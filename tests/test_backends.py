@@ -524,3 +524,72 @@ def test_folded_identity_keeps_the_same_answers(tmp_path: Path):
     assert plain.returncode == 0 and built.returncode == 0, built.stderr
     assert built.stdout == plain.stdout == "True False False\n"
     assert "SyntaxWarning" not in built.stderr
+
+
+def test_a_loop_carried_reset_is_not_hoisted(write, analyze):
+    """`s = 0.0` inside a loop that also does `s += ...` is a reset, not an invariant."""
+    path = write(
+        "reset.ppy",
+        """
+        def rows(values: list[float], n: int, d: int) -> float:
+            total: float = 0.0
+            for i in range(n):
+                s = 0.0
+                for j in range(d):
+                    s += values[i * d + j]
+                total += s / float(d)
+            return total
+        """,
+    )
+    code = _generated(analyze(path, opt_level=3), "reset")
+    body = code.split("def rows")[1]
+    header, _, loop = body.partition("for i in range(n):")
+    assert "s = 0.0" not in header, "the per-row reset was hoisted out of the loop"
+    assert "s = 0.0" in loop
+
+
+def test_reset_semantics_survive_optimization(tmp_path: Path):
+    entry = tmp_path / "reset_run.ppy"
+    entry.write_text(
+        textwrap.dedent(
+            """
+            def rows(values: list[float], n: int, d: int) -> float:
+                total: float = 0.0
+                for i in range(n):
+                    s = 0.0
+                    for j in range(d):
+                        s += values[i * d + j]
+                    total += s / float(d)
+                return total
+
+
+            data: list[float] = [float(i % 7) for i in range(60)]
+            print(f"{rows(data, 10, 6):.6f}")
+            """
+        ).lstrip("\n"),
+        encoding="utf-8",
+    )
+    (tmp_path / "pyproject.toml").write_text("[tool.ppy]\nopt-level = 3\n", encoding="utf-8")
+    plain = _run([sys.executable, entry.name], tmp_path)
+    built = _ppy([entry.name], tmp_path)
+    native = _ppy(["run", entry.name], tmp_path)
+    assert plain.returncode == 0, plain.stderr
+    assert built.stdout == plain.stdout, "the Python backend changed the answer"
+    assert native.stdout.splitlines()[-1] == plain.stdout.strip()
+
+
+def test_an_invariant_computation_still_moves_out(write, analyze):
+    path = write(
+        "invariant.ppy",
+        """
+        def scaled(values: list[float], n: int, width: float) -> float:
+            total: float = 0.0
+            for i in range(n):
+                factor = width * 2.0 + 1.0
+                total += values[i] * factor
+            return total
+        """,
+    )
+    code = _generated(analyze(path, opt_level=3), "invariant")
+    header = code.split("def scaled")[1].partition("for i in range(n):")[0]
+    assert "_ppy_licm" in header, "the invariant computation was not hoisted"

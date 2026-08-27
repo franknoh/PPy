@@ -492,6 +492,10 @@ class LoopInvariantMotion(Pass):
     name = "licm"
     min_level = 2
 
+    def __init__(self, *args, **kwargs) -> None:  # type: ignore[no-untyped-def]
+        super().__init__(*args, **kwargs)
+        self._temporaries = 0
+
     def visit_For(self, node: ast.For) -> ast.AST | list[ast.stmt]:
         self.generic_visit(node)
         return self._hoist(node, node.body, {_target_names(node.target)})
@@ -501,23 +505,56 @@ class LoopInvariantMotion(Pass):
         hoisted: list[ast.stmt] = []
         kept: list[ast.stmt] = []
         for statement in body:
-            if (
-                isinstance(statement, ast.Assign)
-                and len(statement.targets) == 1
-                and isinstance(statement.targets[0], ast.Name)
-                and _is_pure_expr(statement.value)
-                and not (_loaded_names(statement.value) & varying)
-                and statement.targets[0].id not in _loaded_names(node.iter)
-            ):
-                hoisted.append(statement)
-                self.context.count("invariants_hoisted")
-                self.context.remark(statement, "loop-invariant expression hoisted")
+            temporary = self._invariant_temporary(statement, node, varying)
+            if temporary is None:
+                kept.append(statement)
                 continue
-            kept.append(statement)
+            binding, replacement = temporary
+            hoisted.append(binding)
+            kept.append(replacement)
+            self.context.count("invariants_hoisted")
+            self.context.remark(statement, "loop-invariant expression hoisted")
         if not hoisted:
             return node
         node.body = kept or [ast.copy_location(ast.Pass(), node)]
         return [*hoisted, node]
+
+    def _invariant_temporary(
+        self, statement: ast.stmt, node: ast.For, varying: set[str]
+    ) -> tuple[ast.stmt, ast.stmt] | None:
+        """Move the computation out, leaving the assignment where it was.
+
+        Hoisting the whole statement would be wrong whenever the loop also
+        writes the same name -- `s = 0.0` inside a loop that then does
+        `s += ...` is an accumulator reset, not an invariant. Binding the
+        value to a fresh name keeps the reset in place and still evaluates
+        the expression once.
+        """
+        if not isinstance(statement, ast.Assign) or len(statement.targets) != 1:
+            return None
+        target = statement.targets[0]
+        if not isinstance(target, ast.Name):
+            return None
+        value = statement.value
+        # A constant or a bare name costs nothing to re-evaluate, and folding
+        # already handles them.
+        if isinstance(value, (ast.Constant, ast.Name)):
+            return None
+        if not _is_pure_expr(value) or _loaded_names(value) & varying:
+            return None
+        if target.id in _loaded_names(node.iter):
+            return None
+        self._temporaries += 1
+        name = f"_ppy_licm{self._temporaries}"
+        binding = ast.Assign(targets=[ast.Name(id=name, ctx=ast.Store())], value=value)
+        replacement = ast.Assign(
+            targets=[ast.Name(id=target.id, ctx=ast.Store())],
+            value=ast.Name(id=name, ctx=ast.Load()),
+        )
+        for produced in (binding, replacement):
+            ast.copy_location(produced, statement)
+            ast.fix_missing_locations(produced)
+        return binding, replacement
 
 
 def _target_names(target: ast.expr) -> frozenset[str]:
