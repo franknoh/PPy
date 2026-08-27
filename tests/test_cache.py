@@ -186,3 +186,52 @@ def test_changing_a_dependency_invalidates_the_dependent(write, analyze):
     (path.parent / "lib3.ppy").write_text("def value() -> float:\n    return 1.0\n", encoding="utf-8")
     output = build_python(analyze(path))
     assert output.stats.get("cache_misses", 0) >= 1
+
+
+def test_a_plugin_is_not_fingerprinted_for_a_module_that_ignores_it():
+    """Fingerprinting imports the library, so it must follow actual imports."""
+    from ppy_compiler.plugins.base import PluginRegistry
+
+    calls: list[str] = []
+
+    class _Fake:
+        def __init__(self, name: str, modules: tuple[str, ...]) -> None:
+            self.name = name
+            self.modules = modules
+
+        def fingerprint(self) -> str:
+            calls.append(self.name)
+            return f"{self.name}-v1"
+
+        def external_types(self) -> dict[str, str]:
+            return {}
+
+    registry = PluginRegistry()
+    registry.register(_Fake("heavy", ("torch",)))
+    registry.register(_Fake("light", ("numpy",)))
+
+    assert registry.fingerprints({"numpy"}) == ("light:light-v1",)
+    assert calls == ["light"]
+
+    calls.clear()
+    assert len(registry.fingerprints(None)) == 2
+    assert sorted(calls) == ["heavy", "light"]
+
+
+def test_a_module_that_does_import_the_plugin_still_pins_its_version():
+    from ppy_compiler.plugins.base import PluginRegistry
+
+    class _Fake:
+        name = "torch"
+        modules = ("torch",)
+
+        def fingerprint(self) -> str:
+            return "torch=2.11"
+
+        def external_types(self) -> dict[str, str]:
+            return {}
+
+    registry = PluginRegistry()
+    registry.register(_Fake())
+    assert registry.fingerprints({"torch.nn"}) == ("torch:torch=2.11",)
+    assert registry.fingerprints({"json"}) == ()

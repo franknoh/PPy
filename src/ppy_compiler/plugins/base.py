@@ -123,8 +123,23 @@ class PluginRegistry:
             merged.update(plugin.external_types())
         return merged
 
-    def fingerprints(self) -> tuple[str, ...]:
-        return tuple(sorted(f"{p.name}:{p.fingerprint()}" for p in self._plugins))
+    def fingerprints(self, modules: "Iterable[str] | None" = None) -> tuple[str, ...]:
+        """Version fingerprints of the plugins that can affect a compilation.
+
+        Computing a fingerprint imports the library, which for an accelerator
+        runtime costs seconds. A module that never imports torch cannot be
+        affected by torch's version, so restricting this to the modules
+        actually imported keeps that cost off every other compilation. Pass
+        `None` to fingerprint everything.
+        """
+        selected = self._plugins
+        if modules is not None:
+            roots = {name.partition(".")[0] for name in modules}
+            selected = [
+                plugin for plugin in self._plugins
+                if roots & {module.partition(".")[0] for module in plugin.modules}
+            ]
+        return tuple(sorted(f"{p.name}:{p.fingerprint()}" for p in selected))
 
     def __len__(self) -> int:
         return len(self._plugins)

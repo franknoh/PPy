@@ -184,9 +184,16 @@ def module_cache_key(
         directives=directives,
         target=target,
         dependency_hashes=dependency_hashes,
-        plugin_fingerprints=bundle.project.plugins.fingerprints(),
+        plugin_fingerprints=bundle.project.plugins.fingerprints(_imported_modules(symbols)),
         extra=(config.strict, config.dynamic_boundaries, config.inference.implicit_any, *extra),
     )
+
+
+def _imported_modules(symbols) -> set[str]:  # type: ignore[no-untyped-def]
+    """Every module name this module imports, however it was spelled."""
+    names = {binding.module for binding in symbols.imports.values()}
+    names |= {binding.canonical for binding in symbols.imports.values()}
+    return names
 
 
 def _public_abi_hash(bundle: AnalysisBundle, module_name: str) -> str:
