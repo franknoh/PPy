@@ -157,6 +157,7 @@ def module_cache_key(
     *,
     target: str,
     opt_level: int,
+    extra: tuple[object, ...] = (),
 ) -> CacheKey:
     """A content-addressed key covering source, config, deps, and plugins (spec 27.2)."""
     symbols = bundle.symbols.modules[module_name]
@@ -183,7 +184,7 @@ def module_cache_key(
         target=target,
         dependency_hashes=dependency_hashes,
         plugin_fingerprints=bundle.project.plugins.fingerprints(),
-        extra=(config.strict, config.dynamic_boundaries, config.inference.implicit_any),
+        extra=(config.strict, config.dynamic_boundaries, config.inference.implicit_any, *extra),
     )
 
 
@@ -205,12 +206,23 @@ def _public_abi_hash(bundle: AnalysisBundle, module_name: str) -> str:
     return digest(module_name, tuple(parts))
 
 
-def build_python(bundle: AnalysisBundle, *, opt_level: int | None = None) -> BuildOutput:
-    """Optimize every module and publish generated Python to the cache."""
+def build_python(
+    bundle: AnalysisBundle,
+    *,
+    opt_level: int | None = None,
+    target: str = "python",
+    fusion: dict[str, dict[tuple[int, int], object]] | None = None,
+) -> BuildOutput:
+    """Optimize every module and publish generated Python to the cache.
+
+    `target` separates artifacts built for a different backend, because the
+    LLVM path rewrites fused library expressions the Python path leaves alone.
+    """
     from ..backend.python.emit import GeneratedModule, emit
 
     project = bundle.project
     level = opt_level if opt_level is not None else project.config.opt_level
+    fusion = fusion or {}
     project.store.ensure()
 
     generated: dict[str, GeneratedModule] = {}
@@ -222,7 +234,11 @@ def build_python(bundle: AnalysisBundle, *, opt_level: int | None = None) -> Bui
         symbols = bundle.symbols.modules.get(module.name)
         if module_analysis is None or symbols is None:
             continue
-        key = module_cache_key(bundle, module.name, target="python", opt_level=level)
+        plan = fusion.get(module.name, {})
+        key = module_cache_key(
+            bundle, module.name, target=target, opt_level=level,
+            extra=tuple(sorted(str(k) for k in plan)),
+        )
         cached = project.store.read_text(key)
         if cached is not None:
             line_map = _load_line_map(project.store, key)
@@ -233,13 +249,16 @@ def build_python(bundle: AnalysisBundle, *, opt_level: int | None = None) -> Bui
                 artifact=project.store.get(key) or module.path,
                 key=key.hex(),
                 line_map=line_map,
+                fused_symbols=_load_fused(project.store, key),
             )
             stats["cache_hits"] = stats.get("cache_hits", 0) + 1
             continue
 
-        result: OptimizationResult = Optimizer(symbols, module_analysis, bundle.analysis, level=level).run()
+        result: OptimizationResult = Optimizer(
+            symbols, module_analysis, bundle.analysis, level=level, fusion=plan
+        ).run()
         dependencies = tuple(
-            module_cache_key(bundle, edge.target, target="python", opt_level=level).hex()
+            module_cache_key(bundle, edge.target, target=target, opt_level=level).hex()
             for edge in module.imports
             if edge.target in bundle.symbols.modules
         )
@@ -256,6 +275,14 @@ def build_python(bundle: AnalysisBundle, *, opt_level: int | None = None) -> Bui
 
 
 def _load_line_map(store: CacheStore, key: CacheKey) -> dict[int, int]:
+    return _load_metadata(store, key).get("lines", {})
+
+
+def _load_fused(store: CacheStore, key: CacheKey) -> tuple[str, ...]:
+    return tuple(_load_metadata(store, key).get("fused", ()))
+
+
+def _load_metadata(store: CacheStore, key: CacheKey) -> dict:
     import json
 
     raw = store.read_text(f"{key.hex()}.map")
@@ -265,4 +292,5 @@ def _load_line_map(store: CacheStore, key: CacheKey) -> dict[int, int]:
         payload = json.loads(raw)
     except json.JSONDecodeError:
         return {}
-    return {int(k): int(v) for k, v in payload.get("lines", {}).items()}
+    lines = {int(k): int(v) for k, v in payload.get("lines", {}).items()}
+    return {"lines": lines, "fused": payload.get("fused", [])}

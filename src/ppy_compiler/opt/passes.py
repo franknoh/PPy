@@ -30,7 +30,12 @@ __all__ = [
     "LoopInvariantMotion",
     "InlineSmallFunctions",
     "LoopUnroll",
+    "FuseLibraryCalls",
+    "FUSED_BINDER",
 ]
+
+#: Name the LLVM backend injects to supply a fused kernel to a module.
+FUSED_BINDER = "__ppy_bind_fused__"
 
 _MAX_UNROLL = 8
 _INLINE_BUDGET = {2: 16, 3: 48}
@@ -492,7 +497,9 @@ class InlineSmallFunctions(Pass):
     name = "inline"
     min_level = 2
 
-    def __init__(self, context: PassContext, candidates: dict[str, FunctionInfo]) -> None:
+    def __init__(
+        self, context: PassContext, candidates: dict[str, tuple[FunctionInfo, ast.AST]]
+    ) -> None:
         super().__init__(context)
         self.candidates = candidates
         self.budget = _INLINE_BUDGET.get(context.level, 0)
@@ -501,10 +508,11 @@ class InlineSmallFunctions(Pass):
         self.generic_visit(node)
         if not isinstance(node.func, ast.Name) or node.keywords:
             return node
-        info = self.candidates.get(node.func.id)
-        if info is None:
+        entry = self.candidates.get(node.func.id)
+        if entry is None:
             return node
-        body = _single_return_expr(info.node)
+        info, definition = entry
+        body = _single_return_expr(definition)
         if body is None:
             return node
         if _expr_size(body) > self.budget:
@@ -600,3 +608,66 @@ def _constant_range(node: ast.expr) -> tuple[int, int, int] | None:
         case [start, stop, step] if step != 0:
             return start, stop, step
     return None
+
+
+class FuseLibraryCalls(Pass):
+    """Replace a plugin-fused expression with a call to its generated kernel.
+
+    The kernel is bound once per module; the original expression becomes the
+    fallback the binding falls back to whenever a guard fails (spec 19.3).
+    """
+
+    name = "fuse"
+    min_level = 2
+
+    def __init__(self, context: PassContext, plan: dict[tuple[int, int], object]) -> None:
+        super().__init__(context)
+        self.plan = plan
+        self.bound: dict[str, tuple[object, ast.expr]] = {}
+
+    def visit(self, node: ast.AST) -> ast.AST:
+        if isinstance(node, ast.expr):
+            loop = self.plan.get((getattr(node, "lineno", -1), getattr(node, "col_offset", -1)))
+            if loop is not None:
+                return self._replace(node, loop)
+        return super().visit(node)
+
+    def _replace(self, node: ast.expr, loop) -> ast.AST:  # type: ignore[no-untyped-def]
+        helper = f"_ppy_fused_{len(self.bound)}"
+        self.bound[helper] = (loop, copy.deepcopy(node))
+        arguments = [
+            ast.Name(id=name, ctx=ast.Load())
+            for name in (*loop.arrays, *loop.scalars)
+        ]
+        call = ast.Call(func=ast.Name(id=helper, ctx=ast.Load()), args=arguments, keywords=[])
+        ast.copy_location(call, node)
+        ast.fix_missing_locations(call)
+        self.context.count("expressions_fused")
+        self.context.remark(node, f"NumPy expression fused into one strided loop ({loop.symbol})")
+        return call
+
+    def bindings(self) -> list[ast.stmt]:
+        """Module-level statements binding each kernel to its fallback lambda."""
+        statements: list[ast.stmt] = []
+        for helper, (loop, original) in self.bound.items():
+            parameters = [ast.arg(arg=name) for name in (*loop.arrays, *loop.scalars)]
+            fallback = ast.Lambda(
+                args=ast.arguments(
+                    posonlyargs=[], args=parameters, kwonlyargs=[],
+                    kw_defaults=[], defaults=[],
+                ),
+                body=original,
+            )
+            statements.append(
+                ast.Assign(
+                    targets=[ast.Name(id=helper, ctx=ast.Store())],
+                    value=ast.Call(
+                        func=ast.Name(id=FUSED_BINDER, ctx=ast.Load()),
+                        args=[ast.Constant(value=loop.symbol), fallback],
+                        keywords=[],
+                    ),
+                )
+            )
+        for statement in statements:
+            ast.fix_missing_locations(statement)
+        return statements

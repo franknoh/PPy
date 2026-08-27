@@ -1,9 +1,14 @@
 """LLVM IR generation for the natively lowerable subset (spec 16).
 
-Only effect-free scalar functions are lowered. That restriction is what makes
-the guard-and-fall-back model sound: when a native fast path bails out, the
+Only effect-free functions are lowered. That restriction is what makes the
+guard-and-fall-back model sound: when a native fast path bails out, the
 original Python implementation can be re-executed with identical observable
 behavior (spec 16.8).
+
+A function may take scalars and homogeneous `list[int]` / `list[float]`
+arguments. A list is unboxed into a borrowed native buffer at the Python
+boundary, which is transparent because a lowered function may not mutate it
+(spec 13.3, 13.5).
 """
 
 from __future__ import annotations
@@ -17,6 +22,7 @@ from ...analysis.symbols import FunctionInfo
 
 __all__ = [
     "Unsupported",
+    "NativeParam",
     "NativeSignature",
     "LoweredFunction",
     "eligible",
@@ -31,6 +37,9 @@ STATUS_OK = 0
 STATUS_FALLBACK = 1
 
 _SCALARS = {"int", "float", "bool"}
+
+#: Element types a native buffer parameter may carry.
+_BUFFER_ELEMENTS = {"int", "float"}
 
 _MATH_INTRINSICS = {
     "sqrt": "llvm.sqrt.f64",
@@ -59,16 +68,44 @@ class Unsupported(Exception):
 
 
 @dataclass(frozen=True, slots=True)
+class NativeParam:
+    """One source-level parameter and the ABI atoms it expands to."""
+
+    name: str
+    kind: str
+    element: str = ""
+
+    @property
+    def is_buffer(self) -> bool:
+        return self.kind == "list"
+
+    @property
+    def abi(self) -> tuple[str, ...]:
+        if self.is_buffer:
+            return (f"{_abi_name(self.element)}*", "i64")
+        return (_abi_name(self.kind),)
+
+    def __str__(self) -> str:
+        if self.is_buffer:
+            return f"{_abi_name(self.element)}* {self.name}, i64 {self.name}_len"
+        return f"{_abi_name(self.kind)} {self.name}"
+
+
+@dataclass(frozen=True, slots=True)
 class NativeSignature:
     """The PPY native ABI for one function (spec 16.4)."""
 
     qualname: str
     symbol: str
-    params: tuple[str, ...]
+    parameters: tuple[NativeParam, ...]
     ret: str
 
+    @property
+    def params(self) -> tuple[str, ...]:
+        return tuple(atom for parameter in self.parameters for atom in parameter.abi)
+
     def __str__(self) -> str:
-        rendered = ", ".join(self.params)
+        rendered = ", ".join(str(p) for p in self.parameters)
         return f"{self.ret} {self.symbol}({rendered})"
 
 
@@ -93,20 +130,40 @@ def _scalar_name(t: T.Type) -> str | None:
     return None
 
 
+def _buffer_element(t: T.Type) -> str | None:
+    """The element scalar of a `list[int]` / `list[float]` parameter."""
+    base = T.strip_literal(t)
+    if not isinstance(base, T.Instance) or base.name != "list" or len(base.args) != 1:
+        return None
+    element = _scalar_name(base.args[0])
+    return element if element in _BUFFER_ELEMENTS else None
+
+
+def _native_param(name: str, t: T.Type) -> NativeParam | None:
+    scalar = _scalar_name(t)
+    if scalar is not None:
+        return NativeParam(name, scalar)
+    element = _buffer_element(t)
+    if element is not None:
+        return NativeParam(name, "list", element)
+    return None
+
+
 def eligible(info: FunctionInfo, analysis: FunctionAnalysis) -> tuple[bool, str]:
     """Can this function be lowered to a native scalar entry point?"""
     if info.is_async or info.is_generator:
         return False, "coroutines and generators use the boxed runtime"
+    if analysis.mutated_params:
+        mutated = sorted(analysis.mutated_params)[0]
+        return False, f"mutates `{mutated}`, so its buffer cannot be borrowed"
     if not analysis.effects.is_pure:
         listed = ", ".join(sorted(str(e) for e in analysis.effects.violations()))
         return False, f"has effects that must run on CPython: {listed}"
-    if analysis.unknown_callees:
-        return False, f"calls `{analysis.unknown_callees[0]}` with unknown effects"
     for param in info.params:
         if param.kind in {"var_positional", "var_keyword"}:
             return False, "variadic parameters have no native ABI"
-        if _scalar_name(param.type) is None:
-            return False, f"parameter `{param.name}` is `{param.type}`, not a native scalar"
+        if _native_param(param.name, param.type) is None:
+            return False, f"parameter `{param.name}` is `{param.type}`, which has no native ABI"
     if _scalar_name(info.ret) is None:
         return False, f"returns `{info.ret}`, not a native scalar"
     return True, ""
@@ -168,11 +225,13 @@ def _default_triple() -> str:
 
 
 def _signature(info: FunctionInfo) -> NativeSignature:
-    params = tuple(_abi_name(_scalar_name(p.type) or "int") for p in info.params)
+    parameters = tuple(
+        _native_param(p.name, p.type) or NativeParam(p.name, "int") for p in info.params
+    )
     return NativeSignature(
         qualname=info.qualname,
         symbol="ppy_" + info.qualname.replace(".", "_"),
-        params=params,
+        parameters=parameters,
         ret=_abi_name(_scalar_name(info.ret) or "int"),
     )
 
@@ -186,9 +245,15 @@ def _llvm_type(ir, scalar: str):  # type: ignore[no-untyped-def]
 
 
 def _function_type(ir, info: FunctionInfo):  # type: ignore[no-untyped-def]
-    params = [_llvm_type(ir, _scalar_name(p.type) or "int") for p in info.params]
+    atoms = []
+    for parameter in _signature(info).parameters:
+        if parameter.is_buffer:
+            atoms.append(_llvm_type(ir, parameter.element).as_pointer())
+            atoms.append(ir.IntType(64))
+        else:
+            atoms.append(_llvm_type(ir, parameter.kind))
     out = _llvm_type(ir, _scalar_name(info.ret) or "int").as_pointer()
-    return ir.FunctionType(ir.IntType(32), [*params, out])
+    return ir.FunctionType(ir.IntType(32), [*atoms, out])
 
 
 @dataclass(slots=True)
@@ -209,6 +274,7 @@ class _FunctionLowering:
         self.declarations = declarations
         self.builder = None
         self.locals: dict[str, tuple[object, str]] = {}
+        self.buffers: dict[str, tuple[object, object, str]] = {}
         self.out = function.args[-1]
         self.fallback_block = None
 
@@ -218,11 +284,18 @@ class _FunctionLowering:
         self.builder = ir.IRBuilder(entry)
         self.fallback_block = self.function.append_basic_block("fallback")
 
-        for index, param in enumerate(self.info.params):
-            scalar = _scalar_name(param.type) or "int"
-            slot = self.builder.alloca(_llvm_type(ir, scalar), name=param.name)
-            self.builder.store(self.function.args[index], slot)
-            self.locals[param.name] = (slot, scalar)
+        position = 0
+        for parameter in _signature(self.info).parameters:
+            if parameter.is_buffer:
+                data = self.function.args[position]
+                length = self.function.args[position + 1]
+                self.buffers[parameter.name] = (data, length, parameter.element)
+                position += 2
+                continue
+            slot = self.builder.alloca(_llvm_type(ir, parameter.kind), name=parameter.name)
+            self.builder.store(self.function.args[position], slot)
+            self.locals[parameter.name] = (slot, parameter.kind)
+            position += 1
 
         self._body(node.body)
         if not self.builder.block.is_terminated:
@@ -341,10 +414,13 @@ class _FunctionLowering:
     def _for(self, node: ast.For) -> None:
         ir = self.ir
         if node.orelse or not isinstance(node.target, ast.Name):
-            raise Unsupported("only `for NAME in range(...)` has a native lowering")
+            raise Unsupported("only `for NAME in range(...)` or over a list parameter is lowered")
+        if isinstance(node.iter, ast.Name) and node.iter.id in self.buffers:
+            self._for_buffer(node, node.iter.id)
+            return
         if not (isinstance(node.iter, ast.Call) and isinstance(node.iter.func, ast.Name)
                 and node.iter.func.id == "range"):
-            raise Unsupported("only `for NAME in range(...)` has a native lowering")
+            raise Unsupported("only `for NAME in range(...)` or over a list parameter is lowered")
 
         bounds = [self._coerce(self._expr(a), "int") for a in node.iter.args]
         i64 = ir.IntType(64)
@@ -383,6 +459,111 @@ class _FunctionLowering:
 
         self.builder.position_at_end(exit_block)
 
+    def _for_buffer(self, node: ast.For, name: str) -> None:
+        """`for x in xs:` over a borrowed native buffer."""
+        ir = self.ir
+        data, length, element = self.buffers[name]
+        i64 = ir.IntType(64)
+
+        index = self.builder.alloca(i64, name=f"{name}.i")
+        self.builder.store(ir.Constant(i64, 0), index)
+        slot = self.builder.alloca(_llvm_type(ir, element), name=node.target.id)
+        self.locals[node.target.id] = (slot, element)
+
+        header = self.function.append_basic_block("each.head")
+        body = self.function.append_basic_block("each.body")
+        exit_block = self.function.append_basic_block("each.end")
+        self.builder.branch(header)
+
+        self.builder.position_at_end(header)
+        current = self.builder.load(index)
+        self.builder.cbranch(self.builder.icmp_signed("<", current, length), body, exit_block)
+
+        self.builder.position_at_end(body)
+        position = self.builder.load(index)
+        self.builder.store(self.builder.load(self.builder.gep(data, [position])), slot)
+        self._body(node.body)
+        if not self.builder.block.is_terminated:
+            self.builder.store(self.builder.add(self.builder.load(index), ir.Constant(i64, 1)), index)
+            self.builder.branch(header)
+
+        self.builder.position_at_end(exit_block)
+
+    def _buffer_element(self, name: str, index: _Value) -> _Value:
+        """`xs[i]` with the bounds and negative-index checks Python requires."""
+        ir = self.ir
+        data, length, element = self.buffers[name]
+        position = self._coerce(index, "int")
+        zero = ir.Constant(ir.IntType(64), 0)
+        negative = self.builder.icmp_signed("<", position.value, zero)
+        beyond = self.builder.icmp_signed(">=", position.value, length)
+        # A negative or out-of-range index is left to CPython, which raises or
+        # wraps exactly as the source demands.
+        self.builder.cbranch(
+            self.builder.or_(negative, beyond),
+            self.fallback_block,
+            (ok := self.function.append_basic_block("index.ok")),
+        )
+        self.builder.position_at_end(ok)
+        return _Value(self.builder.load(self.builder.gep(data, [position.value])), element)
+
+    def _buffer_reduction(self, name: str, operation: str) -> _Value:
+        """`sum`, `min`, or `max` over a buffer, in strict source order."""
+        ir = self.ir
+        data, length, element = self.buffers[name]
+        i64 = ir.IntType(64)
+        zero = ir.Constant(i64, 0)
+
+        if operation in {"min", "max"}:
+            # An empty sequence must raise ValueError, which CPython does.
+            self.builder.cbranch(
+                self.builder.icmp_signed("==", length, zero),
+                self.fallback_block,
+                (nonempty := self.function.append_basic_block("reduce.nonempty")),
+            )
+            self.builder.position_at_end(nonempty)
+
+        accumulator = self.builder.alloca(_llvm_type(ir, element), name=f"{operation}.acc")
+        index = self.builder.alloca(i64, name=f"{operation}.i")
+        if operation == "sum":
+            start = ir.Constant(_llvm_type(ir, element), 0)
+            self.builder.store(start, accumulator)
+            self.builder.store(zero, index)
+        else:
+            self.builder.store(self.builder.load(self.builder.gep(data, [zero])), accumulator)
+            self.builder.store(ir.Constant(i64, 1), index)
+
+        header = self.function.append_basic_block("reduce.head")
+        body = self.function.append_basic_block("reduce.body")
+        exit_block = self.function.append_basic_block("reduce.end")
+        self.builder.branch(header)
+
+        self.builder.position_at_end(header)
+        current = self.builder.load(index)
+        self.builder.cbranch(self.builder.icmp_signed("<", current, length), body, exit_block)
+
+        self.builder.position_at_end(body)
+        position = self.builder.load(index)
+        value = _Value(self.builder.load(self.builder.gep(data, [position])), element)
+        carried = _Value(self.builder.load(accumulator), element)
+        if operation == "sum":
+            # Sequential accumulation keeps strict Python ordering; no
+            # reassociation happens without an explicit directive (spec 17.2).
+            updated = self._binary(carried, value, ast.Add)
+        else:
+            symbol = "<" if operation == "min" else ">"
+            if element == "float":
+                keep = self.builder.fcmp_ordered(symbol, value.value, carried.value)
+            else:
+                keep = self.builder.icmp_signed(symbol, value.value, carried.value)
+            updated = _Value(self.builder.select(keep, value.value, carried.value), element)
+        self.builder.store(updated.value, accumulator)
+        self.builder.store(self.builder.add(self.builder.load(index), ir.Constant(i64, 1)), index)
+        self.builder.branch(header)
+
+        self.builder.position_at_end(exit_block)
+        return _Value(self.builder.load(accumulator), element)
+
     def _expr(self, node: ast.expr) -> _Value:
         ir = self.ir
         match node:
@@ -408,9 +589,17 @@ class _FunctionLowering:
                 return self._ifexp(node)
             case ast.Call():
                 return self._call(node)
+            case ast.Subscript():
+                if isinstance(node.value, ast.Name) and node.value.id in self.buffers:
+                    if isinstance(node.slice, ast.Slice):
+                        raise Unsupported("slicing a buffer allocates, so it stays boxed")
+                    return self._buffer_element(node.value.id, self._expr(node.slice))
+                raise Unsupported("subscripting this value has no native lowering")
         raise Unsupported(f"`{type(node).__name__}` has no native lowering")
 
     def _load(self, name: str) -> _Value:
+        if name in self.buffers:
+            raise Unsupported(f"`{name}` is a buffer, which has no scalar value")
         found = self.locals.get(name)
         if found is None:
             raise Unsupported(f"`{name}` is not a native local")
@@ -493,6 +682,12 @@ class _FunctionLowering:
         target = ast.unparse(node.func)
         if target.startswith("math."):
             return self._math_call(target.removeprefix("math."), node)
+        if target in {"len", "sum", "min", "max"} and len(node.args) == 1:
+            argument = node.args[0]
+            if isinstance(argument, ast.Name) and argument.id in self.buffers:
+                if target == "len":
+                    return _Value(self.buffers[argument.id][1], "int")
+                return self._buffer_reduction(argument.id, target)
         if target in {"abs", "float", "int", "bool"}:
             return self._builtin_call(target, node)
         for qualname, (function, signature) in self.declarations.items():

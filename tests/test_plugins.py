@@ -76,7 +76,21 @@ def test_numpy_guards_cover_the_documented_fast_path_domain():
     assert "__array_ufunc__" in guards
     assert "dtype" in guards
     assert "byte order" in guards
-    assert "broadcast" in guards
+    assert "identical shapes" in guards
+    assert "floating-point error state" in guards
+
+
+def test_numpy_claims_intrinsic_only_where_a_kernel_exists():
+    """A plugin must not report a lowering the backend cannot perform."""
+    from ppy_compiler.plugins.numpy_plugin import FUSIBLE
+
+    plugin = NumPyPlugin()
+    fused = plugin.call("numpy.sin", [ARRAY], {})
+    unfused = plugin.call("numpy.tanh", [ARRAY], {})
+    assert "sin" in FUSIBLE and "tanh" not in FUSIBLE
+    assert fused.lowering is Lowering.INTRINSIC
+    assert unfused.lowering is Lowering.DIRECT_NATIVE_CALL
+    assert "no generated kernel" in unfused.reason
 
 
 def test_numpy_falls_back_for_unsupported_dtype():

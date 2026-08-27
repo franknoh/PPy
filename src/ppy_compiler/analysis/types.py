@@ -408,11 +408,15 @@ def _instance_assignable(source: Instance, target: Instance) -> bool:
         return True
     if len(source.args) != len(target.args):
         return False
-    # Containers are treated invariantly except for immutable ones.
+    # Containers are treated invariantly except for immutable ones. An empty
+    # display has a `Never` element type, which fits any element type.
     covariant = source.name in {"tuple", "frozenset", "Sequence", "Iterable", "Iterator", "Mapping"}
     if covariant:
         return all(is_assignable(a, b) for a, b in zip(source.args, target.args))
-    return all(a == b or isinstance(b, AnyType) for a, b in zip(source.args, target.args))
+    return all(
+        a == b or isinstance(b, AnyType) or isinstance(a, NeverType)
+        for a, b in zip(source.args, target.args)
+    )
 
 
 def _tuple_assignable(source: Tuple_, target: Type) -> bool:

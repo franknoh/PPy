@@ -10,7 +10,9 @@ from ..analysis.symbols import FunctionInfo, ModuleSymbols
 from ..diagnostics import Diagnostic, Severity, Span
 from .annotate import annotate
 from .passes import (
+    FUSED_BINDER,
     BranchFold,
+    FuseLibraryCalls,
     CommonSubexpression,
     ConstantFold,
     CopyPropagation,
@@ -55,6 +57,7 @@ class OptimizationResult:
     remarks: list[Diagnostic] = field(default_factory=list)
     stats: dict[str, int] = field(default_factory=dict)
     function_levels: dict[str, int] = field(default_factory=dict)
+    fused_symbols: tuple[str, ...] = ()
 
 
 class Optimizer:
@@ -67,11 +70,13 @@ class Optimizer:
         project: ProjectAnalysis,
         *,
         level: int = 2,
+        fusion: dict[tuple[int, int], object] | None = None,
     ) -> None:
         self.symbols = symbols
         self.module = module
         self.project = project
         self.level = level
+        self.fusion = fusion or {}
 
     def run(self) -> OptimizationResult:
         tree = annotate(self.symbols.module.tree, self.module)
@@ -79,6 +84,13 @@ class Optimizer:
         result = OptimizationResult(tree=tree)
 
         self._run_pass(StripDirectives(context, _DIRECTIVE_NAMES), tree)
+
+        fuse: FuseLibraryCalls | None = None
+        if self.fusion and self.level >= 2:
+            # Fusion runs before every other pass, while nodes still carry the
+            # source positions the analysis recorded them at.
+            fuse = FuseLibraryCalls(context, self.fusion)
+            self._run_pass(fuse, tree)
 
         for node in self._function_nodes(tree):
             info = self._info_for(node)
@@ -89,13 +101,17 @@ class Optimizer:
                 level=level,
                 fastmath=bool(info and info.directive("fastmath")),
             )
-            self._optimize_subtree(node, function_context, level)
+            self._optimize_subtree(node, function_context, level, tree)
             context.remarks.extend(function_context.remarks)
             for key, value in function_context.stats.items():
                 context.stats[key] = context.stats.get(key, 0) + value
             setattr(node, "_ppy_done", True)
 
         self._optimize_module_level(tree, context)
+
+        if fuse is not None and fuse.bound:
+            tree.body[_after_imports(tree):_after_imports(tree)] = fuse.bindings()
+            result.fused_symbols = tuple(loop.symbol for loop, _ in fuse.bound.values())
 
         result.tree = tree
         result.stats = context.stats
@@ -128,12 +144,14 @@ class Optimizer:
                 return method
         return None
 
-    def _optimize_subtree(self, node: ast.AST, context: PassContext, level: int) -> None:
+    def _optimize_subtree(
+        self, node: ast.AST, context: PassContext, level: int, tree: ast.Module | None = None
+    ) -> None:
         if level <= 0:
             return
         for _ in range(_MAX_ROUNDS):
             before = context.stats.copy()
-            for optimization in self._pipeline(context, level):
+            for optimization in self._pipeline(context, level, tree):
                 optimization.visit(node)
                 ast.fix_missing_locations(node)
             if context.stats == before:
@@ -148,7 +166,7 @@ class Optimizer:
         )
         if not module_body.body:
             return
-        self._optimize_subtree(module_body, context, self.level)
+        self._optimize_subtree(module_body, context, self.level, tree)
         optimized = iter(module_body.body)
         rebuilt: list[ast.stmt] = []
         for statement in tree.body:
@@ -162,7 +180,7 @@ class Optimizer:
         rebuilt.extend(optimized)
         tree.body = rebuilt
 
-    def _pipeline(self, context: PassContext, level: int) -> list[Pass]:
+    def _pipeline(self, context: PassContext, level: int, tree: ast.Module | None = None) -> list[Pass]:
         pipeline: list[Pass] = [
             ConstantFold(context),
             BranchFold(context),
@@ -171,7 +189,7 @@ class Optimizer:
             Peephole(context),
         ]
         if level >= 2:
-            pipeline.insert(0, InlineSmallFunctions(context, self._inline_candidates()))
+            pipeline.insert(0, InlineSmallFunctions(context, self._inline_candidates(tree)))
             pipeline.append(LoopInvariantMotion(context))
             pipeline.append(CommonSubexpression(context))
         if level >= 3:
@@ -179,9 +197,21 @@ class Optimizer:
         pipeline.append(UnusedLocals(context))
         return pipeline
 
-    def _inline_candidates(self) -> dict[str, FunctionInfo]:
-        """Small functions with verified purity and no `@ppy.noinline`."""
-        candidates: dict[str, FunctionInfo] = {}
+    def _inline_candidates(
+        self, tree: ast.Module | None
+    ) -> dict[str, tuple[FunctionInfo, ast.FunctionDef]]:
+        """Small functions with verified purity and no `@ppy.noinline`.
+
+        The body comes from the tree being transformed, not the original
+        source, so an already-optimized body is what gets inlined.
+        """
+        live: dict[str, ast.FunctionDef] = {}
+        if tree is not None:
+            for node in tree.body:
+                if isinstance(node, ast.FunctionDef):
+                    live[node.name] = node
+
+        candidates: dict[str, tuple[FunctionInfo, ast.FunctionDef]] = {}
         for name, info in self.symbols.functions.items():
             if info.directive("noinline") is not None:
                 continue
@@ -190,9 +220,23 @@ class Optimizer:
                 continue
             if info.is_generator or info.is_async:
                 continue
-            candidates[name] = info
+            candidates[name] = (info, live.get(name, info.node))
         return candidates
 
     def _run_pass(self, optimization: Pass, tree: ast.Module) -> None:
         optimization.visit(tree)
         ast.fix_missing_locations(tree)
+
+
+def _after_imports(tree: ast.Module) -> int:
+    """The index just past the module's leading import statements."""
+    index = 0
+    for position, statement in enumerate(tree.body):
+        if isinstance(statement, (ast.Import, ast.ImportFrom)):
+            index = position + 1
+            continue
+        if isinstance(statement, ast.Expr) and isinstance(statement.value, ast.Constant):
+            index = position + 1
+            continue
+        break
+    return index

@@ -23,6 +23,11 @@ class GeneratedModule:
     artifact: Path
     key: str
     line_map: dict[int, int]
+    fused_symbols: tuple[str, ...] = ()
+
+    @property
+    def needs_fused_binder(self) -> bool:
+        return bool(self.fused_symbols)
 
     def compile(self, native_names: frozenset[str] = frozenset()) -> object:
         """Compile with the original `.ppy` filename so tracebacks map back."""
@@ -86,7 +91,14 @@ def emit(
     )
     store.put(
         f"{key.hex()}.map",
-        json.dumps({"source": str(source_path), "lines": line_map}, indent=1),
+        json.dumps(
+            {
+                "source": str(source_path),
+                "lines": line_map,
+                "fused": list(result.fused_symbols),
+            },
+            indent=1,
+        ),
         kind="metadata",
         source=str(source_path),
         suffix=".json",
@@ -98,6 +110,7 @@ def emit(
         artifact=artifact,
         key=key.hex(),
         line_map=line_map,
+        fused_symbols=result.fused_symbols,
     )
 
 

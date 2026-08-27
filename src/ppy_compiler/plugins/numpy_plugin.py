@@ -10,22 +10,43 @@ from ..analysis.effects import Effect, EffectSet
 from ..analysis.refinements import Facts
 from .base import CallResult, Lowering
 
-__all__ = ["NumPyPlugin", "ELEMENTWISE", "REDUCTIONS", "LINALG"]
+__all__ = [
+    "NumPyPlugin",
+    "ELEMENTWISE",
+    "REDUCTIONS",
+    "LINALG",
+    "FUSIBLE_UNARY",
+    "FUSIBLE_BINARY",
+    "FUSIBLE_REDUCTIONS",
+]
 
 PLUGIN_VERSION = 1
 
 #: Curated ufunc-like operations that lower to fused native loops (spec 19.4).
 ELEMENTWISE = frozenset({
     "add", "subtract", "multiply", "true_divide", "divide", "floor_divide",
-    "remainder", "power", "negative", "absolute", "abs",
+    "remainder", "mod", "fmod", "power", "negative", "absolute", "abs", "positive",
     "less", "less_equal", "equal", "not_equal", "greater", "greater_equal",
-    "logical_and", "logical_or", "logical_not",
-    "sin", "cos", "tan", "exp", "log", "sqrt", "minimum", "maximum",
-    "positive", "invert",
+    "logical_and", "logical_or", "logical_not", "invert",
+    "sin", "cos", "tan", "arcsin", "arccos", "arctan", "arctan2",
+    "sinh", "cosh", "tanh", "exp", "expm1", "log", "log2", "log10", "log1p",
+    "sqrt", "cbrt", "square", "reciprocal", "sign",
+    "minimum", "maximum", "clip", "round", "around", "rint", "floor", "ceil", "trunc",
 })
 
 #: Reductions supported for the v1 fast path (spec 19.8).
 REDUCTIONS = frozenset({"sum", "prod", "product", "min", "max", "mean", "any", "all"})
+
+#: Operations the LLVM backend has a generated kernel for. Only these are
+#: reported as `Intrinsic`; the rest are typed but left to NumPy's own dispatch.
+FUSIBLE_UNARY = frozenset({
+    "sin", "cos", "exp", "log", "log2", "log10", "sqrt", "absolute", "abs", "negative",
+})
+FUSIBLE_BINARY = frozenset({
+    "add", "subtract", "multiply", "true_divide", "divide", "minimum", "maximum", "power",
+})
+FUSIBLE_REDUCTIONS = frozenset({"sum", "prod", "product", "max", "min", "mean"})
+FUSIBLE = FUSIBLE_UNARY | FUSIBLE_BINARY | FUSIBLE_REDUCTIONS
 
 #: Linear algebra lowered to an available BLAS routine (spec 19.9).
 LINALG = frozenset({"dot", "matmul", "inner", "vdot", "tensordot"})
@@ -50,6 +71,12 @@ _SCALAR_DTYPES = (
 _SUPPORTED_DTYPES = frozenset(_SCALAR_DTYPES) - {"complex64", "complex128"}
 
 _NDARRAY = T.Instance("numpy.ndarray", (), ("numpy.ndarray", "object"))
+
+#: Array methods that return another array of the same dtype.
+_ARRAY_SHAPING = frozenset({
+    "reshape", "ravel", "flatten", "copy", "transpose", "squeeze", "astype",
+    "conj", "conjugate", "view", "clip", "round", "repeat", "take",
+})
 
 #: Python operators mapped to the ufunc that implements them.
 _OPERATORS = {
@@ -100,6 +127,20 @@ class NumPyPlugin:
             return T.FLOAT, Facts()
         if attribute == "ndarray":
             return T.ClassObject("numpy.ndarray", _NDARRAY), Facts()
+        return None
+
+    def instance_attribute(self, type_name: str, attribute: str) -> tuple[T.Type, Facts] | None:
+        """Methods and attributes of an exact `numpy.ndarray` value."""
+        if type_name != "numpy.ndarray":
+            return None
+        if attribute in _ARRAY_SHAPING:
+            return T.Callable_((), _NDARRAY, f"numpy.ndarray.{attribute}"), Facts()
+        if attribute == "tolist":
+            return T.Callable_((), T.list_of(T.ANY), "numpy.ndarray.tolist"), Facts()
+        if attribute == "item":
+            return T.Callable_((), T.FLOAT, "numpy.ndarray.item"), Facts()
+        if attribute == "fill":
+            return T.Callable_((), T.NONE, "numpy.ndarray.fill"), Facts()
         return None
 
     def operator(self, symbol: str) -> str | None:
@@ -212,13 +253,26 @@ class NumPyPlugin:
                 return Lowering.PYTHON_FALLBACK, f"operand `{base}` is outside the fast-path domain", ()
         guards = (
             "exact numpy.ndarray (no __array_ufunc__ override)",
-            "builtin numeric or boolean dtype",
-            "native byte order",
-            "broadcast-compatible shapes",
+            "float64 dtype in native byte order",
+            "C-contiguous layout",
+            "identical shapes across array operands",
+            "a floating-point error state the generated loop can honor",
         )
+        if operation not in FUSIBLE:
+            return (
+                Lowering.DIRECT_NATIVE_CALL,
+                f"`{operation}` has no generated kernel, so NumPy's own loop runs",
+                (),
+            )
+        if not self._any_array(args):
+            return (
+                Lowering.DIRECT_NATIVE_CALL,
+                f"`{operation}` has no array operand, so there is no loop to fuse",
+                (),
+            )
         return (
             Lowering.INTRINSIC,
-            f"`{operation}` fused into one broadcast-aware strided loop",
+            f"`{operation}` fused into one strided loop",
             guards,
         )
 

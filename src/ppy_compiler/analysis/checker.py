@@ -210,6 +210,7 @@ class _Checker:
         self._escaping: set[str] = set()
         self._mutated: set[str] = set()
         self._bound_methods: set[int] = set()
+        self._attribute_owners: dict[int, T.Type] = {}
 
     def check_module(self) -> ModuleAnalysis:
         env = Env()
@@ -1072,6 +1073,7 @@ class _Checker:
 
     def _expr_Attribute(self, node: ast.Attribute, env: Env) -> Binding:
         owner = self._expr(node.value, env)
+        self._attribute_owners[id(node)] = owner.type
         return self._attribute(owner, node, env)
 
     def _attribute(self, owner: Binding, node: ast.Attribute, env: Env) -> Binding:
@@ -1909,7 +1911,7 @@ class _Checker:
         if direct is not None and self.plugins.for_qualname(direct) is not None:
             return direct
         if isinstance(func, ast.Attribute):
-            owner = self.module.type_of(func.value)
+            owner = self._attribute_owners.get(id(func), T.UNKNOWN)
             base = T.strip_literal(owner)
             if isinstance(base, T.Instance) and "." in base.name:
                 root = base.name.rpartition(".")[0]
@@ -1996,6 +1998,11 @@ class _Checker:
         plugin = self.plugins.for_qualname(base.name)
         if plugin is None:
             return None
+        describe = getattr(plugin, "instance_attribute", None)
+        if describe is not None:
+            described = describe(base.name, attr)
+            if described is not None:
+                return Binding(described[0], described[1])
         table = _PLUGIN_INSTANCE_ATTRS.get(base.name, {})
         found = table.get(attr)
         if found is not None:

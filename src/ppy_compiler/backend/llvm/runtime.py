@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
+import array
 import ctypes
 from dataclasses import dataclass
 from typing import Callable
 
-from .lowering import STATUS_OK, NativeSignature
+from .lowering import STATUS_OK, NativeParam, NativeSignature
 
 __all__ = ["NativeBinding", "bind"]
 
@@ -18,6 +19,17 @@ _CTYPES = {
     "double": ctypes.c_double,
     "i8": ctypes.c_int8,
 }
+
+_ELEMENT_CTYPES = {"int": ctypes.c_int64, "float": ctypes.c_double}
+
+#: `array` type codes matching the native element types. Unlike a ctypes slice
+#: assignment, `array.array` rejects an out-of-range value instead of
+#: truncating it, which is what keeps Python integer semantics intact.
+_ELEMENT_CODES = {"int": "q", "float": "d"}
+
+
+class GuardFailed(Exception):
+    """A runtime guard rejected an argument, so the Python path must run."""
 
 
 @dataclass(slots=True)
@@ -37,25 +49,36 @@ def bind(signature: NativeSignature, address: int, fallback: Callable[..., objec
     `ctypes.CFUNCTYPE` releases the GIL around the foreign call, which is what
     a native region touching no Python objects is allowed to do (spec 16.6).
     """
-    argument_types = [_CTYPES[p] for p in signature.params]
+    argument_types: list[type] = []
+    for parameter in signature.parameters:
+        if parameter.is_buffer:
+            argument_types.append(ctypes.POINTER(_ELEMENT_CTYPES[parameter.element]))
+            argument_types.append(ctypes.c_int64)
+        else:
+            argument_types.append(_CTYPES[parameter.abi[0]])
+
     result_type = _CTYPES[signature.ret]
     prototype = ctypes.CFUNCTYPE(ctypes.c_int32, *argument_types, ctypes.POINTER(result_type))
     native = prototype(address)
 
-    guards = [_guard_for(p) for p in signature.params]
-    converters = [_converter_for(p) for p in signature.params]
+    expanders = [_expander_for(p) for p in signature.parameters]
     finalize = _result_for(signature.ret)
     binding = NativeBinding(signature=signature, wrapper=lambda *a: None, fallback=fallback)
 
     def wrapper(*args: object) -> object:
-        if len(args) != len(guards):
+        if len(args) != len(expanders):
             return fallback(*args)
-        for value, guard in zip(args, guards):
-            if not guard(value):
-                binding.fallbacks += 1
-                return fallback(*args)
+        atoms: list[object] = []
+        # `borrowed` keeps each unboxed buffer alive for the duration of the call.
+        borrowed: list[object] = []
+        try:
+            for expand, value in zip(expanders, args):
+                expand(value, atoms, borrowed)
+        except GuardFailed:
+            binding.fallbacks += 1
+            return fallback(*args)
         slot = result_type()
-        status = native(*[convert(v) for convert, v in zip(converters, args)], ctypes.byref(slot))
+        status = native(*atoms, ctypes.byref(slot))
         if status != STATUS_OK:
             binding.fallbacks += 1
             return fallback(*args)
@@ -71,26 +94,58 @@ def bind(signature: NativeSignature, address: int, fallback: Callable[..., objec
     return binding
 
 
-def _guard_for(abi: str) -> Callable[[object], bool]:
+def _expander_for(parameter: NativeParam) -> Callable[[object, list, list], None]:
+    """Build the guard-and-convert step for one source-level parameter."""
+    if parameter.is_buffer:
+        code = _ELEMENT_CODES[parameter.element]
+        pointer_type = ctypes.POINTER(_ELEMENT_CTYPES[parameter.element])
+
+        def expand_buffer(value: object, atoms: list, borrowed: list) -> None:
+            if type(value) is not list:
+                raise GuardFailed
+            try:
+                buffer = array.array(code, value)  # type: ignore[arg-type]
+            except (TypeError, OverflowError, ValueError) as exc:
+                raise GuardFailed from exc
+            borrowed.append(buffer)
+            address, length = buffer.buffer_info()
+            atoms.append(ctypes.cast(address, pointer_type))
+            atoms.append(length)
+
+        return expand_buffer
+
+    abi = parameter.abi[0]
     if abi == "i64":
-        def guard_int(value: object) -> bool:
-            return type(value) is int and _I64_LOW <= value <= _I64_HIGH or type(value) is bool
-        return guard_int
-    if abi == "double":
-        def guard_float(value: object) -> bool:
-            return type(value) is float or (type(value) is int and _I64_LOW <= value <= _I64_HIGH)
-        return guard_float
-    def guard_bool(value: object) -> bool:
-        return type(value) is bool
-    return guard_bool
 
+        def expand_int(value: object, atoms: list, borrowed: list) -> None:
+            if type(value) is bool:
+                atoms.append(int(value))
+                return
+            if type(value) is not int or not _I64_LOW <= value <= _I64_HIGH:
+                raise GuardFailed
+            atoms.append(value)
 
-def _converter_for(abi: str) -> Callable[[object], object]:
+        return expand_int
+
     if abi == "double":
-        return lambda value: float(value)  # type: ignore[arg-type]
-    if abi == "i8":
-        return lambda value: int(bool(value))
-    return lambda value: int(value)  # type: ignore[arg-type]
+
+        def expand_float(value: object, atoms: list, borrowed: list) -> None:
+            if type(value) is float:
+                atoms.append(value)
+                return
+            if type(value) is int and _I64_LOW <= value <= _I64_HIGH:
+                atoms.append(float(value))
+                return
+            raise GuardFailed
+
+        return expand_float
+
+    def expand_bool(value: object, atoms: list, borrowed: list) -> None:
+        if type(value) is not bool:
+            raise GuardFailed
+        atoms.append(int(value))
+
+    return expand_bool
 
 
 def _result_for(abi: str) -> Callable[[object], object]:

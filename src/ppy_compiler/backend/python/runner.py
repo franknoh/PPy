@@ -11,6 +11,7 @@ from pathlib import Path
 
 from typing import Protocol
 
+from ...opt.passes import FUSED_BINDER
 from .emit import BINDER_NAME, GeneratedModule
 
 __all__ = ["ExecutionResult", "NativeBinder", "execute", "install_loader"]
@@ -23,11 +24,22 @@ class NativeBinder(Protocol):
 
     def bind(self, module: str, function: str, fallback: object) -> object: ...
 
+    def fused(self, module: str, symbol: str, fallback: object) -> object: ...
 
-def _prepare_natives(namespace: dict, module_name: str, natives: "NativeBinder | None") -> frozenset[str]:
-    """Install the binding hook a generated module calls after each `def`."""
+
+def _prepare_natives(
+    namespace: dict,
+    module_name: str,
+    natives: "NativeBinder | None",
+    generated: GeneratedModule | None = None,
+) -> frozenset[str]:
+    """Install the binding hooks a generated module calls as it loads."""
     if natives is None:
         return frozenset()
+    if generated is not None and generated.needs_fused_binder:
+        namespace[FUSED_BINDER] = (
+            lambda symbol, fallback: natives.fused(module_name, symbol, fallback)
+        )
     names = natives.names(module_name)
     if not names:
         return frozenset()
@@ -69,7 +81,7 @@ class _GeneratedLoader:
 
     def exec_module(self, module: types.ModuleType) -> None:
         module.__file__ = str(self.generated.source_path)
-        names = _prepare_natives(module.__dict__, self.generated.name, self.natives)
+        names = _prepare_natives(module.__dict__, self.generated.name, self.natives, self.generated)
         exec(self.generated.compile(names), module.__dict__)  # noqa: S102 - compiled PPY artifact
 
     def get_source(self, fullname: str) -> str:
@@ -112,7 +124,7 @@ def execute(
     saved_main = sys.modules.get("__main__")
     sys.modules["__main__"] = module
     try:
-        names = _prepare_natives(module.__dict__, entry_name or entry.name, natives)
+        names = _prepare_natives(module.__dict__, entry_name or entry.name, natives, entry)
         exec(entry.compile(names), module.__dict__)  # noqa: S102 - compiled PPY artifact
         return ExecutionResult(0)
     except SystemExit as exit_request:
