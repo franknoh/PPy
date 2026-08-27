@@ -47,6 +47,17 @@ class StagingResult:
         return sum(len(entries) for entries in self.artifacts.values())
 
 
+def _export_help(reason: str) -> str:
+    """Advice that matches why the export was declined, not a fixed suggestion."""
+    if "VJP" in reason:
+        return (
+            "the exported artifact would run the forward pass only; keep the "
+            "differentiated function jitted, or export a function that is not "
+            "differentiated"
+        )
+    return "annotate each parameter with `ppy.Shape(...)` and `ppy.DType(...)`"
+
+
 def stage_project(bundle, diagnostics: DiagnosticBag | None = None) -> StagingResult:  # type: ignore[no-untyped-def]
     """Export every staged region the project both declares and permits."""
     result = StagingResult()
@@ -68,7 +79,7 @@ def stage_project(bundle, diagnostics: DiagnosticBag | None = None) -> StagingRe
                         Severity.WARNING,
                         f"`{staged.info.name}` is staged but cannot be exported: {staged.reason}",
                         span,
-                        help="annotate each parameter with `ppy.Shape(...)` and `ppy.DType(...)`",
+                        help=_export_help(staged.reason),
                     )
                 )
                 continue

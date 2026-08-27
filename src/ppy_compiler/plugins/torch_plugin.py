@@ -56,6 +56,10 @@ _UTILITY_TYPES: dict[str, T.Type] = {
     "float": T.FLOAT,
     "str": T.STR,
     "int_pair": T.Tuple_((T.INT, T.INT)),
+    # `tolist` on a multi-dimensional tensor nests, so this is the 1-D shape
+    # that a caller can actually feed to `array.array` or a native buffer.
+    "float_list": T.list_of(T.FLOAT),
+    "int_tuple": T.Tuple_((T.INT,), homogeneous=True),
 }
 
 #: Tensor methods and attributes with a statically known result.
@@ -70,6 +74,8 @@ _TENSOR_MEMBERS: dict[str, str] = {
     "matmul": "tensor", "mm": "tensor", "t": "tensor", "expand": "tensor",
     "backward": "none",
     "item": "float",
+    "tolist": "float_list",
+    "size": "int_tuple",
     "numel": "int",
     "dim": "int",
     "is_contiguous": "bool",

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import ast
+
 import importlib.util
 from typing import Sequence
 
@@ -45,6 +47,25 @@ _ARRAY_RESULTS = frozenset({
     "softmax", "log_softmax", "relu", "sigmoid", "erf",
 })
 
+#: `jax.random` draws: every one of these returns an array, and `split`
+#: returns a stack of keys, which is an array too.
+_RANDOM_RESULTS = frozenset({
+    "PRNGKey", "key", "split", "fold_in", "normal", "uniform", "bernoulli",
+    "randint", "permutation", "choice", "categorical", "gumbel", "exponential",
+    "truncated_normal", "ball", "beta", "cauchy", "dirichlet", "gamma", "poisson",
+})
+
+#: Function transforms: each takes a callable and returns a callable. What the
+#: returned callable produces is a pytree shaped like the argument it
+#: differentiates, which no v1 signature can describe, so it is `Any` -- an
+#: explicit boundary the plugin declares rather than an inferred one.
+_TRANSFORMS: dict[str, str] = {
+    "grad": "any", "jacfwd": "any", "jacrev": "any", "hessian": "any",
+    "value_and_grad": "value_and_grad",
+    "jit": "any", "vmap": "any", "pmap": "any",
+    "remat": "any", "checkpoint": "any",
+}
+
 #: Reductions: an array when an axis is given, a scalar array otherwise.
 _REDUCTIONS = frozenset({"sum", "prod", "mean", "std", "var", "min", "max", "argmin", "argmax", "any", "all"})
 
@@ -84,11 +105,43 @@ class StagedFunction:
         return f"StagedFunction({self.info.qualname!r}, shapes={self.shapes!r})"
 
 
+#: Transforms that need a VJP. Serializing an `Exported` drops it, so a routed
+#: artifact cannot be differentiated -- `Exported.vjp` raises "No VJP is
+#: available". Routing such a function would break a program that ran fine
+#: under plain CPython, which spec 3 does not permit.
+_DIFFERENTIATING = frozenset({
+    "grad", "value_and_grad", "jacfwd", "jacrev", "hessian", "linearize", "vjp", "jvp",
+})
+
+
+def _differentiated_names(symbols) -> set[str]:  # type: ignore[no-untyped-def]
+    """Functions handed to a JAX transform that will need their backward pass."""
+    names: set[str] = set()
+    for node in ast.walk(symbols.module.tree):
+        if not isinstance(node, ast.Call):
+            continue
+        target = node.func
+        called = target.attr if isinstance(target, ast.Attribute) else getattr(target, "id", "")
+        if called not in _DIFFERENTIATING:
+            continue
+        for argument in node.args:
+            if isinstance(argument, ast.Name):
+                names.add(argument.id)
+    return names
+
+
 def staged_functions(symbols) -> list[StagedFunction]:  # type: ignore[no-untyped-def]
     """Find `@jax.jit` functions whose inputs are fully specified (spec 21.2)."""
     found: list[StagedFunction] = []
+    differentiated = _differentiated_names(symbols)
     for info in symbols.functions.values():
         if not any(decorator in STAGING_MARKERS for decorator in info.decorators):
+            continue
+        if info.name in differentiated:
+            found.append(StagedFunction(
+                info,
+                reason=f"`{info.name}` is differentiated, and a serialized export has no VJP",
+            ))
             continue
         shapes: list[tuple[int | str, ...]] = []
         dtypes: list[str] = []
@@ -206,6 +259,25 @@ class JaxPlugin:
             return CallResult(
                 T.list_of(T.Instance("jax.Device", (), ("jax.Device", "object"))),
                 Facts(), effects, Lowering.PYTHON_FALLBACK, "a runtime query",
+            )
+        if qualname.count(".") == 1 and operation in _TRANSFORMS:
+            produced = (
+                T.Tuple_((_ARRAY, T.ANY))
+                if _TRANSFORMS[operation] == "value_and_grad"
+                else T.ANY
+            )
+            return CallResult(
+                T.Callable_((), produced, f"jax.{operation}.transformed"),
+                Facts(), EffectSet.of(Effect.ALLOC), Lowering.PYTHON_FALLBACK,
+                f"`jax.{operation}` returns a transformed callable; its result is a "
+                "pytree the plugin declares as an explicit boundary",
+            )
+        if qualname.startswith("jax.random.") and operation in _RANDOM_RESULTS:
+            # A draw is not reproducible without its key, so it is pure in the
+            # sense the effect system means: no dependence on hidden state.
+            return CallResult(
+                _ARRAY, Facts(), effects, Lowering.PYTHON_FALLBACK,
+                "a keyed draw runs on the Python path",
             )
         if operation not in _ARRAY_RESULTS and operation not in _REDUCTIONS:
             return None
