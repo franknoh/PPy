@@ -224,13 +224,25 @@ def test_numpy_program_matches_plain_cpython(tmp_path: Path):
 # -- PyTorch --------------------------------------------------------------
 
 
-def test_torch_curated_ops_go_through_the_dispatcher():
+def test_torch_curated_ops_name_their_aten_counterpart():
+    """The verdict says the operation has a C++ counterpart, and which one."""
     plugin = TorchPlugin()
     tensor = (T.Instance("torch.Tensor", (), ("torch.Tensor", "object")), Facts())
     result = plugin.call("torch.matmul", [tensor, tensor], {})
     assert result.lowering is Lowering.DIRECT_NATIVE_CALL
-    assert "dispatcher" in result.reason
+    assert "ATen C++ counterpart" in result.reason
     assert "autograd" in result.reason
+    assert "aten::matmul.default" in result.reason
+
+
+def test_the_named_overload_follows_the_operand_types():
+    plugin = TorchPlugin()
+    tensor = (T.Instance("torch.Tensor", (), ("torch.Tensor", "object")), Facts())
+    scalar = (T.FLOAT, Facts())
+    assert plugin.schema_for("add", [tensor[0], tensor[0]]) == "aten::add.Tensor"
+    assert plugin.schema_for("add", [tensor[0], scalar[0]]) == "aten::add.Scalar"
+    assert plugin.schema_for("relu", [tensor[0]]) == "aten::relu.default"
+    assert plugin.schema_for("not_an_operation", [tensor[0]]) is None
 
 
 def test_torch_guards_cover_override_mechanisms():
