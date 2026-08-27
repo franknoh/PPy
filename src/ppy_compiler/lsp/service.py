@@ -12,7 +12,6 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from ..analysis import types as T
-from ..analysis.checker import FunctionAnalysis, ModuleAnalysis
 from ..analysis.contracts import ContractReport
 from ..analysis.representation import select
 from ..analysis.symbols import ClassInfo, FunctionInfo

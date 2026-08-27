@@ -831,3 +831,17 @@ def test_tuple_programs_match_plain_cpython(tmp_path: Path):
     assert plain.returncode == 0, plain.stderr
     assert native.returncode == 0, native.stderr
     assert native.stdout == plain.stdout
+
+
+def test_the_fusion_tables_match_what_the_plugin_claims():
+    """A plugin must not advertise a kernel the backend cannot generate."""
+    from ppy_compiler.backend.llvm.fusion import BINARY, REDUCTIONS, UNARY
+    from ppy_compiler.plugins.numpy_plugin import (
+        FUSIBLE_BINARY,
+        FUSIBLE_REDUCTIONS,
+        FUSIBLE_UNARY,
+    )
+
+    assert set(UNARY) == set(FUSIBLE_UNARY)
+    assert BINARY == set(FUSIBLE_BINARY)
+    assert REDUCTIONS == set(FUSIBLE_REDUCTIONS)

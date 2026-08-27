@@ -6,7 +6,7 @@ import ctypes
 from dataclasses import dataclass
 from typing import Callable
 
-from .fusion import REASSOCIATING, FusedLoop
+from .fusion import FusedLoop
 from .parallel import chunk_bounds, offset, pool
 
 __all__ = ["FusedBinding", "bind_fused"]

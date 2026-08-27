@@ -23,8 +23,6 @@ from .env import Binding, Env
 from .refinements import Facts, IntRange, width_range
 from .symbols import ClassInfo, FunctionInfo, ModuleSymbols, ProjectSymbols
 
-if TYPE_CHECKING:
-    from ..plugins.base import PluginRegistry
 
 __all__ = ["FunctionAnalysis", "ModuleAnalysis", "ProjectAnalysis", "LoweringNote", "analyze"]
 
@@ -373,11 +371,30 @@ class _Checker:
             env.set(local, Binding(self._imported_name_type(module, alias.name)))
 
     def _stmt_Assign(self, node: ast.Assign, env: Env) -> None:
+        if self._bind_type_alias(node.targets, node.value, env):
+            return
         value = self._expr(node.value, env)
         for target in node.targets:
             self._bind_target(target, value, env)
 
+    def _stmt_TypeAlias(self, node: ast.TypeAlias, env: Env) -> None:
+        """`type X = ...` names a type; its right-hand side is not a value."""
+        if isinstance(node.name, ast.Name):
+            env.set(node.name.id, Binding(T.instance("type")))
+
+    def _bind_type_alias(self, targets: list[ast.expr], value: ast.expr, env: Env) -> bool:
+        """`X = Annotated[...]` names a type, so it is not evaluated as a value."""
+        if len(targets) != 1 or not isinstance(targets[0], ast.Name):
+            return False
+        name = targets[0].id
+        if self.symbols.type_aliases.get(name) is not value:
+            return False
+        env.set(name, Binding(T.instance("type")))
+        return True
+
     def _stmt_AnnAssign(self, node: ast.AnnAssign, env: Env) -> None:
+        if node.value is not None and self._bind_type_alias([node.target], node.value, env):
+            return
         resolved = self.annotations.resolve(node.annotation)
         declared = Binding(resolved.type, resolved.facts)
         if node.value is not None:
@@ -866,6 +883,9 @@ class _Checker:
         if isinstance(callee.type, T.ClassObject):
             return self._construct(callee.type, node, args, keywords, env)
         if isinstance(callee.type, T.Callable_):
+            refined = self._refine_builtin_method(callee.type, args)
+            if refined is not None:
+                return refined
             described = stdlib.lookup(callee.type.qualname)
             if described is not None:
                 self._effects = self._effects | described[1]
@@ -1221,6 +1241,8 @@ class _Checker:
             return found
         if name == "str":
             return self._str_method(attr)
+        if name in {"bytes", "bytearray"}:
+            return self._bytes_method(name, attr)
         return None
 
     def _str_method(self, attr: str) -> T.Type | None:
@@ -1242,6 +1264,24 @@ class _Checker:
             return T.Callable_((), T.list_of(T.STR), f"str.{attr}")
         if attr == "encode":
             return T.Callable_((), T.BYTES, "str.encode")
+        return None
+
+    def _bytes_method(self, owner: str, attr: str) -> T.Type | None:
+        if attr == "decode":
+            return T.Callable_((), T.STR, f"{owner}.decode")
+        if attr in {"hex",}:
+            return T.Callable_((), T.STR, f"{owner}.hex")
+        if attr in {"startswith", "endswith", "isdigit", "isalpha", "isascii"}:
+            return T.Callable_((), T.BOOL, f"{owner}.{attr}")
+        if attr in {"find", "rfind", "count", "index"}:
+            return T.Callable_((), T.INT, f"{owner}.{attr}")
+        if attr in {"split", "rsplit", "splitlines"}:
+            return T.Callable_((), T.list_of(T.BYTES), f"{owner}.{attr}")
+        if attr in {
+            "strip", "lstrip", "rstrip", "upper", "lower", "replace", "join",
+            "removeprefix", "removesuffix", "zfill", "title", "capitalize",
+        }:
+            return T.Callable_((), T.BYTES, f"{owner}.{attr}")
         return None
 
     def _expr_Subscript(self, node: ast.Subscript, env: Env) -> Binding:
@@ -1346,8 +1386,11 @@ class _Checker:
         self._effects = self._effects.add(Effect.SYNC)
         self._native_blockers.append("awaits a coroutine")
         base = T.strip_literal(value.type)
-        if isinstance(base, T.Instance) and base.name == "Coroutine" and base.args:
-            return Binding(base.args[0])
+        if isinstance(base, T.Instance) and base.args:
+            if base.name in {"Coroutine", "Awaitable"}:
+                return Binding(base.args[0])
+        if isinstance(base, (T.AnyType, T.UnknownType)):
+            return Binding(T.ANY if isinstance(base, T.AnyType) else T.UNKNOWN)
         return Binding(T.UNKNOWN if self.strict else T.ANY)
 
     def _expr_Yield(self, node: ast.Yield, env: Env) -> Binding:
@@ -1919,6 +1962,13 @@ class _Checker:
         if value.length is not None:
             merged = merged.with_(length=value.length)
         return merged
+
+    def _refine_builtin_method(self, signature: T.Callable_, args: list[Binding]) -> Binding | None:
+        """Some builtin methods have a result the argument count decides."""
+        if signature.qualname in {"dict.get", "dict.pop"} and len(args) == 2:
+            self._effects = self._effects.add(Effect.READ_OBJECT)
+            return Binding(T.join(T.remove_none(signature.ret), args[1].type))
+        return None
 
     def _plugin_qualname(self, func: ast.expr, env: Env) -> str | None:
         """Resolve a call target to a plugin-owned qualified name."""

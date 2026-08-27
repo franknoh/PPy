@@ -141,14 +141,30 @@ def _print_function(
         print("dynamic: this function contains a ppy.dynamic boundary")
 
     module = bundle.analysis.modules.get(info.module)
+    start, end = info.node.lineno, (info.node.end_lineno or info.node.lineno)
     if module is not None:
-        notes = [n for n in module.lowerings.values() if info.node.lineno <= n.line <= (info.node.end_lineno or n.line)]
+        notes = [n for n in module.lowerings.values() if start <= n.line <= end]
         if notes:
             print("library lowering:")
             for note in notes:
                 print(f"  line {note.line}: {note.qualname} -> {note.lowering} ({note.reason})")
                 for guard in note.guards:
                     print(f"      guard: {guard}")
+    _print_rewrites(bundle, info, start, end)
+
+
+def _print_rewrites(bundle: AnalysisBundle, info: FunctionInfo, start: int, end: int) -> None:
+    """Report the plugin-driven rewrites and regions that cover this function."""
+    from ..opt.rewrites import adjustments_for_project
+
+    _print_region(bundle, info)
+
+    tweaks = adjustments_for_project(bundle).get(info.module, {})
+    within_tweaks = {p: a for p, a in tweaks.items() if start <= p[0] <= end}
+    if within_tweaks:
+        print("framework rewrites:")
+        for (line, _column), adjustment in sorted(within_tweaks.items()):
+            print(f"  line {line}: {adjustment.qualname}: {adjustment.reason}")
 
 
 def _purity(info: FunctionInfo, analysis: FunctionAnalysis) -> str:
@@ -183,3 +199,23 @@ def _print_module(bundle: AnalysisBundle, module_name: str, line: int) -> None:
     for start, end in module.dynamic_spans:
         if start <= line <= end:
             print(f"line {line} is inside a ppy.dynamic boundary (lines {start}-{end})")
+
+
+def _print_region(bundle: AnalysisBundle, info: FunctionInfo) -> None:
+    """Report whether this function compiles into a single library region."""
+    from ..plugins.torch_region import find_regions
+
+    symbols = bundle.symbols.modules.get(info.module)
+    analysis = bundle.analysis.modules.get(info.module)
+    if symbols is None or analysis is None:
+        return
+    for region in find_regions(symbols, analysis):
+        if region.info.qualname != info.qualname:
+            continue
+        if region.body:
+            print(f"aten region: {region.declaration()}")
+            print(f"  operations: {', '.join(region.operations)}")
+            print(f"  body: {region.body}")
+        else:
+            print(f"aten region: rejected -- {region.reason}")
+        return

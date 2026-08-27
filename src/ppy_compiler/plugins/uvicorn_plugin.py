@@ -9,9 +9,12 @@ from typing import Sequence
 from ..analysis import types as T
 from ..analysis.effects import Effect, EffectSet
 from ..analysis.refinements import Facts
-from .base import CallResult, Lowering
+from .base import CallAdjustment, CallResult, Lowering
 
-__all__ = ["UvicornPlugin", "resolve_app"]
+__all__ = ["UvicornPlugin", "resolve_app", "PPY_RELOAD_PATTERN"]
+
+#: Uvicorn's reloader watches `*.py` by default, which never sees PPY sources.
+PPY_RELOAD_PATTERN = "*.ppy"
 
 PLUGIN_VERSION = 1
 
@@ -58,6 +61,48 @@ class UvicornPlugin:
             "Uvicorn remains the ASGI host; PPY compiles the application and its hot helpers",
         )
 
+    def adjust_call(self, qualname: str, node: ast.Call, symbols) -> CallAdjustment | None:  # type: ignore[no-untyped-def]
+        """Resolve the ASGI application statically and fix reload watching.
+
+        Uvicorn stays the host: the only changes are to stop re-importing the
+        application by string on every worker start, and to make the reloader
+        watch `.ppy` sources (spec 22.2, 22.5).
+        """
+        if qualname != "uvicorn.run":
+            return None
+
+        keywords = {k.arg: k.value for k in node.keywords if k.arg}
+        reloading = _is_true(keywords.get("reload"))
+        adjustments: list[tuple[str, str]] = []
+        replacement: str | None = None
+        reasons: list[str] = []
+
+        if reloading and "reload_includes" not in keywords:
+            adjustments.append(("reload_includes", f"[{PPY_RELOAD_PATTERN!r}]"))
+            reasons.append("reload now watches .ppy sources")
+
+        app = resolve_app(node)
+        target = node.args[0] if node.args else keywords.get("app")
+        if (
+            not reloading
+            and app is not None
+            and isinstance(target, ast.Constant)
+            and ":" in app
+        ):
+            module_name, _, attribute = app.partition(":")
+            if module_name == symbols.name and attribute.isidentifier():
+                replacement = attribute
+                reasons.append("the ASGI application is resolved statically")
+
+        if replacement is None and not adjustments:
+            return None
+        return CallAdjustment(
+            qualname=qualname,
+            replace_first_argument=replacement,
+            add_keywords=tuple(adjustments),
+            reason="; ".join(reasons),
+        )
+
     def reload_dirs_note(self) -> str:
         """Development reload must watch `.ppy` files (spec 22.5)."""
         return "pass `reload_includes=['*.ppy']` so watchfiles sees PPY sources"
@@ -81,3 +126,7 @@ def _app_name(expr: ast.expr) -> str | None:
     if isinstance(expr, ast.Attribute):
         return ast.unparse(expr)
     return None
+
+
+def _is_true(node: ast.expr | None) -> bool:
+    return isinstance(node, ast.Constant) and node.value is True

@@ -27,8 +27,9 @@ __all__ = [
     "BINARY",
 ]
 
-#: Unary ufuncs lowered to an LLVM intrinsic over one element.
-UNARY = {
+#: The LLVM intrinsic implementing each unary ufunc. An empty name means the
+#: operation is a single instruction rather than a call.
+_UNARY_INTRINSICS = {
     "sin": "llvm.sin.f64",
     "cos": "llvm.cos.f64",
     "exp": "llvm.exp.f64",
@@ -40,6 +41,10 @@ UNARY = {
     "abs": "llvm.fabs.f64",
     "negative": "",
 }
+
+#: Derived from what the plugin claims, so a claim without an implementation
+#: fails loudly at import rather than silently falling back at run time.
+UNARY = {name: _UNARY_INTRINSICS[name] for name in sorted(FUSIBLE_UNARY)}
 
 #: Binary ufuncs lowered to a single machine instruction per element.
 BINARY = set(FUSIBLE_BINARY)

@@ -8,6 +8,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from ...cache import CacheKey
+from ..binder import LibraryBinder
 from ...diagnostics import Diagnostic, Severity, Span
 from .fusion import (
     FusedLoop,
@@ -158,6 +159,7 @@ def compile_project(  # type: ignore[no-untyped-def]
     if not available():
         raise LlvmUnavailable("llvmlite is not installed, so the LLVM backend is unavailable")
     from ...driver.pipeline import build_python, module_cache_key
+    from ...opt.rewrites import adjustments_for_project
 
     level = opt_level if opt_level is not None else bundle.project.config.opt_level
     store = bundle.project.store
@@ -197,6 +199,7 @@ def compile_project(  # type: ignore[no-untyped-def]
         opt_level=level,
         target="llvm",
         fusion={name: native.fusion_plan for name, native in natives.items()},
+        adjustments=adjustments_for_project(bundle),
     )
 
     if artifacts.objects:
@@ -233,6 +236,9 @@ def compile_and_run(bundle, program_args, reporter, *, opt_level: int | None = N
     from ...driver.pipeline import build_python
     from .runtime import bind
 
+    from ...driver.staging import compile_torch_regions, stage_project
+    from ...opt.rewrites import adjustments_for_project
+
     level = opt_level if opt_level is not None else bundle.project.config.opt_level
     natives = _collect(bundle)
     output = build_python(
@@ -240,6 +246,7 @@ def compile_and_run(bundle, program_args, reporter, *, opt_level: int | None = N
         opt_level=level,
         target="llvm",
         fusion={name: native.fusion_plan for name, native in natives.items()},
+        adjustments=adjustments_for_project(bundle),
     )
 
     engine = JitEngine(opt_level=level).open()
@@ -265,6 +272,19 @@ def compile_and_run(bundle, program_args, reporter, *, opt_level: int | None = N
                 binder.add_fused(name, loop, address)
         _report(native, reporter, bundle)
 
+    regions = compile_torch_regions(bundle, notify=reporter.note)
+    for module_name, entries in regions.compiled.items():
+        for function, entry_point in entries.items():
+            binder.add_region(module_name, function, entry_point)
+
+    staged = stage_project(bundle)
+    for module_name, entries in staged.artifacts.items():
+        for function, artifact in entries.items():
+            binder.add_exported(module_name, function, artifact.payload)
+    if bundle.project.config.diagnostics.optimization_remarks:
+        for remark in (*regions.diagnostics, *staged.diagnostics):
+            reporter.emit(remark)
+
     entry = output.generated.get(bundle.entry or "")
     if entry is None:
         reporter.emit(Diagnostic("E1002", Severity.ERROR, "no generated module for the entry point"))
@@ -283,10 +303,11 @@ def compile_and_run(bundle, program_args, reporter, *, opt_level: int | None = N
     return result.exit_code
 
 
-class _Binder:
+class _Binder(LibraryBinder):
     """Serves guarded native entry points to generated modules as they load."""
 
     def __init__(self, threads: str | int = "auto") -> None:
+        super().__init__()
         self.threads = threads
         self._entries: dict[str, dict[str, tuple]] = {}
         self._fused: dict[str, dict[str, tuple]] = {}

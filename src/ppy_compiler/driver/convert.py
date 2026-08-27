@@ -12,7 +12,7 @@ from libcst.metadata import MetadataWrapper, PositionProvider
 
 from ..analysis import types as T
 from ..analysis.render import render_annotation
-from ..diagnostics import Diagnostic, DiagnosticBag, Severity, Span
+from ..diagnostics import Diagnostic, DiagnosticBag, Severity
 from ..frontend.source import span_of
 from .pipeline import analyze_paths, collect_sources, open_project
 from .reporting import Reporter

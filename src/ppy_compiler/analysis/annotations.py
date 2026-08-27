@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
 
-from ..diagnostics import Diagnostic, DiagnosticBag, Severity, Span
+from ..diagnostics import Diagnostic, DiagnosticBag, Severity
 from ..frontend.source import span_of
 from . import types as T
 from .refinements import Facts, IntRange, width_range
@@ -25,6 +25,8 @@ class Resolver(Protocol):
     def canonical(self, expr: ast.expr) -> str | None: ...
 
     def class_instance(self, qualname: str, args: tuple[T.Type, ...]) -> T.Instance | None: ...
+
+    def type_alias(self, name: str) -> ast.expr | None: ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -71,6 +73,12 @@ _ABSTRACT = {
     "typing.Mapping": "Mapping",
     "typing.Generator": "Generator",
     "typing.Coroutine": "Coroutine",
+    "typing.Awaitable": "Awaitable",
+    "typing.AsyncIterator": "AsyncIterator",
+    "typing.AsyncIterable": "AsyncIterable",
+    "collections.abc.Awaitable": "Awaitable",
+    "collections.abc.Coroutine": "Coroutine",
+    "collections.abc.AsyncIterator": "AsyncIterator",
     "collections.abc.Sequence": "Sequence",
     "collections.abc.Iterable": "Iterable",
     "collections.abc.Iterator": "Iterator",
@@ -96,6 +104,7 @@ class AnnotationResolver:
         self.path = path
         self.diagnostics = diagnostics
         self.strict = strict
+        self._expanding: set[str] = set()
 
     def resolve(self, expr: ast.expr | None) -> Resolved:
         if expr is None:
@@ -138,6 +147,9 @@ class AnnotationResolver:
         return Resolved(T.UNKNOWN)
 
     def _named(self, expr: ast.expr) -> Resolved:
+        alias = self._alias(expr)
+        if alias is not None:
+            return alias
         qualname = self.resolver.canonical(expr)
         if qualname is None:
             self._error(
@@ -174,6 +186,10 @@ class AnnotationResolver:
         return Resolved(T.UNKNOWN)
 
     def _subscript(self, expr: ast.Subscript) -> Resolved:
+        alias = self._alias(expr.value)
+        if alias is not None:
+            # A subscripted alias is a generic alias; v1 resolves the base only.
+            return alias
         qualname = self.resolver.canonical(expr.value)
         args = self._slice_items(expr.slice)
         if qualname is None:
@@ -253,6 +269,8 @@ class AnnotationResolver:
             case "ppy.Shape":
                 dims = tuple(v for v in values if isinstance(v, (int, str)))
                 return facts.with_(shape=dims)
+            case "ppy.DType" if len(values) == 1 and isinstance(values[0], str):
+                return facts.with_(dtype=values[0])
             case "ppy.IntWidth" if len(values) >= 1 and isinstance(values[0], int):
                 signed = bool(values[1]) if len(values) > 1 else bool(keywords.get("signed", True))
                 return facts.with_(width=(values[0], signed), int_range=width_range(values[0], signed))
@@ -336,6 +354,22 @@ class AnnotationResolver:
         if isinstance(length, int):
             return Resolved(T.Tuple_(tuple(element for _ in range(length))), facts)
         return Resolved(T.Tuple_((element,), homogeneous=True), facts)
+
+    def _alias(self, expr: ast.expr) -> Resolved | None:
+        """Expand a module-level type alias, guarding against a cycle."""
+        if not isinstance(expr, ast.Name):
+            return None
+        lookup = getattr(self.resolver, "type_alias", None)
+        if lookup is None:
+            return None
+        target = lookup(expr.id)
+        if target is None or expr.id in self._expanding:
+            return None
+        self._expanding.add(expr.id)
+        try:
+            return self._resolve(target)
+        finally:
+            self._expanding.discard(expr.id)
 
     def _slice_items(self, node: ast.expr) -> list[ast.expr]:
         if isinstance(node, ast.Tuple):

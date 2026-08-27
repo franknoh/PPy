@@ -402,3 +402,81 @@ def test_match_statement_narrows(write, analyze):
         """,
     )
     assert not analyze(path).diagnostics.has_errors()
+
+
+def test_a_module_level_type_alias_is_resolved(write, analyze):
+    path = write(
+        "alias.ppy",
+        """
+        from typing import Annotated
+
+        import ppy
+
+        Pixel = Annotated[int, ppy.Range(0, 255)]
+        Row = list[Pixel]
+
+
+        def brighten(value: Pixel, row: Row) -> Pixel:
+            return value + len(row)
+        """,
+    )
+    bundle = analyze(path)
+    assert not bundle.diagnostics.has_errors(), [d.message for d in bundle.diagnostics.errors]
+    info = bundle.symbols.functions["alias.brighten"]
+    assert str(info.params[0].type) == "int"
+    assert info.params[0].facts.int_range.high == 255
+    assert str(info.params[1].type) == "list[int]"
+
+
+def test_the_312_type_statement_is_resolved(write, analyze):
+    path = write(
+        "typestmt.ppy",
+        """
+        type Weight = float
+        type Weights = list[Weight]
+
+
+        def total(values: Weights) -> Weight:
+            result: Weight = 0.0
+            for value in values:
+                result += value
+            return result
+        """,
+    )
+    bundle = analyze(path)
+    assert not bundle.diagnostics.has_errors(), [d.message for d in bundle.diagnostics.errors]
+    assert str(bundle.symbols.functions["typestmt.total"].ret) == "float"
+
+
+def test_a_recursive_alias_does_not_hang(write, analyze):
+    path = write(
+        "cycle.ppy",
+        """
+        Loop = list[Loop]
+
+
+        def f(x: Loop) -> int:
+            return len(x)
+        """,
+    )
+    # The alias cannot be resolved, but analysis must terminate and say so.
+    codes = [d.code for d in analyze(path).diagnostics]
+    assert "E1101" in codes
+
+
+def test_a_value_assignment_is_not_mistaken_for_an_alias(write, analyze):
+    path = write(
+        "notalias.ppy",
+        """
+        LIMIT = 255
+        NAMES = ["a", "b"]
+
+
+        def f(x: int) -> int:
+            return x + LIMIT + len(NAMES)
+        """,
+    )
+    bundle = analyze(path)
+    assert not bundle.diagnostics.has_errors()
+    assert "LIMIT" not in bundle.symbols.modules["notalias"].type_aliases
+    assert "NAMES" not in bundle.symbols.modules["notalias"].type_aliases

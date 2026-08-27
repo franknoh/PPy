@@ -87,6 +87,7 @@ class Facts:
     contiguous: bool = False
     no_alias: bool = False
     shape: tuple[int | str, ...] | None = None
+    dtype: str | None = None
     width: tuple[int, bool] | None = None
     float_bits: int | None = None
 
@@ -111,6 +112,7 @@ class Facts:
             contiguous=self.contiguous and other.contiguous,
             no_alias=self.no_alias and other.no_alias,
             shape=self.shape if self.shape == other.shape else None,
+            dtype=self.dtype if self.dtype == other.dtype else None,
             width=self.width if self.width == other.width else None,
             float_bits=self.float_bits if self.float_bits == other.float_bits else None,
         )
@@ -138,6 +140,8 @@ class Facts:
             out.append("no-alias")
         if self.shape:
             out.append(f"shape == {self.shape}")
+        if self.dtype:
+            out.append(f"dtype == {self.dtype}")
         return out
 
 

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import builtins
-import runpy
 import sys
 import types
 from dataclasses import dataclass
@@ -12,7 +11,7 @@ from pathlib import Path
 from typing import Protocol
 
 from ...opt.passes import FUSED_BINDER
-from .emit import BINDER_NAME, GeneratedModule
+from .emit import BINDER_NAME, EXPORTED_BINDER, REGION_BINDER, GeneratedModule
 
 __all__ = ["ExecutionResult", "NativeBinder", "execute", "install_loader"]
 
@@ -26,25 +25,46 @@ class NativeBinder(Protocol):
 
     def fused(self, module: str, symbol: str, fallback: object) -> object: ...
 
+    def exported_names(self, module: str) -> frozenset[str]: ...
+
+    def exported(self, module: str, function: str, fallback: object) -> object: ...
+
+    def region_names(self, module: str) -> frozenset[str]: ...
+
+    def region(self, module: str, function: str, fallback: object) -> object: ...
+
 
 def _prepare_natives(
     namespace: dict,
     module_name: str,
     natives: "NativeBinder | None",
     generated: GeneratedModule | None = None,
-) -> frozenset[str]:
+) -> tuple[frozenset[str], frozenset[str], frozenset[str]]:
     """Install the binding hooks a generated module calls as it loads."""
     if natives is None:
-        return frozenset()
+        return frozenset(), frozenset(), frozenset()
     if generated is not None and generated.needs_fused_binder:
         namespace[FUSED_BINDER] = (
             lambda symbol, fallback: natives.fused(module_name, symbol, fallback)
         )
+    exported = frozenset()
+    if getattr(natives, "exported_names", None) is not None:
+        exported = natives.exported_names(module_name)
+        if exported:
+            namespace[EXPORTED_BINDER] = (
+                lambda function, value: natives.exported(module_name, function, value)
+            )
+    regions = frozenset()
+    if getattr(natives, "region_names", None) is not None:
+        regions = natives.region_names(module_name)
+        if regions:
+            namespace[REGION_BINDER] = (
+                lambda function, value: natives.region(module_name, function, value)
+            )
     names = natives.names(module_name)
-    if not names:
-        return frozenset()
-    namespace[BINDER_NAME] = lambda function, value: natives.bind(module_name, function, value)
-    return names
+    if names:
+        namespace[BINDER_NAME] = lambda function, value: natives.bind(module_name, function, value)
+    return (names, exported, regions)
 
 
 @dataclass(slots=True)
@@ -81,8 +101,10 @@ class _GeneratedLoader:
 
     def exec_module(self, module: types.ModuleType) -> None:
         module.__file__ = str(self.generated.source_path)
-        names = _prepare_natives(module.__dict__, self.generated.name, self.natives, self.generated)
-        exec(self.generated.compile(names), module.__dict__)  # noqa: S102 - compiled PPY artifact
+        names, exported, regions = _prepare_natives(
+            module.__dict__, self.generated.name, self.natives, self.generated
+        )
+        exec(self.generated.compile(names, exported, regions), module.__dict__)  # noqa: S102
 
     def get_source(self, fullname: str) -> str:
         return self.generated.source_path.read_text(encoding="utf-8")
@@ -124,8 +146,10 @@ def execute(
     saved_main = sys.modules.get("__main__")
     sys.modules["__main__"] = module
     try:
-        names = _prepare_natives(module.__dict__, entry_name or entry.name, natives, entry)
-        exec(entry.compile(names), module.__dict__)  # noqa: S102 - compiled PPY artifact
+        names, exported, regions = _prepare_natives(
+            module.__dict__, entry_name or entry.name, natives, entry
+        )
+        exec(entry.compile(names, exported, regions), module.__dict__)  # noqa: S102
         return ExecutionResult(0)
     except SystemExit as exit_request:
         code = exit_request.code

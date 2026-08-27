@@ -6,15 +6,13 @@ import argparse
 import sys
 from pathlib import Path
 
-from ..analysis import types as T
-from ..diagnostics import Diagnostic, Severity, Span, describe
+from ..diagnostics import Diagnostic, Severity
 from .pipeline import (
     COMPILER_VERSION,
     AnalysisBundle,
     analyze_paths,
     build_python,
     collect_sources,
-    module_cache_key,
     open_project,
 )
 from .reporting import Reporter
@@ -66,7 +64,10 @@ def run_python_backend(
     reporter: Reporter,
 ) -> int:
     """`ppy foo.ppy`: validate, optimize, cache, and execute generated Python."""
+    from ..backend.binder import LibraryBinder
     from ..backend.python.runner import execute, format_traceback
+    from ..opt.rewrites import adjustments_for_project
+    from .staging import compile_torch_regions, stage_project
 
     if not file.is_file():
         reporter.emit(Diagnostic("E1002", Severity.ERROR, f"{file} is not a file"))
@@ -77,7 +78,11 @@ def run_python_backend(
         reporter.summary(errors, 0)
         return 1
 
-    output = build_python(bundle, opt_level=_overrides(options).get("opt_level"))  # type: ignore[arg-type]
+    output = build_python(
+        bundle,
+        opt_level=_overrides(options).get("opt_level"),  # type: ignore[arg-type]
+        adjustments=adjustments_for_project(bundle),
+    )
     if bundle.project.config.diagnostics.optimization_remarks:
         for remark in output.remarks:
             reporter.emit(remark)
@@ -88,7 +93,25 @@ def run_python_backend(
         reporter.emit(Diagnostic("E1002", Severity.ERROR, f"no generated module for {file}"))
         return 2
 
-    result = execute(entry, output.generated, program_args, search_paths=bundle.project.search_paths)
+    binder = LibraryBinder()
+    _install_library_regions(bundle, binder, reporter)
+
+    staged = stage_project(bundle)
+    for module_name, entries in staged.artifacts.items():
+        for function, artifact in entries.items():
+            binder.add_exported(module_name, function, artifact.payload)
+    if bundle.project.config.diagnostics.optimization_remarks:
+        for remark in staged.diagnostics:
+            reporter.emit(remark)
+
+    result = execute(
+        entry,
+        output.generated,
+        program_args,
+        search_paths=bundle.project.search_paths,
+        natives=binder,
+        entry_name=entry_name,
+    )
     if result.exception is not None:
         sys.stderr.write(format_traceback(result.exception))
     return result.exit_code
@@ -214,7 +237,10 @@ def inspect(options: argparse.Namespace, reporter: Reporter) -> int:
             return 2
         return 0
 
-    output = build_python(bundle)
+    from ..opt.rewrites import adjustments_for_project
+
+    # Inspect must show what a real run executes, plugin rewrites included.
+    output = build_python(bundle, adjustments=adjustments_for_project(bundle))
     for name, generated in output.generated.items():
         if target.is_file() and generated.source_path != target.resolve():
             continue
@@ -284,6 +310,11 @@ def doctor(options: argparse.Namespace, reporter: Reporter) -> int:
     print("plugins:")
     for plugin in project.plugins:
         print(f"  {plugin.name:<10} {plugin.fingerprint()}")
+
+    from ..plugins.torch_build import toolchain_ready
+
+    ready, detail = toolchain_ready()
+    print(f"aten regions      {'available' if ready else 'unavailable'} ({detail})")
     return 0
 
 
@@ -300,3 +331,16 @@ def language_server(options: argparse.Namespace, reporter: Reporter) -> int:
     from ..lsp.server import serve
 
     return serve(options.root.resolve())
+
+
+def _install_library_regions(bundle, binder, reporter) -> None:  # type: ignore[no-untyped-def]
+    """Compile and install the ATen regions this project declares (spec 20.3)."""
+    from .staging import compile_torch_regions
+
+    result = compile_torch_regions(bundle, notify=reporter.note)
+    for module_name, entries in result.compiled.items():
+        for function, entry_point in entries.items():
+            binder.add_region(module_name, function, entry_point)
+    if bundle.project.config.diagnostics.optimization_remarks:
+        for remark in result.diagnostics:
+            reporter.emit(remark)

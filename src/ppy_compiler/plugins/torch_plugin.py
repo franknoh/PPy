@@ -10,7 +10,7 @@ from ..analysis.effects import Effect, EffectSet
 from ..analysis.refinements import Facts
 from .base import CallResult, Lowering
 
-__all__ = ["TorchPlugin", "CURATED_OPS"]
+__all__ = ["TorchPlugin", "CURATED_OPS", "ATEN_SCHEMAS"]
 
 PLUGIN_VERSION = 1
 
@@ -27,12 +27,109 @@ CURATED_OPS = frozenset({
     "zeros", "ones", "empty", "full", "arange", "tensor", "randn", "rand", "zeros_like", "ones_like",
 })
 
-_RANDOM_OPS = frozenset({"randn", "rand", "randint", "randperm"})
+_RANDOM_OPS = frozenset({"randn", "rand", "randint", "randperm", "manual_seed"})
+
+#: Non-tensor library functions the analyzer needs a signature for.
+_UTILITIES: dict[str, tuple[str, str]] = {
+    "torch.manual_seed": ("none", "Random"),
+    "torch.set_num_threads": ("none", "Thread"),
+    "torch.get_num_threads": ("int", ""),
+    "torch.set_grad_enabled": ("none", ""),
+    "torch.is_grad_enabled": ("bool", ""),
+    "torch.allclose": ("bool", ""),
+    "torch.equal": ("bool", ""),
+    "torch.numel": ("int", ""),
+    "torch.cuda.is_available": ("bool", ""),
+    "torch.cuda.device_count": ("int", ""),
+    "torch.cuda.synchronize": ("none", "Sync"),
+    "torch.cuda.get_device_name": ("str", ""),
+    "torch.cuda.get_device_capability": ("int_pair", ""),
+    "torch.cuda.current_device": ("int", ""),
+    "torch.cuda.empty_cache": ("none", ""),
+    "torch.cuda.manual_seed": ("none", "Random"),
+}
+
+_UTILITY_TYPES: dict[str, T.Type] = {
+    "none": T.NONE,
+    "bool": T.BOOL,
+    "int": T.INT,
+    "float": T.FLOAT,
+    "str": T.STR,
+    "int_pair": T.Tuple_((T.INT, T.INT)),
+}
+
+#: Tensor methods and attributes with a statically known result.
+_TENSOR_MEMBERS: dict[str, str] = {
+    "sum": "tensor", "mean": "tensor", "max": "tensor", "min": "tensor",
+    "prod": "tensor", "abs": "tensor", "exp": "tensor", "log": "tensor",
+    "sqrt": "tensor", "relu": "tensor", "sigmoid": "tensor", "tanh": "tensor",
+    "neg": "tensor", "clone": "tensor", "detach": "tensor", "contiguous": "tensor",
+    "reshape": "tensor", "view": "tensor", "transpose": "tensor", "permute": "tensor",
+    "squeeze": "tensor", "unsqueeze": "tensor", "flatten": "tensor", "to": "tensor",
+    "cpu": "tensor", "cuda": "tensor", "float": "tensor", "double": "tensor",
+    "matmul": "tensor", "mm": "tensor", "t": "tensor", "expand": "tensor",
+    "backward": "none",
+    "item": "float",
+    "numel": "int",
+    "dim": "int",
+    "is_contiguous": "bool",
+    "is_cuda": "bool_value",
+    "requires_grad": "bool_value",
+    "grad": "optional_tensor",
+}
 
 #: Operations that need dispatcher behavior PPY must not bypass (spec 20.3).
 _DISPATCH_SENSITIVE = frozenset({"linear", "matmul", "mm", "bmm", "softmax", "log_softmax"})
 
 _TENSOR = T.Instance("torch.Tensor", (), ("torch.Tensor", "object"))
+
+#: The ATen schema each recognized call resolves to. Routing an individual
+#: call to `torch.ops.aten.*` from Python is measurably slower than the
+#: library's own C entry point, so this table documents the operator identity
+#: for diagnostics and manifests; the path that actually pays off is compiling
+#: a whole region against the C++ API (see `torch_region`).
+ATEN_SCHEMAS: dict[str, str | tuple[str, str]] = {
+    "add": ("add.Tensor", "add.Scalar"),
+    "sub": ("sub.Tensor", "sub.Scalar"),
+    "mul": ("mul.Tensor", "mul.Scalar"),
+    "div": ("div.Tensor", "div.Scalar"),
+    "remainder": ("remainder.Tensor", "remainder.Scalar"),
+    "pow": ("pow.Tensor_Tensor", "pow.Tensor_Scalar"),
+    "eq": ("eq.Tensor", "eq.Scalar"),
+    "ne": ("ne.Tensor", "ne.Scalar"),
+    "lt": ("lt.Tensor", "lt.Scalar"),
+    "le": ("le.Tensor", "le.Scalar"),
+    "gt": ("gt.Tensor", "gt.Scalar"),
+    "ge": ("ge.Tensor", "ge.Scalar"),
+    "neg": "neg.default",
+    "abs": "abs.default",
+    "exp": "exp.default",
+    "log": "log.default",
+    "sqrt": "sqrt.default",
+    "rsqrt": "rsqrt.default",
+    "sin": "sin.default",
+    "cos": "cos.default",
+    "tanh": "tanh.default",
+    "sigmoid": "sigmoid.default",
+    "relu": "relu.default",
+    "gelu": "gelu.default",
+    "silu": "silu.default",
+    "erf": "erf.default",
+    "matmul": "matmul.default",
+    "mm": "mm.default",
+    "bmm": "bmm.default",
+    "linear": "linear.default",
+    "t": "t.default",
+    "contiguous": "contiguous.default",
+    "clone": "clone.default",
+    "detach": "detach.default",
+    "sum": "sum.default",
+    "mean": "mean.default",
+    "prod": "prod.default",
+    "argmax": "argmax.default",
+    "argmin": "argmin.default",
+    "sigmoid_": "sigmoid_.default",
+}
 
 #: Python operators mapped to their ATen operator names.
 _OPERATORS = {
@@ -83,10 +180,62 @@ class TorchPlugin:
             return T.ClassObject("torch.Tensor", _TENSOR), Facts()
         if attribute in {"float32", "float16", "bfloat16", "int64", "int32", "bool"}:
             return T.Instance("torch.dtype", (), ("torch.dtype", "object")), Facts()
+        if qualname == "torch.__version__":
+            return T.STR, Facts()
+        if qualname in _UTILITIES:
+            kind, _effect = _UTILITIES[qualname]
+            return T.Callable_((), _UTILITY_TYPES.get(kind, T.UNKNOWN), qualname), Facts()
+        if attribute in {"cuda", "nn", "functional", "linalg", "version", "overrides"}:
+            return T.Module_(qualname), Facts()
         return None
+
+    def instance_attribute(self, type_name: str, attribute: str) -> tuple[T.Type, Facts] | None:
+        """Methods and attributes of an exact `torch.Tensor` value."""
+        if type_name != "torch.Tensor":
+            return None
+        kind = _TENSOR_MEMBERS.get(attribute)
+        if kind is None:
+            return None
+        if kind == "tensor":
+            return T.Callable_((), _TENSOR, f"torch.Tensor.{attribute}"), Facts()
+        if kind == "bool_value":
+            return T.BOOL, Facts()
+        if kind == "optional_tensor":
+            return T.union(_TENSOR, T.NONE), Facts()
+        return (
+            T.Callable_((), _UTILITY_TYPES.get(kind, T.UNKNOWN), f"torch.Tensor.{attribute}"),
+            Facts(),
+        )
 
     def operator(self, symbol: str) -> str | None:
         return _OPERATORS.get(symbol)
+
+    def schema_for(self, operation: str, args: Sequence[T.Type]) -> str | None:
+        """The ATen schema a curated call corresponds to, for diagnostics.
+
+        The overload follows the static argument types, the same way the C++
+        API selects between a tensor and a scalar operand.
+        """
+        schema = ATEN_SCHEMAS.get(operation)
+        if schema is None:
+            return None
+        if not isinstance(schema, tuple):
+            return f"aten::{schema}"
+        tensor_form, scalar_form = schema
+        if len(args) != 2:
+            return None
+        second = T.strip_literal(args[1])
+        is_tensor = isinstance(second, T.Instance) and second.name == "torch.Tensor"
+        return f"aten::{tensor_form if is_tensor else scalar_form}"
+
+    def _operand(self, t: T.Type) -> str:
+        base = T.strip_literal(t)
+        if isinstance(base, T.Instance):
+            if base.name == "torch.Tensor":
+                return "tensor"
+            if base.name in {"int", "float", "bool"}:
+                return "scalar"
+        return "other"
 
     def call(
         self,
@@ -94,6 +243,17 @@ class TorchPlugin:
         args: Sequence[tuple[T.Type, Facts]],
         keywords: dict[str, tuple[T.Type, Facts]],
     ) -> CallResult | None:
+        if qualname in _UTILITIES:
+            kind, effect = _UTILITIES[qualname]
+            effects = EffectSet.of(*((Effect(effect),) if effect else ()))
+            return CallResult(
+                _UTILITY_TYPES.get(kind, T.UNKNOWN),
+                Facts(),
+                effects,
+                Lowering.PYTHON_FALLBACK,
+                "a library utility call, not a tensor operation",
+            )
+
         operation = qualname.rpartition(".")[2]
         if operation not in CURATED_OPS:
             return None
@@ -103,6 +263,9 @@ class TorchPlugin:
             effects = effects.add(Effect.RANDOM)
 
         lowering, reason, guards = self._lowering(operation, args, keywords)
+        schema = self.schema_for(operation, [t for t, _facts in args])
+        if schema is not None:
+            reason = f"{reason} (`{schema}`)"
         result_type: T.Type = _TENSOR
         if operation in {"argmax", "argmin"} and not args:
             result_type = T.INT
@@ -132,11 +295,13 @@ class TorchPlugin:
         if operation in _DISPATCH_SENSITIVE:
             return (
                 Lowering.DIRECT_NATIVE_CALL,
-                f"`{operation}` lowered through the ATen dispatcher, preserving autograd and device keys",
+                f"`{operation}` has an ATen C++ counterpart that keeps autograd and "
+                "device keys; it is used when the whole function compiles into a region",
                 guards,
             )
         return (
             Lowering.DIRECT_NATIVE_CALL,
-            f"`{operation}` lowered to an unboxed dispatcher call for its known schema",
+            f"`{operation}` has an ATen C++ counterpart; it is used when the whole "
+            "function compiles into a region",
             guards,
         )

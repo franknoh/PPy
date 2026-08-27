@@ -18,6 +18,7 @@ __all__ = [
     "Length",
     "NoAlias",
     "Shape",
+    "DType",
     "Contiguous",
     "Array",
     "Vector",
@@ -146,6 +147,16 @@ class Shape(_Meta):
 
     def __init__(self, *dims: int | str) -> None:
         self.dims = tuple(dims)
+
+
+class DType(_Meta):
+    """Refinement: the array's element type, named as the library spells it."""
+
+    __slots__ = ("name",)
+    _fields = ("name",)
+
+    def __init__(self, name: str) -> None:
+        self.name = name
 
 
 class Contiguous(_Meta):

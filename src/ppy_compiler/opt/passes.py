@@ -31,6 +31,7 @@ __all__ = [
     "InlineSmallFunctions",
     "LoopUnroll",
     "FuseLibraryCalls",
+    "AdjustLibraryCalls",
     "FUSED_BINDER",
 ]
 
@@ -671,3 +672,36 @@ class FuseLibraryCalls(Pass):
         for statement in statements:
             ast.fix_missing_locations(statement)
         return statements
+
+
+class AdjustLibraryCalls(Pass):
+    """Apply a plugin's framework-level rewrite to one call's arguments."""
+
+    name = "adjust-calls"
+    min_level = 1
+
+    def __init__(self, context: PassContext, plan: dict[tuple[int, int], object]) -> None:
+        super().__init__(context)
+        self.plan = plan
+
+    def visit_Call(self, node: ast.Call) -> ast.AST:
+        self.generic_visit(node)
+        adjustment = self.plan.get(
+            (getattr(node, "lineno", -1), getattr(node, "col_offset", -1))
+        )
+        if adjustment is None:
+            return node
+
+        if adjustment.replace_first_argument is not None and node.args:
+            node.args[0] = ast.copy_location(
+                ast.Name(id=adjustment.replace_first_argument, ctx=ast.Load()), node.args[0]
+            )
+        present = {keyword.arg for keyword in node.keywords}
+        for name, source in adjustment.add_keywords:
+            if name in present:
+                continue
+            node.keywords.append(ast.keyword(arg=name, value=ast.parse(source, mode="eval").body))
+        ast.fix_missing_locations(node)
+        self.context.count("calls_adjusted")
+        self.context.remark(node, f"{adjustment.qualname}: {adjustment.reason}")
+        return node

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import ast
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -10,7 +9,7 @@ from ..analysis.checker import ProjectAnalysis, analyze
 from ..analysis.contracts import ContractReport, verify
 from ..analysis.symbols import ProjectSymbols
 from ..cache import CacheKey, CacheStore
-from ..diagnostics import Diagnostic, DiagnosticBag, Severity, Span
+from ..diagnostics import Diagnostic, DiagnosticBag, Severity
 from ..frontend.modules import ModuleGraph, build_graph
 from ..opt.manager import OptimizationResult, Optimizer
 from ..plugins.base import PluginRegistry
@@ -214,6 +213,7 @@ def build_python(
     opt_level: int | None = None,
     target: str = "python",
     fusion: dict[str, dict[tuple[int, int], object]] | None = None,
+    adjustments: dict[str, dict[tuple[int, int], object]] | None = None,
 ) -> BuildOutput:
     """Optimize every module and publish generated Python to the cache.
 
@@ -225,6 +225,7 @@ def build_python(
     project = bundle.project
     level = opt_level if opt_level is not None else project.config.opt_level
     fusion = fusion or {}
+    adjustments = adjustments or {}
     project.store.ensure()
 
     generated: dict[str, GeneratedModule] = {}
@@ -237,9 +238,13 @@ def build_python(
         if module_analysis is None or symbols is None:
             continue
         plan = fusion.get(module.name, {})
+        tweaks = adjustments.get(module.name, {})
         key = module_cache_key(
             bundle, module.name, target=target, opt_level=level,
-            extra=tuple(sorted(str(k) for k in plan)),
+            extra=(
+                tuple(sorted(str(k) for k in plan)),
+                tuple(sorted(f"{k}:{v.reason}" for k, v in tweaks.items())),
+            ),
         )
         cached = project.store.read_text(key)
         if cached is not None:
@@ -257,7 +262,8 @@ def build_python(
             continue
 
         result: OptimizationResult = Optimizer(
-            symbols, module_analysis, bundle.analysis, level=level, fusion=plan
+            symbols, module_analysis, bundle.analysis,
+            level=level, fusion=plan, adjustments=tweaks,
         ).run()
         dependencies = tuple(
             module_cache_key(bundle, edge.target, target=target, opt_level=level).hex()
@@ -284,6 +290,7 @@ def _load_fused(store: CacheStore, key: CacheKey) -> tuple[str, ...]:
     return tuple(_load_metadata(store, key).get("fused", ()))
 
 
+
 def _load_metadata(store: CacheStore, key: CacheKey) -> dict:
     import json
 
@@ -295,4 +302,7 @@ def _load_metadata(store: CacheStore, key: CacheKey) -> dict:
     except json.JSONDecodeError:
         return {}
     lines = {int(k): int(v) for k, v in payload.get("lines", {}).items()}
-    return {"lines": lines, "fused": payload.get("fused", [])}
+    return {
+        "lines": lines,
+        "fused": payload.get("fused", []),
+    }

@@ -10,7 +10,14 @@ from ..analysis import types as T
 from ..analysis.effects import EffectSet
 from ..analysis.refinements import Facts
 
-__all__ = ["Lowering", "CallResult", "Plugin", "PluginContext", "PluginRegistry"]
+__all__ = [
+    "Lowering",
+    "CallResult",
+    "CallAdjustment",
+    "Plugin",
+    "PluginContext",
+    "PluginRegistry",
+]
 
 
 class Lowering(enum.StrEnum):
@@ -33,6 +40,16 @@ class CallResult:
     lowering: Lowering = Lowering.PYTHON_FALLBACK
     reason: str = ""
     guards: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class CallAdjustment:
+    """A framework-level rewrite of one call's arguments (spec 15.4, 22.2)."""
+
+    qualname: str
+    replace_first_argument: str | None = None
+    add_keywords: tuple[tuple[str, str], ...] = ()
+    reason: str = ""
 
 
 @dataclass(slots=True)

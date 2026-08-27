@@ -137,7 +137,10 @@ _ABSTRACT_MRO: dict[str, tuple[str, ...]] = {
     "Iterator": ("Iterator", "Iterable", "object"),
     "Mapping": ("Mapping", "object"),
     "Generator": ("Generator", "Iterator", "Iterable", "object"),
-    "Coroutine": ("Coroutine", "object"),
+    "Coroutine": ("Coroutine", "Awaitable", "object"),
+    "Awaitable": ("Awaitable", "object"),
+    "AsyncIterator": ("AsyncIterator", "AsyncIterable", "object"),
+    "AsyncIterable": ("AsyncIterable", "object"),
 }
 
 

@@ -6,11 +6,10 @@ import ast
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from ..diagnostics import Diagnostic, DiagnosticBag, Severity
+from ..diagnostics import DiagnosticBag
 from ..frontend.modules import Module, ModuleGraph
-from ..frontend.source import span_of
 from . import types as T
-from .annotations import AnnotationResolver, Resolved
+from .annotations import AnnotationResolver
 from .effects import EffectSet
 from .refinements import Facts
 
@@ -184,6 +183,7 @@ class ModuleSymbols:
     globals: dict[str, T.Type] = field(default_factory=dict)
     global_facts: dict[str, Facts] = field(default_factory=dict)
     constant_globals: dict[str, object] = field(default_factory=dict)
+    type_aliases: dict[str, ast.expr] = field(default_factory=dict)
     all_exports: tuple[str, ...] | None = None
 
     @property
@@ -279,6 +279,9 @@ class NameResolver:
             return self.symbols.classes[name].qualname
         return None
 
+    def type_alias(self, name: str) -> ast.expr | None:
+        return self.symbols.type_aliases.get(name)
+
     def class_instance(self, qualname: str, args: tuple[T.Type, ...]) -> T.Instance | None:
         info = self.project.classes.get(qualname)
         if info is not None:
@@ -309,6 +312,8 @@ class ProjectSymbols:
             self._collect_imports(self.modules[module.name])
         for module in ordered:
             self._collect_declarations(self.modules[module.name])
+        for module in ordered:
+            self._collect_type_aliases(self.modules[module.name])
         for module in ordered:
             self._compute_mro(self.modules[module.name])
         for module in ordered:
@@ -394,6 +399,52 @@ class ProjectSymbols:
                         symbols.imports[local] = ImportBinding(local, submodule, None, False)
                     else:
                         symbols.imports[local] = ImportBinding(local, edge.target, name, edge.external)
+
+    def _collect_type_aliases(self, symbols: ModuleSymbols) -> None:
+        """Record module-level type aliases so annotations can name them.
+
+        `X = Annotated[...]` and the 3.12 `type X = ...` form are both ways of
+        giving a type a name, and an annotation that uses one has to resolve
+        through it (spec 8.1).
+        """
+        for node in symbols.module.tree.body:
+            if isinstance(node, ast.TypeAlias) and isinstance(node.name, ast.Name):
+                symbols.type_aliases[node.name.id] = node.value
+                continue
+            target = value = None
+            if isinstance(node, ast.Assign) and len(node.targets) == 1:
+                target, value = node.targets[0], node.value
+            elif isinstance(node, ast.AnnAssign) and node.value is not None:
+                if _is_type_alias_annotation(node.annotation):
+                    target, value = node.target, node.value
+            if not isinstance(target, ast.Name) or value is None:
+                continue
+            if self._is_type_expression(symbols, value):
+                symbols.type_aliases[target.id] = value
+
+    def _is_type_expression(self, symbols: ModuleSymbols, node: ast.expr) -> bool:
+        """Does this expression name a type rather than compute a value?"""
+        resolver = self.resolver(symbols)
+        root = node
+        while isinstance(root, ast.Subscript):
+            root = root.value
+        if isinstance(root, ast.BinOp) and isinstance(root.op, ast.BitOr):
+            return self._is_type_expression(symbols, root.left) and self._is_type_expression(
+                symbols, root.right
+            )
+        if isinstance(root, ast.Constant) and root.value is None:
+            return True
+        if not isinstance(root, (ast.Name, ast.Attribute)):
+            return False
+        qualname = resolver.canonical(root)
+        if qualname is None:
+            return False
+        return (
+            qualname.startswith(("typing.", "ppy.", "collections.abc."))
+            or qualname in self.classes
+            or qualname in self.external_types
+            or (qualname.startswith("builtins.") and qualname.rpartition(".")[2] in T.BUILTIN_MRO)
+        )
 
     def _collect_declarations(self, symbols: ModuleSymbols) -> None:
         for node in symbols.module.tree.body:
@@ -625,6 +676,11 @@ class ProjectSymbols:
                 resolved = annotations.resolve(node.annotation)
                 symbols.globals[node.target.id] = resolved.type
                 symbols.global_facts[node.target.id] = resolved.facts
+
+
+def _is_type_alias_annotation(annotation: ast.expr) -> bool:
+    text = ast.unparse(annotation)
+    return text.endswith("TypeAlias")
 
 
 def _is_class_var(annotation: ast.expr) -> bool:

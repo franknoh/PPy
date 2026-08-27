@@ -29,12 +29,22 @@ class GeneratedModule:
     def needs_fused_binder(self) -> bool:
         return bool(self.fused_symbols)
 
-    def compile(self, native_names: frozenset[str] = frozenset()) -> object:
+    def compile(
+        self,
+        native_names: frozenset[str] = frozenset(),
+        exported_names: frozenset[str] = frozenset(),
+        region_names: frozenset[str] = frozenset(),
+    ) -> object:
         """Compile with the original `.ppy` filename so tracebacks map back."""
         tree = ast.parse(self.code, filename=str(self.source_path))
         _restore_lines(tree, self.line_map)
-        if native_names:
-            _insert_native_bindings(tree, native_names)
+        bindings = [
+            (BINDER_NAME, native_names),
+            (EXPORTED_BINDER, exported_names),
+            (REGION_BINDER, region_names),
+        ]
+        if any(names for _binder, names in bindings):
+            _insert_definition_bindings(tree, bindings)
         return compile(tree, str(self.source_path), "exec", dont_inherit=True)
 
 
@@ -114,18 +124,27 @@ def emit(
     )
 
 
-def _insert_native_bindings(tree: ast.Module, native_names: frozenset[str]) -> None:
-    """Bind a native entry point immediately after its `def`, so every later
-    reference in the module -- including a top-level `main()` -- calls it."""
+def _insert_definition_bindings(
+    tree: ast.Module, bindings: list[tuple[str, frozenset[str]]]
+) -> None:
+    """Bind an entry point immediately after its `def`, so every later
+    reference in the module -- including a top-level `main()` -- uses it."""
     body: list[ast.stmt] = []
     for statement in tree.body:
         body.append(statement)
-        if isinstance(statement, (ast.FunctionDef, ast.AsyncFunctionDef)) and statement.name in native_names:
+        if not isinstance(statement, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        for binder, names in bindings:
+            if statement.name not in names:
+                continue
             binding = ast.Assign(
                 targets=[ast.Name(id=statement.name, ctx=ast.Store())],
                 value=ast.Call(
-                    func=ast.Name(id=_BINDER, ctx=ast.Load()),
-                    args=[ast.Constant(value=statement.name), ast.Name(id=statement.name, ctx=ast.Load())],
+                    func=ast.Name(id=binder, ctx=ast.Load()),
+                    args=[
+                        ast.Constant(value=statement.name),
+                        ast.Name(id=statement.name, ctx=ast.Load()),
+                    ],
                     keywords=[],
                 ),
             )
@@ -135,6 +154,7 @@ def _insert_native_bindings(tree: ast.Module, native_names: frozenset[str]) -> N
     tree.body = body
 
 
-#: Name injected into a generated module namespace by the LLVM backend.
-_BINDER = "__ppy_bind_native__"
-BINDER_NAME = _BINDER
+#: Names injected into a generated module namespace by the backends.
+BINDER_NAME = "__ppy_bind_native__"
+EXPORTED_BINDER = "__ppy_bind_exported__"
+REGION_BINDER = "__ppy_bind_region__"

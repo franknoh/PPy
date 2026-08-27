@@ -1,8 +1,13 @@
 from __future__ import annotations
 
+import os
 import sys
 import textwrap
 from pathlib import Path
+
+# JAX preallocates most of the accelerator's memory by default, which starves
+# any other runtime the suite loads. Tests share one device, so they share it.
+os.environ.setdefault("XLA_PYTHON_CLIENT_PREALLOCATE", "false")
 
 import pytest
 

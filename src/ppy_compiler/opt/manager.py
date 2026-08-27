@@ -10,7 +10,7 @@ from ..analysis.symbols import FunctionInfo, ModuleSymbols
 from ..diagnostics import Diagnostic, Severity, Span
 from .annotate import annotate
 from .passes import (
-    FUSED_BINDER,
+    AdjustLibraryCalls,
     BranchFold,
     FuseLibraryCalls,
     CommonSubexpression,
@@ -71,12 +71,14 @@ class Optimizer:
         *,
         level: int = 2,
         fusion: dict[tuple[int, int], object] | None = None,
+        adjustments: dict[tuple[int, int], object] | None = None,
     ) -> None:
         self.symbols = symbols
         self.module = module
         self.project = project
         self.level = level
         self.fusion = fusion or {}
+        self.adjustments = adjustments or {}
 
     def run(self) -> OptimizationResult:
         tree = annotate(self.symbols.module.tree, self.module)
@@ -84,6 +86,9 @@ class Optimizer:
         result = OptimizationResult(tree=tree)
 
         self._run_pass(StripDirectives(context, _DIRECTIVE_NAMES), tree)
+
+        if self.adjustments and self.level >= 1:
+            self._run_pass(AdjustLibraryCalls(context, self.adjustments), tree)
 
         fuse: FuseLibraryCalls | None = None
         if self.fusion and self.level >= 2:
@@ -109,9 +114,13 @@ class Optimizer:
 
         self._optimize_module_level(tree, context)
 
+        preamble: list[ast.stmt] = []
         if fuse is not None and fuse.bound:
-            tree.body[_after_imports(tree):_after_imports(tree)] = fuse.bindings()
+            preamble.extend(fuse.bindings())
             result.fused_symbols = tuple(loop.symbol for loop, _ in fuse.bound.values())
+        if preamble:
+            index = _after_imports(tree)
+            tree.body[index:index] = preamble
 
         result.tree = tree
         result.stats = context.stats

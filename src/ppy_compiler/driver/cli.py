@@ -6,7 +6,6 @@ import argparse
 import sys
 from pathlib import Path
 
-from ..diagnostics import Severity
 from . import commands
 from .reporting import Reporter
 
