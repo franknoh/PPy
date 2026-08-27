@@ -307,6 +307,12 @@ def doctor(options: argparse.Namespace, reporter: Reporter) -> int:
     usable, toolchain = toolchain_status()
     print(f"native toolchain  {'available' if usable else 'unavailable'} ({toolchain})")
 
+    from ..backend.llvm.wrapper_build import wrapper_toolchain
+
+    ready, detail = wrapper_toolchain()
+    boundary = "generated CPython ABI" if ready else "ctypes"
+    print(f"python boundary   {boundary} ({detail})")
+
     print("plugins:")
     for plugin in project.plugins:
         print(f"  {plugin.name:<10} {plugin.fingerprint()}")

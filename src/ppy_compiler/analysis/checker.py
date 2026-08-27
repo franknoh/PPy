@@ -209,6 +209,7 @@ class _Checker:
         self._escaping: set[str] = set()
         self._mutated: set[str] = set()
         self._bound_methods: set[int] = set()
+        self._function_locals: set[str] = set()
         self._attribute_owners: dict[int, T.Type] = {}
 
     def check_module(self) -> ModuleAnalysis:
@@ -235,7 +236,8 @@ class _Checker:
     def _check_function(self, info: FunctionInfo) -> FunctionAnalysis:
         previous = (self._effects, self._unknown, self._calls, self._current,
                     self._returns, self._blockers, self._native_blockers,
-                    self._escaping, self._mutated, self._dynamic_depth)
+                    self._escaping, self._mutated, self._dynamic_depth,
+                    self._function_locals)
         self._effects = EffectSet()
         self._unknown = []
         self._calls = set()
@@ -250,6 +252,10 @@ class _Checker:
 
         env = Env()
         self._seed_module_env(env)
+        # A parameter shadows a module global of the same name, so reading it
+        # is not a global dependency.
+        self._function_locals = {param.name for param in info.params}
+        self._function_locals |= _assigned_names(info.node)
         for param in info.params:
             facts = param.facts
             if isinstance(param.type, T.UnknownType) and not param.annotated:
@@ -262,7 +268,7 @@ class _Checker:
         result = self._finish_function(info, env)
         (self._effects, self._unknown, self._calls, self._current, self._returns,
          self._blockers, self._native_blockers, self._escaping, self._mutated,
-         self._dynamic_depth) = previous
+         self._dynamic_depth, self._function_locals) = previous
         return result
 
     def _finish_function(self, info: FunctionInfo, env: Env) -> FunctionAnalysis:
@@ -1907,7 +1913,7 @@ class _Checker:
 
     def _is_module_global(self, name: str) -> bool:
         """A mutable module-level binding, which reading is an effect."""
-        if name in self.symbols.constant_globals:
+        if name in self._function_locals or name in self.symbols.constant_globals:
             return False
         return (
             name in self.symbols.globals
@@ -2095,6 +2101,21 @@ class _Checker:
 
     def _remark(self, message: str, node: ast.AST) -> None:
         self.diagnostics.add(Diagnostic("R3001", Severity.REMARK, message, span_of(self.path, node)))
+
+
+def _assigned_names(node: ast.AST) -> set[str]:
+    """Names this function binds itself, which therefore shadow any global."""
+    found: set[str] = set()
+    for child in ast.walk(node):
+        if isinstance(child, ast.Name) and isinstance(child.ctx, (ast.Store, ast.Del)):
+            found.add(child.id)
+        elif isinstance(child, ast.arg):
+            found.add(child.arg)
+        elif isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            found.add(child.name)
+        elif isinstance(child, ast.Global):
+            found.difference_update(child.names)
+    return found
 
 
 def _invert_order(op: ast.cmpop) -> ast.cmpop:

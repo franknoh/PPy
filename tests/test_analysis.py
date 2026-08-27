@@ -480,3 +480,69 @@ def test_a_value_assignment_is_not_mistaken_for_an_alias(write, analyze):
     assert not bundle.diagnostics.has_errors()
     assert "LIMIT" not in bundle.symbols.modules["notalias"].type_aliases
     assert "NAMES" not in bundle.symbols.modules["notalias"].type_aliases
+
+
+def test_a_parameter_shadows_a_module_global_of_the_same_name(write, analyze):
+    """Reading a parameter is not a global dependency, whatever it is called."""
+    path = write(
+        "shadow.ppy",
+        """
+        import ppy
+
+        total: int = 0
+
+
+        @ppy.pure
+        def add(total: int, extra: int) -> int:
+            return total + extra
+        """,
+    )
+    bundle = analyze(path)
+    assert not bundle.diagnostics.has_errors(), [d.message for d in bundle.diagnostics.errors]
+
+    analysis = bundle.analysis.function("shadow.add")
+    assert analysis.verified_pure
+    assert Effect.READ_GLOBAL not in analysis.effects
+
+
+def test_a_local_shadows_a_module_global_of_the_same_name(write, analyze):
+    path = write(
+        "localshadow.ppy",
+        """
+        import ppy
+
+        count: int = 5
+
+
+        @ppy.pure
+        def compute(n: int) -> int:
+            count: int = n * 2
+            return count
+        """,
+    )
+    bundle = analyze(path)
+    assert not bundle.diagnostics.has_errors(), [d.message for d in bundle.diagnostics.errors]
+    assert bundle.analysis.function("localshadow.compute").verified_pure
+
+
+def test_reading_a_real_mutable_global_is_still_an_effect(write, analyze):
+    path = write(
+        "realglobal.ppy",
+        """
+        import ppy
+
+        counter: int = 0
+
+
+        def bump() -> None:
+            global counter
+            counter = counter + 1
+
+
+        @ppy.pure
+        def read() -> int:
+            return counter
+        """,
+    )
+    codes = [d.code for d in analyze(path).diagnostics]
+    assert "E1601" in codes

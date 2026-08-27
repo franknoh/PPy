@@ -321,3 +321,34 @@ def test_lsp_command_serves_a_session(workspace: Path):
     assert result.returncode == 0
     assert b'"serverInfo"' in result.stdout
     assert b'"hoverProvider":true' in result.stdout
+
+
+def test_explain_reports_which_boundary_a_function_crosses(workspace: Path):
+    (workspace / "boundary.ppy").write_text(
+        textwrap.dedent(
+            """
+            import ppy
+
+
+            @ppy.pure
+            @ppy.opt(3)
+            def square(x: int) -> int:
+                return x * x
+
+
+            @ppy.jit
+            @ppy.pure
+            def cube(x: int) -> int:
+                return x * x * x
+            """
+        ).lstrip("\n"),
+        encoding="utf-8",
+    )
+    plain = _ppy(["explain", "square"], workspace)
+    assert plain.returncode == 0
+    assert "python boundary: a generated CPython-ABI wrapper" in plain.stdout
+
+    jitted = _ppy(["explain", "cube"], workspace)
+    assert "python boundary: ctypes" in jitted.stdout
+    assert "specialization" in jitted.stdout
+    assert "specializes on x" in jitted.stdout

@@ -1198,3 +1198,532 @@ def test_a_buffer_selects_a_native_vector_representation():
     # A buffer whose element type is unknown has no native layout.
     opaque = select(T.instance("Buffer", T.ANY), Facts())
     assert opaque.repr is Repr.PY_OBJECT
+
+
+# -- value classes --------------------------------------------------------
+
+VALUE_CLASSES = """
+    from dataclasses import dataclass
+
+    import ppy
+
+
+    @dataclass
+    class Point:
+        x: float
+        y: float
+        z: float
+
+        @ppy.pure
+        @ppy.opt(3)
+        def norm2(self) -> float:
+            return self.x * self.x + self.y * self.y + self.z * self.z
+
+
+    class Counter:
+        total: int
+        step: int
+
+        def __init__(self, total: int, step: int) -> None:
+            self.total = total
+            self.step = step
+
+
+    @ppy.pure
+    @ppy.opt(3)
+    def distance2(a: Point, b: Point) -> float:
+        dx: float = a.x - b.x
+        dy: float = a.y - b.y
+        dz: float = a.z - b.z
+        return dx * dx + dy * dy + dz * dz
+
+
+    @ppy.pure
+    def advance(c: Counter, times: int) -> int:
+        return c.total + c.step * times
+    """
+
+
+def _layouts(bundle):  # type: ignore[no-untyped-def]
+    from ppy_compiler.backend.llvm import _value_class_layouts
+
+    return _value_class_layouts(bundle)
+
+
+def test_a_value_class_flattens_into_scalar_arguments(write, analyze):
+    path = write("values.ppy", VALUE_CLASSES)
+    bundle = analyze(path, backend="llvm")
+    assert _layouts(bundle)["values.Point"] == (("x", "float"), ("y", "float"), ("z", "float"))
+    assert _layouts(bundle)["values.Counter"] == (("total", "int"), ("step", "int"))
+
+    module = _collect(bundle)["values"]
+    signature = module.functions["values.distance2"].signature
+    assert signature.params == ("double",) * 6
+    assert signature.parameters[0].is_object
+    assert signature.parameters[0].class_name == "values.Point"
+    assert "double a_x" in str(signature)
+
+
+def test_a_method_receives_its_receiver_flattened(write, analyze):
+    path = write("methods.ppy", VALUE_CLASSES)
+    module = _collect(analyze(path, backend="llvm"))["methods"]
+    assert "methods.Point.norm2" in module.functions
+    assert module.functions["methods.Point.norm2"].signature.params == ("double",) * 3
+
+
+def test_a_class_with_a_non_scalar_field_stays_boxed(write, analyze):
+    path = write(
+        "boxed.ppy",
+        """
+        import ppy
+
+
+        class Holder:
+            name: str
+            size: int
+
+            def __init__(self, name: str, size: int) -> None:
+                self.name = name
+                self.size = size
+
+
+        @ppy.pure
+        def size_of(h: Holder) -> int:
+            return h.size
+        """,
+    )
+    bundle = analyze(path, backend="llvm")
+    assert "boxed.Holder" not in _layouts(bundle)
+    assert "boxed.size_of" in _collect(bundle)["boxed"].rejected
+
+
+def test_a_subclassed_value_class_is_not_flattened(write, analyze):
+    path = write(
+        "derived.ppy",
+        """
+        from dataclasses import dataclass
+
+
+        @dataclass
+        class Base:
+            x: float
+
+
+        @dataclass
+        class Derived(Base):
+            y: float
+        """,
+    )
+    layouts = _layouts(analyze(path, backend="llvm"))
+    assert "derived.Base" in layouts
+    # A subclass may add state or override attribute access, so it is left alone.
+    assert "derived.Derived" not in layouts
+
+
+def test_writing_a_field_keeps_the_function_boxed(write, analyze):
+    path = write(
+        "mutating.ppy",
+        """
+        from dataclasses import dataclass
+
+
+        @dataclass
+        class Cell:
+            value: float
+
+
+        def bump(c: Cell, by: float) -> float:
+            c.value = c.value + by
+            return c.value
+        """,
+    )
+    module = _collect(analyze(path, backend="llvm"))["mutating"]
+    assert "mutating.bump" in module.rejected
+
+
+def test_value_class_results_match_python(write, analyze):
+    path = write("valexec.ppy", VALUE_CLASSES)
+    module = _collect(analyze(path, backend="llvm"))["valexec"]
+    engine = _jit(module)
+
+    class Point:
+        def __init__(self, x, y, z):
+            self.x, self.y, self.z = x, y, z
+
+    def fallback(a, b):
+        return (a.x - b.x) ** 2 + (a.y - b.y) ** 2 + (a.z - b.z) ** 2
+
+    lowered = module.functions["valexec.distance2"]
+    binding = bind(lowered.signature, engine.address(lowered.signature.symbol), fallback)
+    # The class the layout was built for lives in the fallback's module, which
+    # this stand-in is not, so the guard sends the call to Python.
+    assert binding.wrapper(Point(1.0, 2.0, 3.0), Point(4.0, 6.0, 3.0)) == 25.0
+    assert binding.fallbacks == 1
+
+
+def test_value_class_programs_match_plain_cpython(tmp_path: Path):
+    entry = tmp_path / "values_run.ppy"
+    entry.write_text(
+        textwrap.dedent(VALUE_CLASSES).lstrip("\n")
+        + textwrap.dedent(
+            """
+
+            a = Point(1.0, 2.0, 3.0)
+            b = Point(4.0, 6.0, 3.0)
+            print(a.norm2(), distance2(a, b), advance(Counter(10, 3), 4))
+            """
+        ),
+        encoding="utf-8",
+    )
+    plain = _run([sys.executable, entry.name], tmp_path)
+    native = _ppy(["run", entry.name], tmp_path)
+    assert plain.returncode == 0, plain.stderr
+    assert native.returncode == 0, native.stderr
+    assert native.stdout == plain.stdout
+
+
+def test_a_flattened_value_class_selects_an_aggregate_representation():
+    from ppy_compiler.analysis import types as T
+    from ppy_compiler.analysis.refinements import Facts
+    from ppy_compiler.analysis.representation import Repr, select
+
+    layouts = {"m.Point": (("x", "float"), ("y", "float"))}
+    chosen = select(T.Instance("m.Point", (), ("m.Point", "object")), Facts(), layouts=layouts)
+    assert chosen.repr is Repr.AGGREGATE
+    assert "2 scalar(s)" in chosen.reason
+
+    escaping = select(
+        T.Instance("m.Point", (), ("m.Point", "object")),
+        Facts(),
+        escapes=True,
+        layouts=layouts,
+    )
+    assert escaping.repr is Repr.PY_OBJECT
+
+
+# -- the generated CPython-ABI boundary -----------------------------------
+
+
+def test_the_wrapper_toolchain_is_reported():
+    from ppy_compiler.backend.llvm.wrapper_build import wrapper_toolchain
+
+    ready, detail = wrapper_toolchain()
+    assert isinstance(ready, bool) and detail
+
+
+def test_the_generator_emits_one_entry_point_per_function(write, analyze):
+    from ppy_compiler.backend.llvm.wrapper import generate
+
+    path = write("wrapgen.ppy", BUFFERS)
+    module = _collect(analyze(path, backend="llvm"))["wrapgen"]
+    signatures = {q: lowered.signature for q, lowered in module.functions.items()}
+
+    built = generate("ppy_wrappers_test", signatures)
+    assert set(built.entries) == set(signatures)
+    for index in built.entries.values():
+        assert f"ppy_call_{index}" in built.source
+        assert f"ppy_bind_{index}" in built.source
+    assert "METH_FASTCALL" in built.source
+    assert "Py_RETURN_NOTIMPLEMENTED" in built.source
+    assert "PyInit_ppy_wrappers_test" in built.source
+
+
+def test_the_generator_covers_every_parameter_shape(write, analyze):
+    from ppy_compiler.backend.llvm.wrapper import generate
+
+    path = write(
+        "shapes.ppy",
+        """
+        from dataclasses import dataclass
+
+        import ppy
+        from ppy import Buffer
+
+
+        @dataclass
+        class Point:
+            x: float
+            y: float
+
+
+        @ppy.pure
+        def mixed(
+            scalar: int,
+            pair: tuple[float, float],
+            point: Point,
+            copied: list[float],
+            borrowed: Buffer[float],
+        ) -> float:
+            return scalar + pair[0] + point.x + copied[0] + borrowed[0]
+        """,
+    )
+    module = _collect(analyze(path, backend="llvm"))["shapes"]
+    assert "shapes.mixed" in module.functions, module.rejected
+
+    source = generate("ppy_wrappers_shapes", {
+        "shapes.mixed": module.functions["shapes.mixed"].signature
+    }).source
+    assert "PyLong_AsLongLong" in source          # a scalar int
+    assert "PyTuple_GET_ITEM" in source           # a fixed tuple
+    assert "PyObject_GetAttr(" in source          # a value class field
+    assert "PyUnicode_InternFromString" in source  # its name, interned once
+    assert "PyMem_Malloc" in source               # a copied list
+    assert "PyObject_GetBuffer" in source         # a borrowed buffer
+    assert "PyBuffer_Release" in source
+
+
+def _wrapped(write, analyze, name, source, function):
+    """Build a module, compile its wrapper, and bind one entry point."""
+    from ppy_compiler.backend.llvm.wrapper_build import build_wrappers, wrapper_toolchain
+
+    ready, detail = wrapper_toolchain()
+    if not ready:
+        pytest.skip(detail)
+
+    path = write(f"{name}.ppy", source)
+    module = _collect(analyze(path, backend="llvm"))[name]
+    qualname = f"{name}.{function}"
+    assert qualname in module.functions, module.rejected
+    engine = _jit(module)
+
+    built = build_wrappers(
+        name,
+        {q: lowered.signature for q, lowered in module.functions.items()},
+        path.parent / ".ppy-cache",
+    )
+    if not built.ok:
+        pytest.skip(built.reason)
+
+    lowered = module.functions[qualname]
+    entry = built.bind(qualname, engine.address(lowered.signature.symbol), ())
+    assert entry is not None
+    # The engine owns the compiled code: dropping it would free what the
+    # wrapper points at, so it is handed back with the entry.
+    return entry, (engine, built)
+
+
+SCALARS = """
+    import ppy
+
+
+    @ppy.pure
+    @ppy.opt(3)
+    def poly(x: float, k: int) -> float:
+        return x * float(k) + 1.0
+
+
+    @ppy.pure
+    def swap(pair: tuple[int, int]) -> tuple[int, int]:
+        first, second = pair
+        return (second, first)
+
+
+    @ppy.pure
+    def widen(x: int) -> int:
+        return x * x
+    """
+
+
+def test_the_wrapper_computes_the_same_value(write, analyze):
+    entry, _owner = _wrapped(write, analyze, "wrapcall", SCALARS, "poly")
+    assert entry(2.0, 3) == 7.0
+    # An exact int is accepted where a float is expected, as Python does.
+    assert entry(2, 3) == 7.0
+
+
+def test_the_wrapper_returns_a_tuple_result(write, analyze):
+    entry, _owner = _wrapped(write, analyze, "wraptuple", SCALARS, "swap")
+    assert entry((1, 2)) == (2, 1)
+
+
+def test_a_wrong_argument_type_asks_for_the_python_path(write, analyze):
+    entry, _owner = _wrapped(write, analyze, "wrapguard", SCALARS, "poly")
+    assert entry("two", 3) is NotImplemented
+    assert entry(2.0, 3.5) is NotImplemented
+    assert entry(2.0) is NotImplemented, "the wrong arity is a guard failure too"
+
+
+def test_an_out_of_range_integer_asks_for_the_python_path(write, analyze):
+    entry, _owner = _wrapped(write, analyze, "wrapwide", SCALARS, "widen")
+    assert entry(7) == 49
+    assert entry(10**9) == 10**18, "still inside the machine range"
+    assert entry(10**30) is NotImplemented, "the argument is beyond the machine range"
+    assert entry(10**10) is NotImplemented, "the product overflows, so the native code bails"
+
+
+def test_a_guard_failure_leaves_no_exception_set(write, analyze):
+    entry, _owner = _wrapped(write, analyze, "wrapclean", SCALARS, "widen")
+    assert entry(10**30) is NotImplemented
+    # A stale exception here would surface at some unrelated later point.
+    assert sys.exc_info() == (None, None, None)
+    assert entry(3) == 9
+
+
+def test_the_wrapper_reads_a_borrowed_buffer_without_copying(write, analyze):
+    import array
+
+    entry, _owner = _wrapped(write, analyze, "wrapview", BUFFERS_VIEW, "total")
+    values = array.array("d", [1.5, 2.5, 3.0])
+    assert entry(values) == 7.0
+
+    values[0] = 10.5
+    assert entry(values) == 16.0, "the wrapper points at the caller's memory"
+    assert entry([1.0, 2.0]) is NotImplemented, "a list has no buffer to point at"
+
+
+def test_the_wrapper_copies_a_list_buffer(write, analyze):
+    entry, _owner = _wrapped(write, analyze, "wraplist", BUFFERS, "total")
+    assert entry([1, 2, 3]) == 6
+    assert entry((1, 2, 3)) is NotImplemented
+    assert entry([1, 10**30]) is NotImplemented
+
+
+def test_the_binding_prefers_the_generated_wrapper(write, analyze):
+    from ppy_compiler.backend.llvm.wrapper_build import build_wrappers, wrapper_toolchain
+
+    ready, detail = wrapper_toolchain()
+    if not ready:
+        pytest.skip(detail)
+
+    path = write("prefer.ppy", SCALARS)
+    module = _collect(analyze(path, backend="llvm"))["prefer"]
+    engine = _jit(module)
+    built = build_wrappers(
+        "prefer",
+        {q: lowered.signature for q, lowered in module.functions.items()},
+        path.parent / ".ppy-cache",
+    )
+    if not built.ok:
+        pytest.skip(built.reason)
+
+    lowered = module.functions["prefer.widen"]
+    entry = built.bind("prefer.widen", engine.address(lowered.signature.symbol), ())
+
+    def fallback(x):
+        return x * x
+
+    binding = bind(
+        lowered.signature,
+        engine.address(lowered.signature.symbol),
+        fallback,
+        fast_entry=entry,
+    )
+    assert binding.fast_entry is entry
+    assert binding.wrapper(7) == 49
+    assert binding.calls == 1
+
+    # Beyond the machine range the guard fails and the Python body answers.
+    assert binding.wrapper(10**30) == 10**60
+    assert binding.fallbacks == 1
+
+
+MIXED = """
+    from dataclasses import dataclass
+
+    import ppy
+    from ppy import Buffer
+
+
+    @dataclass
+    class Point:
+        x: float
+        y: float
+
+
+    @ppy.pure
+    def mixed(
+        scalar: int,
+        pair: tuple[float, float],
+        point: Point,
+        copied: list[float],
+        borrowed: Buffer[float],
+    ) -> float:
+        return float(scalar) + pair[0] + point.x + copied[0] + borrowed[0]
+    """
+
+
+def test_a_guard_failing_on_an_early_argument_cleans_up_safely(write, analyze):
+    """A jump to the cleanup must not read a declaration it skipped over."""
+    import array
+
+    from ppy_compiler.backend.llvm.wrapper_build import build_wrappers, wrapper_toolchain
+
+    ready, detail = wrapper_toolchain()
+    if not ready:
+        pytest.skip(detail)
+
+    path = write("mixedwrap.ppy", MIXED)
+    bundle = analyze(path, backend="llvm")
+    module = _collect(bundle)["mixedwrap"]
+    assert "mixedwrap.mixed" in module.functions, module.rejected
+    engine = _jit(module)
+
+    built = build_wrappers(
+        "mixedwrap",
+        {q: lowered.signature for q, lowered in module.functions.items()},
+        path.parent / ".ppy-cache",
+    )
+    if not built.ok:
+        pytest.skip(built.reason)
+
+    namespace: dict = {}
+    exec(compile(path.read_text(encoding="utf-8"), str(path), "exec"), namespace)  # noqa: S102
+    point_type = namespace["Point"]
+
+    lowered = module.functions["mixedwrap.mixed"]
+    entry = built.bind(
+        "mixedwrap.mixed", engine.address(lowered.signature.symbol), (point_type,)
+    )
+    assert entry is not None
+
+    point = point_type(3.0, 4.0)
+    values = array.array("d", [5.0, 6.0])
+    assert entry(1, (2.0, 0.0), point, [10.0], values) == 21.0
+
+    # The first argument fails, so the jump skips every later declaration.
+    for _ in range(50):
+        assert entry("no", (2.0, 0.0), point, [10.0], values) is NotImplemented
+        assert entry(1, (2.0, 0.0), "not a point", [10.0], values) is NotImplemented
+        assert entry(1, (2.0, 0.0), point, "not a list", values) is NotImplemented
+        assert entry(1, (2.0, 0.0), point, [10.0], [1.0]) is NotImplemented
+    assert entry(1, (2.0, 0.0), point, [10.0], values) == 21.0
+    del engine, built
+
+
+def test_a_class_that_intercepts_attribute_reads_stays_boxed(write, analyze):
+    """Flattening is only invisible if reading a field is a plain read."""
+    path = write(
+        "intercept.ppy",
+        """
+        from dataclasses import dataclass
+
+
+        @dataclass
+        class Plain:
+            x: float
+
+
+        class Watching:
+            x: float
+
+            def __init__(self, x: float) -> None:
+                self.x = x
+
+            def __getattr__(self, name: str) -> float:
+                return 0.0
+
+
+        class Shadowed:
+            x: float
+
+            def __init__(self, x: float) -> None:
+                self.x = x
+
+            def x(self) -> float:
+                return 1.0
+        """,
+    )
+    layouts = _layouts(analyze(path, backend="llvm"))
+    assert "intercept.Plain" in layouts
+    assert "intercept.Watching" not in layouts
+    assert "intercept.Shadowed" not in layouts

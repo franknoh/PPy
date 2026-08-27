@@ -128,21 +128,33 @@ def _insert_definition_bindings(
     tree: ast.Module, bindings: list[tuple[str, frozenset[str]]]
 ) -> None:
     """Bind an entry point immediately after its `def`, so every later
-    reference in the module -- including a top-level `main()` -- uses it."""
-    body: list[ast.stmt] = []
-    for statement in tree.body:
-        body.append(statement)
+    reference -- a top-level `main()`, or a method looked up on its class --
+    uses it."""
+    tree.body = _bind_in(tree.body, bindings, prefix="")
+
+
+def _bind_in(
+    body: list[ast.stmt], bindings: list[tuple[str, frozenset[str]]], prefix: str
+) -> list[ast.stmt]:
+    rebuilt: list[ast.stmt] = []
+    for statement in body:
+        if isinstance(statement, ast.ClassDef):
+            statement.body = _bind_in(statement.body, bindings, f"{prefix}{statement.name}.")
+            rebuilt.append(statement)
+            continue
+        rebuilt.append(statement)
         if not isinstance(statement, (ast.FunctionDef, ast.AsyncFunctionDef)):
             continue
+        key = f"{prefix}{statement.name}"
         for binder, names in bindings:
-            if statement.name not in names:
+            if key not in names:
                 continue
             binding = ast.Assign(
                 targets=[ast.Name(id=statement.name, ctx=ast.Store())],
                 value=ast.Call(
                     func=ast.Name(id=binder, ctx=ast.Load()),
                     args=[
-                        ast.Constant(value=statement.name),
+                        ast.Constant(value=key),
                         ast.Name(id=statement.name, ctx=ast.Load()),
                     ],
                     keywords=[],
@@ -150,8 +162,8 @@ def _insert_definition_bindings(
             )
             ast.copy_location(binding, statement)
             ast.fix_missing_locations(binding)
-            body.append(binding)
-    tree.body = body
+            rebuilt.append(binding)
+    return rebuilt
 
 
 #: Names injected into a generated module namespace by the backends.

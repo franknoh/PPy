@@ -29,6 +29,7 @@ from .link import (
 )
 from .lowering import LoweredFunction, LoweringResult, NativeSignature, lower_module
 from .specialize import SpecializationPolicy, Specializer
+from .wrapper_build import build_wrappers
 
 __all__ = [
     "LlvmUnavailable",
@@ -56,19 +57,73 @@ class NativeModule:
     fusion_notes: list[tuple[int, str]] = field(default_factory=list)
 
 
+#: Members that make attribute reads observable, so the class stays boxed.
+_INTERCEPTORS = {"__getattr__", "__getattribute__", "__setattr__", "__init_subclass__"}
+
+
+def _definitions(tree: ast.Module):  # type: ignore[no-untyped-def]
+    """Every function the backend may lower, with its owning class if any."""
+    for node in tree.body:
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            yield "", node
+        elif isinstance(node, ast.ClassDef):
+            for child in node.body:
+                if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                    yield node.name, child
+
+
+def _value_class_layouts(bundle) -> dict[str, tuple[tuple[str, str], ...]]:  # type: ignore[no-untyped-def]
+    """Classes whose instances can be flattened into scalar arguments.
+
+    A value class here is one with a fixed set of scalar fields and no base
+    beyond `object`: nothing about it needs a Python object to represent
+    (spec 13.2, 25.4).
+    """
+    from ...analysis import types as T
+
+    scalars = {"int", "float", "bool"}
+    layouts: dict[str, tuple[tuple[str, str], ...]] = {}
+    for qualname, info in bundle.symbols.classes.items():
+        if info.is_protocol or info.is_enum or info.is_pydantic:
+            continue
+        if tuple(entry for entry in info.mro if entry != "object") != (qualname,):
+            continue
+        # Reading a field must be a plain attribute read: anything that can
+        # intercept it could observe the flattening.
+        if _INTERCEPTORS & set(info.methods):
+            continue
+        if set(info.fields) & set(info.methods):
+            continue
+        fields: list[tuple[str, str]] = []
+        for name, declared in info.fields.items():
+            if name in info.class_vars:
+                continue
+            base = T.strip_literal(declared)
+            if not isinstance(base, T.Instance) or base.name not in scalars:
+                fields = []
+                break
+            fields.append((name, base.name))
+        if fields:
+            layouts[qualname] = tuple(fields)
+    return layouts
+
+
 def _collect(bundle) -> dict[str, NativeModule]:  # type: ignore[no-untyped-def]
     """Lower every module in the project to LLVM IR."""
     modules: dict[str, NativeModule] = {}
+    layouts = _value_class_layouts(bundle)
     for module in bundle.graph.order():
         analysis = bundle.analysis.modules.get(module.name)
         symbols = bundle.symbols.modules.get(module.name)
         if analysis is None or symbols is None:
             continue
         candidates: dict[str, tuple] = {}
-        for node in module.tree.body:
-            if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                continue
-            info = symbols.functions.get(node.name)
+        for owner, node in _definitions(module.tree):
+            info = (
+                symbols.classes[owner].methods.get(node.name)
+                if owner and owner in symbols.classes
+                else symbols.functions.get(node.name)
+            )
             if info is None:
                 continue
             function_analysis = analysis.functions.get(info.qualname)
@@ -78,7 +133,7 @@ def _collect(bundle) -> dict[str, NativeModule]:  # type: ignore[no-untyped-def]
         fused, plan, notes = _fuse(symbols, analysis)
         if not candidates and not fused:
             continue
-        result: LoweringResult = lower_module(analysis, candidates)
+        result: LoweringResult = lower_module(analysis, candidates, layouts)
         ir_text = result.ir
         if fused:
             ir_text = _append_fused(ir_text, module.name, fused)
@@ -267,6 +322,7 @@ def compile_and_run(bundle, program_args, reporter, *, opt_level: int | None = N
         if bundle.project.config.parallel.enabled
         else 1
     )
+    layouts = _value_class_layouts(bundle)
     for name, native in natives.items():
         analysis = bundle.analysis.modules.get(name)
         specializer = None
@@ -276,20 +332,40 @@ def compile_and_run(bundle, program_args, reporter, *, opt_level: int | None = N
                 module_analysis=analysis,
                 cache=bundle.project.store,
                 cache_directory=bundle.project.config.cache_path / "jit",
+                layouts=layouts,
             )
             for qualname, (info, node) in native.sources.items():
                 specializer.register(info, node)
+        wrappers = build_wrappers(
+            name,
+            {q: lowered.signature for q, lowered in native.functions.items()},
+            bundle.project.config.cache_path,
+            notify=reporter.note,
+        )
+        if not wrappers.ok and wrappers.reason and native.functions:
+            reporter.emit(
+                Diagnostic(
+                    "W2004",
+                    Severity.WARNING,
+                    f"module `{name}` uses the slower boundary: {wrappers.reason}",
+                )
+            )
+
         for qualname, lowered in native.functions.items():
             address = engine.address(lowered.signature.symbol)
             if not address:
                 continue
             binder.add(
                 name,
-                qualname.rpartition(".")[2],
+                _binding_name(lowered.info),
                 lowered.signature,
                 address,
                 specializer=specializer,
                 info=lowered.info,
+                wrappers=wrappers,
+                qualname=qualname,
+                layouts=layouts,
+                engine=engine,
             )
         for symbol, loop in native.fused.items():
             address = engine.address(symbol)
@@ -328,6 +404,33 @@ def compile_and_run(bundle, program_args, reporter, *, opt_level: int | None = N
     return result.exit_code
 
 
+def _value_class_types(signature, fallback, layouts):  # type: ignore[no-untyped-def]
+    """The runtime classes the generated wrapper guards value parameters on.
+
+    Resolved from the defining module, so a class the wrapper cannot see means
+    no fast entry rather than a wrong one.
+    """
+    namespace = getattr(fallback, "__globals__", None)
+    found = []
+    for parameter in signature.parameters:
+        if not parameter.is_object:
+            continue
+        if namespace is None:
+            return None
+        cls = namespace.get(parameter.class_name.rpartition(".")[2])
+        if not isinstance(cls, type):
+            return None
+        found.append(cls)
+    return tuple(found)
+
+
+def _binding_name(info) -> str:  # type: ignore[no-untyped-def]
+    """How a generated module names this entry point when it binds it."""
+    if info.owner:
+        return f"{info.owner.rpartition('.')[2]}.{info.name}"
+    return info.name
+
+
 class _Binder(LibraryBinder):
     """Serves guarded native entry points to generated modules as they load."""
 
@@ -340,9 +443,21 @@ class _Binder(LibraryBinder):
         self.fused_bindings: list = []
 
     def add(  # type: ignore[no-untyped-def]
-        self, module: str, function: str, signature, address: int, specializer=None, info=None
+        self,
+        module: str,
+        function: str,
+        signature,
+        address: int,
+        specializer=None,
+        info=None,
+        wrappers=None,
+        qualname: str = "",
+        layouts=None,
+        engine=None,
     ) -> None:
-        self._entries.setdefault(module, {})[function] = (signature, address, specializer, info)
+        self._entries.setdefault(module, {})[function] = (
+            signature, address, specializer, info, wrappers, qualname, layouts or {}, engine
+        )
 
     def add_fused(self, module: str, loop, address: int) -> None:  # type: ignore[no-untyped-def]
         self._fused.setdefault(module, {})[loop.symbol] = (loop, address)
@@ -369,7 +484,12 @@ class _Binder(LibraryBinder):
         entry = self._entries.get(module, {}).get(function)
         if entry is None or not callable(fallback):
             return fallback
-        signature, address, specializer, info = entry
+        signature, address, specializer, info, wrappers, qualname, layouts, engine = entry
+        fast_entry = None
+        if wrappers is not None and wrappers.ok:
+            types = _value_class_types(signature, fallback, layouts)
+            if types is not None:
+                fast_entry = wrappers.bind(qualname, address, types)
         binding = make_binding(
             signature,
             address,
@@ -377,6 +497,8 @@ class _Binder(LibraryBinder):
             specializer=specializer,
             policy=SpecializationPolicy.of(info) if info is not None else None,
             info=info,
+            fast_entry=fast_entry,
+            owner=(engine, wrappers),
         )
         self.bindings.append(binding)
         return binding.wrapper

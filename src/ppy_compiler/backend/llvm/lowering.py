@@ -9,8 +9,8 @@ Floating-point ordering is strict by default: no reassociation, no
 contraction, no reciprocal substitution. `@ppy.fastmath` is what permits those,
 and nothing else does -- optimization level alone never will (spec 3.4, 12.5).
 
-A function may take scalars, fixed-size tuples, and homogeneous
-`list[int]` / `list[float]` arguments. A fixed tuple flattens into scalar SSA
+A function may take scalars, fixed-size tuples, value classes whose fields
+are all scalars, and homogeneous `list[int]` / `list[float]` arguments. A fixed tuple flattens into scalar SSA
 values rather than an allocated object, and a list is unboxed into a borrowed
 native buffer at the Python boundary -- transparent because a lowered function
 may not mutate it (spec 13.2, 13.3, 13.5).
@@ -53,6 +53,9 @@ _MAX_TUPLE_WIDTH = 8
 #: The transformations `@ppy.fastmath` permits, and nothing permits otherwise.
 FASTMATH_FLAGS = ("fast",)
 
+#: A class with more fields than this stays boxed rather than expanding the ABI.
+_MAX_CLASS_WIDTH = 8
+
 _MATH_INTRINSICS = {
     "sqrt": "llvm.sqrt.f64",
     "sin": "llvm.sin.f64",
@@ -87,10 +90,16 @@ class NativeParam:
     kind: str
     element: str = ""
     elements: tuple[str, ...] = ()
+    fields: tuple[tuple[str, str], ...] = ()
+    class_name: str = ""
 
     @property
     def is_buffer(self) -> bool:
         return self.kind in {"list", "view"}
+
+    @property
+    def is_object(self) -> bool:
+        return self.kind == "object"
 
     @property
     def is_borrowed(self) -> bool:
@@ -111,6 +120,8 @@ class NativeParam:
             return (f"{_abi_name(self.element)}*", "i64")
         if self.is_tuple:
             return tuple(_abi_name(element) for element in self.elements)
+        if self.is_object:
+            return tuple(_abi_name(scalar) for _field, scalar in self.fields)
         return (_abi_name(self.kind),)
 
     def __str__(self) -> str:
@@ -118,11 +129,14 @@ class NativeParam:
             borrow = " borrowed" if self.is_borrowed else ""
             return f"{_abi_name(self.element)}*{borrow} {self.name}, i64 {self.name}_len"
         if self.is_tuple:
-            fields = ", ".join(
+            return ", ".join(
                 f"{_abi_name(element)} {self.name}{index}"
                 for index, element in enumerate(self.elements)
             )
-            return fields
+        if self.is_object:
+            return ", ".join(
+                f"{_abi_name(scalar)} {self.name}_{field}" for field, scalar in self.fields
+            )
         return f"{_abi_name(self.kind)} {self.name}"
 
 
@@ -199,7 +213,22 @@ def _tuple_elements(t: T.Type) -> tuple[str, ...] | None:
     return tuple(kind for kind in kinds if kind is not None)
 
 
-def _native_param(name: str, t: T.Type) -> NativeParam | None:
+#: Layouts of the value classes this module may flatten, by qualified name.
+ClassLayouts = dict
+
+
+def _class_fields(t: T.Type, layouts: ClassLayouts) -> tuple[str, tuple[tuple[str, str], ...]] | None:
+    """The flattened field layout of a value-class parameter, if it has one."""
+    base = T.strip_literal(t)
+    if not isinstance(base, T.Instance):
+        return None
+    fields = layouts.get(base.name)
+    if not fields or len(fields) > _MAX_CLASS_WIDTH:
+        return None
+    return base.name, tuple(fields)
+
+
+def _native_param(name: str, t: T.Type, layouts: ClassLayouts | None = None) -> NativeParam | None:
     scalar = _scalar_name(t)
     if scalar is not None:
         return NativeParam(name, scalar)
@@ -210,6 +239,10 @@ def _native_param(name: str, t: T.Type) -> NativeParam | None:
     elements = _tuple_elements(t)
     if elements is not None:
         return NativeParam(name, "tuple", elements=elements)
+    described = _class_fields(t, layouts or {})
+    if described is not None:
+        class_name, fields = described
+        return NativeParam(name, "object", fields=fields, class_name=class_name)
     return None
 
 
@@ -220,7 +253,9 @@ def _return_atoms(t: T.Type) -> tuple[str, ...] | None:
     return _tuple_elements(t)
 
 
-def eligible(info: FunctionInfo, analysis: FunctionAnalysis) -> tuple[bool, str]:
+def eligible(
+    info: FunctionInfo, analysis: FunctionAnalysis, layouts: ClassLayouts | None = None
+) -> tuple[bool, str]:
     """Can this function be lowered to a native scalar entry point?"""
     if info.is_async or info.is_generator:
         return False, "coroutines and generators use the boxed runtime"
@@ -233,7 +268,7 @@ def eligible(info: FunctionInfo, analysis: FunctionAnalysis) -> tuple[bool, str]
     for param in info.params:
         if param.kind in {"var_positional", "var_keyword"}:
             return False, "variadic parameters have no native ABI"
-        if _native_param(param.name, param.type) is None:
+        if _native_param(param.name, param.type, layouts) is None:
             return False, f"parameter `{param.name}` is `{param.type}`, which has no native ABI"
     if _return_atoms(info.ret) is None:
         return False, f"returns `{info.ret}`, which has no native ABI"
@@ -246,6 +281,7 @@ def lower_specialization(
     node: ast.FunctionDef,
     constants: dict[str, object],
     symbol: str,
+    layouts: ClassLayouts | None = None,
 ) -> str:
     """Emit an LLVM module holding one specialized copy of a function.
 
@@ -258,17 +294,20 @@ def lower_specialization(
     llvm_module = ir.Module(name=f"{module.name}.{symbol}")
     llvm_module.triple = _default_triple()
 
-    signature = _signature(info)
-    function = ir.Function(llvm_module, _function_type(ir, info), name=symbol)
+    signature = _signature(info, layouts)
+    function = ir.Function(llvm_module, _function_type(ir, info, layouts), name=symbol)
     function.linkage = "external"
     declarations = {info.qualname: (function, signature)}
-    _FunctionLowering(ir, llvm_module, function, info, module, declarations, constants).run(node)
+    _FunctionLowering(
+        ir, llvm_module, function, info, module, declarations, constants, layouts
+    ).run(node)
     return str(llvm_module)
 
 
 def lower_module(
     module: ModuleAnalysis,
     functions: dict[str, tuple[FunctionInfo, FunctionAnalysis, ast.FunctionDef]],
+    layouts: ClassLayouts | None = None,
 ) -> LoweringResult:
     """Emit an LLVM module for every eligible function."""
     from llvmlite import ir
@@ -279,7 +318,7 @@ def lower_module(
     candidates: dict[str, tuple[FunctionInfo, FunctionAnalysis, ast.FunctionDef]] = {}
     rejected: dict[str, str] = {}
     for qualname, (info, analysis, node) in functions.items():
-        ok, reason = eligible(info, analysis)
+        ok, reason = eligible(info, analysis, layouts)
         if ok:
             candidates[qualname] = (info, analysis, node)
         else:
@@ -287,8 +326,8 @@ def lower_module(
 
     declarations: dict[str, tuple[object, NativeSignature]] = {}
     for qualname, (info, _analysis, _node) in candidates.items():
-        signature = _signature(info)
-        function_type = _function_type(ir, info)
+        signature = _signature(info, layouts)
+        function_type = _function_type(ir, info, layouts)
         function = ir.Function(llvm_module, function_type, name=signature.symbol)
         function.linkage = "external"
         declarations[qualname] = (function, signature)
@@ -297,7 +336,9 @@ def lower_module(
     for qualname, (info, analysis, node) in candidates.items():
         function, signature = declarations[qualname]
         try:
-            _FunctionLowering(ir, llvm_module, function, info, module, declarations).run(node)
+            _FunctionLowering(
+                ir, llvm_module, function, info, module, declarations, layouts=layouts
+            ).run(node)
         except Unsupported as exc:
             rejected[qualname] = str(exc)
             function.blocks.clear()
@@ -321,9 +362,10 @@ def _default_triple() -> str:
         return ""
 
 
-def _signature(info: FunctionInfo) -> NativeSignature:
+def _signature(info: FunctionInfo, layouts: ClassLayouts | None = None) -> NativeSignature:
     parameters = tuple(
-        _native_param(p.name, p.type) or NativeParam(p.name, "int") for p in info.params
+        _native_param(p.name, p.type, layouts) or NativeParam(p.name, "int")
+        for p in info.params
     )
     atoms = _return_atoms(info.ret) or ("int",)
     return NativeSignature(
@@ -351,14 +393,16 @@ def _constant_value(ir, value, scalar: str):  # type: ignore[no-untyped-def]
     return ir.Constant(ir.IntType(64), int(value))
 
 
-def _function_type(ir, info: FunctionInfo):  # type: ignore[no-untyped-def]
+def _function_type(ir, info: FunctionInfo, layouts: ClassLayouts | None = None):  # type: ignore[no-untyped-def]
     atoms = []
-    for parameter in _signature(info).parameters:
+    for parameter in _signature(info, layouts).parameters:
         if parameter.is_buffer:
             atoms.append(_llvm_type(ir, parameter.element).as_pointer())
             atoms.append(ir.IntType(64))
         elif parameter.is_tuple:
             atoms.extend(_llvm_type(ir, element) for element in parameter.elements)
+        elif parameter.is_object:
+            atoms.extend(_llvm_type(ir, scalar) for _field, scalar in parameter.fields)
         else:
             atoms.append(_llvm_type(ir, parameter.kind))
     outs = [
@@ -388,7 +432,7 @@ class _FunctionLowering:
     """Lowers one function body to LLVM IR."""
 
     def __init__(  # type: ignore[no-untyped-def]
-        self, ir, module, function, info, analysis, declarations, constants=None
+        self, ir, module, function, info, analysis, declarations, constants=None, layouts=None
     ) -> None:
         # Strict Python floating-point ordering unless the function opted out.
         self.fp_flags = (
@@ -408,6 +452,9 @@ class _FunctionLowering:
         self.locals: dict[str, tuple[object, str]] = {}
         self.buffers: dict[str, tuple[object, object, str]] = {}
         self.tuples: dict[str, list[tuple[object, str]]] = {}
+        #: Value-class parameters, flattened to one slot per field.
+        self.objects: dict[str, dict[str, tuple[object, str]]] = {}
+        self.layouts = dict(layouts or {})
         self.returns = _return_atoms(info.ret) or ("int",)
         self.outs = list(function.args[-len(self.returns):])
         self.out = function.args[-1]
@@ -420,7 +467,7 @@ class _FunctionLowering:
         self.fallback_block = self.function.append_basic_block("fallback")
 
         position = 0
-        for parameter in _signature(self.info).parameters:
+        for parameter in _signature(self.info, self.layouts).parameters:
             if parameter.is_buffer:
                 data = self.function.args[position]
                 length = self.function.args[position + 1]
@@ -429,6 +476,17 @@ class _FunctionLowering:
                     length = ir.Constant(ir.IntType(64), pinned)
                 self.buffers[parameter.name] = (data, length, parameter.element)
                 position += 2
+                continue
+            if parameter.is_object:
+                fields: dict[str, tuple[object, str]] = {}
+                for index, (field, scalar) in enumerate(parameter.fields):
+                    slot = self.builder.alloca(
+                        _llvm_type(ir, scalar), name=f"{parameter.name}_{field}"
+                    )
+                    self.builder.store(self.function.args[position + index], slot)
+                    fields[field] = (slot, scalar)
+                self.objects[parameter.name] = fields
+                position += len(parameter.fields)
                 continue
             if parameter.is_tuple:
                 slots = []
@@ -560,6 +618,8 @@ class _FunctionLowering:
         self._store(node.target, self._binary(current, value, type(node.op)))
 
     def _store(self, target: ast.expr, value: _Value) -> None:
+        if isinstance(target, ast.Attribute):
+            raise Unsupported("a flattened value class cannot be written back")
         if not isinstance(target, ast.Name):
             raise Unsupported("assignment to a non-local has no native lowering")
         existing = self.locals.get(target.id)
@@ -790,6 +850,10 @@ class _FunctionLowering:
                 return self._ifexp(node)
             case ast.Call():
                 return self._call(node)
+            case ast.Attribute():
+                if isinstance(node.value, ast.Name) and node.value.id in self.objects:
+                    return self._field(node.value.id, node.attr)
+                raise Unsupported("attribute access on this value has no native lowering")
             case ast.Subscript():
                 if isinstance(node.value, ast.Name) and node.value.id in self.tuples:
                     return self._tuple_element(node.value.id, node.slice)
@@ -799,6 +863,15 @@ class _FunctionLowering:
                     return self._buffer_element(node.value.id, self._expr(node.slice))
                 raise Unsupported("subscripting this value has no native lowering")
         raise Unsupported(f"`{type(node).__name__}` has no native lowering")
+
+    def _field(self, name: str, field: str) -> _Value:
+        """`p.x` for a flattened value class: one of its SSA values."""
+        slots = self.objects[name]
+        found = slots.get(field)
+        if found is None:
+            raise Unsupported(f"`{name}.{field}` is not a native field")
+        slot, scalar = found
+        return _Value(self.builder.load(slot), scalar)
 
     def _tuple_element(self, name: str, index: ast.expr) -> _Value:
         """`t[i]` for a constant `i`, which is just one of the SSA values."""
@@ -814,6 +887,8 @@ class _FunctionLowering:
         return _Value(self.builder.load(slot), scalar)
 
     def _load(self, name: str) -> _Value:
+        if name in self.objects:
+            raise Unsupported(f"`{name}` is a value class, which has no single scalar value")
         if name in self.tuples:
             raise Unsupported(f"`{name}` is a tuple, which has no single scalar value")
         if name in self.buffers:
@@ -929,6 +1004,16 @@ class _FunctionLowering:
         for argument, parameter in zip(node.args, signature.parameters):
             if parameter.is_buffer:
                 raise Unsupported("a buffer cannot be forwarded between native calls yet")
+            if parameter.is_object:
+                if not isinstance(argument, ast.Name) or argument.id not in self.objects:
+                    raise Unsupported("a value class argument must be a flattened local")
+                slots = self.objects[argument.id]
+                for field, scalar in parameter.fields:
+                    entry = slots.get(field)
+                    if entry is None:
+                        raise Unsupported(f"`{argument.id}` has no field `{field}`")
+                    arguments.append(self._coerce(self._field(argument.id, field), scalar).value)
+                continue
             if parameter.is_tuple:
                 values = self._tuple_expr(argument)
                 if values is None or values.width != len(parameter.elements):

@@ -45,7 +45,13 @@ _FLOAT_REPR = {16: Repr.F16, 32: Repr.F32, 64: Repr.F64}
 _MACHINE_INT = width_range(64, True)
 
 
-def select(t: T.Type, facts: Facts, *, escapes: bool = False) -> Representation:
+def select(
+    t: T.Type,
+    facts: Facts,
+    *,
+    escapes: bool = False,
+    layouts: dict[str, tuple] | None = None,
+) -> Representation:
     """Choose a physical representation for a semantic type plus proven facts.
 
     A semantic type is never conflated with its representation: a Python `int`
@@ -96,4 +102,11 @@ def select(t: T.Type, facts: Facts, *, escapes: bool = False) -> Representation:
             )
         if base.name == "torch.Tensor":
             return Representation(Repr.PY_OBJECT, reason="retained at::Tensor handle")
+        if layouts and base.name in layouts and not escapes:
+            width = len(layouts[base.name])
+            return Representation(
+                Repr.AGGREGATE,
+                guarded=True,
+                reason=f"value class flattened into {width} scalar(s)",
+            )
     return Representation(Repr.PY_OBJECT, reason="no native representation selected")

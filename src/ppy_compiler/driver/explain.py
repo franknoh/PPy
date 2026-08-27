@@ -116,6 +116,8 @@ def _print_function(
     print(f"optimization: O{level}")
     print(f"python backend: {_python_backend(analysis)}")
     print(f"llvm backend: {_llvm_backend(report)}")
+    if report is not None and report.native_ok:
+        print(f"python boundary: {_boundary(info)}")
     print(f"jit: {_jit_detail(info, report)}")
     print(f"parallel: {'accepted' if report and report.parallel_ok else 'rejected'}")
     if report and not report.parallel_ok and report.parallel_reason:
@@ -123,15 +125,21 @@ def _print_function(
     if report and report.reductions:
         print(f"reductions: {', '.join(report.reductions)}")
 
+    layouts = _layouts(bundle)
     representations = []
     for param in info.params:
-        chosen = select(param.type, param.facts, escapes=param.name in analysis.escaping)
+        chosen = select(
+            param.type,
+            param.facts,
+            escapes=param.name in analysis.escaping,
+            layouts=layouts,
+        )
         representations.append(f"{param.name}: {param.type} -> {chosen}")
     if representations:
         print("representation:")
         for line in representations:
             print(f"  {line}")
-    returned = select(info.ret, info.ret_facts, escapes=True)
+    returned = select(info.ret, info.ret_facts, escapes=True, layouts=layouts)
     print(f"  return: {info.ret} -> {returned}")
 
     facts = info.ret_facts.describe()
@@ -252,3 +260,28 @@ def _pinnable(param, policy) -> bool:  # type: ignore[no-untyped-def]
     if base.name in {"int", "float", "bool"}:
         return policy.pin_values
     return policy.pin_lengths and base.name in {"list", "Buffer", "memoryview", "array"}
+
+
+def _layouts(bundle: AnalysisBundle) -> dict[str, tuple]:
+    """Value-class layouts, when the LLVM backend can compute them."""
+    try:
+        from ..backend.llvm import _value_class_layouts
+    except Exception:  # noqa: BLE001 - llvmlite absent
+        return {}
+    return _value_class_layouts(bundle)
+
+
+def _boundary(info: FunctionInfo) -> str:
+    """Which Python-to-native boundary this function crosses (spec 16.4)."""
+    from ..backend.llvm.specialize import SpecializationPolicy
+    from ..backend.llvm.wrapper_build import wrapper_toolchain
+
+    if SpecializationPolicy.of(info).enabled:
+        return (
+            "ctypes, because runtime specialization selects the entry point in Python; "
+            "worth it only where the kernel dominates the call"
+        )
+    ready, detail = wrapper_toolchain()
+    if not ready:
+        return f"ctypes, because no wrapper could be generated: {detail}"
+    return "a generated CPython-ABI wrapper"

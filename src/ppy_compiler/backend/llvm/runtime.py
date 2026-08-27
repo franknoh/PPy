@@ -47,6 +47,11 @@ class NativeBinding:
     calls: int = 0
     fallbacks: int = 0
     specialized_calls: int = 0
+    #: The generated CPython-ABI entry point, when one was compiled.
+    fast_entry: object | None = None
+    #: Whatever owns the compiled code, kept so it cannot be freed while a
+    #: wrapper still points at it.
+    owner: object | None = None
     #: (matcher, entry) pairs, checked in order on every call.
     selectors: list = field(default_factory=list)
     key_counts: dict = field(default_factory=dict)
@@ -66,6 +71,8 @@ def bind(
     specializer: Specializer | None = None,
     policy: SpecializationPolicy | None = None,
     info: object | None = None,
+    fast_entry: Callable[..., object] | None = None,
+    owner: object | None = None,
 ) -> NativeBinding:
     """Build the Python-callable wrapper for one native function.
 
@@ -83,13 +90,18 @@ def bind(
         else:
             argument_types.extend(_CTYPES[atom] for atom in parameter.abi)
 
+
     result_types = [_CTYPES[atom] for atom in signature.returns]
     prototype = ctypes.CFUNCTYPE(
         ctypes.c_int32, *argument_types, *[ctypes.POINTER(t) for t in result_types]
     )
     native = prototype(address)
 
-    expanders = [_expander_for(p) for p in signature.parameters]
+    namespace = getattr(fallback, "__globals__", None)
+    expanders = [
+        _expander_for(p, (lambda: namespace) if namespace is not None else None)
+        for p in signature.parameters
+    ]
     finalizers = [_result_for(atom) for atom in signature.returns]
     returns_tuple = signature.returns_tuple
     observing = bool(
@@ -100,8 +112,32 @@ def bind(
         and info is not None
     )
     binding = NativeBinding(
-        signature=signature, wrapper=lambda *a: None, fallback=fallback, observing=observing
+        signature=signature,
+        wrapper=lambda *a: None,
+        fallback=fallback,
+        observing=observing,
+        fast_entry=fast_entry,
+        owner=owner,
     )
+
+    if fast_entry is not None and not observing:
+        # The generated wrapper does the parsing, the guards, the call, and the
+        # boxing in C; `NotImplemented` is its signal that a guard failed.
+        def fast_wrapper(*args: object) -> object:
+            result = fast_entry(*args)
+            if result is NotImplemented:
+                binding.fallbacks += 1
+                return fallback(*args)
+            binding.calls += 1
+            return result
+
+        fast_wrapper.__name__ = signature.qualname.rpartition(".")[2]
+        fast_wrapper.__qualname__ = signature.qualname
+        fast_wrapper.__doc__ = getattr(fallback, "__doc__", None)
+        fast_wrapper.__ppy_native__ = signature  # type: ignore[attr-defined]
+        fast_wrapper.__ppy_fallback__ = fallback  # type: ignore[attr-defined]
+        binding.wrapper = fast_wrapper
+        return binding
 
     def wrapper(*args: object) -> object:
         if len(args) != len(expanders):
@@ -145,7 +181,9 @@ def bind(
     return binding
 
 
-def _expander_for(parameter: NativeParam) -> Callable[[object, list, list], None]:
+def _expander_for(
+    parameter: NativeParam, namespace: Callable[[], dict] | None = None
+) -> Callable[[object, list, list], None]:
     """Build the guard-and-convert step for one source-level parameter."""
     if parameter.is_borrowed:
         element_type = _ELEMENT_CTYPES[parameter.element]
@@ -197,6 +235,37 @@ def _expander_for(parameter: NativeParam) -> Callable[[object, list, list], None
             atoms.append(length)
 
         return expand_buffer
+
+    if parameter.is_object:
+        field_guards = [
+            (field, _scalar_guard(_abi_of(scalar))) for field, scalar in parameter.fields
+        ]
+        short_name = parameter.class_name.rpartition(".")[2]
+        resolved: list[type | None] = [None]
+
+        def expand_object(value: object, atoms: list, borrowed: list) -> None:
+            """Read a value class's fields, guarded on its exact class.
+
+            The class is looked up lazily in the defining module, so the order
+            of definitions in the source does not matter.
+            """
+            expected = resolved[0]
+            if expected is None:
+                expected = namespace().get(short_name) if namespace is not None else None
+                if not isinstance(expected, type):
+                    raise GuardFailed
+                resolved[0] = expected
+            # A subclass may override attribute access, so only the exact class
+            # is flattened; anything else runs the Python body (spec 25.4).
+            if type(value) is not expected:
+                raise GuardFailed
+            for field, convert in field_guards:
+                try:
+                    atoms.append(convert(getattr(value, field)))
+                except AttributeError as exc:
+                    raise GuardFailed from exc
+
+        return expand_object
 
     if parameter.is_tuple:
         element_guards = [_scalar_guard(atom) for atom in parameter.abi]
@@ -323,3 +392,7 @@ def _observe(
     if binding.specialization_count >= policy.maximum:
         binding.observing = False
     return entry
+
+
+def _abi_of(scalar: str) -> str:
+    return {"int": "i64", "float": "double", "bool": "i8"}[scalar]

@@ -1,0 +1,126 @@
+"""Compiling and loading generated CPython-ABI wrappers (spec 16.5).
+
+The wrapper is built against the exact interpreter it will run in, so the
+artifact is keyed by that interpreter's version and ABI and is never reused
+across a mismatch.
+"""
+
+from __future__ import annotations
+
+import importlib.util
+import os
+import subprocess
+import sys
+import sysconfig
+from dataclasses import dataclass, field
+from pathlib import Path
+
+from ...cache import digest
+from .lowering import NativeSignature
+from .wrapper import WrapperModule, generate
+
+__all__ = ["BuiltWrappers", "build_wrappers", "wrapper_toolchain"]
+
+
+@dataclass(slots=True)
+class BuiltWrappers:
+    module: object | None = None
+    entries: dict[str, int] = field(default_factory=dict)
+    path: Path | None = None
+    reason: str = ""
+
+    @property
+    def ok(self) -> bool:
+        return self.module is not None
+
+    def bind(self, qualname: str, address: int, types: tuple) -> object | None:
+        """Point one wrapper at its native code, and hand back the fast entry."""
+        index = self.entries.get(qualname)
+        if self.module is None or index is None:
+            return None
+        try:
+            getattr(self.module, f"bind_{index}")(address, types)
+        except Exception:  # noqa: BLE001 - a refusal keeps the slower path
+            return None
+        return getattr(self.module, f"call_{index}", None)
+
+
+def wrapper_toolchain() -> tuple[bool, str]:
+    import shutil
+
+    compiler = os.environ.get("CC") or shutil.which("cc") or shutil.which("gcc")
+    if compiler is None:
+        return False, "no C compiler (cc or gcc) is on PATH"
+    include = Path(sysconfig.get_paths()["include"])
+    if not (include / "Python.h").is_file():
+        return False, f"CPython headers are missing from {include}"
+    return True, f"{compiler}, headers in {include}"
+
+
+def _fingerprint(source: str) -> str:
+    return digest(
+        source,
+        f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}",
+        getattr(sys, "abiflags", ""),
+        sysconfig.get_config_var("EXT_SUFFIX") or "",
+    )[:16]
+
+
+def build_wrappers(
+    module_name: str,
+    signatures: dict[str, NativeSignature],
+    cache_directory: Path,
+    *,
+    notify=None,
+) -> BuiltWrappers:
+    """Generate, compile, and import the Python-ABI wrappers for a module."""
+    if not signatures:
+        return BuiltWrappers(reason="no native function to wrap")
+    ready, detail = wrapper_toolchain()
+    if not ready:
+        return BuiltWrappers(reason=detail)
+
+    draft: WrapperModule = generate("ppy_wrappers_placeholder", signatures)
+    name = f"ppy_wrappers_{_fingerprint(draft.source)}"
+    built: WrapperModule = generate(name, signatures)
+
+    directory = cache_directory / "wrappers"
+    directory.mkdir(parents=True, exist_ok=True)
+    suffix = sysconfig.get_config_var("EXT_SUFFIX") or ".so"
+    library = directory / f"{name}{suffix}"
+    source_path = directory / f"{name}.c"
+
+    if not library.is_file():
+        if notify is not None:
+            notify(f"compiling {len(signatures)} Python-ABI wrapper(s)")
+        source_path.write_text(built.source, encoding="utf-8")
+        compiler = os.environ.get("CC") or "cc"
+        command = [
+            compiler,
+            "-O2",
+            "-shared",
+            "-fPIC",
+            "-I", sysconfig.get_paths()["include"],
+            str(source_path),
+            "-o", str(library),
+        ]
+        completed = subprocess.run(  # noqa: S603 - a compiler on an explicit path
+            command, capture_output=True, text=True, check=False
+        )
+        if completed.returncode != 0:
+            detail = (completed.stderr or completed.stdout).strip().splitlines()
+            library.unlink(missing_ok=True)
+            return BuiltWrappers(
+                reason=f"the wrapper did not compile: {detail[-1] if detail else 'unknown'}"
+            )
+
+    spec = importlib.util.spec_from_file_location(name, library)
+    if spec is None or spec.loader is None:
+        return BuiltWrappers(reason="the compiled wrapper could not be loaded")
+    extension = importlib.util.module_from_spec(spec)
+    try:
+        spec.loader.exec_module(extension)
+    except Exception as exc:  # noqa: BLE001
+        return BuiltWrappers(reason=f"the compiled wrapper could not be imported: {exc}")
+
+    return BuiltWrappers(module=extension, entries=built.entries, path=library)
