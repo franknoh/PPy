@@ -129,6 +129,12 @@ class FunctionAnalysis:
     parallel_blockers: tuple[str, ...] = ()
     escaping: set[str] = field(default_factory=set)
     mutated_params: set[str] = field(default_factory=set)
+    #: A write whose target is not a plain local name, so the backend cannot
+    #: tell what it reached.
+    foreign_writes: bool = False
+    #: Every mutation this function performed landed on something it allocated
+    #: itself, which spec 11.2 permits inside `@ppy.pure`.
+    writes_only_locals: bool = True
     calls: set[str] = field(default_factory=set)
 
     @property
@@ -171,6 +177,34 @@ class ProjectAnalysis:
         return None
 
 
+#: Builtins that read their arguments and either return a scalar or a fresh
+#: copy. `enumerate`, `zip`, and `reversed` are deliberately absent: they hold
+#: on to what they were given.
+_INSPECTING_BUILTINS = frozenset({
+    "len", "sum", "min", "max", "sorted", "any", "all", "abs", "round",
+    "str", "repr", "int", "float", "bool", "list", "tuple", "set", "dict",
+    "print", "isinstance", "id", "hash",
+})
+
+
+def _is_inspecting_builtin(node: ast.Call, env: Env) -> bool:
+    """Does this call only read its arguments, never keep them?"""
+    return (
+        isinstance(node.func, ast.Name)
+        and node.func.id in _INSPECTING_BUILTINS
+        and node.func.id not in env
+    )
+
+
+def _is_fresh_allocation(node: ast.expr) -> bool:
+    """Does this expression produce an object nothing else can already hold?"""
+    if isinstance(node, (ast.List, ast.Dict, ast.Set, ast.ListComp, ast.DictComp, ast.SetComp)):
+        return True
+    if isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
+        return node.func.id in {"list", "dict", "set", "bytearray"}
+    return False
+
+
 class _Checker:
     """Checks one module. Reused across the effect fixpoint and the final pass."""
 
@@ -208,6 +242,12 @@ class _Checker:
         self._native_blockers: list[str] = []
         self._escaping: set[str] = set()
         self._mutated: set[str] = set()
+        self._foreign_writes = False
+        self._local_allocs: set[str] = set()
+        self._local_writes: set[str] = set()
+        self._shared: set[str] = set()
+        self._returned_names: set[str] = set()
+        self._external_writes = False
         self._bound_methods: set[int] = set()
         self._function_locals: set[str] = set()
         self._attribute_owners: dict[int, T.Type] = {}
@@ -237,7 +277,9 @@ class _Checker:
         previous = (self._effects, self._unknown, self._calls, self._current,
                     self._returns, self._blockers, self._native_blockers,
                     self._escaping, self._mutated, self._dynamic_depth,
-                    self._function_locals)
+                    self._function_locals, self._foreign_writes,
+                    self._local_allocs, self._local_writes, self._shared, self._returned_names,
+                    self._external_writes)
         self._effects = EffectSet()
         self._unknown = []
         self._calls = set()
@@ -247,6 +289,12 @@ class _Checker:
         self._native_blockers = []
         self._escaping = set()
         self._mutated = set()
+        self._foreign_writes = False
+        self._local_allocs = set()
+        self._local_writes = set()
+        self._shared = set()
+        self._returned_names = set()
+        self._external_writes = False
         if info.dynamic:
             self._dynamic_depth += 1
 
@@ -268,7 +316,9 @@ class _Checker:
         result = self._finish_function(info, env)
         (self._effects, self._unknown, self._calls, self._current, self._returns,
          self._blockers, self._native_blockers, self._escaping, self._mutated,
-         self._dynamic_depth, self._function_locals) = previous
+         self._dynamic_depth, self._function_locals, self._foreign_writes,
+         self._local_allocs, self._local_writes, self._shared, self._returned_names,
+         self._external_writes) = previous
         return result
 
     def _finish_function(self, info: FunctionInfo, env: Env) -> FunctionAnalysis:
@@ -303,6 +353,10 @@ class _Checker:
             native_blockers=tuple(dict.fromkeys(self._native_blockers)),
             escaping=set(self._escaping),
             mutated_params=set(self._mutated),
+            foreign_writes=self._foreign_writes,
+            writes_only_locals=not self._external_writes and not (
+                self._local_writes & self._shared_escapes()
+            ),
             calls=set(self._calls),
         )
         info.effects = effects
@@ -381,7 +435,7 @@ class _Checker:
             return
         value = self._expr(node.value, env)
         for target in node.targets:
-            self._bind_target(target, value, env)
+            self._bind_target(target, value, env, source=node.value)
 
     def _stmt_TypeAlias(self, node: ast.TypeAlias, env: Env) -> None:
         """`type X = ...` names a type; its right-hand side is not a value."""
@@ -414,7 +468,7 @@ class _Checker:
             else:
                 declared = Binding(resolved.type, self._merge_declared(resolved.facts, value.facts))
                 declared = Binding(declared.type, self._check_width(declared, node.value))
-        self._bind_target(node.target, declared, env, declared_type=resolved.type)
+        self._bind_target(node.target, declared, env, declared_type=resolved.type, source=node.value)
 
     def _stmt_AugAssign(self, node: ast.AugAssign, env: Env) -> None:
         current = self._load_target(node.target, env)
@@ -436,6 +490,8 @@ class _Checker:
         else:
             value = self._expr(node.value, env)
             self._returns.append(value)
+            if isinstance(node.value, ast.Name):
+                self._returned_names.add(node.value.id)
             self._mark_escape(node.value, env)
             info = self._current
             if info is not None and info.ret_annotated:
@@ -621,6 +677,8 @@ class _Checker:
         merged: Env | None = None
         for case in node.cases:
             case_env = env.fork()
+            if isinstance(node.subject, ast.Name):
+                case_env.set(node.subject.id, subject)
             self._bind_pattern(case.pattern, subject, case_env, node.subject)
             if case.guard is not None:
                 self._expr(case.guard, case_env)
@@ -628,14 +686,47 @@ class _Checker:
             for stmt in case.body:
                 self._stmt(stmt, case_env)
             merged = case_env if merged is None else merged.merge(case_env)
+            # A later case is only reached when the earlier ones did not match,
+            # so `case _` after `case None` sees a subject that cannot be None.
+            if case.guard is None:
+                subject = self._without_pattern(case.pattern, subject, env)
         if merged is not None:
             env.restore(merged.snapshot())
             env.reachable = merged.reachable
 
-    def _bind_target(self, target: ast.expr, value: Binding, env: Env, declared_type: T.Type | None = None) -> None:
+    def _without_pattern(self, pattern: ast.pattern, subject: Binding, env: Env) -> Binding:
+        """The subject as it stands once `pattern` has failed to match."""
+        matched = self._pattern_type(pattern, env)
+        if matched is None:
+            return subject
+        members = list(T.members_of(subject.type))
+        remaining = [m for m in members if not T.is_assignable(m, matched)]
+        if not remaining or len(remaining) == len(members):
+            return subject
+        return Binding(T.union(*remaining), subject.facts)
+
+    def _pattern_type(self, pattern: ast.pattern, env: Env) -> T.Type | None:
+        """The type a pattern matches in full, or None when it matches partially."""
+        if isinstance(pattern, ast.MatchSingleton):
+            return T.type_of_constant(pattern.value)
+        if isinstance(pattern, ast.MatchClass):
+            if pattern.patterns or pattern.kwd_patterns:
+                return None
+            cls = self._expr(pattern.cls, env)
+            return cls.type.instance_type if isinstance(cls.type, T.ClassObject) else None
+        if isinstance(pattern, ast.MatchOr):
+            parts = [self._pattern_type(sub, env) for sub in pattern.patterns]
+            return T.union(*parts) if all(p is not None for p in parts) else None
+        if isinstance(pattern, ast.MatchAs) and pattern.pattern is not None:
+            return self._pattern_type(pattern.pattern, env)
+        return None
+
+    def _bind_target(self, target: ast.expr, value: Binding, env: Env, declared_type: T.Type | None = None, source: ast.expr | None = None) -> None:
         if isinstance(target, ast.Name):
             binding = Binding(declared_type or value.type, value.facts)
             env.set(target.id, binding)
+            if source is not None:
+                self._note_allocation(target.id, source)
             self._record(target, binding)
             if self._current is None:
                 self.symbols.globals.setdefault(target.id, binding.type)
@@ -696,6 +787,10 @@ class _Checker:
                 inner = env.get(pattern.name) or subject if pattern.name else subject
             if pattern.name:
                 env.set(pattern.name, inner)
+        elif isinstance(pattern, ast.MatchSingleton):
+            if isinstance(source, ast.Name):
+                singleton = T.type_of_constant(pattern.value)
+                env.set(source.id, Binding(singleton, Facts(constant=pattern.value, has_constant=True)))
         elif isinstance(pattern, ast.MatchValue):
             value = self._expr(pattern.value, env)
             if isinstance(source, ast.Name) and value.facts.has_constant:
@@ -798,7 +893,14 @@ class _Checker:
         return Binding(T.UNKNOWN)
 
     def _expr_BoolOp(self, node: ast.BoolOp, env: Env) -> Binding:
-        parts = [self._expr(value, env) for value in node.values]
+        # Each operand is only reached when the ones before it were truthy
+        # (`and`) or falsy (`or`), which is what makes `x is None or x.f` work.
+        scope = env.fork()
+        keeps_going = isinstance(node.op, ast.And)
+        parts: list[Binding] = []
+        for value in node.values:
+            parts.append(self._expr(value, scope))
+            scope = self._narrow(value, scope, keeps_going)
         if all(p.facts.has_constant for p in parts):
             values = [p.facts.constant for p in parts]
             result = values[0]
@@ -867,10 +969,11 @@ class _Checker:
         callee = self._expr(node.func, env)
         args = [self._expr(arg.value if isinstance(arg, ast.Starred) else arg, env) for arg in node.args]
         keywords = {kw.arg: self._expr(kw.value, env) for kw in node.keywords if kw.arg}
+        retains = not _is_inspecting_builtin(node, env)
         for argument in node.args:
-            self._mark_escape(argument, env)
+            self._mark_escape(argument, env, retains=retains)
         for keyword in node.keywords:
-            self._mark_escape(keyword.value, env)
+            self._mark_escape(keyword.value, env, retains=retains)
 
         if isinstance(node.func, ast.Name) and node.func.id not in env:
             result = B.call_builtin(node.func.id, [(a.type, a.facts) for a in args])
@@ -909,6 +1012,7 @@ class _Checker:
                 self._effects = self._effects.add(Effect.WRITE_OBJECT, raises=("IndexError", "KeyError"))
                 if isinstance(node.func, ast.Attribute):
                     self._note_mutation(node.func.value, env)
+                    self._widen_empty_container(node.func, callee.type.qualname, args, env)
                     self._blockers.append(f"calls `{callee.type.qualname}`, which mutates its receiver")
                 return Binding(callee.type.ret)
             return self._call_signature(
@@ -918,6 +1022,30 @@ class _Checker:
             self._error("E1306", f"a module is not callable", node)
             return Binding(T.UNKNOWN)
         return self._opaque_call(node, callee)
+
+    def _widen_empty_container(
+        self, func: ast.Attribute, qualname: str, args: list[Binding], env: Env
+    ) -> None:
+        """`out = []` followed by `out.append(x)` gives `out` an element type."""
+        if not isinstance(func.value, ast.Name) or not args:
+            return
+        binding = env.get(func.value.id)
+        if binding is None:
+            return
+        base = T.strip_literal(binding.type)
+        if not isinstance(base, T.Instance) or not base.args:
+            return
+        added = T.strip_literal(args[0].type)
+        if isinstance(added, (T.UnknownType, T.AnyType, T.NeverType)):
+            return
+        if qualname in {"list.append", "list.insert", "set.add"}:
+            element = T.strip_literal(args[-1].type)
+        elif qualname in {"list.extend", "set.update"}:
+            element = T.strip_literal(B.element_type(added))
+        else:
+            return
+        if base.name in {"list", "set"} and isinstance(base.args[0], T.NeverType):
+            env.set(func.value.id, Binding(T.instance(base.name, element), binding.facts))
 
     def _construct(
         self,
@@ -997,6 +1125,7 @@ class _Checker:
         if info is not None:
             self._calls.add(info.qualname)
             self._effects = self._effects | info.effects
+            self._note_callee_writes(info, node)
             if info.effects.violations():
                 self._blockers.append(
                     f"calls `{info.name}` with effects: {', '.join(sorted(str(e) for e in info.effects.violations()))}"
@@ -1149,12 +1278,13 @@ class _Checker:
                     self._effects = self._effects.add(Effect.READ_OBJECT)
                     return Binding(found[0], found[1])
                 if info.slots is not None and node.attr not in info.slots:
-                    self._error("E1202", f"`{info.name}` has no attribute `{node.attr}`", node)
-                    return Binding(T.UNKNOWN)
+                    if not self._dynamic_depth:
+                        self._error("E1202", f"`{info.name}` has no attribute `{node.attr}`", node)
+                    return Binding(T.ANY if self._dynamic_depth else T.UNKNOWN)
             method = self._builtin_method(base, node.attr)
             if method is not None:
                 return Binding(method)
-            if info is not None and self.strict:
+            if info is not None and self.strict and not self._dynamic_depth:
                 self._error("E1202", f"`{info.name}` has no attribute `{node.attr}`", node)
                 return Binding(T.UNKNOWN)
         plugin_attribute = self._plugin_instance_attribute(base, node.attr)
@@ -1166,11 +1296,11 @@ class _Checker:
         if method is not None:
             self._effects = self._effects.add(Effect.READ_OBJECT)
             return Binding(method)
-        if self.strict and T.is_exact_builtin(base):
+        if self.strict and T.is_exact_builtin(base) and not self._dynamic_depth:
             self._error("E1202", f"`{base}` has no attribute `{node.attr}`", node)
             return Binding(T.UNKNOWN)
         self._effects = self._effects.add(Effect.READ_OBJECT)
-        return Binding(T.UNKNOWN)
+        return Binding(T.ANY if self._dynamic_depth else T.UNKNOWN)
 
     def _module_attribute(self, module: str, node: ast.Attribute) -> Binding:
         qualname = f"{module}.{node.attr}"
@@ -1253,6 +1383,37 @@ class _Checker:
             return self._str_method(attr)
         if name in {"bytes", "bytearray"}:
             return self._bytes_method(name, attr)
+        if name in {"array", "memoryview", "Buffer"}:
+            return self._buffer_method(base, name, attr, element)
+        return None
+
+    def _buffer_method(
+        self, base: T.Type, owner: str, attr: str, element: T.Type
+    ) -> T.Type | None:
+        """Methods of a contiguous buffer: `array`, `memoryview`, `Buffer`."""
+        qualname = f"{owner}.{attr}"
+        if attr == "tolist":
+            return T.Callable_((), T.list_of(element), qualname)
+        if attr in {"tobytes", "tostring"}:
+            return T.Callable_((), T.BYTES, qualname)
+        if attr == "buffer_info":
+            return T.Callable_((), T.Tuple_((T.INT, T.INT)), qualname)
+        if attr in {"append", "extend", "insert", "remove", "reverse", "frombytes", "fromlist"}:
+            return T.Callable_((), T.NONE, qualname)
+        if attr == "pop":
+            return T.Callable_((), element, qualname)
+        if attr in {"count", "index", "itemsize", "nbytes"}:
+            return T.Callable_((), T.INT, qualname) if attr in {"count", "index"} else T.INT
+        if attr == "typecode" or attr == "format":
+            return T.STR
+        if attr == "cast":
+            return T.Callable_((), base, qualname)
+        if attr in {"c_contiguous", "contiguous", "readonly"}:
+            return T.BOOL
+        if attr in {"ndim", "obj"}:
+            return T.INT if attr == "ndim" else T.ANY
+        if attr == "shape":
+            return T.Tuple_((T.INT,), homogeneous=True)
         return None
 
     def _str_method(self, attr: str) -> T.Type | None:
@@ -1903,7 +2064,9 @@ class _Checker:
         return T.UNKNOWN
 
     def _is_dynamic_marker(self, expr: ast.expr) -> bool:
-        return self.project.resolver(self.symbols).canonical(expr) == "ppy.dynamic"
+        # The runtime marker works both bare and called, so both open a boundary.
+        target = expr.func if isinstance(expr, ast.Call) and not expr.args else expr
+        return self.project.resolver(self.symbols).canonical(target) == "ppy.dynamic"
 
     def _enter_dynamic(self, node: ast.AST) -> None:
         self._dynamic_depth += 1
@@ -1937,9 +2100,11 @@ class _Checker:
                 return self.project.functions.get(binding.type.qualname)
         return None
 
-    def _mark_escape(self, node: ast.expr, env: Env) -> None:
+    def _mark_escape(self, node: ast.expr, env: Env, *, retains: bool = True) -> None:
         if isinstance(node, ast.Name) and node.id in env:
             self._escaping.add(node.id)
+            if retains:
+                self._shared.add(node.id)
 
     def _note_mutation(self, node: ast.expr, env: Env) -> None:
         if isinstance(node, ast.Name):
@@ -1947,6 +2112,62 @@ class _Checker:
             info = self._current
             if info is not None and any(p.name == node.id for p in info.params):
                 self._blockers.append(f"mutates parameter `{node.id}`")
+                self._external_writes = True
+            elif node.id in self._local_allocs:
+                self._local_writes.add(node.id)
+            else:
+                self._external_writes = True
+            return
+        # The target is an expression, so which object it reached is unknown.
+        self._foreign_writes = True
+        self._external_writes = True
+        self._blockers.append(f"mutates `{ast.unparse(node)}`")
+
+    def _note_callee_writes(self, info: FunctionInfo, node: ast.Call) -> None:
+        """A callee that mutates writes through whatever it was handed.
+
+        The write only stays local if every argument was allocated here, so
+        anything else makes this function's own writes externally visible.
+        """
+        if Effect.WRITE_OBJECT not in info.effects:
+            return
+        positional = [a.value if isinstance(a, ast.Starred) else a for a in node.args]
+        named = [(k.arg, k.value) for k in node.keywords]
+        for index, argument in enumerate(positional):
+            declared = info.params[index].type if index < len(info.params) else None
+            if self._argument_is_safe(argument, declared):
+                continue
+            self._external_writes = True
+            return
+        for name, argument in named:
+            declared = next((p.type for p in info.params if p.name == name), None)
+            if self._argument_is_safe(argument, declared):
+                continue
+            self._external_writes = True
+            return
+
+    def _argument_is_safe(self, argument: ast.expr, declared: T.Type | None) -> bool:
+        """Could a mutating callee reach anything this function does not own?"""
+        if declared is not None and T.is_immutable(declared):
+            return True
+        if isinstance(argument, ast.Name) and argument.id in self._local_allocs:
+            return True
+        return _is_fresh_allocation(argument)
+
+    def _shared_escapes(self) -> set[str]:
+        """Locals handed to something else, which is what `observably shared` means.
+
+        Returning is not sharing: spec 11.2 only rules out sharing *before*
+        return, so `_mark_escape` from a return statement is not counted here.
+        """
+        return self._shared - self._returned_names
+
+    def _note_allocation(self, name: str, value: ast.expr) -> None:
+        """Remember that `name` currently holds something this call allocated."""
+        if _is_fresh_allocation(value):
+            self._local_allocs.add(name)
+        else:
+            self._local_allocs.discard(name)
 
     def _merge_declared(self, declared: Facts, value: Facts) -> Facts:
         """Combine a declaration's contract with a value's proven facts.

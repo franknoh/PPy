@@ -247,3 +247,46 @@ def test_importing_ppy_starts_nothing_expensive():
         [sys.executable, "-c", script], capture_output=True, text=True, check=False
     )
     assert result.stdout.strip() == "False False"
+
+
+def test_a_plain_py_file_imports_a_ppy_module(tmp_path: Path):
+    """The question the extension raises: ordinary CPython, ordinary `.py` entry."""
+    (tmp_path / "geometry.ppy").write_text(
+        textwrap.dedent(
+            """
+            import ppy
+
+            @ppy.pure
+            def area(width: float, height: float) -> float:
+                return width * height
+            """
+        ),
+        encoding="utf-8",
+    )
+    entry = tmp_path / "consumer.py"
+    entry.write_text(
+        textwrap.dedent(
+            """
+            import ppy
+            import geometry
+
+            print(geometry.area(3.0, 4.0), geometry.__file__.endswith('.ppy'))
+            """
+        ),
+        encoding="utf-8",
+    )
+    result = subprocess.run(
+        [sys.executable, entry.name], cwd=tmp_path, capture_output=True, text=True, check=False
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == "12.0 True"
+
+
+def test_a_ppy_module_is_invisible_without_importing_ppy(tmp_path: Path):
+    (tmp_path / "geometry.ppy").write_text("VALUE = 1\n", encoding="utf-8")
+    (tmp_path / "consumer.py").write_text("import geometry\n", encoding="utf-8")
+    result = subprocess.run(
+        [sys.executable, "consumer.py"], cwd=tmp_path, capture_output=True, text=True, check=False
+    )
+    assert result.returncode == 1
+    assert "No module named 'geometry'" in result.stderr

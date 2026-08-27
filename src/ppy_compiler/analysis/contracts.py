@@ -148,6 +148,10 @@ def _check_purity(function: FunctionAnalysis, diagnostics: DiagnosticBag) -> Non
         )
         diagnostics.add(diagnostic)
         return
+    # Spec 11.2: allocating and filling a local is allowed inside a pure
+    # function, as long as nothing else could see the object before it returns.
+    if function.writes_only_locals:
+        violations = violations - {Effect.WRITE_OBJECT}
     if violations:
         listed = ", ".join(sorted(str(v) for v in violations))
         diagnostic = Diagnostic(

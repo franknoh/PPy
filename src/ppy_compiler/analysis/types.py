@@ -316,6 +316,10 @@ def _flatten(types: Iterable[Type]) -> list[Type]:
     return out
 
 
+def _all_never(args: tuple[Type, ...]) -> bool:
+    return all(isinstance(a, NeverType) for a in args)
+
+
 def union(*types: Type) -> Type:
     """Build a normalized union."""
     flat = _flatten(types)
@@ -333,6 +337,24 @@ def union(*types: Type) -> Type:
         t for t in unique
         if not (isinstance(t, Literal) and t.base in bases)
     ]
+    # `list[Never]` is the empty list, so it is absorbed by any populated list
+    # of the same shape. Without this, `out = []` followed by `out.append(x)`
+    # merges back into `list[Never] | list[X]` at the top of the loop.
+    populated = {
+        (t.name, len(t.args))
+        for t in unique
+        if isinstance(t, Instance) and t.args and not _all_never(t.args)
+    }
+    if populated:
+        unique = [
+            t for t in unique
+            if not (
+                isinstance(t, Instance)
+                and t.args
+                and _all_never(t.args)
+                and (t.name, len(t.args)) in populated
+            )
+        ]
     if len(unique) == 1:
         return unique[0]
     return Union_(tuple(unique))
@@ -362,10 +384,13 @@ def is_assignable(source: Type, target: Type) -> bool:
     if source == target:
         return True
 
-    if isinstance(target, Union_):
-        return any(is_assignable(source, m) for m in target.members)
+    # A union source is decomposed first: every one of its members has to fit
+    # somewhere in the target. Asking the other way round would reject
+    # `int | None` against `None | int` purely because of member order.
     if isinstance(source, Union_):
         return all(is_assignable(m, target) for m in source.members)
+    if isinstance(target, Union_):
+        return any(is_assignable(source, m) for m in target.members)
 
     if isinstance(source, Literal):
         if isinstance(target, Literal):
@@ -458,6 +483,24 @@ def _callable_assignable(source: Callable_, target: Callable_) -> bool:
 
 def is_optional(t: Type) -> bool:
     return isinstance(t, Union_) and any(m == NONE for m in t.members)
+
+
+_IMMUTABLE_NAMES = frozenset({
+    "int", "float", "complex", "bool", "str", "bytes", "NoneType",
+    "frozenset", "range", "slice",
+})
+
+
+def is_immutable(t: Type) -> bool:
+    """Can nothing a callee does to this value be seen by anyone else?"""
+    base = strip_literal(t)
+    if isinstance(base, NeverType):
+        return True
+    if isinstance(base, Union_):
+        return all(is_immutable(m) for m in base.members)
+    if isinstance(base, Tuple_):
+        return all(is_immutable(item) for item in base.items)
+    return isinstance(base, Instance) and base.name in _IMMUTABLE_NAMES and not base.args
 
 
 def remove_none(t: Type) -> Type:

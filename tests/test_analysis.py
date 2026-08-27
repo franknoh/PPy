@@ -243,6 +243,84 @@ def test_narrowing_through_isinstance_and_none(write, analyze):
     assert not analyze(path).diagnostics.has_errors()
 
 
+def test_a_union_is_assignable_whatever_order_its_members_are_in():
+    left = T.union(T.NONE, T.INT)
+    right = T.union(T.INT, T.NONE)
+    assert T.is_assignable(left, right)
+    assert T.is_assignable(right, left)
+    assert not T.is_assignable(right, T.INT)
+
+
+def test_boolean_operators_narrow_their_later_operands(write, analyze):
+    path = write(
+        "boolop.ppy",
+        """
+        def guarded(x: str | None) -> bool:
+            return x is not None and len(x) > 0
+
+        def defaulted(x: str | None) -> int:
+            if x is None or len(x) == 0:
+                return 0
+            return len(x)
+        """,
+    )
+    assert not analyze(path).diagnostics.has_errors()
+
+
+def test_a_match_case_sees_what_earlier_cases_ruled_out(write, analyze):
+    path = write(
+        "cases.ppy",
+        """
+        def describe(value: int | str | None) -> str:
+            match value:
+                case None:
+                    return "none"
+                case int():
+                    return f"int:{value + 1}"
+                case _:
+                    return value.upper()
+        """,
+    )
+    assert not analyze(path).diagnostics.has_errors()
+
+
+def test_a_guarded_case_rules_nothing_out(write, codes):
+    path = write(
+        "guarded.ppy",
+        """
+        def describe(value: int | None) -> str:
+            match value:
+                case None if True:
+                    return "none"
+                case _:
+                    return str(value + 1)
+        """,
+    )
+    assert "E1302" in codes(path)
+
+
+def test_an_empty_container_is_absorbed_by_a_populated_one():
+    empty = T.list_of(T.NEVER)
+    populated = T.list_of(T.INT)
+    assert T.union(empty, populated) == populated
+    assert T.union(populated, empty) == populated
+    assert T.union(T.list_of(T.INT), T.list_of(T.STR)) != T.list_of(T.INT)
+
+
+def test_appending_gives_an_empty_list_its_element_type(write, analyze):
+    path = write(
+        "grow.ppy",
+        """
+        def build(count: int) -> list[int]:
+            out = []
+            for i in range(count):
+                out.append(i * 2)
+            return out
+        """,
+    )
+    assert not analyze(path).diagnostics.has_errors()
+
+
 def test_missing_narrowing_is_reported(write, codes):
     path = write(
         "no_narrow.ppy",
@@ -546,3 +624,119 @@ def test_reading_a_real_mutable_global_is_still_an_effect(write, analyze):
     )
     codes = [d.code for d in analyze(path).diagnostics]
     assert "E1601" in codes
+
+
+def test_a_pure_function_may_fill_a_container_it_allocated(write, analyze):
+    """Spec 11.2 allows allocation whose identity is not shared before return."""
+    path = write(
+        "local_alloc.ppy",
+        """
+        import ppy
+
+        @ppy.pure
+        def squares(count: int) -> list[int]:
+            out = []
+            for i in range(count):
+                out.append(i * i)
+            return out
+
+        @ppy.pure
+        def distinct(values: list[str]) -> int:
+            seen = set()
+            for value in values:
+                seen.add(value)
+            return len(seen)
+        """,
+    )
+    assert not analyze(path).diagnostics.has_errors()
+
+
+def test_a_pure_function_may_not_mutate_a_parameter(write, codes):
+    path = write(
+        "taint.ppy",
+        """
+        import ppy
+
+        @ppy.pure
+        def push(xs: list[int]) -> int:
+            xs.append(1)
+            return len(xs)
+        """,
+    )
+    assert "E1601" in codes(path)
+
+
+def test_a_local_shared_before_it_is_mutated_is_not_pure(write, codes):
+    path = write(
+        "shared.ppy",
+        """
+        import ppy
+
+        def keep(values: list[int]) -> int:
+            return len(values)
+
+        @ppy.pure
+        def leaks() -> int:
+            out = []
+            total: int = keep(out)
+            out.append(1)
+            return total
+        """,
+    )
+    assert "E1601" in codes(path)
+
+
+def test_a_dynamic_boundary_accepts_the_called_marker(write, analyze):
+    path = write(
+        "called.ppy",
+        """
+        import ppy
+
+        def reflect(name: str) -> str:
+            with ppy.dynamic():
+                return str(getattr("abc", name)())
+        """,
+    )
+    assert not analyze(path).diagnostics.has_errors()
+    assert analyze(path).analysis.function("called.reflect").dynamic
+
+
+def test_a_callee_that_mutates_a_borrowed_argument_breaks_purity(write, codes):
+    """The write lands on the caller's list, so the caller is not pure either."""
+    path = write(
+        "indirect.ppy",
+        """
+        import ppy
+
+        def sneaky(a: list[int], b: list[int]) -> None:
+            a.append(1)
+            b.append(2)
+
+        @ppy.pure
+        def caller(theirs: list[int]) -> list[int]:
+            out: list[int] = []
+            sneaky(out, theirs)
+            return out
+        """,
+    )
+    assert "E1601" in codes(path)
+
+
+def test_a_callee_handed_only_local_allocations_keeps_purity(write, analyze):
+    path = write(
+        "indirect_ok.ppy",
+        """
+        import ppy
+
+        def fill(target: list[int], count: int) -> None:
+            for i in range(count):
+                target.append(i)
+
+        @ppy.pure
+        def caller(count: int) -> list[int]:
+            out: list[int] = []
+            fill(out, count)
+            return out
+        """,
+    )
+    assert not analyze(path).diagnostics.has_errors()

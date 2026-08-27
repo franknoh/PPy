@@ -115,7 +115,11 @@ def opt(level: int) -> Callable[[_T], _T]:
 class _Dynamic:
     """`ppy.dynamic` used either as a decorator or as a context manager."""
 
-    def __call__(self, obj: _T) -> _T:
+    def __call__(self, obj: _T | None = None) -> "_T | _Dynamic":
+        # `with ppy.dynamic():` reads more naturally than the bare marker, and
+        # the compiler accepts both, so the runtime has to accept both too.
+        if obj is None:
+            return self
         return attach(obj, Directive("dynamic"))
 
     def __enter__(self) -> "_Dynamic":
