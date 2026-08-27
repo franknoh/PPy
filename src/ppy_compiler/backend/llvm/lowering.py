@@ -5,10 +5,11 @@ guard-and-fall-back model sound: when a native fast path bails out, the
 original Python implementation can be re-executed with identical observable
 behavior (spec 16.8).
 
-A function may take scalars and homogeneous `list[int]` / `list[float]`
-arguments. A list is unboxed into a borrowed native buffer at the Python
-boundary, which is transparent because a lowered function may not mutate it
-(spec 13.3, 13.5).
+A function may take scalars, fixed-size tuples, and homogeneous
+`list[int]` / `list[float]` arguments. A fixed tuple flattens into scalar SSA
+values rather than an allocated object, and a list is unboxed into a borrowed
+native buffer at the Python boundary -- transparent because a lowered function
+may not mutate it (spec 13.2, 13.3, 13.5).
 """
 
 from __future__ import annotations
@@ -40,6 +41,9 @@ _SCALARS = {"int", "float", "bool"}
 
 #: Element types a native buffer parameter may carry.
 _BUFFER_ELEMENTS = {"int", "float"}
+
+#: A tuple wider than this stays boxed rather than expanding the ABI.
+_MAX_TUPLE_WIDTH = 8
 
 _MATH_INTRINSICS = {
     "sqrt": "llvm.sqrt.f64",
@@ -74,20 +78,33 @@ class NativeParam:
     name: str
     kind: str
     element: str = ""
+    elements: tuple[str, ...] = ()
 
     @property
     def is_buffer(self) -> bool:
         return self.kind == "list"
 
     @property
+    def is_tuple(self) -> bool:
+        return self.kind == "tuple"
+
+    @property
     def abi(self) -> tuple[str, ...]:
         if self.is_buffer:
             return (f"{_abi_name(self.element)}*", "i64")
+        if self.is_tuple:
+            return tuple(_abi_name(element) for element in self.elements)
         return (_abi_name(self.kind),)
 
     def __str__(self) -> str:
         if self.is_buffer:
             return f"{_abi_name(self.element)}* {self.name}, i64 {self.name}_len"
+        if self.is_tuple:
+            fields = ", ".join(
+                f"{_abi_name(element)} {self.name}{index}"
+                for index, element in enumerate(self.elements)
+            )
+            return fields
         return f"{_abi_name(self.kind)} {self.name}"
 
 
@@ -98,7 +115,15 @@ class NativeSignature:
     qualname: str
     symbol: str
     parameters: tuple[NativeParam, ...]
-    ret: str
+    returns: tuple[str, ...]
+
+    @property
+    def ret(self) -> str:
+        return self.returns[0] if len(self.returns) == 1 else "{" + ", ".join(self.returns) + "}"
+
+    @property
+    def returns_tuple(self) -> bool:
+        return len(self.returns) > 1
 
     @property
     def params(self) -> tuple[str, ...]:
@@ -139,6 +164,19 @@ def _buffer_element(t: T.Type) -> str | None:
     return element if element in _BUFFER_ELEMENTS else None
 
 
+def _tuple_elements(t: T.Type) -> tuple[str, ...] | None:
+    """The scalar element kinds of a fixed-size tuple, if it has any."""
+    base = T.strip_literal(t)
+    if not isinstance(base, T.Tuple_) or base.homogeneous:
+        return None
+    if not base.items or len(base.items) > _MAX_TUPLE_WIDTH:
+        return None
+    kinds = [_scalar_name(item) for item in base.items]
+    if any(kind is None for kind in kinds):
+        return None
+    return tuple(kind for kind in kinds if kind is not None)
+
+
 def _native_param(name: str, t: T.Type) -> NativeParam | None:
     scalar = _scalar_name(t)
     if scalar is not None:
@@ -146,7 +184,17 @@ def _native_param(name: str, t: T.Type) -> NativeParam | None:
     element = _buffer_element(t)
     if element is not None:
         return NativeParam(name, "list", element)
+    elements = _tuple_elements(t)
+    if elements is not None:
+        return NativeParam(name, "tuple", elements=elements)
     return None
+
+
+def _return_atoms(t: T.Type) -> tuple[str, ...] | None:
+    scalar = _scalar_name(t)
+    if scalar is not None:
+        return (scalar,)
+    return _tuple_elements(t)
 
 
 def eligible(info: FunctionInfo, analysis: FunctionAnalysis) -> tuple[bool, str]:
@@ -164,8 +212,8 @@ def eligible(info: FunctionInfo, analysis: FunctionAnalysis) -> tuple[bool, str]
             return False, "variadic parameters have no native ABI"
         if _native_param(param.name, param.type) is None:
             return False, f"parameter `{param.name}` is `{param.type}`, which has no native ABI"
-    if _scalar_name(info.ret) is None:
-        return False, f"returns `{info.ret}`, not a native scalar"
+    if _return_atoms(info.ret) is None:
+        return False, f"returns `{info.ret}`, which has no native ABI"
     return True, ""
 
 
@@ -228,11 +276,12 @@ def _signature(info: FunctionInfo) -> NativeSignature:
     parameters = tuple(
         _native_param(p.name, p.type) or NativeParam(p.name, "int") for p in info.params
     )
+    atoms = _return_atoms(info.ret) or ("int",)
     return NativeSignature(
         qualname=info.qualname,
         symbol="ppy_" + info.qualname.replace(".", "_"),
         parameters=parameters,
-        ret=_abi_name(_scalar_name(info.ret) or "int"),
+        returns=tuple(_abi_name(atom) for atom in atoms),
     )
 
 
@@ -250,16 +299,31 @@ def _function_type(ir, info: FunctionInfo):  # type: ignore[no-untyped-def]
         if parameter.is_buffer:
             atoms.append(_llvm_type(ir, parameter.element).as_pointer())
             atoms.append(ir.IntType(64))
+        elif parameter.is_tuple:
+            atoms.extend(_llvm_type(ir, element) for element in parameter.elements)
         else:
             atoms.append(_llvm_type(ir, parameter.kind))
-    out = _llvm_type(ir, _scalar_name(info.ret) or "int").as_pointer()
-    return ir.FunctionType(ir.IntType(32), [*atoms, out])
+    outs = [
+        _llvm_type(ir, atom).as_pointer() for atom in (_return_atoms(info.ret) or ("int",))
+    ]
+    return ir.FunctionType(ir.IntType(32), [*atoms, *outs])
 
 
 @dataclass(slots=True)
 class _Value:
     value: object
     scalar: str
+
+
+@dataclass(slots=True)
+class _Tuple:
+    """A fixed tuple held as scalar SSA values, never as an object (spec 13.2)."""
+
+    items: list[_Value]
+
+    @property
+    def width(self) -> int:
+        return len(self.items)
 
 
 class _FunctionLowering:
@@ -275,6 +339,9 @@ class _FunctionLowering:
         self.builder = None
         self.locals: dict[str, tuple[object, str]] = {}
         self.buffers: dict[str, tuple[object, object, str]] = {}
+        self.tuples: dict[str, list[tuple[object, str]]] = {}
+        self.returns = _return_atoms(info.ret) or ("int",)
+        self.outs = list(function.args[-len(self.returns):])
         self.out = function.args[-1]
         self.fallback_block = None
 
@@ -291,6 +358,17 @@ class _FunctionLowering:
                 length = self.function.args[position + 1]
                 self.buffers[parameter.name] = (data, length, parameter.element)
                 position += 2
+                continue
+            if parameter.is_tuple:
+                slots = []
+                for index, element in enumerate(parameter.elements):
+                    slot = self.builder.alloca(
+                        _llvm_type(ir, element), name=f"{parameter.name}{index}"
+                    )
+                    self.builder.store(self.function.args[position + index], slot)
+                    slots.append((slot, element))
+                self.tuples[parameter.name] = slots
+                position += len(parameter.elements)
                 continue
             slot = self.builder.alloca(_llvm_type(ir, parameter.kind), name=parameter.name)
             self.builder.store(self.function.args[position], slot)
@@ -336,11 +414,17 @@ class _FunctionLowering:
 
     def _return(self, node: ast.Return) -> None:
         ir = self.ir
-        target = _scalar_name(self.info.ret) or "int"
         if node.value is None:
-            raise Unsupported("a native function must return a scalar value")
-        value = self._coerce(self._expr(node.value), target)
-        self.builder.store(value.value, self.out)
+            raise Unsupported("a native function must return a value")
+        if len(self.returns) > 1:
+            values = self._tuple_expr(node.value)
+            if values is None or values.width != len(self.returns):
+                raise Unsupported("the returned tuple does not match the declared shape")
+            for slot, item, target in zip(self.outs, values.items, self.returns):
+                self.builder.store(self._coerce(item, target).value, slot)
+        else:
+            value = self._coerce(self._expr(node.value), self.returns[0])
+            self.builder.store(value.value, self.outs[0])
         self.builder.ret(ir.Constant(ir.IntType(32), STATUS_OK))
 
     def _return_default(self) -> None:
@@ -349,7 +433,47 @@ class _FunctionLowering:
     def _assign(self, node: ast.Assign) -> None:
         if len(node.targets) != 1:
             raise Unsupported("chained assignment has no native lowering")
-        self._store(node.targets[0], self._expr(node.value))
+        target = node.targets[0]
+        values = self._tuple_expr(node.value)
+        if values is not None:
+            self._store_tuple(target, values)
+            return
+        self._store(target, self._expr(node.value))
+
+    def _store_tuple(self, target: ast.expr, values: "_Tuple") -> None:
+        """Bind a tuple to a name, or unpack it into several names."""
+        if isinstance(target, ast.Name):
+            slots = []
+            for index, item in enumerate(values.items):
+                slot = self.builder.alloca(
+                    _llvm_type(self.ir, item.scalar), name=f"{target.id}{index}"
+                )
+                self.builder.store(item.value, slot)
+                slots.append((slot, item.scalar))
+            self.tuples[target.id] = slots
+            self.locals.pop(target.id, None)
+            return
+        if isinstance(target, (ast.Tuple, ast.List)):
+            if len(target.elts) != values.width:
+                raise Unsupported("unpacking width does not match the tuple")
+            for element_target, item in zip(target.elts, values.items):
+                self._store(element_target, item)
+            return
+        raise Unsupported("this assignment target has no native lowering")
+
+    def _tuple_expr(self, node: ast.expr) -> "_Tuple | None":
+        """Evaluate an expression that produces a fixed tuple, if it does."""
+        if isinstance(node, ast.Tuple):
+            if not node.elts or len(node.elts) > _MAX_TUPLE_WIDTH:
+                return None
+            if any(isinstance(e, ast.Starred) for e in node.elts):
+                raise Unsupported("a starred element has no fixed native width")
+            return _Tuple([self._expr(element) for element in node.elts])
+        if isinstance(node, ast.Name) and node.id in self.tuples:
+            return _Tuple(
+                [_Value(self.builder.load(slot), scalar) for slot, scalar in self.tuples[node.id]]
+            )
+        return None
 
     def _augassign(self, node: ast.AugAssign) -> None:
         if not isinstance(node.target, ast.Name):
@@ -590,6 +714,8 @@ class _FunctionLowering:
             case ast.Call():
                 return self._call(node)
             case ast.Subscript():
+                if isinstance(node.value, ast.Name) and node.value.id in self.tuples:
+                    return self._tuple_element(node.value.id, node.slice)
                 if isinstance(node.value, ast.Name) and node.value.id in self.buffers:
                     if isinstance(node.slice, ast.Slice):
                         raise Unsupported("slicing a buffer allocates, so it stays boxed")
@@ -597,7 +723,22 @@ class _FunctionLowering:
                 raise Unsupported("subscripting this value has no native lowering")
         raise Unsupported(f"`{type(node).__name__}` has no native lowering")
 
+    def _tuple_element(self, name: str, index: ast.expr) -> _Value:
+        """`t[i]` for a constant `i`, which is just one of the SSA values."""
+        slots = self.tuples[name]
+        if not isinstance(index, ast.Constant) or not isinstance(index.value, int):
+            raise Unsupported("a fixed tuple must be indexed by a constant")
+        position = index.value
+        if position < 0:
+            position += len(slots)
+        if not 0 <= position < len(slots):
+            raise Unsupported(f"index {index.value} is out of range for `{name}`")
+        slot, scalar = slots[position]
+        return _Value(self.builder.load(slot), scalar)
+
     def _load(self, name: str) -> _Value:
+        if name in self.tuples:
+            raise Unsupported(f"`{name}` is a tuple, which has no single scalar value")
         if name in self.buffers:
             raise Unsupported(f"`{name}` is a buffer, which has no scalar value")
         found = self.locals.get(name)
@@ -682,6 +823,12 @@ class _FunctionLowering:
         target = ast.unparse(node.func)
         if target.startswith("math."):
             return self._math_call(target.removeprefix("math."), node)
+        if target == "len" and len(node.args) == 1:
+            argument = node.args[0]
+            if isinstance(argument, ast.Name) and argument.id in self.tuples:
+                return _Value(
+                    self.ir.Constant(self.ir.IntType(64), len(self.tuples[argument.id])), "int"
+                )
         if target in {"len", "sum", "min", "max"} and len(node.args) == 1:
             argument = node.args[0]
             if isinstance(argument, ast.Name) and argument.id in self.buffers:
@@ -698,14 +845,26 @@ class _FunctionLowering:
     def _native_call(self, function, signature: NativeSignature, qualname: str, node: ast.Call) -> _Value:
         ir = self.ir
         info = self.declarations[qualname][1]
-        if len(node.args) != len(signature.params):
+        if len(node.args) != len(signature.parameters):
             raise Unsupported(f"`{qualname}` called with the wrong number of arguments")
         scalars = {"i64": "int", "double": "float", "i8": "bool"}
-        arguments = [
-            self._coerce(self._expr(argument), scalars[param]).value
-            for argument, param in zip(node.args, signature.params)
-        ]
-        result_scalar = scalars[signature.ret]
+        arguments: list[object] = []
+        for argument, parameter in zip(node.args, signature.parameters):
+            if parameter.is_buffer:
+                raise Unsupported("a buffer cannot be forwarded between native calls yet")
+            if parameter.is_tuple:
+                values = self._tuple_expr(argument)
+                if values is None or values.width != len(parameter.elements):
+                    raise Unsupported("a tuple argument does not match the callee's shape")
+                arguments.extend(
+                    self._coerce(item, element).value
+                    for item, element in zip(values.items, parameter.elements)
+                )
+                continue
+            arguments.append(self._coerce(self._expr(argument), parameter.kind).value)
+        if signature.returns_tuple:
+            raise Unsupported("a tuple result cannot be forwarded between native calls yet")
+        result_scalar = scalars[signature.returns[0]]
         slot = self.builder.alloca(_llvm_type(ir, result_scalar), name="callresult")
         status = self.builder.call(function, [*arguments, slot])
         ok = self.builder.icmp_signed("==", status, ir.Constant(ir.IntType(32), STATUS_OK))

@@ -55,14 +55,17 @@ def bind(signature: NativeSignature, address: int, fallback: Callable[..., objec
             argument_types.append(ctypes.POINTER(_ELEMENT_CTYPES[parameter.element]))
             argument_types.append(ctypes.c_int64)
         else:
-            argument_types.append(_CTYPES[parameter.abi[0]])
+            argument_types.extend(_CTYPES[atom] for atom in parameter.abi)
 
-    result_type = _CTYPES[signature.ret]
-    prototype = ctypes.CFUNCTYPE(ctypes.c_int32, *argument_types, ctypes.POINTER(result_type))
+    result_types = [_CTYPES[atom] for atom in signature.returns]
+    prototype = ctypes.CFUNCTYPE(
+        ctypes.c_int32, *argument_types, *[ctypes.POINTER(t) for t in result_types]
+    )
     native = prototype(address)
 
     expanders = [_expander_for(p) for p in signature.parameters]
-    finalize = _result_for(signature.ret)
+    finalizers = [_result_for(atom) for atom in signature.returns]
+    returns_tuple = signature.returns_tuple
     binding = NativeBinding(signature=signature, wrapper=lambda *a: None, fallback=fallback)
 
     def wrapper(*args: object) -> object:
@@ -77,13 +80,15 @@ def bind(signature: NativeSignature, address: int, fallback: Callable[..., objec
         except GuardFailed:
             binding.fallbacks += 1
             return fallback(*args)
-        slot = result_type()
-        status = native(*atoms, ctypes.byref(slot))
+        slots = [result_type() for result_type in result_types]
+        status = native(*atoms, *[ctypes.byref(slot) for slot in slots])
         if status != STATUS_OK:
             binding.fallbacks += 1
             return fallback(*args)
         binding.calls += 1
-        return finalize(slot.value)
+        if returns_tuple:
+            return tuple(finish(slot.value) for finish, slot in zip(finalizers, slots))
+        return finalizers[0](slots[0].value)
 
     wrapper.__name__ = signature.qualname.rpartition(".")[2]
     wrapper.__qualname__ = signature.qualname
@@ -113,6 +118,17 @@ def _expander_for(parameter: NativeParam) -> Callable[[object, list, list], None
             atoms.append(length)
 
         return expand_buffer
+
+    if parameter.is_tuple:
+        element_guards = [_scalar_guard(atom) for atom in parameter.abi]
+
+        def expand_tuple(value: object, atoms: list, borrowed: list) -> None:
+            if type(value) is not tuple or len(value) != len(element_guards):
+                raise GuardFailed
+            for item, convert in zip(value, element_guards):
+                atoms.append(convert(item))
+
+        return expand_tuple
 
     abi = parameter.abi[0]
     if abi == "i64":
@@ -154,3 +170,34 @@ def _result_for(abi: str) -> Callable[[object], object]:
     if abi == "i8":
         return lambda value: bool(value)
     return lambda value: int(value)  # type: ignore[arg-type]
+
+
+def _scalar_guard(abi: str) -> Callable[[object], object]:
+    """Guard and convert one scalar, raising `GuardFailed` when it does not fit."""
+    if abi == "i64":
+
+        def as_int(value: object) -> object:
+            if type(value) is bool:
+                return int(value)
+            if type(value) is not int or not _I64_LOW <= value <= _I64_HIGH:
+                raise GuardFailed
+            return value
+
+        return as_int
+    if abi == "double":
+
+        def as_float(value: object) -> object:
+            if type(value) is float:
+                return value
+            if type(value) is int and _I64_LOW <= value <= _I64_HIGH:
+                return float(value)
+            raise GuardFailed
+
+        return as_float
+
+    def as_bool(value: object) -> object:
+        if type(value) is not bool:
+            raise GuardFailed
+        return int(value)
+
+    return as_bool

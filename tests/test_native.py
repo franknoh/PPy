@@ -691,3 +691,143 @@ def test_required_parallel_is_accepted_for_a_fused_region_on_llvm(write, analyze
     on_python = analyze(path, backend="python")
     codes = [d.code for d in on_python.diagnostics]
     assert "E1701" in codes
+
+
+# -- fixed-size tuples ----------------------------------------------------
+
+TUPLES = """
+    import ppy
+    from ppy import Array
+
+
+    @ppy.pure
+    def norm2(point: tuple[float, float, float]) -> float:
+        return point[0] * point[0] + point[1] * point[1] + point[2] * point[2]
+
+
+    @ppy.pure
+    def midpoint(a: tuple[float, float], b: tuple[float, float]) -> tuple[float, float]:
+        return ((a[0] + b[0]) * 0.5, (a[1] + b[1]) * 0.5)
+
+
+    @ppy.pure
+    def swap(pair: tuple[int, int]) -> tuple[int, int]:
+        first, second = pair
+        return (second, first)
+
+
+    @ppy.pure
+    def rgb_sum(colour: Array[int, 3]) -> int:
+        return colour[0] + colour[1] + colour[2]
+    """
+
+
+def test_a_fixed_tuple_flattens_into_scalar_abi_atoms(write, analyze):
+    path = write("tuples.ppy", TUPLES)
+    module = _collect(analyze(path, backend="llvm"))["tuples"]
+    assert set(module.functions) >= {
+        "tuples.norm2", "tuples.midpoint", "tuples.swap", "tuples.rgb_sum"
+    }
+
+    norm2 = module.functions["tuples.norm2"].signature
+    assert norm2.params == ("double", "double", "double")
+    assert not norm2.returns_tuple
+
+    midpoint = module.functions["tuples.midpoint"].signature
+    assert midpoint.params == ("double",) * 4
+    assert midpoint.returns == ("double", "double") and midpoint.returns_tuple
+
+
+def test_a_ppy_array_marker_lowers_like_a_fixed_tuple(write, analyze):
+    path = write("arr.ppy", TUPLES)
+    module = _collect(analyze(path, backend="llvm"))["arr"]
+    assert module.functions["arr.rgb_sum"].signature.params == ("i64", "i64", "i64")
+
+
+def test_a_non_escaping_tuple_allocates_nothing(write, analyze):
+    path = write("noalloc.ppy", TUPLES)
+    ir = emit_ir(analyze(path, backend="llvm"))["noalloc"]
+    body = ir.split("@ppy_noalloc_norm2")[1].split("}")[0]
+    assert "alloca" not in body
+    assert "getelementptr" not in body
+    assert body.count("fmul") == 3
+
+
+def test_a_tuple_wider_than_the_abi_limit_stays_boxed(write, analyze):
+    path = write(
+        "wide_tuple.ppy",
+        """
+        import ppy
+
+
+        @ppy.pure
+        def wide(t: tuple[int, int, int, int, int, int, int, int, int, int]) -> int:
+            return t[0]
+        """,
+    )
+    module = _collect(analyze(path, backend="llvm"))["wide_tuple"]
+    assert "wide_tuple.wide" in module.rejected
+
+
+def test_native_tuple_results_match_python(write, analyze):
+    path = write("tupexec.ppy", TUPLES)
+    module = _collect(analyze(path, backend="llvm"))["tupexec"]
+    engine = _jit(module)
+
+    def fallback_midpoint(a, b):
+        return ((a[0] + b[0]) * 0.5, (a[1] + b[1]) * 0.5)
+
+    lowered = module.functions["tupexec.midpoint"]
+    binding = bind(lowered.signature, engine.address(lowered.signature.symbol), fallback_midpoint)
+    assert binding.wrapper((0.0, 0.0), (4.0, 6.0)) == (2.0, 3.0)
+    assert binding.calls == 1 and binding.fallbacks == 0
+
+
+def test_a_tuple_element_outside_the_machine_range_falls_back(write, analyze):
+    path = write("tupguard.ppy", TUPLES)
+    module = _collect(analyze(path, backend="llvm"))["tupguard"]
+    engine = _jit(module)
+
+    def fallback_swap(pair):
+        return (pair[1], pair[0])
+
+    lowered = module.functions["tupguard.swap"]
+    binding = bind(lowered.signature, engine.address(lowered.signature.symbol), fallback_swap)
+    assert binding.wrapper((1, 2)) == (2, 1)
+    assert binding.calls == 1
+
+    assert binding.wrapper((10**30, 1)) == (1, 10**30)
+    assert binding.fallbacks == 1
+
+
+def test_a_non_tuple_argument_falls_back(write, analyze):
+    path = write("tuptype.ppy", TUPLES)
+    module = _collect(analyze(path, backend="llvm"))["tuptype"]
+    engine = _jit(module)
+    lowered = module.functions["tuptype.swap"]
+    binding = bind(lowered.signature, engine.address(lowered.signature.symbol), lambda p: (p[1], p[0]))
+
+    assert binding.wrapper([1, 2]) == (2, 1)
+    assert binding.fallbacks == 1
+
+
+def test_tuple_programs_match_plain_cpython(tmp_path: Path):
+    entry = tmp_path / "tuples_run.ppy"
+    entry.write_text(
+        textwrap.dedent(TUPLES).lstrip("\n")
+        + textwrap.dedent(
+            """
+
+            print(norm2((1.0, 2.0, 3.0)))
+            print(midpoint((0.0, 0.0), (4.0, 6.0)))
+            print(swap((1, 2)), swap((10 ** 30, 1)))
+            print(rgb_sum((255, 128, 0)), len((1, 2, 3)))
+            """
+        ),
+        encoding="utf-8",
+    )
+    plain = _run([sys.executable, entry.name], tmp_path)
+    native = _ppy(["run", entry.name], tmp_path)
+    assert plain.returncode == 0, plain.stderr
+    assert native.returncode == 0, native.stderr
+    assert native.stdout == plain.stdout
