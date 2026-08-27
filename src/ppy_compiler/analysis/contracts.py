@@ -4,12 +4,13 @@ from __future__ import annotations
 
 import ast
 from dataclasses import dataclass, field
+from difflib import get_close_matches
 
 from ..diagnostics import Diagnostic, DiagnosticBag, Severity
 from ..frontend.source import span_of
 from .checker import FunctionAnalysis, ProjectAnalysis
 from .effects import Effect
-from .symbols import FunctionInfo
+from .symbols import DIRECTIVE_NAMES, FunctionInfo
 
 __all__ = ["ContractReport", "verify", "parallel_report", "native_report"]
 
@@ -53,11 +54,37 @@ def verify(analysis: ProjectAnalysis, diagnostics: DiagnosticBag, *, backend: st
     """Check every declared contract and return per-function reports."""
     reports: dict[str, ContractReport] = {}
     for module in analysis.modules.values():
+        for info in module.symbols.classes.values():
+            _check_directive_names(info.path, info.node, info.directives, diagnostics)
         for qualname, function in module.functions.items():
+            info = function.info
+            _check_directive_names(info.path, info.node, info.directives, diagnostics)
             fused = _fused_regions(module, function)
             report = _verify_one(function, diagnostics, backend=backend, fused=fused)
             reports[qualname] = report
     return reports
+
+
+def _check_directive_names(path, node, directives, diagnostics: DiagnosticBag) -> None:  # type: ignore[no-untyped-def]
+    """A `ppy.` decorator the runtime does not export never reaches the runtime.
+
+    Plain CPython raises AttributeError on the decorator line, so a typo here
+    is a hard error rather than an unknown directive to ignore.
+    """
+    for directive in directives:
+        if directive.name in DIRECTIVE_NAMES:
+            continue
+        suggestion = get_close_matches(directive.name, sorted(DIRECTIVE_NAMES), n=1)
+        help = f"did you mean `@ppy.{suggestion[0]}`?" if suggestion else None
+        diagnostics.add(
+            Diagnostic(
+                "E1205",
+                Severity.ERROR,
+                f"`ppy` has no directive `{directive.name}`",
+                span_of(path, directive.node or node),
+                help=help,
+            )
+        )
 
 
 def _fused_regions(module, function: FunctionAnalysis) -> int:

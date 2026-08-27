@@ -15,6 +15,7 @@ CODES: dict[str, str] = {
     "E1202": "An attribute could not be resolved on a statically known type.",
     "E1203": "A generic type was used bare, which would introduce an implicit `Any` element type.",
     "E1204": "A decorator applies an unknown transform, so the decorated signature is unknown.",
+    "E1205": "A `ppy.` decorator names a directive the runtime does not export.",
     "E1301": "An assignment or argument does not match the declared type.",
     "E1302": "An operator has no definition for the operand types.",
     "E1303": "A returned value does not match the declared return type.",
@@ -39,6 +40,8 @@ CODES: dict[str, str] = {
     "W2002": "A `bool` value takes part in arithmetic, which is legal but usually unintended.",
     "W2003": "Unknown `Annotated` metadata was preserved but not interpreted.",
     "W2004": "A directive had no effect for the selected backend.",
+    "R3003": "A list parameter is close to being a borrowed buffer but something blocks it.",
+    "R3002": "The converter promoted a list parameter to a borrowed buffer.",
     "R3001": "An optimization remark.",
 }
 

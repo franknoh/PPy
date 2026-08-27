@@ -219,6 +219,14 @@ def _enclosing_function(root: ast.AST, target: ast.AST) -> bool:
     return False
 
 
+#: The decorators `ppy` actually exports. A name outside this set is a typo,
+#: and would raise AttributeError the moment plain CPython ran the file.
+DIRECTIVE_NAMES = frozenset({
+    "pure", "opt", "jit", "parallel", "native",
+    "inline", "noinline", "specialize", "fastmath", "dynamic", "jax",
+})
+
+
 def directives_from(decorators: list[ast.expr], resolver: "NameResolver") -> tuple[Directive, ...]:
     """Read PPY directives from decorator syntax (spec 6.1)."""
     found: list[Directive] = []
