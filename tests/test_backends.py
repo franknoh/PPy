@@ -459,3 +459,68 @@ def test_native_wrapper_falls_back_on_overflow(write, analyze):
     assert binding.calls == 1
     assert binding.wrapper(10**20) == 10**40
     assert binding.fallbacks == 1
+
+
+def test_inlining_never_leaves_an_identity_test_against_a_literal(write, analyze):
+    """CPython warns about `'x' is None`; the original source had no warning."""
+    path = write(
+        "identity.ppy",
+        """
+        import ppy
+
+        @ppy.pure
+        @ppy.opt(3)
+        def present(name: str | None) -> bool:
+            return name is not None and len(name) > 0
+
+        answer: bool = present("ppy")
+        """,
+    )
+    code = _generated(analyze(path, opt_level=3), "identity")
+    assert "'ppy' is not None" not in code
+    assert "is not None" not in code.split("def present")[-1].split("answer")[-1]
+
+
+def test_a_settled_boolean_operand_is_dropped(write, analyze):
+    path = write(
+        "settled.ppy",
+        """
+        import ppy
+
+        @ppy.pure
+        @ppy.opt(3)
+        def check(flag: bool, value: int) -> bool:
+            return flag and value > 0
+
+        answer: bool = check(True, 5)
+        """,
+    )
+    code = _generated(analyze(path, opt_level=3), "settled")
+    assert "True and" not in code
+
+
+def test_folded_identity_keeps_the_same_answers(tmp_path: Path):
+    entry = tmp_path / "fold_run.ppy"
+    entry.write_text(
+        textwrap.dedent(
+            """
+            import ppy
+
+
+            @ppy.pure
+            @ppy.opt(3)
+            def present(name: str | None) -> bool:
+                return name is not None and len(name) > 0
+
+
+            print(present("ppy"), present(""), present(None))
+            """
+        ).lstrip("\n"),
+        encoding="utf-8",
+    )
+    (tmp_path / "pyproject.toml").write_text("[tool.ppy]\nopt-level = 3\n", encoding="utf-8")
+    plain = _run([sys.executable, entry.name], tmp_path)
+    built = _ppy([entry.name], tmp_path)
+    assert plain.returncode == 0 and built.returncode == 0, built.stderr
+    assert built.stdout == plain.stdout == "True False False\n"
+    assert "SyntaxWarning" not in built.stderr

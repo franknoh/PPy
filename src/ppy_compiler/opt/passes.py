@@ -280,9 +280,27 @@ class Peephole(Pass):
 
     def visit_BoolOp(self, node: ast.BoolOp) -> ast.AST:
         self.generic_visit(node)
+        node.values = self._drop_settled_operands(node)
+        if not node.values:
+            return ast.copy_location(ast.Constant(value=isinstance(node.op, ast.And)), node)
         if len(node.values) == 1:
             return node.values[0]
         return node
+
+    def _drop_settled_operands(self, node: ast.BoolOp) -> list[ast.expr]:
+        """Drop operands a constant has already settled, keeping short-circuiting."""
+        neutral = isinstance(node.op, ast.And)
+        kept: list[ast.expr] = []
+        for index, value in enumerate(node.values):
+            settled = isinstance(value, ast.Constant) and isinstance(value.value, bool)
+            if settled and value.value is neutral and index < len(node.values) - 1:
+                self.context.count("peepholes")
+                continue
+            kept.append(value)
+            if settled and value.value is not neutral:
+                self.context.count("peepholes")
+                break
+        return kept
 
     def visit_UnaryOp(self, node: ast.UnaryOp) -> ast.AST:
         self.generic_visit(node)
@@ -292,6 +310,23 @@ class Peephole(Pass):
                 if type_of(inner) == T.BOOL:
                     self.context.count("peepholes")
                     return inner
+        return node
+
+    def visit_Compare(self, node: ast.Compare) -> ast.AST:
+        self.generic_visit(node)
+        # Inlining can substitute a literal into `x is None`. Identity against a
+        # literal is what CPython raises SyntaxWarning about, and the answer is
+        # already known, so settle it here instead of emitting the comparison.
+        if len(node.ops) != 1 or not isinstance(node.ops[0], (ast.Is, ast.IsNot)):
+            return node
+        left, right = node.left, node.comparators[0]
+        if not (isinstance(left, ast.Constant) and isinstance(right, ast.Constant)):
+            return node
+        if left.value is None or right.value is None:
+            matches = left.value is None and right.value is None
+            settled = matches == isinstance(node.ops[0], ast.Is)
+            self.context.count("peepholes")
+            return ast.copy_location(ast.Constant(value=settled), node)
         return node
 
     def visit_If(self, node: ast.If) -> ast.AST:
