@@ -431,3 +431,130 @@ def test_convert_quotes_an_annotation_naming_a_later_class(workspace: Path):
     converted = (workspace / "fwd.ppy").read_text(encoding="utf-8")
     assert "def first(node: 'Node') -> 'Node':" in converted
     assert _ppy(["check", "fwd.ppy"], workspace).returncode == 0
+
+
+def test_convert_attaches_purity_the_checker_proved(workspace: Path):
+    (workspace / "pure.py").write_text(
+        textwrap.dedent(
+            """
+            def double(x):
+                return x * 2
+
+
+            def shout(name):
+                print(name)
+                return name
+
+
+            print(double(3), shout("hi"))
+            """
+        ).lstrip("\n"),
+        encoding="utf-8",
+    )
+    assert _ppy(["convert", "pure.py"], workspace).returncode == 0
+    converted = (workspace / "pure.ppy").read_text(encoding="utf-8")
+    assert "@ppy.pure\ndef double" in converted
+    assert "@ppy.pure\ndef shout" not in converted, "printing is not pure"
+    assert _ppy(["check", "pure.ppy"], workspace).returncode == 0
+
+
+def test_convert_promotes_an_indexed_list_parameter_to_a_buffer(workspace: Path):
+    (workspace / "sums.py").write_text(
+        textwrap.dedent(
+            """
+            def total(xs):
+                out = 0.0
+                for i in range(len(xs)):
+                    out += xs[i]
+                return out
+
+
+            values = [float(i) for i in range(8)]
+            print(total(values))
+            """
+        ).lstrip("\n"),
+        encoding="utf-8",
+    )
+    result = _ppy(["convert", "sums.py", "--promote-buffers"], workspace)
+    assert result.returncode == 0
+    converted = (workspace / "sums.ppy").read_text(encoding="utf-8")
+    assert "def total(xs: Buffer[float])" in converted
+    assert "import array" in converted
+    assert 'array.array("d", [float(i) for i in range(8)])' in converted
+    assert _ppy(["check", "sums.ppy"], workspace).returncode == 0
+
+    plain = subprocess.run(
+        [sys.executable, "sums.py"], cwd=workspace, capture_output=True, text=True, check=False
+    )
+    built = _ppy(["sums.ppy"], workspace)
+    assert built.stdout == plain.stdout
+
+
+def test_convert_leaves_a_list_alone_without_the_flag(workspace: Path):
+    (workspace / "keep.py").write_text(
+        textwrap.dedent(
+            """
+            def total(xs):
+                out = 0.0
+                for i in range(len(xs)):
+                    out += xs[i]
+                return out
+
+
+            values = [float(i) for i in range(8)]
+            print(total(values))
+            """
+        ).lstrip("\n"),
+        encoding="utf-8",
+    )
+    assert _ppy(["convert", "keep.py"], workspace).returncode == 0
+    converted = (workspace / "keep.ppy").read_text(encoding="utf-8")
+    assert "def total(xs: list[float])" in converted
+    assert "array.array" not in converted
+
+
+def test_convert_says_what_blocks_a_promotion(workspace: Path):
+    (workspace / "sliced.py").write_text(
+        textwrap.dedent(
+            """
+            def total(xs, n):
+                out = 0.0
+                for i in range(n):
+                    row = xs[i * 2:(i + 1) * 2]
+                    for v in row:
+                        out += v
+                return out
+
+
+            values = [float(i) for i in range(8)]
+            print(total(values, 4))
+            """
+        ).lstrip("\n"),
+        encoding="utf-8",
+    )
+    result = _ppy(["convert", "sliced.py", "--promote-buffers", "--dry-run"], workspace)
+    assert "R3003" in result.stderr
+    assert "is sliced" in result.stderr
+    assert "list[float]" in result.stdout
+
+
+def test_a_promoted_buffer_lowers_natively(workspace: Path):
+    (workspace / "native.py").write_text(
+        textwrap.dedent(
+            """
+            def total(xs):
+                out = 0.0
+                for i in range(len(xs)):
+                    out += xs[i]
+                return out
+
+
+            values = [float(i) for i in range(8)]
+            print(total(values))
+            """
+        ).lstrip("\n"),
+        encoding="utf-8",
+    )
+    assert _ppy(["convert", "native.py", "--promote-buffers"], workspace).returncode == 0
+    explained = _ppy(["explain", "total"], workspace)
+    assert "llvm backend: native" in explained.stdout

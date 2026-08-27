@@ -38,6 +38,12 @@ def build_parser() -> argparse.ArgumentParser:
     convert.add_argument("--in-place", action="store_true", help="replace the .py source instead of writing .ppy")
     convert.add_argument("--force", action="store_true", help="overwrite an existing .ppy file")
     convert.add_argument("--dry-run", action="store_true", help="print the result without writing")
+    convert.add_argument(
+        "--promote-buffers",
+        action="store_true",
+        help="declare read-only numeric list parameters as borrowed buffers, "
+        "rewriting the values that feed them into `array.array`",
+    )
 
     run = subparsers.add_parser("run", help="compile through LLVM and execute")
     run.add_argument("file", type=Path)

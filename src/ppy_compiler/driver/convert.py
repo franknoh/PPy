@@ -34,6 +34,11 @@ class ConversionPlan:
     #: Class names that are not yet bound where an annotation mentioning them
     #: is written, and so have to be quoted.
     forward: dict[str, int] = field(default_factory=dict)
+    #: `ppy` decorators to attach, keyed by the line the `def` starts on.
+    decorators: dict[int, tuple[str, ...]] = field(default_factory=dict)
+    #: Module-level list constructions to wrap in `array.array`, by line.
+    buffers: dict[int, str] = field(default_factory=dict)
+    needs_array: bool = False
     typing_imports: set[str] = field(default_factory=set)
     ppy_imports: set[str] = field(default_factory=set)
     needs_ppy: bool = False
@@ -41,7 +46,8 @@ class ConversionPlan:
     @property
     def is_empty(self) -> bool:
         return not (
-            self.params or self.returns or self.assignments or self.fields or self.needs_ppy
+            self.params or self.returns or self.assignments or self.fields
+            or self.decorators or self.buffers or self.needs_ppy
         )
 
 
@@ -61,6 +67,10 @@ def run_convert(options: argparse.Namespace, reporter: Reporter) -> int:
     # A project conversion analyzes the whole module and call graph at once.
     bundle = analyze_paths(project, sources, backend="python")
     observed = refine_with_call_sites(bundle)
+    promotions: list[BufferPromotion] = []
+    blocked: list[tuple[object, str, str]] = []
+    if getattr(options, "promote_buffers", False):
+        promotions, blocked = plan_buffer_promotions(bundle)
 
     written: list[Path] = []
     failures = 0
@@ -68,7 +78,7 @@ def run_convert(options: argparse.Namespace, reporter: Reporter) -> int:
         module_name = _module_for(bundle, path)
         if module_name is None:
             continue
-        plan, diagnostics = build_plan(bundle, module_name, observed)
+        plan, diagnostics = build_plan(bundle, module_name, observed, promotions, blocked)
         for diagnostic in diagnostics:
             reporter.emit(diagnostic)
             if diagnostic.severity is Severity.ERROR:
@@ -156,6 +166,8 @@ def build_plan(  # type: ignore[no-untyped-def]
     bundle,
     module_name: str,
     observed: dict[tuple[str, int], T.Type] | None = None,
+    promotions: "list[BufferPromotion] | None" = None,
+    blocked: "list[tuple[object, str, str]] | None" = None,
 ) -> tuple[ConversionPlan, list[Diagnostic]]:
     """Decide which annotations to insert, using interprocedural evidence."""
     plan = ConversionPlan(needs_ppy=True)
@@ -209,6 +221,22 @@ def build_plan(  # type: ignore[no-untyped-def]
     if bundle.project.config.inference.write_local_annotations and analysis is not None:
         _plan_module_globals(symbols, analysis, plan, module_name)
     _plan_fields(symbols, plan, module_name)
+    if analysis is not None:
+        _plan_purity(functions, analysis, plan)
+    if promotions:
+        _apply_promotions(promotions, module_name, plan, diagnostics, bundle)
+    for info, name, reason in blocked or ():
+        if getattr(info, "module", None) != module_name:
+            continue
+        diagnostics.append(
+            Diagnostic(
+                "R3003",
+                Severity.REMARK,
+                f"`{name}` could be a borrowed buffer, but {reason}",
+                span_of(info.path, info.node),
+                help="a borrowed buffer is what lets this loop lower to native code",
+            )
+        )
 
     diagnostics.extend(_dynamic_findings(symbols))
     return plan, diagnostics
@@ -328,6 +356,16 @@ class _Annotator(cst.CSTTransformer):
         if returns is not None and updated.returns is None:
             text = _quote_if_forward(returns, line, self.plan.forward)
             updated = updated.with_changes(returns=cst.Annotation(cst.parse_expression(text)))
+        wanted = self.plan.decorators.get(line, ())
+        if wanted:
+            present = {_dotted(d.decorator) for d in updated.decorators}
+            added = [
+                cst.Decorator(decorator=cst.parse_expression(text))
+                for text in wanted
+                if text.partition("(")[0] not in present
+            ]
+            if added:
+                updated = updated.with_changes(decorators=[*added, *updated.decorators])
         return updated
 
     def leave_Param(self, original: cst.Param, updated: cst.Param) -> cst.Param:
@@ -350,6 +388,15 @@ class _Annotator(cst.CSTTransformer):
             return updated
         target = statement.targets[0].target
         line = self.get_metadata(PositionProvider, original).start.line
+
+        code = self.plan.buffers.get(line)
+        if code is not None and isinstance(target, cst.Name):
+            wrapped = cst.parse_expression(
+                f'array.array("{code}", {cst.Module(body=[]).code_for_node(statement.value)})'
+            )
+            return updated.with_changes(
+                body=[cst.Assign(targets=list(statement.targets), value=wrapped)]
+            )
 
         if isinstance(target, cst.Attribute) and isinstance(target.value, cst.Name):
             annotation = self.plan.fields.get((line, target.attr.value))
@@ -395,6 +442,8 @@ def _insert_imports(module: cst.Module, plan: ConversionPlan) -> cst.Module:
     existing = _existing_imports(module)
     additions: list[cst.SimpleStatementLine] = []
 
+    if plan.needs_array and "array" not in existing:
+        additions.append(cst.parse_statement("import array"))
     ppy_names = sorted(plan.ppy_imports - existing)
     if plan.needs_ppy and "ppy" not in existing:
         additions.append(cst.parse_statement("import ppy"))
@@ -536,6 +585,53 @@ def _is_self_attribute(target: ast.expr, info) -> bool:  # type: ignore[no-untyp
     )
 
 
+def _apply_promotions(  # type: ignore[no-untyped-def]
+    promotions, module_name: str, plan: ConversionPlan, diagnostics, bundle
+) -> None:
+    """Write the promoted signatures and the `array.array` calls that feed them."""
+    for promotion in promotions:
+        info = bundle.symbols.functions.get(promotion.qualname)
+        if info is not None and info.module == module_name:
+            plan.params[(promotion.line, promotion.param)] = f"Buffer[{promotion.element}]"
+            plan.ppy_imports.add("Buffer")
+            diagnostics.append(
+                Diagnostic(
+                    "R3002",
+                    Severity.REMARK,
+                    f"`{promotion.param}` is only read by index, so it is declared "
+                    f"`Buffer[{promotion.element}]` and borrowed instead of copied",
+                    span_of(info.path, info.node),
+                    help="the values feeding it become `array.array` so the memory can be lent",
+                )
+            )
+        for source_module, line, name in promotion.sources:
+            if source_module != module_name:
+                continue
+            plan.buffers[line] = promotion.code
+            plan.needs_array = True
+
+
+def _plan_purity(functions, analysis, plan: ConversionPlan) -> None:  # type: ignore[no-untyped-def]
+    """Attach `@ppy.pure` where the checker already proved the contract holds.
+
+    The decorator returns the function unchanged, so this cannot alter what
+    plain CPython does; what it adds is a contract the compiler will keep
+    verifying as the code changes, and which unlocks the optimizations that
+    depend on purity.
+    """
+    for info in functions:
+        if info.directives or info.decorators:
+            # Leave a function that already carries decorators alone; ordering
+            # against an unknown transform is not ours to decide.
+            continue
+        function = analysis.functions.get(info.qualname)
+        if function is None or not function.verified_pure:
+            continue
+        if not info.node.body or info.is_async:
+            continue
+        plan.decorators[info.node.lineno] = ("ppy.pure",)
+
+
 def _plan_fields(symbols, plan: ConversionPlan, module_name: str) -> None:  # type: ignore[no-untyped-def]
     """Write each inferred instance field where `__init__` first assigns it.
 
@@ -573,6 +669,163 @@ def _plan_fields(symbols, plan: ConversionPlan, module_name: str) -> None:  # ty
             plan.fields[(node.lineno, name)] = rendered.text
             plan.typing_imports |= rendered.typing_imports
             plan.ppy_imports |= rendered.ppy_imports
+
+
+#: Buffer element codes `array.array` uses, by PPY scalar name.
+_ARRAY_CODES = {"float": "d", "int": "q"}
+
+#: Ways of using a name that a borrowed buffer cannot serve. `array.array`
+#: does have `append`, but growing it reallocates, which is exactly what
+#: borrowing rules out.
+_LIST_ONLY_METHODS = frozenset({
+    "append", "extend", "insert", "pop", "remove", "clear", "sort", "copy", "count", "index",
+})
+
+
+@dataclass
+class BufferPromotion:
+    """One `list[T]` parameter to declare as `Buffer[T]`, with its call sites."""
+
+    qualname: str
+    line: int
+    param: str
+    element: str
+    code: str
+    #: `(module, line, name)` of each list construction that has to become an
+    #: `array.array` for the promoted signature to still type-check.
+    sources: tuple[tuple[str, int, str], ...] = ()
+
+
+def plan_buffer_promotions(bundle):  # type: ignore[no-untyped-def]
+    """Find `list[float]` parameters that would lower natively as buffers.
+
+    A promotion only pays off if the caller passes real buffer memory, so a
+    parameter is promoted only when every construction feeding it can be
+    rewritten too. Anything the converter cannot follow is left alone.
+    """
+    found: list[BufferPromotion] = []
+    blocked: list[tuple[object, str, str]] = []
+    for qualname, info in bundle.symbols.functions.items():
+        analysis = bundle.analysis.modules.get(info.module)
+        if analysis is None or info.is_method:
+            continue
+        exported = bundle.symbols.modules.get(info.module)
+        if exported is not None and exported.all_exports and info.name in exported.all_exports:
+            continue
+        for index, param in enumerate(info.params):
+            element = _buffer_scalar(param.type)
+            if element is None or _has_source_annotation(info, param.name):
+                continue
+            blocker = _buffer_blocker(info.node, param.name)
+            if blocker is not None:
+                blocked.append((info, param.name, blocker))
+                continue
+            sources = _list_sources(bundle, qualname, index, element)
+            if sources is None:
+                blocked.append((
+                    info, param.name,
+                    f"the values passed as `{param.name}` are not all traceable to a "
+                    "single construction this converter can rewrite",
+                ))
+                continue
+            found.append(BufferPromotion(
+                qualname, info.node.lineno, param.name,
+                element, _ARRAY_CODES[element], sources,
+            ))
+    return found, blocked
+
+
+def _buffer_scalar(t: T.Type) -> str | None:
+    """The element name of a `list[int]` or `list[float]`, if it is one."""
+    base = T.strip_literal(t)
+    if not isinstance(base, T.Instance) or base.name != "list" or len(base.args) != 1:
+        return None
+    element = T.strip_literal(base.args[0])
+    if not isinstance(element, T.Instance) or element.name not in _ARRAY_CODES:
+        return None
+    return element.name
+
+
+def _buffer_blocker(node: ast.AST, name: str) -> str | None:
+    """What stops `name` from being served by a buffer, if anything."""
+    for child in ast.walk(node):
+        if isinstance(child, ast.Attribute):
+            if isinstance(child.value, ast.Name) and child.value.id == name:
+                if child.attr in _LIST_ONLY_METHODS:
+                    return f"`{name}.{child.attr}()` needs a list that can grow or reorder"
+        if isinstance(child, ast.Subscript):
+            if isinstance(child.value, ast.Name) and child.value.id == name:
+                if isinstance(child.slice, ast.Slice):
+                    return (
+                        f"`{name}` is sliced, which copies; indexing it element by "
+                        "element instead would let the memory be borrowed"
+                    )
+        if isinstance(child, ast.BinOp):
+            for side in (child.left, child.right):
+                if isinstance(side, ast.Name) and side.id == name:
+                    return f"`{name}` is used with `+` or `*`, which are list operations"
+        if isinstance(child, (ast.Return, ast.Yield)):
+            value = child.value
+            if isinstance(value, ast.Name) and value.id == name:
+                return f"`{name}` is returned, so the caller would hold the buffer"
+    return None
+
+
+def _list_sources(  # type: ignore[no-untyped-def]
+    bundle, qualname: str, index: int, element: str
+) -> tuple[tuple[str, int, str], ...] | None:
+    """Every list construction feeding this parameter, or None if any is opaque."""
+    sources: list[tuple[str, int, str]] = []
+    seen_call = False
+    for module_name, symbols in bundle.symbols.modules.items():
+        analysis = bundle.analysis.modules.get(module_name)
+        if analysis is None:
+            continue
+        assignments = _module_list_assignments(symbols)
+        for node in ast.walk(symbols.module.tree):
+            if not isinstance(node, ast.Call):
+                continue
+            if _callee_qualname(bundle, symbols, node) != qualname:
+                continue
+            if index >= len(node.args):
+                return None
+            seen_call = True
+            argument = node.args[index]
+            if not isinstance(argument, ast.Name):
+                return None
+            line = assignments.get(argument.id)
+            if line is None:
+                return None
+            observed = T.strip_literal(analysis.type_of(argument))
+            if _buffer_scalar(observed) != element:
+                return None
+            sources.append((module_name, line, argument.id))
+    if not seen_call or not sources:
+        return None
+    return tuple(dict.fromkeys(sources))
+
+
+def _module_list_assignments(symbols) -> dict[str, int]:  # type: ignore[no-untyped-def]
+    """Module-level names bound exactly once to a list the converter can rewrite."""
+    counts: dict[str, int] = {}
+    lines: dict[str, int] = {}
+    for statement in symbols.module.tree.body:
+        target: ast.expr | None = None
+        value: ast.expr | None = None
+        if isinstance(statement, ast.AnnAssign) and statement.value is not None:
+            target, value = statement.target, statement.value
+        elif isinstance(statement, ast.Assign) and len(statement.targets) == 1:
+            target, value = statement.targets[0], statement.value
+        if not isinstance(target, ast.Name) or value is None:
+            continue
+        counts[target.id] = counts.get(target.id, 0) + 1
+        # `array.array(code, ...)` accepts any iterable of the right scalars, so
+        # the construction does not have to be a literal -- only unambiguous.
+        lines[target.id] = statement.lineno
+    return {name: line for name, line in lines.items() if counts.get(name) == 1}
+
+
+
 
 
 def _forward_references(symbols) -> dict[str, int]:  # type: ignore[no-untyped-def]
