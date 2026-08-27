@@ -740,3 +740,72 @@ def test_a_callee_handed_only_local_allocations_keeps_purity(write, analyze):
         """,
     )
     assert not analyze(path).diagnostics.has_errors()
+
+
+def test_reading_through_an_optional_names_the_real_problem(write, analyze):
+    """The old message blamed a missing stub, which sent readers the wrong way."""
+    path = write(
+        "optional_attr.ppy",
+        """
+        class Box:
+            def __init__(self, size: int) -> None:
+                self.size: int = size
+
+            def grow(self) -> "Box":
+                return Box(self.size + 1)
+
+        def find(flag: bool) -> Box | None:
+            return Box(1) if flag else None
+
+        def use(flag: bool) -> int:
+            return find(flag).grow().size
+        """,
+    )
+    diagnostics = analyze(path).diagnostics.sorted()
+    codes = [d.code for d in diagnostics]
+    assert "E1206" in codes
+    assert "E1306" not in codes, "the unknown-signature cascade was not suppressed"
+    reported = next(d for d in diagnostics if d.code == "E1206")
+    assert "may be `None`" in reported.message
+
+
+def test_a_narrowed_optional_reads_cleanly(write, analyze):
+    path = write(
+        "narrowed_attr.ppy",
+        """
+        class Box:
+            def __init__(self, size: int) -> None:
+                self.size: int = size
+
+        def find(flag: bool) -> Box | None:
+            return Box(1) if flag else None
+
+        def use(flag: bool) -> int:
+            found = find(flag)
+            if found is None:
+                return 0
+            return found.size
+        """,
+    )
+    assert not analyze(path).diagnostics.has_errors()
+
+
+def test_a_dynamic_boundary_still_allows_an_optional_receiver(write, analyze):
+    path = write(
+        "dyn_attr.ppy",
+        """
+        import ppy
+
+        class Box:
+            def __init__(self, size: int) -> None:
+                self.size: int = size
+
+        def find(flag: bool) -> Box | None:
+            return Box(1) if flag else None
+
+        @ppy.dynamic
+        def use(flag: bool) -> int:
+            return find(flag).size
+        """,
+    )
+    assert "E1206" not in [d.code for d in analyze(path).diagnostics.sorted()]

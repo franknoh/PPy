@@ -249,6 +249,9 @@ class _Checker:
         self._returned_names: set[str] = set()
         self._external_writes = False
         self._bound_methods: set[int] = set()
+        #: Nodes that already produced a diagnostic, so a downstream pass does
+        #: not report a second, less useful one about the same expression.
+        self._reported: set[int] = set()
         self._function_locals: set[str] = set()
         self._attribute_owners: dict[int, T.Type] = {}
 
@@ -1224,6 +1227,11 @@ class _Checker:
                 )
 
     def _opaque_call(self, node: ast.Call, callee: Binding) -> Binding:
+        if id(node.func) in self._reported:
+            # The receiver already produced the diagnostic that explains this;
+            # a second one about an unknown signature would send the reader
+            # after a missing stub that does not exist.
+            return Binding(T.UNKNOWN)
         name = ast.unparse(node.func)
         self._unknown.append(name)
         self._effects = self._effects.add(Effect.EXTERNAL_UNKNOWN)
@@ -1249,6 +1257,9 @@ class _Checker:
         self._bound_methods.discard(id(node))
         if isinstance(owner.type, T.Module_):
             return self._module_attribute(owner.type.name, node)
+        optional = self._optional_receiver(owner, node)
+        if optional is not None:
+            return optional
         if isinstance(owner.type, (T.AnyType, T.UnknownType)):
             return Binding(T.ANY if self._dynamic_depth else T.UNKNOWN)
         if isinstance(owner.type, T.ClassObject):
@@ -1287,7 +1298,7 @@ class _Checker:
             if info is not None and self.strict and not self._dynamic_depth:
                 self._error("E1202", f"`{info.name}` has no attribute `{node.attr}`", node)
                 return Binding(T.UNKNOWN)
-        plugin_attribute = self._plugin_instance_attribute(base, node.attr)
+        plugin_attribute = self._plugin_instance_attribute(base, node.attr, owner.facts)
         if plugin_attribute is not None:
             self._effects = self._effects.add(Effect.READ_OBJECT)
             return plugin_attribute
@@ -1301,6 +1312,29 @@ class _Checker:
             return Binding(T.UNKNOWN)
         self._effects = self._effects.add(Effect.READ_OBJECT)
         return Binding(T.ANY if self._dynamic_depth else T.UNKNOWN)
+
+    def _optional_receiver(self, owner: Binding, node: ast.Attribute) -> Binding | None:
+        """Reading through a value that may be None, which fails at runtime.
+
+        Without this the union falls through to the generic path and the
+        reported problem is an unknown signature, which sends the reader
+        looking for a missing stub instead of a missing narrowing.
+        """
+        if self._dynamic_depth or owner.facts.non_null:
+            return None
+        if not isinstance(owner.type, T.Union_) or not T.is_optional(owner.type):
+            return None
+        present = T.remove_none(owner.type)
+        if isinstance(present, T.NeverType):
+            return None
+        self._error(
+            "E1206",
+            f"`{ast.unparse(node.value)}` may be `None`, so `.{node.attr}` is not available",
+            node,
+            help="narrow it first, for example with `if x is not None:`",
+        )
+        self._reported.add(id(node))
+        return Binding(T.UNKNOWN)
 
     def _module_attribute(self, module: str, node: ast.Attribute) -> Binding:
         qualname = f"{module}.{node.attr}"
@@ -2290,7 +2324,9 @@ class _Checker:
             )
         return Binding(result.type, result.facts)
 
-    def _plugin_instance_attribute(self, base: T.Type, attr: str) -> Binding | None:
+    def _plugin_instance_attribute(
+        self, base: T.Type, attr: str, facts: Facts | None = None
+    ) -> Binding | None:
         if self.plugins is None or not isinstance(base, T.Instance) or "." not in base.name:
             return None
         plugin = self.plugins.for_qualname(base.name)
@@ -2298,7 +2334,9 @@ class _Checker:
             return None
         describe = getattr(plugin, "instance_attribute", None)
         if describe is not None:
-            described = describe(base.name, attr)
+            # A plugin that reads the receiver's refinements can answer exactly
+            # where a dtype was declared, instead of guessing an element type.
+            described = describe(base.name, attr, facts or Facts())
             if described is not None:
                 return Binding(described[0], described[1])
         table = _PLUGIN_INSTANCE_ATTRS.get(base.name, {})

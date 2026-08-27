@@ -15,6 +15,7 @@ CODES: dict[str, str] = {
     "E1202": "An attribute could not be resolved on a statically known type.",
     "E1203": "A generic type was used bare, which would introduce an implicit `Any` element type.",
     "E1204": "A decorator applies an unknown transform, so the decorated signature is unknown.",
+    "E1206": "An attribute was read through a value that may be `None`.",
     "E1205": "A `ppy.` decorator names a directive the runtime does not export.",
     "E1301": "An assignment or argument does not match the declared type.",
     "E1302": "An operator has no definition for the operand types.",
