@@ -420,3 +420,18 @@ def test_unknown_annotated_metadata_is_preserved_and_warned(write, analyze):
     bundle = analyze(path)
     assert "W2003" in [d.code for d in bundle.diagnostics]
     assert not bundle.diagnostics.has_errors()
+
+
+def test_tolist_follows_the_declared_dtype():
+    """Without the receiver's refinements this could only guess an element type."""
+    from ppy_compiler.analysis.refinements import Facts
+    from ppy_compiler.plugins.jax_plugin import JaxPlugin
+    from ppy_compiler.plugins.torch_plugin import TorchPlugin
+
+    for plugin, owner in ((JaxPlugin(), "jax.Array"), (TorchPlugin(), "torch.Tensor")):
+        signature, _ = plugin.instance_attribute(owner, "tolist", Facts(dtype="int32"))
+        assert signature.ret == T.list_of(T.INT), owner
+        signature, _ = plugin.instance_attribute(owner, "tolist", Facts(dtype="float32"))
+        assert signature.ret == T.list_of(T.FLOAT), owner
+        signature, _ = plugin.instance_attribute(owner, "tolist", Facts())
+        assert signature.ret == T.list_of(T.FLOAT), owner

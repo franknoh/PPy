@@ -159,6 +159,19 @@ def staged_functions(symbols) -> list[StagedFunction]:  # type: ignore[no-untype
     return found
 
 
+def _element_type(facts: "Facts | None") -> T.Type:
+    """What `tolist()` yields, from the declared dtype when there is one.
+
+    An array carries no dtype unless something declared it, and every JAX
+    default is floating point, so `float` is the fallback rather than a guess
+    between the two.
+    """
+    dtype = getattr(facts, "dtype", None) if facts is not None else None
+    if dtype is not None and ("int" in dtype or "bool" in dtype):
+        return T.BOOL if "bool" in dtype else T.INT
+    return T.FLOAT
+
+
 def _default_dtype(t: T.Type) -> str:
     base = T.strip_literal(t)
     if isinstance(base, T.Instance) and base.name == "int":
@@ -222,7 +235,9 @@ class JaxPlugin:
             return T.STR, Facts()
         return None
 
-    def instance_attribute(self, type_name: str, attribute: str) -> tuple[T.Type, Facts] | None:
+    def instance_attribute(
+        self, type_name: str, attribute: str, facts: Facts | None = None
+    ) -> tuple[T.Type, Facts] | None:
         """Attributes of a `jax.Array` value."""
         if type_name != "jax.Array":
             return None
@@ -242,7 +257,10 @@ class JaxPlugin:
         if kind == "float_method":
             return T.Callable_((), T.FLOAT, f"jax.Array.{attribute}"), Facts()
         if kind == "list_method":
-            return T.Callable_((), T.list_of(T.ANY), f"jax.Array.{attribute}"), Facts()
+            return (
+                T.Callable_((), T.list_of(_element_type(facts)), f"jax.Array.{attribute}"),
+                Facts(),
+            )
         return T.UNKNOWN, Facts()
 
     def call(

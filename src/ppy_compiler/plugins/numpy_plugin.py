@@ -129,7 +129,9 @@ class NumPyPlugin:
             return T.ClassObject("numpy.ndarray", _NDARRAY), Facts()
         return None
 
-    def instance_attribute(self, type_name: str, attribute: str) -> tuple[T.Type, Facts] | None:
+    def instance_attribute(
+        self, type_name: str, attribute: str, facts: Facts | None = None
+    ) -> tuple[T.Type, Facts] | None:
         """Methods and attributes of an exact `numpy.ndarray` value."""
         if type_name != "numpy.ndarray":
             return None

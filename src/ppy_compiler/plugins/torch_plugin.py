@@ -58,7 +58,7 @@ _UTILITY_TYPES: dict[str, T.Type] = {
     "int_pair": T.Tuple_((T.INT, T.INT)),
     # `tolist` on a multi-dimensional tensor nests, so this is the 1-D shape
     # that a caller can actually feed to `array.array` or a native buffer.
-    "float_list": T.list_of(T.FLOAT),
+    "float_list": T.list_of(T.FLOAT),  # refined by the receiver's dtype below
     "int_tuple": T.Tuple_((T.INT,), homogeneous=True),
 }
 
@@ -195,7 +195,9 @@ class TorchPlugin:
             return T.Module_(qualname), Facts()
         return None
 
-    def instance_attribute(self, type_name: str, attribute: str) -> tuple[T.Type, Facts] | None:
+    def instance_attribute(
+        self, type_name: str, attribute: str, facts: Facts | None = None
+    ) -> tuple[T.Type, Facts] | None:
         """Methods and attributes of an exact `torch.Tensor` value."""
         if type_name != "torch.Tensor":
             return None
@@ -208,6 +210,10 @@ class TorchPlugin:
             return T.BOOL, Facts()
         if kind == "optional_tensor":
             return T.union(_TENSOR, T.NONE), Facts()
+        if kind == "float_list":
+            dtype = getattr(facts, "dtype", None) if facts is not None else None
+            element = T.INT if dtype is not None and "int" in dtype else T.FLOAT
+            return T.Callable_((), T.list_of(element), f"torch.Tensor.{attribute}"), Facts()
         return (
             T.Callable_((), _UTILITY_TYPES.get(kind, T.UNKNOWN), f"torch.Tensor.{attribute}"),
             Facts(),
