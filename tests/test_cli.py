@@ -349,6 +349,5 @@ def test_explain_reports_which_boundary_a_function_crosses(workspace: Path):
     assert "python boundary: a generated CPython-ABI wrapper" in plain.stdout
 
     jitted = _ppy(["explain", "cube"], workspace)
-    assert "python boundary: ctypes" in jitted.stdout
-    assert "specialization" in jitted.stdout
+    assert "selects the specialization" in jitted.stdout
     assert "specializes on x" in jitted.stdout

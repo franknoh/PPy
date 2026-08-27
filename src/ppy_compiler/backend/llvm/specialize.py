@@ -62,6 +62,22 @@ class SpecializationKey:
     def suffix(self) -> str:
         return digest(self.entries)[:12]
 
+    def pins(self) -> tuple[tuple[int, int, object], ...]:
+        """The pinned facts as `(kind, argument index, value)` triples.
+
+        Kinds match the generated wrapper: 1 an integer value, 2 a float
+        value, 3 a length.
+        """
+        described: list[tuple[int, int, object]] = []
+        for index, _name, kind, value in self.entries:
+            if kind == "length":
+                described.append((3, index, int(value)))  # type: ignore[arg-type]
+            elif isinstance(value, float):
+                described.append((2, index, value))
+            else:
+                described.append((1, index, int(value)))  # type: ignore[arg-type]
+        return tuple(described)
+
     def matcher(self) -> "Callable[[tuple[object, ...]], bool]":
         """A cheap predicate selecting exactly the calls this was built for.
 
@@ -141,7 +157,9 @@ def key_for(
             continue
         if not policy.pin_values or parameter.kind not in _PINNABLE:
             continue
-        if type(value) not in (int, float, bool):
+        # A bool pins almost nothing and is not an exact `int` to the
+        # generated guard, so it is left alone.
+        if type(value) not in (int, float):
             continue
         entries.append((index, parameter.name, "value", value))
     return SpecializationKey(tuple(entries))

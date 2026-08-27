@@ -44,6 +44,23 @@ class BuiltWrappers:
             return None
         return getattr(self.module, f"call_{index}", None)
 
+    def registrar(self, qualname: str):  # type: ignore[no-untyped-def]
+        """A callable that hands one specialization to the generated wrapper."""
+        index = self.entries.get(qualname)
+        if self.module is None or index is None:
+            return None
+        register = getattr(self.module, f"specialize_{index}", None)
+        if register is None:
+            return None
+
+        def add(address: int, pins: tuple) -> bool:
+            try:
+                return bool(register(address, pins))
+            except Exception:  # noqa: BLE001 - a refusal keeps the generic code
+                return False
+
+        return add
+
 
 def wrapper_toolchain() -> tuple[bool, str]:
     import shutil

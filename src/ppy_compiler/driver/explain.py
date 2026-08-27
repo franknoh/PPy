@@ -276,12 +276,9 @@ def _boundary(info: FunctionInfo) -> str:
     from ..backend.llvm.specialize import SpecializationPolicy
     from ..backend.llvm.wrapper_build import wrapper_toolchain
 
-    if SpecializationPolicy.of(info).enabled:
-        return (
-            "ctypes, because runtime specialization selects the entry point in Python; "
-            "worth it only where the kernel dominates the call"
-        )
     ready, detail = wrapper_toolchain()
     if not ready:
         return f"ctypes, because no wrapper could be generated: {detail}"
+    if SpecializationPolicy.of(info).enabled:
+        return "a generated CPython-ABI wrapper, which also selects the specialization"
     return "a generated CPython-ABI wrapper"

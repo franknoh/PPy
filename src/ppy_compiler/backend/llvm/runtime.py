@@ -52,15 +52,18 @@ class NativeBinding:
     #: Whatever owns the compiled code, kept so it cannot be freed while a
     #: wrapper still points at it.
     owner: object | None = None
-    #: (matcher, entry) pairs, checked in order on every call.
+    #: (matcher, entry) pairs the ctypes boundary checks on every call.
     selectors: list = field(default_factory=list)
+    #: Specializations handed to the generated wrapper, which selects them
+    #: itself, so this side only needs to know how many exist.
+    registered: int = 0
     key_counts: dict = field(default_factory=dict)
     observations: int = 0
     observing: bool = False
 
     @property
     def specialization_count(self) -> int:
-        return len(self.selectors)
+        return len(self.selectors) + self.registered
 
 
 def bind(
@@ -73,6 +76,7 @@ def bind(
     info: object | None = None,
     fast_entry: Callable[..., object] | None = None,
     owner: object | None = None,
+    register: Callable[[int, tuple], bool] | None = None,
 ) -> NativeBinding:
     """Build the Python-callable wrapper for one native function.
 
@@ -110,6 +114,8 @@ def bind(
         and policy.enabled
         and policy.maximum > 0
         and info is not None
+        # Without a way to register one, a specialization could not be reached.
+        and (fast_entry is None or register is not None)
     )
     binding = NativeBinding(
         signature=signature,
@@ -120,10 +126,14 @@ def bind(
         owner=owner,
     )
 
-    if fast_entry is not None and not observing:
-        # The generated wrapper does the parsing, the guards, the call, and the
-        # boxing in C; `NotImplemented` is its signal that a guard failed.
+    if fast_entry is not None:
+        # The generated wrapper does the parsing, the guards, the specialization
+        # choice, the call, and the boxing in C; `NotImplemented` is its signal
+        # that a guard failed. While the function is still learning which
+        # argument shapes repeat, Python watches alongside.
         def fast_wrapper(*args: object) -> object:
+            if binding.observing:
+                _watch(binding, signature, args, policy, specializer, info, register)
             result = fast_entry(*args)
             if result is NotImplemented:
                 binding.fallbacks += 1
@@ -396,3 +406,45 @@ def _observe(
 
 def _abi_of(scalar: str) -> str:
     return {"int": "i64", "float": "double", "bool": "i8"}[scalar]
+
+
+def _watch(
+    binding: NativeBinding,
+    signature: NativeSignature,
+    args: tuple[object, ...],
+    policy: SpecializationPolicy,
+    specializer: Specializer,
+    info: object,
+    register: Callable[[int, tuple], bool] | None,
+) -> None:
+    """Watch argument shapes, and register a specialization once one repeats.
+
+    Selecting the specialization is the generated wrapper's job; this only
+    decides when one is worth compiling, and stops once it knows.
+    """
+    binding.observations += 1
+    if binding.observations > policy.budget:
+        binding.observing = False
+        return
+
+    key = key_for(signature, args, policy)
+    if not key:
+        binding.observing = False
+        return
+
+    seen = binding.key_counts.get(key, 0) + 1
+    binding.key_counts[key] = seen
+    if seen < policy.threshold:
+        return
+
+    specialization = specializer.specialize(info, key)  # type: ignore[arg-type]
+    if specialization is None or not specialization.ok:
+        binding.key_counts[key] = -(1 << 30)
+        return
+    if register is None or not register(specialization.address, key.pins()):
+        binding.observing = False
+        return
+
+    binding.registered += 1
+    if binding.specialization_count >= policy.maximum:
+        binding.observing = False

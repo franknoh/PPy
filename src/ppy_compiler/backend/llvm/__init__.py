@@ -486,10 +486,12 @@ class _Binder(LibraryBinder):
             return fallback
         signature, address, specializer, info, wrappers, qualname, layouts, engine = entry
         fast_entry = None
+        register = None
         if wrappers is not None and wrappers.ok:
             types = _value_class_types(signature, fallback, layouts)
             if types is not None:
                 fast_entry = wrappers.bind(qualname, address, types)
+                register = wrappers.registrar(qualname)
         binding = make_binding(
             signature,
             address,
@@ -499,6 +501,7 @@ class _Binder(LibraryBinder):
             info=info,
             fast_entry=fast_entry,
             owner=(engine, wrappers),
+            register=register,
         )
         self.bindings.append(binding)
         return binding.wrapper

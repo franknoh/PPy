@@ -1727,3 +1727,100 @@ def test_a_class_that_intercepts_attribute_reads_stays_boxed(write, analyze):
     assert "intercept.Plain" in layouts
     assert "intercept.Watching" not in layouts
     assert "intercept.Shadowed" not in layouts
+
+
+def test_a_specialization_key_describes_its_pins_for_the_wrapper():
+    from ppy_compiler.backend.llvm.specialize import SpecializationKey
+
+    key = SpecializationKey(
+        ((1, "modulus", "value", 97), (0, "values", "length", 64), (2, "scale", "value", 0.5))
+    )
+    assert key.pins() == ((1, 1, 97), (3, 0, 64), (2, 2, 0.5))
+
+
+def test_the_wrapper_selects_a_registered_specialization(write, analyze):
+    """The specialization guard lives in C, so a specialized function keeps
+    the cheap boundary (spec 16.9)."""
+    from ppy_compiler.backend.llvm.wrapper_build import build_wrappers, wrapper_toolchain
+
+    ready, detail = wrapper_toolchain()
+    if not ready:
+        pytest.skip(detail)
+
+    path = write(
+        "specwrap.ppy",
+        """
+        import ppy
+
+
+        @ppy.pure
+        @ppy.opt(3)
+        def digest(value: int, modulus: int) -> int:
+            return value % modulus
+        """,
+    )
+    bundle = analyze(path, backend="llvm")
+    module = _collect(bundle)["specwrap"]
+    engine = _jit(module)
+    built = build_wrappers(
+        "specwrap",
+        {q: lowered.signature for q, lowered in module.functions.items()},
+        path.parent / ".ppy-cache",
+    )
+    if not built.ok:
+        pytest.skip(built.reason)
+
+    lowered = module.functions["specwrap.digest"]
+    address = engine.address(lowered.signature.symbol)
+    entry = built.bind("specwrap.digest", address, ())
+    register = built.registrar("specwrap.digest")
+    assert entry is not None and register is not None
+
+    assert entry(17, 5) == 2
+
+    # Register a deliberately wrong "specialization" so its selection is
+    # observable: pinning modulus == 5 must route only calls with modulus 5.
+    from ppy_compiler.backend.llvm.specialize import Specializer
+
+    specializer = Specializer(engine=engine, module_analysis=bundle.analysis.modules["specwrap"])
+    for qualname, (info, node) in module.sources.items():
+        specializer.register(info, node)
+
+    from ppy_compiler.backend.llvm.specialize import SpecializationKey
+
+    key = SpecializationKey(((1, "modulus", "value", 5),))
+    specialization = specializer.specialize(lowered.info, key)
+    assert specialization is not None and specialization.ok
+    assert register(specialization.address, key.pins())
+
+    assert entry(17, 5) == 2, "the specialization computes the same answer"
+    assert entry(17, 4) == 1, "another shape falls through to the generic code"
+    del engine, built
+
+
+def test_registering_beyond_the_wrapper_capacity_is_refused(write, analyze):
+    from ppy_compiler.backend.llvm.wrapper_build import build_wrappers, wrapper_toolchain
+
+    ready, detail = wrapper_toolchain()
+    if not ready:
+        pytest.skip(detail)
+
+    path = write("capwrap.ppy", SCALARS)
+    module = _collect(analyze(path, backend="llvm"))["capwrap"]
+    engine = _jit(module)
+    built = build_wrappers(
+        "capwrap",
+        {q: lowered.signature for q, lowered in module.functions.items()},
+        path.parent / ".ppy-cache",
+    )
+    if not built.ok:
+        pytest.skip(built.reason)
+
+    lowered = module.functions["capwrap.widen"]
+    address = engine.address(lowered.signature.symbol)
+    built.bind("capwrap.widen", address, ())
+    register = built.registrar("capwrap.widen")
+
+    accepted = sum(register(address, ((1, 0, value),)) for value in range(32))
+    assert 0 < accepted <= 8, "the wrapper bounds how many it will hold"
+    del engine, built
