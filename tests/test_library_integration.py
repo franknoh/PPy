@@ -106,7 +106,7 @@ def test_a_function_outside_the_curated_domain_is_rejected(write, analyze):
     bundle = analyze(path)
     regions = {r.name: r for r in find_regions(bundle.symbols.modules["reject"], bundle.analysis.modules["reject"])}
     assert not regions["loopy"].body
-    assert "single `return`" in regions["loopy"].reason
+    assert "only assignments and a final `return`" in regions["loopy"].reason
     assert not regions["exotic"].body
     assert "curated" in regions["exotic"].reason
 

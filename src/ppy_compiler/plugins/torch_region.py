@@ -75,6 +75,8 @@ class TorchRegion:
     info: FunctionInfo
     symbol: str
     parameters: tuple[tuple[str, str], ...]
+    #: `name = <expression>` bindings preceding the return, in source order.
+    bindings: tuple[tuple[str, str], ...] = ()
     body: str = ""
     operations: tuple[str, ...] = ()
     reason: str = ""
@@ -95,7 +97,9 @@ class TorchRegion:
         return f"at::Tensor {self.symbol}({rendered})"
 
     def source(self) -> str:
-        return f"{self.declaration()} {{\n    return {self.body};\n}}"
+        lines = [f"    auto {name} = {value};" for name, value in self.bindings]
+        lines.append(f"    return {self.body};")
+        return self.declaration() + " {\n" + "\n".join(lines) + "\n}"
 
 
 def _kind(t: T.Type) -> str:
@@ -141,25 +145,49 @@ def _region_for(
         return None
 
     body = [statement for statement in info.node.body if not _is_docstring(statement)]
-    if len(body) != 1 or not isinstance(body[0], ast.Return) or body[0].value is None:
+    if not body or not isinstance(body[-1], ast.Return) or body[-1].value is None:
         return TorchRegion(
             info, _symbol(info), tuple(parameters),
-            reason="only a single `return` expression is translated to C++",
+            reason="a region ends in a `return` expression",
         )
 
     operations: list[str] = []
     names = {name for name, _kind in parameters}
+    bindings: list[tuple[str, str]] = []
     try:
-        rendered = _render(body[0].value, analysis, names, operations)
+        # Intermediates are how model code is actually written, and each one
+        # is a straight `auto name = ...;` ahead of the return.
+        for statement in body[:-1]:
+            name, value = _binding(statement, names)
+            bindings.append((name, _render(value, analysis, names, operations)))
+            names.add(name)
+        rendered = _render(body[-1].value, analysis, names, operations)
     except Unsupported as exc:
         return TorchRegion(info, _symbol(info), tuple(parameters), reason=str(exc))
     return TorchRegion(
         info,
         _symbol(info),
         tuple(parameters),
+        bindings=tuple(bindings),
         body=rendered,
         operations=tuple(dict.fromkeys(operations)),
     )
+
+
+def _binding(statement: ast.stmt, names: set[str]) -> tuple[str, ast.expr]:
+    """The name and value of a `name = <expression>` ahead of the return."""
+    if isinstance(statement, ast.AnnAssign) and statement.value is not None:
+        target: ast.expr = statement.target
+        value = statement.value
+    elif isinstance(statement, ast.Assign) and len(statement.targets) == 1:
+        target, value = statement.targets[0], statement.value
+    else:
+        raise Unsupported("a region holds only assignments and a final `return`")
+    if not isinstance(target, ast.Name):
+        raise Unsupported("a region assigns only to plain local names")
+    if target.id in names:
+        raise Unsupported(f"`{target.id}` is assigned twice inside the region")
+    return target.id, value
 
 
 def _symbol(info: FunctionInfo) -> str:
