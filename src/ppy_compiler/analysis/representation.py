@@ -84,6 +84,10 @@ def select(t: T.Type, facts: Facts, *, escapes: bool = False) -> Representation:
             if isinstance(element, T.Instance) and element.name in {"int", "float", "bool"}:
                 return Representation(Repr.NATIVE_VECTOR, reason="non-escaping homogeneous list")
             return Representation(Repr.PY_LIST, reason="heterogeneous element type")
-        if base.name == "ndarray":
-            return Representation(Repr.PY_ARRAY, reason="NumPy array handle")
+        if base.name in {"ndarray", "numpy.ndarray"}:
+            return Representation(
+                Repr.PY_ARRAY, reason="retained PyArrayObject* with an extracted data pointer"
+            )
+        if base.name == "torch.Tensor":
+            return Representation(Repr.PY_OBJECT, reason="retained at::Tensor handle")
     return Representation(Repr.PY_OBJECT, reason="no native representation selected")

@@ -209,6 +209,7 @@ FUSED = """
 
 
     @ppy.pure
+    @ppy.fastmath
     def energy(a: np.ndarray) -> float:
         return np.sum(a * a)
     """
@@ -386,7 +387,7 @@ def test_fused_program_matches_plain_cpython(tmp_path: Path):
 
 @requires_numpy
 def test_a_nested_reduction_is_not_folded_into_an_elementwise_tree(write, analyze):
-    """`sqrt(sum(x*x))` changes shape at the reduction, so only `sum` fuses."""
+    """`sqrt(sum(x*x))` changes shape at the reduction, so it cannot be one tree."""
     path = write(
         "nested.ppy",
         """
@@ -396,6 +397,7 @@ def test_a_nested_reduction_is_not_folded_into_an_elementwise_tree(write, analyz
 
 
         @ppy.pure
+        @ppy.fastmath
         def normalize(x: np.ndarray) -> np.ndarray:
             scale: float = np.sqrt(np.sum(x * x))
             return x / scale
@@ -422,3 +424,270 @@ def test_a_scalar_only_call_is_not_claimed_as_fusible():
     result = NumPyPlugin().call("numpy.sqrt", [(T.FLOAT, Facts())], {})
     assert result.lowering is Lowering.DIRECT_NATIVE_CALL
     assert "no array operand" in result.reason
+
+
+@requires_numpy
+def test_a_reassociating_reduction_needs_explicit_permission(write, analyze):
+    """NumPy sums pairwise, so a sequential kernel would reassociate."""
+    path = write(
+        "strictsum.ppy",
+        """
+        import numpy as np
+
+        import ppy
+
+
+        @ppy.pure
+        def strict(a: np.ndarray) -> float:
+            return np.sum(a * a)
+
+
+        @ppy.pure
+        @ppy.fastmath
+        def relaxed(a: np.ndarray) -> float:
+            return np.sum(a * a)
+        """,
+    )
+    module = _collect(analyze(path, backend="llvm"))["strictsum"]
+    reductions = {loop.reduction for loop in module.fused.values()}
+    # The elementwise `a * a` still fuses in both; only `relaxed` fuses the sum.
+    assert reductions == {"", "sum"}
+
+
+@requires_numpy
+def test_strict_reduction_stays_bit_identical_to_numpy(tmp_path: Path):
+    entry = tmp_path / "bits.ppy"
+    entry.write_text(
+        textwrap.dedent(
+            """
+            import numpy as np
+
+            import ppy
+
+
+            @ppy.pure
+            def strict(a: np.ndarray) -> float:
+                return np.sum(np.sqrt(a) * 2.0 + a)
+
+
+            x = np.linspace(1.0, 1e6, 200000)
+            print(float(strict(x)) == float(np.sum(np.sqrt(x) * 2.0 + x)))
+            """
+        ).lstrip("\n"),
+        encoding="utf-8",
+    )
+    native = _ppy(["run", entry.name], tmp_path)
+    assert native.returncode == 0, native.stderr
+    assert native.stdout.strip() == "True"
+
+
+@requires_numpy
+def test_fused_min_max_propagate_nan_like_numpy(write, analyze):
+    import numpy
+
+    from ppy_compiler.backend.llvm.fused_runtime import bind_fused
+
+    path = write(
+        "peak.ppy",
+        """
+        import numpy as np
+
+        import ppy
+
+
+        @ppy.pure
+        def peak(a: np.ndarray) -> float:
+            return np.max(a * a)
+        """,
+    )
+    module = _collect(analyze(path, backend="llvm"))["peak"]
+    engine = _jit(module)
+    loop = next(loop for loop in module.fused.values() if loop.returns_scalar)
+    assert loop.reduction == "max"
+
+    binding = bind_fused(loop, engine.address(loop.symbol), lambda a: float(numpy.max(a * a)))
+    with numpy.errstate(all="ignore"):
+        values = numpy.array([1.0, numpy.nan, 2.0])
+        assert numpy.isnan(binding.wrapper(values))
+        assert binding.wrapper(numpy.array([1.0, 3.0, 2.0])) == 9.0
+
+
+@requires_numpy
+def test_an_empty_fused_min_max_falls_back_so_numpy_raises(write, analyze):
+    import numpy
+
+    from ppy_compiler.backend.llvm.fused_runtime import bind_fused
+
+    path = write(
+        "emptypeak.ppy",
+        """
+        import numpy as np
+
+        import ppy
+
+
+        @ppy.pure
+        def peak(a: np.ndarray) -> float:
+            return np.max(a * a)
+        """,
+    )
+    module = _collect(analyze(path, backend="llvm"))["emptypeak"]
+    engine = _jit(module)
+    loop = next(loop for loop in module.fused.values() if loop.returns_scalar)
+    binding = bind_fused(loop, engine.address(loop.symbol), lambda a: float(numpy.max(a * a)))
+
+    with pytest.raises(ValueError):
+        binding.wrapper(numpy.array([], dtype=numpy.float64))
+    assert binding.fallbacks == 1
+
+
+# -- parallelization ------------------------------------------------------
+
+
+def test_chunk_bounds_cover_the_whole_range():
+    from ppy_compiler.backend.llvm.parallel import MIN_PARALLEL_ELEMENTS, chunk_bounds
+
+    assert chunk_bounds(1000, 8) == [(0, 1000)], "a small range stays on one thread"
+    assert chunk_bounds(MIN_PARALLEL_ELEMENTS * 8, 1) == [(0, MIN_PARALLEL_ELEMENTS * 8)]
+
+    length = MIN_PARALLEL_ELEMENTS * 8
+    bounds = chunk_bounds(length, 4)
+    assert len(bounds) > 1
+    assert bounds[0][0] == 0 and bounds[-1][1] == length
+    for (_, previous_stop), (start, _) in zip(bounds, bounds[1:]):
+        assert previous_stop == start
+
+
+def test_only_the_parallel_directive_marks_a_kernel_splittable(write, analyze):
+    path = write(
+        "marked.ppy",
+        """
+        import numpy as np
+
+        import ppy
+
+
+        @ppy.pure
+        @ppy.parallel
+        def wide(a: np.ndarray) -> np.ndarray:
+            return np.sin(a) + 1.0
+
+
+        @ppy.pure
+        def narrow(a: np.ndarray) -> np.ndarray:
+            return np.sin(a) + 1.0
+        """,
+    )
+    module = _collect(analyze(path, backend="llvm"))["marked"]
+    marks = {loop.symbol.split("_marked_")[1].split("_")[0]: loop.parallel for loop in module.fused.values()}
+    assert marks == {"wide": True, "narrow": False}
+
+
+def test_a_reassociating_reduction_is_not_split_without_permission():
+    from ppy_compiler.backend.llvm.fused_runtime import _splittable
+    from ppy_compiler.backend.llvm.fusion import FusedLoop
+
+    elementwise = FusedLoop(symbol="s", arrays=("a",), scalars=())
+    assert _splittable(elementwise)
+    assert _splittable(FusedLoop(symbol="s", arrays=("a",), scalars=(), reduction="max"))
+    assert _splittable(FusedLoop(symbol="s", arrays=("a",), scalars=(), reduction="sum"))
+    # Per-chunk means cannot be merged without weighting.
+    assert not _splittable(FusedLoop(symbol="s", arrays=("a",), scalars=(), reduction="mean"))
+
+
+@requires_numpy
+def test_a_parallel_kernel_produces_the_same_array(write, analyze):
+    import numpy
+
+    from ppy_compiler.backend.llvm.fused_runtime import bind_fused
+    from ppy_compiler.backend.llvm.parallel import MIN_PARALLEL_ELEMENTS
+
+    path = write(
+        "split.ppy",
+        """
+        import numpy as np
+
+        import ppy
+
+
+        @ppy.pure
+        @ppy.parallel
+        def kernel(a: np.ndarray, b: np.ndarray) -> np.ndarray:
+            return a * b + a - b * 0.5
+        """,
+    )
+    module = _collect(analyze(path, backend="llvm"))["split"]
+    engine = _jit(module)
+    loop = next(iter(module.fused.values()))
+    assert loop.parallel
+
+    def fallback(a, b):
+        return a * b + a - b * 0.5
+
+    binding = bind_fused(loop, engine.address(loop.symbol), fallback, parallel=True)
+    size = MIN_PARALLEL_ELEMENTS * 4
+    a = numpy.linspace(0.0, 10.0, size)
+    b = numpy.linspace(1.0, 5.0, size)
+
+    result = binding.wrapper(a, b)
+    # Bit-identical, not merely close: each element is computed the same way.
+    assert numpy.array_equal(result, fallback(a, b))
+    assert binding.parallel_calls == 1 and binding.fallbacks == 0
+
+
+@requires_numpy
+def test_a_split_reduction_matches_the_serial_kernel(write, analyze):
+    import numpy
+
+    from ppy_compiler.backend.llvm.fused_runtime import bind_fused
+    from ppy_compiler.backend.llvm.parallel import MIN_PARALLEL_ELEMENTS
+
+    path = write(
+        "splitmax.ppy",
+        """
+        import numpy as np
+
+        import ppy
+
+
+        @ppy.pure
+        @ppy.parallel
+        def peak(a: np.ndarray) -> float:
+            return np.max(a * a)
+        """,
+    )
+    module = _collect(analyze(path, backend="llvm"))["splitmax"]
+    engine = _jit(module)
+    loop = next(loop for loop in module.fused.values() if loop.returns_scalar)
+
+    fallback = lambda a: float(numpy.max(a * a))  # noqa: E731
+    values = numpy.linspace(-5.0, 5.0, MIN_PARALLEL_ELEMENTS * 4)
+
+    parallel = bind_fused(loop, engine.address(loop.symbol), fallback, parallel=True)
+    serial = bind_fused(loop, engine.address(loop.symbol), fallback, parallel=False)
+    assert parallel.wrapper(values) == serial.wrapper(values) == fallback(values)
+    assert parallel.parallel_calls == 1
+
+
+def test_required_parallel_is_accepted_for_a_fused_region_on_llvm(write, analyze):
+    path = write(
+        "reqpar.ppy",
+        """
+        import numpy as np
+
+        import ppy
+
+
+        @ppy.pure
+        @ppy.parallel(require=True)
+        def kernel(a: np.ndarray) -> np.ndarray:
+            return np.sin(a) + 1.0
+        """,
+    )
+    on_llvm = analyze(path, backend="llvm")
+    assert not on_llvm.diagnostics.has_errors()
+    assert on_llvm.reports["reqpar.kernel"].parallel_ok
+
+    on_python = analyze(path, backend="python")
+    codes = [d.code for d in on_python.diagnostics]
+    assert "E1701" in codes

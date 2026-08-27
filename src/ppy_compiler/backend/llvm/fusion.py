@@ -17,7 +17,15 @@ from ...analysis.checker import ModuleAnalysis
 from ...analysis.symbols import FunctionInfo
 from ...plugins.numpy_plugin import FUSIBLE_BINARY, FUSIBLE_REDUCTIONS, FUSIBLE_UNARY
 
-__all__ = ["FusedLoop", "FusionCandidate", "find_candidates", "lower_candidate", "UNARY", "BINARY"]
+__all__ = [
+    "FusedLoop",
+    "FusionCandidate",
+    "find_candidates",
+    "find_module_candidates",
+    "lower_candidate",
+    "UNARY",
+    "BINARY",
+]
 
 #: Unary ufuncs lowered to an LLVM intrinsic over one element.
 UNARY = {
@@ -36,8 +44,13 @@ UNARY = {
 #: Binary ufuncs lowered to a single machine instruction per element.
 BINARY = set(FUSIBLE_BINARY)
 
-#: Reductions lowered to a sequential accumulation, keeping strict order.
+#: Reductions lowered to a sequential accumulation.
 REDUCTIONS = set(FUSIBLE_REDUCTIONS)
+
+#: Reductions whose fused form reassociates the accumulation. NumPy sums
+#: pairwise, so a sequential loop is a different -- and observably different --
+#: order. These fuse only where the program permits reassociation (spec 19.8).
+REASSOCIATING = frozenset({"sum", "prod", "product", "mean"})
 
 _OPERATOR_UFUNC = {
     ast.Add: "add",
@@ -57,6 +70,7 @@ class FusedLoop:
     scalars: tuple[str, ...]
     reduction: str = ""
     expression: str = ""
+    parallel: bool = False
 
     @property
     def returns_scalar(self) -> bool:
@@ -67,8 +81,8 @@ class FusedLoop:
 class FusionCandidate:
     """An expression the NumPy plugin marked `Intrinsic` and PPY can fuse."""
 
-    function: FunctionInfo
-    node: ast.expr
+    function: FunctionInfo | None
+    node: ast.expr | None
     loop: FusedLoop
     operations: tuple[str, ...] = ()
     reason: str = ""
@@ -113,10 +127,41 @@ def find_candidates(
     module: ModuleAnalysis,
 ) -> list[FusionCandidate]:
     """Find maximal fusible expression trees inside one function."""
+    return _search(
+        function.node,
+        module,
+        function=function,
+        prefix=function.qualname,
+        fastmath=function.directive("fastmath") is not None,
+        parallel=function.directive("parallel") is not None,
+    )
+
+
+def find_module_candidates(tree: ast.Module, module: ModuleAnalysis) -> list[FusionCandidate]:
+    """Find fusible expressions in module-level code, outside any definition."""
+    body = ast.Module(
+        body=[
+            statement for statement in tree.body
+            if not isinstance(statement, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef))
+        ],
+        type_ignores=[],
+    )
+    return _search(body, module, function=None, prefix=module.name, fastmath=False)
+
+
+def _search(
+    root: ast.AST,
+    module: ModuleAnalysis,
+    *,
+    function: FunctionInfo | None,
+    prefix: str,
+    fastmath: bool,
+    parallel: bool = False,
+) -> list[FusionCandidate]:
     found: list[FusionCandidate] = []
     claimed: set[int] = set()
 
-    for node in ast.walk(function.node):
+    for node in ast.walk(root):
         if not isinstance(node, ast.expr) or id(node) in claimed:
             continue
         ufunc = _ufunc_of(node, module)
@@ -133,6 +178,8 @@ def find_candidates(
                 # operand collapses to one value, so nothing can wrap it.
                 if not isinstance(node, ast.Call) or len(node.args) != 1 or node.keywords:
                     continue
+                if ufunc in REASSOCIATING and not fastmath:
+                    continue
                 reduction = ufunc
                 operations.append(ufunc)
                 expression = _render(node.args[0], module, shape, operations)
@@ -143,11 +190,12 @@ def find_candidates(
         if not shape.arrays:
             continue
         loop = FusedLoop(
-            symbol="ppy_fused_" + function.qualname.replace(".", "_") + f"_{node.lineno}_{node.col_offset}",
+            symbol="ppy_fused_" + prefix.replace(".", "_") + f"_{node.lineno}_{node.col_offset}",
             arrays=tuple(shape.arrays),
             scalars=tuple(shape.scalars),
             reduction=reduction,
             expression=expression,
+            parallel=parallel,
         )
         found.append(
             FusionCandidate(
@@ -235,13 +283,20 @@ def lower_candidate(ir, llvm_module, candidate: FusionCandidate):  # type: ignor
     builder = ir.IRBuilder(entry)
 
     accumulator = None
+    index = builder.alloca(i64, name="i")
     if loop.returns_scalar:
         accumulator = builder.alloca(double, name="acc")
-        initial = 1.0 if loop.reduction in {"prod", "product"} else 0.0
-        builder.store(ir.Constant(double, initial), accumulator)
-
-    index = builder.alloca(i64, name="i")
-    builder.store(ir.Constant(i64, 0), index)
+        if loop.reduction in {"max", "min"}:
+            # An empty reduction has no identity to start from; NumPy raises,
+            # so the caller's fallback must handle it.
+            builder.store(builder.load(builder.gep(arrays[0], [ir.Constant(i64, 0)])), accumulator)
+            builder.store(ir.Constant(i64, 1), index)
+        else:
+            initial = 1.0 if loop.reduction in {"prod", "product"} else 0.0
+            builder.store(ir.Constant(double, initial), accumulator)
+            builder.store(ir.Constant(i64, 0), index)
+    else:
+        builder.store(ir.Constant(i64, 0), index)
 
     header = function.append_basic_block("head")
     body = function.append_basic_block("body")
@@ -261,10 +316,15 @@ def lower_candidate(ir, llvm_module, candidate: FusionCandidate):  # type: ignor
         carried = builder.load(accumulator)
         if loop.reduction in {"prod", "product"}:
             updated = builder.fmul(carried, value)
-        elif loop.reduction == "max":
-            updated = builder.select(builder.fcmp_ordered(">", value, carried), value, carried)
-        elif loop.reduction == "min":
-            updated = builder.select(builder.fcmp_ordered("<", value, carried), value, carried)
+        elif loop.reduction in {"max", "min"}:
+            # NumPy's min/max propagate NaN, and doing the same keeps the
+            # reduction associative, so no reassociation contract is needed.
+            symbol = ">" if loop.reduction == "max" else "<"
+            better = builder.fcmp_ordered(symbol, value, carried)
+            unordered = builder.fcmp_unordered("!=", value, value)
+            updated = builder.select(
+                builder.or_(better, unordered), value, carried
+            )
         else:
             # `sum` and `mean` accumulate in strict index order: no
             # reassociation without an explicit directive (spec 19.8).

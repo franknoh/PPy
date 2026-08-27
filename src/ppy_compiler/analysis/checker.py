@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING
 from ..diagnostics import Diagnostic, DiagnosticBag, Severity
 from ..frontend.source import span_of
 from . import builtins as B
+from . import stdlib
 from . import types as T
 from .annotations import AnnotationResolver
 from .effects import Effect, EffectSet
@@ -865,6 +866,15 @@ class _Checker:
         if isinstance(callee.type, T.ClassObject):
             return self._construct(callee.type, node, args, keywords, env)
         if isinstance(callee.type, T.Callable_):
+            described = stdlib.lookup(callee.type.qualname)
+            if described is not None:
+                self._effects = self._effects | described[1]
+                if described[1].violations():
+                    self._blockers.append(
+                        f"calls `{callee.type.qualname}` with effects: {described[1]}"
+                    )
+                self._native_blockers.append(f"`{callee.type.qualname}` has no native lowering")
+                return Binding(callee.type.ret)
             if callee.type.qualname in _MUTATING_METHODS:
                 self._effects = self._effects.add(Effect.WRITE_OBJECT, raises=("IndexError", "KeyError"))
                 if isinstance(node.func, ast.Attribute):
@@ -1144,6 +1154,13 @@ class _Checker:
         if other is not None and node.attr in other.globals:
             self._effects = self._effects.add(Effect.READ_GLOBAL)
             return Binding(other.globals[node.attr], other.global_facts.get(node.attr, Facts()))
+        known = stdlib.MODULE_ATTRIBUTES.get(qualname)
+        if known is not None:
+            return Binding(known[0], known[1])
+        described = stdlib.lookup(qualname)
+        if described is not None:
+            return Binding(described[0])
+
         if module == "math":
             result = B.math_result(node.attr)
             if result is not None:

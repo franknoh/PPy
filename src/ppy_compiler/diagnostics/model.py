@@ -64,13 +64,29 @@ class PPyError(Exception):
 class DiagnosticBag:
     def __init__(self) -> None:
         self._items: list[Diagnostic] = []
+        self._seen: set[tuple] = set()
 
     def add(self, diagnostic: Diagnostic) -> Diagnostic:
+        """Record a diagnostic, ignoring one already reported at that place.
+
+        A loop body is analyzed repeatedly to reach a fixpoint, so the same
+        finding can be produced several times for one source location.
+        """
+        span = diagnostic.span
+        key = (
+            diagnostic.code,
+            diagnostic.message,
+            None if span is None else (str(span.path), span.line, span.column),
+        )
+        if key in self._seen:
+            return diagnostic
+        self._seen.add(key)
         self._items.append(diagnostic)
         return diagnostic
 
     def extend(self, diagnostics: Iterable[Diagnostic]) -> None:
-        self._items.extend(diagnostics)
+        for diagnostic in diagnostics:
+            self.add(diagnostic)
 
     def error(self, code: str, message: str, span: Span | None = None, help: str | None = None) -> Diagnostic:
         return self.add(Diagnostic(code, Severity.ERROR, message, span, help=help))

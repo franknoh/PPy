@@ -54,14 +54,34 @@ def verify(analysis: ProjectAnalysis, diagnostics: DiagnosticBag, *, backend: st
     reports: dict[str, ContractReport] = {}
     for module in analysis.modules.values():
         for qualname, function in module.functions.items():
-            report = _verify_one(function, diagnostics, backend=backend)
+            fused = _fused_regions(module, function)
+            report = _verify_one(function, diagnostics, backend=backend, fused=fused)
             reports[qualname] = report
     return reports
 
 
-def _verify_one(function: FunctionAnalysis, diagnostics: DiagnosticBag, *, backend: str) -> ContractReport:
+def _fused_regions(module, function: FunctionAnalysis) -> int:
+    """How many operations inside this function a plugin lowers to a kernel."""
+    node = function.info.node
+    start = node.lineno
+    end = getattr(node, "end_lineno", start) or start
+    return sum(
+        1 for note in module.lowerings.values()
+        if note.lowering == "Intrinsic" and start <= note.line <= end
+    )
+
+
+def _verify_one(
+    function: FunctionAnalysis,
+    diagnostics: DiagnosticBag,
+    *,
+    backend: str,
+    fused: int = 0,
+) -> ContractReport:
     info = function.info
-    parallel_ok, parallel_reason, reductions = parallel_report(function, backend=backend)
+    parallel_ok, parallel_reason, reductions = parallel_report(
+        function, backend=backend, fused=fused
+    )
     native_ok, native_reason = native_report(function)
     report = ContractReport(
         qualname=info.qualname,
@@ -161,12 +181,23 @@ def native_report(function: FunctionAnalysis) -> tuple[bool, str]:
     return True, ""
 
 
-def parallel_report(function: FunctionAnalysis, *, backend: str) -> tuple[bool, str, tuple[str, ...]]:
+def parallel_report(
+    function: FunctionAnalysis, *, backend: str, fused: int = 0
+) -> tuple[bool, str, tuple[str, ...]]:
     """Decide whether the function's loops can be parallelized safely."""
     info = function.info
     loops = _top_level_loops(info)
     reductions = tuple(dict.fromkeys(_reductions(info)))
 
+    if backend == "python":
+        return False, (
+            "the Python backend cannot bypass the GIL for CPU-bound loops; "
+            "use `ppy run` for the LLVM backend"
+        ), reductions
+    if fused and not loops:
+        # A fused library kernel is one loop over independent elements, and it
+        # runs with the GIL released.
+        return True, "", reductions
     if not loops:
         return False, "the function contains no parallelizable loop", reductions
     if Effect.IO in function.effects:
@@ -188,11 +219,6 @@ def parallel_report(function: FunctionAnalysis, *, backend: str) -> tuple[bool, 
     if carried:
         return False, f"`{carried}` carries a dependency across iterations", reductions
 
-    if backend == "python":
-        return False, (
-            "the Python backend cannot bypass the GIL for CPU-bound loops; "
-            "use `ppy run` for the LLVM backend"
-        ), reductions
     return True, "", reductions
 
 

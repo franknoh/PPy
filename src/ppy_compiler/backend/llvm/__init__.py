@@ -9,7 +9,13 @@ from pathlib import Path
 
 from ...cache import CacheKey
 from ...diagnostics import Diagnostic, Severity, Span
-from .fusion import FusedLoop, FusionCandidate, find_candidates, lower_candidate
+from .fusion import (
+    FusedLoop,
+    FusionCandidate,
+    find_candidates,
+    find_module_candidates,
+    lower_candidate,
+)
 from .jit import JitEngine, LlvmUnavailable, available, llvm_status
 from .lowering import LoweredFunction, LoweringResult, lower_module
 
@@ -81,17 +87,21 @@ def _fuse(symbols, analysis):  # type: ignore[no-untyped-def]
     functions = list(symbols.functions.values())
     for cls in symbols.classes.values():
         functions.extend(cls.methods.values())
+
+    candidates = list(find_module_candidates(symbols.module.tree, analysis))
     for info in functions:
-        for candidate in find_candidates(info, analysis):
-            loops[candidate.loop.symbol] = candidate.loop
-            plan[(candidate.node.lineno, candidate.node.col_offset)] = candidate.loop
-            notes.append(
-                (
-                    candidate.node.lineno,
-                    f"NumPy expression fused into one strided loop: "
-                    f"{', '.join(candidate.operations)}",
-                )
+        candidates.extend(find_candidates(info, analysis))
+
+    for candidate in candidates:
+        loops[candidate.loop.symbol] = candidate.loop
+        plan[(candidate.node.lineno, candidate.node.col_offset)] = candidate.loop
+        notes.append(
+            (
+                candidate.node.lineno,
+                f"NumPy expression fused into one strided loop: "
+                f"{', '.join(candidate.operations)}",
             )
+        )
     return loops, plan, notes
 
 
@@ -169,7 +179,11 @@ def compile_and_run(bundle, program_args, reporter, *, opt_level: int | None = N
             engine.add(native.ir)
     engine.finalize()
 
-    binder = _Binder()
+    binder = _Binder(
+        threads=bundle.project.config.parallel.threads
+        if bundle.project.config.parallel.enabled
+        else 1
+    )
     for name, native in natives.items():
         for qualname, lowered in native.functions.items():
             address = engine.address(lowered.signature.symbol)
@@ -203,7 +217,8 @@ def compile_and_run(bundle, program_args, reporter, *, opt_level: int | None = N
 class _Binder:
     """Serves guarded native entry points to generated modules as they load."""
 
-    def __init__(self) -> None:
+    def __init__(self, threads: str | int = "auto") -> None:
+        self.threads = threads
         self._entries: dict[str, dict[str, tuple]] = {}
         self._fused: dict[str, dict[str, tuple]] = {}
         self.bindings: list = []
@@ -225,7 +240,9 @@ class _Binder:
         if entry is None:
             return fallback
         loop, address = entry
-        binding = bind_fused(loop, address, fallback)
+        binding = bind_fused(
+            loop, address, fallback, parallel=loop.parallel, threads=self.threads
+        )
         self.fused_bindings.append(binding)
         return binding.wrapper
 
