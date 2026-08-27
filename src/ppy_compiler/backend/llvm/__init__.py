@@ -17,7 +17,16 @@ from .fusion import (
     lower_candidate,
 )
 from .jit import JitEngine, LlvmUnavailable, available, llvm_status
-from .lowering import LoweredFunction, LoweringResult, lower_module
+from .link import (
+    BuildArtifacts,
+    ToolchainError,
+    build_launcher,
+    emit_object,
+    link_shared_library,
+    toolchain_status,
+    write_manifest,
+)
+from .lowering import LoweredFunction, LoweringResult, NativeSignature, lower_module
 
 __all__ = [
     "LlvmUnavailable",
@@ -27,6 +36,9 @@ __all__ = [
     "compile_and_run",
     "emit_ir",
     "NativeModule",
+    "BuildArtifacts",
+    "ToolchainError",
+    "toolchain_status",
 ]
 
 
@@ -134,24 +146,81 @@ def emit_ir(bundle) -> dict[str, str]:  # type: ignore[no-untyped-def]
     return {name: engine.optimized_ir(module.ir) for name, module in _collect(bundle).items()}
 
 
-def compile_project(bundle, reporter, *, opt_level: int | None = None) -> dict[str, Path]:  # type: ignore[no-untyped-def]
-    """Compile to LLVM and publish IR artifacts to the cache (spec 4.2)."""
+def compile_project(  # type: ignore[no-untyped-def]
+    bundle,
+    reporter,
+    *,
+    opt_level: int | None = None,
+    output: Path | None = None,
+    entry: Path | None = None,
+) -> BuildArtifacts:
+    """Compile to LLVM, emit object code, link, and write the manifest (spec 4.2)."""
     if not available():
         raise LlvmUnavailable("llvmlite is not installed, so the LLVM backend is unavailable")
-    from ...driver.pipeline import module_cache_key
+    from ...driver.pipeline import build_python, module_cache_key
 
     level = opt_level if opt_level is not None else bundle.project.config.opt_level
     store = bundle.project.store
     store.ensure()
-    engine = JitEngine(opt_level=level)
+    engine = JitEngine(opt_level=level).open()
 
-    artifacts: dict[str, Path] = {}
-    for name, native in _collect(bundle).items():
+    natives = _collect(bundle)
+    build_directory = output or (bundle.project.config.cache_path / "native")
+    artifacts = BuildArtifacts()
+    signatures: dict[str, NativeSignature] = {}
+    fused: dict[str, tuple[int, int]] = {}
+
+    for name, native in natives.items():
         key: CacheKey = module_cache_key(bundle, name, target="llvm", opt_level=level)
-        optimized = engine.optimized_ir(native.ir)
-        artifacts[name] = store.put(key, optimized, kind="llvm", source=name, suffix=".ll")
+        store.put(key, engine.optimized_ir(native.ir), kind="llvm", source=name, suffix=".ll")
         store.mark_root(key, f"llvm:{name}")
         _report(native, reporter, bundle)
+
+        if not native.functions and not native.fused:
+            continue
+        try:
+            artifacts.objects.append(
+                emit_object(engine, native.ir, build_directory / f"{name.replace('.', '_')}.o")
+            )
+        except Exception as exc:  # noqa: BLE001 - reported, not fatal
+            artifacts.notes.append(f"could not emit object code for {name}: {exc}")
+            continue
+        for lowered in native.functions.values():
+            signatures[lowered.signature.qualname] = lowered.signature
+        for symbol, loop in native.fused.items():
+            fused[symbol] = (len(loop.arrays), len(loop.scalars))
+
+    # The generated Python is part of the build output: it is what the launcher
+    # executes, and what binds the native entry points at import time.
+    build_python(
+        bundle,
+        opt_level=level,
+        target="llvm",
+        fusion={name: native.fusion_plan for name, native in natives.items()},
+    )
+
+    if artifacts.objects:
+        try:
+            artifacts.library = link_shared_library(
+                artifacts.objects, build_directory / f"libppy_{bundle.project.root.name}.so"
+            )
+        except ToolchainError as exc:
+            artifacts.notes.append(str(exc))
+
+    artifacts.manifest = write_manifest(
+        build_directory / "ppy-bindings.json",
+        signatures,
+        library=artifacts.library,
+        fused=fused,
+    )
+
+    if entry is not None:
+        try:
+            artifacts.launcher = build_launcher(
+                entry, build_directory / entry.stem, bundle.project.search_paths
+            )
+        except ToolchainError as exc:
+            artifacts.notes.append(f"no native launcher: {exc}")
     return artifacts
 
 

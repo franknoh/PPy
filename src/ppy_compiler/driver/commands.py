@@ -145,12 +145,28 @@ def build(options: argparse.Namespace, reporter: Reporter) -> int:
 
     from ..backend.llvm import LlvmUnavailable, compile_project
 
+    entry = target.resolve() if target.is_file() else None
     try:
-        artifacts = compile_project(bundle, reporter, opt_level=_overrides(options).get("opt_level"))  # type: ignore[arg-type]
+        artifacts = compile_project(
+            bundle,
+            reporter,
+            opt_level=_overrides(options).get("opt_level"),  # type: ignore[arg-type]
+            output=options.output,
+            entry=entry,
+        )
     except LlvmUnavailable as exc:
         reporter.emit(Diagnostic("E1801", Severity.ERROR, str(exc)))
         return 2
-    reporter.note(f"built {len(artifacts)} native artifact(s) into {bundle.project.config.cache_path / 'llvm'}")
+
+    reporter.note(f"objects:  {len(artifacts.objects)}")
+    if artifacts.library:
+        reporter.note(f"library:  {artifacts.library}")
+    if artifacts.manifest:
+        reporter.note(f"manifest: {artifacts.manifest}")
+    if artifacts.launcher:
+        reporter.note(f"launcher: {artifacts.launcher}")
+    for note in artifacts.notes:
+        reporter.emit(Diagnostic("W2004", Severity.WARNING, note))
     return 0
 
 
@@ -258,10 +274,12 @@ def doctor(options: argparse.Namespace, reporter: Reporter) -> int:
     print(f"dynamic           {project.config.dynamic_boundaries}")
     print(f"build-execution   {project.config.build_execution}")
 
-    from ..backend.llvm import llvm_status
+    from ..backend.llvm import llvm_status, toolchain_status
 
     status, detail = llvm_status()
     print(f"llvm backend      {status}" + (f" ({detail})" if detail else ""))
+    usable, toolchain = toolchain_status()
+    print(f"native toolchain  {'available' if usable else 'unavailable'} ({toolchain})")
 
     print("plugins:")
     for plugin in project.plugins:

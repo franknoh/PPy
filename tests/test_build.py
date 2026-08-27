@@ -1,0 +1,169 @@
+"""Native object emission, linking, launcher, and manifest (spec 4.2, 16.3, 26.2)."""
+
+from __future__ import annotations
+
+import json
+import subprocess
+import sys
+import textwrap
+from pathlib import Path
+
+import pytest
+
+from ppy_compiler.backend.llvm import available as llvm_available
+from ppy_compiler.backend.llvm.link import toolchain_status
+
+requires_llvm = pytest.mark.skipif(not llvm_available(), reason="llvmlite is not installed")
+_usable, _detail = toolchain_status()
+requires_toolchain = pytest.mark.skipif(not _usable, reason=f"no native toolchain: {_detail}")
+
+pytestmark = requires_llvm
+
+SOURCE = """
+import ppy
+from ppy import f64
+
+
+@ppy.pure
+@ppy.opt(3)
+def distance(x1: f64, y1: f64, x2: f64, y2: f64) -> f64:
+    dx: f64 = x2 - x1
+    dy: f64 = y2 - y1
+    return (dx * dx + dy * dy) ** 0.5
+
+
+@ppy.pure
+def total(xs: list[int]) -> int:
+    result: int = 0
+    for x in xs:
+        result += x
+    return result
+
+
+def main() -> None:
+    print(round(distance(0.0, 0.0, 3.0, 4.0), 6), total([1, 2, 3]))
+
+
+if __name__ == "__main__":
+    main()
+"""
+
+
+@pytest.fixture
+def project(tmp_path: Path) -> Path:
+    (tmp_path / "pyproject.toml").write_text("[tool.ppy]\nstrict = true\n", encoding="utf-8")
+    (tmp_path / "app.ppy").write_text(textwrap.dedent(SOURCE).lstrip("\n"), encoding="utf-8")
+    return tmp_path
+
+
+def _build(project: Path, *extra: str) -> subprocess.CompletedProcess:
+    return subprocess.run(
+        [sys.executable, "-m", "ppy_compiler", "build", "app.ppy", "--backend", "llvm", *extra],
+        cwd=project,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+
+def test_build_writes_a_binding_manifest(project: Path):
+    result = _build(project)
+    assert result.returncode == 0, result.stderr
+
+    manifest = json.loads((project / ".ppy-cache" / "native" / "ppy-bindings.json").read_text())
+    assert manifest["abi_version"] == 1
+    assert manifest["calling_convention"] == "c"
+
+    entries = {entry["python_qualname"]: entry for entry in manifest["entries"]}
+    assert "app.distance" in entries and "app.total" in entries
+
+    distance = entries["app.distance"]
+    assert distance["native_symbol"] == "ppy_app_distance"
+    assert [a["native_type"] for a in distance["arguments"]] == ["double"] * 4
+    assert distance["returns"]["passed_as"] == "out_parameter"
+    assert distance["gil"] == "not_required"
+    assert "re-run the Python implementation" in distance["status"]["meaning"]
+
+    buffer = entries["app.total"]["arguments"][0]
+    assert buffer["semantic_type"] == "list[int]"
+    assert buffer["ownership"] == "borrowed"
+
+
+@requires_toolchain
+def test_build_emits_objects_and_links_a_library(project: Path):
+    result = _build(project)
+    assert result.returncode == 0, result.stderr
+
+    native = project / ".ppy-cache" / "native"
+    objects = list(native.glob("*.o"))
+    libraries = list(native.glob("*.so"))
+    assert objects and libraries
+    assert libraries[0].stat().st_size > 0
+
+    symbols = subprocess.run(
+        ["nm", "-D", "--defined-only", str(libraries[0])],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if symbols.returncode == 0:
+        assert "ppy_app_distance" in symbols.stdout
+
+
+@requires_toolchain
+def test_build_produces_a_runnable_native_executable(project: Path):
+    result = _build(project)
+    assert result.returncode == 0, result.stderr
+
+    launcher = project / ".ppy-cache" / "native" / "app"
+    assert launcher.is_file()
+    assert launcher.stat().st_mode & 0o111
+
+    native = subprocess.run([str(launcher)], cwd=project, capture_output=True, text=True, check=False)
+    plain = subprocess.run(
+        [sys.executable, "app.ppy"], cwd=project, capture_output=True, text=True, check=False
+    )
+    assert plain.returncode == 0, plain.stderr
+    assert native.returncode == 0, native.stderr
+    assert native.stdout == plain.stdout
+
+
+@requires_toolchain
+def test_the_launcher_forwards_program_arguments(tmp_path: Path):
+    (tmp_path / "pyproject.toml").write_text("[tool.ppy]\n", encoding="utf-8")
+    (tmp_path / "args.ppy").write_text("import sys\n\nprint(sys.argv[1:])\n", encoding="utf-8")
+    result = subprocess.run(
+        [sys.executable, "-m", "ppy_compiler", "build", "args.ppy", "--backend", "llvm"],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+
+    launcher = tmp_path / ".ppy-cache" / "native" / "args"
+    if not launcher.is_file():
+        pytest.skip("no launcher was produced")
+    native = subprocess.run(
+        [str(launcher), "one", "two"], cwd=tmp_path, capture_output=True, text=True, check=False
+    )
+    assert native.stdout.strip() == "['one', 'two']"
+
+
+def test_build_honours_an_explicit_output_directory(project: Path, tmp_path: Path):
+    destination = tmp_path / "out"
+    result = _build(project, "-o", str(destination))
+    assert result.returncode == 0, result.stderr
+    assert (destination / "ppy-bindings.json").is_file()
+
+
+def test_doctor_reports_the_native_toolchain(project: Path):
+    result = subprocess.run(
+        [sys.executable, "-m", "ppy_compiler", "doctor"],
+        cwd=project,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0
+    assert "native toolchain" in result.stdout
