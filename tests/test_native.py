@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import array
 import importlib.util
 import subprocess
 import sys
@@ -1824,3 +1825,93 @@ def test_registering_beyond_the_wrapper_capacity_is_refused(write, analyze):
     accepted = sum(register(address, ((1, 0, value),)) for value in range(32))
     assert 0 < accepted <= 8, "the wrapper bounds how many it will hold"
     del engine, built
+
+
+SIEVE = """
+    import ppy
+    from ppy import Buffer
+
+
+    @ppy.opt(3)
+    def sieve(flags: Buffer[int], limit: int) -> int:
+        for i in range(limit):
+            flags[i] = 1
+        flags[0] = 0
+        flags[1] = 0
+        p: int = 2
+        while p * p < limit:
+            if flags[p] == 1:
+                multiple: int = p * p
+                while multiple < limit:
+                    flags[multiple] = 0
+                    multiple += p
+            p += 1
+        total: int = 0
+        for i in range(limit):
+            total += flags[i]
+        return total
+"""
+
+
+def test_a_borrowed_buffer_may_be_written_through(write, analyze):
+    path = write("sieve.ppy", SIEVE)
+    module = _collect(analyze(path, backend="llvm"))["sieve"]
+    assert "sieve.sieve" in module.functions
+    assert "sieve.sieve" not in module.rejected
+    ir = emit_ir(analyze(path, backend="llvm"))["sieve"]
+    assert "store i64" in ir
+
+
+def test_writes_through_a_borrowed_buffer_reach_the_caller(write, analyze):
+    path = write("visible.ppy", SIEVE)
+    module = _collect(analyze(path, backend="llvm"))["visible"]
+    engine = _jit(module)
+    lowered = module.functions["visible.sieve"]
+
+    def fallback(flags, limit):  # pragma: no cover - the native path is taken
+        raise AssertionError("fell back")
+
+    binding = bind(lowered.signature, engine.address(lowered.signature.symbol), fallback)
+    flags = array.array("q", [0] * 50)
+    assert binding.wrapper(flags, 50) == 15
+    assert binding.calls == 1 and binding.fallbacks == 0
+    assert [i for i, flag in enumerate(flags) if flag] == [
+        2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47
+    ]
+
+
+def test_writing_to_a_copied_list_parameter_stays_boxed(write, analyze):
+    path = write(
+        "copied.ppy",
+        """
+        def zero(xs: list[int]) -> int:
+            xs[0] = 0
+            return len(xs)
+        """,
+    )
+    module = _collect(analyze(path, backend="llvm"))["copied"]
+    assert "copied.zero" in module.rejected
+    assert "borrowed buffer" in module.rejected["copied.zero"]
+
+
+def test_a_mutating_program_matches_plain_cpython(tmp_path: Path):
+    entry = tmp_path / "sieve_run.ppy"
+    entry.write_text(
+        textwrap.dedent(SIEVE).lstrip("\n")
+        + textwrap.dedent(
+            """
+
+            import array
+
+            flags = array.array("q", [0] * 100000)
+            print(sieve(flags, 100000))
+            print(sum(flags[:100]))
+            """
+        ),
+        encoding="utf-8",
+    )
+    plain = _run([sys.executable, entry.name], tmp_path)
+    native = _ppy(["run", entry.name], tmp_path)
+    assert plain.returncode == 0, plain.stderr
+    assert native.returncode == 0, native.stderr
+    assert native.stdout == plain.stdout

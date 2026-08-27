@@ -23,6 +23,7 @@ from dataclasses import dataclass, field
 
 from ...analysis import types as T
 from ...analysis.checker import FunctionAnalysis, ModuleAnalysis
+from ...analysis.effects import Effect
 from ...analysis.symbols import FunctionInfo
 
 __all__ = [
@@ -259,11 +260,22 @@ def eligible(
     """Can this function be lowered to a native scalar entry point?"""
     if info.is_async or info.is_generator:
         return False, "coroutines and generators use the boxed runtime"
+    for name in sorted(analysis.mutated_params):
+        declared = next((p.type for p in info.params if p.name == name), None)
+        described = _buffer_element(declared) if declared is not None else None
+        # Writing through a borrowed buffer is visible to the caller, which is
+        # what borrowing means. Anything else would lose the write.
+        if described is None or described[0] != "view":
+            return False, f"mutates `{name}`, which is not a borrowed buffer"
+    if analysis.foreign_writes:
+        return False, "writes through a target the compiler cannot identify"
+
+    violations = set(analysis.effects.violations())
     if analysis.mutated_params:
-        mutated = sorted(analysis.mutated_params)[0]
-        return False, f"mutates `{mutated}`, so its buffer cannot be borrowed"
-    if not analysis.effects.is_pure:
-        listed = ", ".join(sorted(str(e) for e in analysis.effects.violations()))
+        # Those writes land in memory the caller lent us, and nowhere else.
+        violations.discard(Effect.WRITE_OBJECT)
+    if violations:
+        listed = ", ".join(sorted(str(e) for e in violations))
         return False, f"has effects that must run on CPython: {listed}"
     for param in info.params:
         if param.kind in {"var_positional", "var_keyword"}:
@@ -450,7 +462,7 @@ class _FunctionLowering:
         self.constants: dict[str, object] = dict(constants or {})
         self.builder = None
         self.locals: dict[str, tuple[object, str]] = {}
-        self.buffers: dict[str, tuple[object, object, str]] = {}
+        self.buffers: dict[str, tuple[object, object, str, bool]] = {}
         self.tuples: dict[str, list[tuple[object, str]]] = {}
         #: Value-class parameters, flattened to one slot per field.
         self.objects: dict[str, dict[str, tuple[object, str]]] = {}
@@ -474,7 +486,9 @@ class _FunctionLowering:
                 pinned = self.constants.get(f"len({parameter.name})")
                 if isinstance(pinned, int):
                     length = ir.Constant(ir.IntType(64), pinned)
-                self.buffers[parameter.name] = (data, length, parameter.element)
+                self.buffers[parameter.name] = (
+                    data, length, parameter.element, parameter.is_borrowed
+                )
                 position += 2
                 continue
             if parameter.is_object:
@@ -611,6 +625,18 @@ class _FunctionLowering:
         return None
 
     def _augassign(self, node: ast.AugAssign) -> None:
+        if isinstance(node.target, ast.Subscript):
+            if not (
+                isinstance(node.target.value, ast.Name)
+                and node.target.value.id in self.buffers
+            ):
+                raise Unsupported("this augmented assignment has no native lowering")
+            current = self._buffer_element(
+                node.target.value.id, self._expr(node.target.slice)
+            )
+            value = self._expr(node.value)
+            self._store(node.target, self._binary(current, value, type(node.op)))
+            return
         if not isinstance(node.target, ast.Name):
             raise Unsupported("augmented assignment to a non-local has no native lowering")
         current = self._load(node.target.id)
@@ -620,6 +646,11 @@ class _FunctionLowering:
     def _store(self, target: ast.expr, value: _Value) -> None:
         if isinstance(target, ast.Attribute):
             raise Unsupported("a flattened value class cannot be written back")
+        if isinstance(target, ast.Subscript):
+            if isinstance(target.value, ast.Name) and target.value.id in self.buffers:
+                self._store_element(target.value.id, target.slice, value)
+                return
+            raise Unsupported("this subscript assignment has no native lowering")
         if not isinstance(target, ast.Name):
             raise Unsupported("assignment to a non-local has no native lowering")
         existing = self.locals.get(target.id)
@@ -723,7 +754,7 @@ class _FunctionLowering:
     def _for_buffer(self, node: ast.For, name: str) -> None:
         """`for x in xs:` over a borrowed native buffer."""
         ir = self.ir
-        data, length, element = self.buffers[name]
+        data, length, element, _borrowed = self.buffers[name]
         i64 = ir.IntType(64)
 
         index = self.builder.alloca(i64, name=f"{name}.i")
@@ -750,28 +781,41 @@ class _FunctionLowering:
 
         self.builder.position_at_end(exit_block)
 
-    def _buffer_element(self, name: str, index: _Value) -> _Value:
-        """`xs[i]` with the bounds and negative-index checks Python requires."""
+    def _store_element(self, name: str, index: ast.expr, value: _Value) -> None:
+        """`xs[i] = v` through a borrowed buffer: the caller sees the write."""
+        data, length, element, borrowed = self.buffers[name]
+        if not borrowed:
+            # A list is copied in, so a write to it would be lost.
+            raise Unsupported(f"`{name}` is copied in, so writing to it has no effect")
+        if isinstance(index, ast.Slice):
+            raise Unsupported("slice assignment has no native lowering")
+        position = self._coerce(self._expr(index), "int")
+        self._guard_index(position, length)
+        self.builder.store(
+            self._coerce(value, element).value, self.builder.gep(data, [position.value])
+        )
+
+    def _guard_index(self, position: _Value, length) -> None:  # type: ignore[no-untyped-def]
+        """A negative or out-of-range index is left to CPython."""
         ir = self.ir
-        data, length, element = self.buffers[name]
-        position = self._coerce(index, "int")
         zero = ir.Constant(ir.IntType(64), 0)
         negative = self.builder.icmp_signed("<", position.value, zero)
         beyond = self.builder.icmp_signed(">=", position.value, length)
-        # A negative or out-of-range index is left to CPython, which raises or
-        # wraps exactly as the source demands.
-        self.builder.cbranch(
-            self.builder.or_(negative, beyond),
-            self.fallback_block,
-            (ok := self.function.append_basic_block("index.ok")),
-        )
+        ok = self.function.append_basic_block("index.ok")
+        self.builder.cbranch(self.builder.or_(negative, beyond), self.fallback_block, ok)
         self.builder.position_at_end(ok)
+
+    def _buffer_element(self, name: str, index: _Value) -> _Value:
+        """`xs[i]` with the bounds and negative-index checks Python requires."""
+        data, length, element, _borrowed = self.buffers[name]
+        position = self._coerce(index, "int")
+        self._guard_index(position, length)
         return _Value(self.builder.load(self.builder.gep(data, [position.value])), element)
 
     def _buffer_reduction(self, name: str, operation: str) -> _Value:
         """`sum`, `min`, or `max` over a buffer, in strict source order."""
         ir = self.ir
-        data, length, element = self.buffers[name]
+        data, length, element, _borrowed = self.buffers[name]
         i64 = ir.IntType(64)
         zero = ir.Constant(i64, 0)
 
