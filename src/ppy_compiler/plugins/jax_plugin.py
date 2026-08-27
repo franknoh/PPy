@@ -15,8 +15,9 @@ __all__ = ["JaxPlugin", "STAGING_MARKERS", "StagedFunction", "staged_functions"]
 
 PLUGIN_VERSION = 1
 
-#: Decorators that mark a staged region PPY may export (spec 21.2).
-STAGING_MARKERS = ("jax.jit", "jit", "ppy.jax")
+#: Decorators that mark a staged region PPY may export (spec 21.2). These are
+#: matched exactly: `@ppy.jit` is PPY's own directive, not a JAX staging marker.
+STAGING_MARKERS = ("jax.jit", "jit", "jax.pmap", "ppy.jax")
 
 _ARRAY = T.Instance("jax.Array", (), ("jax.Array", "object"))
 
@@ -87,7 +88,7 @@ def staged_functions(symbols) -> list[StagedFunction]:  # type: ignore[no-untype
     """Find `@jax.jit` functions whose inputs are fully specified (spec 21.2)."""
     found: list[StagedFunction] = []
     for info in symbols.functions.values():
-        if not any(marker in decorator for decorator in info.decorators for marker in STAGING_MARKERS):
+        if not any(decorator in STAGING_MARKERS for decorator in info.decorators):
             continue
         shapes: list[tuple[int | str, ...]] = []
         dtypes: list[str] = []
@@ -230,7 +231,7 @@ class JaxPlugin:
 
     def staged_region(self, decorators: Sequence[str]) -> CallResult | None:
         """A `@jax.jit` function PPY may export to StableHLO at build time."""
-        if not any(marker in d for d in decorators for marker in STAGING_MARKERS):
+        if not any(decorator in STAGING_MARKERS for decorator in decorators):
             return None
         if not self.allow_build_export:
             return CallResult(

@@ -28,6 +28,7 @@ from .link import (
     write_manifest,
 )
 from .lowering import LoweredFunction, LoweringResult, NativeSignature, lower_module
+from .specialize import SpecializationPolicy, Specializer
 
 __all__ = [
     "LlvmUnavailable",
@@ -49,6 +50,7 @@ class NativeModule:
     ir: str
     functions: dict[str, LoweredFunction] = field(default_factory=dict)
     rejected: dict[str, str] = field(default_factory=dict)
+    sources: dict[str, tuple] = field(default_factory=dict)
     fused: dict[str, FusedLoop] = field(default_factory=dict)
     fusion_plan: dict[tuple[int, int], FusedLoop] = field(default_factory=dict)
     fusion_notes: list[tuple[int, str]] = field(default_factory=list)
@@ -85,6 +87,11 @@ def _collect(bundle) -> dict[str, NativeModule]:  # type: ignore[no-untyped-def]
             ir=ir_text,
             functions=result.functions,
             rejected=result.rejected,
+            sources={
+                qualname: (info, node)
+                for qualname, (info, _analysis, node) in candidates.items()
+                if qualname in result.functions
+            },
             fused=fused,
             fusion_plan=plan,
             fusion_notes=notes,
@@ -261,11 +268,29 @@ def compile_and_run(bundle, program_args, reporter, *, opt_level: int | None = N
         else 1
     )
     for name, native in natives.items():
+        analysis = bundle.analysis.modules.get(name)
+        specializer = None
+        if analysis is not None and native.sources:
+            specializer = Specializer(
+                engine=engine,
+                module_analysis=analysis,
+                cache=bundle.project.store,
+                cache_directory=bundle.project.config.cache_path / "jit",
+            )
+            for qualname, (info, node) in native.sources.items():
+                specializer.register(info, node)
         for qualname, lowered in native.functions.items():
             address = engine.address(lowered.signature.symbol)
             if not address:
                 continue
-            binder.add(name, qualname.rpartition(".")[2], lowered.signature, address)
+            binder.add(
+                name,
+                qualname.rpartition(".")[2],
+                lowered.signature,
+                address,
+                specializer=specializer,
+                info=lowered.info,
+            )
         for symbol, loop in native.fused.items():
             address = engine.address(symbol)
             if address:
@@ -314,8 +339,10 @@ class _Binder(LibraryBinder):
         self.bindings: list = []
         self.fused_bindings: list = []
 
-    def add(self, module: str, function: str, signature, address: int) -> None:  # type: ignore[no-untyped-def]
-        self._entries.setdefault(module, {})[function] = (signature, address)
+    def add(  # type: ignore[no-untyped-def]
+        self, module: str, function: str, signature, address: int, specializer=None, info=None
+    ) -> None:
+        self._entries.setdefault(module, {})[function] = (signature, address, specializer, info)
 
     def add_fused(self, module: str, loop, address: int) -> None:  # type: ignore[no-untyped-def]
         self._fused.setdefault(module, {})[loop.symbol] = (loop, address)
@@ -342,8 +369,15 @@ class _Binder(LibraryBinder):
         entry = self._entries.get(module, {}).get(function)
         if entry is None or not callable(fallback):
             return fallback
-        signature, address = entry
-        binding = make_binding(signature, address, fallback)
+        signature, address, specializer, info = entry
+        binding = make_binding(
+            signature,
+            address,
+            fallback,
+            specializer=specializer,
+            policy=SpecializationPolicy.of(info) if info is not None else None,
+            info=info,
+        )
         self.bindings.append(binding)
         return binding.wrapper
 

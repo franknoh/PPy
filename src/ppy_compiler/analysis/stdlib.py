@@ -11,7 +11,14 @@ from . import types as T
 from .effects import Effect, EffectSet
 from .refinements import Facts, IntRange
 
-__all__ = ["lookup", "MODULE_ATTRIBUTES"]
+__all__ = ["lookup", "call", "MODULE_ATTRIBUTES", "ARRAY_TYPECODES"]
+
+#: `array` type codes and the element type each denotes.
+ARRAY_TYPECODES: dict[str, T.Type] = {
+    "b": T.INT, "B": T.INT, "h": T.INT, "H": T.INT, "i": T.INT, "I": T.INT,
+    "l": T.INT, "L": T.INT, "q": T.INT, "Q": T.INT,
+    "f": T.FLOAT, "d": T.FLOAT,
+}
 
 _IO = EffectSet.of(Effect.IO)
 _TIME = EffectSet.of(Effect.TIME)
@@ -64,6 +71,9 @@ _FUNCTIONS: dict[str, tuple[T.Type, EffectSet]] = {
     "statistics.stdev": _fn("statistics.stdev", T.FLOAT, EffectSet.of(raises=("ValueError",))),
 
     "itertools.count": _fn("itertools.count", T.instance("Iterator", T.INT), _ALLOC),
+
+    # The element type follows the type code, which `call` resolves.
+    "array.array": _fn("array.array", T.instance("array", T.UNKNOWN), _ALLOC),
     "functools.reduce": _fn(
         "functools.reduce", T.ANY, _ALLOC | EffectSet.of(Effect.PYTHON_CALLBACK)
     ),
@@ -84,3 +94,21 @@ MODULE_ATTRIBUTES: dict[str, tuple[T.Type, Facts]] = {
 
 def lookup(qualname: str) -> tuple[T.Type, EffectSet] | None:
     return _FUNCTIONS.get(qualname)
+
+
+def call(qualname: str, args: list[tuple[T.Type, Facts]]) -> tuple[T.Type, EffectSet] | None:
+    """Signatures whose result the arguments decide."""
+    if qualname == "array.array" and args:
+        code = args[0][1]
+        element = (
+            ARRAY_TYPECODES.get(code.constant)
+            if code.has_constant and isinstance(code.constant, str)
+            else None
+        )
+        if element is None:
+            return None
+        return (
+            T.instance("array", element),
+            _ALLOC | EffectSet.of(raises=("ValueError", "TypeError")),
+        )
+    return None

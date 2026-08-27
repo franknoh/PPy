@@ -886,6 +886,10 @@ class _Checker:
             refined = self._refine_builtin_method(callee.type, args)
             if refined is not None:
                 return refined
+            decided = stdlib.call(callee.type.qualname, [(a.type, a.facts) for a in args])
+            if decided is not None:
+                self._effects = self._effects | decided[1]
+                return Binding(decided[0])
             described = stdlib.lookup(callee.type.qualname)
             if described is not None:
                 self._effects = self._effects | described[1]
@@ -1302,7 +1306,7 @@ class _Checker:
                 return Binding(T.UNKNOWN)
             return Binding(B.element_type(base))
         if isinstance(base, T.Instance):
-            if base.name == "list":
+            if base.name in {"list", "Buffer", "memoryview", "array"}:
                 self._effects = self._effects.add(raises=("IndexError",))
                 return Binding(base if is_slice else B.element_type(base))
             if base.name == "dict":

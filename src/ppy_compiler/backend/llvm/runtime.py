@@ -4,10 +4,11 @@ from __future__ import annotations
 
 import array
 import ctypes
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Callable
 
 from .lowering import STATUS_OK, NativeParam, NativeSignature
+from .specialize import SpecializationKey, SpecializationPolicy, Specializer, key_for
 
 __all__ = ["NativeBinding", "bind"]
 
@@ -27,6 +28,10 @@ _ELEMENT_CTYPES = {"int": ctypes.c_int64, "float": ctypes.c_double}
 #: truncating it, which is what keeps Python integer semantics intact.
 _ELEMENT_CODES = {"int": "q", "float": "d"}
 
+#: Buffer-protocol formats a borrowed buffer accepts per element type. `l` is
+#: a signed long, which is the same width as `q` where this matters.
+_ELEMENT_FORMATS = {"int": ("q", "l"), "float": ("d",)}
+
 
 class GuardFailed(Exception):
     """A runtime guard rejected an argument, so the Python path must run."""
@@ -41,13 +46,34 @@ class NativeBinding:
     fallback: Callable[..., object]
     calls: int = 0
     fallbacks: int = 0
+    specialized_calls: int = 0
+    #: (matcher, entry) pairs, checked in order on every call.
+    selectors: list = field(default_factory=list)
+    key_counts: dict = field(default_factory=dict)
+    observations: int = 0
+    observing: bool = False
+
+    @property
+    def specialization_count(self) -> int:
+        return len(self.selectors)
 
 
-def bind(signature: NativeSignature, address: int, fallback: Callable[..., object]) -> NativeBinding:
+def bind(
+    signature: NativeSignature,
+    address: int,
+    fallback: Callable[..., object],
+    *,
+    specializer: Specializer | None = None,
+    policy: SpecializationPolicy | None = None,
+    info: object | None = None,
+) -> NativeBinding:
     """Build the Python-callable wrapper for one native function.
 
     `ctypes.CFUNCTYPE` releases the GIL around the foreign call, which is what
     a native region touching no Python objects is allowed to do (spec 16.6).
+
+    When the function asked for it, repeated argument shapes are compiled into
+    guarded specializations and selected here (spec 16.9).
     """
     argument_types: list[type] = []
     for parameter in signature.parameters:
@@ -66,7 +92,16 @@ def bind(signature: NativeSignature, address: int, fallback: Callable[..., objec
     expanders = [_expander_for(p) for p in signature.parameters]
     finalizers = [_result_for(atom) for atom in signature.returns]
     returns_tuple = signature.returns_tuple
-    binding = NativeBinding(signature=signature, wrapper=lambda *a: None, fallback=fallback)
+    observing = bool(
+        specializer is not None
+        and policy is not None
+        and policy.enabled
+        and policy.maximum > 0
+        and info is not None
+    )
+    binding = NativeBinding(
+        signature=signature, wrapper=lambda *a: None, fallback=fallback, observing=observing
+    )
 
     def wrapper(*args: object) -> object:
         if len(args) != len(expanders):
@@ -80,12 +115,23 @@ def bind(signature: NativeSignature, address: int, fallback: Callable[..., objec
         except GuardFailed:
             binding.fallbacks += 1
             return fallback(*args)
+        entry = None
+        for matches, candidate in binding.selectors:
+            if matches(args):
+                entry = candidate
+                break
+        else:
+            if binding.observing:
+                entry = _observe(binding, signature, args, policy, specializer, info, prototype)
+
         slots = [result_type() for result_type in result_types]
-        status = native(*atoms, *[ctypes.byref(slot) for slot in slots])
+        target = entry or native
+        status = target(*atoms, *[ctypes.byref(slot) for slot in slots])
         if status != STATUS_OK:
             binding.fallbacks += 1
             return fallback(*args)
         binding.calls += 1
+        binding.specialized_calls += int(entry is not None)
         if returns_tuple:
             return tuple(finish(slot.value) for finish, slot in zip(finalizers, slots))
         return finalizers[0](slots[0].value)
@@ -101,6 +147,39 @@ def bind(signature: NativeSignature, address: int, fallback: Callable[..., objec
 
 def _expander_for(parameter: NativeParam) -> Callable[[object, list, list], None]:
     """Build the guard-and-convert step for one source-level parameter."""
+    if parameter.is_borrowed:
+        element_type = _ELEMENT_CTYPES[parameter.element]
+        pointer_type = ctypes.POINTER(element_type)
+        formats = _ELEMENT_FORMATS[parameter.element]
+
+        def expand_view(value: object, atoms: list, borrowed: list) -> None:
+            """Point at the caller's memory: no copy, no conversion."""
+            try:
+                view = memoryview(value)
+            except TypeError as exc:
+                raise GuardFailed from exc
+            if (
+                view.ndim != 1
+                or not view.c_contiguous
+                or view.format not in formats
+                or view.itemsize != ctypes.sizeof(element_type)
+                or view.readonly
+            ):
+                raise GuardFailed
+            # `borrowed` keeps the view alive for the duration of the call, so
+            # the memory cannot move or be freed underneath the native code.
+            borrowed.append(view)
+            length = view.shape[0]
+            if length:
+                holder = (element_type * length).from_buffer(view)
+                borrowed.append(holder)
+                atoms.append(ctypes.cast(holder, pointer_type))
+            else:
+                atoms.append(ctypes.cast(0, pointer_type))
+            atoms.append(length)
+
+        return expand_view
+
     if parameter.is_buffer:
         code = _ELEMENT_CODES[parameter.element]
         pointer_type = ctypes.POINTER(_ELEMENT_CTYPES[parameter.element])
@@ -201,3 +280,46 @@ def _scalar_guard(abi: str) -> Callable[[object], object]:
         return int(value)
 
     return as_bool
+
+
+def _observe(
+    binding: NativeBinding,
+    signature: NativeSignature,
+    args: tuple[object, ...],
+    policy: SpecializationPolicy,
+    specializer: Specializer,
+    info: object,
+    prototype,  # type: ignore[no-untyped-def]
+):
+    """Watch the arguments, and compile a specialization once one repeats.
+
+    This runs only while learning. Once a specialization exists its matcher
+    handles the call, and once the budget is spent the watching stops, so a
+    function whose arguments never settle pays nothing to have asked.
+    """
+    binding.observations += 1
+    if binding.observations > policy.budget:
+        binding.observing = False
+        return None
+
+    key = key_for(signature, args, policy)
+    if not key:
+        binding.observing = False
+        return None
+
+    seen = binding.key_counts.get(key, 0) + 1
+    binding.key_counts[key] = seen
+    if seen < policy.threshold:
+        return None
+
+    specialization = specializer.specialize(info, key)  # type: ignore[arg-type]
+    if specialization is None or not specialization.ok:
+        # Refused once: never retry, and stop watching if nothing can work.
+        binding.key_counts[key] = -(1 << 30)
+        return None
+
+    entry = prototype(specialization.address)
+    binding.selectors.append((key.matcher(), entry))
+    if binding.specialization_count >= policy.maximum:
+        binding.observing = False
+    return entry

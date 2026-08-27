@@ -5,6 +5,10 @@ guard-and-fall-back model sound: when a native fast path bails out, the
 original Python implementation can be re-executed with identical observable
 behavior (spec 16.8).
 
+Floating-point ordering is strict by default: no reassociation, no
+contraction, no reciprocal substitution. `@ppy.fastmath` is what permits those,
+and nothing else does -- optimization level alone never will (spec 3.4, 12.5).
+
 A function may take scalars, fixed-size tuples, and homogeneous
 `list[int]` / `list[float]` arguments. A fixed tuple flattens into scalar SSA
 values rather than an allocated object, and a list is unboxed into a borrowed
@@ -23,6 +27,7 @@ from ...analysis.symbols import FunctionInfo
 
 __all__ = [
     "Unsupported",
+    "lower_specialization",
     "NativeParam",
     "NativeSignature",
     "LoweredFunction",
@@ -44,6 +49,9 @@ _BUFFER_ELEMENTS = {"int", "float"}
 
 #: A tuple wider than this stays boxed rather than expanding the ABI.
 _MAX_TUPLE_WIDTH = 8
+
+#: The transformations `@ppy.fastmath` permits, and nothing permits otherwise.
+FASTMATH_FLAGS = ("fast",)
 
 _MATH_INTRINSICS = {
     "sqrt": "llvm.sqrt.f64",
@@ -82,7 +90,16 @@ class NativeParam:
 
     @property
     def is_buffer(self) -> bool:
-        return self.kind == "list"
+        return self.kind in {"list", "view"}
+
+    @property
+    def is_borrowed(self) -> bool:
+        """A `ppy.Buffer[T]` is borrowed in place; a list is copied out.
+
+        A Python list holds boxed elements, so there is no contiguous array to
+        point at. A buffer-protocol object already has one (spec 6.4, 13.8).
+        """
+        return self.kind == "view"
 
     @property
     def is_tuple(self) -> bool:
@@ -98,7 +115,8 @@ class NativeParam:
 
     def __str__(self) -> str:
         if self.is_buffer:
-            return f"{_abi_name(self.element)}* {self.name}, i64 {self.name}_len"
+            borrow = " borrowed" if self.is_borrowed else ""
+            return f"{_abi_name(self.element)}*{borrow} {self.name}, i64 {self.name}_len"
         if self.is_tuple:
             fields = ", ".join(
                 f"{_abi_name(element)} {self.name}{index}"
@@ -155,13 +173,17 @@ def _scalar_name(t: T.Type) -> str | None:
     return None
 
 
-def _buffer_element(t: T.Type) -> str | None:
-    """The element scalar of a `list[int]` / `list[float]` parameter."""
+def _buffer_element(t: T.Type) -> tuple[str, str] | None:
+    """The kind and element scalar of a buffer parameter, if it is one."""
     base = T.strip_literal(t)
-    if not isinstance(base, T.Instance) or base.name != "list" or len(base.args) != 1:
+    if not isinstance(base, T.Instance) or len(base.args) != 1:
+        return None
+    if base.name not in {"list", "Buffer", "memoryview", "array"}:
         return None
     element = _scalar_name(base.args[0])
-    return element if element in _BUFFER_ELEMENTS else None
+    if element not in _BUFFER_ELEMENTS:
+        return None
+    return ("list" if base.name == "list" else "view"), element
 
 
 def _tuple_elements(t: T.Type) -> tuple[str, ...] | None:
@@ -181,9 +203,10 @@ def _native_param(name: str, t: T.Type) -> NativeParam | None:
     scalar = _scalar_name(t)
     if scalar is not None:
         return NativeParam(name, scalar)
-    element = _buffer_element(t)
-    if element is not None:
-        return NativeParam(name, "list", element)
+    buffer = _buffer_element(t)
+    if buffer is not None:
+        kind, element = buffer
+        return NativeParam(name, kind, element)
     elements = _tuple_elements(t)
     if elements is not None:
         return NativeParam(name, "tuple", elements=elements)
@@ -215,6 +238,32 @@ def eligible(info: FunctionInfo, analysis: FunctionAnalysis) -> tuple[bool, str]
     if _return_atoms(info.ret) is None:
         return False, f"returns `{info.ret}`, which has no native ABI"
     return True, ""
+
+
+def lower_specialization(
+    module: ModuleAnalysis,
+    info: FunctionInfo,
+    node: ast.FunctionDef,
+    constants: dict[str, object],
+    symbol: str,
+) -> str:
+    """Emit an LLVM module holding one specialized copy of a function.
+
+    The specialization keeps the generic ABI, so the caller may pass the same
+    arguments; the guards that select it are what make the pinned values safe
+    (spec 16.9).
+    """
+    from llvmlite import ir
+
+    llvm_module = ir.Module(name=f"{module.name}.{symbol}")
+    llvm_module.triple = _default_triple()
+
+    signature = _signature(info)
+    function = ir.Function(llvm_module, _function_type(ir, info), name=symbol)
+    function.linkage = "external"
+    declarations = {info.qualname: (function, signature)}
+    _FunctionLowering(ir, llvm_module, function, info, module, declarations, constants).run(node)
+    return str(llvm_module)
 
 
 def lower_module(
@@ -293,6 +342,15 @@ def _llvm_type(ir, scalar: str):  # type: ignore[no-untyped-def]
     return {"int": ir.IntType(64), "float": ir.DoubleType(), "bool": ir.IntType(8)}[scalar]
 
 
+def _constant_value(ir, value, scalar: str):  # type: ignore[no-untyped-def]
+    """An LLVM constant for a pinned parameter value."""
+    if scalar == "float":
+        return ir.Constant(ir.DoubleType(), float(value))
+    if scalar == "bool":
+        return ir.Constant(ir.IntType(8), int(bool(value)))
+    return ir.Constant(ir.IntType(64), int(value))
+
+
 def _function_type(ir, info: FunctionInfo):  # type: ignore[no-untyped-def]
     atoms = []
     for parameter in _signature(info).parameters:
@@ -329,13 +387,23 @@ class _Tuple:
 class _FunctionLowering:
     """Lowers one function body to LLVM IR."""
 
-    def __init__(self, ir, module, function, info, analysis, declarations) -> None:  # type: ignore[no-untyped-def]
+    def __init__(  # type: ignore[no-untyped-def]
+        self, ir, module, function, info, analysis, declarations, constants=None
+    ) -> None:
+        # Strict Python floating-point ordering unless the function opted out.
+        self.fp_flags = (
+            list(FASTMATH_FLAGS) if info.directive("fastmath") is not None else []
+        )
         self.ir = ir
         self.module = module
         self.function = function
         self.info = info
         self.analysis = analysis
         self.declarations = declarations
+        # Parameter values a specialization has pinned. The ABI is unchanged:
+        # the argument is still passed, but the body uses the constant, which
+        # is what lets LLVM fold, unroll, and vectorize around it (spec 16.9).
+        self.constants: dict[str, object] = dict(constants or {})
         self.builder = None
         self.locals: dict[str, tuple[object, str]] = {}
         self.buffers: dict[str, tuple[object, object, str]] = {}
@@ -356,6 +424,9 @@ class _FunctionLowering:
             if parameter.is_buffer:
                 data = self.function.args[position]
                 length = self.function.args[position + 1]
+                pinned = self.constants.get(f"len({parameter.name})")
+                if isinstance(pinned, int):
+                    length = ir.Constant(ir.IntType(64), pinned)
                 self.buffers[parameter.name] = (data, length, parameter.element)
                 position += 2
                 continue
@@ -371,7 +442,13 @@ class _FunctionLowering:
                 position += len(parameter.elements)
                 continue
             slot = self.builder.alloca(_llvm_type(ir, parameter.kind), name=parameter.name)
-            self.builder.store(self.function.args[position], slot)
+            pinned = self.constants.get(parameter.name)
+            initial = (
+                _constant_value(ir, pinned, parameter.kind)
+                if pinned is not None
+                else self.function.args[position]
+            )
+            self.builder.store(initial, slot)
             self.locals[parameter.name] = (slot, parameter.kind)
             position += 1
 
@@ -920,7 +997,7 @@ class _FunctionLowering:
         if op is ast.Div:
             left, right = self._coerce(left, "float"), self._coerce(right, "float")
             self._guard_nonzero(right)
-            return _Value(self.builder.fdiv(left.value, right.value), "float")
+            return _Value(self._fp(self.builder.fdiv, left.value, right.value), "float")
 
         scalar = self._unify(left.scalar, right.scalar)
         left, right = self._coerce(left, scalar), self._coerce(right, scalar)
@@ -939,8 +1016,7 @@ class _FunctionLowering:
                         "float",
                     )
                 raise Unsupported("floating-point operator has no native lowering")
-            # No fast-math flags: strict Python ordering is the default (spec 12.5).
-            return _Value(operation(left.value, right.value), "float")
+            return _Value(self._fp(operation, left.value, right.value), "float")
 
         if op in _OVERFLOW_INTRINSICS:
             return _Value(self._checked_binary(left.value, right.value, op), "int")
@@ -950,6 +1026,12 @@ class _FunctionLowering:
         if op in {ast.LShift, ast.RShift, ast.BitOr, ast.BitAnd, ast.BitXor}:
             return _Value(self._bitwise(left.value, right.value, op), "int")
         raise Unsupported("integer operator has no native lowering")
+
+    def _fp(self, operation, left, right):  # type: ignore[no-untyped-def]
+        """Emit a floating-point operation with the function's FP contract."""
+        if self.fp_flags:
+            return operation(left, right, flags=self.fp_flags)
+        return operation(left, right)
 
     def _checked_add(self, value, step):  # type: ignore[no-untyped-def]
         return self._checked_binary(value, step, ast.Add)

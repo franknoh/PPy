@@ -216,7 +216,7 @@ class AnnotationResolver:
             return Resolved(T.list_of(element))
         if qualname == "ppy.Buffer":
             element = self._resolve(args[0]).type if args else T.UNKNOWN
-            return Resolved(T.instance("memoryview", element), Facts(contiguous=True))
+            return Resolved(T.instance("Buffer", element), Facts(contiguous=True))
 
         resolved_args = tuple(self._resolve(a).type for a in args)
         if qualname in _BARE_GENERIC:

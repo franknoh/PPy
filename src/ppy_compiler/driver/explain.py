@@ -116,7 +116,7 @@ def _print_function(
     print(f"optimization: O{level}")
     print(f"python backend: {_python_backend(analysis)}")
     print(f"llvm backend: {_llvm_backend(report)}")
-    print(f"jit: {'eligible' if report and report.jit_eligible else 'not eligible'}")
+    print(f"jit: {_jit_detail(info, report)}")
     print(f"parallel: {'accepted' if report and report.parallel_ok else 'rejected'}")
     if report and not report.parallel_ok and report.parallel_reason:
         print(f"reason: {report.parallel_reason}")
@@ -219,3 +219,36 @@ def _print_region(bundle: AnalysisBundle, info: FunctionInfo) -> None:
         else:
             print(f"aten region: rejected -- {region.reason}")
         return
+
+
+def _jit_detail(info: FunctionInfo, report: ContractReport | None) -> str:
+    """What runtime specialization is set up to do for this function."""
+    from ..backend.llvm.specialize import SpecializationPolicy
+
+    policy = SpecializationPolicy.of(info)
+    if not policy.enabled:
+        return "not requested"
+    if report is not None and not report.native_ok:
+        return f"requested, but the function is not native: {report.native_reason}"
+
+    pinnable = [
+        p.name for p in info.params
+        if _pinnable(p, policy)
+    ]
+    if not pinnable:
+        return "requested, but no argument is worth pinning"
+    return (
+        f"specializes on {', '.join(pinnable)} "
+        f"after {policy.threshold} repeat(s), at most {policy.maximum}"
+    )
+
+
+def _pinnable(param, policy) -> bool:  # type: ignore[no-untyped-def]
+    from ..analysis import types as T
+
+    base = T.strip_literal(param.type)
+    if not isinstance(base, T.Instance):
+        return False
+    if base.name in {"int", "float", "bool"}:
+        return policy.pin_values
+    return policy.pin_lengths and base.name in {"list", "Buffer", "memoryview", "array"}

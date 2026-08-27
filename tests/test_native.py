@@ -845,3 +845,356 @@ def test_the_fusion_tables_match_what_the_plugin_claims():
     assert set(UNARY) == set(FUSIBLE_UNARY)
     assert BINARY == set(FUSIBLE_BINARY)
     assert REDUCTIONS == set(FUSIBLE_REDUCTIONS)
+
+
+# -- borrowed buffers -----------------------------------------------------
+
+BUFFERS_VIEW = """
+    import ppy
+    from ppy import Buffer
+
+
+    @ppy.pure
+    @ppy.opt(3)
+    def total(values: Buffer[float]) -> float:
+        result: float = 0.0
+        for i in range(len(values)):
+            result += values[i]
+        return result
+
+
+    @ppy.pure
+    def counts(values: Buffer[int]) -> int:
+        result: int = 0
+        for value in values:
+            result += value
+        return result
+    """
+
+
+def test_a_buffer_parameter_is_borrowed_not_copied(write, analyze):
+    path = write("view.ppy", BUFFERS_VIEW)
+    module = _collect(analyze(path, backend="llvm"))["view"]
+    signature = module.functions["view.total"].signature
+    assert signature.parameters[0].is_buffer
+    assert signature.parameters[0].is_borrowed
+    assert "borrowed" in str(signature)
+
+
+def test_a_list_parameter_is_copied_not_borrowed(write, analyze):
+    path = write("copied.ppy", BUFFERS)
+    module = _collect(analyze(path, backend="llvm"))["copied"]
+    parameter = module.functions["copied.total"].signature.parameters[0]
+    assert parameter.is_buffer and not parameter.is_borrowed
+
+
+def test_the_borrowed_pointer_is_the_callers_own_memory(write, analyze):
+    """No copy: the native code reads the array the caller already had."""
+    import array
+    import ctypes
+
+    from ppy_compiler.backend.llvm.runtime import _expander_for
+
+    path = write("borrow.ppy", BUFFERS_VIEW)
+    module = _collect(analyze(path, backend="llvm"))["borrow"]
+    parameter = module.functions["borrow.total"].signature.parameters[0]
+
+    values = array.array("d", [1.0, 2.0, 3.0])
+    atoms: list = []
+    borrowed: list = []
+    _expander_for(parameter)(values, atoms, borrowed)
+
+    address = ctypes.cast(atoms[0], ctypes.c_void_p).value
+    assert address == values.buffer_info()[0]
+    assert atoms[1] == 3
+
+
+def test_borrowed_buffer_guards_reject_what_cannot_be_pointed_at(write, analyze):
+    import array
+
+    from ppy_compiler.backend.llvm.runtime import GuardFailed, _expander_for
+
+    path = write("guardview.ppy", BUFFERS_VIEW)
+    module = _collect(analyze(path, backend="llvm"))["guardview"]
+    expand = _expander_for(module.functions["guardview.total"].signature.parameters[0])
+
+    for value in (
+        [1.0, 2.0],                       # a list has no contiguous buffer
+        array.array("q", [1, 2]),         # wrong element format
+        b"\x00" * 16,                     # read-only
+        memoryview(array.array("d", [1.0, 2.0, 3.0, 4.0]))[::2],  # not contiguous
+    ):
+        with pytest.raises(GuardFailed):
+            expand(value, [], [])
+
+
+def test_borrowed_buffer_results_match_python(write, analyze):
+    import array
+
+    path = write("viewexec.ppy", BUFFERS_VIEW)
+    module = _collect(analyze(path, backend="llvm"))["viewexec"]
+    engine = _jit(module)
+
+    lowered = module.functions["viewexec.total"]
+    binding = bind(lowered.signature, engine.address(lowered.signature.symbol), sum)
+    values = array.array("d", [1.5, 2.5, 3.0])
+    assert binding.wrapper(values) == 7.0
+    assert binding.calls == 1 and binding.fallbacks == 0
+
+    # Borrowed, so a later mutation is visible without rebinding.
+    values[0] = 10.5
+    assert binding.wrapper(values) == 16.0
+
+
+def test_an_empty_borrowed_buffer_is_accepted(write, analyze):
+    import array
+
+    path = write("emptyview.ppy", BUFFERS_VIEW)
+    module = _collect(analyze(path, backend="llvm"))["emptyview"]
+    engine = _jit(module)
+    lowered = module.functions["emptyview.total"]
+    binding = bind(lowered.signature, engine.address(lowered.signature.symbol), sum)
+    assert binding.wrapper(array.array("d", [])) == 0.0
+    assert binding.fallbacks == 0
+
+
+# -- explicit floating-point relaxation -----------------------------------
+
+FP = """
+    import ppy
+    from ppy import Buffer
+
+
+    @ppy.pure
+    @ppy.opt(3)
+    def strict(a: Buffer[float], b: Buffer[float]) -> float:
+        total: float = 0.0
+        for i in range(len(a)):
+            total += a[i] * b[i]
+        return total
+
+
+    @ppy.pure
+    @ppy.fastmath
+    @ppy.opt(3)
+    def relaxed(a: Buffer[float], b: Buffer[float]) -> float:
+        total: float = 0.0
+        for i in range(len(a)):
+            total += a[i] * b[i]
+        return total
+    """
+
+
+def test_only_the_fastmath_function_gets_relaxed_arithmetic(write, analyze):
+    path = write("fp.ppy", FP)
+    ir = emit_ir(analyze(path, backend="llvm", opt_level=3))["fp"]
+
+    strict_body = ir.split("@ppy_fp_strict")[1].split("\ndefine")[0]
+    relaxed_body = ir.split("@ppy_fp_relaxed")[1].split("\ndefine")[0]
+
+    assert "fast" not in strict_body and "reassoc" not in strict_body
+    assert "fast" in relaxed_body
+
+
+def test_optimization_level_alone_never_relaxes_arithmetic(write, analyze):
+    """O3 is not permission: only the directive is (spec 3.4, 12.5, 14.5)."""
+    path = write(
+        "o3only.ppy",
+        """
+        import ppy
+        from ppy import Buffer
+
+
+        @ppy.pure
+        @ppy.opt(3)
+        def total(a: Buffer[float]) -> float:
+            result: float = 0.0
+            for i in range(len(a)):
+                result += a[i] * a[i]
+            return result
+        """,
+    )
+    for level in (0, 1, 2, 3):
+        ir = emit_ir(analyze(path, backend="llvm", opt_level=level))["o3only"]
+        assert "fast" not in ir and "reassoc" not in ir, f"O{level} relaxed the arithmetic"
+
+
+def test_relaxed_arithmetic_vectorizes_the_reduction(write, analyze):
+    path = write("vec.ppy", FP)
+    ir = emit_ir(analyze(path, backend="llvm", opt_level=3))["vec"]
+    relaxed_body = ir.split("@ppy_vec_relaxed")[1].split("\ndefine")[0]
+    assert "x double>" in relaxed_body, "a permitted reassociation should vectorize"
+
+
+def test_both_orderings_agree_to_within_rounding(write, analyze):
+    import array
+
+    path = write("fpexec.ppy", FP)
+    module = _collect(analyze(path, backend="llvm"))["fpexec"]
+    engine = _jit(module)
+
+    def reference(a, b):
+        return sum(x * y for x, y in zip(a, b))
+
+    x = array.array("d", [i * 0.001 for i in range(2048)])
+    y = array.array("d", [i * 0.002 for i in range(2048)])
+
+    results = {}
+    for name in ("strict", "relaxed"):
+        lowered = module.functions[f"fpexec.{name}"]
+        binding = bind(lowered.signature, engine.address(lowered.signature.symbol), reference)
+        results[name] = binding.wrapper(x, y)
+        assert binding.calls == 1
+
+    assert results["strict"] == pytest.approx(results["relaxed"], rel=1e-9)
+
+
+# -- JIT specialization ---------------------------------------------------
+
+JIT = """
+    import ppy
+    from ppy import Buffer
+
+
+    @ppy.jit(threshold=3, max_specializations=2)
+    @ppy.pure
+    @ppy.opt(3)
+    def digest(values: Buffer[int], modulus: int) -> int:
+        total: int = 0
+        for i in range(len(values)):
+            total += values[i] % modulus
+        return total
+    """
+
+
+def _digest(values, modulus):
+    return sum(v % modulus for v in values)
+
+
+def _jit_binding(write, analyze, name="jitmod"):
+    import array
+
+    from ppy_compiler.backend.llvm.specialize import SpecializationPolicy, Specializer
+
+    path = write(f"{name}.ppy", JIT)
+    bundle = analyze(path, backend="llvm")
+    module = _collect(bundle)[name]
+    engine = _jit(module)
+
+    specializer = Specializer(engine=engine, module_analysis=bundle.analysis.modules[name])
+    for qualname, (info, node) in module.sources.items():
+        specializer.register(info, node)
+
+    lowered = module.functions[f"{name}.digest"]
+    binding = bind(
+        lowered.signature,
+        engine.address(lowered.signature.symbol),
+        _digest,
+        specializer=specializer,
+        policy=SpecializationPolicy.of(lowered.info),
+        info=lowered.info,
+    )
+    return binding, array.array("q", [i * 7919 for i in range(64)])
+
+
+def test_the_jit_directive_is_what_enables_specialization(write, analyze):
+    from ppy_compiler.analysis.symbols import Directive, FunctionInfo
+    from ppy_compiler.backend.llvm.specialize import SpecializationPolicy
+
+    class _Info:
+        def __init__(self, directives):
+            self._directives = directives
+
+        def directive(self, name):
+            return self._directives.get(name)
+
+    assert not SpecializationPolicy.of(_Info({})).enabled
+
+    policy = SpecializationPolicy.of(_Info({"jit": Directive("jit", {"max_specializations": 2})}))
+    assert policy.enabled and policy.maximum == 2
+
+    # `@ppy.specialize` asks for it immediately rather than after a warm-up.
+    eager = SpecializationPolicy.of(_Info({"specialize": Directive("specialize", {})}))
+    assert eager.enabled and eager.threshold == 1
+
+
+def test_a_specialization_appears_only_after_the_shape_repeats(write, analyze):
+    binding, values = _jit_binding(write, analyze)
+
+    for _ in range(2):
+        assert binding.wrapper(values, 1000003) == _digest(values, 1000003)
+    assert binding.specialization_count == 0, "two calls is below the threshold of three"
+
+    assert binding.wrapper(values, 1000003) == _digest(values, 1000003)
+    assert binding.specialization_count == 1
+    assert binding.specialized_calls >= 1
+
+
+def test_a_specialization_is_reused_for_the_shape_it_was_built_for(write, analyze):
+    binding, values = _jit_binding(write, analyze, "jitreuse")
+
+    for _ in range(6):
+        binding.wrapper(values, 1000003)
+    assert binding.specialization_count == 1
+    before = binding.specialized_calls
+
+    for _ in range(4):
+        assert binding.wrapper(values, 1000003) == _digest(values, 1000003)
+    assert binding.specialized_calls == before + 4
+
+
+def test_another_shape_uses_the_generic_code(write, analyze):
+    binding, values = _jit_binding(write, analyze, "jitother")
+
+    for _ in range(4):
+        binding.wrapper(values, 1000003)
+    assert binding.specialization_count == 1
+    specialized = binding.specialized_calls
+
+    # A different constant does not match the guard, so the generic code runs.
+    assert binding.wrapper(values, 97) == _digest(values, 97)
+    assert binding.specialized_calls == specialized
+    assert binding.fallbacks == 0, "the generic native code, not the Python path"
+
+
+def test_specializations_are_capped(write, analyze):
+    binding, values = _jit_binding(write, analyze, "jitcap")
+
+    for modulus in (7, 11, 13, 17, 19):
+        for _ in range(4):
+            assert binding.wrapper(values, modulus) == _digest(values, modulus)
+    assert binding.specialization_count <= 2, "max_specializations must bound code growth"
+
+
+def test_watching_stops_when_the_arguments_never_settle(write, analyze):
+    binding, values = _jit_binding(write, analyze, "jitbudget")
+
+    for modulus in range(3, 3 + 200):
+        binding.wrapper(values, modulus)
+    assert not binding.observing, "a function whose shape never repeats stops paying"
+
+
+def test_a_specialization_pins_the_values_it_guards_on(write, analyze):
+    from ppy_compiler.backend.llvm.specialize import SpecializationKey
+
+    key = SpecializationKey(((1, "modulus", "value", 97), (0, "values", "length", 64)))
+    assert key.constants == {"modulus": 97, "len(values)": 64}
+
+    matches = key.matcher()
+    assert matches(([0] * 64, 97))
+    assert not matches(([0] * 64, 98))
+    assert not matches(([0] * 63, 97))
+
+
+def test_a_buffer_selects_a_native_vector_representation():
+    from ppy_compiler.analysis import types as T
+    from ppy_compiler.analysis.refinements import Facts
+    from ppy_compiler.analysis.representation import Repr, select
+
+    chosen = select(T.instance("Buffer", T.FLOAT), Facts(contiguous=True))
+    assert chosen.repr is Repr.NATIVE_VECTOR
+    assert "borrowed" in chosen.reason
+
+    # A buffer whose element type is unknown has no native layout.
+    opaque = select(T.instance("Buffer", T.ANY), Facts())
+    assert opaque.repr is Repr.PY_OBJECT

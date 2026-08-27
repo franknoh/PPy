@@ -39,7 +39,10 @@ def _element_of(t: T.Type) -> T.Type:
             return base.items[0]
         return T.join(*base.items) if base.items else T.NEVER
     if isinstance(base, T.Instance):
-        if base.name in {"list", "set", "frozenset", "Sequence", "Iterable", "Iterator"} and base.args:
+        if base.name in {
+            "list", "set", "frozenset", "Sequence", "Iterable", "Iterator",
+            "Buffer", "memoryview", "array",
+        } and base.args:
             return base.args[0]
         if base.name == "dict" and base.args:
             return base.args[0]
@@ -279,6 +282,19 @@ def _slice(args: Sequence[Arg]) -> BuiltinResult:
     return BuiltinResult(T.instance("slice"))
 
 
+def _memoryview(args: Sequence[Arg]) -> BuiltinResult:
+    """A view over a contiguous buffer, carrying its element type through."""
+    if args:
+        base = T.strip_literal(args[0].type)
+        if isinstance(base, T.Instance) and base.args and base.name in {
+            "array", "Buffer", "memoryview",
+        }:
+            return BuiltinResult(T.instance("memoryview", base.args[0]))
+    return BuiltinResult(
+        T.instance("memoryview"), Facts(), EffectSet.of(raises=("TypeError",))
+    )
+
+
 def _getattr(args: Sequence[Arg]) -> BuiltinResult:
     default = args[2].type if len(args) > 2 else T.NEVER
     return BuiltinResult(
@@ -349,6 +365,7 @@ BUILTINS: dict[str, Handler] = {
     "bytes": _bytes,
     "bytearray": _bytes,
     "slice": _slice,
+    "memoryview": _memoryview,
     "getattr": _getattr,
     "hasattr": _hasattr,
 }

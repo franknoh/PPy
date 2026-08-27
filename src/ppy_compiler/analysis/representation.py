@@ -84,6 +84,12 @@ def select(t: T.Type, facts: Facts, *, escapes: bool = False) -> Representation:
             if isinstance(element, T.Instance) and element.name in {"int", "float", "bool"}:
                 return Representation(Repr.NATIVE_VECTOR, reason="non-escaping homogeneous list")
             return Representation(Repr.PY_LIST, reason="heterogeneous element type")
+        if base.name in {"Buffer", "memoryview", "array"}:
+            element = base.args[0] if base.args else T.ANY
+            if isinstance(element, T.Instance) and element.name in {"int", "float"}:
+                # A buffer is pointed at, not copied, so it needs no promotion.
+                return Representation(Repr.NATIVE_VECTOR, reason="borrowed contiguous buffer")
+            return Representation(Repr.PY_OBJECT, reason="buffer of an unknown element type")
         if base.name in {"ndarray", "numpy.ndarray"}:
             return Representation(
                 Repr.PY_ARRAY, reason="retained PyArrayObject* with an extracted data pointer"
