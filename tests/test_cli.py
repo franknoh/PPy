@@ -300,3 +300,24 @@ def test_missing_target_is_reported(workspace: Path):
     result = _ppy(["check", "nope.ppy"], workspace)
     assert result.returncode == 2
     assert "E1002" in result.stderr
+
+
+def test_lsp_command_serves_a_session(workspace: Path):
+    from ppy_compiler.lsp.protocol import encode
+
+    (workspace / "a.ppy").write_text("def f(x: int) -> int:\n    return x\n", encoding="utf-8")
+    messages = [
+        {"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {"rootPath": str(workspace)}},
+        {"jsonrpc": "2.0", "id": 2, "method": "shutdown", "params": {}},
+        {"jsonrpc": "2.0", "method": "exit"},
+    ]
+    result = subprocess.run(
+        [sys.executable, "-m", "ppy_compiler", "lsp", "--root", "."],
+        cwd=workspace,
+        input=b"".join(encode(message) for message in messages),
+        capture_output=True,
+        check=False,
+    )
+    assert result.returncode == 0
+    assert b'"serverInfo"' in result.stdout
+    assert b'"hoverProvider":true' in result.stdout

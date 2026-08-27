@@ -46,8 +46,10 @@ def _syntax_diagnostic(path: Path, exc: SyntaxError) -> Diagnostic:
     )
 
 
-def parse_file(path: Path) -> tuple[SourceFile | None, Diagnostic | None]:
-    source, diagnostic = load(path)
+def parse_file(
+    path: Path, overlays: dict[Path, str] | None = None
+) -> tuple[SourceFile | None, Diagnostic | None]:
+    source, diagnostic = load(path, overlays)
     if source is None:
         return None, diagnostic
     diagnostic = parse_source(source)

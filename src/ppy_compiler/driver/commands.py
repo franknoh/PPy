@@ -22,7 +22,7 @@ from .reporting import Reporter
 __all__ = [
     "check", "convert", "fmt", "explain", "inspect", "cache", "clean",
     "doctor", "run_python_backend", "run_llvm_backend", "build",
-    "differential_test",
+    "differential_test", "language_server",
 ]
 
 
@@ -275,3 +275,10 @@ def differential_test(options: argparse.Namespace, reporter: Reporter) -> int:
     from ..testing.differential import run_suite
 
     return run_suite(options.path, reporter)
+
+
+def language_server(options: argparse.Namespace, reporter: Reporter) -> int:
+    """`ppy lsp`: serve the analysis daemon to an editor over stdio."""
+    from ..lsp.server import serve
+
+    return serve(options.root.resolve())

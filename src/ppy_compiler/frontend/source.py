@@ -50,7 +50,12 @@ def span_of(path: Path, node: ast.AST) -> Span:
     )
 
 
-def load(path: Path) -> tuple[SourceFile | None, Diagnostic | None]:
+def load(
+    path: Path, overlays: dict[Path, str] | None = None
+) -> tuple[SourceFile | None, Diagnostic | None]:
+    """Read a source file, preferring an editor's unsaved buffer (spec 28.1)."""
+    if overlays is not None and path in overlays:
+        return SourceFile(path=path, text=overlays[path]), None
     try:
         text = path.read_text(encoding="utf-8")
     except OSError as exc:

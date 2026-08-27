@@ -81,6 +81,9 @@ def build_parser() -> argparse.ArgumentParser:
     test = subparsers.add_parser("test", help="run differential conformance tests for a target")
     test.add_argument("path", type=Path, nargs="?", default=Path("."))
 
+    lsp = subparsers.add_parser("lsp", help="run the PPY language server over stdio")
+    lsp.add_argument("--root", type=Path, default=Path("."), help="project root")
+
     return parser
 
 
@@ -105,7 +108,7 @@ def main(argv: list[str] | None = None) -> int:
 
     known = {
         "convert", "run", "build", "check", "fmt", "explain",
-        "inspect", "cache", "clean", "doctor", "test",
+        "inspect", "cache", "clean", "doctor", "test", "lsp",
     }
     execution = None
     if argv and argv[0] not in known:
@@ -154,6 +157,8 @@ def main(argv: list[str] | None = None) -> int:
             return commands.doctor(options, reporter)
         case "test":
             return commands.differential_test(options, reporter)
+        case "lsp":
+            return commands.language_server(options, reporter)
     parser.print_help()
     return 2
 

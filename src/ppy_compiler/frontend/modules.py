@@ -179,6 +179,7 @@ def build_graph(
     *,
     root: Path | None = None,
     follow_imports: bool = True,
+    overlays: dict[Path, str] | None = None,
 ) -> ModuleGraph:
     """Parse the entry files and, transitively, every project module they import."""
     search_paths = [p for p in search_paths if p.is_dir()]
@@ -195,7 +196,7 @@ def build_graph(
         name, path, is_package = queue.pop(0)
         if name in graph.modules:
             continue
-        source, diagnostic = parse_file(path)
+        source, diagnostic = parse_file(path, overlays)
         if diagnostic is not None:
             diagnostics.add(diagnostic)
         if source is None or source.tree is None:

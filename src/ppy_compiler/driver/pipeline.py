@@ -110,6 +110,7 @@ def analyze_paths(
     *,
     backend: str = "python",
     follow_imports: bool = True,
+    overlays: dict[Path, str] | None = None,
 ) -> AnalysisBundle:
     """Parse, resolve, type-check, and verify contracts for the given entries."""
     diagnostics = DiagnosticBag()
@@ -126,6 +127,7 @@ def analyze_paths(
         diagnostics,
         root=project.root,
         follow_imports=follow_imports,
+        overlays=overlays,
     )
     symbols = ProjectSymbols(graph, diagnostics, strict=project.config.strict)
     for qualname, display in project.plugins.external_types().items():
