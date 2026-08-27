@@ -351,3 +351,83 @@ def test_explain_reports_which_boundary_a_function_crosses(workspace: Path):
     jitted = _ppy(["explain", "cube"], workspace)
     assert "selects the specialization" in jitted.stdout
     assert "specializes on x" in jitted.stdout
+
+
+def test_convert_propagates_types_through_a_call_chain(workspace: Path):
+    (workspace / "chain.py").write_text(
+        textwrap.dedent(
+            """
+            def scale(x):
+                return x * 2.0
+
+
+            def middle(x):
+                return scale(x)
+
+
+            def outer(x):
+                return middle(x)
+
+
+            print(outer(1.5))
+            """
+        ).lstrip("\n"),
+        encoding="utf-8",
+    )
+    assert _ppy(["convert", "chain.py"], workspace).returncode == 0
+    converted = (workspace / "chain.ppy").read_text(encoding="utf-8")
+    assert "def outer(x: float) -> float:" in converted
+    assert "def middle(x: float) -> float:" in converted
+    assert "def scale(x: float) -> float:" in converted
+    assert _ppy(["check", "chain.ppy"], workspace).returncode == 0
+
+
+def test_convert_infers_instance_fields_and_leaves_self_alone(workspace: Path):
+    (workspace / "box.py").write_text(
+        textwrap.dedent(
+            """
+            class Box:
+                def __init__(self, width, height):
+                    self.width = width
+                    self.height = height
+
+                def area(self):
+                    return self.width * self.height
+
+
+            print(Box(2.0, 3.0).area())
+            """
+        ).lstrip("\n"),
+        encoding="utf-8",
+    )
+    assert _ppy(["convert", "box.py"], workspace).returncode == 0
+    converted = (workspace / "box.ppy").read_text(encoding="utf-8")
+    assert "def __init__(self, width: float, height: float) -> None:" in converted
+    assert "self.width: float = width" in converted
+    assert "self.height: float = height" in converted
+    assert "def area(self) -> float:" in converted
+    assert _ppy(["check", "box.ppy"], workspace).returncode == 0
+
+
+def test_convert_quotes_an_annotation_naming_a_later_class(workspace: Path):
+    (workspace / "fwd.py").write_text(
+        textwrap.dedent(
+            """
+            def first(node):
+                return node
+
+
+            class Node:
+                def __init__(self, value):
+                    self.value = value
+
+
+            print(first(Node(1)).value)
+            """
+        ).lstrip("\n"),
+        encoding="utf-8",
+    )
+    assert _ppy(["convert", "fwd.py"], workspace).returncode == 0
+    converted = (workspace / "fwd.ppy").read_text(encoding="utf-8")
+    assert "def first(node: 'Node') -> 'Node':" in converted
+    assert _ppy(["check", "fwd.ppy"], workspace).returncode == 0

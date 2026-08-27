@@ -29,13 +29,20 @@ class ConversionPlan:
     params: dict[tuple[int, str], str] = field(default_factory=dict)
     returns: dict[int, str] = field(default_factory=dict)
     assignments: dict[tuple[int, str], str] = field(default_factory=dict)
+    #: Instance fields, annotated where `__init__` first assigns them.
+    fields: dict[tuple[int, str], str] = field(default_factory=dict)
+    #: Class names that are not yet bound where an annotation mentioning them
+    #: is written, and so have to be quoted.
+    forward: dict[str, int] = field(default_factory=dict)
     typing_imports: set[str] = field(default_factory=set)
     ppy_imports: set[str] = field(default_factory=set)
     needs_ppy: bool = False
 
     @property
     def is_empty(self) -> bool:
-        return not (self.params or self.returns or self.assignments or self.needs_ppy)
+        return not (
+            self.params or self.returns or self.assignments or self.fields or self.needs_ppy
+        )
 
 
 def run_convert(options: argparse.Namespace, reporter: Reporter) -> int:
@@ -102,28 +109,39 @@ def _module_for(bundle, path: Path) -> str | None:  # type: ignore[no-untyped-de
     return None
 
 
-def refine_with_call_sites(bundle) -> dict[tuple[str, int], T.Type]:  # type: ignore[no-untyped-def]
-    """Adopt call-site argument types, then re-infer every return type.
+#: Call-site evidence propagates along the call graph, so one round only
+#: reaches functions called from already-typed code. Repeating it walks the
+#: chain; a handful of rounds settles any realistic project.
+_REFINEMENT_ROUNDS = 6
 
-    Without this second pass a function whose parameters were only inferred
-    would still return `<unknown>`, and nothing downstream could be annotated.
+
+def refine_with_call_sites(bundle) -> dict[tuple[str, int], T.Type]:  # type: ignore[no-untyped-def]
+    """Adopt call-site argument types and re-infer, until nothing new appears.
+
+    Without this a function whose parameters were only inferred would still
+    return `<unknown>`, and nothing downstream of it could be annotated.
     """
     from ..analysis.checker import analyze
     from ..diagnostics import DiagnosticBag
 
-    observed = _observed_arguments(bundle)
-    changed = False
-    for (qualname, index), inferred in observed.items():
-        info = bundle.symbols.functions.get(qualname)
-        if info is None or index >= len(info.params):
-            continue
-        param = info.params[index]
-        if param.annotated or isinstance(inferred, (T.UnknownType, T.AnyType)):
-            continue
-        param.type = inferred
-        param.annotated = True
-        changed = True
-    if changed:
+    observed: dict[tuple[str, int], T.Type] = {}
+    for _round in range(_REFINEMENT_ROUNDS):
+        observed = _observed_arguments(bundle)
+        changed = False
+        for (qualname, index), inferred in observed.items():
+            info = bundle.symbols.functions.get(qualname)
+            if info is None or index >= len(info.params):
+                continue
+            param = info.params[index]
+            if param.annotated or isinstance(inferred, (T.UnknownType, T.AnyType)):
+                continue
+            param.type = inferred
+            param.annotated = True
+            changed = True
+        changed |= _infer_fields(bundle)
+        changed |= _infer_from_usage(bundle)
+        if not changed:
+            break
         bundle.analysis = analyze(
             bundle.symbols,
             DiagnosticBag(),
@@ -143,6 +161,7 @@ def build_plan(  # type: ignore[no-untyped-def]
     plan = ConversionPlan(needs_ppy=True)
     diagnostics: list[Diagnostic] = []
     symbols = bundle.symbols.modules[module_name]
+    plan.forward = _forward_references(symbols)
     analysis = bundle.analysis.modules.get(module_name)
     if observed is None:
         observed = refine_with_call_sites(bundle)
@@ -155,6 +174,9 @@ def build_plan(  # type: ignore[no-untyped-def]
         line = info.node.lineno
         for index, param in enumerate(info.params):
             if param.kind in {"var_positional", "var_keyword"}:
+                continue
+            if index == 0 and info.is_method and not info.is_static:
+                # The receiver's type is the class it is defined in.
                 continue
             if _has_source_annotation(info, param.name):
                 continue
@@ -186,6 +208,7 @@ def build_plan(  # type: ignore[no-untyped-def]
 
     if bundle.project.config.inference.write_local_annotations and analysis is not None:
         _plan_module_globals(symbols, analysis, plan, module_name)
+    _plan_fields(symbols, plan, module_name)
 
     diagnostics.extend(_dynamic_findings(symbols))
     return plan, diagnostics
@@ -223,14 +246,32 @@ def _observed_arguments(bundle) -> dict[tuple[str, int], T.Type]:  # type: ignor
 
 
 def _callee_qualname(bundle, symbols, node: ast.Call) -> str | None:  # type: ignore[no-untyped-def]
+    """The function a call reaches, following a constructor to `__init__`."""
     resolver = bundle.symbols.resolver(symbols)
     direct = resolver.canonical(node.func)
     if direct is not None and direct in bundle.symbols.functions:
         return direct
+    if direct is not None and direct in bundle.symbols.classes:
+        initializer = f"{direct}.__init__"
+        if initializer in bundle.symbols.functions:
+            return initializer
     if isinstance(node.func, ast.Name):
         local = f"{symbols.name}.{node.func.id}"
         if local in bundle.symbols.functions:
             return local
+        if local in bundle.symbols.classes:
+            initializer = f"{local}.__init__"
+            if initializer in bundle.symbols.functions:
+                return initializer
+    if isinstance(node.func, ast.Attribute):
+        # A method called on a value of a known class.
+        analysis = bundle.analysis.modules.get(symbols.name)
+        if analysis is not None:
+            owner = T.strip_literal(analysis.type_of(node.func.value))
+            if isinstance(owner, T.Instance):
+                method = f"{owner.name}.{node.func.attr}"
+                if method in bundle.symbols.functions:
+                    return method
     return None
 
 
@@ -285,29 +326,48 @@ class _Annotator(cst.CSTTransformer):
         line = self._function_lines.pop()
         returns = self.plan.returns.get(line)
         if returns is not None and updated.returns is None:
-            updated = updated.with_changes(returns=cst.Annotation(cst.parse_expression(returns)))
+            text = _quote_if_forward(returns, line, self.plan.forward)
+            updated = updated.with_changes(returns=cst.Annotation(cst.parse_expression(text)))
         return updated
 
     def leave_Param(self, original: cst.Param, updated: cst.Param) -> cst.Param:
         if updated.annotation is not None or not self._function_lines:
             return updated
-        annotation = self.plan.params.get((self._function_lines[-1], updated.name.value))
+        line = self._function_lines[-1]
+        annotation = self.plan.params.get((line, updated.name.value))
         if annotation is None:
             return updated
-        return updated.with_changes(annotation=cst.Annotation(cst.parse_expression(annotation)))
+        text = _quote_if_forward(annotation, line, self.plan.forward)
+        return updated.with_changes(annotation=cst.Annotation(cst.parse_expression(text)))
 
     def leave_SimpleStatementLine(
         self, original: cst.SimpleStatementLine, updated: cst.SimpleStatementLine
     ) -> cst.SimpleStatementLine:
-        if self._function_lines or len(updated.body) != 1:
+        if len(updated.body) != 1:
             return updated
         statement = updated.body[0]
         if not isinstance(statement, cst.Assign) or len(statement.targets) != 1:
             return updated
         target = statement.targets[0].target
-        if not isinstance(target, cst.Name):
-            return updated
         line = self.get_metadata(PositionProvider, original).start.line
+
+        if isinstance(target, cst.Attribute) and isinstance(target.value, cst.Name):
+            annotation = self.plan.fields.get((line, target.attr.value))
+            if annotation is None:
+                return updated
+            text = _quote_if_forward(annotation, line, self.plan.forward)
+            return updated.with_changes(
+                body=[
+                    cst.AnnAssign(
+                        target=target,
+                        annotation=cst.Annotation(cst.parse_expression(text)),
+                        value=statement.value,
+                    )
+                ]
+            )
+
+        if self._function_lines or not isinstance(target, cst.Name):
+            return updated
         annotation = self.plan.assignments.get((line, target.value))
         if annotation is None:
             return updated
@@ -406,3 +466,136 @@ def _has_source_annotation(info, name: str) -> bool:  # type: ignore[no-untyped-
         if argument is not None and argument.arg == name:
             return argument.annotation is not None
     return False
+
+
+def _infer_fields(bundle) -> bool:  # type: ignore[no-untyped-def]
+    """Give each instance field the type `__init__` assigns to it.
+
+    `self.width = width` says as much about `width` as an annotation would,
+    and without it nothing that reads the field can be typed.
+    """
+    changed = False
+    for qualname, info in bundle.symbols.classes.items():
+        initializer = info.methods.get("__init__")
+        analysis = bundle.analysis.modules.get(info.module)
+        if initializer is None or analysis is None:
+            continue
+        for node in ast.walk(initializer.node):
+            if not isinstance(node, ast.Assign) or len(node.targets) != 1:
+                continue
+            target = node.targets[0]
+            if not _is_self_attribute(target, initializer):
+                continue
+            name = target.attr  # type: ignore[union-attr]
+            if not isinstance(info.fields.get(name, T.UNKNOWN), T.UnknownType):
+                continue
+            assigned = T.strip_literal(analysis.type_of(node.value))
+            if isinstance(assigned, (T.UnknownType, T.AnyType, T.NeverType)):
+                continue
+            info.fields[name] = assigned
+            changed = True
+    return changed
+
+
+def _infer_from_usage(bundle) -> bool:  # type: ignore[no-untyped-def]
+    """Type a parameter nothing calls, from the arithmetic it takes part in.
+
+    A helper that is only ever called from outside the module has no call-site
+    evidence, but `self.width * factor` still says `factor` is a number.
+    """
+    changed = False
+    for qualname, info in bundle.symbols.functions.items():
+        analysis = bundle.analysis.modules.get(info.module)
+        if analysis is None:
+            continue
+        pending = {p.name: p for p in info.params if not p.annotated}
+        if not pending:
+            continue
+        for node in ast.walk(info.node):
+            if not isinstance(node, ast.BinOp):
+                continue
+            for side, other in ((node.left, node.right), (node.right, node.left)):
+                if not isinstance(side, ast.Name) or side.id not in pending:
+                    continue
+                partner = T.strip_literal(analysis.type_of(other))
+                if partner not in (T.INT, T.FLOAT):
+                    continue
+                param = pending.pop(side.id)
+                param.type = partner
+                param.annotated = True
+                changed = True
+    return changed
+
+
+def _is_self_attribute(target: ast.expr, info) -> bool:  # type: ignore[no-untyped-def]
+    receiver = info.params[0].name if info.params else "self"
+    return (
+        isinstance(target, ast.Attribute)
+        and isinstance(target.value, ast.Name)
+        and target.value.id == receiver
+    )
+
+
+def _plan_fields(symbols, plan: ConversionPlan, module_name: str) -> None:  # type: ignore[no-untyped-def]
+    """Write each inferred instance field where `__init__` first assigns it.
+
+    A converted module has to stand on its own: a field type discovered during
+    conversion is of no use to anything reading the result unless it is
+    written down.
+    """
+    for info in symbols.classes.values():
+        initializer = info.methods.get("__init__")
+        if initializer is None:
+            continue
+        declared = {
+            node.target.id
+            for node in info.node.body
+            if isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name)
+        }
+        written: set[str] = set()
+        for node in ast.walk(initializer.node):
+            if not isinstance(node, ast.Assign) or len(node.targets) != 1:
+                continue
+            target = node.targets[0]
+            if not _is_self_attribute(target, initializer):
+                continue
+            name = target.attr  # type: ignore[union-attr]
+            if name in declared or name in written:
+                continue
+            rendered = render_annotation(
+                info.fields.get(name, T.UNKNOWN),
+                info.field_facts.get(name),
+                local_module=module_name,
+            )
+            if rendered is None:
+                continue
+            written.add(name)
+            plan.fields[(node.lineno, name)] = rendered.text
+            plan.typing_imports |= rendered.typing_imports
+            plan.ppy_imports |= rendered.ppy_imports
+
+
+def _forward_references(symbols) -> dict[str, int]:  # type: ignore[no-untyped-def]
+    """Where each class in this module becomes usable as a runtime name."""
+    return {
+        info.name: (info.node.end_lineno or info.node.lineno)
+        for info in symbols.classes.values()
+    }
+
+
+def _quote_if_forward(text: str, line: int, forward: dict[str, int]) -> str:
+    """Quote an annotation that names a class not yet defined at `line`.
+
+    Annotations are evaluated eagerly before Python 3.14, so a bare reference
+    to the enclosing class would raise at import.
+    """
+    for name, defined_at in forward.items():
+        if line <= defined_at and _mentions(text, name):
+            return repr(text)
+    return text
+
+
+def _mentions(text: str, name: str) -> bool:
+    import re
+
+    return re.search(rf"\b{re.escape(name)}\b", text) is not None
