@@ -435,3 +435,42 @@ def test_tolist_follows_the_declared_dtype():
         assert signature.ret == T.list_of(T.FLOAT), owner
         signature, _ = plugin.instance_attribute(owner, "tolist", Facts())
         assert signature.ret == T.list_of(T.FLOAT), owner
+
+
+def test_a_field_constraint_becomes_a_refinement(tmp_path: Path):
+    """Both ways of writing the bound state the same thing (spec 23.3)."""
+    pytest.importorskip("pydantic")
+    from ppy_compiler.driver.pipeline import analyze_paths, open_project
+
+    (tmp_path / "pyproject.toml").write_text("[tool.ppy]\n", encoding="utf-8")
+    path = tmp_path / "models.ppy"
+    path.write_text(
+        textwrap.dedent(
+            """
+            from typing import Annotated
+
+            from pydantic import BaseModel, Field
+
+
+            class ByDefault(BaseModel):
+                count: int = Field(ge=0, le=100)
+                offset: int = Field(gt=-5, lt=5)
+                free: int = 0
+
+
+            class ByAnnotation(BaseModel):
+                count: Annotated[int, Field(ge=0, le=100)]
+            """
+        ).lstrip("\n"),
+        encoding="utf-8",
+    )
+    bundle = analyze_paths(open_project(path), [path], backend="python")
+    classes = bundle.symbols.classes
+    default = classes["models.ByDefault"].field_facts
+    annotated = classes["models.ByAnnotation"].field_facts
+
+    assert default["count"].int_range == annotated["count"].int_range
+    assert (default["count"].int_range.low, default["count"].int_range.high) == (0, 100)
+    # `gt`/`lt` are exclusive, so the range is the one inside them.
+    assert (default["offset"].int_range.low, default["offset"].int_range.high) == (-4, 4)
+    assert default["free"].int_range is None

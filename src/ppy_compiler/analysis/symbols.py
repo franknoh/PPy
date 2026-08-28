@@ -11,7 +11,7 @@ from ..frontend.modules import Module, ModuleGraph
 from . import types as T
 from .annotations import AnnotationResolver
 from .effects import EffectSet
-from .refinements import Facts
+from .refinements import Facts, IntRange
 
 __all__ = [
     "Directive",
@@ -592,7 +592,13 @@ class ProjectSymbols:
             if isinstance(child, ast.AnnAssign) and isinstance(child.target, ast.Name):
                 resolved = annotations.resolve(child.annotation)
                 info.fields[child.target.id] = resolved.type
-                info.field_facts[child.target.id] = resolved.facts
+                facts = resolved.facts
+                if child.value is not None:
+                    # `count: int = Field(ge=0)` states the same bound that
+                    # `Annotated[int, Field(ge=0)]` does, and is the commoner
+                    # way to write it.
+                    facts = _with_field_bounds(facts, child.value)
+                info.field_facts[child.target.id] = facts
                 if _is_class_var(child.annotation):
                     info.class_vars.add(child.target.id)
             elif isinstance(child, ast.Assign):
@@ -695,6 +701,45 @@ class ProjectSymbols:
 def _is_type_alias_annotation(annotation: ast.expr) -> bool:
     text = ast.unparse(annotation)
     return text.endswith("TypeAlias")
+
+
+#: Keyword names a constraint helper uses for an inclusive or exclusive bound.
+_LOWER_BOUNDS = {"ge": 0, "gt": 1}
+_UPPER_BOUNDS = {"le": 0, "lt": -1}
+
+
+def _integer_literal(node: ast.expr) -> int | None:
+    """An integer written in the source, negative sign included."""
+    if isinstance(node, ast.UnaryOp) and isinstance(node.op, ast.USub):
+        inner = _integer_literal(node.operand)
+        return None if inner is None else -inner
+    if isinstance(node, ast.Constant) and isinstance(node.value, int):
+        return None if isinstance(node.value, bool) else node.value
+    return None
+
+
+def _with_field_bounds(facts: Facts, value: ast.expr) -> Facts:
+    """Read `Field(ge=..., lt=...)` as the integer range it describes."""
+    if not isinstance(value, ast.Call):
+        return facts
+    name = value.func.attr if isinstance(value.func, ast.Attribute) else getattr(value.func, "id", "")
+    if name not in {"Field", "conint", "condecimal"}:
+        return facts
+    low: int | None = None
+    high: int | None = None
+    for keyword in value.keywords:
+        if keyword.arg is None:
+            continue
+        bound = _integer_literal(keyword.value)
+        if bound is None:
+            continue
+        if keyword.arg in _LOWER_BOUNDS:
+            low = bound + _LOWER_BOUNDS[keyword.arg]
+        elif keyword.arg in _UPPER_BOUNDS:
+            high = bound + _UPPER_BOUNDS[keyword.arg]
+    if low is None and high is None:
+        return facts
+    return facts.with_(int_range=IntRange(low, high))
 
 
 def _is_class_var(annotation: ast.expr) -> bool:
