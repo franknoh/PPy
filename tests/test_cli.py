@@ -92,13 +92,34 @@ def test_convert_writes_a_ppy_file_and_preserves_the_source(workspace: Path):
 def test_convert_inserts_ppy_after_docstring_and_future(workspace: Path):
     source = workspace / "order.py"
     source.write_text(
-        '"""Doc."""\nfrom __future__ import annotations\n\nX = 1\n', encoding="utf-8"
+        '"""Doc."""\n'
+        "from __future__ import annotations\n"
+        "\n"
+        "import math\n"
+        "\n"
+        "def area(r):\n"
+        "    return math.pi * r * r\n"
+        "\n"
+        "X = area(2.0)\n",
+        encoding="utf-8",
     )
     _ppy(["convert", "order.py"], workspace)
     lines = (workspace / "order.ppy").read_text(encoding="utf-8").splitlines()
     assert lines[0] == '"""Doc."""'
     assert lines[1] == "from __future__ import annotations"
-    assert lines[2] == "import ppy"
+    assert "import ppy" in lines
+    # Standard library first, then `ppy`, and all of it ahead of any statement.
+    assert lines.index("import math") < lines.index("import ppy")
+    assert lines.index("import ppy") < lines.index("def area(r: float) -> float:")
+
+
+def test_convert_omits_ppy_when_nothing_would_use_it(workspace: Path):
+    """An unused import is a lint finding the source did not have."""
+    (workspace / "plain.py").write_text("X = 1\nprint(X)\n", encoding="utf-8")
+    _ppy(["convert", "plain.py"], workspace)
+    converted = (workspace / "plain.ppy").read_text(encoding="utf-8")
+    assert "import ppy" not in converted
+    assert "X: int = 1" in converted
 
 
 def test_convert_refuses_to_clobber_without_force(workspace: Path):
@@ -409,7 +430,8 @@ def test_convert_infers_instance_fields_and_leaves_self_alone(workspace: Path):
     assert _ppy(["check", "box.ppy"], workspace).returncode == 0
 
 
-def test_convert_quotes_an_annotation_naming_a_later_class(workspace: Path):
+def test_convert_moves_a_class_above_the_function_that_names_it(workspace: Path):
+    """Quotes exist only because the class was not bound yet; move it and they go."""
     (workspace / "fwd.py").write_text(
         textwrap.dedent(
             """
@@ -429,8 +451,61 @@ def test_convert_quotes_an_annotation_naming_a_later_class(workspace: Path):
     )
     assert _ppy(["convert", "fwd.py"], workspace).returncode == 0
     converted = (workspace / "fwd.ppy").read_text(encoding="utf-8")
-    assert "def first(node: 'Node') -> 'Node':" in converted
+    assert "def first(node: Node) -> Node:" in converted
+    assert converted.index("class Node:") < converted.index("def first(")
     assert _ppy(["check", "fwd.ppy"], workspace).returncode == 0
+
+
+def test_convert_keeps_quotes_a_class_cannot_avoid(workspace: Path):
+    """A method naming its own class cannot be reordered out of the problem."""
+    (workspace / "self_ref.py").write_text(
+        textwrap.dedent(
+            """
+            class Node:
+                def __init__(self, value):
+                    self.value = value
+
+                def grown(self):
+                    return Node(self.value + 1)
+
+
+            print(Node(1).grown().value)
+            """
+        ).lstrip("\n"),
+        encoding="utf-8",
+    )
+    assert _ppy(["convert", "self_ref.py"], workspace).returncode == 0
+    converted = (workspace / "self_ref.ppy").read_text(encoding="utf-8")
+    assert "def grown(self) -> 'Node':" in converted
+    assert _ppy(["check", "self_ref.ppy"], workspace).returncode == 0
+
+
+def test_convert_does_not_move_a_class_past_a_statement(workspace: Path):
+    """Only `def` and `class` are safe to cross; a statement may have run."""
+    (workspace / "guarded.py").write_text(
+        textwrap.dedent(
+            """
+            def first(node):
+                return node
+
+
+            LIMIT = 3
+
+
+            class Node:
+                def __init__(self, value):
+                    self.value = value
+
+
+            print(first(Node(LIMIT)).value)
+            """
+        ).lstrip("\n"),
+        encoding="utf-8",
+    )
+    assert _ppy(["convert", "guarded.py"], workspace).returncode == 0
+    converted = (workspace / "guarded.ppy").read_text(encoding="utf-8")
+    assert converted.index("LIMIT") < converted.index("class Node:")
+    assert _ppy(["check", "guarded.ppy"], workspace).returncode == 0
 
 
 def test_convert_attaches_purity_the_checker_proved(workspace: Path):
@@ -558,3 +633,84 @@ def test_a_promoted_buffer_lowers_natively(workspace: Path):
     assert _ppy(["convert", "native.py", "--promote-buffers"], workspace).returncode == 0
     explained = _ppy(["explain", "total"], workspace)
     assert "llvm backend: native" in explained.stdout
+
+
+def test_convert_formats_what_it_writes(workspace: Path):
+    """Inserting annotations disturbs the blank lines around what it touches."""
+    (workspace / "tight.py").write_text(
+        "import math\ndef a(x):\n    return math.sqrt(x)\ndef b(x):\n    return a(x) + 1.0\nprint(b(4.0))\n",
+        encoding="utf-8",
+    )
+    assert _ppy(["convert", "tight.py"], workspace).returncode == 0
+    converted = (workspace / "tight.ppy").read_text(encoding="utf-8")
+    assert "\n\n\n@ppy.pure\ndef a(" in converted
+    assert "\n\n\n@ppy.pure\ndef b(" in converted
+
+
+def test_convert_wraps_a_signature_that_grew_too_long(workspace: Path):
+    (workspace / "wide.py").write_text(
+        textwrap.dedent(
+            """
+            def combine(alpha, bravo, charlie, delta, echo, foxtrot, golf, hotel):
+                return alpha + bravo + charlie + delta + echo + foxtrot + golf + hotel
+
+
+            print(combine(1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0))
+            """
+        ).lstrip("\n"),
+        encoding="utf-8",
+    )
+    assert _ppy(["convert", "wide.py"], workspace).returncode == 0
+    converted = (workspace / "wide.ppy").read_text(encoding="utf-8")
+    assert all(len(line) <= 100 for line in converted.splitlines())
+    assert "def combine(\n    alpha: float," in converted
+    assert ") -> float:" in converted
+    assert _ppy(["check", "wide.ppy"], workspace).returncode == 0
+
+
+def test_conversion_adds_no_pylint_finding(workspace: Path):
+    """Whatever the source scores, the converted file must score the same."""
+    pytest.importorskip("pylint")
+    (workspace / "linted.py").write_text(
+        textwrap.dedent(
+            '''
+            """A module."""
+            import math
+
+
+            def area(radius):
+                """Area of a circle."""
+                return math.pi * radius * radius
+
+
+            def total(radii):
+                """Sum of areas."""
+                out = 0.0
+                for radius in radii:
+                    out += area(radius)
+                return out
+
+
+            print(total([1.0, 2.0]))
+            '''
+        ).lstrip("\n"),
+        encoding="utf-8",
+    )
+    assert _ppy(["convert", "linted.py"], workspace).returncode == 0
+    (workspace / "converted.py").write_text(
+        (workspace / "linted.ppy").read_text(encoding="utf-8"), encoding="utf-8"
+    )
+
+    def _findings(name: str) -> set[str]:
+        done = subprocess.run(
+            [sys.executable, "-m", "pylint", "--enable=all", "--score=n",
+             "--disable=import-error", name],
+            cwd=workspace, capture_output=True, text=True, check=False,
+        )
+        return {
+            line.rsplit("(", 1)[-1].rstrip(")")
+            for line in done.stdout.splitlines()
+            if line.startswith(name)
+        }
+
+    assert _findings("converted.py") <= _findings("linted.py")

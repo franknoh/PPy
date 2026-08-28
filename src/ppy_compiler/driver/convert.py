@@ -8,12 +8,14 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 import libcst as cst
+import libcst.matchers as m
 from libcst.metadata import MetadataWrapper, PositionProvider
 
 from ..analysis import types as T
 from ..analysis.render import render_annotation
 from ..diagnostics import Diagnostic, DiagnosticBag, Severity
 from ..frontend.source import span_of
+from .formatting import normalize_source
 from .pipeline import analyze_paths, collect_sources, open_project
 from .reporting import Reporter
 
@@ -238,8 +240,25 @@ def build_plan(  # type: ignore[no-untyped-def]
             )
         )
 
+    plan.needs_ppy = _uses_ppy(plan, symbols)
     diagnostics.extend(_dynamic_findings(symbols))
     return plan, diagnostics
+
+
+def _uses_ppy(plan: ConversionPlan, symbols) -> bool:  # type: ignore[no-untyped-def]
+    """Is `import ppy` actually needed, rather than merely conventional?
+
+    The runtime import hook matters to a module that imports a sibling `.ppy`,
+    and the decorators and markers matter to one that uses them. A module that
+    does neither would carry an unused import.
+    """
+    if plan.decorators:
+        return True
+    annotations = list(plan.params.values()) + list(plan.returns.values())
+    annotations += list(plan.assignments.values()) + list(plan.fields.values())
+    if any("ppy." in text for text in annotations):
+        return True
+    return any(not binding.external for binding in symbols.imports.values())
 
 
 def _observed_arguments(bundle) -> dict[tuple[str, int], T.Type]:  # type: ignore[no-untyped-def]
@@ -430,34 +449,63 @@ class _Annotator(cst.CSTTransformer):
 
 
 def convert_source(source: str, plan: ConversionPlan) -> str:
-    """Rewrite `source` through a concrete syntax tree, preserving trivia."""
+    """Rewrite `source` through a concrete syntax tree, preserving trivia.
+
+    Inserting annotations and imports disturbs the blank lines around what it
+    touches, so the result is normalized before it is written. The built-in
+    normalizer is used rather than an installed formatter, because the output
+    has to be the same on every machine.
+    """
     module = cst.parse_module(source)
     wrapper = MetadataWrapper(module, unsafe_skip_copy=True)
     annotated = wrapper.visit(_Annotator(plan))
-    return _insert_imports(annotated, plan).code
+    imported = _insert_imports(annotated, plan)
+    # A quoted annotation only exists because the class was not bound yet.
+    # Moving the class above its first use removes the reason for the quotes.
+    reordered = _unquote_resolved(_hoist_classes(imported))
+    return normalize_source(reordered.code)
 
 
 def _insert_imports(module: cst.Module, plan: ConversionPlan) -> cst.Module:
     """Insert `import ppy` after the docstring and `__future__` imports."""
     existing = _existing_imports(module)
-    additions: list[cst.SimpleStatementLine] = []
+    # PEP 8 groups imports, and pylint checks the grouping, so a standard
+    # library addition goes at the top of the block and the rest at the end.
+    standard: list[cst.SimpleStatementLine] = []
+    trailing: list[cst.SimpleStatementLine] = []
 
     if plan.needs_array and "array" not in existing:
-        additions.append(cst.parse_statement("import array"))
-    ppy_names = sorted(plan.ppy_imports - existing)
-    if plan.needs_ppy and "ppy" not in existing:
-        additions.append(cst.parse_statement("import ppy"))
-    if ppy_names:
-        additions.append(cst.parse_statement(f"from ppy import {', '.join(ppy_names)}"))
+        standard.append(cst.parse_statement("import array"))
     typing_names = sorted(plan.typing_imports - existing)
     if typing_names:
-        additions.append(cst.parse_statement(f"from typing import {', '.join(typing_names)}"))
+        standard.append(cst.parse_statement(f"from typing import {', '.join(typing_names)}"))
+    if plan.needs_ppy and "ppy" not in existing:
+        trailing.append(cst.parse_statement("import ppy"))
+    ppy_names = sorted(plan.ppy_imports - existing)
+    if ppy_names:
+        trailing.append(cst.parse_statement(f"from ppy import {', '.join(ppy_names)}"))
 
-    if not additions:
+    if not standard and not trailing:
         return module
-    index = _insert_index(module)
     body = list(module.body)
-    return module.with_changes(body=[*body[:index], *additions, *body[index:]])
+    head = _insert_index(module)
+    tail = _import_block_end(module, head)
+    return module.with_changes(
+        body=[*body[:head], *standard, *body[head:tail], *trailing, *body[tail:]]
+    )
+
+
+def _import_block_end(module: cst.Module, start: int) -> int:
+    """The first statement after the leading run of imports."""
+    end = start
+    for position in range(start, len(module.body)):
+        statement = module.body[position]
+        if not isinstance(statement, cst.SimpleStatementLine):
+            break
+        if not isinstance(statement.body[0], (cst.Import, cst.ImportFrom)):
+            break
+        end = position + 1
+    return end
 
 
 def _existing_imports(module: cst.Module) -> set[str]:
@@ -732,7 +780,61 @@ def plan_buffer_promotions(bundle):  # type: ignore[no-untyped-def]
                 qualname, info.node.lineno, param.name,
                 element, _ARRAY_CODES[element], sources,
             ))
-    return found, blocked
+    return _consistent(found, bundle, blocked), blocked
+
+
+def _consistent(found, bundle, blocked):  # type: ignore[no-untyped-def]
+    """Keep only promotions whose rewritten values reach nothing that stayed a list.
+
+    Rewriting a construction into `array.array` changes what every reader of
+    that name receives. If one function that reads it was not promoted too, the
+    rewrite would hand it a buffer where it declared a list, so the whole group
+    has to be abandoned.
+    """
+    promoted = {(p.qualname, p.param) for p in found}
+    while True:
+        readers = _readers_of(bundle, {name for p in found for _m, _l, name in p.sources})
+        conflicted = {
+            name for name, users in readers.items()
+            if not users <= promoted
+        }
+        if not conflicted:
+            return found
+        kept = []
+        for promotion in found:
+            names = {name for _m, _l, name in promotion.sources}
+            if names & conflicted:
+                blocked.append((
+                    bundle.symbols.functions[promotion.qualname], promotion.param,
+                    "a value it receives is also read by a parameter that stayed a list",
+                ))
+                continue
+            kept.append(promotion)
+        if len(kept) == len(found):
+            return kept
+        found = kept
+        promoted = {(p.qualname, p.param) for p in found}
+
+
+def _readers_of(bundle, names: set[str]) -> dict[str, set[tuple[str, str]]]:  # type: ignore[no-untyped-def]
+    """Every `(function, parameter)` each of these module-level names reaches."""
+    readers: dict[str, set[tuple[str, str]]] = {name: set() for name in names}
+    for module_name, symbols in bundle.symbols.modules.items():
+        for node in ast.walk(symbols.module.tree):
+            if not isinstance(node, ast.Call):
+                continue
+            qualname = _callee_qualname(bundle, symbols, node)
+            info = bundle.symbols.functions.get(qualname or "")
+            if info is None:
+                continue
+            offset = 1 if info.is_method and not info.is_static else 0
+            for index, argument in enumerate(node.args):
+                if not isinstance(argument, ast.Name) or argument.id not in readers:
+                    continue
+                position = index + offset
+                if position < len(info.params):
+                    readers[argument.id].add((qualname, info.params[position].name))
+    return readers
 
 
 def _buffer_scalar(t: T.Type) -> str | None:
@@ -826,6 +928,172 @@ def _module_list_assignments(symbols) -> dict[str, int]:  # type: ignore[no-unty
 
 
 
+
+
+def _definition_time_names(node: cst.CSTNode) -> set[str]:
+    """Names a class needs bound the moment its `class` statement executes.
+
+    The body of a method does not run at class creation, but its decorators,
+    defaults, and annotations do, and so do the bases and the class-level
+    statements. Anything reachable that way has to already exist.
+    """
+    found: set[str] = set()
+
+    def walk(target: cst.CSTNode) -> None:
+        for child in target.children:
+            if isinstance(child, cst.Name):
+                found.add(child.value)
+            walk(child)
+
+    if isinstance(node, cst.ClassDef):
+        for decorator in node.decorators:
+            walk(decorator)
+        for base in node.bases:
+            walk(base)
+        for keyword in node.keywords:
+            walk(keyword)
+        body = node.body.body if isinstance(node.body, cst.IndentedBlock) else []
+        for statement in body:
+            if isinstance(statement, cst.FunctionDef):
+                for decorator in statement.decorators:
+                    walk(decorator)
+                walk(statement.params)
+                if statement.returns is not None:
+                    walk(statement.returns)
+                continue
+            walk(statement)
+    else:
+        walk(node)
+    return found
+
+
+def _hoist_classes(module: cst.Module) -> cst.Module:
+    """Move a class above the definitions that annotate against it.
+
+    A quoted annotation is only needed because the class is not bound yet.
+    Moving the class up removes the reason for the quotes, and moving it past
+    `def` and `class` statements cannot change behavior: those statements bind
+    a name and do not run their bodies.
+    """
+    body = list(module.body)
+    moved = True
+    passes = 0
+    while moved and passes < len(body):
+        moved = False
+        passes += 1
+        for index, statement in enumerate(body):
+            if not isinstance(statement, cst.ClassDef):
+                continue
+            target = _earliest_position(body, index, statement)
+            if target is None or target >= index:
+                continue
+            body.insert(target, body.pop(index))
+            moved = True
+            break
+    return module.with_changes(body=body)
+
+
+def _earliest_position(
+    body: list[cst.BaseStatement], index: int, statement: cst.ClassDef
+) -> int | None:
+    """The first slot this class can occupy without breaking a dependency."""
+    needed = _definition_time_names(statement)
+    position = index
+    while position > 0:
+        previous = body[position - 1]
+        if not isinstance(previous, (cst.FunctionDef, cst.ClassDef)):
+            break
+        if isinstance(previous, cst.ClassDef) and previous.name.value in needed:
+            break
+        if isinstance(previous, cst.FunctionDef) and previous.name.value in needed:
+            break
+        position -= 1
+    if position == index:
+        return None
+    # Only worth moving when something ahead of it actually names this class.
+    name = statement.name.value
+    crossed = body[position:index]
+    if not any(name in _annotation_names(other) for other in crossed):
+        return None
+    return position
+
+
+def _annotation_names(node: cst.CSTNode) -> set[str]:
+    """Every name appearing in an annotation, quoted or not."""
+    found: set[str] = set()
+    for annotation in m.findall(node, m.Annotation()):
+        expression = annotation.annotation
+        if isinstance(expression, cst.SimpleString):
+            text = expression.raw_value
+            try:
+                expression = cst.parse_expression(text)
+            except cst.ParserSyntaxError:
+                continue
+        for name in m.findall(expression, m.Name()):
+            found.add(name.value)
+    return found
+
+
+def _unquote_resolved(module: cst.Module) -> cst.Module:
+    """Drop quotes from an annotation whose names are all bound before it.
+
+    Only a top-level statement can be judged this way: a method annotating
+    against its own enclosing class still needs the quotes, because the class
+    is not bound until its body has finished executing.
+    """
+    body = list(module.body)
+    defined: set[str] = set()
+    rewritten: list[cst.BaseStatement] = []
+    for statement in body:
+        if isinstance(statement, (cst.FunctionDef, cst.ClassDef)):
+            inner = statement.name.value
+            statement = statement.with_changes(
+                **_unquoted_signature(statement, defined - {inner} if isinstance(statement, cst.ClassDef) else defined)
+            )
+            defined.add(inner)
+        rewritten.append(statement)
+    return module.with_changes(body=rewritten)
+
+
+def _unquoted_signature(statement: cst.BaseStatement, defined: set[str]) -> dict:
+    """Replacement fields for a definition whose annotations can lose quotes."""
+    if not isinstance(statement, cst.FunctionDef):
+        return {}
+    changes: dict = {}
+    params = statement.params
+    updated = [
+        param.with_changes(annotation=_unquote(param.annotation, defined))
+        for param in params.params
+    ]
+    if any(new is not old for new, old in zip(updated, params.params)):
+        changes["params"] = params.with_changes(params=updated)
+    returns = _unquote(statement.returns, defined)
+    if returns is not statement.returns:
+        changes["returns"] = returns
+    return changes
+
+
+def _unquote(annotation, defined: set[str]):  # type: ignore[no-untyped-def]
+    if annotation is None or not isinstance(annotation.annotation, cst.SimpleString):
+        return annotation
+    text = annotation.annotation.raw_value
+    try:
+        expression = cst.parse_expression(text)
+    except cst.ParserSyntaxError:
+        return annotation
+    names = {name.value for name in m.findall(expression, m.Name())}
+    if not names <= defined | _ALWAYS_BOUND:
+        return annotation
+    return annotation.with_changes(annotation=expression)
+
+
+#: Names an annotation may use that are never module-level definitions here.
+_ALWAYS_BOUND = {
+    "int", "float", "str", "bytes", "bool", "complex", "None", "object",
+    "list", "dict", "set", "tuple", "frozenset", "type",
+    "Optional", "Union", "Any", "Annotated", "Literal", "Callable",
+    "Sequence", "Iterable", "Mapping", "Buffer", "ppy",
+}
 
 
 def _forward_references(symbols) -> dict[str, int]:  # type: ignore[no-untyped-def]

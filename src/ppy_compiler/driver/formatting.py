@@ -13,7 +13,11 @@ from ..diagnostics import Diagnostic, Severity, Span
 from .pipeline import collect_sources
 from .reporting import Reporter
 
-__all__ = ["run_fmt", "format_source"]
+__all__ = [
+    "normalize_source",
+    "run_fmt",
+    "format_source",
+]
 
 _EXTERNAL = ("ruff", "black")
 
@@ -70,7 +74,7 @@ def format_source(source: str, path: Path | None = None) -> str:
     external = _external_format(source, path)
     if external is not None:
         return external
-    return _normalize(source)
+    return normalize_source(source)
 
 
 def _external_format(source: str, path: Path | None) -> str | None:
@@ -100,13 +104,72 @@ def _external_format(source: str, path: Path | None) -> str | None:
     return None
 
 
-def _normalize(source: str) -> str:
-    """Conservative normalization through the concrete syntax tree."""
+def normalize_source(source: str) -> str:
+    """Conservative normalization through the concrete syntax tree.
+
+    Deterministic and self-contained, so a converted file is byte-identical
+    wherever it is produced.
+    """
     module = cst.parse_module(source)
     module = module.with_changes(body=_space_top_level(list(module.body)))
+    module = module.visit(_WrapSignatures())
     code = module.code
     code = "\n".join(line.rstrip() for line in code.splitlines())
     return code + "\n" if code and not code.endswith("\n") else code
+
+
+#: Annotating a signature can push it past a line limit that the source kept.
+_LINE_LIMIT = 100
+
+
+class _WrapSignatures(cst.CSTTransformer):
+    """Put each parameter on its own line when a signature grows too long."""
+
+    def leave_FunctionDef(
+        self, original: cst.FunctionDef, updated: cst.FunctionDef
+    ) -> cst.FunctionDef:
+        params = updated.params
+        # `star_arg` is a sentinel rather than None when absent, so it has to be
+        # tested by type.
+        variadic = isinstance(params.star_arg, cst.Param) or params.star_kwarg is not None
+        if not params.params or variadic or params.kwonly_params:
+            return updated
+        header = _header_width(updated)
+        if header <= _LINE_LIMIT:
+            return updated
+        wrapped = [
+            param.with_changes(comma=_break_after(last=index == len(params.params) - 1))
+            for index, param in enumerate(params.params)
+        ]
+        return updated.with_changes(
+            params=params.with_changes(params=wrapped),
+            whitespace_before_params=cst.ParenthesizedWhitespace(
+                first_line=cst.TrailingWhitespace(),
+                indent=True,
+                last_line=cst.SimpleWhitespace("    "),
+            ),
+        )
+
+
+def _break_after(*, last: bool) -> cst.Comma:
+    """A trailing comma that starts the next line, closing at column 0 on the last."""
+    return cst.Comma(
+        whitespace_after=cst.ParenthesizedWhitespace(
+            first_line=cst.TrailingWhitespace(),
+            indent=True,
+            last_line=cst.SimpleWhitespace("" if last else "    "),
+        )
+    )
+
+
+def _header_width(node: cst.FunctionDef) -> int:
+    """How wide the `def` line is once its body is set aside."""
+    stripped = node.with_changes(
+        body=cst.IndentedBlock(body=[cst.SimpleStatementLine(body=[cst.Pass()])]),
+        leading_lines=(),
+    )
+    rendered = cst.Module(body=[stripped]).code.splitlines()
+    return max((len(line) for line in rendered[:-1]), default=0)
 
 
 def _space_top_level(body: list[cst.BaseStatement]) -> list[cst.BaseStatement]:
