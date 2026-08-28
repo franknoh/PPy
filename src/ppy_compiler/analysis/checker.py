@@ -856,10 +856,35 @@ class _Checker:
             return binding
         if node.id in T.BUILTIN_MRO:
             return Binding(T.ClassObject(node.id, T.instance(node.id)))
+        if node.id == "super":
+            inherited = self._inherited_type()
+            if inherited is not None:
+                return Binding(T.Callable_((), inherited, "super"))
         if B.is_builtin(node.id) or node.id in {"None", "True", "False"}:
             return Binding(T.Callable_((), T.UNKNOWN, node.id))
         self._error("E1101", f"`{node.id}` is not defined at this point", node)
         return Binding(T.UNKNOWN)
+
+    def _inherited_type(self) -> T.Type | None:
+        """What zero-argument `super()` stands for inside the current method.
+
+        The proxy forwards to the next class in the MRO, and with single
+        inheritance that is the first base, so an instance of it describes what
+        attribute lookup will find.
+        """
+        info = self._current
+        if info is None or info.owner is None:
+            return None
+        owner = self.project.classes.get(info.owner)
+        if owner is None:
+            return None
+        for base in owner.base_names:
+            resolved = self.project.classes.get(base) or self.project.classes.get(
+                f"{owner.module}.{base}"
+            )
+            if resolved is not None:
+                return resolved.instance()
+        return None
 
     def _expr_BinOp(self, node: ast.BinOp, env: Env) -> Binding:
         left = self._expr(node.left, env)

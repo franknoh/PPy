@@ -809,3 +809,52 @@ def test_a_dynamic_boundary_still_allows_an_optional_receiver(write, analyze):
         """,
     )
     assert "E1206" not in [d.code for d in analyze(path).diagnostics.sorted()]
+
+
+def test_zero_argument_super_resolves_to_the_base(write, analyze):
+    path = write(
+        "inherit.ppy",
+        """
+        class Shape:
+            def __init__(self, name: str) -> None:
+                self.name: str = name
+
+            def area(self) -> float:
+                return 0.0
+
+        class Circle(Shape):
+            def __init__(self, radius: float) -> None:
+                super().__init__("circle")
+                self.radius: float = radius
+
+            def area(self) -> float:
+                return 3.141592653589793 * self.radius * self.radius
+        """,
+    )
+    assert not analyze(path).diagnostics.has_errors()
+
+
+def test_super_outside_a_class_is_still_unresolved(write, codes):
+    path = write(
+        "loose.ppy",
+        """
+        def f() -> int:
+            return super().thing()
+        """,
+    )
+    assert "E1101" in codes(path)
+
+
+def test_the_runtime_import_hook_api_is_typed(write, analyze):
+    path = write(
+        "hook.ppy",
+        """
+        import ppy
+
+        ppy.install()
+
+        def installed() -> bool:
+            return ppy.is_installed()
+        """,
+    )
+    assert not analyze(path).diagnostics.has_errors()

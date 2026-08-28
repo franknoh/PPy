@@ -32,6 +32,20 @@ def _fn(qualname: str, ret: T.Type, effects: EffectSet = EffectSet()) -> tuple[T
 
 #: Callables the analyzer knows the result type and effects of.
 _FUNCTIONS: dict[str, tuple[T.Type, EffectSet]] = {
+    # The runtime's own import-hook API. Installing the finder mutates
+    # `sys.meta_path`, which is global state.
+    "ppy.install": _fn("ppy.install", T.NONE, EffectSet.of(Effect.WRITE_GLOBAL)),
+    "ppy.uninstall": _fn("ppy.uninstall", T.NONE, EffectSet.of(Effect.WRITE_GLOBAL)),
+    "ppy.is_installed": _fn("ppy.is_installed", T.BOOL, EffectSet.of(Effect.READ_GLOBAL)),
+    "ppy.add_import_root": _fn(
+        "ppy.add_import_root", T.NONE, EffectSet.of(Effect.WRITE_GLOBAL)
+    ),
+    "ppy.import_roots": _fn(
+        "ppy.import_roots",
+        T.Tuple_((T.STR,), homogeneous=True),
+        EffectSet.of(Effect.READ_GLOBAL),
+    ),
+
     "time.time": _fn("time.time", T.FLOAT, _TIME),
     "time.perf_counter": _fn("time.perf_counter", T.FLOAT, _TIME),
     "time.perf_counter_ns": _fn("time.perf_counter_ns", T.INT, _TIME),
