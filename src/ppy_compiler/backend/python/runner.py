@@ -111,6 +111,20 @@ class _GeneratedLoader:
 
 
 def install_loader(modules: dict[str, GeneratedModule], natives=None) -> _GeneratedFinder:
+    """Put the generated finder ahead of everything, and keep it there.
+
+    A program that does `import ppy` installs the runtime's own `.ppy` finder
+    at the front of `sys.meta_path`, which would then serve a sibling module
+    from source and lose its native bindings. Installing that hook first means
+    the program's own `import ppy` finds it already present and leaves the
+    order alone.
+    """
+    try:
+        import ppy
+
+        ppy.install()
+    except ImportError:  # pragma: no cover - the runtime is a hard dependency
+        pass
     finder = _GeneratedFinder(modules, natives)
     sys.meta_path.insert(0, finder)
     return finder
