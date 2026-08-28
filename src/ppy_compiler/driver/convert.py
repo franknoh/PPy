@@ -267,6 +267,7 @@ def build_plan(  # type: ignore[no-untyped-def]
 
     if bundle.project.config.inference.write_local_annotations and analysis is not None:
         _plan_module_globals(symbols, analysis, plan, module_name)
+        _plan_empty_containers(symbols, analysis, plan, module_name)
     _plan_fields(symbols, plan, module_name)
     if analysis is not None:
         _plan_purity(functions, analysis, plan)
@@ -408,6 +409,51 @@ def _plan_module_globals(symbols, analysis, plan: ConversionPlan, module_name: s
         plan.ppy_imports |= rendered.ppy_imports
 
 
+def _plan_empty_containers(symbols, analysis, plan: ConversionPlan, module_name: str) -> None:  # type: ignore[no-untyped-def]
+    """Annotate a local that starts empty and gets its element type later.
+
+    `out = []` says nothing on its own; the element type comes from what is
+    appended further down. Writing it where the binding happens is the only
+    place another reader -- a person or a type checker -- can see it.
+    """
+    for info in symbols.functions.values():
+        function = analysis.functions.get(info.qualname)
+        if function is None:
+            continue
+        for node in ast.walk(info.node):
+            if not isinstance(node, ast.Assign) or len(node.targets) != 1:
+                continue
+            target = node.targets[0]
+            if not isinstance(target, ast.Name) or not _is_empty_container(node.value):
+                continue
+            # At the assignment the container is still empty; the element type
+            # is whatever it holds by the end of the function.
+            bound = T.strip_literal(function.locals.get(target.id, T.UNKNOWN))
+            if not isinstance(bound, T.Instance) or not bound.args:
+                continue
+            if any(isinstance(arg, (T.NeverType, T.UnknownType, T.AnyType)) for arg in bound.args):
+                continue
+            rendered = render_annotation(bound, local_module=module_name)
+            if rendered is None:
+                continue
+            plan.assignments[(node.lineno, target.id)] = rendered.text
+            plan.typing_imports |= rendered.typing_imports
+            plan.ppy_imports |= rendered.ppy_imports
+
+
+def _is_empty_container(value: ast.expr) -> bool:
+    if isinstance(value, ast.List | ast.Dict) and not (
+        getattr(value, "elts", None) or getattr(value, "keys", None)
+    ):
+        return True
+    return (
+        isinstance(value, ast.Call)
+        and isinstance(value.func, ast.Name)
+        and value.func.id in {"list", "dict", "set"}
+        and not value.args
+    )
+
+
 def _dynamic_findings(symbols) -> list[Diagnostic]:  # type: ignore[no-untyped-def]
     """Report the dynamic features that block conversion (spec 9)."""
     found: list[Diagnostic] = []
@@ -502,7 +548,9 @@ class _Annotator(cst.CSTTransformer):
                 ]
             )
 
-        if self._function_lines or not isinstance(target, cst.Name):
+        # Both module-level bindings and the locals that start empty are
+        # planned, so being inside a function is no longer a reason to skip.
+        if not isinstance(target, cst.Name):
             return updated
         annotation = self.plan.assignments.get((line, target.value))
         if annotation is None:
