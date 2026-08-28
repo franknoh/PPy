@@ -149,6 +149,9 @@ class NativeSignature:
     symbol: str
     parameters: tuple[NativeParam, ...]
     returns: tuple[str, ...]
+    #: The body touches no Python object once its arguments are unpacked, so
+    #: the boundary may drop the GIL around the call (spec 16.6).
+    releases_gil: bool = False
 
     @property
     def ret(self) -> str:
@@ -306,7 +309,9 @@ def lower_specialization(
     llvm_module = ir.Module(name=f"{module.name}.{symbol}")
     llvm_module.triple = _default_triple()
 
-    signature = _signature(info, layouts)
+    # A specialization is the same body with values pinned, so it inherits the
+    # generic function's decision about the GIL.
+    signature = _signature(info, layouts, module.functions.get(info.qualname))
     function = ir.Function(llvm_module, _function_type(ir, info, layouts), name=symbol)
     function.linkage = "external"
     declarations = {info.qualname: (function, signature)}
@@ -337,8 +342,8 @@ def lower_module(
             rejected[qualname] = reason
 
     declarations: dict[str, tuple[object, NativeSignature]] = {}
-    for qualname, (info, _analysis, _node) in candidates.items():
-        signature = _signature(info, layouts)
+    for qualname, (info, analysis, _node) in candidates.items():
+        signature = _signature(info, layouts, analysis)
         function_type = _function_type(ir, info, layouts)
         function = ir.Function(llvm_module, function_type, name=signature.symbol)
         function.linkage = "external"
@@ -374,7 +379,11 @@ def _default_triple() -> str:
         return ""
 
 
-def _signature(info: FunctionInfo, layouts: ClassLayouts | None = None) -> NativeSignature:
+def _signature(
+    info: FunctionInfo,
+    layouts: ClassLayouts | None = None,
+    analysis: FunctionAnalysis | None = None,
+) -> NativeSignature:
     parameters = tuple(
         _native_param(p.name, p.type, layouts) or NativeParam(p.name, "int")
         for p in info.params
@@ -385,7 +394,25 @@ def _signature(info: FunctionInfo, layouts: ClassLayouts | None = None) -> Nativ
         symbol="ppy_" + info.qualname.replace(".", "_"),
         parameters=parameters,
         returns=tuple(_abi_name(atom) for atom in atoms),
+        releases_gil=_releases_gil(analysis) if analysis is not None else False,
     )
+
+
+#: Effects that mean the body can reach the interpreter while it runs, so the
+#: GIL has to be held for the whole call.
+_NEEDS_GIL = (Effect.PYTHON_CALLBACK, Effect.EXTERNAL_UNKNOWN, Effect.IO)
+
+
+def _releases_gil(analysis: FunctionAnalysis) -> bool:
+    """May the boundary drop the GIL around this call? (spec 16.6)
+
+    Arguments are unpacked into machine values before the call and the result
+    is built after it, so the only question is whether the body itself can
+    touch a Python object. A borrowed buffer does not count: the caller holds
+    the reference and the boundary pins the memory for the whole call, which is
+    the same guarantee NumPy relies on.
+    """
+    return not any(effect in analysis.effects for effect in _NEEDS_GIL)
 
 
 def _abi_name(scalar: str) -> str:

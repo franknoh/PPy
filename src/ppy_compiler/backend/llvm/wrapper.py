@@ -213,6 +213,12 @@ def _function(index: int, signature: NativeSignature) -> str:
     out_arguments = ", ".join(f"&ppy_out{position}" for position in range(len(signature.returns)))
     call_arguments = ", ".join([*arguments, out_arguments]) if arguments else out_arguments
 
+    # Arguments are already machine values here and the result is built after
+    # the call returns, so a body that cannot reach the interpreter may run
+    # without the GIL (spec 16.6). A borrowed buffer stays pinned across it.
+    release = "    Py_BEGIN_ALLOW_THREADS" if signature.releases_gil else ""
+    acquire = "    Py_END_ALLOW_THREADS" if signature.releases_gil else ""
+
     builder = _result_builder(index, signature)
     return f"""
 /* {signature.qualname}: {signature} */
@@ -261,7 +267,10 @@ static PyObject *ppy_call_{index}(PyObject *self, PyObject *const *args, Py_ssiz
 {declarations}
 {body}
 {out_declarations}
-    int status = chosen({call_arguments});
+    int status = 0;
+{release}
+    status = chosen({call_arguments});
+{acquire}
 {cleanup}
     if (status != 0) {{
         Py_RETURN_NOTIMPLEMENTED;

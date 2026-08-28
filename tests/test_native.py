@@ -1987,3 +1987,76 @@ def test_extremum_results_match_plain_cpython(tmp_path: Path):
     assert plain.returncode == 0, plain.stderr
     assert native.returncode == 0, native.stderr
     assert native.stdout == plain.stdout
+
+
+def test_a_gil_free_body_is_marked_and_wrapped(write, analyze):
+    """Spec 16.6: a region that cannot reach the interpreter drops the GIL."""
+    from ppy_compiler.backend.llvm.wrapper import generate
+
+    path = write(
+        "gilfree.ppy",
+        """
+        import ppy
+
+        @ppy.pure
+        @ppy.opt(3)
+        def busy(rounds: int) -> int:
+            total: int = 0
+            for i in range(rounds):
+                total += i % 7
+            return total
+        """,
+    )
+    module = _collect(analyze(path, backend="llvm"))["gilfree"]
+    lowered = module.functions["gilfree.busy"]
+    assert lowered.signature.releases_gil
+
+    source = generate("gilfree", {"gilfree.busy": lowered.signature}).source
+    assert "Py_BEGIN_ALLOW_THREADS" in source
+    assert "Py_END_ALLOW_THREADS" in source
+    # The guards read Python objects, so the release has to come after them.
+    assert source.index("PPY_GUARD_FAIL") < source.index("Py_BEGIN_ALLOW_THREADS")
+    # And the result is built once the GIL is back.
+    assert source.index("Py_END_ALLOW_THREADS") < source.index("PyLong_FromLongLong")
+
+
+def test_a_body_that_can_reach_the_interpreter_keeps_the_gil():
+    from ppy_compiler.analysis.effects import Effect, EffectSet
+    from ppy_compiler.backend.llvm.lowering import _releases_gil
+
+    class _Analysis:
+        def __init__(self, effects):
+            self.effects = effects
+
+    assert _releases_gil(_Analysis(EffectSet.of(Effect.ALLOC)))
+    for effect in (Effect.PYTHON_CALLBACK, Effect.EXTERNAL_UNKNOWN, Effect.IO):
+        assert not _releases_gil(_Analysis(EffectSet.of(effect))), effect
+
+
+def test_releasing_the_gil_keeps_the_answer(tmp_path: Path):
+    entry = tmp_path / "gil_run.ppy"
+    entry.write_text(
+        textwrap.dedent(
+            """
+            import ppy
+
+
+            @ppy.pure
+            @ppy.opt(3)
+            def busy(rounds: int) -> int:
+                total: int = 0
+                for i in range(rounds):
+                    total += i % 7
+                return total
+
+
+            print(busy(100000))
+            """
+        ).lstrip("\n"),
+        encoding="utf-8",
+    )
+    (tmp_path / "pyproject.toml").write_text("[tool.ppy]\nopt-level = 3\n", encoding="utf-8")
+    plain = _run([sys.executable, entry.name], tmp_path)
+    native = _ppy(["run", entry.name], tmp_path)
+    assert plain.returncode == 0, plain.stderr
+    assert native.stdout.splitlines()[-1] == plain.stdout.strip()
