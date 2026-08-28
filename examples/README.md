@@ -37,6 +37,7 @@ be generated is caught rather than believed.
 | `25_jax_export` | build-time export to StableHLO |
 | `26_project` | a multi-module project as one call graph |
 | `27_webapp` | an ASGI application under Uvicorn |
+| `28_threads` | a native region releasing the GIL |
 
 ## Checking all of it
 

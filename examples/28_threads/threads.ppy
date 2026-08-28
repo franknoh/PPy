@@ -1,0 +1,37 @@
+import threading
+import time
+
+import ppy
+
+
+@ppy.pure
+@ppy.opt(3)
+def busy(rounds: int) -> int:
+    total: int = 0
+    for i in range(rounds):
+        total += i % 7
+    return total
+
+
+def timed(rounds: int, workers: int) -> float:
+    threads: list[threading.Thread] = []
+    for _ in range(workers):
+        threads.append(threading.Thread(target=busy, args=(rounds,)))
+    started: float = time.perf_counter()
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+    return (time.perf_counter() - started) * 1000.0
+
+
+def main() -> None:
+    rounds: int = 200000000
+    one: float = timed(rounds, 1)
+    two: float = timed(rounds, 2)
+    print(f"1 thread  {one:8.1f} ms")
+    print(f"2 threads {two:8.1f} ms")
+    print(f"scaling   {2.0 * one / two:8.2f}x")
+
+
+main()
