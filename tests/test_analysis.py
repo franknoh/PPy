@@ -1005,3 +1005,50 @@ def test_widening_two_members_to_one_text_does_not_repeat_it():
     assert render_annotation(pair).text in {"str | int", "int | str"}
     same = T.union(T.Literal("a", T.STR), T.Literal("b", T.STR))
     assert render_annotation(same).text == "str"
+
+
+def test_the_recording_pass_is_part_of_the_fixpoint(write, analyze, monkeypatch):
+    """Confirming convergence and recording are the same traversal."""
+    from ppy_compiler.analysis import checker as checker_module
+
+    passes = 0
+    original = checker_module._Checker.check_module
+
+    def counted(self):
+        nonlocal passes
+        passes += 1
+        return original(self)
+
+    monkeypatch.setattr(checker_module._Checker, "check_module", counted)
+    path = write(
+        "converged.ppy",
+        """
+        def a(x: int) -> int:
+            return b(x) + 1
+
+        def b(x: int) -> int:
+            return x * 2
+        """,
+    )
+    analyze(path)
+    # One silent seeding pass and one recording pass that changed nothing.
+    assert passes == 2, f"{passes} traversals for one module"
+
+
+def test_diagnostics_survive_a_pass_that_had_to_be_repeated(write, codes):
+    """A pass whose summaries moved is discarded, so nothing is reported twice."""
+    path = write(
+        "chain.ppy",
+        """
+        def top(x: int) -> int:
+            return middle(x)
+
+        def middle(x: int) -> int:
+            return bottom(x)
+
+        def bottom(x):
+            return x
+        """,
+    )
+    reported = codes(path)
+    assert reported.count("E1201") == 1

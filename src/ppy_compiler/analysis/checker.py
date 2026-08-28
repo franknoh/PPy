@@ -2455,6 +2455,10 @@ def _typeguard_target(node: ast.FunctionDef | ast.AsyncFunctionDef) -> ast.expr 
     return None
 
 
+#: How many recording passes may run before the summaries are taken as settled.
+_FIXPOINT_ROUNDS = 3
+
+
 def analyze(
     symbols: ProjectSymbols,
     diagnostics: DiagnosticBag,
@@ -2467,27 +2471,38 @@ def analyze(
     analysis = ProjectAnalysis(symbols=symbols, diagnostics=diagnostics)
     ordered = [symbols.modules[m.name] for m in symbols.graph.order() if m.name in symbols.modules]
 
-    silent = DiagnosticBag()
-    previous: dict[str, str] = {}
-    for _ in range(3):
-        for module_symbols in ordered:
-            checker = _Checker(
-                module_symbols, symbols, analysis, silent,
-                strict=False, record=False, dynamic_policy=dynamic_policy, plugins=plugins,
-            )
-            checker.check_module()
-        current = {
+    def summaries() -> dict[str, str]:
+        return {
             qualname: f"{info.effects}|{info.ret}"
             for qualname, info in symbols.functions.items()
         }
-        if current == previous:
-            break
-        previous = current
 
+    # One silent pass seeds every summary; a second pass is what confirms the
+    # first reached a fixed point. Rather than confirm it and then traverse a
+    # third time to record, the confirming pass does the recording, and its
+    # diagnostics are kept only if it changed nothing -- which is exactly the
+    # condition under which they were computed from final summaries.
+    silent = DiagnosticBag()
     for module_symbols in ordered:
-        checker = _Checker(
-            module_symbols, symbols, analysis, diagnostics,
-            strict=strict, record=True, dynamic_policy=dynamic_policy, plugins=plugins,
-        )
-        analysis.modules[module_symbols.name] = checker.check_module()
+        _Checker(
+            module_symbols, symbols, analysis, silent,
+            strict=False, record=False, dynamic_policy=dynamic_policy, plugins=plugins,
+        ).check_module()
+
+    for attempt in range(_FIXPOINT_ROUNDS):
+        before = summaries()
+        final = attempt == _FIXPOINT_ROUNDS - 1
+        bag = diagnostics if final else DiagnosticBag()
+        modules: dict[str, ModuleAnalysis] = {}
+        for module_symbols in ordered:
+            checker = _Checker(
+                module_symbols, symbols, analysis, bag,
+                strict=strict, record=True, dynamic_policy=dynamic_policy, plugins=plugins,
+            )
+            modules[module_symbols.name] = checker.check_module()
+        if final or summaries() == before:
+            analysis.modules.update(modules)
+            if bag is not diagnostics:
+                diagnostics.extend(bag)
+            return analysis
     return analysis
