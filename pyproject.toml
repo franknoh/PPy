@@ -25,6 +25,7 @@ ppy = "ppy_compiler.driver.cli:main"
 dev = [
     "pytest>=8.0",
     "pytest-cov>=5.0",
+    "pylint>=3.0",
     "llvmlite>=0.44",
     "numpy>=1.26",
     "pydantic>=2.0",
