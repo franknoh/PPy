@@ -235,3 +235,25 @@ def test_a_module_that_does_import_the_plugin_still_pins_its_version():
     registry.register(_Fake())
     assert registry.fingerprints({"torch.nn"}) == ("torch:torch=2.11",)
     assert registry.fingerprints({"json"}) == ()
+
+
+def test_the_index_is_closed_at_exit(tmp_path: Path):
+    """An open sqlite handle is reported as a ResourceWarning on shutdown."""
+    import subprocess
+    import sys
+
+    script = tmp_path / "use.py"
+    script.write_text(
+        "import sys\n"
+        f"sys.path.insert(0, {str(Path(__file__).resolve().parents[1] / 'src')!r})\n"
+        "from ppy_compiler.cache.store import CacheStore\n"
+        f"from pathlib import Path\nstore = CacheStore(Path({str(tmp_path / 'cache')!r}))\n"
+        "store.connect()\n",
+        encoding="utf-8",
+    )
+    done = subprocess.run(
+        [sys.executable, "-W", "always", str(script)],
+        capture_output=True, text=True, check=False,
+    )
+    assert done.returncode == 0, done.stderr
+    assert "unclosed database" not in done.stderr

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import atexit
 import os
 import shutil
 import sqlite3
@@ -74,6 +75,9 @@ class CacheStore:
     def __init__(self, root: Path) -> None:
         self.root = root
         self._connection: sqlite3.Connection | None = None
+        # A process that opened the index should not leave it to the garbage
+        # collector, which reports the open handle as a ResourceWarning.
+        atexit.register(self.close)
 
     def ensure(self) -> None:
         for directory in _LAYOUT:
