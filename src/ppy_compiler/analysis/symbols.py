@@ -97,6 +97,10 @@ class FunctionInfo:
     effects: EffectSet = field(default_factory=EffectSet)
     verified_pure: bool = False
     dynamic: bool = False
+    #: Whether the body yields. The answer needs a walk of the whole function,
+    #: and `signature()` asks for it once per function per checked function, so
+    #: it is computed once and kept.
+    _generator: bool | None = field(default=None, repr=False, compare=False)
 
     @property
     def is_async(self) -> bool:
@@ -104,7 +108,9 @@ class FunctionInfo:
 
     @property
     def is_generator(self) -> bool:
-        return _contains_yield(self.node)
+        if self._generator is None:
+            self._generator = _contains_yield(self.node)
+        return self._generator
 
     def directive(self, name: str) -> Directive | None:
         for d in self.directives:
