@@ -71,11 +71,16 @@ def run_fmt(options: argparse.Namespace, reporter: Reporter) -> int:
 
 
 def format_source(source: str, path: Path | None = None) -> str:
-    """Format PPY source, delegating to an installed formatter when present."""
-    external = _external_format(source, path)
-    if external is not None:
-        return external
-    return normalize_source(source, _siblings(path))
+    """Normalize, then hand the result to whatever formatter the project uses.
+
+    The built-in pass runs first because it settles what the project's
+    formatter has no opinion about -- import grouping that keeps `ppy` ahead of
+    a sibling, and a signature wrapped after annotation. An installed `ruff` or
+    `black` then applies the project's own style on top.
+    """
+    normalized = normalize_source(source, _siblings(path))
+    external = _external_format(normalized, path)
+    return external if external is not None else normalized
 
 
 def _siblings(path: Path | None) -> frozenset[str]:
@@ -100,13 +105,13 @@ def _siblings(path: Path | None) -> frozenset[str]:
 def _external_format(source: str, path: Path | None) -> str | None:
     """`.ppy` is ordinary Python, so an existing formatter can be reused."""
     for tool in _EXTERNAL:
-        executable = shutil.which(tool)
-        if executable is None:
+        launcher = _launcher(tool)
+        if launcher is None:
             continue
         command = (
-            [executable, "format", "--stdin-filename", str(path or "source.py"), "-"]
+            [*launcher, "format", "--stdin-filename", str(path or "source.py"), "-"]
             if tool == "ruff"
-            else [executable, "-q", "-"]
+            else [*launcher, "-q", "-"]
         )
         try:
             completed = subprocess.run(  # noqa: S603 - explicit executable path
@@ -121,6 +126,23 @@ def _external_format(source: str, path: Path | None) -> str | None:
             continue
         if completed.returncode == 0 and completed.stdout:
             return completed.stdout
+    return None
+
+
+def _launcher(tool: str) -> list[str] | None:
+    """How to run a formatter: on `PATH`, or as a module of this interpreter.
+
+    A tool installed into the environment running `ppy` is usable even when
+    that environment's `bin` is not on `PATH`, which is the common case when
+    `ppy` is invoked as `python -m ppy_compiler`.
+    """
+    executable = shutil.which(tool)
+    if executable is not None:
+        return [executable]
+    import importlib.util
+
+    if importlib.util.find_spec(tool) is not None:
+        return [sys.executable, "-m", tool]
     return None
 
 
