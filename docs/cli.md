@@ -154,7 +154,21 @@ ppy cache gc [--max-age-days N] [--max-bytes N]
 
 A cache key covers the source digest, compiler version, optimization level,
 directives, dependency hashes, and the fingerprints of the plugins the module
-actually imports.
+actually imports. Nothing keys off modification time.
+
+The native build is incremental per module. A rebuild with no source change
+recompiles nothing and never initializes LLVM; a rebuild after editing one
+module recompiles that module alone, and relinks only because its object
+changed. Editing a module invalidates the modules that depend on it, because a
+dependent's key includes the public summaries it compiled against.
+
+| | |
+|---|---|
+| `lowered` | what lowering decided: the IR and each function's native ABI |
+| `llvm` | the optimized IR |
+| `native` | the object file, and the linked library keyed by its inputs |
+| `python` | the generated Python |
+| `jit` | guarded specializations |
 
 ## `ppy clean`
 
