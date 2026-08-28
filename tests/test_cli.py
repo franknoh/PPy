@@ -887,3 +887,42 @@ def test_fmt_groups_imports_by_kind(workspace: Path):
     assert source.read_text(encoding="utf-8").startswith(
         "import math\nimport time\n\nimport ppy\nfrom ppy import Buffer\n"
     )
+
+
+def test_convert_keeps_a_closed_return_set_but_not_a_parameter_one(workspace: Path):
+    """A body is complete evidence; call sites are a sample."""
+    (workspace / "modes.py").write_text(
+        textwrap.dedent(
+            """
+            def kind(n):
+                if n < 0:
+                    return "negative"
+                if n == 0:
+                    return "zero"
+                return "positive"
+
+
+            def scale(value, mode):
+                if mode == "double":
+                    return value * 2
+                return value * 3
+
+
+            print(kind(-1), kind(0), kind(5))
+            print(scale(10, "double"), scale(10, "triple"))
+            """
+        ).lstrip("\n"),
+        encoding="utf-8",
+    )
+    assert _ppy(["convert", "modes.py"], workspace).returncode == 0
+    converted = (workspace / "modes.ppy").read_text(encoding="utf-8")
+    assert "def kind(n: int) -> Literal['negative', 'zero', 'positive']:" in converted
+    assert "from typing import Literal" in converted
+    # `mode` is only ever seen with two values here, but a third is legal.
+    assert "def scale(value: int, mode: str) -> int:" in converted
+    assert _ppy(["check", "modes.ppy"], workspace).returncode == 0
+
+    plain = subprocess.run(
+        [sys.executable, "modes.py"], cwd=workspace, capture_output=True, text=True, check=False
+    )
+    assert _ppy(["modes.ppy"], workspace).stdout == plain.stdout

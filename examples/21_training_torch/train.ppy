@@ -1,6 +1,7 @@
 import array
 import math
 import time
+from typing import Literal
 
 import ppy
 import torch
@@ -72,7 +73,7 @@ def train_step(
 
 
 @ppy.pure
-def preferred_device() -> str | str:
+def preferred_device() -> Literal['cuda', 'cpu']:
     if torch.cuda.is_available():
         return "cuda"
     return "cpu"

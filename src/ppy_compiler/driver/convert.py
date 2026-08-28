@@ -246,7 +246,11 @@ def build_plan(  # type: ignore[no-untyped-def]
             plan.ppy_imports |= rendered.ppy_imports
 
         if not info.ret_annotated:
-            rendered = render_annotation(info.ret, info.ret_facts, local_module=module_name)
+            # A body is the whole evidence for what it returns, so a finite set
+            # of literals is a contract rather than a sample and is kept.
+            rendered = render_annotation(
+                info.ret, info.ret_facts, local_module=module_name, closed_literals=True
+            )
             if rendered is not None:
                 plan.returns[line] = rendered.text
                 plan.typing_imports |= rendered.typing_imports

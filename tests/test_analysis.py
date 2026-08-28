@@ -957,3 +957,51 @@ def test_native_report_matches_what_the_backend_does(write, analyze):
     assert native_report(functions["agree.scalars"])[0]
     assert native_report(functions["agree.buffers"])[0]
     assert not native_report(functions["agree.strings"])[0]
+
+
+def test_a_closed_set_of_literals_renders_as_literal():
+    from ppy_compiler.analysis.render import render_annotation
+
+    closed = T.union(T.Literal("a", T.STR), T.Literal("b", T.STR), T.Literal("c", T.STR))
+    assert render_annotation(closed, closed_literals=True).text == "Literal['a', 'b', 'c']"
+    assert render_annotation(closed, closed_literals=True).typing_imports == frozenset({"Literal"})
+    # Off by default, because a parameter's call sites are only a sample.
+    assert render_annotation(closed).text == "str"
+
+
+def test_a_single_literal_is_widened_rather_than_pinned():
+    from ppy_compiler.analysis.render import render_annotation
+
+    assert render_annotation(T.Literal(3, T.INT), closed_literals=True).text == "int"
+
+
+def test_a_float_literal_is_never_written_as_literal():
+    """PEP 586 does not admit `float`, whatever the runtime accepts."""
+    from ppy_compiler.analysis.render import render_annotation
+
+    floats = T.union(T.Literal(1.5, T.FLOAT), T.Literal(2.5, T.FLOAT))
+    assert render_annotation(floats, closed_literals=True).text == "float"
+
+
+def test_an_optional_closed_set_keeps_none_last():
+    from ppy_compiler.analysis.render import render_annotation
+
+    optional = T.union(T.Literal("x", T.STR), T.Literal("y", T.STR), T.NONE)
+    assert render_annotation(optional, closed_literals=True).text == "Literal['x', 'y'] | None"
+
+
+def test_a_wide_literal_set_is_widened():
+    from ppy_compiler.analysis.render import render_annotation
+
+    many = T.union(*[T.Literal(i, T.INT) for i in range(20)])
+    assert render_annotation(many, closed_literals=True).text == "int"
+
+
+def test_widening_two_members_to_one_text_does_not_repeat_it():
+    """`Literal['a'] | Literal['b']` widened is `str`, not `str | str`."""
+    from ppy_compiler.analysis.render import render_annotation
+
+    pair = T.union(T.Literal("a", T.STR), T.Literal(1, T.INT))
+    assert render_annotation(pair).text in {"str | int", "int | str"}
+    same = T.union(T.Literal("a", T.STR), T.Literal("b", T.STR))
+    assert render_annotation(same).text == "str"

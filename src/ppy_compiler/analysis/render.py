@@ -22,11 +22,60 @@ def renderable(t: T.Type) -> bool:
     return render_annotation(t) is not None
 
 
-def render_annotation(t: T.Type, facts: Facts | None = None, *, local_module: str = "") -> Rendered | None:
+#: PEP 586 admits these as `Literal` parameters. `float` is not one of them,
+#: whatever the runtime accepts.
+_LITERAL_BASES = (T.INT, T.STR, T.BYTES, T.BOOL)
+
+#: Past a handful, a closed set reads as noise rather than as a contract.
+_MAX_LITERALS = 8
+
+
+def render_annotation(
+    t: T.Type,
+    facts: Facts | None = None,
+    *,
+    local_module: str = "",
+    closed_literals: bool = False,
+) -> Rendered | None:
+    """Write a type as an annotation.
+
+    `closed_literals` keeps a union of literals as `Literal[...]` rather than
+    widening it. That is sound for a return type, where the body is the whole
+    evidence for what comes back, and unsound for a parameter, where call sites
+    are only a sample of what the function accepts.
+    """
     marker = _marker(facts)
     if marker is not None and T.strip_literal(t) in (T.INT, T.FLOAT):
         return Rendered(marker, frozenset(), frozenset({marker}))
+    if closed_literals:
+        closed = _render_closed_set(t)
+        if closed is not None:
+            return closed
     return _render(t, local_module)
+
+
+def _render_closed_set(t: T.Type) -> Rendered | None:
+    """`Literal['a', 'b']` when a union is exactly a finite set of literals."""
+    members = t.members if isinstance(t, T.Union_) else ()
+    optional = any(m == T.NONE for m in members)
+    literals = [m for m in members if isinstance(m, T.Literal)]
+    if len(literals) != len(members) - (1 if optional else 0):
+        return None
+    if not 2 <= len(literals) <= _MAX_LITERALS:
+        return None
+    if any(m.base not in _LITERAL_BASES for m in literals):
+        return None
+    seen: list[str] = []
+    for member in literals:
+        text = repr(member.value)
+        if text not in seen:
+            seen.append(text)
+    if len(seen) < 2:
+        return None
+    rendered = f"Literal[{', '.join(seen)}]"
+    return Rendered(
+        f"{rendered} | None" if optional else rendered, frozenset({"Literal"})
+    )
 
 
 def _marker(facts: Facts | None) -> str | None:
@@ -59,10 +108,15 @@ def _render(t: T.Type, local_module: str) -> Rendered | None:
             if rendered is None:
                 return None
             parts.append(rendered)
-        # `None` reads better last in an optional union.
+        # `None` reads better last in an optional union. Widening two members
+        # to the same text -- two literals of one base -- leaves one of them.
         ordered = [p for p in parts if p.text != "None"] + [p for p in parts if p.text == "None"]
+        unique: list[Rendered] = []
+        for part in ordered:
+            if all(part.text != kept.text for kept in unique):
+                unique.append(part)
         return Rendered(
-            " | ".join(p.text for p in ordered),
+            " | ".join(p.text for p in unique),
             frozenset().union(*[p.typing_imports for p in parts]),
             frozenset().union(*[p.ppy_imports for p in parts]),
         )
