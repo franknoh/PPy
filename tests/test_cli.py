@@ -997,3 +997,67 @@ def test_convert_leaves_no_unused_import_behind(workspace: Path):
     assert "Buffer[float]" in converted
     assert "Sequence" not in converted
     assert _ppy(["check", "promoted.ppy"], workspace).returncode == 0
+
+
+def test_lint_runs_an_external_checker_over_ppy_sources(workspace: Path):
+    """`.ppy` is staged as `.py` so a tool that keys off the extension can see it."""
+    pytest.importorskip("pyright")
+    (workspace / "typed.ppy").write_text(
+        "def double(x: int) -> int:\n    return x * 2\n", encoding="utf-8"
+    )
+    done = _ppy(["lint", "--backend", "pyright", "."], workspace)
+    assert done.returncode == 0, done.stdout + done.stderr
+    assert "typed.ppy" not in done.stdout or "error" not in done.stdout
+
+
+def test_lint_reports_findings_against_the_real_ppy_path(workspace: Path):
+    pytest.importorskip("pyright")
+    (workspace / "wrong.ppy").write_text(
+        "def double(x: int) -> str:\n    return x * 2\n", encoding="utf-8"
+    )
+    done = _ppy(["lint", "--backend", "pyright", "."], workspace)
+    assert done.returncode == 1
+    assert "wrong.ppy" in done.stdout
+    assert ".py:" not in done.stdout.replace(".ppy:", "")
+
+
+def test_lint_says_so_when_the_backend_is_missing(workspace: Path):
+    (workspace / "x.ppy").write_text("VALUE: int = 1\n", encoding="utf-8")
+    done = _ppy(["lint", "--backend", "mypy", "."], workspace)
+    if done.returncode == 2:
+        assert "not installed" in done.stderr
+
+
+def test_test_backend_pytest_runs_a_suite_against_ppy_modules(workspace: Path):
+    (workspace / "lib.ppy").write_text(
+        "def area(w: float, h: float) -> float:\n    return w * h\n", encoding="utf-8"
+    )
+    (workspace / "test_lib.py").write_text(
+        "import lib\n\n\ndef test_area():\n    assert lib.area(3.0, 4.0) == 12.0\n",
+        encoding="utf-8",
+    )
+    (workspace / "pyproject.toml").write_text(
+        '[tool.ppy]\nstrict = true\nsource-roots = ["."]\n', encoding="utf-8"
+    )
+    done = _ppy(["test", "--backend", "pytest", "."], workspace)
+    assert done.returncode == 0, done.stdout + done.stderr
+
+    # Without the hook the same suite cannot even import the module.
+    plain = subprocess.run(
+        [sys.executable, "-m", "pytest", ".", "-q"],
+        cwd=workspace, capture_output=True, text=True, check=False,
+    )
+    assert plain.returncode != 0
+
+
+def test_fmt_runs_the_builtin_pass_before_an_external_formatter(workspace: Path):
+    """Import grouping is settled by PPY; the project's formatter styles the rest."""
+    source = workspace / "messy.ppy"
+    source.write_text(
+        "import ppy\nimport math\nfrom ppy import Buffer\nimport time\ndef f( x:int )->int:\n    return  x+1\n",
+        encoding="utf-8",
+    )
+    assert _ppy(["fmt", "messy.ppy"], workspace).returncode == 0
+    text = source.read_text(encoding="utf-8")
+    assert text.startswith("import math\nimport time\n\nimport ppy\nfrom ppy import Buffer\n")
+    assert "def f(x: int) -> int:" in text

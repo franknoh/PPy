@@ -41,7 +41,7 @@ def label(rect: Rect | None, prefix: str) -> str:
 
 
 def build(count: int) -> list[Rect]:
-    out = []
+    out: list[Rect] = []
     for i in range(count):
         out.append(Rect(float(i), float(i) * 2.0))
     return out

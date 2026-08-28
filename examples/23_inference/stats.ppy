@@ -23,7 +23,7 @@ def variance(values: Sequence[float]) -> float:
 def standardize(values: Sequence[float]) -> list[float]:
     m = mean(values)
     spread = variance(values) ** 0.5
-    out = []
+    out: list[float] = []
     for value in values:
         out.append((value - m) / spread)
     return out

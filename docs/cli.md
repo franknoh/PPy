@@ -92,14 +92,42 @@ read when a result differs from plain CPython. `--ir` prints what the native
 path compiles: LLVM IR, then the C for the CPython-ABI wrappers, then the C++
 for any ATen region.
 
-## `ppy test` — differential conformance
+## `ppy test`
 
 ```bash
-ppy test [PATH]
+ppy test [PATH] [--backend {differential,pytest}] [-- ARGS...]
 ```
 
-Runs each program on all three paths and compares stdout, stderr, and exit
-status.
+`differential` (default) runs each program on all three paths and compares
+stdout, stderr, and exit status.
+
+`pytest` runs an ordinary test suite with the `.ppy` import hook already
+installed and the project's source roots registered, so tests can import the
+modules under test. Arguments after `--` reach pytest.
+
+```bash
+ppy test --backend pytest tests -- -k buffers -q
+```
+
+## `ppy lint`
+
+```bash
+ppy lint [PATH] [--backend {auto,pyright,pylint,ruff,mypy}] [--no-strict]
+```
+
+External tools key off the `.py` extension, so the sources are mirrored into a
+staging tree, the tool runs there, and the paths in its output are mapped back
+to the `.ppy` files you have. `auto` picks the first installed backend, and
+each runs in its strictest useful mode unless `--no-strict` is given —
+`pyright` gets `typeCheckingMode = "strict"`, `ruff` gets `--select ALL`,
+`pylint` gets `--enable=all`.
+
+```bash
+ppy lint --backend pyright src
+```
+
+A `pyproject.toml`, `.pylintrc`, or `ruff.toml` at the project root is copied
+into the staging tree, so the project's own configuration applies.
 
 ## `ppy fmt` — formatting
 
@@ -107,10 +135,14 @@ status.
 ppy fmt [PATH] [--check]
 ```
 
-Delegates to an installed `ruff` or `black`, otherwise normalizes through the
-concrete syntax tree. `--check` writes nothing and exits non-zero if a file
-would change. `ppy convert` already formats its output, with the built-in
-normalizer so the result is identical on every machine.
+The built-in pass runs first and settles what an external formatter has no
+opinion about: import grouping that keeps `ppy` ahead of a sibling module, and
+a signature wrapped after annotation. An installed `ruff` or `black` then
+applies the project's own style on top. `--check` writes nothing and exits
+non-zero if a file would change.
+
+`ppy convert` formats its own output with the built-in normalizer only, so a
+converted file is byte-identical on every machine.
 
 ## `ppy cache`
 

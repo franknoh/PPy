@@ -50,7 +50,7 @@ def summarize(readings: Sequence[float]) -> Summary | None:
 
 
 def standardized(readings: Sequence[float], summary: Summary) -> list[float]:
-    out = []
+    out: list[float] = []
     for reading in readings:
         out.append(normalize(reading, summary.mean, summary.deviation))
     return out

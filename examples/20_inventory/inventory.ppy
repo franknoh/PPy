@@ -34,14 +34,14 @@ def apply_discount(
     items: Sequence[tuple[str, int, float]],
     discount: float,
 ) -> list[tuple[str, int, float]]:
-    out = []
+    out: list[tuple[str, int, float]] = []
     for item in items:
         out.append((item[0], item[1], discounted(item[2], discount)))
     return out
 
 
 def below_stock(items: Sequence[tuple[str, int, float]], threshold: int) -> list[str]:
-    low = []
+    low: list[str] = []
     for item in items:
         if item[1] < threshold:
             low.append(item[0])
