@@ -74,6 +74,21 @@ def build_parser() -> argparse.ArgumentParser:
     inspect.add_argument("--backend", choices=("python", "llvm"), default="python")
     inspect.add_argument("--ir", action="store_true", help="print backend IR instead of generated Python")
 
+    lint = subparsers.add_parser("lint", help="run an installed type checker or linter")
+    lint.add_argument("path", type=Path, nargs="?", default=Path("."))
+    lint.add_argument(
+        "--backend",
+        choices=("auto", "pyright", "pylint", "ruff", "mypy"),
+        default="auto",
+        help="which tool to run; `auto` picks the first one installed",
+    )
+    lint.add_argument(
+        "--no-strict",
+        dest="strict",
+        action="store_false",
+        help="run the tool in its default mode instead of its strictest one",
+    )
+
     cache = subparsers.add_parser("cache", help="inspect and maintain the compilation cache")
     cache_sub = cache.add_subparsers(dest="cache_command", required=True)
     cache_sub.add_parser("status", help="show cache contents and size")
@@ -89,6 +104,13 @@ def build_parser() -> argparse.ArgumentParser:
 
     test = subparsers.add_parser("test", help="run differential conformance tests for a target")
     test.add_argument("path", type=Path, nargs="?", default=Path("."))
+    test.add_argument(
+        "--backend",
+        choices=("differential", "pytest"),
+        default="differential",
+        help="`differential` compares the three paths; `pytest` runs a test suite",
+    )
+    test.add_argument("args", nargs=argparse.REMAINDER, help="arguments passed to the backend")
 
     lsp = subparsers.add_parser("lsp", help="run the PPY language server over stdio")
     lsp.add_argument("--root", type=Path, default=Path("."), help="project root")
@@ -117,7 +139,7 @@ def main(argv: list[str] | None = None) -> int:
 
     known = {
         "convert", "run", "build", "check", "fmt", "explain",
-        "inspect", "cache", "clean", "doctor", "test", "lsp",
+        "inspect", "cache", "clean", "doctor", "test", "lint", "lsp",
     }
     execution = None
     if argv and argv[0] not in known:
@@ -156,6 +178,10 @@ def main(argv: list[str] | None = None) -> int:
             return commands.fmt(options, reporter)
         case "explain":
             return commands.explain(options, reporter)
+        case "lint":
+            from . import linting
+
+            return linting.run_lint(options, reporter)
         case "inspect":
             return commands.inspect(options, reporter)
         case "cache":
@@ -165,6 +191,10 @@ def main(argv: list[str] | None = None) -> int:
         case "doctor":
             return commands.doctor(options, reporter)
         case "test":
+            if getattr(options, "backend", "differential") == "pytest":
+                from . import linting
+
+                return linting.run_pytest(options, reporter)
             return commands.differential_test(options, reporter)
         case "lsp":
             return commands.language_server(options, reporter)
