@@ -316,6 +316,19 @@ def _flatten(types: Iterable[Type]) -> list[Type]:
     return out
 
 
+def _widen_literals(t: Type) -> Type:
+    """The same type with every literal replaced by what it is a literal of."""
+    if isinstance(t, Literal):
+        return t.base
+    if isinstance(t, Tuple_):
+        widened = tuple(_widen_literals(item) for item in t.items)
+        return t if widened == t.items else Tuple_(widened, homogeneous=t.homogeneous)
+    if isinstance(t, Instance) and t.args:
+        widened = tuple(_widen_literals(arg) for arg in t.args)
+        return t if widened == t.args else Instance(t.name, widened, t.mro)
+    return t
+
+
 def _all_never(args: tuple[Type, ...]) -> bool:
     return all(isinstance(a, NeverType) for a in args)
 
@@ -331,11 +344,13 @@ def union(*types: Type) -> Type:
     for t in flat:
         if t not in unique:
             unique.append(t)
-    # A literal is absorbed by its own base type.
-    bases = {t for t in unique if isinstance(t, Instance)}
+    # A literal is absorbed by the type it is a literal of, however deeply it
+    # sits: `tuple[Literal[0.0], ...]` and `tuple[float, ...]` are one member,
+    # which is what a function returning a constant from one branch produces.
+    present = set(unique)
     unique = [
         t for t in unique
-        if not (isinstance(t, Literal) and t.base in bases)
+        if not (_widen_literals(t) != t and _widen_literals(t) in present)
     ]
     # `list[Never]` is the empty list, so it is absorbed by any populated list
     # of the same shape. Without this, `out = []` followed by `out.append(x)`
