@@ -15,7 +15,7 @@ from ..analysis import types as T
 from ..analysis.render import render_annotation
 from ..diagnostics import Diagnostic, DiagnosticBag, Severity
 from ..frontend.source import span_of
-from .formatting import normalize_source
+from .formatting import format_source, normalize_source
 from .pipeline import analyze_paths, collect_sources, open_project
 from .reporting import Reporter
 
@@ -97,7 +97,12 @@ def run_convert(options: argparse.Namespace, reporter: Reporter) -> int:
                 failures += 1
 
         original = path.read_text(encoding="utf-8")
+        # Conversion itself stays deterministic, so the same input gives the
+        # same output everywhere. The project's own formatter is applied on top
+        # only when asked for, because it is not.
         converted = convert_source(original, plan)
+        if _wants_formatting(options, project):
+            converted = format_source(converted, path)
         # `--in-place` replaces the source: the module becomes `.ppy` and the
         # `.py` goes, which is what leaves a project importable afterwards.
         destination = path.with_suffix(".ppy")
@@ -126,6 +131,13 @@ def run_convert(options: argparse.Namespace, reporter: Reporter) -> int:
         reporter.note(f"converted {len(written)} file(s): " + ", ".join(str(p) for p in written))
         _warn_about_shadowed_sources(written, reporter)
     return 1 if failures else 0
+
+
+def _wants_formatting(options: argparse.Namespace, project) -> bool:  # type: ignore[no-untyped-def]
+    """`--format`, or `[tool.ppy.convert] format = true`."""
+    if getattr(options, "apply_format", False):
+        return True
+    return bool(project.config.convert.format)
 
 
 def _warn_about_shadowed_sources(written: list[Path], reporter: Reporter) -> None:
@@ -191,6 +203,7 @@ def refine_with_call_sites(bundle) -> dict[tuple[str, int], T.Type]:  # type: ig
             changed = True
         changed |= _infer_fields(bundle)
         changed |= _infer_from_usage(bundle)
+        changed |= _widen_read_only_params(bundle)
         if not changed:
             break
         bundle.analysis = analyze(
@@ -233,11 +246,10 @@ def build_plan(  # type: ignore[no-untyped-def]
                 continue
             if _has_source_annotation(info, param.name):
                 continue
-            candidate = observed.get((info.qualname, index))
-            if candidate is None and param.annotated:
-                candidate = param.type
-            if candidate is not None:
-                candidate = _read_only_view(candidate, info, param.name, analysis)
+            # Inference has the last word: it started from the observed types
+            # and then settled them, widening a read-only container to the
+            # protocol its body needs.
+            candidate = param.type if param.annotated else observed.get((info.qualname, index))
             rendered = render_annotation(candidate, local_module=module_name) if candidate is not None else None
             if rendered is None:
                 diagnostics.append(
@@ -394,19 +406,58 @@ def _callee_qualname(bundle, symbols, node: ast.Call) -> str | None:  # type: ig
 
 
 def _plan_module_globals(symbols, analysis, plan: ConversionPlan, module_name: str) -> None:  # type: ignore[no-untyped-def]
+    rebound = _rebound_globals(symbols)
+    annotated: set[str] = set()
     for node in symbols.module.tree.body:
         if not isinstance(node, ast.Assign) or len(node.targets) != 1:
             continue
         target = node.targets[0]
         if not isinstance(target, ast.Name) or target.id.startswith("__"):
             continue
+        if target.id in annotated:
+            # A name is declared where it is first bound; annotating a later
+            # assignment of it would be a redeclaration.
+            continue
+        annotated.add(target.id)
         value_type = T.strip_literal(analysis.type_of(node.value))
         rendered = render_annotation(value_type, analysis.facts_of(node.value), local_module=module_name)
         if rendered is None:
             continue
-        plan.assignments[(node.lineno, target.id)] = rendered.text
+        text = rendered.text
+        if target.id not in rebound:
+            # Bound once and never rebound, which is what `Final` states.
+            text = f"Final[{text}]"
+            plan.typing_imports = plan.typing_imports | {"Final"}
+        plan.assignments[(node.lineno, target.id)] = text
         plan.typing_imports |= rendered.typing_imports
         plan.ppy_imports |= rendered.ppy_imports
+
+
+def _rebound_globals(symbols) -> set[str]:  # type: ignore[no-untyped-def]
+    """Module-level names that are assigned more than once, or from a function.
+
+    `Final` is a claim about the whole module, so a second binding anywhere --
+    including a `global` statement in some function -- disqualifies the name.
+    """
+    counts: dict[str, int] = {}
+    rebound: set[str] = set()
+    for node in ast.walk(symbols.module.tree):
+        if isinstance(node, ast.Global):
+            rebound.update(node.names)
+        targets: list[ast.expr] = []
+        if isinstance(node, ast.Assign):
+            targets = list(node.targets)
+        elif isinstance(node, (ast.AnnAssign, ast.AugAssign)):
+            targets = [node.target]
+        elif isinstance(node, (ast.For, ast.AsyncFor)):
+            targets = [node.target]
+        elif isinstance(node, ast.NamedExpr):
+            targets = [node.target]
+        for target in targets:
+            for name in ast.walk(target):
+                if isinstance(name, ast.Name):
+                    counts[name.id] = counts.get(name.id, 0) + 1
+    return rebound | {name for name, seen in counts.items() if seen > 1}
 
 
 def _plan_empty_containers(symbols, analysis, plan: ConversionPlan, module_name: str) -> None:  # type: ignore[no-untyped-def]
@@ -803,18 +854,76 @@ def _apply_promotions(  # type: ignore[no-untyped-def]
             plan.needs_array = True
 
 
-#: Concrete containers a read-only parameter can be widened to `Sequence` from.
-#: `dict` and `set` are not sequences, and a `str` annotation says more than
-#: `Sequence[str]` would.
-_WIDENS_TO_SEQUENCE = {"list", "tuple"}
+@dataclass(frozen=True, slots=True)
+class _Widening:
+    """A concrete container and the protocol it may be declared as instead."""
+
+    protocol: str
+    # Not `mro`: `dataclasses` reads class attributes to find defaults, and
+    # `type.mro` would look like one.
+    bases: tuple[str, ...]
+    allowed: frozenset[str]
 
 
-def _read_only_view(t: T.Type, info, name: str, analysis):  # type: ignore[no-untyped-def]
-    """Widen a container parameter the function only reads to `Sequence`.
+#: A protocol offers fewer operations than the concrete type, and some of the
+#: ones it drops would change what a function returns rather than merely
+#: failing: `xs[:]` of a tuple is a tuple, and `xs + ys` of a tuple is a tuple.
+#: So this is an allowlist of uses, not a test for mutation.
+_READ_ONLY_USES = frozenset({"len", "index", "iterate", "contains", "inspecting-call"})
 
-    A function that never mutates its argument should not demand a `list`; that
-    rejects a tuple the caller already has. The widening is safe in the
-    direction that matters, because `Sequence` accepts strictly more.
+_WIDENINGS: dict[str, _Widening] = {
+    "list": _Widening(
+        "Sequence",
+        ("Sequence", "Iterable", "object"),
+        _READ_ONLY_USES | {"method:count", "method:index"},
+    ),
+    "dict": _Widening(
+        "Mapping",
+        ("Mapping", "Iterable", "object"),
+        _READ_ONLY_USES | {"method:get", "method:keys", "method:values", "method:items"},
+    ),
+}
+
+#: Builtins that read a container without keeping it or depending on its exact
+#: type: `sorted(xs)` is a list whatever `xs` was.
+_INSPECTS_CONTAINER = frozenset({
+    "len", "sum", "min", "max", "sorted", "any", "all", "list", "tuple", "set",
+    "dict", "enumerate", "reversed", "zip", "iter", "print", "repr", "str",
+})
+
+
+def _widen_read_only_params(bundle) -> bool:  # type: ignore[no-untyped-def]
+    """Declare each read-only container parameter as the protocol it needs.
+
+    This happens inside the inference fixpoint rather than at render time so
+    that the rest of the analysis sees the widened type: what a `Sequence`
+    yields when iterated is what decides the function's own return type.
+    """
+    changed = False
+    for qualname, info in bundle.symbols.functions.items():
+        analysis = bundle.analysis.modules.get(info.module)
+        if analysis is None:
+            continue
+        callees = bundle.symbols.modules[info.module].functions
+        for param in info.params:
+            if _has_source_annotation(info, param.name):
+                continue
+            widened = _read_only_view(param.type, info, param.name, analysis, callees)
+            if widened != param.type:
+                param.type = widened
+                param.annotated = True
+                changed = True
+    return changed
+
+
+def _read_only_view(t: T.Type, info, name: str, analysis, callees=None):  # type: ignore[no-untyped-def]
+    """Declare a container parameter as the protocol its body actually needs.
+
+    A function that only reads its argument should not demand a `list`, which
+    rejects the tuple a caller already has. Being read-only is not enough on
+    its own: `xs.copy()`, `xs + ys`, and `xs[:]` are all reads, and each either
+    does not exist on the protocol or returns something else through it. What
+    decides is whether every use the body makes is one the protocol offers.
     """
     if analysis is None:
         return t
@@ -822,23 +931,123 @@ def _read_only_view(t: T.Type, info, name: str, analysis):  # type: ignore[no-un
     if function is None or name in function.mutated_params or function.foreign_writes:
         return t
     base = T.strip_literal(t)
-    if not isinstance(base, T.Instance) or base.name not in _WIDENS_TO_SEQUENCE:
+    protocol = _shared_protocol(base)
+    if protocol is None:
         return t
-    if len(base.args) != 1:
+    widening, args = protocol
+    protocol_type = T.Instance(widening.protocol, args, widening.bases)
+    uses = _parameter_uses(info.node, name, protocol_type, callees)
+    if uses is None or not uses <= widening.allowed:
         return t
-    if _returns_the_parameter(info, name):
-        # Handing it back means the caller sees whatever was passed, and the
-        # declared return type would no longer describe it.
-        return t
-    return T.Instance("Sequence", base.args, ("Sequence", "Iterable", "object"))
+    return protocol_type
 
 
-def _returns_the_parameter(info, name: str) -> bool:  # type: ignore[no-untyped-def]
-    for node in ast.walk(info.node):
-        if isinstance(node, ast.Return) and isinstance(node.value, ast.Name):
-            if node.value.id == name:
-                return True
-    return False
+def _shared_protocol(t: T.Type) -> tuple[_Widening, tuple[T.Type, ...]] | None:
+    """The protocol that describes this type, or the one every member shares.
+
+    Call sites that pass a list from one place and a tuple from another infer a
+    union of concrete containers. Naming the protocol they have in common is
+    both the honest annotation and the only usable one.
+    """
+    members = t.members if isinstance(t, T.Union_) else (t,)
+    found: set[str] = set()
+    element: tuple[T.Type, ...] | None = None
+    for member in members:
+        described = _as_container(T.strip_literal(member))
+        if described is None:
+            return None
+        protocol, args = described
+        found.add(protocol)
+        if element is None:
+            element = args
+        elif element != args:
+            return None
+    if len(found) != 1 or element is None:
+        return None
+    return _WIDENINGS[found.pop()], element
+
+
+def _as_container(t: T.Type) -> tuple[str, tuple[T.Type, ...]] | None:
+    """Which widening this concrete container belongs to, and its arguments."""
+    if isinstance(t, T.Tuple_):
+        if not t.items:
+            return None
+        first = t.items[0]
+        if any(item != first for item in t.items):
+            return None
+        return "list", (first,)
+    if isinstance(t, T.Instance) and t.args:
+        if t.name == "tuple":
+            return "list", t.args[:1]
+        if t.name in _WIDENINGS:
+            return t.name, t.args
+    return None
+
+
+def _parameter_uses(  # type: ignore[no-untyped-def]
+    node: ast.AST, name: str, protocol=None, callees=None
+) -> set[str] | None:
+    """Every way the body uses this parameter, or None if one is unrecognized.
+
+    An unrecognized use is not taken to be harmless; the parameter keeps its
+    concrete type rather than the analysis guessing about it.
+    """
+    uses: set[str] = set()
+    for child in ast.walk(node):
+        if isinstance(child, ast.Subscript) and _is_name(child.value, name):
+            if isinstance(child.slice, ast.Slice):
+                return None
+            uses.add("index")
+        elif isinstance(child, ast.Attribute) and _is_name(child.value, name):
+            uses.add(f"method:{child.attr}")
+        elif isinstance(child, (ast.For, ast.AsyncFor, ast.comprehension)):
+            if _is_name(child.iter, name):
+                uses.add("iterate")
+        elif isinstance(child, ast.Compare):
+            for operator, comparator in zip(child.ops, child.comparators):
+                if isinstance(operator, (ast.In, ast.NotIn)) and _is_name(comparator, name):
+                    uses.add("contains")
+                elif _is_name(comparator, name) or _is_name(child.left, name):
+                    return None
+        elif isinstance(child, ast.BinOp):
+            if _is_name(child.left, name) or _is_name(child.right, name):
+                return None
+        elif isinstance(child, ast.Call):
+            for position, argument in enumerate(child.args):
+                if not _is_name(argument, name):
+                    continue
+                if isinstance(child.func, ast.Name) and child.func.id in _INSPECTS_CONTAINER:
+                    uses.add("len" if child.func.id == "len" else "inspecting-call")
+                    continue
+                if not _accepts(child, position, protocol, callees):
+                    return None
+                uses.add("inspecting-call")
+        elif isinstance(child, ast.Return) and _is_name(child.value, name):
+            return None
+        elif isinstance(child, (ast.Starred, ast.Await, ast.Yield, ast.YieldFrom)):
+            if _is_name(getattr(child, "value", None), name):
+                return None
+    return uses
+
+
+def _accepts(call: ast.Call, position: int, protocol, callees) -> bool:  # type: ignore[no-untyped-def]
+    """Would the callee still accept this argument once it is the protocol?
+
+    Passing the parameter on is safe only when whatever receives it declares
+    something the protocol satisfies. The inference fixpoint re-runs, so a
+    callee that widens on one round lets its callers widen on the next.
+    """
+    if protocol is None or callees is None or not isinstance(call.func, ast.Name):
+        return False
+    info = callees.get(call.func.id)
+    if info is None or position >= len(info.params):
+        return False
+    parameter = info.params[position]
+    return bool(parameter.annotated) and T.is_assignable(protocol, parameter.type)
+
+
+def _is_name(node, name: str) -> bool:  # type: ignore[no-untyped-def]
+    return isinstance(node, ast.Name) and node.id == name
 
 
 def _plan_purity(functions, analysis, plan: ConversionPlan) -> None:  # type: ignore[no-untyped-def]
@@ -1022,7 +1231,11 @@ def _readers_of(bundle, names: set[str]) -> dict[str, set[tuple[str, str]]]:  # 
 def _buffer_scalar(t: T.Type) -> str | None:
     """The element name of a `list[int]` or `list[float]`, if it is one."""
     base = T.strip_literal(t)
-    if not isinstance(base, T.Instance) or base.name != "list" or len(base.args) != 1:
+    # `Sequence` as well as `list`: a parameter that was widened to the protocol
+    # is read-only by construction, which is what a borrowed buffer wants.
+    if not isinstance(base, T.Instance) or base.name not in {"list", "Sequence"}:
+        return None
+    if len(base.args) != 1:
         return None
     element = T.strip_literal(base.args[0])
     if not isinstance(element, T.Instance) or element.name not in _ARRAY_CODES:
