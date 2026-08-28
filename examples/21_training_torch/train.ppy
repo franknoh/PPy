@@ -1,6 +1,7 @@
 import array
 import math
 import time
+from collections.abc import Sequence
 from typing import Literal
 
 import ppy
@@ -50,7 +51,7 @@ def forward_loss(
     return torch.mean(torch.mul(residual, residual))
 
 
-def descend(parameters: list[torch.Tensor], rate: float) -> None:
+def descend(parameters: Sequence[torch.Tensor], rate: float) -> None:
     with torch.no_grad():
         for parameter in parameters:
             gradient = parameter.grad
@@ -63,7 +64,7 @@ def descend(parameters: list[torch.Tensor], rate: float) -> None:
 def train_step(
     x: torch.Tensor,
     y: torch.Tensor,
-    parameters: list[torch.Tensor],
+    parameters: Sequence[torch.Tensor],
     rate: float,
 ) -> float:
     loss = forward_loss(x, y, parameters[0], parameters[1], parameters[2], parameters[3])

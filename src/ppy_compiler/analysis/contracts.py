@@ -241,7 +241,7 @@ def _is_buffer_like(t: T.Type) -> bool:
     base = T.strip_literal(t)
     if not isinstance(base, T.Instance) or len(base.args) != 1:
         return False
-    if base.name not in {"list", "Buffer", "memoryview", "array"}:
+    if base.name not in {"list", "Sequence", "Buffer", "memoryview", "array"}:
         return False
     element = T.strip_literal(base.args[0])
     return isinstance(element, T.Instance) and element.name in {"int", "float", "bool"}

@@ -1,4 +1,5 @@
 import math
+from collections.abc import Sequence
 
 import ppy
 
@@ -9,7 +10,7 @@ def line_value(item: tuple[str, int, float]) -> float:
 
 
 @ppy.pure
-def total_value(items: list[tuple[str, int, float]]) -> float:
+def total_value(items: Sequence[tuple[str, int, float]]) -> float:
     total = 0.0
     for item in items:
         total += line_value(item)
@@ -17,7 +18,7 @@ def total_value(items: list[tuple[str, int, float]]) -> float:
 
 
 @ppy.pure
-def total_units(items: list[tuple[str, int, float]]) -> int:
+def total_units(items: Sequence[tuple[str, int, float]]) -> int:
     total = 0
     for item in items:
         total += item[1]
@@ -30,7 +31,7 @@ def discounted(price: float, discount: float) -> float:
 
 
 def apply_discount(
-    items: list[tuple[str, int, float]],
+    items: Sequence[tuple[str, int, float]],
     discount: float,
 ) -> list[tuple[str, int, float]]:
     out = []
@@ -39,7 +40,7 @@ def apply_discount(
     return out
 
 
-def below_stock(items: list[tuple[str, int, float]], threshold: int) -> list[str]:
+def below_stock(items: Sequence[tuple[str, int, float]], threshold: int) -> list[str]:
     low = []
     for item in items:
         if item[1] < threshold:
@@ -48,7 +49,7 @@ def below_stock(items: list[tuple[str, int, float]], threshold: int) -> list[str
 
 
 @ppy.pure
-def summary(items: list[tuple[str, int, float]]) -> tuple[float, float, float]:
+def summary(items: Sequence[tuple[str, int, float]]) -> tuple[float, float, float]:
     value = total_value(items)
     count = len(items)
     if not count:

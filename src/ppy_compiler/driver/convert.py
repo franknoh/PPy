@@ -23,6 +23,13 @@ __all__ = ["run_convert", "convert_source", "ConversionPlan"]
 
 _DYNAMIC_CALLS = {"eval", "exec", "compile", "globals", "locals", "vars", "__import__"}
 
+#: Names PEP 585 moved out of `typing`.
+_COLLECTIONS_ABC = frozenset({
+    "Sequence", "Iterable", "Iterator", "Mapping", "MutableMapping",
+    "MutableSequence", "Callable", "Generator", "Coroutine", "Awaitable",
+    "AsyncIterable", "AsyncIterator", "Container", "Collection", "Set",
+})
+
 
 @dataclass(slots=True)
 class ConversionPlan:
@@ -229,6 +236,8 @@ def build_plan(  # type: ignore[no-untyped-def]
             candidate = observed.get((info.qualname, index))
             if candidate is None and param.annotated:
                 candidate = param.type
+            if candidate is not None:
+                candidate = _read_only_view(candidate, info, param.name, analysis)
             rendered = render_annotation(candidate, local_module=module_name) if candidate is not None else None
             if rendered is None:
                 diagnostics.append(
@@ -515,7 +524,15 @@ def _insert_imports(module: cst.Module, plan: ConversionPlan) -> cst.Module:
 
     if plan.needs_array and "array" not in existing:
         standard.append(cst.parse_statement("import array"))
-    typing_names = sorted(plan.typing_imports - existing)
+    wanted = plan.typing_imports - existing
+    # PEP 585 moved the container protocols to `collections.abc`; importing
+    # them from `typing` is deprecated.
+    abc_names = sorted(wanted & _COLLECTIONS_ABC)
+    if abc_names:
+        standard.append(
+            cst.parse_statement(f"from collections.abc import {', '.join(abc_names)}")
+        )
+    typing_names = sorted(wanted - _COLLECTIONS_ABC)
     if typing_names:
         standard.append(cst.parse_statement(f"from typing import {', '.join(typing_names)}"))
     if plan.needs_ppy and "ppy" not in existing:
@@ -714,6 +731,44 @@ def _apply_promotions(  # type: ignore[no-untyped-def]
                 continue
             plan.buffers[line] = promotion.code
             plan.needs_array = True
+
+
+#: Concrete containers a read-only parameter can be widened to `Sequence` from.
+#: `dict` and `set` are not sequences, and a `str` annotation says more than
+#: `Sequence[str]` would.
+_WIDENS_TO_SEQUENCE = {"list", "tuple"}
+
+
+def _read_only_view(t: T.Type, info, name: str, analysis):  # type: ignore[no-untyped-def]
+    """Widen a container parameter the function only reads to `Sequence`.
+
+    A function that never mutates its argument should not demand a `list`; that
+    rejects a tuple the caller already has. The widening is safe in the
+    direction that matters, because `Sequence` accepts strictly more.
+    """
+    if analysis is None:
+        return t
+    function = analysis.functions.get(info.qualname)
+    if function is None or name in function.mutated_params or function.foreign_writes:
+        return t
+    base = T.strip_literal(t)
+    if not isinstance(base, T.Instance) or base.name not in _WIDENS_TO_SEQUENCE:
+        return t
+    if len(base.args) != 1:
+        return t
+    if _returns_the_parameter(info, name):
+        # Handing it back means the caller sees whatever was passed, and the
+        # declared return type would no longer describe it.
+        return t
+    return T.Instance("Sequence", base.args, ("Sequence", "Iterable", "object"))
+
+
+def _returns_the_parameter(info, name: str) -> bool:  # type: ignore[no-untyped-def]
+    for node in ast.walk(info.node):
+        if isinstance(node, ast.Return) and isinstance(node.value, ast.Name):
+            if node.value.id == name:
+                return True
+    return False
 
 
 def _plan_purity(functions, analysis, plan: ConversionPlan) -> None:  # type: ignore[no-untyped-def]

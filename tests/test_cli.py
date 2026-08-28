@@ -587,8 +587,11 @@ def test_convert_leaves_a_list_alone_without_the_flag(workspace: Path):
     )
     assert _ppy(["convert", "keep.py"], workspace).returncode == 0
     converted = (workspace / "keep.ppy").read_text(encoding="utf-8")
-    assert "def total(xs: list[float])" in converted
+    # Read-only, so it widens to `Sequence`; without the flag it is still a
+    # Python container rather than borrowed memory.
+    assert "def total(xs: Sequence[float])" in converted
     assert "array.array" not in converted
+    assert "Buffer" not in converted
 
 
 def test_convert_says_what_blocks_a_promotion(workspace: Path):
@@ -822,7 +825,7 @@ def test_convert_types_a_project_across_module_boundaries(workspace: Path):
     geometry = (src / "geometry.ppy").read_text(encoding="utf-8")
     assert "def distance(x1: float, y1: float, x2: float, y2: float) -> float:" in geometry
     shapes = (src / "shapes.ppy").read_text(encoding="utf-8")
-    assert "def perimeter(points: list[tuple[float, float]]) -> float:" in shapes
+    assert "def perimeter(points: Sequence[tuple[float, float]]) -> float:" in shapes
 
 
 def test_convert_warns_when_both_sources_survive(workspace: Path):
@@ -926,3 +929,41 @@ def test_convert_keeps_a_closed_return_set_but_not_a_parameter_one(workspace: Pa
         [sys.executable, "modes.py"], cwd=workspace, capture_output=True, text=True, check=False
     )
     assert _ppy(["modes.ppy"], workspace).stdout == plain.stdout
+
+
+def test_convert_widens_a_read_only_container_parameter(workspace: Path):
+    """A function that never mutates its argument should not demand a `list`."""
+    (workspace / "ro.py").write_text(
+        textwrap.dedent(
+            """
+            def total(items):
+                out = 0.0
+                for item in items:
+                    out += item
+                return out
+
+
+            def grow(items):
+                items.append(1.0)
+                return len(items)
+
+
+            def passthrough(items):
+                return items
+
+
+            DATA = [1.0, 2.0]
+            print(total(DATA), grow(DATA), len(passthrough(DATA)))
+            """
+        ).lstrip("\n"),
+        encoding="utf-8",
+    )
+    assert _ppy(["convert", "ro.py"], workspace).returncode == 0
+    converted = (workspace / "ro.ppy").read_text(encoding="utf-8")
+    assert "def total(items: Sequence[float]) -> float:" in converted
+    # Mutating it, or handing it back, keeps the concrete type.
+    assert "def grow(items: list[float]) -> int:" in converted
+    assert "def passthrough(items: list[float]) -> list[float]:" in converted
+    # PEP 585 moved the protocols out of `typing`.
+    assert "from collections.abc import Sequence" in converted
+    assert _ppy(["check", "ro.ppy"], workspace).returncode == 0

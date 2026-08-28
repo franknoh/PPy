@@ -96,7 +96,7 @@ class NativeParam:
 
     @property
     def is_buffer(self) -> bool:
-        return self.kind in {"list", "view"}
+        return self.kind in {"list", "sequence", "view"}
 
     @property
     def is_object(self) -> bool:
@@ -196,12 +196,15 @@ def _buffer_element(t: T.Type) -> tuple[str, str] | None:
     base = T.strip_literal(t)
     if not isinstance(base, T.Instance) or len(base.args) != 1:
         return None
-    if base.name not in {"list", "Buffer", "memoryview", "array"}:
+    if base.name not in {"list", "Sequence", "Buffer", "memoryview", "array"}:
         return None
     element = _scalar_name(base.args[0])
     if element not in _BUFFER_ELEMENTS:
         return None
-    return ("list" if base.name == "list" else "view"), element
+    # A `Sequence` promises only reading, which is what a copied-in buffer
+    # does; anything the caller passes is unpacked the same way.
+    kinds = {"list": "list", "Sequence": "sequence"}
+    return kinds.get(base.name, "view"), element
 
 
 def _tuple_elements(t: T.Type) -> tuple[str, ...] | None:

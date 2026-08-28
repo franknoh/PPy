@@ -376,15 +376,31 @@ def _parse_arguments(
             element = C_TYPES[_abi(parameter.element)]
             declarations.append(f"    {element} *{data} = NULL;")
             declarations.append(f"    Py_ssize_t {count} = 0;")
-            lines.append(f"    if (!PyList_CheckExact({source})) PPY_GUARD_FAIL();")
-            lines.append(f"    {count} = PyList_GET_SIZE({source});")
+            if parameter.kind == "sequence":
+                # `PySequence_Fast` returns the object itself for a list or a
+                # tuple and builds a list otherwise, so one path serves every
+                # sequence the caller may pass.
+                fast = f"fast{position}"
+                declarations.append(f"    PyObject *{fast} = NULL;")
+                lines.append(
+                    f'    {fast} = PySequence_Fast({source}, "expected a sequence");'
+                )
+                lines.append(f"    if ({fast} == NULL) {{ PyErr_Clear(); PPY_GUARD_FAIL(); }}")
+                lines.append(f"    {count} = PySequence_Fast_GET_SIZE({fast});")
+                cleanup.append(f"    Py_XDECREF({fast});")
+                holder, size, item = fast, count, f"PySequence_Fast_GET_ITEM({fast}, i)"
+            else:
+                lines.append(f"    if (!PyList_CheckExact({source})) PPY_GUARD_FAIL();")
+                lines.append(f"    {count} = PyList_GET_SIZE({source});")
+                holder, size, item = source, count, f"PyList_GET_ITEM({source}, i)"
+            assert holder is not None and size is not None
             lines.append(
                 f"    {data} = ({element} *)PyMem_Malloc((size_t)({count} ? {count} : 1)"
                 f" * sizeof({element}));"
             )
             lines.append(f"    if ({data} == NULL) PPY_GUARD_FAIL();")
             lines.append(f"    for (Py_ssize_t i = 0; i < {count}; i++) {{")
-            lines.append(f"        PyObject *item = PyList_GET_ITEM({source}, i);")
+            lines.append(f"        PyObject *item = {item};")
             lines.extend(_scalar_lines(parameter.element, "item", f"{data}[i]", "        ",
                                        declare=False))
             lines.append("    }")

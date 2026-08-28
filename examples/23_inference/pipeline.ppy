@@ -1,4 +1,5 @@
 import math
+from collections.abc import Sequence
 
 import ppy
 
@@ -34,7 +35,7 @@ def normalize(value: float, mean: float, spread: float) -> float:
     return clamp((value - mean) / spread, -3.0, 3.0)
 
 
-def summarize(readings: list[float]) -> Summary | None:
+def summarize(readings: Sequence[float]) -> Summary | None:
     count = len(readings)
     if not count:
         return None
@@ -48,14 +49,14 @@ def summarize(readings: list[float]) -> Summary | None:
     return Summary(mean, math.sqrt(spread / count), count)
 
 
-def standardized(readings: list[float], summary: Summary) -> list[float]:
+def standardized(readings: Sequence[float], summary: Summary) -> list[float]:
     out = []
     for reading in readings:
         out.append(normalize(reading, summary.mean, summary.deviation))
     return out
 
 
-def report(readings: list[float]) -> str:
+def report(readings: Sequence[float]) -> str:
     summary = summarize(readings)
     if summary is None:
         return "empty"

@@ -1,8 +1,10 @@
+from collections.abc import Sequence
+
 import ppy
 
 
 @ppy.pure
-def mean(values: list[float]) -> float:
+def mean(values: Sequence[float]) -> float:
     total = 0.0
     for value in values:
         total += value
@@ -10,7 +12,7 @@ def mean(values: list[float]) -> float:
 
 
 @ppy.pure
-def variance(values: list[float]) -> float:
+def variance(values: Sequence[float]) -> float:
     m = mean(values)
     total = 0.0
     for value in values:
@@ -18,7 +20,7 @@ def variance(values: list[float]) -> float:
     return total / len(values)
 
 
-def standardize(values: list[float]) -> list[float]:
+def standardize(values: Sequence[float]) -> list[float]:
     m = mean(values)
     spread = variance(values) ** 0.5
     out = []
@@ -28,7 +30,7 @@ def standardize(values: list[float]) -> list[float]:
 
 
 @ppy.pure
-def report(values: list[float], label: str) -> str:
+def report(values: Sequence[float], label: str) -> str:
     return f"{label}: mean={mean(values):.3f} var={variance(values):.3f}"
 
 

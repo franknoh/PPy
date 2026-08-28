@@ -2060,3 +2060,63 @@ def test_releasing_the_gil_keeps_the_answer(tmp_path: Path):
     native = _ppy(["run", entry.name], tmp_path)
     assert plain.returncode == 0, plain.stderr
     assert native.stdout.splitlines()[-1] == plain.stdout.strip()
+
+
+SEQUENCE = """
+    from collections.abc import Sequence
+
+    import ppy
+
+
+    @ppy.pure
+    @ppy.opt(3)
+    def total(values: Sequence[float]) -> float:
+        out: float = 0.0
+        for value in values:
+            out += value
+        return out
+"""
+
+
+def test_a_read_only_sequence_still_lowers_natively(write, analyze):
+    """Widening a parameter to `Sequence` must not cost the native path."""
+    path = write("seq.ppy", SEQUENCE)
+    module = _collect(analyze(path, backend="llvm"))["seq"]
+    assert "seq.total" in module.functions
+    assert "seq.total" not in module.rejected
+
+
+def test_a_sequence_parameter_accepts_more_than_a_list(tmp_path: Path):
+    entry = tmp_path / "seq_run.ppy"
+    entry.write_text(
+        textwrap.dedent(SEQUENCE).lstrip("\n")
+        + textwrap.dedent(
+            """
+
+            print(total([1.0, 2.0, 3.0]))
+            print(total((1.0, 2.0, 3.0)))
+            print(total([]))
+            """
+        ),
+        encoding="utf-8",
+    )
+    (tmp_path / "pyproject.toml").write_text("[tool.ppy]\nopt-level = 3\n", encoding="utf-8")
+    plain = _run([sys.executable, entry.name], tmp_path)
+    native = _ppy(["run", entry.name], tmp_path)
+    assert plain.returncode == 0, plain.stderr
+    assert native.returncode == 0, native.stderr
+    assert native.stdout == plain.stdout
+
+
+def test_a_concrete_container_satisfies_the_abstract_one():
+    from ppy_compiler.analysis import types as T
+
+    sequence = T.Instance("Sequence", (T.FLOAT,), ("Sequence", "Iterable", "object"))
+    iterable = T.Instance("Iterable", (T.FLOAT,), ("Iterable", "object"))
+    for concrete in (T.list_of(T.FLOAT), T.Tuple_((T.FLOAT,), homogeneous=True)):
+        assert T.is_assignable(concrete, sequence), concrete
+        assert T.is_assignable(concrete, iterable), concrete
+    assert T.is_assignable(T.instance("set", T.FLOAT), iterable)
+    # A set is not a sequence, and the widening does not run backwards.
+    assert not T.is_assignable(T.instance("set", T.FLOAT), sequence)
+    assert not T.is_assignable(sequence, T.list_of(T.FLOAT))

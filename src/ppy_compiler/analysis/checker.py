@@ -1541,7 +1541,7 @@ class _Checker:
                 return Binding(T.UNKNOWN)
             return Binding(B.element_type(base))
         if isinstance(base, T.Instance):
-            if base.name in {"list", "Buffer", "memoryview", "array"}:
+            if base.name in {"list", "Sequence", "Buffer", "memoryview", "array"}:
                 self._effects = self._effects.add(raises=("IndexError",))
                 return Binding(base if is_slice else B.element_type(base))
             if base.name == "dict":
