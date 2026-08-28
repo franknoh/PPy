@@ -87,7 +87,7 @@ def test_convert_writes_a_ppy_file_and_preserves_the_source(workspace: Path):
     assert "def square(x: int) -> int:" in converted
     assert "# keep me" in converted
     assert '"""Docstring."""' in converted
-    assert "answer: int = square(7)" in converted
+    assert "answer: Final[int] = square(7)" in converted
 
 
 def test_convert_inserts_ppy_after_docstring_and_future(workspace: Path):
@@ -120,7 +120,7 @@ def test_convert_omits_ppy_when_nothing_would_use_it(workspace: Path):
     _ppy(["convert", "plain.py"], workspace)
     converted = (workspace / "plain.ppy").read_text(encoding="utf-8")
     assert "import ppy" not in converted
-    assert "X: int = 1" in converted
+    assert "X: Final[int] = 1" in converted
 
 
 def test_convert_refuses_to_clobber_without_force(workspace: Path):
@@ -1061,3 +1061,189 @@ def test_fmt_runs_the_builtin_pass_before_an_external_formatter(workspace: Path)
     text = source.read_text(encoding="utf-8")
     assert text.startswith("import math\nimport time\n\nimport ppy\nfrom ppy import Buffer\n")
     assert "def f(x: int) -> int:" in text
+
+
+@pytest.mark.parametrize(
+    ("body", "expected"),
+    [
+        ("out = 0.0\n    for v in xs:\n        out += v\n    return out", "Sequence[float]"),
+        ("return len(xs)", "Sequence[float]"),
+        ("return xs[0]", "Sequence[float]"),
+        ("return xs.count(1.0)", "Sequence[float]"),
+        ("return xs.index(1.0)", "Sequence[float]"),
+        ("return 1.0 in xs", "Sequence[float]"),
+        ("return sorted(xs)", "Sequence[float]"),
+        # Uses that a `Sequence` either lacks or answers differently.
+        ("return xs.copy()", "list[float]"),
+        ("return xs[:]", "list[float]"),
+        ("return xs + xs", "list[float]"),
+        ("return xs * 2", "list[float]"),
+        ("return xs", "list[float]"),
+        ("xs.append(1.0)\n    return len(xs)", "list[float]"),
+    ],
+)
+def test_a_parameter_is_widened_only_to_what_its_body_needs(
+    workspace: Path, body: str, expected: str
+):
+    """Read-only is not the test; the protocol offering every use is."""
+    (workspace / "uses.py").write_text(
+        f"def f(xs):\n    {body}\n\n\nDATA = [1.0, 2.0]\nprint(f(DATA))\n", encoding="utf-8"
+    )
+    result = _ppy(["convert", "uses.py", "--dry-run"], workspace)
+    assert result.returncode == 0, result.stderr
+    assert f"def f(xs: {expected})" in result.stdout, result.stdout
+
+
+@pytest.mark.parametrize(
+    ("body", "expected"),
+    [
+        ("return values[key]", "Mapping[str, float]"),
+        ("return len(values)", "Mapping[str, float]"),
+        ("return key in values", "Mapping[str, float]"),
+        ("return values.get(key, 0.0)", "Mapping[str, float]"),
+        ("return sum(values.values())", "Mapping[str, float]"),
+        ("return values.pop(key)", "dict[str, float]"),
+        ("values[key] = 1.0\n    return len(values)", "dict[str, float]"),
+        ("return values.copy()", "dict[str, float]"),
+    ],
+)
+def test_a_mapping_parameter_follows_the_same_rule(workspace: Path, body: str, expected: str):
+    (workspace / "maps.py").write_text(
+        f"def f(values, key):\n    {body}\n\n\n"
+        'DATA = {"a": 1.0}\nprint(f(DATA, "a"))\n',
+        encoding="utf-8",
+    )
+    result = _ppy(["convert", "maps.py", "--dry-run"], workspace)
+    assert result.returncode == 0, result.stderr
+    assert f"def f(values: {expected}" in result.stdout, result.stdout
+
+
+def test_a_widened_signature_accepts_what_it_promises(workspace: Path):
+    """A `Sequence` parameter must really take a tuple, on every path."""
+    (workspace / "pyproject.toml").write_text("[tool.ppy]\nopt-level = 3\n", encoding="utf-8")
+    (workspace / "widened.py").write_text(
+        textwrap.dedent(
+            """
+            def total(xs):
+                out = 0.0
+                for x in xs:
+                    out += x
+                return out
+
+
+            DATA = [1.0, 2.0, 3.0]
+            print(total(DATA), total((4.0, 5.0)))
+            """
+        ).lstrip("\n"),
+        encoding="utf-8",
+    )
+    assert _ppy(["convert", "widened.py"], workspace).returncode == 0
+    assert "def total(xs: Sequence[float])" in (
+        workspace / "widened.ppy"
+    ).read_text(encoding="utf-8")
+    plain = subprocess.run(
+        [sys.executable, "widened.py"], cwd=workspace, capture_output=True, text=True, check=False
+    )
+    assert _ppy(["widened.ppy"], workspace).stdout == plain.stdout
+    assert _ppy(["run", "widened.ppy"], workspace).stdout.splitlines()[-1] == plain.stdout.strip()
+
+
+def test_convert_is_deterministic_unless_formatting_is_asked_for(workspace: Path):
+    (workspace / "styled.py").write_text(
+        "def f(x):\n    return  x+1\n\n\nprint(f(1))\n", encoding="utf-8"
+    )
+    plain = _ppy(["convert", "styled.py", "--dry-run"], workspace).stdout
+    formatted = _ppy(["convert", "styled.py", "--dry-run", "--format"], workspace).stdout
+    assert "return  x+1" in plain, "the deterministic pass restyled the body"
+    assert "return x + 1" in formatted
+
+
+def test_convert_formatting_can_come_from_configuration(workspace: Path):
+    (workspace / "pyproject.toml").write_text(
+        "[tool.ppy]\nstrict = true\n\n[tool.ppy.convert]\nformat = true\n", encoding="utf-8"
+    )
+    (workspace / "cfg.py").write_text(
+        "def f(x):\n    return  x+1\n\n\nprint(f(1))\n", encoding="utf-8"
+    )
+    assert "return x + 1" in _ppy(["convert", "cfg.py", "--dry-run"], workspace).stdout
+
+
+def test_a_module_constant_becomes_final(workspace: Path):
+    (workspace / "consts.py").write_text(
+        textwrap.dedent(
+            """
+            LIMIT = 100
+            counter = 0
+
+
+            def bump():
+                global counter
+                counter += 1
+                return counter
+
+
+            total = 0
+            total = total + LIMIT
+            print(LIMIT, bump(), total)
+            """
+        ).lstrip("\n"),
+        encoding="utf-8",
+    )
+    assert _ppy(["convert", "consts.py"], workspace).returncode == 0
+    converted = (workspace / "consts.ppy").read_text(encoding="utf-8")
+    assert "LIMIT: Final[int] = 100" in converted
+    assert "from typing import Final" in converted
+    # Rebound through `global`, and rebound at module level.
+    assert "counter: int = 0" in converted
+    assert "total: int = 0" in converted
+    assert converted.count("total:") == 1, "a later assignment was re-annotated"
+    assert _ppy(["check", "consts.ppy"], workspace).returncode == 0
+
+
+def test_a_union_of_containers_becomes_the_protocol_they_share(workspace: Path):
+    """Passing a list from one site and a tuple from another names the protocol."""
+    (workspace / "pyproject.toml").write_text("[tool.ppy]\nopt-level = 3\n", encoding="utf-8")
+    (workspace / "both.py").write_text(
+        textwrap.dedent(
+            """
+            def total(xs):
+                out = 0.0
+                for x in xs:
+                    out += x
+                return out
+
+
+            DATA = [1.0, 2.0, 3.0]
+            print(total(DATA), total((4.0, 5.0)))
+            """
+        ).lstrip("\n"),
+        encoding="utf-8",
+    )
+    assert _ppy(["convert", "both.py"], workspace).returncode == 0
+    converted = (workspace / "both.ppy").read_text(encoding="utf-8")
+    assert "def total(xs: Sequence[float]) -> float:" in converted
+    assert _ppy(["check", "both.ppy"], workspace).returncode == 0
+
+    plain = subprocess.run(
+        [sys.executable, "both.py"], cwd=workspace, capture_output=True, text=True, check=False
+    )
+    assert _ppy(["both.ppy"], workspace).stdout == plain.stdout
+    assert _ppy(["run", "both.ppy"], workspace).stdout.splitlines()[-1] == plain.stdout.strip()
+
+
+def test_containers_with_different_elements_are_not_merged(workspace: Path):
+    (workspace / "mixed.py").write_text(
+        textwrap.dedent(
+            """
+            def sized(xs):
+                return len(xs)
+
+
+            print(sized([1.0]), sized(["a"]))
+            """
+        ).lstrip("\n"),
+        encoding="utf-8",
+    )
+    result = _ppy(["convert", "mixed.py", "--dry-run"], workspace)
+    assert "Sequence[float]" not in result.stdout
+    assert "Sequence[str]" not in result.stdout

@@ -13,6 +13,7 @@ __all__ = [
     "ParallelConfig",
     "InferenceConfig",
     "PluginConfig",
+    "ConvertConfig",
     "DiagnosticsConfig",
     "Config",
     "load_config",
@@ -57,6 +58,12 @@ class PluginConfig:
 
 
 @dataclass(slots=True)
+class ConvertConfig:
+    #: Whether `ppy convert` hands its result to the project's formatter.
+    format: bool = False
+
+
+@dataclass(slots=True)
 class DiagnosticsConfig:
     optimization_remarks: bool = False
 
@@ -76,6 +83,7 @@ class Config:
     parallel: ParallelConfig = field(default_factory=ParallelConfig)
     inference: InferenceConfig = field(default_factory=InferenceConfig)
     plugins: dict[str, PluginConfig] = field(default_factory=dict)
+    convert: ConvertConfig = field(default_factory=ConvertConfig)
     diagnostics: DiagnosticsConfig = field(default_factory=DiagnosticsConfig)
 
     @property
@@ -157,6 +165,8 @@ def _apply(config: Config, table: Mapping[str, Any]) -> Config:
             write_local_annotations=_as_bool(sub.get("write-local-annotations"), True),
             implicit_any=sub.get("implicit-any", "error"),
         )
+    if isinstance(sub := table.get("convert"), Mapping):
+        config.convert = ConvertConfig(format=_as_bool(sub.get("format"), False))
     if isinstance(sub := table.get("diagnostics"), Mapping):
         config.diagnostics = DiagnosticsConfig(
             optimization_remarks=_as_bool(sub.get("optimization-remarks"), False),

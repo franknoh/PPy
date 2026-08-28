@@ -43,6 +43,12 @@ def build_parser() -> argparse.ArgumentParser:
     convert.add_argument("--force", action="store_true", help="overwrite an existing .ppy file")
     convert.add_argument("--dry-run", action="store_true", help="print the result without writing")
     convert.add_argument(
+        "--format",
+        dest="apply_format",
+        action="store_true",
+        help="run the project's formatter over the result, after the deterministic pass",
+    )
+    convert.add_argument(
         "--promote-buffers",
         action="store_true",
         help="declare read-only numeric list parameters as borrowed buffers, "
@@ -81,6 +87,11 @@ def build_parser() -> argparse.ArgumentParser:
         choices=("auto", "pyright", "pylint", "ruff", "mypy"),
         default="auto",
         help="which tool to run; `auto` picks the first one installed",
+    )
+    lint.add_argument(
+        "--all-rules",
+        action="store_true",
+        help="ruff only: enable every rule instead of the project's selection",
     )
     lint.add_argument(
         "--no-strict",

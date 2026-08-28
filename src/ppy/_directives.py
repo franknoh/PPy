@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Callable, Mapping, TypeVar
+from typing import Any, Callable, Mapping, Protocol, TypeVar, overload
 
 __all__ = [
     "Directive",
@@ -70,7 +70,22 @@ def attach(obj: _T, directive: Directive) -> _T:
     return obj
 
 
-def _flexible(name: str) -> Any:
+class _Flexible(Protocol):
+    """A directive usable bare (`@d`) or called (`@d(**options)`).
+
+    Declared rather than inferred: `_flexible` builds these at runtime, and
+    without a type a strict checker reports every decorated function as having
+    an unknown signature.
+    """
+
+    @overload
+    def __call__(self, obj: _T, /) -> _T: ...
+
+    @overload
+    def __call__(self, **options: Any) -> Callable[[_T], _T]: ...
+
+
+def _flexible(name: str) -> _Flexible:
     """Build a decorator usable bare (@d) or called (@d(**options))."""
 
     def decorator(*args: Any, **kwargs: Any) -> Any:
@@ -90,15 +105,15 @@ def _flexible(name: str) -> Any:
     return decorator
 
 
-pure = _flexible("pure")
-jit = _flexible("jit")
-parallel = _flexible("parallel")
-native = _flexible("native")
-inline = _flexible("inline")
-noinline = _flexible("noinline")
-specialize = _flexible("specialize")
-fastmath = _flexible("fastmath")
-jax = _flexible("jax")
+pure: _Flexible = _flexible("pure")
+jit: _Flexible = _flexible("jit")
+parallel: _Flexible = _flexible("parallel")
+native: _Flexible = _flexible("native")
+inline: _Flexible = _flexible("inline")
+noinline: _Flexible = _flexible("noinline")
+specialize: _Flexible = _flexible("specialize")
+fastmath: _Flexible = _flexible("fastmath")
+jax: _Flexible = _flexible("jax")
 
 
 def opt(level: int) -> Callable[[_T], _T]:

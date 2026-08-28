@@ -36,7 +36,10 @@ class Backend:
 BACKENDS: dict[str, Backend] = {
     "pyright": Backend("pyright", "pyright", (), ()),
     "pylint": Backend("pylint", "pylint", ("--enable=all",), ()),
-    "ruff": Backend("ruff", "ruff", ("check", "--select", "ALL"), ("check",)),
+    # A type checker's strict mode is a coherent setting; a linter's "every
+    # rule" is not the same thing. Ruff runs the project's own configuration,
+    # and `--select ALL` is available separately as `--all-rules`.
+    "ruff": Backend("ruff", "ruff", ("check",), ("check",)),
     "mypy": Backend("mypy", "mypy", ("--strict",), ()),
 }
 
@@ -89,6 +92,8 @@ def run_lint(options: argparse.Namespace, reporter: Reporter) -> int:
         staged, mapping = _stage(sources, project.root, Path(scratch))
         _configure(backend, Path(scratch), strict=options.strict)
         arguments = backend.strict if options.strict else (backend.relaxed or backend.strict)
+        if chosen == "ruff" and getattr(options, "all_rules", False):
+            arguments = (*arguments, "--select", "ALL")
         done = subprocess.run(
             [sys.executable, "-m", backend.module, *arguments, *[str(p) for p in staged]],
             cwd=scratch, capture_output=True, text=True, check=False, timeout=1800,

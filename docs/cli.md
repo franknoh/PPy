@@ -40,6 +40,7 @@ a function's types can come from call sites in other files.
 | `--dry-run` | print, write nothing |
 | `--force` | overwrite an existing `.ppy` |
 | `--in-place` | write the `.ppy` and remove the `.py` it came from |
+| `--format` | hand the result to the project's formatter afterwards |
 | `--promote-buffers` | declare read-only numeric list parameters as `Buffer[T]` and rewrite the values feeding them into `array.array` |
 
 Use `--in-place` to migrate a project. Without it both `foo.py` and `foo.ppy`
@@ -117,10 +118,11 @@ ppy lint [PATH] [--backend {auto,pyright,pylint,ruff,mypy}] [--no-strict]
 
 External tools key off the `.py` extension, so the sources are mirrored into a
 staging tree, the tool runs there, and the paths in its output are mapped back
-to the `.ppy` files you have. `auto` picks the first installed backend, and
-each runs in its strictest useful mode unless `--no-strict` is given —
-`pyright` gets `typeCheckingMode = "strict"`, `ruff` gets `--select ALL`,
-`pylint` gets `--enable=all`.
+to the `.ppy` files you have. `auto` picks the first installed backend. A type checker runs in its strict
+mode — `pyright` gets `typeCheckingMode = "strict"` — while a linter runs the
+project's own rule selection, because "every rule there is" is not the same
+kind of setting. `--all-rules` turns `ruff` up to `--select ALL` when that is
+what you want; `--no-strict` turns a type checker down.
 
 ```bash
 ppy lint --backend pyright src
@@ -141,8 +143,9 @@ a signature wrapped after annotation. An installed `ruff` or `black` then
 applies the project's own style on top. `--check` writes nothing and exits
 non-zero if a file would change.
 
-`ppy convert` formats its own output with the built-in normalizer only, so a
-converted file is byte-identical on every machine.
+`ppy convert` uses the built-in normalizer only, so a converted file is
+byte-identical on every machine. Pass `--format`, or set
+`[tool.ppy.convert] format = true`, to apply the project's style on top.
 
 ## `ppy cache`
 
@@ -225,6 +228,9 @@ threads = "auto"
 interprocedural = true
 write-local-annotations = true
 implicit-any = "error"
+
+[tool.ppy.convert]
+format = false
 
 [tool.ppy.diagnostics]
 optimization-remarks = false

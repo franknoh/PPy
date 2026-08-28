@@ -64,6 +64,14 @@ remark[R3003]: `raw` could be a borrowed buffer, but `raw` is sliced, which
                memory be borrowed
 ```
 
+A container parameter is declared as the protocol its body actually needs
+rather than the concrete type a caller happened to pass: `Sequence[T]` or
+`Mapping[K, V]` when every use is one the protocol offers, and the concrete
+`list`/`dict` when the body slices it, concatenates it, copies it, hands it
+back, or mutates it — each of which either does not exist on the protocol or
+answers differently through it. A module-level name bound once and never
+rebound is written `Final`.
+
 It does not rename, split a function that does several jobs, or restructure an
 algorithm. Those are design decisions.
 
