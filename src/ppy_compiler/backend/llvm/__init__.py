@@ -108,8 +108,8 @@ def _value_class_layouts(bundle) -> dict[str, tuple[tuple[str, str], ...]]:  # t
     return layouts
 
 
-def _collect(bundle) -> dict[str, NativeModule]:  # type: ignore[no-untyped-def]
-    """Lower every module in the project to LLVM IR."""
+def _collect(bundle, opt_level: int | None = None) -> dict[str, NativeModule]:  # type: ignore[no-untyped-def]
+    """Lower every module in the project to LLVM IR, reusing a cached result."""
     modules: dict[str, NativeModule] = {}
     layouts = _value_class_layouts(bundle)
     for module in bundle.graph.order():
@@ -130,6 +130,12 @@ def _collect(bundle) -> dict[str, NativeModule]:  # type: ignore[no-untyped-def]
             if function_analysis is None:
                 continue
             candidates[info.qualname] = (info, function_analysis, node)
+
+        reused = _cached_lowering(bundle, module.name, opt_level)
+        if reused is not None:
+            modules[module.name] = _module_from_cache(module.name, reused, candidates)
+            continue
+
         fused, plan, notes = _fuse(symbols, analysis)
         if not candidates and not fused:
             continue
@@ -137,7 +143,7 @@ def _collect(bundle) -> dict[str, NativeModule]:  # type: ignore[no-untyped-def]
         ir_text = result.ir
         if fused:
             ir_text = _append_fused(ir_text, module.name, fused)
-        modules[module.name] = NativeModule(
+        native = NativeModule(
             name=module.name,
             ir=ir_text,
             functions=result.functions,
@@ -151,7 +157,67 @@ def _collect(bundle) -> dict[str, NativeModule]:  # type: ignore[no-untyped-def]
             fusion_plan=plan,
             fusion_notes=notes,
         )
+        modules[module.name] = native
+        _store_lowering(bundle, module.name, opt_level, native)
     return modules
+
+
+def _lowering_key(bundle, name: str, opt_level: int | None) -> str:  # type: ignore[no-untyped-def]
+    from ...driver.pipeline import module_cache_key
+
+    level = opt_level if opt_level is not None else bundle.project.config.opt_level
+    return f"{module_cache_key(bundle, name, target='llvm', opt_level=level).hex()}.lowered"
+
+
+def _cached_lowering(bundle, name: str, opt_level: int | None):  # type: ignore[no-untyped-def]
+    """What lowering produced last time, when the key still describes it."""
+    from .lowering_cache import decode
+
+    try:
+        text = bundle.project.store.read_text(_lowering_key(bundle, name, opt_level))
+    except Exception:  # noqa: BLE001 - a cache miss must never fail a build
+        return None
+    return decode(text) if text is not None else None
+
+
+def _store_lowering(bundle, name: str, opt_level: int | None, native: NativeModule) -> None:  # type: ignore[no-untyped-def]
+    from .lowering_cache import encode
+
+    try:
+        key = _lowering_key(bundle, name, opt_level)
+        bundle.project.store.put(key, encode(native), kind="llvm", source=name, suffix=".json")
+        bundle.project.store.mark_root(key, f"lowered:{name}")
+    except Exception:  # noqa: BLE001 - caching is an optimization, not a contract
+        return
+
+
+def _module_from_cache(name: str, reused, candidates) -> NativeModule:  # type: ignore[no-untyped-def]
+    """Rebuild a `NativeModule` from cached ABI decisions plus live symbols.
+
+    The `FunctionInfo` and the AST are taken from this run's analysis rather
+    than from the cache: they are cheap to have already, and reusing the live
+    ones keeps diagnostics pointing at the current source.
+    """
+    functions: dict[str, LoweredFunction] = {}
+    sources: dict[str, tuple] = {}
+    for qualname, signature in reused.signatures.items():
+        entry = candidates.get(qualname)
+        if entry is None:
+            # The cached module no longer matches the source in front of us.
+            return NativeModule(name=name, ir="")
+        info, _analysis, node = entry
+        functions[qualname] = LoweredFunction(info, signature)
+        sources[qualname] = (info, node)
+    return NativeModule(
+        name=name,
+        ir=reused.ir,
+        functions=functions,
+        rejected=dict(reused.rejected),
+        sources=sources,
+        fused=dict(reused.fused),
+        fusion_plan=dict(reused.plan),
+        fusion_notes=list(reused.notes),
+    )
 
 
 def _fuse(symbols, analysis):  # type: ignore[no-untyped-def]
@@ -209,6 +275,26 @@ def emit_ir(bundle) -> dict[str, str]:  # type: ignore[no-untyped-def]
     return {name: engine.optimized_ir(module.ir) for name, module in _collect(bundle).items()}
 
 
+def _library_key(objects: list[Path]) -> str:
+    """A key over exactly the object files that go into the library."""
+    from ...cache import digest
+
+    return digest("ppy-library", *(o.read_bytes().hex() for o in sorted(objects))) + ".so"
+
+
+def _link_and_cache(artifacts, store, key: str, destination: Path) -> None:  # type: ignore[no-untyped-def]
+    try:
+        artifacts.library = link_shared_library(artifacts.objects, destination)
+    except ToolchainError as exc:
+        artifacts.notes.append(str(exc))
+        return
+    try:
+        store.put(key, artifacts.library.read_bytes(), kind="native", suffix=".so")
+        store.mark_root(key, "library")
+    except Exception:  # noqa: BLE001 - caching is an optimization
+        return
+
+
 def _object_key(key: CacheKey) -> str:
     """The key of the object file compiled from the module this key names."""
     return f"{key.hex()}.o"
@@ -223,17 +309,29 @@ def compile_project(  # type: ignore[no-untyped-def]
     entry: Path | None = None,
 ) -> BuildArtifacts:
     """Compile to LLVM, emit object code, link, and write the manifest (spec 4.2)."""
-    if not available():
-        raise LlvmUnavailable("llvmlite is not installed, so the LLVM backend is unavailable")
     from ...driver.pipeline import build_python, module_cache_key
     from ...opt.rewrites import adjustments_for_project
 
     level = opt_level if opt_level is not None else bundle.project.config.opt_level
     store = bundle.project.store
     store.ensure()
-    engine = JitEngine(opt_level=level).open()
 
-    natives = _collect(bundle)
+    # Opening the engine initializes LLVM, which is most of a warm build's
+    # cost. Nothing needs it when every object comes from the cache.
+    opened: list[JitEngine] = []
+
+    def engine() -> JitEngine:
+        if not opened:
+            # Availability is asserted here rather than up front, so a build
+            # that answers entirely from the cache needs no LLVM at all.
+            if not available():
+                raise LlvmUnavailable(
+                    "llvmlite is not installed, so the LLVM backend is unavailable"
+                )
+            opened.append(JitEngine(opt_level=level).open())
+        return opened[0]
+
+    natives = _collect(bundle, level)
     build_directory = output or (bundle.project.config.cache_path / "native")
     artifacts = BuildArtifacts()
     signatures: dict[str, NativeSignature] = {}
@@ -241,7 +339,10 @@ def compile_project(  # type: ignore[no-untyped-def]
 
     for name, native in natives.items():
         key: CacheKey = module_cache_key(bundle, name, target="llvm", opt_level=level)
-        store.put(key, engine.optimized_ir(native.ir), kind="llvm", source=name, suffix=".ll")
+        if store.get(key) is None:
+            store.put(
+                key, engine().optimized_ir(native.ir), kind="llvm", source=name, suffix=".ll"
+            )
         store.mark_root(key, f"llvm:{name}")
         _report(native, reporter, bundle)
 
@@ -259,7 +360,7 @@ def compile_project(  # type: ignore[no-untyped-def]
             artifacts.reused.append(name)
         else:
             try:
-                emitted = emit_object(engine, native.ir, destination)
+                emitted = emit_object(engine(), native.ir, destination)
             except Exception as exc:  # noqa: BLE001 - reported, not fatal
                 artifacts.notes.append(f"could not emit object code for {name}: {exc}")
                 continue
@@ -284,13 +385,16 @@ def compile_project(  # type: ignore[no-untyped-def]
     )
 
     if artifacts.objects:
-        try:
-            artifacts.library = link_shared_library(
-                artifacts.objects, build_directory / f"libppy_{bundle.project.root.name}.so"
-            )
-        except ToolchainError as exc:
-            artifacts.notes.append(str(exc))
-
+        library_key = _library_key(artifacts.objects)
+        destination = build_directory / f"libppy_{bundle.project.root.name}.so"
+        cached_library = store.read(library_key)
+        if cached_library is not None:
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            destination.write_bytes(cached_library)
+            artifacts.library = destination
+            artifacts.reused.append("link")
+        else:
+            _link_and_cache(artifacts, store, library_key, destination)
     artifacts.manifest = write_manifest(
         build_directory / "ppy-bindings.json",
         signatures,
@@ -321,7 +425,7 @@ def compile_and_run(bundle, program_args, reporter, *, opt_level: int | None = N
     from ...opt.rewrites import adjustments_for_project
 
     level = opt_level if opt_level is not None else bundle.project.config.opt_level
-    natives = _collect(bundle)
+    natives = _collect(bundle, level)
     output = build_python(
         bundle,
         opt_level=level,

@@ -345,3 +345,148 @@ def test_is_generator_is_computed_once(tmp_path: Path):
     # The answer is kept, so asking again does not walk the body a second time.
     assert functions["plain"]._generator is False
     assert functions["yielding"]._generator is True
+
+
+def _project(root: Path) -> None:
+    (root / "pyproject.toml").write_text(
+        '[tool.ppy]\nopt-level = 3\nsource-roots = ["src"]\n', encoding="utf-8"
+    )
+    (root / "src").mkdir(exist_ok=True)
+
+
+def test_a_rebuild_with_no_change_recompiles_nothing(tmp_path: Path):
+    pytest.importorskip("llvmlite")
+    _project(tmp_path)
+    (tmp_path / "src" / "hot.ppy").write_text(
+        "import ppy\n\n\n@ppy.pure\n@ppy.opt(3)\ndef f(x: int) -> int:\n    return x * 2\n",
+        encoding="utf-8",
+    )
+    assert _build(tmp_path, "build", "src").returncode == 0
+
+    from ppy_compiler.backend.llvm import _cached_lowering, _object_key
+    from ppy_compiler.driver.pipeline import (
+        analyze_paths, collect_sources, module_cache_key, open_project,
+    )
+
+    sources = list(collect_sources(tmp_path / "src", ppy_only=True))
+    bundle = analyze_paths(open_project(tmp_path / "src"), sources, backend="llvm")
+    key = module_cache_key(bundle, "hot", target="llvm", opt_level=3)
+    assert _cached_lowering(bundle, "hot", 3) is not None, "lowering was not cached"
+    assert bundle.project.store.read(_object_key(key)) is not None, "the object was not cached"
+
+
+def test_only_the_changed_module_is_recompiled(tmp_path: Path):
+    pytest.importorskip("llvmlite")
+    _project(tmp_path)
+    for name in ("a", "b"):
+        (tmp_path / "src" / f"mod_{name}.ppy").write_text(
+            f"import ppy\n\n\n@ppy.pure\n@ppy.opt(3)\ndef {name}(x: int) -> int:\n    return x * 2\n",
+            encoding="utf-8",
+        )
+    assert _build(tmp_path, "build", "src").returncode == 0
+
+    from ppy_compiler.backend.llvm import _object_key
+    from ppy_compiler.driver.pipeline import (
+        analyze_paths, collect_sources, module_cache_key, open_project,
+    )
+
+    def object_keys() -> dict[str, str]:
+        sources = list(collect_sources(tmp_path / "src", ppy_only=True))
+        bundle = analyze_paths(open_project(tmp_path / "src"), sources, backend="llvm")
+        return {
+            name: _object_key(module_cache_key(bundle, name, target="llvm", opt_level=3))
+            for name in ("mod_a", "mod_b")
+        }
+
+    before = object_keys()
+    (tmp_path / "src" / "mod_a.ppy").write_text(
+        "import ppy\n\n\n@ppy.pure\n@ppy.opt(3)\ndef a(x: int) -> int:\n    return x * 3\n",
+        encoding="utf-8",
+    )
+    after = object_keys()
+    assert after["mod_a"] != before["mod_a"], "the changed module kept its key"
+    assert after["mod_b"] == before["mod_b"], "an untouched module was invalidated"
+
+
+def test_changing_a_dependency_invalidates_its_dependent(tmp_path: Path):
+    """The dependent's key covers the public summaries it compiled against."""
+    pytest.importorskip("llvmlite")
+    _project(tmp_path)
+    (tmp_path / "src" / "lib.ppy").write_text(
+        "import ppy\n\n\n@ppy.pure\n@ppy.opt(3)\ndef base(x: int) -> int:\n    return x * 2\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "src" / "app.ppy").write_text(
+        "import ppy\n\nimport lib\n\n\n@ppy.pure\n@ppy.opt(3)\n"
+        "def doubled(x: int) -> int:\n    return lib.base(x) + 1\n\n\nprint(doubled(10))\n",
+        encoding="utf-8",
+    )
+    assert _build(tmp_path, "run", "src/app.ppy").stdout.strip().endswith("21")
+
+    (tmp_path / "src" / "lib.ppy").write_text(
+        "import ppy\n\n\n@ppy.pure\n@ppy.opt(3)\ndef base(x: int) -> int:\n    return x * 5\n",
+        encoding="utf-8",
+    )
+    assert _build(tmp_path, "run", "src/app.ppy").stdout.strip().endswith("51")
+
+
+def test_a_fully_cached_build_needs_no_llvm(tmp_path: Path):
+    """Nothing is compiled, so the backend is never initialized."""
+    pytest.importorskip("llvmlite")
+    _project(tmp_path)
+    (tmp_path / "src" / "hot.ppy").write_text(
+        "import ppy\n\n\n@ppy.pure\n@ppy.opt(3)\ndef f(x: int) -> int:\n    return x * 2\n",
+        encoding="utf-8",
+    )
+    assert _build(tmp_path, "build", "src").returncode == 0
+
+    import subprocess
+    import sys
+
+    probe = tmp_path / "probe.py"
+    probe.write_text(
+        "import sys\n"
+        "from ppy_compiler.driver.cli import main\n"
+        "raise SystemExit(main(['build', 'src']) or "
+        "(1 if any('llvmlite.binding' in m for m in sys.modules) else 0))\n",
+        encoding="utf-8",
+    )
+    done = subprocess.run(
+        [sys.executable, str(probe)], cwd=tmp_path, capture_output=True, text=True, check=False
+    )
+    assert done.returncode == 0, "a fully cached build still loaded LLVM"
+
+
+def test_a_cached_lowering_round_trips():
+    from ppy_compiler.backend.llvm.lowering import NativeParam, NativeSignature
+    from ppy_compiler.backend.llvm.lowering_cache import decode, encode
+
+    class _Module:
+        name = "m"
+        ir = "; ir"
+        functions = {
+            "m.f": type(
+                "L", (), {
+                    "signature": NativeSignature(
+                        "m.f", "ppy_m_f",
+                        (NativeParam("xs", "view", "float"), NativeParam("n", "int")),
+                        ("i64",), releases_gil=True,
+                    )
+                }
+            )()
+        }
+        rejected = {"m.g": "has effects"}
+        fused: dict = {}
+        fusion_plan: dict = {}
+        fusion_notes: list = []
+
+    restored = decode(encode(_Module()))
+    assert restored is not None
+    signature = restored.signatures["m.f"]
+    assert signature.symbol == "ppy_m_f"
+    assert signature.releases_gil
+    assert signature.parameters[0].kind == "view"
+    assert signature.parameters[0].element == "float"
+    assert restored.rejected == {"m.g": "has effects"}
+    assert decode('{"version": 0}') is None
+    assert decode("not json") is None
