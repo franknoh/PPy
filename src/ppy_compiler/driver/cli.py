@@ -35,7 +35,11 @@ def build_parser() -> argparse.ArgumentParser:
 
     convert = subparsers.add_parser("convert", help="convert .py sources to typed .ppy sources")
     convert.add_argument("path", type=Path)
-    convert.add_argument("--in-place", action="store_true", help="replace the .py source instead of writing .ppy")
+    convert.add_argument(
+        "--in-place",
+        action="store_true",
+        help="replace the source: write the .ppy and remove the .py it came from",
+    )
     convert.add_argument("--force", action="store_true", help="overwrite an existing .ppy file")
     convert.add_argument("--dry-run", action="store_true", help="print the result without writing")
     convert.add_argument(

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import subprocess
 import sys
 import textwrap
@@ -132,12 +133,14 @@ def test_convert_refuses_to_clobber_without_force(workspace: Path):
 
 
 def test_convert_in_place_replaces_the_source(workspace: Path):
+    """The module becomes `.ppy` and the `.py` it came from is gone."""
     source = workspace / "inplace.py"
     source.write_text("def f(x):\n    return x + 1\n\n\nf(1)\n", encoding="utf-8")
     result = _ppy(["convert", "inplace.py", "--in-place"], workspace)
     assert result.returncode == 0
-    assert "def f(x: int) -> int:" in source.read_text(encoding="utf-8")
-    assert not (workspace / "inplace.ppy").exists()
+    assert not source.exists()
+    converted = workspace / "inplace.ppy"
+    assert "def f(x: int) -> int:" in converted.read_text(encoding="utf-8")
 
 
 def test_convert_reports_uninferable_parameters(workspace: Path):
@@ -754,3 +757,106 @@ def test_a_per_function_opt_level_outranks_the_flag(workspace: Path):
     )
     lowered = _ppy(["-O0", "explain", "hot"], workspace)
     assert "optimization: O3" in lowered.stdout
+
+
+def _project(workspace: Path) -> Path:
+    """A three-module untyped project whose types only exist across files."""
+    src = workspace / "src"
+    src.mkdir(exist_ok=True)
+    (workspace / "pyproject.toml").write_text(
+        '[tool.ppy]\nstrict = true\nsource-roots = ["src"]\n', encoding="utf-8"
+    )
+    (src / "geometry.py").write_text(
+        textwrap.dedent(
+            """
+            import math
+
+
+            def distance(x1, y1, x2, y2):
+                return math.sqrt((x2 - x1) * (x2 - x1) + (y2 - y1) * (y2 - y1))
+            """
+        ).lstrip("\n"),
+        encoding="utf-8",
+    )
+    (src / "shapes.py").write_text(
+        textwrap.dedent(
+            """
+            import geometry
+
+
+            def perimeter(points):
+                total = 0.0
+                for i in range(len(points)):
+                    a = points[i]
+                    b = points[(i + 1) % len(points)]
+                    total += geometry.distance(a[0], a[1], b[0], b[1])
+                return total
+            """
+        ).lstrip("\n"),
+        encoding="utf-8",
+    )
+    (src / "app.py").write_text(
+        textwrap.dedent(
+            """
+            import shapes
+
+
+            def main():
+                square = [(0.0, 0.0), (1.0, 0.0), (1.0, 1.0), (0.0, 1.0)]
+                print(round(shapes.perimeter(square), 3))
+
+
+            main()
+            """
+        ).lstrip("\n"),
+        encoding="utf-8",
+    )
+    return src
+
+
+def test_convert_types_a_project_across_module_boundaries(workspace: Path):
+    """`distance` has no call site in its own file; the types come from another."""
+    src = _project(workspace)
+    assert _ppy(["convert", "src"], workspace).returncode == 0
+
+    geometry = (src / "geometry.ppy").read_text(encoding="utf-8")
+    assert "def distance(x1: float, y1: float, x2: float, y2: float) -> float:" in geometry
+    shapes = (src / "shapes.ppy").read_text(encoding="utf-8")
+    assert "def perimeter(points: list[tuple[float, float]]) -> float:" in shapes
+
+
+def test_convert_warns_when_both_sources_survive(workspace: Path):
+    src = _project(workspace)
+    result = _ppy(["convert", "src"], workspace)
+    assert "W2005" in result.stderr
+    assert (src / "app.py").exists() and (src / "app.ppy").exists()
+    # The ambiguity the warning is about is a real error for the next command.
+    assert _ppy(["check", "src"], workspace).returncode == 1
+
+
+def test_in_place_migrates_a_project_to_ppy(workspace: Path):
+    src = _project(workspace)
+    result = _ppy(["convert", "src", "--in-place"], workspace)
+    assert result.returncode == 0
+    assert "W2005" not in result.stderr
+    assert sorted(p.name for p in src.glob("*.py")) == []
+    assert sorted(p.name for p in src.glob("*.ppy")) == [
+        "app.ppy", "geometry.ppy", "shapes.ppy"
+    ]
+
+
+def test_a_migrated_project_still_runs_on_plain_cpython(workspace: Path):
+    """`import ppy` installs the loader, so it cannot follow a sibling import."""
+    src = _project(workspace)
+    assert _ppy(["convert", "src", "--in-place"], workspace).returncode == 0
+
+    app = (src / "app.ppy").read_text(encoding="utf-8").splitlines()
+    assert app.index("import ppy") < app.index("import shapes")
+
+    plain = subprocess.run(
+        [sys.executable, "app.ppy"],
+        cwd=src, capture_output=True, text=True, check=False,
+        env={**os.environ, "PYTHONPATH": "."},
+    )
+    assert plain.returncode == 0, plain.stderr
+    assert plain.stdout.strip() == "4.0"

@@ -40,6 +40,7 @@ CODES: dict[str, str] = {
     "W2001": "A module is shadowed by a same-named source with a different extension.",
     "W2002": "A `bool` value takes part in arithmetic, which is legal but usually unintended.",
     "W2003": "Unknown `Annotated` metadata was preserved but not interpreted.",
+    "W2005": "Conversion left both a .py and a .ppy source for the same module.",
     "W2004": "A directive had no effect for the selected backend.",
     "R3003": "A list parameter is close to being a borrowed buffer but something blocks it.",
     "R3002": "The converter promoted a list parameter to a borrowed buffer.",

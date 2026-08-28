@@ -41,6 +41,9 @@ class ConversionPlan:
     #: Module-level list constructions to wrap in `array.array`, by line.
     buffers: dict[int, str] = field(default_factory=dict)
     needs_array: bool = False
+    #: Modules of this project that the file imports. `import ppy` installs the
+    #: loader those need, so it has to be placed ahead of them.
+    local_imports: set[str] = field(default_factory=set)
     typing_imports: set[str] = field(default_factory=set)
     ppy_imports: set[str] = field(default_factory=set)
     needs_ppy: bool = False
@@ -88,13 +91,15 @@ def run_convert(options: argparse.Namespace, reporter: Reporter) -> int:
 
         original = path.read_text(encoding="utf-8")
         converted = convert_source(original, plan)
-        destination = path if options.in_place else path.with_suffix(".ppy")
+        # `--in-place` replaces the source: the module becomes `.ppy` and the
+        # `.py` goes, which is what leaves a project importable afterwards.
+        destination = path.with_suffix(".ppy")
 
         if options.dry_run:
             print(f"# ---- {destination} ----")
             print(converted)
             continue
-        if destination.exists() and destination != path and not options.force:
+        if destination.exists() and not options.force:
             reporter.emit(
                 Diagnostic(
                     "E1002",
@@ -106,11 +111,38 @@ def run_convert(options: argparse.Namespace, reporter: Reporter) -> int:
             failures += 1
             continue
         destination.write_text(converted, encoding="utf-8")
+        if options.in_place:
+            path.unlink()
         written.append(destination)
 
     if written:
         reporter.note(f"converted {len(written)} file(s): " + ", ".join(str(p) for p in written))
+        _warn_about_shadowed_sources(written, reporter)
     return 1 if failures else 0
+
+
+def _warn_about_shadowed_sources(written: list[Path], reporter: Reporter) -> None:
+    """Both `foo.py` and `foo.ppy` now exist, which a project may not contain.
+
+    Conversion leaves the original in place on purpose, but until it is gone
+    the module is ambiguous and `ppy check` refuses it, so say what to do next
+    rather than let the next command report a surprise.
+    """
+    shadowed = [path for path in written if path.with_suffix(".py").exists()]
+    if not shadowed:
+        return
+    listed = ", ".join(str(path.with_suffix(".py")) for path in shadowed[:3])
+    if len(shadowed) > 3:
+        listed += f", and {len(shadowed) - 3} more"
+    reporter.emit(
+        Diagnostic(
+            "W2005",
+            Severity.WARNING,
+            f"{len(shadowed)} module(s) now have both a .py and a .ppy source: {listed}",
+            help="remove the .py sources, or convert with --in-place, before "
+            "running `ppy check`; a module may not be provided by both",
+        )
+    )
 
 
 def _module_for(bundle, path: Path) -> str | None:  # type: ignore[no-untyped-def]
@@ -240,6 +272,9 @@ def build_plan(  # type: ignore[no-untyped-def]
             )
         )
 
+    plan.local_imports = {
+        binding.module for binding in symbols.imports.values() if not binding.external
+    }
     plan.needs_ppy = _uses_ppy(plan, symbols)
     diagnostics.extend(_dynamic_findings(symbols))
     return plan, diagnostics
@@ -489,23 +524,41 @@ def _insert_imports(module: cst.Module, plan: ConversionPlan) -> cst.Module:
         return module
     body = list(module.body)
     head = _insert_index(module)
-    tail = _import_block_end(module, head)
+    tail = _import_block_end(module, head, plan.local_imports)
     return module.with_changes(
         body=[*body[:head], *standard, *body[head:tail], *trailing, *body[tail:]]
     )
 
 
-def _import_block_end(module: cst.Module, start: int) -> int:
-    """The first statement after the leading run of imports."""
+def _import_block_end(module: cst.Module, start: int, local: set[str]) -> int:
+    """Where a `ppy` import belongs: after the third-party ones, before the local.
+
+    `import ppy` installs the loader that a sibling `.ppy` module needs, so it
+    cannot follow one. That is also where PEP 8 puts it, third-party coming
+    before first-party.
+    """
     end = start
     for position in range(start, len(module.body)):
         statement = module.body[position]
         if not isinstance(statement, cst.SimpleStatementLine):
             break
-        if not isinstance(statement.body[0], (cst.Import, cst.ImportFrom)):
+        first = statement.body[0]
+        if not isinstance(first, (cst.Import, cst.ImportFrom)):
+            break
+        if _imports_any(first, local):
             break
         end = position + 1
     return end
+
+
+def _imports_any(statement: cst.BaseSmallStatement, local: set[str]) -> bool:
+    """Does this import statement bring in one of the project's own modules?"""
+    if isinstance(statement, cst.ImportFrom):
+        module = statement.module
+        return module is not None and _dotted(module).partition(".")[0] in local
+    if isinstance(statement, cst.Import):
+        return any(_dotted(alias.name).partition(".")[0] in local for alias in statement.names)
+    return False
 
 
 def _existing_imports(module: cst.Module) -> set[str]:
