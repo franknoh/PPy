@@ -1915,3 +1915,75 @@ def test_a_mutating_program_matches_plain_cpython(tmp_path: Path):
     assert plain.returncode == 0, plain.stderr
     assert native.returncode == 0, native.stderr
     assert native.stdout == plain.stdout
+
+
+MINMAX = """
+    import ppy
+
+
+    @ppy.pure
+    @ppy.opt(3)
+    def widest(a: int, b: int) -> int:
+        return max(a, b)
+
+
+    @ppy.pure
+    @ppy.opt(3)
+    def narrowest(a: float, b: float, c: float) -> float:
+        return min(a, b, c)
+"""
+
+
+def test_min_and_max_over_scalars_lower_natively(write, analyze):
+    path = write("minmax.ppy", MINMAX)
+    module = _collect(analyze(path, backend="llvm"))["minmax"]
+    assert "minmax.widest" in module.functions
+    assert "minmax.narrowest" in module.functions
+    ir = emit_ir(analyze(path, backend="llvm"))["minmax"]
+    # The pairwise selects are what is emitted; LLVM folds them into its own
+    # `smax`/`minnum` intrinsics, and either form is a real machine operation
+    # rather than a call back into CPython.
+    assert "select" in ir or "llvm.smax" in ir or "llvm.minnum" in ir
+    assert "PyObject" not in ir
+
+
+def test_a_mixed_extremum_is_refused_rather_than_coerced(write, analyze):
+    """CPython returns the winning object, so `max(3, 2.5)` is the int `3`."""
+    path = write(
+        "mixed.ppy",
+        """
+        import ppy
+
+        @ppy.pure
+        @ppy.opt(3)
+        def either(a: int, b: float) -> float:
+            return max(a, b)
+        """,
+    )
+    module = _collect(analyze(path, backend="llvm"))["mixed"]
+    assert "mixed.either" not in module.functions
+    assert "would change the result type" in module.rejected["mixed.either"]
+
+
+def test_extremum_results_match_plain_cpython(tmp_path: Path):
+    entry = tmp_path / "extremum.ppy"
+    entry.write_text(
+        textwrap.dedent(MINMAX).lstrip("\n")
+        + textwrap.dedent(
+            """
+
+            nan: float = float("nan")
+            print(widest(3, 7), widest(7, 3), widest(4, 4), widest(-5, -9))
+            print(narrowest(3.0, 1.0, 2.0), narrowest(1.0, 1.0, 1.0))
+            print(narrowest(nan, 1.0, 2.0), narrowest(1.0, nan, 2.0))
+            print(narrowest(-0.0, 0.0, 0.0))
+            """
+        ),
+        encoding="utf-8",
+    )
+    (tmp_path / "pyproject.toml").write_text("[tool.ppy]\nopt-level = 3\n", encoding="utf-8")
+    plain = _run([sys.executable, entry.name], tmp_path)
+    native = _ppy(["run", entry.name], tmp_path)
+    assert plain.returncode == 0, plain.stderr
+    assert native.returncode == 0, native.stderr
+    assert native.stdout == plain.stdout

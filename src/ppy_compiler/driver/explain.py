@@ -115,8 +115,9 @@ def _print_function(
     print(f"purity: {_purity(info, analysis)}")
     print(f"optimization: O{level}")
     print(f"python backend: {_python_backend(analysis)}")
-    print(f"llvm backend: {_llvm_backend(report)}")
-    if report is not None and report.native_ok:
+    lowered = _lowering_outcome(bundle, info)
+    print(f"llvm backend: {lowered or _llvm_backend(report)}")
+    if report is not None and report.native_ok and lowered is None:
         print(f"python boundary: {_boundary(info)}")
     print(f"jit: {_jit_detail(info, report)}")
     print(f"parallel: {'accepted' if report and report.parallel_ok else 'rejected'}")
@@ -185,6 +186,28 @@ def _python_backend(analysis: FunctionAnalysis) -> str:
     if analysis.dynamic:
         return "boxed: contains a dynamic boundary"
     return "optimized"
+
+
+def _lowering_outcome(bundle: AnalysisBundle, info: FunctionInfo) -> str | None:
+    """Why the body did not lower, when the contract said it could.
+
+    Eligibility is decided from types and effects; the body can still contain
+    an expression with no native form, and reporting `native` for a function
+    that will fall back at every call is worse than saying nothing.
+    """
+    try:
+        from ..backend.llvm import LlvmUnavailable, _collect
+    except ImportError:  # pragma: no cover - the backend is optional
+        return None
+    try:
+        modules = _collect(bundle)
+    except (LlvmUnavailable, Exception):  # pragma: no cover - diagnostics only
+        return None
+    module = modules.get(info.module)
+    if module is None or info.qualname in module.functions:
+        return None
+    reason = module.rejected.get(info.qualname)
+    return f"boxed: {reason}" if reason else None
 
 
 def _llvm_backend(report: ContractReport | None) -> str:

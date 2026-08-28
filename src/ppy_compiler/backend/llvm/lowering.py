@@ -1031,12 +1031,45 @@ class _FunctionLowering:
                 if target == "len":
                     return _Value(self.buffers[argument.id][1], "int")
                 return self._buffer_reduction(argument.id, target)
+        if target in {"min", "max"} and len(node.args) >= 2:
+            return self._extremum(target, node)
         if target in {"abs", "float", "int", "bool"}:
             return self._builtin_call(target, node)
         for qualname, (function, signature) in self.declarations.items():
             if qualname.rpartition(".")[2] == target:
                 return self._native_call(function, signature, qualname, node)
         raise Unsupported(f"`{target}` has no native lowering")
+
+    def _extremum(self, target: str, node: ast.Call) -> _Value:
+        """`min(a, b, ...)` and `max(a, b, ...)` over scalars.
+
+        Written as a fold of pairwise selects so that the comparison keeps the
+        argument order Python guarantees: the first of equal values wins.
+        """
+        values = [self._expr(argument) for argument in node.args]
+        kinds = {value.scalar for value in values}
+        if len(kinds) != 1:
+            # CPython returns the winning object, so `max(3, 2.5)` is the int
+            # `3` and not `3.0`. One scalar kind cannot express that.
+            raise Unsupported(f"`{target}` over mixed {sorted(kinds)} would change the result type")
+        kind = values[0].scalar
+        if kind not in {"int", "float"}:
+            raise Unsupported(f"`{target}` over `{kind}` has no native lowering")
+        best = self._coerce(values[0], kind)
+        for candidate in values[1:]:
+            other = self._coerce(candidate, kind)
+            if kind == "float":
+                # NaN propagates the way `min`/`max` do: a comparison against it
+                # is false, so the incumbent is kept.
+                wins = self.builder.fcmp_ordered(
+                    "<" if target == "min" else ">", other.value, best.value
+                )
+            else:
+                wins = self.builder.icmp_signed(
+                    "<" if target == "min" else ">", other.value, best.value
+                )
+            best = _Value(self.builder.select(wins, other.value, best.value), kind)
+        return best
 
     def _native_call(self, function, signature: NativeSignature, qualname: str, node: ast.Call) -> _Value:
         ir = self.ir
