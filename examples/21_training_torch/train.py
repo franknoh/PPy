@@ -55,9 +55,16 @@ def train_step(x, y, parameters, rate):
     return loss.item()
 
 
+def preferred_device():
+    if torch.cuda.is_available():
+        return "cuda"
+    return "cpu"
+
+
 def main():
     rows = 20000
     cols = 16
+    device = preferred_device()
 
     torch.manual_seed(0)
     raw = torch.randn(rows * cols).tolist()
@@ -67,13 +74,13 @@ def main():
     checksum = standardize(raw, features, rows, cols)
     prep_ms = (time.perf_counter() - started) * 1000.0
 
-    x = torch.tensor(features, dtype=torch.float32).reshape(rows, cols * 2)
-    y = torch.randn(rows, 1)
+    x = torch.tensor(features, dtype=torch.float32).reshape(rows, cols * 2).to(device)
+    y = torch.randn(rows, 1).to(device)
     parameters = [
-        torch.randn(cols * 2, 32, requires_grad=True),
-        torch.zeros(32, requires_grad=True),
-        torch.randn(32, 1, requires_grad=True),
-        torch.zeros(1, requires_grad=True),
+        torch.randn(cols * 2, 32, device=device, requires_grad=True),
+        torch.zeros(32, device=device, requires_grad=True),
+        torch.randn(32, 1, device=device, requires_grad=True),
+        torch.zeros(1, device=device, requires_grad=True),
     ]
     with torch.no_grad():
         parameters[0] *= 0.1
@@ -88,6 +95,7 @@ def main():
             first = last
     train_ms = (time.perf_counter() - started) * 1000.0
 
+    print(f"# device: {device}")
     print(f"# native prep: {getattr(standardize, '__ppy_native__', None) is not None}")
     print(f"# aten region: {getattr(forward_loss, '__ppy_region__', False)}")
     print(f"prep  {prep_ms:8.1f} ms   checksum={checksum:.6f}")

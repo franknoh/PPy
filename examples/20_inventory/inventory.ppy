@@ -48,9 +48,7 @@ def below_stock(items: list[tuple[str, int, float]], threshold: int) -> list[str
 
 
 @ppy.pure
-def summary(
-    items: list[tuple[str, int, float]],
-) -> tuple[float, float, float] | tuple[float, float, float]:
+def summary(items: list[tuple[str, int, float]]) -> tuple[float, float, float]:
     value = total_value(items)
     count = len(items)
     if not count:

@@ -84,6 +84,7 @@ def main():
     last = float(forward_loss(x, y, w1, b1, w2, b2))
     train_ms = (time.perf_counter() - started) * 1000.0
 
+    print(f"# device: {jax.devices()[0].platform}")
     print(f"# native prep: {getattr(standardize, '__ppy_native__', None) is not None}")
     print(f"prep  {prep_ms:8.1f} ms   checksum={checksum:.6f}")
     print(f"train {train_ms:8.1f} ms   loss {first:.4f} -> {last:.4f}")
