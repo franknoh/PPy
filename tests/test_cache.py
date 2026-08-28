@@ -257,3 +257,91 @@ def test_the_index_is_closed_at_exit(tmp_path: Path):
     )
     assert done.returncode == 0, done.stderr
     assert "unclosed database" not in done.stderr
+
+
+def _build(workspace: Path, *args: str):
+    import subprocess
+    import sys
+
+    return subprocess.run(
+        [sys.executable, "-m", "ppy_compiler", *args],
+        cwd=workspace, capture_output=True, text=True, check=False, timeout=900,
+    )
+
+
+def test_an_object_file_is_reused_rather_than_regenerated(tmp_path: Path):
+    """Code generation is deterministic, so the same key means the same bytes."""
+    pytest.importorskip("llvmlite")
+    (tmp_path / "pyproject.toml").write_text("[tool.ppy]\nopt-level = 3\n", encoding="utf-8")
+    (tmp_path / "hot.ppy").write_text(
+        "import ppy\n\n\n@ppy.pure\n@ppy.opt(3)\ndef f(x: int) -> int:\n    return x * 2\n",
+        encoding="utf-8",
+    )
+    assert _build(tmp_path, "build", "hot.ppy").returncode == 0
+    status = _build(tmp_path, "cache", "status").stdout
+    assert "native" in status, status
+
+    from ppy_compiler.backend.llvm import _object_key
+    from ppy_compiler.driver.pipeline import analyze_paths, module_cache_key, open_project
+
+    path = tmp_path / "hot.ppy"
+    bundle = analyze_paths(open_project(path), [path], backend="llvm")
+    key = module_cache_key(bundle, "hot", target="llvm", opt_level=3)
+    store = bundle.project.store
+    assert store.read(_object_key(key)) is not None
+
+
+def test_changing_the_source_invalidates_the_object(tmp_path: Path):
+    pytest.importorskip("llvmlite")
+    (tmp_path / "pyproject.toml").write_text("[tool.ppy]\nopt-level = 3\n", encoding="utf-8")
+    source = tmp_path / "hot.ppy"
+    source.write_text(
+        "import ppy\n\n\n@ppy.pure\n@ppy.opt(3)\n"
+        "def f(x: int) -> int:\n    return x * 2\n\n\nprint(f(21))\n",
+        encoding="utf-8",
+    )
+    assert _build(tmp_path, "run", "hot.ppy").stdout.strip().endswith("42")
+    source.write_text(
+        "import ppy\n\n\n@ppy.pure\n@ppy.opt(3)\n"
+        "def f(x: int) -> int:\n    return x * 3\n\n\nprint(f(21))\n",
+        encoding="utf-8",
+    )
+    assert _build(tmp_path, "run", "hot.ppy").stdout.strip().endswith("63")
+
+
+def test_the_optimization_level_is_part_of_the_object_key(tmp_path: Path):
+    pytest.importorskip("llvmlite")
+    (tmp_path / "pyproject.toml").write_text("[tool.ppy]\nopt-level = 3\n", encoding="utf-8")
+    (tmp_path / "hot.ppy").write_text(
+        "import ppy\n\n\ndef f(x: int) -> int:\n    return x * 2\n", encoding="utf-8"
+    )
+    from ppy_compiler.backend.llvm import _object_key
+    from ppy_compiler.driver.pipeline import analyze_paths, module_cache_key, open_project
+
+    path = tmp_path / "hot.ppy"
+    bundle = analyze_paths(open_project(path), [path], backend="llvm")
+    keys = {
+        _object_key(module_cache_key(bundle, "hot", target="llvm", opt_level=level))
+        for level in (0, 1, 2, 3)
+    }
+    assert len(keys) == 4
+
+
+def test_is_generator_is_computed_once(tmp_path: Path):
+    """`signature()` asks for it once per function per checked function."""
+    from ppy_compiler.driver.pipeline import analyze_paths, open_project
+
+    (tmp_path / "pyproject.toml").write_text("[tool.ppy]\n", encoding="utf-8")
+    path = tmp_path / "gen.ppy"
+    path.write_text(
+        "def plain(x: int) -> int:\n    return x\n\n\n"
+        "def yielding(n: int):\n    for i in range(n):\n        yield i\n",
+        encoding="utf-8",
+    )
+    bundle = analyze_paths(open_project(path), [path], backend="python")
+    functions = bundle.symbols.modules["gen"].functions
+    assert not functions["plain"].is_generator
+    assert functions["yielding"].is_generator
+    # The answer is kept, so asking again does not walk the body a second time.
+    assert functions["plain"]._generator is False
+    assert functions["yielding"]._generator is True

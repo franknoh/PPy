@@ -209,6 +209,11 @@ def emit_ir(bundle) -> dict[str, str]:  # type: ignore[no-untyped-def]
     return {name: engine.optimized_ir(module.ir) for name, module in _collect(bundle).items()}
 
 
+def _object_key(key: CacheKey) -> str:
+    """The key of the object file compiled from the module this key names."""
+    return f"{key.hex()}.o"
+
+
 def compile_project(  # type: ignore[no-untyped-def]
     bundle,
     reporter,
@@ -242,13 +247,27 @@ def compile_project(  # type: ignore[no-untyped-def]
 
         if not native.functions and not native.fused:
             continue
-        try:
-            artifacts.objects.append(
-                emit_object(engine, native.ir, build_directory / f"{name.replace('.', '_')}.o")
+        destination = build_directory / f"{name.replace('.', '_')}.o"
+        # The object depends on exactly what the module key covers, so a hit
+        # means the previous one is still correct and running the optimizer and
+        # the code generator again would produce the same bytes.
+        cached = store.read(_object_key(key))
+        if cached is not None:
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            destination.write_bytes(cached)
+            artifacts.objects.append(destination)
+            artifacts.reused.append(name)
+        else:
+            try:
+                emitted = emit_object(engine, native.ir, destination)
+            except Exception as exc:  # noqa: BLE001 - reported, not fatal
+                artifacts.notes.append(f"could not emit object code for {name}: {exc}")
+                continue
+            store.put(
+                _object_key(key), emitted.read_bytes(), kind="native", source=name, suffix=".o"
             )
-        except Exception as exc:  # noqa: BLE001 - reported, not fatal
-            artifacts.notes.append(f"could not emit object code for {name}: {exc}")
-            continue
+            store.mark_root(_object_key(key), f"object:{name}")
+            artifacts.objects.append(emitted)
         for lowered in native.functions.values():
             signatures[lowered.signature.qualname] = lowered.signature
         for symbol, loop in native.fused.items():

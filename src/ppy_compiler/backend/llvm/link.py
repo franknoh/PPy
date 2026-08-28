@@ -47,6 +47,8 @@ class BuildArtifacts:
     manifest: Path | None = None
     launcher: Path | None = None
     notes: list[str] = field(default_factory=list)
+    #: Modules whose object came from the cache instead of the code generator.
+    reused: list[str] = field(default_factory=list)
 
 
 def _compiler() -> str | None:
