@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from ..analysis import stdlib
 from ..analysis.checker import ProjectAnalysis, analyze
 from ..analysis.contracts import ContractReport, verify
 from ..analysis.symbols import ProjectSymbols
@@ -129,6 +130,8 @@ def analyze_paths(
         overlays=overlays,
     )
     symbols = ProjectSymbols(graph, diagnostics, strict=project.config.strict)
+    for qualname, display in stdlib.EXTERNAL_TYPES.items():
+        symbols.register_external_type(qualname, display)
     for qualname, display in project.plugins.external_types().items():
         symbols.register_external_type(qualname, display)
     symbols.build()

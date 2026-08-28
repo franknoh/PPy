@@ -11,7 +11,15 @@ from . import types as T
 from .effects import Effect, EffectSet
 from .refinements import Facts, IntRange
 
-__all__ = ["lookup", "call", "MODULE_ATTRIBUTES", "ARRAY_TYPECODES"]
+__all__ = [
+    "INSTANCE_ATTRS",
+    "EXTERNAL_TYPES",
+    "instance_attribute",
+    "lookup",
+    "call",
+    "MODULE_ATTRIBUTES",
+    "ARRAY_TYPECODES",
+]
 
 #: `array` type codes and the element type each denotes.
 ARRAY_TYPECODES: dict[str, T.Type] = {
@@ -30,8 +38,65 @@ def _fn(qualname: str, ret: T.Type, effects: EffectSet = EffectSet()) -> tuple[T
     return T.Callable_((), ret, qualname), effects
 
 
+_THREAD = T.Instance("threading.Thread", (), ("threading.Thread", "object"))
+_LOCK = T.Instance("threading.Lock", (), ("threading.Lock", "object"))
+_EVENT = T.Instance("threading.Event", (), ("threading.Event", "object"))
+_THREAD_EFFECTS = EffectSet.of(Effect.THREAD, Effect.SYNC)
+
+#: Attributes of a standard-library instance the analyzer knows.
+INSTANCE_ATTRS: dict[str, dict[str, tuple[T.Type, EffectSet]]] = {
+    "threading.Thread": {
+        "start": (T.Callable_((), T.NONE, "threading.Thread.start"), _THREAD_EFFECTS),
+        "join": (T.Callable_((), T.NONE, "threading.Thread.join"), _THREAD_EFFECTS),
+        "is_alive": (T.Callable_((), T.BOOL, "threading.Thread.is_alive"), _THREAD_EFFECTS),
+        "name": (T.STR, EffectSet()),
+        "daemon": (T.BOOL, EffectSet()),
+        "ident": (T.union(T.INT, T.NONE), EffectSet()),
+    },
+    "threading.Lock": {
+        "acquire": (T.Callable_((), T.BOOL, "threading.Lock.acquire"), _THREAD_EFFECTS),
+        "release": (T.Callable_((), T.NONE, "threading.Lock.release"), _THREAD_EFFECTS),
+        "locked": (T.Callable_((), T.BOOL, "threading.Lock.locked"), EffectSet()),
+        "__enter__": (T.Callable_((), T.BOOL, "threading.Lock.__enter__"), _THREAD_EFFECTS),
+        "__exit__": (T.Callable_((), T.BOOL, "threading.Lock.__exit__"), _THREAD_EFFECTS),
+    },
+    "threading.Event": {
+        "set": (T.Callable_((), T.NONE, "threading.Event.set"), _THREAD_EFFECTS),
+        "clear": (T.Callable_((), T.NONE, "threading.Event.clear"), _THREAD_EFFECTS),
+        "is_set": (T.Callable_((), T.BOOL, "threading.Event.is_set"), EffectSet()),
+        "wait": (T.Callable_((), T.BOOL, "threading.Event.wait"), _THREAD_EFFECTS),
+    },
+}
+
+
+#: Standard-library classes usable as annotations, with the name to display.
+EXTERNAL_TYPES: dict[str, str] = {
+    "threading.Thread": "threading.Thread",
+    "threading.Lock": "threading.Lock",
+    "threading.RLock": "threading.Lock",
+    "threading.Event": "threading.Event",
+}
+
+
+def instance_attribute(name: str, attribute: str) -> tuple[T.Type, EffectSet] | None:
+    """An attribute of a standard-library instance, if the analyzer knows it."""
+    return INSTANCE_ATTRS.get(name, {}).get(attribute)
+
+
 #: Callables the analyzer knows the result type and effects of.
 _FUNCTIONS: dict[str, tuple[T.Type, EffectSet]] = {
+    "threading.Thread": (T.Callable_((), _THREAD, "threading.Thread"), _THREAD_EFFECTS),
+    "threading.Lock": (T.Callable_((), _LOCK, "threading.Lock"), _THREAD_EFFECTS),
+    "threading.RLock": (T.Callable_((), _LOCK, "threading.RLock"), _THREAD_EFFECTS),
+    "threading.Event": (T.Callable_((), _EVENT, "threading.Event"), _THREAD_EFFECTS),
+    "threading.current_thread": (
+        T.Callable_((), _THREAD, "threading.current_thread"), _THREAD_EFFECTS
+    ),
+    "threading.active_count": (
+        T.Callable_((), T.INT, "threading.active_count"), _THREAD_EFFECTS
+    ),
+    "threading.get_ident": (T.Callable_((), T.INT, "threading.get_ident"), _THREAD_EFFECTS),
+
     # The runtime's own import-hook API. Installing the finder mutates
     # `sys.meta_path`, which is global state.
     "ppy.install": _fn("ppy.install", T.NONE, EffectSet.of(Effect.WRITE_GLOBAL)),

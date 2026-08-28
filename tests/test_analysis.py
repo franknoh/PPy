@@ -858,3 +858,44 @@ def test_the_runtime_import_hook_api_is_typed(write, analyze):
         """,
     )
     assert not analyze(path).diagnostics.has_errors()
+
+
+def test_threading_is_typed(write, analyze):
+    path = write(
+        "threads.ppy",
+        """
+        import threading
+
+        def spawn(count: int) -> int:
+            workers: list[threading.Thread] = []
+            for _ in range(count):
+                workers.append(threading.Thread())
+            for worker in workers:
+                worker.start()
+            for worker in workers:
+                worker.join()
+            return len(workers)
+
+        def guarded(lock: threading.Lock) -> bool:
+            acquired: bool = lock.acquire()
+            lock.release()
+            return acquired
+        """,
+    )
+    assert not analyze(path).diagnostics.has_errors()
+
+
+def test_threading_carries_its_effects(write, analyze):
+    path = write(
+        "threadfx.ppy",
+        """
+        import ppy
+        import threading
+
+        @ppy.pure
+        def spawn() -> None:
+            threading.Thread().start()
+        """,
+    )
+    codes = [d.code for d in analyze(path).diagnostics.sorted()]
+    assert "E1601" in codes

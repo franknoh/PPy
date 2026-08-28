@@ -1323,6 +1323,15 @@ class _Checker:
             if info is not None and self.strict and not self._dynamic_depth:
                 self._error("E1202", f"`{info.name}` has no attribute `{node.attr}`", node)
                 return Binding(T.UNKNOWN)
+        known = stdlib.instance_attribute(base.name, node.attr) if isinstance(base, T.Instance) else None
+        if known is not None:
+            self._effects = self._effects | known[1]
+            if known[1].violations():
+                self._blockers.append(
+                    f"uses `{base.name}.{node.attr}` with effects: {known[1]}"
+                )
+            self._native_blockers.append(f"`{base.name}.{node.attr}` has no native lowering")
+            return Binding(known[0])
         plugin_attribute = self._plugin_instance_attribute(base, node.attr, owner.facts)
         if plugin_attribute is not None:
             self._effects = self._effects.add(Effect.READ_OBJECT)
