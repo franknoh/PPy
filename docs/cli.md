@@ -128,8 +128,11 @@ what you want; `--no-strict` turns a type checker down.
 ppy lint --backend pyright src
 ```
 
-A `pyproject.toml`, `.pylintrc`, or `ruff.toml` at the project root is copied
-into the staging tree, so the project's own configuration applies.
+The staging tree mirrors the project: every tool config at the root
+(`pyproject.toml`, `pyrightconfig.json`, `.pylintrc`, `ruff.toml`,
+`mypy.ini`, ...) and every plain `.py` module is copied in alongside the
+staged sources, so imports resolve and the project's own configuration —
+`extraPaths`, per-rule overrides, execution environments — keeps applying.
 
 ## `ppy fmt` — formatting
 
@@ -141,7 +144,8 @@ The built-in pass runs first and settles what an external formatter has no
 opinion about: import grouping that keeps `ppy` ahead of a sibling module, and
 a signature wrapped after annotation. An installed `ruff` or `black` then
 applies the project's own style on top. `--check` writes nothing and exits
-non-zero if a file would change.
+non-zero if a file would change. An installed formatter that fails — bad
+config, crash, timeout — is an error (`E1802`), not a silent fallback.
 
 `ppy convert` uses the built-in normalizer only, so a converted file is
 byte-identical on every machine. Pass `--format`, or set
@@ -199,56 +203,7 @@ LSP over stdio.
 ## Configuration
 
 CLI options override `[tool.ppy]` in `pyproject.toml` for one invocation.
-
-```toml
-[tool.ppy]
-python = ">=3.12,<3.15"
-strict = true
-opt-level = 2
-cache-dir = ".ppy-cache"
-dynamic-boundaries = "explicit"   # "explicit" | "deny"
-build-execution = "deny"          # "deny" | "allow"
-source-roots = ["src", "."]
-
-[tool.ppy.python-backend]
-enabled = true
-
-[tool.ppy.llvm]
-enabled = true
-target = "native"
-jit = true
-lto = "thin"
-cpython-api = "version-specific"
-
-[tool.ppy.parallel]
-enabled = true
-threads = "auto"
-
-[tool.ppy.inference]
-interprocedural = true
-write-local-annotations = true
-implicit-any = "error"
-
-[tool.ppy.convert]
-format = false
-
-[tool.ppy.diagnostics]
-optimization-remarks = false
-
-[tool.ppy.plugins.torch]
-enabled = true
-cpp-regions = true
-
-[tool.ppy.plugins.jax]
-enabled = true
-allow-build-export = true
-```
-
-Two settings gate things that run project code or weaken analysis, so they
-default to the safe value: `build-execution = "deny"` keeps build-time
-execution (which JAX export needs) off until the project opts in, and
-`dynamic-boundaries = "explicit"` requires a `ppy.dynamic` boundary for dynamic
-features, with `"deny"` forbidding them outright.
+Every key, with defaults, is in [config.md](config.md).
 
 ## Exit codes
 

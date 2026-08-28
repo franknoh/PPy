@@ -1,0 +1,86 @@
+# Language reference
+
+A `.ppy` file is valid Python 3.12+. Everything PPY adds is carried by
+annotations and decorators from the `ppy` package, all of which are inert at
+runtime: under plain CPython the decorators return the function unchanged and
+the markers are ordinary `typing.Annotated` aliases. What the compiler adds is
+enforcement and speed, never behavior.
+
+## The subset
+
+The compiler analyzes the whole project as one call graph. Inside it:
+
+- Every parameter and return type must be declared or inferable — an implicit
+  `Any` is an error (`E1201`), not a silence.
+- Attributes are resolved on statically known types; `__init__` declares the
+  instance fields.
+- `eval`, `exec`, `from x import *`, computed imports, monkey-patching, and
+  frame manipulation are rejected (`E15xx`) unless isolated behind
+  `ppy.dynamic`.
+- Everything else — classes, generators, closures, `match`, comprehensions,
+  decorators the compiler knows, the stdlib it models — is ordinary Python.
+
+Strict mode is the default. `--no-strict` downgrades only the errors that have
+a sound fallback.
+
+## Directives
+
+All directives work bare (`@ppy.pure`) and called (`@ppy.pure()`), and are
+contracts the compiler verifies, not hints it trusts.
+
+| directive | meaning |
+|---|---|
+| `@ppy.pure` | no observable effects: no I/O, no global or nonlocal writes, no mutation of arguments. Local allocation and mutation of locally created values are fine (spec 11.2). Violations are `E1601`/`E1602`. |
+| `@ppy.opt(n)` | per-function optimization level 0–3, overriding the project default. |
+| `@ppy.native` | lower to LLVM. `require=True` makes any fallback to the Python body an error (`E1702`). |
+| `@ppy.parallel` | parallelize the eligible loop. `require=True` makes failure an error (`E1701`). |
+| `@ppy.jit` | specialize at runtime on the argument classes actually seen. |
+| `@ppy.specialize` | ahead-of-time specialization on declared value classes. |
+| `@ppy.inline` / `@ppy.noinline` | force or forbid inlining into callers. |
+| `@ppy.fastmath` | permit floating-point reassociation in this function; without it, reduction order is preserved bit-for-bit. |
+| `@ppy.jax` | stage this function for build-time StableHLO export (a plain `@jax.jit` decorator marks it too). |
+| `@ppy.dynamic` / `with ppy.dynamic():` | an explicit boundary inside which dynamic features are allowed and everything is `Any`. |
+
+A typo in a directive name is `E1205`, with a suggestion.
+
+## Markers
+
+Ordinary `Annotated` aliases from `ppy`:
+
+| marker | meaning |
+|---|---|
+| `i8 i16 i32 i64 u8 u16 u32 u64` | fixed-width integer contract. A value provably outside the range is `E1401`; a check the contract mode forbids is `E1402`. |
+| `f16 f32 f64` | floating-point width. |
+| `Buffer[T]` | a borrowed writable buffer (`memoryview` over `array.array`) — zero-copy in and out of native code. |
+| `Array[T]`, `Vector[T]` | contiguous numeric containers with a known element type. |
+| `Range(lo, hi)` | an integer refinement the checker propagates. |
+| `Length(n)`, `Shape(...)`, `DType("f32")`, `Contiguous`, `NoAlias` | container refinements; `Shape`/`DType` are what makes a `@ppy.jax` function exportable. |
+
+## Effects and purity
+
+Every function gets an inferred effect set (I/O, global write, argument
+mutation, allocation, randomness, unknown external call). `@ppy.pure` asserts
+the set is empty of the forbidden ones, and the checker proves it
+interprocedurally — a pure function calling something with unknown effects is
+`E1602`, and a callee that mutates the caller's argument is charged to the
+caller.
+
+## The three execution paths
+
+| | |
+|---|---|
+| `python f.ppy` | plain CPython. `import ppy` installs a `sys.meta_path` finder so `.py` files can import `.ppy` modules; nothing else happens. |
+| `ppy f.ppy` | the optimized Python backend: AST-level optimization (folding, inlining, LICM, loop transforms) executed by CPython. |
+| `ppy run f.ppy` | eligible functions compile through LLVM; everything else runs the Python body. |
+
+Any observable difference between the three is a compiler bug. The test suite
+and `examples/run_all.py` compare all three on every example.
+
+## Native lowering
+
+A function lowers when its types are scalars, `Buffer[T]`, homogeneous
+`list[int]`/`list[float]`, `Sequence` of those, or all-scalar `@dataclass`
+value classes (flattened into scalar arguments), and its body stays inside the
+modeled subset. The generated wrapper releases the GIL around the native
+call, so `@ppy.native` functions scale across threads. `ppy explain FILE.ppy:name` reports the decision and, when the
+answer is no, the first blocking construct.

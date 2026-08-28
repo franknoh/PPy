@@ -137,9 +137,15 @@ prints what it found.
 
 ## Docs
 
-- [docs/guide.md](docs/guide.md) — what it does, what it costs, how the pieces fit
+- [docs/guide.md](docs/guide.md) — overview, measurements, the import hook
+- [docs/language.md](docs/language.md) — the subset, directives, markers
+- [docs/conversion.md](docs/conversion.md) — how `ppy convert` infers what it writes
+- [docs/architecture.md](docs/architecture.md) — pipeline, cache, threads
+- [docs/plugins.md](docs/plugins.md) — how each library integration works
+- [docs/config.md](docs/config.md) — every `[tool.ppy]` key
+- [docs/diagnostics.md](docs/diagnostics.md) — every diagnostic code
 - [docs/cli.md](docs/cli.md) — every command and option
-- [examples/README.md](examples/README.md) — 27 worked examples
+- [examples/README.md](examples/README.md) — 28 worked examples
 
 ## Checks
 

@@ -1,11 +1,19 @@
 # Guide
 
-Commands and options are in [cli.md](cli.md).
+The map. Details live one link away:
+
+- [language.md](language.md) — the subset, directives, markers, the three paths
+- [conversion.md](conversion.md) — how `ppy convert` infers what it writes
+- [architecture.md](architecture.md) — pipeline, module map, cache, threads
+- [plugins.md](plugins.md) — NumPy, PyTorch, JAX, Pydantic, Uvicorn
+- [config.md](config.md) — every `[tool.ppy]` key
+- [diagnostics.md](diagnostics.md) — every code
+- [cli.md](cli.md) — every command and option
 
 ## The three paths
 
-One file, three ways. Any disagreement is a compiler bug, and `ppy test`
-checks for it.
+One file, three ways. Any disagreement is a compiler bug, and the suite plus
+`examples/run_all.py` check for it.
 
 | | |
 |---|---|
@@ -38,42 +46,12 @@ and the interpreter overhead is unchanged.
 | jax, preprocessing | 62.8 ms | 0.9 ms |
 | jax, 100 steps | 24.9 ms | 24.2 ms |
 
-The large factor is the Python *around* the model, not the tensor math. A
-PyTorch ATen region removes one Python round trip per operator, worth about 20%
-on small CPU tensors and nothing on an accelerator, where kernel launch latency
-dominates. Training time is dominated by `.backward()` and the optimizer, which
-stay in Python.
+The large factor is the Python *around* the model, not the tensor math.
+Training time is dominated by `.backward()` and the optimizer, which stay in
+Python.
 
-## Conversion
-
-`ppy convert` infers parameter and return types across the whole call graph,
-instance field types from `__init__`, container element types from what is
-appended, and a parameter's type from the arithmetic it takes part in when no
-call site exists. It attaches `@ppy.pure` where the checker proved it, moves a
-class above the function that annotates against it so a quoted forward
-reference becomes an ordinary one, formats what it writes, and introduces no
-pylint finding the source did not have.
-
-With `--promote-buffers` it declares a read-only numeric list parameter as
-`Buffer[T]` and rewrites the values feeding it into `array.array`, which is what
-lets a loop lower to native code. When it cannot, it says why:
-
-```
-remark[R3003]: `raw` could be a borrowed buffer, but `raw` is sliced, which
-               copies; indexing it element by element instead would let the
-               memory be borrowed
-```
-
-A container parameter is declared as the protocol its body actually needs
-rather than the concrete type a caller happened to pass: `Sequence[T]` or
-`Mapping[K, V]` when every use is one the protocol offers, and the concrete
-`list`/`dict` when the body slices it, concatenates it, copies it, hands it
-back, or mutates it — each of which either does not exist on the protocol or
-answers differently through it. A module-level name bound once and never
-rebound is written `Final`.
-
-It does not rename, split a function that does several jobs, or restructure an
-algorithm. Those are design decisions.
+Incremental builds, 30-example tree: cold 2415 ms, no change 371 ms (LLVM
+never loads), one file changed 1785 ms.
 
 ## `.ppy` under ordinary CPython
 
@@ -92,7 +70,8 @@ migrate a project.
 
 ## Examples
 
-27 worked examples under `examples/`, one folder each with a README. Where a
+28 example folders (30 runnable programs) under `examples/`, each with a
+README. Where a
 folder holds both `<name>.py` and `<name>.ppy`, the `.ppy` is exactly what
 `ppy convert` writes and `verify_conversions.py` regenerates it to prove it.
 
