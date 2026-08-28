@@ -498,7 +498,7 @@ def convert_source(source: str, plan: ConversionPlan) -> str:
     # A quoted annotation only exists because the class was not bound yet.
     # Moving the class above its first use removes the reason for the quotes.
     reordered = _unquote_resolved(_hoist_classes(imported))
-    return normalize_source(reordered.code)
+    return normalize_source(reordered.code, frozenset(plan.local_imports))
 
 
 def _insert_imports(module: cst.Module, plan: ConversionPlan) -> cst.Module:
@@ -961,10 +961,22 @@ def _list_sources(  # type: ignore[no-untyped-def]
 
 
 def _module_list_assignments(symbols) -> dict[str, int]:  # type: ignore[no-untyped-def]
-    """Module-level names bound exactly once to a list the converter can rewrite."""
+    """Names bound exactly once to a list the converter can rewrite.
+
+    Script code belongs in a `main()` rather than at module level, so the
+    bodies of top-level functions are searched as well. A name is only usable
+    when it is bound once across everything searched, which keeps two scopes
+    that happen to share a name out of each other's way.
+    """
     counts: dict[str, int] = {}
     lines: dict[str, int] = {}
-    for statement in symbols.module.tree.body:
+    scopes = [symbols.module.tree.body]
+    scopes += [
+        statement.body
+        for statement in symbols.module.tree.body
+        if isinstance(statement, (ast.FunctionDef, ast.AsyncFunctionDef))
+    ]
+    for statement in [s for scope in scopes for s in scope]:
         target: ast.expr | None = None
         value: ast.expr | None = None
         if isinstance(statement, ast.AnnAssign) and statement.value is not None:

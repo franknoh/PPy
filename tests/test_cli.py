@@ -860,3 +860,30 @@ def test_a_migrated_project_still_runs_on_plain_cpython(workspace: Path):
     )
     assert plain.returncode == 0, plain.stderr
     assert plain.stdout.strip() == "4.0"
+
+
+def test_fmt_keeps_ppy_ahead_of_a_sibling_import(workspace: Path):
+    """Sorting `ppy` after the module whose loader it installs breaks the import."""
+    (workspace / "geometry.ppy").write_text("VALUE: int = 1\n", encoding="utf-8")
+    consumer = workspace / "consumer.py"
+    consumer.write_text("import ppy\n\nimport geometry\n\nprint(geometry.VALUE)\n", encoding="utf-8")
+    assert _ppy(["fmt", "consumer.py"], workspace).returncode == 0
+    lines = consumer.read_text(encoding="utf-8").splitlines()
+    assert lines.index("import ppy") < lines.index("import geometry")
+
+    plain = subprocess.run(
+        [sys.executable, "consumer.py"], cwd=workspace, capture_output=True, text=True, check=False
+    )
+    assert plain.returncode == 0, plain.stderr
+
+
+def test_fmt_groups_imports_by_kind(workspace: Path):
+    source = workspace / "messy.ppy"
+    source.write_text(
+        "import ppy\nimport math\nfrom ppy import Buffer\nimport time\n\n\nX: int = 1\n",
+        encoding="utf-8",
+    )
+    assert _ppy(["fmt", "messy.ppy"], workspace).returncode == 0
+    assert source.read_text(encoding="utf-8").startswith(
+        "import math\nimport time\n\nimport ppy\nfrom ppy import Buffer\n"
+    )
