@@ -4,14 +4,14 @@ from __future__ import annotations
 
 import ast
 import importlib.util
-from typing import Sequence
+from collections.abc import Sequence
 
 from ..analysis import types as T
 from ..analysis.effects import Effect, EffectSet
 from ..analysis.refinements import Facts
 from .base import CallAdjustment, CallResult, Lowering
 
-__all__ = ["UvicornPlugin", "resolve_app", "PPY_RELOAD_PATTERN"]
+__all__ = ["PPY_RELOAD_PATTERN", "UvicornPlugin", "resolve_app"]
 
 #: Uvicorn's reloader watches `*.py` by default, which never sees PPY sources.
 PPY_RELOAD_PATTERN = "*.ppy"
@@ -83,12 +83,7 @@ class UvicornPlugin:
 
         app = resolve_app(node)
         target = node.args[0] if node.args else keywords.get("app")
-        if (
-            not reloading
-            and app is not None
-            and isinstance(target, ast.Constant)
-            and ":" in app
-        ):
+        if not reloading and app is not None and isinstance(target, ast.Constant) and ":" in app:
             module_name, _, attribute = app.partition(":")
             if module_name == symbols.name and attribute.isidentifier():
                 replacement = attribute

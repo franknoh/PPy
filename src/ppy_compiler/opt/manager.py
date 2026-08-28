@@ -12,10 +12,10 @@ from .annotate import annotate
 from .passes import (
     AdjustLibraryCalls,
     BranchFold,
-    FuseLibraryCalls,
     CommonSubexpression,
     ConstantFold,
     CopyPropagation,
+    FuseLibraryCalls,
     InlineSmallFunctions,
     LoopInvariantMotion,
     LoopUnroll,
@@ -30,11 +30,27 @@ from .passes import (
 __all__ = ["OptimizationResult", "Optimizer", "level_description"]
 
 _DIRECTIVE_NAMES = {
-    "ppy.pure", "ppy.opt", "ppy.jit", "ppy.parallel", "ppy.native",
-    "ppy.inline", "ppy.noinline", "ppy.specialize", "ppy.fastmath",
-    "ppy.dynamic", "ppy.jax",
-    "pure", "opt", "jit", "parallel", "native", "inline", "noinline",
-    "specialize", "fastmath", "dynamic",
+    "ppy.pure",
+    "ppy.opt",
+    "ppy.jit",
+    "ppy.parallel",
+    "ppy.native",
+    "ppy.inline",
+    "ppy.noinline",
+    "ppy.specialize",
+    "ppy.fastmath",
+    "ppy.dynamic",
+    "ppy.jax",
+    "pure",
+    "opt",
+    "jit",
+    "parallel",
+    "native",
+    "inline",
+    "noinline",
+    "specialize",
+    "fastmath",
+    "dynamic",
 }
 
 _LEVELS = {
@@ -110,7 +126,7 @@ class Optimizer:
             context.remarks.extend(function_context.remarks)
             for key, value in function_context.stats.items():
                 context.stats[key] = context.stats.get(key, 0) + value
-            setattr(node, "_ppy_done", True)
+            node._ppy_done = True
 
         self._optimize_module_level(tree, context)
 
@@ -138,7 +154,8 @@ class Optimizer:
                 found.append(node)
             elif isinstance(node, ast.ClassDef):
                 found.extend(
-                    child for child in node.body
+                    child
+                    for child in node.body
                     if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef))
                 )
         return found
@@ -189,7 +206,9 @@ class Optimizer:
         rebuilt.extend(optimized)
         tree.body = rebuilt
 
-    def _pipeline(self, context: PassContext, level: int, tree: ast.Module | None = None) -> list[Pass]:
+    def _pipeline(
+        self, context: PassContext, level: int, tree: ast.Module | None = None
+    ) -> list[Pass]:
         pipeline: list[Pass] = [
             ConstantFold(context),
             BranchFold(context),

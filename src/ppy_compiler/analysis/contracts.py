@@ -8,15 +8,15 @@ from difflib import get_close_matches
 
 from ..diagnostics import Diagnostic, DiagnosticBag, Severity
 from ..frontend.source import span_of
-from .checker import FunctionAnalysis, ProjectAnalysis
-from . import types as T
 from . import representation
+from . import types as T
+from .checker import FunctionAnalysis, ProjectAnalysis
 from .effects import Effect
 from .refinements import Facts
 from .representation import Repr
 from .symbols import DIRECTIVE_NAMES, FunctionInfo
 
-__all__ = ["ContractReport", "verify", "parallel_report", "native_report"]
+__all__ = ["ContractReport", "native_report", "parallel_report", "verify"]
 
 #: Effects that force an opaque CPython call inside the function body.
 BOXED_EFFECTS = (
@@ -33,7 +33,10 @@ BOXED_EFFECTS = (
 )
 
 _REDUCTION_OPS = {
-    ast.Add: "+", ast.Mult: "*", ast.BitOr: "or", ast.BitAnd: "and",
+    ast.Add: "+",
+    ast.Mult: "*",
+    ast.BitOr: "or",
+    ast.BitAnd: "and",
 }
 
 
@@ -54,7 +57,9 @@ class ContractReport:
     blockers: tuple[str, ...] = field(default=())
 
 
-def verify(analysis: ProjectAnalysis, diagnostics: DiagnosticBag, *, backend: str = "python") -> dict[str, ContractReport]:
+def verify(
+    analysis: ProjectAnalysis, diagnostics: DiagnosticBag, *, backend: str = "python"
+) -> dict[str, ContractReport]:
     """Check every declared contract and return per-function reports."""
     reports: dict[str, ContractReport] = {}
     for module in analysis.modules.values():
@@ -97,7 +102,8 @@ def _fused_regions(module, function: FunctionAnalysis) -> int:
     start = node.lineno
     end = getattr(node, "end_lineno", start) or start
     return sum(
-        1 for note in module.lowerings.values()
+        1
+        for note in module.lowerings.values()
         if note.lowering == "Intrinsic" and start <= note.line <= end
     )
 
@@ -130,12 +136,17 @@ def _verify_one(
 
     if info.declared_pure:
         _check_purity(function, diagnostics)
-    if (directive := info.directive("parallel")) is not None and directive.require and not parallel_ok:
+    if (
+        (directive := info.directive("parallel")) is not None
+        and directive.require
+        and not parallel_ok
+    ):
         diagnostics.add(
             Diagnostic(
                 "E1701",
                 Severity.ERROR,
-                f"`@ppy.parallel(require=True)` cannot be satisfied for `{info.name}` on the {backend} backend",
+                f"`@ppy.parallel(require=True)` cannot be satisfied "
+                f"for `{info.name}` on the {backend} backend",
                 span_of(info.path, directive.node or info.node),
                 help=parallel_reason,
             )
@@ -208,7 +219,10 @@ def native_report(function: FunctionAnalysis) -> tuple[bool, str]:
         return False, f"`{callee}` has no native lowering"
     for effect in BOXED_EFFECTS:
         if effect in function.effects:
-            return False, f"the body has the `{effect}` effect, which requires an opaque Python call"
+            return (
+                False,
+                f"the body has the `{effect}` effect, which requires an opaque Python call",
+            )
     if info.is_generator:
         return False, "generators are lowered through the boxed runtime"
     if info.is_async:
@@ -264,10 +278,14 @@ def parallel_report(
     reductions = tuple(dict.fromkeys(_reductions(info)))
 
     if backend == "python":
-        return False, (
-            "the Python backend cannot bypass the GIL for CPU-bound loops; "
-            "use `ppy run` for the LLVM backend"
-        ), reductions
+        return (
+            False,
+            (
+                "the Python backend cannot bypass the GIL for CPU-bound loops; "
+                "use `ppy run` for the LLVM backend"
+            ),
+            reductions,
+        )
     if fused and not loops:
         # A fused library kernel is one loop over independent elements, and it
         # runs with the GIL released.
@@ -277,10 +295,18 @@ def parallel_report(
     if Effect.IO in function.effects:
         return False, "the loop body performs I/O, so ordering is observable", reductions
     if Effect.PYTHON_CALLBACK in function.effects:
-        return False, "the loop body invokes a Python callback, which must keep its order", reductions
+        return (
+            False,
+            "the loop body invokes a Python callback, which must keep its order",
+            reductions,
+        )
     if Effect.EXTERNAL_UNKNOWN in function.effects:
         callee = function.unknown_callees[0] if function.unknown_callees else "an external call"
-        return False, f"`{callee}` has unknown effects, so iteration independence is unproven", reductions
+        return (
+            False,
+            f"`{callee}` has unknown effects, so iteration independence is unproven",
+            reductions,
+        )
     if Effect.WRITE_GLOBAL in function.effects:
         return False, "the loop body writes a global, so iterations are not independent", reductions
 
@@ -297,11 +323,11 @@ def parallel_report(
 
 
 def _top_level_loops(info: FunctionInfo) -> list[ast.For | ast.While | ast.ListComp]:
-    found: list[ast.For | ast.While | ast.ListComp] = []
-    for node in ast.walk(info.node):
-        if isinstance(node, (ast.For, ast.While, ast.ListComp, ast.GeneratorExp)):
-            found.append(node)  # type: ignore[arg-type]
-    return found
+    return [
+        node  # type: ignore[misc]
+        for node in ast.walk(info.node)
+        if isinstance(node, (ast.For, ast.While, ast.ListComp, ast.GeneratorExp))
+    ]
 
 
 def _reductions(info: FunctionInfo) -> list[str]:
@@ -309,9 +335,12 @@ def _reductions(info: FunctionInfo) -> list[str]:
     for node in ast.walk(info.node):
         if isinstance(node, ast.AugAssign) and type(node.op) in _REDUCTION_OPS:
             found.append(_REDUCTION_OPS[type(node.op)])
-        elif isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
-            if node.func.id in {"min", "max", "sum", "all", "any"}:
-                found.append(node.func.id)
+        elif (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Name)
+            and node.func.id in {"min", "max", "sum", "all", "any"}
+        ):
+            found.append(node.func.id)
     return found
 
 
@@ -332,20 +361,20 @@ def _loop_carried(loops: list, reductions: tuple[str, ...]) -> str | None:
             if isinstance(node, ast.Name) and isinstance(node.ctx, ast.Load) and node.id in targets:
                 read_before_write.add(node.id)
         for node in ast.walk(loop):
-            if isinstance(node, ast.AugAssign) and isinstance(node.target, ast.Name):
-                if type(node.op) not in _REDUCTION_OPS:
-                    return node.target.id
+            if (
+                isinstance(node, ast.AugAssign)
+                and isinstance(node.target, ast.Name)
+                and type(node.op) not in _REDUCTION_OPS
+            ):
+                return node.target.id
         if read_before_write:
-            return sorted(read_before_write)[0]
+            return min(read_before_write)
     return None
 
 
 def _possible_aliases(info: FunctionInfo) -> tuple[str, str] | None:
     """Mutable container parameters are assumed to alias unless declared otherwise."""
-    mutable = [
-        p for p in info.params
-        if _is_mutable_container(p.type) and not p.facts.no_alias
-    ]
+    mutable = [p for p in info.params if _is_mutable_container(p.type) and not p.facts.no_alias]
     if len(mutable) < 2:
         return None
     mutated = {
@@ -364,7 +393,11 @@ def _possible_aliases(info: FunctionInfo) -> tuple[str, str] | None:
 
 
 def _is_mutable_container(t: object) -> bool:
-    from . import types as T
-
     base = T.strip_literal(t) if isinstance(t, T.Type) else None
-    return isinstance(base, T.Instance) and base.name in {"list", "dict", "set", "bytearray", "ndarray"}
+    return isinstance(base, T.Instance) and base.name in {
+        "list",
+        "dict",
+        "set",
+        "bytearray",
+        "ndarray",
+    }

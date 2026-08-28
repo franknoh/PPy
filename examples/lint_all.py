@@ -19,7 +19,11 @@ SKIP = {"run_all.py", "verify_conversions.py", "lint_all.py"}
 def _lint(folder: Path, names: list[str]) -> list[str]:
     done = subprocess.run(
         [sys.executable, "-m", "pylint", "--rcfile", str(ROOT / ".pylintrc"), *names],
-        cwd=folder, capture_output=True, text=True, check=False, timeout=900,
+        cwd=folder,
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=900,
     )
     return [line for line in done.stdout.splitlines() if ".py:" in line and ": " in line]
 
@@ -29,8 +33,7 @@ def main() -> int:
     checked = 0
     for folder in sorted(p for p in ROOT.iterdir() if p.is_dir()):
         sources = sorted(
-            p for p in folder.rglob("*.py")
-            if p.name not in SKIP and ".ppy-cache" not in str(p)
+            p for p in folder.rglob("*.py") if p.name not in SKIP and ".ppy-cache" not in str(p)
         )
         converted = sorted(p for p in folder.rglob("*.ppy") if ".ppy-cache" not in str(p))
         if not sources and not converted:

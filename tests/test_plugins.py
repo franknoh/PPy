@@ -95,7 +95,9 @@ def test_numpy_claims_intrinsic_only_where_a_kernel_exists():
 
 def test_numpy_falls_back_for_unsupported_dtype():
     result = NumPyPlugin().call(
-        "numpy.add", [ARRAY, ARRAY], {"dtype": (T.STR, Facts(constant="complex128", has_constant=True))}
+        "numpy.add",
+        [ARRAY, ARRAY],
+        {"dtype": (T.STR, Facts(constant="complex128", has_constant=True))},
     )
     assert result.lowering is Lowering.PYTHON_FALLBACK
     assert "complex128" in result.reason
@@ -424,10 +426,6 @@ def test_unknown_annotated_metadata_is_preserved_and_warned(write, analyze):
 
 def test_tolist_follows_the_declared_dtype():
     """Without the receiver's refinements this could only guess an element type."""
-    from ppy_compiler.analysis.refinements import Facts
-    from ppy_compiler.plugins.jax_plugin import JaxPlugin
-    from ppy_compiler.plugins.torch_plugin import TorchPlugin
-
     for plugin, owner in ((JaxPlugin(), "jax.Array"), (TorchPlugin(), "torch.Tensor")):
         signature, _ = plugin.instance_attribute(owner, "tolist", Facts(dtype="int32"))
         assert signature.ret == T.list_of(T.INT), owner

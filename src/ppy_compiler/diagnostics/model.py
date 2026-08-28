@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 import enum
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Iterable, Sequence
 
-__all__ = ["Severity", "Span", "Diagnostic", "DiagnosticBag", "render", "PPyError"]
+__all__ = ["Diagnostic", "DiagnosticBag", "PPyError", "Severity", "Span", "render"]
 
 
 class Severity(enum.StrEnum):
@@ -44,7 +44,7 @@ class Diagnostic:
     notes: list[str] = field(default_factory=list)
     help: str | None = None
 
-    def with_note(self, note: str) -> "Diagnostic":
+    def with_note(self, note: str) -> Diagnostic:
         self.notes.append(note)
         return self
 
@@ -88,10 +88,14 @@ class DiagnosticBag:
         for diagnostic in diagnostics:
             self.add(diagnostic)
 
-    def error(self, code: str, message: str, span: Span | None = None, help: str | None = None) -> Diagnostic:
+    def error(
+        self, code: str, message: str, span: Span | None = None, help: str | None = None
+    ) -> Diagnostic:
         return self.add(Diagnostic(code, Severity.ERROR, message, span, help=help))
 
-    def warning(self, code: str, message: str, span: Span | None = None, help: str | None = None) -> Diagnostic:
+    def warning(
+        self, code: str, message: str, span: Span | None = None, help: str | None = None
+    ) -> Diagnostic:
         return self.add(Diagnostic(code, Severity.WARNING, message, span, help=help))
 
     def remark(self, code: str, message: str, span: Span | None = None) -> Diagnostic:
@@ -150,8 +154,7 @@ def render(diagnostic: Diagnostic, *, source: str | None = None, color: bool = F
         if snippet:
             lines.append("")
             lines.extend(snippet)
-    for note in diagnostic.notes:
-        lines.append(f"  = note: {note}")
+    lines.extend(f"  = note: {note}" for note in diagnostic.notes)
     if diagnostic.help:
         lines.append(f"  = help: {diagnostic.help}")
     return "\n".join(lines)

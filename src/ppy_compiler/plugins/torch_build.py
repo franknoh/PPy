@@ -44,7 +44,7 @@ def _ensure_scripts_on_path() -> None:
 def toolchain_ready() -> tuple[bool, str]:
     """Is everything present to compile a region against libtorch?"""
     try:
-        import torch  # noqa: F401
+        import torch  # noqa: F401  # pylint: disable=unused-import
     except Exception as exc:  # noqa: BLE001
         return False, f"torch is not importable: {exc}"
     compiler = os.environ.get("CXX") or shutil.which("c++") or shutil.which("g++")
@@ -58,9 +58,9 @@ def toolchain_ready() -> tuple[bool, str]:
 
 
 def _fingerprint(regions: list[TorchRegion], source: str) -> str:
-    from ..cache import digest
-
     import torch
+
+    from ..cache import digest
 
     return digest(
         source,

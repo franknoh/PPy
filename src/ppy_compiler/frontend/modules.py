@@ -10,7 +10,14 @@ from ..diagnostics import Diagnostic, DiagnosticBag, Severity, Span
 from .parser import parse_file
 from .source import SourceFile
 
-__all__ = ["ImportEdge", "Module", "ModuleGraph", "build_graph", "resolve_module_name", "RUNTIME_MODULES"]
+__all__ = [
+    "RUNTIME_MODULES",
+    "ImportEdge",
+    "Module",
+    "ModuleGraph",
+    "build_graph",
+    "resolve_module_name",
+]
 
 #: The PPY runtime package is never analyzed as project source (spec 6).
 RUNTIME_MODULES = frozenset({"ppy"})
@@ -146,14 +153,14 @@ def _collect_imports(module: Module) -> list[ImportEdge]:
     edges: list[ImportEdge] = []
     for node in ast.walk(module.tree):
         if isinstance(node, ast.Import):
-            for alias in node.names:
-                edges.append(
-                    ImportEdge(
-                        target=alias.name,
-                        node=node,
-                        names=((alias.name, alias.asname),),
-                    )
+            edges.extend(
+                ImportEdge(
+                    target=alias.name,
+                    node=node,
+                    names=((alias.name, alias.asname),),
                 )
+                for alias in node.names
+            )
         elif isinstance(node, ast.ImportFrom):
             names = tuple((a.name, a.asname) for a in node.names)
             target = node.module or ""
@@ -183,7 +190,9 @@ def build_graph(
 ) -> ModuleGraph:
     """Parse the entry files and, transitively, every project module they import."""
     search_paths = [p for p in search_paths if p.is_dir()]
-    graph = ModuleGraph(root=root or (entries[0].parent if entries else Path.cwd()), search_paths=search_paths)
+    graph = ModuleGraph(
+        root=root or (entries[0].parent if entries else Path.cwd()), search_paths=search_paths
+    )
     queue: list[tuple[str, Path, bool]] = []
 
     for entry in entries:
@@ -213,8 +222,13 @@ def build_graph(
                         "E1103",
                         Severity.ERROR,
                         f"`from {edge.target} import *` leaves the module namespace unanalyzable",
-                        Span(path, edge.node.lineno, edge.node.col_offset,
-                             edge.node.end_lineno, edge.node.end_col_offset),
+                        Span(
+                            path,
+                            edge.node.lineno,
+                            edge.node.col_offset,
+                            edge.node.end_lineno,
+                            edge.node.end_col_offset,
+                        ),
                         help="import the names you use explicitly",
                     )
                 )
@@ -241,7 +255,9 @@ def build_graph(
                         Severity.ERROR,
                         f"module {edge.target!r} is provided by more than one source: {paths}",
                         Span(path, edge.node.lineno, edge.node.col_offset),
-                        help="a project must not contain both foo.py and foo.ppy for the same module",
+                        help=(
+                            "a project must not contain both foo.py and foo.ppy for the same module"
+                        ),
                     )
                 )
             target_path, target_is_package = candidates[0]

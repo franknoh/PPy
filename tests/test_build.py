@@ -119,7 +119,9 @@ def test_build_produces_a_runnable_native_executable(project: Path):
     assert launcher.is_file()
     assert launcher.stat().st_mode & 0o111
 
-    native = subprocess.run([str(launcher)], cwd=project, capture_output=True, text=True, check=False)
+    native = subprocess.run(
+        [str(launcher)], cwd=project, capture_output=True, text=True, check=False
+    )
     plain = subprocess.run(
         [sys.executable, "app.ppy"], cwd=project, capture_output=True, text=True, check=False
     )

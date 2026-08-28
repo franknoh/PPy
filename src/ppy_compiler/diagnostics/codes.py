@@ -11,7 +11,10 @@ CODES: dict[str, str] = {
     "E1101": "A name is used before any binding reaches it.",
     "E1102": "An import target could not be resolved to a module in the project or environment.",
     "E1103": "A `from ... import *` makes the module namespace unanalyzable.",
-    "E1201": "A parameter has no annotation and no inferable type, which would introduce an implicit `Any`.",
+    "E1201": (
+        "A parameter has no annotation and no inferable type, "
+        "which would introduce an implicit `Any`."
+    ),
     "E1202": "An attribute could not be resolved on a statically known type.",
     "E1203": "A generic type was used bare, which would introduce an implicit `Any` element type.",
     "E1204": "A decorator applies an unknown transform, so the decorated signature is unknown.",
@@ -24,7 +27,9 @@ CODES: dict[str, str] = {
     "E1305": "A call does not match the callee's parameter list.",
     "E1306": "A callable's signature is unknown, so the call cannot be typed.",
     "E1401": "A value provably leaves the range promised by a fixed-width marker.",
-    "E1402": "A fixed-width contract needs a runtime check that the selected contract mode forbids.",
+    "E1402": (
+        "A fixed-width contract needs a runtime check that the selected contract mode forbids."
+    ),
     "E1501": "`eval`, `exec`, or runtime code-object construction is not statically analyzable.",
     "E1502": "Mutation of `globals()`, `locals()`, or frame locals is not statically analyzable.",
     "E1503": "An import target is not a compile-time constant.",

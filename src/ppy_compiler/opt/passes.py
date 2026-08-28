@@ -17,22 +17,22 @@ from ..analysis.symbols import FunctionInfo
 from .annotate import PURE_NODES, const_of, has_const, type_of
 
 __all__ = [
-    "PassContext",
-    "Pass",
-    "StripDirectives",
-    "ConstantFold",
-    "BranchFold",
-    "UnreachableCode",
-    "CopyPropagation",
-    "UnusedLocals",
-    "Peephole",
-    "CommonSubexpression",
-    "LoopInvariantMotion",
-    "InlineSmallFunctions",
-    "LoopUnroll",
-    "FuseLibraryCalls",
-    "AdjustLibraryCalls",
     "FUSED_BINDER",
+    "AdjustLibraryCalls",
+    "BranchFold",
+    "CommonSubexpression",
+    "ConstantFold",
+    "CopyPropagation",
+    "FuseLibraryCalls",
+    "InlineSmallFunctions",
+    "LoopInvariantMotion",
+    "LoopUnroll",
+    "Pass",
+    "PassContext",
+    "Peephole",
+    "StripDirectives",
+    "UnreachableCode",
+    "UnusedLocals",
 ]
 
 #: Name the LLVM backend injects to supply a fused kernel to a module.
@@ -87,8 +87,20 @@ def _is_pure_expr(node: ast.expr) -> bool:
             return False
         if isinstance(child, ast.Subscript):
             return False
-        if not isinstance(child, (*PURE_NODES, ast.expr_context, ast.operator, ast.unaryop,
-                                  ast.boolop, ast.cmpop, ast.comprehension, ast.arguments, ast.arg)):
+        if not isinstance(
+            child,
+            (
+                *PURE_NODES,
+                ast.expr_context,
+                ast.operator,
+                ast.unaryop,
+                ast.boolop,
+                ast.cmpop,
+                ast.comprehension,
+                ast.arguments,
+                ast.arg,
+            ),
+        ):
             return False
     return True
 
@@ -152,7 +164,8 @@ class StripDirectives(Pass):
     def visit_With(self, node: ast.With) -> ast.AST:
         self.generic_visit(node)
         remaining = [
-            item for item in node.items
+            item
+            for item in node.items
             if ast.unparse(item.context_expr) not in self.directive_names
         ]
         if remaining or not node.items:
@@ -170,14 +183,19 @@ class ConstantFold(Pass):
 
     def visit(self, node: ast.AST) -> ast.AST:
         node = super().visit(node)
-        if isinstance(node, ast.expr) and not isinstance(node, ast.Constant) and _is_load(node):
-            if has_const(node) and _is_pure_expr(node):
-                value = const_of(node)
-                if isinstance(value, (int, float, complex, str, bytes, bool, type(None))):
-                    replacement = ast.Constant(value=value)
-                    ast.copy_location(replacement, node)
-                    self.context.count("constants_folded")
-                    return replacement
+        if (
+            isinstance(node, ast.expr)
+            and not isinstance(node, ast.Constant)
+            and _is_load(node)
+            and has_const(node)
+            and _is_pure_expr(node)
+        ):
+            value = const_of(node)
+            if isinstance(value, (int, float, complex, str, bytes, bool, type(None))):
+                replacement = ast.Constant(value=value)
+                ast.copy_location(replacement, node)
+                self.context.count("constants_folded")
+                return replacement
         return node
 
     def visit_Name(self, node: ast.Name) -> ast.AST:
@@ -304,12 +322,15 @@ class Peephole(Pass):
 
     def visit_UnaryOp(self, node: ast.UnaryOp) -> ast.AST:
         self.generic_visit(node)
-        if isinstance(node.op, ast.Not) and isinstance(node.operand, ast.UnaryOp):
-            if isinstance(node.operand.op, ast.Not):
-                inner = node.operand.operand
-                if type_of(inner) == T.BOOL:
-                    self.context.count("peepholes")
-                    return inner
+        if (
+            isinstance(node.op, ast.Not)
+            and isinstance(node.operand, ast.UnaryOp)
+            and isinstance(node.operand.op, ast.Not)
+        ):
+            inner = node.operand.operand
+            if type_of(inner) == T.BOOL:
+                self.context.count("peepholes")
+                return inner
         return node
 
     def visit_Compare(self, node: ast.Compare) -> ast.AST:
@@ -466,9 +487,7 @@ class CommonSubexpression(Pass):
             count, first = seen.get(key, (0, node))
             seen[key] = (count + 1, first)
         candidates = [
-            (len(ast.dump(expr)), expr)
-            for key, (count, expr) in seen.items()
-            if count >= 2
+            (len(ast.dump(expr)), expr) for key, (count, expr) in seen.items() if count >= 2
         ]
         if not candidates:
             return None
@@ -500,7 +519,9 @@ class LoopInvariantMotion(Pass):
         self.generic_visit(node)
         return self._hoist(node, node.body, {_target_names(node.target)})
 
-    def _hoist(self, node: ast.For, body: list[ast.stmt], bound: set[frozenset[str]]) -> ast.AST | list[ast.stmt]:
+    def _hoist(
+        self, node: ast.For, body: list[ast.stmt], bound: set[frozenset[str]]
+    ) -> ast.AST | list[ast.stmt]:
         varying = set().union(*bound) | _assigned_names(body)
         hoisted: list[ast.stmt] = []
         kept: list[ast.stmt] = []
@@ -558,10 +579,7 @@ class LoopInvariantMotion(Pass):
 
 
 def _target_names(target: ast.expr) -> frozenset[str]:
-    return frozenset(
-        node.id for node in ast.walk(target)
-        if isinstance(node, ast.Name)
-    )
+    return frozenset(node.id for node in ast.walk(target) if isinstance(node, ast.Name))
 
 
 class InlineSmallFunctions(Pass):
@@ -595,7 +613,7 @@ class InlineSmallFunctions(Pass):
             return node
         if any(not _is_pure_expr(a) for a in node.args):
             return node
-        mapping = dict(zip(params, node.args))
+        mapping = dict(zip(params, node.args, strict=False))
         inlined = _Substitute(mapping).visit(copy.deepcopy(body))
         ast.copy_location(inlined, node)
         ast.fix_missing_locations(inlined)
@@ -619,9 +637,14 @@ def _single_return_expr(node: ast.FunctionDef | ast.AsyncFunctionDef) -> ast.exp
     body = [s for s in node.body if not isinstance(s, ast.Pass)]
     if len(body) == 1 and isinstance(body[0], ast.Return) and body[0].value is not None:
         return body[0].value
-    if len(body) == 2 and isinstance(body[0], ast.Expr) and isinstance(body[0].value, ast.Constant):
-        if isinstance(body[1], ast.Return) and body[1].value is not None:
-            return body[1].value
+    if (
+        len(body) == 2
+        and isinstance(body[0], ast.Expr)
+        and isinstance(body[0].value, ast.Constant)
+        and isinstance(body[1], ast.Return)
+        and body[1].value is not None
+    ):
+        return body[1].value
     return None
 
 
@@ -663,7 +686,9 @@ class LoopUnroll(Pass):
 
 
 def _constant_range(node: ast.expr) -> tuple[int, int, int] | None:
-    if not (isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "range"):
+    if not (
+        isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "range"
+    ):
         return None
     values: list[int] = []
     for argument in node.args:
@@ -708,10 +733,7 @@ class FuseLibraryCalls(Pass):
     def _replace(self, node: ast.expr, loop) -> ast.AST:  # type: ignore[no-untyped-def]
         helper = f"_ppy_fused_{len(self.bound)}"
         self.bound[helper] = (loop, copy.deepcopy(node))
-        arguments = [
-            ast.Name(id=name, ctx=ast.Load())
-            for name in (*loop.arrays, *loop.scalars)
-        ]
+        arguments = [ast.Name(id=name, ctx=ast.Load()) for name in (*loop.arrays, *loop.scalars)]
         call = ast.Call(func=ast.Name(id=helper, ctx=ast.Load()), args=arguments, keywords=[])
         ast.copy_location(call, node)
         ast.fix_missing_locations(call)
@@ -726,8 +748,11 @@ class FuseLibraryCalls(Pass):
             parameters = [ast.arg(arg=name) for name in (*loop.arrays, *loop.scalars)]
             fallback = ast.Lambda(
                 args=ast.arguments(
-                    posonlyargs=[], args=parameters, kwonlyargs=[],
-                    kw_defaults=[], defaults=[],
+                    posonlyargs=[],
+                    args=parameters,
+                    kwonlyargs=[],
+                    kw_defaults=[],
+                    defaults=[],
                 ),
                 body=original,
             )
@@ -758,9 +783,7 @@ class AdjustLibraryCalls(Pass):
 
     def visit_Call(self, node: ast.Call) -> ast.AST:
         self.generic_visit(node)
-        adjustment = self.plan.get(
-            (getattr(node, "lineno", -1), getattr(node, "col_offset", -1))
-        )
+        adjustment = self.plan.get((getattr(node, "lineno", -1), getattr(node, "col_offset", -1)))
         if adjustment is None:
             return node
 

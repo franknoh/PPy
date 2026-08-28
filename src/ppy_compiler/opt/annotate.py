@@ -8,7 +8,7 @@ import copy
 from ..analysis import types as T
 from ..analysis.checker import ModuleAnalysis
 
-__all__ = ["annotate", "const_of", "type_of", "has_const", "PURE_NODES"]
+__all__ = ["PURE_NODES", "annotate", "const_of", "has_const", "type_of"]
 
 _CONST_ATTR = "_ppy_const"
 _HAS_CONST_ATTR = "_ppy_has_const"
@@ -19,9 +19,21 @@ _FOLDABLE = (int, float, complex, str, bytes, bool, type(None))
 
 #: Node types whose evaluation cannot have an observable effect on its own.
 PURE_NODES = (
-    ast.Constant, ast.Name, ast.BinOp, ast.UnaryOp, ast.BoolOp, ast.Compare,
-    ast.Tuple, ast.List, ast.Set, ast.Dict, ast.IfExp, ast.Slice, ast.Starred,
-    ast.JoinedStr, ast.FormattedValue,
+    ast.Constant,
+    ast.Name,
+    ast.BinOp,
+    ast.UnaryOp,
+    ast.BoolOp,
+    ast.Compare,
+    ast.Tuple,
+    ast.List,
+    ast.Set,
+    ast.Dict,
+    ast.IfExp,
+    ast.Slice,
+    ast.Starred,
+    ast.JoinedStr,
+    ast.FormattedValue,
 )
 
 

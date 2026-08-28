@@ -15,13 +15,13 @@ class Binding:
     type: T.Type
     facts: Facts = field(default_factory=Facts)
 
-    def with_type(self, t: T.Type) -> "Binding":
+    def with_type(self, t: T.Type) -> Binding:
         return Binding(t, self.facts)
 
-    def with_facts(self, facts: Facts) -> "Binding":
+    def with_facts(self, facts: Facts) -> Binding:
         return Binding(self.type, facts)
 
-    def merge(self, other: "Binding") -> "Binding":
+    def merge(self, other: Binding) -> Binding:
         return Binding(T.join(self.type, other.type), self.facts.merge(other.facts))
 
 
@@ -52,13 +52,13 @@ class Env:
     def names(self) -> set[str]:
         return set(self._bindings)
 
-    def fork(self) -> "Env":
+    def fork(self) -> Env:
         return Env(self._bindings, self.reachable)
 
     def terminate(self) -> None:
         self.reachable = False
 
-    def merge(self, other: "Env") -> "Env":
+    def merge(self, other: Env) -> Env:
         """Merge two branch environments, keeping only jointly proven facts."""
         if not self.reachable:
             return other.fork()

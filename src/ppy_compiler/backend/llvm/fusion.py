@@ -18,13 +18,13 @@ from ...analysis.symbols import FunctionInfo
 from ...plugins.numpy_plugin import FUSIBLE_BINARY, FUSIBLE_REDUCTIONS, FUSIBLE_UNARY
 
 __all__ = [
+    "BINARY",
+    "UNARY",
     "FusedLoop",
     "FusionCandidate",
     "find_candidates",
     "find_module_candidates",
     "lower_candidate",
-    "UNARY",
-    "BINARY",
 ]
 
 #: The LLVM intrinsic implementing each unary ufunc. An empty name means the
@@ -146,7 +146,8 @@ def find_module_candidates(tree: ast.Module, module: ModuleAnalysis) -> list[Fus
     """Find fusible expressions in module-level code, outside any definition."""
     body = ast.Module(
         body=[
-            statement for statement in tree.body
+            statement
+            for statement in tree.body
             if not isinstance(statement, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef))
         ],
         type_ignores=[],
@@ -225,7 +226,11 @@ def _render(node: ast.expr, module: ModuleAnalysis, shape: _Shape, operations: l
         if base in (T.FLOAT, T.INT, T.BOOL):
             return f"s{shape.scalar(node.id)}"
         raise _Unsupported
-    if isinstance(node, ast.Constant) and isinstance(node.value, (int, float)) and not isinstance(node.value, bool):
+    if (
+        isinstance(node, ast.Constant)
+        and isinstance(node.value, (int, float))
+        and not isinstance(node.value, bool)
+    ):
         return f"c{float(node.value)!r}"
     if isinstance(node, ast.BinOp):
         ufunc = _OPERATOR_UFUNC.get(type(node.op))
@@ -327,9 +332,7 @@ def lower_candidate(ir, llvm_module, candidate: FusionCandidate):  # type: ignor
             symbol = ">" if loop.reduction == "max" else "<"
             better = builder.fcmp_ordered(symbol, value, carried)
             unordered = builder.fcmp_unordered("!=", value, value)
-            updated = builder.select(
-                builder.or_(better, unordered), value, carried
-            )
+            updated = builder.select(builder.or_(better, unordered), value, carried)
         else:
             # `sum` and `mean` accumulate in strict index order: no
             # reassociation without an explicit directive (spec 19.8).
@@ -355,7 +358,7 @@ def lower_candidate(ir, llvm_module, candidate: FusionCandidate):  # type: ignor
 @dataclass(slots=True)
 class _Node:
     op: str
-    operands: list["_Node"] = field(default_factory=list)
+    operands: list[_Node] = field(default_factory=list)
     array: int = -1
     scalar: int = -1
     constant: float = 0.0

@@ -11,17 +11,17 @@ from __future__ import annotations
 import ctypes
 import os
 import threading
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
-from typing import Callable
 
-__all__ = ["WorkerPool", "pool", "chunk_bounds", "MIN_PARALLEL_ELEMENTS"]
+__all__ = ["MIN_PARALLEL_ELEMENTS", "WorkerPool", "chunk_bounds", "pool"]
 
 #: Below this element count the thread hand-off costs more than it saves.
 MIN_PARALLEL_ELEMENTS = 1 << 15
 
 _lock = threading.Lock()
-_pool: "WorkerPool | None" = None
+_pool: WorkerPool | None = None
 
 
 @dataclass(slots=True)
@@ -57,7 +57,8 @@ def _requested_threads(setting: str | int) -> int:
 
 def pool(threads: str | int = "auto") -> WorkerPool:
     """The process-wide PPY worker pool, created on first use."""
-    global _pool
+    # One pool per process is the contract (spec 17.3); the module owns it.
+    global _pool  # noqa: PLW0603
     with _lock:
         if _pool is None:
             count = _requested_threads(threads)

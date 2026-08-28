@@ -73,9 +73,7 @@ def _render_closed_set(t: T.Type) -> Rendered | None:
     if len(seen) < 2:
         return None
     rendered = f"Literal[{', '.join(seen)}]"
-    return Rendered(
-        f"{rendered} | None" if optional else rendered, frozenset({"Literal"})
-    )
+    return Rendered(f"{rendered} | None" if optional else rendered, frozenset({"Literal"}))
 
 
 def _marker(facts: Facts | None) -> str | None:
@@ -152,7 +150,9 @@ def _render(t: T.Type, local_module: str) -> Rendered | None:
         inner = ", ".join(p.text for p in parts)
         return Rendered(
             f"Callable[[{inner}], {returned.text}]",
-            frozenset({"Callable"}).union(*[p.typing_imports for p in parts], returned.typing_imports),
+            frozenset({"Callable"}).union(
+                *[p.typing_imports for p in parts], returned.typing_imports
+            ),
             frozenset().union(*[p.ppy_imports for p in parts], returned.ppy_imports),
         )
 

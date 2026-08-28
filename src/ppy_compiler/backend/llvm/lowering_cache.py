@@ -14,7 +14,7 @@ import json
 from .fusion import FusedLoop
 from .lowering import NativeParam, NativeSignature
 
-__all__ = ["encode", "decode", "CachedLowering", "SCHEMA_VERSION"]
+__all__ = ["SCHEMA_VERSION", "CachedLowering", "decode", "encode"]
 
 #: Bumped when the shape below changes, so an old entry is simply a miss.
 SCHEMA_VERSION = 1
@@ -23,7 +23,7 @@ SCHEMA_VERSION = 1
 class CachedLowering:
     """What `_collect` produced for one module, minus what is recomputable."""
 
-    __slots__ = ("ir", "signatures", "rejected", "fused", "plan", "notes")
+    __slots__ = ("fused", "ir", "notes", "plan", "rejected", "signatures")
 
     def __init__(
         self,
@@ -115,7 +115,9 @@ def encode(module) -> str:  # type: ignore[no-untyped-def]
             "signatures": {q: _signature(f.signature) for q, f in module.functions.items()},
             "rejected": dict(module.rejected),
             "fused": {symbol: _loop(loop) for symbol, loop in module.fused.items()},
-            "plan": [[list(position), _loop(loop)] for position, loop in module.fusion_plan.items()],
+            "plan": [
+                [list(position), _loop(loop)] for position, loop in module.fusion_plan.items()
+            ],
             "notes": [list(note) for note in module.fusion_notes],
         },
         separators=(",", ":"),

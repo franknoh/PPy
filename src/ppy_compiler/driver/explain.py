@@ -66,13 +66,15 @@ def _explain_location(bundle: AnalysisBundle, path: Path, line: int, reporter: R
             return 0
         _print_module(bundle, module.name, line)
         return 0
-    reporter.emit(Diagnostic("E1002", Severity.ERROR, f"{path} is not part of the analyzed project"))
+    reporter.emit(
+        Diagnostic("E1002", Severity.ERROR, f"{path} is not part of the analyzed project")
+    )
     return 2
 
 
 def _explain_qualname(bundle: AnalysisBundle, name: str, reporter: Reporter) -> int:
     for qualname, info in bundle.symbols.functions.items():
-        if qualname == name or info.name == name:
+        if name in (qualname, info.name):
             analysis = bundle.analysis.function(qualname)
             if analysis is not None:
                 _print_function(bundle, info, analysis, bundle.reports.get(qualname))
@@ -85,7 +87,7 @@ def _function_at(
     bundle: AnalysisBundle, module_name: str, line: int
 ) -> tuple[FunctionInfo, FunctionAnalysis, ContractReport | None] | None:
     best: tuple[int, FunctionInfo] | None = None
-    for qualname, info in bundle.symbols.functions.items():
+    for info in bundle.symbols.functions.values():
         if info.module != module_name:
             continue
         start = info.node.lineno
@@ -196,12 +198,14 @@ def _lowering_outcome(bundle: AnalysisBundle, info: FunctionInfo) -> str | None:
     that will fall back at every call is worse than saying nothing.
     """
     try:
-        from ..backend.llvm import LlvmUnavailable, _collect
+        from ..backend.llvm import _collect
     except ImportError:  # pragma: no cover - the backend is optional
         return None
     try:
         modules = _collect(bundle)
-    except (LlvmUnavailable, Exception):  # pragma: no cover - diagnostics only
+    except Exception:  # noqa: BLE001  # pragma: no cover - diagnostics only
+        # `explain` reports on compilation; a backend crash while explaining
+        # must degrade to "no native answer", not take the command down.
         return None
     module = modules.get(info.module)
     if module is None or info.qualname in module.functions:
@@ -262,10 +266,7 @@ def _jit_detail(info: FunctionInfo, report: ContractReport | None) -> str:
     if report is not None and not report.native_ok:
         return f"requested, but the function is not native: {report.native_reason}"
 
-    pinnable = [
-        p.name for p in info.params
-        if _pinnable(p, policy)
-    ]
+    pinnable = [p.name for p in info.params if _pinnable(p, policy)]
     if not pinnable:
         return "requested, but no argument is worth pinning"
     return (

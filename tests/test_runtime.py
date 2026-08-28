@@ -98,7 +98,7 @@ def test_class_decoration_keeps_class_identity():
     [(ppy.i8, 8, True), (ppy.u16, 16, False), (ppy.i64, 64, True), (ppy.u64, 64, False)],
 )
 def test_integer_markers_are_annotated_aliases(marker, bits, signed):
-    from typing import Annotated, get_args, get_origin
+    from typing import get_args, get_origin
 
     assert get_origin(marker) is not None or hasattr(marker, "__metadata__")
     base, meta = get_args(marker)

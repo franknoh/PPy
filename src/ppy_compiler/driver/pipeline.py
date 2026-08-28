@@ -18,14 +18,14 @@ from ..plugins.registry import load_plugins
 from .config import Config, find_project_root, load_config
 
 __all__ = [
-    "Project",
+    "COMPILER_VERSION",
     "AnalysisBundle",
     "BuildOutput",
-    "open_project",
+    "Project",
     "analyze_paths",
     "build_python",
     "collect_sources",
-    "COMPILER_VERSION",
+    "open_project",
 ]
 
 COMPILER_VERSION = "0.1.0"
@@ -87,7 +87,9 @@ def open_project(target: Path, *, config_overrides: dict[str, object] | None = N
 
     store = CacheStore(config.cache_path)
     plugins = load_plugins(config)
-    return Project(config=config, root=root, search_paths=search_paths, store=store, plugins=plugins)
+    return Project(
+        config=config, root=root, search_paths=search_paths, store=store, plugins=plugins
+    )
 
 
 def collect_sources(target: Path, *, ppy_only: bool = False) -> list[Path]:
@@ -95,13 +97,12 @@ def collect_sources(target: Path, *, ppy_only: bool = False) -> list[Path]:
     if target.is_file():
         return [target.resolve()]
     suffixes = (".ppy",) if ppy_only else _SOURCE_SUFFIXES
-    found = sorted(
+    return sorted(
         path.resolve()
         for suffix in suffixes
         for path in target.rglob(f"*{suffix}")
         if not any(part in {"__pycache__", ".ppy-cache", ".git", ".venv"} for part in path.parts)
     )
-    return found
 
 
 def analyze_paths(
@@ -250,7 +251,10 @@ def build_python(
         plan = fusion.get(module.name, {})
         tweaks = adjustments.get(module.name, {})
         key = module_cache_key(
-            bundle, module.name, target=target, opt_level=level,
+            bundle,
+            module.name,
+            target=target,
+            opt_level=level,
             extra=(
                 tuple(sorted(str(k) for k in plan)),
                 tuple(sorted(f"{k}:{v.reason}" for k, v in tweaks.items())),
@@ -272,8 +276,12 @@ def build_python(
             continue
 
         result: OptimizationResult = Optimizer(
-            symbols, module_analysis, bundle.analysis,
-            level=level, fusion=plan, adjustments=tweaks,
+            symbols,
+            module_analysis,
+            bundle.analysis,
+            level=level,
+            fusion=plan,
+            adjustments=tweaks,
         ).run()
         dependencies = tuple(
             module_cache_key(bundle, edge.target, target=target, opt_level=level).hex()
@@ -298,7 +306,6 @@ def _load_line_map(store: CacheStore, key: CacheKey) -> dict[int, int]:
 
 def _load_fused(store: CacheStore, key: CacheKey) -> tuple[str, ...]:
     return tuple(_load_metadata(store, key).get("fused", ()))
-
 
 
 def _load_metadata(store: CacheStore, key: CacheKey) -> dict:

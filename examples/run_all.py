@@ -8,7 +8,11 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).parent
-PATHS = [("plain", []), ("python", ["-m", "ppy_compiler"]), ("native", ["-m", "ppy_compiler", "run"])]
+PATHS = [
+    ("plain", []),
+    ("python", ["-m", "ppy_compiler"]),
+    ("native", ["-m", "ppy_compiler", "run"]),
+]
 NOISE = ("compiling ", "SyntaxWarning", "  if ", "staged ", "warning:")
 #: An example prefixes a line with this when it reports which path it is on,
 #: which is the one thing that is *supposed* to differ between the three.
@@ -17,17 +21,18 @@ PATH_SPECIFIC = "# "
 
 #: Examples that print their own timings differ between paths by design.
 _MEASURED = [
-    (re.compile(r"\d+\.\d+\s*(ms|us|µs|ns|s)\b"), "<time>"),   # wall clock
-    (re.compile(r"\d+\.\d+x\b"), "<ratio>"),                    # speedup
-    (re.compile(r"\d+\.\d+e[-+]\d+"), "<delta>"),               # float difference
-    (re.compile(r"\s{2,}"), " "),                               # column padding
+    (re.compile(r"\d+\.\d+\s*(ms|us|µs|ns|s)\b"), "<time>"),  # wall clock
+    (re.compile(r"\d+\.\d+x\b"), "<ratio>"),  # speedup
+    (re.compile(r"\d+\.\d+e[-+]\d+"), "<delta>"),  # float difference
+    (re.compile(r"\s{2,}"), " "),  # column padding
 ]
 
 
 def _clean(text: str) -> str:
     kept = (
-        l for l in text.splitlines()
-        if not l.startswith(NOISE) and not l.startswith(PATH_SPECIFIC) and l.strip()
+        line
+        for line in text.splitlines()
+        if not line.startswith(NOISE) and not line.startswith(PATH_SPECIFIC) and line.strip()
     )
     return "\n".join(_normalize(line) for line in kept)
 
@@ -56,7 +61,10 @@ def main() -> int:
         cwd, name = entry.parent, entry.name
         checked = subprocess.run(
             [sys.executable, "-m", "ppy_compiler", "check", name],
-            cwd=cwd, capture_output=True, text=True, check=False,
+            cwd=cwd,
+            capture_output=True,
+            text=True,
+            check=False,
         )
         status = "ok" if checked.returncode == 0 else "CHECK FAILED"
         results: dict[str, tuple[int, str]] = {}

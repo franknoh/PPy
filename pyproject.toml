@@ -83,3 +83,79 @@ build-execution = "deny"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+# The lint policy is written down so `ruff check` answers the same everywhere.
+# Example subdirectories hold converter inputs (deliberately plain Python) and
+# byte-exact converter output, both verified by examples/verify_conversions.py;
+# linting them is the converter's job, not this file's.
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+extend-exclude = ["examples/*/"]
+
+[tool.ruff.lint]
+select = [
+    "E", "W", "F", "I", "UP", "B", "C4", "SIM", "RET", "RUF",
+    "PERF", "PYI", "ISC", "PIE", "FURB", "BLE", "PL",
+]
+ignore = [
+    # Design metrics: a type checker's dispatch really does have that many
+    # branches, and splitting it to please a counter hides the shape.
+    "PLR0904", "PLR0911", "PLR0912", "PLR0913", "PLR0915", "PLR0916", "PLR1702",
+    # Bit widths, argument counts and opt levels are named by their number.
+    "PLR2004",
+    # `subprocess` here always runs a tool the user installed, by explicit path.
+    "S603",
+    # Lazy imports are the design: importing torch/jax/llvmlite eagerly costs
+    # seconds per invocation, and was measured to (22.4s -> 1.2s).
+    "PLC0415",
+    "PLR0917",
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Tests state their expectations inline; a magic number is the expectation.
+"tests/*" = ["PLR2004", "E501"]
+
+[tool.pylint.main]
+ignore-paths = ["examples/.*/.*"]
+
+[tool.pylint."messages control"]
+# The same policy as ruff's, for the checks the two tools share; the design
+# counters are judgment calls this project makes per function, not globally.
+disable = [
+    "too-many-branches", "too-many-statements", "too-many-return-statements",
+    "too-many-locals", "too-many-arguments", "too-many-instance-attributes",
+    "too-many-public-methods", "too-many-lines", "too-few-public-methods",
+    "too-many-positional-arguments", "too-many-nested-blocks", "too-many-boolean-expressions",
+    "line-too-long", "invalid-name", "duplicate-code",
+    "missing-module-docstring", "missing-class-docstring", "missing-function-docstring",
+    "fixme", "import-outside-toplevel", "cyclic-import",
+    # Plugin and visitor methods implement an interface; an argument one
+    # implementation ignores is still part of the signature.
+    "unused-argument", "arguments-renamed",
+    # Availability probes: `import torch` failing for any reason means the
+    # plugin is off, whatever the reason was.
+    "broad-exception-caught",
+    # A compiler dispatches on exact node classes; `type(x) is Y` is the test
+    # it means, and `isinstance` would accept subclasses it must not.
+    "unidiomatic-typecheck",
+    # pylint's inference cannot follow the plugin registry or llvmlite's
+    # dynamic surface; pyright strict is the type checker of record here.
+    "no-member", "not-callable", "unsubscriptable-object",
+    # Internal API crossing module boundaries inside the same package.
+    "protected-access",
+    # Two process-wide singletons (LLVM init, the worker pool), each argued
+    # at the use site.
+    "global-statement",
+    # Build-time execution (spec 31) is the feature, policy-gated at run time.
+    "exec-used",
+    # A pytest fixture is used by shadowing its name; that is the mechanism.
+    "redefined-outer-name",
+]
+
+[tool.pylint.variables]
+# `help=` on a diagnostic is its API, matching the `= help:` line it prints.
+allowed-redefined-builtins = ["help"]
+
+[tool.pylint.format]
+max-line-length = 100

@@ -3,17 +3,17 @@ from .server import LanguageServer, path_to_uri, serve, uri_to_path
 from .service import Action, AnalysisService, Hint, Located, Position
 
 __all__ = [
-    "AnalysisService",
-    "Position",
-    "Located",
-    "Hint",
     "Action",
+    "AnalysisService",
+    "Hint",
     "LanguageServer",
+    "Located",
+    "Message",
+    "Position",
+    "encode",
+    "path_to_uri",
+    "read_messages",
     "serve",
     "uri_to_path",
-    "path_to_uri",
-    "Message",
-    "read_messages",
     "write_message",
-    "encode",
 ]

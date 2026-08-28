@@ -9,20 +9,20 @@ from __future__ import annotations
 import os
 import sys
 import warnings
+from collections.abc import Iterable, Sequence
 from importlib.machinery import ModuleSpec, SourceFileLoader
 from importlib.util import spec_from_file_location
-from typing import Iterable, Sequence
 
 __all__ = [
+    "SUFFIX",
     "PPyAmbiguousModuleWarning",
-    "PPySourceLoader",
     "PPyPathFinder",
-    "install",
-    "uninstall",
-    "is_installed",
+    "PPySourceLoader",
     "add_import_root",
     "import_roots",
-    "SUFFIX",
+    "install",
+    "is_installed",
+    "uninstall",
 ]
 
 SUFFIX = ".ppy"
@@ -57,10 +57,11 @@ def _within_roots(path: str) -> bool:
 
 
 class PPySourceLoader(SourceFileLoader):
-    """Loads a `.ppy` file as ordinary Python source."""
+    """Loads a `.ppy` file as ordinary Python source.
 
-    def get_source(self, fullname: str) -> str:
-        return super().get_source(fullname)
+    `SourceFileLoader` already does everything: the suffix only matters to the
+    finder, so no method needs overriding.
+    """
 
 
 def _candidates(directory: str, tail: str) -> Iterable[tuple[str, bool]]:
@@ -91,13 +92,12 @@ class PPyPathFinder:
                     continue
                 cls._warn_if_ambiguous(fullname, directory, tail, is_package)
                 loader = PPySourceLoader(fullname, filename)
-                spec = spec_from_file_location(
+                return spec_from_file_location(
                     fullname,
                     filename,
                     loader=loader,
                     submodule_search_locations=[os.path.dirname(filename)] if is_package else None,
                 )
-                return spec
         return None
 
     @staticmethod

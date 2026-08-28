@@ -6,30 +6,36 @@ working under plain CPython and under any Python-aware editor.
 
 from __future__ import annotations
 
-from typing import Annotated, Any, TypeVar
+from typing import Annotated, Any
 
 __all__ = [
-    "IntWidth",
-    "FloatWidth",
+    "NUMERIC_MARKERS",
+    "Array",
     "ArraySpec",
-    "VectorSpec",
+    "Buffer",
     "BufferSpec",
-    "Range",
+    "Contiguous",
+    "DType",
+    "FloatWidth",
+    "IntWidth",
     "Length",
     "NoAlias",
+    "Range",
     "Shape",
-    "DType",
-    "Contiguous",
-    "Array",
     "Vector",
-    "Buffer",
-    "i8", "i16", "i32", "i64",
-    "u8", "u16", "u32", "u64",
-    "f16", "f32", "f64",
-    "NUMERIC_MARKERS",
+    "VectorSpec",
+    "f16",
+    "f32",
+    "f64",
+    "i8",
+    "i16",
+    "i32",
+    "i64",
+    "u8",
+    "u16",
+    "u32",
+    "u64",
 ]
-
-_T = TypeVar("_T")
 
 
 class _Meta:
@@ -114,10 +120,10 @@ class BufferSpec(_Meta):
 class Range(_Meta):
     """Refinement: `low <= value <= high`."""
 
-    __slots__ = ("low", "high")
+    __slots__ = ("high", "low")
     _fields = ("low", "high")
 
-    def __init__(self, low: int | float, high: int | float) -> None:
+    def __init__(self, low: float, high: float) -> None:
         self.low = low
         self.high = high
 
@@ -207,7 +213,15 @@ f32 = Annotated[float, FloatWidth(32)]
 f64 = Annotated[float, FloatWidth(64)]
 
 NUMERIC_MARKERS: dict[str, Any] = {
-    "i8": i8, "i16": i16, "i32": i32, "i64": i64,
-    "u8": u8, "u16": u16, "u32": u32, "u64": u64,
-    "f16": f16, "f32": f32, "f64": f64,
+    "i8": i8,
+    "i16": i16,
+    "i32": i32,
+    "i64": i64,
+    "u8": u8,
+    "u16": u16,
+    "u32": u32,
+    "u64": u64,
+    "f16": f16,
+    "f32": f32,
+    "f64": f64,
 }

@@ -16,7 +16,6 @@ from pathlib import Path
 
 import pytest
 
-from ppy_compiler.analysis import types as T
 from ppy_compiler.analysis.effects import Effect
 from ppy_compiler.backend.llvm import available as llvm_available
 
@@ -39,7 +38,9 @@ def _write(project: Path, name: str, source: str) -> Path:
 
 
 def _run(command: list[str], cwd: Path) -> subprocess.CompletedProcess:
-    return subprocess.run(command, cwd=cwd, capture_output=True, text=True, check=False, timeout=900)
+    return subprocess.run(
+        command, cwd=cwd, capture_output=True, text=True, check=False, timeout=900
+    )
 
 
 def _ppy(args: list[str], cwd: Path) -> subprocess.CompletedProcess:
@@ -212,8 +213,14 @@ def test_5_3_public_summaries_cross_module_boundaries(project: Path):
 def test_6_2_importing_ppy_starts_nothing_expensive():
     """`import ppy` must not initialize LLVM or start a service (spec 6.2)."""
     done = subprocess.run(
-        [sys.executable, "-c", "import sys, ppy; print(sorted(m for m in sys.modules if 'llvm' in m))"],
-        capture_output=True, text=True, check=False,
+        [
+            sys.executable,
+            "-c",
+            "import sys, ppy; print(sorted(m for m in sys.modules if 'llvm' in m))",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
     )
     assert done.returncode == 0, done.stderr
     assert done.stdout.strip() == "[]"
@@ -518,7 +525,7 @@ def test_16_3_an_overflowing_scalar_falls_back_instead_of_wrapping(project: Path
         print(cube(3), cube(10 ** 7))
         """,
     )
-    assert _agree(path).strip() == f"27 {10 ** 21}"
+    assert _agree(path).strip() == f"27 {10**21}"
 
 
 @requires_llvm
@@ -583,9 +590,7 @@ def test_16_9_a_specialization_falls_back_when_its_guard_fails(project: Path):
     engine.add(module.ir)
     engine.finalize()
     lowered = module.functions["spec.scaled"]
-    binding = bind(
-        lowered.signature, engine.address(lowered.signature.symbol), lambda x, f: x * f
-    )
+    binding = bind(lowered.signature, engine.address(lowered.signature.symbol), lambda x, f: x * f)
     specializer = Specializer(module, bundle.analysis.modules["spec"], engine)
     for _ in range(8):
         assert binding.wrapper(3, 5) == 15
@@ -711,7 +716,7 @@ def test_25_a_wrong_type_reaches_the_python_implementation(project: Path):
         print(total([10 ** 30, 1]))
         """,
     )
-    assert _agree(path).splitlines() == ["6", str(10 ** 30 + 1)]
+    assert _agree(path).splitlines() == ["6", str(10**30 + 1)]
 
 
 # --------------------------------------------------------------------------
@@ -721,7 +726,9 @@ def test_25_a_wrong_type_reaches_the_python_implementation(project: Path):
 
 def test_27_1_artifacts_are_content_addressed(project: Path):
     """Touching a file without changing it must not invalidate anything."""
-    path = _write(project, "stable.ppy", "def f(x: int) -> int:\n    return x + 1\n\n\nprint(f(1))\n")
+    path = _write(
+        project, "stable.ppy", "def f(x: int) -> int:\n    return x + 1\n\n\nprint(f(1))\n"
+    )
     assert _ppy([path.name], project).returncode == 0
     before = _ppy(["cache", "status"], project).stdout
     path.touch()
@@ -730,7 +737,9 @@ def test_27_1_artifacts_are_content_addressed(project: Path):
 
 
 def test_27_1_a_changed_source_produces_a_new_artifact(project: Path):
-    path = _write(project, "moving.ppy", "def f(x: int) -> int:\n    return x + 1\n\n\nprint(f(1))\n")
+    path = _write(
+        project, "moving.ppy", "def f(x: int) -> int:\n    return x + 1\n\n\nprint(f(1))\n"
+    )
     assert _ppy([path.name], project).returncode == 0
     entries = _ppy(["cache", "status"], project).stdout
     path.write_text("def f(x: int) -> int:\n    return x + 2\n\n\nprint(f(1))\n", encoding="utf-8")

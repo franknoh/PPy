@@ -9,8 +9,8 @@ from pathlib import Path
 
 import pytest
 
-from ppy_compiler.lsp.protocol import Message, encode, read_messages
-from ppy_compiler.lsp.server import LanguageServer, path_to_uri, serve, uri_to_path
+from ppy_compiler.lsp.protocol import encode, read_messages
+from ppy_compiler.lsp.server import path_to_uri, serve, uri_to_path
 from ppy_compiler.lsp.service import AnalysisService, Position
 
 SOURCE = """
@@ -66,8 +66,8 @@ def test_messages_round_trip_through_the_framing():
 
 
 def test_a_truncated_stream_ends_cleanly():
-    assert list(read_messages(io.BytesIO(b"Content-Length: 50\r\n\r\n{}"))) == []
-    assert list(read_messages(io.BytesIO(b""))) == []
+    assert not list(read_messages(io.BytesIO(b"Content-Length: 50\r\n\r\n{}")))
+    assert not list(read_messages(io.BytesIO(b"")))
 
 
 def test_uri_and_path_round_trip(tmp_path: Path):
@@ -233,14 +233,23 @@ def test_the_server_advertises_its_capabilities(workspace: Path):
     replies = _session(
         workspace,
         [
-            {"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {"rootPath": str(workspace)}},
+            {
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "initialize",
+                "params": {"rootPath": str(workspace)},
+            },
             {"jsonrpc": "2.0", "method": "exit"},
         ],
     )
     capabilities = replies[0]["result"]["capabilities"]
     for feature in (
-        "hoverProvider", "definitionProvider", "referencesProvider",
-        "renameProvider", "documentSymbolProvider", "inlayHintProvider",
+        "hoverProvider",
+        "definitionProvider",
+        "referencesProvider",
+        "renameProvider",
+        "documentSymbolProvider",
+        "inlayHintProvider",
         "codeActionProvider",
     ):
         assert capabilities[feature]
@@ -252,7 +261,12 @@ def test_the_server_publishes_diagnostics_on_open(workspace: Path):
     replies = _session(
         workspace,
         [
-            {"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {"rootPath": str(workspace)}},
+            {
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "initialize",
+                "params": {"rootPath": str(workspace)},
+            },
             _open(uri, path.read_text(encoding="utf-8")),
             {"jsonrpc": "2.0", "method": "exit"},
         ],
@@ -273,7 +287,12 @@ def test_editing_a_buffer_updates_diagnostics(workspace: Path):
     replies = _session(
         workspace,
         [
-            {"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {"rootPath": str(workspace)}},
+            {
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "initialize",
+                "params": {"rootPath": str(workspace)},
+            },
             _open(uri, path.read_text(encoding="utf-8")),
             {
                 "jsonrpc": "2.0",
@@ -297,13 +316,26 @@ def test_the_server_answers_hover_and_survives_a_bad_request(workspace: Path):
     replies = _session(
         workspace,
         [
-            {"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {"rootPath": str(workspace)}},
+            {
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "initialize",
+                "params": {"rootPath": str(workspace)},
+            },
             _open(uri, path.read_text(encoding="utf-8")),
-            {"jsonrpc": "2.0", "id": 2, "method": "textDocument/hover",
-             "params": {"textDocument": {"uri": uri}, "position": {"line": 4, "character": 4}}},
+            {
+                "jsonrpc": "2.0",
+                "id": 2,
+                "method": "textDocument/hover",
+                "params": {"textDocument": {"uri": uri}, "position": {"line": 4, "character": 4}},
+            },
             {"jsonrpc": "2.0", "id": 3, "method": "textDocument/nonsense", "params": {}},
-            {"jsonrpc": "2.0", "id": 4, "method": "textDocument/documentSymbol",
-             "params": {"textDocument": {"uri": uri}}},
+            {
+                "jsonrpc": "2.0",
+                "id": 4,
+                "method": "textDocument/documentSymbol",
+                "params": {"textDocument": {"uri": uri}},
+            },
             {"jsonrpc": "2.0", "id": 5, "method": "shutdown", "params": {}},
             {"jsonrpc": "2.0", "method": "exit"},
         ],
@@ -320,14 +352,31 @@ def test_the_server_reports_inlay_hints_and_code_actions(workspace: Path):
     replies = _session(
         workspace,
         [
-            {"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {"rootPath": str(workspace)}},
+            {
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "initialize",
+                "params": {"rootPath": str(workspace)},
+            },
             _open(uri, path.read_text(encoding="utf-8")),
-            {"jsonrpc": "2.0", "id": 2, "method": "textDocument/inlayHint",
-             "params": {"textDocument": {"uri": uri}}},
-            {"jsonrpc": "2.0", "id": 3, "method": "textDocument/codeAction",
-             "params": {"textDocument": {"uri": uri},
-                        "range": {"start": {"line": 8, "character": 0},
-                                  "end": {"line": 8, "character": 0}}}},
+            {
+                "jsonrpc": "2.0",
+                "id": 2,
+                "method": "textDocument/inlayHint",
+                "params": {"textDocument": {"uri": uri}},
+            },
+            {
+                "jsonrpc": "2.0",
+                "id": 3,
+                "method": "textDocument/codeAction",
+                "params": {
+                    "textDocument": {"uri": uri},
+                    "range": {
+                        "start": {"line": 8, "character": 0},
+                        "end": {"line": 8, "character": 0},
+                    },
+                },
+            },
             {"jsonrpc": "2.0", "method": "exit"},
         ],
     )

@@ -12,7 +12,7 @@ import ast
 from ..analysis.symbols import ModuleSymbols, ProjectSymbols
 from ..plugins.base import CallAdjustment, PluginRegistry
 
-__all__ = ["AdjustPlan", "find_adjustments", "adjustments_for_project"]
+__all__ = ["AdjustPlan", "adjustments_for_project", "find_adjustments"]
 
 #: Positions, per module, of calls whose arguments a plugin rewrites.
 AdjustPlan = dict[tuple[int, int], CallAdjustment]

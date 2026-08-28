@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 import ast
+import contextlib
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 
 from ...cache import CacheKey
-from ..binder import LibraryBinder
 from ...diagnostics import Diagnostic, Severity, Span
+from ..binder import LibraryBinder
 from .fusion import (
     FusedLoop,
     FusionCandidate,
@@ -32,15 +33,15 @@ from .specialize import SpecializationPolicy, Specializer
 from .wrapper_build import build_wrappers
 
 __all__ = [
-    "LlvmUnavailable",
-    "llvm_status",
-    "available",
-    "compile_project",
-    "compile_and_run",
-    "emit_ir",
-    "NativeModule",
     "BuildArtifacts",
+    "LlvmUnavailable",
+    "NativeModule",
     "ToolchainError",
+    "available",
+    "compile_and_run",
+    "compile_project",
+    "emit_ir",
+    "llvm_status",
     "toolchain_status",
 ]
 
@@ -183,12 +184,11 @@ def _cached_lowering(bundle, name: str, opt_level: int | None):  # type: ignore[
 def _store_lowering(bundle, name: str, opt_level: int | None, native: NativeModule) -> None:  # type: ignore[no-untyped-def]
     from .lowering_cache import encode
 
-    try:
+    # Caching is an optimization, not a contract; failing to store is fine.
+    with contextlib.suppress(Exception):
         key = _lowering_key(bundle, name, opt_level)
         bundle.project.store.put(key, encode(native), kind="llvm", source=name, suffix=".json")
         bundle.project.store.mark_root(key, f"lowered:{name}")
-    except Exception:  # noqa: BLE001 - caching is an optimization, not a contract
-        return
 
 
 def _module_from_cache(name: str, reused, candidates) -> NativeModule:  # type: ignore[no-untyped-def]
@@ -239,8 +239,7 @@ def _fuse(symbols, analysis):  # type: ignore[no-untyped-def]
         notes.append(
             (
                 candidate.node.lineno,
-                f"NumPy expression fused into one strided loop: "
-                f"{', '.join(candidate.operations)}",
+                f"NumPy expression fused into one strided loop: {', '.join(candidate.operations)}",
             )
         )
     return loops, plan, notes
@@ -261,8 +260,11 @@ def _append_fused(ir_text: str, module_name: str, fused: dict[str, FusedLoop]) -
 def _body_only(text: str) -> str:
     """Drop the module header so two LLVM modules can be concatenated."""
     lines = [
-        line for line in text.splitlines()
-        if not line.startswith(("; ModuleID", "source_filename", "target triple", "target datalayout"))
+        line
+        for line in text.splitlines()
+        if not line.startswith(
+            ("; ModuleID", "source_filename", "target triple", "target datalayout")
+        )
     ]
     return "\n".join(lines)
 
@@ -340,9 +342,7 @@ def compile_project(  # type: ignore[no-untyped-def]
     for name, native in natives.items():
         key: CacheKey = module_cache_key(bundle, name, target="llvm", opt_level=level)
         if store.get(key) is None:
-            store.put(
-                key, engine().optimized_ir(native.ir), kind="llvm", source=name, suffix=".ll"
-            )
+            store.put(key, engine().optimized_ir(native.ir), kind="llvm", source=name, suffix=".ll")
         store.mark_root(key, f"llvm:{name}")
         _report(native, reporter, bundle)
 
@@ -419,8 +419,6 @@ def compile_and_run(bundle, program_args, reporter, *, opt_level: int | None = N
 
     from ...backend.python.runner import execute, format_traceback
     from ...driver.pipeline import build_python
-    from .runtime import bind
-
     from ...driver.staging import compile_torch_regions, stage_project
     from ...opt.rewrites import adjustments_for_project
 
@@ -457,7 +455,7 @@ def compile_and_run(bundle, program_args, reporter, *, opt_level: int | None = N
                 cache_directory=bundle.project.config.cache_path / "jit",
                 layouts=layouts,
             )
-            for qualname, (info, node) in native.sources.items():
+            for info, node in native.sources.values():
                 specializer.register(info, node)
         wrappers = build_wrappers(
             name,
@@ -511,7 +509,9 @@ def compile_and_run(bundle, program_args, reporter, *, opt_level: int | None = N
 
     entry = output.generated.get(bundle.entry or "")
     if entry is None:
-        reporter.emit(Diagnostic("E1002", Severity.ERROR, "no generated module for the entry point"))
+        reporter.emit(
+            Diagnostic("E1002", Severity.ERROR, "no generated module for the entry point")
+        )
         return 2
 
     result = execute(
@@ -579,7 +579,14 @@ class _Binder(LibraryBinder):
         engine=None,
     ) -> None:
         self._entries.setdefault(module, {})[function] = (
-            signature, address, specializer, info, wrappers, qualname, layouts or {}, engine
+            signature,
+            address,
+            specializer,
+            info,
+            wrappers,
+            qualname,
+            layouts or {},
+            engine,
         )
 
     def add_fused(self, module: str, loop, address: int) -> None:  # type: ignore[no-untyped-def]
@@ -595,9 +602,7 @@ class _Binder(LibraryBinder):
         if entry is None:
             return fallback
         loop, address = entry
-        binding = bind_fused(
-            loop, address, fallback, parallel=loop.parallel, threads=self.threads
-        )
+        binding = bind_fused(loop, address, fallback, parallel=loop.parallel, threads=self.threads)
         self.fused_bindings.append(binding)
         return binding.wrapper
 

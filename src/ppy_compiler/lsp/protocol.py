@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Iterator
 from dataclasses import dataclass
-from typing import Any, BinaryIO, Iterator
+from typing import Any, BinaryIO
 
-__all__ = ["Message", "read_messages", "write_message", "encode"]
+__all__ = ["Message", "encode", "read_messages", "write_message"]
 
 
 @dataclass(frozen=True, slots=True)

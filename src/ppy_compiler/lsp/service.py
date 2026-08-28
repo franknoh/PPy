@@ -18,7 +18,7 @@ from ..analysis.symbols import ClassInfo, FunctionInfo
 from ..diagnostics import Diagnostic, Severity
 from ..driver.pipeline import AnalysisBundle, analyze_paths, collect_sources, open_project
 
-__all__ = ["AnalysisService", "Position", "Located", "Hint", "Action"]
+__all__ = ["Action", "AnalysisService", "Hint", "Located", "Position"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -36,7 +36,7 @@ class Located:
     end_column: int
 
     @staticmethod
-    def of(path: Path, node: ast.AST) -> "Located":
+    def of(path: Path, node: ast.AST) -> Located:
         return Located(
             path,
             getattr(node, "lineno", 1),
@@ -122,7 +122,8 @@ class AnalysisService:
         self.bundle()
         resolved = path.resolve()
         return [
-            diagnostic for diagnostic in self._diagnostics
+            diagnostic
+            for diagnostic in self._diagnostics
             if diagnostic.span is not None and diagnostic.span.path.resolve() == resolved
         ]
 
@@ -137,15 +138,15 @@ class AnalysisService:
 
         analysis = bundle.analysis.modules.get(module)
         if analysis is not None:
-            for note in analysis.lowerings.values():
-                found.append(
-                    Diagnostic(
-                        "R3001",
-                        Severity.REMARK,
-                        f"{note.qualname} -> {note.lowering}: {note.reason}",
-                        Span(path, note.line, 0),
-                    )
+            found.extend(
+                Diagnostic(
+                    "R3001",
+                    Severity.REMARK,
+                    f"{note.qualname} -> {note.lowering}: {note.reason}",
+                    Span(path, note.line, 0),
                 )
+                for note in analysis.lowerings.values()
+            )
         for info in self._functions(path):
             report = bundle.reports.get(info.qualname)
             if report is None:
@@ -153,7 +154,8 @@ class AnalysisService:
             if report.native_ok:
                 found.append(
                     Diagnostic(
-                        "R3001", Severity.REMARK,
+                        "R3001",
+                        Severity.REMARK,
                         f"`{info.name}` lowers to native code",
                         Span(path, info.node.lineno, 0),
                     )
@@ -161,7 +163,8 @@ class AnalysisService:
             if report.parallel_ok:
                 found.append(
                     Diagnostic(
-                        "R3001", Severity.REMARK,
+                        "R3001",
+                        Severity.REMARK,
                         f"`{info.name}` is parallelizable",
                         Span(path, info.node.lineno, 0),
                     )
@@ -192,7 +195,9 @@ class AnalysisService:
         if isinstance(node, ast.Name) and info is not None:
             for param in info.params:
                 if param.name == node.id:
-                    return self._describe_binding(f"parameter `{param.name}`", param.type, param.facts)
+                    return self._describe_binding(
+                        f"parameter `{param.name}`", param.type, param.facts
+                    )
 
         if isinstance(node, ast.Name):
             target = self._function_named(path, node.id)
@@ -205,7 +210,9 @@ class AnalysisService:
         node_type = analysis.type_of(node)
         if isinstance(node_type, T.UnknownType):
             return None
-        detail = self._describe_binding(f"`{ast.unparse(node)}`", node_type, analysis.facts_of(node))
+        detail = self._describe_binding(
+            f"`{ast.unparse(node)}`", node_type, analysis.facts_of(node)
+        )
         note = analysis.lowerings.get(id(node))
         if note is not None:
             detail += f"\n\nlowering: {note.lowering} — {note.reason}"
@@ -227,7 +234,9 @@ class AnalysisService:
             local = self._local_binding(info, name)
             if local is not None:
                 return Located.of(info.path, local)
-        target = bundle.symbols.functions.get(f"{module}.{name}") or self._imported(bundle, symbols, name)
+        target = bundle.symbols.functions.get(f"{module}.{name}") or self._imported(
+            bundle, symbols, name
+        )
         if target is not None:
             return Located.of(target.path, target.node)
         cls = symbols.classes.get(name)
@@ -254,17 +263,21 @@ class AnalysisService:
                 if isinstance(child, ast.Name) and child.id == name
             ]
 
-        found: list[Located] = []
-        for other in bundle.symbols.modules.values():
-            for child in ast.walk(other.module.tree):
-                if isinstance(child, ast.Name) and child.id == name:
-                    found.append(Located.of(other.path, child))
-                elif isinstance(child, ast.Attribute) and child.attr == name:
-                    found.append(Located.of(other.path, child))
-                elif isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
-                    if child.name == name:
-                        found.append(Located.of(other.path, child))
-        return found
+        def mentions(child: ast.AST) -> bool:
+            if isinstance(child, ast.Name):
+                return child.id == name
+            if isinstance(child, ast.Attribute):
+                return child.attr == name
+            if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+                return child.name == name
+            return False
+
+        return [
+            Located.of(other.path, child)
+            for other in bundle.symbols.modules.values()
+            for child in ast.walk(other.module.tree)
+            if mentions(child)
+        ]
 
     def rename(self, path: Path, position: Position, new_name: str) -> list[Located] | None:
         """Locations to rewrite, or `None` when the rename is not provably safe."""
@@ -290,14 +303,18 @@ class AnalysisService:
             ]
         # A module-level name is renamable only when the whole project is visible
         # and no dynamic boundary could reach it by string.
-        if any(m.functions and analysis.dynamic_spans for m, analysis in
-               zip(bundle.symbols.modules.values(), bundle.analysis.modules.values())):
+        if any(
+            m.functions and analysis.dynamic_spans
+            for m, analysis in zip(
+                bundle.symbols.modules.values(), bundle.analysis.modules.values(), strict=False
+            )
+        ):
             return None
         return self.references(path, position) or None
 
     def inlay_hints(self, path: Path) -> list[Hint]:
         """Inferred types shown as ghost annotations, never written to source."""
-        bundle = self.bundle()
+        self.bundle()
         hints: list[Hint] = []
         from ..analysis.render import render_annotation
 
@@ -323,7 +340,12 @@ class AnalysisService:
                 rendered = render_annotation(info.ret, info.ret_facts, local_module=info.module)
                 if rendered is not None:
                     hints.append(
-                        Hint(info.node.lineno, self._signature_end(info), f" -> {rendered.text}", f" -> {rendered.text}")
+                        Hint(
+                            info.node.lineno,
+                            self._signature_end(info),
+                            f" -> {rendered.text}",
+                            f" -> {rendered.text}",
+                        )
                     )
         return hints
 
@@ -399,7 +421,7 @@ class AnalysisService:
             start_line, start_col = node.lineno, node.col_offset
             end_line = getattr(node, "end_lineno", start_line) or start_line
             end_col = getattr(node, "end_col_offset", start_col) or start_col
-            if not (start_line <= position.line <= end_line):
+            if position.line < start_line or position.line > end_line:
                 continue
             if position.line == start_line and position.column < start_col:
                 continue
@@ -422,7 +444,11 @@ class AnalysisService:
         return None
 
     def _local_binding(self, info: FunctionInfo, name: str) -> ast.AST | None:
-        for argument in [*info.node.args.posonlyargs, *info.node.args.args, *info.node.args.kwonlyargs]:
+        for argument in [
+            *info.node.args.posonlyargs,
+            *info.node.args.args,
+            *info.node.args.kwonlyargs,
+        ]:
             if argument.arg == name:
                 return argument
         for node in ast.walk(info.node):
@@ -481,7 +507,8 @@ class AnalysisService:
                 "llvm: native" if report.native_ok else f"llvm: boxed — {report.native_reason}"
             )
             lines.append(
-                "parallel: accepted" if report.parallel_ok
+                "parallel: accepted"
+                if report.parallel_ok
                 else f"parallel: rejected — {report.parallel_reason}"
             )
         if info.opt_level is not None:
@@ -490,5 +517,7 @@ class AnalysisService:
 
     def _describe_class(self, cls: ClassInfo) -> str:
         fields = ", ".join(f"{name}: {t}" for name, t in cls.fields.items())
-        kind = "pydantic model" if cls.is_pydantic else ("dataclass" if cls.is_dataclass else "class")
+        kind = (
+            "pydantic model" if cls.is_pydantic else ("dataclass" if cls.is_dataclass else "class")
+        )
         return f"`{cls.name}` ({kind})\n\nfields: {fields or 'none'}\n\nmro: {' -> '.join(cls.mro)}"

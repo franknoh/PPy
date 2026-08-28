@@ -18,9 +18,19 @@ from .pipeline import (
 from .reporting import Reporter
 
 __all__ = [
-    "check", "convert", "fmt", "explain", "inspect", "cache", "clean",
-    "doctor", "run_python_backend", "run_llvm_backend", "build",
-    "differential_test", "language_server",
+    "build",
+    "cache",
+    "check",
+    "clean",
+    "convert",
+    "differential_test",
+    "doctor",
+    "explain",
+    "fmt",
+    "inspect",
+    "language_server",
+    "run_llvm_backend",
+    "run_python_backend",
 ]
 
 
@@ -33,11 +43,12 @@ def _overrides(options: argparse.Namespace) -> dict[str, object]:
     return overrides
 
 
-def _prepare(target: Path, options: argparse.Namespace, *, backend: str = "python") -> AnalysisBundle:
+def _prepare(
+    target: Path, options: argparse.Namespace, *, backend: str = "python"
+) -> AnalysisBundle:
     project = open_project(target, config_overrides=_overrides(options))
     entries = collect_sources(target)
     return analyze_paths(project, entries, backend=backend)
-
 
 
 def check(options: argparse.Namespace, reporter: Reporter) -> int:
@@ -52,9 +63,10 @@ def check(options: argparse.Namespace, reporter: Reporter) -> int:
     if errors:
         reporter.summary(errors, warnings, subject=f" in {modules} module(s)")
         return 1
-    reporter.note(f"checked {modules} module(s): no errors" + (f", {warnings} warning(s)" if warnings else ""))
+    reporter.note(
+        f"checked {modules} module(s): no errors" + (f", {warnings} warning(s)" if warnings else "")
+    )
     return 0
-
 
 
 def run_python_backend(
@@ -67,7 +79,7 @@ def run_python_backend(
     from ..backend.binder import LibraryBinder
     from ..backend.python.runner import execute, format_traceback
     from ..opt.rewrites import adjustments_for_project
-    from .staging import compile_torch_regions, stage_project
+    from .staging import stage_project
 
     if not file.is_file():
         reporter.emit(Diagnostic("E1002", Severity.ERROR, f"{file} is not a file"))
@@ -135,7 +147,9 @@ def run_llvm_backend(
         reporter.summary(errors, 0)
         return 1
     try:
-        return compile_and_run(bundle, program_args, reporter, opt_level=_overrides(options).get("opt_level"))  # type: ignore[arg-type]
+        return compile_and_run(
+            bundle, program_args, reporter, opt_level=_overrides(options).get("opt_level")
+        )  # type: ignore[arg-type]
     except LlvmUnavailable as exc:
         reporter.emit(
             Diagnostic(
@@ -163,7 +177,9 @@ def build(options: argparse.Namespace, reporter: Reporter) -> int:
 
     if backend == "python":
         output = build_python(bundle)
-        reporter.note(f"built {len(output.generated)} module(s) into {bundle.project.config.cache_path}")
+        reporter.note(
+            f"built {len(output.generated)} module(s) into {bundle.project.config.cache_path}"
+        )
         return 0
 
     from ..backend.llvm import LlvmUnavailable, compile_project
@@ -193,7 +209,6 @@ def build(options: argparse.Namespace, reporter: Reporter) -> int:
     return 0
 
 
-
 def convert(options: argparse.Namespace, reporter: Reporter) -> int:
     from .convert import run_convert
 
@@ -206,12 +221,10 @@ def fmt(options: argparse.Namespace, reporter: Reporter) -> int:
     return run_fmt(options, reporter)
 
 
-
 def explain(options: argparse.Namespace, reporter: Reporter) -> int:
     from .explain import run_explain
 
     return run_explain(options, reporter)
-
 
 
 def inspect(options: argparse.Namespace, reporter: Reporter) -> int:
@@ -254,7 +267,6 @@ def inspect(options: argparse.Namespace, reporter: Reporter) -> int:
     return 0
 
 
-
 def _generated_native_sources(bundle) -> dict[str, str]:  # type: ignore[no-untyped-def]
     """The C and C++ the native path compiles alongside the IR."""
     found: dict[str, str] = {}
@@ -262,9 +274,7 @@ def _generated_native_sources(bundle) -> dict[str, str]:  # type: ignore[no-unty
     from ..backend.llvm.wrapper import generate
 
     for name, module in _collect(bundle).items():
-        signatures = {
-            function: lowered.signature for function, lowered in module.functions.items()
-        }
+        signatures = {function: lowered.signature for function, lowered in module.functions.items()}
         if signatures:
             found[f"{name} (CPython ABI wrappers, C)"] = generate(name, signatures).source
 
@@ -298,7 +308,9 @@ def cache(options: argparse.Namespace, reporter: Reporter) -> int:
             reporter.note(f"cleaned {store.root}")
             return 0
         case "gc":
-            removed, freed = store.gc(max_age_days=options.max_age_days, max_bytes=options.max_bytes)
+            removed, freed = store.gc(
+                max_age_days=options.max_age_days, max_bytes=options.max_bytes
+            )
             reporter.note(f"removed {removed} artifact(s), freed {freed} bytes")
             return 0
     return 2
@@ -315,7 +327,6 @@ def clean(options: argparse.Namespace, reporter: Reporter) -> int:
     else:
         reporter.note(f"nothing to remove at {path}")
     return 0
-
 
 
 def doctor(options: argparse.Namespace, reporter: Reporter) -> int:
@@ -354,7 +365,6 @@ def doctor(options: argparse.Namespace, reporter: Reporter) -> int:
     ready, detail = toolchain_ready()
     print(f"aten regions      {'available' if ready else 'unavailable'} ({detail})")
     return 0
-
 
 
 def differential_test(options: argparse.Namespace, reporter: Reporter) -> int:

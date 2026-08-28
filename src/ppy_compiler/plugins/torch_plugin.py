@@ -3,29 +3,77 @@
 from __future__ import annotations
 
 import importlib.util
-from typing import Sequence
+from collections.abc import Sequence
 
 from ..analysis import types as T
 from ..analysis.effects import Effect, EffectSet
 from ..analysis.refinements import Facts
 from .base import CallResult, Lowering
 
-__all__ = ["TorchPlugin", "CURATED_OPS", "ATEN_SCHEMAS"]
+__all__ = ["ATEN_SCHEMAS", "CURATED_OPS", "TorchPlugin"]
 
 PLUGIN_VERSION = 1
 
 #: The v1 curated operator set (spec 20.4).
-CURATED_OPS = frozenset({
-    "add", "sub", "mul", "div", "neg", "abs", "pow", "remainder",
-    "eq", "ne", "lt", "le", "gt", "ge",
-    "reshape", "view", "transpose", "permute", "squeeze", "unsqueeze", "flatten",
-    "contiguous", "clone", "detach", "to",
-    "sum", "mean", "max", "min", "prod", "argmax", "argmin", "norm",
-    "matmul", "mm", "bmm", "linear",
-    "relu", "gelu", "sigmoid", "tanh", "softmax", "log_softmax",
-    "cat", "stack",
-    "zeros", "ones", "empty", "full", "arange", "tensor", "randn", "rand", "zeros_like", "ones_like",
-})
+CURATED_OPS = frozenset(
+    {
+        "add",
+        "sub",
+        "mul",
+        "div",
+        "neg",
+        "abs",
+        "pow",
+        "remainder",
+        "eq",
+        "ne",
+        "lt",
+        "le",
+        "gt",
+        "ge",
+        "reshape",
+        "view",
+        "transpose",
+        "permute",
+        "squeeze",
+        "unsqueeze",
+        "flatten",
+        "contiguous",
+        "clone",
+        "detach",
+        "to",
+        "sum",
+        "mean",
+        "max",
+        "min",
+        "prod",
+        "argmax",
+        "argmin",
+        "norm",
+        "matmul",
+        "mm",
+        "bmm",
+        "linear",
+        "relu",
+        "gelu",
+        "sigmoid",
+        "tanh",
+        "softmax",
+        "log_softmax",
+        "cat",
+        "stack",
+        "zeros",
+        "ones",
+        "empty",
+        "full",
+        "arange",
+        "tensor",
+        "randn",
+        "rand",
+        "zeros_like",
+        "ones_like",
+    }
+)
 
 _RANDOM_OPS = frozenset({"randn", "rand", "randint", "randperm", "manual_seed"})
 
@@ -64,14 +112,38 @@ _UTILITY_TYPES: dict[str, T.Type] = {
 
 #: Tensor methods and attributes with a statically known result.
 _TENSOR_MEMBERS: dict[str, str] = {
-    "sum": "tensor", "mean": "tensor", "max": "tensor", "min": "tensor",
-    "prod": "tensor", "abs": "tensor", "exp": "tensor", "log": "tensor",
-    "sqrt": "tensor", "relu": "tensor", "sigmoid": "tensor", "tanh": "tensor",
-    "neg": "tensor", "clone": "tensor", "detach": "tensor", "contiguous": "tensor",
-    "reshape": "tensor", "view": "tensor", "transpose": "tensor", "permute": "tensor",
-    "squeeze": "tensor", "unsqueeze": "tensor", "flatten": "tensor", "to": "tensor",
-    "cpu": "tensor", "cuda": "tensor", "float": "tensor", "double": "tensor",
-    "matmul": "tensor", "mm": "tensor", "t": "tensor", "expand": "tensor",
+    "sum": "tensor",
+    "mean": "tensor",
+    "max": "tensor",
+    "min": "tensor",
+    "prod": "tensor",
+    "abs": "tensor",
+    "exp": "tensor",
+    "log": "tensor",
+    "sqrt": "tensor",
+    "relu": "tensor",
+    "sigmoid": "tensor",
+    "tanh": "tensor",
+    "neg": "tensor",
+    "clone": "tensor",
+    "detach": "tensor",
+    "contiguous": "tensor",
+    "reshape": "tensor",
+    "view": "tensor",
+    "transpose": "tensor",
+    "permute": "tensor",
+    "squeeze": "tensor",
+    "unsqueeze": "tensor",
+    "flatten": "tensor",
+    "to": "tensor",
+    "cpu": "tensor",
+    "cuda": "tensor",
+    "float": "tensor",
+    "double": "tensor",
+    "matmul": "tensor",
+    "mm": "tensor",
+    "t": "tensor",
+    "expand": "tensor",
     "backward": "none",
     "item": "float",
     "tolist": "float_list",
@@ -139,9 +211,19 @@ ATEN_SCHEMAS: dict[str, str | tuple[str, str]] = {
 
 #: Python operators mapped to their ATen operator names.
 _OPERATORS = {
-    "+": "add", "-": "sub", "*": "mul", "/": "div", "%": "remainder",
-    "**": "pow", "@": "matmul",
-    "<": "lt", "<=": "le", "==": "eq", "!=": "ne", ">": "gt", ">=": "ge",
+    "+": "add",
+    "-": "sub",
+    "*": "mul",
+    "/": "div",
+    "%": "remainder",
+    "**": "pow",
+    "@": "matmul",
+    "<": "lt",
+    "<=": "le",
+    "==": "eq",
+    "!=": "ne",
+    ">": "gt",
+    ">=": "ge",
     "u-": "neg",
 }
 
@@ -166,11 +248,18 @@ class TorchPlugin:
                 import torch
 
                 version = torch.__version__
-                cxx11_abi = str(getattr(torch.compiled_with_cxx11_abi(), "real", torch.compiled_with_cxx11_abi()))
+                cxx11_abi = str(
+                    getattr(
+                        torch.compiled_with_cxx11_abi(), "real", torch.compiled_with_cxx11_abi()
+                    )
+                )
                 cuda = str(getattr(torch.version, "cuda", None) or "none")
         except Exception:  # noqa: BLE001 - a broken install must not break analysis
             version = "unknown"
-        return f"v{PLUGIN_VERSION}:torch={version}:cxx11abi={cxx11_abi}:cuda={cuda}:policy={self.version_policy}"
+        return (
+            f"v{PLUGIN_VERSION}:torch={version}:cxx11abi={cxx11_abi}"
+            f":cuda={cuda}:policy={self.version_policy}"
+        )
 
     def external_types(self) -> dict[str, str]:
         return {
@@ -218,7 +307,6 @@ class TorchPlugin:
             T.Callable_((), _UTILITY_TYPES.get(kind, T.UNKNOWN), f"torch.Tensor.{attribute}"),
             Facts(),
         )
-
 
     def subscript(
         self, type_name: str, *, is_slice: bool, tupled: bool
@@ -295,7 +383,9 @@ class TorchPlugin:
         result_type: T.Type = _TENSOR
         if operation in {"argmax", "argmin"} and not args:
             result_type = T.INT
-        return CallResult(result_type, Facts(exact_class="torch.Tensor"), effects, lowering, reason, guards)
+        return CallResult(
+            result_type, Facts(exact_class="torch.Tensor"), effects, lowering, reason, guards
+        )
 
     def _lowering(
         self,
@@ -308,9 +398,16 @@ class TorchPlugin:
             if isinstance(base, (T.AnyType, T.UnknownType)):
                 return Lowering.PYTHON_FALLBACK, "an operand has no static type", ()
             if isinstance(base, T.Instance) and base.name not in {
-                "torch.Tensor", "int", "float", "bool"
+                "torch.Tensor",
+                "int",
+                "float",
+                "bool",
             }:
-                return Lowering.PYTHON_FALLBACK, f"operand `{base}` is outside the curated domain", ()
+                return (
+                    Lowering.PYTHON_FALLBACK,
+                    f"operand `{base}` is outside the curated domain",
+                    (),
+                )
 
         guards = (
             "exact torch.Tensor (no tensor subclass)",
@@ -321,13 +418,17 @@ class TorchPlugin:
         if operation in _DISPATCH_SENSITIVE:
             return (
                 Lowering.DIRECT_NATIVE_CALL,
-                f"`{operation}` has an ATen C++ counterpart that keeps autograd and "
-                "device keys; it is used when the whole function compiles into a region",
+                (
+                    f"`{operation}` has an ATen C++ counterpart that keeps autograd and "
+                    "device keys; it is used when the whole function compiles into a region"
+                ),
                 guards,
             )
         return (
             Lowering.DIRECT_NATIVE_CALL,
-            f"`{operation}` has an ATen C++ counterpart; it is used when the whole "
-            "function compiles into a region",
+            (
+                f"`{operation}` has an ATen C++ counterpart; it is used when the whole "
+                "function compiles into a region"
+            ),
             guards,
         )

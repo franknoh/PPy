@@ -15,11 +15,11 @@ from ..plugins.jax_export import ExportRequest, accelerator_fingerprint, export_
 from ..plugins.jax_plugin import JaxPlugin, staged_functions
 
 __all__ = [
+    "RegionResult",
     "StagedArtifact",
     "StagingResult",
-    "RegionResult",
-    "stage_project",
     "compile_torch_regions",
+    "stage_project",
 ]
 
 
@@ -86,7 +86,12 @@ def stage_project(bundle, diagnostics: DiagnosticBag | None = None) -> StagingRe
             if not permitted:
                 result.skipped.append((staged.info.qualname, reason))
                 result.diagnostics.append(
-                    Diagnostic("R3001", Severity.REMARK, f"`{staged.info.name}` not exported: {reason}", span)
+                    Diagnostic(
+                        "R3001",
+                        Severity.REMARK,
+                        f"`{staged.info.name}` not exported: {reason}",
+                        span,
+                    )
                 )
                 continue
 
@@ -127,7 +132,9 @@ def stage_project(bundle, diagnostics: DiagnosticBag | None = None) -> StagingRe
                 )
                 continue
 
-            store.put(key, exported.payload, kind="metadata", source=str(symbols.path), suffix=".mlir")
+            store.put(
+                key, exported.payload, kind="metadata", source=str(symbols.path), suffix=".mlir"
+            )
             store.mark_root(key, f"jax:{staged.info.qualname}")
             result.artifacts.setdefault(module_name, {})[staged.info.name] = StagedArtifact(
                 module_name,
@@ -141,7 +148,8 @@ def stage_project(bundle, diagnostics: DiagnosticBag | None = None) -> StagingRe
                 Diagnostic(
                     "R3001",
                     Severity.REMARK,
-                    f"`{staged.info.name}` exported to StableHLO for {', '.join(exported.platforms) or 'the default platform'}",
+                    f"`{staged.info.name}` exported to StableHLO for "
+                    + (", ".join(exported.platforms) or "the default platform"),
                     span,
                 )
             )

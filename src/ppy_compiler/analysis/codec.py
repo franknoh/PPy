@@ -16,8 +16,15 @@ from . import types as T
 from .effects import Effect, EffectSet
 from .refinements import Facts, IntRange
 
-__all__ = ["encode_type", "decode_type", "encode_facts", "decode_facts",
-           "encode_effects", "decode_effects", "CodecError"]
+__all__ = [
+    "CodecError",
+    "decode_effects",
+    "decode_facts",
+    "decode_type",
+    "encode_effects",
+    "encode_facts",
+    "encode_type",
+]
 
 
 class CodecError(ValueError):

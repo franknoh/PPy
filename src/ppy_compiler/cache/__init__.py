@@ -2,10 +2,10 @@ from .keys import CacheKey, digest, environment_fingerprint
 from .store import CacheEntry, CacheStats, CacheStore
 
 __all__ = [
-    "CacheKey",
-    "CacheStore",
     "CacheEntry",
+    "CacheKey",
     "CacheStats",
+    "CacheStore",
     "digest",
     "environment_fingerprint",
 ]

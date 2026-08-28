@@ -8,13 +8,13 @@ import shutil
 import sqlite3
 import tempfile
 import time
+from collections.abc import Iterable, Iterator
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable, Iterator
 
 from .keys import CacheKey, digest
 
-__all__ = ["CacheEntry", "CacheStore", "CacheStats"]
+__all__ = ["CacheEntry", "CacheStats", "CacheStore"]
 
 _LAYOUT = ("objects", "python", "llvm", "native", "jit", "plugins", "metadata", "locks", "gc")
 
@@ -122,7 +122,11 @@ class CacheStore:
         payload = data.encode("utf-8") if isinstance(data, str) else data
         key_hex = key.hex() if isinstance(key, CacheKey) else key
         kind = kind or (key.kind if isinstance(key, CacheKey) else "object")
-        content_hash = digest(payload.decode("utf-8", "surrogateescape")) if isinstance(data, str) else digest(payload)
+        content_hash = (
+            digest(payload.decode("utf-8", "surrogateescape"))
+            if isinstance(data, str)
+            else digest(payload)
+        )
         target = self.object_path(content_hash + suffix)
         target.parent.mkdir(parents=True, exist_ok=True)
         if not target.exists():
@@ -132,7 +136,8 @@ class CacheStore:
         connection.execute(
             "INSERT INTO artifacts(key, kind, object, size, created, accessed, source) "
             "VALUES(?,?,?,?,?,?,?) "
-            "ON CONFLICT(key) DO UPDATE SET object=excluded.object, size=excluded.size, accessed=excluded.accessed",
+            "ON CONFLICT(key) DO UPDATE SET object=excluded.object, "
+            "size=excluded.size, accessed=excluded.accessed",
             (key_hex, kind, content_hash + suffix, len(payload), now, now, source),
         )
         for dependency in dependencies:
@@ -219,7 +224,9 @@ class CacheStore:
             Path(str(self.index_path) + suffix).unlink(missing_ok=True)
         self.ensure()
 
-    def gc(self, *, max_age_days: float | None = 30.0, max_bytes: int | None = None) -> tuple[int, int]:
+    def gc(
+        self, *, max_age_days: float | None = 30.0, max_bytes: int | None = None
+    ) -> tuple[int, int]:
         """Drop unreachable and expired artifacts. Returns (removed, bytes freed)."""
         if not self.exists():
             return 0, 0
@@ -228,11 +235,13 @@ class CacheStore:
         removed = freed = 0
         cutoff = time.time() - (max_age_days * 86400) if max_age_days else None
 
-        candidates = list(connection.execute(
-            "SELECT key, object, size, accessed FROM artifacts ORDER BY accessed ASC"
-        ))
+        candidates = list(
+            connection.execute(
+                "SELECT key, object, size, accessed FROM artifacts ORDER BY accessed ASC"
+            )
+        )
         live_bytes = sum(row[2] for row in candidates)
-        for key, obj, size, accessed in candidates:
+        for key, _obj, size, accessed in candidates:
             expired = cutoff is not None and accessed < cutoff
             over_budget = max_bytes is not None and live_bytes > max_bytes
             if key in reachable and not expired and not over_budget:

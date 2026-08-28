@@ -4,11 +4,11 @@ from __future__ import annotations
 
 import array
 import ctypes
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Callable
 
 from .lowering import STATUS_OK, NativeParam, NativeSignature
-from .specialize import SpecializationKey, SpecializationPolicy, Specializer, key_for
+from .specialize import SpecializationPolicy, Specializer, key_for
 
 __all__ = ["NativeBinding", "bind"]
 
@@ -94,7 +94,6 @@ def bind(
         else:
             argument_types.extend(_CTYPES[atom] for atom in parameter.abi)
 
-
     result_types = [_CTYPES[atom] for atom in signature.returns]
     prototype = ctypes.CFUNCTYPE(
         ctypes.c_int32, *argument_types, *[ctypes.POINTER(t) for t in result_types]
@@ -156,7 +155,7 @@ def bind(
         # `borrowed` keeps each unboxed buffer alive for the duration of the call.
         borrowed: list[object] = []
         try:
-            for expand, value in zip(expanders, args):
+            for expand, value in zip(expanders, args, strict=False):
                 expand(value, atoms, borrowed)
         except GuardFailed:
             binding.fallbacks += 1
@@ -179,7 +178,9 @@ def bind(
         binding.calls += 1
         binding.specialized_calls += int(entry is not None)
         if returns_tuple:
-            return tuple(finish(slot.value) for finish, slot in zip(finalizers, slots))
+            return tuple(
+                finish(slot.value) for finish, slot in zip(finalizers, slots, strict=False)
+            )
         return finalizers[0](slots[0].value)
 
     wrapper.__name__ = signature.qualname.rpartition(".")[2]
@@ -247,9 +248,7 @@ def _expander_for(
         return expand_buffer
 
     if parameter.is_object:
-        field_guards = [
-            (field, _scalar_guard(_abi_of(scalar))) for field, scalar in parameter.fields
-        ]
+        field_guards = [(attr, _scalar_guard(_abi_of(scalar))) for attr, scalar in parameter.fields]
         short_name = parameter.class_name.rpartition(".")[2]
         resolved: list[type | None] = [None]
 
@@ -269,9 +268,9 @@ def _expander_for(
             # is flattened; anything else runs the Python body (spec 25.4).
             if type(value) is not expected:
                 raise GuardFailed
-            for field, convert in field_guards:
+            for attr, convert in field_guards:
                 try:
-                    atoms.append(convert(getattr(value, field)))
+                    atoms.append(convert(getattr(value, attr)))
                 except AttributeError as exc:
                     raise GuardFailed from exc
 
@@ -283,7 +282,7 @@ def _expander_for(
         def expand_tuple(value: object, atoms: list, borrowed: list) -> None:
             if type(value) is not tuple or len(value) != len(element_guards):
                 raise GuardFailed
-            for item, convert in zip(value, element_guards):
+            for item, convert in zip(value, element_guards, strict=False):
                 atoms.append(convert(item))
 
         return expand_tuple
@@ -324,10 +323,10 @@ def _expander_for(
 
 def _result_for(abi: str) -> Callable[[object], object]:
     if abi == "double":
-        return lambda value: float(value)  # type: ignore[arg-type]
+        return float  # type: ignore[arg-type]
     if abi == "i8":
-        return lambda value: bool(value)
-    return lambda value: int(value)  # type: ignore[arg-type]
+        return bool
+    return int  # type: ignore[arg-type]
 
 
 def _scalar_guard(abi: str) -> Callable[[object], object]:

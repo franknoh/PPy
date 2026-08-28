@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, replace
 from typing import Any
 
-__all__ = ["IntRange", "Facts", "UNBOUNDED", "width_range"]
+__all__ = ["UNBOUNDED", "Facts", "IntRange", "width_range"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -22,44 +22,52 @@ class IntRange:
     def is_unbounded(self) -> bool:
         return self.low is None and self.high is None
 
-    def contains(self, other: "IntRange") -> bool:
+    def contains(self, other: IntRange) -> bool:
         if self.low is not None and (other.low is None or other.low < self.low):
             return False
-        if self.high is not None and (other.high is None or other.high > self.high):
-            return False
-        return True
+        return not (self.high is not None and (other.high is None or other.high > self.high))
 
-    def join(self, other: "IntRange") -> "IntRange":
+    def join(self, other: IntRange) -> IntRange:
         low = None if self.low is None or other.low is None else min(self.low, other.low)
         high = None if self.high is None or other.high is None else max(self.high, other.high)
         return IntRange(low, high)
 
-    def meet(self, other: "IntRange") -> "IntRange":
-        low = self.low if other.low is None else (other.low if self.low is None else max(self.low, other.low))
-        high = self.high if other.high is None else (other.high if self.high is None else min(self.high, other.high))
+    def meet(self, other: IntRange) -> IntRange:
+        low = (
+            self.low
+            if other.low is None
+            else (other.low if self.low is None else max(self.low, other.low))
+        )
+        high = (
+            self.high
+            if other.high is None
+            else (other.high if self.high is None else min(self.high, other.high))
+        )
         return IntRange(low, high)
 
-    def __add__(self, other: "IntRange") -> "IntRange":
+    def __add__(self, other: IntRange) -> IntRange:
         low = None if self.low is None or other.low is None else self.low + other.low
         high = None if self.high is None or other.high is None else self.high + other.high
         return IntRange(low, high)
 
-    def __sub__(self, other: "IntRange") -> "IntRange":
+    def __sub__(self, other: IntRange) -> IntRange:
         low = None if self.low is None or other.high is None else self.low - other.high
         high = None if self.high is None or other.low is None else self.high - other.low
         return IntRange(low, high)
 
-    def __mul__(self, other: "IntRange") -> "IntRange":
+    def __mul__(self, other: IntRange) -> IntRange:
         bounds = (self.low, self.high, other.low, other.high)
         if any(b is None for b in bounds):
             return UNBOUNDED
         products = [
-            self.low * other.low, self.low * other.high,  # type: ignore[operator]
-            self.high * other.low, self.high * other.high,  # type: ignore[operator]
+            self.low * other.low,
+            self.low * other.high,  # type: ignore[operator]
+            self.high * other.low,
+            self.high * other.high,  # type: ignore[operator]
         ]
         return IntRange(min(products), max(products))
 
-    def negate(self) -> "IntRange":
+    def negate(self) -> IntRange:
         low = None if self.high is None else -self.high
         high = None if self.low is None else -self.low
         return IntRange(low, high)
@@ -91,10 +99,10 @@ class Facts:
     width: tuple[int, bool] | None = None
     float_bits: int | None = None
 
-    def with_(self, **updates: Any) -> "Facts":
+    def with_(self, **updates: Any) -> Facts:
         return replace(self, **updates)
 
-    def merge(self, other: "Facts") -> "Facts":
+    def merge(self, other: Facts) -> Facts:
         """Flow-merge: keep only facts both branches prove."""
         int_range = None
         if self.int_range is not None and other.int_range is not None:

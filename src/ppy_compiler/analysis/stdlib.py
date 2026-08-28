@@ -12,20 +12,29 @@ from .effects import Effect, EffectSet
 from .refinements import Facts, IntRange
 
 __all__ = [
-    "INSTANCE_ATTRS",
+    "ARRAY_TYPECODES",
     "EXTERNAL_TYPES",
+    "INSTANCE_ATTRS",
+    "MODULE_ATTRIBUTES",
+    "call",
     "instance_attribute",
     "lookup",
-    "call",
-    "MODULE_ATTRIBUTES",
-    "ARRAY_TYPECODES",
 ]
 
 #: `array` type codes and the element type each denotes.
 ARRAY_TYPECODES: dict[str, T.Type] = {
-    "b": T.INT, "B": T.INT, "h": T.INT, "H": T.INT, "i": T.INT, "I": T.INT,
-    "l": T.INT, "L": T.INT, "q": T.INT, "Q": T.INT,
-    "f": T.FLOAT, "d": T.FLOAT,
+    "b": T.INT,
+    "B": T.INT,
+    "h": T.INT,
+    "H": T.INT,
+    "i": T.INT,
+    "I": T.INT,
+    "l": T.INT,
+    "L": T.INT,
+    "q": T.INT,
+    "Q": T.INT,
+    "f": T.FLOAT,
+    "d": T.FLOAT,
 }
 
 _IO = EffectSet.of(Effect.IO)
@@ -34,7 +43,10 @@ _RANDOM = EffectSet.of(Effect.RANDOM)
 _ALLOC = EffectSet.of(Effect.ALLOC)
 
 
-def _fn(qualname: str, ret: T.Type, effects: EffectSet = EffectSet()) -> tuple[T.Type, EffectSet]:
+_NO_EFFECTS = EffectSet()
+
+
+def _fn(qualname: str, ret: T.Type, effects: EffectSet = _NO_EFFECTS) -> tuple[T.Type, EffectSet]:
     return T.Callable_((), ret, qualname), effects
 
 
@@ -90,27 +102,22 @@ _FUNCTIONS: dict[str, tuple[T.Type, EffectSet]] = {
     "threading.RLock": (T.Callable_((), _LOCK, "threading.RLock"), _THREAD_EFFECTS),
     "threading.Event": (T.Callable_((), _EVENT, "threading.Event"), _THREAD_EFFECTS),
     "threading.current_thread": (
-        T.Callable_((), _THREAD, "threading.current_thread"), _THREAD_EFFECTS
+        T.Callable_((), _THREAD, "threading.current_thread"),
+        _THREAD_EFFECTS,
     ),
-    "threading.active_count": (
-        T.Callable_((), T.INT, "threading.active_count"), _THREAD_EFFECTS
-    ),
+    "threading.active_count": (T.Callable_((), T.INT, "threading.active_count"), _THREAD_EFFECTS),
     "threading.get_ident": (T.Callable_((), T.INT, "threading.get_ident"), _THREAD_EFFECTS),
-
     # The runtime's own import-hook API. Installing the finder mutates
     # `sys.meta_path`, which is global state.
     "ppy.install": _fn("ppy.install", T.NONE, EffectSet.of(Effect.WRITE_GLOBAL)),
     "ppy.uninstall": _fn("ppy.uninstall", T.NONE, EffectSet.of(Effect.WRITE_GLOBAL)),
     "ppy.is_installed": _fn("ppy.is_installed", T.BOOL, EffectSet.of(Effect.READ_GLOBAL)),
-    "ppy.add_import_root": _fn(
-        "ppy.add_import_root", T.NONE, EffectSet.of(Effect.WRITE_GLOBAL)
-    ),
+    "ppy.add_import_root": _fn("ppy.add_import_root", T.NONE, EffectSet.of(Effect.WRITE_GLOBAL)),
     "ppy.import_roots": _fn(
         "ppy.import_roots",
         T.Tuple_((T.STR,), homogeneous=True),
         EffectSet.of(Effect.READ_GLOBAL),
     ),
-
     "time.time": _fn("time.time", T.FLOAT, _TIME),
     "time.perf_counter": _fn("time.perf_counter", T.FLOAT, _TIME),
     "time.perf_counter_ns": _fn("time.perf_counter_ns", T.INT, _TIME),
@@ -119,7 +126,6 @@ _FUNCTIONS: dict[str, tuple[T.Type, EffectSet]] = {
     "time.process_time": _fn("time.process_time", T.FLOAT, _TIME),
     "time.time_ns": _fn("time.time_ns", T.INT, _TIME),
     "time.sleep": _fn("time.sleep", T.NONE, _TIME | EffectSet.of(Effect.SYNC)),
-
     "random.random": _fn("random.random", T.FLOAT, _RANDOM),
     "random.randint": _fn("random.randint", T.INT, _RANDOM),
     "random.randrange": _fn("random.randrange", T.INT, _RANDOM),
@@ -127,7 +133,6 @@ _FUNCTIONS: dict[str, tuple[T.Type, EffectSet]] = {
     "random.gauss": _fn("random.gauss", T.FLOAT, _RANDOM),
     "random.seed": _fn("random.seed", T.NONE, _RANDOM),
     "random.shuffle": _fn("random.shuffle", T.NONE, _RANDOM | EffectSet.of(Effect.WRITE_OBJECT)),
-
     "os.getenv": _fn("os.getenv", T.union(T.STR, T.NONE), _IO),
     "os.getcwd": _fn("os.getcwd", T.STR, _IO),
     "os.cpu_count": _fn("os.cpu_count", T.union(T.INT, T.NONE), _IO),
@@ -137,20 +142,15 @@ _FUNCTIONS: dict[str, tuple[T.Type, EffectSet]] = {
     "os.path.dirname": _fn("os.path.dirname", T.STR, _ALLOC),
     "os.path.abspath": _fn("os.path.abspath", T.STR, _IO),
     "os.path.splitext": _fn("os.path.splitext", T.Tuple_((T.STR, T.STR)), _ALLOC),
-
     "sys.exit": _fn("sys.exit", T.NEVER, EffectSet.of(raises=("SystemExit",))),
     "sys.getsizeof": _fn("sys.getsizeof", T.INT),
     "sys.getrecursionlimit": _fn("sys.getrecursionlimit", T.INT),
-
     "json.dumps": _fn("json.dumps", T.STR, _ALLOC | EffectSet.of(raises=("TypeError",))),
     "json.loads": _fn("json.loads", T.ANY, _ALLOC | EffectSet.of(raises=("ValueError",))),
-
     "statistics.mean": _fn("statistics.mean", T.FLOAT, EffectSet.of(raises=("ValueError",))),
     "statistics.median": _fn("statistics.median", T.FLOAT, EffectSet.of(raises=("ValueError",))),
     "statistics.stdev": _fn("statistics.stdev", T.FLOAT, EffectSet.of(raises=("ValueError",))),
-
     "itertools.count": _fn("itertools.count", T.instance("Iterator", T.INT), _ALLOC),
-
     # The element type follows the type code, which `call` resolves.
     "array.array": _fn("array.array", T.instance("array", T.UNKNOWN), _ALLOC),
     "functools.reduce": _fn(

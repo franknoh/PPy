@@ -17,7 +17,7 @@ from ..diagnostics import Diagnostic, Severity
 from .protocol import Message, read_messages, write_message
 from .service import AnalysisService, Position
 
-__all__ = ["LanguageServer", "serve", "uri_to_path", "path_to_uri"]
+__all__ = ["LanguageServer", "path_to_uri", "serve", "uri_to_path"]
 
 _SEVERITY = {
     Severity.ERROR: 1,
@@ -104,11 +104,9 @@ class LanguageServer:
 
     def on_shutdown(self, params: dict[str, Any]) -> None:
         self.shutdown_requested = True
-        return None
 
     def on_exit(self, params: dict[str, Any]) -> None:
         self.running = False
-        return None
 
     def on_textDocument_didOpen(self, params: dict[str, Any]) -> None:
         document = params["textDocument"]
@@ -252,7 +250,7 @@ class LanguageServer:
         line = (span.line - 1) if span else 0
         column = span.column if span else 0
         end_line = ((span.end_line or span.line) - 1) if span else 0
-        end_column = (span.end_column if span and span.end_column is not None else column + 1)
+        end_column = span.end_column if span and span.end_column is not None else column + 1
         message = diagnostic.message
         if diagnostic.help:
             message += f"\nhelp: {diagnostic.help}"

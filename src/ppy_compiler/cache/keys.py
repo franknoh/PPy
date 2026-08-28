@@ -5,10 +5,10 @@ from __future__ import annotations
 import hashlib
 import platform
 import sys
+from collections.abc import Iterable
 from dataclasses import dataclass
-from typing import Iterable
 
-__all__ = ["digest", "CacheKey", "environment_fingerprint", "FRONTEND_SCHEMA_VERSION"]
+__all__ = ["FRONTEND_SCHEMA_VERSION", "CacheKey", "digest", "environment_fingerprint"]
 
 #: Bump when the semantic AST or analysis artifact layout changes.
 FRONTEND_SCHEMA_VERSION = 1
@@ -60,7 +60,7 @@ class CacheKey:
         dependency_hashes: Iterable[str] = (),
         plugin_fingerprints: Iterable[str] = (),
         extra: Iterable[object] = (),
-    ) -> "CacheKey":
+    ) -> CacheKey:
         return CacheKey(
             kind=kind,
             source=source_digest,
@@ -73,8 +73,13 @@ class CacheKey:
 
     def hex(self) -> str:
         return digest(
-            self.kind, self.source, self.compiler_version,
-            self.target, self.options, self.dependencies, self.plugins,
+            self.kind,
+            self.source,
+            self.compiler_version,
+            self.target,
+            self.options,
+            self.dependencies,
+            self.plugins,
         )
 
     def __str__(self) -> str:

@@ -5,7 +5,6 @@ from __future__ import annotations
 import ast
 import importlib
 import importlib.util
-import textwrap
 from pathlib import Path
 
 import pytest
@@ -17,6 +16,7 @@ from ppy_compiler.plugins.jax_plugin import JaxPlugin, staged_functions
 from ppy_compiler.plugins.torch_plugin import ATEN_SCHEMAS, TorchPlugin
 from ppy_compiler.plugins.torch_region import emit_source, find_regions
 from ppy_compiler.plugins.uvicorn_plugin import PPY_RELOAD_PATTERN, UvicornPlugin
+
 
 def _importable(name: str) -> bool:
     """A partially installed optional runtime must not fail the suite."""
@@ -104,7 +104,10 @@ def test_a_function_outside_the_curated_domain_is_rejected(write, analyze):
         """,
     )
     bundle = analyze(path)
-    regions = {r.name: r for r in find_regions(bundle.symbols.modules["reject"], bundle.analysis.modules["reject"])}
+    regions = {
+        r.name: r
+        for r in find_regions(bundle.symbols.modules["reject"], bundle.analysis.modules["reject"])
+    }
     assert not regions["loopy"].body
     assert "only assignments and a final `return`" in regions["loopy"].reason
     assert not regions["exotic"].body
@@ -138,7 +141,9 @@ def test_the_generated_translation_unit_is_valid_cpp(write, analyze):
         """,
     )
     bundle = analyze(path)
-    source = emit_source(find_regions(bundle.symbols.modules["unit"], bundle.analysis.modules["unit"]))
+    source = emit_source(
+        find_regions(bundle.symbols.modules["unit"], bundle.analysis.modules["unit"])
+    )
     assert "#include <ATen/ATen.h>" in source
     assert "at::Tensor ppy_region_unit_layer(const at::Tensor& x, const at::Tensor& w) {" in source
     assert "return at::tanh(at::matmul(x, w));" in source
@@ -253,7 +258,7 @@ def test_a_tensor_subclass_falls_back_from_a_region():
     def fallback(a, b):
         return torch.add(a, b)
 
-    binding = bind_region("add", lambda a, b: torch.add(a, b), fallback)
+    binding = bind_region("add", torch.add, fallback)
     result = binding.wrapper(torch.ones(3).as_subclass(Tracked), torch.ones(3))
     assert binding.fallbacks == 1
     assert torch.equal(result, torch.full((3,), 2.0))
@@ -327,7 +332,7 @@ def test_a_staged_function_exports_to_stablehlo(write, analyze, project_dir):
     from ppy_compiler.driver.staging import stage_project
 
     (project_dir / "pyproject.toml").write_text(
-        "[tool.ppy]\nstrict = true\nbuild-execution = \"allow\"\n\n"
+        '[tool.ppy]\nstrict = true\nbuild-execution = "allow"\n\n'
         "[tool.ppy.plugins.jax]\nallow-build-export = true\n",
         encoding="utf-8",
     )
@@ -365,7 +370,7 @@ def test_an_exported_artifact_is_cached_and_reused(write, analyze, project_dir):
     from ppy_compiler.driver.staging import stage_project
 
     (project_dir / "pyproject.toml").write_text(
-        "[tool.ppy]\nbuild-execution = \"allow\"\n\n"
+        '[tool.ppy]\nbuild-execution = "allow"\n\n'
         "[tool.ppy.plugins.jax]\nallow-build-export = true\n",
         encoding="utf-8",
     )
@@ -403,7 +408,7 @@ def test_an_exported_region_computes_the_same_values(write, analyze, project_dir
     from ppy_compiler.driver.staging import stage_project
 
     (project_dir / "pyproject.toml").write_text(
-        "[tool.ppy]\nbuild-execution = \"allow\"\n\n"
+        '[tool.ppy]\nbuild-execution = "allow"\n\n'
         "[tool.ppy.plugins.jax]\nallow-build-export = true\n",
         encoding="utf-8",
     )
@@ -451,7 +456,7 @@ def test_a_shape_outside_the_exported_signature_falls_back(write, analyze, proje
     from ppy_compiler.driver.staging import stage_project
 
     (project_dir / "pyproject.toml").write_text(
-        "[tool.ppy]\nbuild-execution = \"allow\"\n\n"
+        '[tool.ppy]\nbuild-execution = "allow"\n\n'
         "[tool.ppy.plugins.jax]\nallow-build-export = true\n",
         encoding="utf-8",
     )
@@ -708,7 +713,7 @@ def test_a_ppy_asgi_application_answers_a_request(write, analyze):
 
     generated = build_python(bundle).generated["asgi"]
     namespace: dict = {}
-    exec(generated.compile(), namespace)  # noqa: S102 - the artifact under test
+    exec(generated.compile(), namespace)
 
     messages: list[dict] = []
 

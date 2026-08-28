@@ -3,21 +3,22 @@
 from __future__ import annotations
 
 import tomllib
+from collections.abc import Mapping
 from dataclasses import dataclass, field, replace
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any
 
 __all__ = [
-    "PythonBackendConfig",
-    "LlvmConfig",
-    "ParallelConfig",
-    "InferenceConfig",
-    "PluginConfig",
+    "Config",
     "ConvertConfig",
     "DiagnosticsConfig",
-    "Config",
-    "load_config",
+    "InferenceConfig",
+    "LlvmConfig",
+    "ParallelConfig",
+    "PluginConfig",
+    "PythonBackendConfig",
     "find_project_root",
+    "load_config",
 ]
 
 _MARKERS = ("pyproject.toml", "ppy.toml", ".git")
@@ -94,7 +95,7 @@ class Config:
     def plugin(self, name: str) -> PluginConfig:
         return self.plugins.get(name, PluginConfig())
 
-    def with_overrides(self, **overrides: Any) -> "Config":
+    def with_overrides(self, **overrides: Any) -> Config:
         clean = {k: v for k, v in overrides.items() if v is not None}
         return replace(self, **clean) if clean else self
 

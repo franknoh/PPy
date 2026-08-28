@@ -7,7 +7,7 @@ Implements spec 8.1 (Python typing as the baseline), 6.3/6.4 (PPY markers) and
 from __future__ import annotations
 
 import ast
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Protocol
 
@@ -16,7 +16,7 @@ from ..frontend.source import span_of
 from . import types as T
 from .refinements import Facts, IntRange, width_range
 
-__all__ = ["Resolver", "Resolved", "AnnotationResolver"]
+__all__ = ["AnnotationResolver", "Resolved", "Resolver"]
 
 
 class Resolver(Protocol):
@@ -32,9 +32,9 @@ class Resolver(Protocol):
 @dataclass(frozen=True, slots=True)
 class Resolved:
     type: T.Type
-    facts: Facts = Facts()
+    facts: Facts = field(default_factory=Facts)
 
-    def with_facts(self, **updates: object) -> "Resolved":
+    def with_facts(self, **updates: object) -> Resolved:
         return Resolved(self.type, self.facts.with_(**updates))
 
 
@@ -99,7 +99,9 @@ _PASSTHROUGH = {"typing.Final", "typing.ClassVar", "typing.Required", "typing.No
 class AnnotationResolver:
     """Turns an annotation expression into a semantic type plus proven facts."""
 
-    def __init__(self, resolver: Resolver, path: Path, diagnostics: DiagnosticBag, *, strict: bool = True) -> None:
+    def __init__(
+        self, resolver: Resolver, path: Path, diagnostics: DiagnosticBag, *, strict: bool = True
+    ) -> None:
         self.resolver = resolver
         self.path = path
         self.diagnostics = diagnostics
@@ -171,7 +173,9 @@ class AnnotationResolver:
         if qualname in _BARE_GENERIC:
             name, arity = _BARE_GENERIC[qualname]
             self._bare_generic(name, expr)
-            return Resolved(T.Instance(name, tuple(T.ANY for _ in range(arity)), T.BUILTIN_MRO.get(name, ())))
+            return Resolved(
+                T.Instance(name, tuple(T.ANY for _ in range(arity)), T.BUILTIN_MRO.get(name, ()))
+            )
         if qualname in _ABSTRACT:
             return Resolved(T.instance(_ABSTRACT[qualname]))
         found = self.resolver.class_instance(qualname, ())
@@ -205,7 +209,7 @@ class AnnotationResolver:
             return Resolved(T.union(*[self._resolve(a).type for a in args]))
         if qualname == "typing.Literal":
             return self._literal(args, expr)
-        if qualname == "typing.Callable" or qualname == "collections.abc.Callable":
+        if qualname in {"typing.Callable", "collections.abc.Callable"}:
             return self._callable(args, expr)
         if qualname in _PASSTHROUGH:
             return self._resolve(args[0]) if args else Resolved(T.UNKNOWN)
@@ -273,7 +277,9 @@ class AnnotationResolver:
                 return facts.with_(dtype=values[0])
             case "ppy.IntWidth" if len(values) >= 1 and isinstance(values[0], int):
                 signed = bool(values[1]) if len(values) > 1 else bool(keywords.get("signed", True))
-                return facts.with_(width=(values[0], signed), int_range=width_range(values[0], signed))
+                return facts.with_(
+                    width=(values[0], signed), int_range=width_range(values[0], signed)
+                )
             case "ppy.FloatWidth" if len(values) == 1 and isinstance(values[0], int):
                 return facts.with_(float_bits=values[0])
             case "pydantic.Field" | "pydantic.fields.Field":
@@ -295,7 +301,10 @@ class AnnotationResolver:
         if (low is not None or high is not None) and T.strip_literal(base) == T.INT:
             existing = facts.int_range or IntRange()
             facts = facts.with_(int_range=existing.meet(IntRange(low, high)))
-        if isinstance(length := keywords.get("min_length"), int) and keywords.get("max_length") == length:
+        if (
+            isinstance(length := keywords.get("min_length"), int)
+            and keywords.get("max_length") == length
+        ):
             facts = facts.with_(length=length)
         return facts
 
@@ -305,7 +314,8 @@ class AnnotationResolver:
                 Diagnostic(
                     "W2003",
                     Severity.WARNING,
-                    f"unknown Annotated metadata `{ast.unparse(meta)}` was preserved but not interpreted",
+                    f"unknown Annotated metadata `{ast.unparse(meta)}` "
+                    "was preserved but not interpreted",
                     span_of(self.path, meta),
                 )
             )
@@ -332,8 +342,7 @@ class AnnotationResolver:
             self._error("E1301", "Callable parameters must be a list", params_expr)
             return Resolved(T.UNKNOWN)
         params = tuple(
-            T.Param(f"a{i}", self._resolve(e).type)
-            for i, e in enumerate(params_expr.elts)
+            T.Param(f"a{i}", self._resolve(e).type) for i, e in enumerate(params_expr.elts)
         )
         return Resolved(T.Callable_(params, ret))
 

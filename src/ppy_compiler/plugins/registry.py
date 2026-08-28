@@ -5,7 +5,7 @@ from __future__ import annotations
 from ..driver.config import Config
 from .base import PluginRegistry
 
-__all__ = ["load_plugins", "AVAILABLE"]
+__all__ = ["AVAILABLE", "load_plugins"]
 
 AVAILABLE = ("numpy", "torch", "jax", "uvicorn", "pydantic")
 

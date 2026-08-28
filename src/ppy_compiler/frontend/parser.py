@@ -12,7 +12,7 @@ from pathlib import Path
 from ..diagnostics import Diagnostic, Severity, Span
 from .source import SourceFile, load
 
-__all__ = ["parse_source", "parse_file", "parse_text"]
+__all__ = ["parse_file", "parse_source", "parse_text"]
 
 
 def parse_source(source: SourceFile) -> Diagnostic | None:
@@ -56,6 +56,8 @@ def parse_file(
     return source, diagnostic
 
 
-def parse_text(text: str, path: Path | str = "<string>") -> tuple[SourceFile | None, Diagnostic | None]:
+def parse_text(
+    text: str, path: Path | str = "<string>"
+) -> tuple[SourceFile | None, Diagnostic | None]:
     source = SourceFile(path=Path(path), text=text)
     return source, parse_source(source)

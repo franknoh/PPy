@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Callable
 
 __all__ = ["ExportedBinding", "bind_exported"]
 
@@ -23,7 +23,9 @@ class ExportedBinding:
         return self.wrapper is not self.fallback
 
 
-def bind_exported(function: str, payload: bytes, fallback: Callable[..., object]) -> ExportedBinding:
+def bind_exported(
+    function: str, payload: bytes, fallback: Callable[..., object]
+) -> ExportedBinding:
     """Rehydrate an exported computation, falling back to the staged function.
 
     The exported artifact carries its own StableHLO and calling metadata, so
@@ -40,7 +42,9 @@ def bind_exported(function: str, payload: bytes, fallback: Callable[..., object]
         call = runtime_call(payload)
     except Exception as exc:  # noqa: BLE001 - a mismatched runtime must not break the program
         return ExportedBinding(
-            function, fallback, fallback,
+            function,
+            fallback,
+            fallback,
             reason=f"the exported artifact does not load here: {exc}",
         )
 

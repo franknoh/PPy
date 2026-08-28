@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import os
-import sys
 import textwrap
 from pathlib import Path
 
@@ -9,10 +8,12 @@ from pathlib import Path
 # any other runtime the suite loads. Tests share one device, so they share it.
 os.environ.setdefault("XLA_PYTHON_CLIENT_PREALLOCATE", "false")
 
-import pytest
+import pytest  # pylint: disable=wrong-import-position
 
-from ppy_compiler.diagnostics import DiagnosticBag
-from ppy_compiler.driver.pipeline import analyze_paths, open_project
+from ppy_compiler.driver.pipeline import (  # pylint: disable=wrong-import-position
+    analyze_paths,
+    open_project,
+)
 
 
 @pytest.fixture

@@ -117,13 +117,13 @@ def build_wrappers(
             "-O2",
             "-shared",
             "-fPIC",
-            "-I", sysconfig.get_paths()["include"],
+            "-I",
+            sysconfig.get_paths()["include"],
             str(source_path),
-            "-o", str(library),
+            "-o",
+            str(library),
         ]
-        completed = subprocess.run(  # noqa: S603 - a compiler on an explicit path
-            command, capture_output=True, text=True, check=False
-        )
+        completed = subprocess.run(command, capture_output=True, text=True, check=False)
         if completed.returncode != 0:
             detail = (completed.stderr or completed.stdout).strip().splitlines()
             library.unlink(missing_ok=True)

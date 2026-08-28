@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import array
 import importlib.util
+import itertools
 import subprocess
 import sys
 import textwrap
@@ -11,7 +12,8 @@ from pathlib import Path
 
 import pytest
 
-from ppy_compiler.backend.llvm import _collect, available as llvm_available, emit_ir
+from ppy_compiler.backend.llvm import _collect, emit_ir
+from ppy_compiler.backend.llvm import available as llvm_available
 from ppy_compiler.backend.llvm.jit import JitEngine
 from ppy_compiler.backend.llvm.runtime import bind
 
@@ -81,7 +83,10 @@ def test_list_parameters_are_lowered_to_native_buffers(write, analyze):
     path = write("buffers.ppy", BUFFERS)
     module = _collect(analyze(path, backend="llvm"))["buffers"]
     assert set(module.functions) >= {
-        "buffers.dot", "buffers.total", "buffers.peak", "buffers.add_up"
+        "buffers.dot",
+        "buffers.total",
+        "buffers.peak",
+        "buffers.add_up",
     }
     signature = module.functions["buffers.dot"].signature
     assert signature.params == ("double*", "i64", "double*", "i64")
@@ -116,7 +121,7 @@ def test_native_buffer_results_match_python(write, analyze):
     engine = _jit(module)
 
     def fallback_dot(a, b):
-        return sum(x * y for x, y in zip(a, b))
+        return sum(x * y for x, y in zip(a, b, strict=False))
 
     lowered = module.functions["exec.dot"]
     binding = bind(lowered.signature, engine.address(lowered.signature.symbol), fallback_dot)
@@ -313,7 +318,9 @@ def test_guards_reject_values_outside_the_fast_path(write, analyze, make, why):
 
     binding = bind_fused(loop, engine.address(loop.symbol), lambda a: float(numpy.sum(a * a)))
     value = make(numpy)
-    assert binding.wrapper(value) == pytest.approx(float(numpy.sum(numpy.asarray(value) * numpy.asarray(value))))
+    assert binding.wrapper(value) == pytest.approx(
+        float(numpy.sum(numpy.asarray(value) * numpy.asarray(value)))
+    )
     assert binding.fallbacks == 1, why
 
 
@@ -416,11 +423,10 @@ def test_a_nested_reduction_is_not_folded_into_an_elementwise_tree(write, analyz
 
 
 def test_a_scalar_only_call_is_not_claimed_as_fusible():
+    from ppy_compiler.analysis import types as T
     from ppy_compiler.analysis.refinements import Facts
     from ppy_compiler.plugins.base import Lowering
     from ppy_compiler.plugins.numpy_plugin import NumPyPlugin
-
-    from ppy_compiler.analysis import types as T
 
     result = NumPyPlugin().call("numpy.sqrt", [(T.FLOAT, Facts())], {})
     assert result.lowering is Lowering.DIRECT_NATIVE_CALL
@@ -555,7 +561,7 @@ def test_chunk_bounds_cover_the_whole_range():
     bounds = chunk_bounds(length, 4)
     assert len(bounds) > 1
     assert bounds[0][0] == 0 and bounds[-1][1] == length
-    for (_, previous_stop), (start, _) in zip(bounds, bounds[1:]):
+    for (_, previous_stop), (start, _) in itertools.pairwise(bounds):
         assert previous_stop == start
 
 
@@ -580,7 +586,10 @@ def test_only_the_parallel_directive_marks_a_kernel_splittable(write, analyze):
         """,
     )
     module = _collect(analyze(path, backend="llvm"))["marked"]
-    marks = {loop.symbol.split("_marked_")[1].split("_")[0]: loop.parallel for loop in module.fused.values()}
+    marks = {
+        loop.symbol.split("_marked_")[1].split("_")[0]: loop.parallel
+        for loop in module.fused.values()
+    }
     assert marks == {"wide": True, "narrow": False}
 
 
@@ -661,7 +670,9 @@ def test_a_split_reduction_matches_the_serial_kernel(write, analyze):
     engine = _jit(module)
     loop = next(loop for loop in module.fused.values() if loop.returns_scalar)
 
-    fallback = lambda a: float(numpy.max(a * a))  # noqa: E731
+    def fallback(a):
+        return float(numpy.max(a * a))
+
     values = numpy.linspace(-5.0, 5.0, MIN_PARALLEL_ELEMENTS * 4)
 
     parallel = bind_fused(loop, engine.address(loop.symbol), fallback, parallel=True)
@@ -727,7 +738,10 @@ def test_a_fixed_tuple_flattens_into_scalar_abi_atoms(write, analyze):
     path = write("tuples.ppy", TUPLES)
     module = _collect(analyze(path, backend="llvm"))["tuples"]
     assert set(module.functions) >= {
-        "tuples.norm2", "tuples.midpoint", "tuples.swap", "tuples.rgb_sum"
+        "tuples.norm2",
+        "tuples.midpoint",
+        "tuples.swap",
+        "tuples.rgb_sum",
     }
 
     norm2 = module.functions["tuples.norm2"].signature
@@ -806,7 +820,9 @@ def test_a_non_tuple_argument_falls_back(write, analyze):
     module = _collect(analyze(path, backend="llvm"))["tuptype"]
     engine = _jit(module)
     lowered = module.functions["tuptype.swap"]
-    binding = bind(lowered.signature, engine.address(lowered.signature.symbol), lambda p: (p[1], p[0]))
+    binding = bind(
+        lowered.signature, engine.address(lowered.signature.symbol), lambda p: (p[1], p[0])
+    )
 
     assert binding.wrapper([1, 2]) == (2, 1)
     assert binding.fallbacks == 1
@@ -844,8 +860,8 @@ def test_the_fusion_tables_match_what_the_plugin_claims():
     )
 
     assert set(UNARY) == set(FUSIBLE_UNARY)
-    assert BINARY == set(FUSIBLE_BINARY)
-    assert REDUCTIONS == set(FUSIBLE_REDUCTIONS)
+    assert set(FUSIBLE_BINARY) == BINARY
+    assert set(FUSIBLE_REDUCTIONS) == REDUCTIONS
 
 
 # -- borrowed buffers -----------------------------------------------------
@@ -911,8 +927,6 @@ def test_the_borrowed_pointer_is_the_callers_own_memory(write, analyze):
 
 
 def test_borrowed_buffer_guards_reject_what_cannot_be_pointed_at(write, analyze):
-    import array
-
     from ppy_compiler.backend.llvm.runtime import GuardFailed, _expander_for
 
     path = write("guardview.ppy", BUFFERS_VIEW)
@@ -920,9 +934,9 @@ def test_borrowed_buffer_guards_reject_what_cannot_be_pointed_at(write, analyze)
     expand = _expander_for(module.functions["guardview.total"].signature.parameters[0])
 
     for value in (
-        [1.0, 2.0],                       # a list has no contiguous buffer
-        array.array("q", [1, 2]),         # wrong element format
-        b"\x00" * 16,                     # read-only
+        [1.0, 2.0],  # a list has no contiguous buffer
+        array.array("q", [1, 2]),  # wrong element format
+        b"\x00" * 16,  # read-only
         memoryview(array.array("d", [1.0, 2.0, 3.0, 4.0]))[::2],  # not contiguous
     ):
         with pytest.raises(GuardFailed):
@@ -930,8 +944,6 @@ def test_borrowed_buffer_guards_reject_what_cannot_be_pointed_at(write, analyze)
 
 
 def test_borrowed_buffer_results_match_python(write, analyze):
-    import array
-
     path = write("viewexec.ppy", BUFFERS_VIEW)
     module = _collect(analyze(path, backend="llvm"))["viewexec"]
     engine = _jit(module)
@@ -948,8 +960,6 @@ def test_borrowed_buffer_results_match_python(write, analyze):
 
 
 def test_an_empty_borrowed_buffer_is_accepted(write, analyze):
-    import array
-
     path = write("emptyview.ppy", BUFFERS_VIEW)
     module = _collect(analyze(path, backend="llvm"))["emptyview"]
     engine = _jit(module)
@@ -1028,14 +1038,12 @@ def test_relaxed_arithmetic_vectorizes_the_reduction(write, analyze):
 
 
 def test_both_orderings_agree_to_within_rounding(write, analyze):
-    import array
-
     path = write("fpexec.ppy", FP)
     module = _collect(analyze(path, backend="llvm"))["fpexec"]
     engine = _jit(module)
 
     def reference(a, b):
-        return sum(x * y for x, y in zip(a, b))
+        return sum(x * y for x, y in zip(a, b, strict=False))
 
     x = array.array("d", [i * 0.001 for i in range(2048)])
     y = array.array("d", [i * 0.002 for i in range(2048)])
@@ -1073,8 +1081,6 @@ def _digest(values, modulus):
 
 
 def _jit_binding(write, analyze, name="jitmod"):
-    import array
-
     from ppy_compiler.backend.llvm.specialize import SpecializationPolicy, Specializer
 
     path = write(f"{name}.ppy", JIT)
@@ -1083,7 +1089,7 @@ def _jit_binding(write, analyze, name="jitmod"):
     engine = _jit(module)
 
     specializer = Specializer(engine=engine, module_analysis=bundle.analysis.modules[name])
-    for qualname, (info, node) in module.sources.items():
+    for info, node in module.sources.values():
         specializer.register(info, node)
 
     lowered = module.functions[f"{name}.digest"]
@@ -1099,7 +1105,7 @@ def _jit_binding(write, analyze, name="jitmod"):
 
 
 def test_the_jit_directive_is_what_enables_specialization(write, analyze):
-    from ppy_compiler.analysis.symbols import Directive, FunctionInfo
+    from ppy_compiler.analysis.symbols import Directive
     from ppy_compiler.backend.llvm.specialize import SpecializationPolicy
 
     class _Info:
@@ -1461,15 +1467,15 @@ def test_the_generator_covers_every_parameter_shape(write, analyze):
     module = _collect(analyze(path, backend="llvm"))["shapes"]
     assert "shapes.mixed" in module.functions, module.rejected
 
-    source = generate("ppy_wrappers_shapes", {
-        "shapes.mixed": module.functions["shapes.mixed"].signature
-    }).source
-    assert "PyLong_AsLongLong" in source          # a scalar int
-    assert "PyTuple_GET_ITEM" in source           # a fixed tuple
-    assert "PyObject_GetAttr(" in source          # a value class field
+    source = generate(
+        "ppy_wrappers_shapes", {"shapes.mixed": module.functions["shapes.mixed"].signature}
+    ).source
+    assert "PyLong_AsLongLong" in source  # a scalar int
+    assert "PyTuple_GET_ITEM" in source  # a fixed tuple
+    assert "PyObject_GetAttr(" in source  # a value class field
     assert "PyUnicode_InternFromString" in source  # its name, interned once
-    assert "PyMem_Malloc" in source               # a copied list
-    assert "PyObject_GetBuffer" in source         # a borrowed buffer
+    assert "PyMem_Malloc" in source  # a copied list
+    assert "PyObject_GetBuffer" in source  # a borrowed buffer
     assert "PyBuffer_Release" in source
 
 
@@ -1561,8 +1567,6 @@ def test_a_guard_failure_leaves_no_exception_set(write, analyze):
 
 
 def test_the_wrapper_reads_a_borrowed_buffer_without_copying(write, analyze):
-    import array
-
     entry, _owner = _wrapped(write, analyze, "wrapview", BUFFERS_VIEW, "total")
     values = array.array("d", [1.5, 2.5, 3.0])
     assert entry(values) == 7.0
@@ -1645,8 +1649,6 @@ MIXED = """
 
 def test_a_guard_failing_on_an_early_argument_cleans_up_safely(write, analyze):
     """A jump to the cleanup must not read a declaration it skipped over."""
-    import array
-
     from ppy_compiler.backend.llvm.wrapper_build import build_wrappers, wrapper_toolchain
 
     ready, detail = wrapper_toolchain()
@@ -1668,13 +1670,11 @@ def test_a_guard_failing_on_an_early_argument_cleans_up_safely(write, analyze):
         pytest.skip(built.reason)
 
     namespace: dict = {}
-    exec(compile(path.read_text(encoding="utf-8"), str(path), "exec"), namespace)  # noqa: S102
+    exec(compile(path.read_text(encoding="utf-8"), str(path), "exec"), namespace)
     point_type = namespace["Point"]
 
     lowered = module.functions["mixedwrap.mixed"]
-    entry = built.bind(
-        "mixedwrap.mixed", engine.address(lowered.signature.symbol), (point_type,)
-    )
+    entry = built.bind("mixedwrap.mixed", engine.address(lowered.signature.symbol), (point_type,))
     assert entry is not None
 
     point = point_type(3.0, 4.0)
@@ -1784,7 +1784,7 @@ def test_the_wrapper_selects_a_registered_specialization(write, analyze):
     from ppy_compiler.backend.llvm.specialize import Specializer
 
     specializer = Specializer(engine=engine, module_analysis=bundle.analysis.modules["specwrap"])
-    for qualname, (info, node) in module.sources.items():
+    for info, node in module.sources.values():
         specializer.register(info, node)
 
     from ppy_compiler.backend.llvm.specialize import SpecializationKey
@@ -1876,7 +1876,21 @@ def test_writes_through_a_borrowed_buffer_reach_the_caller(write, analyze):
     assert binding.wrapper(flags, 50) == 15
     assert binding.calls == 1 and binding.fallbacks == 0
     assert [i for i, flag in enumerate(flags) if flag] == [
-        2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47
+        2,
+        3,
+        5,
+        7,
+        11,
+        13,
+        17,
+        19,
+        23,
+        29,
+        31,
+        37,
+        41,
+        43,
+        47,
     ]
 
 

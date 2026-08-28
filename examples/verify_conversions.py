@@ -47,9 +47,19 @@ def _convert(source: Path, into: Path) -> tuple[bool, str]:
     if config.exists():
         (into / "pyproject.toml").write_text(config.read_text(encoding="utf-8"), encoding="utf-8")
     done = subprocess.run(
-        [sys.executable, "-m", "ppy_compiler", "convert", staged.name,
-         *FLAGS.get(source.parent.name, [])],
-        cwd=into, capture_output=True, text=True, check=False, timeout=900,
+        [
+            sys.executable,
+            "-m",
+            "ppy_compiler",
+            "convert",
+            staged.name,
+            *FLAGS.get(source.parent.name, []),
+        ],
+        cwd=into,
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=900,
     )
     produced = staged.with_suffix(".ppy")
     if not produced.exists():
@@ -62,9 +72,21 @@ def _lint(path: Path, scratch: Path) -> set[str]:
     staged = scratch / (path.stem + "_lint.py")
     staged.write_text(path.read_text(encoding="utf-8"), encoding="utf-8")
     done = subprocess.run(
-        [sys.executable, "-m", "pylint", "--enable=all", "--score=n",
-         "--rcfile", str(ROOT / ".pylintrc"), staged.name],
-        cwd=scratch, capture_output=True, text=True, check=False, timeout=900,
+        [
+            sys.executable,
+            "-m",
+            "pylint",
+            "--enable=all",
+            "--score=n",
+            "--rcfile",
+            str(ROOT / ".pylintrc"),
+            staged.name,
+        ],
+        cwd=scratch,
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=900,
     )
     found: set[str] = set()
     for line in done.stdout.splitlines():
@@ -115,8 +137,10 @@ def main() -> int:
         )
         if claims_generated == has_source:
             continue
-        wrong = "claims generated but has no .py source" if claims_generated else (
-            "has a .py source but does not say its .ppy is generated"
+        wrong = (
+            "claims generated but has no .py source"
+            if claims_generated
+            else ("has a .py source but does not say its .ppy is generated")
         )
         print(f"[FAIL] {readme.relative_to(ROOT)}  {wrong}")
         failures += 1

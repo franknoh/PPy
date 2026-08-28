@@ -17,12 +17,12 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 __all__ = [
+    "EXPORT_TIMEOUT",
     "ExportRequest",
     "ExportResult",
+    "accelerator_fingerprint",
     "export_function",
     "runtime_call",
-    "accelerator_fingerprint",
-    "EXPORT_TIMEOUT",
 ]
 
 #: Build-time execution must not run unbounded (spec 31.3).
@@ -57,7 +57,7 @@ class ExportResult:
     reason: str = ""
 
 
-_WORKER = r'''
+_WORKER = r"""
 import base64, importlib.util, json, sys
 
 def fail(reason):
@@ -137,7 +137,7 @@ print(json.dumps({
     "platforms": list(exported.platforms),
     "versions": {"jax": jax.__version__, "jaxlib": jaxlib.__version__},
 }))
-'''
+"""
 
 
 def accelerator_fingerprint() -> str:
@@ -173,8 +173,13 @@ def export_function(request: ExportRequest, *, timeout: int = EXPORT_TIMEOUT) ->
     environment = {
         name: os.environ[name]
         for name in (
-            "PATH", "HOME", "LD_LIBRARY_PATH", "JAX_PLATFORMS",
-            "XLA_FLAGS", "CUDA_VISIBLE_DEVICES", "NVIDIA_VISIBLE_DEVICES",
+            "PATH",
+            "HOME",
+            "LD_LIBRARY_PATH",
+            "JAX_PLATFORMS",
+            "XLA_FLAGS",
+            "CUDA_VISIBLE_DEVICES",
+            "NVIDIA_VISIBLE_DEVICES",
         )
         if os.environ.get(name)
     }
@@ -187,7 +192,7 @@ def export_function(request: ExportRequest, *, timeout: int = EXPORT_TIMEOUT) ->
         }
     )
     try:
-        completed = subprocess.run(  # noqa: S603 - fixed interpreter and script
+        completed = subprocess.run(
             [sys.executable, "-c", _WORKER, payload],
             capture_output=True,
             text=True,
@@ -202,7 +207,7 @@ def export_function(request: ExportRequest, *, timeout: int = EXPORT_TIMEOUT) ->
         detail = (completed.stderr or completed.stdout).strip().splitlines()
         return ExportResult(False, reason=detail[-1] if detail else "the export process failed")
 
-    line = next((l for l in reversed(completed.stdout.splitlines()) if l.startswith("{")), "")
+    line = next((x for x in reversed(completed.stdout.splitlines()) if x.startswith("{")), "")
     try:
         answer = json.loads(line)
     except json.JSONDecodeError:

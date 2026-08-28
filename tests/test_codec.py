@@ -9,8 +9,13 @@ import pytest
 
 from ppy_compiler.analysis import types as T
 from ppy_compiler.analysis.codec import (
-    CodecError, decode_effects, decode_facts, decode_type,
-    encode_effects, encode_facts, encode_type,
+    CodecError,
+    decode_effects,
+    decode_facts,
+    decode_type,
+    encode_effects,
+    encode_facts,
+    encode_type,
 )
 from ppy_compiler.analysis.effects import Effect, EffectSet
 from ppy_compiler.analysis.refinements import Facts, IntRange
@@ -112,7 +117,7 @@ def test_every_type_the_checker_produced_survives(tmp_path: Path):
     path = tmp_path / "wide.ppy"
     path.write_text(
         textwrap.dedent(
-            '''
+            """
             from collections.abc import Sequence
             from dataclasses import dataclass
 
@@ -145,7 +150,7 @@ def test_every_type_the_checker_produced_survives(tmp_path: Path):
                 if isinstance(value, str):
                     return "text"
                 return "number"
-            '''
+            """
         ).lstrip("\n"),
         encoding="utf-8",
     )

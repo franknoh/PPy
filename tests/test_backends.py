@@ -103,7 +103,9 @@ def test_loops_unroll_only_at_o3(write, analyze):
     assert "for i in range" not in code
 
     path2 = path.with_name("nounroll.ppy")
-    path2.write_text(textwrap.dedent(source).replace("ppy.opt(3)", "ppy.opt(1)").lstrip("\n"), encoding="utf-8")
+    path2.write_text(
+        textwrap.dedent(source).replace("ppy.opt(3)", "ppy.opt(1)").lstrip("\n"), encoding="utf-8"
+    )
     code2 = _generated(analyze(path2, opt_level=1), "nounroll")
     assert "for i in range" in code2
 

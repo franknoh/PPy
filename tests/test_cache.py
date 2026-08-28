@@ -4,10 +4,11 @@ from __future__ import annotations
 
 import time
 from pathlib import Path
+from typing import ClassVar
 
 import pytest
 
-from ppy_compiler.cache import CacheKey, CacheStore, digest, environment_fingerprint
+from ppy_compiler.cache import CacheKey, CacheStore, environment_fingerprint
 
 
 @pytest.fixture
@@ -18,12 +19,12 @@ def store(tmp_path: Path) -> CacheStore:
 
 
 def _key(source: str = "abc", **overrides) -> CacheKey:
-    options = dict(
-        source_digest=source,
-        compiler_version="0.1.0",
-        opt_level=2,
-        target="python",
-    )
+    options = {
+        "source_digest": source,
+        "compiler_version": "0.1.0",
+        "opt_level": 2,
+        "target": "python",
+    }
     options.update(overrides)
     return CacheKey.build("python", **options)
 
@@ -152,7 +153,10 @@ def test_two_stores_share_one_cache(tmp_path: Path):
 def test_function_level_abi_hash_ignores_private_bodies(write, analyze):
     from ppy_compiler.driver.pipeline import _public_abi_hash
 
-    write("dep.ppy", "def public(x: int) -> int:\n    return helper(x)\n\ndef helper(x: int) -> int:\n    return x + 1\n")
+    write(
+        "dep.ppy",
+        "def public(x: int) -> int:\n    return helper(x)\n\ndef helper(x: int) -> int:\n    return x + 1\n",
+    )
     path = write("app.ppy", "import dep\n\ndef use() -> int:\n    return dep.public(1)\n")
     before = _public_abi_hash(analyze(path), "dep")
 
@@ -171,7 +175,9 @@ def test_changing_a_public_signature_changes_the_abi_hash(write, analyze):
     path = write("app2.ppy", "import dep2\n\ndef use() -> int:\n    return dep2.public(1)\n")
     before = _public_abi_hash(analyze(path), "dep2")
 
-    (path.parent / "dep2.ppy").write_text("def public(x: int) -> float:\n    return float(x)\n", encoding="utf-8")
+    (path.parent / "dep2.ppy").write_text(
+        "def public(x: int) -> float:\n    return float(x)\n", encoding="utf-8"
+    )
     after = _public_abi_hash(analyze(path), "dep2")
     assert before != after
 
@@ -183,7 +189,9 @@ def test_changing_a_dependency_invalidates_the_dependent(write, analyze):
     path = write("main3.ppy", "import lib3\n\ndef use() -> int:\n    return lib3.value()\n")
     build_python(analyze(path))
 
-    (path.parent / "lib3.ppy").write_text("def value() -> float:\n    return 1.0\n", encoding="utf-8")
+    (path.parent / "lib3.ppy").write_text(
+        "def value() -> float:\n    return 1.0\n", encoding="utf-8"
+    )
     output = build_python(analyze(path))
     assert output.stats.get("cache_misses", 0) >= 1
 
@@ -234,7 +242,7 @@ def test_a_module_that_does_import_the_plugin_still_pins_its_version():
     registry = PluginRegistry()
     registry.register(_Fake())
     assert registry.fingerprints({"torch.nn"}) == ("torch:torch=2.11",)
-    assert registry.fingerprints({"json"}) == ()
+    assert not registry.fingerprints({"json"})
 
 
 def test_the_index_is_closed_at_exit(tmp_path: Path):
@@ -253,7 +261,9 @@ def test_the_index_is_closed_at_exit(tmp_path: Path):
     )
     done = subprocess.run(
         [sys.executable, "-W", "always", str(script)],
-        capture_output=True, text=True, check=False,
+        capture_output=True,
+        text=True,
+        check=False,
     )
     assert done.returncode == 0, done.stderr
     assert "unclosed database" not in done.stderr
@@ -265,7 +275,11 @@ def _build(workspace: Path, *args: str):
 
     return subprocess.run(
         [sys.executable, "-m", "ppy_compiler", *args],
-        cwd=workspace, capture_output=True, text=True, check=False, timeout=900,
+        cwd=workspace,
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=900,
     )
 
 
@@ -365,7 +379,10 @@ def test_a_rebuild_with_no_change_recompiles_nothing(tmp_path: Path):
 
     from ppy_compiler.backend.llvm import _cached_lowering, _object_key
     from ppy_compiler.driver.pipeline import (
-        analyze_paths, collect_sources, module_cache_key, open_project,
+        analyze_paths,
+        collect_sources,
+        module_cache_key,
+        open_project,
     )
 
     sources = list(collect_sources(tmp_path / "src", ppy_only=True))
@@ -387,7 +404,10 @@ def test_only_the_changed_module_is_recompiled(tmp_path: Path):
 
     from ppy_compiler.backend.llvm import _object_key
     from ppy_compiler.driver.pipeline import (
-        analyze_paths, collect_sources, module_cache_key, open_project,
+        analyze_paths,
+        collect_sources,
+        module_cache_key,
+        open_project,
     )
 
     def object_keys() -> dict[str, str]:
@@ -464,21 +484,25 @@ def test_a_cached_lowering_round_trips():
     class _Module:
         name = "m"
         ir = "; ir"
-        functions = {
+        functions: ClassVar[dict] = {
             "m.f": type(
-                "L", (), {
+                "L",
+                (),
+                {
                     "signature": NativeSignature(
-                        "m.f", "ppy_m_f",
+                        "m.f",
+                        "ppy_m_f",
                         (NativeParam("xs", "view", "float"), NativeParam("n", "int")),
-                        ("i64",), releases_gil=True,
+                        ("i64",),
+                        releases_gil=True,
                     )
-                }
+                },
             )()
         }
-        rejected = {"m.g": "has effects"}
-        fused: dict = {}
-        fusion_plan: dict = {}
-        fusion_notes: list = []
+        rejected: ClassVar[dict] = {"m.g": "has effects"}
+        fused: ClassVar[dict] = {}
+        fusion_plan: ClassVar[dict] = {}
+        fusion_notes: ClassVar[list] = []
 
     restored = decode(encode(_Module()))
     assert restored is not None

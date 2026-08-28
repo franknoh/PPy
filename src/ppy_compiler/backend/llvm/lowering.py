@@ -10,7 +10,8 @@ contraction, no reciprocal substitution. `@ppy.fastmath` is what permits those,
 and nothing else does -- optimization level alone never will (spec 3.4, 12.5).
 
 A function may take scalars, fixed-size tuples, value classes whose fields
-are all scalars, and homogeneous `list[int]` / `list[float]` arguments. A fixed tuple flattens into scalar SSA
+are all scalars, and homogeneous `list[int]` / `list[float]` arguments. A fixed
+tuple flattens into scalar SSA
 values rather than an allocated object, and a list is unboxed into a borrowed
 native buffer at the Python boundary -- transparent because a lowered function
 may not mutate it (spec 13.2, 13.3, 13.5).
@@ -27,15 +28,15 @@ from ...analysis.effects import Effect
 from ...analysis.symbols import FunctionInfo
 
 __all__ = [
-    "Unsupported",
-    "lower_specialization",
+    "STATUS_FALLBACK",
+    "STATUS_OK",
+    "LoweredFunction",
     "NativeParam",
     "NativeSignature",
-    "LoweredFunction",
+    "Unsupported",
     "eligible",
     "lower_module",
-    "STATUS_OK",
-    "STATUS_FALLBACK",
+    "lower_specialization",
 ]
 
 #: The native entry point returns a status; a non-zero status means the caller
@@ -224,7 +225,9 @@ def _tuple_elements(t: T.Type) -> tuple[str, ...] | None:
 ClassLayouts = dict
 
 
-def _class_fields(t: T.Type, layouts: ClassLayouts) -> tuple[str, tuple[tuple[str, str], ...]] | None:
+def _class_fields(
+    t: T.Type, layouts: ClassLayouts
+) -> tuple[str, tuple[tuple[str, str], ...]] | None:
     """The flattened field layout of a value-class parameter, if it has one."""
     base = T.strip_literal(t)
     if not isinstance(base, T.Instance):
@@ -353,7 +356,7 @@ def lower_module(
         declarations[qualname] = (function, signature)
 
     lowered: dict[str, LoweredFunction] = {}
-    for qualname, (info, analysis, node) in candidates.items():
+    for qualname, (info, _analysis, node) in candidates.items():
         function, signature = declarations[qualname]
         try:
             _FunctionLowering(
@@ -388,8 +391,7 @@ def _signature(
     analysis: FunctionAnalysis | None = None,
 ) -> NativeSignature:
     parameters = tuple(
-        _native_param(p.name, p.type, layouts) or NativeParam(p.name, "int")
-        for p in info.params
+        _native_param(p.name, p.type, layouts) or NativeParam(p.name, "int") for p in info.params
     )
     atoms = _return_atoms(info.ret) or ("int",)
     return NativeSignature(
@@ -447,9 +449,7 @@ def _function_type(ir, info: FunctionInfo, layouts: ClassLayouts | None = None):
             atoms.extend(_llvm_type(ir, scalar) for _field, scalar in parameter.fields)
         else:
             atoms.append(_llvm_type(ir, parameter.kind))
-    outs = [
-        _llvm_type(ir, atom).as_pointer() for atom in (_return_atoms(info.ret) or ("int",))
-    ]
+    outs = [_llvm_type(ir, atom).as_pointer() for atom in (_return_atoms(info.ret) or ("int",))]
     return ir.FunctionType(ir.IntType(32), [*atoms, *outs])
 
 
@@ -477,9 +477,7 @@ class _FunctionLowering:
         self, ir, module, function, info, analysis, declarations, constants=None, layouts=None
     ) -> None:
         # Strict Python floating-point ordering unless the function opted out.
-        self.fp_flags = (
-            list(FASTMATH_FLAGS) if info.directive("fastmath") is not None else []
-        )
+        self.fp_flags = list(FASTMATH_FLAGS) if info.directive("fastmath") is not None else []
         self.ir = ir
         self.module = module
         self.function = function
@@ -498,7 +496,7 @@ class _FunctionLowering:
         self.objects: dict[str, dict[str, tuple[object, str]]] = {}
         self.layouts = dict(layouts or {})
         self.returns = _return_atoms(info.ret) or ("int",)
-        self.outs = list(function.args[-len(self.returns):])
+        self.outs = list(function.args[-len(self.returns) :])
         self.out = function.args[-1]
         self.fallback_block = None
 
@@ -517,18 +515,21 @@ class _FunctionLowering:
                 if isinstance(pinned, int):
                     length = ir.Constant(ir.IntType(64), pinned)
                 self.buffers[parameter.name] = (
-                    data, length, parameter.element, parameter.is_borrowed
+                    data,
+                    length,
+                    parameter.element,
+                    parameter.is_borrowed,
                 )
                 position += 2
                 continue
             if parameter.is_object:
                 fields: dict[str, tuple[object, str]] = {}
-                for index, (field, scalar) in enumerate(parameter.fields):
+                for index, (attr, scalar) in enumerate(parameter.fields):
                     slot = self.builder.alloca(
-                        _llvm_type(ir, scalar), name=f"{parameter.name}_{field}"
+                        _llvm_type(ir, scalar), name=f"{parameter.name}_{attr}"
                     )
                     self.builder.store(self.function.args[position + index], slot)
-                    fields[field] = (slot, scalar)
+                    fields[attr] = (slot, scalar)
                 self.objects[parameter.name] = fields
                 position += len(parameter.fields)
                 continue
@@ -599,7 +600,7 @@ class _FunctionLowering:
             values = self._tuple_expr(node.value)
             if values is None or values.width != len(self.returns):
                 raise Unsupported("the returned tuple does not match the declared shape")
-            for slot, item, target in zip(self.outs, values.items, self.returns):
+            for slot, item, target in zip(self.outs, values.items, self.returns, strict=False):
                 self.builder.store(self._coerce(item, target).value, slot)
         else:
             value = self._coerce(self._expr(node.value), self.returns[0])
@@ -619,7 +620,7 @@ class _FunctionLowering:
             return
         self._store(target, self._expr(node.value))
 
-    def _store_tuple(self, target: ast.expr, values: "_Tuple") -> None:
+    def _store_tuple(self, target: ast.expr, values: _Tuple) -> None:
         """Bind a tuple to a name, or unpack it into several names."""
         if isinstance(target, ast.Name):
             slots = []
@@ -635,12 +636,12 @@ class _FunctionLowering:
         if isinstance(target, (ast.Tuple, ast.List)):
             if len(target.elts) != values.width:
                 raise Unsupported("unpacking width does not match the tuple")
-            for element_target, item in zip(target.elts, values.items):
+            for element_target, item in zip(target.elts, values.items, strict=False):
                 self._store(element_target, item)
             return
         raise Unsupported("this assignment target has no native lowering")
 
-    def _tuple_expr(self, node: ast.expr) -> "_Tuple | None":
+    def _tuple_expr(self, node: ast.expr) -> _Tuple | None:
         """Evaluate an expression that produces a fixed tuple, if it does."""
         if isinstance(node, ast.Tuple):
             if not node.elts or len(node.elts) > _MAX_TUPLE_WIDTH:
@@ -657,13 +658,10 @@ class _FunctionLowering:
     def _augassign(self, node: ast.AugAssign) -> None:
         if isinstance(node.target, ast.Subscript):
             if not (
-                isinstance(node.target.value, ast.Name)
-                and node.target.value.id in self.buffers
+                isinstance(node.target.value, ast.Name) and node.target.value.id in self.buffers
             ):
                 raise Unsupported("this augmented assignment has no native lowering")
-            current = self._buffer_element(
-                node.target.value.id, self._expr(node.target.slice)
-            )
+            current = self._buffer_element(node.target.value.id, self._expr(node.target.slice))
             value = self._expr(node.value)
             self._store(node.target, self._binary(current, value, type(node.op)))
             return
@@ -711,8 +709,6 @@ class _FunctionLowering:
             self.builder.branch(merge_block)
 
         self.builder.position_at_end(merge_block)
-        if not then_block.is_terminated and not else_block.is_terminated:
-            return
 
     def _while(self, node: ast.While) -> None:
         if node.orelse:
@@ -740,8 +736,11 @@ class _FunctionLowering:
         if isinstance(node.iter, ast.Name) and node.iter.id in self.buffers:
             self._for_buffer(node, node.iter.id)
             return
-        if not (isinstance(node.iter, ast.Call) and isinstance(node.iter.func, ast.Name)
-                and node.iter.func.id == "range"):
+        if not (
+            isinstance(node.iter, ast.Call)
+            and isinstance(node.iter.func, ast.Name)
+            and node.iter.func.id == "range"
+        ):
             raise Unsupported("only `for NAME in range(...)` or over a list parameter is lowered")
 
         bounds = [self._coerce(self._expr(a), "int") for a in node.iter.args]
@@ -806,7 +805,9 @@ class _FunctionLowering:
         self.builder.store(self.builder.load(self.builder.gep(data, [position])), slot)
         self._body(node.body)
         if not self.builder.block.is_terminated:
-            self.builder.store(self.builder.add(self.builder.load(index), ir.Constant(i64, 1)), index)
+            self.builder.store(
+                self.builder.add(self.builder.load(index), ir.Constant(i64, 1)), index
+            )
             self.builder.branch(header)
 
         self.builder.position_at_end(exit_block)
@@ -902,13 +903,13 @@ class _FunctionLowering:
     def _expr(self, node: ast.expr) -> _Value:
         ir = self.ir
         match node:
-            case ast.Constant(value=bool(value)):
+            case ast.Constant(value=bool() as value):
                 return _Value(ir.Constant(ir.IntType(8), int(value)), "bool")
-            case ast.Constant(value=int(value)):
+            case ast.Constant(value=int() as value):
                 if not -(1 << 63) <= value < (1 << 63):
                     raise Unsupported("an integer literal exceeds the native machine range")
                 return _Value(ir.Constant(ir.IntType(64), value), "int")
-            case ast.Constant(value=float(value)):
+            case ast.Constant(value=float() as value):
                 return _Value(ir.Constant(ir.DoubleType(), value), "float")
             case ast.Name():
                 return self._load(node.id)
@@ -938,12 +939,12 @@ class _FunctionLowering:
                 raise Unsupported("subscripting this value has no native lowering")
         raise Unsupported(f"`{type(node).__name__}` has no native lowering")
 
-    def _field(self, name: str, field: str) -> _Value:
+    def _field(self, name: str, attr: str) -> _Value:
         """`p.x` for a flattened value class: one of its SSA values."""
         slots = self.objects[name]
-        found = slots.get(field)
+        found = slots.get(attr)
         if found is None:
-            raise Unsupported(f"`{name}.{field}` is not a native field")
+            raise Unsupported(f"`{name}.{attr}` is not a native field")
         slot, scalar = found
         return _Value(self.builder.load(slot), scalar)
 
@@ -1021,8 +1022,12 @@ class _FunctionLowering:
         left = self._expr(node.left)
         right = self._expr(node.comparators[0])
         symbol = {
-            ast.Eq: "==", ast.NotEq: "!=", ast.Lt: "<",
-            ast.LtE: "<=", ast.Gt: ">", ast.GtE: ">=",
+            ast.Eq: "==",
+            ast.NotEq: "!=",
+            ast.Lt: "<",
+            ast.LtE: "<=",
+            ast.Gt: ">",
+            ast.GtE: ">=",
         }.get(type(node.ops[0]))
         if symbol is None:
             raise Unsupported("comparison operator has no native lowering")
@@ -1101,25 +1106,26 @@ class _FunctionLowering:
             best = _Value(self.builder.select(wins, other.value, best.value), kind)
         return best
 
-    def _native_call(self, function, signature: NativeSignature, qualname: str, node: ast.Call) -> _Value:
+    def _native_call(
+        self, function, signature: NativeSignature, qualname: str, node: ast.Call
+    ) -> _Value:
         ir = self.ir
-        info = self.declarations[qualname][1]
         if len(node.args) != len(signature.parameters):
             raise Unsupported(f"`{qualname}` called with the wrong number of arguments")
         scalars = {"i64": "int", "double": "float", "i8": "bool"}
         arguments: list[object] = []
-        for argument, parameter in zip(node.args, signature.parameters):
+        for argument, parameter in zip(node.args, signature.parameters, strict=False):
             if parameter.is_buffer:
                 raise Unsupported("a buffer cannot be forwarded between native calls yet")
             if parameter.is_object:
                 if not isinstance(argument, ast.Name) or argument.id not in self.objects:
                     raise Unsupported("a value class argument must be a flattened local")
                 slots = self.objects[argument.id]
-                for field, scalar in parameter.fields:
-                    entry = slots.get(field)
+                for attr, scalar in parameter.fields:
+                    entry = slots.get(attr)
                     if entry is None:
-                        raise Unsupported(f"`{argument.id}` has no field `{field}`")
-                    arguments.append(self._coerce(self._field(argument.id, field), scalar).value)
+                        raise Unsupported(f"`{argument.id}` has no field `{attr}`")
+                    arguments.append(self._coerce(self._field(argument.id, attr), scalar).value)
                 continue
             if parameter.is_tuple:
                 values = self._tuple_expr(argument)
@@ -1127,7 +1133,7 @@ class _FunctionLowering:
                     raise Unsupported("a tuple argument does not match the callee's shape")
                 arguments.extend(
                     self._coerce(item, element).value
-                    for item, element in zip(values.items, parameter.elements)
+                    for item, element in zip(values.items, parameter.elements, strict=False)
                 )
                 continue
             arguments.append(self._coerce(self._expr(argument), parameter.kind).value)
@@ -1168,7 +1174,9 @@ class _FunctionLowering:
             return self._coerce(value, "int")
         if name == "abs":
             if value.scalar == "float":
-                return _Value(self.builder.call(self._intrinsic("llvm.fabs.f64", 1), [value.value]), "float")
+                return _Value(
+                    self.builder.call(self._intrinsic("llvm.fabs.f64", 1), [value.value]), "float"
+                )
             promoted = self._coerce(value, "int")
             zero = self.ir.Constant(self.ir.IntType(64), 0)
             negative = self.builder.icmp_signed("<", promoted.value, zero)
@@ -1185,7 +1193,6 @@ class _FunctionLowering:
         return ir.Function(self.module, ir.FunctionType(double, [double] * arity), name=name)
 
     def _binary(self, left: _Value, right: _Value, op: type[ast.operator]) -> _Value:
-        ir = self.ir
         if op is ast.Div:
             left, right = self._coerce(left, "float"), self._coerce(right, "float")
             self._guard_nonzero(right)
@@ -1204,7 +1211,9 @@ class _FunctionLowering:
             if operation is None:
                 if op is ast.Pow:
                     return _Value(
-                        self.builder.call(self._intrinsic("llvm.pow.f64", 2), [left.value, right.value]),
+                        self.builder.call(
+                            self._intrinsic("llvm.pow.f64", 2), [left.value, right.value]
+                        ),
                         "float",
                     )
                 raise Unsupported("floating-point operator has no native lowering")

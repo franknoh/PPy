@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+import contextlib
 from dataclasses import dataclass, field
 
-__all__ = ["LlvmUnavailable", "JitEngine", "llvm_status", "available"]
+__all__ = ["JitEngine", "LlvmUnavailable", "available", "llvm_status"]
 
 
 class LlvmUnavailable(RuntimeError):
@@ -12,17 +13,15 @@ class LlvmUnavailable(RuntimeError):
 
 
 def available() -> bool:
-    try:
-        import llvmlite.binding  # noqa: F401
-    except Exception:  # noqa: BLE001
-        return False
-    return True
+    import importlib.util
+
+    return importlib.util.find_spec("llvmlite.binding") is not None
 
 
 def llvm_status() -> tuple[str, str]:
     try:
         import llvmlite
-        import llvmlite.binding as binding
+        from llvmlite import binding
     except Exception as exc:  # noqa: BLE001
         return "unavailable", str(exc)
     try:
@@ -36,22 +35,22 @@ _INITIALIZED = False
 
 
 def _initialize() -> None:
-    global _INITIALIZED
+    # LLVM must be initialized exactly once per process; a module flag is the
+    # honest way to say that.
+    global _INITIALIZED  # noqa: PLW0603
     if _INITIALIZED:
         return
     try:
-        import llvmlite.binding as binding
-    except Exception as exc:  # noqa: BLE001
+        from llvmlite import binding
+    except Exception as exc:
         raise LlvmUnavailable(f"llvmlite is not installed: {exc}") from exc
     # Newer llvmlite initializes LLVM automatically and rejects the old calls.
     for step in ("initialize", "initialize_native_target", "initialize_native_asmprinter"):
         function = getattr(binding, step, None)
         if function is None:
             continue
-        try:
+        with contextlib.suppress(RuntimeError):
             function()
-        except RuntimeError:
-            pass
     _INITIALIZED = True
 
 
@@ -64,8 +63,8 @@ class JitEngine:
     target_machine: object | None = None
     _modules: list[object] = field(default_factory=list)
 
-    def open(self) -> "JitEngine":
-        import llvmlite.binding as binding
+    def open(self) -> JitEngine:
+        from llvmlite import binding
 
         _initialize()
         target = binding.Target.from_default_triple()
@@ -75,7 +74,7 @@ class JitEngine:
         return self
 
     def add(self, ir: str) -> object:
-        import llvmlite.binding as binding
+        from llvmlite import binding
 
         if self.engine is None:
             self.open()
@@ -97,7 +96,7 @@ class JitEngine:
         return self.engine.get_function_address(symbol)  # type: ignore[union-attr]
 
     def optimized_ir(self, ir: str) -> str:
-        import llvmlite.binding as binding
+        from llvmlite import binding
 
         _initialize()
         module = binding.parse_assembly(ir)
@@ -112,7 +111,7 @@ class JitEngine:
         require an explicit directive (spec 3.4, 12.5), so no fast-math flags
         are set here at any level.
         """
-        import llvmlite.binding as binding
+        from llvmlite import binding
 
         level = min(self.opt_level, 3)
         if hasattr(binding, "create_pass_builder"):
@@ -133,7 +132,7 @@ class JitEngine:
         manager.run(module)  # type: ignore[arg-type]
 
     def _machine(self):  # type: ignore[no-untyped-def]
-        import llvmlite.binding as binding
+        from llvmlite import binding
 
         _initialize()
         self.target_machine = binding.Target.from_default_triple().create_target_machine(

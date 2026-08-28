@@ -10,11 +10,11 @@ from .model import (
 
 __all__ = [
     "CODES",
-    "describe",
     "Diagnostic",
     "DiagnosticBag",
     "PPyError",
     "Severity",
     "Span",
+    "describe",
     "render",
 ]

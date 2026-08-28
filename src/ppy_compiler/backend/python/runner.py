@@ -7,7 +7,6 @@ import sys
 import types
 from dataclasses import dataclass
 from pathlib import Path
-
 from typing import Protocol
 
 from ...opt.passes import FUSED_BINDER
@@ -37,29 +36,29 @@ class NativeBinder(Protocol):
 def _prepare_natives(
     namespace: dict,
     module_name: str,
-    natives: "NativeBinder | None",
+    natives: NativeBinder | None,
     generated: GeneratedModule | None = None,
 ) -> tuple[frozenset[str], frozenset[str], frozenset[str]]:
     """Install the binding hooks a generated module calls as it loads."""
     if natives is None:
         return frozenset(), frozenset(), frozenset()
     if generated is not None and generated.needs_fused_binder:
-        namespace[FUSED_BINDER] = (
-            lambda symbol, fallback: natives.fused(module_name, symbol, fallback)
+        namespace[FUSED_BINDER] = lambda symbol, fallback: natives.fused(
+            module_name, symbol, fallback
         )
     exported = frozenset()
     if getattr(natives, "exported_names", None) is not None:
         exported = natives.exported_names(module_name)
         if exported:
-            namespace[EXPORTED_BINDER] = (
-                lambda function, value: natives.exported(module_name, function, value)
+            namespace[EXPORTED_BINDER] = lambda function, value: natives.exported(
+                module_name, function, value
             )
     regions = frozenset()
     if getattr(natives, "region_names", None) is not None:
         regions = natives.region_names(module_name)
         if regions:
-            namespace[REGION_BINDER] = (
-                lambda function, value: natives.region(module_name, function, value)
+            namespace[REGION_BINDER] = lambda function, value: natives.region(
+                module_name, function, value
             )
     names = natives.names(module_name)
     if names:
@@ -86,7 +85,9 @@ class _GeneratedFinder:
         generated = self.modules.get(fullname)
         if generated is None:
             return None
-        spec = ModuleSpec(fullname, _GeneratedLoader(generated, self.natives), origin=str(generated.source_path))
+        spec = ModuleSpec(
+            fullname, _GeneratedLoader(generated, self.natives), origin=str(generated.source_path)
+        )
         spec.has_location = True
         return spec
 
@@ -104,7 +105,7 @@ class _GeneratedLoader:
         names, exported, regions = _prepare_natives(
             module.__dict__, self.generated.name, self.natives, self.generated
         )
-        exec(self.generated.compile(names, exported, regions), module.__dict__)  # noqa: S102
+        exec(self.generated.compile(names, exported, regions), module.__dict__)
 
     def get_source(self, fullname: str) -> str:
         return self.generated.source_path.read_text(encoding="utf-8")
@@ -136,7 +137,7 @@ def execute(
     argv: list[str],
     *,
     search_paths: list[Path] | None = None,
-    natives: "NativeBinder | None" = None,
+    natives: NativeBinder | None = None,
     entry_name: str | None = None,
 ) -> ExecutionResult:
     """Run the generated entry module as `__main__`."""
@@ -163,7 +164,7 @@ def execute(
         names, exported, regions = _prepare_natives(
             module.__dict__, entry_name or entry.name, natives, entry
         )
-        exec(entry.compile(names, exported, regions), module.__dict__)  # noqa: S102
+        exec(entry.compile(names, exported, regions), module.__dict__)
         return ExecutionResult(0)
     except SystemExit as exit_request:
         code = exit_request.code

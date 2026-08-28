@@ -9,7 +9,7 @@ from pathlib import Path
 
 from ..diagnostics import Diagnostic, Severity
 
-__all__ = ["Outcome", "Comparison", "run_paths", "compare", "run_suite"]
+__all__ = ["Comparison", "Outcome", "compare", "run_paths", "run_suite"]
 
 _TIMEOUT = 120
 
@@ -39,7 +39,7 @@ class Comparison:
 
 def _run(command: list[str], cwd: Path) -> Outcome:
     try:
-        completed = subprocess.run(  # noqa: S603 - commands are constructed here
+        completed = subprocess.run(
             command,
             cwd=cwd,
             capture_output=True,
@@ -75,16 +75,14 @@ def compare(file: Path, outcomes: dict[str, Outcome]) -> Comparison:
         if outcome.stdout != baseline.stdout:
             mismatches.append(f"{name}: stdout differs from plain CPython")
         if outcome.exit_code != baseline.exit_code:
-            mismatches.append(
-                f"{name}: exit code {outcome.exit_code} != {baseline.exit_code}"
-            )
+            mismatches.append(f"{name}: exit code {outcome.exit_code} != {baseline.exit_code}")
     return Comparison(file, outcomes, tuple(mismatches))
 
 
 def run_suite(target: Path, reporter) -> int:  # type: ignore[no-untyped-def]
     from ..driver.pipeline import collect_sources
 
-    files = [p for p in collect_sources(target, ppy_only=True)]
+    files = list(collect_sources(target, ppy_only=True))
     if not files:
         reporter.note(f"no .ppy sources found under {target}")
         return 0

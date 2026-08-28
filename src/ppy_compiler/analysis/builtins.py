@@ -2,21 +2,21 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Callable, Sequence
+from collections.abc import Callable, Sequence
+from dataclasses import dataclass, field
 
 from . import types as T
 from .effects import Effect, EffectSet
 from .refinements import Facts, IntRange
 
-__all__ = ["BuiltinResult", "BUILTINS", "MODULE_EFFECTS", "call_builtin", "is_builtin"]
+__all__ = ["BUILTINS", "MODULE_EFFECTS", "BuiltinResult", "call_builtin", "is_builtin"]
 
 
 @dataclass(frozen=True, slots=True)
 class BuiltinResult:
     type: T.Type
-    facts: Facts = Facts()
-    effects: EffectSet = EffectSet()
+    facts: Facts = field(default_factory=Facts)
+    effects: EffectSet = field(default_factory=EffectSet)
 
 
 @dataclass(frozen=True, slots=True)
@@ -39,10 +39,21 @@ def _element_of(t: T.Type) -> T.Type:
             return base.items[0]
         return T.join(*base.items) if base.items else T.NEVER
     if isinstance(base, T.Instance):
-        if base.name in {
-            "list", "set", "frozenset", "Sequence", "Iterable", "Iterator",
-            "Buffer", "memoryview", "array",
-        } and base.args:
+        if (
+            base.name
+            in {
+                "list",
+                "set",
+                "frozenset",
+                "Sequence",
+                "Iterable",
+                "Iterator",
+                "Buffer",
+                "memoryview",
+                "array",
+            }
+            and base.args
+        ):
             return base.args[0]
         if base.name == "dict" and base.args:
             return base.args[0]
@@ -73,7 +84,9 @@ def _len(args: Sequence[Arg]) -> BuiltinResult:
 
 
 def _range(args: Sequence[Arg]) -> BuiltinResult:
-    return BuiltinResult(T.instance("range"), Facts(), EffectSet.of(raises=("TypeError", "ValueError")))
+    return BuiltinResult(
+        T.instance("range"), Facts(), EffectSet.of(raises=("TypeError", "ValueError"))
+    )
 
 
 def _int(args: Sequence[Arg]) -> BuiltinResult:
@@ -83,7 +96,9 @@ def _int(args: Sequence[Arg]) -> BuiltinResult:
         except (TypeError, ValueError):
             value = None
         if value is not None:
-            return BuiltinResult(T.INT, Facts(constant=value, has_constant=True, int_range=IntRange(value, value)))
+            return BuiltinResult(
+                T.INT, Facts(constant=value, has_constant=True, int_range=IntRange(value, value))
+            )
     if args and T.strip_literal(args[0].type) == T.INT:
         return BuiltinResult(T.INT, args[0].facts)
     return BuiltinResult(T.INT, Facts(), EffectSet.of(raises=("ValueError", "TypeError")))
@@ -117,7 +132,9 @@ def _abs(args: Sequence[Arg]) -> BuiltinResult:
 
 def _min_max(args: Sequence[Arg]) -> BuiltinResult:
     if len(args) == 1:
-        return BuiltinResult(_element_of(args[0].type), Facts(), EffectSet.of(raises=("ValueError",)))
+        return BuiltinResult(
+            _element_of(args[0].type), Facts(), EffectSet.of(raises=("ValueError",))
+        )
     return BuiltinResult(T.join(*[a.type for a in args]) if args else T.UNKNOWN)
 
 
@@ -142,7 +159,9 @@ def _tuple(args: Sequence[Arg]) -> BuiltinResult:
         base = T.strip_literal(args[0].type)
         if isinstance(base, T.Tuple_):
             return BuiltinResult(base, args[0].facts, _ALLOC)
-        return BuiltinResult(T.Tuple_((_element_of(args[0].type),), homogeneous=True), Facts(), _ALLOC)
+        return BuiltinResult(
+            T.Tuple_((_element_of(args[0].type),), homogeneous=True), Facts(), _ALLOC
+        )
     return BuiltinResult(T.Tuple_(()), Facts(), _ALLOC)
 
 
@@ -233,7 +252,9 @@ def _repr(args: Sequence[Arg]) -> BuiltinResult:
 
 
 def _hash(args: Sequence[Arg]) -> BuiltinResult:
-    return BuiltinResult(T.INT, Facts(), EffectSet.of(Effect.PYTHON_CALLBACK, raises=("TypeError",)))
+    return BuiltinResult(
+        T.INT, Facts(), EffectSet.of(Effect.PYTHON_CALLBACK, raises=("TypeError",))
+    )
 
 
 def _id(args: Sequence[Arg]) -> BuiltinResult:
@@ -241,7 +262,9 @@ def _id(args: Sequence[Arg]) -> BuiltinResult:
 
 
 def _ord(args: Sequence[Arg]) -> BuiltinResult:
-    return BuiltinResult(T.INT, Facts(int_range=IntRange(0, 0x10FFFF)), EffectSet.of(raises=("TypeError",)))
+    return BuiltinResult(
+        T.INT, Facts(int_range=IntRange(0, 0x10FFFF)), EffectSet.of(raises=("TypeError",))
+    )
 
 
 def _chr(args: Sequence[Arg]) -> BuiltinResult:
@@ -286,13 +309,18 @@ def _memoryview(args: Sequence[Arg]) -> BuiltinResult:
     """A view over a contiguous buffer, carrying its element type through."""
     if args:
         base = T.strip_literal(args[0].type)
-        if isinstance(base, T.Instance) and base.args and base.name in {
-            "array", "Buffer", "memoryview",
-        }:
+        if (
+            isinstance(base, T.Instance)
+            and base.args
+            and base.name
+            in {
+                "array",
+                "Buffer",
+                "memoryview",
+            }
+        ):
             return BuiltinResult(T.instance("memoryview", base.args[0]))
-    return BuiltinResult(
-        T.instance("memoryview"), Facts(), EffectSet.of(raises=("TypeError",))
-    )
+    return BuiltinResult(T.instance("memoryview"), Facts(), EffectSet.of(raises=("TypeError",)))
 
 
 def _getattr(args: Sequence[Arg]) -> BuiltinResult:
@@ -392,9 +420,31 @@ MODULE_EFFECTS: dict[str, EffectSet] = {
 
 #: Pure standard-library math functions usable inside `@ppy.pure`.
 MATH_FUNCTIONS = {
-    "sqrt", "sin", "cos", "tan", "asin", "acos", "atan", "atan2", "exp", "log",
-    "log2", "log10", "pow", "floor", "ceil", "fabs", "fmod", "hypot", "isnan",
-    "isinf", "isfinite", "trunc", "copysign", "degrees", "radians",
+    "sqrt",
+    "sin",
+    "cos",
+    "tan",
+    "asin",
+    "acos",
+    "atan",
+    "atan2",
+    "exp",
+    "log",
+    "log2",
+    "log10",
+    "pow",
+    "floor",
+    "ceil",
+    "fabs",
+    "fmod",
+    "hypot",
+    "isnan",
+    "isinf",
+    "isfinite",
+    "trunc",
+    "copysign",
+    "degrees",
+    "radians",
 }
 
 _MATH_INT_RESULTS = {"floor", "ceil", "trunc"}

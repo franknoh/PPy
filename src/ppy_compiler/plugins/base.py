@@ -3,17 +3,18 @@
 from __future__ import annotations
 
 import enum
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
-from typing import Protocol, Sequence
+from typing import Protocol
 
 from ..analysis import types as T
 from ..analysis.effects import EffectSet
 from ..analysis.refinements import Facts
 
 __all__ = [
-    "Lowering",
-    "CallResult",
     "CallAdjustment",
+    "CallResult",
+    "Lowering",
     "Plugin",
     "PluginContext",
     "PluginRegistry",
@@ -123,7 +124,7 @@ class PluginRegistry:
             merged.update(plugin.external_types())
         return merged
 
-    def fingerprints(self, modules: "Iterable[str] | None" = None) -> tuple[str, ...]:
+    def fingerprints(self, modules: Iterable[str] | None = None) -> tuple[str, ...]:
         """Version fingerprints of the plugins that can affect a compilation.
 
         Computing a fingerprint imports the library, which for an accelerator
@@ -136,7 +137,8 @@ class PluginRegistry:
         if modules is not None:
             roots = {name.partition(".")[0] for name in modules}
             selected = [
-                plugin for plugin in self._plugins
+                plugin
+                for plugin in self._plugins
                 if roots & {module.partition(".")[0] for module in plugin.modules}
             ]
         return tuple(sorted(f"{p.name}:{p.fingerprint()}" for p in selected))

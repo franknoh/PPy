@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import importlib.util
-from typing import Sequence
+from collections.abc import Sequence
 
 from ..analysis import types as T
 from ..analysis.effects import Effect, EffectSet
@@ -63,7 +63,9 @@ class PydanticPlugin:
         attribute = qualname.rpartition(".")[2]
         if attribute == "Field":
             # Field metadata is consumed by the annotation resolver, not at runtime.
-            return CallResult(T.ANY, Facts(), EffectSet(), Lowering.PYTHON_FALLBACK, "field metadata")
+            return CallResult(
+                T.ANY, Facts(), EffectSet(), Lowering.PYTHON_FALLBACK, "field metadata"
+            )
         if attribute in {"model_validate", "model_validate_json", "parse_obj"}:
             return CallResult(
                 T.UNKNOWN,

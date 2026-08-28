@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import importlib.util
-from typing import Sequence
+from collections.abc import Sequence
 
 from ..analysis import types as T
 from ..analysis.effects import Effect, EffectSet
@@ -11,40 +11,108 @@ from ..analysis.refinements import Facts
 from .base import CallResult, Lowering
 
 __all__ = [
-    "NumPyPlugin",
     "ELEMENTWISE",
-    "REDUCTIONS",
-    "LINALG",
-    "FUSIBLE_UNARY",
     "FUSIBLE_BINARY",
     "FUSIBLE_REDUCTIONS",
+    "FUSIBLE_UNARY",
+    "LINALG",
+    "REDUCTIONS",
+    "NumPyPlugin",
 ]
 
 PLUGIN_VERSION = 1
 
 #: Curated ufunc-like operations that lower to fused native loops (spec 19.4).
-ELEMENTWISE = frozenset({
-    "add", "subtract", "multiply", "true_divide", "divide", "floor_divide",
-    "remainder", "mod", "fmod", "power", "negative", "absolute", "abs", "positive",
-    "less", "less_equal", "equal", "not_equal", "greater", "greater_equal",
-    "logical_and", "logical_or", "logical_not", "invert",
-    "sin", "cos", "tan", "arcsin", "arccos", "arctan", "arctan2",
-    "sinh", "cosh", "tanh", "exp", "expm1", "log", "log2", "log10", "log1p",
-    "sqrt", "cbrt", "square", "reciprocal", "sign",
-    "minimum", "maximum", "clip", "round", "around", "rint", "floor", "ceil", "trunc",
-})
+ELEMENTWISE = frozenset(
+    {
+        "add",
+        "subtract",
+        "multiply",
+        "true_divide",
+        "divide",
+        "floor_divide",
+        "remainder",
+        "mod",
+        "fmod",
+        "power",
+        "negative",
+        "absolute",
+        "abs",
+        "positive",
+        "less",
+        "less_equal",
+        "equal",
+        "not_equal",
+        "greater",
+        "greater_equal",
+        "logical_and",
+        "logical_or",
+        "logical_not",
+        "invert",
+        "sin",
+        "cos",
+        "tan",
+        "arcsin",
+        "arccos",
+        "arctan",
+        "arctan2",
+        "sinh",
+        "cosh",
+        "tanh",
+        "exp",
+        "expm1",
+        "log",
+        "log2",
+        "log10",
+        "log1p",
+        "sqrt",
+        "cbrt",
+        "square",
+        "reciprocal",
+        "sign",
+        "minimum",
+        "maximum",
+        "clip",
+        "round",
+        "around",
+        "rint",
+        "floor",
+        "ceil",
+        "trunc",
+    }
+)
 
 #: Reductions supported for the v1 fast path (spec 19.8).
 REDUCTIONS = frozenset({"sum", "prod", "product", "min", "max", "mean", "any", "all"})
 
 #: Operations the LLVM backend has a generated kernel for. Only these are
 #: reported as `Intrinsic`; the rest are typed but left to NumPy's own dispatch.
-FUSIBLE_UNARY = frozenset({
-    "sin", "cos", "exp", "log", "log2", "log10", "sqrt", "absolute", "abs", "negative",
-})
-FUSIBLE_BINARY = frozenset({
-    "add", "subtract", "multiply", "true_divide", "divide", "minimum", "maximum", "power",
-})
+FUSIBLE_UNARY = frozenset(
+    {
+        "sin",
+        "cos",
+        "exp",
+        "log",
+        "log2",
+        "log10",
+        "sqrt",
+        "absolute",
+        "abs",
+        "negative",
+    }
+)
+FUSIBLE_BINARY = frozenset(
+    {
+        "add",
+        "subtract",
+        "multiply",
+        "true_divide",
+        "divide",
+        "minimum",
+        "maximum",
+        "power",
+    }
+)
 FUSIBLE_REDUCTIONS = frozenset({"sum", "prod", "product", "max", "min", "mean"})
 FUSIBLE = FUSIBLE_UNARY | FUSIBLE_BINARY | FUSIBLE_REDUCTIONS
 
@@ -52,19 +120,56 @@ FUSIBLE = FUSIBLE_UNARY | FUSIBLE_BINARY | FUSIBLE_REDUCTIONS
 LINALG = frozenset({"dot", "matmul", "inner", "vdot", "tensordot"})
 
 #: Creation routines that allocate a new array.
-CREATION = frozenset({
-    "array", "asarray", "zeros", "ones", "empty", "full", "arange", "linspace",
-    "zeros_like", "ones_like", "empty_like", "full_like", "eye", "identity",
-})
+CREATION = frozenset(
+    {
+        "array",
+        "asarray",
+        "zeros",
+        "ones",
+        "empty",
+        "full",
+        "arange",
+        "linspace",
+        "zeros_like",
+        "ones_like",
+        "empty_like",
+        "full_like",
+        "eye",
+        "identity",
+    }
+)
 
-_BOOL_RESULTS = frozenset({
-    "less", "less_equal", "equal", "not_equal", "greater", "greater_equal",
-    "logical_and", "logical_or", "logical_not", "any", "all",
-})
+_BOOL_RESULTS = frozenset(
+    {
+        "less",
+        "less_equal",
+        "equal",
+        "not_equal",
+        "greater",
+        "greater_equal",
+        "logical_and",
+        "logical_or",
+        "logical_not",
+        "any",
+        "all",
+    }
+)
 
 _SCALAR_DTYPES = (
-    "int8", "int16", "int32", "int64", "uint8", "uint16", "uint32", "uint64",
-    "float16", "float32", "float64", "bool_", "complex64", "complex128",
+    "int8",
+    "int16",
+    "int32",
+    "int64",
+    "uint8",
+    "uint16",
+    "uint32",
+    "uint64",
+    "float16",
+    "float32",
+    "float64",
+    "bool_",
+    "complex64",
+    "complex128",
 )
 
 #: dtypes the fused fast path accepts (spec 19.3).
@@ -73,18 +178,44 @@ _SUPPORTED_DTYPES = frozenset(_SCALAR_DTYPES) - {"complex64", "complex128"}
 _NDARRAY = T.Instance("numpy.ndarray", (), ("numpy.ndarray", "object"))
 
 #: Array methods that return another array of the same dtype.
-_ARRAY_SHAPING = frozenset({
-    "reshape", "ravel", "flatten", "copy", "transpose", "squeeze", "astype",
-    "conj", "conjugate", "view", "clip", "round", "repeat", "take",
-})
+_ARRAY_SHAPING = frozenset(
+    {
+        "reshape",
+        "ravel",
+        "flatten",
+        "copy",
+        "transpose",
+        "squeeze",
+        "astype",
+        "conj",
+        "conjugate",
+        "view",
+        "clip",
+        "round",
+        "repeat",
+        "take",
+    }
+)
 
 #: Python operators mapped to the ufunc that implements them.
 _OPERATORS = {
-    "+": "add", "-": "subtract", "*": "multiply", "/": "true_divide",
-    "//": "floor_divide", "%": "remainder", "**": "power", "@": "matmul",
-    "<": "less", "<=": "less_equal", "==": "equal", "!=": "not_equal",
-    ">": "greater", ">=": "greater_equal",
-    "u-": "negative", "u+": "positive", "u~": "invert",
+    "+": "add",
+    "-": "subtract",
+    "*": "multiply",
+    "/": "true_divide",
+    "//": "floor_divide",
+    "%": "remainder",
+    "**": "power",
+    "@": "matmul",
+    "<": "less",
+    "<=": "less_equal",
+    "==": "equal",
+    "!=": "not_equal",
+    ">": "greater",
+    ">=": "greater_equal",
+    "u-": "negative",
+    "u+": "positive",
+    "u~": "invert",
 }
 
 
@@ -145,7 +276,6 @@ class NumPyPlugin:
             return T.Callable_((), T.NONE, "numpy.ndarray.fill"), Facts()
         return None
 
-
     def subscript(
         self, type_name: str, *, is_slice: bool, tupled: bool
     ) -> tuple[T.Type, Facts] | None:
@@ -174,7 +304,9 @@ class NumPyPlugin:
             return CallResult(
                 type=_NDARRAY,
                 facts=self._creation_facts(operation, args, keywords),
-                effects=EffectSet.of(Effect.ALLOC, raises=("ValueError", "TypeError", "MemoryError")),
+                effects=EffectSet.of(
+                    Effect.ALLOC, raises=("ValueError", "TypeError", "MemoryError")
+                ),
                 lowering=Lowering.DIRECT_NATIVE_CALL,
                 reason="allocated through the public NumPy C API",
             )
@@ -251,22 +383,34 @@ class NumPyPlugin:
         """Decide the lowering for one operation (spec 19.3)."""
         if not self.fusion:
             return Lowering.PYTHON_FALLBACK, "fusion is disabled by project configuration", ()
-        for name, (_type, facts) in keywords.items():
+        for name in keywords:
             if name not in {"axis", "out", "dtype", "keepdims"}:
                 return Lowering.PYTHON_FALLBACK, f"unsupported keyword `{name}`", ()
         dtype = keywords.get("dtype")
         if dtype is not None and dtype[1].has_constant:
             named = str(dtype[1].constant)
             if named not in _SUPPORTED_DTYPES:
-                return Lowering.PYTHON_FALLBACK, f"dtype `{named}` is outside the fast-path domain", ()
+                return (
+                    Lowering.PYTHON_FALLBACK,
+                    f"dtype `{named}` is outside the fast-path domain",
+                    (),
+                )
         for arg_type, _facts in args:
             base = T.strip_literal(arg_type)
             if isinstance(base, (T.AnyType, T.UnknownType)):
                 return Lowering.PYTHON_FALLBACK, "an operand has no static type", ()
             if isinstance(base, T.Instance) and base.name not in {
-                "numpy.ndarray", "int", "float", "bool", *[f"numpy.{d}" for d in _SCALAR_DTYPES]
+                "numpy.ndarray",
+                "int",
+                "float",
+                "bool",
+                *[f"numpy.{d}" for d in _SCALAR_DTYPES],
             }:
-                return Lowering.PYTHON_FALLBACK, f"operand `{base}` is outside the fast-path domain", ()
+                return (
+                    Lowering.PYTHON_FALLBACK,
+                    f"operand `{base}` is outside the fast-path domain",
+                    (),
+                )
         guards = (
             "exact numpy.ndarray (no __array_ufunc__ override)",
             "float64 dtype in native byte order",

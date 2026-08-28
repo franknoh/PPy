@@ -2,23 +2,25 @@
 
 from __future__ import annotations
 
-from typing import Any, Callable, Mapping, Protocol, TypeVar, overload
+import contextlib
+from collections.abc import Callable, Mapping
+from typing import Any, Protocol, Self, TypeVar, overload
 
 __all__ = [
     "Directive",
-    "directives_of",
     "attach",
-    "pure",
-    "opt",
-    "jit",
-    "parallel",
-    "native",
-    "inline",
-    "noinline",
-    "specialize",
-    "fastmath",
+    "directives_of",
     "dynamic",
+    "fastmath",
+    "inline",
     "jax",
+    "jit",
+    "native",
+    "noinline",
+    "opt",
+    "parallel",
+    "pure",
+    "specialize",
 ]
 
 _T = TypeVar("_T")
@@ -53,7 +55,7 @@ def directives_of(obj: Any) -> tuple[Directive, ...]:
     return tuple(getattr(obj, DIRECTIVE_ATTR, ()))
 
 
-def attach(obj: _T, directive: Directive) -> _T:
+def attach[T](obj: T, directive: Directive) -> T:
     """Record a directive on obj and return obj unchanged.
 
     The object is never wrapped: identity, descriptor behavior, coroutine
@@ -63,10 +65,8 @@ def attach(obj: _T, directive: Directive) -> _T:
         existing = tuple(obj.__dict__.get(DIRECTIVE_ATTR, ()))  # type: ignore[attr-defined]
     except AttributeError:
         existing = ()
-    try:
+    with contextlib.suppress(AttributeError, TypeError):
         setattr(obj, DIRECTIVE_ATTR, (directive, *existing))
-    except (AttributeError, TypeError):
-        pass
     return obj
 
 
@@ -130,14 +130,14 @@ def opt(level: int) -> Callable[[_T], _T]:
 class _Dynamic:
     """`ppy.dynamic` used either as a decorator or as a context manager."""
 
-    def __call__(self, obj: _T | None = None) -> "_T | _Dynamic":
+    def __call__(self, obj: _T | None = None) -> _T | _Dynamic:
         # `with ppy.dynamic():` reads more naturally than the bare marker, and
         # the compiler accepts both, so the runtime has to accept both too.
         if obj is None:
             return self
         return attach(obj, Directive("dynamic"))
 
-    def __enter__(self) -> "_Dynamic":
+    def __enter__(self) -> Self:
         return self
 
     def __exit__(self, *exc: object) -> bool:

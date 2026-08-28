@@ -10,22 +10,22 @@ on the exact key it was built for, and anything else uses the generic code.
 from __future__ import annotations
 
 import ast
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Callable
 
 from ...analysis.symbols import FunctionInfo
 from ...cache import CacheKey, digest
-from .lowering import NativeParam, NativeSignature, lower_specialization
+from .lowering import NativeSignature, lower_specialization
 
 __all__ = [
+    "DEFAULT_MAX",
+    "DEFAULT_THRESHOLD",
+    "Specialization",
     "SpecializationKey",
     "SpecializationPolicy",
-    "Specialization",
     "Specializer",
     "key_for",
-    "DEFAULT_THRESHOLD",
-    "DEFAULT_MAX",
 ]
 
 #: Calls with the same key before a specialization is worth compiling.
@@ -78,7 +78,7 @@ class SpecializationKey:
                 described.append((1, index, int(value)))  # type: ignore[arg-type]
         return tuple(described)
 
-    def matcher(self) -> "Callable[[tuple[object, ...]], bool]":
+    def matcher(self) -> Callable[[tuple[object, ...]], bool]:
         """A cheap predicate selecting exactly the calls this was built for.
 
         This runs on every call once a specialization exists, so it compares
@@ -121,7 +121,7 @@ class SpecializationPolicy:
     budget: int = LEARNING_BUDGET
 
     @staticmethod
-    def of(info: FunctionInfo) -> "SpecializationPolicy":
+    def of(info: FunctionInfo) -> SpecializationPolicy:
         jit = info.directive("jit")
         specialize = info.directive("specialize")
         if jit is None and specialize is None:
@@ -147,7 +147,7 @@ def key_for(
 ) -> SpecializationKey:
     """The key describing what is worth pinning about this call."""
     entries: list[tuple[int, str, str, object]] = []
-    for index, (parameter, value) in enumerate(zip(signature.parameters, args)):
+    for index, (parameter, value) in enumerate(zip(signature.parameters, args, strict=False)):
         if parameter.is_buffer:
             if policy.pin_lengths:
                 try:

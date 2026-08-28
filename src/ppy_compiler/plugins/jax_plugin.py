@@ -3,9 +3,8 @@
 from __future__ import annotations
 
 import ast
-
 import importlib.util
-from typing import Sequence
+from collections.abc import Sequence
 
 from ..analysis import types as T
 from ..analysis.effects import Effect, EffectSet
@@ -13,7 +12,7 @@ from ..analysis.refinements import Facts
 from ..analysis.symbols import FunctionInfo
 from .base import CallResult, Lowering
 
-__all__ = ["JaxPlugin", "STAGING_MARKERS", "StagedFunction", "staged_functions"]
+__all__ = ["STAGING_MARKERS", "JaxPlugin", "StagedFunction", "staged_functions"]
 
 PLUGIN_VERSION = 1
 
@@ -25,65 +24,176 @@ _ARRAY = T.Instance("jax.Array", (), ("jax.Array", "object"))
 
 #: Python operators mapped to the `jax.numpy` function implementing them.
 _OPERATORS = {
-    "+": "add", "-": "subtract", "*": "multiply", "/": "true_divide",
-    "//": "floor_divide", "%": "remainder", "**": "power", "@": "matmul",
-    "<": "less", "<=": "less_equal", "==": "equal", "!=": "not_equal",
-    ">": "greater", ">=": "greater_equal",
-    "u-": "negative", "u+": "positive",
+    "+": "add",
+    "-": "subtract",
+    "*": "multiply",
+    "/": "true_divide",
+    "//": "floor_divide",
+    "%": "remainder",
+    "**": "power",
+    "@": "matmul",
+    "<": "less",
+    "<=": "less_equal",
+    "==": "equal",
+    "!=": "not_equal",
+    ">": "greater",
+    ">=": "greater_equal",
+    "u-": "negative",
+    "u+": "positive",
 }
 
 #: `jax.numpy` operations whose result is an array.
-_ARRAY_RESULTS = frozenset({
-    "add", "subtract", "multiply", "true_divide", "divide", "floor_divide",
-    "remainder", "power", "negative", "positive", "abs", "absolute", "sign",
-    "sin", "cos", "tan", "tanh", "sinh", "cosh", "exp", "expm1", "log", "log1p",
-    "sqrt", "rsqrt", "square", "reciprocal", "clip", "round", "floor", "ceil",
-    "minimum", "maximum", "matmul", "dot", "where", "concatenate", "stack",
-    "reshape", "transpose", "ravel", "squeeze", "expand_dims", "arange",
-    "zeros", "ones", "full", "zeros_like", "ones_like", "eye", "linspace",
-    "array", "asarray", "astype", "einsum", "take", "split",
-    "less", "less_equal", "equal", "not_equal", "greater", "greater_equal",
-    "logical_and", "logical_or", "logical_not",
-    "softmax", "log_softmax", "relu", "sigmoid", "erf",
-})
+_ARRAY_RESULTS = frozenset(
+    {
+        "add",
+        "subtract",
+        "multiply",
+        "true_divide",
+        "divide",
+        "floor_divide",
+        "remainder",
+        "power",
+        "negative",
+        "positive",
+        "abs",
+        "absolute",
+        "sign",
+        "sin",
+        "cos",
+        "tan",
+        "tanh",
+        "sinh",
+        "cosh",
+        "exp",
+        "expm1",
+        "log",
+        "log1p",
+        "sqrt",
+        "rsqrt",
+        "square",
+        "reciprocal",
+        "clip",
+        "round",
+        "floor",
+        "ceil",
+        "minimum",
+        "maximum",
+        "matmul",
+        "dot",
+        "where",
+        "concatenate",
+        "stack",
+        "reshape",
+        "transpose",
+        "ravel",
+        "squeeze",
+        "expand_dims",
+        "arange",
+        "zeros",
+        "ones",
+        "full",
+        "zeros_like",
+        "ones_like",
+        "eye",
+        "linspace",
+        "array",
+        "asarray",
+        "astype",
+        "einsum",
+        "take",
+        "split",
+        "less",
+        "less_equal",
+        "equal",
+        "not_equal",
+        "greater",
+        "greater_equal",
+        "logical_and",
+        "logical_or",
+        "logical_not",
+        "softmax",
+        "log_softmax",
+        "relu",
+        "sigmoid",
+        "erf",
+    }
+)
 
 #: `jax.random` draws: every one of these returns an array, and `split`
 #: returns a stack of keys, which is an array too.
-_RANDOM_RESULTS = frozenset({
-    "PRNGKey", "key", "split", "fold_in", "normal", "uniform", "bernoulli",
-    "randint", "permutation", "choice", "categorical", "gumbel", "exponential",
-    "truncated_normal", "ball", "beta", "cauchy", "dirichlet", "gamma", "poisson",
-})
+_RANDOM_RESULTS = frozenset(
+    {
+        "PRNGKey",
+        "key",
+        "split",
+        "fold_in",
+        "normal",
+        "uniform",
+        "bernoulli",
+        "randint",
+        "permutation",
+        "choice",
+        "categorical",
+        "gumbel",
+        "exponential",
+        "truncated_normal",
+        "ball",
+        "beta",
+        "cauchy",
+        "dirichlet",
+        "gamma",
+        "poisson",
+    }
+)
 
 #: Function transforms: each takes a callable and returns a callable. What the
 #: returned callable produces is a pytree shaped like the argument it
 #: differentiates, which no v1 signature can describe, so it is `Any` -- an
 #: explicit boundary the plugin declares rather than an inferred one.
 _TRANSFORMS: dict[str, str] = {
-    "grad": "any", "jacfwd": "any", "jacrev": "any", "hessian": "any",
+    "grad": "any",
+    "jacfwd": "any",
+    "jacrev": "any",
+    "hessian": "any",
     "value_and_grad": "value_and_grad",
-    "jit": "any", "vmap": "any", "pmap": "any",
-    "remat": "any", "checkpoint": "any",
+    "jit": "any",
+    "vmap": "any",
+    "pmap": "any",
+    "remat": "any",
+    "checkpoint": "any",
 }
 
 #: Reductions: an array when an axis is given, a scalar array otherwise.
-_REDUCTIONS = frozenset({"sum", "prod", "mean", "std", "var", "min", "max", "argmin", "argmax", "any", "all"})
+_REDUCTIONS = frozenset(
+    {"sum", "prod", "mean", "std", "var", "min", "max", "argmin", "argmax", "any", "all"}
+)
 
 #: Attributes of a `jax.Array` value.
 _ARRAY_MEMBERS: dict[str, str] = {
-    "shape": "shape", "ndim": "int", "size": "int", "dtype": "dtype",
-    "T": "array", "at": "indexer",
-    "reshape": "array_method", "astype": "array_method", "sum": "array_method",
-    "mean": "array_method", "max": "array_method", "min": "array_method",
-    "ravel": "array_method", "squeeze": "array_method", "block_until_ready": "array_method",
-    "item": "float_method", "tolist": "list_method",
+    "shape": "shape",
+    "ndim": "int",
+    "size": "int",
+    "dtype": "dtype",
+    "T": "array",
+    "at": "indexer",
+    "reshape": "array_method",
+    "astype": "array_method",
+    "sum": "array_method",
+    "mean": "array_method",
+    "max": "array_method",
+    "min": "array_method",
+    "ravel": "array_method",
+    "squeeze": "array_method",
+    "block_until_ready": "array_method",
+    "item": "float_method",
+    "tolist": "list_method",
 }
 
 
 class StagedFunction:
     """A function PPY may export, with the input specification it declared."""
 
-    __slots__ = ("info", "shapes", "dtypes", "reason")
+    __slots__ = ("dtypes", "info", "reason", "shapes")
 
     def __init__(
         self,
@@ -109,9 +219,18 @@ class StagedFunction:
 #: artifact cannot be differentiated -- `Exported.vjp` raises "No VJP is
 #: available". Routing such a function would break a program that ran fine
 #: under plain CPython, which spec 3 does not permit.
-_DIFFERENTIATING = frozenset({
-    "grad", "value_and_grad", "jacfwd", "jacrev", "hessian", "linearize", "vjp", "jvp",
-})
+_DIFFERENTIATING = frozenset(
+    {
+        "grad",
+        "value_and_grad",
+        "jacfwd",
+        "jacrev",
+        "hessian",
+        "linearize",
+        "vjp",
+        "jvp",
+    }
+)
 
 
 def _differentiated_names(symbols) -> set[str]:  # type: ignore[no-untyped-def]
@@ -138,10 +257,12 @@ def staged_functions(symbols) -> list[StagedFunction]:  # type: ignore[no-untype
         if not any(decorator in STAGING_MARKERS for decorator in info.decorators):
             continue
         if info.name in differentiated:
-            found.append(StagedFunction(
-                info,
-                reason=f"`{info.name}` is differentiated, and a serialized export has no VJP",
-            ))
+            found.append(
+                StagedFunction(
+                    info,
+                    reason=f"`{info.name}` is differentiated, and a serialized export has no VJP",
+                )
+            )
             continue
         shapes: list[tuple[int | str, ...]] = []
         dtypes: list[str] = []
@@ -159,7 +280,7 @@ def staged_functions(symbols) -> list[StagedFunction]:  # type: ignore[no-untype
     return found
 
 
-def _element_type(facts: "Facts | None") -> T.Type:
+def _element_type(facts: Facts | None) -> T.Type:
     """What `tolist()` yields, from the declared dtype when there is one.
 
     An array carries no dtype unless something declared it, and every JAX
@@ -217,7 +338,6 @@ class JaxPlugin:
             "jax.Device": "jax.Device",
             "jax.numpy.dtype": "jax.numpy.dtype",
         }
-
 
     def subscript(
         self, type_name: str, *, is_slice: bool, tupled: bool
@@ -290,17 +410,20 @@ class JaxPlugin:
         if operation == "devices":
             return CallResult(
                 T.list_of(T.Instance("jax.Device", (), ("jax.Device", "object"))),
-                Facts(), effects, Lowering.PYTHON_FALLBACK, "a runtime query",
+                Facts(),
+                effects,
+                Lowering.PYTHON_FALLBACK,
+                "a runtime query",
             )
         if qualname.count(".") == 1 and operation in _TRANSFORMS:
             produced = (
-                T.Tuple_((_ARRAY, T.ANY))
-                if _TRANSFORMS[operation] == "value_and_grad"
-                else T.ANY
+                T.Tuple_((_ARRAY, T.ANY)) if _TRANSFORMS[operation] == "value_and_grad" else T.ANY
             )
             return CallResult(
                 T.Callable_((), produced, f"jax.{operation}.transformed"),
-                Facts(), EffectSet.of(Effect.ALLOC), Lowering.PYTHON_FALLBACK,
+                Facts(),
+                EffectSet.of(Effect.ALLOC),
+                Lowering.PYTHON_FALLBACK,
                 f"`jax.{operation}` returns a transformed callable; its result is a "
                 "pytree the plugin declares as an explicit boundary",
             )
@@ -308,7 +431,10 @@ class JaxPlugin:
             # A draw is not reproducible without its key, so it is pure in the
             # sense the effect system means: no dependence on hidden state.
             return CallResult(
-                _ARRAY, Facts(), effects, Lowering.PYTHON_FALLBACK,
+                _ARRAY,
+                Facts(),
+                effects,
+                Lowering.PYTHON_FALLBACK,
                 "a keyed draw runs on the Python path",
             )
         if operation not in _ARRAY_RESULTS and operation not in _REDUCTIONS:
@@ -351,6 +477,10 @@ class JaxPlugin:
             Facts(),
             EffectSet.of(Effect.ALLOC),
             Lowering.GRAPH_REGION,
-            "staged and exported to StableHLO, then executed through PJRT without per-call Python dispatch",
-            ("input shape and dtype match the exported signature", "PJRT client available for the target device"),
+            "staged and exported to StableHLO, then executed through PJRT "
+            "without per-call Python dispatch",
+            (
+                "input shape and dtype match the exported signature",
+                "PJRT client available for the target device",
+            ),
         )

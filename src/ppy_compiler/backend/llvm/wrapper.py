@@ -16,7 +16,7 @@ from dataclasses import dataclass, field
 
 from .lowering import NativeParam, NativeSignature
 
-__all__ = ["WrapperModule", "generate", "C_TYPES"]
+__all__ = ["C_TYPES", "WrapperModule", "generate"]
 
 #: The C spelling of each ABI atom.
 C_TYPES = {"i64": "long long", "double": "double", "i8": "char"}
@@ -172,15 +172,10 @@ def generate(name: str, signatures: dict[str, NativeSignature]) -> WrapperModule
     for index, (qualname, signature) in enumerate(sorted(signatures.items())):
         entries[qualname] = index
         parts.append(_function(index, signature))
+        methods.append(f'    {{"bind_{index}", ppy_bind_{index}, METH_VARARGS, NULL}},')
+        methods.append(f'    {{"specialize_{index}", ppy_specialize_{index}, METH_VARARGS, NULL}},')
         methods.append(
-            f'    {{"bind_{index}", ppy_bind_{index}, METH_VARARGS, NULL}},'
-        )
-        methods.append(
-            f'    {{"specialize_{index}", ppy_specialize_{index}, METH_VARARGS, NULL}},'
-        )
-        methods.append(
-            f'    {{"call_{index}", (PyCFunction)(void *)ppy_call_{index}, '
-            f"METH_FASTCALL, NULL}},"
+            f'    {{"call_{index}", (PyCFunction)(void *)ppy_call_{index}, METH_FASTCALL, NULL}},'
         )
 
     parts.append(_FOOTER.format(methods="\n".join(methods), name=name))
@@ -188,8 +183,10 @@ def generate(name: str, signatures: dict[str, NativeSignature]) -> WrapperModule
 
 
 def _function(index: int, signature: NativeSignature) -> str:
-    atoms = [C_TYPES[atom.removesuffix("*")] + ("*" if atom.endswith("*") else "")
-             for atom in signature.params]
+    atoms = [
+        C_TYPES[atom.removesuffix("*")] + ("*" if atom.endswith("*") else "")
+        for atom in signature.params
+    ]
     outs = [f"{C_TYPES[atom]} *" for atom in signature.returns]
     pointer = f"ppy_fn_{index}"
 
@@ -288,19 +285,16 @@ def _type_assignments(index: int, object_params: list[NativeParam]) -> str:
     lines = []
     for position, parameter in enumerate(object_params):
         lines.append(
-            f"    ppy_type_{index}_{position} = "
-            f"(PyTypeObject *)PyTuple_GetItem(types, {position});"
+            f"    ppy_type_{index}_{position} = (PyTypeObject *)PyTuple_GetItem(types, {position});"
         )
-        for offset, (field, _scalar) in enumerate(parameter.fields):
+        for offset, (attr, _scalar) in enumerate(parameter.fields):
             slot = f"ppy_name_{index}_{position}_{offset}"
-            lines.append(f'    if ({slot} == NULL) {slot} = PyUnicode_InternFromString("{field}");')
+            lines.append(f'    if ({slot} == NULL) {slot} = PyUnicode_InternFromString("{attr}");')
             lines.append(f"    if ({slot} == NULL) return NULL;")
     return "\n".join(lines) + ("\n" if lines else "")
 
 
-def _parse_arguments(
-    index: int, signature: NativeSignature
-) -> tuple[str, str, str, list[str]]:
+def _parse_arguments(index: int, signature: NativeSignature) -> tuple[str, str, str, list[str]]:
     """Emit the declarations, the parsing, the cleanup, and the call arguments.
 
     Every variable is declared and initialized up front, because a guard that
@@ -319,17 +313,14 @@ def _parse_arguments(
             slot = f"ppy_type_{index}_{object_position}"
             object_position += 1
             lines.append(
-                f"    if ({slot} == NULL || Py_TYPE({source}) != {slot}) "
-                f"PPY_GUARD_FAIL();"
+                f"    if ({slot} == NULL || Py_TYPE({source}) != {slot}) PPY_GUARD_FAIL();"
             )
-            for offset, (field, scalar) in enumerate(parameter.fields):
-                name = f"a{position}_{field}"
+            for offset, (attr, scalar) in enumerate(parameter.fields):
+                name = f"a{position}_{attr}"
                 interned = f"ppy_name_{index}_{object_position - 1}_{offset}"
                 declarations.append(f"    {C_TYPES[_abi(scalar)]} {name} = 0;")
-                lines.append(f"    {{")
-                lines.append(
-                    f"        PyObject *member = PyObject_GetAttr({source}, {interned});"
-                )
+                lines.append("    {")
+                lines.append(f"        PyObject *member = PyObject_GetAttr({source}, {interned});")
                 lines.append("        if (member == NULL) PPY_GUARD_FAIL();")
                 lines.extend(_scalar_lines(scalar, "member", name, "        ", release=True))
                 lines.append("        Py_DECREF(member);")
@@ -382,9 +373,7 @@ def _parse_arguments(
                 # sequence the caller may pass.
                 fast = f"fast{position}"
                 declarations.append(f"    PyObject *{fast} = NULL;")
-                lines.append(
-                    f'    {fast} = PySequence_Fast({source}, "expected a sequence");'
-                )
+                lines.append(f'    {fast} = PySequence_Fast({source}, "expected a sequence");')
                 lines.append(f"    if ({fast} == NULL) {{ PyErr_Clear(); PPY_GUARD_FAIL(); }}")
                 lines.append(f"    {count} = PySequence_Fast_GET_SIZE({fast});")
                 cleanup.append(f"    Py_XDECREF({fast});")
@@ -401,8 +390,9 @@ def _parse_arguments(
             lines.append(f"    if ({data} == NULL) PPY_GUARD_FAIL();")
             lines.append(f"    for (Py_ssize_t i = 0; i < {count}; i++) {{")
             lines.append(f"        PyObject *item = {item};")
-            lines.extend(_scalar_lines(parameter.element, "item", f"{data}[i]", "        ",
-                                       declare=False))
+            lines.extend(
+                _scalar_lines(parameter.element, "item", f"{data}[i]", "        ", declare=False)
+            )
             lines.append("    }")
             cleanup.append(f"    PyMem_Free({data});")
             arguments.append(data)
@@ -463,9 +453,11 @@ def _box(signature: NativeSignature) -> str:
     """Build the Python object the wrapper returns."""
     if len(signature.returns) == 1:
         return _box_one(signature.returns[0], "ppy_out0")
-    return "ppy_build_result(" + ", ".join(
-        f"ppy_out{position}" for position in range(len(signature.returns))
-    ) + ")"
+    return (
+        "ppy_build_result("
+        + ", ".join(f"ppy_out{position}" for position in range(len(signature.returns)))
+        + ")"
+    )
 
 
 def _result_builder(index: int, signature: NativeSignature) -> str:

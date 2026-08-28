@@ -9,7 +9,7 @@ from pathlib import Path
 
 from ..diagnostics import Diagnostic, Severity, Span
 
-__all__ = ["SourceFile", "load", "span_of", "SOURCE_SUFFIXES"]
+__all__ = ["SOURCE_SUFFIXES", "SourceFile", "load", "span_of"]
 
 SOURCE_SUFFIXES = (".ppy", ".py")
 
