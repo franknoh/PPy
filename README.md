@@ -38,11 +38,102 @@ uv run ppy     collatz.ppy   # optimized Python backend     1305 ms
 uv run ppy run collatz.ppy   # LLVM native                   112 ms
 ```
 
-Turn ordinary Python into it:
+## Turning ordinary Python into it
 
 ```bash
 uv run ppy convert src/ --in-place
 ```
+
+Given untyped Python:
+
+```python
+import math
+
+LIMIT = 3.0
+
+
+def clamp(value):
+    return min(value, LIMIT)
+
+
+def spread(samples):
+    total = 0.0
+    for sample in samples:
+        total += clamp(sample)
+    return math.sqrt(total / len(samples))
+
+
+print(spread([1.0, 2.0, 9.0]), spread((4.0, 5.0)))
+```
+
+`ppy convert` writes:
+
+```python
+import math
+from collections.abc import Sequence
+from typing import Final
+
+import ppy
+
+LIMIT: Final[float] = 3.0
+
+
+@ppy.pure
+def clamp(value: float) -> float:
+    return min(value, LIMIT)
+
+
+@ppy.pure
+def spread(samples: Sequence[float]) -> float:
+    total = 0.0
+    for sample in samples:
+        total += clamp(sample)
+    return math.sqrt(total / len(samples))
+
+
+print(spread([1.0, 2.0, 9.0]), spread((4.0, 5.0)))
+```
+
+Types come from the whole call graph, not one file. `samples` is `Sequence`
+rather than `list` because the body only reads it and one call site passes a
+tuple; `LIMIT` is `Final` because nothing rebinds it; `@ppy.pure` is attached
+only where the checker proved it. Nothing is renamed and no function is split —
+those are design decisions, not mechanical ones.
+
+## Works with
+
+Each library is a plugin: the compiler learns that library's types and effects,
+takes a faster path where it can prove one is equivalent, and falls back to the
+ordinary Python call everywhere else. A guard that fails is a fallback, never a
+different answer.
+
+**NumPy** — elementwise expressions fuse into a single loop with no
+temporaries; `dot`, `matmul`, `inner`, `vdot`, and `tensordot` route to the
+linear-algebra path. Contiguity and shape are guarded at runtime, not assumed.
+Reduction order is preserved unless `@ppy.fastmath` permits reassociation, so a
+sum stays bit-identical to NumPy's.
+
+**PyTorch** — a function whose body is entirely curated tensor operations (55 of
+them) compiles into one C++ region calling ATen directly, removing a Python
+round trip per operator. Every call still goes through the dispatcher, so
+autograd, device selection, and backend keys are unchanged; a tensor subclass or
+a `__torch_function__` override trips the guard and the Python body runs. CUDA
+is used when it is there.
+
+**JAX** — a `@jax.jit` function whose inputs carry `ppy.Shape` and `ppy.DType`
+can be exported to StableHLO at build time, so the trace is not repeated at
+startup. Shapes may be symbolic, so one artifact serves every batch size.
+Export runs project code and is off until the project opts in.
+
+**Pydantic** — models are typed, constructor and output shapes are kept
+distinct, and field constraints become refinements the checker can use.
+
+**Uvicorn** — the ASGI application is resolved statically instead of re-imported
+by module string per worker, and the reloader is told to watch `.ppy`.
+
+The plugin's exact version is part of every cache key, so an artifact built
+against one build of a library is never reused against another. `ppy doctor`
+prints what it found.
 
 ## Docs
 
