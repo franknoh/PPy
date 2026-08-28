@@ -219,6 +219,20 @@ class TorchPlugin:
             Facts(),
         )
 
+
+    def subscript(
+        self, type_name: str, *, is_slice: bool, tupled: bool
+    ) -> tuple[T.Type, Facts] | None:
+        """Indexing an array: a slice stays an array, a full index is a scalar."""
+        if type_name != "torch.Tensor":
+            return None
+        if is_slice or tupled:
+            return _TENSOR, Facts()
+        # A single index into an array of unknown rank may still be an array,
+        # so the result is the element type only when the rank is known to be
+        # one, which v1 does not track. `_TENSOR` is the safe answer.
+        return _TENSOR, Facts()
+
     def operator(self, symbol: str) -> str | None:
         return _OPERATORS.get(symbol)
 

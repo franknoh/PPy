@@ -1553,6 +1553,9 @@ class _Checker:
             if base.name == "bytes":
                 self._effects = self._effects.add(raises=("IndexError",))
                 return Binding(T.BYTES if is_slice else T.INT)
+            indexed = self._plugin_subscript(base, node, is_slice)
+            if indexed is not None:
+                return indexed
         if isinstance(base, (T.AnyType, T.UnknownType)):
             return Binding(T.ANY if self._dynamic_depth else T.UNKNOWN)
         self._effects = self._effects.add(Effect.READ_OBJECT, raises=("TypeError",))
@@ -2357,6 +2360,28 @@ class _Checker:
                 line=getattr(node, "lineno", 0),
             )
         return Binding(result.type, result.facts)
+
+    def _plugin_subscript(
+        self, base: T.Instance, node: ast.Subscript, is_slice: bool
+    ) -> Binding | None:
+        """`a[i]` and `a[i:j]` on a library array type.
+
+        A slice or a multi-dimensional index yields another array; a single
+        index into a one-dimensional array yields a scalar, which the plugin
+        names because only it knows the element type.
+        """
+        if self.plugins is None:
+            return None
+        plugin = self.plugins.for_qualname(base.name)
+        describe = getattr(plugin, "subscript", None) if plugin is not None else None
+        if describe is None:
+            return None
+        described = describe(base.name, is_slice=is_slice, tupled=isinstance(node.slice, ast.Tuple))
+        if described is None:
+            return None
+        self._effects = self._effects.add(Effect.READ_OBJECT, raises=("IndexError",))
+        self._native_blockers.append(f"`{base.name}` indexing has no native lowering")
+        return Binding(described[0], described[1])
 
     def _plugin_instance_attribute(
         self, base: T.Type, attr: str, facts: Facts | None = None
