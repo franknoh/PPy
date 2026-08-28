@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import argparse
 import shutil
-import sys
 import subprocess
+import sys
 from pathlib import Path
 
 import libcst as cst
@@ -15,9 +15,10 @@ from .pipeline import collect_sources
 from .reporting import Reporter
 
 __all__ = [
+    "FormatterFailed",
+    "format_source",
     "normalize_source",
     "run_fmt",
-    "format_source",
 ]
 
 _EXTERNAL = ("ruff", "black")
@@ -47,7 +48,20 @@ def run_fmt(options: argparse.Namespace, reporter: Reporter) -> int:
             formatted = format_source(original, path)
         except cst.ParserSyntaxError as exc:
             reporter.emit(
-                Diagnostic("E1001", Severity.ERROR, str(exc), Span(path, getattr(exc, "raw_line", 1), 0))
+                Diagnostic(
+                    "E1001", Severity.ERROR, str(exc), Span(path, getattr(exc, "raw_line", 1), 0)
+                )
+            )
+            failed += 1
+            continue
+        except FormatterFailed as failure:
+            reporter.emit(
+                Diagnostic(
+                    "E1802",
+                    Severity.ERROR,
+                    f"`{failure.tool}` failed while formatting {path}",
+                    help=failure.detail or "run it directly to see what it objects to",
+                )
             )
             failed += 1
             continue
@@ -70,15 +84,32 @@ def run_fmt(options: argparse.Namespace, reporter: Reporter) -> int:
     return 1 if failed else 0
 
 
-def format_source(source: str, path: Path | None = None) -> str:
+class FormatterFailed(Exception):
+    """A formatter the project has ran, and did not succeed."""
+
+    def __init__(self, tool: str, detail: str) -> None:
+        super().__init__(f"{tool} failed")
+        self.tool = tool
+        self.detail = detail.strip()
+
+
+def format_source(
+    source: str, path: Path | None = None, local: frozenset[str] | None = None
+) -> str:
     """Normalize, then hand the result to whatever formatter the project uses.
 
     The built-in pass runs first because it settles what the project's
     formatter has no opinion about -- import grouping that keeps `ppy` ahead of
     a sibling, and a signature wrapped after annotation. An installed `ruff` or
     `black` then applies the project's own style on top.
+
+    `local` names the modules that are first-party to this file. A caller that
+    resolved the imports knows them exactly and should say so; guessing from
+    the directory would sort a first-party module from another source root in
+    among the third-party ones, and could put `import ppy` after the very
+    import whose loader it installs.
     """
-    normalized = normalize_source(source, _siblings(path))
+    normalized = normalize_source(source, _siblings(path) if local is None else local)
     external = _external_format(normalized, path)
     return external if external is not None else normalized
 
@@ -98,7 +129,9 @@ def _siblings(path: Path | None) -> frozenset[str]:
     ) | frozenset(
         entry.name
         for entry in path.parent.iterdir()
-        if entry.is_dir() and (entry / "__init__.py").exists()
+        # After `--in-place` a package is defined by `__init__.ppy`, and a
+        # package that stops being recognized sorts in with the third parties.
+        if entry.is_dir() and any((entry / f"__init__{s}").exists() for s in (".py", ".ppy"))
     )
 
 
@@ -114,7 +147,7 @@ def _external_format(source: str, path: Path | None) -> str | None:
             else [*launcher, "-q", "-"]
         )
         try:
-            completed = subprocess.run(  # noqa: S603 - explicit executable path
+            completed = subprocess.run(
                 command,
                 input=source,
                 capture_output=True,
@@ -122,9 +155,16 @@ def _external_format(source: str, path: Path | None) -> str | None:
                 timeout=60,
                 check=False,
             )
-        except (OSError, subprocess.TimeoutExpired):
-            continue
-        if completed.returncode == 0 and completed.stdout:
+        except OSError as error:
+            raise FormatterFailed(tool, str(error)) from error
+        except subprocess.TimeoutExpired as error:
+            raise FormatterFailed(tool, "timed out after 60s") from error
+        # A formatter that is installed and then fails is not the same as no
+        # formatter at all: the caller asked for one, so falling through to the
+        # next candidate would quietly deliver something it did not ask for.
+        if completed.returncode != 0:
+            raise FormatterFailed(tool, completed.stderr or completed.stdout)
+        if completed.stdout:
             return completed.stdout
     return None
 
@@ -146,7 +186,7 @@ def _launcher(tool: str) -> list[str] | None:
     return None
 
 
-def normalize_source(source: str, local: "frozenset[str]" = frozenset()) -> str:
+def normalize_source(source: str, local: frozenset[str] = frozenset()) -> str:
     """Conservative normalization through the concrete syntax tree.
 
     Deterministic and self-contained, so a converted file is byte-identical
@@ -165,7 +205,7 @@ def normalize_source(source: str, local: "frozenset[str]" = frozenset()) -> str:
 _LINE_LIMIT = 100
 
 
-def _import_rank(statement: cst.BaseStatement, local: "frozenset[str]") -> int | None:
+def _import_rank(statement: cst.BaseStatement, local: frozenset[str]) -> int | None:
     """Which PEP 8 group an import belongs to, or None if it is not one."""
     if not isinstance(statement, cst.SimpleStatementLine) or len(statement.body) != 1:
         return None
@@ -202,7 +242,7 @@ def _dotted_name(node: object) -> str:
     return ""
 
 
-def _group_imports(module: cst.Module, local: "frozenset[str]") -> cst.Module:
+def _group_imports(module: cst.Module, local: frozenset[str]) -> cst.Module:
     """Sort the leading imports into PEP 8 groups, one blank line apart.
 
     Only the run of imports at the top is touched, so an import placed later on
@@ -295,7 +335,8 @@ def _header_width(node: cst.FunctionDef) -> int:
 def _space_top_level(body: list[cst.BaseStatement]) -> list[cst.BaseStatement]:
     """Two blank lines before each top-level `def` or `class`."""
     spaced: list[cst.BaseStatement] = []
-    for index, statement in enumerate(body):
+    for index, original in enumerate(body):
+        statement = original
         if (
             index > 0
             and isinstance(statement, (cst.FunctionDef, cst.ClassDef))

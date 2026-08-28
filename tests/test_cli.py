@@ -87,7 +87,7 @@ def test_convert_writes_a_ppy_file_and_preserves_the_source(workspace: Path):
     assert "def square(x: int) -> int:" in converted
     assert "# keep me" in converted
     assert '"""Docstring."""' in converted
-    assert "answer: Final[int] = square(7)" in converted
+    assert "answer: int = square(7)" in converted
 
 
 def test_convert_inserts_ppy_after_docstring_and_future(workspace: Path):
@@ -188,7 +188,9 @@ def test_converted_output_runs_on_all_paths(workspace: Path):
 
 def test_fmt_normalizes_and_check_mode_reports(workspace: Path):
     target = workspace / "messy.ppy"
-    target.write_text("def a() -> int:\n    return 1\ndef b() -> int:\n    return 2\n", encoding="utf-8")
+    target.write_text(
+        "def a() -> int:\n    return 1\ndef b() -> int:\n    return 2\n", encoding="utf-8"
+    )
 
     check = _ppy(["fmt", "messy.ppy", "--check"], workspace)
     assert check.returncode == 1
@@ -294,12 +296,26 @@ def test_doctor_reports_the_toolchain(workspace: Path):
 
 
 def test_program_arguments_reach_the_script(workspace: Path):
-    (workspace / "args.ppy").write_text(
-        "import sys\n\nprint(sys.argv[1:])\n", encoding="utf-8"
-    )
+    (workspace / "args.ppy").write_text("import sys\n\nprint(sys.argv[1:])\n", encoding="utf-8")
     result = _ppy(["args.ppy", "--", "one", "two"], workspace)
     assert result.returncode == 0
     assert result.stdout.strip() == "['one', 'two']"
+
+
+def test_program_arguments_may_look_like_compiler_flags(workspace: Path):
+    """Past `--`, an argument belongs to the program even if it starts with `-`.
+
+    `ppy` has no `--verbose`, so re-scanning the whole command line for flags
+    makes the compiler reject an argument that was never addressed to it.
+    """
+    (workspace / "args.ppy").write_text("import sys\n\nprint(sys.argv[1:])\n", encoding="utf-8")
+    result = _ppy(["args.ppy", "--", "--verbose", "-x"], workspace)
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == "['--verbose', '-x']"
+
+    both = _ppy(["-O", "0", "args.ppy", "--", "--verbose"], workspace)
+    assert both.returncode == 0, both.stderr
+    assert both.stdout.strip() == "['--verbose']"
 
 
 def test_opt_level_flag_overrides_the_project_setting(workspace: Path):
@@ -709,9 +725,19 @@ def test_conversion_adds_no_pylint_finding(workspace: Path):
 
     def _findings(name: str) -> set[str]:
         done = subprocess.run(
-            [sys.executable, "-m", "pylint", "--enable=all", "--score=n",
-             "--disable=import-error", name],
-            cwd=workspace, capture_output=True, text=True, check=False,
+            [
+                sys.executable,
+                "-m",
+                "pylint",
+                "--enable=all",
+                "--score=n",
+                "--disable=import-error",
+                name,
+            ],
+            cwd=workspace,
+            capture_output=True,
+            text=True,
+            check=False,
         )
         return {
             line.rsplit("(", 1)[-1].rstrip(")")
@@ -843,9 +869,7 @@ def test_in_place_migrates_a_project_to_ppy(workspace: Path):
     assert result.returncode == 0
     assert "W2005" not in result.stderr
     assert sorted(p.name for p in src.glob("*.py")) == []
-    assert sorted(p.name for p in src.glob("*.ppy")) == [
-        "app.ppy", "geometry.ppy", "shapes.ppy"
-    ]
+    assert sorted(p.name for p in src.glob("*.ppy")) == ["app.ppy", "geometry.ppy", "shapes.ppy"]
 
 
 def test_a_migrated_project_still_runs_on_plain_cpython(workspace: Path):
@@ -858,7 +882,10 @@ def test_a_migrated_project_still_runs_on_plain_cpython(workspace: Path):
 
     plain = subprocess.run(
         [sys.executable, "app.ppy"],
-        cwd=src, capture_output=True, text=True, check=False,
+        cwd=src,
+        capture_output=True,
+        text=True,
+        check=False,
         env={**os.environ, "PYTHONPATH": "."},
     )
     assert plain.returncode == 0, plain.stderr
@@ -869,7 +896,9 @@ def test_fmt_keeps_ppy_ahead_of_a_sibling_import(workspace: Path):
     """Sorting `ppy` after the module whose loader it installs breaks the import."""
     (workspace / "geometry.ppy").write_text("VALUE: int = 1\n", encoding="utf-8")
     consumer = workspace / "consumer.py"
-    consumer.write_text("import ppy\n\nimport geometry\n\nprint(geometry.VALUE)\n", encoding="utf-8")
+    consumer.write_text(
+        "import ppy\n\nimport geometry\n\nprint(geometry.VALUE)\n", encoding="utf-8"
+    )
     assert _ppy(["fmt", "consumer.py"], workspace).returncode == 0
     lines = consumer.read_text(encoding="utf-8").splitlines()
     assert lines.index("import ppy") < lines.index("import geometry")
@@ -1045,7 +1074,10 @@ def test_test_backend_pytest_runs_a_suite_against_ppy_modules(workspace: Path):
     # Without the hook the same suite cannot even import the module.
     plain = subprocess.run(
         [sys.executable, "-m", "pytest", ".", "-q"],
-        cwd=workspace, capture_output=True, text=True, check=False,
+        cwd=workspace,
+        capture_output=True,
+        text=True,
+        check=False,
     )
     assert plain.returncode != 0
 
@@ -1109,8 +1141,7 @@ def test_a_parameter_is_widened_only_to_what_its_body_needs(
 )
 def test_a_mapping_parameter_follows_the_same_rule(workspace: Path, body: str, expected: str):
     (workspace / "maps.py").write_text(
-        f"def f(values, key):\n    {body}\n\n\n"
-        'DATA = {"a": 1.0}\nprint(f(DATA, "a"))\n',
+        f'def f(values, key):\n    {body}\n\n\nDATA = {{"a": 1.0}}\nprint(f(DATA, "a"))\n',
         encoding="utf-8",
     )
     result = _ppy(["convert", "maps.py", "--dry-run"], workspace)
@@ -1138,9 +1169,9 @@ def test_a_widened_signature_accepts_what_it_promises(workspace: Path):
         encoding="utf-8",
     )
     assert _ppy(["convert", "widened.py"], workspace).returncode == 0
-    assert "def total(xs: Sequence[float])" in (
-        workspace / "widened.ppy"
-    ).read_text(encoding="utf-8")
+    assert "def total(xs: Sequence[float])" in (workspace / "widened.ppy").read_text(
+        encoding="utf-8"
+    )
     plain = subprocess.run(
         [sys.executable, "widened.py"], cwd=workspace, capture_output=True, text=True, check=False
     )
@@ -1247,3 +1278,163 @@ def test_containers_with_different_elements_are_not_merged(workspace: Path):
     result = _ppy(["convert", "mixed.py", "--dry-run"], workspace)
     assert "Sequence[float]" not in result.stdout
     assert "Sequence[str]" not in result.stdout
+
+
+def test_convert_joins_call_site_evidence_across_rounds(workspace: Path):
+    """A caller typed on a later round still gets to widen the signature.
+
+    `relay` cannot be typed until the module-level call to it is seen, so the
+    dict it forwards reaches `sink` one round after the list does. Freezing
+    the parameter on the first round would describe only the easy caller.
+    """
+    (workspace / "freeze.py").write_text(
+        textwrap.dedent(
+            """
+            def sink(x):
+                return len(x)
+
+
+            def direct():
+                return sink([1])
+
+
+            def relay(y):
+                return sink(y)
+
+
+            print(direct())
+            print(relay({"a": 1}))
+            """
+        ).lstrip("\n"),
+        encoding="utf-8",
+    )
+    assert _ppy(["convert", "freeze.py"], workspace).returncode == 0
+    converted = (workspace / "freeze.ppy").read_text(encoding="utf-8")
+    assert "def sink(x: list[int] | dict[str, int]) -> int:" in converted
+    assert "def relay(y: dict[str, int]) -> int:" in converted
+
+
+def test_convert_reads_arguments_passed_by_keyword(workspace: Path):
+    (workspace / "kw.py").write_text(
+        textwrap.dedent(
+            """
+            def consume(values):
+                return len(values)
+
+
+            print(consume([1, 2]))
+            print(consume(values={"a": 1}))
+            """
+        ).lstrip("\n"),
+        encoding="utf-8",
+    )
+    assert _ppy(["convert", "kw.py"], workspace).returncode == 0
+    converted = (workspace / "kw.ppy").read_text(encoding="utf-8")
+    assert "def consume(values: list[int] | dict[str, int]) -> int:" in converted
+
+
+def test_convert_will_not_widen_past_a_callee_named_by_keyword(workspace: Path):
+    """`concrete` wants a list, so forwarding to it blocks the widening.
+
+    The forwarding is written as a keyword argument, which the analysis has to
+    bind exactly as Python would -- reading only positional arguments would
+    miss the constraint and emit a signature its own callee rejects.
+    """
+    (workspace / "fwd.py").write_text(
+        textwrap.dedent(
+            """
+            def concrete(values: list[int]) -> list[int]:
+                return values.copy()
+
+
+            def wrapper(values):
+                return concrete(values=values)
+
+
+            print(wrapper([1, 2]))
+            """
+        ).lstrip("\n"),
+        encoding="utf-8",
+    )
+    assert _ppy(["convert", "fwd.py"], workspace).returncode == 0
+    converted = (workspace / "fwd.ppy").read_text(encoding="utf-8")
+    assert "def wrapper(values: list[int]) -> list[int]:" in converted
+    assert "Sequence" not in converted
+
+
+def test_final_is_written_only_where_it_states_something(workspace: Path):
+    """`Final` is an interface contract, not a note about assignment counts.
+
+    A lowercase global that happens to be bound once is not announcing itself
+    as a constant, and freezing it commits the module's callers to something
+    its author never said.
+    """
+    (workspace / "consts.py").write_text(
+        textwrap.dedent(
+            """
+            LIMIT = 3.0
+            scratch = 1.0
+            RETRIES = 2
+            RETRIES = 3
+
+
+            def f(x: float) -> float:
+                return x * LIMIT + scratch + RETRIES
+            """
+        ).lstrip("\n"),
+        encoding="utf-8",
+    )
+    assert _ppy(["convert", "consts.py"], workspace).returncode == 0
+    converted = (workspace / "consts.ppy").read_text(encoding="utf-8")
+    assert "LIMIT: Final[float] = 3.0" in converted
+    assert "scratch: float = 1.0" in converted
+    assert "RETRIES: int = 2" in converted
+
+
+def test_final_accounts_for_another_module_rebinding_the_name(workspace: Path):
+    (workspace / "store.py").write_text("REGISTRY = {}\nSTABLE = 1\n", encoding="utf-8")
+    (workspace / "user.py").write_text(
+        textwrap.dedent(
+            """
+            import store
+
+            store.REGISTRY = {"b": 2}
+            print(store.STABLE)
+            """
+        ).lstrip("\n"),
+        encoding="utf-8",
+    )
+    assert _ppy(["convert", "."], workspace).returncode == 0
+    converted = (workspace / "store.ppy").read_text(encoding="utf-8")
+    assert "REGISTRY: Final" not in converted
+    assert "STABLE: Final[int] = 1" in converted
+
+
+def test_final_sees_the_other_ways_python_binds_a_name(workspace: Path):
+    (workspace / "binds.py").write_text(
+        textwrap.dedent(
+            """
+            import contextlib
+
+            OPENED = 1
+            HELD = 2
+            CAUGHT = 3
+
+            with contextlib.suppress(ValueError) as OPENED:
+                pass
+
+            try:
+                pass
+            except ValueError as CAUGHT:
+                pass
+
+            print(OPENED, HELD, CAUGHT)
+            """
+        ).lstrip("\n"),
+        encoding="utf-8",
+    )
+    assert _ppy(["convert", "binds.py"], workspace).returncode == 0
+    converted = (workspace / "binds.ppy").read_text(encoding="utf-8")
+    assert "OPENED: Final" not in converted
+    assert "CAUGHT: Final" not in converted
+    assert "HELD: Final[int] = 2" in converted

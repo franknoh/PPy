@@ -14,24 +14,57 @@ from .effects import EffectSet
 from .refinements import Facts, IntRange
 
 __all__ = [
-    "Directive",
-    "ImportBinding",
-    "ParamInfo",
-    "FunctionInfo",
     "ClassInfo",
+    "Directive",
+    "FunctionInfo",
+    "ImportBinding",
     "ModuleSymbols",
+    "ParamInfo",
     "ProjectSymbols",
     "directives_from",
 ]
 
 _BUILTIN_NAMES = {
-    "int", "float", "bool", "str", "bytes", "complex", "object", "bytearray",
-    "memoryview", "list", "dict", "set", "frozenset", "tuple", "range", "slice",
-    "type", "BaseException", "Exception", "ValueError", "TypeError", "IndexError",
-    "KeyError", "LookupError", "ZeroDivisionError", "ArithmeticError",
-    "OverflowError", "StopIteration", "AttributeError", "None", "True", "False",
-    "OSError", "RuntimeError", "NotImplementedError", "AssertionError",
-    "StopAsyncIteration", "GeneratorExit", "KeyboardInterrupt", "SystemExit",
+    "int",
+    "float",
+    "bool",
+    "str",
+    "bytes",
+    "complex",
+    "object",
+    "bytearray",
+    "memoryview",
+    "list",
+    "dict",
+    "set",
+    "frozenset",
+    "tuple",
+    "range",
+    "slice",
+    "type",
+    "BaseException",
+    "Exception",
+    "ValueError",
+    "TypeError",
+    "IndexError",
+    "KeyError",
+    "LookupError",
+    "ZeroDivisionError",
+    "ArithmeticError",
+    "OverflowError",
+    "StopIteration",
+    "AttributeError",
+    "None",
+    "True",
+    "False",
+    "OSError",
+    "RuntimeError",
+    "NotImplementedError",
+    "AssertionError",
+    "StopAsyncIteration",
+    "GeneratorExit",
+    "KeyboardInterrupt",
+    "SystemExit",
 }
 
 
@@ -73,7 +106,16 @@ class ParamInfo:
     has_default: bool = False
     default: ast.expr | None = None
     kind: str = "positional_or_keyword"
+    #: Whether the source declares this type. Inference may not overrule it.
     annotated: bool = False
+    #: Whether a pass filled this type in. Usable, but still open to new
+    #: evidence -- which is why it is not the same flag as `annotated`.
+    inferred: bool = False
+
+    @property
+    def known(self) -> bool:
+        """Whether the type is settled enough to rely on."""
+        return self.annotated or self.inferred
 
 
 @dataclass(slots=True)
@@ -161,14 +203,14 @@ class ClassInfo:
     def instance(self, args: tuple[T.Type, ...] = ()) -> T.Instance:
         return T.Instance(self.qualname, args, self.mro or (self.qualname, "object"))
 
-    def find_method(self, name: str, project: "ProjectSymbols") -> FunctionInfo | None:
+    def find_method(self, name: str, project: ProjectSymbols) -> FunctionInfo | None:
         for entry in self.mro or (self.qualname,):
             info = project.classes.get(entry)
             if info is not None and name in info.methods:
                 return info.methods[name]
         return None
 
-    def lookup(self, name: str, project: "ProjectSymbols") -> tuple[T.Type, Facts] | None:
+    def lookup(self, name: str, project: ProjectSymbols) -> tuple[T.Type, Facts] | None:
         for entry in self.mro or (self.qualname,):
             info = project.classes.get(entry)
             if info is None:
@@ -203,9 +245,8 @@ class ModuleSymbols:
 
 def _contains_yield(node: ast.AST) -> bool:
     for child in ast.walk(node):
-        if isinstance(child, (ast.Yield, ast.YieldFrom)):
-            if _enclosing_function(node, child):
-                return True
+        if isinstance(child, (ast.Yield, ast.YieldFrom)) and _enclosing_function(node, child):
+            return True
     return False
 
 
@@ -217,9 +258,15 @@ def _enclosing_function(root: ast.AST, target: ast.AST) -> bool:
         for child in ast.iter_child_nodes(node):
             if child is target:
                 return True
-            if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)) and not is_root:
+            if (
+                isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda))
+                and not is_root
+            ):
                 continue
-            if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)) and not is_root:
+            if (
+                isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda))
+                and not is_root
+            ):
                 continue
             stack.append((child, False))
     return False
@@ -227,13 +274,24 @@ def _enclosing_function(root: ast.AST, target: ast.AST) -> bool:
 
 #: The decorators `ppy` actually exports. A name outside this set is a typo,
 #: and would raise AttributeError the moment plain CPython ran the file.
-DIRECTIVE_NAMES = frozenset({
-    "pure", "opt", "jit", "parallel", "native",
-    "inline", "noinline", "specialize", "fastmath", "dynamic", "jax",
-})
+DIRECTIVE_NAMES = frozenset(
+    {
+        "pure",
+        "opt",
+        "jit",
+        "parallel",
+        "native",
+        "inline",
+        "noinline",
+        "specialize",
+        "fastmath",
+        "dynamic",
+        "jax",
+    }
+)
 
 
-def directives_from(decorators: list[ast.expr], resolver: "NameResolver") -> tuple[Directive, ...]:
+def directives_from(decorators: list[ast.expr], resolver: NameResolver) -> tuple[Directive, ...]:
     """Read PPY directives from decorator syntax (spec 6.1)."""
     found: list[Directive] = []
     for decorator in decorators:
@@ -264,7 +322,7 @@ def directives_from(decorators: list[ast.expr], resolver: "NameResolver") -> tup
 class NameResolver:
     """Resolves annotation names for one module against the whole project."""
 
-    def __init__(self, symbols: ModuleSymbols, project: "ProjectSymbols") -> None:
+    def __init__(self, symbols: ModuleSymbols, project: ProjectSymbols) -> None:
         self.symbols = symbols
         self.project = project
 
@@ -309,7 +367,9 @@ class NameResolver:
 class ProjectSymbols:
     """Project-wide symbol, class, and signature tables."""
 
-    def __init__(self, graph: ModuleGraph, diagnostics: DiagnosticBag, *, strict: bool = True) -> None:
+    def __init__(
+        self, graph: ModuleGraph, diagnostics: DiagnosticBag, *, strict: bool = True
+    ) -> None:
         self.graph = graph
         self.diagnostics = diagnostics
         self.strict = strict
@@ -318,7 +378,7 @@ class ProjectSymbols:
         self.functions: dict[str, FunctionInfo] = {}
         self.external_types: dict[str, str] = {}
 
-    def build(self) -> "ProjectSymbols":
+    def build(self) -> ProjectSymbols:
         ordered = self.graph.order()
         for module in ordered:
             self.modules[module.name] = ModuleSymbols(module=module)
@@ -363,7 +423,11 @@ class ProjectSymbols:
                 target = value = None
                 if isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
                     target, value = node.target.id, node.value
-                elif isinstance(node, ast.Assign) and len(node.targets) == 1 and isinstance(node.targets[0], ast.Name):
+                elif (
+                    isinstance(node, ast.Assign)
+                    and len(node.targets) == 1
+                    and isinstance(node.targets[0], ast.Name)
+                ):
                     target, value = node.targets[0].id, node.value
                 if target is None or value is None:
                     continue
@@ -381,8 +445,6 @@ class ProjectSymbols:
                 existing = symbols.global_facts.get(name, Facts())
                 facts = existing.with_(constant=literal, has_constant=True)
                 if isinstance(literal, int) and not isinstance(literal, bool):
-                    from .refinements import IntRange
-
                     facts = facts.with_(int_range=IntRange(literal, literal))
                 symbols.global_facts[name] = facts
                 symbols.globals.setdefault(name, T.type_of_constant(literal))
@@ -391,7 +453,9 @@ class ProjectSymbols:
         return NameResolver(symbols, self)
 
     def annotation_resolver(self, symbols: ModuleSymbols) -> AnnotationResolver:
-        return AnnotationResolver(self.resolver(symbols), symbols.path, self.diagnostics, strict=self.strict)
+        return AnnotationResolver(
+            self.resolver(symbols), symbols.path, self.diagnostics, strict=self.strict
+        )
 
     def register_external_type(self, qualname: str, display: str | None = None) -> None:
         self.external_types[qualname] = display or qualname.rpartition(".")[2]
@@ -412,7 +476,9 @@ class ProjectSymbols:
                     if submodule in self.graph.modules:
                         symbols.imports[local] = ImportBinding(local, submodule, None, False)
                     else:
-                        symbols.imports[local] = ImportBinding(local, edge.target, name, edge.external)
+                        symbols.imports[local] = ImportBinding(
+                            local, edge.target, name, edge.external
+                        )
 
     def _collect_type_aliases(self, symbols: ModuleSymbols) -> None:
         """Record module-level type aliases so annotations can name them.
@@ -428,9 +494,12 @@ class ProjectSymbols:
             target = value = None
             if isinstance(node, ast.Assign) and len(node.targets) == 1:
                 target, value = node.targets[0], node.value
-            elif isinstance(node, ast.AnnAssign) and node.value is not None:
-                if _is_type_alias_annotation(node.annotation):
-                    target, value = node.target, node.value
+            elif (
+                isinstance(node, ast.AnnAssign)
+                and node.value is not None
+                and _is_type_alias_annotation(node.annotation)
+            ):
+                target, value = node.target, node.value
             if not isinstance(target, ast.Name) or value is None:
                 continue
             if self._is_type_expression(symbols, value):
@@ -537,7 +606,9 @@ class ProjectSymbols:
             info.mro = self._linearize(info, symbols, set())
             self._classify(info)
 
-    def _linearize(self, info: ClassInfo, symbols: ModuleSymbols, seen: set[str]) -> tuple[str, ...]:
+    def _linearize(
+        self, info: ClassInfo, symbols: ModuleSymbols, seen: set[str]
+    ) -> tuple[str, ...]:
         if info.qualname in seen:
             return (info.qualname, "object")
         seen = seen | {info.qualname}
@@ -551,7 +622,9 @@ class ProjectSymbols:
             if parent is not None:
                 parent_symbols = self.modules.get(parent.module)
                 inherited = parent.mro or (
-                    self._linearize(parent, parent_symbols, seen) if parent_symbols else (parent.qualname, "object")
+                    self._linearize(parent, parent_symbols, seen)
+                    if parent_symbols
+                    else (parent.qualname, "object")
                 )
                 for entry in inherited:
                     if entry not in order and entry != "object":
@@ -633,17 +706,19 @@ class ProjectSymbols:
         if info.params:
             return
         args = info.node.args
-        entries: list[tuple[ast.arg, str, ast.expr | None]] = []
-        for arg in args.posonlyargs:
-            entries.append((arg, "positional_only", None))
+        entries: list[tuple[ast.arg, str, ast.expr | None]] = [
+            (arg, "positional_only", None) for arg in args.posonlyargs
+        ]
         defaults_start = len(args.posonlyargs) + len(args.args) - len(args.defaults)
         for index, arg in enumerate(args.args):
             position = len(args.posonlyargs) + index
-            default = args.defaults[position - defaults_start] if position >= defaults_start else None
+            default = (
+                args.defaults[position - defaults_start] if position >= defaults_start else None
+            )
             entries.append((arg, "positional_or_keyword", default))
         if args.vararg:
             entries.append((args.vararg, "var_positional", None))
-        for arg, default in zip(args.kwonlyargs, args.kw_defaults):
+        for arg, default in zip(args.kwonlyargs, args.kw_defaults, strict=False):
             entries.append((arg, "keyword_only", default))
         if args.kwarg:
             entries.append((args.kwarg, "var_keyword", None))
@@ -686,11 +761,18 @@ class ProjectSymbols:
     ) -> ParamInfo:
         if index == 0 and owner is not None and not info.is_static:
             if info.is_classmethod:
-                return ParamInfo(arg.arg, T.ClassObject(owner.qualname, owner.instance()), kind=kind, annotated=True)
+                return ParamInfo(
+                    arg.arg,
+                    T.ClassObject(owner.qualname, owner.instance()),
+                    kind=kind,
+                    annotated=True,
+                )
             return ParamInfo(arg.arg, owner.instance(), kind=kind, annotated=True)
         return ParamInfo(arg.arg, T.UNKNOWN, kind=kind, annotated=False)
 
-    def _resolve_module_globals(self, symbols: ModuleSymbols, annotations: AnnotationResolver) -> None:
+    def _resolve_module_globals(
+        self, symbols: ModuleSymbols, annotations: AnnotationResolver
+    ) -> None:
         for node in symbols.module.tree.body:
             if isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
                 resolved = annotations.resolve(node.annotation)
@@ -722,7 +804,9 @@ def _with_field_bounds(facts: Facts, value: ast.expr) -> Facts:
     """Read `Field(ge=..., lt=...)` as the integer range it describes."""
     if not isinstance(value, ast.Call):
         return facts
-    name = value.func.attr if isinstance(value.func, ast.Attribute) else getattr(value.func, "id", "")
+    name = (
+        value.func.attr if isinstance(value.func, ast.Attribute) else getattr(value.func, "id", "")
+    )
     if name not in {"Field", "conint", "condecimal"}:
         return facts
     low: int | None = None

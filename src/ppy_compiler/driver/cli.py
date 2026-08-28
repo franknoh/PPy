@@ -9,7 +9,7 @@ from pathlib import Path
 from . import commands
 from .reporting import Reporter
 
-__all__ = ["main", "build_parser"]
+__all__ = ["build_parser", "main"]
 
 _EXECUTION_SUFFIXES = (".ppy", ".py")
 
@@ -28,8 +28,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--version", action="store_true", help="print the compiler version")
     parser.add_argument("-q", "--quiet", action="store_true", help="suppress non-error output")
     parser.add_argument("--color", choices=("auto", "always", "never"), default="auto")
-    parser.add_argument("-O", "--opt-level", type=int, choices=(0, 1, 2, 3), help="override the optimization level")
-    parser.add_argument("--no-strict", action="store_true", help="downgrade strict-mode errors where possible")
+    parser.add_argument(
+        "-O", "--opt-level", type=int, choices=(0, 1, 2, 3), help="override the optimization level"
+    )
+    parser.add_argument(
+        "--no-strict", action="store_true", help="downgrade strict-mode errors where possible"
+    )
 
     subparsers = parser.add_subparsers(dest="command")
 
@@ -72,13 +76,17 @@ def build_parser() -> argparse.ArgumentParser:
     fmt.add_argument("path", type=Path, nargs="?", default=Path("."))
     fmt.add_argument("--check", action="store_true", help="exit non-zero if a file would change")
 
-    explain = subparsers.add_parser("explain", help="explain a location, function, or diagnostic code")
+    explain = subparsers.add_parser(
+        "explain", help="explain a location, function, or diagnostic code"
+    )
     explain.add_argument("location", help="FILE:LINE, a function qualname, or a diagnostic code")
 
     inspect = subparsers.add_parser("inspect", help="show generated artifacts for a target")
     inspect.add_argument("target", type=Path)
     inspect.add_argument("--backend", choices=("python", "llvm"), default="python")
-    inspect.add_argument("--ir", action="store_true", help="print backend IR instead of generated Python")
+    inspect.add_argument(
+        "--ir", action="store_true", help="print backend IR instead of generated Python"
+    )
 
     lint = subparsers.add_parser("lint", help="run an installed type checker or linter")
     lint.add_argument("path", type=Path, nargs="?", default=Path("."))
@@ -129,18 +137,32 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def _split_execution_argv(argv: list[str]) -> tuple[Path, list[str]] | None:
-    """Recognize the `ppy FILE.ppy [-- ARGS...]` form (spec 4.4)."""
+def _split_execution_argv(
+    argv: list[str], subcommands: frozenset[str] = frozenset()
+) -> tuple[list[str], Path, list[str]] | None:
+    """Split `ppy [FLAGS] FILE.ppy [-- ARGS...]` into its three parts (spec 4.4).
+
+    Everything after the file belongs to the program, so this is the only place
+    that decides where PPy's own arguments stop. Scanning the whole command
+    line again for anything starting with `-` would collect the program's flags
+    too, and `ppy app.ppy -- --verbose` would fail on an argument meant for the
+    program rather than for the compiler.
+    """
     for index, token in enumerate(argv):
-        if token.startswith("-"):
-            continue
+        if token == "--" or token in subcommands:
+            # `ppy -O 1 inspect x.ppy` is a subcommand with a file argument,
+            # not a file to run with flags in front of it.
+            break
+        # The file is what separates the two sides, so it is found by its
+        # suffix rather than by being the first token that is not a flag --
+        # which would stop on the `0` of `-O 0`.
         candidate = Path(token)
-        if candidate.suffix in _EXECUTION_SUFFIXES:
-            rest = argv[index + 1 :]
-            if rest and rest[0] == "--":
-                rest = rest[1:]
-            return candidate, rest
-        return None
+        if candidate.suffix not in _EXECUTION_SUFFIXES:
+            continue
+        rest = argv[index + 1 :]
+        if rest and rest[0] == "--":
+            rest = rest[1:]
+        return argv[:index], candidate, rest
     return None
 
 
@@ -149,19 +171,27 @@ def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
 
     known = {
-        "convert", "run", "build", "check", "fmt", "explain",
-        "inspect", "cache", "clean", "doctor", "test", "lint", "lsp",
+        "convert",
+        "run",
+        "build",
+        "check",
+        "fmt",
+        "explain",
+        "inspect",
+        "cache",
+        "clean",
+        "doctor",
+        "test",
+        "lint",
+        "lsp",
     }
     execution = None
     if argv and argv[0] not in known:
-        execution = _split_execution_argv(argv)
+        execution = _split_execution_argv(argv, frozenset(known))
 
     if execution is not None:
-        file, program_args = execution
-        options = parser.parse_args([a for a in argv if a.startswith("-") and a != "--"][:0])
-        flags = [a for a in argv if a.startswith("-") and a not in {"--"}]
-        if flags:
-            options = parser.parse_args(flags)
+        compiler_args, file, program_args = execution
+        options = parser.parse_args(compiler_args)
         reporter = _reporter(options)
         return commands.run_python_backend(file, program_args, options, reporter)
 
@@ -180,7 +210,9 @@ def main(argv: list[str] | None = None) -> int:
         case "convert":
             return commands.convert(options, reporter)
         case "run":
-            return commands.run_llvm_backend(options.file, _program_args(options.args), options, reporter)
+            return commands.run_llvm_backend(
+                options.file, _program_args(options.args), options, reporter
+            )
         case "build":
             return commands.build(options, reporter)
         case "check":

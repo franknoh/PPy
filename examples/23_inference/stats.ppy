@@ -1,5 +1,4 @@
 from collections.abc import Sequence
-from typing import Final
 
 import ppy
 
@@ -35,5 +34,5 @@ def report(values: Sequence[float], label: str) -> str:
     return f"{label}: mean={mean(values):.3f} var={variance(values):.3f}"
 
 
-samples: Final[list[float]] = [1.0, 2.0, 3.0, 4.0, 5.0]
+samples: list[float] = [1.0, 2.0, 3.0, 4.0, 5.0]
 print(report(samples, "samples"), [round(x, 4) for x in standardize(samples)])

@@ -18,13 +18,16 @@ from . import builtins as B
 from . import stdlib
 from . import types as T
 from .annotations import AnnotationResolver
+from .binding import bind_call, positional_values
 from .effects import Effect, EffectSet
 from .env import Binding, Env
 from .refinements import Facts, IntRange, width_range
 from .symbols import ClassInfo, FunctionInfo, ModuleSymbols, ProjectSymbols
 
+if TYPE_CHECKING:
+    from ..plugins.base import PluginRegistry
 
-__all__ = ["FunctionAnalysis", "ModuleAnalysis", "ProjectAnalysis", "LoweringNote", "analyze"]
+__all__ = ["FunctionAnalysis", "LoweringNote", "ModuleAnalysis", "ProjectAnalysis", "analyze"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -36,6 +39,7 @@ class LoweringNote:
     reason: str
     guards: tuple[str, ...] = ()
     line: int = 0
+
 
 _FORBIDDEN_CALLS = {
     "eval": ("E1501", "`eval` cannot be statically analyzed"),
@@ -50,23 +54,56 @@ _FORBIDDEN_CALLS = {
 _DYNAMIC_ATTR_CALLS = {"setattr", "delattr"}
 
 #: Builtin methods that mutate their receiver in place.
-_MUTATING_METHODS = frozenset({
-    "list.append", "list.extend", "list.insert", "list.pop", "list.clear",
-    "list.sort", "list.reverse", "list.remove",
-    "dict.pop", "dict.popitem", "dict.update", "dict.clear", "dict.setdefault",
-    "set.add", "set.discard", "set.remove", "set.update", "set.clear",
-})
+_MUTATING_METHODS = frozenset(
+    {
+        "list.append",
+        "list.extend",
+        "list.insert",
+        "list.pop",
+        "list.clear",
+        "list.sort",
+        "list.reverse",
+        "list.remove",
+        "dict.pop",
+        "dict.popitem",
+        "dict.update",
+        "dict.clear",
+        "dict.setdefault",
+        "set.add",
+        "set.discard",
+        "set.remove",
+        "set.update",
+        "set.clear",
+    }
+)
 
 _COMPARE_OPS = {
-    ast.Eq: "==", ast.NotEq: "!=", ast.Lt: "<", ast.LtE: "<=",
-    ast.Gt: ">", ast.GtE: ">=", ast.Is: "is", ast.IsNot: "is not",
-    ast.In: "in", ast.NotIn: "not in",
+    ast.Eq: "==",
+    ast.NotEq: "!=",
+    ast.Lt: "<",
+    ast.LtE: "<=",
+    ast.Gt: ">",
+    ast.GtE: ">=",
+    ast.Is: "is",
+    ast.IsNot: "is not",
+    ast.In: "in",
+    ast.NotIn: "not in",
 }
 
 _ARITH_OPS = {
-    ast.Add: "+", ast.Sub: "-", ast.Mult: "*", ast.Div: "/", ast.FloorDiv: "//",
-    ast.Mod: "%", ast.Pow: "**", ast.LShift: "<<", ast.RShift: ">>",
-    ast.BitOr: "|", ast.BitXor: "^", ast.BitAnd: "&", ast.MatMult: "@",
+    ast.Add: "+",
+    ast.Sub: "-",
+    ast.Mult: "*",
+    ast.Div: "/",
+    ast.FloorDiv: "//",
+    ast.Mod: "%",
+    ast.Pow: "**",
+    ast.LShift: "<<",
+    ast.RShift: ">>",
+    ast.BitOr: "|",
+    ast.BitXor: "^",
+    ast.BitAnd: "&",
+    ast.MatMult: "@",
 }
 
 _MAX_LOOP_ITERATIONS = 4
@@ -150,7 +187,7 @@ class ModuleAnalysis:
     node_facts: dict[int, Facts] = field(default_factory=dict)
     module_effects: EffectSet = field(default_factory=EffectSet)
     dynamic_spans: list[tuple[int, int]] = field(default_factory=list)
-    lowerings: dict[int, "LoweringNote"] = field(default_factory=dict)
+    lowerings: dict[int, LoweringNote] = field(default_factory=dict)
 
     @property
     def name(self) -> str:
@@ -180,11 +217,32 @@ class ProjectAnalysis:
 #: Builtins that read their arguments and either return a scalar or a fresh
 #: copy. `enumerate`, `zip`, and `reversed` are deliberately absent: they hold
 #: on to what they were given.
-_INSPECTING_BUILTINS = frozenset({
-    "len", "sum", "min", "max", "sorted", "any", "all", "abs", "round",
-    "str", "repr", "int", "float", "bool", "list", "tuple", "set", "dict",
-    "print", "isinstance", "id", "hash",
-})
+_INSPECTING_BUILTINS = frozenset(
+    {
+        "len",
+        "sum",
+        "min",
+        "max",
+        "sorted",
+        "any",
+        "all",
+        "abs",
+        "round",
+        "str",
+        "repr",
+        "int",
+        "float",
+        "bool",
+        "list",
+        "tuple",
+        "set",
+        "dict",
+        "print",
+        "isinstance",
+        "id",
+        "hash",
+    }
+)
 
 
 def _is_inspecting_builtin(node: ast.Call, env: Env) -> bool:
@@ -218,7 +276,7 @@ class _Checker:
         strict: bool = True,
         record: bool = True,
         dynamic_policy: str = "explicit",
-        plugins: "PluginRegistry | None" = None,
+        plugins: PluginRegistry | None = None,
     ) -> None:
         self.plugins = plugins
         self.symbols = symbols
@@ -230,7 +288,9 @@ class _Checker:
         self.dynamic_policy = dynamic_policy
         self.path: Path = symbols.path
         self.module = ModuleAnalysis(symbols=symbols)
-        self.annotations = AnnotationResolver(project.resolver(symbols), self.path, diagnostics, strict=strict)
+        self.annotations = AnnotationResolver(
+            project.resolver(symbols), self.path, diagnostics, strict=strict
+        )
         self._effects = EffectSet()
         self._unknown: list[str] = []
         self._calls: set[str] = set()
@@ -277,12 +337,25 @@ class _Checker:
         return []
 
     def _check_function(self, info: FunctionInfo) -> FunctionAnalysis:
-        previous = (self._effects, self._unknown, self._calls, self._current,
-                    self._returns, self._blockers, self._native_blockers,
-                    self._escaping, self._mutated, self._dynamic_depth,
-                    self._function_locals, self._foreign_writes,
-                    self._local_allocs, self._local_writes, self._shared, self._returned_names,
-                    self._external_writes)
+        previous = (
+            self._effects,
+            self._unknown,
+            self._calls,
+            self._current,
+            self._returns,
+            self._blockers,
+            self._native_blockers,
+            self._escaping,
+            self._mutated,
+            self._dynamic_depth,
+            self._function_locals,
+            self._foreign_writes,
+            self._local_allocs,
+            self._local_writes,
+            self._shared,
+            self._returned_names,
+            self._external_writes,
+        )
         self._effects = EffectSet()
         self._unknown = []
         self._calls = set()
@@ -317,16 +390,32 @@ class _Checker:
             self._stmt(stmt, env)
 
         result = self._finish_function(info, env)
-        (self._effects, self._unknown, self._calls, self._current, self._returns,
-         self._blockers, self._native_blockers, self._escaping, self._mutated,
-         self._dynamic_depth, self._function_locals, self._foreign_writes,
-         self._local_allocs, self._local_writes, self._shared, self._returned_names,
-         self._external_writes) = previous
+        (
+            self._effects,
+            self._unknown,
+            self._calls,
+            self._current,
+            self._returns,
+            self._blockers,
+            self._native_blockers,
+            self._escaping,
+            self._mutated,
+            self._dynamic_depth,
+            self._function_locals,
+            self._foreign_writes,
+            self._local_allocs,
+            self._local_writes,
+            self._shared,
+            self._returned_names,
+            self._external_writes,
+        ) = previous
         return result
 
     def _finish_function(self, info: FunctionInfo, env: Env) -> FunctionAnalysis:
         if info.is_generator:
-            inferred: T.Type = T.instance("Generator", T.join(*[r.type for r in self._returns]) if self._returns else T.NONE)
+            inferred: T.Type = T.instance(
+                "Generator", T.join(*[r.type for r in self._returns]) if self._returns else T.NONE
+            )
             ret_facts = Facts()
         elif self._returns:
             inferred = T.join(*[r.type for r in self._returns])
@@ -349,7 +438,9 @@ class _Checker:
             effects=effects,
             inferred_ret=inferred,
             ret_facts=ret_facts,
-            locals={name: (env.get(name).type if env.get(name) else T.UNKNOWN) for name in env.names()},
+            locals={
+                name: (env.get(name).type if env.get(name) else T.UNKNOWN) for name in env.names()
+            },
             dynamic=info.dynamic or self._dynamic_seen,
             unknown_callees=tuple(dict.fromkeys(self._unknown)),
             purity_blockers=tuple(dict.fromkeys(self._blockers)),
@@ -357,9 +448,8 @@ class _Checker:
             escaping=set(self._escaping),
             mutated_params=set(self._mutated),
             foreign_writes=self._foreign_writes,
-            writes_only_locals=not self._external_writes and not (
-                self._local_writes & self._shared_escapes()
-            ),
+            writes_only_locals=not self._external_writes
+            and not (self._local_writes & self._shared_escapes()),
             calls=set(self._calls),
         )
         info.effects = effects
@@ -423,7 +513,10 @@ class _Checker:
     def _stmt_Import(self, node: ast.Import, env: Env) -> None:
         for alias in node.names:
             local = alias.asname or alias.name.partition(".")[0]
-            env.set(local, Binding(T.Module_(alias.name if alias.asname else alias.name.partition(".")[0])))
+            env.set(
+                local,
+                Binding(T.Module_(alias.name if alias.asname else alias.name.partition(".")[0])),
+            )
 
     def _stmt_ImportFrom(self, node: ast.ImportFrom, env: Env) -> None:
         module = node.module or ""
@@ -471,7 +564,9 @@ class _Checker:
             else:
                 declared = Binding(resolved.type, self._merge_declared(resolved.facts, value.facts))
                 declared = Binding(declared.type, self._check_width(declared, node.value))
-        self._bind_target(node.target, declared, env, declared_type=resolved.type, source=node.value)
+        self._bind_target(
+            node.target, declared, env, declared_type=resolved.type, source=node.value
+        )
 
     def _stmt_AugAssign(self, node: ast.AugAssign, env: Env) -> None:
         current = self._load_target(node.target, env)
@@ -505,7 +600,10 @@ class _Checker:
                         node.value,
                     )
                 elif info.ret_facts.width is not None:
-                    self._check_width(Binding(value.type, self._merge_declared(info.ret_facts, value.facts)), node.value)
+                    self._check_width(
+                        Binding(value.type, self._merge_declared(info.ret_facts, value.facts)),
+                        node.value,
+                    )
         env.terminate()
 
     def _stmt_If(self, node: ast.If, env: Env) -> None:
@@ -536,7 +634,13 @@ class _Checker:
         self._effects = self._effects.add(Effect.SYNC)
         self._loop(node, env, None, node)
 
-    def _loop(self, node: ast.stmt, env: Env, test: ast.expr | None, for_node: ast.For | ast.AsyncFor | None) -> None:
+    def _loop(
+        self,
+        node: ast.stmt,
+        env: Env,
+        test: ast.expr | None,
+        for_node: ast.For | ast.AsyncFor | None,
+    ) -> None:
         if for_node is not None:
             iterable = self._expr(for_node.iter, env)
             element = self._iteration_element(iterable, for_node.iter)
@@ -573,7 +677,13 @@ class _Checker:
         for name in list(env.names()):
             binding = env.get(name)
             if binding is not None and binding.facts.int_range is not None:
-                env.set(name, Binding(binding.type, binding.facts.with_(int_range=None, has_constant=False, constant=None)))
+                env.set(
+                    name,
+                    Binding(
+                        binding.type,
+                        binding.facts.with_(int_range=None, has_constant=False, constant=None),
+                    ),
+                )
 
     def _stmt_Break(self, node: ast.Break, env: Env) -> None:
         env.terminate()
@@ -620,7 +730,11 @@ class _Checker:
             if handler.type is not None:
                 bound = self._expr(handler.type, env)
                 if handler.name:
-                    instance = bound.type.instance_type if isinstance(bound.type, T.ClassObject) else T.instance("Exception")
+                    instance = (
+                        bound.type.instance_type
+                        if isinstance(bound.type, T.ClassObject)
+                        else T.instance("Exception")
+                    )
                     handler_env.set(handler.name, Binding(instance or T.instance("Exception")))
             for stmt in handler.body:
                 self._stmt(stmt, handler_env)
@@ -666,7 +780,9 @@ class _Checker:
 
     def _stmt_ClassDef(self, node: ast.ClassDef, env: Env) -> None:
         info = self.symbols.classes.get(node.name)
-        env.set(node.name, Binding(T.ClassObject(info.qualname, info.instance()) if info else T.UNKNOWN))
+        env.set(
+            node.name, Binding(T.ClassObject(info.qualname, info.instance()) if info else T.UNKNOWN)
+        )
 
     def _stmt_Global(self, node: ast.Global, env: Env) -> None:
         self._effects = self._effects.add(Effect.WRITE_GLOBAL)
@@ -724,7 +840,14 @@ class _Checker:
             return self._pattern_type(pattern.pattern, env)
         return None
 
-    def _bind_target(self, target: ast.expr, value: Binding, env: Env, declared_type: T.Type | None = None, source: ast.expr | None = None) -> None:
+    def _bind_target(
+        self,
+        target: ast.expr,
+        value: Binding,
+        env: Env,
+        declared_type: T.Type | None = None,
+        source: ast.expr | None = None,
+    ) -> None:
         if isinstance(target, ast.Name):
             binding = Binding(declared_type or value.type, value.facts)
             env.set(target.id, binding)
@@ -746,7 +869,9 @@ class _Checker:
         elif isinstance(target, ast.Subscript):
             self._expr(target.value, env)
             self._expr(target.slice, env)
-            self._effects = self._effects.add(Effect.WRITE_OBJECT, raises=("IndexError", "KeyError", "TypeError"))
+            self._effects = self._effects.add(
+                Effect.WRITE_OBJECT, raises=("IndexError", "KeyError", "TypeError")
+            )
             self._note_mutation(target.value, env)
         elif isinstance(target, ast.Starred):
             self._bind_target(target.value, Binding(T.list_of(value.type)), env)
@@ -760,7 +885,12 @@ class _Checker:
             element = B.element_type(base)
             elements = [element] * len(target.elts)
         starred = any(isinstance(e, ast.Starred) for e in target.elts)
-        if not starred and len(elements) != len(target.elts) and isinstance(base, T.Tuple_) and not base.homogeneous:
+        if (
+            not starred
+            and len(elements) != len(target.elts)
+            and isinstance(base, T.Tuple_)
+            and not base.homogeneous
+        ):
             self._error(
                 "E1301",
                 f"cannot unpack {len(elements)} values into {len(target.elts)} targets",
@@ -768,7 +898,11 @@ class _Checker:
             )
         for index, element_target in enumerate(target.elts):
             if isinstance(element_target, ast.Starred):
-                self._bind_target(element_target.value, Binding(T.list_of(elements[index] if index < len(elements) else T.UNKNOWN)), env)
+                self._bind_target(
+                    element_target.value,
+                    Binding(T.list_of(elements[index] if index < len(elements) else T.UNKNOWN)),
+                    env,
+                )
                 continue
             element = elements[index] if index < len(elements) else T.UNKNOWN
             self._bind_target(element_target, Binding(element), env)
@@ -782,7 +916,9 @@ class _Checker:
             return binding
         return self._expr(target, env)
 
-    def _bind_pattern(self, pattern: ast.pattern, subject: Binding, env: Env, source: ast.expr) -> None:
+    def _bind_pattern(
+        self, pattern: ast.pattern, subject: Binding, env: Env, source: ast.expr
+    ) -> None:
         if isinstance(pattern, ast.MatchAs):
             inner = subject
             if pattern.pattern is not None:
@@ -793,7 +929,9 @@ class _Checker:
         elif isinstance(pattern, ast.MatchSingleton):
             if isinstance(source, ast.Name):
                 singleton = T.type_of_constant(pattern.value)
-                env.set(source.id, Binding(singleton, Facts(constant=pattern.value, has_constant=True)))
+                env.set(
+                    source.id, Binding(singleton, Facts(constant=pattern.value, has_constant=True))
+                )
         elif isinstance(pattern, ast.MatchValue):
             value = self._expr(pattern.value, env)
             if isinstance(source, ast.Name) and value.facts.has_constant:
@@ -824,10 +962,7 @@ class _Checker:
 
     def _expr(self, node: ast.expr, env: Env) -> Binding:
         method = getattr(self, f"_expr_{type(node).__name__}", None)
-        if method is None:
-            binding = Binding(T.UNKNOWN)
-        else:
-            binding = method(node, env)
+        binding = Binding(T.UNKNOWN) if method is None else method(node, env)
         self._record(node, binding)
         return binding
 
@@ -934,15 +1069,16 @@ class _Checker:
             result = values[0]
             for value in values[1:]:
                 result = (result and value) if isinstance(node.op, ast.And) else (result or value)
-            return Binding(T.join(*[p.type for p in parts]), Facts(constant=result, has_constant=True))
+            return Binding(
+                T.join(*[p.type for p in parts]), Facts(constant=result, has_constant=True)
+            )
         return Binding(T.join(*[p.type for p in parts]))
 
     def _expr_Compare(self, node: ast.Compare, env: Env) -> Binding:
         left = self._expr(node.left, env)
         operands = [left]
-        for comparator in node.comparators:
-            operands.append(self._expr(comparator, env))
-        for op, right in zip(node.ops, operands[1:]):
+        operands.extend(self._expr(comparator, env) for comparator in node.comparators)
+        for op, _right in zip(node.ops, operands[1:], strict=False):
             if isinstance(op, (ast.In, ast.NotIn)):
                 self._effects = self._effects.add(raises=("TypeError",))
         if len(node.ops) == 1:
@@ -967,15 +1103,24 @@ class _Checker:
             for index, op in enumerate(node.ops):
                 left, right = values[index], values[index + 1]
                 match op:
-                    case ast.Eq(): step = left == right
-                    case ast.NotEq(): step = left != right
-                    case ast.Lt(): step = left < right  # type: ignore[operator]
-                    case ast.LtE(): step = left <= right  # type: ignore[operator]
-                    case ast.Gt(): step = left > right  # type: ignore[operator]
-                    case ast.GtE(): step = left >= right  # type: ignore[operator]
-                    case ast.Is(): step = left is right
-                    case ast.IsNot(): step = left is not right
-                    case _: return None
+                    case ast.Eq():
+                        step = left == right
+                    case ast.NotEq():
+                        step = left != right
+                    case ast.Lt():
+                        step = left < right  # type: ignore[operator]
+                    case ast.LtE():
+                        step = left <= right  # type: ignore[operator]
+                    case ast.Gt():
+                        step = left > right  # type: ignore[operator]
+                    case ast.GtE():
+                        step = left >= right  # type: ignore[operator]
+                    case ast.Is():
+                        step = left is right
+                    case ast.IsNot():
+                        step = left is not right
+                    case _:
+                        return None
                 result = result and bool(step)
                 if not result:
                     break
@@ -995,7 +1140,9 @@ class _Checker:
         if self._check_forbidden_call(node, env):
             return Binding(T.ANY if self._dynamic_depth else T.UNKNOWN)
         callee = self._expr(node.func, env)
-        args = [self._expr(arg.value if isinstance(arg, ast.Starred) else arg, env) for arg in node.args]
+        args = [
+            self._expr(arg.value if isinstance(arg, ast.Starred) else arg, env) for arg in node.args
+        ]
         keywords = {kw.arg: self._expr(kw.value, env) for kw in node.keywords if kw.arg}
         retains = not _is_inspecting_builtin(node, env)
         for argument in node.args:
@@ -1037,17 +1184,21 @@ class _Checker:
                 self._native_blockers.append(f"`{callee.type.qualname}` has no native lowering")
                 return Binding(callee.type.ret)
             if callee.type.qualname in _MUTATING_METHODS:
-                self._effects = self._effects.add(Effect.WRITE_OBJECT, raises=("IndexError", "KeyError"))
+                self._effects = self._effects.add(
+                    Effect.WRITE_OBJECT, raises=("IndexError", "KeyError")
+                )
                 if isinstance(node.func, ast.Attribute):
                     self._note_mutation(node.func.value, env)
                     self._widen_empty_container(node.func, callee.type.qualname, args, env)
-                    self._blockers.append(f"calls `{callee.type.qualname}`, which mutates its receiver")
+                    self._blockers.append(
+                        f"calls `{callee.type.qualname}`, which mutates its receiver"
+                    )
                 return Binding(callee.type.ret)
             return self._call_signature(
                 callee.type, node, args, keywords, bound=id(node.func) in self._bound_methods
             )
         if isinstance(callee.type, T.Module_):
-            self._error("E1306", f"a module is not callable", node)
+            self._error("E1306", "a module is not callable", node)
             return Binding(T.UNKNOWN)
         return self._opaque_call(node, callee)
 
@@ -1116,7 +1267,8 @@ class _Checker:
             if not self._accepts(info, expected, argument.type):
                 self._error(
                     "E1301",
-                    f"field `{fields[index]}` of `{info.name}` expects `{expected}`, got `{argument.type}`",
+                    f"field `{fields[index]}` of `{info.name}` "
+                    f"expects `{expected}`, got `{argument.type}`",
                     node.args[index],
                 )
         for name, binding in keywords.items():
@@ -1156,14 +1308,17 @@ class _Checker:
             self._note_callee_writes(info, node)
             if info.effects.violations():
                 self._blockers.append(
-                    f"calls `{info.name}` with effects: {', '.join(sorted(str(e) for e in info.effects.violations()))}"
+                    f"calls `{info.name}` with effects: "
+                    + ", ".join(sorted(str(e) for e in info.effects.violations()))
                 )
-            self._check_arity(info, node, len(args) + (1 if bound else 0), set(keywords), skip_self=bound)
+            self._check_arity(
+                info, node, len(args) + (1 if bound else 0), set(keywords), skip_self=bound
+            )
             self._check_argument_types(info, node, args, keywords, bound=bound)
             if info.dynamic:
                 self._native_blockers.append(f"`{info.name}` is a dynamic boundary")
             return Binding(info.ret, info.ret_facts if info.ret_annotated else Facts())
-        for index, (param, argument) in enumerate(zip(signature.params, args)):
+        for index, (param, argument) in enumerate(zip(signature.params, args, strict=False)):
             if not T.is_assignable(argument.type, param.type):
                 self._error(
                     "E1301",
@@ -1185,13 +1340,20 @@ class _Checker:
         if any(p.kind in {"var_positional", "var_keyword"} for p in params):
             return
         supplied = positional - (1 if skip_self else 0)
-        accepts_positional = [p for p in params if p.kind in {"positional_only", "positional_or_keyword"}]
-        required = [p for p in params if not p.has_default and p.kind not in {"var_positional", "var_keyword"}]
+        accepts_positional = [
+            p for p in params if p.kind in {"positional_only", "positional_or_keyword"}
+        ]
+        required = [
+            p
+            for p in params
+            if not p.has_default and p.kind not in {"var_positional", "var_keyword"}
+        ]
         named = {n for n in keyword_names if n is not None}
         if supplied > len(accepts_positional):
             self._error(
                 "E1305",
-                f"`{info.name}` takes {len(accepts_positional)} positional argument(s), {supplied} given",
+                f"`{info.name}` takes {len(accepts_positional)} "
+                f"positional argument(s), {supplied} given",
                 node,
             )
             return
@@ -1218,37 +1380,30 @@ class _Checker:
         *,
         bound: bool = False,
     ) -> None:
-        params = info.params[1:] if bound or (info.is_method and not info.is_static) else info.params
-        for index, argument in enumerate(args):
-            if index >= len(params):
-                break
-            param = params[index]
-            if param.kind in {"var_positional", "var_keyword"}:
-                break
+        offset = 1 if bound or (info.is_method and not info.is_static) else 0
+        # Positional order, keywords by name, the receiver that is never
+        # written down: the same rules the conversion passes use, from the
+        # same code, so the two cannot drift apart.
+        positional = args[: len(positional_values(node.args))]
+        for reached in bind_call(info.params, positional, list(keywords.items()), offset=offset):
+            param, argument = reached.param, reached.value
             if isinstance(param.type, T.UnknownType):
                 continue
+            where = node
+            if not reached.keyword and reached.index - offset < len(node.args):
+                where = node.args[reached.index - offset]
             if not T.is_assignable(argument.type, param.type):
                 self._error(
                     "E1301",
-                    f"`{info.name}` parameter `{param.name}` expects `{param.type}`, got `{argument.type}`",
-                    node.args[index] if index < len(node.args) else node,
+                    f"`{info.name}` parameter `{param.name}` "
+                    f"expects `{param.type}`, got `{argument.type}`",
+                    where,
                 )
             elif param.facts.width is not None:
                 self._check_width(
                     Binding(argument.type, self._merge_declared(param.facts, argument.facts)),
-                    node.args[index] if index < len(node.args) else node,
+                    where,
                     what=f"parameter `{param.name}`",
-                )
-        by_name = {p.name: p for p in params}
-        for name, binding in keywords.items():
-            param = by_name.get(name) if name else None
-            if param is None or isinstance(param.type, T.UnknownType):
-                continue
-            if not T.is_assignable(binding.type, param.type):
-                self._error(
-                    "E1301",
-                    f"`{info.name}` parameter `{param.name}` expects `{param.type}`, got `{binding.type}`",
-                    node,
                 )
 
     def _opaque_call(self, node: ast.Call, callee: Binding) -> Binding:
@@ -1323,13 +1478,15 @@ class _Checker:
             if info is not None and self.strict and not self._dynamic_depth:
                 self._error("E1202", f"`{info.name}` has no attribute `{node.attr}`", node)
                 return Binding(T.UNKNOWN)
-        known = stdlib.instance_attribute(base.name, node.attr) if isinstance(base, T.Instance) else None
+        known = (
+            stdlib.instance_attribute(base.name, node.attr)
+            if isinstance(base, T.Instance)
+            else None
+        )
         if known is not None:
             self._effects = self._effects | known[1]
             if known[1].violations():
-                self._blockers.append(
-                    f"uses `{base.name}.{node.attr}` with effects: {known[1]}"
-                )
+                self._blockers.append(f"uses `{base.name}.{node.attr}` with effects: {known[1]}")
             self._native_blockers.append(f"`{base.name}.{node.attr}` has no native lowering")
             return Binding(known[0])
         plugin_attribute = self._plugin_instance_attribute(base, node.attr, owner.facts)
@@ -1416,9 +1573,13 @@ class _Checker:
         element = B.element_type(base)
         table: dict[tuple[str, str], T.Type] = {
             ("list", "append"): T.Callable_((T.Param("value", element),), T.NONE, "list.append"),
-            ("list", "extend"): T.Callable_((T.Param("values", T.instance("Iterable", element)),), T.NONE, "list.extend"),
+            ("list", "extend"): T.Callable_(
+                (T.Param("values", T.instance("Iterable", element)),), T.NONE, "list.extend"
+            ),
             ("list", "pop"): T.Callable_((T.Param("index", T.INT, True),), element, "list.pop"),
-            ("list", "insert"): T.Callable_((T.Param("index", T.INT), T.Param("value", element)), T.NONE, "list.insert"),
+            ("list", "insert"): T.Callable_(
+                (T.Param("index", T.INT), T.Param("value", element)), T.NONE, "list.insert"
+            ),
             ("list", "index"): T.Callable_((T.Param("value", element),), T.INT, "list.index"),
             ("list", "count"): T.Callable_((T.Param("value", element),), T.INT, "list.count"),
             ("list", "clear"): T.Callable_((), T.NONE, "list.clear"),
@@ -1426,15 +1587,54 @@ class _Checker:
             ("list", "reverse"): T.Callable_((), T.NONE, "list.reverse"),
             ("list", "copy"): T.Callable_((), base, "list.copy"),
             ("dict", "get"): T.Callable_(
-                (T.Param("key", base.args[0] if isinstance(base, T.Instance) and base.args else T.ANY),),
-                T.union(base.args[1], T.NONE) if isinstance(base, T.Instance) and len(base.args) == 2 else T.UNKNOWN,
+                (
+                    T.Param(
+                        "key", base.args[0] if isinstance(base, T.Instance) and base.args else T.ANY
+                    ),
+                ),
+                T.union(base.args[1], T.NONE)
+                if isinstance(base, T.Instance) and len(base.args) == 2
+                else T.UNKNOWN,
                 "dict.get",
             ),
-            ("dict", "keys"): T.Callable_((), T.instance("Iterable", base.args[0] if isinstance(base, T.Instance) and base.args else T.ANY), "dict.keys"),
-            ("dict", "values"): T.Callable_((), T.instance("Iterable", base.args[1] if isinstance(base, T.Instance) and len(base.args) == 2 else T.ANY), "dict.values"),
-            ("dict", "items"): T.Callable_((), T.instance("Iterable", T.Tuple_(base.args if isinstance(base, T.Instance) and len(base.args) == 2 else (T.ANY, T.ANY))), "dict.items"),
-            ("dict", "pop"): T.Callable_((), base.args[1] if isinstance(base, T.Instance) and len(base.args) == 2 else T.UNKNOWN, "dict.pop"),
-            ("dict", "setdefault"): T.Callable_((), base.args[1] if isinstance(base, T.Instance) and len(base.args) == 2 else T.UNKNOWN, "dict.setdefault"),
+            ("dict", "keys"): T.Callable_(
+                (),
+                T.instance(
+                    "Iterable",
+                    base.args[0] if isinstance(base, T.Instance) and base.args else T.ANY,
+                ),
+                "dict.keys",
+            ),
+            ("dict", "values"): T.Callable_(
+                (),
+                T.instance(
+                    "Iterable",
+                    base.args[1] if isinstance(base, T.Instance) and len(base.args) == 2 else T.ANY,
+                ),
+                "dict.values",
+            ),
+            ("dict", "items"): T.Callable_(
+                (),
+                T.instance(
+                    "Iterable",
+                    T.Tuple_(
+                        base.args
+                        if isinstance(base, T.Instance) and len(base.args) == 2
+                        else (T.ANY, T.ANY)
+                    ),
+                ),
+                "dict.items",
+            ),
+            ("dict", "pop"): T.Callable_(
+                (),
+                base.args[1] if isinstance(base, T.Instance) and len(base.args) == 2 else T.UNKNOWN,
+                "dict.pop",
+            ),
+            ("dict", "setdefault"): T.Callable_(
+                (),
+                base.args[1] if isinstance(base, T.Instance) and len(base.args) == 2 else T.UNKNOWN,
+                "dict.setdefault",
+            ),
             ("dict", "update"): T.Callable_((), T.NONE, "dict.update"),
             ("dict", "clear"): T.Callable_((), T.NONE, "dict.clear"),
             ("set", "add"): T.Callable_((T.Param("value", element),), T.NONE, "set.add"),
@@ -1455,9 +1655,7 @@ class _Checker:
             return self._buffer_method(base, name, attr, element)
         return None
 
-    def _buffer_method(
-        self, base: T.Type, owner: str, attr: str, element: T.Type
-    ) -> T.Type | None:
+    def _buffer_method(self, base: T.Type, owner: str, attr: str, element: T.Type) -> T.Type | None:
         """Methods of a contiguous buffer: `array`, `memoryview`, `Buffer`."""
         qualname = f"{owner}.{attr}"
         if attr == "tolist":
@@ -1472,7 +1670,7 @@ class _Checker:
             return T.Callable_((), element, qualname)
         if attr in {"count", "index", "itemsize", "nbytes"}:
             return T.Callable_((), T.INT, qualname) if attr in {"count", "index"} else T.INT
-        if attr == "typecode" or attr == "format":
+        if attr in {"typecode", "format"}:
             return T.STR
         if attr == "cast":
             return T.Callable_((), base, qualname)
@@ -1486,12 +1684,33 @@ class _Checker:
 
     def _str_method(self, attr: str) -> T.Type | None:
         returns_str = {
-            "upper", "lower", "strip", "lstrip", "rstrip", "title", "capitalize",
-            "replace", "join", "format", "removeprefix", "removesuffix", "casefold", "zfill",
+            "upper",
+            "lower",
+            "strip",
+            "lstrip",
+            "rstrip",
+            "title",
+            "capitalize",
+            "replace",
+            "join",
+            "format",
+            "removeprefix",
+            "removesuffix",
+            "casefold",
+            "zfill",
         }
         returns_bool = {
-            "startswith", "endswith", "isdigit", "isalpha", "isalnum", "isspace",
-            "islower", "isupper", "isnumeric", "isdecimal", "isidentifier",
+            "startswith",
+            "endswith",
+            "isdigit",
+            "isalpha",
+            "isalnum",
+            "isspace",
+            "islower",
+            "isupper",
+            "isnumeric",
+            "isdecimal",
+            "isidentifier",
         }
         if attr in returns_str:
             return T.Callable_((), T.STR, f"str.{attr}")
@@ -1508,7 +1727,7 @@ class _Checker:
     def _bytes_method(self, owner: str, attr: str) -> T.Type | None:
         if attr == "decode":
             return T.Callable_((), T.STR, f"{owner}.decode")
-        if attr in {"hex",}:
+        if attr == "hex":
             return T.Callable_((), T.STR, f"{owner}.hex")
         if attr in {"startswith", "endswith", "isdigit", "isalpha", "isascii"}:
             return T.Callable_((), T.BOOL, f"{owner}.{attr}")
@@ -1517,8 +1736,18 @@ class _Checker:
         if attr in {"split", "rsplit", "splitlines"}:
             return T.Callable_((), T.list_of(T.BYTES), f"{owner}.{attr}")
         if attr in {
-            "strip", "lstrip", "rstrip", "upper", "lower", "replace", "join",
-            "removeprefix", "removesuffix", "zfill", "title", "capitalize",
+            "strip",
+            "lstrip",
+            "rstrip",
+            "upper",
+            "lower",
+            "replace",
+            "join",
+            "removeprefix",
+            "removesuffix",
+            "zfill",
+            "title",
+            "capitalize",
         }:
             return T.Callable_((), T.BYTES, f"{owner}.{attr}")
         return None
@@ -1533,7 +1762,11 @@ class _Checker:
             self._effects = self._effects.add(raises=("IndexError",))
             if is_slice:
                 return Binding(T.Tuple_((B.element_type(base),), homogeneous=True))
-            if index.facts.has_constant and isinstance(index.facts.constant, int) and not base.homogeneous:
+            if (
+                index.facts.has_constant
+                and isinstance(index.facts.constant, int)
+                and not base.homogeneous
+            ):
                 position = index.facts.constant
                 if -len(base.items) <= position < len(base.items):
                     return Binding(base.items[position])
@@ -1621,16 +1854,17 @@ class _Checker:
             inner.set(arg.arg, Binding(T.UNKNOWN))
         body = self._expr(node.body, inner)
         self._native_blockers.append("contains a lambda")
-        return Binding(T.Callable_(tuple(T.Param(a.arg, T.UNKNOWN) for a in node.args.args), body.type))
+        return Binding(
+            T.Callable_(tuple(T.Param(a.arg, T.UNKNOWN) for a in node.args.args), body.type)
+        )
 
     def _expr_Await(self, node: ast.Await, env: Env) -> Binding:
         value = self._expr(node.value, env)
         self._effects = self._effects.add(Effect.SYNC)
         self._native_blockers.append("awaits a coroutine")
         base = T.strip_literal(value.type)
-        if isinstance(base, T.Instance) and base.args:
-            if base.name in {"Coroutine", "Awaitable"}:
-                return Binding(base.args[0])
+        if isinstance(base, T.Instance) and base.args and base.name in {"Coroutine", "Awaitable"}:
+            return Binding(base.args[0])
         if isinstance(base, (T.AnyType, T.UnknownType)):
             return Binding(T.ANY if isinstance(base, T.AnyType) else T.UNKNOWN)
         return Binding(T.UNKNOWN if self.strict else T.ANY)
@@ -1677,14 +1911,18 @@ class _Checker:
     def _bind_generators(self, generators: list[ast.comprehension], env: Env) -> None:
         for generator in generators:
             iterable = self._expr(generator.iter, env)
-            self._bind_target(generator.target, self._iteration_element(iterable, generator.iter), env)
+            self._bind_target(
+                generator.target, self._iteration_element(iterable, generator.iter), env
+            )
             for condition in generator.ifs:
                 self._expr(condition, env)
                 env.restore(self._narrow(condition, env.fork(), True).snapshot())
             if generator.is_async:
                 self._effects = self._effects.add(Effect.SYNC)
 
-    def _binary(self, left: Binding, right: Binding, op: type[ast.operator], node: ast.AST) -> Binding:
+    def _binary(
+        self, left: Binding, right: Binding, op: type[ast.operator], node: ast.AST
+    ) -> Binding:
         left_base = T.strip_literal(left.type)
         right_base = T.strip_literal(right.type)
 
@@ -1696,26 +1934,40 @@ class _Checker:
         if plugin_result is not None:
             return plugin_result
 
-        if isinstance(left_base, (T.AnyType, T.UnknownType)) or isinstance(right_base, (T.AnyType, T.UnknownType)):
+        if isinstance(left_base, (T.AnyType, T.UnknownType)) or isinstance(
+            right_base, (T.AnyType, T.UnknownType)
+        ):
             return Binding(T.ANY if self._dynamic_depth else T.UNKNOWN)
 
         if op is ast.Add:
             for container in ("list", "str", "bytes"):
-                if isinstance(left_base, T.Instance) and left_base.name == container:
-                    if T.is_assignable(right_base, left_base) or right_base == left_base:
-                        self._effects = self._effects.add(Effect.ALLOC)
-                        return Binding(left_base)
+                if (
+                    isinstance(left_base, T.Instance)
+                    and left_base.name == container
+                    and (T.is_assignable(right_base, left_base) or right_base == left_base)
+                ):
+                    self._effects = self._effects.add(Effect.ALLOC)
+                    return Binding(left_base)
             if isinstance(left_base, T.Tuple_) and isinstance(right_base, T.Tuple_):
                 self._effects = self._effects.add(Effect.ALLOC)
                 if not left_base.homogeneous and not right_base.homogeneous:
                     return Binding(T.Tuple_(left_base.items + right_base.items))
-                return Binding(T.Tuple_((T.join(B.element_type(left_base), B.element_type(right_base)),), homogeneous=True))
+                return Binding(
+                    T.Tuple_(
+                        (T.join(B.element_type(left_base), B.element_type(right_base)),),
+                        homogeneous=True,
+                    )
+                )
         if op is ast.Mult:
             for sequence, count in ((left_base, right_base), (right_base, left_base)):
                 if isinstance(sequence, (T.Tuple_,)) and count == T.INT:
                     self._effects = self._effects.add(Effect.ALLOC)
                     return Binding(T.Tuple_((B.element_type(sequence),), homogeneous=True))
-                if isinstance(sequence, T.Instance) and sequence.name in {"list", "str", "bytes"} and count in (T.INT, T.BOOL):
+                if (
+                    isinstance(sequence, T.Instance)
+                    and sequence.name in {"list", "str", "bytes"}
+                    and count in (T.INT, T.BOOL)
+                ):
                     self._effects = self._effects.add(Effect.ALLOC)
                     return Binding(sequence)
         if op is ast.Mod and left_base == T.STR:
@@ -1730,7 +1982,11 @@ class _Checker:
             )
             return Binding(T.UNKNOWN)
 
-        if left_base == T.BOOL and right_base == T.BOOL and op in {ast.Add, ast.Sub, ast.Mult, ast.Pow}:
+        if (
+            left_base == T.BOOL
+            and right_base == T.BOOL
+            and op in {ast.Add, ast.Sub, ast.Mult, ast.Pow}
+        ):
             self._warn("W2002", "arithmetic on `bool` values is legal but usually unintended", node)
 
         return self._numeric_result(left, right, left_base, right_base, op, node)
@@ -1765,7 +2021,11 @@ class _Checker:
             return Binding(result_type if rank != 1 else T.INT)
 
         facts = Facts()
-        if result_type == T.INT and left.facts.int_range is not None and right.facts.int_range is not None:
+        if (
+            result_type == T.INT
+            and left.facts.int_range is not None
+            and right.facts.int_range is not None
+        ):
             lr, rr = left.facts.int_range, right.facts.int_range
             if op is ast.Add:
                 facts = Facts(int_range=lr + rr)
@@ -1799,7 +2059,9 @@ class _Checker:
             value = operation(left.facts.constant, right.facts.constant)
         except (TypeError, ValueError, ZeroDivisionError, OverflowError):
             return None
-        if isinstance(value, (int, float, complex, str, bytes, bool)) and not isinstance(value, bool):
+        if isinstance(value, (int, float, complex, str, bytes, bool)) and not isinstance(
+            value, bool
+        ):
             facts = Facts(constant=value, has_constant=True)
             if isinstance(value, int):
                 facts = facts.with_(int_range=IntRange(value, value))
@@ -1810,7 +2072,9 @@ class _Checker:
         if isinstance(test, ast.UnaryOp) and isinstance(test.op, ast.Not):
             return self._narrow(test.operand, env, not positive)
         if isinstance(test, ast.BoolOp):
-            sequential = (isinstance(test.op, ast.And) and positive) or (isinstance(test.op, ast.Or) and not positive)
+            sequential = (isinstance(test.op, ast.And) and positive) or (
+                isinstance(test.op, ast.Or) and not positive
+            )
             if sequential:
                 for value in test.values:
                     env = self._narrow(value, env, positive)
@@ -1822,7 +2086,10 @@ class _Checker:
         if isinstance(test, ast.Name) and positive:
             binding = env.get(test.id)
             if binding is not None and T.is_optional(binding.type):
-                env.set(test.id, Binding(T.remove_none(binding.type), binding.facts.with_(non_null=True)))
+                env.set(
+                    test.id,
+                    Binding(T.remove_none(binding.type), binding.facts.with_(non_null=True)),
+                )
         return env
 
     def _narrow_compare(self, test: ast.Compare, env: Env, positive: bool) -> Env:
@@ -1831,7 +2098,11 @@ class _Checker:
         op, right = test.ops[0], test.comparators[0]
         left = test.left
 
-        if isinstance(op, (ast.Is, ast.IsNot)) and isinstance(right, ast.Constant) and right.value is None:
+        if (
+            isinstance(op, (ast.Is, ast.IsNot))
+            and isinstance(right, ast.Constant)
+            and right.value is None
+        ):
             wants_none = isinstance(op, ast.Is) == positive
             if isinstance(left, ast.Name):
                 binding = env.get(left.id)
@@ -1839,7 +2110,12 @@ class _Checker:
                     if wants_none:
                         env.set(left.id, Binding(T.NONE, Facts()))
                     else:
-                        env.set(left.id, Binding(T.remove_none(binding.type), binding.facts.with_(non_null=True)))
+                        env.set(
+                            left.id,
+                            Binding(
+                                T.remove_none(binding.type), binding.facts.with_(non_null=True)
+                            ),
+                        )
             return env
 
         constant = self._constant_of(right, env)
@@ -1849,7 +2125,9 @@ class _Checker:
             env = self._narrow_by_length(left, op, constant, env, positive)
         return env
 
-    def _narrow_by_constant(self, name: str, op: ast.cmpop, constant: object, env: Env, positive: bool) -> Env:
+    def _narrow_by_constant(
+        self, name: str, op: ast.cmpop, constant: object, env: Env, positive: bool
+    ) -> Env:
         binding = env.get(name)
         if binding is None:
             return env
@@ -1883,7 +2161,9 @@ class _Checker:
         env.set(name, Binding(binding.type, binding.facts.with_(int_range=current.meet(bound))))
         return env
 
-    def _narrow_by_length(self, call: ast.Call, op: ast.cmpop, constant: object, env: Env, positive: bool) -> Env:
+    def _narrow_by_length(
+        self, call: ast.Call, op: ast.cmpop, constant: object, env: Env, positive: bool
+    ) -> Env:
         if not (isinstance(op, ast.Eq) and positive and isinstance(constant, int)):
             return env
         target = call.args[0] if call.args else None
@@ -1978,7 +2258,8 @@ class _Checker:
             if not constant_name:
                 self._dynamic_feature(
                     "E1506",
-                    f"`{name}` with a computed attribute name mutates an unresolvable attribute set",
+                    f"`{name}` with a computed attribute name "
+                    "mutates an unresolvable attribute set",
                     node,
                 )
                 return True
@@ -1992,11 +2273,15 @@ class _Checker:
         if text.endswith("import_module"):
             constant = node.args and isinstance(node.args[0], ast.Constant)
             if not constant:
-                self._dynamic_feature("E1503", "`import_module` requires a constant module name", node)
+                self._dynamic_feature(
+                    "E1503", "`import_module` requires a constant module name", node
+                )
                 return True
         return False
 
-    def _dynamic_feature(self, code: str, message: str, node: ast.AST, help: str | None = None) -> None:
+    def _dynamic_feature(
+        self, code: str, message: str, node: ast.AST, help: str | None = None
+    ) -> None:
         if self._dynamic_depth:
             self._dynamic_seen = True
             self._effects = self._effects.add(Effect.EXTERNAL_UNKNOWN)
@@ -2004,7 +2289,7 @@ class _Checker:
             if self.dynamic_policy == "deny":
                 self._error(
                     "E1505",
-                    f"{message}; dynamic boundaries are disabled by `dynamic-boundaries = \"deny\"`",
+                    f'{message}; dynamic boundaries are disabled by `dynamic-boundaries = "deny"`',
                     node,
                 )
             return
@@ -2012,14 +2297,18 @@ class _Checker:
             code,
             message,
             node,
-            help=help or "wrap the region in `with ppy.dynamic:` or mark the function `@ppy.dynamic`",
+            help=help
+            or "wrap the region in `with ppy.dynamic:` or mark the function `@ppy.dynamic`",
         )
 
-    def _check_attribute_assignment(self, owner: Binding, target: ast.Attribute, value: Binding) -> None:
+    def _check_attribute_assignment(
+        self, owner: Binding, target: ast.Attribute, value: Binding
+    ) -> None:
         if isinstance(owner.type, (T.Module_, T.ClassObject)):
             self._dynamic_feature(
                 "E1506",
-                f"assigning to `{ast.unparse(target)}` monkey-patches a module or class after analysis",
+                f"assigning to `{ast.unparse(target)}` "
+                "monkey-patches a module or class after analysis",
                 target,
             )
             return
@@ -2033,10 +2322,13 @@ class _Checker:
                 if info.slots is not None:
                     self._error("E1202", f"`{info.name}` has no attribute `{target.attr}`", target)
                 return
-            if not isinstance(declared[0], T.Callable_) and not T.is_assignable(value.type, declared[0]):
+            if not isinstance(declared[0], T.Callable_) and not T.is_assignable(
+                value.type, declared[0]
+            ):
                 self._error(
                     "E1301",
-                    f"attribute `{target.attr}` of `{info.name}` expects `{declared[0]}`, got `{value.type}`",
+                    f"attribute `{target.attr}` of `{info.name}` "
+                    f"expects `{declared[0]}`, got `{value.type}`",
                     target,
                 )
 
@@ -2067,12 +2359,15 @@ class _Checker:
         if self._contract_mode_forbids_checks():
             self._error(
                 "E1402",
-                f"{what} may leave the range of `ppy.{marker}` and the contract mode forbids a runtime check",
+                f"{what} may leave the range of `ppy.{marker}` "
+                "and the contract mode forbids a runtime check",
                 node,
             )
             return facts
         self._remark(f"inserted a checked `{marker}` conversion for {what} (range {actual})", node)
-        return facts.with_(int_range=allowed.meet(actual) if allowed.meet(actual).low is not None else allowed)
+        return facts.with_(
+            int_range=allowed.meet(actual) if allowed.meet(actual).low is not None else allowed
+        )
 
     def _contract_mode_forbids_checks(self) -> bool:
         return False
@@ -2104,7 +2399,11 @@ class _Checker:
 
     def _range_facts(self, node: ast.expr) -> Facts:
         """Bound a `range` induction variable when its arguments are constant."""
-        if not (isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "range"):
+        if not (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Name)
+            and node.func.id == "range"
+        ):
             return Facts(int_range=IntRange())
         values: list[int] = []
         for arg in node.args:
@@ -2143,7 +2442,9 @@ class _Checker:
         self._dynamic_depth += 1
         self._dynamic_seen = True
         if self.dynamic_policy == "deny":
-            self._error("E1505", "dynamic boundaries are disabled by `dynamic-boundaries = \"deny\"`", node)
+            self._error(
+                "E1505", 'dynamic boundaries are disabled by `dynamic-boundaries = "deny"`', node
+            )
 
     def _is_module_global(self, name: str) -> bool:
         """A mutable module-level binding, which reading is an effect."""
@@ -2156,7 +2457,9 @@ class _Checker:
         )
 
     def _is_len_call(self, node: ast.expr) -> bool:
-        return isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "len"
+        return (
+            isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "len"
+        )
 
     def _constant_of(self, expr: ast.expr, env: Env) -> object | None:
         try:
@@ -2324,7 +2627,9 @@ class _Checker:
             )
         return Binding(result.type, result.facts)
 
-    def _plugin_operator(self, symbol: str, operands: list[Binding], node: ast.AST) -> Binding | None:
+    def _plugin_operator(
+        self, symbol: str, operands: list[Binding], node: ast.AST
+    ) -> Binding | None:
         """Let a plugin type an operator applied to its own values."""
         if self.plugins is None or not symbol:
             return None
@@ -2409,7 +2714,9 @@ class _Checker:
         return Binding(T.UNKNOWN)
 
     def _error(self, code: str, message: str, node: ast.AST, help: str | None = None) -> None:
-        self.diagnostics.add(Diagnostic(code, Severity.ERROR, message, span_of(self.path, node), help=help))
+        self.diagnostics.add(
+            Diagnostic(code, Severity.ERROR, message, span_of(self.path, node), help=help)
+        )
 
     def _error_at(self, code: str, message: str, node: ast.AST, help: str | None = None) -> None:
         self._error(code, message, node, help)
@@ -2418,7 +2725,9 @@ class _Checker:
         self.diagnostics.add(Diagnostic(code, Severity.WARNING, message, span_of(self.path, node)))
 
     def _remark(self, message: str, node: ast.AST) -> None:
-        self.diagnostics.add(Diagnostic("R3001", Severity.REMARK, message, span_of(self.path, node)))
+        self.diagnostics.add(
+            Diagnostic("R3001", Severity.REMARK, message, span_of(self.path, node))
+        )
 
 
 def _assigned_names(node: ast.AST) -> set[str]:
@@ -2438,10 +2747,14 @@ def _assigned_names(node: ast.AST) -> set[str]:
 
 def _invert_order(op: ast.cmpop) -> ast.cmpop:
     match op:
-        case ast.Lt(): return ast.GtE()
-        case ast.LtE(): return ast.Gt()
-        case ast.Gt(): return ast.LtE()
-        case ast.GtE(): return ast.Lt()
+        case ast.Lt():
+            return ast.GtE()
+        case ast.LtE():
+            return ast.Gt()
+        case ast.Gt():
+            return ast.LtE()
+        case ast.GtE():
+            return ast.Lt()
     return op
 
 
@@ -2465,7 +2778,7 @@ def analyze(
     *,
     strict: bool = True,
     dynamic_policy: str = "explicit",
-    plugins: "PluginRegistry | None" = None,
+    plugins: PluginRegistry | None = None,
 ) -> ProjectAnalysis:
     """Run the effect fixpoint, then a final recording pass (spec 11.5)."""
     analysis = ProjectAnalysis(symbols=symbols, diagnostics=diagnostics)
@@ -2473,8 +2786,7 @@ def analyze(
 
     def summaries() -> dict[str, str]:
         return {
-            qualname: f"{info.effects}|{info.ret}"
-            for qualname, info in symbols.functions.items()
+            qualname: f"{info.effects}|{info.ret}" for qualname, info in symbols.functions.items()
         }
 
     # One silent pass seeds every summary; a second pass is what confirms the
@@ -2485,8 +2797,14 @@ def analyze(
     silent = DiagnosticBag()
     for module_symbols in ordered:
         _Checker(
-            module_symbols, symbols, analysis, silent,
-            strict=False, record=False, dynamic_policy=dynamic_policy, plugins=plugins,
+            module_symbols,
+            symbols,
+            analysis,
+            silent,
+            strict=False,
+            record=False,
+            dynamic_policy=dynamic_policy,
+            plugins=plugins,
         ).check_module()
 
     for attempt in range(_FIXPOINT_ROUNDS):
@@ -2496,8 +2814,14 @@ def analyze(
         modules: dict[str, ModuleAnalysis] = {}
         for module_symbols in ordered:
             checker = _Checker(
-                module_symbols, symbols, analysis, bag,
-                strict=strict, record=True, dynamic_policy=dynamic_policy, plugins=plugins,
+                module_symbols,
+                symbols,
+                analysis,
+                bag,
+                strict=strict,
+                record=True,
+                dynamic_policy=dynamic_policy,
+                plugins=plugins,
             )
             modules[module_symbols.name] = checker.check_module()
         if final or summaries() == before:

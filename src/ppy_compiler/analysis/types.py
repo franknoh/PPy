@@ -7,48 +7,48 @@ chosen by the backend (spec 10.4).
 
 from __future__ import annotations
 
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
-from typing import Iterable, Sequence
 
 __all__ = [
-    "Type",
-    "AnyType",
-    "UnknownType",
-    "NeverType",
-    "Instance",
-    "Literal",
-    "Tuple_",
-    "Union_",
-    "Callable_",
-    "Param",
-    "Module_",
-    "ClassObject",
-    "TypeVar_",
     "ANY",
-    "UNKNOWN",
+    "BOOL",
+    "BUILTIN_MRO",
+    "BYTES",
+    "COMPLEX",
+    "ELLIPSIS_T",
+    "FLOAT",
+    "INT",
     "NEVER",
     "NONE",
-    "BOOL",
-    "INT",
-    "FLOAT",
-    "COMPLEX",
-    "STR",
-    "BYTES",
     "OBJECT",
-    "ELLIPSIS_T",
-    "BUILTIN_MRO",
-    "instance",
-    "list_of",
-    "set_of",
+    "STR",
+    "UNKNOWN",
+    "AnyType",
+    "Callable_",
+    "ClassObject",
+    "Instance",
+    "Literal",
+    "Module_",
+    "NeverType",
+    "Param",
+    "Tuple_",
+    "Type",
+    "TypeVar_",
+    "Union_",
+    "UnknownType",
     "dict_of",
-    "union",
+    "instance",
     "is_assignable",
-    "join",
-    "remove_none",
-    "is_optional",
-    "is_numeric",
-    "numeric_rank",
     "is_exact_builtin",
+    "is_numeric",
+    "is_optional",
+    "join",
+    "list_of",
+    "numeric_rank",
+    "remove_none",
+    "set_of",
+    "union",
 ]
 
 
@@ -126,7 +126,13 @@ BUILTIN_MRO: dict[str, tuple[str, ...]] = {
     "IndexError": ("IndexError", "LookupError", "Exception", "BaseException", "object"),
     "KeyError": ("KeyError", "LookupError", "Exception", "BaseException", "object"),
     "LookupError": ("LookupError", "Exception", "BaseException", "object"),
-    "ZeroDivisionError": ("ZeroDivisionError", "ArithmeticError", "Exception", "BaseException", "object"),
+    "ZeroDivisionError": (
+        "ZeroDivisionError",
+        "ArithmeticError",
+        "Exception",
+        "BaseException",
+        "object",
+    ),
     "ArithmeticError": ("ArithmeticError", "Exception", "BaseException", "object"),
     "OverflowError": ("OverflowError", "ArithmeticError", "Exception", "BaseException", "object"),
     "StopIteration": ("StopIteration", "Exception", "BaseException", "object"),
@@ -333,6 +339,14 @@ def _all_never(args: tuple[Type, ...]) -> bool:
     return all(isinstance(a, NeverType) for a in args)
 
 
+#: Container protocols, which describe what a value offers rather than what it
+#: is. A union holding one of these alongside something that satisfies it is
+#: saying the same thing twice.
+ABSTRACT_CONTAINERS = frozenset(
+    {"Sequence", "Iterable", "Iterator", "Mapping", "Collection", "Reversible", "Container"}
+)
+
+
 def union(*types: Type) -> Type:
     """Build a normalized union."""
     flat = _flatten(types)
@@ -348,10 +362,7 @@ def union(*types: Type) -> Type:
     # sits: `tuple[Literal[0.0], ...]` and `tuple[float, ...]` are one member,
     # which is what a function returning a constant from one branch produces.
     present = set(unique)
-    unique = [
-        t for t in unique
-        if not (_widen_literals(t) != t and _widen_literals(t) in present)
-    ]
+    unique = [t for t in unique if not (_widen_literals(t) != t and _widen_literals(t) in present)]
     # `list[Never]` is the empty list, so it is absorbed by any populated list
     # of the same shape. Without this, `out = []` followed by `out.append(x)`
     # merges back into `list[Never] | list[X]` at the top of the loop.
@@ -362,13 +373,25 @@ def union(*types: Type) -> Type:
     }
     if populated:
         unique = [
-            t for t in unique
+            t
+            for t in unique
             if not (
                 isinstance(t, Instance)
                 and t.args
                 and _all_never(t.args)
                 and (t.name, len(t.args)) in populated
             )
+        ]
+    # A concrete container is absorbed by a protocol it satisfies. Call-site
+    # evidence produces this whenever one caller passes a `list` and another
+    # was itself widened to `Sequence`: what the parameter takes is the
+    # protocol, not a choice between it and one of its own implementations.
+    protocols = [t for t in unique if isinstance(t, Instance) and t.name in ABSTRACT_CONTAINERS]
+    if protocols:
+        unique = [
+            t
+            for t in unique
+            if any(t is p for p in protocols) or not any(is_assignable(t, p) for p in protocols)
         ]
     if len(unique) == 1:
         return unique[0]
@@ -443,10 +466,9 @@ def _instance_assignable(source: Instance, target: Instance) -> bool:
     if target.name == "object":
         return True
     rank_s, rank_t = numeric_rank(source), numeric_rank(target)
-    if rank_s is not None and rank_t is not None:
-        # Python's implicit numeric promotion: bool -> int -> float -> complex.
-        if rank_s <= rank_t:
-            return True
+    # Python's implicit numeric promotion: bool -> int -> float -> complex.
+    if rank_s is not None and rank_t is not None and rank_s <= rank_t:
+        return True
     if target.name not in source.resolved_mro:
         return False
     if not target.args:
@@ -457,10 +479,10 @@ def _instance_assignable(source: Instance, target: Instance) -> bool:
     # display has a `Never` element type, which fits any element type.
     covariant = source.name in {"tuple", "frozenset", "Sequence", "Iterable", "Iterator", "Mapping"}
     if covariant:
-        return all(is_assignable(a, b) for a, b in zip(source.args, target.args))
+        return all(is_assignable(a, b) for a, b in zip(source.args, target.args, strict=False))
     return all(
         a == b or isinstance(b, AnyType) or isinstance(a, NeverType)
-        for a, b in zip(source.args, target.args)
+        for a, b in zip(source.args, target.args, strict=False)
     )
 
 
@@ -474,13 +496,12 @@ def _tuple_assignable(source: Tuple_, target: Type) -> bool:
             return False
         if len(source.items) != len(target.items):
             return False
-        return all(is_assignable(a, b) for a, b in zip(source.items, target.items))
-    if isinstance(target, Instance):
-        if target.name in {"tuple", "object", "Sequence", "Iterable"}:
-            if not target.args:
-                return True
-            element = join(*source.items) if source.items else NEVER
-            return is_assignable(element, target.args[0])
+        return all(is_assignable(a, b) for a, b in zip(source.items, target.items, strict=False))
+    if isinstance(target, Instance) and target.name in {"tuple", "object", "Sequence", "Iterable"}:
+        if not target.args:
+            return True
+        element = join(*source.items) if source.items else NEVER
+        return is_assignable(element, target.args[0])
     return False
 
 
@@ -490,20 +511,30 @@ def _callable_assignable(source: Callable_, target: Callable_) -> bool:
     required = [p for p in target.params if not p.has_default]
     if len(source.params) < len(required):
         return False
-    for sp, tp in zip(source.params, target.params):
-        if not is_assignable(tp.type, sp.type):
-            return False
-    return True
+    return all(
+        is_assignable(tp.type, sp.type)
+        for sp, tp in zip(source.params, target.params, strict=False)
+    )
 
 
 def is_optional(t: Type) -> bool:
     return isinstance(t, Union_) and any(m == NONE for m in t.members)
 
 
-_IMMUTABLE_NAMES = frozenset({
-    "int", "float", "complex", "bool", "str", "bytes", "NoneType",
-    "frozenset", "range", "slice",
-})
+_IMMUTABLE_NAMES = frozenset(
+    {
+        "int",
+        "float",
+        "complex",
+        "bool",
+        "str",
+        "bytes",
+        "NoneType",
+        "frozenset",
+        "range",
+        "slice",
+    }
+)
 
 
 def is_immutable(t: Type) -> bool:

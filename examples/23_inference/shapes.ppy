@@ -1,5 +1,4 @@
 from collections.abc import Sequence
-from typing import Final
 
 import ppy
 
@@ -48,7 +47,7 @@ def build(count: int) -> list[Rect]:
     return out
 
 
-boxes: Final[list[Rect]] = build(4)
+boxes: list[Rect] = build(4)
 print(total_area(boxes))
 print(label(widest(boxes), "max"))
 print(label(widest([]), "none") if widest([]) is None else 0.0)

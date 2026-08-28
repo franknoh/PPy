@@ -12,23 +12,43 @@ import libcst.matchers as m
 from libcst.metadata import MetadataWrapper, PositionProvider
 
 from ..analysis import types as T
+from ..analysis.inference import (
+    callee_qualname,
+    has_source_annotation,
+    is_self_attribute,
+    refine_with_call_sites,
+)
 from ..analysis.render import render_annotation
-from ..diagnostics import Diagnostic, DiagnosticBag, Severity
+from ..diagnostics import Diagnostic, Severity
 from ..frontend.source import span_of
-from .formatting import format_source, normalize_source
+from .formatting import FormatterFailed, format_source, normalize_source
 from .pipeline import analyze_paths, collect_sources, open_project
 from .reporting import Reporter
 
-__all__ = ["run_convert", "convert_source", "ConversionPlan"]
+__all__ = ["ConversionPlan", "convert_source", "run_convert"]
 
 _DYNAMIC_CALLS = {"eval", "exec", "compile", "globals", "locals", "vars", "__import__"}
 
 #: Names PEP 585 moved out of `typing`.
-_COLLECTIONS_ABC = frozenset({
-    "Sequence", "Iterable", "Iterator", "Mapping", "MutableMapping",
-    "MutableSequence", "Callable", "Generator", "Coroutine", "Awaitable",
-    "AsyncIterable", "AsyncIterator", "Container", "Collection", "Set",
-})
+_COLLECTIONS_ABC = frozenset(
+    {
+        "Sequence",
+        "Iterable",
+        "Iterator",
+        "Mapping",
+        "MutableMapping",
+        "MutableSequence",
+        "Callable",
+        "Generator",
+        "Coroutine",
+        "Awaitable",
+        "AsyncIterable",
+        "AsyncIterator",
+        "Container",
+        "Collection",
+        "Set",
+    }
+)
 
 
 @dataclass(slots=True)
@@ -58,8 +78,13 @@ class ConversionPlan:
     @property
     def is_empty(self) -> bool:
         return not (
-            self.params or self.returns or self.assignments or self.fields
-            or self.decorators or self.buffers or self.needs_ppy
+            self.params
+            or self.returns
+            or self.assignments
+            or self.fields
+            or self.decorators
+            or self.buffers
+            or self.needs_ppy
         )
 
 
@@ -102,7 +127,21 @@ def run_convert(options: argparse.Namespace, reporter: Reporter) -> int:
         # only when asked for, because it is not.
         converted = convert_source(original, plan)
         if _wants_formatting(options, project):
-            converted = format_source(converted, path)
+            try:
+                # The plan resolved the imports, so it knows exactly which of
+                # them are first-party; the formatter must not have to guess.
+                converted = format_source(converted, path, frozenset(plan.local_imports))
+            except FormatterFailed as failure:
+                reporter.emit(
+                    Diagnostic(
+                        "E1802",
+                        Severity.ERROR,
+                        f"`{failure.tool}` failed while formatting {path}",
+                        help=failure.detail or "run it directly to see what it objects to",
+                    )
+                )
+                failures += 1
+                continue
         # `--in-place` replaces the source: the module becomes `.ppy` and the
         # `.py` goes, which is what leaves a project importable afterwards.
         destination = path.with_suffix(".ppy")
@@ -172,56 +211,12 @@ def _module_for(bundle, path: Path) -> str | None:  # type: ignore[no-untyped-de
     return None
 
 
-#: Call-site evidence propagates along the call graph, so one round only
-#: reaches functions called from already-typed code. Repeating it walks the
-#: chain; a handful of rounds settles any realistic project.
-_REFINEMENT_ROUNDS = 6
-
-
-def refine_with_call_sites(bundle) -> dict[tuple[str, int], T.Type]:  # type: ignore[no-untyped-def]
-    """Adopt call-site argument types and re-infer, until nothing new appears.
-
-    Without this a function whose parameters were only inferred would still
-    return `<unknown>`, and nothing downstream of it could be annotated.
-    """
-    from ..analysis.checker import analyze
-    from ..diagnostics import DiagnosticBag
-
-    observed: dict[tuple[str, int], T.Type] = {}
-    for _round in range(_REFINEMENT_ROUNDS):
-        observed = _observed_arguments(bundle)
-        changed = False
-        for (qualname, index), inferred in observed.items():
-            info = bundle.symbols.functions.get(qualname)
-            if info is None or index >= len(info.params):
-                continue
-            param = info.params[index]
-            if param.annotated or isinstance(inferred, (T.UnknownType, T.AnyType)):
-                continue
-            param.type = inferred
-            param.annotated = True
-            changed = True
-        changed |= _infer_fields(bundle)
-        changed |= _infer_from_usage(bundle)
-        changed |= _widen_read_only_params(bundle)
-        if not changed:
-            break
-        bundle.analysis = analyze(
-            bundle.symbols,
-            DiagnosticBag(),
-            strict=False,
-            dynamic_policy=bundle.project.config.dynamic_boundaries,
-            plugins=bundle.project.plugins,
-        )
-    return observed
-
-
 def build_plan(  # type: ignore[no-untyped-def]
     bundle,
     module_name: str,
     observed: dict[tuple[str, int], T.Type] | None = None,
-    promotions: "list[BufferPromotion] | None" = None,
-    blocked: "list[tuple[object, str, str]] | None" = None,
+    promotions: list[BufferPromotion] | None = None,
+    blocked: list[tuple[object, str, str]] | None = None,
 ) -> tuple[ConversionPlan, list[Diagnostic]]:
     """Decide which annotations to insert, using interprocedural evidence."""
     plan = ConversionPlan(needs_ppy=True)
@@ -244,13 +239,17 @@ def build_plan(  # type: ignore[no-untyped-def]
             if index == 0 and info.is_method and not info.is_static:
                 # The receiver's type is the class it is defined in.
                 continue
-            if _has_source_annotation(info, param.name):
+            if has_source_annotation(info, param.name):
                 continue
             # Inference has the last word: it started from the observed types
             # and then settled them, widening a read-only container to the
             # protocol its body needs.
-            candidate = param.type if param.annotated else observed.get((info.qualname, index))
-            rendered = render_annotation(candidate, local_module=module_name) if candidate is not None else None
+            candidate = param.type if param.known else observed.get((info.qualname, index))
+            rendered = (
+                render_annotation(candidate, local_module=module_name)
+                if candidate is not None
+                else None
+            )
             if rendered is None:
                 diagnostics.append(
                     Diagnostic(
@@ -258,7 +257,10 @@ def build_plan(  # type: ignore[no-untyped-def]
                         Severity.WARNING,
                         f"cannot infer a stable type for parameter `{param.name}`",
                         span_of(info.path, info.node),
-                        help="annotate it explicitly, split the function, or isolate the dynamic operation",
+                        help=(
+                            "annotate it explicitly, split the function, "
+                            "or isolate the dynamic operation"
+                        ),
                     )
                 )
                 continue
@@ -278,7 +280,7 @@ def build_plan(  # type: ignore[no-untyped-def]
                 plan.ppy_imports |= rendered.ppy_imports
 
     if bundle.project.config.inference.write_local_annotations and analysis is not None:
-        _plan_module_globals(symbols, analysis, plan, module_name)
+        _plan_module_globals(symbols, analysis, plan, module_name, bundle)
         _plan_empty_containers(symbols, analysis, plan, module_name)
     _plan_fields(symbols, plan, module_name)
     if analysis is not None:
@@ -344,69 +346,19 @@ def _uses_ppy(plan: ConversionPlan, symbols) -> bool:  # type: ignore[no-untyped
     return any(not binding.external for binding in symbols.imports.values())
 
 
-def _observed_arguments(bundle) -> dict[tuple[str, int], T.Type]:  # type: ignore[no-untyped-def]
-    """Join the argument types seen at every call site of each function."""
-    observed: dict[tuple[str, int], T.Type] = {}
-    for module_name, module in bundle.analysis.modules.items():
-        symbols = bundle.symbols.modules.get(module_name)
-        if symbols is None:
-            continue
-        for node in ast.walk(symbols.module.tree):
-            if not isinstance(node, ast.Call):
-                continue
-            qualname = _callee_qualname(bundle, symbols, node)
-            if qualname is None:
-                continue
-            info = bundle.symbols.functions.get(qualname)
-            if info is None:
-                continue
-            offset = 1 if info.is_method and not info.is_static else 0
-            for index, argument in enumerate(node.args):
-                observed_type = T.strip_literal(module.type_of(argument))
-                if isinstance(observed_type, (T.UnknownType, T.AnyType, T.NeverType)):
-                    continue
-                key = (qualname, index + offset)
-                existing = observed.get(key)
-                observed[key] = observed_type if existing is None else T.join(existing, observed_type)
-    for qualname, info in bundle.symbols.functions.items():
-        for index, param in enumerate(info.params):
-            if param.annotated and not isinstance(param.type, T.UnknownType):
-                observed.setdefault((qualname, index), param.type)
-    return observed
+#: `Final` is a contract about a module's interface, not a note that the
+#: compiler happened to see one assignment. It is written where a programmer
+#: would write it: on a name that already announces itself as a constant.
+def _reads_as_a_constant(name: str) -> bool:
+    return name.upper() == name and any(c.isalpha() for c in name)
 
 
-def _callee_qualname(bundle, symbols, node: ast.Call) -> str | None:  # type: ignore[no-untyped-def]
-    """The function a call reaches, following a constructor to `__init__`."""
-    resolver = bundle.symbols.resolver(symbols)
-    direct = resolver.canonical(node.func)
-    if direct is not None and direct in bundle.symbols.functions:
-        return direct
-    if direct is not None and direct in bundle.symbols.classes:
-        initializer = f"{direct}.__init__"
-        if initializer in bundle.symbols.functions:
-            return initializer
-    if isinstance(node.func, ast.Name):
-        local = f"{symbols.name}.{node.func.id}"
-        if local in bundle.symbols.functions:
-            return local
-        if local in bundle.symbols.classes:
-            initializer = f"{local}.__init__"
-            if initializer in bundle.symbols.functions:
-                return initializer
-    if isinstance(node.func, ast.Attribute):
-        # A method called on a value of a known class.
-        analysis = bundle.analysis.modules.get(symbols.name)
-        if analysis is not None:
-            owner = T.strip_literal(analysis.type_of(node.func.value))
-            if isinstance(owner, T.Instance):
-                method = f"{owner.name}.{node.func.attr}"
-                if method in bundle.symbols.functions:
-                    return method
-    return None
-
-
-def _plan_module_globals(symbols, analysis, plan: ConversionPlan, module_name: str) -> None:  # type: ignore[no-untyped-def]
+def _plan_module_globals(  # type: ignore[no-untyped-def]
+    symbols, analysis, plan: ConversionPlan, module_name: str, bundle=None
+) -> None:
     rebound = _rebound_globals(symbols)
+    if bundle is not None:
+        rebound |= _assigned_from_other_modules(bundle, module_name)
     annotated: set[str] = set()
     for node in symbols.module.tree.body:
         if not isinstance(node, ast.Assign) or len(node.targets) != 1:
@@ -420,12 +372,15 @@ def _plan_module_globals(symbols, analysis, plan: ConversionPlan, module_name: s
             continue
         annotated.add(target.id)
         value_type = T.strip_literal(analysis.type_of(node.value))
-        rendered = render_annotation(value_type, analysis.facts_of(node.value), local_module=module_name)
+        rendered = render_annotation(
+            value_type, analysis.facts_of(node.value), local_module=module_name
+        )
         if rendered is None:
             continue
         text = rendered.text
-        if target.id not in rebound:
-            # Bound once and never rebound, which is what `Final` states.
+        if target.id not in rebound and _reads_as_a_constant(target.id):
+            # Bound once, nowhere rebound in the project, and named as a
+            # constant -- which is when `Final` says what the author meant.
             text = f"Final[{text}]"
             plan.typing_imports = plan.typing_imports | {"Final"}
         plan.assignments[(node.lineno, target.id)] = text
@@ -434,30 +389,101 @@ def _plan_module_globals(symbols, analysis, plan: ConversionPlan, module_name: s
 
 
 def _rebound_globals(symbols) -> set[str]:  # type: ignore[no-untyped-def]
-    """Module-level names that are assigned more than once, or from a function.
+    """Module-level names that are bound more than once, or unbound again.
 
     `Final` is a claim about the whole module, so a second binding anywhere --
-    including a `global` statement in some function -- disqualifies the name.
+    a `global` statement in some function, a `with ... as`, a `def` that
+    shadows an assignment -- disqualifies the name. Python has more ways to
+    bind a name than assignment, and each one that is missed here is a `Final`
+    the module goes on to contradict.
     """
     counts: dict[str, int] = {}
     rebound: set[str] = set()
+
+    def count(target: ast.expr | None) -> None:
+        for name in ast.walk(target) if target is not None else ():
+            if isinstance(name, ast.Name):
+                counts[name.id] = counts.get(name.id, 0) + 1
+
     for node in ast.walk(symbols.module.tree):
         if isinstance(node, ast.Global):
             rebound.update(node.names)
-        targets: list[ast.expr] = []
-        if isinstance(node, ast.Assign):
-            targets = list(node.targets)
-        elif isinstance(node, (ast.AnnAssign, ast.AugAssign)):
-            targets = [node.target]
-        elif isinstance(node, (ast.For, ast.AsyncFor)):
-            targets = [node.target]
-        elif isinstance(node, ast.NamedExpr):
-            targets = [node.target]
-        for target in targets:
-            for name in ast.walk(target):
-                if isinstance(name, ast.Name):
-                    counts[name.id] = counts.get(name.id, 0) + 1
+        elif isinstance(node, ast.Delete):
+            for target in node.targets:
+                if isinstance(target, ast.Name):
+                    rebound.add(target.id)
+        elif isinstance(node, ast.Assign):
+            for target in node.targets:
+                count(target)
+        elif isinstance(node, (ast.AnnAssign, ast.AugAssign, ast.For, ast.AsyncFor, ast.NamedExpr)):
+            count(node.target)
+        elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            counts[node.name] = counts.get(node.name, 0) + 1
+        elif isinstance(node, (ast.Import, ast.ImportFrom)):
+            for alias in node.names:
+                bound = alias.asname or alias.name.partition(".")[0]
+                counts[bound] = counts.get(bound, 0) + 1
+        elif isinstance(node, (ast.With, ast.AsyncWith)):
+            for item in node.items:
+                count(item.optional_vars)
+        elif (
+            (isinstance(node, ast.ExceptHandler) and node.name)
+            or (isinstance(node, ast.MatchAs) and node.name)
+            or (isinstance(node, ast.MatchStar) and node.name)
+        ):
+            counts[node.name] = counts.get(node.name, 0) + 1
+        elif isinstance(node, ast.MatchMapping) and node.rest:
+            counts[node.rest] = counts.get(node.rest, 0) + 1
     return rebound | {name for name, seen in counts.items() if seen > 1}
+
+
+def _assigned_from_other_modules(bundle, module_name: str) -> set[str]:  # type: ignore[no-untyped-def]
+    """Names this module's globals are given from somewhere else.
+
+    `Final` is part of the module's public interface, so proving it needs the
+    whole project: another module doing `config.registry = {}` rebinds the name
+    just as surely as a second assignment here would, and only that module's
+    source says so.
+    """
+    assigned: set[str] = set()
+    for other, symbols in bundle.symbols.modules.items():
+        if other == module_name:
+            continue
+        aliases = _aliases_for(symbols, module_name)
+        if not aliases:
+            continue
+        for node in ast.walk(symbols.module.tree):
+            targets: list[ast.expr] = []
+            if isinstance(node, ast.Assign):
+                targets = list(node.targets)
+            elif isinstance(node, (ast.AnnAssign, ast.AugAssign)):
+                targets = [node.target]
+            elif isinstance(node, ast.Delete):
+                targets = list(node.targets)
+            for target in targets:
+                if (
+                    isinstance(target, ast.Attribute)
+                    and isinstance(target.value, ast.Name)
+                    and target.value.id in aliases
+                ):
+                    assigned.add(target.attr)
+    return assigned
+
+
+def _aliases_for(symbols, module_name: str) -> set[str]:  # type: ignore[no-untyped-def]
+    """The local names under which a module refers to another module."""
+    aliases: set[str] = set()
+    for node in ast.walk(symbols.module.tree):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                if alias.name == module_name or module_name.endswith("." + alias.name):
+                    aliases.add(alias.asname or alias.name.partition(".")[0])
+        elif isinstance(node, ast.ImportFrom):
+            for alias in node.names:
+                reached = f"{node.module}.{alias.name}" if node.module else alias.name
+                if reached == module_name or module_name.endswith("." + alias.name):
+                    aliases.add(alias.asname or alias.name)
+    return aliases
 
 
 def _plan_empty_containers(symbols, analysis, plan: ConversionPlan, module_name: str) -> None:  # type: ignore[no-untyped-def]
@@ -508,19 +534,22 @@ def _is_empty_container(value: ast.expr) -> bool:
 def _dynamic_findings(symbols) -> list[Diagnostic]:  # type: ignore[no-untyped-def]
     """Report the dynamic features that block conversion (spec 9)."""
     found: list[Diagnostic] = []
-    for node in ast.walk(symbols.module.tree):
-        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id in _DYNAMIC_CALLS:
-            found.append(
-                Diagnostic(
-                    "E1504",
-                    Severity.WARNING,
-                    f"`{node.func.id}` is a dynamic feature the converted module must isolate",
-                    span_of(symbols.path, node),
-                    help="wrap it in `with ppy.dynamic:` or mark the function `@ppy.dynamic`",
-                )
-            )
+    found.extend(
+        Diagnostic(
+            "E1504",
+            Severity.WARNING,
+            f"`{node.func.id}` is a dynamic feature the converted module must isolate",
+            span_of(symbols.path, node),
+            help="wrap it in `with ppy.dynamic:` or mark the function `@ppy.dynamic`",
+        )
+        for node in ast.walk(symbols.module.tree)
+        if (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Name)
+            and node.func.id in _DYNAMIC_CALLS
+        )
+    )
     return found
-
 
 
 class _Annotator(cst.CSTTransformer):
@@ -650,9 +679,7 @@ def _insert_imports(module: cst.Module, plan: ConversionPlan) -> cst.Module:
     # them from `typing` is deprecated.
     abc_names = sorted(wanted & _COLLECTIONS_ABC)
     if abc_names:
-        standard.append(
-            cst.parse_statement(f"from collections.abc import {', '.join(abc_names)}")
-        )
+        standard.append(cst.parse_statement(f"from collections.abc import {', '.join(abc_names)}"))
     typing_names = sorted(wanted - _COLLECTIONS_ABC)
     if typing_names:
         standard.append(cst.parse_statement(f"from typing import {', '.join(typing_names)}"))
@@ -739,93 +766,15 @@ def _insert_index(module: cst.Module) -> int:
             and isinstance(first, cst.Expr)
             and isinstance(first.value, cst.SimpleString)
         )
-        is_future = isinstance(first, cst.ImportFrom) and _dotted(first.module or cst.Name("")) == "__future__"
+        is_future = (
+            isinstance(first, cst.ImportFrom)
+            and _dotted(first.module or cst.Name("")) == "__future__"
+        )
         if is_docstring or is_future:
             index = position + 1
             continue
         break
     return index
-
-
-def _has_source_annotation(info, name: str) -> bool:  # type: ignore[no-untyped-def]
-    """Was the parameter already annotated in the original source?"""
-    arguments = info.node.args
-    for group in (arguments.posonlyargs, arguments.args, arguments.kwonlyargs):
-        for argument in group:
-            if argument.arg == name:
-                return argument.annotation is not None
-    for argument in (arguments.vararg, arguments.kwarg):
-        if argument is not None and argument.arg == name:
-            return argument.annotation is not None
-    return False
-
-
-def _infer_fields(bundle) -> bool:  # type: ignore[no-untyped-def]
-    """Give each instance field the type `__init__` assigns to it.
-
-    `self.width = width` says as much about `width` as an annotation would,
-    and without it nothing that reads the field can be typed.
-    """
-    changed = False
-    for qualname, info in bundle.symbols.classes.items():
-        initializer = info.methods.get("__init__")
-        analysis = bundle.analysis.modules.get(info.module)
-        if initializer is None or analysis is None:
-            continue
-        for node in ast.walk(initializer.node):
-            if not isinstance(node, ast.Assign) or len(node.targets) != 1:
-                continue
-            target = node.targets[0]
-            if not _is_self_attribute(target, initializer):
-                continue
-            name = target.attr  # type: ignore[union-attr]
-            if not isinstance(info.fields.get(name, T.UNKNOWN), T.UnknownType):
-                continue
-            assigned = T.strip_literal(analysis.type_of(node.value))
-            if isinstance(assigned, (T.UnknownType, T.AnyType, T.NeverType)):
-                continue
-            info.fields[name] = assigned
-            changed = True
-    return changed
-
-
-def _infer_from_usage(bundle) -> bool:  # type: ignore[no-untyped-def]
-    """Type a parameter nothing calls, from the arithmetic it takes part in.
-
-    A helper that is only ever called from outside the module has no call-site
-    evidence, but `self.width * factor` still says `factor` is a number.
-    """
-    changed = False
-    for qualname, info in bundle.symbols.functions.items():
-        analysis = bundle.analysis.modules.get(info.module)
-        if analysis is None:
-            continue
-        pending = {p.name: p for p in info.params if not p.annotated}
-        if not pending:
-            continue
-        for node in ast.walk(info.node):
-            if not isinstance(node, ast.BinOp):
-                continue
-            for side, other in ((node.left, node.right), (node.right, node.left)):
-                if not isinstance(side, ast.Name) or side.id not in pending:
-                    continue
-                partner = T.strip_literal(analysis.type_of(other))
-                if partner not in (T.INT, T.FLOAT):
-                    continue
-                param = pending.pop(side.id)
-                param.type = partner
-                param.annotated = True
-                changed = True
-    return changed
-
-
-def _is_self_attribute(target: ast.expr, info) -> bool:  # type: ignore[no-untyped-def]
-    receiver = info.params[0].name if info.params else "self"
-    return (
-        isinstance(target, ast.Attribute)
-        and isinstance(target.value, ast.Name)
-        and target.value.id == receiver
-    )
 
 
 def _apply_promotions(  # type: ignore[no-untyped-def]
@@ -847,207 +796,11 @@ def _apply_promotions(  # type: ignore[no-untyped-def]
                     help="the values feeding it become `array.array` so the memory can be lent",
                 )
             )
-        for source_module, line, name in promotion.sources:
+        for source_module, line, _name in promotion.sources:
             if source_module != module_name:
                 continue
             plan.buffers[line] = promotion.code
             plan.needs_array = True
-
-
-@dataclass(frozen=True, slots=True)
-class _Widening:
-    """A concrete container and the protocol it may be declared as instead."""
-
-    protocol: str
-    # Not `mro`: `dataclasses` reads class attributes to find defaults, and
-    # `type.mro` would look like one.
-    bases: tuple[str, ...]
-    allowed: frozenset[str]
-
-
-#: A protocol offers fewer operations than the concrete type, and some of the
-#: ones it drops would change what a function returns rather than merely
-#: failing: `xs[:]` of a tuple is a tuple, and `xs + ys` of a tuple is a tuple.
-#: So this is an allowlist of uses, not a test for mutation.
-_READ_ONLY_USES = frozenset({"len", "index", "iterate", "contains", "inspecting-call"})
-
-_WIDENINGS: dict[str, _Widening] = {
-    "list": _Widening(
-        "Sequence",
-        ("Sequence", "Iterable", "object"),
-        _READ_ONLY_USES | {"method:count", "method:index"},
-    ),
-    "dict": _Widening(
-        "Mapping",
-        ("Mapping", "Iterable", "object"),
-        _READ_ONLY_USES | {"method:get", "method:keys", "method:values", "method:items"},
-    ),
-}
-
-#: Builtins that read a container without keeping it or depending on its exact
-#: type: `sorted(xs)` is a list whatever `xs` was.
-_INSPECTS_CONTAINER = frozenset({
-    "len", "sum", "min", "max", "sorted", "any", "all", "list", "tuple", "set",
-    "dict", "enumerate", "reversed", "zip", "iter", "print", "repr", "str",
-})
-
-
-def _widen_read_only_params(bundle) -> bool:  # type: ignore[no-untyped-def]
-    """Declare each read-only container parameter as the protocol it needs.
-
-    This happens inside the inference fixpoint rather than at render time so
-    that the rest of the analysis sees the widened type: what a `Sequence`
-    yields when iterated is what decides the function's own return type.
-    """
-    changed = False
-    for qualname, info in bundle.symbols.functions.items():
-        analysis = bundle.analysis.modules.get(info.module)
-        if analysis is None:
-            continue
-        callees = bundle.symbols.modules[info.module].functions
-        for param in info.params:
-            if _has_source_annotation(info, param.name):
-                continue
-            widened = _read_only_view(param.type, info, param.name, analysis, callees)
-            if widened != param.type:
-                param.type = widened
-                param.annotated = True
-                changed = True
-    return changed
-
-
-def _read_only_view(t: T.Type, info, name: str, analysis, callees=None):  # type: ignore[no-untyped-def]
-    """Declare a container parameter as the protocol its body actually needs.
-
-    A function that only reads its argument should not demand a `list`, which
-    rejects the tuple a caller already has. Being read-only is not enough on
-    its own: `xs.copy()`, `xs + ys`, and `xs[:]` are all reads, and each either
-    does not exist on the protocol or returns something else through it. What
-    decides is whether every use the body makes is one the protocol offers.
-    """
-    if analysis is None:
-        return t
-    function = analysis.functions.get(info.qualname)
-    if function is None or name in function.mutated_params or function.foreign_writes:
-        return t
-    base = T.strip_literal(t)
-    protocol = _shared_protocol(base)
-    if protocol is None:
-        return t
-    widening, args = protocol
-    protocol_type = T.Instance(widening.protocol, args, widening.bases)
-    uses = _parameter_uses(info.node, name, protocol_type, callees)
-    if uses is None or not uses <= widening.allowed:
-        return t
-    return protocol_type
-
-
-def _shared_protocol(t: T.Type) -> tuple[_Widening, tuple[T.Type, ...]] | None:
-    """The protocol that describes this type, or the one every member shares.
-
-    Call sites that pass a list from one place and a tuple from another infer a
-    union of concrete containers. Naming the protocol they have in common is
-    both the honest annotation and the only usable one.
-    """
-    members = t.members if isinstance(t, T.Union_) else (t,)
-    found: set[str] = set()
-    element: tuple[T.Type, ...] | None = None
-    for member in members:
-        described = _as_container(T.strip_literal(member))
-        if described is None:
-            return None
-        protocol, args = described
-        found.add(protocol)
-        if element is None:
-            element = args
-        elif element != args:
-            return None
-    if len(found) != 1 or element is None:
-        return None
-    return _WIDENINGS[found.pop()], element
-
-
-def _as_container(t: T.Type) -> tuple[str, tuple[T.Type, ...]] | None:
-    """Which widening this concrete container belongs to, and its arguments."""
-    if isinstance(t, T.Tuple_):
-        if not t.items:
-            return None
-        first = t.items[0]
-        if any(item != first for item in t.items):
-            return None
-        return "list", (first,)
-    if isinstance(t, T.Instance) and t.args:
-        if t.name == "tuple":
-            return "list", t.args[:1]
-        if t.name in _WIDENINGS:
-            return t.name, t.args
-    return None
-
-
-def _parameter_uses(  # type: ignore[no-untyped-def]
-    node: ast.AST, name: str, protocol=None, callees=None
-) -> set[str] | None:
-    """Every way the body uses this parameter, or None if one is unrecognized.
-
-    An unrecognized use is not taken to be harmless; the parameter keeps its
-    concrete type rather than the analysis guessing about it.
-    """
-    uses: set[str] = set()
-    for child in ast.walk(node):
-        if isinstance(child, ast.Subscript) and _is_name(child.value, name):
-            if isinstance(child.slice, ast.Slice):
-                return None
-            uses.add("index")
-        elif isinstance(child, ast.Attribute) and _is_name(child.value, name):
-            uses.add(f"method:{child.attr}")
-        elif isinstance(child, (ast.For, ast.AsyncFor, ast.comprehension)):
-            if _is_name(child.iter, name):
-                uses.add("iterate")
-        elif isinstance(child, ast.Compare):
-            for operator, comparator in zip(child.ops, child.comparators):
-                if isinstance(operator, (ast.In, ast.NotIn)) and _is_name(comparator, name):
-                    uses.add("contains")
-                elif _is_name(comparator, name) or _is_name(child.left, name):
-                    return None
-        elif isinstance(child, ast.BinOp):
-            if _is_name(child.left, name) or _is_name(child.right, name):
-                return None
-        elif isinstance(child, ast.Call):
-            for position, argument in enumerate(child.args):
-                if not _is_name(argument, name):
-                    continue
-                if isinstance(child.func, ast.Name) and child.func.id in _INSPECTS_CONTAINER:
-                    uses.add("len" if child.func.id == "len" else "inspecting-call")
-                    continue
-                if not _accepts(child, position, protocol, callees):
-                    return None
-                uses.add("inspecting-call")
-        elif isinstance(child, ast.Return) and _is_name(child.value, name):
-            return None
-        elif isinstance(child, (ast.Starred, ast.Await, ast.Yield, ast.YieldFrom)):
-            if _is_name(getattr(child, "value", None), name):
-                return None
-    return uses
-
-
-def _accepts(call: ast.Call, position: int, protocol, callees) -> bool:  # type: ignore[no-untyped-def]
-    """Would the callee still accept this argument once it is the protocol?
-
-    Passing the parameter on is safe only when whatever receives it declares
-    something the protocol satisfies. The inference fixpoint re-runs, so a
-    callee that widens on one round lets its callers widen on the next.
-    """
-    if protocol is None or callees is None or not isinstance(call.func, ast.Name):
-        return False
-    info = callees.get(call.func.id)
-    if info is None or position >= len(info.params):
-        return False
-    parameter = info.params[position]
-    return bool(parameter.annotated) and T.is_assignable(protocol, parameter.type)
-
-
-def _is_name(node, name: str) -> bool:  # type: ignore[no-untyped-def]
-    return isinstance(node, ast.Name) and node.id == name
 
 
 def _plan_purity(functions, analysis, plan: ConversionPlan) -> None:  # type: ignore[no-untyped-def]
@@ -1092,7 +845,7 @@ def _plan_fields(symbols, plan: ConversionPlan, module_name: str) -> None:  # ty
             if not isinstance(node, ast.Assign) or len(node.targets) != 1:
                 continue
             target = node.targets[0]
-            if not _is_self_attribute(target, initializer):
+            if not is_self_attribute(target, initializer):
                 continue
             name = target.attr  # type: ignore[union-attr]
             if name in declared or name in written:
@@ -1116,9 +869,20 @@ _ARRAY_CODES = {"float": "d", "int": "q"}
 #: Ways of using a name that a borrowed buffer cannot serve. `array.array`
 #: does have `append`, but growing it reallocates, which is exactly what
 #: borrowing rules out.
-_LIST_ONLY_METHODS = frozenset({
-    "append", "extend", "insert", "pop", "remove", "clear", "sort", "copy", "count", "index",
-})
+_LIST_ONLY_METHODS = frozenset(
+    {
+        "append",
+        "extend",
+        "insert",
+        "pop",
+        "remove",
+        "clear",
+        "sort",
+        "copy",
+        "count",
+        "index",
+    }
+)
 
 
 @dataclass
@@ -1153,7 +917,7 @@ def plan_buffer_promotions(bundle):  # type: ignore[no-untyped-def]
             continue
         for index, param in enumerate(info.params):
             element = _buffer_scalar(param.type)
-            if element is None or _has_source_annotation(info, param.name):
+            if element is None or has_source_annotation(info, param.name):
                 continue
             blocker = _buffer_blocker(info.node, param.name)
             if blocker is not None:
@@ -1161,16 +925,27 @@ def plan_buffer_promotions(bundle):  # type: ignore[no-untyped-def]
                 continue
             sources = _list_sources(bundle, qualname, index, element)
             if sources is None:
-                blocked.append((
-                    info, param.name,
-                    f"the values passed as `{param.name}` are not all traceable to a "
-                    "single construction this converter can rewrite",
-                ))
+                blocked.append(
+                    (
+                        info,
+                        param.name,
+                        (
+                            f"the values passed as `{param.name}` are not all traceable to a "
+                            "single construction this converter can rewrite"
+                        ),
+                    )
+                )
                 continue
-            found.append(BufferPromotion(
-                qualname, info.node.lineno, param.name,
-                element, _ARRAY_CODES[element], sources,
-            ))
+            found.append(
+                BufferPromotion(
+                    qualname,
+                    info.node.lineno,
+                    param.name,
+                    element,
+                    _ARRAY_CODES[element],
+                    sources,
+                )
+            )
     return _consistent(found, bundle, blocked), blocked
 
 
@@ -1185,20 +960,20 @@ def _consistent(found, bundle, blocked):  # type: ignore[no-untyped-def]
     promoted = {(p.qualname, p.param) for p in found}
     while True:
         readers = _readers_of(bundle, {name for p in found for _m, _l, name in p.sources})
-        conflicted = {
-            name for name, users in readers.items()
-            if not users <= promoted
-        }
+        conflicted = {name for name, users in readers.items() if not users <= promoted}
         if not conflicted:
             return found
         kept = []
         for promotion in found:
             names = {name for _m, _l, name in promotion.sources}
             if names & conflicted:
-                blocked.append((
-                    bundle.symbols.functions[promotion.qualname], promotion.param,
-                    "a value it receives is also read by a parameter that stayed a list",
-                ))
+                blocked.append(
+                    (
+                        bundle.symbols.functions[promotion.qualname],
+                        promotion.param,
+                        "a value it receives is also read by a parameter that stayed a list",
+                    )
+                )
                 continue
             kept.append(promotion)
         if len(kept) == len(found):
@@ -1210,11 +985,11 @@ def _consistent(found, bundle, blocked):  # type: ignore[no-untyped-def]
 def _readers_of(bundle, names: set[str]) -> dict[str, set[tuple[str, str]]]:  # type: ignore[no-untyped-def]
     """Every `(function, parameter)` each of these module-level names reaches."""
     readers: dict[str, set[tuple[str, str]]] = {name: set() for name in names}
-    for module_name, symbols in bundle.symbols.modules.items():
+    for symbols in bundle.symbols.modules.values():
         for node in ast.walk(symbols.module.tree):
             if not isinstance(node, ast.Call):
                 continue
-            qualname = _callee_qualname(bundle, symbols, node)
+            qualname = callee_qualname(bundle, symbols, node)
             info = bundle.symbols.functions.get(qualname or "")
             if info is None:
                 continue
@@ -1246,17 +1021,23 @@ def _buffer_scalar(t: T.Type) -> str | None:
 def _buffer_blocker(node: ast.AST, name: str) -> str | None:
     """What stops `name` from being served by a buffer, if anything."""
     for child in ast.walk(node):
-        if isinstance(child, ast.Attribute):
-            if isinstance(child.value, ast.Name) and child.value.id == name:
-                if child.attr in _LIST_ONLY_METHODS:
-                    return f"`{name}.{child.attr}()` needs a list that can grow or reorder"
-        if isinstance(child, ast.Subscript):
-            if isinstance(child.value, ast.Name) and child.value.id == name:
-                if isinstance(child.slice, ast.Slice):
-                    return (
-                        f"`{name}` is sliced, which copies; indexing it element by "
-                        "element instead would let the memory be borrowed"
-                    )
+        if (
+            isinstance(child, ast.Attribute)
+            and isinstance(child.value, ast.Name)
+            and child.value.id == name
+            and child.attr in _LIST_ONLY_METHODS
+        ):
+            return f"`{name}.{child.attr}()` needs a list that can grow or reorder"
+        if (
+            isinstance(child, ast.Subscript)
+            and isinstance(child.value, ast.Name)
+            and child.value.id == name
+            and isinstance(child.slice, ast.Slice)
+        ):
+            return (
+                f"`{name}` is sliced, which copies; indexing it element by "
+                "element instead would let the memory be borrowed"
+            )
         if isinstance(child, ast.BinOp):
             for side in (child.left, child.right):
                 if isinstance(side, ast.Name) and side.id == name:
@@ -1282,7 +1063,7 @@ def _list_sources(  # type: ignore[no-untyped-def]
         for node in ast.walk(symbols.module.tree):
             if not isinstance(node, ast.Call):
                 continue
-            if _callee_qualname(bundle, symbols, node) != qualname:
+            if callee_qualname(bundle, symbols, node) != qualname:
                 continue
             if index >= len(node.args):
                 return None
@@ -1332,9 +1113,6 @@ def _module_list_assignments(symbols) -> dict[str, int]:  # type: ignore[no-unty
         # the construction does not have to be a literal -- only unambiguous.
         lines[target.id] = statement.lineno
     return {name: line for name, line in lines.items() if counts.get(name) == 1}
-
-
-
 
 
 def _definition_time_names(node: cst.CSTNode) -> set[str]:
@@ -1451,11 +1229,14 @@ def _unquote_resolved(module: cst.Module) -> cst.Module:
     body = list(module.body)
     defined: set[str] = set()
     rewritten: list[cst.BaseStatement] = []
-    for statement in body:
+    for original in body:
+        statement = original
         if isinstance(statement, (cst.FunctionDef, cst.ClassDef)):
             inner = statement.name.value
             statement = statement.with_changes(
-                **_unquoted_signature(statement, defined - {inner} if isinstance(statement, cst.ClassDef) else defined)
+                **_unquoted_signature(
+                    statement, defined - {inner} if isinstance(statement, cst.ClassDef) else defined
+                )
             )
             defined.add(inner)
         rewritten.append(statement)
@@ -1472,7 +1253,7 @@ def _unquoted_signature(statement: cst.BaseStatement, defined: set[str]) -> dict
         param.with_changes(annotation=_unquote(param.annotation, defined))
         for param in params.params
     ]
-    if any(new is not old for new, old in zip(updated, params.params)):
+    if any(new is not old for new, old in zip(updated, params.params, strict=False)):
         changes["params"] = params.with_changes(params=updated)
     returns = _unquote(statement.returns, defined)
     if returns is not statement.returns:
@@ -1496,18 +1277,38 @@ def _unquote(annotation, defined: set[str]):  # type: ignore[no-untyped-def]
 
 #: Names an annotation may use that are never module-level definitions here.
 _ALWAYS_BOUND = {
-    "int", "float", "str", "bytes", "bool", "complex", "None", "object",
-    "list", "dict", "set", "tuple", "frozenset", "type",
-    "Optional", "Union", "Any", "Annotated", "Literal", "Callable",
-    "Sequence", "Iterable", "Mapping", "Buffer", "ppy",
+    "int",
+    "float",
+    "str",
+    "bytes",
+    "bool",
+    "complex",
+    "None",
+    "object",
+    "list",
+    "dict",
+    "set",
+    "tuple",
+    "frozenset",
+    "type",
+    "Optional",
+    "Union",
+    "Any",
+    "Annotated",
+    "Literal",
+    "Callable",
+    "Sequence",
+    "Iterable",
+    "Mapping",
+    "Buffer",
+    "ppy",
 }
 
 
 def _forward_references(symbols) -> dict[str, int]:  # type: ignore[no-untyped-def]
     """Where each class in this module becomes usable as a runtime name."""
     return {
-        info.name: (info.node.end_lineno or info.node.lineno)
-        for info in symbols.classes.values()
+        info.name: (info.node.end_lineno or info.node.lineno) for info in symbols.classes.values()
     }
 
 

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 from ppy_compiler.analysis import types as T
@@ -1052,3 +1054,64 @@ def test_diagnostics_survive_a_pass_that_had_to_be_repeated(write, codes):
     )
     reported = codes(path)
     assert reported.count("E1201") == 1
+
+
+def test_widening_offers_only_what_the_protocol_has(tmp_path: Path):
+    """`reversed()` is a `Sequence` operation, not a `Mapping` one.
+
+    `dict` happens to be reversible; `Mapping` declares no `__reversed__`, so
+    a body that reverses its argument may not have it widened -- one allowlist
+    shared across protocols would let this through.
+    """
+    from ppy_compiler.driver.convert import build_plan, convert_source
+    from ppy_compiler.driver.pipeline import analyze_paths, open_project
+
+    (tmp_path / "pyproject.toml").write_text("[tool.ppy]\n", encoding="utf-8")
+
+    def convert(body: str, call: str) -> str:
+        path = tmp_path / "rev.py"
+        path.write_text(
+            f"def newest(events):\n{body}\n\n\nprint(newest({call}))\n", encoding="utf-8"
+        )
+        bundle = analyze_paths(open_project(path), [path], backend="python")
+        plan, _ = build_plan(bundle, "rev")
+        return convert_source(path.read_text(encoding="utf-8"), plan)
+
+    loop = "    for item in reversed(events):\n        return item\n    return 0"
+    assert "events: Sequence[int]" in convert(loop, "[1, 2, 3]")
+    assert "events: dict[str, int]" in convert(loop.replace("return 0", 'return ""'), '{"a": 1}')
+
+
+def test_the_call_binder_follows_python_argument_rules():
+    import ast
+
+    from ppy_compiler.analysis.binding import bind_call, positional_values
+    from ppy_compiler.analysis.symbols import ParamInfo
+
+    def param(name: str, kind: str = "positional_or_keyword") -> ParamInfo:
+        return ParamInfo(name, T.INT, kind=kind)
+
+    params = [
+        param("self"),
+        param("a"),
+        param("b"),
+        param("rest", "var_positional"),
+        param("flag", "keyword_only"),
+    ]
+
+    def names(bound):
+        return [(b.param.name, b.value) for b in bound]
+
+    # A bound receiver shifts every written position by one.
+    assert names(bind_call(params, ["x", "y"], offset=1)) == [("a", "x"), ("b", "y")]
+    # A keyword reaches its parameter wherever it sits.
+    assert names(bind_call(params, [], [("flag", "f")], offset=1)) == [("flag", "f")]
+    # Positional arguments stop at `*rest` rather than spilling into it.
+    assert names(bind_call(params, ["x", "y", "z", "w"], offset=1)) == [("a", "x"), ("b", "y")]
+    # `**splat` names no parameter, so it binds nothing.
+    assert not bind_call(params, [], [(None, "s")], offset=1)
+    # The receiver is not addressable from the call site.
+    assert not bind_call(params, [], [("self", "s")], offset=1)
+
+    call = ast.parse("f(a, b, *rest, c)").body[0].value
+    assert len(positional_values(call.args)) == 2

@@ -21,7 +21,7 @@ from ..diagnostics import Diagnostic, Severity
 from .pipeline import collect_sources, open_project
 from .reporting import Reporter
 
-__all__ = ["run_lint", "BACKENDS", "available_backends"]
+__all__ = ["BACKENDS", "available_backends", "run_lint"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -77,7 +77,8 @@ def run_lint(options: argparse.Namespace, reporter: Reporter) -> int:
                 "E1801",
                 Severity.ERROR,
                 f"`{chosen}` is not installed",
-                help=f"install it, or pass --backend with one of {', '.join(available_backends()) or 'none'}",
+                help="install it, or pass --backend with one of "
+                + (", ".join(available_backends()) or "none"),
             )
         )
         return 2
@@ -96,7 +97,11 @@ def run_lint(options: argparse.Namespace, reporter: Reporter) -> int:
             arguments = (*arguments, "--select", "ALL")
         done = subprocess.run(
             [sys.executable, "-m", backend.module, *arguments, *[str(p) for p in staged]],
-            cwd=scratch, capture_output=True, text=True, check=False, timeout=1800,
+            cwd=scratch,
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=1800,
         )
         output = _restore_paths(done.stdout + done.stderr, mapping, Path(scratch))
 
@@ -107,8 +112,30 @@ def run_lint(options: argparse.Namespace, reporter: Reporter) -> int:
     return 1 if done.returncode else 0
 
 
+#: Every file a supported tool reads its settings from. A config left behind
+#: means the tool runs in a mode the project never chose, and reports findings
+#: the project had already decided about.
+_CONFIGS = (
+    "pyproject.toml",
+    "setup.cfg",
+    ".pylintrc",
+    "pylintrc",
+    "ruff.toml",
+    ".ruff.toml",
+    "mypy.ini",
+    ".mypy.ini",
+    "setup.py",
+    "pyrightconfig.json",
+)
+
+
 def _stage(sources: list[Path], root: Path, scratch: Path) -> tuple[list[Path], dict[str, Path]]:
-    """Copy each `.ppy` to a `.py` of the same relative name."""
+    """Mirror the project: each `.ppy` as `.py`, and everything it imports.
+
+    A checker's answer depends on what it can see. Staging only the `.ppy`
+    files would leave every `.py` in the project unresolvable, and the missing
+    imports would take real findings down with them.
+    """
     staged: list[Path] = []
     mapping: dict[str, Path] = {}
     for source in sources:
@@ -122,22 +149,53 @@ def _stage(sources: list[Path], root: Path, scratch: Path) -> tuple[list[Path], 
         staged.append(target)
         mapping[str(target)] = source
         mapping[str(relative.with_suffix(".py"))] = source
-    for extra in ("pyproject.toml", "setup.cfg", ".pylintrc", "ruff.toml"):
+
+    converted = {p.with_suffix(".py") for p in staged}
+    for companion in root.rglob("*.py"):
+        if any(part in _SKIP_DIRECTORIES for part in companion.parts):
+            continue
+        target = scratch / companion.resolve().relative_to(root.resolve())
+        if target in converted or target.exists():
+            continue
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(companion, target)
+
+    for extra in _CONFIGS:
         candidate = root / extra
         if candidate.is_file():
             shutil.copyfile(candidate, scratch / extra)
     return staged, mapping
 
 
+#: Directories whose `.py` files are not the project's own source.
+_SKIP_DIRECTORIES = frozenset(
+    {".venv", "venv", ".git", "__pycache__", "build", "dist", ".ppy-cache", ".tox", "node_modules"}
+)
+
+
 def _configure(backend: Backend, scratch: Path, *, strict: bool) -> None:
-    """Write whatever config file the tool needs to run in the wanted mode."""
+    """Set the wanted mode on top of the project's own settings.
+
+    The project's `extraPaths`, `stubPath`, per-directory execution
+    environments and rule overrides are what make its type-check meaningful.
+    Overwriting the config with two keys would replace the answer the user
+    wanted with an answer about a project that does not exist.
+    """
     if backend.name != "pyright":
         return
-    mode = "strict" if strict else "standard"
-    (scratch / "pyrightconfig.json").write_text(
-        '{"typeCheckingMode": "%s", "reportMissingImports": false}\n' % mode,
-        encoding="utf-8",
-    )
+    import json
+
+    config: dict[str, object] = {}
+    existing = scratch / "pyrightconfig.json"
+    if existing.is_file():
+        try:
+            loaded = json.loads(existing.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            loaded = None
+        if isinstance(loaded, dict):
+            config = loaded
+    config["typeCheckingMode"] = "strict" if strict else "standard"
+    existing.write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
 
 
 def _restore_paths(output: str, mapping: dict[str, Path], scratch: Path) -> str:
@@ -182,6 +240,8 @@ def run_pytest(options: argparse.Namespace, reporter: Reporter) -> int:
         passed = [a for a in getattr(options, "args", []) if a != "--"]
         done = subprocess.run(
             [sys.executable, "-m", "pytest", "-p", "ppy_pytest_hook", str(target), *passed],
-            cwd=project.root, env=environment, check=False,
+            cwd=project.root,
+            env=environment,
+            check=False,
         )
     return done.returncode
