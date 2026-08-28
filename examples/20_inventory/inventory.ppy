@@ -1,0 +1,81 @@
+import math
+
+import ppy
+
+
+@ppy.pure
+def line_value(item: tuple[str, int, float]) -> float:
+    return item[1] * item[2]
+
+
+@ppy.pure
+def total_value(items: list[tuple[str, int, float]]) -> float:
+    total = 0.0
+    for item in items:
+        total += line_value(item)
+    return total
+
+
+@ppy.pure
+def total_units(items: list[tuple[str, int, float]]) -> int:
+    total = 0
+    for item in items:
+        total += item[1]
+    return total
+
+
+@ppy.pure
+def discounted(price: float, discount: float) -> float:
+    return price * (1.0 - discount)
+
+
+def apply_discount(
+    items: list[tuple[str, int, float]],
+    discount: float,
+) -> list[tuple[str, int, float]]:
+    out = []
+    for item in items:
+        out.append((item[0], item[1], discounted(item[2], discount)))
+    return out
+
+
+def below_stock(items: list[tuple[str, int, float]], threshold: int) -> list[str]:
+    low = []
+    for item in items:
+        if item[1] < threshold:
+            low.append(item[0])
+    return low
+
+
+@ppy.pure
+def summary(
+    items: list[tuple[str, int, float]],
+) -> tuple[float, float, float] | tuple[float, float, float]:
+    value = total_value(items)
+    count = len(items)
+    if not count:
+        return (0.0, 0.0, 0.0)
+    return (value, value / count, math.sqrt(value))
+
+
+@ppy.pure
+def labeled(name: str, value: float) -> str:
+    return name + "=" + str(round(value, 2))
+
+
+def main() -> None:
+    items = [
+        ("bolt", 120, 0.25),
+        ("nut", 340, 0.1),
+        ("washer", 80, 0.05),
+        ("bracket", 15, 12.5),
+    ]
+
+    value, average, root = summary(items)
+    print(labeled("total", value), labeled("avg", average), labeled("root", root))
+    print(apply_discount(items, 0.2)[0])
+    print(below_stock(items, 100))
+    print("units:", total_units(items))
+
+
+main()

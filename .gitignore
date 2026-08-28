@@ -8,5 +8,7 @@ build/
 .coverage
 htmlcov/
 .ppy-cache/
-examples/
 *.md
+!README.md
+!docs/*.md
+!examples/**/*.md

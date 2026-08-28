@@ -1,0 +1,23 @@
+[MAIN]
+ignored-modules = torch, jax, jax.numpy, numpy, pydantic, uvicorn, geometry, ppy
+
+[MESSAGES CONTROL]
+enable = all
+disable =
+    missing-module-docstring,
+    missing-class-docstring,
+    missing-function-docstring,
+    duplicate-code,
+    too-few-public-methods,
+    use-implicit-booleaness-not-comparison-to-zero,
+    consider-using-enumerate,
+    eval-used,
+    wrong-import-position,
+
+[FORMAT]
+max-line-length = 100
+
+[DESIGN]
+max-args = 8
+max-positional-arguments = 8
+max-locals = 28

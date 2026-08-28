@@ -1,0 +1,129 @@
+import array
+import time
+
+import ppy
+from ppy import Buffer
+
+
+@ppy.pure
+@ppy.opt(3)
+def total_list(values: list[float]) -> float:
+    result: float = 0.0
+    for i in range(len(values)):
+        result += values[i]
+    return result
+
+
+@ppy.pure
+@ppy.opt(3)
+def total_view(values: Buffer[float]) -> float:
+    result: float = 0.0
+    for i in range(len(values)):
+        result += values[i]
+    return result
+
+
+@ppy.pure
+@ppy.opt(3)
+def dot_strict(a: Buffer[float], b: Buffer[float]) -> float:
+    result: float = 0.0
+    for i in range(len(a)):
+        result += a[i] * b[i]
+    return result
+
+
+@ppy.pure
+@ppy.fastmath
+@ppy.opt(3)
+def dot_relaxed(a: Buffer[float], b: Buffer[float]) -> float:
+    result: float = 0.0
+    for i in range(len(a)):
+        result += a[i] * b[i]
+    return result
+
+
+@ppy.jit(threshold=4, max_specializations=4)
+@ppy.pure
+@ppy.opt(3)
+def digest_jit(values: Buffer[int], modulus: int) -> int:
+    result: int = 0
+    for i in range(len(values)):
+        result += values[i] % modulus
+    return result
+
+
+@ppy.pure
+@ppy.opt(3)
+def digest_generic(values: Buffer[int], modulus: int) -> int:
+    result: int = 0
+    for i in range(len(values)):
+        result += values[i] % modulus
+    return result
+
+
+def report(label: str, us: float, note: str) -> None:
+    print(f"{label:24s} {us:8.3f} us   {note}")
+
+
+def main() -> None:
+    size: int = 8192
+    raw: list[float] = [float(i) * 0.001 for i in range(size)]
+    x = array.array("d", raw)
+    y = array.array("d", [float(i) * 0.002 for i in range(size)])
+    counts = array.array("q", [i * 7919 for i in range(size)])
+
+    rounds: int = 2000
+    for _i in range(400):
+        total_list(raw)
+        total_view(x)
+        dot_strict(x, y)
+        dot_relaxed(x, y)
+        digest_jit(counts, 1000003)
+        digest_generic(counts, 1000003)
+
+    start: float = time.perf_counter()
+    for _i in range(rounds):
+        copied = total_list(raw)
+    copied_us: float = (time.perf_counter() - start) / rounds * 1e6
+
+    start = time.perf_counter()
+    for _i in range(rounds):
+        borrowed = total_view(x)
+    borrowed_us: float = (time.perf_counter() - start) / rounds * 1e6
+
+    report("list[float] copied", copied_us, "")
+    ratio = copied_us / borrowed_us
+    report("Buffer[float] borrowed", borrowed_us, f"{ratio:.2f}x, same sum: {copied == borrowed}")
+
+    start = time.perf_counter()
+    for _i in range(rounds):
+        strict = dot_strict(x, y)
+    strict_us: float = (time.perf_counter() - start) / rounds * 1e6
+
+    start = time.perf_counter()
+    for _i in range(rounds):
+        relaxed = dot_relaxed(x, y)
+    relaxed_us: float = (time.perf_counter() - start) / rounds * 1e6
+
+    report("dot, strict order", strict_us, "")
+    ratio = strict_us / relaxed_us
+    gap = abs(strict - relaxed)
+    report("dot, @ppy.fastmath", relaxed_us, f"{ratio:.2f}x, differs by {gap:.2e}")
+
+    start = time.perf_counter()
+    for _i in range(rounds):
+        generic = digest_generic(counts, 1000003)
+    generic_us: float = (time.perf_counter() - start) / rounds * 1e6
+
+    start = time.perf_counter()
+    for _i in range(rounds):
+        specialized = digest_jit(counts, 1000003)
+    specialized_us: float = (time.perf_counter() - start) / rounds * 1e6
+
+    report("digest, generic", generic_us, "")
+    ratio = generic_us / specialized_us
+    report("digest, @ppy.jit", specialized_us, f"{ratio:.2f}x, same: {generic == specialized}")
+
+
+if __name__ == "__main__":
+    main()

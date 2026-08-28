@@ -1,0 +1,20 @@
+import ppy
+from ppy import f64
+
+
+@ppy.pure
+@ppy.opt(3)
+def distance(x1: f64, y1: f64, x2: f64, y2: f64) -> f64:
+    dx: f64 = x2 - x1
+    dy: f64 = y2 - y1
+    return (dx * dx + dy * dy) ** 0.5
+
+
+@ppy.pure
+def perimeter(points: list[tuple[float, float]]) -> float:
+    total: float = 0.0
+    for index in range(len(points)):
+        a = points[index]
+        b = points[(index + 1) % len(points)]
+        total += distance(a[0], a[1], b[0], b[1])
+    return total

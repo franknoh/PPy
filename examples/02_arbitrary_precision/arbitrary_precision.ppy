@@ -1,0 +1,30 @@
+import ppy
+
+
+@ppy.pure
+def cube(x: int) -> int:
+    return x * x * x
+
+
+@ppy.pure
+def floor_and_mod(a: int, b: int) -> int:
+    return a // b + a % b
+
+
+@ppy.pure
+def divide(a: int, b: int) -> float:
+    return a / b
+
+
+def main() -> None:
+    print(cube(3))
+    print(cube(10**7))
+    print(floor_and_mod(-7, 2), floor_and_mod(7, -2))
+    try:
+        divide(1, 0)
+    except ZeroDivisionError as error:
+        print("caught", type(error).__name__)
+
+
+if __name__ == "__main__":
+    main()

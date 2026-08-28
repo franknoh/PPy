@@ -1,0 +1,39 @@
+import ppy
+
+
+@ppy.pure
+@ppy.opt(3)
+def machine_range(a: int, b: int) -> int:
+    return a * b
+
+
+@ppy.pure
+@ppy.opt(3)
+def may_overflow(n: int) -> int:
+    result: int = 1
+    for i in range(1, n + 1):
+        result *= i
+    return result
+
+
+@ppy.pure
+@ppy.opt(3)
+def floor_semantics(a: int, b: int) -> int:
+    return a // b
+
+
+@ppy.pure
+@ppy.opt(3)
+def modulo_semantics(a: int, b: int) -> int:
+    return a % b
+
+
+def main() -> None:
+    print(machine_range(1000, 1000))
+    print(may_overflow(20))
+    print(may_overflow(30))
+    print(floor_semantics(-7, 2), floor_semantics(7, 2))
+    print(modulo_semantics(-7, 2), modulo_semantics(7, -2))
+
+
+main()

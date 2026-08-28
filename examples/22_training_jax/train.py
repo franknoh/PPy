@@ -1,0 +1,92 @@
+import math
+import time
+
+import jax
+import jax.numpy as jnp
+
+
+def standardize(raw, out, rows, cols):
+    total = 0.0
+    for row in range(rows):
+        base = row * cols
+        target = row * cols * 2
+
+        sum_ = 0.0
+        for i in range(cols):
+            sum_ += raw[base + i]
+        mean = sum_ / cols
+
+        spread = 0.0
+        for i in range(cols):
+            spread += (raw[base + i] - mean) * (raw[base + i] - mean)
+        deviation = math.sqrt(spread / cols) + 1e-8
+
+        for i in range(cols):
+            value = (raw[base + i] - mean) / deviation
+            out[target + i] = value
+            total += value
+        for i in range(cols):
+            interaction = out[target + i] * out[target + (i + 1) % cols]
+            out[target + cols + i] = interaction
+            total += interaction
+    return total
+
+
+@jax.jit
+def forward_loss(x, y, w1, b1, w2, b2):
+    hidden = jnp.maximum(jnp.dot(x, w1) + b1, 0.0)
+    predicted = jnp.dot(hidden, w2) + b2
+    residual = predicted - y
+    return jnp.mean(residual * residual)
+
+
+gradients_of = jax.grad(forward_loss, argnums=(2, 3, 4, 5))
+
+
+@jax.jit
+def train_step(x, y, w1, b1, w2, b2, rate):
+    grads = gradients_of(x, y, w1, b1, w2, b2)
+    return (
+        w1 - rate * grads[0],
+        b1 - rate * grads[1],
+        w2 - rate * grads[2],
+        b2 - rate * grads[3],
+    )
+
+
+def main():
+    rows = 20000
+    cols = 16
+
+    key = jax.random.PRNGKey(0)
+    k1, k2, k3, k4 = jax.random.split(key, 4)
+    raw = jax.random.normal(k1, (rows * cols,)).tolist()
+    features = [0.0] * (rows * cols * 2)
+
+    started = time.perf_counter()
+    checksum = standardize(raw, features, rows, cols)
+    prep_ms = (time.perf_counter() - started) * 1000.0
+
+    x = jnp.asarray(features, dtype=jnp.float32).reshape(rows, cols * 2)
+    y = jax.random.normal(k2, (rows, 1))
+    w1 = jax.random.normal(k3, (cols * 2, 32)) * 0.1
+    b1 = jnp.zeros((32,))
+    w2 = jax.random.normal(k4, (32, 1)) * 0.1
+    b2 = jnp.zeros((1,))
+
+    first = float(forward_loss(x, y, w1, b1, w2, b2))
+    w1, b1, w2, b2 = train_step(x, y, w1, b1, w2, b2, 0.02)
+    w1.block_until_ready()
+
+    started = time.perf_counter()
+    for _ in range(100):
+        w1, b1, w2, b2 = train_step(x, y, w1, b1, w2, b2, 0.02)
+    last = float(forward_loss(x, y, w1, b1, w2, b2))
+    train_ms = (time.perf_counter() - started) * 1000.0
+
+    print(f"# native prep: {getattr(standardize, '__ppy_native__', None) is not None}")
+    print(f"prep  {prep_ms:8.1f} ms   checksum={checksum:.6f}")
+    print(f"train {train_ms:8.1f} ms   loss {first:.4f} -> {last:.4f}")
+
+
+main()

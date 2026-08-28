@@ -1,0 +1,36 @@
+import ppy
+
+
+@ppy.pure
+@ppy.opt(3)
+def safe_divide(a: int, b: int) -> int:
+    if b == 0:
+        return 0
+    return a // b
+
+
+@ppy.opt(3)
+def divide(a: int, b: int) -> int:
+    return a // b
+
+
+@ppy.opt(3)
+def at(values: list[int], index: int) -> int:
+    return values[index]
+
+
+def main() -> None:
+    print(safe_divide(7, 2), safe_divide(7, 0))
+    print(divide(7, 2), divide(-7, 2))
+    try:
+        divide(1, 0)
+    except ZeroDivisionError as error:
+        print("caught", type(error).__name__)
+    print(at([10, 20, 30], 1))
+    try:
+        at([10, 20, 30], 9)
+    except IndexError as error:
+        print("caught", type(error).__name__)
+
+
+main()

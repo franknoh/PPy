@@ -1,0 +1,57 @@
+import ppy
+
+
+@ppy.pure
+def optional_guard(name: str | None) -> int:
+    if name is None:
+        return 0
+    return len(name)
+
+
+@ppy.pure
+def boolean_guard(name: str | None) -> bool:
+    return name is not None and len(name) > 0
+
+
+@ppy.pure
+def early_default(name: str | None) -> int:
+    if name is None or len(name) == 0:
+        return -1
+    return len(name)
+
+
+@ppy.pure
+def by_class(value: int | str) -> int:
+    if isinstance(value, str):
+        return len(value)
+    return value
+
+
+@ppy.pure
+def by_match(value: int | str | None) -> str:
+    match value:
+        case None:
+            return "none"
+        case int():
+            return f"int:{value + 1}"
+        case _:
+            return f"str:{value.upper()}"
+
+
+@ppy.pure
+def walrus_guard(values: list[int]) -> int:
+    if (count := len(values)) == 0:
+        return 0
+    return count
+
+
+def main() -> None:
+    print(optional_guard("ppy"), optional_guard(None))
+    print(boolean_guard("ppy"), boolean_guard(""), boolean_guard(None))
+    print(early_default("ppy"), early_default(""), early_default(None))
+    print(by_class("four"), by_class(7))
+    print(by_match(None), by_match(41), by_match("hi"))
+    print(walrus_guard([1, 2, 3]), walrus_guard([]))
+
+
+main()

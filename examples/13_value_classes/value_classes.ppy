@@ -1,0 +1,86 @@
+import time
+from dataclasses import dataclass
+
+import ppy
+
+
+@dataclass
+class Vec3:
+    x: float
+    y: float
+    z: float
+
+    @ppy.pure
+    @ppy.opt(3)
+    def norm2(self) -> float:
+        return self.x * self.x + self.y * self.y + self.z * self.z
+
+    @ppy.pure
+    @ppy.opt(3)
+    def dot(self, other: "Vec3") -> float:
+        return self.x * other.x + self.y * other.y + self.z * other.z
+
+
+@dataclass
+class Ray:
+    origin: float
+    direction: float
+
+
+@ppy.pure
+@ppy.opt(3)
+def distance2(a: Vec3, b: Vec3) -> float:
+    dx: float = a.x - b.x
+    dy: float = a.y - b.y
+    dz: float = a.z - b.z
+    return dx * dx + dy * dy + dz * dz
+
+
+@ppy.pure
+def at(ray: Ray, t: float) -> float:
+    return ray.origin + ray.direction * t
+
+
+@ppy.pure
+@ppy.opt(3)
+def steps(start: Ray, limit: int) -> int:
+    position: float = start.origin
+    taken: int = 0
+    while position < 1000000.0 and taken < limit:
+        position = position * 1.000001 + start.direction
+        taken += 1
+    return taken
+
+
+class Tracked(Vec3):
+    pass
+
+
+def main() -> None:
+    a = Vec3(1.0, 2.0, 3.0)
+    b = Vec3(4.0, 6.0, 3.0)
+    print(a.norm2(), a.dot(b), distance2(a, b), at(Ray(1.0, 2.0), 3.0))
+
+    print(distance2(Tracked(1.0, 2.0, 3.0), b))
+    print("# native:", getattr(Vec3.norm2, "__ppy_native__", None) is not None)
+
+    ray = Ray(1.0, 0.5)
+    for _i in range(3000):
+        distance2(a, b)
+        steps(ray, 200)
+
+    rounds: int = 200000
+    start: float = time.perf_counter()
+    for _i in range(rounds):
+        distance2(a, b)
+    print(f"distance2 (8 float ops)  {(time.perf_counter() - start) / rounds * 1e9:8.1f} ns/call")
+
+    rounds = 20000
+    start = time.perf_counter()
+    for _i in range(rounds):
+        steps(ray, 200)
+    print(f"steps     (200 iters)    {(time.perf_counter() - start) / rounds * 1e9:8.1f} ns/call")
+
+
+if __name__ == "__main__":
+    main()

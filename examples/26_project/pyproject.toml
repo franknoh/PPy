@@ -1,0 +1,49 @@
+[project]
+name = "ppy-example-project"
+version = "0.1.0"
+requires-python = ">=3.12"
+
+[tool.ppy]
+python = ">=3.12,<3.15"
+strict = true
+opt-level = 2
+cache-dir = ".ppy-cache"
+dynamic-boundaries = "explicit"
+build-execution = "deny"
+source-roots = ["src"]
+
+[tool.ppy.python-backend]
+enabled = true
+interpreter = "python"
+
+[tool.ppy.llvm]
+enabled = true
+target = "native"
+jit = true
+lto = "thin"
+cpython-api = "version-specific"
+
+[tool.ppy.parallel]
+enabled = true
+threads = "auto"
+
+[tool.ppy.inference]
+interprocedural = true
+write-local-annotations = true
+implicit-any = "error"
+
+[tool.ppy.plugins.numpy]
+enabled = true
+internal-api = false
+fusion = true
+
+[tool.ppy.plugins.jax]
+enabled = true
+allow-build-export = false
+
+[tool.ppy.plugins.pydantic]
+enabled = true
+schema-execution = "deny"
+
+[tool.ppy.diagnostics]
+optimization-remarks = true

@@ -1,0 +1,43 @@
+import ppy
+
+
+@ppy.pure
+def histogram(values: list[int]) -> dict[int, int]:
+    counts: dict[int, int] = {}
+    for value in values:
+        counts[value] = counts.get(value, 0) + 1
+    return counts
+
+
+@ppy.pure
+def grow(count: int) -> list[int]:
+    out = []
+    for i in range(count):
+        out.append(i * i)
+    return out
+
+
+@ppy.pure
+def distinct(values: list[str]) -> int:
+    seen = set()
+    for value in values:
+        seen.add(value)
+    return len(seen)
+
+
+@ppy.pure
+def flatten(rows: list[list[int]]) -> list[int]:
+    out: list[int] = []
+    for row in rows:
+        out.extend(row)
+    return out
+
+
+def main() -> None:
+    print(sorted(histogram([1, 2, 2, 3, 3, 3]).items()))
+    print(grow(6))
+    print(distinct(["a", "b", "a", "c"]))
+    print(flatten([[1, 2], [3], [], [4, 5]]))
+
+
+main()

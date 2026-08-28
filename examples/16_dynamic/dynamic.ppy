@@ -1,0 +1,28 @@
+import ppy
+
+
+@ppy.pure
+def static_only(values: list[int]) -> int:
+    total: int = 0
+    for value in values:
+        total += value
+    return total
+
+
+def reflective(name: str) -> str:
+    with ppy.dynamic():
+        return str(getattr("abc", name)())
+
+
+@ppy.dynamic
+def duck_typed(obj: object) -> str:
+    return f"{obj.__class__.__name__}"
+
+
+def main() -> None:
+    print(static_only([1, 2, 3, 4]))
+    print(reflective("upper"))
+    print(duck_typed(3), duck_typed("s"), duck_typed([]))
+
+
+main()

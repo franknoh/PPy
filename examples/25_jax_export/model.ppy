@@ -1,0 +1,28 @@
+from typing import Annotated
+
+import jax
+import jax.numpy as jnp
+import ppy
+
+Batch = Annotated[jax.Array, ppy.Shape("B", 4), ppy.DType("float32")]
+
+
+@jax.jit
+def normalize(x: Batch) -> jax.Array:
+    centred = x - jnp.mean(x, axis=-1, keepdims=True)
+    return centred / (jnp.std(x, axis=-1, keepdims=True) + 1e-6)
+
+
+@jax.jit
+def score(x: Batch) -> jax.Array:
+    return jnp.sum(jnp.tanh(normalize(x)), axis=-1)
+
+
+def main() -> None:
+    values = jnp.arange(12, dtype=jnp.float32).reshape(3, 4)
+    print(jax.devices()[0].platform)
+    print([round(float(v), 6) for v in score(values)])
+
+
+if __name__ == "__main__":
+    main()

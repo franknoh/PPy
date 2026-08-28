@@ -1,0 +1,52 @@
+import time
+
+import ppy
+import torch
+
+
+@ppy.opt(3)
+def layer(x: torch.Tensor, weight: torch.Tensor, bias: torch.Tensor) -> torch.Tensor:
+    return torch.relu(torch.add(torch.matmul(x, weight), bias))
+
+
+@ppy.opt(3)
+def residual(x: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
+    return torch.tanh(torch.add(x, torch.mul(y, 0.5)))
+
+
+def report(label: str, elapsed: float, value: float) -> None:
+    print(f"{label:22s} {elapsed * 1e6:8.3f} us/call   sample={value:.6f}")
+
+
+def measure(name: str, x: torch.Tensor, w: torch.Tensor, b: torch.Tensor) -> None:
+    rounds: int = 20000
+    for _i in range(300):
+        layer(x, w, b)
+    if x.is_cuda:
+        torch.cuda.synchronize()
+    start: float = time.perf_counter()
+    for _i in range(rounds):
+        out = layer(x, w, b)
+    if x.is_cuda:
+        torch.cuda.synchronize()
+    report(name, (time.perf_counter() - start) / rounds, float(out.sum()))
+
+
+def main() -> None:
+    torch.manual_seed(0)
+    print("torch", torch.__version__, "| cuda", torch.cuda.is_available())
+    print("# region active:", getattr(layer, "__ppy_region__", False))
+
+    for device in ["cpu", "cuda"] if torch.cuda.is_available() else ["cpu"]:
+        x = torch.randn(8, 32, device=device)
+        w = torch.randn(32, 32, device=device)
+        b = torch.randn(32, device=device)
+        measure(f"layer on {device}", x, w, b)
+
+    tracked = torch.randn(4, 8, requires_grad=True)
+    residual(tracked, tracked).sum().backward()
+    print("autograd survives the region:", tracked.grad is not None)
+
+
+if __name__ == "__main__":
+    main()

@@ -1,0 +1,25 @@
+import numpy as np
+import ppy
+
+
+@ppy.pure
+@ppy.opt(3)
+def normalize(x: np.ndarray) -> np.ndarray:
+    scale: float = np.sqrt(np.sum(x * x))
+    return x / scale
+
+
+@ppy.pure
+def blend(a: np.ndarray, b: np.ndarray) -> np.ndarray:
+    return np.sin(a) * 2.0 + np.cos(b)
+
+
+def main() -> None:
+    values = np.arange(1024, dtype=np.float64)
+    normalized = normalize(values)
+    mixed = blend(values, values)
+    print(round(float(normalized[1]), 8), round(float(mixed[1]), 8), int(values.ndim))
+
+
+if __name__ == "__main__":
+    main()

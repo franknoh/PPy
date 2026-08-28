@@ -1,0 +1,40 @@
+import ppy
+
+
+@ppy.pure
+def initials(name: str) -> str:
+    out: str = ""
+    for part in name.split(" "):
+        if len(part) > 0:
+            out += part[0].upper()
+    return out
+
+
+@ppy.pure
+def is_palindrome(text: str) -> bool:
+    cleaned: str = text.lower().replace(" ", "")
+    left: int = 0
+    right: int = len(cleaned) - 1
+    while left < right:
+        if cleaned[left] != cleaned[right]:
+            return False
+        left += 1
+        right -= 1
+    return True
+
+
+@ppy.pure
+def word_count(text: str) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for word in text.lower().split(" "):
+        counts[word] = counts.get(word, 0) + 1
+    return counts
+
+
+def main() -> None:
+    print(initials("ada lovelace king"))
+    print(is_palindrome("A man a plan a canal Panama"), is_palindrome("nope"))
+    print(sorted(word_count("a b a c b a").items()))
+
+
+main()

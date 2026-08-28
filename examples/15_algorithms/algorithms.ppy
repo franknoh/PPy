@@ -1,0 +1,218 @@
+import array
+import time
+
+import ppy
+from ppy import Buffer
+
+
+@ppy.opt(3)
+def sieve_count(flags: Buffer[int], limit: int) -> int:
+    for i in range(limit):
+        flags[i] = 1
+    flags[0] = 0
+    if limit > 1:
+        flags[1] = 0
+    p: int = 2
+    while p * p < limit:
+        if flags[p] == 1:
+            multiple: int = p * p
+            while multiple < limit:
+                flags[multiple] = 0
+                multiple += p
+        p += 1
+    total: int = 0
+    for i in range(limit):
+        total += flags[i]
+    return total
+
+
+@ppy.pure
+@ppy.opt(3)
+def collatz_longest(limit: int) -> int:
+    best: int = 0
+    for start in range(1, limit):
+        n: int = start
+        steps: int = 0
+        while n != 1:
+            if n % 2 == 0:
+                n = n // 2
+            else:
+                n = 3 * n + 1
+            steps += 1
+        best = max(best, steps)
+    return best
+
+
+@ppy.opt(3)
+def knapsack(weights: Buffer[int], values: Buffer[int], table: Buffer[int], capacity: int) -> int:
+    for i in range(capacity + 1):
+        table[i] = 0
+    for item in range(len(weights)):
+        weight: int = weights[item]
+        value: int = values[item]
+        room: int = capacity
+        while room >= weight:
+            candidate: int = table[room - weight] + value
+            if candidate > table[room]:
+                table[room] = candidate
+            room -= 1
+    return table[capacity]
+
+
+@ppy.opt(3)
+def edit_distance(a: Buffer[int], b: Buffer[int], row: Buffer[int]) -> int:
+    width: int = len(b)
+    for j in range(width + 1):
+        row[j] = j
+    for i in range(len(a)):
+        previous: int = row[0]
+        row[0] = i + 1
+        for j in range(width):
+            current: int = row[j + 1]
+            cost: int = 0
+            if a[i] != b[j]:
+                cost = 1
+            best: int = previous + cost
+            best = min(best, row[j] + 1)
+            best = min(best, current + 1)
+            row[j + 1] = best
+            previous = current
+    return row[width]
+
+
+@ppy.opt(3)
+def floyd_warshall(dist: Buffer[int], n: int) -> int:
+    for k in range(n):
+        for i in range(n):
+            through: int = dist[i * n + k]
+            if through < 1000000000:
+                for j in range(n):
+                    candidate: int = through + dist[k * n + j]
+                    if candidate < dist[i * n + j]:
+                        dist[i * n + j] = candidate
+    total: int = 0
+    for i in range(n * n):
+        if dist[i] < 1000000000:
+            total += dist[i]
+    return total
+
+
+@ppy.opt(3)
+def matmul(a: Buffer[float], b: Buffer[float], out: Buffer[float], n: int) -> float:
+    for i in range(n):
+        for j in range(n):
+            total: float = 0.0
+            for k in range(n):
+                total += a[i * n + k] * b[k * n + j]
+            out[i * n + j] = total
+    return out[n * n - 1]
+
+
+@ppy.opt(3)
+def union_find(parent: Buffer[int], edges: Buffer[int], n: int) -> int:
+    for i in range(n):
+        parent[i] = i
+    pairs: int = len(edges) // 2
+    for e in range(pairs):
+        a: int = edges[e * 2]
+        b: int = edges[e * 2 + 1]
+        while parent[a] != a:
+            parent[a] = parent[parent[a]]
+            a = parent[a]
+        while parent[b] != b:
+            parent[b] = parent[parent[b]]
+            b = parent[b]
+        if a != b:
+            parent[a] = b
+    components: int = 0
+    for i in range(n):
+        if parent[i] == i:
+            components += 1
+    return components
+
+
+@ppy.pure
+@ppy.opt(3)
+def modpow(base: int, exponent: int, modulus: int) -> int:
+    result: int = 1
+    b: int = base % modulus
+    e: int = exponent
+    while e > 0:
+        if e % 2 == 1:
+            result = result * b % modulus
+        b = b * b % modulus
+        e = e // 2
+    return result
+
+
+@ppy.pure
+@ppy.opt(3)
+def count_primes_fermat(limit: int) -> int:
+    found: int = 0
+    for n in range(3, limit, 2):
+        if modpow(2, n - 1, n) == 1:
+            found += 1
+    return found
+
+
+def run(label: str, seconds: float, answer: int) -> None:
+    print(f"{label:<18s} {seconds * 1000.0:9.1f} ms   -> {answer}")
+
+
+def main() -> None:
+    flags = array.array("q", [0] * 2000000)
+    start: float = time.perf_counter()
+    primes: int = sieve_count(flags, 2000000)
+    run("sieve 2e6", time.perf_counter() - start, primes)
+
+    start = time.perf_counter()
+    longest: int = collatz_longest(300000)
+    run("collatz 3e5", time.perf_counter() - start, longest)
+
+    weights = array.array("q", [(i * 7919) % 97 + 1 for i in range(400)])
+    values = array.array("q", [(i * 104729) % 1000 + 1 for i in range(400)])
+    table = array.array("q", [0] * 20001)
+    start = time.perf_counter()
+    best: int = knapsack(weights, values, table, 20000)
+    run("knapsack 400x2e4", time.perf_counter() - start, best)
+
+    a = array.array("q", [(i * 31) % 26 for i in range(2000)])
+    b = array.array("q", [(i * 17) % 26 for i in range(2000)])
+    row = array.array("q", [0] * 2001)
+    start = time.perf_counter()
+    distance: int = edit_distance(a, b, row)
+    run("edit 2000x2000", time.perf_counter() - start, distance)
+
+    size: int = 220
+    dist = array.array("q", [0] * (size * size))
+    for i in range(size):
+        for j in range(size):
+            if i == j:
+                dist[i * size + j] = 0
+            else:
+                dist[i * size + j] = (i * 7 + j * 13) % 100 + 1
+    start = time.perf_counter()
+    total: int = floyd_warshall(dist, size)
+    run("floyd 220", time.perf_counter() - start, total)
+
+    n: int = 220
+    left = array.array("d", [float((i * 31) % 17) for i in range(n * n)])
+    right = array.array("d", [float((i * 13) % 23) for i in range(n * n)])
+    out = array.array("d", [0.0] * (n * n))
+    start = time.perf_counter()
+    corner: float = matmul(left, right, out, n)
+    run("matmul 220", time.perf_counter() - start, int(corner))
+
+    nodes: int = 500000
+    parent = array.array("q", [0] * nodes)
+    edges = array.array("q", [(i * 7919) % nodes for i in range(2000000)])
+    start = time.perf_counter()
+    components: int = union_find(parent, edges, nodes)
+    run("union-find 5e5", time.perf_counter() - start, components)
+
+    start = time.perf_counter()
+    fermat: int = count_primes_fermat(60000)
+    run("fermat 6e4", time.perf_counter() - start, fermat)
+
+
+main()

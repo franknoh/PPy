@@ -1,0 +1,36 @@
+import ppy
+from ppy import i64
+
+
+@ppy.pure
+@ppy.opt(3)
+def square(x: i64) -> i64:
+    return x * x
+
+
+@ppy.pure
+def sum_of_squares(n: i64) -> i64:
+    total: i64 = 0
+    for value in range(n):
+        total += square(value)
+    return total
+
+
+@ppy.pure
+def collatz_steps(n: int) -> int:
+    steps: int = 0
+    while n != 1:
+        if n % 2 == 0:
+            n = n // 2
+        else:
+            n = 3 * n + 1
+        steps += 1
+    return steps
+
+
+def main() -> None:
+    print(square(7), sum_of_squares(10), collatz_steps(27))
+
+
+if __name__ == "__main__":
+    main()

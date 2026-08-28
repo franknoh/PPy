@@ -1,0 +1,53 @@
+from dataclasses import dataclass
+
+import ppy
+
+
+class Shape:
+    name: str
+
+    def __init__(self, name: str) -> None:
+        self.name = name
+
+    def area(self) -> float:
+        return 0.0
+
+
+class Circle(Shape):
+    radius: float
+
+    def __init__(self, radius: float) -> None:
+        super().__init__("circle")
+        self.radius = radius
+
+    def area(self) -> float:
+        return 3.141592653589793 * self.radius * self.radius
+
+
+@dataclass
+class Box:
+    width: float
+    height: float
+
+    def area(self) -> float:
+        return self.width * self.height
+
+
+@ppy.pure
+def describe(value: int | str | None) -> str:
+    if value is None:
+        return "none"
+    if isinstance(value, str):
+        return "text of " + str(len(value))
+    return "number " + str(value)
+
+
+def main() -> None:
+    circle = Circle(2.0)
+    box = Box(3.0, 4.0)
+    print(circle.name, round(circle.area(), 4), box.area())
+    print(describe(None), describe("hello"), describe(7))
+
+
+if __name__ == "__main__":
+    main()

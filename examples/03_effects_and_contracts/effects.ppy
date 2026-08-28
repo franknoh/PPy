@@ -1,0 +1,47 @@
+from typing import Annotated
+
+import ppy
+from ppy import f32
+
+
+@ppy.pure
+def scale(values: list[float], factor: float) -> list[float]:
+    return [value * factor for value in values]
+
+
+@ppy.pure
+def clamp(x: Annotated[int, ppy.Range(0, 255)]) -> Annotated[int, ppy.Range(0, 255)]:
+    if x < 0:
+        return 0
+    if x > 255:
+        return 255
+    return x
+
+
+@ppy.pure
+def mix(a: f32, b: f32) -> f32:
+    return a * 0.75 + b * 0.25
+
+
+def log_and_total(values: list[int]) -> int:
+    total: int = 0
+    for value in values:
+        print(value)
+        total += value
+    return total
+
+
+@ppy.dynamic
+def evaluate(source: str) -> int:
+    with ppy.dynamic:
+        return eval(source)
+
+
+def main() -> None:
+    print(scale([1.0, 2.0], 2.0), clamp(300), mix(1.0, 3.0))
+    print(log_and_total([1, 2]))
+    print(evaluate("6 * 7"))
+
+
+if __name__ == "__main__":
+    main()

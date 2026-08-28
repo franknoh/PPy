@@ -1,0 +1,30 @@
+from typing import Annotated
+
+import ppy
+from pydantic import BaseModel, Field
+
+
+class Pixel(BaseModel):
+    r: Annotated[int, Field(ge=0, le=255)]
+    g: Annotated[int, Field(ge=0, le=255)]
+    b: Annotated[int, Field(ge=0, le=255)]
+
+
+class User(BaseModel):
+    id: int
+    name: str
+
+
+@ppy.pure
+def luminance(pixel: Pixel) -> float:
+    return 0.2126 * pixel.r + 0.7152 * pixel.g + 0.0722 * pixel.b
+
+
+def main() -> None:
+    pixel = Pixel(r=255, g=128, b=0)
+    user = User(id="123", name="ada")
+    print(round(luminance(pixel), 4), user.id + 1, user.name)
+
+
+if __name__ == "__main__":
+    main()

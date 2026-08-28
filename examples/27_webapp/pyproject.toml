@@ -1,0 +1,15 @@
+[project]
+name = "ppy-example-webapp"
+version = "0.1.0"
+requires-python = ">=3.12"
+
+[tool.ppy]
+strict = true
+opt-level = 2
+source-roots = ["."]
+
+[tool.ppy.plugins.uvicorn]
+enabled = true
+
+[tool.ppy.diagnostics]
+optimization-remarks = true

@@ -1,0 +1,19 @@
+[project]
+name = "ppy-example-jaxmodel"
+version = "0.1.0"
+requires-python = ">=3.12"
+
+[tool.ppy]
+strict = true
+opt-level = 2
+source-roots = ["."]
+# Exporting a staged JAX function imports and runs this project's code, so it
+# is off unless the project says otherwise (spec 21.8, 31.2).
+build-execution = "allow"
+
+[tool.ppy.plugins.jax]
+enabled = true
+allow-build-export = true
+
+[tool.ppy.diagnostics]
+optimization-remarks = true

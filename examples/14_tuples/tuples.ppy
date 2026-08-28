@@ -1,0 +1,28 @@
+import ppy
+
+
+@ppy.pure
+@ppy.opt(3)
+def midpoint(a: tuple[float, float], b: tuple[float, float]) -> tuple[float, float]:
+    return ((a[0] + b[0]) / 2.0, (a[1] + b[1]) / 2.0)
+
+
+@ppy.pure
+@ppy.opt(3)
+def norm2(point: tuple[float, float]) -> float:
+    return point[0] * point[0] + point[1] * point[1]
+
+
+@ppy.pure
+@ppy.opt(3)
+def divmod_pair(a: int, b: int) -> tuple[int, int]:
+    return (a // b, a % b)
+
+
+def main() -> None:
+    print(midpoint((0.0, 0.0), (4.0, 6.0)))
+    print(norm2((3.0, 4.0)))
+    print(divmod_pair(17, 5), divmod_pair(-17, 5))
+
+
+main()

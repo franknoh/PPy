@@ -1,0 +1,46 @@
+from typing import Any, Awaitable, Callable
+
+import ppy
+import uvicorn
+
+Scope = dict[str, Any]
+Receive = Callable[[], Awaitable[Scope]]
+Send = Callable[[Scope], Awaitable[None]]
+
+
+@ppy.pure
+def render(name: str, count: int) -> bytes:
+    return b'{"hello": "' + name.encode() + b'", "count": ' + str(count).encode() + b"}"
+
+
+@ppy.pure
+def status_for(path: str) -> int:
+    if path == "/":
+        return 200
+    return 404
+
+
+async def app(scope: Scope, _receive: Receive, send: Send) -> None:
+    path: str = str(scope.get("path", "/"))
+    status: int = status_for(path)
+    body: bytes = render(path, len(scope))
+    await send(
+        {
+            "type": "http.response.start",
+            "status": status,
+            "headers": [(b"content-type", b"application/json")],
+        }
+    )
+    await send({"type": "http.response.body", "body": body})
+
+
+def serve() -> None:
+    uvicorn.run("service:app", host="127.0.0.1", port=8000)
+
+
+def develop() -> None:
+    uvicorn.run("service:app", host="127.0.0.1", port=8000, reload=True)
+
+
+if __name__ == "__main__":
+    print(render("/", 3).decode(), status_for("/"), status_for("/missing"))

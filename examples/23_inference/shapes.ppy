@@ -1,0 +1,51 @@
+import ppy
+
+
+class Rect:
+    def __init__(self, width: float, height: float) -> None:
+        self.width: float = width
+        self.height: float = height
+
+    @ppy.pure
+    def area(self) -> float:
+        return self.width * self.height
+
+    def scaled(self, factor: float) -> 'Rect':
+        return Rect(self.width * factor, self.height * factor)
+
+
+@ppy.pure
+def widest(rects: list[Rect]) -> Rect | None:
+    best = None
+    for rect in rects:
+        if best is None or rect.width > best.width:
+            best = rect
+    return best
+
+
+@ppy.pure
+def total_area(rects: list[Rect]) -> float:
+    total = 0.0
+    for rect in rects:
+        total += rect.area()
+    return total
+
+
+@ppy.pure
+def label(rect: Rect | None, prefix: str) -> str:
+    if rect is None:
+        return prefix + ":none"
+    return f"{prefix}:{rect.width}x{rect.height}"
+
+
+def build(count: int) -> list[Rect]:
+    out = []
+    for i in range(count):
+        out.append(Rect(float(i), float(i) * 2.0))
+    return out
+
+
+boxes: list[Rect] = build(4)
+print(total_area(boxes))
+print(label(widest(boxes), "max"))
+print(label(widest([]), "none") if widest([]) is None else 0.0)

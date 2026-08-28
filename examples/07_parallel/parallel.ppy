@@ -1,0 +1,59 @@
+import time
+
+import numpy as np
+import ppy
+
+
+@ppy.pure
+@ppy.opt(3)
+def serial(a: np.ndarray, b: np.ndarray) -> np.ndarray:
+    return (a * b + a) * (b - a) + a * 0.5 - b * 0.25
+
+
+@ppy.pure
+@ppy.parallel
+@ppy.opt(3)
+def parallel(a: np.ndarray, b: np.ndarray) -> np.ndarray:
+    return (a * b + a) * (b - a) + a * 0.5 - b * 0.25
+
+
+@ppy.pure
+@ppy.fastmath
+def relaxed_total(a: np.ndarray) -> float:
+    return np.sum(a * a)
+
+
+@ppy.pure
+def strict_total(a: np.ndarray) -> float:
+    return np.sum(a * a)
+
+
+def report(label: str, elapsed: float, sample: float) -> None:
+    print(f"{label:16s} {elapsed * 1000.0:8.1f} ms   sample={sample:.12f}")
+
+
+def main() -> None:
+    x: np.ndarray = np.linspace(0.0, 10.0, 8000000)
+    y: np.ndarray = np.linspace(1.0, 5.0, 8000000)
+    serial(x, y)
+    parallel(x, y)
+
+    start: float = time.perf_counter()
+    a = serial(x, y)
+    report("fused serial", time.perf_counter() - start, float(a[7]))
+
+    start = time.perf_counter()
+    b = parallel(x, y)
+    report("fused parallel", time.perf_counter() - start, float(b[7]))
+
+    start = time.perf_counter()
+    c = (x * y + x) * (y - x) + x * 0.5 - y * 0.25
+    report("numpy", time.perf_counter() - start, float(c[7]))
+
+    print("bit-identical:", bool(np.array_equal(a, c)) and bool(np.array_equal(b, c)))
+    print("strict == numpy:", strict_total(x) == float(np.sum(x * x)))
+    print("relaxed close   :", abs(relaxed_total(x) - float(np.sum(x * x))) < 1e-3)
+
+
+if __name__ == "__main__":
+    main()

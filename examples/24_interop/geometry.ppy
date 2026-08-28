@@ -1,0 +1,11 @@
+import ppy
+
+
+@ppy.pure
+def area(width: float, height: float) -> float:
+    return width * height
+
+
+@ppy.pure
+def perimeter(width: float, height: float) -> float:
+    return 2.0 * (width + height)
