@@ -714,3 +714,43 @@ def test_conversion_adds_no_pylint_finding(workspace: Path):
         }
 
     assert _findings("converted.py") <= _findings("linted.py")
+
+
+def test_inspect_shows_the_c_it_generated(workspace: Path):
+    """The native path is IR plus the C boundary back into CPython."""
+    (workspace / "hot.ppy").write_text(
+        textwrap.dedent(
+            """
+            import ppy
+
+            @ppy.pure
+            @ppy.opt(3)
+            def square(x: int) -> int:
+                return x * x
+            """
+        ).lstrip("\n"),
+        encoding="utf-8",
+    )
+    result = _ppy(["inspect", "hot.ppy", "--backend", "llvm", "--ir"], workspace)
+    assert result.returncode == 0, result.stderr
+    assert "; ---- hot ----" in result.stdout
+    assert "CPython ABI wrappers, C" in result.stdout
+    assert "PyObject" in result.stdout
+
+
+def test_a_per_function_opt_level_outranks_the_flag(workspace: Path):
+    """`-O` sets the project default; `@ppy.opt` is a contract on one function."""
+    (workspace / "pin.ppy").write_text(
+        textwrap.dedent(
+            """
+            import ppy
+
+            @ppy.opt(3)
+            def hot(x: int) -> int:
+                return x * x
+            """
+        ).lstrip("\n"),
+        encoding="utf-8",
+    )
+    lowered = _ppy(["-O0", "explain", "hot"], workspace)
+    assert "optimization: O3" in lowered.stdout

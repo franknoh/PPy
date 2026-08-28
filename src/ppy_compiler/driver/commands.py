@@ -235,6 +235,11 @@ def inspect(options: argparse.Namespace, reporter: Reporter) -> int:
         except LlvmUnavailable as exc:
             reporter.emit(Diagnostic("E1801", Severity.ERROR, str(exc)))
             return 2
+        # The native path is not only LLVM IR: the boundary back into CPython
+        # and any library region are C and C++ that this compiler wrote too.
+        for label, source in _generated_native_sources(bundle).items():
+            print(f"/* ---- {label} ---- */")
+            print(source)
         return 0
 
     from ..opt.rewrites import adjustments_for_project
@@ -248,6 +253,33 @@ def inspect(options: argparse.Namespace, reporter: Reporter) -> int:
         print(generated.code)
     return 0
 
+
+
+def _generated_native_sources(bundle) -> dict[str, str]:  # type: ignore[no-untyped-def]
+    """The C and C++ the native path compiles alongside the IR."""
+    found: dict[str, str] = {}
+    from ..backend.llvm import _collect
+    from ..backend.llvm.wrapper import generate
+
+    for name, module in _collect(bundle).items():
+        signatures = {
+            function: lowered.signature for function, lowered in module.functions.items()
+        }
+        if signatures:
+            found[f"{name} (CPython ABI wrappers, C)"] = generate(name, signatures).source
+
+    try:
+        from ..plugins.torch_region import find_regions
+    except ImportError:  # pragma: no cover - the plugin is optional
+        return found
+    for name, symbols in bundle.symbols.modules.items():
+        analysis = bundle.analysis.modules.get(name)
+        if analysis is None:
+            continue
+        for region in find_regions(symbols, analysis):
+            if region.body:
+                found[f"{name}.{region.name} (ATen region, C++)"] = region.source()
+    return found
 
 
 def cache(options: argparse.Namespace, reporter: Reporter) -> int:
