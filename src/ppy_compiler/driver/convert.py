@@ -288,9 +288,31 @@ def build_plan(  # type: ignore[no-untyped-def]
     plan.local_imports = {
         binding.module for binding in symbols.imports.values() if not binding.external
     }
+    _settle_imports(plan)
     plan.needs_ppy = _uses_ppy(plan, symbols)
     diagnostics.extend(_dynamic_findings(symbols))
     return plan, diagnostics
+
+
+def _settle_imports(plan: ConversionPlan) -> None:
+    """Recompute the imports from the annotations that will actually be written.
+
+    A later decision can replace an annotation -- a buffer promotion overwrites
+    the widened `Sequence` form -- and the import it needed would otherwise be
+    left behind unused.
+    """
+    written = (
+        list(plan.params.values())
+        + list(plan.returns.values())
+        + list(plan.assignments.values())
+        + list(plan.fields.values())
+    )
+    plan.typing_imports = {
+        name for name in plan.typing_imports if any(_mentions(text, name) for text in written)
+    }
+    plan.ppy_imports = {
+        name for name in plan.ppy_imports if any(_mentions(text, name) for text in written)
+    }
 
 
 def _uses_ppy(plan: ConversionPlan, symbols) -> bool:  # type: ignore[no-untyped-def]

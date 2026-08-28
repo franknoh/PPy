@@ -1,7 +1,6 @@
 import array
 import math
 import time
-from collections.abc import Sequence
 
 import jax
 import jax.numpy as jnp

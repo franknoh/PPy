@@ -967,3 +967,33 @@ def test_convert_widens_a_read_only_container_parameter(workspace: Path):
     # PEP 585 moved the protocols out of `typing`.
     assert "from collections.abc import Sequence" in converted
     assert _ppy(["check", "ro.ppy"], workspace).returncode == 0
+
+
+def test_convert_leaves_no_unused_import_behind(workspace: Path):
+    """A later decision can replace an annotation the import was added for."""
+    (workspace / "promoted.py").write_text(
+        textwrap.dedent(
+            """
+            def total(values):
+                out = 0.0
+                for i in range(len(values)):
+                    out += values[i]
+                return out
+
+
+            def main():
+                data = [float(i) for i in range(8)]
+                print(total(data))
+
+
+            main()
+            """
+        ).lstrip("\n"),
+        encoding="utf-8",
+    )
+    assert _ppy(["convert", "promoted.py", "--promote-buffers"], workspace).returncode == 0
+    converted = (workspace / "promoted.ppy").read_text(encoding="utf-8")
+    # The parameter is read-only, so it was widened before promotion replaced it.
+    assert "Buffer[float]" in converted
+    assert "Sequence" not in converted
+    assert _ppy(["check", "promoted.ppy"], workspace).returncode == 0
