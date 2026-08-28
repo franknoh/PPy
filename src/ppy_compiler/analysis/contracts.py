@@ -9,7 +9,11 @@ from difflib import get_close_matches
 from ..diagnostics import Diagnostic, DiagnosticBag, Severity
 from ..frontend.source import span_of
 from .checker import FunctionAnalysis, ProjectAnalysis
+from . import types as T
+from . import representation
 from .effects import Effect
+from .refinements import Facts
+from .representation import Repr
 from .symbols import DIRECTIVE_NAMES, FunctionInfo
 
 __all__ = ["ContractReport", "verify", "parallel_report", "native_report"]
@@ -209,7 +213,46 @@ def native_report(function: FunctionAnalysis) -> tuple[bool, str]:
         return False, "generators are lowered through the boxed runtime"
     if info.is_async:
         return False, "coroutines are lowered through the boxed runtime"
+    # A clean body is not enough: the signature has to have a native form too,
+    # or `@ppy.native(require=True)` would accept a function that stays boxed.
+    for param in info.params:
+        if param.kind in {"var_positional", "var_keyword"}:
+            return False, f"`*{param.name}` has no native ABI"
+        if not _has_native_abi(param.type, param.facts):
+            return False, f"parameter `{param.name}` is `{param.type}`, which has no native ABI"
+    if not _has_native_abi(info.ret, info.ret_facts):
+        return False, f"returns `{info.ret}`, which has no native ABI"
     return True, ""
+
+
+def _has_native_abi(t: T.Type, facts: Facts) -> bool:
+    """Does this type reach the native ABI, as a scalar or a described buffer?
+
+    Mirrors what the backend accepts. A `PyObject*` representation is the boxed
+    one, and a list of scalars is passed as a buffer rather than an object.
+    """
+    chosen = representation.select(t, facts)
+    if chosen.repr not in {Repr.PY_OBJECT, Repr.PY_LONG, Repr.PY_LIST, Repr.PY_ARRAY}:
+        return True
+    return _is_buffer_like(t) or _is_flat_class(t)
+
+
+def _is_buffer_like(t: T.Type) -> bool:
+    base = T.strip_literal(t)
+    if not isinstance(base, T.Instance) or len(base.args) != 1:
+        return False
+    if base.name not in {"list", "Buffer", "memoryview", "array"}:
+        return False
+    element = T.strip_literal(base.args[0])
+    return isinstance(element, T.Instance) and element.name in {"int", "float", "bool"}
+
+
+def _is_flat_class(t: T.Type) -> bool:
+    """A fixed tuple of scalars, or a class whose fields are all scalars."""
+    base = T.strip_literal(t)
+    if isinstance(base, T.Tuple_) and not base.homogeneous and base.items:
+        return all(_has_native_abi(item, Facts()) for item in base.items)
+    return False
 
 
 def parallel_report(

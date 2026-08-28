@@ -899,3 +899,61 @@ def test_threading_carries_its_effects(write, analyze):
     )
     codes = [d.code for d in analyze(path).diagnostics.sorted()]
     assert "E1601" in codes
+
+
+def test_required_native_rejects_a_signature_with_no_native_abi(write, codes):
+    """A clean body is not enough; the signature has to reach the native ABI."""
+    path = write(
+        "require_native.ppy",
+        """
+        import ppy
+
+        @ppy.native(require=True)
+        def joined(values: list[str]) -> str:
+            return ",".join(values)
+        """,
+    )
+    assert "E1702" in codes(path)
+
+
+def test_required_native_accepts_a_buffer_signature(write, analyze):
+    path = write(
+        "require_ok.ppy",
+        """
+        import ppy
+
+        @ppy.native(require=True)
+        def total(values: list[float]) -> float:
+            out: float = 0.0
+            for value in values:
+                out += value
+            return out
+        """,
+    )
+    assert not analyze(path).diagnostics.has_errors()
+
+
+def test_native_report_matches_what_the_backend_does(write, analyze):
+    """The contract and the lowering must agree about the same function."""
+    from ppy_compiler.analysis.contracts import native_report
+
+    path = write(
+        "agree.ppy",
+        """
+        def scalars(a: int, b: float) -> float:
+            return a + b
+
+        def strings(values: list[str]) -> int:
+            return len(values)
+
+        def buffers(values: list[int]) -> int:
+            out: int = 0
+            for value in values:
+                out += value
+            return out
+        """,
+    )
+    functions = analyze(path, backend="llvm").analysis.modules["agree"].functions
+    assert native_report(functions["agree.scalars"])[0]
+    assert native_report(functions["agree.buffers"])[0]
+    assert not native_report(functions["agree.strings"])[0]
