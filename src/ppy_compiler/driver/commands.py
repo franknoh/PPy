@@ -215,6 +215,12 @@ def convert(options: argparse.Namespace, reporter: Reporter) -> int:
     return run_convert(options, reporter)
 
 
+def migrate(options: argparse.Namespace, reporter: Reporter) -> int:
+    from .convert import run_migrate
+
+    return run_migrate(options, reporter)
+
+
 def fmt(options: argparse.Namespace, reporter: Reporter) -> int:
     from .formatting import run_fmt
 

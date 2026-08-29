@@ -37,33 +37,28 @@ def build_parser() -> argparse.ArgumentParser:
 
     subparsers = parser.add_subparsers(dest="command")
 
-    convert = subparsers.add_parser("convert", help="convert .py sources to typed .ppy sources")
-    convert.add_argument("path", type=Path)
-    convert.add_argument(
-        "--in-place",
-        action="store_true",
-        help="replace the source: write the .ppy and remove the .py it came from",
+    convert = subparsers.add_parser(
+        "convert", help="strictly convert .py sources to typed .ppy sources"
     )
-    convert.add_argument("--force", action="store_true", help="overwrite an existing .ppy file")
-    convert.add_argument("--dry-run", action="store_true", help="print the result without writing")
+    _conversion_arguments(convert)
     convert.add_argument(
-        "--format",
-        dest="apply_format",
+        "--no-strict",
         action="store_true",
-        help="run the project's formatter over the result, after the deterministic pass",
+        default=argparse.SUPPRESS,
+        help="write the output even when it is not yet valid strict PPY",
     )
-    convert.add_argument(
-        "--promote-buffers",
+
+    migrate = subparsers.add_parser(
+        "migrate", help="rewrite normal Python toward strict PPY, permissively"
+    )
+    _conversion_arguments(migrate)
+    migrate.add_argument(
+        "--diff",
         action="store_true",
-        help="declare read-only numeric list parameters as borrowed buffers, "
-        "rewriting the values that feed them into `array.array`",
+        help="print a unified diff of what migration would write, and write nothing",
     )
-    convert.add_argument(
-        "--hoist-classes",
-        choices=["safe", "aggressive", "off"],
-        default=None,
-        help="which classes may move above their uses: only provably inert "
-        "definitions (safe, default), any (aggressive), or none (off)",
+    migrate.add_argument(
+        "--report", type=Path, default=None, help="write the migration accounting to FILE as JSON"
     )
 
     run = subparsers.add_parser("run", help="compile through LLVM and execute")
@@ -144,6 +139,37 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _conversion_arguments(parser: argparse.ArgumentParser) -> None:
+    """The flags `convert` and `migrate` share: they write the same artifact."""
+    parser.add_argument("path", type=Path)
+    parser.add_argument(
+        "--in-place",
+        action="store_true",
+        help="replace the source: write the .ppy and remove the .py it came from",
+    )
+    parser.add_argument("--force", action="store_true", help="overwrite an existing .ppy file")
+    parser.add_argument("--dry-run", action="store_true", help="print the result without writing")
+    parser.add_argument(
+        "--format",
+        dest="apply_format",
+        action="store_true",
+        help="run the project's formatter over the result, after the deterministic pass",
+    )
+    parser.add_argument(
+        "--promote-buffers",
+        action="store_true",
+        help="declare read-only numeric list parameters as borrowed buffers, "
+        "rewriting the values that feed them into `array.array`",
+    )
+    parser.add_argument(
+        "--hoist-classes",
+        choices=["safe", "aggressive", "off"],
+        default=None,
+        help="which classes may move above their uses: only provably inert "
+        "definitions (safe, default), any (aggressive), or none (off)",
+    )
+
+
 def _split_execution_argv(
     argv: list[str], subcommands: frozenset[str] = frozenset()
 ) -> tuple[list[str], Path, list[str]] | None:
@@ -179,6 +205,7 @@ def main(argv: list[str] | None = None) -> int:
 
     known = {
         "convert",
+        "migrate",
         "run",
         "build",
         "check",
@@ -216,6 +243,8 @@ def main(argv: list[str] | None = None) -> int:
     match options.command:
         case "convert":
             return commands.convert(options, reporter)
+        case "migrate":
+            return commands.migrate(options, reporter)
         case "run":
             return commands.run_llvm_backend(
                 options.file, _program_args(options.args), options, reporter

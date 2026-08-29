@@ -150,9 +150,19 @@ def test_convert_reports_uninferable_parameters(workspace: Path):
     assert "Any" not in (workspace / "vague.py").read_text(encoding="utf-8")
 
 
-def test_convert_flags_dynamic_features(workspace: Path):
+def test_convert_rejects_dynamic_features(workspace: Path):
+    """Strict conversion refuses to produce what `ppy check` would reject."""
     (workspace / "dyn.py").write_text("def f(src: str):\n    return eval(src)\n", encoding="utf-8")
-    result = _ppy(["convert", "dyn.py", "--dry-run"], workspace)
+    result = _ppy(["convert", "dyn.py"], workspace)
+    assert result.returncode == 1
+    assert "E1501" in result.stderr
+    assert not (workspace / "dyn.ppy").exists()
+
+
+def test_migrate_flags_dynamic_features(workspace: Path):
+    """Migration converts the dynamic feature faithfully and says what remains."""
+    (workspace / "dyn.py").write_text("def f(src: str):\n    return eval(src)\n", encoding="utf-8")
+    result = _ppy(["migrate", "dyn.py", "--dry-run"], workspace)
     assert "E1504" in result.stderr
     assert "ppy.dynamic" in result.stderr
 
@@ -1407,7 +1417,7 @@ def test_final_accounts_for_another_module_rebinding_the_name(workspace: Path):
         ).lstrip("\n"),
         encoding="utf-8",
     )
-    assert _ppy(["convert", "."], workspace).returncode == 0
+    assert _ppy(["migrate", "."], workspace).returncode == 0
     converted = (workspace / "store.ppy").read_text(encoding="utf-8")
     assert "REGISTRY: Final" not in converted
     assert "STABLE: Final[int] = 1" in converted
@@ -1436,7 +1446,7 @@ def test_final_sees_the_other_ways_python_binds_a_name(workspace: Path):
         ).lstrip("\n"),
         encoding="utf-8",
     )
-    assert _ppy(["convert", "binds.py"], workspace).returncode == 0
+    assert _ppy(["migrate", "binds.py"], workspace).returncode == 0
     converted = (workspace / "binds.ppy").read_text(encoding="utf-8")
     assert "OPENED: Final" not in converted
     assert "CAUGHT: Final" not in converted
@@ -1592,7 +1602,7 @@ def test_annotations_stay_off_functions_with_unknown_decorators(workspace: Path)
         ).lstrip("\n"),
         encoding="utf-8",
     )
-    assert _ppy(["convert", "wrapped.py"], workspace).returncode == 0
+    assert _ppy(["migrate", "wrapped.py"], workspace).returncode == 0
     converted = (workspace / "wrapped.ppy").read_text(encoding="utf-8")
     assert "def opaque(x):" in converted
     assert "def known(x: int) -> int:" in converted
@@ -1620,14 +1630,14 @@ def test_hoisting_is_conservative_by_default(workspace: Path):
         """
     ).lstrip("\n")
     (workspace / "noisy.py").write_text(source, encoding="utf-8")
-    assert _ppy(["convert", "noisy.py"], workspace).returncode == 0
+    assert _ppy(["migrate", "noisy.py"], workspace).returncode == 0
     converted = (workspace / "noisy.ppy").read_text(encoding="utf-8")
     # Not moved: the quoted forward reference is the price of the decorator.
     assert converted.index("def widest") < converted.index("class Loud")
     assert "'list[Loud]'" in converted
 
     (workspace / "noisy.ppy").unlink()
-    assert _ppy(["convert", "--hoist-classes", "aggressive", "noisy.py"], workspace).returncode == 0
+    assert _ppy(["migrate", "--hoist-classes", "aggressive", "noisy.py"], workspace).returncode == 0
     converted = (workspace / "noisy.ppy").read_text(encoding="utf-8")
     assert converted.index("class Loud") < converted.index("def widest")
     assert "list[Loud]" in converted and "'list[Loud]'" not in converted
@@ -1843,10 +1853,68 @@ def test_reflective_keeps_annotations_exactly_as_written(workspace: Path):
         ).lstrip("\n"),
         encoding="utf-8",
     )
-    assert _ppy(["convert", "pinned.py"], workspace).returncode == 0
+    assert _ppy(["migrate", "pinned.py"], workspace).returncode == 0
     converted = (workspace / "pinned.ppy").read_text(encoding="utf-8")
     assert "def observed(x):" in converted
     assert "def plain(x: int) -> int:" in converted
+
+
+def test_strict_convert_rejects_what_check_would_reject(workspace: Path):
+    """`ppy convert` output must be valid strict PPY, or nothing is written.
+
+    The same program migrates fine: `ppy migrate` is the command that writes
+    work-in-progress code on purpose.
+    """
+    (workspace / "homemade.py").write_text(
+        textwrap.dedent(
+            """
+            def cache(fn):
+                print(sorted(fn.__annotations__))
+                return fn
+
+
+            @cache
+            def f(x):
+                return x
+
+
+            print(f(1))
+            """
+        ).lstrip("\n"),
+        encoding="utf-8",
+    )
+    result = _ppy(["convert", "homemade.py"], workspace)
+    assert result.returncode == 1
+    assert "E1201" in result.stderr
+    assert "ppy migrate" in result.stderr
+    assert "@ppy.reflective" in result.stderr
+    assert not (workspace / "homemade.ppy").exists()
+
+    assert _ppy(["migrate", "homemade.py"], workspace).returncode == 0
+    assert (workspace / "homemade.ppy").exists()
+
+
+def test_convert_no_strict_downgrades_the_gate(workspace: Path):
+    """`--no-strict` writes the permissive result without the migrate framing."""
+    (workspace / "wrapped.py").write_text(
+        textwrap.dedent(
+            """
+            def registry(fn):
+                return fn
+
+
+            @registry
+            def opaque(x):
+                return x * 2
+
+
+            print(opaque(1))
+            """
+        ).lstrip("\n"),
+        encoding="utf-8",
+    )
+    assert _ppy(["convert", "--no-strict", "wrapped.py"], workspace).returncode == 0
+    assert "def opaque(x):" in (workspace / "wrapped.ppy").read_text(encoding="utf-8")
 
 
 def test_a_user_defined_cache_is_not_functools_cache(workspace: Path):
@@ -1874,7 +1942,7 @@ def test_a_user_defined_cache_is_not_functools_cache(workspace: Path):
         ).lstrip("\n"),
         encoding="utf-8",
     )
-    assert _ppy(["convert", "homemade.py"], workspace).returncode == 0
+    assert _ppy(["migrate", "homemade.py"], workspace).returncode == 0
     converted = (workspace / "homemade.ppy").read_text(encoding="utf-8")
     assert "def f(x):" in converted
     assert "def f(x: int)" not in converted
@@ -1924,7 +1992,7 @@ def test_safe_hoisting_will_not_cross_an_unsafe_definition(workspace: Path):
         ).lstrip("\n"),
         encoding="utf-8",
     )
-    assert _ppy(["convert", "probe.py"], workspace).returncode == 0
+    assert _ppy(["migrate", "probe.py"], workspace).returncode == 0
     converted = (workspace / "probe.ppy").read_text(encoding="utf-8")
     assert converted.index("def use") < converted.index("class Node")
     assert '"Node"' in converted or "'Node'" in converted
@@ -1966,7 +2034,7 @@ def test_reflection_readers_freeze_what_they_observe(workspace: Path):
         ).lstrip("\n"),
         encoding="utf-8",
     )
-    assert _ppy(["convert", "lib.py"], workspace).returncode == 0
+    assert _ppy(["migrate", "lib.py"], workspace).returncode == 0
     converted = (workspace / "lib.ppy").read_text(encoding="utf-8")
     assert "def observed(x):" in converted
     assert "def free(x: int) -> int:" in converted
@@ -2040,7 +2108,7 @@ def test_reflection_follows_import_and_object_aliases(workspace: Path):
         ).lstrip("\n"),
         encoding="utf-8",
     )
-    assert _ppy(["convert", "lib.py"], workspace).returncode == 0
+    assert _ppy(["migrate", "lib.py"], workspace).returncode == 0
     converted = (workspace / "lib.ppy").read_text(encoding="utf-8")
     assert "def observed_a(x):" in converted
     assert "def observed_b(x):" in converted
@@ -2070,5 +2138,5 @@ def test_a_shadowing_cache_keeps_its_untyped_view(workspace: Path):
         ).lstrip("\n"),
         encoding="utf-8",
     )
-    assert _ppy(["convert", "shadow.py"], workspace).returncode == 0
+    assert _ppy(["migrate", "shadow.py"], workspace).returncode == 0
     assert "def f(x):" in (workspace / "shadow.ppy").read_text(encoding="utf-8")

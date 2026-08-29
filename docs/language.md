@@ -23,6 +23,25 @@ The compiler analyzes the whole project as one call graph. Inside it:
 Strict mode is the default. `--no-strict` downgrades only the errors that have
 a sound fallback.
 
+## Compatibility policy
+
+Three different claims, deliberately held to three different standards:
+
+- **Syntax compatibility — very high.** A `.ppy` file is valid Python; the
+  tooling, editors, and formatters that read Python read PPY.
+- **Library compatibility — high, through plugins and boundaries.** NumPy,
+  PyTorch, JAX/Flax, pydantic, FastAPI and the modeled stdlib work as-is;
+  everything else works behind an explicit `ppy.dynamic` boundary.
+- **Semantic compatibility — intentionally incomplete.** PPY does not aim to
+  preserve arbitrary dynamic Python behavior. `exec`/`eval`, monkey-patching,
+  dynamic namespace mutation, computed class construction, and unrestricted
+  runtime reflection are restricted in exchange for reliable analysis,
+  optimization, and native compilation.
+
+Running existing Python is a migration feature (`ppy migrate`), not the
+definition of the language: a valid Python program is not necessarily a valid
+PPY program.
+
 ## Directives
 
 All directives work bare (`@ppy.pure`) and called (`@ppy.pure()`), and are

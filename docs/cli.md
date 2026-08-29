@@ -26,11 +26,19 @@ ppy run FILE.ppy [-- ARGS...]    # compile through LLVM, then run
 
 Everything after `--` reaches the program as `sys.argv[1:]`.
 
-## `ppy convert` — `.py` to `.ppy`
+## `ppy convert` — strict `.py` to `.ppy`
 
 ```bash
 ppy convert PATH [--in-place] [--force] [--dry-run] [--promote-buffers]
 ```
+
+Strict staticization: the input is expected to already be reasonably static,
+and the output must be valid strict PPY. After planning the annotations, the
+converter re-analyzes its own output in strict mode; whatever `ppy check`
+would reject tomorrow — a dynamic feature without its `ppy.dynamic` boundary,
+a parameter no annotation reaches, an unvouched decorator holding one back —
+`ppy convert` refuses to produce today, with the checker's own explanation of
+why and a pointer to `ppy migrate`.
 
 `PATH` is a file or a directory; a directory is analyzed as one call graph, so
 a function's types can come from call sites in other files.
@@ -43,18 +51,64 @@ a function's types can come from call sites in other files.
 | `--format` | hand the result to the project's formatter afterwards |
 | `--promote-buffers` | declare read-only numeric list parameters as `Buffer[T]` and rewrite the values feeding them into `array.array` |
 | `--hoist-classes {safe,aggressive,off}` | which classes may move above their uses; `safe` (default) moves only provably inert definitions |
+| `--no-strict` | write the permissive result even when it is not yet valid strict PPY |
 
-Conversion is atomic: an analysis error anywhere means no file is written
-anywhere, so `--in-place` can never leave a tree half `.py` and half `.ppy`.
-Dynamic-feature findings are exempt — they convert faithfully and `ppy check`
-takes it from there.
+Conversion is atomic: an error anywhere means no file is written anywhere, so
+`--in-place` can never leave a tree half `.py` and half `.ppy`.
 
-Use `--in-place` to migrate a project. Without it both `foo.py` and `foo.ppy`
-are left on disk, which a project may not contain — the module would be
-ambiguous — so the converter warns and `ppy check` then refuses.
+Without `--in-place` both `foo.py` and `foo.ppy` are left on disk, which a
+project may not contain — the module would be ambiguous — so the converter
+warns and `ppy check` then refuses.
 
 In a converted module `import ppy` is placed before any sibling import, because
 that import is what installs the loader those modules need.
+
+## `ppy migrate` — permissive Python to PPY
+
+```bash
+ppy migrate PATH [--in-place] [--force] [--dry-run] [--diff] [--report FILE]
+```
+
+The migration tool for normal existing Python. It shares every flag and every
+guarantee of `ppy convert` — deterministic output, atomic failure, one call
+graph per directory — but it writes work-in-progress code on purpose: dynamic
+features convert faithfully with an advisory (`E1504`) instead of an error,
+functions whose annotations could not be written stay untouched, and `ppy
+check` is the command that later insists on the remaining boundaries. The
+natural workflow is
+
+```bash
+ppy migrate project/ --in-place   # rewrite what can be rewritten
+ppy check project/                # see what manual migration remains
+```
+
+and iterating on the check findings until the project is strict PPY.
+
+Before staticizing, migration runs its rewrite passes
+(`ppy_compiler/migration/`), each of which proves its rewrite equivalent
+before making it:
+
+| pass | rewrite |
+|---|---|
+| `literal-attributes` | `setattr(o, "name", v)` → `o.name = v`; two-argument `getattr` → `o.name`; `delattr` → `del o.name` — constant, identifier-shaped names only, and only when the builtin still means the builtin |
+| `static-imports` | `m = importlib.import_module("pkg.mod")` → `import pkg.mod as m` |
+| `module-namespace-writes` | `globals()["NAME"] = value` in the module body → `NAME = value` (function scope differs, and stays) |
+
+Afterwards the strict checker runs over the result once more — not to fail
+the migration, but to classify what remains:
+
+| classification | meaning |
+|---|---|
+| `AUTOFIXED` | a pass rewrote the site; nothing left to do |
+| `REQUIRES_REWRITE` | valid Python the analysis cannot yet hold still; needs a manual rewrite |
+| `DYNAMIC_BOUNDARY` | needs an explicit `ppy.dynamic` boundary to stay dynamic |
+| `UNSUPPORTED` | `eval`/`exec`-class constructs no rewrite recovers |
+| `OPTIMIZATION_OPPORTUNITY` | already valid, and one change away from a faster lowering |
+
+`--report FILE` writes the full accounting as JSON; the summary block prints
+either way. `--diff` prints a unified diff of what migration would write and
+writes nothing, which is the right first command on a project you have not
+migrated before.
 
 ## `ppy check` — static validation
 

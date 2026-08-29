@@ -9,6 +9,7 @@ symbol tables            analysis/symbols       declarations, imports, fields, d
 type & effect analysis   analysis/checker       flow typing, refinements, purity fixpoint
      ▼
      ├── driver/convert + analysis/inference    call-site fixpoint → ConversionPlan → CST rewrite
+     ├── migration/                              rewrite passes + report behind `ppy migrate`
      ├── opt/                                   AST passes for the Python backend
      ├── backend/llvm/                          lowering → LLVM IR → wrapper → link/JIT
      └── lsp/, driver/explain                   the same analysis, served interactively
@@ -24,6 +25,7 @@ and nothing in the backends re-derives what the checker already proved.
 |---|---|
 | `ppy` (runtime) | the import hook and the inert directives/markers. This is all a plain CPython run ever loads. |
 | `frontend/` | source loading, the module graph, ambiguity detection (`E1003`). |
+| `migration/` | the `ppy migrate` layer over the shared conversion engine: deterministic rewrite passes (`pipeline`, `dynamic`, `globals`) that prove each rewrite equivalent before making it, and the classified report (`report`) that says what remains. |
 | `analysis/` | `symbols` (declarations), `checker` (types, refinements, effects), `binding` (one shared call-argument binder), `lexical` (point-sensitive name resolution: what a name means at each statement, shared by decorator identity, reflection, and the write index), `aliasing` (flow-sensitive local alias analysis: mutation and escape resolve through what a name may refer to, not its spelling), `inference` (staged evidence/generalization fixpoint with a convergence guard), `decorators` (what each known decorator does, and that unknown means opaque), `global_writes` (scope-aware project-wide write index behind `Final`), `reflection` (who reads annotations at runtime, blocking their materialization), `codec` (exact-inverse serialization of analysis facts for the cache), `render` (types back to annotation source). |
 | `opt/` | AST-level passes: constant folding, inlining, LICM, loop transforms; used by the Python backend and as pre-lowering cleanup. |
 | `backend/python/` | runs optimized AST under CPython with the loader installed. |

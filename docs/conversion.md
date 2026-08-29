@@ -1,10 +1,22 @@
 # Conversion and inference
 
-`ppy convert` turns untyped Python into typed `.ppy` without changing what it
-does. The command is deterministic — the same input produces the same bytes
-everywhere — and its honesty is machine-checked: in `examples/`, every file
-named `<name>.ppy` next to a `<name>.py` is exactly what the converter wrote,
-and `examples/verify_conversions.py` regenerates each one to prove it.
+Two commands turn untyped Python into typed `.ppy` without changing what it
+does, sharing one engine and one guarantee of determinism — the same input
+produces the same bytes everywhere:
+
+- **`ppy convert`** is strict staticization. The output must be valid strict
+  PPY: the converter re-analyzes what it produced, and anything `ppy check`
+  would reject — a dynamic feature outside a `ppy.dynamic` boundary, a
+  parameter left without a type, an unvouched decorator pinning one back —
+  fails the conversion with the checker's own diagnostic.
+- **`ppy migrate`** is the permissive migration tool for normal existing
+  Python. Same engine, no gate: dynamic features convert faithfully with an
+  advisory, blocked annotations stay off, and `ppy check` picks up from
+  there.
+
+Honesty is machine-checked: in `examples/`, every file named `<name>.ppy`
+next to a `<name>.py` is exactly what the converter wrote, and
+`examples/verify_conversions.py` regenerates each one to prove it.
 
 ## Where types come from
 
@@ -87,13 +99,24 @@ global that happens to be bound once is not announcing one.
 
 ## Failure is atomic
 
-Conversion refuses to write anything when the settled analysis holds an
-error: a half-converted tree (some modules `.ppy`, the broken ones still
-`.py`) does not even import, and there is no good half of that outcome to
-keep. Dynamic-feature findings (`E15xx`) are exempt — converting them
-faithfully is the command's job, and `ppy check` will still demand their
-`ppy.dynamic` boundary afterwards. `--dry-run` prints what conversion would
-have said either way.
+Neither command writes anything when the settled analysis holds an error: a
+half-converted tree (some modules `.ppy`, the broken ones still `.py`) does
+not even import, and there is no good half of that outcome to keep. Under
+`ppy migrate`, dynamic-feature findings (`E15xx`) are exempt — converting
+them faithfully is that command's job, and `ppy check` will still demand
+their `ppy.dynamic` boundary afterwards. Under `ppy convert` they fail the
+conversion like anything else the strict gate catches. `--dry-run` prints
+what conversion would have said either way.
+
+## The strict gate
+
+`ppy convert` ends by re-analyzing the text it is about to write, overlaid on
+the project in strict mode. This is the definition of the command, not an
+extra check: strict conversion means the output is valid strict PPY, so the
+gate simply asks the checker. When the gap is one the converter understands —
+inference knew a type but a decorator or a reflective read pinned the
+function — the diagnostic says so and names the ways out: annotate it
+yourself, mark it `@ppy.reflective`, or run `ppy migrate`.
 
 ## What else conversion does
 

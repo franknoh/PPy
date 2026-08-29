@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import ast
+import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -81,6 +82,15 @@ class ConversionPlan:
     ppy_imports: set[str] = field(default_factory=set)
     needs_ppy: bool = False
 
+    def annotation_counts(self) -> dict[str, int]:
+        return {
+            "parameters": len(self.params),
+            "returns": len(self.returns),
+            "module_constants": len(self.assignments),
+            "fields": len(self.fields),
+            "directives": sum(len(added) for added in self.decorators.values()),
+        }
+
     @property
     def is_empty(self) -> bool:
         return not (
@@ -95,6 +105,18 @@ class ConversionPlan:
 
 
 def run_convert(options: argparse.Namespace, reporter: Reporter) -> int:
+    """`ppy convert`: strict staticization. The output must be valid strict PPY."""
+    return _run_conversion(options, reporter, strict=not getattr(options, "no_strict", False))
+
+
+def run_migrate(options: argparse.Namespace, reporter: Reporter) -> int:
+    """`ppy migrate`: permissive rewriting of normal Python toward strict PPY."""
+    return _run_conversion(options, reporter, strict=False, command="migrate")
+
+
+def _run_conversion(
+    options: argparse.Namespace, reporter: Reporter, *, strict: bool, command: str = "convert"
+) -> int:
     target: Path = options.path
     if not target.exists():
         reporter.emit(Diagnostic("E1002", Severity.ERROR, f"{target} does not exist"))
@@ -109,16 +131,33 @@ def run_convert(options: argparse.Namespace, reporter: Reporter) -> int:
         reporter.note(f"no .py sources found under {target}")
         return 0
 
+    # Migration rewrites first, then staticizes what the rewrites produced:
+    # a `setattr` that became `obj.attr = value` is an attribute write by the
+    # time the checker looks at it.
+    from ..migration import MigrationReport, apply_passes
+
+    report = MigrationReport(root=project.root)
+    rewritten: dict[Path, str] = {}
+    if command == "migrate":
+        for path in sources:
+            text = path.read_text(encoding="utf-8")
+            fixed, fixes = apply_passes(text)
+            if fixes:
+                rewritten[path] = fixed
+                rewritten[path.resolve()] = fixed
+                report.add_rewrites(path, fixes)
+
     # A project conversion analyzes the whole module and call graph at once.
-    bundle = analyze_paths(project, sources, backend="python")
+    bundle = analyze_paths(project, sources, backend="python", overlays=rewritten or None)
     observed = refine_with_call_sites(bundle, bundle.diagnostics)
 
     # A plan built over broken analysis writes broken contracts; an error
     # anywhere is a reason to write nothing anywhere. The verdict comes from
     # a fresh analysis *after* inference -- the first pass over untyped input
     # is full of unknowns that inference exists to resolve -- and dynamic
-    # features are exempt: converting them faithfully is this command's job,
-    # and `ppy check` will still demand their `ppy.dynamic` boundary later.
+    # features are exempt here: `migrate` converts them faithfully on purpose,
+    # and for `convert` the strict gate at the end is the stage that rejects
+    # them, with the checker's own explanations.
     from ..analysis.global_writes import build_write_index
     from ..analysis.reflection import build_reflection_index
 
@@ -129,7 +168,7 @@ def run_convert(options: argparse.Namespace, reporter: Reporter) -> int:
     bundle.global_writes = build_write_index(project.root, project.config.source_roots)
     bundle.reflection = build_reflection_index(project.root, project.config.source_roots)
 
-    fatal = _fatal_findings(bundle, reporter)
+    fatal, leftover = _fatal_findings(bundle, reporter, strict=strict)
     if fatal and not options.dry_run:
         reporter.note(f"{fatal} error(s); nothing was converted")
         return 1
@@ -139,19 +178,44 @@ def run_convert(options: argparse.Namespace, reporter: Reporter) -> int:
     if getattr(options, "promote_buffers", False):
         promotions, blocked = plan_buffer_promotions(bundle)
 
-    ready: list[tuple[Path, Path, str]] = []
+    produced: list[tuple[Path, Path, str]] = []
     failures = fatal
+    pinned: dict[tuple[Path, int], str] = {}
+    seen = {(Path(d.span.path).resolve(), d.span.line) for d in leftover if d.span is not None}
+    for d in leftover:
+        report.add_finding(d)
     for path in sources:
         module_name = _module_for(bundle, path)
         if module_name is None:
             continue
+        report.files_scanned += 1
         plan, diagnostics = build_plan(bundle, module_name, observed, promotions, blocked)
+        if strict:
+            pinned.update(_blocked_materializations(bundle, module_name))
+        if command == "migrate":
+            for key, count in plan.annotation_counts().items():
+                report.annotations[key] = report.annotations.get(key, 0) + count
         for diagnostic in diagnostics:
+            if strict and diagnostic.code == "E1504":
+                # The strict gate is about to report the same dynamic feature
+                # as the error it is; the migration-facing advisory would say
+                # it twice.
+                continue
             reporter.emit(diagnostic)
             if diagnostic.severity is Severity.ERROR:
                 failures += 1
+            if command == "migrate":
+                span = diagnostic.span
+                if not (
+                    diagnostic.code == "E1504"
+                    and span is not None
+                    and (Path(span.path).resolve(), span.line) in seen
+                ):
+                    # The settled analysis already classified this site under
+                    # its precise code; the advisory would count it twice.
+                    report.add_finding(diagnostic)
 
-        original = path.read_text(encoding="utf-8")
+        original = rewritten.get(path) or path.read_text(encoding="utf-8")
         # Conversion itself stays deterministic, so the same input gives the
         # same output everywhere. The project's own formatter is applied on top
         # only when asked for, because it is not.
@@ -172,14 +236,44 @@ def run_convert(options: argparse.Namespace, reporter: Reporter) -> int:
                 )
                 failures += 1
                 continue
-        # `--in-place` replaces the source: the module becomes `.ppy` and the
-        # `.py` goes, which is what leaves a project importable afterwards.
-        destination = path.with_suffix(".ppy")
+        produced.append((path, path.with_suffix(".ppy"), converted))
+        if converted != path.read_text(encoding="utf-8"):
+            report.files_changed += 1
 
-        if options.dry_run:
+    if command == "migrate":
+        for line in report.summary_lines():
+            reporter.note(line)
+        if getattr(options, "report", None):
+            options.report.write_text(report.to_json(), encoding="utf-8")
+
+    if strict and not failures:
+        failures += _strict_gate(project, sources, produced, pinned, reporter)
+
+    if getattr(options, "diff", False):
+        import difflib
+
+        for path, destination, converted in produced:
+            disk = path.read_text(encoding="utf-8")
+            sys.stdout.writelines(
+                difflib.unified_diff(
+                    disk.splitlines(keepends=True),
+                    converted.splitlines(keepends=True),
+                    fromfile=str(path),
+                    tofile=str(destination),
+                )
+            )
+        return 1 if failures else 0
+
+    if options.dry_run:
+        for _path, destination, converted in produced:
             print(f"# ---- {destination} ----")
             print(converted)
-            continue
+        return 1 if failures else 0
+
+    # `--in-place` replaces the source: the module becomes `.ppy` and the
+    # `.py` goes, which is what leaves a project importable afterwards.
+    ready: list[tuple[Path, Path, str]] = []
+    for path, destination, converted in produced:
         if destination.exists() and not options.force:
             reporter.emit(
                 Diagnostic(
@@ -193,8 +287,6 @@ def run_convert(options: argparse.Namespace, reporter: Reporter) -> int:
             continue
         ready.append((path, destination, converted))
 
-    if options.dry_run:
-        return 1 if failures else 0
     if failures:
         # Atomic: a project conversion either lands whole or not at all. A
         # tree left half `.py` and half `.ppy` by `--in-place` would not even
@@ -210,21 +302,120 @@ def run_convert(options: argparse.Namespace, reporter: Reporter) -> int:
         written.append(destination)
 
     if written:
-        reporter.note(f"converted {len(written)} file(s): " + ", ".join(str(p) for p in written))
+        verb = "migrated" if command == "migrate" else "converted"
+        reporter.note(f"{verb} {len(written)} file(s): " + ", ".join(str(p) for p in written))
         _warn_about_shadowed_sources(written, reporter)
     return 0
+
+
+#: Findings about the state of the tree rather than the produced source; the
+#: overlay analysis sees a half-converted world the write step never leaves.
+_TREE_STATE = frozenset({"E1003"})
+
+
+def _strict_gate(project, sources, produced, pinned, reporter: Reporter) -> int:  # type: ignore[no-untyped-def]
+    """Validate the output: strict conversion may not write invalid strict PPY.
+
+    The converted text is re-analyzed in place of the originals, in strict
+    mode with dynamic-feature enforcement on. Whatever `ppy check` would
+    reject tomorrow, `ppy convert` refuses to produce today -- `ppy migrate`
+    is the command that writes work-in-progress code on purpose.
+    """
+    overlays: dict[Path, str] = {}
+    for path, _destination, text in produced:
+        overlays[path] = text
+        overlays[path.resolve()] = text
+    previous = project.config.strict
+    project.config.strict = True
+    try:
+        checked = analyze_paths(project, sources, backend="python", overlays=overlays)
+    finally:
+        project.config.strict = previous
+    errors = 0
+    for diagnostic in checked.diagnostics:
+        if diagnostic.severity is not Severity.ERROR or diagnostic.code in _TREE_STATE:
+            continue
+        _explain_pinned(diagnostic, pinned)
+        reporter.emit(diagnostic)
+        errors += 1
+    return errors
+
+
+def _blocked_materializations(bundle, module_name: str) -> dict[tuple[Path, int], str]:  # type: ignore[no-untyped-def]
+    """Why each skipped function was skipped, for the strict gate's messages."""
+    from ..analysis.decorators import semantics_of
+
+    symbols = bundle.symbols.modules[module_name]
+    functions = list(symbols.functions.values())
+    for cls in symbols.classes.values():
+        functions.extend(cls.methods.values())
+    reflection = _reflection_index(bundle)
+    found: dict[tuple[Path, int], str] = {}
+    for info in functions:
+        if info.directive("reflective") is not None:
+            # The author pinned the annotations deliberately; the plain
+            # `annotate it yourself` guidance is already the right one.
+            continue
+        if _may_materialize(info, bundle.project.plugins, reflection):
+            continue
+        reason = "materialization was blocked"
+        if reflection is not None and reflection.blocks_function(info.name, info.qualname):
+            reason = "the project reads this function's annotations at runtime"
+        else:
+            for name in info.decorators:
+                known = semantics_of(name, bundle.project.plugins)
+                if known is None:
+                    reason = f"decorator `@{name}` has semantics nobody vouches for"
+                    break
+                if known.reads_annotations:
+                    reason = f"decorator `@{name}` reads `__annotations__` at definition time"
+                    break
+        found[(info.path, info.node.lineno)] = reason
+    return found
+
+
+def _explain_pinned(diagnostic: Diagnostic, pinned: dict[tuple[Path, int], str]) -> None:
+    """Replace a type-gap error's help when conversion knew and could not write.
+
+    The default help says `annotate or run ppy convert`, which is circular
+    advice coming from `ppy convert` itself; what the reader needs is why the
+    inferred annotation was withheld and which ways out exist.
+    """
+    if diagnostic.code not in {"E1201", "E1204", "E1304"} or diagnostic.span is None:
+        return
+    reason = pinned.get((Path(diagnostic.span.path).resolve(), diagnostic.span.line))
+    if reason is None:
+        if diagnostic.code in {"E1201", "E1304"}:
+            # The checker's default help suggests running `ppy convert`,
+            # which is exactly what produced this message.
+            diagnostic.help = (
+                "annotate it explicitly; strict conversion could not infer a stable type to insert"
+            )
+        return
+    diagnostic.help = (
+        f"{reason}, so the inferred annotations were not written; annotate the "
+        "function yourself, mark it `@ppy.reflective`, or run `ppy migrate`"
+    )
 
 
 #: Source problems the frontend reports before analysis can even start.
 _STRUCTURAL = ("E1001", "E1002", "E1003", "E9001")
 
 
-def _fatal_findings(bundle, reporter: Reporter) -> int:  # type: ignore[no-untyped-def]
-    """Report what blocks this conversion, and say how much did."""
+def _fatal_findings(  # type: ignore[no-untyped-def]
+    bundle, reporter: Reporter, strict: bool = False
+) -> tuple[int, list[Diagnostic]]:
+    """Report what blocks this conversion, and hand back what was tolerated.
+
+    The tolerated findings -- dynamic features under `ppy migrate` -- are not
+    errors there, but they are exactly what the migration report classifies,
+    so they are returned rather than discarded.
+    """
     from ..analysis.checker import analyze
     from ..diagnostics import DiagnosticBag
 
     fatal = 0
+    leftover: list[Diagnostic] = []
     for diagnostic in bundle.diagnostics:
         if diagnostic.severity is Severity.ERROR and diagnostic.code in _STRUCTURAL:
             reporter.emit(diagnostic)
@@ -240,13 +431,15 @@ def _fatal_findings(bundle, reporter: Reporter) -> int:  # type: ignore[no-untyp
     for diagnostic in settled:
         if diagnostic.severity is not Severity.ERROR:
             continue
-        if diagnostic.code.startswith("E15"):
-            # A dynamic feature converts fine; it is `ppy check` that will
-            # insist on its boundary.
+        if diagnostic.code.startswith("E15") and not strict:
+            # `ppy migrate` converts a dynamic feature faithfully on purpose;
+            # it is `ppy check` that will insist on its boundary. Strict
+            # conversion refuses to produce it at all.
+            leftover.append(diagnostic)
             continue
         reporter.emit(diagnostic)
         fatal += 1
-    return fatal
+    return fatal, leftover
 
 
 def _may_materialize(info, plugins, reflection=None) -> bool:  # type: ignore[no-untyped-def]
