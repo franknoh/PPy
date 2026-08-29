@@ -1,0 +1,14 @@
+[project]
+name = "ppy-example-fastapi"
+version = "0.1.0"
+requires-python = ">=3.12"
+
+[tool.ppy]
+# FastAPI's surface has no plugin yet, so its calls have unknown signatures;
+# strict mode would demand a stub for each one (E1306).
+strict = false
+opt-level = 2
+source-roots = ["."]
+
+[tool.ppy.plugins.pydantic]
+enabled = true

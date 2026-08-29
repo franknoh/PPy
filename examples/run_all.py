@@ -61,7 +61,7 @@ def _missing_libraries(folder: Path) -> set[str]:
         if "__pycache__" in source.parts:
             continue
         text = source.read_text(encoding="utf-8")
-        for library in ("torch", "jax", "uvicorn", "numpy", "pydantic"):
+        for library in ("torch", "jax", "uvicorn", "fastapi", "numpy", "pydantic"):
             if f"import {library}" in text:
                 needed.add(library)
     return {lib for lib in needed if importlib.util.find_spec(lib) is None}

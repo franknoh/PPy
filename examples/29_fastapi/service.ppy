@@ -1,0 +1,48 @@
+import ppy
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
+from pydantic import BaseModel
+
+app = FastAPI()
+
+
+class Item(BaseModel):
+    name: str
+    price: float
+    count: int = 1
+
+
+@ppy.pure
+def total_cost(price: float, count: int) -> float:
+    return price * count
+
+
+@ppy.pure
+def describe(item: Item) -> str:
+    return item.name + " x" + str(item.count)
+
+
+@app.get("/")
+def read_root():
+    return {"service": "inventory"}
+
+
+@app.get("/items/{item_id}")
+def read_item(item_id: int, q: str | None = None):
+    return {"item_id": item_id, "q": q}
+
+
+@app.post("/items")
+def create_item(item: Item):
+    return {"label": describe(item), "cost": total_cost(item.price, item.count)}
+
+
+def main() -> None:
+    client = TestClient(app)
+    print(client.get("/").json())
+    print(client.get("/items/7?q=fast").json())
+    print(client.post("/items", json={"name": "bolt", "price": 0.5, "count": 12}).json())
+
+
+if __name__ == "__main__":
+    main()

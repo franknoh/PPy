@@ -70,7 +70,7 @@ migrate a project.
 
 ## Examples
 
-28 example folders (30 runnable programs) under `examples/`, each with a
+29 example folders (31 runnable programs) under `examples/`, each with a
 README. Where a
 folder holds both `<name>.py` and `<name>.ppy`, the `.ppy` is exactly what
 `ppy convert` writes and `verify_conversions.py` regenerates it to prove it.

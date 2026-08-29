@@ -166,7 +166,7 @@ prints what it found.
 - [docs/config.md](docs/config.md) — every `[tool.ppy]` key
 - [docs/diagnostics.md](docs/diagnostics.md) — every diagnostic code
 - [docs/cli.md](docs/cli.md) — every command and option
-- [examples/README.md](examples/README.md) — 28 worked examples
+- [examples/README.md](examples/README.md) — 29 worked examples
 
 ## Development
 

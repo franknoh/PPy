@@ -37,7 +37,11 @@ dev = [
 torch = ["torch>=2.4", "ninja>=1.11"]
 # flatbuffers is what jax.export uses to serialize StableHLO (spec 21.3).
 jax = ["jax[cuda12]>=0.4", "flatbuffers>=24.0"]
-uvicorn = ["uvicorn>=0.30", "httpx>=0.27"]
+uvicorn = [
+    "uvicorn>=0.30",
+    "httpx>=0.27",
+    "fastapi>=0.115",
+]
 plugins = [
     { include-group = "torch" },
     { include-group = "jax" },

@@ -36,7 +36,8 @@ be generated is caught rather than believed.
 | `24_interop` | a plain `.py` importing a `.ppy` module |
 | `25_jax_export` | build-time export to StableHLO |
 | `26_project` | a multi-module project as one call graph |
-| `27_webapp` | an ASGI application under Uvicorn |
+| `27_uvicorn` | an ASGI application under Uvicorn |
+| `29_fastapi` | a FastAPI service, converted from plain Python |
 | `28_threads` | a native region releasing the GIL |
 
 ## Checking all of it
