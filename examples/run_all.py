@@ -52,19 +52,30 @@ def _run(args: list[str], cwd: Path) -> tuple[int, str]:
 
 
 def _missing_libraries(folder: Path) -> set[str]:
-    """Optional libraries this example needs and this machine lacks."""
+    """Optional libraries this example needs and this machine lacks.
+
+    Imports are read from the AST, so `from fastapi import FastAPI` counts
+    the same as `import fastapi` -- a substring test missed the former, and
+    a missed skip runs an example that cannot even import.
+    """
+    import ast
     import importlib.util
 
+    optional = {"torch", "jax", "uvicorn", "fastapi", "numpy", "pydantic"}
     needed: set[str] = set()
-    sources = [*folder.rglob("*.py"), *folder.rglob("*.ppy")]
-    for source in sources:
-        if "__pycache__" in source.parts:
+    for source in [*folder.rglob("*.py"), *folder.rglob("*.ppy")]:
+        if "__pycache__" in source.parts or ".ppy-cache" in source.parts:
             continue
-        text = source.read_text(encoding="utf-8")
-        for library in ("torch", "jax", "uvicorn", "fastapi", "numpy", "pydantic"):
-            if f"import {library}" in text:
-                needed.add(library)
-    return {lib for lib in needed if importlib.util.find_spec(lib) is None}
+        try:
+            tree = ast.parse(source.read_text(encoding="utf-8"))
+        except SyntaxError:
+            continue
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                needed.update(alias.name.partition(".")[0] for alias in node.names)
+            elif isinstance(node, ast.ImportFrom) and node.module:
+                needed.add(node.module.partition(".")[0])
+    return {lib for lib in needed & optional if importlib.util.find_spec(lib) is None}
 
 
 def main() -> int:

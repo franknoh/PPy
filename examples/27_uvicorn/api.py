@@ -1,3 +1,4 @@
+import uvicorn
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from pydantic import BaseModel
@@ -32,6 +33,10 @@ def read_item(item_id: int, q: str | None = None):
 @app.post("/items")
 def create_item(item: Item):
     return {"label": describe(item), "cost": total_cost(item.price, item.count)}
+
+
+def serve():
+    uvicorn.run("api:app", host="127.0.0.1", port=8000)
 
 
 def main():

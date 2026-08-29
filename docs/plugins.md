@@ -56,23 +56,19 @@ against another, and a module that imports none of them pays for none of them.
   `count: int = Field(ge=0, le=100)` (`ge`/`gt`/`le`/`lt`, `conint`).
 - Schema-building code execution is policy-gated like JAX export.
 
-## Uvicorn
+## Uvicorn (and FastAPI on top of it)
 
 - `uvicorn.run(app)` with a statically resolvable application skips the
   per-worker re-import by module string.
 - The reloader is told to watch `*.ppy` alongside `*.py`.
-
-## FastAPI (no plugin yet)
-
-FastAPI works today through what already exists: `examples/29_fastapi` is a
-converted service whose three paths return byte-identical responses. The
-conversion is exactly right by policy — route handlers keep the signatures
-their author wrote, because `@app.get` is an unvouched decorator and FastAPI
-reads `__annotations__` at import to build validation; the pydantic plugin
-types the models the handlers exchange. What is missing is a plugin declaring
-FastAPI's own surface, so `strict = true` reports every `FastAPI()` and
-`TestClient` call as an unknown signature (`E1306`); such projects run with
-`strict = false` until then.
+- FastAPI rides the same serving path — it is an ASGI framework, and
+  `examples/27_uvicorn` converts a FastAPI service whose three paths return
+  byte-identical responses. The conversion is right by policy: route handlers
+  keep the signatures their author wrote (`@app.get` is unvouched, and
+  FastAPI reads `__annotations__` at import), while the pydantic plugin types
+  the models they exchange. What is missing is a plugin for FastAPI's own
+  surface, so `strict = true` reports its calls as unknown signatures
+  (`E1306`); such projects run with `strict = false` until then.
 
 ## Writing against the interface
 
