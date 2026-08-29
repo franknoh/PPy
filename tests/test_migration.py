@@ -86,7 +86,20 @@ def test_constant_import_module_becomes_an_import():
     source = 'import importlib\n\nmath = importlib.import_module("math")\n'
     rewritten, rewrites = apply_passes(source)
     assert "import math\n" in rewritten
-    assert "import_module" not in rewritten.replace("import importlib", "")
+    assert "import_module" not in rewritten
+    # The rewrite consumed the only use, so the feeding import goes too.
+    assert "import importlib" not in rewritten
+    assert [r.pass_name for r in rewrites] == ["static-imports", "static-imports"]
+
+
+def test_a_still_used_importlib_import_is_kept():
+    source = (
+        "import importlib\n\n"
+        'math = importlib.import_module("math")\n'
+        "other = importlib.import_module(pick())\n"
+    )
+    rewritten, rewrites = apply_passes(source)
+    assert "import importlib\n" in rewritten
     assert [r.pass_name for r in rewrites] == ["static-imports"]
 
 

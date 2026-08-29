@@ -1,9 +1,17 @@
 # PPY — Pretty Python
 
-A source-compatible, statically analyzable subset of Python. A `.ppy` file *is*
-valid Python: it runs under plain CPython with no compiler involved. The
-compiler adds static checking, an optimized Python backend, and an LLVM native
+A statically analyzable language in Python's syntax. A `.ppy` file *is* valid
+Python: it runs under plain CPython with no compiler involved. The compiler
+adds static checking, an optimized Python backend, and an LLVM native
 backend — and all three must produce the same answer.
+
+PPY is source-compatible with Python's syntax and ecosystem, not with every
+dynamic Python behavior: `exec`/`eval`, monkey-patching, dynamic namespace
+mutation, and unrestricted runtime reflection are deliberately restricted —
+or isolated behind an explicit `ppy.dynamic` boundary — in exchange for
+analysis, optimization, and native compilation that can be trusted. Running
+existing Python is a migration feature (`ppy migrate`), not the definition of
+the language.
 
 ## Install
 
@@ -62,8 +70,16 @@ uv run ppy run collatz.ppy   # LLVM native                   112 ms
 ## Turning ordinary Python into it
 
 ```bash
-uv run ppy convert src/ --in-place
+uv run ppy convert src/ --in-place    # strict: the output must be valid strict PPY
+uv run ppy migrate src/ --in-place    # permissive: rewrite toward it, report the rest
 ```
+
+`convert` is the compiler-facing command: it refuses to produce anything
+`ppy check` would reject, and says why. `migrate` is for normal existing
+Python — it first rewrites dynamic-but-static patterns (`setattr` with a
+constant name, `globals()["X"] = ...`, constant `importlib.import_module`),
+then staticizes, and classifies whatever remains (`--report migration.json`,
+`--diff`).
 
 Given untyped Python:
 
@@ -166,13 +182,13 @@ prints what it found.
 
 - [docs/guide.md](docs/guide.md) — overview, measurements, the import hook
 - [docs/language.md](docs/language.md) — the subset, directives, markers
-- [docs/conversion.md](docs/conversion.md) — how `ppy convert` infers what it writes
+- [docs/conversion.md](docs/conversion.md) — how `ppy convert` and `ppy migrate` infer what they write
 - [docs/architecture.md](docs/architecture.md) — pipeline, cache, threads
 - [docs/plugins.md](docs/plugins.md) — how each library integration works
 - [docs/config.md](docs/config.md) — every `[tool.ppy]` key
 - [docs/diagnostics.md](docs/diagnostics.md) — every diagnostic code
 - [docs/cli.md](docs/cli.md) — every command and option
-- [examples/README.md](examples/README.md) — 29 worked examples
+- [examples/README.md](examples/README.md) — 30 worked examples
 
 ## Development
 

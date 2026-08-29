@@ -1,0 +1,34 @@
+"""A little legacy telemetry script, dynamic in all the usual harmless ways."""
+import math
+from collections.abc import Sequence
+from typing import Final
+
+import ppy
+
+SCALE: Final[int] = 4
+
+
+class Reading:
+    def __init__(self, value: float) -> None:
+        self.value: float = value
+        self.flagged: bool = False
+
+
+def normalize(readings: Sequence[Reading]) -> list[float]:
+    out: list[float] = []
+    for reading in readings:
+        out.append(reading.value * SCALE)
+    return out
+
+
+@ppy.pure
+def spread(values: Sequence[float]) -> int:
+    return math.ceil(max(values) - min(values))
+
+
+samples: list[Reading] = [Reading(0.5), Reading(1.25), Reading(2.0)]
+first: Reading = samples[0]
+first.flagged = True
+
+scaled: list[float] = normalize(samples)
+print(first.flagged, scaled, spread(scaled))

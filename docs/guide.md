@@ -3,7 +3,7 @@
 The map. Details live one link away:
 
 - [language.md](language.md) — the subset, directives, markers, the three paths
-- [conversion.md](conversion.md) — how `ppy convert` infers what it writes
+- [conversion.md](conversion.md) — how `ppy convert` and `ppy migrate` infer what they write
 - [architecture.md](architecture.md) — pipeline, module map, cache, threads
 - [plugins.md](plugins.md) — NumPy, PyTorch, JAX, Pydantic, Uvicorn
 - [config.md](config.md) — every `[tool.ppy]` key
@@ -65,15 +65,16 @@ import geometry   # loads geometry.ppy as ordinary Python source
 
 Without `import ppy` the module is invisible — the hook is never implicit. If
 `foo.py` and `foo.ppy` both exist the `.ppy` wins and a warning is raised;
-`ppy check` rejects the ambiguity outright, so use `convert --in-place` to
-migrate a project.
+`ppy check` rejects the ambiguity outright, so use `--in-place` to migrate a
+project.
 
 ## Examples
 
-29 example folders (32 runnable programs) under `examples/`, each with a
+30 example folders (33 runnable programs) under `examples/`, each with a
 README. Where a
 folder holds both `<name>.py` and `<name>.ppy`, the `.ppy` is exactly what
-`ppy convert` writes and `verify_conversions.py` regenerates it to prove it.
+`ppy convert` writes — `ppy migrate` for the folder that says so — and
+`verify_conversions.py` regenerates it to prove it.
 
 ```bash
 python examples/run_all.py             # every example x 3 paths, compared

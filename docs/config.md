@@ -60,7 +60,7 @@ enabled = true                    # any other keys are plugin options
 | `llvm.jit` | `true` | keep compiled code in-process via MCJIT; `false` always links a shared library. |
 | `parallel.threads` | `auto` | worker pool size; `auto` uses every core, honouring `OMP_NUM_THREADS` when set. |
 | `inference.write-local-annotations` | `true` | conversion annotates module globals and empty containers, not just signatures. |
-| `convert.format` | `false` | same as passing `--format` to every `ppy convert`. |
+| `convert.format` | `false` | same as passing `--format` to every `ppy convert` (and `ppy migrate`, which shares the engine). |
 | `convert.hoist-classes` | `safe` | which classes conversion may reorder: only provably inert definitions, any (`aggressive`), or none (`off`). |
 | `format.backend` | `auto` | which formatter runs after the built-in pass; `auto` reads the project's own ruff/black configuration, `none` is built-in only. |
 | `diagnostics.optimization-remarks` | `false` | emit `R3001` remarks for applied optimizations. |

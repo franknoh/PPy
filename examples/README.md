@@ -39,6 +39,7 @@ be generated is caught rather than believed.
 | `27_uvicorn` | serving over Uvicorn: a raw ASGI app, and a converted FastAPI service |
 | `28_threads` | a native region releasing the GIL |
 | `29_flax` | a Flax/optax training loop, converted and strict-checked |
+| `30_migrate` | a deliberately dynamic legacy script rewritten by `ppy migrate` into strict PPY |
 
 ## Checking all of it
 

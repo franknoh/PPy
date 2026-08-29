@@ -1,9 +1,10 @@
-"""Check that every file claiming to be `ppy convert` output really is.
+"""Check that every file claiming to be generated output really is.
 
 Convention, so a filename cannot mislead:
 
   * `<name>.py`   the input, ordinary untyped Python
   * `<name>.ppy`  exactly what `ppy convert <name>.py` writes
+                  (`ppy migrate` for the folders listed in COMMANDS)
 
 This regenerates every `<name>.ppy` from its `.py` and fails on any difference,
 so a hand edit to a file that claims to be generated is caught here rather than
@@ -25,6 +26,11 @@ FLAGS: dict[str, list[str]] = {
     "20_inventory": ["--promote-buffers"],
     "21_training_torch": ["--promote-buffers"],
     "22_training_jax": ["--promote-buffers"],
+}
+
+#: Directories whose pairs are produced by a different subcommand.
+COMMANDS: dict[str, str] = {
+    "30_migrate": "migrate",
 }
 
 
@@ -51,7 +57,7 @@ def _convert(source: Path, into: Path) -> tuple[bool, str]:
             sys.executable,
             "-m",
             "ppy_compiler",
-            "convert",
+            COMMANDS.get(source.parent.name, "convert"),
             staged.name,
             *FLAGS.get(source.parent.name, []),
         ],
@@ -153,7 +159,8 @@ def main() -> int:
             print(f"[FAIL] {rel}  conversion introduced {sorted(introduced)}")
             failures += 1
             continue
-        print(f"[OK]   {rel}  is `ppy convert` output and adds no lint finding")
+        command = COMMANDS.get(source.parent.name, "convert")
+        print(f"[OK]   {rel}  is `ppy {command}` output and adds no lint finding")
 
     checked = len(pairs)
     for folder in sorted(ROOT.glob("[0-9]*/")):

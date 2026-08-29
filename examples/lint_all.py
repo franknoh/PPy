@@ -15,6 +15,10 @@ from pathlib import Path
 ROOT = Path(__file__).parent
 SKIP = {"run_all.py", "verify_conversions.py", "lint_all.py"}
 
+#: Folders whose `.py` is the deliberately messy "before" picture of a
+#: migration; the claim is that the `.ppy` lints clean, not the input.
+BEFORE_PICTURES = {"30_migrate"}
+
 
 def _lint(folder: Path, names: list[str]) -> list[str]:
     done = subprocess.run(
@@ -35,6 +39,8 @@ def main() -> int:
         sources = sorted(
             p for p in folder.rglob("*.py") if p.name not in SKIP and ".ppy-cache" not in str(p)
         )
+        if folder.name in BEFORE_PICTURES:
+            sources = []
         converted = sorted(p for p in folder.rglob("*.ppy") if ".ppy-cache" not in str(p))
         if not sources and not converted:
             continue

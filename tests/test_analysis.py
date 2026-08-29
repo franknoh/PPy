@@ -263,6 +263,29 @@ def test_a_dynamic_boundary_permits_dynamic_class_construction(write, codes):
     assert "E1507" not in codes(path)
 
 
+def test_the_widened_protocols_answer_their_promised_methods(write, analyze):
+    """What the widener writes, the checker must accept back."""
+    path = write(
+        "protocols.ppy",
+        """
+        from collections.abc import Mapping, Sequence
+
+
+        def hits(xs: Sequence[float]) -> int:
+            return xs.count(1.0)
+
+
+        def label(values: Mapping[str, float]) -> float:
+            return values.get("a", 0.0) or sum(values.values())
+
+
+        print(hits([1.0, 2.0]), label({"a": 1.5}))
+        """,
+    )
+    bundle = analyze(path)
+    assert not bundle.diagnostics.has_errors()
+
+
 def test_ppy_dynamic_is_an_explicit_any_boundary(write, analyze):
     path = write(
         "boundary_type.ppy",

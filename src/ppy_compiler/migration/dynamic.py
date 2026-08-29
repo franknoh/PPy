@@ -210,6 +210,39 @@ def _dotted_cst(dotted: str) -> cst.Name | cst.Attribute:
     return node
 
 
+class _NameCounter(cst.CSTVisitor):
+    def __init__(self, name: str) -> None:
+        self.name = name
+        self.count = 0
+
+    def visit_Name(self, node: cst.Name) -> None:
+        if node.value == self.name:
+            self.count += 1
+
+
+class _ImportDropper(cst.CSTTransformer):
+    METADATA_DEPENDENCIES = (PositionProvider,)
+
+    def __init__(self) -> None:
+        self.rewrites: list[Rewrite] = []
+
+    def leave_SimpleStatementLine(
+        self, original: cst.SimpleStatementLine, updated: cst.SimpleStatementLine
+    ) -> cst.SimpleStatementLine | cst.RemovalSentinel:
+        if len(updated.body) != 1 or not isinstance(updated.body[0], cst.Import):
+            return updated
+        names = updated.body[0].names
+        if len(names) != 1 or names[0].asname is not None:
+            return updated
+        if not isinstance(names[0].name, cst.Name) or names[0].name.value != "importlib":
+            return updated
+        line = self.get_metadata(PositionProvider, original).start.line
+        self.rewrites.append(
+            Rewrite(line, "static-imports", "`import importlib` is no longer needed")
+        )
+        return cst.RemoveFromParent()
+
+
 class StaticImports:
     """`m = importlib.import_module("pkg.mod")` becomes `import pkg.mod as m`."""
 
@@ -220,4 +253,15 @@ class StaticImports:
             return module, []
         rewriter = _ImportRewriter()
         rewritten = MetadataWrapper(module, unsafe_skip_copy=True).visit(rewriter)
+        if not rewriter.rewrites:
+            return rewritten, rewriter.rewrites
+        # When the rewrites consumed every use, the import that fed them is
+        # freight with no cargo; a module the interpreter has loaded anyway
+        # imports the same with or without it.
+        counter = _NameCounter("importlib")
+        rewritten.visit(counter)
+        if counter.count == 1:
+            dropper = _ImportDropper()
+            rewritten = MetadataWrapper(rewritten, unsafe_skip_copy=True).visit(dropper)
+            rewriter.rewrites.extend(dropper.rewrites)
         return rewritten, rewriter.rewrites

@@ -26,7 +26,6 @@ class MigrationPass(Protocol):
 
     def apply(self, module: cst.Module, source: str) -> tuple[cst.Module, list[Rewrite]]:
         """Rewrite what this pass owns; report each site changed."""
-        ...
 
 
 def bound_names(source: str) -> frozenset[str]:
