@@ -73,8 +73,12 @@ a list here, a tuple there — the union collapses to the shared
 - no file **anywhere in the project** assigns the attribute — a write index
   (`analysis/global_writes.py`) is built over every source under the project
   root, so converting one file still sees the reverse dependency doing
-  `store.NAME = ...`, through any import spelling, and a `setattr` with a
-  computed name disqualifies the whole module;
+  `store.NAME = ...`. The scan is scope-aware and lexical: a function-scope
+  `import other as s` shadows nothing at module level, `alias = store` makes
+  the alias count for as long as the binding lasts, relative imports resolve
+  against the file's package, `setattr`/`delattr` count, a computed `setattr`
+  name disqualifies the whole module, and a project file that fails to parse
+  fails the proof closed — an unread file could hold any write;
 - the name reads as a constant (`UPPER_CASE`).
 
 The last rule is deliberate: `Final` is an interface contract, and a lowercase
@@ -97,16 +101,23 @@ have said either way.
   (sound for returns, where the body is the whole evidence; never for
   parameters, where call sites are only a sample);
 - moves a class above the function that annotates against it, so
-  `'list[Rect]'` becomes `list[Rect]` — but only a class whose definition is
-  provably inert (`--hoist-classes=safe`, the default): an unknown decorator,
-  an effectful base expression, a metaclass keyword, or a side effect in the
-  class body all keep it where it is, because defining it *runs* those.
-  `aggressive` moves any class, `off` moves none;
+  `'list[Rect]'` becomes `list[Rect]` — but only when the move is provably
+  reorder-safe (`--hoist-classes=safe`, the default), on **both** sides: the
+  moved class and every definition it crosses. A crossed decorator that
+  probes `globals()` would otherwise observe the class ahead of time. "Safe"
+  expressions are literals and bare names only — `holder.Base`, `a + b`, and
+  `Base[int]` can each run user code. `aggressive` moves any class, `off`
+  moves none;
 - writes signature annotations only onto functions whose decorators are all
-  known to tolerate them (`analysis/decorators.py`): an unknown decorator, or
-  one that reads `__annotations__` like `singledispatch`, saw an untyped
-  function and must keep receiving one. The types are still inferred — they
-  are just not materialized;
+  known to tolerate them (`analysis/decorators.py`). Decorator identity is
+  *resolved*, not spelled: a local `def cache` is `mymodule.cache` however it
+  is written, and only the real `functools.cache` matches the known table.
+  An unknown decorator, or one that reads `__annotations__` like
+  `singledispatch`, saw an untyped function and must keep receiving one — and
+  so did any code anywhere in the project calling `inspect.signature`,
+  `typing.get_type_hints`, or reading `__annotations__` on it
+  (`analysis/reflection.py`; an unresolvable read blocks everything). The
+  types are still inferred — they are just not materialized;
 - orders imports into PEP 8 groups with `import ppy` ahead of first-party
   imports — the loader must install before the first `.ppy` import;
 - with `--promote-buffers`, declares read-only numeric list parameters as

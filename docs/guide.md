@@ -81,6 +81,22 @@ python examples/verify_conversions.py  # every .ppy regenerated from its .py
 python examples/lint_all.py            # pylint over every example
 ```
 
+Both runners skip an example whose optional library (torch, jax, uvicorn) is
+not installed, and say so — a skip is never counted as a pass.
+
+## Differential fuzzing
+
+`tests/test_differential_fuzz.py` generates deterministic small programs —
+arithmetic, branches, bounded loops, lists, aliases, mutation, exceptions —
+and requires the three paths to agree byte for byte. Fixed seeds (including
+every seed that ever regressed) run in CI; sweep wider locally with:
+
+```bash
+PPY_FUZZ_SEEDS=0:500 pytest tests/test_differential_fuzz.py
+```
+
+Its first three hundred seeds caught three real optimizer bugs.
+
 ## Dependency groups
 
 ```bash
