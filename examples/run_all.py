@@ -51,14 +51,35 @@ def _run(args: list[str], cwd: Path) -> tuple[int, str]:
     return done.returncode, _clean(done.stdout)
 
 
+def _missing_libraries(folder: Path) -> set[str]:
+    """Optional libraries this example needs and this machine lacks."""
+    import importlib.util
+
+    needed: set[str] = set()
+    sources = [*folder.rglob("*.py"), *folder.rglob("*.ppy")]
+    for source in sources:
+        if "__pycache__" in source.parts:
+            continue
+        text = source.read_text(encoding="utf-8")
+        for library in ("torch", "jax", "uvicorn", "numpy", "pydantic"):
+            if f"import {library}" in text:
+                needed.add(library)
+    return {lib for lib in needed if importlib.util.find_spec(lib) is None}
+
+
 def main() -> int:
     entries = sorted(ROOT.glob("[0-9]*/[a-z]*.ppy")) + sorted(ROOT.glob("*/src/app.ppy"))
     only = sys.argv[1:]
     if only:
         entries = [e for e in entries if any(token in str(e) for token in only)]
     failures = 0
+    skipped: list[str] = []
     for entry in entries:
         cwd, name = entry.parent, entry.name
+        missing = _missing_libraries(entry.parent)
+        if missing:
+            skipped.append(f"{entry.relative_to(ROOT)} (needs {', '.join(sorted(missing))})")
+            continue
         checked = subprocess.run(
             [sys.executable, "-m", "ppy_compiler", "check", name],
             cwd=cwd,
@@ -84,7 +105,11 @@ def main() -> int:
         if not agree:
             for label in outputs:
                 print(f"        {label}: {outputs[label]!r}"[:300])
-    print(f"\n{len(entries) - failures}/{len(entries)} examples agree on all three paths")
+    ran = len(entries) - len(skipped)
+    for entry in skipped:
+        # A skip is not a pass; say what did not run and why.
+        print(f"[SKIP] {entry}")
+    print(f"\n{ran - failures}/{ran} examples agree on all three paths")
     return 1 if failures else 0
 
 

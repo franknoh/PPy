@@ -1,0 +1,31 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: ${{ matrix.python }}
+      # The dev group carries llvmlite, numpy, pydantic, and the linters;
+      # torch/jax stay out of CI (accelerator wheels), and every consumer --
+      # the test suite, run_all, verify_conversions -- skips what is missing
+      # and says so rather than pretending it ran.
+      - run: uv sync
+      - run: uv run ruff check src tests examples/run_all.py examples/lint_all.py examples/verify_conversions.py
+      - run: uv run ruff format --check src tests
+      - run: uv run pylint src/ppy src/ppy_compiler tests examples/run_all.py examples/lint_all.py examples/verify_conversions.py
+      - run: uv run pytest -q
+      - run: uv run python examples/verify_conversions.py
+      - run: uv run python examples/run_all.py
+      - run: uv run python examples/lint_all.py

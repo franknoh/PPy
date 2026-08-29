@@ -125,6 +125,14 @@ def _loaded_names(nodes: list[ast.stmt] | ast.AST) -> set[str]:
         for node in ast.walk(statement):
             if isinstance(node, ast.Name) and isinstance(node.ctx, ast.Load):
                 found.add(node.id)
+            elif isinstance(node, ast.AugAssign) and isinstance(node.target, ast.Name):
+                # `n += 1` parses its target as a store, but it reads first;
+                # removing the binding it reads leaves an UnboundLocalError.
+                found.add(node.target.id)
+            elif isinstance(node, ast.Delete):
+                for target in node.targets:
+                    if isinstance(target, ast.Name):
+                        found.add(target.id)
     return found
 
 
@@ -376,6 +384,18 @@ class CopyPropagation(Pass):
     def _propagate(self, node: ast.FunctionDef) -> ast.FunctionDef:
         assigned = _assigned_names(node.body)
         counts: dict[str, int] = {}
+        # A parameter arrives already bound, so any store in the body is a
+        # *re*binding; without this seed, `n = a; a += 2; return a + n` would
+        # forward `n` straight into the reassigned `a`.
+        arguments = node.args
+        for parameter in [
+            *arguments.posonlyargs,
+            *arguments.args,
+            *arguments.kwonlyargs,
+            *([arguments.vararg] if arguments.vararg else []),
+            *([arguments.kwarg] if arguments.kwarg else []),
+        ]:
+            counts[parameter.arg] = 1
         for child in ast.walk(node):
             if isinstance(child, ast.Name) and isinstance(child.ctx, ast.Store):
                 counts[child.id] = counts.get(child.id, 0) + 1
@@ -391,7 +411,10 @@ class CopyPropagation(Pass):
                 and counts.get(statement.value.id, 0) <= 1
                 and statement.value.id in assigned | {p.arg for p in node.args.args}
             ):
-                substitutions[statement.targets[0].id] = statement.value.id
+                source = statement.value.id
+                # `n = a; m = n` must land on `a`: the middle of the chain is
+                # being deleted in this very loop.
+                substitutions[statement.targets[0].id] = substitutions.get(source, source)
                 self.context.count("copies_propagated")
                 continue
             keep.append(statement)
@@ -455,7 +478,15 @@ class CommonSubexpression(Pass):
     def visit_FunctionDef(self, node: ast.FunctionDef) -> ast.AST:
         self.generic_visit(node)
         new_body: list[ast.stmt] = []
+        # Passes rerun to a fixpoint, so temporaries from an earlier run are
+        # already in the body; starting the counter over would rebind them
+        # and hand later reads a different value.
         counter = 0
+        for existing in ast.walk(node):
+            if isinstance(existing, ast.Name) and existing.id.startswith("_ppy_cse"):
+                suffix = existing.id[len("_ppy_cse") :]
+                if suffix.isdigit():
+                    counter = max(counter, int(suffix))
         for statement in node.body:
             if isinstance(statement, (ast.Assign, ast.Return)) and statement.value is not None:
                 repeated = self._repeated(statement.value)

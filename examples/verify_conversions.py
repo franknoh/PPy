@@ -95,10 +95,33 @@ def _lint(path: Path, scratch: Path) -> set[str]:
     return found
 
 
+def _missing_libraries(folder: Path) -> set[str]:
+    """Optional libraries this example needs and this machine lacks."""
+    import importlib.util
+
+    needed: set[str] = set()
+    sources = [*folder.rglob("*.py"), *folder.rglob("*.ppy")]
+    for source in sources:
+        if "__pycache__" in source.parts:
+            continue
+        text = source.read_text(encoding="utf-8")
+        for library in ("torch", "jax", "uvicorn", "numpy", "pydantic"):
+            if f"import {library}" in text:
+                needed.add(library)
+    return {lib for lib in needed if importlib.util.find_spec(lib) is None}
+
+
 def main() -> int:
     failures = 0
+    skipped = 0
     pairs = _pairs()
     for source, generated in pairs:
+        missing = _missing_libraries(source.parent)
+        if missing:
+            # A skip is not a verification; say what was not proven and why.
+            print(f"[SKIP] {generated.relative_to(ROOT)} (needs {', '.join(sorted(missing))})")
+            skipped += 1
+            continue
         with tempfile.TemporaryDirectory() as scratch:
             ok, produced = _convert(source, Path(scratch))
         rel = generated.relative_to(ROOT)
@@ -145,7 +168,7 @@ def main() -> int:
         print(f"[FAIL] {readme.relative_to(ROOT)}  {wrong}")
         failures += 1
 
-    print(f"\n{checked - failures}/{checked} conversion claims verified")
+    print(f"\n{checked - skipped - failures}/{checked - skipped} conversion claims verified")
     return 1 if failures else 0
 
 
