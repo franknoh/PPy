@@ -19,10 +19,15 @@ def duck_typed(obj: object) -> str:
     return f"{obj.__class__.__name__}"
 
 
+def normalize(payload: ppy.Dynamic) -> int:
+    return int(payload)
+
+
 def main() -> None:
     print(static_only([1, 2, 3, 4]))
     print(reflective("upper"))
     print(duck_typed(3), duck_typed("s"), duck_typed([]))
+    print(normalize("41") + 1)
 
 
 main()

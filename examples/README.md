@@ -4,9 +4,10 @@ Each folder holds one example and a `README.md` explaining it. Code carries no
 comments; the explanation lives in the markdown.
 
 Where a folder holds both `<name>.py` and `<name>.ppy`, the `.ppy` is **exactly**
-what `ppy convert <name>.py` writes. `verify_conversions.py` regenerates every
-one of them and fails on any difference, so a hand edit to a file that claims to
-be generated is caught rather than believed.
+what `ppy convert <name>.py` writes — `ppy migrate` for the folder whose README
+says so. `verify_conversions.py` regenerates every one of them and fails on any
+difference, so a hand edit to a file that claims to be generated is caught
+rather than believed.
 
 | | |
 |---|---|
