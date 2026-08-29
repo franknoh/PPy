@@ -38,6 +38,7 @@ be generated is caught rather than believed.
 | `26_project` | a multi-module project as one call graph |
 | `27_uvicorn` | serving over Uvicorn: a raw ASGI app, and a converted FastAPI service |
 | `28_threads` | a native region releasing the GIL |
+| `29_flax` | a Flax/optax training loop, converted and strict-checked |
 
 ## Checking all of it
 

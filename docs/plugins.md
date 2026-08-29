@@ -46,6 +46,12 @@ against another, and a module that imports none of them pays for none of them.
   `[tool.ppy] build-execution` and **off by default** (`"deny"`).
 - At runtime the artifact executes through PJRT; a mismatch falls back to the
   ordinary jitted call.
+- The plugin also models the Flax (linen) and optax surface: layer
+  constructors and activations, `Module.init`/`apply` resolved through a
+  class's external MRO (`class Mlp(nn.Module)` gets them from a base only
+  the plugin knows), optimizers and `tx.update`. A Flax training loop checks
+  under `strict = true` with nothing extra — `examples/29_flax` converts one
+  whose three paths train identically.
 
 ## Pydantic
 

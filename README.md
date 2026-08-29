@@ -141,10 +141,13 @@ autograd, device selection, and backend keys are unchanged; a tensor subclass or
 a `__torch_function__` override trips the guard and the Python body runs. CUDA
 is used when it is there.
 
-**JAX** — a `@jax.jit` function whose inputs carry `ppy.Shape` and `ppy.DType`
-can be exported to StableHLO at build time, so the trace is not repeated at
-startup. Shapes may be symbolic, so one artifact serves every batch size.
-Export runs project code and is off until the project opts in.
+**JAX / Flax** — a `@jax.jit` function whose inputs carry `ppy.Shape` and
+`ppy.DType` can be exported to StableHLO at build time, so the trace is not
+repeated at startup; shapes may be symbolic, so one artifact serves every
+batch size (export runs project code and is off until the project opts in).
+The same plugin models Flax and optax — layers, activations, `Module.init`/
+`apply` through the external MRO, optimizers — so a Flax training loop
+checks under strict mode as-is.
 
 **Pydantic** — models are typed, constructor and output shapes are kept
 distinct, and field constraints become refinements the checker can use.
@@ -169,7 +172,7 @@ prints what it found.
 - [docs/config.md](docs/config.md) — every `[tool.ppy]` key
 - [docs/diagnostics.md](docs/diagnostics.md) — every diagnostic code
 - [docs/cli.md](docs/cli.md) — every command and option
-- [examples/README.md](examples/README.md) — 28 worked examples
+- [examples/README.md](examples/README.md) — 29 worked examples
 
 ## Development
 

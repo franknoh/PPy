@@ -1,0 +1,72 @@
+from functools import partial
+from typing import Any
+
+import jax
+import jax.numpy as jnp
+import optax
+import ppy
+from flax import linen as nn
+
+
+class Mlp(nn.Module):
+    hidden: int
+
+    @nn.compact
+    def __call__(self, x: jax.Array) -> jax.Array:
+        x = nn.Dense(self.hidden)(x)
+        x = nn.relu(x)
+        return nn.Dense(1)(x)
+
+
+@ppy.pure
+def target_curve(x: jax.Array) -> jax.Array:
+    return 3.0 * x * x - 2.0 * x + 0.5
+
+
+@ppy.pure
+def relative_drop(first: float, last: float) -> float:
+    return last / first
+
+
+@partial(jax.jit, static_argnums=(0, 1))
+def train_step(
+    model: Mlp,
+    tx: optax.GradientTransformation,
+    params: Any,
+    state: Any,
+    xs: jax.Array,
+    ys: jax.Array,
+) -> Any:
+    def loss_fn(p: Any) -> jax.Array:
+        pred = model.apply(p, xs)
+        return jnp.mean((pred - ys) ** 2)
+
+    loss, grads = jax.value_and_grad(loss_fn)(params)
+    updates, state = tx.update(grads, state)
+    params = optax.apply_updates(params, updates)
+    return params, state, loss
+
+
+def main() -> None:
+    key = jax.random.PRNGKey(0)
+    xs = jnp.linspace(-1.0, 1.0, 256).reshape(-1, 1)
+    ys = target_curve(xs)
+
+    model = Mlp(hidden=32)
+    params: Any = model.init(key, xs)
+    tx = optax.adam(1e-2)
+    state: Any = tx.init(params)
+
+    first = 0.0
+    last = 0.0
+    for i in range(200):
+        params, state, loss = train_step(model, tx, params, state, xs, ys)
+        if i == 0:
+            first = float(loss)
+        last = float(loss)
+    print(f"device={jax.devices()[0].platform}")
+    print(f"loss {first:.4f} -> {last:.4f}")
+    print("learned" if relative_drop(first, last) < 0.05 else "did not learn")
+
+
+main()

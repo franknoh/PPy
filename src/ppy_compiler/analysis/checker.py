@@ -1511,6 +1511,9 @@ class _Checker:
                 if found is not None:
                     self._effects = self._effects.add(Effect.READ_OBJECT)
                     return Binding(found[0], found[1])
+                inherited_external = self._external_base_attribute(info, node.attr, owner.facts)
+                if inherited_external is not None:
+                    return inherited_external
                 if info.slots is not None and node.attr not in info.slots:
                     if not self._dynamic_depth:
                         self._error("E1202", f"`{info.name}` has no attribute `{node.attr}`", node)
@@ -1546,6 +1549,24 @@ class _Checker:
             return Binding(T.UNKNOWN)
         self._effects = self._effects.add(Effect.READ_OBJECT)
         return Binding(T.ANY if self._dynamic_depth else T.UNKNOWN)
+
+    def _external_base_attribute(self, info: ClassInfo, attr: str, facts: Facts) -> Binding | None:
+        """An attribute inherited from a base only a plugin knows.
+
+        `class Mlp(nn.Module)` gets `init` and `apply` from flax, not from
+        anything in the project; the class's MRO carries the external base's
+        canonical name, and the plugin that owns it says what the attribute
+        is.
+        """
+        for entry in info.mro:
+            if entry == "object" or entry in self.project.classes:
+                continue
+            probe = T.Instance(entry, (), (entry, "object"))
+            found = self._plugin_instance_attribute(probe, attr, facts)
+            if found is not None:
+                self._effects = self._effects.add(Effect.READ_OBJECT)
+                return found
+        return None
 
     def _optional_receiver(self, owner: Binding, node: ast.Attribute) -> Binding | None:
         """Reading through a value that may be None, which fails at runtime.

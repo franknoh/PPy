@@ -516,3 +516,51 @@ def test_the_uvicorn_plugin_covers_the_fastapi_surface(tmp_path: Path):
     bundle = analyze_paths(open_project(path), [path], backend="python")
     errors = [d for d in bundle.diagnostics if d.severity.name == "ERROR"]
     assert not errors, [f"{d.code}: {d.message}" for d in errors]
+
+
+def test_the_jax_plugin_covers_the_flax_surface(tmp_path: Path):
+    """A Flax module class resolves `init`/`apply` through its external MRO,
+    and layers, activations, and optax calls all have strict-mode signatures."""
+    pytest.importorskip("flax")
+    from ppy_compiler.driver.pipeline import analyze_paths, open_project
+
+    (tmp_path / "pyproject.toml").write_text(
+        "[tool.ppy]\nstrict = true\n\n[tool.ppy.plugins.jax]\nenabled = true\n",
+        encoding="utf-8",
+    )
+    path = tmp_path / "net.ppy"
+    path.write_text(
+        textwrap.dedent(
+            """
+            from typing import Any
+
+            import jax
+            import optax
+            from flax import linen as nn
+
+
+            class Net(nn.Module):
+                width: int
+
+                @nn.compact
+                def __call__(self, x: jax.Array) -> jax.Array:
+                    return nn.relu(nn.Dense(self.width)(x))
+
+
+            def build() -> None:
+                model = Net(width=4)
+                key = jax.random.PRNGKey(0)
+                xs = jax.numpy.ones((2, 3))
+                params: Any = model.init(key, xs)
+                out = model.apply(params, xs)
+                tx = optax.adam(1e-3)
+                state: Any = tx.init(params)
+                updates, state = tx.update(params, state)
+                print(out, updates)
+            """
+        ).lstrip("\n"),
+        encoding="utf-8",
+    )
+    bundle = analyze_paths(open_project(path), [path], backend="python")
+    errors = [d for d in bundle.diagnostics if d.severity.name == "ERROR"]
+    assert not errors, [f"{d.code}: {d.message}" for d in errors]

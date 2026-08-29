@@ -1,0 +1,12 @@
+[project]
+name = "ppy-example-flax"
+version = "0.1.0"
+requires-python = ">=3.12"
+
+[tool.ppy]
+strict = true
+opt-level = 2
+source-roots = ["."]
+
+[tool.ppy.plugins.jax]
+enabled = true

@@ -36,7 +36,11 @@ dev = [
 # ninja is how torch compiles a generated C++ region (spec 20.3).
 torch = ["torch>=2.4", "ninja>=1.11"]
 # flatbuffers is what jax.export uses to serialize StableHLO (spec 21.3).
-jax = ["jax[cuda12]>=0.4", "flatbuffers>=24.0"]
+jax = [
+    "jax[cuda12]>=0.4",
+    "flatbuffers>=24.0",
+    "flax>=0.12.9",
+]
 uvicorn = [
     "uvicorn>=0.30",
     "httpx>=0.27",

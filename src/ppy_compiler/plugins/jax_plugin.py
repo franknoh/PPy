@@ -22,6 +22,77 @@ STAGING_MARKERS = ("jax.jit", "jit", "jax.pmap", "ppy.jax")
 
 _ARRAY = T.Instance("jax.Array", (), ("jax.Array", "object"))
 
+_MODULE = "flax.linen.Module"
+_OPTIMIZER = "optax.GradientTransformation"
+
+#: `flax.linen` layer constructors: each builds a module, and a module is a
+#: callable from arrays to arrays.
+_LINEN_LAYERS = frozenset(
+    {
+        "Dense",
+        "DenseGeneral",
+        "Conv",
+        "ConvTranspose",
+        "Embed",
+        "LayerNorm",
+        "BatchNorm",
+        "RMSNorm",
+        "GroupNorm",
+        "Dropout",
+        "MultiHeadDotProductAttention",
+        "SelfAttention",
+        "Sequential",
+        "MaxPool",
+        "AvgPool",
+    }
+)
+
+#: `flax.linen` activations and array functions, re-exported from `jax.nn`.
+_LINEN_FUNCTIONS = frozenset(
+    {
+        "relu",
+        "gelu",
+        "silu",
+        "swish",
+        "sigmoid",
+        "tanh",
+        "softmax",
+        "log_softmax",
+        "leaky_relu",
+        "elu",
+        "celu",
+        "softplus",
+        "standardize",
+        "one_hot",
+        "avg_pool",
+        "max_pool",
+    }
+)
+
+#: `optax` constructors whose result is a gradient transformation.
+_OPTAX_TRANSFORMS = frozenset(
+    {
+        "adam",
+        "adamw",
+        "sgd",
+        "rmsprop",
+        "adagrad",
+        "adafactor",
+        "lamb",
+        "lion",
+        "novograd",
+        "radam",
+        "chain",
+        "clip",
+        "clip_by_global_norm",
+        "scale",
+        "scale_by_adam",
+        "scale_by_schedule",
+        "add_decayed_weights",
+        "sgdr",
+    }
+)
+
 #: Python operators mapped to the `jax.numpy` function implementing them.
 _OPERATORS = {
     "+": "add",
@@ -306,14 +377,15 @@ class JaxPlugin:
     name = "jax"
 
     def decorator_semantics(self, name: str):  # type: ignore[no-untyped-def]
-        """`jax.jit` wraps but neither reads annotations nor changes arity."""
-        if name in {"jax.jit", "jax.pmap"}:
+        """`jax.jit` and flax's method wrappers neither read annotations nor
+        change the visible arity."""
+        if name in {"jax.jit", "jax.pmap", "flax.linen.compact", "flax.linen.nowrap"}:
             from ..analysis.decorators import DecoratorSemantics
 
             return DecoratorSemantics(preserves_identity=False)
         return None
 
-    modules = ("jax", "jax.numpy", "jax.lax", "jaxlib")
+    modules = ("jax", "jax.numpy", "jax.lax", "jaxlib", "flax", "optax")
 
     def __init__(self, options: dict[str, object] | None = None) -> None:
         self.options = options or {}
@@ -335,9 +407,17 @@ class JaxPlugin:
                     jaxlib_version = "unknown"
         except Exception:  # noqa: BLE001
             jax_version = "unknown"
+        flax_version = "absent"
+        try:
+            if importlib.util.find_spec("flax") is not None:
+                import flax
+
+                flax_version = flax.__version__
+        except Exception:  # noqa: BLE001
+            flax_version = "unknown"
         return (
             f"v{PLUGIN_VERSION}:jax={jax_version}:jaxlib={jaxlib_version}"
-            f":export={int(self.allow_build_export)}"
+            f":flax={flax_version}:export={int(self.allow_build_export)}"
         )
 
     def external_types(self) -> dict[str, str]:
@@ -346,6 +426,8 @@ class JaxPlugin:
             "jax.numpy.ndarray": "jax.Array",
             "jax.Device": "jax.Device",
             "jax.numpy.dtype": "jax.numpy.dtype",
+            _MODULE: _MODULE,
+            _OPTIMIZER: _OPTIMIZER,
         }
 
     def subscript(
@@ -378,10 +460,59 @@ class JaxPlugin:
             return T.STR, Facts()
         return None
 
+    def _flax_call(self, qualname: str) -> CallResult | None:
+        """Flax and optax stay eager Python; what strict mode needs is a
+        signature for each call, and the honest one for a pytree is `Any`."""
+        stays = "flax/optax objects stay on the Python path; PPY compiles the code around them"
+        tail = qualname.rpartition(".")[2]
+        effects = EffectSet.of(Effect.ALLOC)
+        if qualname.startswith(("flax.linen.", "flax.nn.")):
+            if tail in _LINEN_LAYERS:
+                return CallResult(
+                    T.Callable_((), _ARRAY, f"{_MODULE}.__call__"),
+                    Facts(),
+                    effects,
+                    Lowering.PYTHON_FALLBACK,
+                    stays,
+                )
+            if tail in _LINEN_FUNCTIONS:
+                return CallResult(_ARRAY, Facts(), effects, Lowering.PYTHON_FALLBACK, stays)
+            return None
+        if qualname.startswith("optax."):
+            if tail in _OPTAX_TRANSFORMS:
+                return CallResult(
+                    T.Instance(_OPTIMIZER, (), (_OPTIMIZER, "object")),
+                    Facts(),
+                    effects,
+                    Lowering.PYTHON_FALLBACK,
+                    stays,
+                )
+            if tail == "apply_updates":
+                return CallResult(T.ANY, Facts(), effects, Lowering.PYTHON_FALLBACK, stays)
+            return None
+        return None
+
     def instance_attribute(
         self, type_name: str, attribute: str, facts: Facts | None = None
     ) -> tuple[T.Type, Facts] | None:
-        """Attributes of a `jax.Array` value."""
+        """Attributes of a `jax.Array`, a flax module, or an optimizer."""
+        if type_name == _MODULE:
+            if attribute in {"init", "init_with_output", "bind", "variables", "tabulate"}:
+                return T.Callable_((), T.ANY, f"{_MODULE}.{attribute}"), Facts()
+            if attribute == "apply":
+                # `apply` returns whatever `__call__` returns; a pytree of
+                # arrays in general, so `Any` rather than a guess.
+                return T.Callable_((), T.ANY, f"{_MODULE}.apply"), Facts()
+            return None
+        if type_name == _OPTIMIZER:
+            if attribute == "init":
+                return T.Callable_((), T.ANY, f"{_OPTIMIZER}.init"), Facts()
+            if attribute == "update":
+                return (
+                    T.Callable_((), T.Tuple_((T.ANY, T.ANY)), f"{_OPTIMIZER}.update"),
+                    Facts(),
+                )
+            return None
         if type_name != "jax.Array":
             return None
         kind = _ARRAY_MEMBERS.get(attribute)
@@ -412,6 +543,9 @@ class JaxPlugin:
         args: Sequence[tuple[T.Type, Facts]],
         keywords: dict[str, tuple[T.Type, Facts]],
     ) -> CallResult | None:
+        flax_result = self._flax_call(qualname)
+        if flax_result is not None:
+            return flax_result
         if not qualname.startswith(("jax.numpy.", "jax.lax.", "jax.nn.", "jax.")):
             return None
         operation = qualname.rpartition(".")[2]
