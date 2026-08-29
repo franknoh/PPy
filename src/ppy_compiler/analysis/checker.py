@@ -1759,6 +1759,23 @@ class _Checker:
             ("tuple", "count"): T.Callable_((), T.INT, "tuple.count"),
             ("tuple", "index"): T.Callable_((), T.INT, "tuple.index"),
         }
+        # The widener declares read-only parameters as `Sequence`/`Mapping`
+        # and promises exactly these methods; a checker that does not honor
+        # the promise would reject the converter's own output.
+        for owner, concrete in (("Sequence", "list"), ("Mapping", "dict")):
+            for method in (
+                ("count", "index") if owner == "Sequence" else ("get", "keys", "values", "items")
+            ):
+                modeled = table.get((concrete, method))
+                if modeled is not None:
+                    table[(owner, method)] = modeled
+        table[("Sequence", "count")] = T.Callable_(
+            (T.Param("value", element),), T.INT, "Sequence.count"
+        )
+        table[("Sequence", "index")] = T.Callable_(
+            (T.Param("value", element),), T.INT, "Sequence.index"
+        )
+        table[("dict", "copy")] = T.Callable_((), base, "dict.copy")
         found = table.get((name, attr))
         if found is not None:
             return found
