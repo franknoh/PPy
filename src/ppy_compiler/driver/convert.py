@@ -12,6 +12,7 @@ import libcst.matchers as m
 from libcst.metadata import MetadataWrapper, PositionProvider
 
 from ..analysis import types as T
+from ..analysis.binding import bind_ast_call
 from ..analysis.inference import (
     callee_qualname,
     has_source_annotation,
@@ -1002,7 +1003,8 @@ def plan_buffer_promotions(bundle):  # type: ignore[no-untyped-def]
             element = _buffer_scalar(param.type)
             if element is None or has_source_annotation(info, param.name):
                 continue
-            blocker = _buffer_blocker(info.node, param.name)
+            function = analysis.functions.get(qualname)
+            blocker = _buffer_blocker(info.node, param.name, function.aliases if function else None)
             if blocker is not None:
                 blocked.append((info, param.name, blocker))
                 continue
@@ -1076,13 +1078,10 @@ def _readers_of(bundle, names: set[str]) -> dict[str, set[tuple[str, str]]]:  # 
             info = bundle.symbols.functions.get(qualname or "")
             if info is None:
                 continue
-            offset = 1 if info.is_method and not info.is_static else 0
-            for index, argument in enumerate(node.args):
-                if not isinstance(argument, ast.Name) or argument.id not in readers:
-                    continue
-                position = index + offset
-                if position < len(info.params):
-                    readers[argument.id].add((qualname, info.params[position].name))
+            for bound in bind_ast_call(info, node):
+                argument = bound.value
+                if isinstance(argument, ast.Name) and argument.id in readers:
+                    readers[argument.id].add((qualname, bound.param.name))
     return readers
 
 
@@ -1101,34 +1100,47 @@ def _buffer_scalar(t: T.Type) -> str | None:
     return element.name
 
 
-def _buffer_blocker(node: ast.AST, name: str) -> str | None:
-    """What stops `name` from being served by a buffer, if anything."""
+def _buffer_blocker(node: ast.AST, name: str, aliases=None) -> str | None:
+    """What stops `name` from being served by a buffer, if anything.
+
+    Uses are matched through the alias map: `view = values; view.append(0.0)`
+    grows the parameter as surely as `values.append` would, and a borrowed
+    buffer must not grow -- reallocation is exactly what borrowing rules out.
+    """
+
+    def is_use(candidate) -> bool:  # type: ignore[no-untyped-def]
+        if not isinstance(candidate, ast.Name):
+            return False
+        if candidate.id == name:
+            return True
+        return aliases is not None and name in aliases.roots_at(candidate, candidate.id)
+
     for child in ast.walk(node):
         if (
             isinstance(child, ast.Attribute)
-            and isinstance(child.value, ast.Name)
-            and child.value.id == name
+            and is_use(child.value)
             and child.attr in _LIST_ONLY_METHODS
         ):
             return f"`{name}.{child.attr}()` needs a list that can grow or reorder"
         if (
             isinstance(child, ast.Subscript)
-            and isinstance(child.value, ast.Name)
-            and child.value.id == name
+            and is_use(child.value)
             and isinstance(child.slice, ast.Slice)
         ):
             return (
                 f"`{name}` is sliced, which copies; indexing it element by "
                 "element instead would let the memory be borrowed"
             )
-        if isinstance(child, ast.BinOp):
-            for side in (child.left, child.right):
-                if isinstance(side, ast.Name) and side.id == name:
-                    return f"`{name}` is used with `+` or `*`, which are list operations"
-        if isinstance(child, (ast.Return, ast.Yield)):
-            value = child.value
-            if isinstance(value, ast.Name) and value.id == name:
-                return f"`{name}` is returned, so the caller would hold the buffer"
+        if isinstance(child, ast.BinOp) and (is_use(child.left) or is_use(child.right)):
+            return f"`{name}` is used with `+` or `*`, which are list operations"
+        if isinstance(child, ast.AugAssign) and (is_use(child.target) or is_use(child.value)):
+            return f"`{name}` is grown or concatenated in place, which reallocates"
+        if isinstance(child, ast.Delete):
+            for target in child.targets:
+                if isinstance(target, (ast.Subscript, ast.Attribute)) and is_use(target.value):
+                    return f"`{name}` has items deleted, which a borrowed buffer cannot"
+        if isinstance(child, (ast.Return, ast.Yield)) and is_use(child.value):
+            return f"`{name}` is returned, so the caller would hold the buffer"
     return None
 
 
@@ -1136,6 +1148,7 @@ def _list_sources(  # type: ignore[no-untyped-def]
     bundle, qualname: str, index: int, element: str
 ) -> tuple[tuple[str, int, str], ...] | None:
     """Every list construction feeding this parameter, or None if any is opaque."""
+    info = bundle.symbols.functions[qualname]
     sources: list[tuple[str, int, str]] = []
     seen_call = False
     for module_name, symbols in bundle.symbols.modules.items():
@@ -1148,12 +1161,14 @@ def _list_sources(  # type: ignore[no-untyped-def]
                 continue
             if callee_qualname(bundle, symbols, node) != qualname:
                 continue
-            if index >= len(node.args):
-                return None
             seen_call = True
-            argument = node.args[index]
-            if not isinstance(argument, ast.Name):
+            # Positional order, keywords by name -- the binder's rules, so a
+            # call written `f(data=xs)` traces the same list `f(xs)` would,
+            # and `f(other, data=xs)` never traces the wrong argument.
+            reached = [b.value for b in bind_ast_call(info, node) if b.index == index]
+            if len(reached) != 1 or not isinstance(reached[0], ast.Name):
                 return None
+            argument = reached[0]
             line = assignments.get(argument.id)
             if line is None:
                 return None

@@ -444,6 +444,15 @@ def _parameter_uses(  # type: ignore[no-untyped-def]
         elif isinstance(child, ast.BinOp):
             if is_use(child.left) or is_use(child.right):
                 return None
+        elif isinstance(child, ast.AugAssign):
+            # `xs += ys` mutates in place, and `other += xs` concatenates;
+            # neither exists on the protocol.
+            if is_use(child.target) or is_use(child.value):
+                return None
+        elif isinstance(child, ast.Delete):
+            for target in child.targets:
+                if isinstance(target, (ast.Subscript, ast.Attribute)) and is_use(target.value):
+                    return None
         elif isinstance(child, ast.Call):
             written = [*child.args, *(k.value for k in child.keywords)]
             for argument in written:

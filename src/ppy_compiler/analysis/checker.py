@@ -257,6 +257,15 @@ def _is_inspecting_builtin(node: ast.Call, env: Env) -> bool:
     )
 
 
+#: Types whose `+=`/`-=`/... mutate the object rather than rebinding.
+_IN_PLACE_MUTABLE = frozenset({"list", "set", "dict", "bytearray", "collections.deque"})
+
+
+def _mutates_in_place(t: T.Type) -> bool:
+    base = T.strip_literal(t)
+    return isinstance(base, T.Instance) and base.name in _IN_PLACE_MUTABLE
+
+
 def _is_fresh_allocation(node: ast.expr) -> bool:
     """Does this expression produce an object nothing else can already hold?"""
     if isinstance(node, (ast.List, ast.Dict, ast.Set, ast.ListComp, ast.DictComp, ast.SetComp)):
@@ -591,6 +600,11 @@ class _Checker:
     def _stmt_AugAssign(self, node: ast.AugAssign, env: Env) -> None:
         current = self._load_target(node.target, env)
         value = self._expr(node.value, env)
+        if isinstance(node.target, ast.Name) and _mutates_in_place(current.type):
+            # `ys += [x]` on a list is `ys.extend([x])`: the object every
+            # alias of `ys` holds has changed, not just the binding.
+            self._effects = self._effects.add(Effect.WRITE_OBJECT)
+            self._note_mutation(node.target, env)
         result = self._binary(current, value, type(node.op), node)
         declared = None
         if isinstance(node.target, ast.Name):
@@ -740,7 +754,12 @@ class _Checker:
             else:
                 self._expr(target, env)
                 self._effects = self._effects.add(Effect.WRITE_OBJECT)
-                self._blockers.append("deletes an attribute or item")
+                if isinstance(target, (ast.Subscript, ast.Attribute)):
+                    # `del ys[0]` shrinks the container `ys` names, wherever
+                    # it came from.
+                    self._note_mutation(target.value, env)
+                else:
+                    self._blockers.append("deletes an attribute or item")
 
     def _stmt_Try(self, node: ast.Try, env: Env) -> None:
         body_env = env.fork()

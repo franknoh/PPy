@@ -1684,3 +1684,82 @@ def test_an_undeclared_formatter_means_builtin_only(workspace: Path):
     )
     formatted = _ppy(["convert", "styled.py", "--dry-run", "--format"], workspace).stdout
     assert "return  x+1" in formatted
+
+
+def test_buffer_promotion_respects_aliases_and_keywords(workspace: Path):
+    """The promotion planner uses the same alias map and call binder.
+
+    `view = values; view.append(...)` grows the parameter, so it may not be
+    borrowed; a call written `f(data=xs)` traces the same list `f(xs)` would;
+    and a keyword call into a function that stayed a list abandons the group.
+    """
+    (workspace / "grow.py").write_text(
+        textwrap.dedent(
+            """
+            def total(values):
+                view = values
+                view.append(0.0)
+                out = 0.0
+                for v in values:
+                    out += v
+                return out
+
+
+            data = [1.0, 2.0, 3.0]
+            print(total(data))
+            """
+        ).lstrip("\n"),
+        encoding="utf-8",
+    )
+    assert _ppy(["convert", "grow.py", "--promote-buffers"], workspace).returncode == 0
+    converted = (workspace / "grow.ppy").read_text(encoding="utf-8")
+    assert "Buffer" not in converted
+
+    (workspace / "kwcall.py").write_text(
+        textwrap.dedent(
+            """
+            def norm(scale, values):
+                out = 0.0
+                for v in values:
+                    out += v * scale
+                return out
+
+
+            data = [1.0, 2.0]
+            print(norm(2.0, values=data))
+            """
+        ).lstrip("\n"),
+        encoding="utf-8",
+    )
+    assert _ppy(["convert", "kwcall.py", "--promote-buffers"], workspace).returncode == 0
+    converted = (workspace / "kwcall.ppy").read_text(encoding="utf-8")
+    assert "values: Buffer[float]" in converted
+    assert 'array.array("d", [1.0, 2.0])' in converted
+
+    (workspace / "kwreader.py").write_text(
+        textwrap.dedent(
+            """
+            def summed(values):
+                out = 0.0
+                for v in values:
+                    out += v
+                return out
+
+
+            def grows(values):
+                values.append(9.0)
+                return len(values)
+
+
+            data = [1.0, 2.0]
+            print(summed(data), grows(values=data))
+            """
+        ).lstrip("\n"),
+        encoding="utf-8",
+    )
+    assert _ppy(["convert", "kwreader.py", "--promote-buffers"], workspace).returncode == 0
+    converted = (workspace / "kwreader.ppy").read_text(encoding="utf-8")
+    # The keyword call reaches `grows`, which needs a list, so nothing is
+    # rewritten -- otherwise `grows` would receive an array it did not declare.
+    assert "array.array" not in converted
+    assert "Buffer" not in converted

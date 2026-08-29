@@ -1304,3 +1304,55 @@ def test_late_keyword_evidence_still_reaches_the_callee(tmp_path: Path):
     sink = bundle.symbols.functions["late.sink"]
     assert "dict[str, int]" in str(sink.params[0].type)
     assert "list[int]" in str(sink.params[0].type)
+
+
+def test_augmented_assignment_and_del_count_as_mutations(tmp_path: Path):
+    """`ys += [x]` is `ys.extend`, `del ys[0]` shrinks -- through any alias.
+
+    Scalar `+=` must stay a rebinding: an accumulator loop is the single most
+    common pure function there is.
+    """
+    from ppy_compiler.analysis.inference import refine_with_call_sites
+    from ppy_compiler.driver.pipeline import analyze_paths, open_project
+
+    (tmp_path / "pyproject.toml").write_text("[tool.ppy]\n", encoding="utf-8")
+    path = tmp_path / "aug.py"
+    path.write_text(
+        textwrap.dedent(
+            """
+            def extend_it(xs):
+                ys = xs
+                ys += [4.0]
+                return len(xs)
+
+
+            def shrink_it(xs):
+                ys = xs
+                del ys[0]
+                return len(xs)
+
+
+            def accumulate(xs):
+                total = 0.0
+                for x in xs:
+                    total += x
+                return total
+
+
+            print(extend_it([1.0]), shrink_it([1.0, 2.0]), accumulate([3.0]))
+            """
+        ).lstrip("\n"),
+        encoding="utf-8",
+    )
+    project = open_project(path)
+    project.config.strict = False
+    bundle = analyze_paths(project, [path], backend="python")
+    refine_with_call_sites(bundle, bundle.diagnostics)
+    functions = bundle.analysis.modules["aug"].functions
+    assert functions["aug.extend_it"].mutated_params == {"xs"}
+    assert functions["aug.shrink_it"].mutated_params == {"xs"}
+    assert functions["aug.accumulate"].mutated_params == set()
+    assert functions["aug.accumulate"].verified_pure
+    # The widening saw the mutation too: both stay concrete.
+    for name in ("extend_it", "shrink_it"):
+        assert str(bundle.symbols.functions[f"aug.{name}"].params[0].type) == "list[float]"
