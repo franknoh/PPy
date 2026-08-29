@@ -91,7 +91,7 @@ def run_lint(options: argparse.Namespace, reporter: Reporter) -> int:
 
     with tempfile.TemporaryDirectory(prefix="ppy-lint-") as scratch:
         staged, mapping = _stage(sources, project.root, Path(scratch))
-        _configure(backend, Path(scratch), strict=options.strict)
+        _configure(backend, Path(scratch), strict=options.strict, root=project.root)
         arguments = backend.strict if options.strict else (backend.relaxed or backend.strict)
         if chosen == "ruff" and getattr(options, "all_rules", False):
             arguments = (*arguments, "--select", "ALL")
@@ -174,15 +174,56 @@ _SKIP_DIRECTORIES = frozenset(
 )
 
 
-def _configure(backend: Backend, scratch: Path, *, strict: bool) -> None:
+def _parse_jsonc(text: str) -> dict | None:
+    """Parse pyright-flavoured JSON: comments and trailing commas allowed.
+
+    Real pyright configs use both; a strict `json.loads` would throw the
+    project's settings away exactly when they exist.
+    """
+    import json
+
+    def strip(match: re.Match) -> str:
+        piece = match.group(0)
+        return piece if piece.startswith('"') else ""
+
+    # Strings first, so a `//` inside one survives.
+    text = re.sub(r'"(?:[^"\\]|\\.)*"|//[^\n]*|/\*.*?\*/', strip, text, flags=re.DOTALL)
+    text = re.sub(r",\s*([}\]])", r"\1", text)
+    try:
+        loaded = json.loads(text)
+    except json.JSONDecodeError:
+        return None
+    return loaded if isinstance(loaded, dict) else None
+
+
+def _pyright_file_config(path: Path, depth: int = 0) -> dict:
+    """A pyright config file flattened through its `extends` chain."""
+    if depth > 8 or not path.is_file():
+        return {}
+    try:
+        loaded = _parse_jsonc(path.read_text(encoding="utf-8"))
+    except OSError:
+        loaded = None
+    if loaded is None:
+        return {}
+    merged: dict = {}
+    parent = loaded.pop("extends", None)
+    if isinstance(parent, str):
+        merged.update(_pyright_file_config((path.parent / parent).resolve(), depth + 1))
+    merged.update(loaded)
+    return merged
+
+
+def _configure(backend: Backend, scratch: Path, *, strict: bool, root: Path | None = None) -> None:
     """Set the wanted mode on top of the project's own settings.
 
     The project's `extraPaths`, `stubPath`, per-directory execution
     environments and rule overrides are what make its type-check meaningful,
-    and they live in `pyrightconfig.json` or in `[tool.pyright]` -- in that
-    precedence order, which is pyright's own. Only `typeCheckingMode` is
-    overridden, and only because the user asked for `--strict`; everything
-    the project chose is carried into the staging tree unchanged.
+    and they live in `pyrightconfig.json` (JSONC, possibly `extends`-chained)
+    or in `[tool.pyright]` -- in that precedence order, which is pyright's
+    own. The chain is flattened from the original project, so a base config
+    outside the staging tree still counts. Only `typeCheckingMode` is
+    overridden, and only because the user asked for `--strict`.
     """
     if backend.name != "pyright":
         return
@@ -190,13 +231,9 @@ def _configure(backend: Backend, scratch: Path, *, strict: bool) -> None:
 
     config: dict[str, object] = {}
     existing = scratch / "pyrightconfig.json"
-    if existing.is_file():
-        try:
-            loaded = json.loads(existing.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError):
-            loaded = None
-        if isinstance(loaded, dict):
-            config = loaded
+    source = (root or scratch) / "pyrightconfig.json"
+    if source.is_file() or existing.is_file():
+        config = _pyright_file_config(source if source.is_file() else existing)
     else:
         # pyright reads `[tool.pyright]` only when no pyrightconfig.json
         # exists; writing one would shadow the project's table, so its

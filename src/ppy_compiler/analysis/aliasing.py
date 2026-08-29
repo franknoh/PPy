@@ -90,8 +90,9 @@ class AliasInfo:
 
 
 class _Analyzer:
-    def __init__(self, params: frozenset[str]) -> None:
+    def __init__(self, params: frozenset[str], immutable: frozenset[str]) -> None:
         self.params = params
+        self.immutable = immutable
         self.at: dict[int, _State] = {}
         self.holds: dict[str, set[str]] = {}
         self._alloc = 0
@@ -146,10 +147,17 @@ class _Analyzer:
         if isinstance(node, ast.AnnAssign) and node.value is not None:
             return self.bind(node.target, self.eval(node.value, state), node.value, state)
         if isinstance(node, ast.AugAssign):
-            # `xs += ...` keeps the same object for a list; the store side is
-            # what matters, and for a subscript target that is a `holds` write.
+            # `xs += ...` keeps the same object for a list -- but for a value
+            # known to be immutable (a tuple-typed parameter), `+=` builds a
+            # new object and the alias is over. Anything uncertain keeps its
+            # roots, which is the conservative direction.
             self.eval(node.value, state)
-            if isinstance(node.target, (ast.Subscript, ast.Attribute)):
+            if isinstance(node.target, ast.Name):
+                roots = state.get(node.target.id, frozenset())
+                if roots and roots <= self.immutable:
+                    state = dict(state)
+                    state[node.target.id] = self.fresh()
+            elif isinstance(node.target, (ast.Subscript, ast.Attribute)):
                 self.store_into(self.eval(node.target.value, state), self.eval(node.value, state))
             return state
         if isinstance(node, ast.If):
@@ -370,10 +378,17 @@ def _capture_names(pattern: ast.pattern) -> set[str]:
     return names
 
 
-def analyze_aliases(node: ast.FunctionDef | ast.AsyncFunctionDef) -> AliasInfo:
+def analyze_aliases(
+    node: ast.FunctionDef | ast.AsyncFunctionDef,
+    immutable_params: frozenset[str] = frozenset(),
+) -> AliasInfo:
     """Analyze one function. Nested function bodies are left out: a name they
     capture is not re-bound here, and what they do with it is the effect
-    analysis's problem, not the alias map's."""
+    analysis's problem, not the alias map's.
+
+    `immutable_params` names parameters whose declared type cannot be mutated
+    in place; an augmented assignment through one of those is a rebinding.
+    """
     params = frozenset(
         arg.arg
         for arg in [
@@ -384,4 +399,4 @@ def analyze_aliases(node: ast.FunctionDef | ast.AsyncFunctionDef) -> AliasInfo:
             *([node.args.kwarg] if node.args.kwarg else []),
         ]
     )
-    return _Analyzer(params).run(node)
+    return _Analyzer(params, immutable_params & params).run(node)
