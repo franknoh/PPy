@@ -97,11 +97,8 @@ PPY_FUZZ_SEEDS=0:500 pytest tests/test_differential_fuzz.py
 
 Its first three hundred seeds caught three real optimizer bugs.
 
-## Dependency groups
+## Installing
 
-```bash
-uv sync                  # dev: pytest, pylint, llvmlite, numpy, pydantic
-uv sync --group torch    # + PyTorch (cu128 index)
-uv sync --group jax      # + JAX (cuda12)
-uv sync --group all      # everything
-```
+Using PPY from another project (`uv add "ppy[llvm] @ git+..."`) and setting
+up this repo for development (`uv sync` and its groups) are both in the
+[README](../README.md#install).

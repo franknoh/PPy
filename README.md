@@ -5,10 +5,31 @@ valid Python: it runs under plain CPython with no compiler involved. The
 compiler adds static checking, an optimized Python backend, and an LLVM native
 backend — and all three must produce the same answer.
 
+## Install
+
+Add PPY to your project with [uv](https://docs.astral.sh/uv/) (Python 3.12+):
+
 ```bash
-uv sync --group all
-uv run ppy doctor
+uv add "ppy[llvm] @ git+https://github.com/franknoh/PPy.git"
 ```
+
+or with pip: `pip install "ppy[llvm] @ git+https://github.com/franknoh/PPy.git"`.
+
+The base package is the compiler and the runtime; extras enable the rest, so
+you install only what you use:
+
+| extra | enables |
+|---|---|
+| `llvm` | the native backend (llvmlite) |
+| `numpy` / `pydantic` / `web` | the matching plugin |
+| `torch` / `jax` | the matching plugin, resolved from PyPI — pick your own CUDA index in your project if you need one |
+
+Everything degrades cleanly: a missing library only disables its plugin, and
+`uv run ppy doctor` reports what was found. For the fastest native call
+boundary, have the CPython headers installed (`python3-dev`); without them
+PPY says so once and uses the slower boundary.
+
+## One file, three ways
 
 ```python
 # collatz.ppy
@@ -147,13 +168,20 @@ prints what it found.
 - [docs/cli.md](docs/cli.md) — every command and option
 - [examples/README.md](examples/README.md) — 28 worked examples
 
-## Checks
+## Development
 
 ```bash
-uv run pytest -q
+git clone https://github.com/franknoh/PPy.git
+cd PPy
+uv sync                  # dev group: llvmlite, numpy, pydantic, pytest, linters
+uv sync --group torch    # + PyTorch (CUDA 12.8 index)
+uv sync --group jax      # + JAX (cuda12)
+uv sync --group all      # everything
+uv run ppy doctor
 ```
 
 ```bash
+uv run pytest -q
 uv run python examples/run_all.py             # every example x 3 paths, compared
 uv run python examples/verify_conversions.py  # every .ppy regenerated from its .py
 uv run python examples/lint_all.py            # pylint over every example
