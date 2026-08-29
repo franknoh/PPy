@@ -907,7 +907,6 @@ def test_a_list_parameter_is_copied_not_borrowed(write, analyze):
 
 def test_the_borrowed_pointer_is_the_callers_own_memory(write, analyze):
     """No copy: the native code reads the array the caller already had."""
-    import array
     import ctypes
 
     from ppy_compiler.backend.llvm.runtime import _expander_for

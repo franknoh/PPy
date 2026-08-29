@@ -183,7 +183,10 @@ def test_inlining_preserves_the_exception_and_its_location(tmp_path: Path):
     plain = _run([sys.executable, entry.name], tmp_path)
     optimized = _ppy([entry.name], tmp_path)
     assert plain.returncode == optimized.returncode == 1
-    assert "ZeroDivisionError: division by zero" in optimized.stderr
+    # CPython's wording for `// 0` differs across versions; what inlining
+    # must preserve is the exception itself, told the same way plain does.
+    assert "ZeroDivisionError" in optimized.stderr
+    assert plain.stderr.strip().splitlines()[-1] == optimized.stderr.strip().splitlines()[-1]
     assert f'File "{entry}", line 2' in optimized.stderr
 
 

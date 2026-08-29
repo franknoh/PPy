@@ -126,7 +126,7 @@ def test_a_function_without_a_tensor_is_not_a_region(write, analyze):
         """,
     )
     bundle = analyze(path)
-    assert find_regions(bundle.symbols.modules["scalar"], bundle.analysis.modules["scalar"]) == []
+    assert not find_regions(bundle.symbols.modules["scalar"], bundle.analysis.modules["scalar"])
 
 
 def test_the_generated_translation_unit_is_valid_cpp(write, analyze):

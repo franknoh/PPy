@@ -151,6 +151,9 @@ disable = [
     "exec-used",
     # A pytest fixture is used by shadowing its name; that is the mechanism.
     "redefined-outer-name",
+    # torch/jax/uvicorn are optional runtimes, probed behind try/except and
+    # absent by design on machines (and CI) that did not opt in.
+    "import-error",
 ]
 
 [tool.pylint.variables]

@@ -86,7 +86,8 @@ class AliasInfo:
 
     def only_local(self, roots: frozenset[str]) -> bool:
         """Do these roots name only objects this function created?"""
-        return bool(roots) and EXTERNAL not in roots and not (roots & self.params)
+        shared = roots & self.params
+        return bool(roots) and EXTERNAL not in roots and not shared
 
 
 class _Analyzer:
