@@ -25,12 +25,10 @@ Mixed, deliberately:
   build validation — the annotation-materialization policy doing its job.
 - `TestClient` exercises the app in-process, so the output is deterministic
   and all three paths return byte-identical responses.
-
-## Limits
-
-There is no FastAPI plugin yet, so under `strict = true` every `FastAPI()`
-and `TestClient` call is an unknown signature (`E1306`); this folder sets
-`strict = false`. A plugin would lift this.
+- The whole folder checks under `strict = true`: the uvicorn plugin models
+  the serving stack's surface — `FastAPI()`, route decorators, dependency
+  markers, `TestClient` requests and their responses — so strict mode has a
+  signature for every call.
 
 ## Run it
 

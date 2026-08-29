@@ -472,3 +472,47 @@ def test_a_field_constraint_becomes_a_refinement(tmp_path: Path):
     # `gt`/`lt` are exclusive, so the range is the one inside them.
     assert (default["offset"].int_range.low, default["offset"].int_range.high) == (-4, 4)
     assert default["free"].int_range is None
+
+
+def test_the_uvicorn_plugin_covers_the_fastapi_surface(tmp_path: Path):
+    """One plugin, one serving stack: a FastAPI service checks under strict.
+
+    Route handlers stay under their unvouched decorator; what the plugin
+    supplies is a signature for every call the module itself makes.
+    """
+    pytest.importorskip("fastapi")
+    from ppy_compiler.driver.pipeline import analyze_paths, open_project
+
+    (tmp_path / "pyproject.toml").write_text(
+        "[tool.ppy]\nstrict = true\n\n[tool.ppy.plugins.uvicorn]\nenabled = true\n",
+        encoding="utf-8",
+    )
+    path = tmp_path / "svc.ppy"
+    path.write_text(
+        textwrap.dedent(
+            """
+            from fastapi import FastAPI
+            from fastapi.testclient import TestClient
+
+            app = FastAPI()
+
+
+            @app.get("/")
+            def read_root():
+                return {"ok": True}
+
+
+            def main() -> None:
+                client = TestClient(app)
+                response = client.get("/")
+                print(response.status_code, response.json())
+
+
+            main()
+            """
+        ).lstrip("\n"),
+        encoding="utf-8",
+    )
+    bundle = analyze_paths(open_project(path), [path], backend="python")
+    errors = [d for d in bundle.diagnostics if d.severity.name == "ERROR"]
+    assert not errors, [f"{d.code}: {d.message}" for d in errors]

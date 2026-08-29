@@ -4,9 +4,7 @@ version = "0.1.0"
 requires-python = ">=3.12"
 
 [tool.ppy]
-# FastAPI's surface has no plugin yet; strict mode would want a stub for
-# each of its calls (E1306).
-strict = false
+strict = true
 opt-level = 2
 source-roots = ["."]
 

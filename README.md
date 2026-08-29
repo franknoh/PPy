@@ -149,8 +149,11 @@ Export runs project code and is off until the project opts in.
 **Pydantic** — models are typed, constructor and output shapes are kept
 distinct, and field constraints become refinements the checker can use.
 
-**Uvicorn** — the ASGI application is resolved statically instead of re-imported
-by module string per worker, and the reloader is told to watch `.ppy`.
+**Uvicorn / FastAPI** — the ASGI application is resolved statically instead of
+re-imported by module string per worker, and the reloader is told to watch
+`.ppy`. FastAPI rides the same plugin: its surface is modeled so strict mode
+checks a FastAPI service as-is, while route handlers keep the exact
+signatures FastAPI reads at import.
 
 The plugin's exact version is part of every cache key, so an artifact built
 against one build of a library is never reused against another. `ppy doctor`

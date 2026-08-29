@@ -61,14 +61,18 @@ against another, and a module that imports none of them pays for none of them.
 - `uvicorn.run(app)` with a statically resolvable application skips the
   per-worker re-import by module string.
 - The reloader is told to watch `*.ppy` alongside `*.py`.
-- FastAPI rides the same serving path — it is an ASGI framework, and
-  `examples/27_uvicorn` converts a FastAPI service whose three paths return
-  byte-identical responses. The conversion is right by policy: route handlers
-  keep the signatures their author wrote (`@app.get` is unvouched, and
-  FastAPI reads `__annotations__` at import), while the pydantic plugin types
-  the models they exchange. What is missing is a plugin for FastAPI's own
-  surface, so `strict = true` reports its calls as unknown signatures
-  (`E1306`); such projects run with `strict = false` until then.
+- FastAPI rides the same serving path — it is an ASGI framework — so this
+  plugin models its surface too: `FastAPI()`/`APIRouter()`, route decorators,
+  dependency markers (`Depends`, `Query`, ...), and the in-process
+  `TestClient` with its responses. A FastAPI project checks under
+  `strict = true` with nothing extra installed; the plugin activates when
+  the project imports the library.
+- Route handlers stay exactly as their author wrote them: `@app.get` is an
+  unvouched decorator and FastAPI reads `__annotations__` at import to build
+  validation, so the conversion policy refuses to touch them — while the
+  pydantic plugin types the models they exchange. `examples/27_uvicorn`
+  converts a FastAPI service whose three paths return byte-identical
+  responses.
 
 ## Writing against the interface
 
