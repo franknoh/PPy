@@ -1,5 +1,5 @@
 [MAIN]
-ignored-modules = torch, jax, jax.numpy, numpy, pydantic, uvicorn, geometry, ppy
+ignored-modules = torch, jax, jax.numpy, numpy, pydantic, uvicorn, fastapi, fastapi.testclient, geometry, ppy
 
 [MESSAGES CONTROL]
 enable = all
