@@ -74,6 +74,9 @@ class ConversionPlan:
     local_imports: set[str] = field(default_factory=set)
     #: Classes proven safe to move, or None to move any (aggressive mode).
     hoistable: frozenset[str] | None = frozenset()
+    #: Top-level definitions a hoist may cross (safe mode only): a crossed
+    #: decorator that observes module state would see the moved class early.
+    reorder_safe: frozenset[str] | None = None
     typing_imports: set[str] = field(default_factory=set)
     ppy_imports: set[str] = field(default_factory=set)
     needs_ppy: bool = False
@@ -117,11 +120,14 @@ def run_convert(options: argparse.Namespace, reporter: Reporter) -> int:
     # features are exempt: converting them faithfully is this command's job,
     # and `ppy check` will still demand their `ppy.dynamic` boundary later.
     from ..analysis.global_writes import build_write_index
+    from ..analysis.reflection import build_reflection_index
 
     # `Final` needs the whole project's word, not just the files being
     # converted: a reverse dependency assigning `foo.NAME` is invisible to
-    # the bundle and disqualifies the name all the same.
-    bundle.global_writes = build_write_index(project.root)
+    # the bundle and disqualifies the name all the same. The same goes for
+    # reflection: whoever reads `f.__annotations__` may live anywhere.
+    bundle.global_writes = build_write_index(project.root, project.config.source_roots)
+    bundle.reflection = build_reflection_index(project.root, project.config.source_roots)
 
     fatal = _fatal_findings(bundle, reporter)
     if fatal and not options.dry_run:
@@ -243,16 +249,19 @@ def _fatal_findings(bundle, reporter: Reporter) -> int:  # type: ignore[no-untyp
     return fatal
 
 
-def _may_materialize(info, plugins) -> bool:  # type: ignore[no-untyped-def]
+def _may_materialize(info, plugins, reflection=None) -> bool:  # type: ignore[no-untyped-def]
     """May inferred annotations be written into this function's source?
 
     "The analysis knows the type" and "the type is safe to write down" are
     different claims. A decorator that reads `__annotations__`, or one nobody
-    can vouch for, makes the second one false: the decorator saw an untyped
-    function, and the conversion must hand it the same one.
+    can vouch for, makes the second one false; so does any code anywhere in
+    the project inspecting this function's annotations at runtime -- it saw
+    an untyped function, and the conversion must hand it the same one.
     """
     from ..analysis.decorators import semantics_of
 
+    if reflection is not None and reflection.blocks_function(info.name, info.qualname):
+        return False
     for name in info.decorators:
         known = semantics_of(name, plugins)
         if known is None or known.reads_annotations:
@@ -260,25 +269,45 @@ def _may_materialize(info, plugins) -> bool:  # type: ignore[no-untyped-def]
     return True
 
 
-def _hoistable_classes(symbols, bundle, module_name: str) -> frozenset[str] | None:  # type: ignore[no-untyped-def]
-    """Which classes may move: the ones whose definition is inert.
+def _reflection_index(bundle):  # type: ignore[no-untyped-def]
+    if bundle is None:
+        return None
+    existing = getattr(bundle, "reflection", None)
+    if existing is not None:
+        return existing
+    from ..analysis.reflection import build_reflection_index
 
-    Defining a class runs its decorators, bases, keywords, and body. Moving
-    an inert definition past other statements changes nothing; moving one
-    with effects reorders those effects, so it stays where it is unless the
-    project explicitly chose aggressive hoisting.
+    index = build_reflection_index(bundle.project.root, bundle.project.config.source_roots)
+    bundle.reflection = index
+    return index
+
+
+def _hoistable_classes(symbols, bundle):  # type: ignore[no-untyped-def]
+    """Which classes may move, and which definitions they may move across.
+
+    Defining a class runs its decorators, bases, keywords, and body; so does
+    every `def` it would cross. A hoist is meaning-preserving only when both
+    sides are reorder-safe -- a crossed decorator that probes `globals()`
+    would otherwise observe the moved class ahead of time. Aggressive mode
+    waives all of it, explicitly.
     """
-    from ..analysis.decorators import definition_time_pure
+    from ..analysis.decorators import definition_time_reorder_safe
 
     mode = bundle.project.config.convert.hoist_classes
     if mode == "off":
-        return frozenset()
+        return frozenset(), frozenset()
     if mode == "aggressive":
-        return None
-    return frozenset(
+        return None, None
+    identify = bundle.symbols.resolver(symbols).decorator_identity
+    safe = frozenset(
         node.name
         for node in symbols.module.tree.body
-        if isinstance(node, ast.ClassDef) and definition_time_pure(node, bundle.project.plugins)
+        if isinstance(node, (ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef))
+        and definition_time_reorder_safe(node, bundle.project.plugins, identify)
+    )
+    return (
+        frozenset(n.name for n in symbols.module.tree.body if isinstance(n, ast.ClassDef)) & safe,
+        safe,
     )
 
 
@@ -341,9 +370,10 @@ def build_plan(  # type: ignore[no-untyped-def]
     for cls in symbols.classes.values():
         functions.extend(cls.methods.values())
 
+    reflection = _reflection_index(bundle)
     for info in functions:
         line = info.node.lineno
-        if not _may_materialize(info, bundle.project.plugins):
+        if not _may_materialize(info, bundle.project.plugins, reflection):
             # The analysis still knows the types; writing them down is a
             # separate decision, and an unknown decorator may be reading
             # `__annotations__` -- new annotations would change its input.
@@ -415,7 +445,7 @@ def build_plan(  # type: ignore[no-untyped-def]
             )
         )
 
-    plan.hoistable = _hoistable_classes(symbols, bundle, module_name)
+    plan.hoistable, plan.reorder_safe = _hoistable_classes(symbols, bundle)
     plan.local_imports = {
         binding.module for binding in symbols.imports.values() if not binding.external
     }
@@ -472,6 +502,11 @@ def _reads_as_a_constant(name: str) -> bool:
 def _plan_module_globals(  # type: ignore[no-untyped-def]
     symbols, analysis, plan: ConversionPlan, module_name: str, bundle=None
 ) -> None:
+    reflection = _reflection_index(bundle)
+    if reflection is not None and reflection.blocks_module_globals(module_name):
+        # Someone prints this module's `__annotations__`; adding entries to
+        # it would change what they see.
+        return
     rebound = _rebound_globals(symbols)
     index = _write_index(bundle)
     annotated: set[str] = set()
@@ -565,7 +600,7 @@ def _write_index(bundle):  # type: ignore[no-untyped-def]
         return existing
     from ..analysis.global_writes import build_write_index
 
-    index = build_write_index(bundle.project.root)
+    index = build_write_index(bundle.project.root, bundle.project.config.source_roots)
     bundle.global_writes = index
     return index
 
@@ -744,7 +779,7 @@ def convert_source(source: str, plan: ConversionPlan) -> str:
     imported = _insert_imports(annotated, plan)
     # A quoted annotation only exists because the class was not bound yet.
     # Moving the class above its first use removes the reason for the quotes.
-    reordered = _unquote_resolved(_hoist_classes(imported, plan.hoistable))
+    reordered = _unquote_resolved(_hoist_classes(imported, plan.hoistable, plan.reorder_safe))
     return normalize_source(reordered.code, frozenset(plan.local_imports))
 
 
@@ -1250,7 +1285,11 @@ def _definition_time_names(node: cst.CSTNode) -> set[str]:
     return found
 
 
-def _hoist_classes(module: cst.Module, hoistable: frozenset[str] | None) -> cst.Module:
+def _hoist_classes(
+    module: cst.Module,
+    hoistable: frozenset[str] | None,
+    reorder_safe: frozenset[str] | None = None,
+) -> cst.Module:
     """Move a class above the definitions that annotate against it.
 
     A quoted annotation is only needed because the class is not bound yet.
@@ -1269,7 +1308,7 @@ def _hoist_classes(module: cst.Module, hoistable: frozenset[str] | None) -> cst.
                 continue
             if hoistable is not None and statement.name.value not in hoistable:
                 continue
-            target = _earliest_position(body, index, statement)
+            target = _earliest_position(body, index, statement, reorder_safe)
             if target is None or target >= index:
                 continue
             body.insert(target, body.pop(index))
@@ -1279,7 +1318,10 @@ def _hoist_classes(module: cst.Module, hoistable: frozenset[str] | None) -> cst.
 
 
 def _earliest_position(
-    body: list[cst.BaseStatement], index: int, statement: cst.ClassDef
+    body: list[cst.BaseStatement],
+    index: int,
+    statement: cst.ClassDef,
+    reorder_safe: frozenset[str] | None = None,
 ) -> int | None:
     """The first slot this class can occupy without breaking a dependency."""
     needed = _definition_time_names(statement)
@@ -1291,6 +1333,10 @@ def _earliest_position(
         if isinstance(previous, cst.ClassDef) and previous.name.value in needed:
             break
         if isinstance(previous, cst.FunctionDef) and previous.name.value in needed:
+            break
+        if reorder_safe is not None and previous.name.value not in reorder_safe:
+            # Crossing this definition would run its decorators and defaults
+            # with the moved class already bound -- observable.
             break
         position -= 1
     if position == index:

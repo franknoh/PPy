@@ -1763,3 +1763,205 @@ def test_buffer_promotion_respects_aliases_and_keywords(workspace: Path):
     # rewritten -- otherwise `grows` would receive an array it did not declare.
     assert "array.array" not in converted
     assert "Buffer" not in converted
+
+
+def test_the_write_index_is_scope_aware(workspace: Path):
+    """Aliases live in scopes and in time, and writes follow both.
+
+    A function-scope `import other as s` must not launder the module-scope
+    write on `store`; `s = store` makes `s` the module for as long as the
+    binding lasts; `from . import store` resolves against the package; and a
+    file that does not parse fails the whole proof closed.
+    """
+    (workspace / "store.py").write_text("LIMIT = 5\nSAFE = 1\n", encoding="utf-8")
+    (workspace / "other.py").write_text("LIMIT = 7\n", encoding="utf-8")
+    (workspace / "shadow.py").write_text(
+        textwrap.dedent(
+            """
+            import store as s
+
+            s.LIMIT = 9
+
+
+            def f():
+                import other as s
+
+                return s
+            """
+        ).lstrip("\n"),
+        encoding="utf-8",
+    )
+    (workspace / "chain.py").write_text(
+        'import store\n\nalias = store\nsetattr(alias, "SAFE", 2)\n', encoding="utf-8"
+    )
+    pkg = workspace / "pkg"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("", encoding="utf-8")
+    (pkg / "inner.py").write_text("DEPTH = 1\n", encoding="utf-8")
+    (pkg / "user.py").write_text("from . import inner\n\ninner.DEPTH = 2\n", encoding="utf-8")
+
+    assert _ppy(["convert", "store.py"], workspace).returncode == 0
+    converted = (workspace / "store.ppy").read_text(encoding="utf-8")
+    assert "LIMIT: Final" not in converted
+    assert "SAFE: Final" not in converted
+    (workspace / "store.ppy").unlink()
+
+    assert _ppy(["convert", str(pkg / "inner.py")], workspace).returncode == 0
+    assert "DEPTH: Final" not in (pkg / "inner.ppy").read_text(encoding="utf-8")
+
+    # `other` was only ever rebound inside a function's own alias.
+    assert _ppy(["convert", "other.py"], workspace).returncode == 0
+    assert "LIMIT: Final[int] = 7" in (workspace / "other.ppy").read_text(encoding="utf-8")
+
+
+def test_an_unparsable_project_file_fails_the_final_proof_closed(workspace: Path):
+    (workspace / "store.py").write_text("STEADY = 1\n", encoding="utf-8")
+    (workspace / "mystery.py").write_text("def (broken\n", encoding="utf-8")
+    assert _ppy(["convert", "store.py"], workspace).returncode == 0
+    assert "STEADY: Final" not in (workspace / "store.ppy").read_text(encoding="utf-8")
+
+
+def test_a_user_defined_cache_is_not_functools_cache(workspace: Path):
+    """Decorator identity is resolved, not spelled.
+
+    A local `def cache` that prints `fn.__annotations__` must keep seeing the
+    empty dict it always saw; only the real `functools.cache` is known to
+    tolerate annotations.
+    """
+    (workspace / "homemade.py").write_text(
+        textwrap.dedent(
+            """
+            def cache(fn):
+                print(sorted(fn.__annotations__))
+                return fn
+
+
+            @cache
+            def f(x):
+                return x
+
+
+            print(f(1))
+            """
+        ).lstrip("\n"),
+        encoding="utf-8",
+    )
+    assert _ppy(["convert", "homemade.py"], workspace).returncode == 0
+    converted = (workspace / "homemade.ppy").read_text(encoding="utf-8")
+    assert "def f(x):" in converted
+    assert "def f(x: int)" not in converted
+
+    (workspace / "genuine.py").write_text(
+        textwrap.dedent(
+            """
+            from functools import cache
+
+
+            @cache
+            def f(x):
+                return x
+
+
+            print(f(1))
+            """
+        ).lstrip("\n"),
+        encoding="utf-8",
+    )
+    assert _ppy(["convert", "genuine.py"], workspace).returncode == 0
+    converted = (workspace / "genuine.ppy").read_text(encoding="utf-8")
+    assert "def f(x: int) -> int:" in converted
+
+
+def test_safe_hoisting_will_not_cross_an_unsafe_definition(workspace: Path):
+    """A crossed decorator observing `globals()` pins the class in place."""
+    (workspace / "probe.py").write_text(
+        textwrap.dedent(
+            """
+            def probe(fn):
+                print("Node" in globals())
+                return fn
+
+
+            @probe
+            def use(x: "Node"):
+                return x
+
+
+            class Node:
+                pass
+
+
+            print(use(Node()).__class__.__name__)
+            """
+        ).lstrip("\n"),
+        encoding="utf-8",
+    )
+    assert _ppy(["convert", "probe.py"], workspace).returncode == 0
+    converted = (workspace / "probe.ppy").read_text(encoding="utf-8")
+    assert converted.index("def use") < converted.index("class Node")
+    assert '"Node"' in converted or "'Node'" in converted
+
+
+def test_reflection_readers_freeze_what_they_observe(workspace: Path):
+    """Whoever reads annotations at runtime must keep reading the original.
+
+    The observation may live in a different file than the function; the scan
+    is project-wide, like the one behind `Final`.
+    """
+    (workspace / "lib.py").write_text(
+        textwrap.dedent(
+            """
+            def observed(x):
+                return x
+
+
+            def free(x):
+                return x + 1
+
+
+            X = 1
+            print(free(1), observed(2), X)
+            """
+        ).lstrip("\n"),
+        encoding="utf-8",
+    )
+    (workspace / "inspector.py").write_text(
+        textwrap.dedent(
+            """
+            import inspect
+
+            import lib
+
+            print(inspect.signature(lib.observed))
+            print(lib.__annotations__)
+            """
+        ).lstrip("\n"),
+        encoding="utf-8",
+    )
+    assert _ppy(["convert", "lib.py"], workspace).returncode == 0
+    converted = (workspace / "lib.ppy").read_text(encoding="utf-8")
+    assert "def observed(x):" in converted
+    assert "def free(x: int) -> int:" in converted
+    # `lib.__annotations__` is printed, so the module gets no new entries.
+    assert "X: " not in converted
+
+
+def test_pyright_config_may_be_jsonc_with_extends(workspace: Path):
+    """Real pyright configs carry comments, trailing commas, and `extends`."""
+    import importlib.util
+
+    if importlib.util.find_spec("pyright") is None:
+        pytest.skip("pyright is not installed")
+    (workspace / "config").mkdir()
+    (workspace / "config" / "base.json").write_text(
+        '{\n  // the base\n  "reportMissingImports": "none",\n}\n', encoding="utf-8"
+    )
+    (workspace / "pyrightconfig.json").write_text(
+        '{\n  /* local */\n  "extends": "./config/base.json",\n}\n', encoding="utf-8"
+    )
+    (workspace / "uses.ppy").write_text(
+        "import missing_third_party\n\nprint(missing_third_party)\n", encoding="utf-8"
+    )
+    result = _ppy(["lint", "--backend", "pyright", "--no-strict", "."], workspace)
+    assert "reportMissingImports" not in result.stdout
+    assert result.returncode == 0, result.stdout + result.stderr
