@@ -1356,3 +1356,31 @@ def test_augmented_assignment_and_del_count_as_mutations(tmp_path: Path):
     # The widening saw the mutation too: both stay concrete.
     for name in ("extend_it", "shrink_it"):
         assert str(bundle.symbols.functions[f"aug.{name}"].params[0].type) == "list[float]"
+
+
+def test_augmenting_an_immutable_alias_breaks_it():
+    """`y = xs; y += (1,)` on a tuple builds a new tuple: `y` is on its own.
+
+    Only a provably immutable target may break the alias -- for a list the
+    same syntax is an in-place extend and the roots must survive.
+    """
+    import ast
+
+    from ppy_compiler.analysis.aliasing import analyze_aliases
+
+    source = textwrap.dedent(
+        """
+        def f(xs):
+            y = xs
+            y += (1,)
+            return y
+        """
+    )
+    fn = ast.parse(source).body[0]
+    use = next(n for n in ast.walk(fn) if isinstance(n, ast.Return))
+
+    frozen = analyze_aliases(fn, immutable_params=frozenset({"xs"}))
+    assert not frozen.param_roots(frozen.roots_at(use.value, "y"))
+
+    thawed = analyze_aliases(fn)
+    assert thawed.param_roots(thawed.roots_at(use.value, "y")) == {"xs"}

@@ -326,6 +326,18 @@ class NameResolver:
         self.symbols = symbols
         self.project = project
 
+    def decorator_identity(self, decorator: ast.expr) -> str:
+        """One canonical name per decorator, resolution included.
+
+        `@cache` written after `from functools import cache` is
+        `functools.cache`; `@cache` naming a local `def cache` is
+        `mymodule.cache`, whatever the spelling. A name the resolver cannot
+        place keeps its spelling -- and matches nothing known, which is the
+        safe direction.
+        """
+        target = decorator.func if isinstance(decorator, ast.Call) else decorator
+        return self.canonical(target) or ast.unparse(target)
+
     def canonical(self, expr: ast.expr) -> str | None:
         if isinstance(expr, ast.Name):
             return self._canonical_name(expr.id)
@@ -548,9 +560,7 @@ class ProjectSymbols:
     def _declare_class(self, symbols: ModuleSymbols, node: ast.ClassDef) -> ClassInfo:
         resolver = self.resolver(symbols)
         qualname = f"{symbols.name}.{node.name}"
-        decorators = tuple(
-            ast.unparse(d.func if isinstance(d, ast.Call) else d) for d in node.decorator_list
-        )
+        decorators = tuple(resolver.decorator_identity(d) for d in node.decorator_list)
         info = ClassInfo(
             name=node.name,
             qualname=qualname,
@@ -578,9 +588,7 @@ class ProjectSymbols:
     ) -> FunctionInfo:
         resolver = self.resolver(symbols)
         qualname = f"{owner.qualname}.{node.name}" if owner else f"{symbols.name}.{node.name}"
-        decorators = tuple(
-            ast.unparse(d.func if isinstance(d, ast.Call) else d) for d in node.decorator_list
-        )
+        decorators = tuple(resolver.decorator_identity(d) for d in node.decorator_list)
         info = FunctionInfo(
             name=node.name,
             qualname=qualname,
@@ -590,9 +598,9 @@ class ProjectSymbols:
             directives=directives_from(node.decorator_list, resolver),
             decorators=decorators,
             is_method=owner is not None,
-            is_static="staticmethod" in decorators,
-            is_classmethod="classmethod" in decorators,
-            is_property="property" in decorators,
+            is_static="builtins.staticmethod" in decorators,
+            is_classmethod="builtins.classmethod" in decorators,
+            is_property="builtins.property" in decorators,
             owner=owner.qualname if owner else None,
         )
         info.dynamic = info.directive("dynamic") is not None

@@ -128,6 +128,7 @@ _MODULE_DUNDERS: dict[str, T.Type] = {
     "__spec__": T.ANY,
     "__builtins__": T.ANY,
     "__debug__": T.BOOL,
+    "__annotations__": T.dict_of(T.STR, T.ANY),
 }
 
 #: Statically known attributes of plugin-owned instance types.
@@ -387,7 +388,10 @@ class _Checker:
         self._external_writes = False
         # Names are not objects: everything below that asks "what does this
         # mutate or share?" resolves the name through the alias map first.
-        self._aliases = analyze_aliases(info.node)
+        self._aliases = analyze_aliases(
+            info.node,
+            frozenset(p.name for p in info.params if p.known and T.is_immutable(p.type)),
+        )
         if info.dynamic:
             self._dynamic_depth += 1
 
