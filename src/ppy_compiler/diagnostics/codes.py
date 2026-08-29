@@ -48,6 +48,7 @@ CODES: dict[str, str] = {
     "W2005": "Conversion left both a .py and a .ppy source for the same module.",
     "W2004": "A directive had no effect for the selected backend.",
     "R3003": "A list parameter is close to being a borrowed buffer but something blocks it.",
+    "E9001": "An internal analysis failed to converge; the result cannot be trusted.",
     "R3002": "The converter promoted a list parameter to a borrowed buffer.",
     "R3001": "An optimization remark.",
 }

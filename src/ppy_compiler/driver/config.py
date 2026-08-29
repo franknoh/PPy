@@ -12,6 +12,7 @@ __all__ = [
     "Config",
     "ConvertConfig",
     "DiagnosticsConfig",
+    "FormatConfig",
     "InferenceConfig",
     "LlvmConfig",
     "ParallelConfig",
@@ -62,6 +63,16 @@ class PluginConfig:
 class ConvertConfig:
     #: Whether `ppy convert` hands its result to the project's formatter.
     format: bool = False
+    #: `safe` moves only classes whose definition is provably inert;
+    #: `aggressive` moves any, `off` moves none.
+    hoist_classes: str = "safe"
+
+
+@dataclass(slots=True)
+class FormatConfig:
+    #: Which external formatter runs after the built-in normalizer. `auto`
+    #: picks the one the project configures; `none` is built-in only.
+    backend: str = "auto"
 
 
 @dataclass(slots=True)
@@ -85,6 +96,7 @@ class Config:
     inference: InferenceConfig = field(default_factory=InferenceConfig)
     plugins: dict[str, PluginConfig] = field(default_factory=dict)
     convert: ConvertConfig = field(default_factory=ConvertConfig)
+    format: FormatConfig = field(default_factory=FormatConfig)
     diagnostics: DiagnosticsConfig = field(default_factory=DiagnosticsConfig)
 
     @property
@@ -167,7 +179,16 @@ def _apply(config: Config, table: Mapping[str, Any]) -> Config:
             implicit_any=sub.get("implicit-any", "error"),
         )
     if isinstance(sub := table.get("convert"), Mapping):
-        config.convert = ConvertConfig(format=_as_bool(sub.get("format"), False))
+        mode = sub.get("hoist-classes", "safe")
+        config.convert = ConvertConfig(
+            format=_as_bool(sub.get("format"), False),
+            hoist_classes=mode if mode in {"safe", "aggressive", "off"} else "safe",
+        )
+    if isinstance(sub := table.get("format"), Mapping):
+        backend = sub.get("backend", "auto")
+        config.format = FormatConfig(
+            backend=backend if backend in {"auto", "ruff", "black", "none"} else "auto"
+        )
     if isinstance(sub := table.get("diagnostics"), Mapping):
         config.diagnostics = DiagnosticsConfig(
             optimization_remarks=_as_bool(sub.get("optimization-remarks"), False),

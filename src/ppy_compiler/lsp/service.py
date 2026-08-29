@@ -113,7 +113,7 @@ class AnalysisService:
         entries = sorted(set(collect_sources(self.root, ppy_only=False)) | set(self.documents))
         bundle = analyze_paths(project, entries, backend="llvm", overlays=self.overlays)
         self._diagnostics = bundle.diagnostics.sorted()
-        refine_with_call_sites(bundle)
+        refine_with_call_sites(bundle, bundle.diagnostics)
         self._bundle = bundle
         self._stamp = stamp
         return bundle

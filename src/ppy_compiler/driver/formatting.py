@@ -18,10 +18,44 @@ __all__ = [
     "FormatterFailed",
     "format_source",
     "normalize_source",
+    "project_formatter",
     "run_fmt",
 ]
 
-_EXTERNAL = ("ruff", "black")
+#: Config files that declare the ruff formatter outside pyproject.toml.
+_DECLARES_RUFF = ("ruff.toml", ".ruff.toml")
+
+
+def project_formatter(root: Path | None) -> str | None:
+    """The formatter this project declares, or None when it declares none.
+
+    `auto` resolution reads the project's own configuration rather than
+    whatever happens to be installed: a machine with black on PATH must not
+    format a ruff-configured project differently than CI would. When a
+    project configures both, ruff wins; that precedence lives here and in
+    the docs, nowhere else.
+    """
+    if root is None:
+        return None
+    pyproject = root / "pyproject.toml"
+    table: dict = {}
+    if pyproject.is_file():
+        try:
+            import tomllib
+
+            table = tomllib.loads(pyproject.read_text(encoding="utf-8")).get("tool", {})
+        except (OSError, tomllib.TOMLDecodeError):
+            table = {}
+    configured = table.get("ppy", {}).get("format", {}).get("backend", "auto")
+    if configured in {"ruff", "black"}:
+        return configured
+    if configured == "none":
+        return None
+    if "ruff" in table or any((root / name).is_file() for name in _DECLARES_RUFF):
+        return "ruff"
+    if "black" in table:
+        return "black"
+    return None
 
 
 def run_fmt(options: argparse.Namespace, reporter: Reporter) -> int:
@@ -100,8 +134,8 @@ def format_source(
 
     The built-in pass runs first because it settles what the project's
     formatter has no opinion about -- import grouping that keeps `ppy` ahead of
-    a sibling, and a signature wrapped after annotation. An installed `ruff` or
-    `black` then applies the project's own style on top.
+    a sibling, and a signature wrapped after annotation. The formatter the
+    project *declares* (see `project_formatter`) then applies its style.
 
     `local` names the modules that are first-party to this file. A caller that
     resolved the imports knows them exactly and should say so; guessing from
@@ -112,6 +146,14 @@ def format_source(
     normalized = normalize_source(source, _siblings(path) if local is None else local)
     external = _external_format(normalized, path)
     return external if external is not None else normalized
+
+
+def _project_root(path: Path | None) -> Path | None:
+    if path is None:
+        return None
+    from .config import find_project_root
+
+    return find_project_root(path)
 
 
 def _siblings(path: Path | None) -> frozenset[str]:
@@ -136,37 +178,39 @@ def _siblings(path: Path | None) -> frozenset[str]:
 
 
 def _external_format(source: str, path: Path | None) -> str | None:
-    """`.ppy` is ordinary Python, so an existing formatter can be reused."""
-    for tool in _EXTERNAL:
-        launcher = _launcher(tool)
-        if launcher is None:
-            continue
-        command = (
-            [*launcher, "format", "--stdin-filename", str(path or "source.py"), "-"]
-            if tool == "ruff"
-            else [*launcher, "-q", "-"]
+    """`.ppy` is ordinary Python, so the project's own formatter is reused."""
+    tool = project_formatter(_project_root(path))
+    if tool is None:
+        return None
+    launcher = _launcher(tool)
+    if launcher is None:
+        # The project declares this formatter. Quietly formatting some other
+        # way would hand back a result the project's own tooling rejects.
+        raise FormatterFailed(tool, "declared by the project but not installed")
+    command = (
+        [*launcher, "format", "--stdin-filename", str(path or "source.py"), "-"]
+        if tool == "ruff"
+        else [*launcher, "-q", "-"]
+    )
+    try:
+        completed = subprocess.run(
+            command,
+            input=source,
+            capture_output=True,
+            text=True,
+            timeout=60,
+            check=False,
         )
-        try:
-            completed = subprocess.run(
-                command,
-                input=source,
-                capture_output=True,
-                text=True,
-                timeout=60,
-                check=False,
-            )
-        except OSError as error:
-            raise FormatterFailed(tool, str(error)) from error
-        except subprocess.TimeoutExpired as error:
-            raise FormatterFailed(tool, "timed out after 60s") from error
-        # A formatter that is installed and then fails is not the same as no
-        # formatter at all: the caller asked for one, so falling through to the
-        # next candidate would quietly deliver something it did not ask for.
-        if completed.returncode != 0:
-            raise FormatterFailed(tool, completed.stderr or completed.stdout)
-        if completed.stdout:
-            return completed.stdout
-    return None
+    except OSError as error:
+        raise FormatterFailed(tool, str(error)) from error
+    except subprocess.TimeoutExpired as error:
+        raise FormatterFailed(tool, "timed out after 60s") from error
+    # An installed formatter that fails is not the same as no formatter at
+    # all: the caller asked for the project's style, and falling back to the
+    # built-in would quietly deliver something else.
+    if completed.returncode != 0:
+        raise FormatterFailed(tool, completed.stderr or completed.stdout)
+    return completed.stdout or None
 
 
 def _launcher(tool: str) -> list[str] | None:

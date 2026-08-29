@@ -58,6 +58,13 @@ def build_parser() -> argparse.ArgumentParser:
         help="declare read-only numeric list parameters as borrowed buffers, "
         "rewriting the values that feed them into `array.array`",
     )
+    convert.add_argument(
+        "--hoist-classes",
+        choices=["safe", "aggressive", "off"],
+        default=None,
+        help="which classes may move above their uses: only provably inert "
+        "definitions (safe, default), any (aggressive), or none (off)",
+    )
 
     run = subparsers.add_parser("run", help="compile through LLVM and execute")
     run.add_argument("file", type=Path)

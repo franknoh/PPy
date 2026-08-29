@@ -304,6 +304,15 @@ class JaxPlugin:
     """Recognizes staged JAX functions; eager calls stay on the Python path."""
 
     name = "jax"
+
+    def decorator_semantics(self, name: str):  # type: ignore[no-untyped-def]
+        """`jax.jit` wraps but neither reads annotations nor changes arity."""
+        if name in {"jax.jit", "jax.pmap"}:
+            from ..analysis.decorators import DecoratorSemantics
+
+            return DecoratorSemantics(preserves_identity=False)
+        return None
+
     modules = ("jax", "jax.numpy", "jax.lax", "jaxlib")
 
     def __init__(self, options: dict[str, object] | None = None) -> None:

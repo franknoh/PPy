@@ -55,6 +55,8 @@ class AnalysisBundle:
     reports: dict[str, ContractReport]
     diagnostics: DiagnosticBag
     entry: str | None = None
+    #: Project-wide cross-module write index, filled in by conversion.
+    global_writes: object | None = None
 
     @property
     def ok(self) -> bool:

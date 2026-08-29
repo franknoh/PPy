@@ -71,6 +71,8 @@ class ConversionPlan:
     #: Modules of this project that the file imports. `import ppy` installs the
     #: loader those need, so it has to be placed ahead of them.
     local_imports: set[str] = field(default_factory=set)
+    #: Classes proven safe to move, or None to move any (aggressive mode).
+    hoistable: frozenset[str] | None = frozenset()
     typing_imports: set[str] = field(default_factory=set)
     ppy_imports: set[str] = field(default_factory=set)
     needs_ppy: bool = False
@@ -96,6 +98,8 @@ def run_convert(options: argparse.Namespace, reporter: Reporter) -> int:
 
     project = open_project(target)
     project.config.strict = False
+    if getattr(options, "hoist_classes", None):
+        project.config.convert.hoist_classes = options.hoist_classes
     sources = [p for p in collect_sources(target) if p.suffix == ".py"]
     if not sources:
         reporter.note(f"no .py sources found under {target}")
@@ -103,14 +107,33 @@ def run_convert(options: argparse.Namespace, reporter: Reporter) -> int:
 
     # A project conversion analyzes the whole module and call graph at once.
     bundle = analyze_paths(project, sources, backend="python")
-    observed = refine_with_call_sites(bundle)
+    observed = refine_with_call_sites(bundle, bundle.diagnostics)
+
+    # A plan built over broken analysis writes broken contracts; an error
+    # anywhere is a reason to write nothing anywhere. The verdict comes from
+    # a fresh analysis *after* inference -- the first pass over untyped input
+    # is full of unknowns that inference exists to resolve -- and dynamic
+    # features are exempt: converting them faithfully is this command's job,
+    # and `ppy check` will still demand their `ppy.dynamic` boundary later.
+    from ..analysis.global_writes import build_write_index
+
+    # `Final` needs the whole project's word, not just the files being
+    # converted: a reverse dependency assigning `foo.NAME` is invisible to
+    # the bundle and disqualifies the name all the same.
+    bundle.global_writes = build_write_index(project.root)
+
+    fatal = _fatal_findings(bundle, reporter)
+    if fatal and not options.dry_run:
+        reporter.note(f"{fatal} error(s); nothing was converted")
+        return 1
+
     promotions: list[BufferPromotion] = []
     blocked: list[tuple[object, str, str]] = []
     if getattr(options, "promote_buffers", False):
         promotions, blocked = plan_buffer_promotions(bundle)
 
-    written: list[Path] = []
-    failures = 0
+    ready: list[tuple[Path, Path, str]] = []
+    failures = fatal
     for path in sources:
         module_name = _module_for(bundle, path)
         if module_name is None:
@@ -161,6 +184,19 @@ def run_convert(options: argparse.Namespace, reporter: Reporter) -> int:
             )
             failures += 1
             continue
+        ready.append((path, destination, converted))
+
+    if options.dry_run:
+        return 1 if failures else 0
+    if failures:
+        # Atomic: a project conversion either lands whole or not at all. A
+        # tree left half `.py` and half `.ppy` by `--in-place` would not even
+        # import, and there is no good half of that outcome to keep.
+        reporter.note(f"{failures} error(s); nothing was converted")
+        return 1
+
+    written: list[Path] = []
+    for path, destination, converted in ready:
         destination.write_text(converted, encoding="utf-8")
         if options.in_place:
             path.unlink()
@@ -169,7 +205,80 @@ def run_convert(options: argparse.Namespace, reporter: Reporter) -> int:
     if written:
         reporter.note(f"converted {len(written)} file(s): " + ", ".join(str(p) for p in written))
         _warn_about_shadowed_sources(written, reporter)
-    return 1 if failures else 0
+    return 0
+
+
+#: Source problems the frontend reports before analysis can even start.
+_STRUCTURAL = ("E1001", "E1002", "E1003", "E9001")
+
+
+def _fatal_findings(bundle, reporter: Reporter) -> int:  # type: ignore[no-untyped-def]
+    """Report what blocks this conversion, and say how much did."""
+    from ..analysis.checker import analyze
+    from ..diagnostics import DiagnosticBag
+
+    fatal = 0
+    for diagnostic in bundle.diagnostics:
+        if diagnostic.severity is Severity.ERROR and diagnostic.code in _STRUCTURAL:
+            reporter.emit(diagnostic)
+            fatal += 1
+    settled = DiagnosticBag()
+    bundle.analysis = analyze(
+        bundle.symbols,
+        settled,
+        strict=False,
+        dynamic_policy=bundle.project.config.dynamic_boundaries,
+        plugins=bundle.project.plugins,
+    )
+    for diagnostic in settled:
+        if diagnostic.severity is not Severity.ERROR:
+            continue
+        if diagnostic.code.startswith("E15"):
+            # A dynamic feature converts fine; it is `ppy check` that will
+            # insist on its boundary.
+            continue
+        reporter.emit(diagnostic)
+        fatal += 1
+    return fatal
+
+
+def _may_materialize(info, plugins) -> bool:  # type: ignore[no-untyped-def]
+    """May inferred annotations be written into this function's source?
+
+    "The analysis knows the type" and "the type is safe to write down" are
+    different claims. A decorator that reads `__annotations__`, or one nobody
+    can vouch for, makes the second one false: the decorator saw an untyped
+    function, and the conversion must hand it the same one.
+    """
+    from ..analysis.decorators import semantics_of
+
+    for name in info.decorators:
+        known = semantics_of(name, plugins)
+        if known is None or known.reads_annotations:
+            return False
+    return True
+
+
+def _hoistable_classes(symbols, bundle, module_name: str) -> frozenset[str] | None:  # type: ignore[no-untyped-def]
+    """Which classes may move: the ones whose definition is inert.
+
+    Defining a class runs its decorators, bases, keywords, and body. Moving
+    an inert definition past other statements changes nothing; moving one
+    with effects reorders those effects, so it stays where it is unless the
+    project explicitly chose aggressive hoisting.
+    """
+    from ..analysis.decorators import definition_time_pure
+
+    mode = bundle.project.config.convert.hoist_classes
+    if mode == "off":
+        return frozenset()
+    if mode == "aggressive":
+        return None
+    return frozenset(
+        node.name
+        for node in symbols.module.tree.body
+        if isinstance(node, ast.ClassDef) and definition_time_pure(node, bundle.project.plugins)
+    )
 
 
 def _wants_formatting(options: argparse.Namespace, project) -> bool:  # type: ignore[no-untyped-def]
@@ -225,7 +334,7 @@ def build_plan(  # type: ignore[no-untyped-def]
     plan.forward = _forward_references(symbols)
     analysis = bundle.analysis.modules.get(module_name)
     if observed is None:
-        observed = refine_with_call_sites(bundle)
+        observed = refine_with_call_sites(bundle, bundle.diagnostics)
 
     functions = list(symbols.functions.values())
     for cls in symbols.classes.values():
@@ -233,6 +342,11 @@ def build_plan(  # type: ignore[no-untyped-def]
 
     for info in functions:
         line = info.node.lineno
+        if not _may_materialize(info, bundle.project.plugins):
+            # The analysis still knows the types; writing them down is a
+            # separate decision, and an unknown decorator may be reading
+            # `__annotations__` -- new annotations would change its input.
+            continue
         for index, param in enumerate(info.params):
             if param.kind in {"var_positional", "var_keyword"}:
                 continue
@@ -300,6 +414,7 @@ def build_plan(  # type: ignore[no-untyped-def]
             )
         )
 
+    plan.hoistable = _hoistable_classes(symbols, bundle, module_name)
     plan.local_imports = {
         binding.module for binding in symbols.imports.values() if not binding.external
     }
@@ -357,8 +472,7 @@ def _plan_module_globals(  # type: ignore[no-untyped-def]
     symbols, analysis, plan: ConversionPlan, module_name: str, bundle=None
 ) -> None:
     rebound = _rebound_globals(symbols)
-    if bundle is not None:
-        rebound |= _assigned_from_other_modules(bundle, module_name)
+    index = _write_index(bundle)
     annotated: set[str] = set()
     for node in symbols.module.tree.body:
         if not isinstance(node, ast.Assign) or len(node.targets) != 1:
@@ -378,7 +492,11 @@ def _plan_module_globals(  # type: ignore[no-untyped-def]
         if rendered is None:
             continue
         text = rendered.text
-        if target.id not in rebound and _reads_as_a_constant(target.id):
+        if (
+            target.id not in rebound
+            and _reads_as_a_constant(target.id)
+            and (index is None or index.can_emit_final(module_name, target.id))
+        ):
             # Bound once, nowhere rebound in the project, and named as a
             # constant -- which is when `Final` says what the author meant.
             text = f"Final[{text}]"
@@ -437,53 +555,18 @@ def _rebound_globals(symbols) -> set[str]:  # type: ignore[no-untyped-def]
     return rebound | {name for name, seen in counts.items() if seen > 1}
 
 
-def _assigned_from_other_modules(bundle, module_name: str) -> set[str]:  # type: ignore[no-untyped-def]
-    """Names this module's globals are given from somewhere else.
+def _write_index(bundle):  # type: ignore[no-untyped-def]
+    """The project-wide write index, built on demand for direct callers."""
+    if bundle is None:
+        return None
+    existing = getattr(bundle, "global_writes", None)
+    if existing is not None:
+        return existing
+    from ..analysis.global_writes import build_write_index
 
-    `Final` is part of the module's public interface, so proving it needs the
-    whole project: another module doing `config.registry = {}` rebinds the name
-    just as surely as a second assignment here would, and only that module's
-    source says so.
-    """
-    assigned: set[str] = set()
-    for other, symbols in bundle.symbols.modules.items():
-        if other == module_name:
-            continue
-        aliases = _aliases_for(symbols, module_name)
-        if not aliases:
-            continue
-        for node in ast.walk(symbols.module.tree):
-            targets: list[ast.expr] = []
-            if isinstance(node, ast.Assign):
-                targets = list(node.targets)
-            elif isinstance(node, (ast.AnnAssign, ast.AugAssign)):
-                targets = [node.target]
-            elif isinstance(node, ast.Delete):
-                targets = list(node.targets)
-            for target in targets:
-                if (
-                    isinstance(target, ast.Attribute)
-                    and isinstance(target.value, ast.Name)
-                    and target.value.id in aliases
-                ):
-                    assigned.add(target.attr)
-    return assigned
-
-
-def _aliases_for(symbols, module_name: str) -> set[str]:  # type: ignore[no-untyped-def]
-    """The local names under which a module refers to another module."""
-    aliases: set[str] = set()
-    for node in ast.walk(symbols.module.tree):
-        if isinstance(node, ast.Import):
-            for alias in node.names:
-                if alias.name == module_name or module_name.endswith("." + alias.name):
-                    aliases.add(alias.asname or alias.name.partition(".")[0])
-        elif isinstance(node, ast.ImportFrom):
-            for alias in node.names:
-                reached = f"{node.module}.{alias.name}" if node.module else alias.name
-                if reached == module_name or module_name.endswith("." + alias.name):
-                    aliases.add(alias.asname or alias.name)
-    return aliases
+    index = build_write_index(bundle.project.root)
+    bundle.global_writes = index
+    return index
 
 
 def _plan_empty_containers(symbols, analysis, plan: ConversionPlan, module_name: str) -> None:  # type: ignore[no-untyped-def]
@@ -660,7 +743,7 @@ def convert_source(source: str, plan: ConversionPlan) -> str:
     imported = _insert_imports(annotated, plan)
     # A quoted annotation only exists because the class was not bound yet.
     # Moving the class above its first use removes the reason for the quotes.
-    reordered = _unquote_resolved(_hoist_classes(imported))
+    reordered = _unquote_resolved(_hoist_classes(imported, plan.hoistable))
     return normalize_source(reordered.code, frozenset(plan.local_imports))
 
 
@@ -1152,13 +1235,13 @@ def _definition_time_names(node: cst.CSTNode) -> set[str]:
     return found
 
 
-def _hoist_classes(module: cst.Module) -> cst.Module:
+def _hoist_classes(module: cst.Module, hoistable: frozenset[str] | None) -> cst.Module:
     """Move a class above the definitions that annotate against it.
 
     A quoted annotation is only needed because the class is not bound yet.
-    Moving the class up removes the reason for the quotes, and moving it past
-    `def` and `class` statements cannot change behavior: those statements bind
-    a name and do not run their bodies.
+    Moving the class up removes the reason for the quotes. Which classes may
+    move at all was decided against the analysis (`hoistable`): a definition
+    with observable effects stays put, and the annotation stays quoted.
     """
     body = list(module.body)
     moved = True
@@ -1168,6 +1251,8 @@ def _hoist_classes(module: cst.Module) -> cst.Module:
         passes += 1
         for index, statement in enumerate(body):
             if not isinstance(statement, cst.ClassDef):
+                continue
+            if hoistable is not None and statement.name.value not in hoistable:
                 continue
             target = _earliest_position(body, index, statement)
             if target is None or target >= index:

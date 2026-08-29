@@ -1084,6 +1084,7 @@ def test_test_backend_pytest_runs_a_suite_against_ppy_modules(workspace: Path):
 
 def test_fmt_runs_the_builtin_pass_before_an_external_formatter(workspace: Path):
     """Import grouping is settled by PPY; the project's formatter styles the rest."""
+    (workspace / "ruff.toml").write_text("", encoding="utf-8")
     source = workspace / "messy.ppy"
     source.write_text(
         "import ppy\nimport math\nfrom ppy import Buffer\nimport time\ndef f( x:int )->int:\n    return  x+1\n",
@@ -1180,6 +1181,7 @@ def test_a_widened_signature_accepts_what_it_promises(workspace: Path):
 
 
 def test_convert_is_deterministic_unless_formatting_is_asked_for(workspace: Path):
+    (workspace / "ruff.toml").write_text("", encoding="utf-8")
     (workspace / "styled.py").write_text(
         "def f(x):\n    return  x+1\n\n\nprint(f(1))\n", encoding="utf-8"
     )
@@ -1191,7 +1193,8 @@ def test_convert_is_deterministic_unless_formatting_is_asked_for(workspace: Path
 
 def test_convert_formatting_can_come_from_configuration(workspace: Path):
     (workspace / "pyproject.toml").write_text(
-        "[tool.ppy]\nstrict = true\n\n[tool.ppy.convert]\nformat = true\n", encoding="utf-8"
+        "[tool.ppy]\nstrict = true\n\n[tool.ppy.convert]\nformat = true\n\n[tool.ruff]\n",
+        encoding="utf-8",
     )
     (workspace / "cfg.py").write_text(
         "def f(x):\n    return  x+1\n\n\nprint(f(1))\n", encoding="utf-8"
@@ -1438,3 +1441,246 @@ def test_final_sees_the_other_ways_python_binds_a_name(workspace: Path):
     assert "OPENED: Final" not in converted
     assert "CAUGHT: Final" not in converted
     assert "HELD: Final[int] = 2" in converted
+
+
+def test_convert_refuses_to_write_over_broken_analysis(workspace: Path):
+    """An error anywhere means no file is written anywhere.
+
+    Half-converting a project -- some modules `.ppy`, the broken ones left
+    `.py` -- is the one outcome with nothing to recommend it: the tree does
+    not even import. `--dry-run` still shows what conversion would say.
+    """
+    (workspace / "good.py").write_text(
+        "def double(x):\n    return x * 2\n\n\nprint(double(2))\n", encoding="utf-8"
+    )
+    (workspace / "bad.py").write_text(
+        "def broken(x: int) -> int:\n    return x + 'no'\n\n\nprint(broken(1))\n",
+        encoding="utf-8",
+    )
+    result = _ppy(["convert", "."], workspace)
+    assert result.returncode == 1
+    assert not (workspace / "good.ppy").exists()
+    assert not (workspace / "bad.ppy").exists()
+
+    kept = _ppy(["convert", "--in-place", "."], workspace)
+    assert kept.returncode == 1
+    assert (workspace / "good.py").exists()
+    assert (workspace / "bad.py").exists()
+
+    shown = _ppy(["convert", "--dry-run", "."], workspace)
+    assert shown.returncode == 1
+    assert "def double" in shown.stdout
+    assert not (workspace / "good.ppy").exists()
+
+
+def test_widening_sees_a_mutation_through_an_alias(workspace: Path):
+    """`zs = ys = xs; zs.append(1)` mutates `xs`, whatever name did it.
+
+    Declaring `Sequence` here would emit a signature whose own body needs a
+    method the protocol does not offer -- an output any type checker rejects.
+    """
+    (workspace / "alias.py").write_text(
+        textwrap.dedent(
+            """
+            def push(xs):
+                ys = xs
+                zs = ys
+                zs.append(4)
+                return len(xs)
+
+
+            def read(xs):
+                ys = xs
+                return len(ys)
+
+
+            def killed(xs):
+                ys = xs
+                ys = []
+                ys.append(1)
+                return len(xs)
+
+
+            print(push([1]), read([2]), killed([3]))
+            """
+        ).lstrip("\n"),
+        encoding="utf-8",
+    )
+    assert _ppy(["convert", "alias.py"], workspace).returncode == 0
+    converted = (workspace / "alias.ppy").read_text(encoding="utf-8")
+    assert "def push(xs: list[int]) -> int:" in converted
+    assert "def read(xs: Sequence[int]) -> int:" in converted
+    assert "def killed(xs: Sequence[int]) -> int:" in converted
+
+
+def test_final_proof_is_project_wide_even_for_one_file(workspace: Path):
+    """Converting one file still consults every file in the project.
+
+    The bundle holds the conversion target and its imports; a *reverse*
+    dependency assigning `store.NAME` is in neither, and is exactly what
+    `Final` promises cannot happen.
+    """
+    (workspace / "store.py").write_text(
+        "LIMIT = 5\nREGISTRY = {}\nSTABLE = 1\nOPAQUE = 2\n", encoding="utf-8"
+    )
+    (workspace / "user.py").write_text(
+        textwrap.dedent(
+            """
+            import store
+
+            store.REGISTRY = {"a": 1}
+            setattr(store, "LIMIT", 9)
+            print(store.STABLE)
+            """
+        ).lstrip("\n"),
+        encoding="utf-8",
+    )
+    (workspace / "dynamic_user.py").write_text(
+        textwrap.dedent(
+            """
+            import store as st
+
+            def poke(name):
+                setattr(st, name, 0)
+            """
+        ).lstrip("\n"),
+        encoding="utf-8",
+    )
+    assert _ppy(["convert", "store.py"], workspace).returncode == 0
+    converted = (workspace / "store.ppy").read_text(encoding="utf-8")
+    # A computed setattr through an alias taints the whole module.
+    assert "Final" not in converted
+
+    (workspace / "dynamic_user.py").unlink()
+    (workspace / "store.ppy").unlink()
+    assert _ppy(["convert", "store.py"], workspace).returncode == 0
+    converted = (workspace / "store.ppy").read_text(encoding="utf-8")
+    assert "STABLE: Final[int] = 1" in converted
+    assert "LIMIT: Final" not in converted
+    assert "REGISTRY: Final" not in converted
+
+
+def test_annotations_stay_off_functions_with_unknown_decorators(workspace: Path):
+    """An unknown decorator saw an untyped function; it must keep getting one.
+
+    The analysis still infers the types -- it simply does not write them,
+    because `inspect.signature` or `__annotations__` inside the decorator
+    would see input the original program never gave it.
+    """
+    (workspace / "wrapped.py").write_text(
+        textwrap.dedent(
+            """
+            import functools
+
+
+            def registry(fn):
+                return fn
+
+
+            @registry
+            def opaque(x):
+                return x * 2
+
+
+            @functools.cache
+            def known(x):
+                return x * 3
+
+
+            print(opaque(1), known(2))
+            """
+        ).lstrip("\n"),
+        encoding="utf-8",
+    )
+    assert _ppy(["convert", "wrapped.py"], workspace).returncode == 0
+    converted = (workspace / "wrapped.ppy").read_text(encoding="utf-8")
+    assert "def opaque(x):" in converted
+    assert "def known(x: int) -> int:" in converted
+
+
+def test_hoisting_is_conservative_by_default(workspace: Path):
+    """A class whose definition has effects moves only under `aggressive`."""
+    source = textwrap.dedent(
+        """
+        def tag(cls):
+            print("tagged", cls.__name__)
+            return cls
+
+
+        def widest(items: 'list[Loud]') -> int:
+            return len(items)
+
+
+        @tag
+        class Loud:
+            pass
+
+
+        print(widest([]))
+        """
+    ).lstrip("\n")
+    (workspace / "noisy.py").write_text(source, encoding="utf-8")
+    assert _ppy(["convert", "noisy.py"], workspace).returncode == 0
+    converted = (workspace / "noisy.ppy").read_text(encoding="utf-8")
+    # Not moved: the quoted forward reference is the price of the decorator.
+    assert converted.index("def widest") < converted.index("class Loud")
+    assert "'list[Loud]'" in converted
+
+    (workspace / "noisy.ppy").unlink()
+    assert _ppy(["convert", "--hoist-classes", "aggressive", "noisy.py"], workspace).returncode == 0
+    converted = (workspace / "noisy.ppy").read_text(encoding="utf-8")
+    assert converted.index("class Loud") < converted.index("def widest")
+    assert "list[Loud]" in converted and "'list[Loud]'" not in converted
+
+
+def test_lint_pyright_carries_the_projects_own_configuration(workspace: Path):
+    """`[tool.pyright]`, existing configs, and stubs all reach the staging tree.
+
+    A type-check that dropped the project's `reportMissingImports` choice or
+    its `.pyi` stubs would answer questions about a project that does not
+    exist.
+    """
+    import importlib.util
+
+    if importlib.util.find_spec("pyright") is None:
+        pytest.skip("pyright is not installed")
+    (workspace / "pyproject.toml").write_text(
+        '[tool.ppy]\n\n[tool.pyright]\nreportMissingImports = "none"\n', encoding="utf-8"
+    )
+    (workspace / "vendored.pyi").write_text("VALUE: int\n", encoding="utf-8")
+    (workspace / "vendored.py").write_text("VALUE = 1\n", encoding="utf-8")
+    (workspace / "uses.ppy").write_text(
+        "import missing_third_party\n\nfrom vendored import VALUE\n\n"
+        "print(VALUE, missing_third_party)\n",
+        encoding="utf-8",
+    )
+    result = _ppy(["lint", "--backend", "pyright", "."], workspace)
+    # The project turned reportMissingImports off, so the unresolvable
+    # third-party import is not a finding.
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_a_declared_formatter_that_is_missing_fails_the_conversion(workspace: Path):
+    (workspace / "pyproject.toml").write_text(
+        '[tool.ppy]\n\n[tool.ppy.format]\nbackend = "black"\n', encoding="utf-8"
+    )
+    (workspace / "plain.py").write_text(
+        "def f(x):\n    return x\n\n\nprint(f(1))\n", encoding="utf-8"
+    )
+    import importlib.util
+
+    if importlib.util.find_spec("black") is not None:
+        pytest.skip("black is installed here, so the declared formatter works")
+    result = _ppy(["convert", "plain.py", "--format"], workspace)
+    assert result.returncode == 1
+    assert "E1802" in result.stdout + result.stderr
+    assert not (workspace / "plain.ppy").exists()
+
+
+def test_an_undeclared_formatter_means_builtin_only(workspace: Path):
+    """No config, no external formatter -- whatever happens to be installed."""
+    (workspace / "styled.py").write_text(
+        "def f(x):\n    return  x+1\n\n\nprint(f(1))\n", encoding="utf-8"
+    )
+    formatted = _ppy(["convert", "styled.py", "--dry-run", "--format"], workspace).stdout
+    assert "return  x+1" in formatted

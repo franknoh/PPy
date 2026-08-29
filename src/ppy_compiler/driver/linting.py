@@ -151,14 +151,15 @@ def _stage(sources: list[Path], root: Path, scratch: Path) -> tuple[list[Path], 
         mapping[str(relative.with_suffix(".py"))] = source
 
     converted = {p.with_suffix(".py") for p in staged}
-    for companion in root.rglob("*.py"):
-        if any(part in _SKIP_DIRECTORIES for part in companion.parts):
-            continue
-        target = scratch / companion.resolve().relative_to(root.resolve())
-        if target in converted or target.exists():
-            continue
-        target.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copyfile(companion, target)
+    for pattern in ("*.py", "*.pyi"):
+        for companion in root.rglob(pattern):
+            if any(part in _SKIP_DIRECTORIES for part in companion.parts):
+                continue
+            target = scratch / companion.resolve().relative_to(root.resolve())
+            if target in converted or target.exists():
+                continue
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(companion, target)
 
     for extra in _CONFIGS:
         candidate = root / extra
@@ -177,9 +178,11 @@ def _configure(backend: Backend, scratch: Path, *, strict: bool) -> None:
     """Set the wanted mode on top of the project's own settings.
 
     The project's `extraPaths`, `stubPath`, per-directory execution
-    environments and rule overrides are what make its type-check meaningful.
-    Overwriting the config with two keys would replace the answer the user
-    wanted with an answer about a project that does not exist.
+    environments and rule overrides are what make its type-check meaningful,
+    and they live in `pyrightconfig.json` or in `[tool.pyright]` -- in that
+    precedence order, which is pyright's own. Only `typeCheckingMode` is
+    overridden, and only because the user asked for `--strict`; everything
+    the project chose is carried into the staging tree unchanged.
     """
     if backend.name != "pyright":
         return
@@ -194,7 +197,25 @@ def _configure(backend: Backend, scratch: Path, *, strict: bool) -> None:
             loaded = None
         if isinstance(loaded, dict):
             config = loaded
-    config["typeCheckingMode"] = "strict" if strict else "standard"
+    else:
+        # pyright reads `[tool.pyright]` only when no pyrightconfig.json
+        # exists; writing one would shadow the project's table, so its
+        # contents move into the file being written.
+        pyproject = scratch / "pyproject.toml"
+        if pyproject.is_file():
+            try:
+                import tomllib
+
+                table = tomllib.loads(pyproject.read_text(encoding="utf-8"))
+                loaded = table.get("tool", {}).get("pyright")
+                if isinstance(loaded, dict):
+                    config = loaded
+            except (OSError, tomllib.TOMLDecodeError):
+                pass
+    if strict:
+        config["typeCheckingMode"] = "strict"
+    elif "typeCheckingMode" not in config:
+        config["typeCheckingMode"] = "standard"
     existing.write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
 
 
