@@ -35,7 +35,11 @@ write-local-annotations = true
 implicit-any = "error"
 
 [tool.ppy.convert]
-format = false                    # run the project formatter after convert
+format = false                    # run the declared formatter after convert
+hoist-classes = "safe"            # safe | aggressive | off
+
+[tool.ppy.format]
+backend = "auto"                  # auto | ruff | black | none
 
 [tool.ppy.diagnostics]
 optimization-remarks = false
@@ -57,6 +61,8 @@ enabled = true                    # any other keys are plugin options
 | `parallel.threads` | `auto` | worker pool size; `auto` uses every core, honouring `OMP_NUM_THREADS` when set. |
 | `inference.write-local-annotations` | `true` | conversion annotates module globals and empty containers, not just signatures. |
 | `convert.format` | `false` | same as passing `--format` to every `ppy convert`. |
+| `convert.hoist-classes` | `safe` | which classes conversion may reorder: only provably inert definitions, any (`aggressive`), or none (`off`). |
+| `format.backend` | `auto` | which formatter runs after the built-in pass; `auto` reads the project's own ruff/black configuration, `none` is built-in only. |
 | `diagnostics.optimization-remarks` | `false` | emit `R3001` remarks for applied optimizations. |
 
 CLI flags win over the file for one invocation; the file wins over defaults.

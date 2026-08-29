@@ -42,6 +42,12 @@ a function's types can come from call sites in other files.
 | `--in-place` | write the `.ppy` and remove the `.py` it came from |
 | `--format` | hand the result to the project's formatter afterwards |
 | `--promote-buffers` | declare read-only numeric list parameters as `Buffer[T]` and rewrite the values feeding them into `array.array` |
+| `--hoist-classes {safe,aggressive,off}` | which classes may move above their uses; `safe` (default) moves only provably inert definitions |
+
+Conversion is atomic: an analysis error anywhere means no file is written
+anywhere, so `--in-place` can never leave a tree half `.py` and half `.ppy`.
+Dynamic-feature findings are exempt — they convert faithfully and `ppy check`
+takes it from there.
 
 Use `--in-place` to migrate a project. Without it both `foo.py` and `foo.ppy`
 are left on disk, which a project may not contain — the module would be

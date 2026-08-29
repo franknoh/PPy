@@ -8,14 +8,21 @@ and `examples/verify_conversions.py` regenerates each one to prove it.
 
 ## Where types come from
 
-Inference is interprocedural and runs to a fixpoint
-(`analysis/inference.py`):
+Inference is interprocedural and runs to a true fixpoint
+(`analysis/inference.py`) -- no round limit, a convergence guard (`E9001`)
+instead of silently keeping whatever the last round held. It has two stages
+that never interleave: **evidence** (monotone: call-site types only join,
+a field or usage inference only fills an unknown) runs until nothing changes;
+**generalization** (presenting `list[T]` as `Sequence[T]`) then decides from
+settled facts. A ten-deep call chain, mutual recursion, and a recursive
+`fact(n - 1)` return type all settle -- a recursive call's unknown is a
+placeholder for the thing being computed, not an answer.
 
 1. **Call sites.** Every call to a project function contributes its argument
    types, positional and keyword alike, matched to parameters by the same
    binder the checker uses (`analysis/binding.py`). Evidence is *joined*
-   across rounds, never frozen: a caller that only becomes typeable on round
-   two still widens the callee's signature, so `sink([1])` here and
+   across rounds, never frozen: a caller that only becomes typeable late
+   still widens the callee's signature, so `sink([1])` here and
    `sink(y)` with a dict there infer `list[int] | dict[str, int]`, not
    whichever came first.
 2. **Fields.** `self.x = value` in `__init__` types the field; the annotation
@@ -43,6 +50,15 @@ because `Mapping` declares no `__reversed__`. Forwarding the parameter to
 another function widens only if that callee (after its own widening) accepts
 the protocol, keyword arguments included.
 
+Uses are found through a flow-sensitive **alias analysis**
+(`analysis/aliasing.py`), because names are not objects: in
+`ys = xs; zs = ys; zs.append(1)` the mutation reaches `xs`, whatever name
+performed it, and the parameter stays `list`. Reassignment kills an alias
+(`ys = xs; ys = []` frees `xs` again), branches join, aliasing through a
+tuple is tracked, and `list(xs)` is known to be a copy. The same alias map
+feeds purity and escape analysis, so mutating a local through an alias is
+still pure, and mutating a parameter through one never is.
+
 When call sites disagree on the concrete type but agree on the protocol —
 a list here, a tuple there — the union collapses to the shared
 `Sequence[T]`.
@@ -54,11 +70,25 @@ a list here, a tuple there — the union collapses to the shared
 - the name is bound exactly once, counting every binding form Python has
   (`with ... as`, `except ... as`, `del`, imports, `def`/`class`, match
   captures, `global` in any function);
-- no other module in the project assigns the attribute (`other.NAME = ...`);
+- no file **anywhere in the project** assigns the attribute — a write index
+  (`analysis/global_writes.py`) is built over every source under the project
+  root, so converting one file still sees the reverse dependency doing
+  `store.NAME = ...`, through any import spelling, and a `setattr` with a
+  computed name disqualifies the whole module;
 - the name reads as a constant (`UPPER_CASE`).
 
 The last rule is deliberate: `Final` is an interface contract, and a lowercase
 global that happens to be bound once is not announcing one.
+
+## Failure is atomic
+
+Conversion refuses to write anything when the settled analysis holds an
+error: a half-converted tree (some modules `.ppy`, the broken ones still
+`.py`) does not even import, and there is no good half of that outcome to
+keep. Dynamic-feature findings (`E15xx`) are exempt — converting them
+faithfully is the command's job, and `ppy check` will still demand their
+`ppy.dynamic` boundary afterwards. `--dry-run` prints what conversion would
+have said either way.
 
 ## What else conversion does
 
@@ -67,16 +97,27 @@ global that happens to be bound once is not announcing one.
   (sound for returns, where the body is the whole evidence; never for
   parameters, where call sites are only a sample);
 - moves a class above the function that annotates against it, so
-  `'list[Rect]'` becomes `list[Rect]`;
+  `'list[Rect]'` becomes `list[Rect]` — but only a class whose definition is
+  provably inert (`--hoist-classes=safe`, the default): an unknown decorator,
+  an effectful base expression, a metaclass keyword, or a side effect in the
+  class body all keep it where it is, because defining it *runs* those.
+  `aggressive` moves any class, `off` moves none;
+- writes signature annotations only onto functions whose decorators are all
+  known to tolerate them (`analysis/decorators.py`): an unknown decorator, or
+  one that reads `__annotations__` like `singledispatch`, saw an untyped
+  function and must keep receiving one. The types are still inferred — they
+  are just not materialized;
 - orders imports into PEP 8 groups with `import ppy` ahead of first-party
   imports — the loader must install before the first `.ppy` import;
 - with `--promote-buffers`, declares read-only numeric list parameters as
   `Buffer[T]` and rewrites the values feeding them into `array.array`
   (remarked as `R3002`, or `R3003` with the reason it could not);
 - with `--format` (or `[tool.ppy.convert] format = true`), hands the result to
-  the project's own formatter afterwards, telling it exactly which imports are
-  first-party. A formatter that is installed but fails is an error (`E1802`),
-  not a silent skip.
+  the formatter the project *declares* — `[tool.ppy.format] backend`, or
+  detected from `[tool.ruff]`/`ruff.toml`/`[tool.black]` (ruff wins when both
+  are configured; no declaration means built-in normalization only). A
+  declared formatter that is missing or fails is an error (`E1802`), never a
+  silent restyle by something else.
 
 It does not rename, split functions, or restructure algorithms — those are
 design decisions, and the converter's output must be attributable to the
