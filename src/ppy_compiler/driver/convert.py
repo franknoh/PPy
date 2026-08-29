@@ -260,6 +260,10 @@ def _may_materialize(info, plugins, reflection=None) -> bool:  # type: ignore[no
     """
     from ..analysis.decorators import semantics_of
 
+    if info.directive("reflective") is not None:
+        # `@ppy.reflective` is the author saying the annotations, as written,
+        # are runtime-visible state; the toolchain leaves them alone.
+        return False
     if reflection is not None and reflection.blocks_function(info.name, info.qualname):
         return False
     for name in info.decorators:

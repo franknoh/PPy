@@ -200,6 +200,87 @@ def test_dynamic_boundary_can_be_denied_by_configuration(write, codes):
     assert "E1505" in codes(path, dynamic_boundaries="deny")
 
 
+def test_a_computed_base_is_rejected(write, codes):
+    path = write(
+        "built.ppy",
+        """
+        def factory() -> object:
+            return object
+
+
+        class Node(factory()):
+            pass
+        """,
+    )
+    assert "E1507" in codes(path)
+
+
+def test_an_unvouched_metaclass_is_rejected(write, codes):
+    path = write(
+        "meta.ppy",
+        """
+        class Meta(type):
+            pass
+
+
+        class Leaf(metaclass=Meta):
+            pass
+        """,
+    )
+    assert "E1507" in codes(path)
+
+
+def test_a_vouched_metaclass_is_accepted(write, codes):
+    path = write(
+        "abstract.ppy",
+        """
+        import abc
+
+
+        class Base(metaclass=abc.ABCMeta):
+            pass
+        """,
+    )
+    assert "E1507" not in codes(path)
+
+
+def test_a_dynamic_boundary_permits_dynamic_class_construction(write, codes):
+    path = write(
+        "escape.ppy",
+        """
+        import ppy
+
+
+        def factory() -> object:
+            return object
+
+
+        with ppy.dynamic:
+            class Node(factory()):
+                pass
+        """,
+    )
+    assert "E1507" not in codes(path)
+
+
+def test_ppy_dynamic_is_an_explicit_any_boundary(write, analyze):
+    path = write(
+        "boundary_type.ppy",
+        """
+        import ppy
+
+
+        def normalize(payload: ppy.Dynamic) -> int:
+            return int(payload)
+
+
+        print(normalize("5"))
+        """,
+    )
+    bundle = analyze(path)
+    assert not bundle.diagnostics.has_errors()
+
+
 def test_fixed_width_violation_is_rejected(write, codes):
     path = write(
         "width.ppy",

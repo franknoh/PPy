@@ -41,6 +41,7 @@ _DIRECTIVE_NAMES = {
     "ppy.fastmath",
     "ppy.dynamic",
     "ppy.jax",
+    "ppy.reflective",
     "pure",
     "opt",
     "jit",
@@ -51,6 +52,7 @@ _DIRECTIVE_NAMES = {
     "specialize",
     "fastmath",
     "dynamic",
+    "reflective",
 }
 
 _LEVELS = {

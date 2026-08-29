@@ -54,6 +54,24 @@ _FORBIDDEN_CALLS = {
 
 _DYNAMIC_ATTR_CALLS = {"setattr", "delattr"}
 
+#: Metaclasses whose construction behavior is modeled; anything else rewrites
+#: the class in ways no static analysis follows.
+_KNOWN_METACLASSES = frozenset(
+    {"builtins.type", "type", "abc.ABCMeta", "enum.EnumMeta", "enum.EnumType"}
+)
+
+
+def _static_base(node: ast.expr) -> bool:
+    """A base expression that names a class rather than computing one."""
+    if isinstance(node, ast.Name):
+        return True
+    if isinstance(node, ast.Attribute):
+        return _static_base(node.value)
+    if isinstance(node, ast.Subscript):
+        return _static_base(node.value)
+    return False
+
+
 #: Builtin methods that mutate their receiver in place.
 _MUTATING_METHODS = frozenset(
     {
@@ -824,10 +842,43 @@ class _Checker:
     _stmt_AsyncFunctionDef = _stmt_FunctionDef
 
     def _stmt_ClassDef(self, node: ast.ClassDef, env: Env) -> None:
+        self._check_class_construction(node)
         info = self.symbols.classes.get(node.name)
         env.set(
             node.name, Binding(T.ClassObject(info.qualname, info.instance()) if info else T.UNKNOWN)
         )
+
+    def _check_class_construction(self, node: ast.ClassDef) -> None:
+        """Class construction must be static: PPY reorders and compiles classes.
+
+        A base built by a call, or a metaclass nobody vouches for, runs
+        arbitrary code at definition time and can hand back a class whose
+        shape no analysis predicted (spec: strict class semantics).
+        """
+        for base in node.bases:
+            if _static_base(base):
+                continue
+            self._dynamic_feature(
+                "E1507",
+                f"base `{ast.unparse(base)}` of class `{node.name}` is computed at runtime",
+                base,
+                help="name the base class directly, or wrap the definition "
+                "in a ppy.dynamic boundary",
+            )
+        for keyword in node.keywords:
+            if keyword.arg != "metaclass":
+                continue
+            canonical = self.project.resolver(self.symbols).canonical(keyword.value)
+            if canonical in _KNOWN_METACLASSES:
+                continue
+            self._dynamic_feature(
+                "E1507",
+                f"metaclass `{ast.unparse(keyword.value)}` of class `{node.name}` "
+                "rewrites class construction",
+                keyword.value,
+                help="use a plain class, a vouched metaclass such as `abc.ABCMeta`, "
+                "or a ppy.dynamic boundary",
+            )
 
     def _stmt_Global(self, node: ast.Global, env: Env) -> None:
         self._effects = self._effects.add(Effect.WRITE_GLOBAL)

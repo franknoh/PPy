@@ -16,6 +16,7 @@ __all__ = [
     "BufferSpec",
     "Contiguous",
     "DType",
+    "Dynamic",
     "FloatWidth",
     "IntWidth",
     "Length",
@@ -211,6 +212,10 @@ u64 = Annotated[int, IntWidth(64, False)]
 f16 = Annotated[float, FloatWidth(16)]
 f32 = Annotated[float, FloatWidth(32)]
 f64 = Annotated[float, FloatWidth(64)]
+
+#: An explicit Python-dynamic boundary. `Dynamic` is `Any` at runtime, but
+#: spelling it says the dynamism is a decision, not an inference failure.
+Dynamic = Any
 
 NUMERIC_MARKERS: dict[str, Any] = {
     "i8": i8,

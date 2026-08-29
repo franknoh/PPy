@@ -59,6 +59,7 @@ sound fallback, and never the rest.
 | `E1504` | A dynamic Python feature requires an explicit `ppy.dynamic` boundary. |
 | `E1505` | A dynamic boundary is forbidden by the project configuration. |
 | `E1506` | Attribute or class mutation after analysis is not supported. |
+| `E1507` | A class is constructed dynamically, from computed bases or an unvouched metaclass. |
 
 ## Purity
 

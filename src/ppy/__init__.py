@@ -22,6 +22,7 @@ from ._directives import (
     opt,
     parallel,
     pure,
+    reflective,
     specialize,
 )
 from ._importer import (
@@ -40,6 +41,7 @@ from ._markers import (
     BufferSpec,
     Contiguous,
     DType,
+    Dynamic,
     FloatWidth,
     IntWidth,
     Length,
@@ -73,6 +75,7 @@ __all__ = [
     "Contiguous",
     "DType",
     "Directive",
+    "Dynamic",
     "FloatWidth",
     "IntWidth",
     "Length",
@@ -106,6 +109,7 @@ __all__ = [
     "opt",
     "parallel",
     "pure",
+    "reflective",
     "specialize",
     "u8",
     "u16",

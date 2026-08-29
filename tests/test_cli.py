@@ -1821,6 +1821,34 @@ def test_an_unparsable_project_file_fails_the_final_proof_closed(workspace: Path
     assert "STEADY: Final" not in (workspace / "store.ppy").read_text(encoding="utf-8")
 
 
+def test_reflective_keeps_annotations_exactly_as_written(workspace: Path):
+    """`@ppy.reflective` pins the source: no annotations are added or relied on."""
+    (workspace / "pinned.py").write_text(
+        textwrap.dedent(
+            """
+            import ppy
+
+
+            @ppy.reflective
+            def observed(x):
+                return x * 2
+
+
+            def plain(x):
+                return x + 1
+
+
+            print(observed(3), plain(4))
+            """
+        ).lstrip("\n"),
+        encoding="utf-8",
+    )
+    assert _ppy(["convert", "pinned.py"], workspace).returncode == 0
+    converted = (workspace / "pinned.ppy").read_text(encoding="utf-8")
+    assert "def observed(x):" in converted
+    assert "def plain(x: int) -> int:" in converted
+
+
 def test_a_user_defined_cache_is_not_functools_cache(workspace: Path):
     """Decorator identity is resolved, not spelled.
 

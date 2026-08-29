@@ -84,6 +84,21 @@ def test_dynamic_is_both_decorator_and_context_manager():
     assert ppy.directives_of(boundary)[0].name == "dynamic"
 
 
+def test_reflective_is_inert_and_recorded():
+    @ppy.reflective
+    def observed(x: int) -> int:
+        return x * 2
+
+    assert observed(3) == 6
+    assert any(d.name == "reflective" for d in ppy.directives_of(observed))
+
+
+def test_dynamic_marker_is_plain_any():
+    from typing import Any
+
+    assert ppy.Dynamic is Any
+
+
 def test_class_decoration_keeps_class_identity():
     @ppy.opt(1)
     class Model:

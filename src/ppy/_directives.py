@@ -114,6 +114,7 @@ noinline: _Flexible = _flexible("noinline")
 specialize: _Flexible = _flexible("specialize")
 fastmath: _Flexible = _flexible("fastmath")
 jax: _Flexible = _flexible("jax")
+reflective: _Flexible = _flexible("reflective")
 
 
 def opt(level: int) -> Callable[[_T], _T]:

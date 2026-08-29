@@ -293,6 +293,7 @@ DIRECTIVE_NAMES = frozenset(
         "fastmath",
         "dynamic",
         "jax",
+        "reflective",
     }
 )
 

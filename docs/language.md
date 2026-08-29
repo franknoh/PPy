@@ -14,9 +14,9 @@ The compiler analyzes the whole project as one call graph. Inside it:
   `Any` is an error (`E1201`), not a silence.
 - Attributes are resolved on statically known types; `__init__` declares the
   instance fields.
-- `eval`, `exec`, `from x import *`, computed imports, monkey-patching, and
-  frame manipulation are rejected (`E15xx`) unless isolated behind
-  `ppy.dynamic`.
+- `eval`, `exec`, `from x import *`, computed imports, monkey-patching,
+  frame manipulation, computed base classes, and unvouched metaclasses are
+  rejected (`E15xx`) unless isolated behind `ppy.dynamic`.
 - Everything else — classes, generators, closures, `match`, comprehensions,
   decorators the compiler knows, the stdlib it models — is ordinary Python.
 
@@ -40,6 +40,7 @@ contracts the compiler verifies, not hints it trusts.
 | `@ppy.fastmath` | permit floating-point reassociation in this function; without it, reduction order is preserved bit-for-bit. |
 | `@ppy.jax` | stage this function for build-time StableHLO export (a plain `@jax.jit` decorator marks it too). |
 | `@ppy.dynamic` / `with ppy.dynamic():` | an explicit boundary inside which dynamic features are allowed and everything is `Any`. |
+| `@ppy.reflective` | the function's annotations are runtime-visible state, exactly as written: `ppy convert`/`ppy migrate` will never add to or rely on rewriting them. |
 
 A typo in a directive name is `E1205`, with a suggestion.
 
@@ -54,6 +55,7 @@ Ordinary `Annotated` aliases from `ppy`:
 | `Buffer[T]` | a borrowed writable buffer (`memoryview` over `array.array`) — zero-copy in and out of native code. |
 | `Array[T]`, `Vector[T]` | contiguous numeric containers with a known element type. |
 | `Range(lo, hi)` | an integer refinement the checker propagates. |
+| `Dynamic` | an explicit Python-dynamic boundary: `Any` at runtime, but spelled so the dynamism reads as a decision rather than an inference failure. |
 | `Length(n)`, `Shape(...)`, `DType("f32")`, `Contiguous`, `NoAlias` | container refinements; `Shape`/`DType` are what makes a `@ppy.jax` function exportable. |
 
 ## Effects and purity

@@ -163,7 +163,7 @@ class AnnotationResolver:
             return Resolved(T.UNKNOWN)
         if qualname in _SIMPLE:
             return Resolved(_SIMPLE[qualname])
-        if qualname == "typing.Any":
+        if qualname in {"typing.Any", "ppy.Dynamic"}:
             return Resolved(T.ANY)
         if qualname in _INT_MARKERS:
             bits, signed = _INT_MARKERS[qualname]

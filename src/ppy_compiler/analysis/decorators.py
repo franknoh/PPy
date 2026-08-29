@@ -52,6 +52,7 @@ _KNOWN: dict[str, DecoratorSemantics] = {
     "ppy.jax": _INERT,
     "ppy.opt": _INERT,
     "ppy.dynamic": _INERT,
+    "ppy.reflective": _INERT,
     # Python-defined transforms with fixed meaning.
     "builtins.staticmethod": _WRAPPER,
     "builtins.classmethod": _WRAPPER,
