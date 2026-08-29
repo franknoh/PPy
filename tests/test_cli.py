@@ -1965,3 +1965,82 @@ def test_pyright_config_may_be_jsonc_with_extends(workspace: Path):
     result = _ppy(["lint", "--backend", "pyright", "--no-strict", "."], workspace)
     assert "reportMissingImports" not in result.stdout
     assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_reflection_follows_import_and_object_aliases(workspace: Path):
+    """`sig = inspect.signature; fn = lib.f; sig(fn)` observes `lib.f`."""
+    (workspace / "lib.py").write_text(
+        textwrap.dedent(
+            """
+            def observed_a(x):
+                return x
+
+
+            def observed_b(x):
+                return x
+
+
+            def observed_c(x):
+                return x
+
+
+            def free(x):
+                return x + 1
+
+
+            print(free(1), observed_a(2), observed_b(3), observed_c(4))
+            """
+        ).lstrip("\n"),
+        encoding="utf-8",
+    )
+    (workspace / "readers.py").write_text(
+        textwrap.dedent(
+            """
+            import inspect as i
+            from typing import get_type_hints as gth
+
+            import lib
+
+            sig = i.signature
+            fn = lib.observed_b
+            fn2 = fn
+
+            print(sig(lib.observed_a))
+            print(fn2.__annotations__)
+            print(gth(lib.observed_c))
+            """
+        ).lstrip("\n"),
+        encoding="utf-8",
+    )
+    assert _ppy(["convert", "lib.py"], workspace).returncode == 0
+    converted = (workspace / "lib.ppy").read_text(encoding="utf-8")
+    assert "def observed_a(x):" in converted
+    assert "def observed_b(x):" in converted
+    assert "def observed_c(x):" in converted
+    assert "def free(x: int) -> int:" in converted
+
+
+def test_a_shadowing_cache_keeps_its_untyped_view(workspace: Path):
+    """Decoration binds at its point in the file, not to the file's imports."""
+    (workspace / "shadow.py").write_text(
+        textwrap.dedent(
+            """
+            def cache(fn):
+                print(sorted(fn.__annotations__))
+                return fn
+
+
+            @cache
+            def f(x):
+                return x
+
+
+            from functools import cache as real_cache
+
+            print(f(1), real_cache)
+            """
+        ).lstrip("\n"),
+        encoding="utf-8",
+    )
+    assert _ppy(["convert", "shadow.py"], workspace).returncode == 0
+    assert "def f(x):" in (workspace / "shadow.ppy").read_text(encoding="utf-8")

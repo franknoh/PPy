@@ -73,12 +73,13 @@ a list here, a tuple there — the union collapses to the shared
 - no file **anywhere in the project** assigns the attribute — a write index
   (`analysis/global_writes.py`) is built over every source under the project
   root, so converting one file still sees the reverse dependency doing
-  `store.NAME = ...`. The scan is scope-aware and lexical: a function-scope
-  `import other as s` shadows nothing at module level, `alias = store` makes
-  the alias count for as long as the binding lasts, relative imports resolve
-  against the file's package, `setattr`/`delattr` count, a computed `setattr`
-  name disqualifies the whole module, and a project file that fails to parse
-  fails the proof closed — an unread file could hold any write;
+  `store.NAME = ...`. The scan rides the shared lexical bindings: a
+  function-scope `import other as s` shadows nothing at module level,
+  `alias = store` counts for as long as the binding lasts, relative imports
+  resolve against the file's package, `setattr`/`delattr` count, a computed
+  `setattr` name disqualifies the whole module, `global s; s = other` in one
+  function makes `s.X = 1` in another a write to *both* candidates, and a
+  project file that fails to parse fails the proof closed;
 - the name reads as a constant (`UPPER_CASE`).
 
 The last rule is deliberate: `Final` is an interface contract, and a lowercase
@@ -104,19 +105,27 @@ have said either way.
   `'list[Rect]'` becomes `list[Rect]` — but only when the move is provably
   reorder-safe (`--hoist-classes=safe`, the default), on **both** sides: the
   moved class and every definition it crosses. A crossed decorator that
-  probes `globals()` would otherwise observe the class ahead of time. "Safe"
-  expressions are literals and bare names only — `holder.Base`, `a + b`, and
-  `Base[int]` can each run user code. `aggressive` moves any class, `off`
-  moves none;
+  probes `globals()` would otherwise observe the class ahead of time.
+  Creating a class runs more than its spelled expressions: any explicit base
+  may carry `__init_subclass__` or a metaclass, and a name-valued class field
+  may be a descriptor with `__set_name__` — so safe mode allows only baseless
+  (or `object`-based) classes with literal-valued fields and plain methods.
+  `aggressive` moves any class, `off` moves none;
 - writes signature annotations only onto functions whose decorators are all
   known to tolerate them (`analysis/decorators.py`). Decorator identity is
-  *resolved*, not spelled: a local `def cache` is `mymodule.cache` however it
-  is written, and only the real `functools.cache` matches the known table.
+  *resolved at its point in the file* (`analysis/lexical.py`): `@cache` above
+  a local `def cache` is that function even when `from functools import
+  cache` appears later, and only the binding in force at the `def` matches
+  the known table. The same lexical layer answers "what does this name mean
+  here?" for the reflection scan and the write index, so the three cannot
+  disagree.
   An unknown decorator, or one that reads `__annotations__` like
   `singledispatch`, saw an untyped function and must keep receiving one — and
   so did any code anywhere in the project calling `inspect.signature`,
   `typing.get_type_hints`, or reading `__annotations__` on it
-  (`analysis/reflection.py`; an unresolvable read blocks everything). The
+  (`analysis/reflection.py`) — through any alias chain: `sig = i.signature;
+  fn = lib.f; sig(fn)` observes `lib.f`. An unresolvable read blocks
+  everything. The
   types are still inferred — they are just not materialized;
 - orders imports into PEP 8 groups with `import ppy` ahead of first-party
   imports — the loader must install before the first `.ppy` import;

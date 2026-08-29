@@ -1384,3 +1384,116 @@ def test_augmenting_an_immutable_alias_breaks_it():
 
     thawed = analyze_aliases(fn)
     assert thawed.param_roots(thawed.roots_at(use.value, "y")) == {"xs"}
+
+
+def test_builtin_descriptor_decorators_are_recognized(tmp_path: Path):
+    """`@staticmethod` must canonicalize, not vanish into an unknown name."""
+    from ppy_compiler.driver.pipeline import analyze_paths, open_project
+
+    (tmp_path / "pyproject.toml").write_text("[tool.ppy]\n", encoding="utf-8")
+    path = tmp_path / "desc.ppy"
+    path.write_text(
+        textwrap.dedent(
+            """
+            class C:
+                @staticmethod
+                def f(x: int) -> int:
+                    return x
+
+                @classmethod
+                def g(cls) -> int:
+                    return 1
+
+                @property
+                def p(self) -> int:
+                    return 2
+            """
+        ).lstrip("\n"),
+        encoding="utf-8",
+    )
+    bundle = analyze_paths(open_project(path), [path], backend="python")
+    assert bundle.symbols.functions["desc.C.f"].is_static
+    assert bundle.symbols.functions["desc.C.g"].is_classmethod
+    assert bundle.symbols.functions["desc.C.p"].is_property
+
+
+def test_lexical_bindings_are_point_sensitive():
+    import ast
+
+    from ppy_compiler.analysis.lexical import scan_module
+
+    source = textwrap.dedent(
+        """
+        def cache(fn):
+            return fn
+
+
+        @cache
+        def early(x):
+            return x
+
+
+        from functools import cache
+
+
+        @cache
+        def late(x):
+            return x
+        """
+    )
+    tree = ast.parse(source)
+    bindings = scan_module(tree, "mod")
+    decorators = {
+        node.name: bindings.targets_at(node.decorator_list[0])
+        for node in tree.body
+        if isinstance(node, ast.FunctionDef) and node.decorator_list
+    }
+    assert decorators["early"] == {"mod.cache"}
+    assert decorators["late"] == {"functools.cache"}
+
+
+def test_global_rebinding_reaches_other_functions(tmp_path: Path):
+    from ppy_compiler.analysis.global_writes import build_write_index
+
+    (tmp_path / "store.py").write_text("LIMIT = 5\n", encoding="utf-8")
+    (tmp_path / "other.py").write_text("LIMIT = 7\nSAFE = 1\n", encoding="utf-8")
+    (tmp_path / "rebind.py").write_text(
+        textwrap.dedent(
+            """
+            import store as s
+
+            import other
+
+
+            def rebind():
+                global s
+                s = other
+
+
+            def write():
+                s.LIMIT = 9
+            """
+        ).lstrip("\n"),
+        encoding="utf-8",
+    )
+    index = build_write_index(tmp_path)
+    assert not index.can_emit_final("store", "LIMIT")
+    assert not index.can_emit_final("other", "LIMIT")
+    assert index.can_emit_final("other", "SAFE")
+
+
+def test_class_creation_effects_block_reordering():
+    """A base's `__init_subclass__` and a field's `__set_name__` run at
+    class creation; a simply *spelled* base or field proves nothing."""
+    import ast
+
+    from ppy_compiler.analysis.decorators import definition_time_reorder_safe
+
+    def check(src: str) -> bool:
+        return definition_time_reorder_safe(ast.parse(textwrap.dedent(src)).body[0])
+
+    assert check("class C:\n    X = 1")
+    assert check("class C(object):\n    pass")
+    assert not check("class C(Base):\n    pass")
+    assert not check("class C:\n    field = descriptor")
+    assert check("class C:\n    field = (1, 2)")

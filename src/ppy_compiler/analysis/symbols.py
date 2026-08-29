@@ -24,7 +24,11 @@ __all__ = [
     "directives_from",
 ]
 
+#: Builtin decorators every consumer must recognize under one canonical name.
+BUILTIN_DECORATORS = frozenset({"staticmethod", "classmethod", "property"})
+
 _BUILTIN_NAMES = {
+    *BUILTIN_DECORATORS,
     "int",
     "float",
     "bool",
@@ -233,6 +237,8 @@ class ModuleSymbols:
     constant_globals: dict[str, object] = field(default_factory=dict)
     type_aliases: dict[str, ast.expr] = field(default_factory=dict)
     all_exports: tuple[str, ...] | None = None
+    #: Point-sensitive lexical bindings for this module's tree.
+    lexical: object | None = None
 
     @property
     def name(self) -> str:
@@ -327,15 +333,22 @@ class NameResolver:
         self.project = project
 
     def decorator_identity(self, decorator: ast.expr) -> str:
-        """One canonical name per decorator, resolution included.
+        """One canonical name per decorator, resolved at its point in the file.
 
-        `@cache` written after `from functools import cache` is
-        `functools.cache`; `@cache` naming a local `def cache` is
-        `mymodule.cache`, whatever the spelling. A name the resolver cannot
-        place keeps its spelling -- and matches nothing known, which is the
-        safe direction.
+        Decoration happens where the `def` stands: `@cache` above a local
+        `def cache` is that function even when `from functools import cache`
+        appears later, and only until something rebinds the name. A name the
+        bindings cannot place -- or place ambiguously -- keeps its spelling,
+        which matches nothing known: the safe direction.
         """
         target = decorator.func if isinstance(decorator, ast.Call) else decorator
+        lexical = self.symbols.lexical
+        if lexical is not None:
+            found = lexical.targets_at(target)
+            if len(found) == 1:
+                return next(iter(found))
+            if found:
+                return ast.unparse(target)
         return self.canonical(target) or ast.unparse(target)
 
     def canonical(self, expr: ast.expr) -> str | None:
@@ -391,9 +404,13 @@ class ProjectSymbols:
         self.external_types: dict[str, str] = {}
 
     def build(self) -> ProjectSymbols:
+        from .lexical import scan_module
+
         ordered = self.graph.order()
         for module in ordered:
-            self.modules[module.name] = ModuleSymbols(module=module)
+            symbols = ModuleSymbols(module=module)
+            symbols.lexical = scan_module(module.tree, module.name, is_package=module.is_package)
+            self.modules[module.name] = symbols
         for module in ordered:
             self._collect_imports(self.modules[module.name])
         for module in ordered:

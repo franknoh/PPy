@@ -171,19 +171,42 @@ def definition_time_reorder_safe(node: ast.stmt, plugins=None, identify=None) ->
         if node.keywords:
             # A metaclass or `__init_subclass__` keyword runs arbitrary code.
             return False
-        if not all(_simple(base) for base in node.bases):
+        # Any explicit base can carry an `__init_subclass__` or a metaclass,
+        # both of which run at class creation and may look around; a base
+        # being *spelled* simply proves nothing about what creating the
+        # subclass executes. Only `object` is known inert.
+        if any(not (isinstance(base, ast.Name) and base.id == "object") for base in node.bases):
             return False
         return all(_body_statement_pure(child, plugins, identify) for child in node.body)
     return isinstance(node, (ast.Import, ast.ImportFrom, ast.Pass))
+
+
+def _literal(node: ast.expr) -> bool:
+    """A value that is provably not a descriptor.
+
+    A bare name in a class body may be a descriptor whose `__set_name__`
+    runs at class creation; a literal cannot be one.
+    """
+    if isinstance(node, ast.Constant):
+        return True
+    if isinstance(node, (ast.Tuple, ast.List, ast.Set)):
+        return all(_literal(e) for e in node.elts)
+    if isinstance(node, ast.Dict):
+        return all(k is not None and _literal(k) for k in node.keys) and all(
+            _literal(v) for v in node.values
+        )
+    if isinstance(node, ast.UnaryOp):
+        return isinstance(node.operand, ast.Constant)
+    return False
 
 
 def _body_statement_pure(node: ast.stmt, plugins=None, identify=None) -> bool:  # type: ignore[no-untyped-def]
     if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
         return definition_time_reorder_safe(node, plugins, identify)
     if isinstance(node, ast.AnnAssign):
-        return _simple(node.annotation) and (node.value is None or _simple(node.value))
+        return _simple(node.annotation) and (node.value is None or _literal(node.value))
     if isinstance(node, ast.Assign):
-        return _simple(node.value)
+        return _literal(node.value)
     if isinstance(node, ast.Expr):
         return isinstance(node.value, ast.Constant)
     return isinstance(node, ast.Pass)
