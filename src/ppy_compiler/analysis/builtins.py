@@ -34,6 +34,13 @@ _IO = EffectSet.of(Effect.IO)
 
 def _element_of(t: T.Type) -> T.Type:
     base = T.strip_literal(t)
+    if isinstance(base, T.Union_):
+        # Iterating `list[float] | tuple[float, float]` yields a float either
+        # way; the union is over containers, not over what they hand out.
+        elements = [_element_of(member) for member in T.members_of(base)]
+        if elements and not any(isinstance(e, T.UnknownType) for e in elements):
+            return T.join(*elements)
+        return T.UNKNOWN
     if isinstance(base, T.Tuple_):
         if base.homogeneous:
             return base.items[0]

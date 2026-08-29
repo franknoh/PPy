@@ -1160,6 +1160,38 @@ def test_a_mapping_parameter_follows_the_same_rule(workspace: Path, body: str, e
     assert f"def f(values: {expected}" in result.stdout, result.stdout
 
 
+def test_iterating_a_union_of_containers_yields_the_joined_element(workspace: Path):
+    """`list[float]` here, `tuple[float, float]` there: the loop still knows.
+
+    This is the README's own quickstart shape; evidence from both call sites
+    joins into a union of containers, and what the union hands out is the
+    join of what its members hand out.
+    """
+    (workspace / "mixed.py").write_text(
+        textwrap.dedent(
+            """
+            def clamp(value):
+                return min(value, 3.0)
+
+
+            def spread(samples):
+                total = 0.0
+                for sample in samples:
+                    total += clamp(sample)
+                return total
+
+
+            print(spread([1.0, 2.0]), spread((4.0, 5.0)))
+            """
+        ).lstrip("\n"),
+        encoding="utf-8",
+    )
+    assert _ppy(["convert", "mixed.py"], workspace).returncode == 0
+    converted = (workspace / "mixed.ppy").read_text(encoding="utf-8")
+    assert "def clamp(value: float) -> float:" in converted
+    assert "def spread(samples: Sequence[float]) -> float:" in converted
+
+
 def test_a_widened_signature_accepts_what_it_promises(workspace: Path):
     """A `Sequence` parameter must really take a tuple, on every path."""
     (workspace / "pyproject.toml").write_text("[tool.ppy]\nopt-level = 3\n", encoding="utf-8")
