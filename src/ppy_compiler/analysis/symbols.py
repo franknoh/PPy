@@ -726,6 +726,8 @@ class ProjectSymbols:
         for index, (arg, kind, default) in enumerate(entries):
             if arg.annotation is None:
                 implicit = self._implicit_param(info, arg, index, owner, kind)
+                implicit.has_default = default is not None
+                implicit.default = default
                 info.params.append(implicit)
                 continue
             resolved = annotations.resolve(arg.annotation)

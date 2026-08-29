@@ -27,29 +27,31 @@ __all__ = [
 ]
 
 
-#: Call-site evidence propagates along the call graph, so one round only
-#: reaches functions called from already-typed code. Repeating it walks the
-#: chain; a handful of rounds settles any realistic project.
-_REFINEMENT_ROUNDS = 6
+#: A hard ceiling, not a tuning knob: the passes below are monotone over
+#: finite lattices, so a run that reaches it is a compiler bug and says so.
+_MAX_ITERATIONS = 50
 
 
-def refine_with_call_sites(bundle) -> dict[tuple[str, int], T.Type]:  # type: ignore[no-untyped-def]
-    """Adopt call-site argument types and re-infer, until nothing new appears.
+def refine_with_call_sites(bundle, diagnostics=None) -> dict[tuple[str, int], T.Type]:  # type: ignore[no-untyped-def]
+    """Run inference to a real fixpoint, then generalize, then settle again.
 
-    Without this a function whose parameters were only inferred would still
-    return `<unknown>`, and nothing downstream of it could be annotated.
+    The two stages are different kinds of decision and must not interleave:
 
-    Evidence is joined across rounds rather than taken from the first round
-    that produced any. A call reached through another function is only typed
-    once that function is, so the second caller of a helper routinely shows up
-    a round after the first -- and a signature frozen on round one would
-    describe just the callers that happened to be easy to type.
+    * **Evidence** is monotone -- call-site types only join, a field or usage
+      inference only fills an unknown -- and runs until nothing changes. A
+      caller that only becomes typeable late still reaches its callee.
+    * **Generalization** (a read-only `list[T]` presented as `Sequence[T]`)
+      is a presentation choice about settled facts. Running it against a
+      half-analyzed function decides from stale effects: a mutation through
+      an alias is only visible once the concrete types are in.
+
+    "What the analysis knows" and "what is safe to write into the source" are
+    separate questions; this function answers the first, and hands the second
+    settled facts to decide from.
     """
-    from ..diagnostics import DiagnosticBag
-    from .checker import analyze
-
     evidence: dict[tuple[str, int], T.Type] = {}
-    for _round in range(_REFINEMENT_ROUNDS):
+
+    def evidence_round() -> bool:
         changed = False
         fresh: set[tuple[str, int]] = set()
         for key, seen in observed_arguments(bundle).items():
@@ -65,17 +67,25 @@ def refine_with_call_sites(bundle) -> dict[tuple[str, int], T.Type]:  # type: ig
             inferred = evidence[(qualname, index)]
             if param.annotated or isinstance(inferred, (T.UnknownType, T.AnyType)):
                 continue
-            # Only evidence that grew this round is written back, so a type a
-            # later pass generalized is not reset to the raw observation on
-            # every round -- which would keep the fixpoint from settling.
             param.type = inferred
             param.inferred = True
             changed = True
         changed |= _infer_fields(bundle)
         changed |= _infer_from_usage(bundle)
-        changed |= _widen_read_only_params(bundle)
-        if not changed:
-            break
+        return changed
+
+    _run_to_fixpoint(bundle, evidence_round, "evidence", diagnostics)
+    _run_to_fixpoint(bundle, lambda: _widen_read_only_params(bundle), "generalization", diagnostics)
+    return evidence
+
+
+def _run_to_fixpoint(bundle, step, stage: str, diagnostics) -> None:  # type: ignore[no-untyped-def]
+    from ..diagnostics import Diagnostic, DiagnosticBag, Severity
+    from .checker import analyze
+
+    for _iteration in range(_MAX_ITERATIONS):
+        if not step():
+            return
         bundle.analysis = analyze(
             bundle.symbols,
             DiagnosticBag(),
@@ -83,7 +93,13 @@ def refine_with_call_sites(bundle) -> dict[tuple[str, int], T.Type]:  # type: ig
             dynamic_policy=bundle.project.config.dynamic_boundaries,
             plugins=bundle.project.plugins,
         )
-    return evidence
+    # Refusing to settle is an internal error; the caller must hear about it
+    # rather than receive whatever types the last round happened to hold.
+    message = f"type inference did not converge in {_MAX_ITERATIONS} {stage} rounds"
+    if diagnostics is not None:
+        diagnostics.add(Diagnostic("E9001", Severity.ERROR, message))
+    else:
+        raise RuntimeError(message)
 
 
 def observed_arguments(bundle) -> dict[tuple[str, int], T.Type]:  # type: ignore[no-untyped-def]
@@ -339,7 +355,7 @@ def _read_only_view(t: T.Type, info, name: str, analysis, callees=None):  # type
         return t
     widening, args = protocol
     protocol_type = T.Instance(widening.protocol, args, widening.bases)
-    uses = _parameter_uses(info.node, name, protocol_type, callees, widening)
+    uses = _parameter_uses(info.node, name, protocol_type, callees, widening, function.aliases)
     if uses is None or not uses <= widening.allowed:
         return t
     return protocol_type
@@ -388,37 +404,50 @@ def _as_container(t: T.Type) -> tuple[str, tuple[T.Type, ...]] | None:
 
 
 def _parameter_uses(  # type: ignore[no-untyped-def]
-    node: ast.AST, name: str, protocol=None, callees=None, widening=None
+    node: ast.AST, name: str, protocol=None, callees=None, widening=None, aliases=None
 ) -> set[str] | None:
     """Every way the body uses this parameter, or None if one is unrecognized.
 
     An unrecognized use is not taken to be harmless; the parameter keeps its
-    concrete type rather than the analysis guessing about it.
+    concrete type rather than the analysis guessing about it. Uses are found
+    through the alias map: `ys = xs; ys.append(1)` is a use of `xs`, made by
+    a different name, and a scan that only matched the spelling would declare
+    a `Sequence` the body goes on to mutate.
     """
+
+    def is_use(candidate) -> bool:  # type: ignore[no-untyped-def]
+        if not isinstance(candidate, ast.Name):
+            return False
+        if candidate.id == name:
+            return True
+        if aliases is None:
+            return False
+        return name in aliases.roots_at(candidate, candidate.id)
+
     uses: set[str] = set()
     for child in ast.walk(node):
-        if isinstance(child, ast.Subscript) and _is_name(child.value, name):
+        if isinstance(child, ast.Subscript) and is_use(child.value):
             if isinstance(child.slice, ast.Slice):
                 return None
             uses.add("index")
-        elif isinstance(child, ast.Attribute) and _is_name(child.value, name):
+        elif isinstance(child, ast.Attribute) and is_use(child.value):
             uses.add(f"method:{child.attr}")
         elif isinstance(child, (ast.For, ast.AsyncFor, ast.comprehension)):
-            if _is_name(child.iter, name):
+            if is_use(child.iter):
                 uses.add("iterate")
         elif isinstance(child, ast.Compare):
             for operator, comparator in zip(child.ops, child.comparators, strict=False):
-                if isinstance(operator, (ast.In, ast.NotIn)) and _is_name(comparator, name):
+                if isinstance(operator, (ast.In, ast.NotIn)) and is_use(comparator):
                     uses.add("contains")
-                elif _is_name(comparator, name) or _is_name(child.left, name):
+                elif is_use(comparator) or is_use(child.left):
                     return None
         elif isinstance(child, ast.BinOp):
-            if _is_name(child.left, name) or _is_name(child.right, name):
+            if is_use(child.left) or is_use(child.right):
                 return None
         elif isinstance(child, ast.Call):
             written = [*child.args, *(k.value for k in child.keywords)]
             for argument in written:
-                if not _is_name(argument, name):
+                if not is_use(argument):
                     continue
                 inspectors = widening.inspectors if widening is not None else frozenset()
                 if isinstance(child.func, ast.Name) and child.func.id in inspectors:
@@ -427,10 +456,10 @@ def _parameter_uses(  # type: ignore[no-untyped-def]
                 if not _accepts(child, argument, protocol, callees):
                     return None
                 uses.add("inspecting-call")
-        elif isinstance(child, ast.Return) and _is_name(child.value, name):
+        elif isinstance(child, ast.Return) and is_use(child.value):
             return None
         elif isinstance(child, (ast.Starred, ast.Await, ast.Yield, ast.YieldFrom)):
-            if _is_name(getattr(child, "value", None), name):
+            if is_use(getattr(child, "value", None)):
                 return None
     return uses
 

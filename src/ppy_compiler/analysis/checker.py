@@ -17,6 +17,7 @@ from ..frontend.source import span_of
 from . import builtins as B
 from . import stdlib
 from . import types as T
+from .aliasing import EXTERNAL, AliasInfo, analyze_aliases
 from .annotations import AnnotationResolver
 from .binding import bind_call, positional_values
 from .effects import Effect, EffectSet
@@ -173,6 +174,8 @@ class FunctionAnalysis:
     #: itself, which spec 11.2 permits inside `@ppy.pure`.
     writes_only_locals: bool = True
     calls: set[str] = field(default_factory=set)
+    #: The alias map the facts above were resolved through.
+    aliases: AliasInfo | None = None
 
     @property
     def verified_pure(self) -> bool:
@@ -298,16 +301,17 @@ class _Checker:
         self._dynamic_seen = False
         self._current: FunctionInfo | None = None
         self._returns: list[Binding] = []
+        self._provisional_returns: list[bool] = []
         self._blockers: list[str] = []
         self._native_blockers: list[str] = []
         self._escaping: set[str] = set()
         self._mutated: set[str] = set()
         self._foreign_writes = False
-        self._local_allocs: set[str] = set()
         self._local_writes: set[str] = set()
         self._shared: set[str] = set()
         self._returned_names: set[str] = set()
         self._external_writes = False
+        self._aliases: AliasInfo | None = None
         self._bound_methods: set[int] = set()
         #: Nodes that already produced a diagnostic, so a downstream pass does
         #: not report a second, less useful one about the same expression.
@@ -343,6 +347,7 @@ class _Checker:
             self._calls,
             self._current,
             self._returns,
+            self._provisional_returns,
             self._blockers,
             self._native_blockers,
             self._escaping,
@@ -350,27 +355,30 @@ class _Checker:
             self._dynamic_depth,
             self._function_locals,
             self._foreign_writes,
-            self._local_allocs,
             self._local_writes,
             self._shared,
             self._returned_names,
             self._external_writes,
+            self._aliases,
         )
         self._effects = EffectSet()
         self._unknown = []
         self._calls = set()
         self._current = info
         self._returns = []
+        self._provisional_returns = []
         self._blockers = []
         self._native_blockers = []
         self._escaping = set()
         self._mutated = set()
         self._foreign_writes = False
-        self._local_allocs = set()
         self._local_writes = set()
         self._shared = set()
         self._returned_names = set()
         self._external_writes = False
+        # Names are not objects: everything below that asks "what does this
+        # mutate or share?" resolves the name through the alias map first.
+        self._aliases = analyze_aliases(info.node)
         if info.dynamic:
             self._dynamic_depth += 1
 
@@ -396,6 +404,7 @@ class _Checker:
             self._calls,
             self._current,
             self._returns,
+            self._provisional_returns,
             self._blockers,
             self._native_blockers,
             self._escaping,
@@ -403,11 +412,11 @@ class _Checker:
             self._dynamic_depth,
             self._function_locals,
             self._foreign_writes,
-            self._local_allocs,
             self._local_writes,
             self._shared,
             self._returned_names,
             self._external_writes,
+            self._aliases,
         ) = previous
         return result
 
@@ -418,9 +427,19 @@ class _Checker:
             )
             ret_facts = Facts()
         elif self._returns:
-            inferred = T.join(*[r.type for r in self._returns])
-            ret_facts = self._returns[0].facts
-            for extra in self._returns[1:]:
+            # A recursive call's return type is the very thing being computed
+            # here, so an unknown that came from calling into the project is
+            # a placeholder, not an answer. Seeding the join from the settled
+            # branches lets the effect fixpoint refine the rest -- otherwise
+            # `fact(n - 1)` keeps `fact` unknown forever.
+            settled = [
+                r
+                for r, provisional in zip(self._returns, self._provisional_returns, strict=False)
+                if not provisional
+            ] or self._returns
+            inferred = T.join(*[r.type for r in settled])
+            ret_facts = settled[0].facts
+            for extra in settled[1:]:
                 ret_facts = ret_facts.merge(extra.facts)
             if env.reachable:
                 inferred = T.join(inferred, T.NONE)
@@ -450,6 +469,7 @@ class _Checker:
             foreign_writes=self._foreign_writes,
             writes_only_locals=not self._external_writes
             and not (self._local_writes & self._shared_escapes()),
+            aliases=self._aliases,
             calls=set(self._calls),
         )
         info.effects = effects
@@ -585,11 +605,13 @@ class _Checker:
     def _stmt_Return(self, node: ast.Return, env: Env) -> None:
         if node.value is None:
             self._returns.append(Binding(T.NONE))
+            self._provisional_returns.append(False)
         else:
             value = self._expr(node.value, env)
             self._returns.append(value)
+            self._provisional_returns.append(self._is_provisional(node.value, value, env))
             if isinstance(node.value, ast.Name):
-                self._returned_names.add(node.value.id)
+                self._returned_names.update(self._roots(node.value, node.value.id))
             self._mark_escape(node.value, env)
             info = self._current
             if info is not None and info.ret_annotated:
@@ -851,8 +873,6 @@ class _Checker:
         if isinstance(target, ast.Name):
             binding = Binding(declared_type or value.type, value.facts)
             env.set(target.id, binding)
-            if source is not None:
-                self._note_allocation(target.id, source)
             self._record(target, binding)
             if self._current is None:
                 self.symbols.globals.setdefault(target.id, binding.type)
@@ -2474,21 +2494,54 @@ class _Checker:
                 return self.project.functions.get(binding.type.qualname)
         return None
 
+    def _roots(self, node: ast.expr, name: str) -> frozenset[str]:
+        if self._aliases is None:
+            return frozenset({name})
+        return self._aliases.roots_at(node, name)
+
+    def _is_provisional(self, node: ast.expr, value: Binding, env: Env) -> bool:
+        """An unknown whose source is a call back into the project.
+
+        `n * fact(n - 1)` is unknown only because `fact` is still being
+        computed; any expression over such a call is provisional the same way
+        the bare call is.
+        """
+        if not isinstance(value.type, (T.UnknownType, T.AnyType)):
+            return False
+        for child in ast.walk(node):
+            if not isinstance(child, ast.Call) or not isinstance(child.func, ast.Name):
+                continue
+            binding = env.get(child.func.id)
+            if (
+                binding is not None
+                and isinstance(binding.type, T.Callable_)
+                and binding.type.qualname in self.project.functions
+            ):
+                return True
+        return False
+
     def _mark_escape(self, node: ast.expr, env: Env, *, retains: bool = True) -> None:
         if isinstance(node, ast.Name) and node.id in env:
-            self._escaping.add(node.id)
+            roots = self._roots(node, node.id)
+            self._escaping.update(roots - {EXTERNAL})
             if retains:
-                self._shared.add(node.id)
+                self._shared.update(roots - {EXTERNAL})
 
     def _note_mutation(self, node: ast.expr, env: Env) -> None:
         if isinstance(node, ast.Name):
-            self._mutated.add(node.id)
-            info = self._current
-            if info is not None and any(p.name == node.id for p in info.params):
-                self._blockers.append(f"mutates parameter `{node.id}`")
+            roots = self._roots(node, node.id)
+            params = (
+                self._aliases.param_roots(roots)
+                if self._aliases is not None
+                else roots & {p.name for p in (self._current.params if self._current else [])}
+            )
+            self._mutated.update(params)
+            if params:
+                for name in sorted(params):
+                    self._blockers.append(f"mutates parameter `{name}`")
                 self._external_writes = True
-            elif node.id in self._local_allocs:
-                self._local_writes.add(node.id)
+            elif self._aliases is not None and self._aliases.only_local(roots):
+                self._local_writes.update(roots)
             else:
                 self._external_writes = True
             return
@@ -2524,7 +2577,11 @@ class _Checker:
         """Could a mutating callee reach anything this function does not own?"""
         if declared is not None and T.is_immutable(declared):
             return True
-        if isinstance(argument, ast.Name) and argument.id in self._local_allocs:
+        if (
+            isinstance(argument, ast.Name)
+            and self._aliases is not None
+            and self._aliases.only_local(self._roots(argument, argument.id))
+        ):
             return True
         return _is_fresh_allocation(argument)
 
@@ -2535,13 +2592,6 @@ class _Checker:
         return, so `_mark_escape` from a return statement is not counted here.
         """
         return self._shared - self._returned_names
-
-    def _note_allocation(self, name: str, value: ast.expr) -> None:
-        """Remember that `name` currently holds something this call allocated."""
-        if _is_fresh_allocation(value):
-            self._local_allocs.add(name)
-        else:
-            self._local_allocs.discard(name)
 
     def _merge_declared(self, declared: Facts, value: Facts) -> Facts:
         """Combine a declaration's contract with a value's proven facts.

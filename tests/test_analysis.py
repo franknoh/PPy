@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import textwrap
 from pathlib import Path
 
 import pytest
@@ -1115,3 +1116,191 @@ def test_the_call_binder_follows_python_argument_rules():
 
     call = ast.parse("f(a, b, *rest, c)").body[0].value
     assert len(positional_values(call.args)) == 2
+
+
+def test_the_alias_map_follows_python_binding():
+    import ast
+
+    from ppy_compiler.analysis.aliasing import EXTERNAL, analyze_aliases
+
+    source = textwrap.dedent(
+        """
+        def f(xs, ys):
+            a = xs
+            b = a
+            b.append(1)          # chain: mutates xs
+            a = []
+            a.append(2)          # killed: local now
+            c = xs if ys else ys
+            c.append(3)          # join: may be either parameter
+            pair = (xs, [0])
+            left, right = pair
+            left.append(4)       # through the tuple: may be xs
+            for row in [xs]:
+                row.append(5)    # iteration over a literal: may be xs
+            fresh = list(xs)
+            fresh.append(6)      # a copy shares nothing
+            return xs
+        """
+    )
+    fn = ast.parse(source).body[0]
+    info = analyze_aliases(fn)
+
+    def roots_of(receiver: str, ordinal: int = 0) -> frozenset:
+        seen = 0
+        for node in ast.walk(fn):
+            if (
+                isinstance(node, ast.Attribute)
+                and isinstance(node.value, ast.Name)
+                and node.value.id == receiver
+            ):
+                if seen == ordinal:
+                    return info.roots_at(node.value, receiver)
+                seen += 1
+        raise AssertionError(receiver)
+
+    assert info.param_roots(roots_of("b")) == {"xs"}
+    assert info.only_local(roots_of("a"))
+    assert info.param_roots(roots_of("c")) == {"xs", "ys"}
+    assert "xs" in info.param_roots(roots_of("left"))
+    assert "xs" in info.param_roots(roots_of("row"))
+    assert info.only_local(roots_of("fresh"))
+    # A name never seen answers conservatively.
+    assert EXTERNAL in info.roots_at(ast.Name(id="ghost"), "ghost")
+
+
+def test_purity_survives_mutating_a_local_through_an_alias(write, analyze):
+    path = write(
+        "alias_pure.ppy",
+        """
+        import ppy
+
+        @ppy.pure
+        def build(count: int) -> int:
+            out = []
+            tail = out
+            for i in range(count):
+                tail.append(i)
+            return len(out)
+        """,
+    )
+    assert not analyze(path).diagnostics.has_errors()
+
+
+def test_purity_rejects_mutating_a_parameter_through_an_alias(write, codes):
+    path = write(
+        "alias_impure.ppy",
+        """
+        import ppy
+
+        @ppy.pure
+        def push(xs: list[int]) -> int:
+            ys = xs
+            ys.append(1)
+            return len(xs)
+        """,
+    )
+    assert "E1601" in codes(path)
+
+
+def test_inference_settles_a_deep_call_chain(tmp_path: Path):
+    """Ten levels of indirection, evidence entering only at the bottom.
+
+    A fixed round count would type however many levels the count allows and
+    freeze the rest; a fixpoint types all of them or is a bug.
+    """
+    from ppy_compiler.analysis.inference import refine_with_call_sites
+    from ppy_compiler.driver.pipeline import analyze_paths, open_project
+
+    (tmp_path / "pyproject.toml").write_text("[tool.ppy]\n", encoding="utf-8")
+    depth = 10
+    lines = ["def level0(x):", "    return x * 2.0", ""]
+    for level in range(1, depth):
+        lines += [f"def level{level}(x):", f"    return level{level - 1}(x)", ""]
+    lines.append(f"print(level{depth - 1}(1.5))")
+    path = tmp_path / "chain.py"
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+    project = open_project(path)
+    project.config.strict = False
+    bundle = analyze_paths(project, [path], backend="python")
+    refine_with_call_sites(bundle, bundle.diagnostics)
+    assert not any(d.code == "E9001" for d in bundle.diagnostics)
+    for level in range(depth):
+        info = bundle.symbols.functions[f"chain.level{level}"]
+        assert str(info.params[0].type) == "float", f"level{level} was left untyped"
+        assert str(info.ret) == "float"
+
+
+def test_inference_survives_mutual_recursion(tmp_path: Path):
+    from ppy_compiler.analysis.inference import refine_with_call_sites
+    from ppy_compiler.driver.pipeline import analyze_paths, open_project
+
+    (tmp_path / "pyproject.toml").write_text("[tool.ppy]\n", encoding="utf-8")
+    path = tmp_path / "mutual.py"
+    path.write_text(
+        textwrap.dedent(
+            """
+            def is_even(n):
+                if n == 0:
+                    return True
+                return is_odd(n - 1)
+
+
+            def is_odd(n):
+                if n == 0:
+                    return False
+                return is_even(n - 1)
+
+
+            print(is_even(10), is_odd(7))
+            """
+        ).lstrip("\n"),
+        encoding="utf-8",
+    )
+    project = open_project(path)
+    project.config.strict = False
+    bundle = analyze_paths(project, [path], backend="python")
+    refine_with_call_sites(bundle, bundle.diagnostics)
+    assert not any(d.code == "E9001" for d in bundle.diagnostics)
+    for name in ("mutual.is_even", "mutual.is_odd"):
+        info = bundle.symbols.functions[name]
+        assert str(info.params[0].type) == "int"
+        assert T.is_assignable(info.ret, T.BOOL)
+
+
+def test_late_keyword_evidence_still_reaches_the_callee(tmp_path: Path):
+    """The dict arrives by keyword, from a caller typed on a later round."""
+    from ppy_compiler.analysis.inference import refine_with_call_sites
+    from ppy_compiler.driver.pipeline import analyze_paths, open_project
+
+    (tmp_path / "pyproject.toml").write_text("[tool.ppy]\n", encoding="utf-8")
+    path = tmp_path / "late.py"
+    path.write_text(
+        textwrap.dedent(
+            """
+            def sink(data):
+                return len(data)
+
+
+            def direct():
+                return sink([1])
+
+
+            def relay(payload):
+                return sink(data=payload)
+
+
+            print(direct())
+            print(relay({"a": 1}))
+            """
+        ).lstrip("\n"),
+        encoding="utf-8",
+    )
+    project = open_project(path)
+    project.config.strict = False
+    bundle = analyze_paths(project, [path], backend="python")
+    refine_with_call_sites(bundle, bundle.diagnostics)
+    sink = bundle.symbols.functions["late.sink"]
+    assert "dict[str, int]" in str(sink.params[0].type)
+    assert "list[int]" in str(sink.params[0].type)
