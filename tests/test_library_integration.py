@@ -631,17 +631,17 @@ def test_each_plugin_runtime_has_its_own_dependency_group():
     data = tomllib.loads((root / "pyproject.toml").read_text(encoding="utf-8"))
 
     groups = data["dependency-groups"]
-    assert {"dev", "torch", "jax", "web", "plugins", "all"} <= set(groups)
+    assert {"dev", "torch", "jax", "uvicorn", "plugins", "all"} <= set(groups)
 
     # `plugins` pulls in every runtime group, and `all` adds the base group.
     included = {entry["include-group"] for entry in groups["plugins"] if isinstance(entry, dict)}
-    assert included == {"torch", "jax", "web"}
+    assert included == {"torch", "jax", "uvicorn"}
     assert {"dev", "plugins"} == {
         entry["include-group"] for entry in groups["all"] if isinstance(entry, dict)
     }
 
     extras = data["project"]["optional-dependencies"]
-    assert {"llvm", "numpy", "torch", "jax", "web", "pydantic"} <= set(extras)
+    assert {"llvm", "numpy", "torch", "jax", "uvicorn", "pydantic"} <= set(extras)
 
     # Only `dev` is installed by default; a plugin runtime is opt-in.
     assert data["tool"]["uv"]["default-groups"] == ["dev"]

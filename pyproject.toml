@@ -14,7 +14,7 @@ llvm = ["llvmlite>=0.44"]
 numpy = ["numpy>=1.26"]
 torch = ["torch>=2.4", "ninja>=1.11"]
 jax = ["jax>=0.4", "jaxlib>=0.4", "flatbuffers>=24.0"]
-web = ["uvicorn>=0.30"]
+uvicorn = ["uvicorn>=0.30"]
 pydantic = ["pydantic>=2.0"]
 
 [project.scripts]
@@ -37,11 +37,11 @@ dev = [
 torch = ["torch>=2.4", "ninja>=1.11"]
 # flatbuffers is what jax.export uses to serialize StableHLO (spec 21.3).
 jax = ["jax[cuda12]>=0.4", "flatbuffers>=24.0"]
-web = ["uvicorn>=0.30", "httpx>=0.27"]
+uvicorn = ["uvicorn>=0.30", "httpx>=0.27"]
 plugins = [
     { include-group = "torch" },
     { include-group = "jax" },
-    { include-group = "web" },
+    { include-group = "uvicorn" },
 ]
 all = [
     { include-group = "dev" },

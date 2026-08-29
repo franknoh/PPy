@@ -21,7 +21,7 @@ you install only what you use:
 | extra | enables |
 |---|---|
 | `llvm` | the native backend (llvmlite) |
-| `numpy` / `pydantic` / `web` | the matching plugin |
+| `numpy` / `pydantic` / `uvicorn` | the matching plugin |
 | `torch` / `jax` | the matching plugin, resolved from PyPI — pick your own CUDA index in your project if you need one |
 
 Everything degrades cleanly: a missing library only disables its plugin, and

@@ -992,7 +992,7 @@ torch = [
     { name = "ninja" },
     { name = "torch" },
 ]
-web = [
+uvicorn = [
     { name = "uvicorn" },
 ]
 
@@ -1039,7 +1039,7 @@ torch = [
     { name = "ninja" },
     { name = "torch" },
 ]
-web = [
+uvicorn = [
     { name = "httpx" },
     { name = "uvicorn" },
 ]
@@ -1056,9 +1056,9 @@ requires-dist = [
     { name = "pydantic", marker = "extra == 'pydantic'", specifier = ">=2.0" },
     { name = "torch", marker = "extra == 'torch'", specifier = ">=2.4", index = "https://download.pytorch.org/whl/cu128" },
     { name = "typing-extensions", specifier = ">=4.12" },
-    { name = "uvicorn", marker = "extra == 'web'", specifier = ">=0.30" },
+    { name = "uvicorn", marker = "extra == 'uvicorn'", specifier = ">=0.30" },
 ]
-provides-extras = ["llvm", "numpy", "torch", "jax", "web", "pydantic"]
+provides-extras = ["llvm", "numpy", "torch", "jax", "uvicorn", "pydantic"]
 
 [package.metadata.requires-dev]
 all = [
@@ -1103,7 +1103,7 @@ torch = [
     { name = "ninja", specifier = ">=1.11" },
     { name = "torch", specifier = ">=2.4", index = "https://download.pytorch.org/whl/cu128" },
 ]
-web = [
+uvicorn = [
     { name = "httpx", specifier = ">=0.27" },
     { name = "uvicorn", specifier = ">=0.30" },
 ]
