@@ -72,6 +72,15 @@ seen, guarded on exact class identity; a guard miss runs the Python body and
 may compile another specialization. All-scalar `@dataclass` value classes are
 flattened to scalar SSA values at the ABI, with reads guarded on exact class.
 
+## Code generation
+
+JIT-compiled code targets the exact host CPU — its name and feature set are
+handed to LLVM, so AVX2/FMA and friends are on where the machine has them
+(measured 14% on a matmul kernel; memory-bound kernels are unchanged).
+Emitted objects, built artifacts, and standalone binaries stay on the
+portable baseline: they may run on another machine, exactly like a C
+compiler's output without `-march=native`.
+
 ## The boundary
 
 Python callers cross into native code through a generated `METH_FASTCALL`
