@@ -91,6 +91,20 @@ def test_build_writes_a_binding_manifest(project: Path):
 
 
 @requires_toolchain
+def test_build_ships_the_python_abi_wrapper(project: Path):
+    """The artifact carries the compiled boundary, so a launcher never pays ctypes."""
+    result = _build(project)
+    assert result.returncode == 0, result.stderr
+
+    native = project / ".ppy-cache" / "native"
+    manifest = json.loads((native / "ppy-bindings.json").read_text())
+    wrappers = manifest["wrappers"]
+    assert wrappers is not None
+    assert (native / wrappers["library"]).is_file()
+    assert "app.total" in wrappers["entries"]
+
+
+@requires_toolchain
 def test_build_emits_objects_and_links_a_library(project: Path):
     result = _build(project)
     assert result.returncode == 0, result.stderr

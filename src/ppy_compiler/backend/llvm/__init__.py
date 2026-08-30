@@ -5,6 +5,7 @@ from __future__ import annotations
 import ast
 import contextlib
 import json
+import shutil
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -449,12 +450,29 @@ def compile_project(  # type: ignore[no-untyped-def]
             "search_paths": [str(path) for path in bundle.project.search_paths],
             "safeguards": bundle.project.config.llvm.safeguards or "hoisted",
         }
+    wrapper_section = None
+    if signatures:
+        wrappers = build_wrappers(
+            bundle.project.root.name,
+            signatures,
+            bundle.project.config.cache_path,
+            notify=reporter.note,
+        )
+        if wrappers.ok and wrappers.path is not None:
+            shipped = build_directory / wrappers.path.name
+            if shipped != wrappers.path:
+                shipped.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(wrappers.path, shipped)
+            wrapper_section = {"library": shipped.name, "entries": dict(wrappers.entries)}
+        elif wrappers.reason:
+            artifacts.notes.append(f"the artifact uses the slower boundary: {wrappers.reason}")
     artifacts.manifest = write_manifest(
         build_directory / "ppy-bindings.json",
         signatures,
         library=artifacts.library,
         fused=fused,
         program=program,
+        wrappers=wrapper_section,
     )
 
     if entry is not None:
@@ -559,7 +577,6 @@ def compile_and_run(  # type: ignore[no-untyped-def]
                 info=lowered.info,
                 wrappers=wrappers,
                 qualname=qualname,
-                layouts=layouts,
                 engine=engine,
             )
         for symbol, loop in native.fused.items():
@@ -601,26 +618,6 @@ def compile_and_run(  # type: ignore[no-untyped-def]
     return result.exit_code
 
 
-def _value_class_types(signature, fallback, layouts):  # type: ignore[no-untyped-def]
-    """The runtime classes the generated wrapper guards value parameters on.
-
-    Resolved from the defining module, so a class the wrapper cannot see means
-    no fast entry rather than a wrong one.
-    """
-    namespace = getattr(fallback, "__globals__", None)
-    found = []
-    for parameter in signature.parameters:
-        if not parameter.is_object:
-            continue
-        if namespace is None:
-            return None
-        cls = namespace.get(parameter.class_name.rpartition(".")[2])
-        if not isinstance(cls, type):
-            return None
-        found.append(cls)
-    return tuple(found)
-
-
 def _binding_name(info) -> str:  # type: ignore[no-untyped-def]
     """How a generated module names this entry point when it binds it."""
     if info.owner:
@@ -649,7 +646,6 @@ class _Binder(LibraryBinder):
         info=None,
         wrappers=None,
         qualname: str = "",
-        layouts=None,
         engine=None,
     ) -> None:
         self._entries.setdefault(module, {})[function] = (
@@ -659,7 +655,6 @@ class _Binder(LibraryBinder):
             info,
             wrappers,
             qualname,
-            layouts or {},
             engine,
         )
 
@@ -681,25 +676,36 @@ class _Binder(LibraryBinder):
         return binding.wrapper
 
     def bind(self, module: str, function: str, fallback):  # type: ignore[no-untyped-def]
+        from ppy_runtime.binding import adopt, observation_wanted, value_class_types
+
         from .runtime import bind as make_binding
 
         entry = self._entries.get(module, {}).get(function)
         if entry is None or not callable(fallback):
             return fallback
-        signature, address, specializer, info, wrappers, qualname, layouts, engine = entry
+        signature, address, specializer, info, wrappers, qualname, engine = entry
+        policy = SpecializationPolicy.of(info) if info is not None else None
         fast_entry = None
         register = None
         if wrappers is not None and wrappers.ok:
-            types = _value_class_types(signature, fallback, layouts)
+            types = value_class_types(signature, fallback)
             if types is not None:
-                fast_entry = wrappers.bind(qualname, address, types)
                 register = wrappers.registrar(qualname)
+                if not (observation_wanted(specializer, policy, info) and register is not None):
+                    # Nothing to watch for: the wrapper holds the fallback in C
+                    # and no Python frame stands on the call path at all.
+                    direct = wrappers.bind(qualname, address, types, fallback)
+                    if direct is not None:
+                        binding = adopt(signature, direct, fallback, owner=(engine, wrappers))
+                        self.bindings.append(binding)
+                        return direct
+                fast_entry = wrappers.bind(qualname, address, types)
         binding = make_binding(
             signature,
             address,
             fallback,
             specializer=specializer,
-            policy=SpecializationPolicy.of(info) if info is not None else None,
+            policy=policy,
             info=info,
             fast_entry=fast_entry,
             owner=(engine, wrappers),

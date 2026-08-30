@@ -33,13 +33,18 @@ class BuiltWrappers:
     def ok(self) -> bool:
         return self.module is not None
 
-    def bind(self, qualname: str, address: int, types: tuple) -> object | None:
-        """Point one wrapper at its native code, and hand back the fast entry."""
+    def bind(self, qualname: str, address: int, types: tuple, fallback=None) -> object | None:  # type: ignore[no-untyped-def]
+        """Point one wrapper at its native code, and hand back the fast entry.
+
+        With `fallback`, the wrapper holds the Python implementation itself and
+        invokes it from C when a guard refuses the call; without one it returns
+        `NotImplemented` and the caller must watch for it.
+        """
         index = self.entries.get(qualname)
         if self.module is None or index is None:
             return None
         try:
-            getattr(self.module, f"bind_{index}")(address, types)
+            getattr(self.module, f"bind_{index}")(address, types, fallback)
         except Exception:  # noqa: BLE001 - a refusal keeps the slower path
             return None
         return getattr(self.module, f"call_{index}", None)

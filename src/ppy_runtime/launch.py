@@ -9,17 +9,35 @@ No parsing, no analysis, no LLVM: those all happened at build time.
 from __future__ import annotations
 
 import ctypes
+import importlib.util
 import json
 import sys
 from pathlib import Path
 
-from .binding import bind
+from .binding import bind, value_class_types
 from .dispatch import LibraryBinder
 from .execute import execute, format_traceback
 from .generated import GeneratedModule
 from .manifest import Manifest, ManifestError, load
 
 __all__ = ["main"]
+
+
+def _wrapper_module(manifest: Manifest):  # type: ignore[no-untyped-def]
+    """Import the wrapper extension the build shipped, or None without one."""
+    if manifest.wrapper_library is None:
+        return None
+    # The module name is the filename before the interpreter's ABI tag.
+    name = manifest.wrapper_library.name.partition(".")[0]
+    spec = importlib.util.spec_from_file_location(name, manifest.wrapper_library)
+    if spec is None or spec.loader is None:
+        return None
+    extension = importlib.util.module_from_spec(spec)
+    try:
+        spec.loader.exec_module(extension)
+    except Exception:  # noqa: BLE001 - a stale wrapper means the slower path
+        return None
+    return extension
 
 
 class PrebuiltBinder(LibraryBinder):
@@ -29,11 +47,27 @@ class PrebuiltBinder(LibraryBinder):
         super().__init__()
         self._library = library
         self._entries: dict[str, dict[str, object]] = {}
+        self._wrappers = _wrapper_module(manifest)
+        self._wrapper_entries = manifest.wrapper_entries or {}
         for entry in manifest.entries:
             self._entries.setdefault(entry.module, {})[entry.binding] = entry.signature
 
     def names(self, module: str) -> frozenset[str]:
         return frozenset(self._entries.get(module, {}))
+
+    def _fast_entry(self, signature, address: int, fallback):  # type: ignore[no-untyped-def]
+        """Bind the shipped C wrapper, which holds the fallback itself."""
+        index = self._wrapper_entries.get(signature.qualname)
+        if self._wrappers is None or index is None:
+            return None
+        types = value_class_types(signature, fallback)
+        if types is None:
+            return None
+        try:
+            getattr(self._wrappers, f"bind_{index}")(address, types, fallback)
+        except Exception:  # noqa: BLE001 - a refusal keeps the slower path
+            return None
+        return getattr(self._wrappers, f"call_{index}", None)
 
     def bind(self, module: str, function: str, fallback):  # type: ignore[no-untyped-def]
         signature = self._entries.get(module, {}).get(function)
@@ -46,6 +80,9 @@ class PrebuiltBinder(LibraryBinder):
         address = ctypes.cast(symbol, ctypes.c_void_p).value or 0
         if not address:
             return fallback
+        entry = self._fast_entry(signature, address, fallback)
+        if entry is not None:
+            return entry
         binding = bind(signature, address, fallback, owner=self._library)
         return binding.wrapper
 

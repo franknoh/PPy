@@ -161,8 +161,10 @@ program with nothing native simply binds nothing, like `ppy run` would.
 enabled and permitted, staged functions are exported here too.
 
 The artifact is complete: the manifest carries the full native ABI and a
-program section, and `generated/` holds the optimized Python the build wrote,
-so the launcher loads `ppy_runtime`, binds, and executes — it does not
+program section, `generated/` holds the optimized Python the build wrote,
+and the compiled `METH_FASTCALL` boundary wrapper ships alongside the
+library — a launched artifact crosses the same fast boundary a JIT run
+does, not a ctypes one. The launcher loads `ppy_runtime`, binds, and executes — it does not
 discover a project, parse, analyze, or touch LLVM, and it keeps working with
 `ppy_compiler` uninstalled. Launch wall time is ~170 ms on the reference
 machine against ~2 s for a cold `ppy run`; `examples/bench_startup.py`

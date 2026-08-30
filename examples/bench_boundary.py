@@ -14,6 +14,7 @@ from pathlib import Path
 
 PROGRAM = """import array
 import time
+from collections.abc import Callable
 
 import ppy
 from ppy import Buffer
@@ -44,23 +45,52 @@ def summed(xs: Buffer[int]) -> int:
     return sum(xs)
 
 
-def rate(label: str, call, rounds: int) -> None:
+# Module-level aliases and per-iteration-varying arguments: both defeat the
+# optimizer, which happily folds a small pure call with constant arguments
+# into its answer -- and a folded call measures nothing.
+plain = tiny
+native = tiny_native
+looped = loop100
+buffered = summed
+values = array.array("q", range(100))
+overflowing: list[int] = [1 << 100]
+big: int = overflowing[0]
+
+
+def drive_plain(i: int) -> None:
+    plain(i, 3)
+
+
+def drive_native(i: int) -> None:
+    native(i, 3)
+
+
+def drive_loop(i: int) -> None:
+    looped(100)
+
+
+def drive_buffer(i: int) -> None:
+    buffered(values)
+
+
+def drive_guard(i: int) -> None:
+    native(big, i)
+
+
+def rate(label: str, call: Callable[[int], None], rounds: int) -> None:
     started = time.perf_counter()
-    for _ in range(rounds):
-        call()
+    for i in range(rounds):
+        call(i)
     elapsed = time.perf_counter() - started
     print(f"{label:<28s} {elapsed / rounds * 1e9:9.0f} ns/call")
 
 
 def main() -> None:
-    xs = array.array("q", range(100))
-    overflowing: list[int] = [1 << 100]
-    big: int = overflowing[0]
-    rate("tiny, kept in Python", lambda: tiny(2, 3), 200000)
-    rate("tiny, forced native", lambda: tiny_native(2, 3), 200000)
-    rate("native loop, n=100", lambda: loop100(100), 200000)
-    rate("borrowed buffer, n=100", lambda: summed(xs), 200000)
-    rate("guard failure -> fallback", lambda: tiny_native(big, 3), 200000)
+    rate("tiny, kept in Python", drive_plain, 200000)
+    rate("tiny, forced native", drive_native, 200000)
+    rate("native loop, n=100", drive_loop, 200000)
+    rate("borrowed buffer, n=100", drive_buffer, 200000)
+    rate("guard failure -> fallback", drive_guard, 200000)
 
 
 main()

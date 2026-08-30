@@ -72,6 +72,20 @@ seen, guarded on exact class identity; a guard miss runs the Python body and
 may compile another specialization. All-scalar `@dataclass` value classes are
 flattened to scalar SSA values at the ABI, with reads guarded on exact class.
 
+## The boundary
+
+Python callers cross into native code through a generated `METH_FASTCALL`
+wrapper that parses, guards, calls, and boxes in C — and holds the Python
+implementation itself, so a refused guard is a C-to-Python call, not a
+`NotImplemented` bounced through a Python frame. No Python code stands on
+the call path at all (`@ppy.jit` keeps a thin Python watcher only while it
+is still learning which argument shapes repeat). Measured against a plain
+Python call at 29 ns: 51 ns forced-native two-int call, 70 ns borrowed
+buffer, 80 ns guard failure into the fallback
+(`examples/bench_boundary.py`). Built artifacts ship the compiled wrapper
+and bind through it at launch; the ctypes trampoline remains only as the
+fallback where no C toolchain exists (`W2004` says so once).
+
 ## Threads
 
 Generated wrappers release the GIL around native calls

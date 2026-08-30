@@ -39,6 +39,10 @@ class Manifest:
     search_paths: list[Path]
     generated: dict[str, Path]
     safeguards: str
+    #: The prebuilt CPython-ABI wrapper extension, when the build shipped one:
+    #: its path next to the manifest, and the wrapper index per qualname.
+    wrapper_library: Path | None = None
+    wrapper_entries: dict[str, int] | None = None
 
 
 def _signature(payload: dict) -> NativeSignature:
@@ -114,6 +118,17 @@ def load(path: Path) -> Manifest:
         target = path.parent / Path(filename).name
         candidate = path.parent / "generated" / Path(filename).name
         generated[module] = candidate if candidate.is_file() else target
+    wrapper_library = None
+    wrapper_entries = None
+    wrappers = payload.get("wrappers")
+    if isinstance(wrappers, dict) and wrappers.get("library"):
+        candidate = path.parent / Path(wrappers["library"]).name
+        # A missing wrapper is a slower boundary, not a broken artifact.
+        if candidate.is_file():
+            wrapper_library = candidate
+            wrapper_entries = {
+                str(name): int(index) for name, index in wrappers.get("entries", {}).items()
+            }
     return Manifest(
         path=path,
         library=library,
@@ -122,4 +137,6 @@ def load(path: Path) -> Manifest:
         search_paths=[Path(p) for p in program.get("search_paths", ())],
         generated=generated,
         safeguards=program.get("safeguards", "hoisted"),
+        wrapper_library=wrapper_library,
+        wrapper_entries=wrapper_entries,
     )

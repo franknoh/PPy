@@ -1776,7 +1776,7 @@ def test_the_generator_covers_every_parameter_shape(write, analyze):
     assert "PyBuffer_Release" in source
 
 
-def _wrapped(write, analyze, name, source, function):
+def _wrapped(write, analyze, name, source, function, fallback=None):
     """Build a module, compile its wrapper, and bind one entry point."""
     from ppy_compiler.backend.llvm.wrapper_build import build_wrappers, wrapper_toolchain
 
@@ -1799,7 +1799,7 @@ def _wrapped(write, analyze, name, source, function):
         pytest.skip(built.reason)
 
     lowered = module.functions[qualname]
-    entry = built.bind(qualname, engine.address(lowered.signature.symbol), ())
+    entry = built.bind(qualname, engine.address(lowered.signature.symbol), (), fallback)
     assert entry is not None
     # The engine owns the compiled code: dropping it would free what the
     # wrapper points at, so it is handed back with the entry.
@@ -1917,6 +1917,37 @@ def test_the_binding_prefers_the_generated_wrapper(write, analyze):
     # Beyond the machine range the guard fails and the Python body answers.
     assert binding.wrapper(10**30) == 10**60
     assert binding.fallbacks == 1
+
+
+def test_a_bound_fallback_is_invoked_from_c(write, analyze):
+    calls = []
+
+    def fallback(x):
+        calls.append(x)
+        return x * x
+
+    entry, _owner = _wrapped(write, analyze, "heldwide", SCALARS, "widen", fallback)
+    assert entry(7) == 49 and not calls, "the native path answers without Python"
+    assert entry(10**30) == 10**60, "the guard hands the call to the held fallback"
+    assert calls == [10**30]
+    assert entry(10**10) == 10**20 and calls[-1] == 10**10, "an overflow does too"
+
+
+def test_the_wrong_arity_reaches_the_bound_fallback(write, analyze):
+    entry, _owner = _wrapped(write, analyze, "heldargs", SCALARS, "widen", lambda *a: len(a))
+    assert entry(6) == 36
+    assert entry(1, 2, 3) == 3, "a wrong arity goes to the fallback, never to native code"
+
+
+def test_a_fallback_error_propagates_through_the_wrapper(write, analyze):
+    def fallback(x):
+        raise ValueError("told you so")
+
+    entry, _owner = _wrapped(write, analyze, "heldraise", SCALARS, "widen", fallback)
+    assert entry(5) == 25
+    with pytest.raises(ValueError, match="told you so"):
+        entry(10**30)
+    assert sys.exc_info() == (None, None, None)
 
 
 MIXED = """

@@ -116,11 +116,13 @@ def write_manifest(
     library: Path | None,
     fused: dict[str, tuple[int, int]] | None = None,
     program: dict | None = None,
+    wrappers: dict | None = None,
 ) -> Path:
     """Write the PPY Native Binding Manifest for the built symbols (spec 26.2)."""
     payload = {
         "abi_version": MANIFEST_ABI_VERSION,
         "program": program,
+        "wrappers": wrappers,
         # By name: the library sits next to the manifest, and the pair must
         # survive being moved or shipped together.
         "native_library": library.name if library else None,

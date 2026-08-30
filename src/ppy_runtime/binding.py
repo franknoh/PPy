@@ -14,7 +14,7 @@ from dataclasses import dataclass, field
 
 from .abi import STATUS_OK, NativeParam, NativeSignature
 
-__all__ = ["NativeBinding", "bind"]
+__all__ = ["NativeBinding", "adopt", "bind", "observation_wanted", "value_class_types"]
 
 _I64_LOW = -(1 << 63)
 _I64_HIGH = (1 << 63) - 1
@@ -39,6 +39,54 @@ _ELEMENT_FORMATS = {"int": ("q", "l"), "float": ("d",)}
 
 class GuardFailed(Exception):
     """A runtime guard rejected an argument, so the Python path must run."""
+
+
+def observation_wanted(specializer: object, policy: object, info: object) -> bool:
+    """Whether this function still wants Python watching for specialization."""
+    return bool(
+        specializer is not None
+        and policy is not None
+        and policy.enabled  # type: ignore[attr-defined]
+        and policy.maximum > 0  # type: ignore[attr-defined]
+        and info is not None
+    )
+
+
+def value_class_types(signature: NativeSignature, fallback: Callable[..., object]) -> tuple | None:
+    """The runtime classes a generated wrapper guards value parameters on.
+
+    Resolved from the defining module, so a class the wrapper cannot see means
+    no fast entry rather than a wrong one.
+    """
+    namespace = getattr(fallback, "__globals__", None)
+    found = []
+    for parameter in signature.parameters:
+        if not parameter.is_object:
+            continue
+        if namespace is None:
+            return None
+        cls = namespace.get(parameter.class_name.rpartition(".")[2])
+        if not isinstance(cls, type):
+            return None
+        found.append(cls)
+    return tuple(found)
+
+
+def adopt(
+    signature: NativeSignature,
+    entry: Callable[..., object],
+    fallback: Callable[..., object],
+    *,
+    owner: object | None = None,
+) -> NativeBinding:
+    """Adopt a generated wrapper that already holds its Python fallback in C.
+
+    Nothing stands between the caller and the C entry point, so per-call
+    statistics are not collected on this path.
+    """
+    return NativeBinding(
+        signature=signature, wrapper=entry, fallback=fallback, fast_entry=entry, owner=owner
+    )
 
 
 @dataclass(slots=True)
@@ -111,14 +159,9 @@ def bind(
     ]
     finalizers = [_result_for(atom) for atom in signature.returns]
     returns_tuple = signature.returns_tuple
-    observing = bool(
-        specializer is not None
-        and policy is not None
-        and policy.enabled
-        and policy.maximum > 0
-        and info is not None
-        # Without a way to register one, a specialization could not be reached.
-        and (fast_entry is None or register is not None)
+    # Without a way to register one, a specialization could not be reached.
+    observing = observation_wanted(specializer, policy, info) and (
+        fast_entry is None or register is not None
     )
     binding = NativeBinding(
         signature=signature,
