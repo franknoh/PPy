@@ -82,6 +82,7 @@ sound fallback, and never the rest.
 |---|---|
 | `E1801` | The selected backend is unavailable in this environment. |
 | `E1802` | A construct is not supported by the selected backend. |
+| `E1803` | A standalone build requires a fully native reachable graph. |
 
 ## Remarks
 

@@ -181,9 +181,17 @@ def _return_atoms(t: T.Type) -> tuple[str, ...] | None:
 
 
 def eligible(
-    info: FunctionInfo, analysis: FunctionAnalysis, layouts: ClassLayouts | None = None
+    info: FunctionInfo,
+    analysis: FunctionAnalysis,
+    layouts: ClassLayouts | None = None,
+    *,
+    allow_io: bool = False,
 ) -> tuple[bool, str]:
-    """Can this function be lowered to a native scalar entry point?"""
+    """Can this function be lowered to a native scalar entry point?
+
+    `allow_io` is the standalone build's dispensation: printing goes through
+    native shims there, so the IO effect alone is not disqualifying.
+    """
     if info.is_async or info.is_generator:
         return False, "coroutines and generators use the boxed runtime"
     for name in sorted(analysis.mutated_params):
@@ -197,6 +205,8 @@ def eligible(
         return False, "writes through a target the compiler cannot identify"
 
     violations = set(analysis.effects.violations())
+    if allow_io:
+        violations.discard(Effect.IO)
     if analysis.mutated_params:
         # Those writes land in memory the caller lent us, and nowhere else.
         violations.discard(Effect.WRITE_OBJECT)
@@ -208,9 +218,13 @@ def eligible(
             return False, "variadic parameters have no native ABI"
         if _native_param(param.name, param.type, layouts) is None:
             return False, f"parameter `{param.name}` is `{param.type}`, which has no native ABI"
-    if _return_atoms(info.ret) is None:
+    if _return_atoms(info.ret) is None and not (allow_io and _returns_none(info.ret)):
         return False, f"returns `{info.ret}`, which has no native ABI"
     return True, ""
+
+
+def _returns_none(t: T.Type) -> bool:
+    return t == T.NONE
 
 
 #: Directives that are an explicit request for the native boundary.
@@ -295,6 +309,7 @@ def lower_module(
     functions: dict[str, tuple[FunctionInfo, FunctionAnalysis, ast.FunctionDef]],
     layouts: ClassLayouts | None = None,
     safeguards: str = "hoisted",
+    standalone: bool = False,
 ) -> LoweringResult:
     """Emit an LLVM module for every eligible function."""
     from llvmlite import ir
@@ -305,7 +320,7 @@ def lower_module(
     candidates: dict[str, tuple[FunctionInfo, FunctionAnalysis, ast.FunctionDef]] = {}
     rejected: dict[str, str] = {}
     for qualname, (info, analysis, node) in functions.items():
-        ok, reason = eligible(info, analysis, layouts)
+        ok, reason = eligible(info, analysis, layouts, allow_io=standalone)
         if ok:
             candidates[qualname] = (info, analysis, node)
         else:
@@ -332,6 +347,7 @@ def lower_module(
                 declarations,
                 layouts=layouts,
                 safeguards=safeguards,
+                standalone=standalone,
             ).run(node)
         except Unsupported as exc:
             rejected[qualname] = str(exc)
@@ -494,6 +510,7 @@ class _FunctionLowering:
         constants=None,
         layouts=None,
         safeguards: str = "hoisted",
+        standalone: bool = False,
     ) -> None:
         # Strict Python floating-point ordering unless the function opted out.
         self.fp_flags = list(FASTMATH_FLAGS) if info.directive("fastmath") is not None else []
@@ -520,6 +537,8 @@ class _FunctionLowering:
         self.fallback_block = None
         self.safeguards = safeguards
         self.hoist_guards = safeguards != "inline"
+        self.standalone = standalone
+        self._strings = 0
         #: Open guard blocks, one per active hoistable loop, outermost first.
         self._guard_sites: list = []
         #: Induction variable name -> (lo, hi, depth), both IR values that
@@ -635,6 +654,10 @@ class _FunctionLowering:
                 return
             case ast.Expr(value=ast.Constant()):
                 return
+            case ast.Expr(value=ast.Call()) if self.standalone:
+                # A statement-level call: evaluated for its effect, which in
+                # a standalone body is a native call or a print shim.
+                self._expr(node.value)
             case _:
                 raise Unsupported(f"`{type(node).__name__}` has no native lowering")
 
@@ -654,6 +677,14 @@ class _FunctionLowering:
         self.builder.ret(ir.Constant(ir.IntType(32), STATUS_OK))
 
     def _return_default(self) -> None:
+        if self.info.ret == T.NONE:
+            # `-> None` falls off the end returning None, which the ABI
+            # spells as a zero it will never read.
+            ir = self.ir
+            zero = ir.Constant(ir.IntType(64), 0)
+            self.builder.store(zero, self.out)
+            self.builder.ret(ir.Constant(ir.IntType(32), STATUS_OK))
+            return
         raise Unsupported("control flow can fall off the end without returning a value")
 
     def _assign(self, node: ast.Assign) -> None:
@@ -1156,6 +1187,8 @@ class _FunctionLowering:
         if node.keywords:
             raise Unsupported("keyword arguments have no native ABI")
         target = ast.unparse(node.func)
+        if self.standalone and target == "print":
+            return self._standalone_print(node)
         if target.startswith("math."):
             return self._math_call(target.removeprefix("math."), node)
         if target == "len" and len(node.args) == 1:
@@ -1178,6 +1211,57 @@ class _FunctionLowering:
             if qualname.rpartition(".")[2] == target:
                 return self._native_call(function, signature, qualname, node)
         raise Unsupported(f"`{target}` has no native lowering")
+
+    def _standalone_print(self, node: ast.Call) -> _Value:
+        """`print` of scalars and string literals, through the C support shims.
+
+        A standalone binary has no CPython to print for it. Integers,
+        booleans, and literal text cover the narrow first slice; floats wait
+        until native formatting can reproduce Python's shortest-round-trip
+        repr rather than an almost-right one.
+        """
+        ir = self.ir
+        i64 = ir.IntType(64)
+        text_pointer = ir.IntType(8).as_pointer()
+
+        def shim(name: str, *types):  # type: ignore[no-untyped-def]
+            existing = self.module.globals.get(name)
+            if existing is not None:
+                return existing
+            return ir.Function(self.module, ir.FunctionType(ir.VoidType(), list(types)), name=name)
+
+        for index, argument in enumerate(node.args):
+            if index:
+                self.builder.call(shim("ppy_rt_print_sep"), [])
+            if isinstance(argument, ast.Constant) and isinstance(argument.value, str):
+                pointer, length = self._string_constant(argument.value)
+                self.builder.call(
+                    shim("ppy_rt_print_str", text_pointer, i64),
+                    [pointer, ir.Constant(i64, length)],
+                )
+                continue
+            value = self._expr(argument)
+            if value.scalar == "int":
+                self.builder.call(shim("ppy_rt_print_i64", i64), [value.value])
+            elif value.scalar == "bool":
+                self.builder.call(shim("ppy_rt_print_bool", ir.IntType(8)), [value.value])
+            else:
+                raise Unsupported("only integers, booleans, and string literals print natively")
+        self.builder.call(shim("ppy_rt_print_nl"), [])
+        return _Value(ir.Constant(i64, 0), "int")
+
+    def _string_constant(self, text: str):  # type: ignore[no-untyped-def]
+        ir = self.ir
+        data = bytearray(text.encode("utf-8"))
+        array_type = ir.ArrayType(ir.IntType(8), len(data))
+        name = f"ppy.str.{self._strings}"
+        self._strings += 1
+        variable = ir.GlobalVariable(self.module, array_type, name=name)
+        variable.global_constant = True
+        variable.linkage = "private"
+        variable.initializer = ir.Constant(array_type, data)
+        pointer = self.builder.bitcast(variable, ir.IntType(8).as_pointer())
+        return pointer, len(data)
 
     def _extremum(self, target: str, node: ast.Call) -> _Value:
         """`min(a, b, ...)` and `max(a, b, ...)` over scalars.

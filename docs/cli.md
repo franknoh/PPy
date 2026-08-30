@@ -168,6 +168,25 @@ discover a project, parse, analyze, or touch LLVM, and it keeps working with
 machine against ~2 s for a cold `ppy run`; `examples/bench_startup.py`
 measures the categories separately.
 
+### `--standalone`
+
+```bash
+ppy build --standalone app.ppy
+```
+
+Links a fully native executable with **no CPython inside** — `ldd` shows
+libc and nothing else, and startup is C startup (~a few ms). The reachable
+graph from `main` must be entirely native: functions the hybrid path could
+lower, plus `print` of integers, booleans, and string literals through C
+shims (floats wait until native formatting can reproduce Python's
+shortest-round-trip repr exactly). Anything else is `E1803` with the path
+that reaches it, never a workaround. There is no Python to fall back to, so
+in `--safe` mode a failed guard aborts with a message instead of retrying
+in Python; the default wrap-semantics build has almost no guards left to
+fail. On the reference machine the collatz program runs plain CPython in
+~1.2 s, the hybrid launcher in ~170 ms, and the standalone binary in
+~35 ms total.
+
 ## `ppy explain` — why it compiled that way
 
 ```bash

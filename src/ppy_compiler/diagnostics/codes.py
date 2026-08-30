@@ -44,6 +44,7 @@ CODES: dict[str, str] = {
     "E1702": "`@ppy.native(require=True)` could not be satisfied without an opaque Python call.",
     "E1801": "The selected backend is unavailable in this environment.",
     "E1802": "A construct is not supported by the selected backend.",
+    "E1803": "A standalone build requires a fully native reachable graph.",
     "W2001": "A module is shadowed by a same-named source with a different extension.",
     "W2002": "A `bool` value takes part in arithmetic, which is legal but usually unintended.",
     "W2003": "Unknown `Annotated` metadata was preserved but not interpreted.",
@@ -52,7 +53,10 @@ CODES: dict[str, str] = {
     "R3003": "A list parameter is close to being a borrowed buffer but something blocks it.",
     "E9001": "An internal analysis failed to converge; the result cannot be trusted.",
     "R3002": "The converter promoted a list parameter to a borrowed buffer.",
-    "R3004": "A native-eligible function stays on the Python boundary; crossing costs more than it saves.",
+    "R3004": (
+        "A native-eligible function stays on the Python boundary; "
+        "crossing costs more than it saves."
+    ),
     "R3001": "An optimization remark.",
 }
 

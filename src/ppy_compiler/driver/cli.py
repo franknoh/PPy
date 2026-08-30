@@ -79,6 +79,12 @@ def build_parser() -> argparse.ArgumentParser:
     build = subparsers.add_parser("build", help="compile without running")
     build.add_argument("target", type=Path)
     build.add_argument(
+        "--standalone",
+        action="store_true",
+        help="link a fully native executable with no CPython inside; the "
+        "reachable graph from `main` must be entirely native",
+    )
+    build.add_argument(
         "--safe",
         action="store_true",
         help="keep the Python-integer overflow guards; without it a build "

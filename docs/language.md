@@ -128,9 +128,10 @@ caller.
 
 Any observable difference between the three is a compiler bug. The test suite
 and `examples/run_all.py` compare all three on every example. `ppy build`
-produces the third path ahead of time: the launcher it emits re-enters the
-same pipeline and the same guarded bindings, taking machine code from the
-library built next to it instead of a JIT.
+produces the third path ahead of time: its launcher runs through
+`ppy_runtime` with machine code from the library built next to it, and
+`ppy build --standalone` goes all the way — a native executable with no
+CPython inside, for programs whose reachable graph is entirely native.
 
 ## Native lowering
 

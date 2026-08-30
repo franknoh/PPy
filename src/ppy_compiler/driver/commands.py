@@ -224,6 +224,25 @@ def build(options: argparse.Namespace, reporter: Reporter) -> int:
     from ..backend.llvm import LlvmUnavailable, compile_project
 
     entry = target.resolve() if target.is_file() else None
+    if getattr(options, "standalone", False):
+        from ..backend.llvm.standalone import build_standalone
+
+        if entry is None:
+            reporter.emit(
+                Diagnostic("E1803", Severity.ERROR, "a standalone build needs an entry file")
+            )
+            return 2
+        try:
+            return build_standalone(
+                bundle,
+                reporter,
+                entry,
+                options.output,
+                opt_level=_overrides(options).get("opt_level"),
+            )  # type: ignore[arg-type]
+        except LlvmUnavailable as exc:
+            reporter.emit(Diagnostic("E1801", Severity.ERROR, str(exc)))
+            return 2
     try:
         artifacts = compile_project(
             bundle,

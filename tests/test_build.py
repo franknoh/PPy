@@ -303,6 +303,102 @@ def test_the_manifest_records_the_program_and_the_abi(project: Path):
     assert [p["kind"] for p in entry["abi"]["parameters"]] == ["list"]
 
 
+STANDALONE = """
+import ppy
+
+
+@ppy.pure
+def collatz(limit: int) -> int:
+    best: int = 0
+    for start in range(1, limit):
+        n: int = start
+        steps: int = 0
+        while n != 1:
+            if n % 2 == 0:
+                n = n // 2
+            else:
+                n = 3 * n + 1
+            steps += 1
+        best = max(best, steps)
+    return best
+
+
+def main() -> None:
+    print("longest below", 300000, "->", collatz(300000))
+    print("flag:", True)
+
+
+main()
+"""
+
+
+@requires_toolchain
+def test_standalone_builds_a_python_free_native_executable(tmp_path: Path):
+    """`--standalone`: no CPython inside, same bytes out.
+
+    The strongest proof of independence available portably: the produced
+    binary runs with an empty environment, from a directory with no project,
+    and prints exactly what plain CPython prints.
+    """
+    (tmp_path / "pyproject.toml").write_text("[tool.ppy]\n", encoding="utf-8")
+    (tmp_path / "app.ppy").write_text(textwrap.dedent(STANDALONE).lstrip("\n"), encoding="utf-8")
+    built = subprocess.run(
+        [sys.executable, "-m", "ppy_compiler", "build", "--standalone", "app.ppy", "-o", "out"],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert built.returncode == 0, built.stderr
+    plain = subprocess.run(
+        [sys.executable, "app.ppy"], cwd=tmp_path, capture_output=True, text=True, check=False
+    )
+    ran = subprocess.run(
+        [str(tmp_path / "out" / "app")],
+        cwd="/",
+        capture_output=True,
+        text=True,
+        check=False,
+        env={},
+    )
+    assert ran.returncode == 0, ran.stderr
+    assert ran.stdout == plain.stdout
+
+
+@requires_toolchain
+def test_standalone_rejects_a_python_reachable_graph(tmp_path: Path):
+    (tmp_path / "pyproject.toml").write_text("[tool.ppy]\n", encoding="utf-8")
+    (tmp_path / "floaty.ppy").write_text(
+        textwrap.dedent(
+            """
+            import ppy
+
+
+            def scaled(x: float) -> float:
+                return x * 2.0
+
+
+            def main() -> None:
+                print(scaled(1.5))
+
+
+            main()
+            """
+        ).lstrip("\n"),
+        encoding="utf-8",
+    )
+    built = subprocess.run(
+        [sys.executable, "-m", "ppy_compiler", "build", "--standalone", "floaty.ppy"],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert built.returncode != 0
+    assert "E1803" in built.stderr
+    assert "floaty.main" in built.stderr
+
+
 def test_build_honours_an_explicit_output_directory(project: Path, tmp_path: Path):
     destination = tmp_path / "out"
     result = _build(project, "-o", str(destination))
