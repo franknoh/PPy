@@ -111,7 +111,9 @@ def test_build_emits_objects_and_links_a_library(project: Path):
 
     native = project / ".ppy-cache" / "native"
     objects = list(native.glob("*.o"))
-    libraries = list(native.glob("*.so"))
+    # The boundary wrapper is a `.so` here too, so the project library is
+    # named, not globbed for.
+    libraries = list(native.glob("libppy_*.so"))
     assert objects and libraries
     assert libraries[0].stat().st_size > 0
 
