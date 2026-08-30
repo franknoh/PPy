@@ -938,6 +938,67 @@ class _Checker:
                 help="use a plain class, a vouched metaclass such as `abc.ABCMeta`, "
                 "or a ppy.dynamic boundary",
             )
+        from .decorators import class_construction
+
+        construction = class_construction(node)
+        for statement in construction.executable:
+            self._dynamic_feature(
+                "E1507",
+                f"the body of class `{node.name}` executes code at definition time",
+                statement,
+                help="keep the class body declarative -- fields, methods, "
+                "constants -- or wrap the definition in a ppy.dynamic boundary",
+            )
+        for call in construction.value_calls:
+            constructed = self._project_class_of(call.func)  # type: ignore[attr-defined]
+            if constructed is not None and self._nontrivial_hook(constructed, "__set_name__"):
+                self._dynamic_feature(
+                    "E1507",
+                    f"class `{node.name}` binds a `{constructed.name}`, whose "
+                    "`__set_name__` runs at class creation",
+                    call,
+                    help="construct the descriptor through a plugin-vouched "
+                    "factory, or wrap the definition in a ppy.dynamic boundary",
+                )
+        for base in node.bases:
+            hooked = self._subclass_hook(base)
+            if hooked is not None:
+                self._dynamic_feature(
+                    "E1507",
+                    f"base `{ast.unparse(base)}` runs `__init_subclass__` "
+                    f"when class `{node.name}` is created",
+                    base,
+                    help="make the hook trivial, vouch for it via a plugin, "
+                    "or wrap the definition in a ppy.dynamic boundary",
+                )
+
+    def _project_class_of(self, expr: ast.expr):  # type: ignore[no-untyped-def]
+        canonical = self.project.resolver(self.symbols).canonical(expr)
+        if canonical is None:
+            return None
+        return self.project.classes.get(canonical)
+
+    def _nontrivial_hook(self, info, name: str) -> bool:  # type: ignore[no-untyped-def]
+        """Does `info` define `name` with a body that actually does something?"""
+        method = info.methods.get(name)
+        if method is None:
+            return False
+        return not all(
+            isinstance(statement, ast.Pass)
+            or (isinstance(statement, ast.Expr) and isinstance(statement.value, ast.Constant))
+            for statement in method.node.body
+        )
+
+    def _subclass_hook(self, base: ast.expr):  # type: ignore[no-untyped-def]
+        """The project class in `base`'s chain whose `__init_subclass__` runs."""
+        info = self._project_class_of(base)
+        if info is None:
+            return None
+        for entry in (info.qualname, *info.mro):
+            candidate = self.project.classes.get(entry)
+            if candidate is not None and self._nontrivial_hook(candidate, "__init_subclass__"):
+                return candidate
+        return None
 
     def _stmt_Global(self, node: ast.Global, env: Env) -> None:
         self._effects = self._effects.add(Effect.WRITE_GLOBAL)

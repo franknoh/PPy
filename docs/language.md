@@ -17,6 +17,13 @@ The compiler analyzes the whole project as one call graph. Inside it:
 - `eval`, `exec`, `from x import *`, computed imports, monkey-patching,
   frame manipulation, computed base classes, and unvouched metaclasses are
   rejected (`E15xx`) unless isolated behind `ppy.dynamic`.
+- Class construction must be declarative: a class body that executes
+  statements, a body value constructing a project descriptor whose
+  `__set_name__` runs at creation, or a base whose `__init_subclass__` does
+  real work are all `E1507`. The strict checker and the safe hoister judge
+  this from the same shared facts (`class_construction` in
+  `analysis/decorators.py`), so they cannot disagree about what a class body
+  runs.
 - A decorator must have vouched semantics — the built-in table, a plugin, or
   `ppy.*` — because a decorator may replace the decorated object: believing
   the `def` while the runtime holds whatever the decorator returned would be

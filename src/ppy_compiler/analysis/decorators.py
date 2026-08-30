@@ -14,7 +14,13 @@ from __future__ import annotations
 import ast
 from dataclasses import dataclass
 
-__all__ = ["DecoratorSemantics", "definition_time_reorder_safe", "semantics_of"]
+__all__ = [
+    "ClassConstructionSemantics",
+    "DecoratorSemantics",
+    "class_construction",
+    "definition_time_reorder_safe",
+    "semantics_of",
+]
 
 
 @dataclass(frozen=True, slots=True)
@@ -169,17 +175,64 @@ def definition_time_reorder_safe(node: ast.stmt, plugins=None, identify=None) ->
     if isinstance(node, ast.ClassDef):
         if not _decorators_pure(node.decorator_list, plugins, identify):
             return False
-        if node.keywords:
-            # A metaclass or `__init_subclass__` keyword runs arbitrary code.
-            return False
-        # Any explicit base can carry an `__init_subclass__` or a metaclass,
-        # both of which run at class creation and may look around; a base
-        # being *spelled* simply proves nothing about what creating the
-        # subclass executes. Only `object` is known inert.
-        if any(not (isinstance(base, ast.Name) and base.id == "object") for base in node.bases):
+        construction = class_construction(node)
+        # A metaclass or `__init_subclass__` keyword runs arbitrary code, and
+        # any explicit base can carry either hook -- a base being *spelled*
+        # simply proves nothing about what creating the subclass executes.
+        # Only `object` is known inert.
+        if construction.keywords or construction.explicit_bases or construction.executable:
             return False
         return all(_body_statement_pure(child, plugins, identify) for child in node.body)
     return isinstance(node, (ast.Import, ast.ImportFrom, ast.Pass))
+
+
+@dataclass(frozen=True, slots=True)
+class ClassConstructionSemantics:
+    """What creating this class executes, judged from its spelling.
+
+    Two consumers with two thresholds read these facts: the strict checker
+    asks whether construction is *statically modeled* (no executable body
+    statements, no proven-effectful hooks), the safe hoister asks the
+    stronger question of whether it is *reorder-safe*. Sharing the facts is
+    what keeps the two from disagreeing about what a class body runs.
+    """
+
+    #: Body statements that execute arbitrary code at definition time --
+    #: anything that is not a declaration, an assignment, or a docstring.
+    executable: tuple[ast.stmt, ...]
+    #: Calls whose results are bound in the class body; each may construct
+    #: a descriptor whose `__set_name__` runs at class creation.
+    value_calls: tuple[ast.expr, ...]
+    #: Explicit bases other than a plain `object`.
+    explicit_bases: tuple[ast.expr, ...]
+    keywords: tuple[ast.keyword, ...]
+
+
+def class_construction(node: ast.ClassDef) -> ClassConstructionSemantics:
+    executable: list[ast.stmt] = []
+    value_calls: list[ast.expr] = []
+    for child in node.body:
+        if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef, ast.Pass)):
+            continue
+        if isinstance(child, ast.Expr):
+            if not isinstance(child.value, ast.Constant):
+                executable.append(child)
+            continue
+        if isinstance(child, (ast.Assign, ast.AnnAssign)):
+            value = child.value
+            if isinstance(value, ast.Call):
+                value_calls.append(value)
+            continue
+        executable.append(child)
+    bases = tuple(
+        base for base in node.bases if not (isinstance(base, ast.Name) and base.id == "object")
+    )
+    return ClassConstructionSemantics(
+        executable=tuple(executable),
+        value_calls=tuple(value_calls),
+        explicit_bases=bases,
+        keywords=tuple(node.keywords),
+    )
 
 
 def _literal(node: ast.expr) -> bool:

@@ -343,6 +343,94 @@ def test_an_unvouched_metaclass_is_rejected(write, codes):
     assert "E1507" in codes(path)
 
 
+def test_an_effectful_init_subclass_base_is_rejected(write, codes):
+    path = write(
+        "hooked.ppy",
+        """
+        class Base:
+            def __init_subclass__(cls) -> None:
+                print("side effect")
+
+
+        class Child(Base):
+            pass
+
+
+        print(Child)
+        """,
+    )
+    assert "E1507" in codes(path)
+
+
+def test_a_trivial_init_subclass_is_tolerated(write, codes):
+    path = write(
+        "inert.ppy",
+        """
+        class Base:
+            def __init_subclass__(cls) -> None:
+                pass
+
+
+        class Child(Base):
+            pass
+
+
+        print(Child)
+        """,
+    )
+    assert "E1507" not in codes(path)
+
+
+def test_an_executable_class_body_is_rejected(write, codes):
+    path = write(
+        "loud.ppy",
+        """
+        class Loud:
+            print("executed at class definition")
+
+
+        print(Loud)
+        """,
+    )
+    assert "E1507" in codes(path)
+
+
+def test_a_project_descriptor_in_a_class_body_is_rejected(write, codes):
+    path = write(
+        "descriptor.ppy",
+        """
+        class Descriptor:
+            def __set_name__(self, owner: object, name: str) -> None:
+                print("side effect")
+
+
+        class Holder:
+            field = Descriptor()
+
+
+        print(Holder)
+        """,
+    )
+    assert "E1507" in codes(path)
+
+
+def test_a_declarative_class_body_passes(write, codes):
+    path = write(
+        "plain.ppy",
+        """
+        class Plain:
+            X = 3
+
+            def method(self) -> int:
+                return 4
+
+
+        print(Plain().method())
+        """,
+    )
+    assert "E1507" not in codes(path)
+
+
 def test_a_vouched_metaclass_is_accepted(write, codes):
     path = write(
         "abstract.ppy",
