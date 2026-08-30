@@ -91,7 +91,7 @@ before making it:
 | pass | rewrite |
 |---|---|
 | `literal-attributes` | `setattr(o, "name", v)` → `o.name = v`; two-argument `getattr` → `o.name`; `delattr` → `del o.name` — constant, identifier-shaped names only, and only when the builtin still means the builtin |
-| `static-imports` | `m = importlib.import_module("pkg.mod")` → `import pkg.mod as m` |
+| `static-imports` | `m = importlib.import_module("pkg.mod")` → `import pkg.mod as m`, under any spelling the lexical bindings resolve to importlib's importer (`il.import_module`, a `from importlib import import_module as imp` alias); an import that fed only rewritten calls is removed with them |
 | `module-namespace-writes` | `globals()["NAME"] = value` in the module body → `NAME = value` (function scope differs, and stays) |
 
 Afterwards the strict checker runs over the result once more — not to fail

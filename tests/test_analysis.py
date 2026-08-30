@@ -313,6 +313,56 @@ def test_a_dynamic_boundary_permits_an_unvouched_decorator(write, codes):
     assert "E1204" not in codes(path)
 
 
+def test_dynamic_import_detection_resolves_lexically(write, codes):
+    """`imp(name)` is importlib's importer; `x.import_module(...)` is not."""
+    path = write(
+        "imports.ppy",
+        """
+        from importlib import import_module as imp
+
+
+        class X:
+            def import_module(self, name: str) -> str:
+                return name
+
+
+        def load(name: str) -> None:
+            imp(name)
+
+
+        x = X()
+        print(x.import_module("fine"))
+        """,
+    )
+    found = codes(path)
+    assert found.count("E1503") == 1
+
+
+def test_a_constant_import_module_is_typed_as_its_module(write, analyze, codes):
+    path = write(
+        "modtype.ppy",
+        """
+        import importlib
+
+        m = importlib.import_module("math")
+        print(m.floor(2.5))
+        """,
+    )
+    bundle = analyze(path)
+    assert not bundle.diagnostics.has_errors()
+
+    patched = write(
+        "patch.ppy",
+        """
+        import importlib
+
+        s = importlib.import_module("string")
+        s.digits = "nope"
+        """,
+    )
+    assert "E1506" in codes(patched)
+
+
 def test_a_computed_base_is_rejected(write, codes):
     path = write(
         "built.ppy",

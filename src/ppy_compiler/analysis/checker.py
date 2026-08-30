@@ -1357,6 +1357,9 @@ class _Checker:
             checked = self._checked_conversion(node, env)
             if checked is not None:
                 return checked
+        imported = self._constant_import(node)
+        if imported is not None:
+            return imported
         callee = self._expr(node.func, env)
         args = [
             self._expr(arg.value if isinstance(arg, ast.Starred) else arg, env) for arg in node.args
@@ -2524,7 +2527,9 @@ class _Checker:
             return self._check_dynamic_import(node, env)
         name = node.func.id
         if name in env:
-            return False
+            # A bound name is not a builtin -- but it may still be an alias
+            # of importlib's importer, which the lexical layer resolves.
+            return self._check_dynamic_import(node, env)
         if name in _FORBIDDEN_CALLS:
             code, message = _FORBIDDEN_CALLS[name]
             self._dynamic_feature(code, message, node)
@@ -2556,18 +2561,57 @@ class _Checker:
             self._effects = self._effects.add(Effect.WRITE_OBJECT)
         return False
 
+    def _constant_import(self, node: ast.Call) -> Binding | None:
+        """`importlib.import_module("known.literal")` is a static import.
+
+        Typing the result as the module keeps the rest of the checker honest
+        about it: attributes resolve like any import's, and assigning through
+        it is the monkey-patch it always was.
+        """
+        if self._lexical_target(node.func) != "importlib.import_module":
+            return None
+        if len(node.args) != 1 or node.keywords:
+            return None
+        argument = node.args[0]
+        if not isinstance(argument, ast.Constant) or not isinstance(argument.value, str):
+            return None
+        name = argument.value
+        if not name or name.startswith("."):
+            return None
+        return Binding(T.Module_(name))
+
     def _check_dynamic_import(self, node: ast.Call, env: Env) -> bool:
-        if not isinstance(node.func, ast.Attribute):
+        """Is this call `importlib.import_module` under any of its spellings?
+
+        Resolution goes through the lexical bindings, not the source text: a
+        user method that happens to be named `import_module` is nobody's
+        import, and `from importlib import import_module as imp` is exactly
+        importlib's.
+        """
+        canonical = self._lexical_target(node.func)
+        if canonical not in {"importlib.import_module", "builtins.__import__"}:
             return False
-        text = ast.unparse(node.func)
-        if text.endswith("import_module"):
-            constant = node.args and isinstance(node.args[0], ast.Constant)
-            if not constant:
-                self._dynamic_feature(
-                    "E1503", "`import_module` requires a constant module name", node
-                )
-                return True
+        spelled = canonical.rpartition(".")[2]
+        constant = (
+            len(node.args) >= 1
+            and isinstance(node.args[0], ast.Constant)
+            and isinstance(node.args[0].value, str)
+        )
+        if not constant:
+            self._dynamic_feature("E1503", f"`{spelled}` requires a constant module name", node)
+            return True
         return False
+
+    def _lexical_target(self, expr: ast.expr) -> str | None:
+        """The one canonical thing `expr` means here, resolved point-sensitively."""
+        lexical = self.symbols.lexical
+        if lexical is not None:
+            found = lexical.targets_at(expr)
+            if len(found) == 1:
+                return next(iter(found))
+            if found:
+                return None
+        return self.project.resolver(self.symbols).canonical(expr)
 
     def _mismatch(self, code: str, message: str, node: ast.AST, source: T.Type) -> None:
         """A type mismatch, unless the value is dynamic -- then it is an escape.

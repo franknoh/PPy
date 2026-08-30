@@ -475,8 +475,6 @@ def test_a_field_constraint_becomes_a_refinement(tmp_path: Path):
 
 
 def test_the_uvicorn_plugin_vouches_for_route_decorators():
-    from ppy_compiler.plugins.uvicorn_plugin import UvicornPlugin
-
     plugin = UvicornPlugin()
     semantics = plugin.decorator_semantics("fastapi.FastAPI.get")
     assert semantics is not None

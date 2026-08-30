@@ -1455,6 +1455,27 @@ def test_final_accounts_for_another_module_rebinding_the_name(workspace: Path):
     assert "STABLE: Final[int] = 1" in converted
 
 
+def test_final_sees_a_write_through_an_import_module_alias(workspace: Path):
+    """`s = import_module("store"); s.LIMIT = 2` rebinds `store.LIMIT`."""
+    (workspace / "store.py").write_text("LIMIT = 1\nSTABLE = 2\n", encoding="utf-8")
+    (workspace / "user.py").write_text(
+        textwrap.dedent(
+            """
+            import importlib
+
+            s = importlib.import_module("store")
+            s.LIMIT = 2
+            print(s.LIMIT, s.STABLE)
+            """
+        ).lstrip("\n"),
+        encoding="utf-8",
+    )
+    assert _ppy(["migrate", "."], workspace).returncode == 0
+    converted = (workspace / "store.ppy").read_text(encoding="utf-8")
+    assert "LIMIT: Final" not in converted
+    assert "STABLE: Final[int] = 2" in converted
+
+
 def test_final_sees_the_other_ways_python_binds_a_name(workspace: Path):
     (workspace / "binds.py").write_text(
         textwrap.dedent(

@@ -103,6 +103,33 @@ def test_a_still_used_importlib_import_is_kept():
     assert [r.pass_name for r in rewrites] == ["static-imports"]
 
 
+def test_import_module_aliases_resolve_through_the_lexical_layer():
+    source = 'import importlib as il\n\nmath = il.import_module("math")\nprint(math.pi)\n'
+    rewritten, rewrites = apply_passes(source)
+    assert "import math\n" in rewritten
+    assert "il." not in rewritten and "import importlib" not in rewritten
+    assert len(rewrites) == 2
+
+    source = 'from importlib import import_module as imp\n\nrandom = imp("random")\nprint(random)\n'
+    rewritten, rewrites = apply_passes(source)
+    assert "import random\n" in rewritten
+    assert "imp(" not in rewritten and "from importlib" not in rewritten
+
+
+def test_a_local_import_module_function_is_not_importlib():
+    source = (
+        "def import_module(name):\n"
+        "    return name\n"
+        "\n"
+        "\n"
+        'm = import_module("not.a.real.import")\n'
+        "print(m)\n"
+    )
+    rewritten, rewrites = apply_passes(source)
+    assert rewritten == source
+    assert not rewrites
+
+
 def test_module_namespace_writes_become_assignments():
     source = 'globals()["LIMIT"] = 128\nprint(LIMIT)\n'
     rewritten, rewrites = apply_passes(source)

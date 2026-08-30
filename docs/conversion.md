@@ -85,7 +85,10 @@ a list here, a tuple there — the union collapses to the shared
 - no file **anywhere in the project** assigns the attribute — a write index
   (`analysis/global_writes.py`) is built over every source under the project
   root, so converting one file still sees the reverse dependency doing
-  `store.NAME = ...`. The scan rides the shared lexical bindings: a
+  `store.NAME = ...` — spelled statically or as `s =
+  importlib.import_module("store"); s.NAME = ...`, because the lexical layer
+  understands a constant `import_module` as the import it is. The scan rides
+  the shared lexical bindings: a
   function-scope `import other as s` shadows nothing at module level,
   `alias = store` counts for as long as the binding lasts, relative imports
   resolve against the file's package, `setattr`/`delattr` count, a computed

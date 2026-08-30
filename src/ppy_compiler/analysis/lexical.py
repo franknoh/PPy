@@ -250,6 +250,8 @@ class _Scanner:
         return env
 
     def _eval(self, node: ast.expr, env: _Env) -> frozenset[str]:
+        if isinstance(node, ast.Call):
+            return self._imported_module(node, env)
         parts: list[str] = []
         while isinstance(node, ast.Attribute):
             parts.append(node.attr)
@@ -265,6 +267,26 @@ class _Scanner:
             return bases
         tail = ".".join(reversed(parts))
         return frozenset(f"{base}.{tail}" for base in bases)
+
+    def _imported_module(self, node: ast.Call, env: _Env) -> frozenset[str]:
+        """`importlib.import_module("x")` is `import x` with extra steps.
+
+        A write through the result -- `s = import_module("store"); s.LIMIT =
+        2` -- rebinds `store.LIMIT` as surely as the static spelling would,
+        and the `Final` proof must see it.
+        """
+        callee = self._eval(node.func, env)
+        if callee != frozenset({"importlib.import_module"}):
+            return frozenset()
+        if len(node.args) != 1 or node.keywords:
+            return frozenset()
+        argument = node.args[0]
+        if not isinstance(argument, ast.Constant) or not isinstance(argument.value, str):
+            return frozenset()
+        name = argument.value
+        if not name or name.startswith("."):
+            return frozenset()
+        return frozenset({name})
 
     def _local(self, name: str) -> frozenset[str]:
         return frozenset({f"{self.module}.{name}"})

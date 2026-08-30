@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import ast
 import keyword
+from collections.abc import Sequence
 
 import libcst as cst
 from libcst.metadata import MetadataWrapper, PositionProvider
@@ -126,29 +127,8 @@ class LiteralAttributes:
         return rewritten, rewriter.rewrites
 
 
-def _only_plainly_imported(source: str, name: str) -> bool:
-    """`name` is bound by `import name` statements and nothing else."""
-    tree = ast.parse(source)
-    for node in ast.walk(tree):
-        if isinstance(node, ast.Import):
-            if any(alias.asname for alias in node.names if alias.name == name):
-                return False
-        elif isinstance(node, ast.Name) and isinstance(node.ctx, (ast.Store, ast.Del)):
-            if node.id == name:
-                return False
-        elif (
-            isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef))
-            and node.name == name
-        ):
-            return False
-    return True
-
-
-def _module_string(node: cst.BaseExpression) -> str | None:
-    if not isinstance(node, cst.SimpleString):
-        return None
-    value = node.evaluated_value
-    if not isinstance(value, str) or not value:
+def _module_string(value: object) -> str | None:
+    if not isinstance(value, str) or not value or value.startswith("."):
         return None
     parts = value.split(".")
     if all(part.isidentifier() and not keyword.iskeyword(part) for part in parts):
@@ -156,36 +136,61 @@ def _module_string(node: cst.BaseExpression) -> str | None:
     return None
 
 
+def _import_sites(source: str) -> dict[int, tuple[str, str, str]]:
+    """line -> (alias, module name, feeder name) for each static import call.
+
+    The callee is resolved through the shared lexical bindings, so
+    `importlib.import_module`, `il.import_module`, and a `from importlib
+    import import_module as imp` alias are all one thing -- and a local
+    function that happens to share the name is not.
+    """
+    from ..analysis.lexical import scan_module
+
+    tree = ast.parse(source)
+    bindings = scan_module(tree, "<migration>")
+    sites: dict[int, tuple[str, str, str]] = {}
+    for statement in ast.walk(tree):
+        if not isinstance(statement, ast.Assign) or len(statement.targets) != 1:
+            continue
+        target = statement.targets[0]
+        value = statement.value
+        if not isinstance(target, ast.Name) or not isinstance(value, ast.Call):
+            continue
+        if bindings.targets_at(value.func) != frozenset({"importlib.import_module"}):
+            continue
+        if len(value.args) != 1 or value.keywords:
+            continue
+        argument = value.args[0]
+        if not isinstance(argument, ast.Constant):
+            continue
+        module_name = _module_string(argument.value)
+        if module_name is None:
+            continue
+        probe: ast.expr = value.func
+        while isinstance(probe, ast.Attribute):
+            probe = probe.value
+        if not isinstance(probe, ast.Name):
+            continue
+        sites[statement.lineno] = (target.id, module_name, probe.id)
+    return sites
+
+
 class _ImportRewriter(cst.CSTTransformer):
     METADATA_DEPENDENCIES = (PositionProvider,)
 
-    def __init__(self) -> None:
+    def __init__(self, sites: dict[int, tuple[str, str, str]]) -> None:
+        self.sites = sites
         self.rewrites: list[Rewrite] = []
+        self.feeders: set[str] = set()
 
     def leave_SimpleStatementLine(
         self, original: cst.SimpleStatementLine, updated: cst.SimpleStatementLine
     ) -> cst.SimpleStatementLine:
-        if len(updated.body) != 1 or not isinstance(updated.body[0], cst.Assign):
-            return updated
-        assign = updated.body[0]
-        if len(assign.targets) != 1 or not isinstance(assign.targets[0].target, cst.Name):
-            return updated
-        call = assign.value
-        if not isinstance(call, cst.Call) or not isinstance(call.func, cst.Attribute):
-            return updated
-        func = call.func
-        if not isinstance(func.value, cst.Name) or func.value.value != "importlib":
-            return updated
-        if func.attr.value != "import_module":
-            return updated
-        arguments = _arguments(call)
-        if arguments is None or len(arguments) != 1:
-            return updated
-        module_name = _module_string(arguments[0])
-        if module_name is None:
-            return updated
-        alias = assign.targets[0].target.value
         line = self.get_metadata(PositionProvider, original).start.line
+        site = self.sites.get(line)
+        if site is None or len(updated.body) != 1 or not isinstance(updated.body[0], cst.Assign):
+            return updated
+        alias, module_name, feeder = site
         spelled = (
             f"import {module_name}" if alias == module_name else f"import {module_name} as {alias}"
         )
@@ -196,6 +201,7 @@ class _ImportRewriter(cst.CSTTransformer):
                 f"`importlib.import_module({module_name!r})` became `{spelled}`",
             )
         )
+        self.feeders.add(feeder)
         asname = None if alias == module_name else cst.AsName(cst.Name(alias))
         return updated.with_changes(
             body=[cst.Import(names=[cst.ImportAlias(name=_dotted_cst(module_name), asname=asname)])]
@@ -210,58 +216,110 @@ def _dotted_cst(dotted: str) -> cst.Name | cst.Attribute:
     return node
 
 
-class _NameCounter(cst.CSTVisitor):
+class _FeederReferences(cst.CSTVisitor):
+    """Count uses of a name outside import statements."""
+
     def __init__(self, name: str) -> None:
         self.name = name
         self.count = 0
+        self._importing = 0
+
+    def visit_Import(self, node: cst.Import) -> bool:
+        self._importing += 1
+        return True
+
+    def leave_Import(self, original: cst.Import) -> None:
+        self._importing -= 1
+
+    def visit_ImportFrom(self, node: cst.ImportFrom) -> bool:
+        self._importing += 1
+        return True
+
+    def leave_ImportFrom(self, original: cst.ImportFrom) -> None:
+        self._importing -= 1
 
     def visit_Name(self, node: cst.Name) -> None:
-        if node.value == self.name:
+        if not self._importing and node.value == self.name:
             self.count += 1
 
 
-class _ImportDropper(cst.CSTTransformer):
+class _FeederDropper(cst.CSTTransformer):
     METADATA_DEPENDENCIES = (PositionProvider,)
 
-    def __init__(self) -> None:
+    def __init__(self, feeders: frozenset[str]) -> None:
+        self.feeders = feeders
         self.rewrites: list[Rewrite] = []
 
     def leave_SimpleStatementLine(
         self, original: cst.SimpleStatementLine, updated: cst.SimpleStatementLine
     ) -> cst.SimpleStatementLine | cst.RemovalSentinel:
-        if len(updated.body) != 1 or not isinstance(updated.body[0], cst.Import):
+        if len(updated.body) != 1:
             return updated
-        names = updated.body[0].names
-        if len(names) != 1 or names[0].asname is not None:
-            return updated
-        if not isinstance(names[0].name, cst.Name) or names[0].name.value != "importlib":
+        statement = updated.body[0]
+        spelled = self._feeding_import(statement)
+        if spelled is None:
             return updated
         line = self.get_metadata(PositionProvider, original).start.line
-        self.rewrites.append(
-            Rewrite(line, "static-imports", "`import importlib` is no longer needed")
-        )
+        self.rewrites.append(Rewrite(line, "static-imports", f"`{spelled}` is no longer needed"))
         return cst.RemoveFromParent()
+
+    def _feeding_import(self, statement: cst.BaseSmallStatement) -> str | None:
+        if isinstance(statement, cst.Import) and len(statement.names) == 1:
+            imported = statement.names[0]
+            if not isinstance(imported.name, cst.Name) or imported.name.value != "importlib":
+                return None
+            bound = imported.asname.name.value if imported.asname else "importlib"  # type: ignore[union-attr]
+            if bound in self.feeders:
+                return f"import importlib as {bound}" if imported.asname else "import importlib"
+            return None
+        if isinstance(statement, cst.ImportFrom) and isinstance(statement.names, Sequence):
+            if not isinstance(statement.module, cst.Name) or statement.module.value != "importlib":
+                return None
+            if len(statement.names) != 1:
+                return None
+            imported = statement.names[0]
+            if not isinstance(imported.name, cst.Name) or imported.name.value != "import_module":
+                return None
+            bound = imported.asname.name.value if imported.asname else "import_module"  # type: ignore[union-attr]
+            if bound in self.feeders:
+                suffix = f" as {bound}" if imported.asname else ""
+                return f"from importlib import import_module{suffix}"
+        return None
 
 
 class StaticImports:
-    """`m = importlib.import_module("pkg.mod")` becomes `import pkg.mod as m`."""
+    """`m = importlib.import_module("pkg.mod")` becomes `import pkg.mod as m`.
+
+    Every spelling the lexical bindings resolve to importlib's importer is
+    caught, and an import that fed only rewritten calls is removed with them.
+    """
 
     name = "static-imports"
 
     def apply(self, module: cst.Module, source: str) -> tuple[cst.Module, list[Rewrite]]:
-        if not _only_plainly_imported(source, "importlib"):
+        sites = _import_sites(source)
+        if not sites:
             return module, []
-        rewriter = _ImportRewriter()
+        rewriter = _ImportRewriter(sites)
         rewritten = MetadataWrapper(module, unsafe_skip_copy=True).visit(rewriter)
         if not rewriter.rewrites:
             return rewritten, rewriter.rewrites
-        # When the rewrites consumed every use, the import that fed them is
-        # freight with no cargo; a module the interpreter has loaded anyway
-        # imports the same with or without it.
-        counter = _NameCounter("importlib")
-        rewritten.visit(counter)
-        if counter.count == 1:
-            dropper = _ImportDropper()
+        # An import that fed only the rewritten calls is freight with no
+        # cargo; a module the interpreter has loaded anyway imports the same
+        # with or without it.
+        unused = frozenset(
+            feeder
+            for feeder in rewriter.feeders
+            if _references_outside_imports(rewritten, feeder) == 0
+        )
+        if unused:
+            dropper = _FeederDropper(unused)
             rewritten = MetadataWrapper(rewritten, unsafe_skip_copy=True).visit(dropper)
             rewriter.rewrites.extend(dropper.rewrites)
         return rewritten, rewriter.rewrites
+
+
+def _references_outside_imports(module: cst.Module, name: str) -> int:
+    counter = _FeederReferences(name)
+    module.visit(counter)
+    return counter.count

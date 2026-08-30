@@ -173,9 +173,6 @@ def test_every_type_the_checker_produced_survives(tmp_path: Path):
 
 
 def test_dynamic_and_any_encode_distinctly():
-    from ppy_compiler.analysis import types as T
-    from ppy_compiler.analysis.codec import decode_type, encode_type
-
     assert encode_type(T.DYNAMIC) != encode_type(T.ANY)
     assert decode_type(encode_type(T.DYNAMIC)) is T.DYNAMIC
     assert decode_type(encode_type(T.ANY)) is T.ANY
