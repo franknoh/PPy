@@ -251,6 +251,57 @@ def test_build_defaults_to_wrap_semantics_and_safe_restores_python_integers(tmp_
     assert built("--safe") == plain.stdout
 
 
+@requires_toolchain
+def test_the_launcher_never_imports_the_compiler(project: Path, tmp_path: Path):
+    """A built artifact is compiled software: `ppy_compiler` may be gone.
+
+    The compiler package is poisoned via PYTHONPATH; if any part of the
+    runtime path imported it, the launcher would die on the spot.
+    """
+    result = _build(project)
+    assert result.returncode == 0, result.stderr
+    launcher = project / ".ppy-cache" / "native" / "app"
+    if not launcher.is_file():
+        pytest.skip("no launcher was produced")
+    poison = tmp_path / "poison"
+    poison.mkdir()
+    (poison / "ppy_compiler.py").write_text(
+        'raise ImportError("a built artifact must not import the compiler")\n',
+        encoding="utf-8",
+    )
+    plain = subprocess.run(
+        [sys.executable, "app.ppy"], cwd=project, capture_output=True, text=True, check=False
+    )
+    import os
+
+    environment = dict(os.environ, PYTHONPATH=str(poison))
+    ran = subprocess.run(
+        [str(launcher)],
+        cwd=project,
+        capture_output=True,
+        text=True,
+        check=False,
+        env=environment,
+    )
+    assert ran.returncode == 0, ran.stderr
+    assert ran.stdout == plain.stdout
+
+
+@requires_toolchain
+def test_the_manifest_records_the_program_and_the_abi(project: Path):
+    result = _build(project)
+    assert result.returncode == 0, result.stderr
+    manifest = json.loads((project / ".ppy-cache" / "native" / "ppy-bindings.json").read_text())
+    program = manifest["program"]
+    assert program["entry"] == "app"
+    assert "app" in program["generated"]
+    entry = next(e for e in manifest["entries"] if e["python_qualname"] == "app.distance")
+    assert entry["module"] == "app"
+    assert entry["binding"] == "distance"
+    assert entry["abi"]["returns"] == ["double"]
+    assert [p["kind"] for p in entry["abi"]["parameters"]] == ["float"] * 4
+
+
 def test_build_honours_an_explicit_output_directory(project: Path, tmp_path: Path):
     destination = tmp_path / "out"
     result = _build(project, "-o", str(destination))

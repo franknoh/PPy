@@ -161,6 +161,14 @@ def run_llvm_backend(
     """`ppy run foo.ppy`: compile through LLVM and execute."""
     from ..backend.llvm import LlvmUnavailable, compile_and_run
 
+    prebuilt = getattr(options, "prebuilt", None)
+    if prebuilt is not None:
+        # The fast path: a built artifact runs through the runtime alone.
+        # No project discovery, no analysis, no LLVM -- the manifest is the
+        # whole contract, and validation stays as cheap as reading it.
+        from ppy_runtime.launch import main as launch
+
+        return launch(prebuilt, program_args)
     if not file.is_file():
         reporter.emit(Diagnostic("E1002", Severity.ERROR, f"{file} is not a file"))
         return 2
@@ -177,7 +185,6 @@ def run_llvm_backend(
             program_args,
             reporter,
             opt_level=_overrides(options).get("opt_level"),  # type: ignore[arg-type]
-            prebuilt=getattr(options, "prebuilt", None),
         )
     except LlvmUnavailable as exc:
         reporter.emit(

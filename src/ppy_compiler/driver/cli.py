@@ -6,9 +6,6 @@ import argparse
 import sys
 from pathlib import Path
 
-from . import commands
-from .reporting import Reporter
-
 __all__ = ["build_parser", "main"]
 
 _EXECUTION_SUFFIXES = (".ppy", ".py")
@@ -247,9 +244,19 @@ def main(argv: list[str] | None = None) -> int:
         compiler_args, file, program_args = execution
         options = parser.parse_args(compiler_args)
         reporter = _reporter(options)
+        from . import commands
+
         return commands.run_python_backend(file, program_args, options, reporter)
 
     options = parser.parse_args(argv)
+    if options.command == "run" and getattr(options, "prebuilt", None) is not None:
+        # The prebuilt fast path must not pay for the compiler's import: a
+        # built artifact runs through the runtime alone.
+        from ppy_runtime.launch import main as launch
+
+        return launch(options.prebuilt, _program_args(options.args))
+    from . import commands
+
     if options.version:
         from .pipeline import COMPILER_VERSION
 
@@ -305,7 +312,9 @@ def _program_args(rest: list[str]) -> list[str]:
     return rest[1:] if rest and rest[0] == "--" else rest
 
 
-def _reporter(options: argparse.Namespace) -> Reporter:
+def _reporter(options: argparse.Namespace):  # type: ignore[no-untyped-def]
+    from .reporting import Reporter
+
     color = None if options.color == "auto" else options.color == "always"
     return Reporter(color=color, quiet=options.quiet)
 

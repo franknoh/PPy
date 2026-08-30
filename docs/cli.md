@@ -153,11 +153,20 @@ was built with. It is a native executable that embeds the
 interpreter and is `ppy run` in a compiled coat: it enters the same CLI, the
 same pipeline, and the same guarded bindings, and only takes its machine code
 from the library built next to it instead of a JIT (`ppy run --prebuilt
-MANIFEST` is the spelled-out form). A manifest that names a library which has
+MANIFEST` is the spelled-out form, and takes the same runtime-only fast
+path — no analysis, manifest validation only). A manifest that names a library which has
 gone missing is an error, never a silent fall back to interpretation; a
 program with nothing native simply binds nothing, like `ppy run` would.
 `-o` puts the artifacts somewhere other than the cache. With the JAX plugin
 enabled and permitted, staged functions are exported here too.
+
+The artifact is complete: the manifest carries the full native ABI and a
+program section, and `generated/` holds the optimized Python the build wrote,
+so the launcher loads `ppy_runtime`, binds, and executes — it does not
+discover a project, parse, analyze, or touch LLVM, and it keeps working with
+`ppy_compiler` uninstalled. Launch wall time is ~170 ms on the reference
+machine against ~2 s for a cold `ppy run`; `examples/bench_startup.py`
+measures the categories separately.
 
 ## `ppy explain` — why it compiled that way
 

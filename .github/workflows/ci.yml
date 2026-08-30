@@ -22,9 +22,9 @@ jobs:
       # the test suite, run_all, verify_conversions -- skips what is missing
       # and says so rather than pretending it ran.
       - run: uv sync
-      - run: uv run ruff check src tests examples/run_all.py examples/lint_all.py examples/verify_conversions.py
+      - run: uv run ruff check src tests examples/run_all.py examples/lint_all.py examples/verify_conversions.py examples/bench_startup.py
       - run: uv run ruff format --check src tests
-      - run: uv run pylint src/ppy src/ppy_compiler tests examples/run_all.py examples/lint_all.py examples/verify_conversions.py
+      - run: uv run pylint src/ppy src/ppy_compiler tests examples/run_all.py examples/lint_all.py examples/verify_conversions.py examples/bench_startup.py
       - run: uv run pytest -q
       - run: uv run python examples/verify_conversions.py
       - run: uv run python examples/run_all.py

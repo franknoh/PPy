@@ -115,10 +115,12 @@ def write_manifest(
     *,
     library: Path | None,
     fused: dict[str, tuple[int, int]] | None = None,
+    program: dict | None = None,
 ) -> Path:
     """Write the PPY Native Binding Manifest for the built symbols (spec 26.2)."""
     payload = {
         "abi_version": MANIFEST_ABI_VERSION,
+        "program": program,
         # By name: the library sits next to the manifest, and the pair must
         # survive being moved or shipped together.
         "native_library": library.name if library else None,
@@ -141,8 +143,25 @@ def write_manifest(
                     "meaning": "0 = ok, non-zero = re-run the Python implementation",
                 },
                 "effects": ["may_raise"],
-                "gil": "not_required",
+                "gil": "not_required" if signature.releases_gil else "required",
                 "thread_safe": True,
+                "module": _owning_module(signature.qualname, program),
+                "binding": _binding_of(signature.qualname, program),
+                "abi": {
+                    "parameters": [
+                        {
+                            "name": parameter.name,
+                            "kind": parameter.kind,
+                            "element": parameter.element,
+                            "elements": list(parameter.elements),
+                            "fields": [list(pair) for pair in parameter.fields],
+                            "class_name": parameter.class_name,
+                        }
+                        for parameter in signature.parameters
+                    ],
+                    "returns": list(signature.returns),
+                    "releases_gil": signature.releases_gil,
+                },
             }
             for signature in sorted(entries.values(), key=lambda s: s.qualname)
         ],
@@ -154,6 +173,21 @@ def write_manifest(
     destination.parent.mkdir(parents=True, exist_ok=True)
     destination.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
     return destination
+
+
+def _owning_module(qualname: str, program: dict | None) -> str:
+    """The generated module a binding belongs to, by longest name prefix."""
+    modules = (program or {}).get("modules", ())
+    best = ""
+    for module in modules:
+        if qualname.startswith(module + ".") and len(module) > len(best):
+            best = module
+    return best or qualname.rpartition(".")[0]
+
+
+def _binding_of(qualname: str, program: dict | None) -> str:
+    module = _owning_module(qualname, program)
+    return qualname[len(module) + 1 :] if qualname.startswith(module + ".") else qualname
 
 
 def _argument(parameter: NativeParam) -> dict[str, object]:
@@ -213,22 +247,18 @@ int main(int argc, char **argv)
 }}
 """
 
-#: The launcher is `ppy run` in a compiled coat: it enters the same CLI, the
-#: same pipeline, and the same guarded bindings -- only the machine code is
-#: taken from the library built next to it instead of being JIT-compiled.
+#: The launcher is compiled software: it loads the runtime, the manifest,
+#: and the native library, and executes. The compiler is not imported -- all
+#: analysis happened at build time, and uninstalling `ppy_compiler` must not
+#: break a built application.
 _BOOTSTRAP = """import sys
+from pathlib import Path
 for extra in {paths!r}:
     if extra not in sys.path:
         sys.path.append(extra)
 sys.path.insert(0, {search!r})
-from ppy_compiler.driver.cli import main
-sys.exit(main([
-    "run",
-    "--prebuilt", {manifest!r},
-    "--safeguards", {safeguards!r},
-    {entry!r},
-    "--", *sys.argv[1:],
-]))
+from ppy_runtime.launch import main
+sys.exit(main(Path({manifest!r}), sys.argv[1:]))
 """
 
 
@@ -238,7 +268,7 @@ def _c_string(text: str) -> str:
 
 
 def build_launcher(
-    entry: Path, destination: Path, search_paths: list[Path], manifest: Path, safeguards: str
+    entry: Path, destination: Path, search_paths: list[Path], manifest: Path
 ) -> Path:
     """Compile a native launcher that embeds CPython and runs the entry point."""
     compiler = _compiler()
@@ -258,9 +288,7 @@ def build_launcher(
     # build-time import path is the right one to record (spec 16.5).
     bootstrap = _BOOTSTRAP.format(
         search=search,
-        entry=str(entry),
         manifest=str(manifest),
-        safeguards=safeguards,
         paths=[p for p in sys.path if p],
     )
     source = _LAUNCHER.format(bootstrap=_c_string(bootstrap))

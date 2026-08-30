@@ -80,7 +80,9 @@ Python-integer semantics (overflow is guarded and falls back to arbitrary
 precision — that is the 45 ms, C parity with the guards in), while
 `ppy build` produces a wrap-semantics artifact like every native compiler —
 that is the 35 ms, past C. `run --unsafe` and `build --safe` flip either
-one; bounds checks stay in both. (Python's floor semantics help too:
+one; bounds checks stay in both. The built binary is compiled software: it
+launches in ~170 ms through `ppy_runtime` alone, and keeps working with the
+compiler uninstalled. (Python's floor semantics help too:
 `n // 2` lowers to one arithmetic shift exactly, where C's truncating
 division needs a sign fixup.)
 

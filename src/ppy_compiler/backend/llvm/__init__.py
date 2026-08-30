@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import ast
 import contextlib
+import json
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -400,11 +401,50 @@ def compile_project(  # type: ignore[no-untyped-def]
             artifacts.reused.append("link")
         else:
             _link_and_cache(artifacts, store, library_key, destination)
+    generated_dir = build_directory / "generated"
+    program: dict | None = None
+    entry_module = None
+    if entry is not None:
+        for name, symbols in bundle.symbols.modules.items():
+            if symbols.path == entry.resolve():
+                entry_module = name
+                break
+    if entry_module is not None:
+        output = build_python(
+            bundle,
+            opt_level=level,
+            target="llvm",
+            fusion={name: native.fusion_plan for name, native in natives.items()},
+            adjustments=adjustments_for_project(bundle),
+        )
+        generated_dir.mkdir(parents=True, exist_ok=True)
+        listed: dict[str, str] = {}
+        for name, module in output.generated.items():
+            payload = {
+                "name": module.name,
+                "source": str(module.source_path),
+                "code": module.code,
+                "artifact": str(module.artifact),
+                "key": module.key,
+                "line_map": {str(k): v for k, v in module.line_map.items()},
+                "fused_symbols": list(module.fused_symbols),
+            }
+            filename = f"{name}.json"
+            (generated_dir / filename).write_text(json.dumps(payload, indent=1), encoding="utf-8")
+            listed[name] = filename
+        program = {
+            "entry": entry_module,
+            "modules": sorted(output.generated),
+            "generated": listed,
+            "search_paths": [str(path) for path in bundle.project.search_paths],
+            "safeguards": bundle.project.config.llvm.safeguards or "hoisted",
+        }
     artifacts.manifest = write_manifest(
         build_directory / "ppy-bindings.json",
         signatures,
         library=artifacts.library,
         fused=fused,
+        program=program,
     )
 
     if entry is not None:
@@ -414,7 +454,6 @@ def compile_project(  # type: ignore[no-untyped-def]
                 build_directory / entry.stem,
                 bundle.project.search_paths,
                 artifacts.manifest,
-                bundle.project.config.llvm.safeguards or "hoisted",
             )
         except ToolchainError as exc:
             artifacts.notes.append(f"no native launcher: {exc}")
@@ -422,16 +461,9 @@ def compile_project(  # type: ignore[no-untyped-def]
 
 
 def compile_and_run(  # type: ignore[no-untyped-def]
-    bundle, program_args, reporter, *, opt_level: int | None = None, prebuilt: Path | None = None
+    bundle, program_args, reporter, *, opt_level: int | None = None
 ) -> int:
-    """`ppy run`: JIT-compile the native subset, then execute with CPython as host.
-
-    With `prebuilt`, the one thing that changes is where machine code comes
-    from: symbol addresses are looked up in the library `ppy build` linked
-    instead of being JIT-compiled. Everything else -- analysis, the generated
-    Python, the guarded bindings, the fallbacks -- is the same path, which is
-    what makes the launcher's behavior the behavior of `ppy run`.
-    """
+    """`ppy run`: JIT-compile the native subset, then execute with CPython as host."""
     if not available():
         raise LlvmUnavailable("llvmlite is not installed, so the LLVM backend is unavailable")
 
@@ -450,23 +482,11 @@ def compile_and_run(  # type: ignore[no-untyped-def]
         adjustments=adjustments_for_project(bundle),
     )
 
-    engine = None
-    library = None
-    if prebuilt is not None:
-        library = _prebuilt_library(prebuilt, reporter)
-        if library is None:
-            return 2
-    else:
-        engine = JitEngine(opt_level=level).open()
-        for native in natives.values():
-            if native.functions or native.fused:
-                engine.add(native.ir)
-        engine.finalize()
-
-    def address_of(symbol: str) -> int:
-        if engine is not None:
-            return engine.address(symbol)
-        return _library_address(library, symbol)
+    engine = JitEngine(opt_level=level).open()
+    for native in natives.values():
+        if native.functions or native.fused:
+            engine.add(native.ir)
+    engine.finalize()
 
     binder = _Binder(
         threads=bundle.project.config.parallel.threads
@@ -477,9 +497,7 @@ def compile_and_run(  # type: ignore[no-untyped-def]
     for name, native in natives.items():
         analysis = bundle.analysis.modules.get(name)
         specializer = None
-        # Runtime specialization JIT-compiles new variants; a prebuilt
-        # library runs exactly what was built.
-        if engine is not None and analysis is not None and native.sources:
+        if analysis is not None and native.sources:
             specializer = Specializer(
                 engine=engine,
                 module_analysis=analysis,
@@ -506,7 +524,7 @@ def compile_and_run(  # type: ignore[no-untyped-def]
             )
 
         for qualname, lowered in native.functions.items():
-            address = address_of(lowered.signature.symbol)
+            address = engine.address(lowered.signature.symbol)
             if not address:
                 continue
             binder.add(
@@ -519,12 +537,10 @@ def compile_and_run(  # type: ignore[no-untyped-def]
                 wrappers=wrappers,
                 qualname=qualname,
                 layouts=layouts,
-                # The owner anchor keeps the machine code alive: the JIT
-                # engine, or the dlopened prebuilt library.
-                engine=engine if engine is not None else library,
+                engine=engine,
             )
         for symbol, loop in native.fused.items():
-            address = address_of(symbol)
+            address = engine.address(symbol)
             if address:
                 binder.add_fused(name, loop, address)
         _report(native, reporter, bundle)
@@ -560,65 +576,6 @@ def compile_and_run(  # type: ignore[no-untyped-def]
     if result.exception is not None:
         sys.stderr.write(format_traceback(result.exception))
     return result.exit_code
-
-
-def _prebuilt_library(manifest: Path, reporter):  # type: ignore[no-untyped-def]
-    """Open the library a manifest points at, or say precisely what is missing."""
-    import ctypes
-    import json
-
-    from ...diagnostics import Diagnostic, Severity
-
-    try:
-        payload = json.loads(manifest.read_text(encoding="utf-8"))
-    except (OSError, ValueError) as exc:
-        reporter.emit(
-            Diagnostic(
-                "E1801",
-                Severity.ERROR,
-                f"cannot read the binding manifest {manifest}: {exc}",
-                help="rebuild the artifacts with `ppy build`",
-            )
-        )
-        return None
-    spelled = payload.get("native_library")
-    if not spelled:
-        # Nothing in this program lowered natively; there is no library to
-        # load, and every binding falls back to its Python body -- exactly
-        # what `ppy run` does for the same program.
-        return _NO_LIBRARY
-    candidates = [manifest.parent / Path(spelled).name, Path(spelled)]
-    for candidate in candidates:
-        if candidate.is_file():
-            try:
-                return ctypes.CDLL(str(candidate))
-            except OSError as exc:
-                reporter.emit(
-                    Diagnostic("E1801", Severity.ERROR, f"cannot load {candidate}: {exc}")
-                )
-                return None
-    reporter.emit(
-        Diagnostic(
-            "E1801",
-            Severity.ERROR,
-            f"the native library named by {manifest} is missing",
-            help="rebuild the artifacts with `ppy build`",
-        )
-    )
-    return None
-
-
-#: A manifest with no native library: valid, and empty of symbols.
-_NO_LIBRARY = object()
-
-
-def _library_address(library, symbol: str) -> int:  # type: ignore[no-untyped-def]
-    import ctypes
-
-    try:
-        return ctypes.cast(getattr(library, symbol), ctypes.c_void_p).value or 0
-    except AttributeError:
-        return 0
 
 
 def _value_class_types(signature, fallback, layouts):  # type: ignore[no-untyped-def]

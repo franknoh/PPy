@@ -63,10 +63,12 @@ supposed to.
 
 Caches earn their keep inside a run, not around it: on the collatz module,
 lowering to IR costs 777 ms cold and 12 ms from the content-addressed store.
-What no cache can remove is per-process — importing the compiler (~850 ms)
-and MCJIT machine-code emission (~190 ms) — which is exactly what the
-launcher `ppy build` emits pays once instead of every run. `PPY_CACHE_DIR`
-moves the store itself off a slow filesystem.
+What no cache can remove from `ppy run` is per-process — importing the
+compiler (~850 ms) and MCJIT machine-code emission (~190 ms) — and that is
+what `ppy build` pays once: its launcher runs through `ppy_runtime` alone
+(~170 ms wall, compiler not even imported). `examples/bench_startup.py`
+reports cold build, warm build, launcher, prebuilt, and JIT walls
+separately. `PPY_CACHE_DIR` moves the store itself off a slow filesystem.
 
 ## `.ppy` under ordinary CPython
 

@@ -13,7 +13,7 @@ import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).parent
-SKIP = {"run_all.py", "verify_conversions.py", "lint_all.py"}
+SKIP = {"run_all.py", "verify_conversions.py", "lint_all.py", "bench_startup.py"}
 
 #: Folders whose `.py` is the deliberately messy "before" picture of a
 #: migration; the claim is that the `.ppy` lints clean, not the input.

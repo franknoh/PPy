@@ -11,6 +11,9 @@ import ast
 import copy
 from dataclasses import dataclass, field
 
+# The LLVM backend injects this name to supply a fused kernel to a module.
+from ppy_runtime.generated import FUSED_BINDER
+
 from ..analysis import types as T
 from ..analysis.checker import FunctionAnalysis, ModuleAnalysis
 from ..analysis.symbols import FunctionInfo
@@ -34,9 +37,6 @@ __all__ = [
     "UnreachableCode",
     "UnusedLocals",
 ]
-
-#: Name the LLVM backend injects to supply a fused kernel to a module.
-from ppy_runtime.generated import FUSED_BINDER
 
 _MAX_UNROLL = 8
 _INLINE_BUDGET = {2: 16, 3: 48}
