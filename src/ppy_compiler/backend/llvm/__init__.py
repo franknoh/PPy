@@ -140,7 +140,9 @@ def _collect(bundle, opt_level: int | None = None) -> dict[str, NativeModule]:  
         fused, plan, notes = _fuse(symbols, analysis)
         if not candidates and not fused:
             continue
-        result: LoweringResult = lower_module(analysis, candidates, layouts)
+        result: LoweringResult = lower_module(
+            analysis, candidates, layouts, safeguards=bundle.project.config.llvm.safeguards
+        )
         ir_text = result.ir
         if fused:
             ir_text = _append_fused(ir_text, module.name, fused)
@@ -480,6 +482,7 @@ def compile_and_run(  # type: ignore[no-untyped-def]
                 cache=bundle.project.store,
                 cache_directory=bundle.project.config.cache_path / "jit",
                 layouts=layouts,
+                safeguards=bundle.project.config.llvm.safeguards,
             )
             for info, node in native.sources.values():
                 specializer.register(info, node)

@@ -188,6 +188,7 @@ class Specializer:
     cache: object | None = None
     cache_directory: Path | None = None
     layouts: dict = field(default_factory=dict)
+    safeguards: str = "hoisted"
     compiled: list[Specialization] = field(default_factory=list)
     refusals: list[tuple[str, str]] = field(default_factory=list)
     _sources: dict[str, tuple[FunctionInfo, ast.FunctionDef]] = field(default_factory=dict)
@@ -209,7 +210,13 @@ class Specializer:
         specialization = Specialization(key=key, symbol=symbol)
         try:
             text = lower_specialization(
-                self.module_analysis, info, node, key.constants, symbol, self.layouts
+                self.module_analysis,
+                info,
+                node,
+                key.constants,
+                symbol,
+                self.layouts,
+                safeguards=self.safeguards,
             )
         except Exception as exc:  # noqa: BLE001 - a refusal keeps the generic code
             specialization.reason = f"could not lower: {exc}"

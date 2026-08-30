@@ -225,7 +225,13 @@ def module_cache_key(
         target=target,
         dependency_hashes=dependency_hashes,
         plugin_fingerprints=bundle.project.plugins.fingerprints(_imported_modules(symbols)),
-        extra=(config.strict, config.dynamic_boundaries, config.inference.implicit_any, *extra),
+        extra=(
+            config.strict,
+            config.dynamic_boundaries,
+            config.inference.implicit_any,
+            config.llvm.safeguards,
+            *extra,
+        ),
     )
 
 

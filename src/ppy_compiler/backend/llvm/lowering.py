@@ -303,6 +303,7 @@ def lower_specialization(
     constants: dict[str, object],
     symbol: str,
     layouts: ClassLayouts | None = None,
+    safeguards: str = "hoisted",
 ) -> str:
     """Emit an LLVM module holding one specialized copy of a function.
 
@@ -322,7 +323,7 @@ def lower_specialization(
     function.linkage = "external"
     declarations = {info.qualname: (function, signature)}
     _FunctionLowering(
-        ir, llvm_module, function, info, module, declarations, constants, layouts
+        ir, llvm_module, function, info, module, declarations, constants, layouts, safeguards
     ).run(node)
     return str(llvm_module)
 
@@ -331,6 +332,7 @@ def lower_module(
     module: ModuleAnalysis,
     functions: dict[str, tuple[FunctionInfo, FunctionAnalysis, ast.FunctionDef]],
     layouts: ClassLayouts | None = None,
+    safeguards: str = "hoisted",
 ) -> LoweringResult:
     """Emit an LLVM module for every eligible function."""
     from llvmlite import ir
@@ -360,7 +362,14 @@ def lower_module(
         function, signature = declarations[qualname]
         try:
             _FunctionLowering(
-                ir, llvm_module, function, info, module, declarations, layouts=layouts
+                ir,
+                llvm_module,
+                function,
+                info,
+                module,
+                declarations,
+                layouts=layouts,
+                safeguards=safeguards,
             ).run(node)
         except Unsupported as exc:
             rejected[qualname] = str(exc)
@@ -470,11 +479,58 @@ class _Tuple:
         return len(self.items)
 
 
+class _GuardSite:
+    """An open block ahead of one loop, collecting that loop's hoisted guards.
+
+    The block sits between the loop's bound computation and its setup, so
+    every check in it runs once per loop *entry* instead of once per
+    iteration -- and a body freed of its side exits is one the optimizer can
+    strength-reduce and vectorize. A failed check takes the same road a
+    failed inline guard always took: the function's fallback, and CPython.
+    """
+
+    def __init__(self, ir, function, fallback, block) -> None:  # type: ignore[no-untyped-def]
+        self.ir = ir
+        self.function = function
+        self.fallback = fallback
+        self.builder = ir.IRBuilder(block)
+
+    def bail_if(self, condition) -> None:  # type: ignore[no-untyped-def]
+        keep = self.function.append_basic_block("guards.ok")
+        self.builder.cbranch(condition, self.fallback, keep)
+        self.builder.position_at_end(keep)
+
+    def finish(self, destination) -> None:  # type: ignore[no-untyped-def]
+        self.builder.branch(destination)
+
+
+def _rebinds(body: list[ast.stmt], name: str) -> bool:
+    """Does the loop body bind `name` itself, invalidating its range?"""
+    for statement in body:
+        for child in ast.walk(statement):
+            if (
+                isinstance(child, ast.Name)
+                and child.id == name
+                and isinstance(child.ctx, (ast.Store, ast.Del))
+            ):
+                return True
+    return False
+
+
 class _FunctionLowering:
     """Lowers one function body to LLVM IR."""
 
     def __init__(  # type: ignore[no-untyped-def]
-        self, ir, module, function, info, analysis, declarations, constants=None, layouts=None
+        self,
+        ir,
+        module,
+        function,
+        info,
+        analysis,
+        declarations,
+        constants=None,
+        layouts=None,
+        safeguards: str = "hoisted",
     ) -> None:
         # Strict Python floating-point ordering unless the function opted out.
         self.fp_flags = list(FASTMATH_FLAGS) if info.directive("fastmath") is not None else []
@@ -499,6 +555,16 @@ class _FunctionLowering:
         self.outs = list(function.args[-len(self.returns) :])
         self.out = function.args[-1]
         self.fallback_block = None
+        self.hoist_guards = safeguards != "inline"
+        #: Open guard blocks, one per active hoistable loop, outermost first.
+        self._guard_sites: list = []
+        #: Induction variable name -> (lo, hi, depth), both IR values that
+        #: dominate the loop's guard block.
+        self._induction: dict[str, tuple[object, object, int]] = {}
+        #: IR value -> (lo, hi, depth): a proven range for a body value.
+        self._ranges: dict[object, tuple[object, object, int]] = {}
+        #: Results whose guards were hoisted; their consumers hoist too.
+        self._hoisted: set = set()
 
     def run(self, node: ast.FunctionDef) -> None:
         ir = self.ir
@@ -554,6 +620,19 @@ class _FunctionLowering:
             self.builder.store(initial, slot)
             self.locals[parameter.name] = (slot, parameter.kind)
             position += 1
+
+        stored = {
+            name.id
+            for statement in node.body
+            for name in ast.walk(statement)
+            if isinstance(name, ast.Name) and isinstance(name.ctx, (ast.Store, ast.Del))
+        }
+        #: Integer parameters the body never rebinds: their slot holds one
+        #: value forever, so a load in the entry block speaks for every read.
+        self._stable = {
+            name for name, (_slot, scalar) in self.locals.items() if scalar == "int"
+        } - stored
+        self._entry_loads: dict[str, object] = {}
 
         self._body(node.body)
         if not self.builder.block.is_terminated:
@@ -753,8 +832,29 @@ class _FunctionLowering:
             start, stop, step = bounds[0].value, bounds[1].value, bounds[2].value
             if not isinstance(step, ir.Constant):
                 raise Unsupported("a non-constant `range` step has no native lowering")
+            if step.constant == 0:
+                # CPython raises ValueError; a native loop would spin forever.
+                raise Unsupported("`range` with a zero step has no native lowering")
         else:
             raise Unsupported("`range` takes at most three arguments")
+
+        site = None
+        saved_induction = self._induction.get(node.target.id)
+        if self.hoist_guards and not _rebinds(node.body, node.target.id):
+            guards = self.function.append_basic_block("for.guards")
+            setup = self.function.append_basic_block("for.setup")
+            self.builder.branch(guards)
+            site = _GuardSite(ir, self.function, self.fallback_block, guards)
+            self.builder.position_at_end(setup)
+            self._guard_sites.append(site)
+            one = ir.Constant(i64, 1)
+            if step.constant > 0:
+                # Body loads sit in [start, stop-1]; a wrapping stop-1 can
+                # only happen when the loop is empty and the body never runs.
+                lo, hi = start, site.builder.sub(stop, one)
+            else:
+                lo, hi = site.builder.add(stop, one), start
+            self._induction[node.target.id] = (lo, hi, len(self._guard_sites))
 
         slot = self.builder.alloca(i64, name=node.target.id)
         self.builder.store(start, slot)
@@ -763,6 +863,7 @@ class _FunctionLowering:
         header = self.function.append_basic_block("for.head")
         body = self.function.append_basic_block("for.body")
         exit_block = self.function.append_basic_block("for.end")
+        loop_setup = self.builder.block
         self.builder.branch(header)
 
         self.builder.position_at_end(header)
@@ -775,10 +876,19 @@ class _FunctionLowering:
         self._body(node.body)
         if not self.builder.block.is_terminated:
             value = self.builder.load(slot)
+            if site is not None:
+                self._ranges[value] = self._induction[node.target.id]
             self.builder.store(self._checked_add(value, step), slot)
             self.builder.branch(header)
 
         self.builder.position_at_end(exit_block)
+        if site is not None:
+            site.finish(loop_setup)
+            self._guard_sites.pop()
+            if saved_induction is None:
+                self._induction.pop(node.target.id, None)
+            else:
+                self._induction[node.target.id] = saved_induction
 
     def _for_buffer(self, node: ast.For, name: str) -> None:
         """`for x in xs:` over a borrowed native buffer."""
@@ -827,9 +937,26 @@ class _FunctionLowering:
         )
 
     def _guard_index(self, position: _Value, length) -> None:  # type: ignore[no-untyped-def]
-        """A negative or out-of-range index is left to CPython."""
+        """A negative or out-of-range index is left to CPython.
+
+        An index with a proven range checks its extremes once in the loop's
+        guard block instead -- removing the side exit is what lets the loop
+        vectorize -- provided the length is an argument or a constant, which
+        is the only kind of length a buffer holds.
+        """
         ir = self.ir
         zero = ir.Constant(ir.IntType(64), 0)
+        if self.hoist_guards:
+            entry = self._ranges.get(position.value)
+            if entry is not None:
+                lo, hi, depth = entry
+                dominates = isinstance(length, ir.Constant) or length in tuple(self.function.args)
+                if 1 <= depth <= len(self._guard_sites) and dominates:
+                    site = self._guard_sites[depth - 1]
+                    negative = site.builder.icmp_signed("<", lo, zero)
+                    beyond = site.builder.icmp_signed(">=", hi, length)
+                    site.bail_if(site.builder.or_(negative, beyond))
+                    return
         negative = self.builder.icmp_signed("<", position.value, zero)
         beyond = self.builder.icmp_signed(">=", position.value, length)
         ok = self.function.append_basic_block("index.ok")
@@ -908,11 +1035,21 @@ class _FunctionLowering:
             case ast.Constant(value=int() as value):
                 if not -(1 << 63) <= value < (1 << 63):
                     raise Unsupported("an integer literal exceeds the native machine range")
-                return _Value(ir.Constant(ir.IntType(64), value), "int")
+                constant = ir.Constant(ir.IntType(64), value)
+                self._ranges[constant] = (constant, constant, 0)
+                return _Value(constant, "int")
             case ast.Constant(value=float() as value):
                 return _Value(ir.Constant(ir.DoubleType(), value), "float")
             case ast.Name():
-                return self._load(node.id)
+                loaded = self._load(node.id)
+                if loaded.scalar == "int":
+                    interval = self._induction.get(node.id)
+                    if interval is not None:
+                        self._ranges[loaded.value] = interval
+                    elif self.hoist_guards and node.id in getattr(self, "_stable", ()):
+                        anchor = self._entry_load(node.id)
+                        self._ranges[loaded.value] = (anchor, anchor, 0)
+                return loaded
             case ast.BinOp():
                 return self._binary(self._expr(node.left), self._expr(node.right), type(node.op))
             case ast.UnaryOp():
@@ -1238,7 +1375,16 @@ class _FunctionLowering:
         return self._checked_binary(value, step, ast.Add)
 
     def _checked_binary(self, left, right, op: type[ast.operator]):  # type: ignore[no-untyped-def]
-        """Machine arithmetic with an overflow guard back to CPython (spec 12.2)."""
+        """Machine arithmetic with an overflow guard back to CPython (spec 12.2).
+
+        When both operands carry a proven range, the guard hoists: the
+        extreme cases are checked once in the enclosing loop's guard block,
+        and the body runs the plain instruction. Same failure road either
+        way -- the fallback and CPython.
+        """
+        hoisted = self._hoisted_binary(left, right, op)
+        if hoisted is not None:
+            return hoisted
         ir = self.ir
         name = _OVERFLOW_INTRINSICS[op]
         i64 = ir.IntType(64)
@@ -1251,6 +1397,107 @@ class _FunctionLowering:
         self.builder.cbranch(overflowed, self.fallback_block, continue_block)
         self.builder.position_at_end(continue_block)
         return result
+
+    def _hoisted_binary(self, left, right, op: type[ast.operator]):  # type: ignore[no-untyped-def]
+        if not self.hoist_guards or op not in _OVERFLOW_INTRINSICS:
+            return None
+        left_range = self._ranges.get(left)
+        right_range = self._ranges.get(right)
+        if left_range is None or right_range is None:
+            return None
+        # Only chains that contain a multiplication hoist. A guarded add of
+        # an induction variable is something LLVM proves and folds by itself;
+        # a guarded multiply is the one thing it cannot see through, and the
+        # additions that consume its result must follow it out or the chain
+        # stays opaque.
+        if op is not ast.Mult and left not in self._hoisted and right not in self._hoisted:
+            return None
+        depth = max(left_range[2], right_range[2])
+        if depth < 1 or depth > len(self._guard_sites):
+            return None
+        site = self._guard_sites[depth - 1]
+        bounds = self._corner_check(site, left_range, right_range, op)
+        operations = {
+            ast.Add: self.builder.add,
+            ast.Sub: self.builder.sub,
+            ast.Mult: self.builder.mul,
+        }
+        # The corners proved no signed wrap; saying so is what keeps SCEV able
+        # to fold the inductions this value feeds.
+        result = operations[op](left, right, flags=("nsw",))
+        self._ranges[result] = (*bounds, depth)
+        self._hoisted.add(result)
+        return result
+
+    def _corner_check(self, site: _GuardSite, left_range, right_range, op):  # type: ignore[no-untyped-def]
+        """Prove the operation safe for its extreme operands, once.
+
+        Every value the body can hold lies between its operands' corners, so
+        if no corner overflows, no iteration can. Any corner overflowing --
+        or an already-empty loop with absurd bounds -- bails to CPython,
+        which is never wrong, only slower.
+        """
+        ir = self.ir
+        i64 = ir.IntType(64)
+        name = _OVERFLOW_INTRINSICS[op]
+        signature = ir.FunctionType(ir.LiteralStructType([i64, ir.IntType(1)]), [i64, i64])
+        function = self.module.globals.get(name) or ir.Function(self.module, signature, name=name)
+        left_lo, left_hi, _ = left_range
+        right_lo, right_hi, _ = right_range
+        if op is ast.Add:
+            corners = [(left_lo, right_lo), (left_hi, right_hi)]
+        elif op is ast.Sub:
+            corners = [(left_lo, right_hi), (left_hi, right_lo)]
+        else:
+            corners = [
+                (left_lo, right_lo),
+                (left_lo, right_hi),
+                (left_hi, right_lo),
+                (left_hi, right_hi),
+            ]
+        builder = site.builder
+        values = []
+        overflowed = None
+        for first, second in corners:
+            packed = builder.call(function, [first, second])
+            values.append(builder.extract_value(packed, 0))
+            flag = builder.extract_value(packed, 1)
+            overflowed = flag if overflowed is None else builder.or_(overflowed, flag)
+        site.bail_if(overflowed)
+        if len(values) == 2:
+            return values[0], values[1]
+        lo, hi = values[0], values[0]
+        for value in values[1:]:
+            lo = builder.call(self._i64_intrinsic("llvm.smin.i64"), [lo, value])
+            hi = builder.call(self._i64_intrinsic("llvm.smax.i64"), [hi, value])
+        return lo, hi
+
+    def _entry_load(self, name: str):  # type: ignore[no-untyped-def]
+        """One load of a never-rebound parameter, placed to dominate everything."""
+        existing = self._entry_loads.get(name)
+        if existing is not None:
+            return existing
+        slot, _scalar = self.locals[name]
+        entry = self.function.blocks[0]
+        if self.builder.block is entry:
+            # Still in the entry block: the live builder must stay the one
+            # appending, or its notion of the end goes stale.
+            value = self.builder.load(slot, name=f"{name}.entry")
+        else:
+            builder = self.ir.IRBuilder(entry)
+            if entry.is_terminated:
+                builder.position_before(entry.instructions[-1])
+            value = builder.load(slot, name=f"{name}.entry")
+        self._entry_loads[name] = value
+        return value
+
+    def _i64_intrinsic(self, name: str):  # type: ignore[no-untyped-def]
+        ir = self.ir
+        existing = self.module.globals.get(name)
+        if existing is not None:
+            return existing
+        i64 = ir.IntType(64)
+        return ir.Function(self.module, ir.FunctionType(i64, [i64, i64]), name=name)
 
     def _python_floordiv(self, left, right, op: type[ast.operator]):  # type: ignore[no-untyped-def]
         """`//` and `%` with Python's floor semantics, not C truncation."""

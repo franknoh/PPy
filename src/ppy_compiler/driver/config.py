@@ -40,6 +40,9 @@ class LlvmConfig:
     jit: bool = True
     lto: str = "thin"
     cpython_api: str = "version-specific"
+    #: "hoisted" (default) proves loop guards once before the loop and runs a
+    #: clean body; "inline" keeps the per-operation guards in the body.
+    safeguards: str = "hoisted"
 
 
 @dataclass(slots=True)
@@ -175,6 +178,7 @@ def _apply(config: Config, table: Mapping[str, Any]) -> Config:
             jit=_as_bool(sub.get("jit"), True),
             lto=sub.get("lto", "thin"),
             cpython_api=sub.get("cpython-api", "version-specific"),
+            safeguards=sub.get("safeguards", "hoisted"),
         )
     if isinstance(sub := table.get("parallel"), Mapping):
         config.parallel = ParallelConfig(

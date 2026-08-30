@@ -110,6 +110,80 @@ def test_floor_division_by_a_power_of_two_lowers_to_shifts(write, analyze):
     assert "ashr" in native.ir
 
 
+def test_multiplied_index_guards_hoist_out_of_the_loop(write, analyze):
+    """`i * n + k` proves its extremes once per loop entry, not per iteration.
+
+    The body keeps a plain `mul nsw`; the corner checks live in the loop's
+    guard block. `safeguards = "inline"` restores the per-operation guards.
+    """
+    path = write(
+        "kernel.ppy",
+        """
+        import ppy
+        from ppy import Buffer
+
+
+        @ppy.opt(3)
+        def total(a: Buffer[float], n: int) -> float:
+            out: float = 0.0
+            for i in range(n):
+                for k in range(n):
+                    out += a[i * n + k]
+            return out
+        """,
+    )
+    bundle = analyze(path)
+    native = _collect(bundle, 2)["kernel"]
+    assert "for.guards" in native.ir
+    assert "mul nsw" in native.ir
+
+    bundle.project.config.llvm.safeguards = "inline"
+    inline = _collect(bundle, 2)["kernel"]
+    assert "for.guards" not in inline.ir
+    assert "mul nsw" not in inline.ir
+
+
+def test_hoisted_guards_keep_python_semantics_at_the_extremes(tmp_path: Path):
+    """A bailed preflight is CPython, bit for bit -- IndexError included."""
+    (tmp_path / "pyproject.toml").write_text("[tool.ppy]\n", encoding="utf-8")
+    (tmp_path / "extremes.ppy").write_text(
+        textwrap.dedent(
+            """
+            import array
+
+            import ppy
+            from ppy import Buffer
+
+
+            @ppy.opt(3)
+            def gather(xs: Buffer[int], n: int, scale: int) -> int:
+                total: int = 0
+                for i in range(n):
+                    total += xs[i * scale]
+                return total
+
+
+            def main() -> None:
+                xs = array.array("q", list(range(16)))
+                print(gather(xs, 4, 3))
+                for scale in (4611686018427387904, -3):
+                    try:
+                        gather(xs, 4, scale)
+                    except IndexError as error:
+                        print(type(error).__name__, scale < 0)
+
+
+            main()
+            """
+        ).lstrip("\n"),
+        encoding="utf-8",
+    )
+    plain = _run([sys.executable, "extremes.ppy"], tmp_path)
+    native = _ppy(["run", "extremes.ppy"], tmp_path)
+    assert native.returncode == 0, native.stderr
+    assert native.stdout == plain.stdout
+
+
 def test_power_of_two_floor_semantics_match_python_on_every_sign(tmp_path: Path):
     (tmp_path / "pyproject.toml").write_text("[tool.ppy]\n", encoding="utf-8")
     (tmp_path / "negdiv.ppy").write_text(

@@ -53,6 +53,7 @@ enabled = true                    # any other keys are plugin options
 | `python` | `>=3.12,<3.15` | the CPython versions the project promises to run on. |
 | `strict` | `true` | implicit `Any` and unsound constructs are errors; `--no-strict` downgrades the ones with a sound fallback. |
 | `opt-level` | `2` | project default, overridden per run by `-O` and per function by `@ppy.opt(n)`. |
+| `llvm.safeguards` | `hoisted` | where loop guards live: `hoisted` proves the extreme cases once in a guard block ahead of the loop, `inline` keeps every per-operation guard in the body. A failed check takes the same road either way: the fallback, and CPython. |
 | `cache-dir` | `.ppy-cache` | the content-addressed store; relative to the root. The `PPY_CACHE_DIR` environment variable overrides it with a per-project tree underneath — the escape hatch for a repo on a slow filesystem, such as a Windows-mounted drive under WSL. |
 | `dynamic-boundaries` | `explicit` | `explicit` requires `ppy.dynamic` around dynamic features; `deny` forbids them outright (`E1505`). |
 | `build-execution` | `deny` | whether build-time stages may execute project code (JAX StableHLO export, pydantic schema builds). |
