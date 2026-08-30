@@ -202,6 +202,55 @@ def test_run_binds_from_a_prebuilt_manifest(project: Path):
     assert ran.stdout == plain.stdout
 
 
+@requires_toolchain
+def test_build_defaults_to_wrap_semantics_and_safe_restores_python_integers(tmp_path: Path):
+    (tmp_path / "pyproject.toml").write_text("[tool.ppy]\n", encoding="utf-8")
+    (tmp_path / "spin.ppy").write_text(
+        textwrap.dedent(
+            """
+            import ppy
+
+
+            @ppy.pure
+            def spin(n: int) -> int:
+                value: int = 3
+                for _i in range(n):
+                    value = value * 2654435761 + 1
+                return value
+
+
+            print(spin(41))
+            """
+        ).lstrip("\n"),
+        encoding="utf-8",
+    )
+    plain = subprocess.run(
+        [sys.executable, "spin.ppy"], cwd=tmp_path, capture_output=True, text=True, check=False
+    )
+
+    def built(*extra: str) -> str:
+        out = tmp_path / ("safe" if extra else "fast")
+        result = subprocess.run(
+            [sys.executable, "-m", "ppy_compiler", "build", *extra, "spin.ppy", "-o", str(out)],
+            cwd=tmp_path,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert result.returncode == 0, result.stderr
+        launcher = out / "spin"
+        if not launcher.is_file():
+            pytest.skip("no launcher was produced")
+        ran = subprocess.run(
+            [str(launcher)], cwd=tmp_path, capture_output=True, text=True, check=False
+        )
+        assert ran.returncode == 0, ran.stderr
+        return ran.stdout
+
+    assert built().strip() == "8606135309836935036"
+    assert built("--safe") == plain.stdout
+
+
 def test_build_honours_an_explicit_output_directory(project: Path, tmp_path: Path):
     destination = tmp_path / "out"
     result = _build(project, "-o", str(destination))

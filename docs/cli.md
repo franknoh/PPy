@@ -24,7 +24,10 @@ ppy FILE.ppy [-- ARGS...]        # optimized Python backend
 ppy run FILE.ppy [-- ARGS...]    # compile through LLVM, then run
 ```
 
-Everything after `--` reaches the program as `sys.argv[1:]`.
+Everything after `--` reaches the program as `sys.argv[1:]`. `ppy run`
+keeps Python-integer semantics by default; `--unsafe` drops the overflow
+guards on data arithmetic (64-bit wrap, bounds checks stay), and
+`--safeguards {hoisted,inline,off}` names the guard mode outright.
 
 ## `ppy convert` — strict `.py` to `.ppy`
 
@@ -142,7 +145,11 @@ ppy build TARGET [--backend {llvm,python}] [-o DIR]
 ```
 
 `--backend llvm` (default) writes objects, `libppy_<project>.so`,
-`ppy-bindings.json`, and a launcher — a native executable that embeds the
+`ppy-bindings.json`, and a launcher. A build is a wrap-semantics artifact by
+default — data arithmetic overflows at 64 bits like every native compiler's
+output, while bounds checks stay; `--safe` keeps Python's integers
+bit-for-bit instead, and the launcher always runs with exactly the mode it
+was built with. It is a native executable that embeds the
 interpreter and is `ppy run` in a compiled coat: it enters the same CLI, the
 same pipeline, and the same guarded bindings, and only takes its machine code
 from the library built next to it instead of a JIT (`ppy run --prebuilt

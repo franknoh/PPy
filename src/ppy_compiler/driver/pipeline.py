@@ -229,7 +229,7 @@ def module_cache_key(
             config.strict,
             config.dynamic_boundaries,
             config.inference.implicit_any,
-            config.llvm.safeguards,
+            config.llvm.safeguards or "hoisted",
             *extra,
         ),
     )

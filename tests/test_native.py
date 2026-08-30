@@ -143,6 +143,71 @@ def test_multiplied_index_guards_hoist_out_of_the_loop(write, analyze):
     assert "mul nsw" not in inline.ir
 
 
+WRAPPING = """
+import ppy
+
+
+@ppy.pure
+def spin(n: int) -> int:
+    value: int = 3
+    for _i in range(n):
+        value = value * 2654435761 + 1
+    return value
+
+
+print(spin(41))
+"""
+
+
+def test_safe_mode_keeps_python_integers_and_unsafe_mode_wraps(tmp_path: Path):
+    """The `--unsafe` contract, pinned: 64-bit wrap on data arithmetic.
+
+    Safe mode overflows into CPython's arbitrary precision, bit for bit;
+    unsafe mode is the deterministic machine result every wrap-semantics
+    compiler produces.
+    """
+    (tmp_path / "pyproject.toml").write_text("[tool.ppy]\n", encoding="utf-8")
+    (tmp_path / "spin.ppy").write_text(textwrap.dedent(WRAPPING).lstrip("\n"), encoding="utf-8")
+    plain = _run([sys.executable, "spin.ppy"], tmp_path)
+    safe = _ppy(["run", "spin.ppy"], tmp_path)
+    unsafe = _ppy(["run", "--unsafe", "spin.ppy"], tmp_path)
+    assert safe.stdout == plain.stdout
+    assert unsafe.stdout.strip() == "8606135309836935036"
+
+
+def test_unsafe_mode_keeps_bounds_semantics(tmp_path: Path):
+    """Unsafe drops overflow guards, never memory safety."""
+    (tmp_path / "pyproject.toml").write_text("[tool.ppy]\n", encoding="utf-8")
+    (tmp_path / "oob.ppy").write_text(
+        textwrap.dedent(
+            """
+            import array
+
+            import ppy
+            from ppy import Buffer
+
+
+            @ppy.opt(3)
+            def pick(xs: Buffer[int], index: int) -> int:
+                return xs[index]
+
+
+            xs = array.array("q", [1, 2, 3])
+            print(pick(xs, 1))
+            try:
+                pick(xs, 7)
+            except IndexError as error:
+                print("IndexError")
+            """
+        ).lstrip("\n"),
+        encoding="utf-8",
+    )
+    plain = _run([sys.executable, "oob.ppy"], tmp_path)
+    unsafe = _ppy(["run", "--unsafe", "oob.ppy"], tmp_path)
+    assert unsafe.returncode == 0, unsafe.stderr
+    assert unsafe.stdout == plain.stdout
+
+
 def test_hoisted_guards_keep_python_semantics_at_the_extremes(tmp_path: Path):
     """A bailed preflight is CPython, bit for bit -- IndexError included."""
     (tmp_path / "pyproject.toml").write_text("[tool.ppy]\n", encoding="utf-8")

@@ -33,7 +33,10 @@ columns:
 | union-find 5e5 | 186.2 ms | 3.2 ms | 3.9 ms |
 | fermat 6e4 | 25.9 ms | 2.8 ms | 1.8 ms |
 
-Guard hoisting (`[tool.ppy.llvm] safeguards`, on by default) is what closed
+These are `ppy run` numbers, Python-integer semantics included; with
+`--unsafe` (the `ppy build` default) the data-arithmetic guards drop too and
+the wrap-semantics numbers are collatz 34.6 ms, knapsack 4.1 ms, fermat
+2.6 ms. Guard hoisting (`[tool.ppy.llvm] safeguards`) is what closed
 most of the old gaps: a multiplied index like `i * n + k` proves its extreme
 cases once in a guard block ahead of the loop, and the body runs plain `mul
 nsw` with no side exits — which is what lets LLVM strength-reduce and

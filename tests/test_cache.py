@@ -299,7 +299,11 @@ def test_an_object_file_is_reused_rather_than_regenerated(tmp_path: Path):
     from ppy_compiler.driver.pipeline import analyze_paths, module_cache_key, open_project
 
     path = tmp_path / "hot.ppy"
-    bundle = analyze_paths(open_project(path), [path], backend="llvm")
+    project = open_project(path)
+    # The probe must speak the same cache-key dialect as `ppy build`, whose
+    # default guard mode is the wrap-semantics `off`.
+    project.config.llvm.safeguards = "off"
+    bundle = analyze_paths(project, [path], backend="llvm")
     key = module_cache_key(bundle, "hot", target="llvm", opt_level=3)
     store = bundle.project.store
     assert store.read(_object_key(key)) is not None
@@ -386,7 +390,11 @@ def test_a_rebuild_with_no_change_recompiles_nothing(tmp_path: Path):
     )
 
     sources = list(collect_sources(tmp_path / "src", ppy_only=True))
-    bundle = analyze_paths(open_project(tmp_path / "src"), sources, backend="llvm")
+    project = open_project(tmp_path / "src")
+    # The probe must speak the same cache-key dialect as `ppy build`, whose
+    # default guard mode is the wrap-semantics `off`.
+    project.config.llvm.safeguards = "off"
+    bundle = analyze_paths(project, sources, backend="llvm")
     key = module_cache_key(bundle, "hot", target="llvm", opt_level=3)
     assert _cached_lowering(bundle, "hot", 3) is not None, "lowering was not cached"
     assert bundle.project.store.read(_object_key(key)) is not None, "the object was not cached"
@@ -412,7 +420,11 @@ def test_only_the_changed_module_is_recompiled(tmp_path: Path):
 
     def object_keys() -> dict[str, str]:
         sources = list(collect_sources(tmp_path / "src", ppy_only=True))
-        bundle = analyze_paths(open_project(tmp_path / "src"), sources, backend="llvm")
+        project = open_project(tmp_path / "src")
+        # The probe must speak the same cache-key dialect as `ppy build`,
+        # whose default guard mode is the wrap-semantics `off`.
+        project.config.llvm.safeguards = "off"
+        bundle = analyze_paths(project, sources, backend="llvm")
         return {
             name: _object_key(module_cache_key(bundle, name, target="llvm", opt_level=3))
             for name in ("mod_a", "mod_b")

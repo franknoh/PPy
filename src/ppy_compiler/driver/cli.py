@@ -58,6 +58,19 @@ def build_parser() -> argparse.ArgumentParser:
     run = subparsers.add_parser("run", help="compile through LLVM and execute")
     run.add_argument("file", type=Path)
     run.add_argument(
+        "--unsafe",
+        action="store_true",
+        help="drop the overflow guards on data arithmetic: 64-bit wrap "
+        "semantics, like C -- bounds checks stay",
+    )
+    run.add_argument(
+        "--safeguards",
+        choices=("hoisted", "inline", "off"),
+        default=None,
+        help="explicit guard mode, overriding the flags and the project "
+        "configuration (the built launcher uses this to run exactly as built)",
+    )
+    run.add_argument(
         "--prebuilt",
         type=Path,
         default=None,
@@ -68,6 +81,12 @@ def build_parser() -> argparse.ArgumentParser:
 
     build = subparsers.add_parser("build", help="compile without running")
     build.add_argument("target", type=Path)
+    build.add_argument(
+        "--safe",
+        action="store_true",
+        help="keep the Python-integer overflow guards; without it a build "
+        "uses 64-bit wrap semantics for data arithmetic",
+    )
     build.add_argument("--backend", choices=("llvm", "python"), default="llvm")
     build.add_argument("-o", "--output", type=Path, help="output directory")
 

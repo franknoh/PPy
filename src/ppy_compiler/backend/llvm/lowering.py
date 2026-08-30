@@ -555,6 +555,7 @@ class _FunctionLowering:
         self.outs = list(function.args[-len(self.returns) :])
         self.out = function.args[-1]
         self.fallback_block = None
+        self.safeguards = safeguards
         self.hoist_guards = safeguards != "inline"
         #: Open guard blocks, one per active hoistable loop, outermost first.
         self._guard_sites: list = []
@@ -1388,6 +1389,16 @@ class _FunctionLowering:
         hoisted = self._hoisted_binary(left, right, op)
         if hoisted is not None:
             return hoisted
+        if self.safeguards == "off" and op in _OVERFLOW_INTRINSICS:
+            # Unsafe mode: data arithmetic wraps at 64 bits, like C and every
+            # wrap-semantics compiler. Index chains are unaffected -- their
+            # corner checks above are memory safety, and they stay.
+            operations = {
+                ast.Add: self.builder.add,
+                ast.Sub: self.builder.sub,
+                ast.Mult: self.builder.mul,
+            }
+            return operations[op](left, right)
         ir = self.ir
         name = _OVERFLOW_INTRINSICS[op]
         i64 = ir.IntType(64)

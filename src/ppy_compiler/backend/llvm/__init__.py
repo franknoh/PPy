@@ -141,7 +141,10 @@ def _collect(bundle, opt_level: int | None = None) -> dict[str, NativeModule]:  
         if not candidates and not fused:
             continue
         result: LoweringResult = lower_module(
-            analysis, candidates, layouts, safeguards=bundle.project.config.llvm.safeguards
+            analysis,
+            candidates,
+            layouts,
+            safeguards=bundle.project.config.llvm.safeguards or "hoisted",
         )
         ir_text = result.ir
         if fused:
@@ -411,6 +414,7 @@ def compile_project(  # type: ignore[no-untyped-def]
                 build_directory / entry.stem,
                 bundle.project.search_paths,
                 artifacts.manifest,
+                bundle.project.config.llvm.safeguards or "hoisted",
             )
         except ToolchainError as exc:
             artifacts.notes.append(f"no native launcher: {exc}")
@@ -482,7 +486,7 @@ def compile_and_run(  # type: ignore[no-untyped-def]
                 cache=bundle.project.store,
                 cache_directory=bundle.project.config.cache_path / "jit",
                 layouts=layouts,
-                safeguards=bundle.project.config.llvm.safeguards,
+                safeguards=bundle.project.config.llvm.safeguards or "hoisted",
             )
             for info, node in native.sources.values():
                 specializer.register(info, node)

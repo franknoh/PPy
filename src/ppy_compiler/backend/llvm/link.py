@@ -222,7 +222,13 @@ for extra in {paths!r}:
         sys.path.append(extra)
 sys.path.insert(0, {search!r})
 from ppy_compiler.driver.cli import main
-sys.exit(main(["run", "--prebuilt", {manifest!r}, {entry!r}, "--", *sys.argv[1:]]))
+sys.exit(main([
+    "run",
+    "--prebuilt", {manifest!r},
+    "--safeguards", {safeguards!r},
+    {entry!r},
+    "--", *sys.argv[1:],
+]))
 """
 
 
@@ -232,7 +238,7 @@ def _c_string(text: str) -> str:
 
 
 def build_launcher(
-    entry: Path, destination: Path, search_paths: list[Path], manifest: Path
+    entry: Path, destination: Path, search_paths: list[Path], manifest: Path, safeguards: str
 ) -> Path:
     """Compile a native launcher that embeds CPython and runs the entry point."""
     compiler = _compiler()
@@ -254,6 +260,7 @@ def build_launcher(
         search=search,
         entry=str(entry),
         manifest=str(manifest),
+        safeguards=safeguards,
         paths=[p for p in sys.path if p],
     )
     source = _LAUNCHER.format(bootstrap=_c_string(bootstrap))

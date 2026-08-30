@@ -43,6 +43,29 @@ def _overrides(options: argparse.Namespace) -> dict[str, object]:
     return overrides
 
 
+def _resolve_safeguards(options: argparse.Namespace, project, command: str) -> None:  # type: ignore[no-untyped-def]
+    """Settle the guard mode before any cache key reads it.
+
+    Priority: an explicit `--safeguards`, then the `--unsafe`/`--safe`
+    flags, then the project's `[tool.ppy.llvm] safeguards`, then the
+    command's own default -- `run` keeps Python-integer semantics, `build`
+    produces a wrap-semantics artifact like every native compiler.
+    """
+    explicit = getattr(options, "safeguards", None)
+    if explicit:
+        project.config.llvm.safeguards = explicit
+        return
+    if getattr(options, "unsafe", False):
+        project.config.llvm.safeguards = "off"
+        return
+    if getattr(options, "safe", False):
+        project.config.llvm.safeguards = "hoisted"
+        return
+    if project.config.llvm.safeguards:
+        return
+    project.config.llvm.safeguards = "off" if command == "build" else "hoisted"
+
+
 def _prepare(
     target: Path, options: argparse.Namespace, *, backend: str = "python"
 ) -> AnalysisBundle:
@@ -141,7 +164,9 @@ def run_llvm_backend(
     if not file.is_file():
         reporter.emit(Diagnostic("E1002", Severity.ERROR, f"{file} is not a file"))
         return 2
-    bundle = _prepare(file, options, backend="llvm")
+    project = open_project(file, config_overrides=_overrides(options))
+    _resolve_safeguards(options, project, "run")
+    bundle = analyze_paths(project, collect_sources(file), backend="llvm")
     errors = reporter.report(bundle.diagnostics)
     if errors:
         reporter.summary(errors, 0)
@@ -173,7 +198,10 @@ def build(options: argparse.Namespace, reporter: Reporter) -> int:
         reporter.emit(Diagnostic("E1002", Severity.ERROR, f"{target} does not exist"))
         return 2
     backend = options.backend
-    bundle = _prepare(target, options, backend=backend)
+    project = open_project(target, config_overrides=_overrides(options))
+    if backend == "llvm":
+        _resolve_safeguards(options, project, "build")
+    bundle = analyze_paths(project, collect_sources(target), backend=backend)
     errors = reporter.report(bundle.diagnostics)
     if errors:
         reporter.summary(errors, 0)
