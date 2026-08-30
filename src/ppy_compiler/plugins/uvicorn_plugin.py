@@ -111,6 +111,21 @@ class UvicornPlugin:
     def attribute_type(self, qualname: str) -> tuple[T.Type, Facts] | None:
         return None
 
+    def decorator_semantics(self, name: str):  # type: ignore[no-untyped-def]
+        """Route decorators register the handler and hand it back unchanged.
+
+        FastAPI reads the handler's `__annotations__` at registration, and
+        registering is a definition-time effect -- both facts matter: the
+        first pins the source annotations, the second pins the definition
+        in place for hoisting.
+        """
+        owner, _, attr = name.rpartition(".")
+        if owner in {_APP, _ROUTER} and attr in _ROUTE_METHODS:
+            from ..analysis.decorators import DecoratorSemantics
+
+            return DecoratorSemantics(pure_at_definition=False, reads_annotations=True)
+        return None
+
     def call(
         self,
         qualname: str,

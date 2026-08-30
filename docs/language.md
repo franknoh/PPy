@@ -17,6 +17,12 @@ The compiler analyzes the whole project as one call graph. Inside it:
 - `eval`, `exec`, `from x import *`, computed imports, monkey-patching,
   frame manipulation, computed base classes, and unvouched metaclasses are
   rejected (`E15xx`) unless isolated behind `ppy.dynamic`.
+- A decorator must have vouched semantics — the built-in table, a plugin, or
+  `ppy.*` — because a decorator may replace the decorated object: believing
+  the `def` while the runtime holds whatever the decorator returned would be
+  unsound. An unvouched decorator is `E1204` unless the definition is marked
+  `@ppy.dynamic`. `@partial(vouched, ...)` counts as the vouched decorator it
+  binds.
 - Everything else — classes, generators, closures, `match`, comprehensions,
   decorators the compiler knows, the stdlib it models — is ordinary Python.
 

@@ -200,6 +200,119 @@ def test_dynamic_boundary_can_be_denied_by_configuration(write, codes):
     assert "E1505" in codes(path, dynamic_boundaries="deny")
 
 
+def test_an_unvouched_decorator_is_rejected_in_strict_mode(write, codes):
+    """The decorator may replace the object; believing the `def` is unsound."""
+    path = write(
+        "swapped.ppy",
+        """
+        import ppy
+
+
+        def deco(fn: ppy.Dynamic) -> ppy.Dynamic:
+            def wrapped(s: str) -> str:
+                return s.upper()
+
+            return wrapped
+
+
+        @deco
+        def f(x: int) -> int:
+            return x + 1
+
+
+        y: int = f(1)
+        print(y)
+        """,
+    )
+    assert "E1204" in codes(path)
+
+
+def test_an_unvouched_class_decorator_is_rejected(write, codes):
+    path = write(
+        "classy.ppy",
+        """
+        import ppy
+
+
+        def register(cls: ppy.Dynamic) -> ppy.Dynamic:
+            return cls
+
+
+        @register
+        class Node:
+            pass
+
+
+        print(Node)
+        """,
+    )
+    assert "E1204" in codes(path)
+
+
+def test_an_unvouched_method_decorator_is_rejected(write, codes):
+    path = write(
+        "method.ppy",
+        """
+        import ppy
+
+
+        def guard(fn: ppy.Dynamic) -> ppy.Dynamic:
+            return fn
+
+
+        class Node:
+            @guard
+            def touch(self) -> int:
+                return 1
+
+
+        print(Node().touch())
+        """,
+    )
+    assert "E1204" in codes(path)
+
+
+def test_vouched_decorators_pass_strict_mode(write, codes):
+    path = write(
+        "vouched.ppy",
+        """
+        import functools
+
+
+        @functools.cache
+        def known(x: int) -> int:
+            return x * 3
+
+
+        print(known(2))
+        """,
+    )
+    assert "E1204" not in codes(path)
+
+
+def test_a_dynamic_boundary_permits_an_unvouched_decorator(write, codes):
+    path = write(
+        "escaped.ppy",
+        """
+        import ppy
+
+
+        def registry(fn: ppy.Dynamic) -> ppy.Dynamic:
+            return fn
+
+
+        @ppy.dynamic
+        @registry
+        def f(x: int) -> int:
+            return x
+
+
+        print(f(1))
+        """,
+    )
+    assert "E1204" not in codes(path)
+
+
 def test_a_computed_base_is_rejected(write, codes):
     path = write(
         "built.ppy",

@@ -835,6 +835,7 @@ class _Checker:
         self._stmt_With(node, env)  # type: ignore[arg-type]
 
     def _stmt_FunctionDef(self, node: ast.FunctionDef, env: Env) -> None:
+        self._check_decorators(node, env)
         qualname = f"{self.symbols.name}.{node.name}"
         info = self.project.functions.get(qualname)
         env.set(node.name, Binding(info.signature() if info else T.UNKNOWN))
@@ -843,10 +844,66 @@ class _Checker:
 
     def _stmt_ClassDef(self, node: ast.ClassDef, env: Env) -> None:
         self._check_class_construction(node)
+        self._check_decorators(node, env)
+        for child in ast.walk(node):
+            if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef)) and child is not node:
+                # Methods are not visited as statements, but decoration
+                # rewrites them all the same.
+                self._check_decorators(child, env)
         info = self.symbols.classes.get(node.name)
         env.set(
             node.name, Binding(T.ClassObject(info.qualname, info.instance()) if info else T.UNKNOWN)
         )
+
+    def _check_decorators(
+        self, node: ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef, env: Env
+    ) -> None:
+        """A decorator nobody vouches for may replace the decorated object.
+
+        The symbol table would keep believing the declared signature while
+        the runtime object is whatever the decorator returned -- the checker
+        would then approve calls the program cannot take. Strict PPY demands
+        known semantics, a plugin's word, or an explicit dynamic boundary
+        (spec: strict decorator semantics).
+        """
+        if not self.strict or not node.decorator_list:
+            return
+        resolver = self.project.resolver(self.symbols)
+        names = [resolver.decorator_identity(d) for d in node.decorator_list]
+        if "ppy.dynamic" in names:
+            return
+        for decorator, name in zip(node.decorator_list, names, strict=True):
+            if self._decorator_vouched(decorator, name, env, resolver):
+                continue
+            spelled = ast.unparse(decorator.func if isinstance(decorator, ast.Call) else decorator)
+            self._dynamic_feature(
+                "E1204",
+                f"decorator `@{spelled}` applies a transform nobody vouches for",
+                decorator,
+                help="use a vouched decorator, register this one's semantics with a "
+                "plugin, or mark the decorated definition `@ppy.dynamic`",
+            )
+
+    def _decorator_vouched(  # type: ignore[no-untyped-def]
+        self, decorator: ast.expr, name: str, env: Env, resolver
+    ) -> bool:
+        from .decorators import semantics_of
+
+        if semantics_of(name, self.plugins) is not None:
+            return True
+        if name == "functools.partial" and isinstance(decorator, ast.Call) and decorator.args:
+            # `@partial(D, ...)` binds arguments of `D`; the transform is D's.
+            inner = resolver.decorator_identity(decorator.args[0])
+            return semantics_of(inner, self.plugins) is not None
+        target = decorator.func if isinstance(decorator, ast.Call) else decorator
+        if isinstance(target, ast.Attribute) and isinstance(target.value, ast.Name):
+            # `@app.get(...)`: the decorator is an attribute of a typed value,
+            # and its owner's plugin may vouch for it by qualified name.
+            binding = env.get(target.value.id)
+            base = T.strip_literal(binding.type) if binding is not None else None
+            if isinstance(base, T.Instance):
+                return semantics_of(f"{base.name}.{target.attr}", self.plugins) is not None
+        return False
 
     def _check_class_construction(self, node: ast.ClassDef) -> None:
         """Class construction must be static: PPY reorders and compiles classes.
