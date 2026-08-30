@@ -34,7 +34,7 @@ def log_and_total(values: list[int]) -> int:
 @ppy.dynamic
 def evaluate(source: str) -> int:
     with ppy.dynamic:
-        return eval(source)
+        return ppy.check[int](eval(source))
 
 
 def main() -> None:

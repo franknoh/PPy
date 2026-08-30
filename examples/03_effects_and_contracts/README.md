@@ -11,6 +11,7 @@ source and no conversion step involved.
 
 - Effects are a set, not a bit: I/O, global writes, randomness, and time are tracked separately.
 - Declaring a contract the code does not satisfy is an error, with the offending effect named.
+- A `@ppy.dynamic` boundary suspends dynamic-feature checks, not type declarations: the `eval` result crosses back into the declared `-> int` through `ppy.check[int]`, which validates at runtime.
 
 ## Run it
 
