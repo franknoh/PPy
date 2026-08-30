@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import os
+import hashlib
 import tomllib
 from collections.abc import Mapping
 from dataclasses import dataclass, field, replace
@@ -101,6 +103,13 @@ class Config:
 
     @property
     def cache_path(self) -> Path:
+        override = os.environ.get("PPY_CACHE_DIR")
+        if override:
+            # The slow-filesystem escape hatch: a repo on a Windows-mounted
+            # drive under WSL can keep its cache on the fast side. One tree
+            # per project root, so two projects never share a store.
+            stamp = hashlib.sha256(str(self.root.resolve()).encode()).hexdigest()[:12]
+            return Path(override).expanduser() / f"{self.root.name}-{stamp}"
         path = Path(self.cache_dir)
         return path if path.is_absolute() else self.root / path
 
