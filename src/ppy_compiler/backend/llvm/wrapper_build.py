@@ -114,7 +114,7 @@ def build_wrappers(
         compiler = os.environ.get("CC") or "cc"
         command = [
             compiler,
-            "-O2",
+            "-O3",
             "-shared",
             "-fPIC",
             "-I",

@@ -65,7 +65,7 @@ print(longest(300000))
 uv run python  collatz.ppy    # plain CPython, no compiler   1170 ms
 uv run ppy     collatz.ppy    # optimized Python backend     1181 ms
 uv run ppy run collatz.ppy    # LLVM native                    45 ms  (JIT ~1200 ms, every run)
-gcc -O2 collatz.c && ./a.out  # the same loop in C             43 ms  (gcc ~110 ms, once)
+gcc -O3 collatz.c && ./a.out  # the same loop in C             44 ms  (gcc ~110 ms, once)
 ```
 
 And the fourth way — build the native artifacts once, then run the binary:

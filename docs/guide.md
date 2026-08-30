@@ -26,21 +26,23 @@ One file, three ways. Any disagreement is a compiler bug, and the suite plus
 WSL2, RTX 5080, torch 2.11+cu128, jax 0.11.1. Answers identical on all three
 paths in every row.
 
-| algorithm | plain | ppy run | C (`gcc -O2`) |
+| algorithm | plain | ppy run | C (`gcc -O3`) |
 |---|---:|---:|---:|
-| sieve 2e6 | 191.9 ms | 10.4 ms | 17.7 ms |
-| collatz 3e5 | 1204.3 ms | 42.1 ms | 44.4 ms |
+| sieve 2e6 | 191.9 ms | 10.4 ms | 14.6 ms |
+| collatz 3e5 | 1204.3 ms | 42.1 ms | 42.9 ms |
 | knapsack 400×2e4 | 476.7 ms | 5.5 ms | 2.5 ms |
-| edit distance 2000² | 531.1 ms | 3.3 ms | 2.0 ms |
-| Floyd–Warshall 220 | 539.9 ms | 6.2 ms | 5.6 ms |
-| matmul 220 | 527.4 ms | 6.8 ms | 2.3 ms |
-| union-find 5e5 | 186.2 ms | 3.8 ms | 4.2 ms |
+| edit distance 2000² | 531.1 ms | 3.3 ms | 3.8 ms |
+| Floyd–Warshall 220 | 539.9 ms | 6.2 ms | 5.3 ms |
+| matmul 220 | 527.4 ms | 6.8 ms | 2.2 ms |
+| union-find 5e5 | 186.2 ms | 3.8 ms | 3.9 ms |
 | fermat 6e4 | 25.9 ms | 2.9 ms | 1.8 ms |
 
 The C column is `examples/15_algorithms/algorithms.c`: the same kernels
-hand-written, printing the same answers. Where gcc wins, the reason is
-auto-vectorization (matmul, edit distance); where PPY wins or draws, the
-scalar code generation is already at parity — overflow guards included.
+hand-written, printing the same answers, compiled at the same optimization
+level the kernels declare (`@ppy.opt(3)`). Where gcc wins, the reason is
+auto-vectorization (matmul) or a fused-multiply loop body (knapsack,
+fermat); everywhere else the scalar code generation is at parity — overflow
+guards included.
 
 The Python backend is not faster and is not meant to be: it optimizes the AST,
 and the interpreter overhead is unchanged.
