@@ -37,7 +37,7 @@ Everything degrades cleanly: a missing library only disables its plugin, and
 boundary, have the CPython headers installed (`python3-dev`); without them
 PPY says so once and uses the slower boundary.
 
-## One file, three ways
+## One file, four ways
 
 ```python
 # collatz.ppy
@@ -62,30 +62,47 @@ print(longest(300000))
 ```
 
 ```bash
-uv run python  collatz.ppy    # plain CPython, no compiler   1170 ms
-uv run ppy     collatz.ppy    # optimized Python backend     1181 ms
-uv run ppy run collatz.ppy    # LLVM native                    45 ms  (JIT ~1200 ms, every run)
-gcc -O3 collatz.c && ./a.out  # the same loop in C             44 ms  (gcc ~110 ms, once)
+uv run python    collatz.ppy           # 1  plain CPython, no compiler       1170 ms
+uv run ppy       collatz.ppy           # 2  optimized Python backend         1181 ms
+uv run ppy run   collatz.ppy           # 3  LLVM, JIT-compiled every run       45 ms  (+ ~1200 ms JIT)
+uv run ppy build collatz.ppy -o dist   # 4  LLVM, built once (~800 ms)...
+./dist/collatz                         #    ...then the native binary          45 ms
+
+gcc -O3 collatz.c && ./a.out           # reference: the same loop in C         44 ms  (+ ~110 ms gcc)
 ```
 
-And the fourth way — build the native artifacts once, then run the binary:
-
-```bash
-uv run ppy build collatz.ppy -o dist   # ~800 ms, once: object, libppy_*.so, manifest, launcher
-./dist/collatz                         # native binary                 45 ms
-```
-
-Run numbers are the kernel's wall time on one machine, best of five; the
+Numbers are the kernel's wall time on one machine, best of five; the
 parenthesized figure is what that row spends turning source into machine
-code, and how often. The C row is the same algorithm hand-written with
-64-bit integers — the target that keeps the native backend honest: within
-measurement noise of it today, overflow guards included, from source that is
-still plain Python. (Python's floor semantics help: `n // 2` lowers to one
-arithmetic shift exactly, where C's truncating division needs a sign fixup.)
-`./dist/collatz` is `ppy run` in a compiled coat: the launcher enters the
-same pipeline and the same guarded bindings, and only takes its machine code
-from the library built next to it — delete the library and it refuses,
-rather than quietly interpreting.
+code, and how often. The binary is `ppy run` in a compiled coat — the same
+pipeline and the same guarded bindings, machine code taken from the library
+built next to it — so the three-path identity invariant is untouched: ways 3
+and 4 are one path, ahead of time or not. The C row is the same algorithm
+hand-written with 64-bit integers, and PPY runs within measurement noise of
+it, overflow guards included. (Python's floor semantics help: `n // 2`
+lowers to one arithmetic shift exactly, where C's truncating division needs
+a sign fixup.)
+
+The same kernel through the neighbors, same machine and methodology:
+
+| compiler | kernel | integer semantics |
+|---|---:|---|
+| Numba `@njit` | 34 ms | 64-bit, wraps on overflow |
+| Codon `-release` | 36 ms | 64-bit, wraps on overflow |
+| C (`gcc -O3`) | 44 ms | 64-bit, wraps on overflow |
+| **PPY** `ppy run` / binary | **45 ms** | **Python ints: guarded, falls back to arbitrary precision** |
+| PyPy 3.11 | 54 ms | Python ints |
+| mypyc | 74 ms | Python ints |
+| Cython (`cdef long long`) | 76 ms | 64-bit, wraps on overflow |
+| Nuitka | 776 ms | Python ints, no type specialization |
+| CPython 3.14 | 1170 ms | Python ints |
+
+Every compiler ahead of PPY gets there by narrowing the language: its `int`
+is a machine word that silently wraps. PPY keeps Python's integers — the
+guards are inside the 45 ms — and still keeps pace with the wrap-semantics
+compilers. Ports are the straightforward one for each tool: `@njit`, a
+`cdef long long` `.pyx`, an annotated module for mypyc, `codon build
+-release`, `nuitka --module`; Numba 0.67, Cython 3.3, mypy 2.3.1, Nuitka on
+CPython 3.13, Codon 0.19.6, PyPy 3.11.15 (warm).
 
 ## Turning ordinary Python into it
 
