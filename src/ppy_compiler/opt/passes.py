@@ -36,7 +36,7 @@ __all__ = [
 ]
 
 #: Name the LLVM backend injects to supply a fused kernel to a module.
-FUSED_BINDER = "__ppy_bind_fused__"
+from ppy_runtime.generated import FUSED_BINDER
 
 _MAX_UNROLL = 8
 _INLINE_BUDGET = {2: 16, 3: 48}

@@ -1122,7 +1122,7 @@ def test_the_borrowed_pointer_is_the_callers_own_memory(write, analyze):
     """No copy: the native code reads the array the caller already had."""
     import ctypes
 
-    from ppy_compiler.backend.llvm.runtime import _expander_for
+    from ppy_runtime.binding import _expander_for
 
     path = write("borrow.ppy", BUFFERS_VIEW)
     module = _collect(analyze(path, backend="llvm"))["borrow"]
@@ -1139,7 +1139,7 @@ def test_the_borrowed_pointer_is_the_callers_own_memory(write, analyze):
 
 
 def test_borrowed_buffer_guards_reject_what_cannot_be_pointed_at(write, analyze):
-    from ppy_compiler.backend.llvm.runtime import GuardFailed, _expander_for
+    from ppy_runtime.binding import GuardFailed, _expander_for
 
     path = write("guardview.ppy", BUFFERS_VIEW)
     module = _collect(analyze(path, backend="llvm"))["guardview"]
