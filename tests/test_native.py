@@ -143,6 +143,91 @@ def test_multiplied_index_guards_hoist_out_of_the_loop(write, analyze):
     assert "mul nsw" not in inline.ir
 
 
+def test_profitability_keeps_tiny_functions_off_the_boundary(write, analyze):
+    """`can_lower_native` and `should_lower_native` answer different questions."""
+    from ppy_compiler.backend.llvm.lowering import should_lower_native
+
+    path = write(
+        "sizes.ppy",
+        """
+        import ppy
+        from ppy import Buffer
+
+
+        @ppy.pure
+        def add(x: int, y: int) -> int:
+            return x + y
+
+
+        @ppy.native
+        def demanded(x: int) -> int:
+            return x + 1
+
+
+        @ppy.pure
+        def looped(n: int) -> int:
+            out: int = 0
+            for i in range(n):
+                out += i
+            return out
+
+
+        @ppy.pure
+        def summed(xs: Buffer[int]) -> int:
+            return sum(xs)
+
+
+        print(add(1, 2), demanded(1), looped(3))
+        """,
+    )
+    bundle = analyze(path)
+    module = bundle.analysis.modules["sizes"]
+    infos = bundle.symbols.modules["sizes"].functions
+
+    def verdict(name):
+        info = infos[name]
+        return should_lower_native(info, module.functions[info.qualname])[0]
+
+    assert not verdict("add")
+    assert verdict("demanded")
+    assert verdict("looped")
+    assert verdict("summed")
+
+
+def test_unexposed_helpers_are_still_called_natively(tmp_path: Path):
+    """Off the boundary is not out of the binary: native callers go direct."""
+    (tmp_path / "pyproject.toml").write_text("[tool.ppy]\n", encoding="utf-8")
+    (tmp_path / "tiny.ppy").write_text(
+        textwrap.dedent(
+            """
+            import ppy
+
+
+            @ppy.pure
+            def add(x: int, y: int) -> int:
+                return x + y
+
+
+            @ppy.pure
+            @ppy.opt(3)
+            def total(n: int) -> int:
+                out: int = 0
+                for i in range(n):
+                    out += add(i, i)
+                return out
+
+
+            print(total(100000), add(2, 3))
+            """
+        ).lstrip("\n"),
+        encoding="utf-8",
+    )
+    plain = _run([sys.executable, "tiny.ppy"], tmp_path)
+    native = _ppy(["run", "tiny.ppy"], tmp_path)
+    assert native.returncode == 0, native.stderr
+    assert native.stdout == plain.stdout
+
+
 WRAPPING = """
 import ppy
 

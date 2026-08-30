@@ -75,14 +75,15 @@ def test_build_writes_a_binding_manifest(project: Path):
     assert manifest["calling_convention"] == "c"
 
     entries = {entry["python_qualname"]: entry for entry in manifest["entries"]}
-    assert "app.distance" in entries and "app.total" in entries
+    # `distance` is native-eligible but too small to pay for the boundary;
+    # the manifest lists only what Python callers should cross into.
+    assert "app.distance" not in entries
+    assert "app.total" in entries
 
-    distance = entries["app.distance"]
-    assert distance["native_symbol"] == "ppy_app_distance"
-    assert [a["native_type"] for a in distance["arguments"]] == ["double"] * 4
-    assert distance["returns"]["passed_as"] == "out_parameter"
-    assert distance["gil"] == "not_required"
-    assert "re-run the Python implementation" in distance["status"]["meaning"]
+    total = entries["app.total"]
+    assert total["native_symbol"] == "ppy_app_total"
+    assert total["returns"]["passed_as"] == "out_parameter"
+    assert "re-run the Python implementation" in total["status"]["meaning"]
 
     buffer = entries["app.total"]["arguments"][0]
     assert buffer["semantic_type"] == "list[int]"
@@ -295,11 +296,11 @@ def test_the_manifest_records_the_program_and_the_abi(project: Path):
     program = manifest["program"]
     assert program["entry"] == "app"
     assert "app" in program["generated"]
-    entry = next(e for e in manifest["entries"] if e["python_qualname"] == "app.distance")
+    entry = next(e for e in manifest["entries"] if e["python_qualname"] == "app.total")
     assert entry["module"] == "app"
-    assert entry["binding"] == "distance"
-    assert entry["abi"]["returns"] == ["double"]
-    assert [p["kind"] for p in entry["abi"]["parameters"]] == ["float"] * 4
+    assert entry["binding"] == "total"
+    assert entry["abi"]["returns"] == ["i64"]
+    assert [p["kind"] for p in entry["abi"]["parameters"]] == ["list"]
 
 
 def test_build_honours_an_explicit_output_directory(project: Path, tmp_path: Path):

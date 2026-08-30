@@ -52,6 +52,7 @@ CODES: dict[str, str] = {
     "R3003": "A list parameter is close to being a borrowed buffer but something blocks it.",
     "E9001": "An internal analysis failed to converge; the result cannot be trusted.",
     "R3002": "The converter promoted a list parameter to a borrowed buffer.",
+    "R3004": "A native-eligible function stays on the Python boundary; crossing costs more than it saves.",
     "R3001": "An optimization remark.",
 }
 

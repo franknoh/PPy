@@ -89,6 +89,10 @@ class LoweredFunction:
     info: FunctionInfo
     signature: NativeSignature
     reason: str = ""
+    #: Whether the Python/native boundary is worth crossing for this
+    #: function. Native callers use the direct symbol either way.
+    exposed: bool = True
+    exposure_reason: str = ""
 
 
 @dataclass(slots=True)
@@ -209,6 +213,51 @@ def eligible(
     return True, ""
 
 
+#: Directives that are an explicit request for the native boundary.
+_EXPOSURE_DIRECTIVES = ("native", "jit", "specialize", "parallel")
+
+#: Below this much straight-line work, the ~0.2 us Python/native crossing
+#: costs more than the native body saves over CPython.
+_EXPOSURE_WORK = 16
+
+
+def can_lower_native(
+    info: FunctionInfo, analysis: FunctionAnalysis, layouts: ClassLayouts | None = None
+) -> tuple[bool, str]:
+    """Can PPY generate correct native code for this function?"""
+    return eligible(info, analysis, layouts)
+
+
+def should_lower_native(info: FunctionInfo, analysis: FunctionAnalysis) -> tuple[bool, str]:
+    """Is native execution through the Python boundary expected to be faster?
+
+    Eligibility and profitability are different questions: a two-instruction
+    add lowers perfectly and still loses to CPython once the boundary's
+    guards and conversions are paid. Native-to-native calls never cross the
+    boundary, so a helper this keeps off it is still called directly by any
+    native caller.
+    """
+    del analysis
+    for name in _EXPOSURE_DIRECTIVES:
+        if info.directive(name) is not None:
+            return True, f"@ppy.{name} asks for the boundary"
+    for param in info.params:
+        native = _native_param(param.name, param.type)
+        if native is not None and native.is_buffer:
+            # Buffer work scales with the data; the crossing is flat.
+            return True, "takes a buffer"
+    for child in ast.walk(info.node):
+        if isinstance(child, (ast.For, ast.While, ast.AsyncFor)):
+            return True, "contains a loop"
+    work = sum(
+        isinstance(child, (ast.BinOp, ast.Compare, ast.BoolOp, ast.Call, ast.Subscript))
+        for child in ast.walk(info.node)
+    )
+    if work >= _EXPOSURE_WORK:
+        return True, f"straight-line work ({work} operations)"
+    return False, "the boundary crossing costs more than the body saves"
+
+
 def lower_specialization(
     module: ModuleAnalysis,
     info: FunctionInfo,
@@ -288,7 +337,8 @@ def lower_module(
             rejected[qualname] = str(exc)
             function.blocks.clear()
             continue
-        lowered[qualname] = LoweredFunction(info, signature)
+        exposed, why = should_lower_native(info, _analysis)
+        lowered[qualname] = LoweredFunction(info, signature, exposed=exposed, exposure_reason=why)
 
     for qualname in list(rejected):
         entry = declarations.get(qualname)

@@ -88,6 +88,7 @@ sound fallback, and never the rest.
 | code | meaning |
 |---|---|
 | `R3001` | An optimization remark. |
+| `R3004` | A native-eligible function stays on the Python boundary; crossing costs more than it saves. |
 | `R3002` | The converter promoted a list parameter to a borrowed buffer. |
 | `R3003` | A list parameter is close to being a borrowed buffer but something blocks it. |
 

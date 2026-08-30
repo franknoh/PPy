@@ -134,6 +134,15 @@ library built next to it instead of a JIT.
 
 ## Native lowering
 
+Eligibility and profitability are different questions, and the compiler asks
+both: `can_lower_native` decides whether correct native code exists, and
+`should_lower_native` whether crossing the Python/native boundary pays for
+it. A function with a loop, a buffer parameter, enough straight-line work,
+or an explicit `@ppy.native`/`@ppy.jit`/`@ppy.specialize`/`@ppy.parallel`
+gets the boundary; a two-instruction helper stays on the Python side
+(remarked as `R3004`) — while native callers keep calling its native symbol
+directly, boundary or not.
+
 A function lowers when its types are scalars, `Buffer[T]`, homogeneous
 `list[int]`/`list[float]`, `Sequence` of those, or all-scalar `@dataclass`
 value classes (flattened into scalar arguments), and its body stays inside the

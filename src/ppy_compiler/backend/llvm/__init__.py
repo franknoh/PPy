@@ -29,7 +29,13 @@ from .link import (
     toolchain_status,
     write_manifest,
 )
-from .lowering import LoweredFunction, LoweringResult, NativeSignature, lower_module
+from .lowering import (
+    LoweredFunction,
+    LoweringResult,
+    NativeSignature,
+    lower_module,
+    should_lower_native,
+)
 from .specialize import SpecializationPolicy, Specializer
 from .wrapper_build import build_wrappers
 
@@ -212,7 +218,10 @@ def _module_from_cache(name: str, reused, candidates) -> NativeModule:  # type: 
             # The cached module no longer matches the source in front of us.
             return NativeModule(name=name, ir="")
         info, _analysis, node = entry
-        functions[qualname] = LoweredFunction(info, signature)
+        # Profitability is a pure function of today's source, so a cached
+        # module answers it fresh rather than trusting yesterday's verdict.
+        exposed, why = should_lower_native(info, _analysis)
+        functions[qualname] = LoweredFunction(info, signature, exposed=exposed, exposure_reason=why)
         sources[qualname] = (info, node)
     return NativeModule(
         name=name,
@@ -376,7 +385,8 @@ def compile_project(  # type: ignore[no-untyped-def]
             store.mark_root(_object_key(key), f"object:{name}")
             artifacts.objects.append(emitted)
         for lowered in native.functions.values():
-            signatures[lowered.signature.qualname] = lowered.signature
+            if lowered.exposed:
+                signatures[lowered.signature.qualname] = lowered.signature
         for symbol, loop in native.fused.items():
             fused[symbol] = (len(loop.arrays), len(loop.scalars))
 
@@ -524,6 +534,19 @@ def compile_and_run(  # type: ignore[no-untyped-def]
             )
 
         for qualname, lowered in native.functions.items():
+            if not lowered.exposed:
+                # Native callers reach the symbol directly; Python callers
+                # keep the Python body, because the boundary would cost more
+                # than the body saves (spec: native profitability).
+                if bundle.project.config.diagnostics.optimization_remarks:
+                    reporter.emit(
+                        Diagnostic(
+                            "R3004",
+                            Severity.REMARK,
+                            f"`{qualname}` stays on the Python boundary: {lowered.exposure_reason}",
+                        )
+                    )
+                continue
             address = engine.address(lowered.signature.symbol)
             if not address:
                 continue
