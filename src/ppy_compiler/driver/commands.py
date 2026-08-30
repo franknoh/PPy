@@ -148,8 +148,12 @@ def run_llvm_backend(
         return 1
     try:
         return compile_and_run(
-            bundle, program_args, reporter, opt_level=_overrides(options).get("opt_level")
-        )  # type: ignore[arg-type]
+            bundle,
+            program_args,
+            reporter,
+            opt_level=_overrides(options).get("opt_level"),  # type: ignore[arg-type]
+            prebuilt=getattr(options, "prebuilt", None),
+        )
     except LlvmUnavailable as exc:
         reporter.emit(
             Diagnostic(

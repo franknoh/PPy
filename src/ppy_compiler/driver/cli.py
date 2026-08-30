@@ -57,6 +57,13 @@ def build_parser() -> argparse.ArgumentParser:
 
     run = subparsers.add_parser("run", help="compile through LLVM and execute")
     run.add_argument("file", type=Path)
+    run.add_argument(
+        "--prebuilt",
+        type=Path,
+        default=None,
+        help="bind native symbols from the library a `ppy build` manifest names, "
+        "instead of JIT-compiling them",
+    )
     run.add_argument("args", nargs=argparse.REMAINDER)
 
     build = subparsers.add_parser("build", help="compile without running")

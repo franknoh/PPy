@@ -152,6 +152,56 @@ def test_the_launcher_forwards_program_arguments(tmp_path: Path):
     assert native.stdout.strip() == "['one', 'two']"
 
 
+@requires_toolchain
+def test_the_launcher_runs_the_prebuilt_library_not_a_jit(project: Path):
+    """The binary is `ppy run` in a compiled coat, fed by the built library.
+
+    Deleting the library must break the launcher: a launcher that still
+    worked would be quietly recompiling or, worse, quietly interpreting.
+    """
+    result = _build(project)
+    assert result.returncode == 0, result.stderr
+    native = project / ".ppy-cache" / "native"
+    launcher = native / "app"
+    if not launcher.is_file():
+        pytest.skip("no launcher was produced")
+
+    plain = subprocess.run(
+        [sys.executable, "app.ppy"], cwd=project, capture_output=True, text=True, check=False
+    )
+    ran = subprocess.run([str(launcher)], cwd=project, capture_output=True, text=True, check=False)
+    assert ran.returncode == 0, ran.stderr
+    assert ran.stdout == plain.stdout
+
+    library = next(native.glob("libppy_*.so"))
+    library.unlink()
+    broken = subprocess.run(
+        [str(launcher)], cwd=project, capture_output=True, text=True, check=False
+    )
+    assert broken.returncode != 0
+    assert "E1801" in broken.stderr
+
+
+@requires_toolchain
+def test_run_binds_from_a_prebuilt_manifest(project: Path):
+    result = _build(project)
+    assert result.returncode == 0, result.stderr
+    manifest = project / ".ppy-cache" / "native" / "ppy-bindings.json"
+
+    plain = subprocess.run(
+        [sys.executable, "app.ppy"], cwd=project, capture_output=True, text=True, check=False
+    )
+    ran = subprocess.run(
+        [sys.executable, "-m", "ppy_compiler", "run", "--prebuilt", str(manifest), "app.ppy"],
+        cwd=project,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert ran.returncode == 0, ran.stderr
+    assert ran.stdout == plain.stdout
+
+
 def test_build_honours_an_explicit_output_directory(project: Path, tmp_path: Path):
     destination = tmp_path / "out"
     result = _build(project, "-o", str(destination))

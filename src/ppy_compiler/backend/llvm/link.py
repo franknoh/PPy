@@ -119,7 +119,9 @@ def write_manifest(
     """Write the PPY Native Binding Manifest for the built symbols (spec 26.2)."""
     payload = {
         "abi_version": MANIFEST_ABI_VERSION,
-        "native_library": str(library) if library else None,
+        # By name: the library sits next to the manifest, and the pair must
+        # survive being moved or shipped together.
+        "native_library": library.name if library else None,
         "python": f"{sys.version_info.major}.{sys.version_info.minor}",
         "calling_convention": "c",
         "entries": [
@@ -211,14 +213,16 @@ int main(int argc, char **argv)
 }}
 """
 
-_BOOTSTRAP = """import runpy, sys
+#: The launcher is `ppy run` in a compiled coat: it enters the same CLI, the
+#: same pipeline, and the same guarded bindings -- only the machine code is
+#: taken from the library built next to it instead of being JIT-compiled.
+_BOOTSTRAP = """import sys
 for extra in {paths!r}:
     if extra not in sys.path:
         sys.path.append(extra)
 sys.path.insert(0, {search!r})
-sys.argv = [{entry!r}] + sys.argv[1:]
-import ppy
-runpy.run_path({entry!r}, run_name="__main__")
+from ppy_compiler.driver.cli import main
+sys.exit(main(["run", "--prebuilt", {manifest!r}, {entry!r}, "--", *sys.argv[1:]]))
 """
 
 
@@ -227,7 +231,9 @@ def _c_string(text: str) -> str:
     return f'"{escaped}"'
 
 
-def build_launcher(entry: Path, destination: Path, search_paths: list[Path]) -> Path:
+def build_launcher(
+    entry: Path, destination: Path, search_paths: list[Path], manifest: Path
+) -> Path:
     """Compile a native launcher that embeds CPython and runs the entry point."""
     compiler = _compiler()
     if compiler is None:
@@ -244,7 +250,12 @@ def build_launcher(entry: Path, destination: Path, search_paths: list[Path]) -> 
     search = str(search_paths[0]) if search_paths else str(entry.parent)
     # The launcher is pinned to the interpreter it was built against, so the
     # build-time import path is the right one to record (spec 16.5).
-    bootstrap = _BOOTSTRAP.format(search=search, entry=str(entry), paths=[p for p in sys.path if p])
+    bootstrap = _BOOTSTRAP.format(
+        search=search,
+        entry=str(entry),
+        manifest=str(manifest),
+        paths=[p for p in sys.path if p],
+    )
     source = _LAUNCHER.format(bootstrap=_c_string(bootstrap))
 
     destination.parent.mkdir(parents=True, exist_ok=True)
