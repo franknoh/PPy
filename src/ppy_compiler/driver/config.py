@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-import os
 import hashlib
+import os
 import tomllib
 from collections.abc import Mapping
 from dataclasses import dataclass, field, replace
