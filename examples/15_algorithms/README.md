@@ -33,11 +33,14 @@ columns:
 | union-find 5e5 | 186.2 ms | 3.8 ms | 3.9 ms |
 | fermat 6e4 | 25.9 ms | 2.9 ms | 1.8 ms |
 
-It goes both ways: PPY wins sieve and edit distance, draws collatz (overflow
-guards included), union-find, and floyd, and gcc wins where
-auto-vectorization pays (matmul) or the loop body is one fused multiply
-(knapsack, fermat). Vectorization of the native backend is where that
-remaining gap lives.
+It goes both ways: PPY wins sieve and edit distance, draws collatz,
+union-find, and floyd, and gcc wins matmul, knapsack, and fermat. Grafting
+PPY's guard semantics into the C versions shows where those gaps live: the
+bounds checks are essentially free, but Python-int overflow guards on the
+index arithmetic (`i * n + k` behind `smul.with.overflow`) block strength
+reduction and vectorization — C with the same guards runs matmul at 5.5 ms,
+knapsack at 4.3 ms, fermat at 2.5 ms. The path to closing them is range
+analysis proving the guards redundant, not faster arithmetic.
 
 ## Run it
 

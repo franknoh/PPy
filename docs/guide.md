@@ -39,10 +39,11 @@ paths in every row.
 
 The C column is `examples/15_algorithms/algorithms.c`: the same kernels
 hand-written, printing the same answers, compiled at the same optimization
-level the kernels declare (`@ppy.opt(3)`). Where gcc wins, the reason is
-auto-vectorization (matmul) or a fused-multiply loop body (knapsack,
-fermat); everywhere else the scalar code generation is at parity — overflow
-guards included.
+level the kernels declare (`@ppy.opt(3)`). Where gcc wins, the measured
+reason is Python-int overflow guards on index arithmetic — C grafted with
+the same guards lands within ~20% of the PPY numbers — and those guards are
+what range analysis can prove away; everywhere else the scalar code
+generation is already at parity.
 
 The Python backend is not faster and is not meant to be: it optimizes the AST,
 and the interpreter overhead is unchanged.
