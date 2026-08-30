@@ -62,10 +62,16 @@ print(longest(300000))
 ```
 
 ```bash
-uv run python  collatz.ppy   # plain CPython, no compiler   1262 ms
-uv run ppy     collatz.ppy   # optimized Python backend     1305 ms
-uv run ppy run collatz.ppy   # LLVM native                   112 ms
+uv run python  collatz.ppy    # plain CPython, no compiler   1197 ms
+uv run ppy     collatz.ppy    # optimized Python backend     1204 ms
+uv run ppy run collatz.ppy    # LLVM native                   103 ms
+gcc -O2 collatz.c && ./a.out  # the same loop in C             45 ms
 ```
+
+Numbers are the kernel's wall time on one machine, best of five. The C row is
+the same algorithm hand-written with 64-bit integers — the target that keeps
+the native backend honest: within about 2.3× of it today, from source that is
+still plain Python.
 
 ## Turning ordinary Python into it
 
