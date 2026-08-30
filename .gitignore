@@ -12,3 +12,5 @@ htmlcov/
 !README.md
 !docs/*.md
 !examples/**/*.md
+examples/**/uv.lock
+examples/**/.venv/
