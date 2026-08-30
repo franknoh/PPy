@@ -565,6 +565,10 @@ class _FunctionLowering:
         self._ranges: dict[object, tuple[object, object, int]] = {}
         #: Results whose guards were hoisted; their consumers hoist too.
         self._hoisted: set = set()
+        #: Integer parameters the body never rebinds (filled once the
+        #: prologue knows the parameters), and their entry-block loads.
+        self._stable: set[str] = set()
+        self._entry_loads: dict[str, object] = {}
 
     def run(self, node: ast.FunctionDef) -> None:
         ir = self.ir
@@ -627,12 +631,11 @@ class _FunctionLowering:
             for name in ast.walk(statement)
             if isinstance(name, ast.Name) and isinstance(name.ctx, (ast.Store, ast.Del))
         }
-        #: Integer parameters the body never rebinds: their slot holds one
-        #: value forever, so a load in the entry block speaks for every read.
+        # Integer parameters the body never rebinds: their slot holds one
+        # value forever, so a load in the entry block speaks for every read.
         self._stable = {
             name for name, (_slot, scalar) in self.locals.items() if scalar == "int"
         } - stored
-        self._entry_loads: dict[str, object] = {}
 
         self._body(node.body)
         if not self.builder.block.is_terminated:
@@ -1046,7 +1049,7 @@ class _FunctionLowering:
                     interval = self._induction.get(node.id)
                     if interval is not None:
                         self._ranges[loaded.value] = interval
-                    elif self.hoist_guards and node.id in getattr(self, "_stable", ()):
+                    elif self.hoist_guards and node.id in self._stable:
                         anchor = self._entry_load(node.id)
                         self._ranges[loaded.value] = (anchor, anchor, 0)
                 return loaded
