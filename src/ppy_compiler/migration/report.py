@@ -75,6 +75,8 @@ class MigrationReport:
     annotations: dict[str, int] = field(default_factory=dict)
     rewrites: dict[Path, list[Rewrite]] = field(default_factory=dict)
     findings: list[tuple[Classification, Diagnostic]] = field(default_factory=list)
+    #: Errors the strict checker still holds against the final output.
+    strict_errors: int = 0
 
     def add_rewrites(self, path: Path, rewrites: list[Rewrite]) -> None:
         if rewrites:
@@ -96,6 +98,11 @@ class MigrationReport:
     def annotations_written(self) -> int:
         return sum(self.annotations.values())
 
+    @property
+    def strict_ready(self) -> bool:
+        """Would `ppy check` accept the migrated output as-is?"""
+        return self.strict_errors == 0
+
     def summary_lines(self) -> list[str]:
         lines = [
             "migration summary",
@@ -114,6 +121,8 @@ class MigrationReport:
             count = self.count(classification)
             if count:
                 lines.append(f"  {label}:{' ' * max(1, 28 - len(label) - 1)}{count}")
+        verdict = "yes" if self.strict_ready else f"no ({self.strict_errors} error(s))"
+        lines.append(f"  strict ready:               {verdict}")
         return lines
 
     def to_json(self) -> str:
@@ -126,6 +135,8 @@ class MigrationReport:
         payload = {
             "files_scanned": self.files_scanned,
             "files_changed": self.files_changed,
+            "strict_ready": self.strict_ready,
+            "strict_errors": self.strict_errors,
             "annotations": dict(sorted(self.annotations.items())),
             "sites_rewritten": self.sites_rewritten,
             "rewrites": [

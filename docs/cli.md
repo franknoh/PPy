@@ -105,6 +105,18 @@ the migration, but to classify what remains:
 | `UNSUPPORTED` | `eval`/`exec`-class constructs no rewrite recovers |
 | `OPTIMIZATION_OPPORTUNITY` | already valid, and one change away from a faster lowering |
 
+After writing, migration re-analyzes its own final output in strict mode --
+the same pass `ppy convert` gates on -- and classifies what the strict
+language still rejects. A strict failure is not a migration failure: the
+files land either way, and the report carries the verdict as `strict_ready`
+and `strict_errors`, so
+
+```bash
+ppy migrate project/ --report migration.json
+```
+
+is by itself an accurate account of how far the migration got.
+
 `--report FILE` writes the full accounting as JSON; the summary block prints
 either way. `--diff` prints a unified diff of what migration would write and
 writes nothing, which is the right first command on a project you have not

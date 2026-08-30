@@ -171,9 +171,53 @@ def test_migrate_applies_passes_and_writes_a_report(workspace: Path):
     assert report["sites_rewritten"] == 2
     assert report["counts"]["autofixed"] == 2
     assert any(f["classification"] == "unsupported" for f in report["findings"])
+    # The verdict is about the final output: the eval survives migration, so
+    # the result is not yet strict PPY, and the report says so.
+    assert report["strict_ready"] is False
+    assert report["strict_errors"] >= 1
     listed = {(r["pass"], r["line"]) for r in report["rewrites"]}
     assert ("literal-attributes", 11) in listed
     assert ("module-namespace-writes", 12) in listed
+
+
+def test_the_report_judges_the_final_output_not_the_input(workspace: Path):
+    """A pinned unknown decorator leaves strict-invalid output; the report says so."""
+    (workspace / "wrapped.py").write_text(
+        textwrap.dedent(
+            """
+            def registry(fn):
+                return fn
+
+
+            @registry
+            def opaque(x):
+                return x * 2
+
+
+            print(opaque(1))
+            """
+        ).lstrip("\n"),
+        encoding="utf-8",
+    )
+    result = _ppy(["migrate", "wrapped.py", "--report", "migration.json"], workspace)
+    assert result.returncode == 0, result.stderr
+    report = json.loads((workspace / "migration.json").read_text(encoding="utf-8"))
+    assert report["strict_ready"] is False
+    codes = {f["code"] for f in report["findings"]}
+    assert "E1204" in codes
+    assert "E1201" in codes
+
+
+def test_a_complete_migration_reports_strict_ready(workspace: Path):
+    (workspace / "clean.py").write_text(
+        "def double(x):\n    return x * 2\n\n\nprint(double(21))\n", encoding="utf-8"
+    )
+    result = _ppy(["migrate", "clean.py", "--report", "migration.json"], workspace)
+    assert result.returncode == 0, result.stderr
+    report = json.loads((workspace / "migration.json").read_text(encoding="utf-8"))
+    assert report["strict_ready"] is True
+    assert report["strict_errors"] == 0
+    assert "strict ready:               yes" in result.stderr
 
 
 def test_migrate_diff_shows_the_change_and_writes_nothing(workspace: Path):

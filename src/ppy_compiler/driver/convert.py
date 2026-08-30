@@ -168,7 +168,7 @@ def _run_conversion(
     bundle.global_writes = build_write_index(project.root, project.config.source_roots)
     bundle.reflection = build_reflection_index(project.root, project.config.source_roots)
 
-    fatal, leftover = _fatal_findings(bundle, reporter, strict=strict)
+    fatal = _fatal_findings(bundle, reporter, strict=strict)
     if fatal and not options.dry_run:
         reporter.note(f"{fatal} error(s); nothing was converted")
         return 1
@@ -181,9 +181,6 @@ def _run_conversion(
     produced: list[tuple[Path, Path, str]] = []
     failures = fatal
     pinned: dict[tuple[Path, int], str] = {}
-    seen = {(Path(d.span.path).resolve(), d.span.line) for d in leftover if d.span is not None}
-    for d in leftover:
-        report.add_finding(d)
     for path in sources:
         module_name = _module_for(bundle, path)
         if module_name is None:
@@ -204,16 +201,10 @@ def _run_conversion(
             reporter.emit(diagnostic)
             if diagnostic.severity is Severity.ERROR:
                 failures += 1
-            if command == "migrate":
-                span = diagnostic.span
-                if not (
-                    diagnostic.code == "E1504"
-                    and span is not None
-                    and (Path(span.path).resolve(), span.line) in seen
-                ):
-                    # The settled analysis already classified this site under
-                    # its precise code; the advisory would count it twice.
-                    report.add_finding(diagnostic)
+            if command == "migrate" and diagnostic.code == "R3003":
+                # Opportunities come from planning; everything unresolved is
+                # classified from the strict check of the final output below.
+                report.add_finding(diagnostic)
 
         original = rewritten.get(path) or path.read_text(encoding="utf-8")
         # Conversion itself stays deterministic, so the same input gives the
@@ -240,7 +231,15 @@ def _run_conversion(
         if converted != path.read_text(encoding="utf-8"):
             report.files_changed += 1
 
-    if command == "migrate":
+    if command == "migrate" and not failures:
+        # The report is about the *final* output: what was written is
+        # re-analyzed in strict mode, and whatever the strict language still
+        # rejects is what the migration has left to do. A strict failure is
+        # not a migration failure -- the files are written either way.
+        for diagnostic in _strict_findings(project, sources, produced):
+            if diagnostic.severity is Severity.ERROR:
+                report.strict_errors += 1
+            report.add_finding(diagnostic)
         for line in report.summary_lines():
             reporter.note(line)
         if getattr(options, "report", None):
@@ -313,13 +312,13 @@ def _run_conversion(
 _TREE_STATE = frozenset({"E1003"})
 
 
-def _strict_gate(project, sources, produced, pinned, reporter: Reporter) -> int:  # type: ignore[no-untyped-def]
-    """Validate the output: strict conversion may not write invalid strict PPY.
+def _strict_findings(project, sources, produced) -> list[Diagnostic]:  # type: ignore[no-untyped-def]
+    """What the strict language says about the text about to be written.
 
-    The converted text is re-analyzed in place of the originals, in strict
-    mode with dynamic-feature enforcement on. Whatever `ppy check` would
-    reject tomorrow, `ppy convert` refuses to produce today -- `ppy migrate`
-    is the command that writes work-in-progress code on purpose.
+    The produced text is re-analyzed in place of the originals, in strict
+    mode with dynamic-feature enforcement on. `ppy convert` turns the errors
+    into a refusal; `ppy migrate` turns them into the report's account of
+    what remains.
     """
     overlays: dict[Path, str] = {}
     for path, _destination, text in produced:
@@ -331,9 +330,14 @@ def _strict_gate(project, sources, produced, pinned, reporter: Reporter) -> int:
         checked = analyze_paths(project, sources, backend="python", overlays=overlays)
     finally:
         project.config.strict = previous
+    return [d for d in checked.diagnostics if d.code not in _TREE_STATE]
+
+
+def _strict_gate(project, sources, produced, pinned, reporter: Reporter) -> int:  # type: ignore[no-untyped-def]
+    """Strict conversion may not write invalid strict PPY, so it refuses to."""
     errors = 0
-    for diagnostic in checked.diagnostics:
-        if diagnostic.severity is not Severity.ERROR or diagnostic.code in _TREE_STATE:
+    for diagnostic in _strict_findings(project, sources, produced):
+        if diagnostic.severity is not Severity.ERROR:
             continue
         _explain_pinned(diagnostic, pinned)
         reporter.emit(diagnostic)
@@ -402,20 +406,12 @@ def _explain_pinned(diagnostic: Diagnostic, pinned: dict[tuple[Path, int], str])
 _STRUCTURAL = ("E1001", "E1002", "E1003", "E9001")
 
 
-def _fatal_findings(  # type: ignore[no-untyped-def]
-    bundle, reporter: Reporter, strict: bool = False
-) -> tuple[int, list[Diagnostic]]:
-    """Report what blocks this conversion, and hand back what was tolerated.
-
-    The tolerated findings -- dynamic features under `ppy migrate` -- are not
-    errors there, but they are exactly what the migration report classifies,
-    so they are returned rather than discarded.
-    """
+def _fatal_findings(bundle, reporter: Reporter, strict: bool = False) -> int:  # type: ignore[no-untyped-def]
+    """Report what blocks this conversion, and say how much did."""
     from ..analysis.checker import analyze
     from ..diagnostics import DiagnosticBag
 
     fatal = 0
-    leftover: list[Diagnostic] = []
     for diagnostic in bundle.diagnostics:
         if diagnostic.severity is Severity.ERROR and diagnostic.code in _STRUCTURAL:
             reporter.emit(diagnostic)
@@ -433,13 +429,12 @@ def _fatal_findings(  # type: ignore[no-untyped-def]
             continue
         if diagnostic.code.startswith("E15") and not strict:
             # `ppy migrate` converts a dynamic feature faithfully on purpose;
-            # it is `ppy check` that will insist on its boundary. Strict
-            # conversion refuses to produce it at all.
-            leftover.append(diagnostic)
+            # the strict pass over its final output classifies it for the
+            # report, and `ppy check` will insist on its boundary.
             continue
         reporter.emit(diagnostic)
         fatal += 1
-    return fatal, leftover
+    return fatal
 
 
 def _may_materialize(info, plugins, reflection=None) -> bool:  # type: ignore[no-untyped-def]
