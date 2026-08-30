@@ -51,7 +51,10 @@ a function's types can come from call sites in other files.
 | `--format` | hand the result to the project's formatter afterwards |
 | `--promote-buffers` | declare read-only numeric list parameters as `Buffer[T]` and rewrite the values feeding them into `array.array` |
 | `--hoist-classes {safe,aggressive,off}` | which classes may move above their uses; `safe` (default) moves only provably inert definitions |
-| `--no-strict` | write the permissive result even when it is not yet valid strict PPY |
+
+There is deliberately no `--no-strict` here: a convert that can be asked not
+to be strict is two pipelines wearing one name. The permissive pipeline is
+`ppy migrate`.
 
 Conversion is atomic: an error anywhere means no file is written anywhere, so
 `--in-place` can never leave a tree half `.py` and half `.ppy`.

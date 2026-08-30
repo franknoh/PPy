@@ -105,8 +105,13 @@ class ConversionPlan:
 
 
 def run_convert(options: argparse.Namespace, reporter: Reporter) -> int:
-    """`ppy convert`: strict staticization. The output must be valid strict PPY."""
-    return _run_conversion(options, reporter, strict=not getattr(options, "no_strict", False))
+    """`ppy convert`: strict staticization. The output must be valid strict PPY.
+
+    There is deliberately no escape hatch here: a convert that can be asked
+    not to be strict is two pipelines wearing one name, and `ppy migrate` is
+    already the permissive one.
+    """
+    return _run_conversion(options, reporter, strict=True)
 
 
 def run_migrate(options: argparse.Namespace, reporter: Reporter) -> int:

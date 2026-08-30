@@ -41,12 +41,6 @@ def build_parser() -> argparse.ArgumentParser:
         "convert", help="strictly convert .py sources to typed .ppy sources"
     )
     _conversion_arguments(convert)
-    convert.add_argument(
-        "--no-strict",
-        action="store_true",
-        default=argparse.SUPPRESS,
-        help="write the output even when it is not yet valid strict PPY",
-    )
 
     migrate = subparsers.add_parser(
         "migrate", help="rewrite normal Python toward strict PPY, permissively"

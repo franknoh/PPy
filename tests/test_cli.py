@@ -1947,27 +1947,15 @@ def test_strict_convert_rejects_what_check_would_reject(workspace: Path):
     assert (workspace / "homemade.ppy").exists()
 
 
-def test_convert_no_strict_downgrades_the_gate(workspace: Path):
-    """`--no-strict` writes the permissive result without the migrate framing."""
-    (workspace / "wrapped.py").write_text(
-        textwrap.dedent(
-            """
-            def registry(fn):
-                return fn
+def test_convert_has_no_strictness_escape_hatch(workspace: Path):
+    """A convert that can be asked not to be strict is two pipelines in one.
 
-
-            @registry
-            def opaque(x):
-                return x * 2
-
-
-            print(opaque(1))
-            """
-        ).lstrip("\n"),
-        encoding="utf-8",
-    )
-    assert _ppy(["convert", "--no-strict", "wrapped.py"], workspace).returncode == 0
-    assert "def opaque(x):" in (workspace / "wrapped.ppy").read_text(encoding="utf-8")
+    The flag is gone on purpose; the permissive pipeline is `ppy migrate`.
+    """
+    (workspace / "clean.py").write_text("print(1)\n", encoding="utf-8")
+    result = _ppy(["convert", "--no-strict", "clean.py"], workspace)
+    assert result.returncode == 2
+    assert "unrecognized arguments" in result.stderr
 
 
 def test_a_user_defined_cache_is_not_functools_cache(workspace: Path):
