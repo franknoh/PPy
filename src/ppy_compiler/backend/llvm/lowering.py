@@ -1256,6 +1256,15 @@ class _FunctionLowering:
         """`//` and `%` with Python's floor semantics, not C truncation."""
         ir = self.ir
         i64 = ir.IntType(64)
+        power = _positive_power_of_two(right)
+        if power is not None:
+            # Floor semantics make these exact for every sign: `n // 2**k`
+            # is an arithmetic shift and `n % 2**k` keeps the low bits,
+            # negatives included -- identities C's truncating division does
+            # not have. This is the parity test of every hot loop.
+            if op is ast.FloorDiv:
+                return self.builder.ashr(left, ir.Constant(i64, power))
+            return self.builder.and_(left, ir.Constant(i64, (1 << power) - 1))
         zero = ir.Constant(i64, 0)
         quotient = self.builder.sdiv(left, right)
         remainder = self.builder.srem(left, right)
@@ -1340,3 +1349,12 @@ class _FunctionLowering:
         if value.scalar == "bool":
             return self.builder.icmp_signed("!=", value.value, ir.Constant(ir.IntType(8), 0))
         return self.builder.icmp_signed("!=", value.value, ir.Constant(ir.IntType(64), 0))
+
+
+def _positive_power_of_two(value) -> int | None:  # type: ignore[no-untyped-def]
+    constant = getattr(value, "constant", None)
+    if not isinstance(constant, int) or constant <= 0:
+        return None
+    if constant & (constant - 1):
+        return None
+    return constant.bit_length() - 1

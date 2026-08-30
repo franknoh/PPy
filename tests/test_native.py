@@ -79,6 +79,80 @@ BUFFERS = """
     """
 
 
+def test_floor_division_by_a_power_of_two_lowers_to_shifts(write, analyze):
+    """`n // 2` is `ashr` and `n % 2` is `and` -- floor semantics make them exact.
+
+    No `sdiv`/`srem` may survive: the correction chain they drag along is
+    what kept the hot loop twice as slow as the same loop in C.
+    """
+    path = write(
+        "parity.ppy",
+        """
+        import ppy
+
+
+        @ppy.pure
+        def halve(n: int) -> int:
+            return n // 2
+
+
+        @ppy.pure
+        def parity(n: int) -> int:
+            return n % 8
+
+
+        print(halve(-7), parity(-9))
+        """,
+    )
+    bundle = analyze(path)
+    native = _collect(bundle, 2)["parity"]
+    assert "sdiv" not in native.ir and "srem" not in native.ir
+    assert "ashr" in native.ir
+
+
+def test_power_of_two_floor_semantics_match_python_on_every_sign(tmp_path: Path):
+    (tmp_path / "pyproject.toml").write_text("[tool.ppy]\n", encoding="utf-8")
+    (tmp_path / "negdiv.ppy").write_text(
+        textwrap.dedent(
+            """
+            import ppy
+
+
+            @ppy.pure
+            @ppy.opt(3)
+            def probe(values: list[int]) -> list[int]:
+                out: list[int] = []
+                for v in values:
+                    out.append(v // 2)
+                    out.append(v % 2)
+                    out.append(v // 8)
+                    out.append(v % 8)
+                    out.append(v // 1)
+                    out.append(v % 1)
+                    out.append(v // 4096)
+                    out.append(v % 4096)
+                return out
+
+
+            def main() -> None:
+                edges: list[int] = [
+                    -9223372036854775808, -4097, -4096, -9, -8, -7, -2, -1,
+                    0, 1, 2, 7, 8, 9, 4095, 4096, 9223372036854775807,
+                ]
+                print(probe(edges))
+
+
+            main()
+            """
+        ).lstrip("\n"),
+        encoding="utf-8",
+    )
+    plain = _run([sys.executable, "negdiv.ppy"], tmp_path)
+    native = _ppy(["run", "negdiv.ppy"], tmp_path)
+    assert native.returncode == 0, native.stderr
+    assert native.stdout == plain.stdout
+
+
 def test_list_parameters_are_lowered_to_native_buffers(write, analyze):
     path = write("buffers.ppy", BUFFERS)
     module = _collect(analyze(path, backend="llvm"))["buffers"]
