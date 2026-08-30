@@ -127,7 +127,10 @@ caller.
 | `ppy run f.ppy` | eligible functions compile through LLVM; everything else runs the Python body. |
 
 Any observable difference between the three is a compiler bug. The test suite
-and `examples/run_all.py` compare all three on every example.
+and `examples/run_all.py` compare all three on every example. `ppy build`
+produces the third path ahead of time: the launcher it emits re-enters the
+same pipeline and the same guarded bindings, taking machine code from the
+library built next to it instead of a JIT.
 
 ## Native lowering
 

@@ -142,9 +142,15 @@ ppy build TARGET [--backend {llvm,python}] [-o DIR]
 ```
 
 `--backend llvm` (default) writes objects, `libppy_<project>.so`,
-`ppy-bindings.json`, and a launcher. `-o` puts them somewhere other than the
-cache. With the JAX plugin enabled and permitted, staged functions are exported
-here too.
+`ppy-bindings.json`, and a launcher — a native executable that embeds the
+interpreter and is `ppy run` in a compiled coat: it enters the same CLI, the
+same pipeline, and the same guarded bindings, and only takes its machine code
+from the library built next to it instead of a JIT (`ppy run --prebuilt
+MANIFEST` is the spelled-out form). A manifest that names a library which has
+gone missing is an error, never a silent fall back to interpretation; a
+program with nothing native simply binds nothing, like `ppy run` would.
+`-o` puts the artifacts somewhere other than the cache. With the JAX plugin
+enabled and permitted, staged functions are exported here too.
 
 ## `ppy explain` — why it compiled that way
 

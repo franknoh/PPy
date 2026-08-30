@@ -64,14 +64,26 @@ print(longest(300000))
 ```bash
 uv run python  collatz.ppy    # plain CPython, no compiler   1197 ms
 uv run ppy     collatz.ppy    # optimized Python backend     1204 ms
-uv run ppy run collatz.ppy    # LLVM native                   103 ms
-gcc -O2 collatz.c && ./a.out  # the same loop in C             45 ms
+uv run ppy run collatz.ppy    # LLVM native                   103 ms  (JIT ~1230 ms, every run)
+gcc -O2 collatz.c && ./a.out  # the same loop in C             45 ms  (gcc ~110 ms, once)
 ```
 
-Numbers are the kernel's wall time on one machine, best of five. The C row is
-the same algorithm hand-written with 64-bit integers — the target that keeps
-the native backend honest: within about 2.3× of it today, from source that is
-still plain Python.
+And the fourth way — build the native artifacts once, then run the binary:
+
+```bash
+uv run ppy build collatz.ppy -o dist   # ~800 ms, once: object, libppy_*.so, manifest, launcher
+./dist/collatz                         # native binary                103 ms
+```
+
+Run numbers are the kernel's wall time on one machine, best of five; the
+parenthesized figure is what that row spends turning source into machine
+code, and how often. The C row is the same algorithm hand-written with 64-bit
+integers — the target that keeps the native backend honest: within about
+2.3× of it today, from source that is still plain Python. `./dist/collatz`
+is `ppy run` in a compiled coat: the launcher enters the same pipeline and
+the same guarded bindings, and only takes its machine code from the library
+built next to it — delete the library and it refuses, rather than quietly
+interpreting.
 
 ## Turning ordinary Python into it
 
@@ -128,7 +140,7 @@ def clamp(value: float) -> float:
 
 @ppy.pure
 def spread(samples: Sequence[float]) -> float:
-    total = 0.0
+    total: float = 0.0
     for sample in samples:
         total += clamp(sample)
     return math.sqrt(total / len(samples))
