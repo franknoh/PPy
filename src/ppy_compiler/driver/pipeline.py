@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+import contextlib
+import functools
+import hashlib
+import os
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -31,6 +35,34 @@ __all__ = [
 COMPILER_VERSION = "0.1.0"
 
 _SOURCE_SUFFIXES = (".ppy", ".py")
+
+
+@functools.cache
+def compiler_fingerprint() -> str:
+    """What identifies this compiler build, for cache keys.
+
+    A version string only changes at releases; the compiler changes at every
+    edit. A cache keyed on the string alone will happily serve IR and
+    generated code from before a codegen fix -- silently wrong, or silently
+    slow. So a development tree (anything outside `site-packages`) hashes its
+    own sources once per process, while a regular install -- immutable until
+    the version moves -- keeps the free constant. `PPY_COMPILER_BUILD`
+    overrides both for build systems that already know their identity.
+    """
+    override = os.environ.get("PPY_COMPILER_BUILD")
+    if override:
+        return override
+    package = Path(__file__).resolve().parent.parent
+    if "site-packages" in package.parts or "dist-packages" in package.parts:
+        return COMPILER_VERSION
+    digest = hashlib.sha256()
+    for source in sorted(package.rglob("*.py")):
+        if "__pycache__" in source.parts:
+            continue
+        digest.update(source.name.encode())
+        with contextlib.suppress(OSError):
+            digest.update(source.read_bytes())
+    return digest.hexdigest()[:16]
 
 
 @dataclass(slots=True)
@@ -187,7 +219,7 @@ def module_cache_key(
     return CacheKey.build(
         target,
         source_digest=symbols.module.source.digest(),
-        compiler_version=COMPILER_VERSION,
+        compiler_version=f"{COMPILER_VERSION}+{compiler_fingerprint()}",
         opt_level=opt_level,
         directives=directives,
         target=target,

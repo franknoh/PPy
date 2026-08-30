@@ -514,3 +514,30 @@ def test_a_cached_lowering_round_trips():
     assert restored.rejected == {"m.g": "has effects"}
     assert decode('{"version": 0}') is None
     assert decode("not json") is None
+
+
+def test_the_compiler_fingerprint_tracks_the_build(monkeypatch):
+    """A dev tree keys caches on its own sources; an override wins outright."""
+    from ppy_compiler.driver import pipeline
+
+    pipeline.compiler_fingerprint.cache_clear()
+    monkeypatch.setenv("PPY_COMPILER_BUILD", "release-abc")
+    assert pipeline.compiler_fingerprint() == "release-abc"
+    pipeline.compiler_fingerprint.cache_clear()
+    monkeypatch.delenv("PPY_COMPILER_BUILD")
+    fingerprint = pipeline.compiler_fingerprint()
+    assert fingerprint and fingerprint != "release-abc"
+    pipeline.compiler_fingerprint.cache_clear()
+
+
+def test_the_cache_root_honours_the_environment(monkeypatch, tmp_path):
+    """`PPY_CACHE_DIR` moves the store off a slow filesystem, per project."""
+    from ppy_compiler.driver.config import Config
+
+    monkeypatch.setenv("PPY_CACHE_DIR", str(tmp_path / "store"))
+    one = Config(root=tmp_path / "one")
+    two = Config(root=tmp_path / "two")
+    assert one.cache_path != two.cache_path
+    assert one.cache_path.is_relative_to(tmp_path / "store")
+    monkeypatch.delenv("PPY_CACHE_DIR")
+    assert Config(root=tmp_path / "one").cache_path == tmp_path / "one" / ".ppy-cache"
