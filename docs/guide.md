@@ -26,15 +26,21 @@ One file, three ways. Any disagreement is a compiler bug, and the suite plus
 WSL2, RTX 5080, torch 2.11+cu128, jax 0.11.1. Answers identical on all three
 paths in every row.
 
-| algorithm | plain | ppy run |
-|---|---:|---:|
-| sieve 2e6 | 187.7 ms | 8.6 ms |
-| collatz 3e5 | 1203.6 ms | 88.4 ms |
-| knapsack 400×2e4 | 469.0 ms | 5.3 ms |
-| edit distance 2000² | 423.3 ms | 2.9 ms |
-| Floyd–Warshall 220 | 492.2 ms | 6.1 ms |
-| matmul 220 | 527.7 ms | 7.2 ms |
-| union-find 5e5 | 167.9 ms | 3.2 ms |
+| algorithm | plain | ppy run | C (`gcc -O2`) |
+|---|---:|---:|---:|
+| sieve 2e6 | 191.9 ms | 10.4 ms | 17.7 ms |
+| collatz 3e5 | 1204.3 ms | 42.1 ms | 44.4 ms |
+| knapsack 400×2e4 | 476.7 ms | 5.5 ms | 2.5 ms |
+| edit distance 2000² | 531.1 ms | 3.3 ms | 2.0 ms |
+| Floyd–Warshall 220 | 539.9 ms | 6.2 ms | 5.6 ms |
+| matmul 220 | 527.4 ms | 6.8 ms | 2.3 ms |
+| union-find 5e5 | 186.2 ms | 3.8 ms | 4.2 ms |
+| fermat 6e4 | 25.9 ms | 2.9 ms | 1.8 ms |
+
+The C column is `examples/15_algorithms/algorithms.c`: the same kernels
+hand-written, printing the same answers. Where gcc wins, the reason is
+auto-vectorization (matmul, edit distance); where PPY wins or draws, the
+scalar code generation is already at parity — overflow guards included.
 
 The Python backend is not faster and is not meant to be: it optimizes the AST,
 and the interpreter overhead is unchanged.
