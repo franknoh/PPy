@@ -36,14 +36,14 @@ def normalize(value: float, mean: float, spread: float) -> float:
 
 
 def summarize(readings: Sequence[float]) -> Summary | None:
-    count = len(readings)
+    count: int = len(readings)
     if not count:
         return None
-    total = 0.0
+    total: float = 0.0
     for i in range(count):
         total += readings[i]
-    mean = total / count
-    spread = 0.0
+    mean: float = total / count
+    spread: float = 0.0
     for i in range(count):
         spread += (readings[i] - mean) * (readings[i] - mean)
     return Summary(mean, math.sqrt(spread / count), count)
@@ -60,7 +60,7 @@ def report(readings: Sequence[float]) -> str:
     summary = summarize(readings)
     if summary is None:
         return "empty"
-    values = standardized(readings, summary)
+    values: list[float] = standardized(readings, summary)
     return summary.describe() + " first=" + str(round(values[0], 4))
 
 

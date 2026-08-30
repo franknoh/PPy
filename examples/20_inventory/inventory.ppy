@@ -11,7 +11,7 @@ def line_value(item: tuple[str, int, float]) -> float:
 
 @ppy.pure
 def total_value(items: Sequence[tuple[str, int, float]]) -> float:
-    total = 0.0
+    total: float = 0.0
     for item in items:
         total += line_value(item)
     return total
@@ -19,7 +19,7 @@ def total_value(items: Sequence[tuple[str, int, float]]) -> float:
 
 @ppy.pure
 def total_units(items: Sequence[tuple[str, int, float]]) -> int:
-    total = 0
+    total: int = 0
     for item in items:
         total += item[1]
     return total
@@ -50,8 +50,8 @@ def below_stock(items: Sequence[tuple[str, int, float]], threshold: int) -> list
 
 @ppy.pure
 def summary(items: Sequence[tuple[str, int, float]]) -> tuple[float, float, float]:
-    value = total_value(items)
-    count = len(items)
+    value: float = total_value(items)
+    count: int = len(items)
     if not count:
         return (0.0, 0.0, 0.0)
     return (value, value / count, math.sqrt(value))
@@ -63,7 +63,7 @@ def labeled(name: str, value: float) -> str:
 
 
 def main() -> None:
-    items = [
+    items: list[tuple[str, int, float]] = [
         ("bolt", 120, 0.25),
         ("nut", 340, 0.1),
         ("washer", 80, 0.05),

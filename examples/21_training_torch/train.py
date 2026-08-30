@@ -38,9 +38,9 @@ def forward_loss(x, y, w1, b1, w2, b2):
     return torch.mean(torch.mul(residual, residual))
 
 
-def descend(parameters, rate):
+def descend(params, rate):
     with torch.no_grad():
-        for parameter in parameters:
+        for parameter in params:
             gradient = parameter.grad
             if gradient is None:
                 continue
@@ -48,10 +48,10 @@ def descend(parameters, rate):
             parameter.grad = None
 
 
-def train_step(x, y, parameters, rate):
-    loss = forward_loss(x, y, parameters[0], parameters[1], parameters[2], parameters[3])
+def train_step(x, y, params, rate):
+    loss = forward_loss(x, y, params[0], params[1], params[2], params[3])
     loss.backward()
-    descend(parameters, rate)
+    descend(params, rate)
     return loss.item()
 
 
@@ -76,21 +76,21 @@ def main():
 
     x = torch.tensor(features, dtype=torch.float32).reshape(rows, cols * 2).to(device)
     y = torch.randn(rows, 1).to(device)
-    parameters = [
+    params = [
         torch.randn(cols * 2, 32, device=device, requires_grad=True),
         torch.zeros(32, device=device, requires_grad=True),
         torch.randn(32, 1, device=device, requires_grad=True),
         torch.zeros(1, device=device, requires_grad=True),
     ]
     with torch.no_grad():
-        parameters[0] *= 0.1
-        parameters[2] *= 0.1
+        params[0] *= 0.1
+        params[2] *= 0.1
 
     started = time.perf_counter()
     first = 0.0
     last = 0.0
     for index in range(100):
-        last = train_step(x, y, parameters, 0.02)
+        last = train_step(x, y, params, 0.02)
         if not index:
             first = last
     train_ms = (time.perf_counter() - started) * 1000.0

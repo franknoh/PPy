@@ -48,17 +48,17 @@ def train_step(
 
 
 def main() -> None:
-    key = jax.random.PRNGKey(0)
-    xs = jnp.linspace(-1.0, 1.0, 256).reshape(-1, 1)
-    ys = target_curve(xs)
+    key: jax.Array = jax.random.PRNGKey(0)
+    xs: jax.Array = jnp.linspace(-1.0, 1.0, 256).reshape(-1, 1)
+    ys: jax.Array = target_curve(xs)
 
-    model = Mlp(hidden=32)
+    model: Mlp = Mlp(hidden=32)
     params: Any = model.init(key, xs)
     tx = optax.adam(1e-2)
     state: Any = tx.init(params)
 
-    first = 0.0
-    last = 0.0
+    first: float = 0.0
+    last: float = 0.0
     for i in range(200):
         params, state, loss = train_step(model, tx, params, state, xs, ys)
         if i == 0:

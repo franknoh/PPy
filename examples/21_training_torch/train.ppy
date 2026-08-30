@@ -10,27 +10,27 @@ from ppy import Buffer
 
 
 def standardize(raw: Buffer[float], out: Buffer[float], rows: int, cols: int) -> float:
-    total = 0.0
+    total: float = 0.0
     for row in range(rows):
-        base = row * cols
-        target = row * cols * 2
+        base: int = row * cols
+        target: int = row * cols * 2
 
-        sum_ = 0.0
+        sum_: float = 0.0
         for i in range(cols):
             sum_ += raw[base + i]
-        mean = sum_ / cols
+        mean: float = sum_ / cols
 
-        spread = 0.0
+        spread: float = 0.0
         for i in range(cols):
             spread += (raw[base + i] - mean) * (raw[base + i] - mean)
-        deviation = math.sqrt(spread / cols) + 1e-8
+        deviation: float = math.sqrt(spread / cols) + 1e-8
 
         for i in range(cols):
-            value = (raw[base + i] - mean) / deviation
+            value: float = (raw[base + i] - mean) / deviation
             out[target + i] = value
             total += value
         for i in range(cols):
-            interaction = out[target + i] * out[target + (i + 1) % cols]
+            interaction: float = out[target + i] * out[target + (i + 1) % cols]
             out[target + cols + i] = interaction
             total += interaction
     return total
@@ -45,15 +45,15 @@ def forward_loss(
     w2: torch.Tensor,
     b2: torch.Tensor,
 ) -> torch.Tensor:
-    hidden = torch.relu(torch.add(torch.matmul(x, w1), b1))
-    predicted = torch.add(torch.matmul(hidden, w2), b2)
-    residual = torch.sub(predicted, y)
+    hidden: torch.Tensor = torch.relu(torch.add(torch.matmul(x, w1), b1))
+    predicted: torch.Tensor = torch.add(torch.matmul(hidden, w2), b2)
+    residual: torch.Tensor = torch.sub(predicted, y)
     return torch.mean(torch.mul(residual, residual))
 
 
-def descend(parameters: Sequence[torch.Tensor], rate: float) -> None:
+def descend(params: Sequence[torch.Tensor], rate: float) -> None:
     with torch.no_grad():
-        for parameter in parameters:
+        for parameter in params:
             gradient = parameter.grad
             if gradient is None:
                 continue
@@ -64,12 +64,12 @@ def descend(parameters: Sequence[torch.Tensor], rate: float) -> None:
 def train_step(
     x: torch.Tensor,
     y: torch.Tensor,
-    parameters: Sequence[torch.Tensor],
+    params: Sequence[torch.Tensor],
     rate: float,
 ) -> float:
-    loss = forward_loss(x, y, parameters[0], parameters[1], parameters[2], parameters[3])
+    loss: torch.Tensor = forward_loss(x, y, params[0], params[1], params[2], params[3])
     loss.backward()
-    descend(parameters, rate)
+    descend(params, rate)
     return loss.item()
 
 
@@ -81,38 +81,38 @@ def preferred_device() -> Literal['cuda', 'cpu']:
 
 
 def main() -> None:
-    rows = 20000
-    cols = 16
-    device = preferred_device()
+    rows: int = 20000
+    cols: int = 16
+    device: str = preferred_device()
 
     torch.manual_seed(0)
     raw = array.array("d", torch.randn(rows * cols).tolist())
     features = array.array("d", [0.0] * (rows * cols * 2))
 
-    started = time.perf_counter()
-    checksum = standardize(raw, features, rows, cols)
-    prep_ms = (time.perf_counter() - started) * 1000.0
+    started: float = time.perf_counter()
+    checksum: float = standardize(raw, features, rows, cols)
+    prep_ms: float = (time.perf_counter() - started) * 1000.0
 
-    x = torch.tensor(features, dtype=torch.float32).reshape(rows, cols * 2).to(device)
-    y = torch.randn(rows, 1).to(device)
-    parameters = [
+    x: torch.Tensor = torch.tensor(features, dtype=torch.float32).reshape(rows, cols * 2).to(device)
+    y: torch.Tensor = torch.randn(rows, 1).to(device)
+    params: list[torch.Tensor] = [
         torch.randn(cols * 2, 32, device=device, requires_grad=True),
         torch.zeros(32, device=device, requires_grad=True),
         torch.randn(32, 1, device=device, requires_grad=True),
         torch.zeros(1, device=device, requires_grad=True),
     ]
     with torch.no_grad():
-        parameters[0] *= 0.1
-        parameters[2] *= 0.1
+        params[0] *= 0.1
+        params[2] *= 0.1
 
     started = time.perf_counter()
-    first = 0.0
-    last = 0.0
+    first: float = 0.0
+    last: float = 0.0
     for index in range(100):
-        last = train_step(x, y, parameters, 0.02)
+        last = train_step(x, y, params, 0.02)
         if not index:
             first = last
-    train_ms = (time.perf_counter() - started) * 1000.0
+    train_ms: float = (time.perf_counter() - started) * 1000.0
 
     print(f"# device: {device}")
     print(f"# native prep: {getattr(standardize, '__ppy_native__', None) is not None}")

@@ -181,9 +181,15 @@ def _render(t: T.Type, local_module: str) -> Rendered | None:
     return None
 
 
+#: Packages whose types are conventionally spelled with the package name --
+#: `torch.Tensor`, not `Tensor` -- so shortening would read wrong and the
+#: whole-name spelling resolves through the import the source already has.
+KEEPS_QUALNAME = ("numpy.", "torch.", "jax.", "pydantic.")
+
+
 def _short(qualname: str, local_module: str) -> str:
     if local_module and qualname.startswith(local_module + "."):
         return qualname[len(local_module) + 1 :]
-    if "." in qualname and not qualname.startswith(("numpy.", "torch.", "jax.", "pydantic.")):
+    if "." in qualname and not qualname.startswith(KEEPS_QUALNAME):
         return qualname.rpartition(".")[2]
     return qualname

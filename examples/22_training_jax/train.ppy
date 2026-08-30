@@ -8,27 +8,27 @@ from ppy import Buffer
 
 
 def standardize(raw: Buffer[float], out: Buffer[float], rows: int, cols: int) -> float:
-    total = 0.0
+    total: float = 0.0
     for row in range(rows):
-        base = row * cols
-        target = row * cols * 2
+        base: int = row * cols
+        target: int = row * cols * 2
 
-        sum_ = 0.0
+        sum_: float = 0.0
         for i in range(cols):
             sum_ += raw[base + i]
-        mean = sum_ / cols
+        mean: float = sum_ / cols
 
-        spread = 0.0
+        spread: float = 0.0
         for i in range(cols):
             spread += (raw[base + i] - mean) * (raw[base + i] - mean)
-        deviation = math.sqrt(spread / cols) + 1e-8
+        deviation: float = math.sqrt(spread / cols) + 1e-8
 
         for i in range(cols):
-            value = (raw[base + i] - mean) / deviation
+            value: float = (raw[base + i] - mean) / deviation
             out[target + i] = value
             total += value
         for i in range(cols):
-            interaction = out[target + i] * out[target + (i + 1) % cols]
+            interaction: float = out[target + i] * out[target + (i + 1) % cols]
             out[target + cols + i] = interaction
             total += interaction
     return total
@@ -43,9 +43,9 @@ def forward_loss(
     w2: jax.Array,
     b2: jax.Array,
 ) -> jax.Array:
-    hidden = jnp.maximum(jnp.dot(x, w1) + b1, 0.0)
-    predicted = jnp.dot(hidden, w2) + b2
-    residual = predicted - y
+    hidden: jax.Array = jnp.maximum(jnp.dot(x, w1) + b1, 0.0)
+    predicted: jax.Array = jnp.dot(hidden, w2) + b2
+    residual: jax.Array = predicted - y
     return jnp.mean(residual * residual)
 
 
@@ -72,34 +72,34 @@ def train_step(
 
 
 def main() -> None:
-    rows = 20000
-    cols = 16
+    rows: int = 20000
+    cols: int = 16
 
-    key = jax.random.PRNGKey(0)
+    key: jax.Array = jax.random.PRNGKey(0)
     k1, k2, k3, k4 = jax.random.split(key, 4)
     raw = array.array("d", jax.random.normal(k1, (rows * cols,)).tolist())
     features = array.array("d", [0.0] * (rows * cols * 2))
 
-    started = time.perf_counter()
-    checksum = standardize(raw, features, rows, cols)
-    prep_ms = (time.perf_counter() - started) * 1000.0
+    started: float = time.perf_counter()
+    checksum: float = standardize(raw, features, rows, cols)
+    prep_ms: float = (time.perf_counter() - started) * 1000.0
 
-    x = jnp.asarray(features, dtype=jnp.float32).reshape(rows, cols * 2)
-    y = jax.random.normal(k2, (rows, 1))
+    x: jax.Array = jnp.asarray(features, dtype=jnp.float32).reshape(rows, cols * 2)
+    y: jax.Array = jax.random.normal(k2, (rows, 1))
     w1 = jax.random.normal(k3, (cols * 2, 32)) * 0.1
     b1 = jnp.zeros((32,))
     w2 = jax.random.normal(k4, (32, 1)) * 0.1
     b2 = jnp.zeros((1,))
 
-    first = float(forward_loss(x, y, w1, b1, w2, b2))
+    first: float = float(forward_loss(x, y, w1, b1, w2, b2))
     w1, b1, w2, b2 = train_step(x, y, w1, b1, w2, b2, 0.02)
     w1.block_until_ready()
 
     started = time.perf_counter()
     for _ in range(100):
         w1, b1, w2, b2 = train_step(x, y, w1, b1, w2, b2, 0.02)
-    last = float(forward_loss(x, y, w1, b1, w2, b2))
-    train_ms = (time.perf_counter() - started) * 1000.0
+    last: float = float(forward_loss(x, y, w1, b1, w2, b2))
+    train_ms: float = (time.perf_counter() - started) * 1000.0
 
     print(f"# device: {jax.devices()[0].platform}")
     print(f"# native prep: {getattr(standardize, '__ppy_native__', None) is not None}")

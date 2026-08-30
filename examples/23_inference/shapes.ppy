@@ -18,7 +18,7 @@ class Rect:
 
 @ppy.pure
 def widest(rects: Sequence[Rect]) -> Rect | None:
-    best = None
+    best: Rect | None = None
     for rect in rects:
         if best is None or rect.width > best.width:
             best = rect
@@ -27,7 +27,7 @@ def widest(rects: Sequence[Rect]) -> Rect | None:
 
 @ppy.pure
 def total_area(rects: Sequence[Rect]) -> float:
-    total = 0.0
+    total: float = 0.0
     for rect in rects:
         total += rect.area()
     return total

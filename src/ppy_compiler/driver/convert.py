@@ -624,6 +624,7 @@ def build_plan(  # type: ignore[no-untyped-def]
     if bundle.project.config.inference.write_local_annotations and analysis is not None:
         _plan_module_globals(symbols, analysis, plan, module_name, bundle)
         _plan_empty_containers(symbols, analysis, plan, module_name)
+        _plan_function_locals(symbols, analysis, plan, module_name)
     _plan_fields(symbols, plan, module_name)
     if analysis is not None:
         _plan_purity(functions, analysis, plan)
@@ -832,6 +833,134 @@ def _plan_empty_containers(symbols, analysis, plan: ConversionPlan, module_name:
             plan.assignments[(node.lineno, target.id)] = rendered.text
             plan.typing_imports |= rendered.typing_imports
             plan.ppy_imports |= rendered.ppy_imports
+
+
+def _scope_statements(function: ast.AST):  # type: ignore[no-untyped-def]
+    """The nodes of one function's own scope: nested `def`s keep their own."""
+    stack = list(ast.iter_child_nodes(function))
+    while stack:
+        node = stack.pop()
+        yield node
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef, ast.Lambda)):
+            continue
+        stack.extend(ast.iter_child_nodes(node))
+
+
+def _unannotatable_locals(info) -> set[str]:  # type: ignore[no-untyped-def]
+    """Names bound by anything other than a plain single-target assignment.
+
+    A `for` target, a `with ... as`, an `except ... as`, a match capture, a
+    walrus, or a `global` declaration binds without a statement an annotation
+    could sit on, and proving the annotation against every such binding is
+    more cleverness than the reader gains from it.
+    """
+    found: set[str] = {p.name for p in info.params}
+    for node in _scope_statements(info.node):
+        targets: list[ast.expr | None] = []
+        if isinstance(node, (ast.For, ast.AsyncFor)):
+            targets = [node.target]
+        elif isinstance(node, (ast.With, ast.AsyncWith)):
+            targets = [item.optional_vars for item in node.items]
+        elif isinstance(node, ast.ExceptHandler) and node.name:
+            found.add(node.name)
+        elif isinstance(node, (ast.Global, ast.Nonlocal)):
+            found.update(node.names)
+        elif isinstance(node, ast.NamedExpr) and isinstance(node.target, ast.Name):
+            found.add(node.target.id)
+        elif isinstance(node, (ast.Import, ast.ImportFrom)):
+            found.update((a.asname or a.name).partition(".")[0] for a in node.names)
+        elif isinstance(node, ast.Assign) and (
+            len(node.targets) != 1 or not isinstance(node.targets[0], ast.Name)
+        ):
+            for target in ast.walk(node):
+                if isinstance(target, ast.Name) and isinstance(target.ctx, ast.Store):
+                    found.add(target.id)
+        elif isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
+            found.add(node.target.id)
+        elif isinstance(node, (ast.MatchAs, ast.MatchStar)) and node.name:
+            found.add(node.name)
+        for target in targets:
+            if target is None:
+                continue
+            for name in ast.walk(target):
+                if isinstance(name, ast.Name):
+                    found.add(name.id)
+    return found
+
+
+def _plan_function_locals(symbols, analysis, plan: ConversionPlan, module_name: str) -> None:  # type: ignore[no-untyped-def]
+    """Annotate a function-local where it is first bound, like a global.
+
+    Module constants and empty containers already get annotations; a plain
+    `total = 0.0` accumulator deserves the same treatment, and for the same
+    reader. The annotation goes on the first binding, and only when every
+    later assignment provably fits the settled type -- a local that changes
+    its mind keeps its silence.
+    """
+    functions = list(symbols.functions.values())
+    for cls in symbols.classes.values():
+        functions.extend(cls.methods.values())
+    for info in functions:
+        function = analysis.functions.get(info.qualname)
+        if function is None:
+            continue
+        skip = _unannotatable_locals(info)
+        assigns: dict[str, list[ast.Assign]] = {}
+        for node in _scope_statements(info.node):
+            if not isinstance(node, ast.Assign) or len(node.targets) != 1:
+                continue
+            target = node.targets[0]
+            if isinstance(target, ast.Name):
+                assigns.setdefault(target.id, []).append(node)
+        for name, nodes in assigns.items():
+            if name in skip or name.startswith("_"):
+                continue
+            first = min(nodes, key=lambda n: n.lineno)
+            if _is_empty_container(first.value):
+                # `out = []` is the empty-container pass's business.
+                continue
+            bound = T.strip_literal(function.locals.get(name, T.UNKNOWN))
+            if isinstance(bound, (T.UnknownType, T.AnyType, T.NeverType)):
+                continue
+            if not _resolves_once_written(bound, module_name):
+                continue
+            observed = [T.strip_literal(analysis.type_of(n.value)) for n in nodes]
+            if any(
+                isinstance(t, (T.UnknownType, T.NeverType)) or not T.is_assignable(t, bound)
+                for t in observed
+            ):
+                continue
+            rendered = render_annotation(bound, local_module=module_name)
+            if rendered is None:
+                continue
+            plan.assignments[(first.lineno, name)] = rendered.text
+            plan.typing_imports |= rendered.typing_imports
+            plan.ppy_imports |= rendered.ppy_imports
+
+
+def _resolves_once_written(t: T.Type, module_name: str) -> bool:
+    """Would every name in this annotation still resolve once written down?
+
+    Rendering shortens `pkg.Class` to its tail unless the package is one
+    whose types are conventionally spelled whole; a shortened tail from
+    anywhere else names something this module may never have imported, and
+    the annotation would be the one line in the file that does not check.
+    """
+    from ..analysis.render import KEEPS_QUALNAME
+
+    base = T.strip_literal(t)
+    if isinstance(base, T.Union_):
+        return all(_resolves_once_written(m, module_name) for m in base.members)
+    if isinstance(base, T.Tuple_):
+        return all(_resolves_once_written(i, module_name) for i in base.items)
+    if isinstance(base, T.Instance):
+        resolvable = (
+            "." not in base.name
+            or base.name.startswith(module_name + ".")
+            or base.name.startswith(KEEPS_QUALNAME)
+        )
+        return resolvable and all(_resolves_once_written(a, module_name) for a in base.args)
+    return not isinstance(base, (T.UnknownType, T.AnyType, T.NeverType, T.Callable_))
 
 
 def _is_empty_container(value: ast.expr) -> bool:

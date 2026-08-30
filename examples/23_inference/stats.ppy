@@ -5,7 +5,7 @@ import ppy
 
 @ppy.pure
 def mean(values: Sequence[float]) -> float:
-    total = 0.0
+    total: float = 0.0
     for value in values:
         total += value
     return total / len(values)
@@ -13,16 +13,16 @@ def mean(values: Sequence[float]) -> float:
 
 @ppy.pure
 def variance(values: Sequence[float]) -> float:
-    m = mean(values)
-    total = 0.0
+    m: float = mean(values)
+    total: float = 0.0
     for value in values:
         total += (value - m) * (value - m)
     return total / len(values)
 
 
 def standardize(values: Sequence[float]) -> list[float]:
-    m = mean(values)
-    spread = variance(values) ** 0.5
+    m: float = mean(values)
+    spread: float = variance(values) ** 0.5
     out: list[float] = []
     for value in values:
         out.append((value - m) / spread)

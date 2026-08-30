@@ -1160,6 +1160,32 @@ def test_a_mapping_parameter_follows_the_same_rule(workspace: Path, body: str, e
     assert f"def f(values: {expected}" in result.stdout, result.stdout
 
 
+def test_stable_function_locals_are_annotated_where_first_bound(workspace: Path):
+    """`total = 0.0` gets the same treatment as a module constant."""
+    (workspace / "locals.py").write_text(
+        textwrap.dedent(
+            """
+            def spread(samples):
+                total = 0.0
+                for sample in samples:
+                    total += sample
+                shifty = 1
+                shifty = "no annotation for a local that changes its mind"
+                return total
+
+
+            print(spread([1.0, 2.0]), spread((3.0,)))
+            """
+        ).lstrip("\n"),
+        encoding="utf-8",
+    )
+    assert _ppy(["migrate", "locals.py"], workspace).returncode == 0
+    converted = (workspace / "locals.ppy").read_text(encoding="utf-8")
+    assert "    total: float = 0.0" in converted
+    assert "    shifty = 1" in converted
+    assert "shifty:" not in converted
+
+
 def test_iterating_a_union_of_containers_yields_the_joined_element(workspace: Path):
     """`list[float]` here, `tuple[float, float]` there: the loop still knows.
 
