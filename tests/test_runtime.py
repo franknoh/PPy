@@ -99,6 +99,23 @@ def test_dynamic_marker_is_plain_any():
     assert ppy.Dynamic is Any
 
 
+def test_check_validates_and_returns_the_value():
+    assert ppy.check[int](5) == 5
+    assert ppy.check[list[int]]([1, 2]) == [1, 2]
+    assert ppy.check[int | None](None) is None
+    with pytest.raises(TypeError):
+        ppy.check[int]("five")
+    with pytest.raises(TypeError):
+        ppy.check[str | bytes](3)
+
+
+def test_check_refuses_targets_it_cannot_validate():
+    from typing import Literal
+
+    with pytest.raises(TypeError):
+        ppy.check[Literal[3]](3)
+
+
 def test_class_decoration_keeps_class_identity():
     @ppy.opt(1)
     class Model:

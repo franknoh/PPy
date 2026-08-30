@@ -60,6 +60,7 @@ sound fallback, and never the rest.
 | `E1505` | A dynamic boundary is forbidden by the project configuration. |
 | `E1506` | Attribute or class mutation after analysis is not supported. |
 | `E1507` | A class is constructed dynamically, from computed bases or an unvouched metaclass. |
+| `E1508` | A dynamic value crosses into typed code without a `ppy.check[T]` conversion. |
 
 ## Purity
 

@@ -37,6 +37,7 @@ CODES: dict[str, str] = {
     "E1505": "A dynamic boundary is forbidden by the project configuration.",
     "E1506": "Attribute or class mutation after analysis is not supported.",
     "E1507": "A class is constructed dynamically, from computed bases or an unvouched metaclass.",
+    "E1508": "A dynamic value crosses into typed code without a checked conversion.",
     "E1601": "A function declared `@ppy.pure` performs a forbidden effect.",
     "E1602": "A function declared `@ppy.pure` calls a function with unknown effects.",
     "E1701": "`@ppy.parallel(require=True)` could not be satisfied for the selected backend.",

@@ -16,6 +16,7 @@ __all__ = [
     "BUILTIN_MRO",
     "BYTES",
     "COMPLEX",
+    "DYNAMIC",
     "ELLIPSIS_T",
     "FLOAT",
     "INT",
@@ -27,6 +28,7 @@ __all__ = [
     "AnyType",
     "Callable_",
     "ClassObject",
+    "DynamicType",
     "Instance",
     "Literal",
     "Module_",
@@ -75,6 +77,20 @@ class AnyType(Type):
     @property
     def is_dynamic(self) -> bool:
         return True
+
+
+@dataclass(frozen=True, slots=True)
+class DynamicType(AnyType):
+    """An explicit Python-dynamic boundary value.
+
+    Entering is free -- any value may become `Dynamic` -- but leaving is
+    not: a dynamic value fits only `Dynamic`, `Any`, or `object`, and
+    crossing into typed code takes `ppy.check[T](value)`. `Any` stays the
+    permissive legacy spelling; `Dynamic` is the one the compiler polices.
+    """
+
+    def __str__(self) -> str:
+        return "ppy.Dynamic"
 
 
 @dataclass(frozen=True, slots=True)
@@ -261,6 +277,7 @@ class TypeVar_(Type):
 
 
 ANY = AnyType()
+DYNAMIC = DynamicType()
 UNKNOWN = UnknownType()
 NEVER = NeverType()
 
@@ -352,6 +369,10 @@ def union(*types: Type) -> Type:
     flat = _flatten(types)
     if not flat:
         return NEVER
+    if any(isinstance(t, DynamicType) for t in flat):
+        # Dynamic is contagious through merges: half a dynamic value is
+        # still a dynamic value.
+        return DYNAMIC
     if any(isinstance(t, AnyType) for t in flat):
         return ANY
     unique: list[Type] = []
@@ -413,6 +434,9 @@ def join(*types: Type) -> Type:
 
 def is_assignable(source: Type, target: Type) -> bool:
     """Is a value of `source` acceptable where `target` is expected?"""
+    if isinstance(source, DynamicType) and not isinstance(target, (AnyType, UnknownType)):
+        # Entering a boundary is free; leaving typed code takes ppy.check[T].
+        return isinstance(target, Instance) and target.name == "object"
     if isinstance(target, AnyType) or isinstance(source, AnyType):
         return True
     if isinstance(source, NeverType):

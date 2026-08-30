@@ -376,6 +376,100 @@ def test_a_dynamic_boundary_permits_dynamic_class_construction(write, codes):
     assert "E1507" not in codes(path)
 
 
+def test_a_dynamic_value_may_not_escape_its_boundary(write, codes):
+    """`Dynamic -> int` is a missing runtime check, not a spelling choice."""
+    path = write(
+        "escape.ppy",
+        """
+        import ppy
+
+
+        class C:
+            def __init__(self) -> None:
+                self.x: int = 0
+
+
+        def need_int(x: int) -> int:
+            return x + 1
+
+
+        def f(c: C, source: str) -> int:
+            with ppy.dynamic:
+                value = eval(source)
+
+            c.x = value
+            need_int(value)
+            return value
+        """,
+    )
+    found = codes(path)
+    assert found.count("E1508") == 3
+
+
+def test_ppy_check_sanctions_the_crossing(write, analyze):
+    path = write(
+        "sanctioned.ppy",
+        """
+        import ppy
+
+
+        def f(source: str) -> int:
+            with ppy.dynamic:
+                value = eval(source)
+
+            return ppy.check[int](value)
+
+
+        print(f("1 + 1"))
+        """,
+    )
+    bundle = analyze(path)
+    assert not bundle.diagnostics.has_errors()
+
+
+def test_dynamic_stays_dynamic_through_operations(write, codes):
+    """Attribute hops and arithmetic keep the taint until a check clears it."""
+    path = write(
+        "taint.ppy",
+        """
+        import ppy
+
+
+        def f(source: str) -> int:
+            with ppy.dynamic:
+                value = eval(source)
+
+            shifted = value + 1
+            return shifted
+        """,
+    )
+    assert "E1508" in codes(path)
+
+
+def test_any_remains_the_permissive_legacy_spelling(write, codes):
+    """`typing.Any` absorbs a dynamic value; `Dynamic` is the policed one."""
+    path = write(
+        "legacy.ppy",
+        """
+        from typing import Any
+
+        import ppy
+
+
+        def sink(x: Any) -> None:
+            print(x)
+
+
+        def f(source: str) -> None:
+            with ppy.dynamic:
+                value = eval(source)
+
+            sink(value)
+        """,
+    )
+    assert "E1508" not in codes(path)
+
+
 def test_the_widened_protocols_answer_their_promised_methods(write, analyze):
     """What the widener writes, the checker must accept back."""
     path = write(

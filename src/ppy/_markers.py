@@ -25,6 +25,7 @@ __all__ = [
     "Shape",
     "Vector",
     "VectorSpec",
+    "check",
     "f16",
     "f32",
     "f64",
@@ -216,6 +217,63 @@ f64 = Annotated[float, FloatWidth(64)]
 #: An explicit Python-dynamic boundary. `Dynamic` is `Any` at runtime, but
 #: spelling it says the dynamism is a decision, not an inference failure.
 Dynamic = Any
+
+
+class _CheckedConversion:
+    """`ppy.check[T]`: validate a dynamic value against `T` at runtime.
+
+    The inverse of `typing.cast`, which asserts and checks nothing: this one
+    checks and asserts nothing. Validation is shallow -- a `list[int]` is
+    checked to be a `list`, not walked element by element -- because the
+    check runs on the hot boundary and O(n) surprises belong to the caller.
+    """
+
+    __slots__ = ("target",)
+
+    def __init__(self, target: Any) -> None:
+        self.target = target
+
+    def __call__(self, value: Any) -> Any:
+        import types
+        import typing
+
+        target = self.target
+        if target is None:
+            target = type(None)
+        origin = typing.get_origin(target) or target
+        if origin is typing.Union or isinstance(target, types.UnionType):
+            members = tuple(
+                type(None) if member is None else typing.get_origin(member) or member
+                for member in typing.get_args(target)
+            )
+            if not all(isinstance(member, type) for member in members):
+                raise TypeError(f"ppy.check cannot validate against {target!r}")
+            if not isinstance(value, members):
+                raise TypeError(f"expected {target!r}, got {type(value).__name__}")
+            return value
+        if not isinstance(origin, type):
+            raise TypeError(f"ppy.check cannot validate against {target!r}")
+        if not isinstance(value, origin):
+            raise TypeError(f"expected {target!r}, got {type(value).__name__}")
+        return value
+
+    def __repr__(self) -> str:
+        return f"ppy.check[{self.target!r}]"
+
+
+class _Check:
+    """Subscribe with the expected type, call with the dynamic value."""
+
+    __slots__ = ()
+
+    def __getitem__(self, target: Any) -> _CheckedConversion:
+        return _CheckedConversion(target)
+
+    def __repr__(self) -> str:
+        return "ppy.check"
+
+
+check = _Check()
 
 NUMERIC_MARKERS: dict[str, Any] = {
     "i8": i8,

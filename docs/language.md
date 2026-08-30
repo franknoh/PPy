@@ -64,10 +64,29 @@ contracts the compiler verifies, not hints it trusts.
 | `@ppy.inline` / `@ppy.noinline` | force or forbid inlining into callers. |
 | `@ppy.fastmath` | permit floating-point reassociation in this function; without it, reduction order is preserved bit-for-bit. |
 | `@ppy.jax` | stage this function for build-time StableHLO export (a plain `@jax.jit` decorator marks it too). |
-| `@ppy.dynamic` / `with ppy.dynamic():` | an explicit boundary inside which dynamic features are allowed and everything is `Any`. |
+| `@ppy.dynamic` / `with ppy.dynamic():` | an explicit boundary inside which dynamic features are allowed; every value it produces is `Dynamic`, and stays `Dynamic` through attribute hops and arithmetic until a `ppy.check[T]` clears it. |
 | `@ppy.reflective` | the function's annotations are runtime-visible state, exactly as written: `ppy convert`/`ppy migrate` will never add to or rely on rewriting them. |
 
 A typo in a directive name is `E1205`, with a suggestion.
+
+## Unknown, Any, and Dynamic
+
+Three different absences of a type, held apart on purpose:
+
+- **Unknown** is internal compiler state — inference has not resolved the
+  value. It must not survive strict compilation: it is reported (`E1201`,
+  `E1304`), never silently widened.
+- **`typing.Any`** is the permissive legacy spelling. It absorbs anything and
+  the compiler polices nothing about it — use it for interop annotations you
+  already trust.
+- **`ppy.Dynamic`** is the policed boundary. Any value may become `Dynamic`;
+  a `Dynamic` value fits only `Dynamic`, `Any`, or `object`. Crossing into
+  typed code — a typed return, parameter, field, or declared variable — is
+  `E1508` until it passes through `ppy.check[T](value)`, which validates at
+  runtime (raising `TypeError`) and hands back a typed value. `ppy.check` is
+  the inverse of `typing.cast`: it checks and asserts nothing, where `cast`
+  asserts and checks nothing. Validation is shallow — `list[int]` is checked
+  to be a `list`, not walked — because the check runs on the boundary.
 
 ## Markers
 
@@ -80,7 +99,7 @@ Ordinary `Annotated` aliases from `ppy`:
 | `Buffer[T]` | a borrowed writable buffer (`memoryview` over `array.array`) — zero-copy in and out of native code. |
 | `Array[T]`, `Vector[T]` | contiguous numeric containers with a known element type. |
 | `Range(lo, hi)` | an integer refinement the checker propagates. |
-| `Dynamic` | an explicit Python-dynamic boundary: `Any` at runtime, but spelled so the dynamism reads as a decision rather than an inference failure. |
+| `Dynamic` | an explicit Python-dynamic boundary value. Entering is free; leaving is not: `Dynamic -> Dynamic` flows freely, but `Dynamic -> int` is `E1508` until a `ppy.check[T]` validates it. `Any` at runtime. |
 | `Length(n)`, `Shape(...)`, `DType("f32")`, `Contiguous`, `NoAlias` | container refinements; `Shape`/`DType` are what makes a `@ppy.jax` function exportable. |
 
 ## Effects and purity

@@ -33,6 +33,8 @@ class CodecError(ValueError):
 
 def encode_type(t: T.Type) -> Any:
     match t:
+        case T.DynamicType():
+            return ["dynamic"]
         case T.AnyType():
             return ["any"]
         case T.UnknownType():
@@ -69,6 +71,8 @@ def decode_type(raw: Any) -> T.Type:
     if not isinstance(raw, list) or not raw:
         raise CodecError(f"not an encoded type: {raw!r}")
     match raw[0]:
+        case "dynamic":
+            return T.DYNAMIC
         case "any":
             return T.ANY
         case "unknown":

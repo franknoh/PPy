@@ -607,10 +607,11 @@ class _Checker:
         if node.value is not None:
             value = self._expr(node.value, env)
             if not T.is_assignable(value.type, resolved.type):
-                self._error(
+                self._mismatch(
                     "E1301",
                     f"cannot assign `{value.type}` to a variable declared `{resolved.type}`",
                     node.value,
+                    value.type,
                 )
             else:
                 declared = Binding(resolved.type, self._merge_declared(resolved.facts, value.facts))
@@ -652,10 +653,11 @@ class _Checker:
             info = self._current
             if info is not None and info.ret_annotated:
                 if not T.is_assignable(value.type, info.ret):
-                    self._error(
+                    self._mismatch(
                         "E1303",
                         f"returning `{value.type}` from a function declared `-> {info.ret}`",
                         node.value,
+                        value.type,
                     )
                 elif info.ret_facts.width is not None:
                     self._check_width(
@@ -1289,7 +1291,11 @@ class _Checker:
 
     def _expr_Call(self, node: ast.Call, env: Env) -> Binding:
         if self._check_forbidden_call(node, env):
-            return Binding(T.ANY if self._dynamic_depth else T.UNKNOWN)
+            return Binding(T.DYNAMIC if self._dynamic_depth else T.UNKNOWN)
+        if isinstance(node.func, ast.Subscript):
+            checked = self._checked_conversion(node, env)
+            if checked is not None:
+                return checked
         callee = self._expr(node.func, env)
         args = [
             self._expr(arg.value if isinstance(arg, ast.Starred) else arg, env) for arg in node.args
@@ -1416,11 +1422,12 @@ class _Checker:
                 break
             expected = info.fields[fields[index]]
             if not self._accepts(info, expected, argument.type):
-                self._error(
+                self._mismatch(
                     "E1301",
                     f"field `{fields[index]}` of `{info.name}` "
                     f"expects `{expected}`, got `{argument.type}`",
                     node.args[index],
+                    argument.type,
                 )
         for name, binding in keywords.items():
             if name is None:
@@ -1430,10 +1437,11 @@ class _Checker:
                 continue
             expected = info.fields[name]
             if not self._accepts(info, expected, binding.type):
-                self._error(
+                self._mismatch(
                     "E1301",
                     f"field `{name}` of `{info.name}` expects `{expected}`, got `{binding.type}`",
                     node,
+                    binding.type,
                 )
 
     def _accepts(self, info: ClassInfo, expected: T.Type, actual: T.Type) -> bool:
@@ -1471,10 +1479,11 @@ class _Checker:
             return Binding(info.ret, info.ret_facts if info.ret_annotated else Facts())
         for index, (param, argument) in enumerate(zip(signature.params, args, strict=False)):
             if not T.is_assignable(argument.type, param.type):
-                self._error(
+                self._mismatch(
                     "E1301",
                     f"argument {index + 1} expects `{param.type}`, got `{argument.type}`",
                     node.args[index] if index < len(node.args) else node,
+                    argument.type,
                 )
         return Binding(signature.ret)
 
@@ -1544,11 +1553,12 @@ class _Checker:
             if not reached.keyword and reached.index - offset < len(node.args):
                 where = node.args[reached.index - offset]
             if not T.is_assignable(argument.type, param.type):
-                self._error(
+                self._mismatch(
                     "E1301",
                     f"`{info.name}` parameter `{param.name}` "
                     f"expects `{param.type}`, got `{argument.type}`",
                     where,
+                    argument.type,
                 )
             elif param.facts.width is not None:
                 self._check_width(
@@ -1592,7 +1602,10 @@ class _Checker:
         if optional is not None:
             return optional
         if isinstance(owner.type, (T.AnyType, T.UnknownType)):
-            return Binding(T.ANY if self._dynamic_depth else T.UNKNOWN)
+            if isinstance(owner.type, T.DynamicType):
+                # Half a dynamic value is still a dynamic value.
+                return Binding(T.DYNAMIC)
+            return Binding(T.DYNAMIC if self._dynamic_depth else T.UNKNOWN)
         if isinstance(owner.type, T.ClassObject):
             info = self.project.classes.get(owner.type.name)
             if info is not None:
@@ -1625,7 +1638,7 @@ class _Checker:
                 if info.slots is not None and node.attr not in info.slots:
                     if not self._dynamic_depth:
                         self._error("E1202", f"`{info.name}` has no attribute `{node.attr}`", node)
-                    return Binding(T.ANY if self._dynamic_depth else T.UNKNOWN)
+                    return Binding(T.DYNAMIC if self._dynamic_depth else T.UNKNOWN)
             method = self._builtin_method(base, node.attr)
             if method is not None:
                 return Binding(method)
@@ -1656,7 +1669,7 @@ class _Checker:
             self._error("E1202", f"`{base}` has no attribute `{node.attr}`", node)
             return Binding(T.UNKNOWN)
         self._effects = self._effects.add(Effect.READ_OBJECT)
-        return Binding(T.ANY if self._dynamic_depth else T.UNKNOWN)
+        return Binding(T.DYNAMIC if self._dynamic_depth else T.UNKNOWN)
 
     def _external_base_attribute(self, info: ClassInfo, attr: str, facts: Facts) -> Binding | None:
         """An attribute inherited from a base only a plugin knows.
@@ -1979,7 +1992,9 @@ class _Checker:
             if indexed is not None:
                 return indexed
         if isinstance(base, (T.AnyType, T.UnknownType)):
-            return Binding(T.ANY if self._dynamic_depth else T.UNKNOWN)
+            if isinstance(base, T.DynamicType):
+                return Binding(T.DYNAMIC)
+            return Binding(T.DYNAMIC if self._dynamic_depth else T.UNKNOWN)
         self._effects = self._effects.add(Effect.READ_OBJECT, raises=("TypeError",))
         return Binding(T.UNKNOWN)
 
@@ -2055,6 +2070,8 @@ class _Checker:
         if isinstance(base, T.Instance) and base.args and base.name in {"Coroutine", "Awaitable"}:
             return Binding(base.args[0])
         if isinstance(base, (T.AnyType, T.UnknownType)):
+            if isinstance(base, T.DynamicType):
+                return Binding(T.DYNAMIC)
             return Binding(T.ANY if isinstance(base, T.AnyType) else T.UNKNOWN)
         return Binding(T.UNKNOWN if self.strict else T.ANY)
 
@@ -2126,7 +2143,9 @@ class _Checker:
         if isinstance(left_base, (T.AnyType, T.UnknownType)) or isinstance(
             right_base, (T.AnyType, T.UnknownType)
         ):
-            return Binding(T.ANY if self._dynamic_depth else T.UNKNOWN)
+            if isinstance(left_base, T.DynamicType) or isinstance(right_base, T.DynamicType):
+                return Binding(T.DYNAMIC)
+            return Binding(T.DYNAMIC if self._dynamic_depth else T.UNKNOWN)
 
         if op is ast.Add:
             for container in ("list", "str", "bytes"):
@@ -2418,6 +2437,27 @@ class _Checker:
                 found.append(T.instance(node.id))
         return found
 
+    def _checked_conversion(self, node: ast.Call, env: Env) -> Binding | None:
+        """`ppy.check[T](value)`: the sanctioned crossing out of dynamic code.
+
+        The runtime validates the value against `T` (raising `TypeError`) and
+        hands it back; the checker takes that word and types the result `T`.
+        This is the inverse of `typing.cast`, which asserts and checks
+        nothing -- the name is different because the behavior is.
+        """
+        func = node.func
+        assert isinstance(func, ast.Subscript)
+        if self.project.resolver(self.symbols).canonical(func.value) != "ppy.check":
+            return None
+        resolved = self.annotations.resolve(func.slice)
+        if len(node.args) != 1 or node.keywords:
+            self._error("E1305", "`ppy.check[T]` takes exactly one positional value", node)
+        for argument in node.args:
+            self._expr(argument, env)
+            self._mark_escape(argument, env)
+        self._effects = self._effects | EffectSet.of(raises=("TypeError",))
+        return Binding(resolved.type, resolved.facts)
+
     def _check_forbidden_call(self, node: ast.Call, env: Env) -> bool:
         if not isinstance(node.func, ast.Name):
             return self._check_dynamic_import(node, env)
@@ -2468,6 +2508,24 @@ class _Checker:
                 return True
         return False
 
+    def _mismatch(self, code: str, message: str, node: ast.AST, source: T.Type) -> None:
+        """A type mismatch, unless the value is dynamic -- then it is an escape.
+
+        `Dynamic -> int` is not a wrong type so much as a missing runtime
+        check; the diagnostic should hand the reader the conversion, not a
+        shrug.
+        """
+        if isinstance(T.strip_literal(source), T.DynamicType):
+            self._error(
+                "E1508",
+                f"{message}; a dynamic value is crossing into typed code",
+                node,
+                help="validate it explicitly: `ppy.check[T](value)` checks at "
+                "runtime and hands back a typed value",
+            )
+            return
+        self._error(code, message, node)
+
     def _dynamic_feature(
         self, code: str, message: str, node: ast.AST, help: str | None = None
     ) -> None:
@@ -2514,11 +2572,12 @@ class _Checker:
             if not isinstance(declared[0], T.Callable_) and not T.is_assignable(
                 value.type, declared[0]
             ):
-                self._error(
+                self._mismatch(
                     "E1301",
                     f"attribute `{target.attr}` of `{info.name}` "
                     f"expects `{declared[0]}`, got `{value.type}`",
                     target,
+                    value.type,
                 )
 
     def _check_width(self, binding: Binding, node: ast.AST, what: str = "value") -> Facts:
@@ -2574,7 +2633,9 @@ class _Checker:
     def _iteration_element(self, iterable: Binding, node: ast.expr) -> Binding:
         base = T.strip_literal(iterable.type)
         if isinstance(base, (T.AnyType, T.UnknownType)):
-            return Binding(T.ANY if self._dynamic_depth else T.UNKNOWN)
+            if isinstance(base, T.DynamicType):
+                return Binding(T.DYNAMIC)
+            return Binding(T.DYNAMIC if self._dynamic_depth else T.UNKNOWN)
         element = B.element_type(base)
         if isinstance(element, T.UnknownType):
             if isinstance(base, T.Instance) and base.name == "range":
