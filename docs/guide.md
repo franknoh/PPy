@@ -47,17 +47,22 @@ and the interpreter overhead is unchanged.
 
 | model training | plain | ppy run |
 |---|---:|---:|
-| torch, preprocessing | 66.2 ms | 0.9 ms |
-| torch, 100 steps | 1244.9 ms | 715.3 ms |
-| jax, preprocessing | 62.8 ms | 0.9 ms |
-| jax, 100 steps | 24.9 ms | 24.2 ms |
+| torch, preprocessing | 70.9 ms | 0.9 ms |
+| torch, training loop | 507 ms | 532 ms |
+| jax, preprocessing | 69.6 ms | 0.9 ms |
+| jax, training loop | 26.5 ms | 26.3 ms |
 
 The large factor is the Python *around* the model, not the tensor math.
-Training time is dominated by `.backward()` and the optimizer, which stay in
-Python.
+The training loops are dominated by `.backward()` and the optimizer, which
+stay in the framework either way — the native path neither helps nor is it
+supposed to.
 
-Incremental builds, 30-example tree: cold 2415 ms, no change 371 ms (LLVM
-never loads), one file changed 1785 ms.
+Caches earn their keep inside a run, not around it: on the collatz module,
+lowering to IR costs 777 ms cold and 12 ms from the content-addressed store.
+What no cache can remove is per-process — importing the compiler (~850 ms)
+and MCJIT machine-code emission (~190 ms) — which is exactly what the
+launcher `ppy build` emits pays once instead of every run. `PPY_CACHE_DIR`
+moves the store itself off a slow filesystem.
 
 ## `.ppy` under ordinary CPython
 
