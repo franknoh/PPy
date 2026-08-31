@@ -1,12 +1,13 @@
-# 15d — Range sums (Baekjoon 2042)
+# 15d — Range sums ([BOJ 2042](https://www.acmicpc.net/problem/2042))
 
-Input: `N M K`, then N numbers, then M+K commands — `1 b c` assigns, `2 b c`
-sums over [b, c). Output: the checksum of the answers.
+Input: `N M K`, then N numbers, then M+K commands — `1 b c` assigns,
+`2 b c` sums over [b, c). Output: the checksum of the answers.
 
 ## Provenance
 
-Hand-written. The `.ppy` is written directly; there is no `.py` source and no
-conversion step. The `.c` is the same solution hand-written in C, reading the
+Generated, not hand-written. `segment_tree.ppy` is exactly what
+`ppy convert segment_tree.py --promote-buffers` writes, and
+`examples/verify_conversions.py` checks that on every run. `segment_tree.c` is the same solution hand-written in C, reading the
 same input with `scanf`.
 
 ## What it shows
@@ -18,19 +19,28 @@ same input with `scanf`.
 
 ## Numbers
 
-Judge-style: the input is piped in and both halves are timed, mean ±
-standard deviation over 5 runs. `examples/15_algorithms/bench.py` reproduces
-the whole table.
+Wall time of the whole process, measured from outside the way a judge does —
+input, interpreter startup and all. Mean ± standard deviation over 5 runs;
+`examples/15_algorithms/bench.py` reproduces it and
+`scripts/refresh.py` says when these have drifted.
 
-| phase | plain | `ppy run` | `ppy build` | C (`scanf`) |
-|---|---:|---:|---:|---:|
-| read | 23.6 ± 0.4 ms | 26.6 ± 2.6 ms | 24.9 ± 1.4 ms | 47.2 ± 0.8 ms |
-| solve | 514.5 ± 13.8 ms | 7.4 ± 1.3 ms | 7.7 ± 0.9 ms | 8.0 ± 1.3 ms |
+| path | wall |
+|---|---:|
+| plain | 805 ± 18 ms |
+| ppy run | 2232 ± 27 ms |
+| ppy build | 259 ± 25 ms |
+| C scanf | 59 ± 2 ms |
+
+`ppy run` compiles before it runs, which is most of its two seconds; it is
+the development path, not the one to submit. `ppy build` produces a binary
+that still starts an embedded CPython, and that startup is the ~170 ms floor
+under every row of it.
 
 ## Run it
 
 ```bash
 python  segment_tree.ppy < input.txt
 ppy run segment_tree.ppy < input.txt
+ppy build segment_tree.ppy -o dist && ./dist/segment_tree < input.txt
 gcc -O3 segment_tree.c -o segment_tree_c && ./segment_tree_c < input.txt
 ```

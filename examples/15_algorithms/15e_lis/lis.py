@@ -6,18 +6,15 @@ Output: the length of the longest strictly increasing subsequence.
 
 import array
 
-import ppy
-from ppy import Buffer
 
-
-def longest_increasing(values: Buffer[int], tails: Buffer[int]) -> int:
-    length: int = 0
+def longest_increasing(values, tails):
+    length = 0
     for i in range(len(values)):
-        value: int = values[i]
-        low: int = 0
-        high: int = length
+        value = values[i]
+        low = 0
+        high = length
         while low < high:
-            middle: int = (low + high) // 2
+            middle = (low + high) // 2
             if tails[middle] < value:
                 low = middle + 1
             else:
@@ -28,20 +25,21 @@ def longest_increasing(values: Buffer[int], tails: Buffer[int]) -> int:
     return length
 
 
-def read_values() -> Buffer[int]:
+def read_values():
     """The judge's input, or a generated stand-in when nothing is piped in."""
     try:
-        count: int = ppy.input[int]()
+        count = int(input())
     except EOFError:
         return array.array("q", [(i * 7919 + (i % 977) * 104729) % 1000003 for i in range(1000000)])
-    values: Buffer[int] = array.array("q", [0] * count)
-    ppy.read_ints(memoryview(values)[:count])
+    values = array.array("q", [0] * count)
+    for i in range(count):
+        values[i] = int(input())
     return values
 
 
-def main() -> None:
-    values: Buffer[int] = read_values()
-    tails: Buffer[int] = array.array("q", [0] * len(values))
+def main():
+    values = read_values()
+    tails = array.array("q", [0] * len(values))
     print(longest_increasing(values, tails))
 
 

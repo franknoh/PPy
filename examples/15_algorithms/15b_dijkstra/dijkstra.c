@@ -1,7 +1,6 @@
 /* The same heap and the same graph as dijkstra.ppy, for the same answer. */
 #include <stdio.h>
 #include <stdlib.h>
-#include <time.h>
 
 #define INFINITY_DISTANCE (1LL << 60)
 
@@ -88,15 +87,7 @@ static long long dijkstra(const long long *offsets, const long long *targets,
     return total;
 }
 
-static double since(struct timespec start) {
-    struct timespec now;
-    clock_gettime(CLOCK_MONOTONIC, &now);
-    return (now.tv_sec - start.tv_sec) * 1000.0 + (now.tv_nsec - start.tv_nsec) / 1e6;
-}
-
 int main(void) {
-    struct timespec started;
-    clock_gettime(CLOCK_MONOTONIC, &started);
 
     long long count = 0, edges = 0, source = 0;
     long long *heads = NULL, *tails = NULL, *costs = NULL;
@@ -127,7 +118,6 @@ int main(void) {
             }
         }
     }
-    double read_ms = since(started);
 
     long long *offsets = calloc((size_t)(count + 1), sizeof(long long));
     long long *cursor = calloc((size_t)count, sizeof(long long));
@@ -137,7 +127,6 @@ int main(void) {
     long long *keys = malloc((size_t)(edges + 1) * sizeof(long long));
     long long *nodes = malloc((size_t)(edges + 1) * sizeof(long long));
 
-    clock_gettime(CLOCK_MONOTONIC, &started);
     for (long long e = 0; e < edges; e++) {
         offsets[heads[e] + 1] += 1;
     }
@@ -151,9 +140,7 @@ int main(void) {
         weights[at] = costs[e];
     }
     long long total = dijkstra(offsets, targets, weights, distance, keys, nodes, count, source);
-    double solve_ms = since(started);
 
     printf("%lld\n", total);
-    printf("# v=%lld e=%lld read %.1f ms   solve %.1f ms\n", count, edges, read_ms, solve_ms);
     return 0;
 }

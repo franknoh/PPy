@@ -1,7 +1,6 @@
 /* The same problem as inversions.ppy, reading the judge's input with scanf. */
 #include <stdio.h>
 #include <stdlib.h>
-#include <time.h>
 
 #define LIMIT 1000004
 
@@ -32,15 +31,7 @@ static long long count_inversions(const long long *values, long long size, long 
     return total;
 }
 
-static double since(struct timespec start) {
-    struct timespec now;
-    clock_gettime(CLOCK_MONOTONIC, &now);
-    return (now.tv_sec - start.tv_sec) * 1000.0 + (now.tv_nsec - start.tv_nsec) / 1e6;
-}
-
 int main(void) {
-    struct timespec started;
-    clock_gettime(CLOCK_MONOTONIC, &started);
 
     long long size = 0;
     long long *values = NULL;
@@ -58,14 +49,10 @@ int main(void) {
             values[i] = (i * 7919) % 1000003;
         }
     }
-    double read_ms = since(started);
 
     long long *tree = calloc(LIMIT, sizeof(long long));
-    clock_gettime(CLOCK_MONOTONIC, &started);
     long long answer = count_inversions(values, size, tree);
-    double solve_ms = since(started);
 
     printf("%lld\n", answer);
-    printf("# n=%lld read %.1f ms   solve %.1f ms\n", size, read_ms, solve_ms);
     return 0;
 }

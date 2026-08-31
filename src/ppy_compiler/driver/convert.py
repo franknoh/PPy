@@ -81,6 +81,10 @@ class ConversionPlan:
     typing_imports: set[str] = field(default_factory=set)
     ppy_imports: set[str] = field(default_factory=set)
     needs_ppy: bool = False
+    #: Rewrite `int(input())` and friends into `ppy.input[T]()`. Only set for
+    #: a module that reads with `input` and never touches `sys.stdin`, since
+    #: the typed reader owns the file descriptor.
+    rewrite_input: bool = False
 
     def annotation_counts(self) -> dict[str, int]:
         return {
@@ -648,7 +652,8 @@ def build_plan(  # type: ignore[no-untyped-def]
         binding.module for binding in symbols.imports.values() if not binding.external
     }
     _settle_imports(plan)
-    plan.needs_ppy = _uses_ppy(plan, symbols)
+    plan.rewrite_input = _reads_with_input(symbols.module.tree)
+    plan.needs_ppy = _uses_ppy(plan, symbols) or plan.rewrite_input
     diagnostics.extend(_dynamic_findings(symbols))
     return plan, diagnostics
 
@@ -672,6 +677,23 @@ def _settle_imports(plan: ConversionPlan) -> None:
     plan.ppy_imports = {
         name for name in plan.ppy_imports if any(_mentions(text, name) for text in written)
     }
+
+
+def _reads_with_input(tree: ast.AST) -> bool:
+    """Does this module read with `input`, and only with `input`?
+
+    The typed reader owns the file descriptor and buffers it itself, so a
+    module that also touches `sys.stdin` keeps the `input` it has rather than
+    ending up with two readers of the same stream.
+    """
+    reads = False
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Attribute) and node.attr == "stdin":
+            return False
+        called = isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+        if called and node.func.id == "input":  # type: ignore[attr-defined]
+            reads = True
+    return reads
 
 
 def _uses_ppy(plan: ConversionPlan, symbols) -> bool:  # type: ignore[no-untyped-def]
@@ -1091,6 +1113,126 @@ class _Annotator(cst.CSTTransformer):
         )
 
 
+#: What `T(input())` reads, by the name of `T`.
+_READ_AS = {"int": "int", "float": "float", "str": "str"}
+
+
+def _is_input_call(node: cst.BaseExpression) -> cst.Call | None:
+    """`input()` or `input(prompt)`, or None for anything else."""
+    if isinstance(node, cst.Call) and isinstance(node.func, cst.Name):
+        return node if node.func.value == "input" else None
+    return None
+
+
+def _typed_read(spec: str, arguments: list[cst.Arg]) -> cst.BaseExpression:
+    """`ppy.input[spec](...)`, carrying the prompt the original had."""
+    prompt = "".join(cst.Module(body=()).code_for_node(a.value) for a in arguments)
+    return cst.parse_expression(f"ppy.input[{spec}]({prompt})")
+
+
+class _TypedReads(cst.CSTTransformer):
+    """Rewrite the `input()` idioms into `ppy.input[T]`.
+
+    `int(input())` is what a submission writes and what it means is `read an
+    integer`; saying so lets the value be read without a Python object per
+    field. The originals are matched, not the rewritten children, so the
+    inner `input()` of `int(input())` is not rewritten twice.
+    """
+
+    def leave_Call(self, original: cst.Call, updated: cst.Call) -> cst.BaseExpression:
+        wrapper = isinstance(original.func, cst.Name) and original.func.value in _READ_AS
+        if wrapper and len(original.args) == 1:
+            inner = _is_input_call(original.args[0].value)
+            if inner is not None:
+                return _typed_read(_READ_AS[original.func.value], list(inner.args))
+        if _is_input_call(original) is not None:
+            return _typed_read("str", list(original.args))
+        return updated
+
+    def leave_For(self, original: cst.For, updated: cst.For) -> cst.BaseStatement:
+        bulk = _filling_loop(original)
+        return bulk if bulk is not None else updated
+
+    def leave_Assign(self, original: cst.Assign, updated: cst.Assign) -> cst.Assign:
+        """`a, b = map(int, input().split())` reads a tuple of that width."""
+        if len(original.targets) != 1:
+            return updated
+        target = original.targets[0].target
+        if not isinstance(target, (cst.Tuple, cst.List)):
+            return updated
+        spec = _mapped_read(original.value, len(target.elements))
+        if spec is None:
+            return updated
+        return updated.with_changes(value=spec)
+
+
+def _filling_loop(node: cst.For) -> cst.BaseStatement | None:
+    """`for i in range(n): xs[i] = int(input())` is one bulk read.
+
+    Filling a buffer one value at a time pays the boundary per element; the
+    same values land in the same slots in one call. The slice keeps it exact:
+    the loop wrote `n` entries, so the read fills `n` entries.
+    """
+    index = node.target
+    if not isinstance(index, cst.Name) or node.orelse is not None:
+        return None
+    iterated = node.iter
+    if not isinstance(iterated, cst.Call) or not isinstance(iterated.func, cst.Name):
+        return None
+    if iterated.func.value != "range" or len(iterated.args) != 1:
+        return None
+    body = node.body
+    if not isinstance(body, cst.IndentedBlock) or len(body.body) != 1:
+        return None
+    line = body.body[0]
+    if not isinstance(line, cst.SimpleStatementLine) or len(line.body) != 1:
+        return None
+    assign = line.body[0]
+    if not isinstance(assign, cst.Assign) or len(assign.targets) != 1:
+        return None
+    written = assign.targets[0].target
+    if not isinstance(written, cst.Subscript) or len(written.slice) != 1:
+        return None
+    subscript = written.slice[0].slice
+    if not isinstance(subscript, cst.Index) or not isinstance(subscript.value, cst.Name):
+        return None
+    if subscript.value.value != index.value:
+        return None
+    read = assign.value
+    if not isinstance(read, cst.Call) or not isinstance(read.func, cst.Name):
+        return None
+    if read.func.value != "int" or len(read.args) != 1:
+        return None
+    if _is_input_call(read.args[0].value) is None:
+        return None
+
+    code = cst.Module(body=())
+    buffer = code.code_for_node(written.value)
+    bound = code.code_for_node(iterated.args[0].value)
+    filled = buffer if bound == f"len({buffer})" else f"memoryview({buffer})[:{bound}]"
+    return cst.parse_statement(f"ppy.read_ints({filled})")
+
+
+def _mapped_read(value: cst.BaseExpression, width: int) -> cst.BaseExpression | None:
+    """`map(T, input().split())` over a fixed number of targets."""
+    if not isinstance(value, cst.Call) or not isinstance(value.func, cst.Name):
+        return None
+    if value.func.value != "map" or len(value.args) != 2:
+        return None
+    caster = value.args[0].value
+    if not isinstance(caster, cst.Name) or caster.value not in _READ_AS:
+        return None
+    split = value.args[1].value
+    if not isinstance(split, cst.Call) or not isinstance(split.func, cst.Attribute):
+        return None
+    if split.func.attr.value != "split" or split.args:
+        return None
+    if _is_input_call(split.func.value) is None:
+        return None
+    element = _READ_AS[caster.value]
+    return cst.parse_expression(f"ppy.input[tuple[{', '.join([element] * width)}]]()")
+
+
 def convert_source(source: str, plan: ConversionPlan) -> str:
     """Rewrite `source` through a concrete syntax tree, preserving trivia.
 
@@ -1102,6 +1244,8 @@ def convert_source(source: str, plan: ConversionPlan) -> str:
     module = cst.parse_module(source)
     wrapper = MetadataWrapper(module, unsafe_skip_copy=True)
     annotated = wrapper.visit(_Annotator(plan))
+    if plan.rewrite_input:
+        annotated = annotated.visit(_TypedReads())
     imported = _insert_imports(annotated, plan)
     # A quoted annotation only exists because the class was not bound yet.
     # Moving the class above its first use removes the reason for the quotes.

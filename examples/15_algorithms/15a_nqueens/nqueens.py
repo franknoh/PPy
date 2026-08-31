@@ -3,17 +3,15 @@
 Input:  N on the first line.
 Output: how many ways N queens can be placed without attacking each other.
 """
-import ppy
 
 
-@ppy.pure
-def solve(full: int, columns: int, diagonal: int, antidiagonal: int):
+def solve(full, columns, diagonal, antidiagonal):
     if columns == full:
         return 1
     total = 0
-    available: int = full & ~(columns | diagonal | antidiagonal)
+    available = full & ~(columns | diagonal | antidiagonal)
     while available != 0:
-        bit: int = available & -available
+        bit = available & -available
         available -= bit
         total += solve(
             full,
@@ -24,16 +22,16 @@ def solve(full: int, columns: int, diagonal: int, antidiagonal: int):
     return total
 
 
-def read_size() -> int:
+def read_size():
     """The judge's input, or the stand-in this example uses on its own."""
     try:
-        return ppy.input[int]()
+        return int(input())
     except EOFError:
         return 12
 
 
-def main() -> None:
-    n: int = read_size()
+def main():
+    n = read_size()
     print(solve((1 << n) - 1, 0, 0, 0))
 
 

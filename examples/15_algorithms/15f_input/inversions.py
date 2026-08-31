@@ -3,55 +3,52 @@
 Input:  N on the first line, then N integers.
 Output: how many pairs are out of order.
 """
+
 import array
-from typing import Final
 
-import ppy
-from ppy import Buffer
-
-LIMIT: Final[int] = 1000004
+LIMIT = 1000004
 
 
-def add(tree: Buffer[int], position: int, delta: int) -> int:
-    index: int = position + 1
+def add(tree, position, delta):
+    index = position + 1
     while index < LIMIT:
         tree[index] += delta
         index += index & -index
     return index
 
 
-@ppy.pure
-def prefix(tree: Buffer[int], position: int) -> int:
-    total: int = 0
-    index: int = position + 1
+def prefix(tree, position):
+    total = 0
+    index = position + 1
     while index > 0:
         total += tree[index]
         index -= index & -index
     return total
 
 
-def count_inversions(values: Buffer[int], tree: Buffer[int]) -> int:
-    total: int = 0
+def count_inversions(values, tree):
+    total = 0
     for i in range(len(values) - 1, -1, -1):
         total += prefix(tree, values[i] - 1)
         add(tree, values[i], 1)
     return total
 
 
-def read_values() -> Buffer[int]:
+def read_values():
     """The judge's input, or a generated stand-in when nothing is piped in."""
     try:
-        count: int = ppy.input[int]()
+        count = int(input())
     except EOFError:
         return array.array("q", [(i * 7919) % 1000003 for i in range(500000)])
-    values: Buffer[int] = array.array("q", [0] * count)
-    ppy.read_ints(memoryview(values)[:count])
+    values = array.array("q", [0] * count)
+    for i in range(count):
+        values[i] = int(input())
     return values
 
 
-def main() -> None:
-    values: Buffer[int] = read_values()
-    tree: Buffer[int] = array.array("q", [0] * LIMIT)
+def main():
+    values = read_values()
+    tree = array.array("q", [0] * LIMIT)
     print(count_inversions(values, tree))
 
 

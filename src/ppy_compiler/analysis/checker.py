@@ -798,7 +798,12 @@ class _Checker:
         body_env = env.fork()
         for stmt in node.body:
             self._stmt(stmt, body_env)
+        # A handler starts from the state before the try, because the body may
+        # have raised anywhere inside it.
         merged = body_env if body_env.reachable else env.fork()
+        # What follows is reachable only if the body or some handler can fall
+        # out of the statement: `try: return a / except E: return b` cannot.
+        reachable = body_env.reachable
         for handler in node.handlers:
             handler_env = env.fork()
             if handler.type is not None:
@@ -813,11 +818,12 @@ class _Checker:
             for stmt in handler.body:
                 self._stmt(stmt, handler_env)
             if handler_env.reachable:
-                merged = merged.merge(handler_env)
+                merged = merged.merge(handler_env) if reachable else handler_env
+                reachable = True
         for stmt in node.orelse:
             self._stmt(stmt, merged)
         env.restore(merged.snapshot())
-        env.reachable = merged.reachable or bool(node.finalbody)
+        env.reachable = reachable
         for stmt in node.finalbody:
             self._stmt(stmt, env)
 

@@ -1,7 +1,6 @@
 /* The same iterative segment tree as segment_tree.ppy, same workload. */
 #include <stdio.h>
 #include <stdlib.h>
-#include <time.h>
 
 static long long build(long long *tree, long long size) {
     for (long long i = size - 1; i > 0; i--) {
@@ -40,15 +39,7 @@ static long long query(const long long *tree, long long size, long long left, lo
     return total;
 }
 
-static double since(struct timespec start) {
-    struct timespec now;
-    clock_gettime(CLOCK_MONOTONIC, &now);
-    return (now.tv_sec - start.tv_sec) * 1000.0 + (now.tv_nsec - start.tv_nsec) / 1e6;
-}
-
 int main(void) {
-    struct timespec started;
-    clock_gettime(CLOCK_MONOTONIC, &started);
 
     long long size = 0, rounds = 0, queries = 0;
     long long *leaves = NULL;
@@ -89,14 +80,12 @@ int main(void) {
             at[5] = right;
         }
     }
-    double read_ms = since(started);
 
     long long *tree = calloc((size_t)(2 * size), sizeof(long long));
     for (long long i = 0; i < size; i++) {
         tree[size + i] = leaves[i];
     }
 
-    clock_gettime(CLOCK_MONOTONIC, &started);
     build(tree, size);
     long long checksum = 0;
     for (long long step = 0; step < rounds; step++) {
@@ -104,9 +93,7 @@ int main(void) {
         update(tree, size, at[1], at[2]);
         checksum += query(tree, size, at[4], at[5]);
     }
-    double solve_ms = since(started);
 
     printf("%lld\n", checksum);
-    printf("# n=%lld q=%lld read %.1f ms   solve %.1f ms\n", size, rounds, read_ms, solve_ms);
     return 0;
 }

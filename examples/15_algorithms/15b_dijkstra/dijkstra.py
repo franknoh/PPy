@@ -4,29 +4,26 @@ Input:  V E on the first line, the source K on the second, then E lines of
         `u v w` (a directed edge from u to v of weight w).
 Output: the sum of the reachable distances, so one line stands in for V.
 """
+
 import array
-from typing import Final
 
-import ppy
-from ppy import Buffer
-
-INFINITY: Final[int] = 1 << 60
+INFINITY = 1 << 60
 
 
-def sift_down(keys: Buffer[int], nodes: Buffer[int], size: int, start: int) -> int:
-    position: int = start
+def sift_down(keys, nodes, size, start):
+    position = start
     while True:
-        left: int = 2 * position + 1
+        left = 2 * position + 1
         if left >= size:
             break
-        best: int = left
-        right: int = left + 1
+        best = left
+        right = left + 1
         if right < size and keys[right] < keys[left]:
             best = right
         if keys[position] <= keys[best]:
             break
-        key: int = keys[position]
-        node: int = nodes[position]
+        key = keys[position]
+        node = nodes[position]
         keys[position] = keys[best]
         nodes[position] = nodes[best]
         keys[best] = key
@@ -35,14 +32,14 @@ def sift_down(keys: Buffer[int], nodes: Buffer[int], size: int, start: int) -> i
     return position
 
 
-def sift_up(keys: Buffer[int], nodes: Buffer[int], start: int) -> int:
-    position: int = start
+def sift_up(keys, nodes, start):
+    position = start
     while position > 0:
-        parent: int = (position - 1) // 2
+        parent = (position - 1) // 2
         if keys[parent] <= keys[position]:
             break
-        key: int = keys[position]
-        node: int = nodes[position]
+        key = keys[position]
+        node = nodes[position]
         keys[position] = keys[parent]
         nodes[position] = nodes[parent]
         keys[parent] = key
@@ -52,39 +49,39 @@ def sift_up(keys: Buffer[int], nodes: Buffer[int], start: int) -> int:
 
 
 def dijkstra(
-    offsets: Buffer[int],
-    targets: Buffer[int],
-    weights: Buffer[int],
-    distance: Buffer[int],
-    keys: Buffer[int],
-    nodes: Buffer[int],
-    count: int,
-    source: int,
-) -> int:
+    offsets,
+    targets,
+    weights,
+    distance,
+    keys,
+    nodes,
+    count,
+    source,
+):
     for i in range(count):
         distance[i] = INFINITY
     distance[source] = 0
     keys[0] = 0
     nodes[0] = source
-    size: int = 1
+    size = 1
     while size > 0:
-        best: int = keys[0]
-        node: int = nodes[0]
+        best = keys[0]
+        node = nodes[0]
         size -= 1
         keys[0] = keys[size]
         nodes[0] = nodes[size]
         sift_down(keys, nodes, size, 0)
         if best <= distance[node]:
             for edge in range(offsets[node], offsets[node + 1]):
-                neighbour: int = targets[edge]
-                relaxed: int = best + weights[edge]
+                neighbour = targets[edge]
+                relaxed = best + weights[edge]
                 if relaxed < distance[neighbour]:
                     distance[neighbour] = relaxed
                     keys[size] = relaxed
                     nodes[size] = neighbour
                     size += 1
                     sift_up(keys, nodes, size - 1)
-    total: int = 0
+    total = 0
     for i in range(count):
         if distance[i] < INFINITY:
             total += distance[i]
@@ -92,14 +89,14 @@ def dijkstra(
 
 
 def build_csr(
-    fields: Buffer[int],
-    offsets: Buffer[int],
-    targets: Buffer[int],
-    weights: Buffer[int],
-    cursor: Buffer[int],
-    count: int,
-    edges: int,
-) -> int:
+    fields,
+    offsets,
+    targets,
+    weights,
+    cursor,
+    count,
+    edges,
+):
     """Turn the `u v w` triples into compressed adjacency, in place."""
     for e in range(edges):
         offsets[fields[3 + e * 3] + 1] += 1
@@ -108,19 +105,19 @@ def build_csr(
     for i in range(count):
         cursor[i] = offsets[i]
     for e in range(edges):
-        head: int = fields[3 + e * 3]
-        at: int = cursor[head]
+        head = fields[3 + e * 3]
+        at = cursor[head]
         targets[at] = fields[4 + e * 3]
         weights[at] = fields[5 + e * 3]
         cursor[head] = at + 1
     return offsets[count]
 
 
-def generated() -> list[int]:
+def generated():
     """The stand-in graph, in the same `V E K u v w ...` order as the input."""
-    count: int = 200000
-    degree: int = 6
-    fields: list[int] = [count, count * degree, 0]
+    count = 200000
+    degree = 6
+    fields = [count, count * degree, 0]
     for i in range(count):
         for k in range(degree):
             fields.append(i)
@@ -129,31 +126,32 @@ def generated() -> list[int]:
     return fields
 
 
-def read_fields() -> Buffer[int]:
+def read_fields():
     """The judge's input, or a generated stand-in when nothing is piped in."""
     try:
-        count, edges = ppy.input[tuple[int, int]]()
+        count, edges = map(int, input().split())
     except EOFError:
         return array.array("q", generated())
-    fields: Buffer[int] = array.array("q", [count, edges, ppy.input[int]()])
-    triples: Buffer[int] = array.array("q", [0] * (edges * 3))
-    ppy.read_ints(memoryview(triples)[:edges * 3])
+    fields = array.array("q", [count, edges, int(input())])
+    triples = array.array("q", [0] * (edges * 3))
+    for i in range(edges * 3):
+        triples[i] = int(input())
     fields.extend(triples)
     return fields
 
 
-def main() -> None:
-    fields: Buffer[int] = read_fields()
-    count: int = fields[0]
-    edges: int = fields[1]
-    source: int = fields[2]
-    offsets: Buffer[int] = array.array("q", [0] * (count + 1))
-    cursor: Buffer[int] = array.array("q", [0] * count)
-    targets: Buffer[int] = array.array("q", [0] * edges)
-    weights: Buffer[int] = array.array("q", [0] * edges)
-    distance: Buffer[int] = array.array("q", [0] * count)
-    keys: Buffer[int] = array.array("q", [0] * (edges + 1))
-    nodes: Buffer[int] = array.array("q", [0] * (edges + 1))
+def main():
+    fields = read_fields()
+    count = fields[0]
+    edges = fields[1]
+    source = fields[2]
+    offsets = array.array("q", [0] * (count + 1))
+    cursor = array.array("q", [0] * count)
+    targets = array.array("q", [0] * edges)
+    weights = array.array("q", [0] * edges)
+    distance = array.array("q", [0] * count)
+    keys = array.array("q", [0] * (edges + 1))
+    nodes = array.array("q", [0] * (edges + 1))
 
     build_csr(fields, offsets, targets, weights, cursor, count, edges)
     print(dijkstra(offsets, targets, weights, distance, keys, nodes, count, source))

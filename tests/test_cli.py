@@ -2207,3 +2207,59 @@ def test_a_shadowing_cache_keeps_its_untyped_view(workspace: Path):
     )
     assert _ppy(["migrate", "shadow.py"], workspace).returncode == 0
     assert "def f(x):" in (workspace / "shadow.ppy").read_text(encoding="utf-8")
+
+
+def test_convert_reads_input_by_type(workspace: Path):
+    """`int(input())` says what it reads; the conversion writes that down."""
+    source = workspace / "reads.py"
+    source.write_text(
+        textwrap.dedent(
+            """
+            def main():
+                count = int(input())
+                a, b = map(int, input().split())
+                name = input()
+                ratio = float(input("ratio? "))
+                print(count, a + b, name, ratio)
+
+
+            main()
+            """
+        ).lstrip("\n"),
+        encoding="utf-8",
+    )
+    assert _ppy(["convert", "reads.py"], workspace).returncode == 0
+
+    converted = (workspace / "reads.ppy").read_text(encoding="utf-8")
+    assert "count: int = ppy.input[int]()" in converted
+    assert "a, b = ppy.input[tuple[int, int]]()" in converted
+    assert "name: str = ppy.input[str]()" in converted
+    # The prompt is carried across rather than dropped.
+    assert 'ratio: float = ppy.input[float]("ratio? ")' in converted
+
+
+def test_a_module_that_also_reads_stdin_keeps_its_input(workspace: Path):
+    """Two readers of one file descriptor would not agree on where it is."""
+    source = workspace / "mixed.py"
+    source.write_text(
+        textwrap.dedent(
+            """
+            import sys
+
+
+            def main():
+                count = int(input())
+                rest = sys.stdin.read()
+                print(count, len(rest))
+
+
+            main()
+            """
+        ).lstrip("\n"),
+        encoding="utf-8",
+    )
+    assert _ppy(["convert", "mixed.py"], workspace).returncode == 0
+
+    converted = (workspace / "mixed.ppy").read_text(encoding="utf-8")
+    assert "ppy.input" not in converted
+    assert "int(input())" in converted

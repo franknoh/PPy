@@ -160,6 +160,15 @@ def _render(t: T.Type, local_module: str) -> Rendered | None:
         return Rendered(f"type[{_short(t.name, local_module)}]")
 
     if isinstance(t, T.Instance):
+        # `array[int]` is not a written annotation, but `Buffer[int]` is, and
+        # an `array` already answers to it -- the contract a caller needs is
+        # `a contiguous buffer of these`, not the concrete container.
+        if t.name == "array" and len(t.args) == 1:
+            element = _render(t.args[0], local_module)
+            if element is not None:
+                return Rendered(
+                    f"Buffer[{element.text}]", element.typing_imports, frozenset({"Buffer"})
+                )
         name = _short(t.name, local_module)
         if name in {"Sequence", "Iterable", "Iterator", "Mapping", "Generator", "Coroutine"}:
             typing_imports = frozenset({name})

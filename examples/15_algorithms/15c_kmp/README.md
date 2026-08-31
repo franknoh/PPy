@@ -1,35 +1,44 @@
-# 15c — Substring search (Baekjoon 1786)
+# 15c — Substring search ([BOJ 1786](https://www.acmicpc.net/problem/1786))
 
-Input: the text on the first line, the pattern on the second. Output: how
-many times the pattern occurs. Four million characters here.
+Input: the text, then the pattern. Output: how many times it occurs.
+Four million characters here.
 
 ## Provenance
 
-Hand-written. The `.ppy` is written directly; there is no `.py` source and no
-conversion step. The `.c` is the same solution hand-written in C, reading the
+Hand-written. `kmp.ppy` is written directly; there is no `.py` source
+and no conversion step. `kmp.c` is the same solution hand-written in C, reading the
 same input with `scanf`.
 
 ## What it shows
 
 - `ppy.read_token` fills the buffer without building a Python string.
-- This is the one problem where C's reader wins: `Buffer[int]` is 64-bit, so
-  a character costs eight bytes to read where `scanf("%s")` costs one.
+- This is the one problem here whose `.ppy` is hand-written: the character
+  buffer it wants has no plain-Python spelling that converts to it.
 
 ## Numbers
 
-Judge-style: the input is piped in and both halves are timed, mean ±
-standard deviation over 5 runs. `examples/15_algorithms/bench.py` reproduces
-the whole table.
+Wall time of the whole process, measured from outside the way a judge does —
+input, interpreter startup and all. Mean ± standard deviation over 5 runs;
+`examples/15_algorithms/bench.py` reproduces it and
+`scripts/refresh.py` says when these have drifted.
 
-| phase | plain | `ppy run` | `ppy build` | C (`scanf`) |
-|---|---:|---:|---:|---:|
-| read | 26.4 ± 0.5 ms | 34.0 ± 1.7 ms | 26.3 ± 1.1 ms | 6.4 ± 0.4 ms |
-| solve | 288.6 ± 4.3 ms | 5.2 ± 0.3 ms | 5.1 ± 0.2 ms | 2.8 ± 0.2 ms |
+| path | wall |
+|---|---:|
+| plain | 535 ± 20 ms |
+| ppy run | 2192 ± 64 ms |
+| ppy build | 210 ± 7 ms |
+| C scanf | 13 ± 1 ms |
+
+`ppy run` compiles before it runs, which is most of its two seconds; it is
+the development path, not the one to submit. `ppy build` produces a binary
+that still starts an embedded CPython, and that startup is the ~170 ms floor
+under every row of it.
 
 ## Run it
 
 ```bash
 python  kmp.ppy < input.txt
 ppy run kmp.ppy < input.txt
+ppy build kmp.ppy -o dist && ./dist/kmp < input.txt
 gcc -O3 kmp.c -o kmp_c && ./kmp_c < input.txt
 ```

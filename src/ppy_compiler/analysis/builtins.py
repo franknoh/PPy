@@ -292,7 +292,24 @@ def _callable(args: Sequence[Arg]) -> BuiltinResult:
 
 
 def _map_filter(args: Sequence[Arg]) -> BuiltinResult:
+    """`filter` yields what it was given; `map` yields what it calls."""
     element = _element_of(args[1].type) if len(args) > 1 else T.UNKNOWN
+    return BuiltinResult(
+        T.instance("Iterator", element),
+        Facts(),
+        _ALLOC | EffectSet.of(Effect.PYTHON_CALLBACK),
+    )
+
+
+def _map(args: Sequence[Arg]) -> BuiltinResult:
+    """`map(f, xs)` yields `f`'s results, not `xs`'s elements."""
+    element = T.UNKNOWN
+    if len(args) > 1:
+        function = args[0].type
+        if isinstance(function, T.Callable_):
+            element = function.ret
+        elif isinstance(function, T.ClassObject) and function.instance_type is not None:
+            element = function.instance_type
     return BuiltinResult(
         T.instance("Iterator", element),
         Facts(),
@@ -390,7 +407,7 @@ BUILTINS: dict[str, Handler] = {
     "object": _identity_object,
     "type": _type,
     "callable": _callable,
-    "map": _map_filter,
+    "map": _map,
     "filter": _map_filter,
     "bin": _radix,
     "hex": _radix,

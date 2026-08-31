@@ -10,6 +10,7 @@ import pytest
 from ppy_compiler.analysis import types as T
 from ppy_compiler.analysis.effects import Effect
 from ppy_compiler.analysis.refinements import IntRange, width_range
+from ppy_compiler.diagnostics import Severity
 
 
 def test_numeric_promotion_follows_python_typing():
@@ -1946,3 +1947,22 @@ def test_class_creation_effects_block_reordering():
     assert not check("class C(Base):\n    pass")
     assert not check("class C:\n    field = descriptor")
     assert check("class C:\n    field = (1, 2)")
+
+
+def test_a_try_that_returns_on_every_path_falls_off_no_end(write, analyze):
+    """`try: return a / except E: return b` cannot reach what follows."""
+    path = write(
+        "exhaustive.ppy",
+        """
+        def read() -> int:
+            try:
+                return int(input())
+            except EOFError:
+                return 12
+        """,
+    )
+    bundle = analyze(path)
+    assert not [d for d in bundle.diagnostics if d.severity is Severity.ERROR]
+    analysis = bundle.analysis.modules["exhaustive"].functions["exhaustive.read"]
+    # An inferred `int | None` would mean the checker thought it fell through.
+    assert analysis.inferred_ret == T.INT

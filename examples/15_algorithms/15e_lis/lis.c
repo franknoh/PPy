@@ -1,7 +1,6 @@
 /* The same problem as lis.ppy, reading the judge's input with scanf. */
 #include <stdio.h>
 #include <stdlib.h>
-#include <time.h>
 
 static long long longest_increasing(const long long *values, long long size, long long *tails) {
     long long length = 0;
@@ -25,15 +24,7 @@ static long long longest_increasing(const long long *values, long long size, lon
     return length;
 }
 
-static double since(struct timespec start) {
-    struct timespec now;
-    clock_gettime(CLOCK_MONOTONIC, &now);
-    return (now.tv_sec - start.tv_sec) * 1000.0 + (now.tv_nsec - start.tv_nsec) / 1e6;
-}
-
 int main(void) {
-    struct timespec started;
-    clock_gettime(CLOCK_MONOTONIC, &started);
 
     long long size = 0;
     long long *values = NULL;
@@ -52,14 +43,10 @@ int main(void) {
             values[i] = (i * 7919 + (i % 977) * 104729) % 1000003;
         }
     }
-    double read_ms = since(started);
 
     long long *tails = calloc((size_t)size, sizeof(long long));
-    clock_gettime(CLOCK_MONOTONIC, &started);
     long long answer = longest_increasing(values, size, tails);
-    double solve_ms = since(started);
 
     printf("%lld\n", answer);
-    printf("# n=%lld read %.1f ms   solve %.1f ms\n", size, read_ms, solve_ms);
     return 0;
 }

@@ -1,49 +1,44 @@
-# 15f — Counting inversions, and what input costs (Baekjoon 1517)
+# 15f — Counting inversions ([BOJ 1517](https://www.acmicpc.net/problem/1517))
 
 Input: `N`, then N integers. Output: how many pairs are out of order.
 Half a million values here.
 
 ## Provenance
 
-Hand-written. `inversions.ppy` is written directly; there is no `.py` source
-and no conversion step. `inversions.c` is the same solution hand-written in
-C, reading the same input with `scanf`.
+Generated, not hand-written. `inversions.ppy` is exactly what
+`ppy convert inversions.py --promote-buffers` writes, and
+`examples/verify_conversions.py` checks that on every run. `inversions.c` is the same solution hand-written in C, reading the
+same input with `scanf`.
 
-## The question this folder answers
+## What it shows
 
-Reading input is an IO effect, so it stays on the interpreter — which is why
-`input()` and `sys.stdin.read().split()` cost exactly what they cost without
-PPY. Reading 500k integers, mean ± standard deviation over 5 runs:
-
-| how | plain CPython | `ppy run` |
-|---|---:|---:|
-| `input()` | 187.1 ± 4.0 ms | 199.2 ± 3.4 ms |
-| `sys.stdin.read().split()` | 54.8 ± 2.4 ms | 53.0 ± 3.0 ms |
-| **`ppy.input[Buffer[int]](n)`** | **9.5 ± 0.3 ms** | **9.6 ± 0.4 ms** |
-
-`ppy.input[T]()` reads the next value the way `T` says to read it, straight
-from file descriptor 0 through a small C reader, so the numbers never become
-Python objects on the way in. It is 5.8× faster than the fast Python idiom
-and 1.7× faster than C's `scanf` (16.5 ± 0.9 ms), and it works on every path including plain CPython — the
-reader is compiled once and cached, with a pure-Python fallback where no C
-compiler exists.
+- A Fenwick tree over half a million values, `add` and `prefix` both native.
+- The read loop in the source converts into one bulk `ppy.read_ints`.
 
 ## Numbers
 
-| phase | plain | `ppy run` | `ppy build` | C (`scanf`) |
-|---|---:|---:|---:|---:|
-| read | 9.5 ± 0.3 ms | 9.6 ± 0.4 ms | 9.0 ± 0.6 ms | 16.5 ± 0.9 ms |
-| solve | 663.2 ± 21.7 ms | 35.9 ± 3.6 ms | 34.8 ± 0.9 ms | 31.5 ± 0.8 ms |
+Wall time of the whole process, measured from outside the way a judge does —
+input, interpreter startup and all. Mean ± standard deviation over 5 runs;
+`examples/15_algorithms/bench.py` reproduces it and
+`scripts/refresh.py` says when these have drifted.
 
-So the whole submission is 45 ms against C's 48 ms, and the part that used to
-be untouchable is now the smaller half.
+| path | wall |
+|---|---:|
+| plain | 948 ± 44 ms |
+| ppy run | 2143 ± 91 ms |
+| ppy build | 241 ± 9 ms |
+| C scanf | 52 ± 2 ms |
+
+`ppy run` compiles before it runs, which is most of its two seconds; it is
+the development path, not the one to submit. `ppy build` produces a binary
+that still starts an embedded CPython, and that startup is the ~170 ms floor
+under every row of it.
 
 ## Run it
 
 ```bash
 python  inversions.ppy < input.txt
 ppy run inversions.ppy < input.txt
+ppy build inversions.ppy -o dist && ./dist/inversions < input.txt
 gcc -O3 inversions.c -o inversions_c && ./inversions_c < input.txt
-
-python ../bench.py 15f    # the tables above
 ```

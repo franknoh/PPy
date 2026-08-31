@@ -1,12 +1,13 @@
-# 15b — Shortest path (Baekjoon 1753)
+# 15b — Shortest path ([BOJ 1753](https://www.acmicpc.net/problem/1753))
 
 Input: `V E`, the source `K`, then E lines of `u v w`. Output: the sum of
 the reachable distances. 200k nodes and 1.2M edges here.
 
 ## Provenance
 
-Hand-written. The `.ppy` is written directly; there is no `.py` source and no
-conversion step. The `.c` is the same solution hand-written in C, reading the
+Generated, not hand-written. `dijkstra.ppy` is exactly what
+`ppy convert dijkstra.py --promote-buffers` writes, and
+`examples/verify_conversions.py` checks that on every run. `dijkstra.c` is the same solution hand-written in C, reading the
 same input with `scanf`.
 
 ## What it shows
@@ -19,22 +20,28 @@ same input with `scanf`.
 
 ## Numbers
 
-Judge-style: the input is piped in and both halves are timed, mean ±
-standard deviation over 5 runs. `examples/15_algorithms/bench.py` reproduces
-the whole table.
+Wall time of the whole process, measured from outside the way a judge does —
+input, interpreter startup and all. Mean ± standard deviation over 5 runs;
+`examples/15_algorithms/bench.py` reproduces it and
+`scripts/refresh.py` says when these have drifted.
 
-| phase | plain | `ppy run` | `ppy build` | C (`scanf`) |
-|---|---:|---:|---:|---:|
-| read | 66.4 ± 2.3 ms | 73.3 ± 3.7 ms | 63.0 ± 1.8 ms | 93.3 ± 1.6 ms |
-| solve | 1652.2 ± 9.0 ms | 66.2 ± 4.6 ms | 71.5 ± 6.1 ms | 75.6 ± 7.2 ms |
+| path | wall |
+|---|---:|
+| plain | 2021 ± 63 ms |
+| ppy run | 2420 ± 51 ms |
+| ppy build | 428 ± 19 ms |
+| C scanf | 177 ± 8 ms |
 
-`ppy.input[Buffer[int]](n)` reads 3.6M integers faster than `scanf` does, so
-the whole submission finishes in 140 ms against C's 169 ms.
+`ppy run` compiles before it runs, which is most of its two seconds; it is
+the development path, not the one to submit. `ppy build` produces a binary
+that still starts an embedded CPython, and that startup is the ~170 ms floor
+under every row of it.
 
 ## Run it
 
 ```bash
 python  dijkstra.ppy < input.txt
 ppy run dijkstra.ppy < input.txt
+ppy build dijkstra.ppy -o dist && ./dist/dijkstra < input.txt
 gcc -O3 dijkstra.c -o dijkstra_c && ./dijkstra_c < input.txt
 ```

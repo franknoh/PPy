@@ -26,6 +26,11 @@ FLAGS: dict[str, list[str]] = {
     "20_inventory": ["--promote-buffers"],
     "21_training_torch": ["--promote-buffers"],
     "22_training_jax": ["--promote-buffers"],
+    "15a_nqueens": ["--promote-buffers"],
+    "15b_dijkstra": ["--promote-buffers"],
+    "15d_segment_tree": ["--promote-buffers"],
+    "15e_lis": ["--promote-buffers"],
+    "15f_input": ["--promote-buffers"],
 }
 
 #: Directories whose pairs are produced by a different subcommand.
@@ -36,7 +41,8 @@ COMMANDS: dict[str, str] = {
 
 def _pairs() -> list[tuple[Path, Path]]:
     found: list[tuple[Path, Path]] = []
-    for source in sorted(ROOT.glob("*/*.py")):
+    # A folder of related problems keeps them in numbered subfolders.
+    for source in sorted([*ROOT.glob("*/*.py"), *ROOT.glob("[0-9]*/[0-9]*/*.py")]):
         if source.name.startswith(("run_all", "verify_", "consumer")):
             continue
         generated = source.with_suffix(".ppy")
@@ -163,18 +169,22 @@ def main() -> int:
         print(f"[OK]   {rel}  is `ppy {command}` output and adds no lint finding")
 
     checked = len(pairs)
-    for folder in sorted(ROOT.glob("[0-9]*/")):
+    for folder in sorted([*ROOT.glob("[0-9]*/"), *ROOT.glob("[0-9]*/[0-9]*/")]):
         readme = folder / "README.md"
         if not readme.exists():
             continue
         checked += 1
         text = readme.read_text(encoding="utf-8")
         claims_generated = "Generated, not hand-written" in text
+        # A folder answers for its own `.ppy` files. A subfolder of problems
+        # makes its own claim, in its own README.
+        candidates = [p for p in folder.rglob("*.ppy") if ".ppy-cache" not in str(p)]
+        if any(child.is_dir() and (child / "README.md").is_file() for child in folder.iterdir()):
+            candidates = [p for p in candidates if p.parent == folder]
         has_source = any(
             ppy.with_suffix(".py").exists()
             and not ppy.with_suffix(".py").name.startswith(("run_all", "verify_", "consumer"))
-            for ppy in folder.rglob("*.ppy")
-            if ".ppy-cache" not in str(ppy)
+            for ppy in candidates
         )
         if claims_generated == has_source:
             continue

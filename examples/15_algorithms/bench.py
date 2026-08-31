@@ -1,24 +1,24 @@
-"""Time every problem here the way a judge would: input included.
+"""Time every problem here the way a judge does: the whole process.
 
-Each problem is fed the same input on standard input and run on all four
-paths, and both halves are reported -- reading the input and solving it --
-because for a submission the two are one wall clock. Not a CI gate.
+Nothing inside the programs is instrumented -- they read input and print an
+answer -- so what is measured is wall time from launch to exit, input and
+interpreter startup included. Not a CI gate; `scripts/refresh.py` runs this
+and says when a number in the documentation has drifted.
 """
 
 from __future__ import annotations
 
-import re
+import json
 import statistics
 import subprocess
 import sys
 import tempfile
+import time
 from pathlib import Path
 
 HERE = Path(__file__).parent
 ROUNDS = 5
 PPY = [sys.executable, "-m", "ppy_compiler"]
-TIMES = re.compile(r"read ([0-9.]+) ms\s+solve ([0-9.]+) ms")
-SOLVE_ONLY = re.compile(r"solve ([0-9.]+) ms")
 
 
 def _queens() -> str:
@@ -73,8 +73,10 @@ PROBLEMS = [
     ("15f_input", "inversions", _inversions),
 ]
 
+PATHS = ["plain", "ppy run", "ppy build", "C scanf"]
 
-def _paths(stem: str) -> list[tuple[str, list[str]]]:
+
+def _commands(stem: str) -> list[tuple[str, list[str]]]:
     return [
         ("plain", [sys.executable, f"{stem}.ppy"]),
         ("ppy run", [*PPY, "run", f"{stem}.ppy"]),
@@ -83,23 +85,20 @@ def _paths(stem: str) -> list[tuple[str, list[str]]]:
     ]
 
 
-def _measure(command: list[str], folder: Path, data: Path) -> tuple[float, float]:
+def _wall(command: list[str], folder: Path, data: Path) -> tuple[float, str]:
+    """One run, timed from outside: what the judge's clock would show."""
     with data.open("rb") as stream:
+        started = time.perf_counter()
         done = subprocess.run(
             command, cwd=folder, stdin=stream, capture_output=True, text=True, check=True
         )
-    found = TIMES.search(done.stdout)
-    if found:
-        return float(found.group(1)), float(found.group(2))
-    only = SOLVE_ONLY.search(done.stdout)
-    if only:
-        return 0.0, float(only.group(1))
-    raise SystemExit(f"no timing from {command}: {done.stdout[:300]!r}")
+        elapsed = (time.perf_counter() - started) * 1000.0
+    return elapsed, done.stdout.strip()
 
 
-def main() -> int:
-    only = sys.argv[1:]
-    print(f"{'problem':<18}{'phase':<8}" + "".join(f"{name:>18}" for name, _ in _paths("x")))
+def measure(only: list[str] | None = None, rounds: int = ROUNDS) -> dict:
+    """Every problem on every path: milliseconds of wall time, and the answer."""
+    results: dict = {}
     for folder_name, stem, generate in PROBLEMS:
         if only and not any(token in folder_name for token in only):
             continue
@@ -115,16 +114,35 @@ def main() -> int:
         with tempfile.TemporaryDirectory() as scratch:
             data = Path(scratch) / "input.txt"
             data.write_text(generate(), encoding="utf-8")
-            reads: list[str] = []
-            solves: list[str] = []
-            for _name, command in _paths(stem):
-                samples = [_measure(command, folder, data) for _ in range(ROUNDS)]
-                read = [s[0] for s in samples]
-                solve = [s[1] for s in samples]
-                reads.append(f"{statistics.mean(read):8.1f} ±{statistics.stdev(read):5.1f}")
-                solves.append(f"{statistics.mean(solve):8.1f} ±{statistics.stdev(solve):5.1f}")
-        print(f"{folder_name:<18}{'read':<8}" + "".join(f"{cell:>18}" for cell in reads))
-        print(f"{'':<18}{'solve':<8}" + "".join(f"{cell:>18}" for cell in solves), flush=True)
+            row: dict = {}
+            answers = set()
+            for label, command in _commands(stem):
+                samples = []
+                for _ in range(rounds):
+                    elapsed, answer = _wall(command, folder, data)
+                    samples.append(elapsed)
+                    answers.add(answer)
+                row[label] = {
+                    "mean": statistics.mean(samples),
+                    "stdev": statistics.stdev(samples) if len(samples) > 1 else 0.0,
+                }
+            row["answers"] = sorted(answers)
+        results[folder_name] = row
+    return results
+
+
+def main() -> int:
+    only = [a for a in sys.argv[1:] if not a.startswith("--")]
+    results = measure(only or None)
+    if "--json" in sys.argv:
+        print(json.dumps(results, indent=1))
+        return 0
+    print(f"{'problem':<18}" + "".join(f"{name:>18}" for name in PATHS))
+    for folder_name, row in results.items():
+        cells = "".join(f"{row[name]['mean']:9.1f} ±{row[name]['stdev']:5.1f}" for name in PATHS)
+        print(f"{folder_name:<18}{cells}")
+        if len(row["answers"]) != 1:
+            print(f"  DISAGREE: {row['answers']}")
     return 0
 
 

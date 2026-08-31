@@ -8,18 +8,15 @@ Output: the checksum of every answered query, so one line stands in for K.
 
 import array
 
-import ppy
-from ppy import Buffer
 
-
-def build(tree: Buffer[int], size: int) -> int:
+def build(tree, size):
     for i in range(size - 1, 0, -1):
         tree[i] = tree[2 * i] + tree[2 * i + 1]
     return tree[1]
 
 
-def update(tree: Buffer[int], size: int, position: int, value: int) -> int:
-    index: int = position + size
+def update(tree, size, position, value):
+    index = position + size
     tree[index] = value
     index //= 2
     while index >= 1:
@@ -28,11 +25,10 @@ def update(tree: Buffer[int], size: int, position: int, value: int) -> int:
     return tree[1]
 
 
-@ppy.pure
-def query(tree: Buffer[int], size: int, left: int, right: int) -> int:
-    total: int = 0
-    low: int = left + size
-    high: int = right + size
+def query(tree, size, left, right):
+    total = 0
+    low = left + size
+    high = right + size
     while low < high:
         if low % 2 == 1:
             total += tree[low]
@@ -45,53 +41,54 @@ def query(tree: Buffer[int], size: int, left: int, right: int) -> int:
     return total
 
 
-def run_commands(tree: Buffer[int], commands: Buffer[int], size: int, rounds: int) -> int:
-    checksum: int = 0
+def run_commands(tree, commands, size, rounds):
+    checksum = 0
     for step in range(rounds):
-        base: int = step * 6
+        base = step * 6
         update(tree, size, commands[base + 1], commands[base + 2])
         checksum += query(tree, size, commands[base + 4], commands[base + 5])
     return checksum
 
 
-def generated() -> list[int]:
+def generated():
     """The stand-in input, in the same order the judge would send it."""
-    size: int = 1 << 18
-    rounds: int = 200000
-    fields: list[int] = [size, rounds, rounds]
+    size = 1 << 18
+    rounds = 200000
+    fields = [size, rounds, rounds]
     fields.extend((i * 7919) % 1000 for i in range(size))
     for step in range(rounds):
         fields.append(1)
         fields.append((step * 7919) % size)
         fields.append((step * 31) % 1000)
-        left: int = (step * 104729) % size
+        left = (step * 104729) % size
         fields.append(2)
         fields.append(left)
         fields.append(min(left + (step % 512) + 1, size))
     return fields
 
 
-def read_fields() -> Buffer[int]:
+def read_fields():
     """The judge's input, or a generated stand-in when nothing is piped in."""
     try:
-        size, rounds, queries = ppy.input[tuple[int, int, int]]()
+        size, rounds, queries = map(int, input().split())
     except EOFError:
         return array.array("q", generated())
-    fields: Buffer[int] = array.array("q", [size, rounds, queries])
-    rest: Buffer[int] = array.array("q", [0] * (size + rounds * 6))
-    ppy.read_ints(memoryview(rest)[:size + rounds * 6])
+    fields = array.array("q", [size, rounds, queries])
+    rest = array.array("q", [0] * (size + rounds * 6))
+    for i in range(size + rounds * 6):
+        rest[i] = int(input())
     fields.extend(rest)
     return fields
 
 
-def main() -> None:
-    fields: Buffer[int] = read_fields()
-    size: int = fields[0]
-    rounds: int = fields[1]
-    tree: Buffer[int] = array.array("q", [0] * (2 * size))
+def main():
+    fields = read_fields()
+    size = fields[0]
+    rounds = fields[1]
+    tree = array.array("q", [0] * (2 * size))
     for i in range(size):
         tree[size + i] = fields[3 + i]
-    commands: Buffer[int] = array.array("q", fields[3 + size :])
+    commands = array.array("q", fields[3 + size :])
 
     build(tree, size)
     print(run_commands(tree, commands, size, rounds))

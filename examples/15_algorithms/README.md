@@ -50,23 +50,33 @@ range can prove.
 ## More problems
 
 Each subfolder is one competitive-programming problem, read from standard
-input the way a judge sends it and answered on stdout. The C reference reads
-the same input with `scanf`, so the comparison includes what every
-submission actually pays for. Totals below are read + solve, mean over 5
-runs; `bench.py` prints both halves separately.
+input the way a judge sends it and answered on stdout. Nothing inside the
+programs is instrumented: the times below are wall time of the whole
+process, measured from outside, input and interpreter startup included.
+The C reference reads the same input with `scanf`.
 
-| | problem | plain | `ppy run` | C (`scanf`) |
+| | problem | plain | `ppy build` | C (`scanf`) |
 |---|---|---:|---:|---:|
-| [15a](15a_nqueens/) | N-Queens (9663) | 122.4 ms | 5.7 ms | 4.5 ms |
-| [15b](15b_dijkstra/) | shortest path (1753) | 1718.6 ms | 139.5 ms | 168.9 ms |
-| [15c](15c_kmp/) | substring search (1786) | 315.0 ms | 39.2 ms | 9.2 ms |
-| [15d](15d_segment_tree/) | range sums (2042) | 538.1 ms | 34.0 ms | 55.2 ms |
-| [15e](15e_lis/) | longest increasing subsequence (12015) | 523.1 ms | 43.0 ms | 64.3 ms |
-| [15f](15f_input/) | counting inversions (1517) | 672.7 ms | 45.5 ms | 48.0 ms |
+| [15a](15a_nqueens/) | N-Queens ([BOJ 9663](https://www.acmicpc.net/problem/9663)) | 331 ms | 327 ms | 8 ms |
+| [15b](15b_dijkstra/) | shortest path ([BOJ 1753](https://www.acmicpc.net/problem/1753)) | 2021 ms | 428 ms | 177 ms |
+| [15c](15c_kmp/) | substring search ([BOJ 1786](https://www.acmicpc.net/problem/1786)) | 535 ms | 210 ms | 13 ms |
+| [15d](15d_segment_tree/) | range sums ([BOJ 2042](https://www.acmicpc.net/problem/2042)) | 805 ms | 259 ms | 59 ms |
+| [15e](15e_lis/) | longest increasing subsequence ([BOJ 12015](https://www.acmicpc.net/problem/12015)) | 763 ms | 250 ms | 68 ms |
+| [15f](15f_input/) | counting inversions ([BOJ 1517](https://www.acmicpc.net/problem/1517)) | 948 ms | 241 ms | 52 ms |
 
-PPY wins four of the six outright. It loses N-Queens by a hair on pure
-compute, and loses substring search on the read: `Buffer[int]` is 64-bit, so
-a character costs eight bytes to read where `scanf("%s")` costs one.
+`ppy run` is left out of the table because it compiles before it runs — a
+flat ~2.1 s on every row, which is the development path rather than the one
+to submit. What the `ppy build` column mostly shows at these input sizes is
+that its binary still starts an embedded CPython: ~170 ms before any of the
+program runs, against C's ~1 ms. The kernels themselves are at or ahead of C
+(see the tables in each folder's README); the startup is what a judge would
+charge PPY for.
+
+Five of the six are written as ordinary Python and converted:
+`ppy convert <name>.py --promote-buffers` writes the `.ppy` beside it, and
+`examples/verify_conversions.py` checks that the committed file is exactly
+that. [15c](15c_kmp/) is hand-written, because the character buffer it wants
+has no plain-Python spelling that converts to it.
 
 ### Reading input
 
@@ -81,8 +91,8 @@ values = ppy.input[Buffer[int]](n)
 
 It goes straight into memory rather than building a Python object per field
 — 9.6 ms for 500k integers against 54.8 ms for `sys.stdin.read().split()`
-and 16.5 ms for C's `scanf`. It works on every path, plain CPython included;
-the reader is compiled once and cached, and falls back to pure Python where
-there is no C compiler. A program that uses it must not also read `input()`
-or `sys.stdin`, because the reader owns the file descriptor.
-[15f](15f_input/) measures all three ways side by side.
+and 16.5 ms for C's `scanf`. The conversion writes it for you: `int(input())`
+becomes `ppy.input[int]()`, `a, b = map(int, input().split())` becomes the
+tuple read, and a loop that fills a buffer one value at a time becomes one
+bulk `ppy.read_ints`. A module that also touches `sys.stdin` keeps the
+`input` it has, since the typed reader owns the file descriptor.
