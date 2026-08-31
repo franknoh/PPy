@@ -376,7 +376,9 @@ def compile_project(  # type: ignore[no-untyped-def]
             artifacts.reused.append(name)
         else:
             try:
-                emitted = emit_object(engine(), native.ir, destination)
+                emitted = emit_object(
+                    engine(), native.ir, destination, host_cpu=bundle.project.config.llvm.host_cpu
+                )
             except Exception as exc:  # noqa: BLE001 - reported, not fatal
                 artifacts.notes.append(f"could not emit object code for {name}: {exc}")
                 continue

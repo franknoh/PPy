@@ -157,7 +157,11 @@ MANIFEST` is the spelled-out form, and takes the same runtime-only fast
 path — no analysis, manifest validation only). A manifest that names a library which has
 gone missing is an error, never a silent fall back to interpretation; a
 program with nothing native simply binds nothing, like `ppy run` would.
-`-o` puts the artifacts somewhere other than the cache. With the JAX plugin
+`--host-cpu` compiles the object code for the machine doing the build
+rather than the portable baseline: faster where the code vectorizes (~20%
+on a matmul kernel), and the artifact then requires a CPU with the same
+instruction set, so it is off by default. `-o` puts the artifacts somewhere
+other than the cache. With the JAX plugin
 enabled and permitted, staged functions are exported here too.
 
 The artifact is complete: the manifest carries the full native ABI and a

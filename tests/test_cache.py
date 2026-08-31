@@ -528,6 +528,21 @@ def test_a_cached_lowering_round_trips():
     assert decode("not json") is None
 
 
+def test_host_targeting_is_part_of_the_cache_key(write, analyze):
+    """A baseline object and a host-specific one are different artifacts."""
+    from ppy_compiler.driver.pipeline import module_cache_key
+
+    path = write("keyed.ppy", "value: int = 1\n")
+    bundle = analyze(path, backend="llvm")
+    bundle.project.config.llvm.safeguards = "off"
+
+    bundle.project.config.llvm.host_cpu = False
+    portable = module_cache_key(bundle, "keyed", target="llvm", opt_level=2)
+    bundle.project.config.llvm.host_cpu = True
+    tuned = module_cache_key(bundle, "keyed", target="llvm", opt_level=2)
+    assert portable != tuned
+
+
 def test_the_compiler_fingerprint_tracks_the_build(monkeypatch):
     """A dev tree keys caches on its own sources; an override wins outright."""
     from ppy_compiler.driver import pipeline

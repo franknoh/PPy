@@ -76,10 +76,17 @@ flattened to scalar SSA values at the ABI, with reads guarded on exact class.
 
 JIT-compiled code targets the exact host CPU — its name and feature set are
 handed to LLVM, so AVX2/FMA and friends are on where the machine has them
-(measured 14% on a matmul kernel; memory-bound kernels are unchanged).
+(measured ~20% on a matmul kernel; memory-bound kernels are unchanged).
+That is free because JIT code never leaves the machine that made it.
+
 Emitted objects, built artifacts, and standalone binaries stay on the
-portable baseline: they may run on another machine, exactly like a C
-compiler's output without `-march=native`.
+portable baseline instead: they may run on another machine, exactly like a
+C compiler's output without `-march=native`. `ppy build --host-cpu`
+(`[tool.ppy.llvm] host-cpu`) trades that away deliberately — the artifact
+gets this machine's instruction set and faults on an older one. The choice
+is part of the cache key, along with the host CPU's name and features, so a
+baseline object is never handed to a host build or carried between
+machines.
 
 ## The boundary
 

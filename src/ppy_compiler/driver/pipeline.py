@@ -230,9 +230,28 @@ def module_cache_key(
             config.dynamic_boundaries,
             config.inference.implicit_any,
             config.llvm.safeguards or "hoisted",
+            _target_descriptor(config),
             *extra,
         ),
     )
+
+
+def _target_descriptor(config) -> str:  # type: ignore[no-untyped-def]
+    """What the emitted object code was compiled for.
+
+    A baseline object and a host-specific one are different artifacts, and a
+    host object built on one machine must not be reused on another, so the
+    CPU and its feature set are part of the key when `--host-cpu` is on.
+    """
+    if not config.llvm.host_cpu:
+        return "baseline"
+    try:
+        from ..backend.llvm.jit import host_target
+
+        cpu, features = host_target()
+    except Exception:  # noqa: BLE001 - no LLVM means nothing host-specific ran
+        return "host:unknown"
+    return f"host:{cpu}:{hashlib.sha256(features.encode()).hexdigest()[:16]}"
 
 
 def _imported_modules(symbols) -> set[str]:  # type: ignore[no-untyped-def]

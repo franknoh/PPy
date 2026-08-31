@@ -43,6 +43,12 @@ def _overrides(options: argparse.Namespace) -> dict[str, object]:
     return overrides
 
 
+def _resolve_host_cpu(options: argparse.Namespace, project) -> None:  # type: ignore[no-untyped-def]
+    """Settle host targeting before any cache key reads it."""
+    if getattr(options, "host_cpu", False):
+        project.config.llvm.host_cpu = True
+
+
 def _resolve_safeguards(options: argparse.Namespace, project, command: str) -> None:  # type: ignore[no-untyped-def]
     """Settle the guard mode before any cache key reads it.
 
@@ -208,6 +214,7 @@ def build(options: argparse.Namespace, reporter: Reporter) -> int:
     project = open_project(target, config_overrides=_overrides(options))
     if backend == "llvm":
         _resolve_safeguards(options, project, "build")
+        _resolve_host_cpu(options, project)
     bundle = analyze_paths(project, collect_sources(target), backend=backend)
     errors = reporter.report(bundle.diagnostics)
     if errors:

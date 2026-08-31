@@ -46,6 +46,11 @@ class LlvmConfig:
     #: every bounds check. None means "the command decides": `ppy run`
     #: defaults to hoisted, `ppy build` to off.
     safeguards: str | None = None
+    #: Compile object code for the CPU that builds it rather than the
+    #: portable baseline. Off by default: an artifact is meant to be shipped,
+    #: and host code faults on an older machine. In-process JIT code always
+    #: targets the host, because it never leaves it.
+    host_cpu: bool = False
 
 
 @dataclass(slots=True)
@@ -182,6 +187,7 @@ def _apply(config: Config, table: Mapping[str, Any]) -> Config:
             lto=sub.get("lto", "thin"),
             cpython_api=sub.get("cpython-api", "version-specific"),
             safeguards=sub.get("safeguards"),
+            host_cpu=_as_bool(sub.get("host-cpu"), False),
         )
     if isinstance(sub := table.get("parallel"), Mapping):
         config.parallel = ParallelConfig(

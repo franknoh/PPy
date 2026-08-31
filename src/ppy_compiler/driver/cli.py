@@ -90,6 +90,13 @@ def build_parser() -> argparse.ArgumentParser:
         help="keep the Python-integer overflow guards; without it a build "
         "uses 64-bit wrap semantics for data arithmetic",
     )
+    build.add_argument(
+        "--host-cpu",
+        action="store_true",
+        help="compile for the CPU that builds this, not the portable "
+        "baseline; faster where the code vectorizes, and the artifact then "
+        "requires a machine with the same instruction set",
+    )
     build.add_argument("--backend", choices=("llvm", "python"), default="llvm")
     build.add_argument("-o", "--output", type=Path, help="output directory")
 

@@ -133,7 +133,7 @@ def build_standalone(  # type: ignore[no-untyped-def]
     build_directory.mkdir(parents=True, exist_ok=True)
     engine = JitEngine(opt_level=level).open()
     object_path = build_directory / f"{module_name}.o"
-    emit_object(engine, result.ir, object_path)
+    emit_object(engine, result.ir, object_path, host_cpu=bundle.project.config.llvm.host_cpu)
 
     support = build_directory / "ppy_support.c"
     support.write_text(_SUPPORT, encoding="utf-8")
