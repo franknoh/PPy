@@ -131,6 +131,15 @@ _FUNCTIONS: dict[str, tuple[T.Type, EffectSet]] = {
     "threading.get_ident": (T.Callable_((), T.INT, "threading.get_ident"), _THREAD_EFFECTS),
     # The runtime's own import-hook API. Installing the finder mutates
     # `sys.meta_path`, which is global state.
+    # Reading straight into a buffer: an IO effect like any other read, and
+    # the write lands in the caller's memory (spec 28).
+    "ppy.read_ints": _fn(
+        "ppy.read_ints", T.INT, _IO | EffectSet.of(Effect.WRITE_OBJECT, raises=("TypeError",))
+    ),
+    "ppy.read_token": _fn(
+        "ppy.read_token", T.INT, _IO | EffectSet.of(Effect.WRITE_OBJECT, raises=("TypeError",))
+    ),
+    "ppy.reader_available": _fn("ppy.reader_available", T.BOOL, EffectSet()),
     "ppy.install": _fn("ppy.install", T.NONE, EffectSet.of(Effect.WRITE_GLOBAL)),
     "ppy.uninstall": _fn("ppy.uninstall", T.NONE, EffectSet.of(Effect.WRITE_GLOBAL)),
     "ppy.is_installed": _fn("ppy.is_installed", T.BOOL, EffectSet.of(Effect.READ_GLOBAL)),

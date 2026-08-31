@@ -33,6 +33,7 @@ from ._importer import (
     is_installed,
     uninstall,
 )
+from ._io import read_ints, read_token, reader_available
 from ._markers import (
     NUMERIC_MARKERS,
     Array,
@@ -111,6 +112,9 @@ __all__ = [
     "opt",
     "parallel",
     "pure",
+    "read_ints",
+    "read_token",
+    "reader_available",
     "reflective",
     "specialize",
     "u8",
