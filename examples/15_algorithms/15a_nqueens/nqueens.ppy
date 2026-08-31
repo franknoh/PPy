@@ -7,10 +7,10 @@ import ppy
 
 
 @ppy.pure
-def solve(full: int, columns: int, diagonal: int, antidiagonal: int):
+def solve(full: int, columns: int, diagonal: int, antidiagonal: int) -> int:
     if columns == full:
         return 1
-    total = 0
+    total: int = 0
     available: int = full & ~(columns | diagonal | antidiagonal)
     while available != 0:
         bit: int = available & -available

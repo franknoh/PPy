@@ -24,10 +24,10 @@ input, interpreter startup and all. Mean ± standard deviation over 5 runs;
 
 | path | wall |
 |---|---:|
-| plain | 948 ± 44 ms |
-| ppy run | 2143 ± 91 ms |
-| ppy build | 241 ± 9 ms |
-| C scanf | 52 ± 2 ms |
+| plain | 941 ± 33 ms |
+| ppy run | 2148 ± 82 ms |
+| ppy build | 245 ± 7 ms |
+| C scanf | 53 ± 2 ms |
 
 `ppy run` compiles before it runs, which is most of its two seconds; it is
 the development path, not the one to submit. `ppy build` produces a binary

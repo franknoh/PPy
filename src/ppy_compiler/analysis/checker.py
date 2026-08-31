@@ -333,6 +333,9 @@ class _Checker:
         self._current: FunctionInfo | None = None
         self._returns: list[Binding] = []
         self._provisional_returns: list[bool] = []
+        #: Locals whose type is unknown only because a recursive call fed
+        #: them, so a `return` of one is provisional the same way.
+        self._provisional_locals: set[str] = set()
         self._blockers: list[str] = []
         self._native_blockers: list[str] = []
         self._escaping: set[str] = set()
@@ -381,6 +384,7 @@ class _Checker:
             self._current,
             self._returns,
             self._provisional_returns,
+            self._provisional_locals,
             self._blockers,
             self._native_blockers,
             self._escaping,
@@ -401,6 +405,7 @@ class _Checker:
         self._current = info
         self._returns = []
         self._provisional_returns = []
+        self._provisional_locals = set()
         self._blockers = []
         self._native_blockers = []
         self._escaping = set()
@@ -443,6 +448,7 @@ class _Checker:
             self._current,
             self._returns,
             self._provisional_returns,
+            self._provisional_locals,
             self._blockers,
             self._native_blockers,
             self._escaping,
@@ -646,6 +652,8 @@ class _Checker:
         if declared is not None:
             result = Binding(result.type, self._merge_declared(declared, result.facts))
             result = Binding(result.type, self._check_width(result, node))
+        if isinstance(node.target, ast.Name) and self._is_provisional(node.value, result, env):
+            self._provisional_locals.add(node.target.id)
         self._bind_target(node.target, result, env)
 
     def _stmt_Return(self, node: ast.Return, env: Env) -> None:
@@ -2883,6 +2891,10 @@ class _Checker:
         """
         if not isinstance(value.type, (T.UnknownType, T.AnyType)):
             return False
+        for child in ast.walk(node):
+            # A local that a recursive call fed carries the placeholder on.
+            if isinstance(child, ast.Name) and child.id in self._provisional_locals:
+                return True
         for child in ast.walk(node):
             if not isinstance(child, ast.Call) or not isinstance(child.func, ast.Name):
                 continue

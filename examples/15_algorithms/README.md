@@ -57,20 +57,23 @@ The C reference reads the same input with `scanf`.
 
 | | problem | plain | `ppy build` | C (`scanf`) |
 |---|---|---:|---:|---:|
-| [15a](15a_nqueens/) | N-Queens ([BOJ 9663](https://www.acmicpc.net/problem/9663)) | 331 ms | 327 ms | 8 ms |
-| [15b](15b_dijkstra/) | shortest path ([BOJ 1753](https://www.acmicpc.net/problem/1753)) | 2021 ms | 428 ms | 177 ms |
-| [15c](15c_kmp/) | substring search ([BOJ 1786](https://www.acmicpc.net/problem/1786)) | 535 ms | 210 ms | 13 ms |
-| [15d](15d_segment_tree/) | range sums ([BOJ 2042](https://www.acmicpc.net/problem/2042)) | 805 ms | 259 ms | 59 ms |
-| [15e](15e_lis/) | longest increasing subsequence ([BOJ 12015](https://www.acmicpc.net/problem/12015)) | 763 ms | 250 ms | 68 ms |
-| [15f](15f_input/) | counting inversions ([BOJ 1517](https://www.acmicpc.net/problem/1517)) | 948 ms | 241 ms | 52 ms |
+| [15a](15a_nqueens/) | N-Queens ([BOJ 9663](https://www.acmicpc.net/problem/9663)) | 351 ms | 200 ms | 8 ms |
+| [15b](15b_dijkstra/) | shortest path ([BOJ 1753](https://www.acmicpc.net/problem/1753)) | 2005 ms | 430 ms | 172 ms |
+| [15c](15c_kmp/) | substring search ([BOJ 1786](https://www.acmicpc.net/problem/1786)) | 544 ms | 219 ms | 13 ms |
+| [15d](15d_segment_tree/) | range sums ([BOJ 2042](https://www.acmicpc.net/problem/2042)) | 803 ms | 259 ms | 58 ms |
+| [15e](15e_lis/) | longest increasing subsequence ([BOJ 12015](https://www.acmicpc.net/problem/12015)) | 764 ms | 257 ms | 65 ms |
+| [15f](15f_input/) | counting inversions ([BOJ 1517](https://www.acmicpc.net/problem/1517)) | 941 ms | 245 ms | 53 ms |
 
 `ppy run` is left out of the table because it compiles before it runs — a
-flat ~2.1 s on every row, which is the development path rather than the one
-to submit. What the `ppy build` column mostly shows at these input sizes is
-that its binary still starts an embedded CPython: ~170 ms before any of the
-program runs, against C's ~1 ms. The kernels themselves are at or ahead of C
-(see the tables in each folder's README); the startup is what a judge would
-charge PPY for.
+flat ~1.7 s on every row, which is the development path rather than the one
+to submit. What the `ppy build` column mostly shows at these
+input sizes is that its binary still starts an embedded CPython: **~145 ms
+before a line of the program runs**, against C's ~3 ms. N-Queens is the
+clearest look at it — the same binary takes 145 ms for `n=1` and 180 ms for
+`n=12`, so all but 35 ms of that row is startup. The kernels themselves are
+at or ahead of C; the startup is what a judge would charge PPY for, and
+`--standalone` is the build that does not pay it (it has no CPython inside),
+for programs whose whole reachable graph is native.
 
 Five of the six are written as ordinary Python and converted:
 `ppy convert <name>.py --promote-buffers` writes the `.ppy` beside it, and

@@ -1966,3 +1966,20 @@ def test_a_try_that_returns_on_every_path_falls_off_no_end(write, analyze):
     analysis = bundle.analysis.modules["exhaustive"].functions["exhaustive.read"]
     # An inferred `int | None` would mean the checker thought it fell through.
     assert analysis.inferred_ret == T.INT
+
+
+def test_a_recursive_return_settles_through_a_local(write, analyze):
+    """`total += f(...)` must not leave `f` unknown forever."""
+    path = write(
+        "recursive.ppy",
+        """
+        def count_down(n):
+            if n <= 0:
+                return 1
+            total = 0
+            total += count_down(n - 1)
+            return total
+        """,
+    )
+    analysis = analyze(path).analysis.modules["recursive"].functions["recursive.count_down"]
+    assert analysis.inferred_ret == T.INT
