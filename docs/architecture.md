@@ -92,11 +92,11 @@ machines.
 
 `ppy/_io.py` is a runtime-only reader: a small C scanner over file
 descriptor 0, compiled on first use into the user cache and bound through
-ctypes, exposed as `ppy.input(T)` and the lower-level `ppy.read_ints` /
+ctypes, exposed as `ppy.input[T]()` and the lower-level `ppy.read_ints` /
 `ppy.read_token`. It lives in the `ppy` package rather than the compiler
 because it is useful on every path, plain CPython included, and it degrades
 to a pure-Python implementation where no C compiler exists. The checker
-types `ppy.input(T)` from its argument, the way it types `ppy.check[T]`.
+types `ppy.input[T]()` from its subscript, the way it types `ppy.check[T]`.
 
 ## The boundary
 

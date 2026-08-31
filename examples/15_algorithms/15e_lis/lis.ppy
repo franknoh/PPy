@@ -33,17 +33,17 @@ def longest_increasing(values: Buffer[int], tails: Buffer[int]) -> int:
 def read_values() -> Buffer[int]:
     """The judge's input, or a generated stand-in when nothing is piped in.
 
-    `ppy.input(Buffer[int], n)` reads the numbers straight into memory: no
+    `ppy.input[Buffer[int]](n)` reads the numbers straight into memory: no
     Python object is built per field, which is where a submission reading a
     million of them would otherwise spend its time.
     """
     try:
-        count = ppy.input(int)
+        count = ppy.input[int]()
     except EOFError:
         return array.array(
             "q", [(i * 7919 + (i % 977) * 104729) % 1000003 for i in range(1000000)]
         )
-    return ppy.input(Buffer[int], count)
+    return ppy.input[Buffer[int]](count)
 
 
 def main() -> None:

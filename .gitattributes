@@ -1,2 +1,5 @@
 # Auto detect text files and perform LF normalization
 * text=auto
+
+# `.ppy` is valid Python; GitHub should read and count it as such.
+*.ppy linguist-language=Python

@@ -19,9 +19,9 @@ PPY. Reading 500k integers, mean ± standard deviation over 5 runs:
 |---|---:|---:|
 | `input()` | 187.1 ± 4.0 ms | 199.2 ± 3.4 ms |
 | `sys.stdin.read().split()` | 54.8 ± 2.4 ms | 53.0 ± 3.0 ms |
-| **`ppy.input(Buffer[int], n)`** | **9.5 ± 0.3 ms** | **9.6 ± 0.4 ms** |
+| **`ppy.input[Buffer[int]](n)`** | **9.5 ± 0.3 ms** | **9.6 ± 0.4 ms** |
 
-`ppy.input(T)` reads the next value the way `T` says to read it, straight
+`ppy.input[T]()` reads the next value the way `T` says to read it, straight
 from file descriptor 0 through a small C reader, so the numbers never become
 Python objects on the way in. It is 5.8× faster than the fast Python idiom
 and 1.7× faster than C's `scanf` (16.5 ± 0.9 ms), and it works on every path including plain CPython — the

@@ -294,37 +294,71 @@ def _buffer_element(spec) -> object | None:  # type: ignore[no-untyped-def]
     return None
 
 
-def input(spec, count: int | None = None):  # pylint: disable=redefined-builtin
-    """Read the next value from standard input as `spec` says to read it.
+class _Reading:
+    """One `ppy.input[T]`, waiting to be called."""
 
-    ```python
-    n = ppy.input(int)                    # one integer
-    a, b = ppy.input(tuple[int, int])     # two, on one line or not
-    word = ppy.input(str)                 # one whitespace-delimited token
-    values = ppy.input(Buffer[int], n)    # n integers, into a buffer
-    ```
+    __slots__ = ("_spec",)
 
-    Whitespace and line breaks are the same thing to it, as they are to
-    `scanf` and to every judge's input format. Reading goes straight into
-    memory rather than through a Python object per field, so `Buffer[int]`
-    is the fast way to take a million numbers.
-    """
+    def __init__(self, spec) -> None:  # type: ignore[no-untyped-def]
+        self._spec = spec
+
+    def __repr__(self) -> str:
+        return f"ppy.input[{getattr(self._spec, '__name__', self._spec)!r}]"
+
+    def __call__(self, argument=None):  # type: ignore[no-untyped-def]
+        spec = self._spec
+        element = _buffer_element(spec)
+        if element is not None:
+            if not isinstance(argument, int):
+                raise TypeError("reading a buffer needs how many values to read")
+            if element is not int:
+                raise TypeError("only `Buffer[int]` can be read for now")
+            values = _array.array("q", bytes(8 * argument))
+            read_ints(values)
+            return values
+        if argument is not None:
+            if not isinstance(argument, str):
+                raise TypeError("the argument to a scalar read is a prompt")
+            sys.stdout.write(argument)
+            sys.stdout.flush()
+        return _read_one(spec)
+
+
+def _read_one(spec):  # type: ignore[no-untyped-def]
     reader = _SCALARS.get(spec)
     if reader is not None:
         return reader()
-    element = _buffer_element(spec)
-    if element is not None:
-        if count is None:
-            raise TypeError("reading a buffer needs how many values to read")
-        if element is not int:
-            raise TypeError("only `Buffer[int]` can be read for now")
-        values = _array.array("q", bytes(8 * count))
-        read_ints(values)
-        return values
-    origin = _get_origin(spec)
-    if origin is tuple:
+    if _get_origin(spec) is tuple:
         parts = _get_args(spec)
         if not parts or Ellipsis in parts:
             raise TypeError("a tuple to read needs a fixed number of typed fields")
-        return tuple(input(part) for part in parts)
+        return tuple(_read_one(part) for part in parts)
     raise TypeError(f"{spec!r} is not something `ppy.input` knows how to read")
+
+
+class _TypedInput:
+    """`ppy.input[T](...)`: read the next value as `T` says to read it.
+
+    ```python
+    n = ppy.input[int]()                   # one integer
+    a, b = ppy.input[tuple[int, int]]()    # two fields, line breaks irrelevant
+    word = ppy.input[str]("name? ")        # a token, after printing the prompt
+    values = ppy.input[Buffer[int]](n)     # n integers, straight into a buffer
+    ```
+
+    Whitespace and newlines are the same thing to it, as they are to `scanf`.
+    Reading goes into memory rather than through a Python object per field,
+    so the buffer form is what takes a million numbers quickly.
+    """
+
+    __slots__ = ()
+
+    def __getitem__(self, spec) -> _Reading:  # type: ignore[no-untyped-def]
+        return _Reading(spec)
+
+    def __call__(self, *_args, **_keywords):  # type: ignore[no-untyped-def]
+        raise TypeError("`ppy.input` needs the type it is reading: `ppy.input[int]()`")
+
+
+#: The name shadows the builtin on purpose: this is the typed one.
+input = _TypedInput()  # pylint: disable=redefined-builtin

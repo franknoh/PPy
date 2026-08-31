@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import array
 import os
+import re
 import subprocess
 import sys
 import textwrap
@@ -116,10 +117,10 @@ def test_input_reads_by_type():
         """
         import ppy
         from ppy import Buffer
-        count = ppy.input(int)
-        pair = ppy.input(tuple[int, int])
-        word = ppy.input(str)
-        values = ppy.input(Buffer[int], count)
+        count = ppy.input[int]()
+        pair = ppy.input[tuple[int, int]]()
+        word = ppy.input[str]()
+        values = ppy.input[Buffer[int]](count)
         print(count, pair, word, list(values))
         """,
     )
@@ -132,7 +133,7 @@ def test_input_at_the_end_raises_eof():
         """
         import ppy
         try:
-            ppy.input(int)
+            ppy.input[int]()
         except EOFError as error:
             print("eof:", error)
         """,
@@ -142,4 +143,21 @@ def test_input_at_the_end_raises_eof():
 
 def test_input_refuses_a_shape_it_cannot_read():
     with pytest.raises(TypeError):
-        ppy.input(dict)
+        ppy.input[dict]()
+
+
+def test_input_needs_the_type_it_is_reading():
+    with pytest.raises(TypeError, match=re.escape("ppy.input")):
+        ppy.input(int)
+
+
+def test_a_prompt_is_printed_before_the_read():
+    output = _piped(
+        "7\n",
+        """
+        import ppy
+        value = ppy.input[int]("n? ")
+        print("|", value)
+        """,
+    )
+    assert output == "n? | 7"

@@ -135,22 +135,24 @@ CPython inside, for programs whose reachable graph is entirely native.
 
 ## Reading input
 
-`ppy.input(T)` reads the next value the way `T` says to read it, and the
+`ppy.input[T]()` reads the next value the way `T` says to read it, and the
 checker types the result from the same `T`:
 
 ```python
-n = ppy.input(int)                    # one integer
-a, b = ppy.input(tuple[int, int])     # two fields, line breaks irrelevant
-word = ppy.input(str)                 # one whitespace-delimited token
-values = ppy.input(Buffer[int], n)    # n integers, straight into a buffer
+n = ppy.input[int]()                   # one integer
+a, b = ppy.input[tuple[int, int]]()    # two fields, line breaks irrelevant
+word = ppy.input[str]("name? ")        # a token, after printing the prompt
+values = ppy.input[Buffer[int]](n)     # n integers, straight into a buffer
 ```
 
 Whitespace and newlines are the same thing to it, as they are to `scanf`.
 Reading goes into memory rather than through a Python object per field, so
 the buffer form is what takes a million numbers quickly: measured 9.6 ms for
 500k integers against 54.8 ms for `sys.stdin.read().split()` and 16.5 ms for
-C's `scanf`. `ppy.read_ints` and `ppy.read_token` are the lower-level forms
-that fill a buffer you already have.
+C's `scanf`. The call takes a prompt for a scalar, printed before reading
+the way the builtin `input` does, or how many values to read for a buffer.
+`ppy.read_ints` and `ppy.read_token` are the lower-level forms that fill a
+buffer you already have.
 
 All of them carry the IO effect, so a function that reads is never mistaken
 for a pure one, and all of them work on every path including plain CPython:

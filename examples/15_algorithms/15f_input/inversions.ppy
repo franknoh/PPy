@@ -46,10 +46,10 @@ def count_inversions(values: Buffer[int], tree: Buffer[int]) -> int:
 def read_values() -> Buffer[int]:
     """The judge's input, or a generated stand-in when nothing is piped in."""
     try:
-        count = ppy.input(int)
+        count = ppy.input[int]()
     except EOFError:
         return array.array("q", [(i * 7919) % 1000003 for i in range(500000)])
-    return ppy.input(Buffer[int], count)
+    return ppy.input[Buffer[int]](count)
 
 
 def main() -> None:

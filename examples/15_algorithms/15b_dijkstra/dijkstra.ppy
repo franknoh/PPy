@@ -138,11 +138,11 @@ def generated() -> list[int]:
 def read_fields() -> Buffer[int]:
     """The judge's input, or a generated stand-in when nothing is piped in."""
     try:
-        count, edges = ppy.input(tuple[int, int])
+        count, edges = ppy.input[tuple[int, int]]()
     except EOFError:
         return array.array("q", generated())
-    fields = array.array("q", [count, edges, ppy.input(int)])
-    fields.extend(ppy.input(Buffer[int], edges * 3))
+    fields = array.array("q", [count, edges, ppy.input[int]()])
+    fields.extend(ppy.input[Buffer[int]](edges * 3))
     return fields
 
 

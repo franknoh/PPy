@@ -70,13 +70,13 @@ a character costs eight bytes to read where `scanf("%s")` costs one.
 
 ### Reading input
 
-`ppy.input(T)` reads the next value the way `T` says to read it, and types
+`ppy.input[T]()` reads the next value the way `T` says to read it, and types
 the result the same way:
 
 ```python
-n = ppy.input(int)
-a, b = ppy.input(tuple[int, int])
-values = ppy.input(Buffer[int], n)
+n = ppy.input[int]()
+a, b = ppy.input[tuple[int, int]]()
+values = ppy.input[Buffer[int]](n)
 ```
 
 It goes straight into memory rather than building a Python object per field

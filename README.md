@@ -58,10 +58,10 @@ def longest(limit: int) -> int:
     return best
 
 
-print(longest(ppy.input(int)))
+print(longest(ppy.input[int]()))
 ```
 
-`ppy.input(T)` reads the next value the way `T` says to read it, straight
+`ppy.input[T]()` reads the next value the way `T` says to read it, straight
 into memory rather than through a Python object per field. Piping the limit
 in, `echo 300000 |` before each of these:
 

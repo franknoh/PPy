@@ -28,7 +28,7 @@ the whole table.
 | read | 66.4 ± 2.3 ms | 73.3 ± 3.7 ms | 63.0 ± 1.8 ms | 93.3 ± 1.6 ms |
 | solve | 1652.2 ± 9.0 ms | 66.2 ± 4.6 ms | 71.5 ± 6.1 ms | 75.6 ± 7.2 ms |
 
-`ppy.input(Buffer[int], n)` reads 3.6M integers faster than `scanf` does, so
+`ppy.input[Buffer[int]](n)` reads 3.6M integers faster than `scanf` does, so
 the whole submission finishes in 140 ms against C's 169 ms.
 
 ## Run it
