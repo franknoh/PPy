@@ -50,6 +50,8 @@ def _fn(qualname: str, ret: T.Type, effects: EffectSet = _NO_EFFECTS) -> tuple[T
     return T.Callable_((), ret, qualname), effects
 
 
+_TEXT_STREAM = T.Instance("io.TextIOWrapper", (), ("io.TextIOWrapper", "object"))
+
 _THREAD = T.Instance("threading.Thread", (), ("threading.Thread", "object"))
 _LOCK = T.Instance("threading.Lock", (), ("threading.Lock", "object"))
 _EVENT = T.Instance("threading.Event", (), ("threading.Event", "object"))
@@ -57,6 +59,26 @@ _THREAD_EFFECTS = EffectSet.of(Effect.THREAD, Effect.SYNC)
 
 #: Attributes of a standard-library instance the analyzer knows.
 INSTANCE_ATTRS: dict[str, dict[str, tuple[T.Type, EffectSet]]] = {
+    # The standard streams. Reading is the effect it looks like, so a function
+    # that reads input is never mistaken for a pure one.
+    "io.TextIOWrapper": {
+        "read": (T.Callable_((), T.STR, "io.TextIOWrapper.read"), _IO | _ALLOC),
+        "readline": (T.Callable_((), T.STR, "io.TextIOWrapper.readline"), _IO | _ALLOC),
+        "readlines": (
+            T.Callable_((), T.list_of(T.STR), "io.TextIOWrapper.readlines"),
+            _IO | _ALLOC,
+        ),
+        "write": (T.Callable_((), T.INT, "io.TextIOWrapper.write"), _IO),
+        "writelines": (T.Callable_((), T.NONE, "io.TextIOWrapper.writelines"), _IO),
+        "flush": (T.Callable_((), T.NONE, "io.TextIOWrapper.flush"), _IO),
+        "close": (T.Callable_((), T.NONE, "io.TextIOWrapper.close"), _IO),
+        "isatty": (T.Callable_((), T.BOOL, "io.TextIOWrapper.isatty"), _IO),
+        "fileno": (T.Callable_((), T.INT, "io.TextIOWrapper.fileno"), _IO),
+        "readable": (T.Callable_((), T.BOOL, "io.TextIOWrapper.readable"), EffectSet()),
+        "writable": (T.Callable_((), T.BOOL, "io.TextIOWrapper.writable"), EffectSet()),
+        "closed": (T.BOOL, EffectSet()),
+        "encoding": (T.STR, EffectSet()),
+    },
     "threading.Thread": {
         "start": (T.Callable_((), T.NONE, "threading.Thread.start"), _THREAD_EFFECTS),
         "join": (T.Callable_((), T.NONE, "threading.Thread.join"), _THREAD_EFFECTS),
@@ -161,6 +183,9 @@ _FUNCTIONS: dict[str, tuple[T.Type, EffectSet]] = {
 #: Module attributes with a known type.
 MODULE_ATTRIBUTES: dict[str, tuple[T.Type, Facts]] = {
     "sys.argv": (T.list_of(T.STR), Facts()),
+    "sys.stdin": (_TEXT_STREAM, Facts()),
+    "sys.stdout": (_TEXT_STREAM, Facts()),
+    "sys.stderr": (_TEXT_STREAM, Facts()),
     "sys.executable": (T.STR, Facts()),
     "sys.platform": (T.STR, Facts()),
     "sys.maxsize": (T.INT, Facts(int_range=IntRange(0, None))),

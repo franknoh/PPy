@@ -186,6 +186,9 @@ class FunctionAnalysis:
     parallel_blockers: tuple[str, ...] = ()
     escaping: set[str] = field(default_factory=set)
     mutated_params: set[str] = field(default_factory=set)
+    #: Parameters this function hands to a callee that writes through them.
+    #: The write lands in the caller's memory just as a direct one would.
+    delegated_writes: set[str] = field(default_factory=set)
     #: A write whose target is not a plain local name, so the backend cannot
     #: tell what it reached.
     foreign_writes: bool = False
@@ -334,6 +337,8 @@ class _Checker:
         self._native_blockers: list[str] = []
         self._escaping: set[str] = set()
         self._mutated: set[str] = set()
+        #: Parameters handed to a callee that writes through what it is given.
+        self._delegated: set[str] = set()
         self._foreign_writes = False
         self._local_writes: set[str] = set()
         self._shared: set[str] = set()
@@ -380,6 +385,7 @@ class _Checker:
             self._native_blockers,
             self._escaping,
             self._mutated,
+            self._delegated,
             self._dynamic_depth,
             self._function_locals,
             self._foreign_writes,
@@ -399,6 +405,7 @@ class _Checker:
         self._native_blockers = []
         self._escaping = set()
         self._mutated = set()
+        self._delegated = set()
         self._foreign_writes = False
         self._local_writes = set()
         self._shared = set()
@@ -440,6 +447,7 @@ class _Checker:
             self._native_blockers,
             self._escaping,
             self._mutated,
+            self._delegated,
             self._dynamic_depth,
             self._function_locals,
             self._foreign_writes,
@@ -497,6 +505,7 @@ class _Checker:
             native_blockers=tuple(dict.fromkeys(self._native_blockers)),
             escaping=set(self._escaping),
             mutated_params=set(self._mutated),
+            delegated_writes=set(self._delegated),
             foreign_writes=self._foreign_writes,
             writes_only_locals=not self._external_writes
             and not (self._local_writes & self._shared_escapes()),
@@ -2899,14 +2908,29 @@ class _Checker:
             declared = info.params[index].type if index < len(info.params) else None
             if self._argument_is_safe(argument, declared):
                 continue
+            self._note_delegated_write(argument)
             self._external_writes = True
-            return
         for name, argument in named:
             declared = next((p.type for p in info.params if p.name == name), None)
             if self._argument_is_safe(argument, declared):
                 continue
+            self._note_delegated_write(argument)
             self._external_writes = True
+
+    def _note_delegated_write(self, argument: ast.expr) -> None:
+        """One of our parameters was handed to a callee that writes.
+
+        The write lands in memory this function was lent, exactly as a direct
+        `xs[i] = v` would, so a function that delegates its writes is not
+        thereby stuck on the Python side. Whether the parameter can actually
+        carry a write is the backend's question, not this one's.
+        """
+        if not isinstance(argument, ast.Name):
             return
+        roots = self._roots(argument, argument.id)
+        own = {p.name for p in (self._current.params if self._current else [])}
+        params = self._aliases.param_roots(roots) if self._aliases is not None else roots & own
+        self._delegated.update(params)
 
     def _argument_is_safe(self, argument: ast.expr, declared: T.Type | None) -> bool:
         """Could a mutating callee reach anything this function does not own?"""

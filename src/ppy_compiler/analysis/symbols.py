@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import ast
+import operator
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -425,6 +426,21 @@ class ProjectSymbols:
         self._mark_constant_globals()
         return self
 
+    @staticmethod
+    def _constant_value(node: ast.expr) -> object:
+        """A module-level constant expression's value, or `None`.
+
+        `ast.literal_eval` stops at a literal, but a constant of any size is
+        written the way it reads -- `10**9 + 7`, `1 << 60` -- so arithmetic
+        over literals folds here too. Only the operators below are evaluated,
+        and only within a size that cannot make compilation expensive.
+        """
+        try:
+            return ast.literal_eval(node)
+        except (ValueError, SyntaxError, TypeError, MemoryError):
+            pass
+        return _fold_constant(node)
+
     def _mark_constant_globals(self) -> None:
         """Find module globals bound once, at module level, to a literal.
 
@@ -461,9 +477,8 @@ class ProjectSymbols:
                     target, value = node.targets[0].id, node.value
                 if target is None or value is None:
                     continue
-                try:
-                    literal = ast.literal_eval(value)
-                except (ValueError, SyntaxError, TypeError):
+                literal = self._constant_value(value)
+                if literal is _NOT_CONSTANT:
                     continue
                 if not isinstance(literal, (int, float, complex, str, bytes, bool, type(None))):
                     continue
@@ -865,3 +880,69 @@ def _is_self_attribute(target: ast.expr) -> bool:
         and isinstance(target.value, ast.Name)
         and target.value.id == "self"
     )
+
+
+#: "This expression is not a constant" -- distinct from the constant `None`.
+_NOT_CONSTANT = object()
+
+#: Operators folded in a module-level constant expression. Anything else
+#: leaves the name a genuine global read.
+_FOLD_BINARY = {
+    ast.Add: operator.add,
+    ast.Sub: operator.sub,
+    ast.Mult: operator.mul,
+    ast.FloorDiv: operator.floordiv,
+    ast.Div: operator.truediv,
+    ast.Mod: operator.mod,
+    ast.Pow: operator.pow,
+    ast.LShift: operator.lshift,
+    ast.RShift: operator.rshift,
+    ast.BitOr: operator.or_,
+    ast.BitAnd: operator.and_,
+    ast.BitXor: operator.xor,
+}
+_FOLD_UNARY = {ast.USub: operator.neg, ast.UAdd: operator.pos, ast.Invert: operator.invert}
+
+#: A folded integer wider than this is refused rather than computed: the
+#: point is to name a constant, not to run a calculation at compile time.
+_FOLD_LIMIT = 1 << 1024
+
+
+def _fold_constant(node: ast.expr) -> object:
+    """Evaluate a numeric constant expression over literals.
+
+    Returns `_NOT_CONSTANT` when the expression is not one, because `None` is
+    a value a global can hold and must not be confused with a refusal.
+    """
+    match node:
+        case ast.Constant(value=int() | float() | complex() as value) if not isinstance(
+            node.value, bool
+        ):
+            return value
+        case ast.UnaryOp(op=op, operand=operand) if type(op) in _FOLD_UNARY:
+            inner = _fold_constant(operand)
+            if inner is _NOT_CONSTANT:
+                return _NOT_CONSTANT
+            return _guarded(lambda: _FOLD_UNARY[type(op)](inner))
+        case ast.BinOp(left=left, op=op, right=right) if type(op) in _FOLD_BINARY:
+            first = _fold_constant(left)
+            second = _fold_constant(right)
+            if first is _NOT_CONSTANT or second is _NOT_CONSTANT:
+                return _NOT_CONSTANT
+            if isinstance(op, (ast.Pow, ast.LShift)) and (
+                not isinstance(second, int) or second > 4096 or second < 0
+            ):
+                return _NOT_CONSTANT
+            return _guarded(lambda: _FOLD_BINARY[type(op)](first, second))
+    return _NOT_CONSTANT
+
+
+def _guarded(compute):  # type: ignore[no-untyped-def]
+    """Run one folding step, refusing anything unrepresentable or oversized."""
+    try:
+        value = compute()
+    except (ArithmeticError, TypeError, ValueError):
+        return _NOT_CONSTANT
+    if isinstance(value, int) and not isinstance(value, bool) and abs(value) >= _FOLD_LIMIT:
+        return _NOT_CONSTANT
+    return value
