@@ -24,8 +24,8 @@ the whole table.
 
 | phase | plain | `ppy run` | `ppy build` | C (`scanf`) |
 |---|---:|---:|---:|---:|
-| read | 20.1 ± 0.7 ms | 22.1 ± 1.8 ms | 19.7 ± 0.4 ms | 45.9 ± 0.5 ms |
-| solve | 499.0 ± 15.5 ms | 8.1 ± 1.5 ms | 7.7 ± 1.5 ms | 7.6 ± 0.7 ms |
+| read | 23.6 ± 0.4 ms | 26.6 ± 2.6 ms | 24.9 ± 1.4 ms | 47.2 ± 0.8 ms |
+| solve | 514.5 ± 13.8 ms | 7.4 ± 1.3 ms | 7.7 ± 0.9 ms | 8.0 ± 1.3 ms |
 
 ## Run it
 

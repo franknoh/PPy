@@ -1366,6 +1366,9 @@ class _Checker:
             checked = self._checked_conversion(node, env)
             if checked is not None:
                 return checked
+        typed_read = self._typed_input(node, env)
+        if typed_read is not None:
+            return typed_read
         imported = self._constant_import(node)
         if imported is not None:
             return imported
@@ -2509,6 +2512,26 @@ class _Checker:
             elif isinstance(node, ast.Name) and node.id in T.BUILTIN_MRO:
                 found.append(T.instance(node.id))
         return found
+
+    def _typed_input(self, node: ast.Call, env: Env) -> Binding | None:
+        """`ppy.input(T)`: read the next value, typed by what was asked for.
+
+        The first argument is read as a type rather than a value, the way an
+        annotation is, so `ppy.input(tuple[int, int])` types as that tuple and
+        `ppy.input(Buffer[int], n)` as that buffer.
+        """
+        if self.project.resolver(self.symbols).canonical(node.func) != "ppy.input":
+            return None
+        if not node.args or node.keywords:
+            self._error("E1305", "`ppy.input(T)` takes a type and an optional count", node)
+            return Binding(T.UNKNOWN)
+        resolved = self.annotations.resolve(node.args[0])
+        for argument in node.args[1:]:
+            self._expr(argument, env)
+        self._effects = self._effects | EffectSet.of(
+            Effect.IO, Effect.ALLOC, raises=("EOFError", "TypeError", "ValueError")
+        )
+        return Binding(resolved.type, resolved.facts)
 
     def _checked_conversion(self, node: ast.Call, env: Env) -> Binding | None:
         """`ppy.check[T](value)`: the sanctioned crossing out of dynamic code.

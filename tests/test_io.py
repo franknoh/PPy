@@ -108,3 +108,38 @@ def test_a_read_only_buffer_is_refused():
 def test_a_buffer_of_the_wrong_width_is_refused():
     with pytest.raises(TypeError):
         ppy.read_ints(array.array("i", [0, 0]))
+
+
+def test_input_reads_by_type():
+    output = _piped(
+        "3\n10 20\nhello\n1 2 3\n",
+        """
+        import ppy
+        from ppy import Buffer
+        count = ppy.input(int)
+        pair = ppy.input(tuple[int, int])
+        word = ppy.input(str)
+        values = ppy.input(Buffer[int], count)
+        print(count, pair, word, list(values))
+        """,
+    )
+    assert output == "3 (10, 20) hello [1, 2, 3]"
+
+
+def test_input_at_the_end_raises_eof():
+    output = _piped(
+        "",
+        """
+        import ppy
+        try:
+            ppy.input(int)
+        except EOFError as error:
+            print("eof:", error)
+        """,
+    )
+    assert output.startswith("eof:")
+
+
+def test_input_refuses_a_shape_it_cannot_read():
+    with pytest.raises(TypeError):
+        ppy.input(dict)

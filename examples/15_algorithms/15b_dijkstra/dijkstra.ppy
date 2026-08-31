@@ -136,16 +136,13 @@ def generated() -> list[int]:
 
 
 def read_fields() -> Buffer[int]:
-    """The judge's input through `ppy.read_ints`, or a generated stand-in."""
-    header = array.array("q", [0, 0, 0])
-    if ppy.read_ints(header) < 3:
+    """The judge's input, or a generated stand-in when nothing is piped in."""
+    try:
+        count, edges = ppy.input(tuple[int, int])
+    except EOFError:
         return array.array("q", generated())
-    fields = array.array("q", bytes(8 * (3 + header[1] * 3)))
-    fields[0] = header[0]
-    fields[1] = header[1]
-    fields[2] = header[2]
-    view = memoryview(fields)[3:]
-    ppy.read_ints(view)
+    fields = array.array("q", [count, edges, ppy.input(int)])
+    fields.extend(ppy.input(Buffer[int], edges * 3))
     return fields
 
 

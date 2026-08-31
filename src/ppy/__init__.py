@@ -33,7 +33,12 @@ from ._importer import (
     is_installed,
     uninstall,
 )
-from ._io import read_ints, read_token, reader_available
+from ._io import (  # pylint: disable=redefined-builtin
+    input,
+    read_ints,
+    read_token,
+    reader_available,
+)
 from ._markers import (
     NUMERIC_MARKERS,
     Array,
@@ -103,6 +108,7 @@ __all__ = [
     "i64",
     "import_roots",
     "inline",
+    "input",
     "install",
     "is_installed",
     "jax",

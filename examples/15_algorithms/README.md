@@ -57,12 +57,12 @@ runs; `bench.py` prints both halves separately.
 
 | | problem | plain | `ppy run` | C (`scanf`) |
 |---|---|---:|---:|---:|
-| [15a](15a_nqueens/) | N-Queens (9663) | 122.6 ms | 5.6 ms | 4.4 ms |
-| [15b](15b_dijkstra/) | shortest path (1753) | 1706.8 ms | 119.7 ms | 173.0 ms |
-| [15c](15c_kmp/) | substring search (1786) | 312.5 ms | 38.2 ms | 9.3 ms |
-| [15d](15d_segment_tree/) | range sums (2042) | 519.1 ms | 30.2 ms | 53.5 ms |
-| [15e](15e_lis/) | longest increasing subsequence (12015) | 513.1 ms | 45.0 ms | 64.7 ms |
-| [15f](15f_input/) | counting inversions (1517) | 716.2 ms | 43.1 ms | 48.1 ms |
+| [15a](15a_nqueens/) | N-Queens (9663) | 122.4 ms | 5.7 ms | 4.5 ms |
+| [15b](15b_dijkstra/) | shortest path (1753) | 1718.6 ms | 139.5 ms | 168.9 ms |
+| [15c](15c_kmp/) | substring search (1786) | 315.0 ms | 39.2 ms | 9.2 ms |
+| [15d](15d_segment_tree/) | range sums (2042) | 538.1 ms | 34.0 ms | 55.2 ms |
+| [15e](15e_lis/) | longest increasing subsequence (12015) | 523.1 ms | 43.0 ms | 64.3 ms |
+| [15f](15f_input/) | counting inversions (1517) | 672.7 ms | 45.5 ms | 48.0 ms |
 
 PPY wins four of the six outright. It loses N-Queens by a hair on pure
 compute, and loses substring search on the read: `Buffer[int]` is 64-bit, so
@@ -70,11 +70,19 @@ a character costs eight bytes to read where `scanf("%s")` costs one.
 
 ### Reading input
 
-`ppy.read_ints(buffer)` and `ppy.read_token(buffer)` fill a buffer straight
-from file descriptor 0 through a small C reader, so input never becomes
-Python objects on the way in — 9.6 ms for 500k integers against 54.8 ms for
-`sys.stdin.read().split()` and 16.7 ms for C's `scanf`. They work on every
-path, plain CPython included; the reader is compiled once and cached, and
-falls back to pure Python where there is no C compiler. A program that uses
-them must not also read `input()` or `sys.stdin`, because the reader owns
-the file descriptor. [15f](15f_input/) measures all three ways side by side.
+`ppy.input(T)` reads the next value the way `T` says to read it, and types
+the result the same way:
+
+```python
+n = ppy.input(int)
+a, b = ppy.input(tuple[int, int])
+values = ppy.input(Buffer[int], n)
+```
+
+It goes straight into memory rather than building a Python object per field
+— 9.6 ms for 500k integers against 54.8 ms for `sys.stdin.read().split()`
+and 16.5 ms for C's `scanf`. It works on every path, plain CPython included;
+the reader is compiled once and cached, and falls back to pure Python where
+there is no C compiler. A program that uses it must not also read `input()`
+or `sys.stdin`, because the reader owns the file descriptor.
+[15f](15f_input/) measures all three ways side by side.

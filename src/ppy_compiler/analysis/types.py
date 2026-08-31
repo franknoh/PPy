@@ -150,6 +150,7 @@ BUILTIN_MRO: dict[str, tuple[str, ...]] = {
         "object",
     ),
     "ArithmeticError": ("ArithmeticError", "Exception", "BaseException", "object"),
+    "EOFError": ("EOFError", "Exception", "BaseException", "object"),
     "OverflowError": ("OverflowError", "ArithmeticError", "Exception", "BaseException", "object"),
     "StopIteration": ("StopIteration", "Exception", "BaseException", "object"),
     "AttributeError": ("AttributeError", "Exception", "BaseException", "object"),

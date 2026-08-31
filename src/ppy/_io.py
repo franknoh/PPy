@@ -11,6 +11,7 @@ fallback below is used instead, and the only difference is speed.
 
 from __future__ import annotations
 
+import array as _array
 import ctypes
 import hashlib
 import os
@@ -19,8 +20,10 @@ import sys
 import sysconfig
 import tempfile
 from pathlib import Path
+from typing import get_args as _get_args
+from typing import get_origin as _get_origin
 
-__all__ = ["read_ints", "read_token", "reader_available"]
+__all__ = ["input", "read_ints", "read_token", "reader_available"]
 
 #: The reader owns file descriptor 0 and buffers it itself, so it must not be
 #: mixed with `input()` or `sys.stdin` in the same program.
@@ -107,6 +110,10 @@ int64_t ppy_rt_read_ints(int64_t *data, int64_t capacity) {
 """
 
 _LOADED: list[object] = []
+
+#: Scratch space reused by the scalar reads, so one number costs no allocation.
+_SCALAR_SLOT = _array.array("q", [0])
+_TOKEN_SLOT = _array.array("b", bytes(4096))
 
 
 def _cache_directory() -> Path:
@@ -254,3 +261,70 @@ def read_token(buffer) -> int:  # type: ignore[no-untyped-def]
     if view.itemsize == 1:
         return int(narrow(ctypes.cast(address, ctypes.POINTER(ctypes.c_int8)), view.shape[0]))
     return int(wide(ctypes.cast(address, ctypes.POINTER(ctypes.c_int64)), view.shape[0]))
+
+
+def _one_int() -> int:
+    slot = _SCALAR_SLOT
+    if read_ints(slot) != 1:
+        raise EOFError("the input ended where an integer was expected")
+    return slot[0]
+
+
+def _one_token() -> str:
+    room = _TOKEN_SLOT
+    length = read_token(room)
+    if length == 0:
+        raise EOFError("the input ended where a token was expected")
+    return bytes(memoryview(room)[:length]).decode("utf-8")
+
+
+def _one_float() -> float:
+    return float(_one_token())
+
+
+_SCALARS = {int: _one_int, float: _one_float, str: _one_token, bool: lambda: bool(_one_int())}
+
+
+def _buffer_element(spec) -> object | None:  # type: ignore[no-untyped-def]
+    """`ppy.Buffer[T]`'s element type, or None if `spec` is not one."""
+    for item in getattr(spec, "__metadata__", ()):
+        element = getattr(item, "element", None)
+        if element is not None:
+            return element
+    return None
+
+
+def input(spec, count: int | None = None):  # pylint: disable=redefined-builtin
+    """Read the next value from standard input as `spec` says to read it.
+
+    ```python
+    n = ppy.input(int)                    # one integer
+    a, b = ppy.input(tuple[int, int])     # two, on one line or not
+    word = ppy.input(str)                 # one whitespace-delimited token
+    values = ppy.input(Buffer[int], n)    # n integers, into a buffer
+    ```
+
+    Whitespace and line breaks are the same thing to it, as they are to
+    `scanf` and to every judge's input format. Reading goes straight into
+    memory rather than through a Python object per field, so `Buffer[int]`
+    is the fast way to take a million numbers.
+    """
+    reader = _SCALARS.get(spec)
+    if reader is not None:
+        return reader()
+    element = _buffer_element(spec)
+    if element is not None:
+        if count is None:
+            raise TypeError("reading a buffer needs how many values to read")
+        if element is not int:
+            raise TypeError("only `Buffer[int]` can be read for now")
+        values = _array.array("q", bytes(8 * count))
+        read_ints(values)
+        return values
+    origin = _get_origin(spec)
+    if origin is tuple:
+        parts = _get_args(spec)
+        if not parts or Ellipsis in parts:
+            raise TypeError("a tuple to read needs a fixed number of typed fields")
+        return tuple(input(part) for part in parts)
+    raise TypeError(f"{spec!r} is not something `ppy.input` knows how to read")

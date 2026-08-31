@@ -135,16 +135,29 @@ CPython inside, for programs whose reachable graph is entirely native.
 
 ## Reading input
 
-`ppy.read_ints(buffer)` and `ppy.read_token(buffer)` fill a contiguous
-buffer straight from file descriptor 0, so input never becomes a Python
-object on the way in — measured 9.6 ms for 500k integers against 54.8 ms for
-`sys.stdin.read().split()` and 16.7 ms for C's `scanf`. Both carry the IO
-effect, so a function that reads is never mistaken for a pure one, and both
-work on every path including plain CPython: the small C reader is compiled
-once and cached beside the other artifacts, with a pure-Python fallback
-where no compiler exists. The reader owns the file descriptor and buffers it
+`ppy.input(T)` reads the next value the way `T` says to read it, and the
+checker types the result from the same `T`:
+
+```python
+n = ppy.input(int)                    # one integer
+a, b = ppy.input(tuple[int, int])     # two fields, line breaks irrelevant
+word = ppy.input(str)                 # one whitespace-delimited token
+values = ppy.input(Buffer[int], n)    # n integers, straight into a buffer
+```
+
+Whitespace and newlines are the same thing to it, as they are to `scanf`.
+Reading goes into memory rather than through a Python object per field, so
+the buffer form is what takes a million numbers quickly: measured 9.6 ms for
+500k integers against 54.8 ms for `sys.stdin.read().split()` and 16.5 ms for
+C's `scanf`. `ppy.read_ints` and `ppy.read_token` are the lower-level forms
+that fill a buffer you already have.
+
+All of them carry the IO effect, so a function that reads is never mistaken
+for a pure one, and all of them work on every path including plain CPython:
+the small C reader is compiled once and cached, with a pure-Python fallback
+where no compiler exists. The reader owns file descriptor 0 and buffers it
 itself, so a program that uses it must not also read `input()` or
-`sys.stdin`.
+`sys.stdin`. Reading past the end raises `EOFError`.
 
 ## Native lowering
 

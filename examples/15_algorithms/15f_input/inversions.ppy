@@ -44,13 +44,12 @@ def count_inversions(values: Buffer[int], tree: Buffer[int]) -> int:
 
 
 def read_values() -> Buffer[int]:
-    """The judge's input through `ppy.read_ints`, or a generated stand-in."""
-    header = array.array("q", [0])
-    if ppy.read_ints(header) == 0:
+    """The judge's input, or a generated stand-in when nothing is piped in."""
+    try:
+        count = ppy.input(int)
+    except EOFError:
         return array.array("q", [(i * 7919) % 1000003 for i in range(500000)])
-    values = array.array("q", bytes(8 * header[0]))
-    ppy.read_ints(values)
-    return values
+    return ppy.input(Buffer[int], count)
 
 
 def main() -> None:

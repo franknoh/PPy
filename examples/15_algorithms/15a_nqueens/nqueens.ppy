@@ -4,7 +4,6 @@ Input:  N on the first line.
 Output: how many ways N queens can be placed without attacking each other.
 """
 
-import sys
 import time
 
 import ppy
@@ -31,8 +30,10 @@ def solve(full: int, columns: int, diagonal: int, antidiagonal: int) -> int:
 
 def read_size() -> int:
     """The judge's input, or the stand-in this example uses on its own."""
-    text = sys.stdin.read()
-    return int(text.split()[0]) if text.strip() else 12
+    try:
+        return ppy.input(int)
+    except EOFError:
+        return 12
 
 
 def main() -> None:

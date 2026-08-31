@@ -63,6 +63,7 @@ _BUILTIN_NAMES = {
     "True",
     "False",
     "OSError",
+    "EOFError",
     "RuntimeError",
     "NotImplementedError",
     "AssertionError",

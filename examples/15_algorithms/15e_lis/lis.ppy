@@ -31,20 +31,19 @@ def longest_increasing(values: Buffer[int], tails: Buffer[int]) -> int:
 
 
 def read_values() -> Buffer[int]:
-    """The judge's input through `ppy.read_ints`, or a generated stand-in.
+    """The judge's input, or a generated stand-in when nothing is piped in.
 
-    `read_ints` fills the buffer from file descriptor 0 without building a
-    Python object per field, which is where a submission that reads a
-    million numbers spends most of its time.
+    `ppy.input(Buffer[int], n)` reads the numbers straight into memory: no
+    Python object is built per field, which is where a submission reading a
+    million of them would otherwise spend its time.
     """
-    header = array.array("q", [0])
-    if ppy.read_ints(header) == 0:
+    try:
+        count = ppy.input(int)
+    except EOFError:
         return array.array(
             "q", [(i * 7919 + (i % 977) * 104729) % 1000003 for i in range(1000000)]
         )
-    values = array.array("q", bytes(8 * header[0]))
-    ppy.read_ints(values)
-    return values
+    return ppy.input(Buffer[int], count)
 
 
 def main() -> None:
