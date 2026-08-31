@@ -88,6 +88,15 @@ is part of the cache key, along with the host CPU's name and features, so a
 baseline object is never handed to a host build or carried between
 machines.
 
+## Reading input
+
+`ppy/_io.py` is a runtime-only reader: a small C scanner over file
+descriptor 0, compiled on first use into the user cache and bound through
+ctypes, exposed as `ppy.read_ints` and `ppy.read_token`. It lives in the
+`ppy` package rather than the compiler because it is useful on every path,
+plain CPython included, and it degrades to a pure-Python implementation
+where no C compiler exists.
+
 ## The boundary
 
 Python callers cross into native code through a generated `METH_FASTCALL`

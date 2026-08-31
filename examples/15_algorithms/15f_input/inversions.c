@@ -1,4 +1,4 @@
-/* The same Fenwick inversion count as inversions.ppy, same generated data. */
+/* The same problem as inversions.ppy, reading the judge's input with scanf. */
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
@@ -32,19 +32,40 @@ static long long count_inversions(const long long *values, long long size, long 
     return total;
 }
 
-int main(void) {
-    const long long size = 500000;
-    long long *values = malloc((size_t)size * sizeof(long long));
-    long long *tree = calloc(LIMIT, sizeof(long long));
-    for (long long i = 0; i < size; i++) {
-        values[i] = (i * 7919) % 1000003;
-    }
+static double since(struct timespec start) {
+    struct timespec now;
+    clock_gettime(CLOCK_MONOTONIC, &now);
+    return (now.tv_sec - start.tv_sec) * 1000.0 + (now.tv_nsec - start.tv_nsec) / 1e6;
+}
 
-    struct timespec t0, t1;
-    clock_gettime(CLOCK_MONOTONIC, &t0);
+int main(void) {
+    struct timespec started;
+    clock_gettime(CLOCK_MONOTONIC, &started);
+
+    long long size = 0;
+    long long *values = NULL;
+    if (scanf("%lld", &size) == 1) {
+        values = malloc((size_t)size * sizeof(long long));
+        for (long long i = 0; i < size; i++) {
+            if (scanf("%lld", &values[i]) != 1) {
+                return 1;
+            }
+        }
+    } else {
+        size = 500000;
+        values = malloc((size_t)size * sizeof(long long));
+        for (long long i = 0; i < size; i++) {
+            values[i] = (i * 7919) % 1000003;
+        }
+    }
+    double read_ms = since(started);
+
+    long long *tree = calloc(LIMIT, sizeof(long long));
+    clock_gettime(CLOCK_MONOTONIC, &started);
     long long answer = count_inversions(values, size, tree);
-    clock_gettime(CLOCK_MONOTONIC, &t1);
-    double ms = (t1.tv_sec - t0.tv_sec) * 1000.0 + (t1.tv_nsec - t0.tv_nsec) / 1e6;
-    printf("count inversions%8.1f ms   -> %lld\n", ms, answer);
+    double solve_ms = since(started);
+
+    printf("%lld\n", answer);
+    printf("# n=%lld read %.1f ms   solve %.1f ms\n", size, read_ms, solve_ms);
     return 0;
 }

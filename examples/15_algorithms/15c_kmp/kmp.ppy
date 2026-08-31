@@ -1,3 +1,9 @@
+"""Substring search, judge style (Baekjoon 1786).
+
+Input:  the text T on the first line, the pattern P on the second.
+Output: how many times P occurs in T.
+"""
+
 import array
 import time
 
@@ -33,15 +39,39 @@ def count_matches(text: Buffer[int], pattern: Buffer[int], failure: Buffer[int])
     return found
 
 
+def read_case() -> tuple[Buffer[int], Buffer[int]]:
+    """The judge's two tokens through `ppy.read_token`, or a stand-in.
+
+    The characters land in a 64-bit buffer directly, which is both what the
+    reader can fill without building a Python string and what the native
+    kernel indexes.
+    """
+    haystack = array.array("q", bytes(8 * 4000064))
+    size = ppy.read_token(haystack)
+    if size == 0:
+        for i in range(4000000):
+            haystack[i] = 97 + (i * 7919) % 4
+        size = 4000000
+        needle = array.array("q", haystack[:12])
+        return memoryview(haystack)[:size], memoryview(needle)
+    needle = array.array("q", bytes(8 * 4096))
+    length = ppy.read_token(needle)
+    return memoryview(haystack)[:size], memoryview(needle)[:length]
+
+
 def main() -> None:
-    size: int = 4000000
-    text = array.array("q", [(i * 7919) % 4 for i in range(size)])
-    pattern = array.array("q", [(i * 7919) % 4 for i in range(12)])
+    started = time.perf_counter()
+    text, pattern = read_case()
+    read_ms = (time.perf_counter() - started) * 1000.0
+
     failure = array.array("q", [0] * len(pattern))
+    started = time.perf_counter()
     build_failure(pattern, failure)
-    start = time.perf_counter()
     found: int = count_matches(text, pattern, failure)
-    print(f"kmp 4e6{(time.perf_counter() - start) * 1000.0:17.1f} ms   -> {found}")
+    solve_ms = (time.perf_counter() - started) * 1000.0
+
+    print(found)
+    print(f"# |t|={len(text)} |p|={len(pattern)} read {read_ms:.1f} ms   solve {solve_ms:.1f} ms")
 
 
 main()

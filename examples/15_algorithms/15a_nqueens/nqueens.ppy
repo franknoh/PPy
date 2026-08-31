@@ -1,3 +1,10 @@
+"""N-Queens, judge style (Baekjoon 9663).
+
+Input:  N on the first line.
+Output: how many ways N queens can be placed without attacking each other.
+"""
+
+import sys
 import time
 
 import ppy
@@ -22,11 +29,20 @@ def solve(full: int, columns: int, diagonal: int, antidiagonal: int) -> int:
     return total
 
 
+def read_size() -> int:
+    """The judge's input, or the stand-in this example uses on its own."""
+    text = sys.stdin.read()
+    return int(text.split()[0]) if text.strip() else 12
+
+
 def main() -> None:
-    n: int = 12
-    start = time.perf_counter()
+    n: int = read_size()
+    started = time.perf_counter()
     answer: int = solve((1 << n) - 1, 0, 0, 0)
-    print(f"n-queens n={n}{(time.perf_counter() - start) * 1000.0:12.1f} ms   -> {answer}")
+    solve_ms = (time.perf_counter() - started) * 1000.0
+
+    print(answer)
+    print(f"# n={n} solve {solve_ms:.1f} ms")
 
 
 main()

@@ -49,29 +49,32 @@ range can prove.
 
 ## More problems
 
-Each subfolder is a self-contained problem with its own C reference and its
-own measurements:
+Each subfolder is one competitive-programming problem, read from standard
+input the way a judge sends it and answered on stdout. The C reference reads
+the same input with `scanf`, so the comparison includes what every
+submission actually pays for. Totals below are read + solve, mean over 5
+runs; `bench.py` prints both halves separately.
 
-| | problem | plain | `ppy run` | C |
+| | problem | plain | `ppy run` | C (`scanf`) |
 |---|---|---:|---:|---:|
-| [15a](15a_nqueens/) | n-queens, bitmask backtracking | 121.5 ms | 5.4 ms | 4.4 ms |
-| [15b](15b_dijkstra/) | Dijkstra with a binary heap | 1409.7 ms | 59.6 ms | 79.7 ms |
-| [15c](15c_kmp/) | KMP substring search | 265.0 ms | 5.1 ms | 4.4 ms |
-| [15d](15d_segment_tree/) | segment tree, update and query | 489.8 ms | 6.1 ms | 5.7 ms |
-| [15e](15e_lis/) | longest increasing subsequence | 1048.9 ms | 57.4 ms | 67.9 ms |
-| [15f](15f_input/) | reading input, and what it costs | 683.3 ms | 33.3 ms | 30.9 ms |
+| [15a](15a_nqueens/) | N-Queens (9663) | 122.6 ms | 5.6 ms | 4.4 ms |
+| [15b](15b_dijkstra/) | shortest path (1753) | 1706.8 ms | 119.7 ms | 173.0 ms |
+| [15c](15c_kmp/) | substring search (1786) | 312.5 ms | 38.2 ms | 9.3 ms |
+| [15d](15d_segment_tree/) | range sums (2042) | 519.1 ms | 30.2 ms | 53.5 ms |
+| [15e](15e_lis/) | longest increasing subsequence (12015) | 513.1 ms | 45.0 ms | 64.7 ms |
+| [15f](15f_input/) | counting inversions (1517) | 716.2 ms | 43.1 ms | 48.1 ms |
 
-[15f](15f_input/) answers the question this set of problems raises on a
-judge: **PPY does not make reading input any faster.** Reading is an IO
-effect and stays on the interpreter, so `input()` costs what it always did
-and `sys.stdin.read().split()` is still the idiom to reach for. What gets
-faster is everything after the parse.
+PPY wins four of the six outright. It loses N-Queens by a hair on pure
+compute, and loses substring search on the read: `Buffer[int]` is 64-bit, so
+a character costs eight bytes to read where `scanf("%s")` costs one.
 
-## Run it
+### Reading input
 
-```bash
-python  algorithms.ppy
-ppy     algorithms.ppy
-ppy run algorithms.ppy
-gcc -O3 algorithms.c -o algorithms_c && ./algorithms_c
-```
+`ppy.read_ints(buffer)` and `ppy.read_token(buffer)` fill a buffer straight
+from file descriptor 0 through a small C reader, so input never becomes
+Python objects on the way in — 9.6 ms for 500k integers against 54.8 ms for
+`sys.stdin.read().split()` and 16.7 ms for C's `scanf`. They work on every
+path, plain CPython included; the reader is compiled once and cached, and
+falls back to pure Python where there is no C compiler. A program that uses
+them must not also read `input()` or `sys.stdin`, because the reader owns
+the file descriptor. [15f](15f_input/) measures all three ways side by side.

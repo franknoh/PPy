@@ -1,11 +1,13 @@
-# 15e — Longest increasing subsequence
+# 15e — Longest increasing subsequence (Baekjoon 12015)
 
-Patience sorting with a binary search, over two million values.
+Input: `N`, then N integers. Output: the length of the longest strictly
+increasing subsequence. One million values here.
 
 ## Provenance
 
-Hand-written. `lis.ppy` is written directly; there is no `.py` source and no
-conversion step. `lis.c` is the same algorithm hand-written in C.
+Hand-written. The `.ppy` is written directly; there is no `.py` source and no
+conversion step. The `.c` is the same solution hand-written in C, reading the
+same input with `scanf`.
 
 ## What it shows
 
@@ -15,19 +17,19 @@ conversion step. `lis.c` is the same algorithm hand-written in C.
 
 ## Numbers
 
-Kernel wall time, mean ± standard deviation over 7 runs:
+Judge-style: the input is piped in and both halves are timed, mean ±
+standard deviation over 5 runs. `examples/15_algorithms/bench.py` reproduces
+the whole table.
 
-| path | 2e6 values |
-|---|---:|
-| plain CPython | 1048.9 ± 11.3 ms |
-| `ppy run` | 57.4 ± 1.4 ms |
-| `ppy build` binary | 53.7 ± 1.8 ms |
-| C (`gcc -O3`) | 67.9 ± 1.8 ms |
+| phase | plain | `ppy run` | `ppy build` | C (`scanf`) |
+|---|---:|---:|---:|---:|
+| read | 17.8 ± 0.6 ms | 18.6 ± 1.0 ms | 17.7 ± 0.5 ms | 33.9 ± 1.2 ms |
+| solve | 495.3 ± 3.8 ms | 26.4 ± 1.5 ms | 24.8 ± 1.2 ms | 30.8 ± 1.3 ms |
 
 ## Run it
 
 ```bash
-python  lis.ppy
-ppy run lis.ppy
-gcc -O3 lis.c -o lis_c && ./lis_c
+python  lis.ppy < input.txt
+ppy run lis.ppy < input.txt
+gcc -O3 lis.c -o lis_c && ./lis_c < input.txt
 ```

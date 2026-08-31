@@ -1,4 +1,4 @@
-/* The same bitmask backtracking as nqueens.ppy, for the same answer. */
+/* The same problem as nqueens.ppy, reading the judge's input with scanf. */
 #include <stdio.h>
 #include <time.h>
 
@@ -19,12 +19,18 @@ static long long solve(long long full, long long columns, long long diagonal,
 }
 
 int main(void) {
-    int n = 12;
+    int n = 0;
+    if (scanf("%d", &n) != 1) {
+        n = 12;
+    }
+
     struct timespec t0, t1;
     clock_gettime(CLOCK_MONOTONIC, &t0);
     long long answer = solve((1LL << n) - 1, 0, 0, 0);
     clock_gettime(CLOCK_MONOTONIC, &t1);
     double ms = (t1.tv_sec - t0.tv_sec) * 1000.0 + (t1.tv_nsec - t0.tv_nsec) / 1e6;
-    printf("n-queens n=%d%12.1f ms   -> %lld\n", n, ms, answer);
+
+    printf("%lld\n", answer);
+    printf("# n=%d solve %.1f ms\n", n, ms);
     return 0;
 }

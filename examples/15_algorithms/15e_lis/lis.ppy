@@ -1,3 +1,9 @@
+"""Longest increasing subsequence, judge style (Baekjoon 12015).
+
+Input:  N on the first line, then N integers.
+Output: the length of the longest strictly increasing subsequence.
+"""
+
 import array
 import time
 
@@ -24,13 +30,35 @@ def longest_increasing(values: Buffer[int], tails: Buffer[int]) -> int:
     return length
 
 
+def read_values() -> Buffer[int]:
+    """The judge's input through `ppy.read_ints`, or a generated stand-in.
+
+    `read_ints` fills the buffer from file descriptor 0 without building a
+    Python object per field, which is where a submission that reads a
+    million numbers spends most of its time.
+    """
+    header = array.array("q", [0])
+    if ppy.read_ints(header) == 0:
+        return array.array(
+            "q", [(i * 7919 + (i % 977) * 104729) % 1000003 for i in range(1000000)]
+        )
+    values = array.array("q", bytes(8 * header[0]))
+    ppy.read_ints(values)
+    return values
+
+
 def main() -> None:
-    size: int = 2000000
-    values = array.array("q", [(i * 7919 + (i % 977) * 104729) % 1000003 for i in range(size)])
-    tails = array.array("q", [0] * size)
-    start = time.perf_counter()
-    length: int = longest_increasing(values, tails)
-    print(f"lis 2e6{(time.perf_counter() - start) * 1000.0:17.1f} ms   -> {length}")
+    started = time.perf_counter()
+    values = read_values()
+    read_ms = (time.perf_counter() - started) * 1000.0
+
+    tails = array.array("q", [0] * len(values))
+    started = time.perf_counter()
+    answer: int = longest_increasing(values, tails)
+    solve_ms = (time.perf_counter() - started) * 1000.0
+
+    print(answer)
+    print(f"# n={len(values)} read {read_ms:.1f} ms   solve {solve_ms:.1f} ms")
 
 
 main()

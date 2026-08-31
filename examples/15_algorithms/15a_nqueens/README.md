@@ -1,35 +1,33 @@
-# 15a — N-Queens
+# 15a — N-Queens (Baekjoon 9663)
 
-Bitmask backtracking: the classic recursion, counting placements for n=12.
+Input: `N`. Output: how many ways N queens fit on an N×N board.
 
 ## Provenance
 
-Hand-written. `nqueens.ppy` is written directly; there is no `.py` source
-and no conversion step. `nqueens.c` is the same algorithm hand-written in C.
+Hand-written. The `.ppy` is written directly; there is no `.py` source and no
+conversion step. The `.c` is the same solution hand-written in C, reading the
+same input with `scanf`.
 
 ## What it shows
 
 - Recursion lowers natively, and so do the operators a bitmask solution is
   made of: `~`, unary `-`, the shifts, and the masks.
-- `available & -available` (lowest set bit) and `full & ~(...)` are the whole
-  inner loop, and each becomes a single native instruction.
+- There is no input to speak of, so this row is pure compute.
 
 ## Numbers
 
-Kernel wall time, mean ± standard deviation over 7 runs:
+Judge-style: the input is piped in and both halves are timed, mean ±
+standard deviation over 5 runs. `examples/15_algorithms/bench.py` reproduces
+the whole table.
 
-| path | n=12 |
-|---|---:|
-| plain CPython | 121.5 ± 2.7 ms |
-| `ppy run` | 5.4 ± 0.1 ms |
-| `ppy build` binary | 6.2 ± 0.2 ms |
-| C (`gcc -O3`) | 4.4 ± 0.4 ms |
+| phase | plain | `ppy run` | `ppy build` | C (`scanf`) |
+|---|---:|---:|---:|---:|
+| solve | 122.6 ± 0.5 ms | 5.6 ± 0.3 ms | 6.3 ± 0.2 ms | 4.4 ± 0.1 ms |
 
 ## Run it
 
 ```bash
-python  nqueens.ppy
-ppy run nqueens.ppy
-ppy build nqueens.ppy -o dist && ./dist/nqueens
-gcc -O3 nqueens.c -o nqueens_c && ./nqueens_c
+echo 12 | python  nqueens.ppy
+echo 12 | ppy run nqueens.ppy
+gcc -O3 nqueens.c -o nqueens_c && echo 12 | ./nqueens_c
 ```

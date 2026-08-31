@@ -46,7 +46,15 @@ def _normalize(line: str) -> str:
 
 def _run(args: list[str], cwd: Path) -> tuple[int, str]:
     done = subprocess.run(
-        [sys.executable, *args], cwd=cwd, capture_output=True, text=True, timeout=240, check=False
+        [sys.executable, *args],
+        cwd=cwd,
+        capture_output=True,
+        text=True,
+        # An example that reads standard input must see it end, not wait on a
+        # terminal that will never send anything.
+        stdin=subprocess.DEVNULL,
+        timeout=240,
+        check=False,
     )
     return done.returncode, _clean(done.stdout)
 

@@ -1,3 +1,10 @@
+"""Single-source shortest paths, judge style (Baekjoon 1753).
+
+Input:  V E on the first line, the source K on the second, then E lines of
+        `u v w` (a directed edge from u to v of weight w).
+Output: the sum of the reachable distances, so one line stands in for V.
+"""
+
 import array
 import time
 from typing import Final
@@ -57,12 +64,13 @@ def dijkstra(
     keys: Buffer[int],
     nodes: Buffer[int],
     count: int,
+    source: int,
 ) -> int:
     for i in range(count):
         distance[i] = INFINITY
-    distance[0] = 0
+    distance[source] = 0
     keys[0] = 0
-    nodes[0] = 0
+    nodes[0] = source
     size: int = 1
     while size > 0:
         best: int = keys[0]
@@ -88,24 +96,82 @@ def dijkstra(
     return total
 
 
-def main() -> None:
-    count: int = 200000
-    degree: int = 6
-    offsets = array.array("q", [i * degree for i in range(count + 1)])
-    targets = array.array("q", [0] * (count * degree))
-    weights = array.array("q", [0] * (count * degree))
+@ppy.opt(3)
+def build_csr(
+    fields: Buffer[int],
+    offsets: Buffer[int],
+    targets: Buffer[int],
+    weights: Buffer[int],
+    cursor: Buffer[int],
+    count: int,
+    edges: int,
+) -> int:
+    """Turn the `u v w` triples into compressed adjacency, in place."""
+    for e in range(edges):
+        offsets[fields[3 + e * 3] + 1] += 1
+    for i in range(count):
+        offsets[i + 1] += offsets[i]
+    for i in range(count):
+        cursor[i] = offsets[i]
+    for e in range(edges):
+        head: int = fields[3 + e * 3]
+        at: int = cursor[head]
+        targets[at] = fields[4 + e * 3]
+        weights[at] = fields[5 + e * 3]
+        cursor[head] = at + 1
+    return offsets[count]
+
+
+def generated() -> list[int]:
+    """The stand-in graph, in the same `V E K u v w ...` order as the input."""
+    count = 200000
+    degree = 6
+    fields = [count, count * degree, 0]
     for i in range(count):
         for k in range(degree):
-            edge: int = i * degree + k
-            targets[edge] = (i * 7919 + k * 104729 + 1) % count
-            weights[edge] = (i * 31 + k * 17) % 1000 + 1
+            fields.append(i)
+            fields.append((i * 7919 + k * 104729 + 1) % count)
+            fields.append((i * 31 + k * 17) % 1000 + 1)
+    return fields
 
+
+def read_fields() -> Buffer[int]:
+    """The judge's input through `ppy.read_ints`, or a generated stand-in."""
+    header = array.array("q", [0, 0, 0])
+    if ppy.read_ints(header) < 3:
+        return array.array("q", generated())
+    fields = array.array("q", bytes(8 * (3 + header[1] * 3)))
+    fields[0] = header[0]
+    fields[1] = header[1]
+    fields[2] = header[2]
+    view = memoryview(fields)[3:]
+    ppy.read_ints(view)
+    return fields
+
+
+def main() -> None:
+    started = time.perf_counter()
+    fields = read_fields()
+    read_ms = (time.perf_counter() - started) * 1000.0
+
+    count = fields[0]
+    edges = fields[1]
+    source = fields[2]
+    offsets = array.array("q", [0] * (count + 1))
+    cursor = array.array("q", [0] * count)
+    targets = array.array("q", [0] * edges)
+    weights = array.array("q", [0] * edges)
     distance = array.array("q", [0] * count)
-    keys = array.array("q", [0] * (count * degree + 1))
-    nodes = array.array("q", [0] * (count * degree + 1))
-    start = time.perf_counter()
-    total: int = dijkstra(offsets, targets, weights, distance, keys, nodes, count)
-    print(f"dijkstra 2e5{(time.perf_counter() - start) * 1000.0:12.1f} ms   -> {total}")
+    keys = array.array("q", [0] * (edges + 1))
+    nodes = array.array("q", [0] * (edges + 1))
+
+    started = time.perf_counter()
+    build_csr(fields, offsets, targets, weights, cursor, count, edges)
+    total: int = dijkstra(offsets, targets, weights, distance, keys, nodes, count, source)
+    solve_ms = (time.perf_counter() - started) * 1000.0
+
+    print(total)
+    print(f"# v={count} e={edges} read {read_ms:.1f} ms   solve {solve_ms:.1f} ms")
 
 
 main()

@@ -1,34 +1,35 @@
-# 15c — KMP
+# 15c — Substring search (Baekjoon 1786)
 
-Substring search over four million symbols, failure table and all.
+Input: the text on the first line, the pattern on the second. Output: how
+many times the pattern occurs. Four million characters here.
 
 ## Provenance
 
-Hand-written. `kmp.ppy` is written directly; there is no `.py` source and no
-conversion step. `kmp.c` is the same algorithm hand-written in C.
+Hand-written. The `.ppy` is written directly; there is no `.py` source and no
+conversion step. The `.c` is the same solution hand-written in C, reading the
+same input with `scanf`.
 
 ## What it shows
 
-- The `while` that walks the failure links is the whole trick, and it lowers
-  with `break`-free control flow straight into the scan loop.
-- Two native functions over the same borrowed buffers: the failure table is
-  built once from the caller, then the scan reads it.
+- `ppy.read_token` fills the buffer without building a Python string.
+- This is the one problem where C's reader wins: `Buffer[int]` is 64-bit, so
+  a character costs eight bytes to read where `scanf("%s")` costs one.
 
 ## Numbers
 
-Kernel wall time, mean ± standard deviation over 7 runs:
+Judge-style: the input is piped in and both halves are timed, mean ±
+standard deviation over 5 runs. `examples/15_algorithms/bench.py` reproduces
+the whole table.
 
-| path | 4e6 symbols |
-|---|---:|
-| plain CPython | 265.0 ± 10.0 ms |
-| `ppy run` | 5.1 ± 0.3 ms |
-| `ppy build` binary | 5.3 ± 0.2 ms |
-| C (`gcc -O3`) | 4.4 ± 0.2 ms |
+| phase | plain | `ppy run` | `ppy build` | C (`scanf`) |
+|---|---:|---:|---:|---:|
+| read | 26.5 ± 1.3 ms | 33.1 ± 4.8 ms | 26.6 ± 0.6 ms | 6.5 ± 0.3 ms |
+| solve | 286.0 ± 4.4 ms | 5.1 ± 0.2 ms | 5.4 ± 0.5 ms | 2.8 ± 0.1 ms |
 
 ## Run it
 
 ```bash
-python  kmp.ppy
-ppy run kmp.ppy
-gcc -O3 kmp.c -o kmp_c && ./kmp_c
+python  kmp.ppy < input.txt
+ppy run kmp.ppy < input.txt
+gcc -O3 kmp.c -o kmp_c && ./kmp_c < input.txt
 ```

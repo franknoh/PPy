@@ -49,13 +49,14 @@ static void sift_up(long long *keys, long long *nodes, long long start) {
 
 static long long dijkstra(const long long *offsets, const long long *targets,
                           const long long *weights, long long *distance, long long *keys,
-                          long long *nodes, long long count) {
+                          long long *nodes, long long count, long long source) {
     for (long long i = 0; i < count; i++) {
         distance[i] = INFINITY_DISTANCE;
     }
-    distance[0] = 0;
+    distance[source] = 0;
     keys[0] = 0;
-    nodes[0] = 0;
+    nodes[source] = source;
+    nodes[0] = source;
     long long size = 1;
     while (size > 0) {
         long long best = keys[0];
@@ -87,31 +88,72 @@ static long long dijkstra(const long long *offsets, const long long *targets,
     return total;
 }
 
+static double since(struct timespec start) {
+    struct timespec now;
+    clock_gettime(CLOCK_MONOTONIC, &now);
+    return (now.tv_sec - start.tv_sec) * 1000.0 + (now.tv_nsec - start.tv_nsec) / 1e6;
+}
+
 int main(void) {
-    const long long count = 200000;
-    const long long degree = 6;
-    long long *offsets = malloc((size_t)(count + 1) * sizeof(long long));
-    long long *targets = malloc((size_t)(count * degree) * sizeof(long long));
-    long long *weights = malloc((size_t)(count * degree) * sizeof(long long));
-    long long *distance = malloc((size_t)count * sizeof(long long));
-    long long *keys = malloc((size_t)(count * degree + 1) * sizeof(long long));
-    long long *nodes = malloc((size_t)(count * degree + 1) * sizeof(long long));
-    for (long long i = 0; i <= count; i++) {
-        offsets[i] = i * degree;
-    }
-    for (long long i = 0; i < count; i++) {
-        for (long long k = 0; k < degree; k++) {
-            long long edge = i * degree + k;
-            targets[edge] = (i * 7919 + k * 104729 + 1) % count;
-            weights[edge] = (i * 31 + k * 17) % 1000 + 1;
+    struct timespec started;
+    clock_gettime(CLOCK_MONOTONIC, &started);
+
+    long long count = 0, edges = 0, source = 0;
+    long long *heads = NULL, *tails = NULL, *costs = NULL;
+    if (scanf("%lld %lld %lld", &count, &edges, &source) == 3) {
+        heads = malloc((size_t)edges * sizeof(long long));
+        tails = malloc((size_t)edges * sizeof(long long));
+        costs = malloc((size_t)edges * sizeof(long long));
+        for (long long e = 0; e < edges; e++) {
+            if (scanf("%lld %lld %lld", &heads[e], &tails[e], &costs[e]) != 3) {
+                return 1;
+            }
+        }
+    } else {
+        /* Nothing piped in: the same stand-in graph the .ppy generates. */
+        const long long degree = 6;
+        count = 200000;
+        edges = count * degree;
+        source = 0;
+        heads = malloc((size_t)edges * sizeof(long long));
+        tails = malloc((size_t)edges * sizeof(long long));
+        costs = malloc((size_t)edges * sizeof(long long));
+        for (long long i = 0; i < count; i++) {
+            for (long long k = 0; k < degree; k++) {
+                long long e = i * degree + k;
+                heads[e] = i;
+                tails[e] = (i * 7919 + k * 104729 + 1) % count;
+                costs[e] = (i * 31 + k * 17) % 1000 + 1;
+            }
         }
     }
+    double read_ms = since(started);
 
-    struct timespec t0, t1;
-    clock_gettime(CLOCK_MONOTONIC, &t0);
-    long long total = dijkstra(offsets, targets, weights, distance, keys, nodes, count);
-    clock_gettime(CLOCK_MONOTONIC, &t1);
-    double ms = (t1.tv_sec - t0.tv_sec) * 1000.0 + (t1.tv_nsec - t0.tv_nsec) / 1e6;
-    printf("dijkstra 2e5%12.1f ms   -> %lld\n", ms, total);
+    long long *offsets = calloc((size_t)(count + 1), sizeof(long long));
+    long long *cursor = calloc((size_t)count, sizeof(long long));
+    long long *targets = malloc((size_t)edges * sizeof(long long));
+    long long *weights = malloc((size_t)edges * sizeof(long long));
+    long long *distance = malloc((size_t)count * sizeof(long long));
+    long long *keys = malloc((size_t)(edges + 1) * sizeof(long long));
+    long long *nodes = malloc((size_t)(edges + 1) * sizeof(long long));
+
+    clock_gettime(CLOCK_MONOTONIC, &started);
+    for (long long e = 0; e < edges; e++) {
+        offsets[heads[e] + 1] += 1;
+    }
+    for (long long i = 0; i < count; i++) {
+        offsets[i + 1] += offsets[i];
+        cursor[i] = offsets[i];
+    }
+    for (long long e = 0; e < edges; e++) {
+        long long at = cursor[heads[e]]++;
+        targets[at] = tails[e];
+        weights[at] = costs[e];
+    }
+    long long total = dijkstra(offsets, targets, weights, distance, keys, nodes, count, source);
+    double solve_ms = since(started);
+
+    printf("%lld\n", total);
+    printf("# v=%lld e=%lld read %.1f ms   solve %.1f ms\n", count, edges, read_ms, solve_ms);
     return 0;
 }
