@@ -79,7 +79,12 @@ def _missing_libraries(folder: Path) -> set[str]:
 
 
 def main() -> int:
-    entries = sorted(ROOT.glob("[0-9]*/[a-z]*.ppy")) + sorted(ROOT.glob("*/src/app.ppy"))
+    entries = (
+        sorted(ROOT.glob("[0-9]*/[a-z]*.ppy"))
+        # A folder of related problems keeps them in numbered subfolders.
+        + sorted(ROOT.glob("[0-9]*/[0-9]*/[a-z]*.ppy"))
+        + sorted(ROOT.glob("*/src/app.ppy"))
+    )
     only = sys.argv[1:]
     if only:
         entries = [e for e in entries if any(token in str(e) for token in only)]

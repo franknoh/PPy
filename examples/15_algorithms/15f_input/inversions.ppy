@@ -1,0 +1,86 @@
+import array
+import sys
+import time
+from typing import Final
+
+import ppy
+from ppy import Buffer
+
+LIMIT: Final[int] = 1000004
+
+
+@ppy.opt(3)
+def add(tree: Buffer[int], position: int, delta: int) -> int:
+    index: int = position + 1
+    while index < LIMIT:
+        tree[index] += delta
+        index += index & -index
+    return index
+
+
+@ppy.pure
+@ppy.opt(3)
+def prefix(tree: Buffer[int], position: int) -> int:
+    total: int = 0
+    index: int = position + 1
+    while index > 0:
+        total += tree[index]
+        index -= index & -index
+    return total
+
+
+@ppy.opt(3)
+def count_inversions(values: Buffer[int], tree: Buffer[int]) -> int:
+    total: int = 0
+    for i in range(len(values) - 1, -1, -1):
+        total += prefix(tree, values[i] - 1)
+        add(tree, values[i], 1)
+    return total
+
+
+def generated(count: int) -> list[int]:
+    return [(i * 7919) % 1000003 for i in range(count)]
+
+
+def parsed(text: str) -> list[int]:
+    fields = text.split()
+    count = int(fields[0])
+    return [int(fields[i]) for i in range(1, count + 1)]
+
+
+def source_text() -> str:
+    """Standard input, when this run was given any.
+
+    A competitive-programming solution reads standard input, and `-` is the
+    conventional way to ask for it; with no argument the program generates
+    its own numbers, so it can be run -- and compared across paths -- with
+    nothing piped in.
+    """
+    if len(sys.argv) > 1 and sys.argv[1] == "-":
+        return sys.stdin.read()
+    return ""
+
+
+def main() -> None:
+    start = time.perf_counter()
+    text = source_text()
+    if text.strip():
+        numbers = parsed(text)
+        source = "stdin"
+    else:
+        numbers = generated(500000)
+        source = "generated"
+    values = array.array("q", numbers)
+    reading = (time.perf_counter() - start) * 1000.0
+
+    tree = array.array("q", [0] * LIMIT)
+    start = time.perf_counter()
+    answer: int = count_inversions(values, tree)
+    computing = (time.perf_counter() - start) * 1000.0
+
+    print(f"# source: {source}, n={len(values)}")
+    print(f"read+parse{reading:14.1f} ms")
+    print(f"count inversions{computing:8.1f} ms   -> {answer}")
+
+
+main()

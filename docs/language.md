@@ -147,6 +147,15 @@ directly, boundary or not.
 A function lowers when its types are scalars, `Buffer[T]`, homogeneous
 `list[int]`/`list[float]`, `Sequence` of those, or all-scalar `@dataclass`
 value classes (flattened into scalar arguments), and its body stays inside the
-modeled subset. The generated wrapper releases the GIL around the native
+modeled subset. That subset includes what a loop is normally made of:
+`break` and `continue` (a `continue` in a `for` still advances the counter),
+statement-level calls whose result is discarded, buffers handed on to
+another native function, and the bitwise operators including `~`. A module
+constant written as an expression — `MOD = 10**9 + 7`, `LIMIT = 1 << 20` —
+folds into the code rather than staying a global read. A function whose
+writes all happen inside a callee it handed a buffer to lowers too: the
+write lands in the caller's memory either way. A call to a function that did
+not lower keeps its caller on the Python side, because the call would
+otherwise name a symbol nothing defines. The generated wrapper releases the GIL around the native
 call, so `@ppy.native` functions scale across threads. `ppy explain FILE.ppy:name` reports the decision and, when the
 answer is no, the first blocking construct.

@@ -1,0 +1,36 @@
+import array
+import time
+
+import ppy
+from ppy import Buffer
+
+
+@ppy.opt(3)
+def longest_increasing(values: Buffer[int], tails: Buffer[int]) -> int:
+    length: int = 0
+    for i in range(len(values)):
+        value: int = values[i]
+        low: int = 0
+        high: int = length
+        while low < high:
+            middle: int = (low + high) // 2
+            if tails[middle] < value:
+                low = middle + 1
+            else:
+                high = middle
+        tails[low] = value
+        if low == length:
+            length += 1
+    return length
+
+
+def main() -> None:
+    size: int = 2000000
+    values = array.array("q", [(i * 7919 + (i % 977) * 104729) % 1000003 for i in range(size)])
+    tails = array.array("q", [0] * size)
+    start = time.perf_counter()
+    length: int = longest_increasing(values, tails)
+    print(f"lis 2e6{(time.perf_counter() - start) * 1000.0:17.1f} ms   -> {length}")
+
+
+main()

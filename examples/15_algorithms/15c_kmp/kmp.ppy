@@ -1,0 +1,47 @@
+import array
+import time
+
+import ppy
+from ppy import Buffer
+
+
+@ppy.opt(3)
+def build_failure(pattern: Buffer[int], failure: Buffer[int]) -> int:
+    failure[0] = 0
+    length: int = 0
+    for i in range(1, len(pattern)):
+        while length > 0 and pattern[i] != pattern[length]:
+            length = failure[length - 1]
+        if pattern[i] == pattern[length]:
+            length += 1
+        failure[i] = length
+    return length
+
+
+@ppy.opt(3)
+def count_matches(text: Buffer[int], pattern: Buffer[int], failure: Buffer[int]) -> int:
+    found: int = 0
+    length: int = 0
+    for i in range(len(text)):
+        while length > 0 and text[i] != pattern[length]:
+            length = failure[length - 1]
+        if text[i] == pattern[length]:
+            length += 1
+        if length == len(pattern):
+            found += 1
+            length = failure[length - 1]
+    return found
+
+
+def main() -> None:
+    size: int = 4000000
+    text = array.array("q", [(i * 7919) % 4 for i in range(size)])
+    pattern = array.array("q", [(i * 7919) % 4 for i in range(12)])
+    failure = array.array("q", [0] * len(pattern))
+    build_failure(pattern, failure)
+    start = time.perf_counter()
+    found: int = count_matches(text, pattern, failure)
+    print(f"kmp 4e6{(time.perf_counter() - start) * 1000.0:17.1f} ms   -> {found}")
+
+
+main()

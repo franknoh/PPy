@@ -1,0 +1,67 @@
+import array
+import time
+
+import ppy
+from ppy import Buffer
+
+
+@ppy.opt(3)
+def build(tree: Buffer[int], size: int) -> int:
+    for i in range(size - 1, 0, -1):
+        tree[i] = tree[2 * i] + tree[2 * i + 1]
+    return tree[1]
+
+
+@ppy.opt(3)
+def update(tree: Buffer[int], size: int, position: int, value: int) -> int:
+    index: int = position + size
+    tree[index] = value
+    index //= 2
+    while index >= 1:
+        tree[index] = tree[2 * index] + tree[2 * index + 1]
+        index //= 2
+    return tree[1]
+
+
+@ppy.pure
+@ppy.opt(3)
+def query(tree: Buffer[int], size: int, left: int, right: int) -> int:
+    total: int = 0
+    low: int = left + size
+    high: int = right + size
+    while low < high:
+        if low % 2 == 1:
+            total += tree[low]
+            low += 1
+        if high % 2 == 1:
+            high -= 1
+            total += tree[high]
+        low //= 2
+        high //= 2
+    return total
+
+
+@ppy.opt(3)
+def workload(tree: Buffer[int], size: int, rounds: int) -> int:
+    checksum: int = 0
+    for step in range(rounds):
+        position: int = (step * 7919) % size
+        update(tree, size, position, (step * 31) % 1000)
+        left: int = (step * 104729) % size
+        right: int = min(left + (step % 512) + 1, size)
+        checksum += query(tree, size, left, right)
+    return checksum
+
+
+def main() -> None:
+    size: int = 1 << 18
+    tree = array.array("q", [0] * (2 * size))
+    for i in range(size):
+        tree[size + i] = (i * 7919) % 1000
+    build(tree, size)
+    start = time.perf_counter()
+    checksum: int = workload(tree, size, 200000)
+    print(f"segment tree 2e5{(time.perf_counter() - start) * 1000.0:8.1f} ms   -> {checksum}")
+
+
+main()

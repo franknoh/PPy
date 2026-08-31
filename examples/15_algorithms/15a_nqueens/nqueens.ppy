@@ -1,0 +1,32 @@
+import time
+
+import ppy
+
+
+@ppy.pure
+@ppy.opt(3)
+def solve(full: int, columns: int, diagonal: int, antidiagonal: int) -> int:
+    if columns == full:
+        return 1
+    total: int = 0
+    available: int = full & ~(columns | diagonal | antidiagonal)
+    while available != 0:
+        bit: int = available & -available
+        available -= bit
+        total += solve(
+            full,
+            columns | bit,
+            ((diagonal | bit) << 1) & full,
+            (antidiagonal | bit) >> 1,
+        )
+    return total
+
+
+def main() -> None:
+    n: int = 12
+    start = time.perf_counter()
+    answer: int = solve((1 << n) - 1, 0, 0, 0)
+    print(f"n-queens n={n}{(time.perf_counter() - start) * 1000.0:12.1f} ms   -> {answer}")
+
+
+main()
