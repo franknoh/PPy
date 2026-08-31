@@ -194,7 +194,8 @@ def eligible(
     """
     if info.is_async or info.is_generator:
         return False, "coroutines and generators use the boxed runtime"
-    for name in sorted(analysis.mutated_params):
+    written = analysis.mutated_params | analysis.delegated_writes
+    for name in sorted(written):
         declared = next((p.type for p in info.params if p.name == name), None)
         described = _buffer_element(declared) if declared is not None else None
         # Writing through a borrowed buffer is visible to the caller, which is
@@ -207,8 +208,10 @@ def eligible(
     violations = set(analysis.effects.violations())
     if allow_io:
         violations.discard(Effect.IO)
-    if analysis.mutated_params:
-        # Those writes land in memory the caller lent us, and nowhere else.
+    if written:
+        # Those writes land in memory the caller lent us, and nowhere else --
+        # whether this function performed them or a callee it handed the
+        # buffer to did.
         violations.discard(Effect.WRITE_OBJECT)
     if violations:
         listed = ", ".join(sorted(str(e) for e in violations))
@@ -356,12 +359,49 @@ def lower_module(
         exposed, why = should_lower_native(info, _analysis)
         lowered[qualname] = LoweredFunction(info, signature, exposed=exposed, exposure_reason=why)
 
+    _reject_callers_of_rejected(declarations, lowered, rejected)
+
     for qualname in list(rejected):
         entry = declarations.get(qualname)
         if entry is not None and not entry[0].blocks:
             entry[0].linkage = "external"
 
     return LoweringResult(ir=str(llvm_module), functions=lowered, rejected=rejected)
+
+
+def _reject_callers_of_rejected(declarations, lowered, rejected) -> None:  # type: ignore[no-untyped-def]
+    """Drop any function that calls one which did not lower.
+
+    The call would name a symbol nothing defines, and calling it is undefined
+    rather than slow, so the caller has to run on the Python side too.
+    Rejecting one caller can reject its own callers, so this runs to a
+    fixpoint.
+    """
+    owner = {signature.symbol: qualname for qualname, (_fn, signature) in declarations.items()}
+    while True:
+        missing = {
+            symbol
+            for symbol, qualname in owner.items()
+            if not declarations[qualname][0].blocks  # nothing was emitted for it
+        }
+        blocked: dict[str, str] = {}
+        for qualname in lowered:
+            function = declarations[qualname][0]
+            for block in function.blocks:
+                for instruction in block.instructions:
+                    callee = getattr(instruction, "callee", None)
+                    name = getattr(callee, "name", None)
+                    if name in missing:
+                        blocked[qualname] = owner[name]
+                        break
+                if qualname in blocked:
+                    break
+        if not blocked:
+            return
+        for qualname, callee in blocked.items():
+            rejected[qualname] = f"`{callee}` has no native lowering, so this call cannot be made"
+            declarations[qualname][0].blocks.clear()
+            del lowered[qualname]
 
 
 def _default_triple() -> str:
@@ -552,6 +592,8 @@ class _FunctionLowering:
         #: prologue knows the parameters), and their entry-block loads.
         self._stable: set[str] = set()
         self._entry_loads: dict[str, object] = {}
+        #: (continue target, break target) for each loop being lowered.
+        self._loops: list[tuple[object, object]] = []
 
     def run(self, node: ast.FunctionDef) -> None:
         ir = self.ir
@@ -646,6 +688,14 @@ class _FunctionLowering:
                 self._augassign(node)
             case ast.If():
                 self._if(node)
+            case ast.Break():
+                if not self._loops:
+                    raise Unsupported("`break` outside a loop")
+                self.builder.branch(self._loops[-1][1])
+            case ast.Continue():
+                if not self._loops:
+                    raise Unsupported("`continue` outside a loop")
+                self.builder.branch(self._loops[-1][0])
             case ast.While():
                 self._while(node)
             case ast.For():
@@ -654,9 +704,11 @@ class _FunctionLowering:
                 return
             case ast.Expr(value=ast.Constant()):
                 return
-            case ast.Expr(value=ast.Call()) if self.standalone:
-                # A statement-level call: evaluated for its effect, which in
-                # a standalone body is a native call or a print shim.
+            case ast.Expr(value=ast.Call()):
+                # A statement-level call, evaluated for its effect and its
+                # result discarded: a helper that writes through a buffer is
+                # called this way, and in a standalone body so is `print`.
+                # Anything with no native lowering still refuses below.
                 self._expr(node.value)
             case _:
                 raise Unsupported(f"`{type(node).__name__}` has no native lowering")
@@ -702,9 +754,7 @@ class _FunctionLowering:
         if isinstance(target, ast.Name):
             slots = []
             for index, item in enumerate(values.items):
-                slot = self.builder.alloca(
-                    _llvm_type(self.ir, item.scalar), name=f"{target.id}{index}"
-                )
+                slot = self._entry_alloca(item.scalar, f"{target.id}{index}")
                 self.builder.store(item.value, slot)
                 slots.append((slot, item.scalar))
             self.tuples[target.id] = slots
@@ -760,7 +810,7 @@ class _FunctionLowering:
             raise Unsupported("assignment to a non-local has no native lowering")
         existing = self.locals.get(target.id)
         if existing is None:
-            slot = self.builder.alloca(_llvm_type(self.ir, value.scalar), name=target.id)
+            slot = self._entry_alloca(value.scalar, target.id)
             self.locals[target.id] = (slot, value.scalar)
             self.builder.store(value.value, slot)
             return
@@ -800,7 +850,9 @@ class _FunctionLowering:
         self.builder.cbranch(condition, body, exit_block)
 
         self.builder.position_at_end(body)
+        self._loops.append((header, exit_block))
         self._body(node.body)
+        self._loops.pop()
         if not self.builder.block.is_terminated:
             self.builder.branch(header)
 
@@ -854,12 +906,15 @@ class _FunctionLowering:
                 lo, hi = site.builder.add(stop, one), start
             self._induction[node.target.id] = (lo, hi, len(self._guard_sites))
 
-        slot = self.builder.alloca(i64, name=node.target.id)
+        slot = self._entry_alloca("int", node.target.id)
         self.builder.store(start, slot)
         self.locals[node.target.id] = (slot, "int")
 
         header = self.function.append_basic_block("for.head")
         body = self.function.append_basic_block("for.body")
+        # `continue` lands on the latch, not the header, so the counter still
+        # advances and the loop cannot spin forever.
+        latch = self.function.append_basic_block("for.latch")
         exit_block = self.function.append_basic_block("for.end")
         loop_setup = self.builder.block
         self.builder.branch(header)
@@ -871,13 +926,18 @@ class _FunctionLowering:
         self.builder.cbranch(condition, body, exit_block)
 
         self.builder.position_at_end(body)
+        self._loops.append((latch, exit_block))
         self._body(node.body)
+        self._loops.pop()
         if not self.builder.block.is_terminated:
-            value = self.builder.load(slot)
-            if site is not None:
-                self._ranges[value] = self._induction[node.target.id]
-            self.builder.store(self._checked_add(value, step), slot)
-            self.builder.branch(header)
+            self.builder.branch(latch)
+
+        self.builder.position_at_end(latch)
+        value = self.builder.load(slot)
+        if site is not None:
+            self._ranges[value] = self._induction[node.target.id]
+        self.builder.store(self._checked_add(value, step), slot)
+        self.builder.branch(header)
 
         self.builder.position_at_end(exit_block)
         if site is not None:
@@ -894,13 +954,14 @@ class _FunctionLowering:
         data, length, element, _borrowed = self.buffers[name]
         i64 = ir.IntType(64)
 
-        index = self.builder.alloca(i64, name=f"{name}.i")
+        index = self._entry_alloca("int", f"{name}.i")
         self.builder.store(ir.Constant(i64, 0), index)
-        slot = self.builder.alloca(_llvm_type(ir, element), name=node.target.id)
+        slot = self._entry_alloca(element, node.target.id)
         self.locals[node.target.id] = (slot, element)
 
         header = self.function.append_basic_block("each.head")
         body = self.function.append_basic_block("each.body")
+        latch = self.function.append_basic_block("each.latch")
         exit_block = self.function.append_basic_block("each.end")
         self.builder.branch(header)
 
@@ -911,12 +972,15 @@ class _FunctionLowering:
         self.builder.position_at_end(body)
         position = self.builder.load(index)
         self.builder.store(self.builder.load(self.builder.gep(data, [position])), slot)
+        self._loops.append((latch, exit_block))
         self._body(node.body)
+        self._loops.pop()
         if not self.builder.block.is_terminated:
-            self.builder.store(
-                self.builder.add(self.builder.load(index), ir.Constant(i64, 1)), index
-            )
-            self.builder.branch(header)
+            self.builder.branch(latch)
+
+        self.builder.position_at_end(latch)
+        self.builder.store(self.builder.add(self.builder.load(index), ir.Constant(i64, 1)), index)
+        self.builder.branch(header)
 
         self.builder.position_at_end(exit_block)
 
@@ -984,8 +1048,8 @@ class _FunctionLowering:
             )
             self.builder.position_at_end(nonempty)
 
-        accumulator = self.builder.alloca(_llvm_type(ir, element), name=f"{operation}.acc")
-        index = self.builder.alloca(i64, name=f"{operation}.i")
+        accumulator = self._entry_alloca(element, f"{operation}.acc")
+        index = self._entry_alloca("int", f"{operation}.i")
         if operation == "sum":
             start = ir.Constant(_llvm_type(ir, element), 0)
             self.builder.store(start, accumulator)
@@ -1096,6 +1160,28 @@ class _FunctionLowering:
         slot, scalar = slots[position]
         return _Value(self.builder.load(slot), scalar)
 
+    def _module_constant(self, name: str) -> _Value | None:
+        """A module global bound once to a constant expression, as a literal.
+
+        `MOD = 10**9 + 7` beside the function that uses it is how such a
+        constant is written; the native code gets the value rather than a
+        global read.
+        """
+        symbols = getattr(self.analysis, "symbols", None)
+        if symbols is None:
+            return None
+        value = symbols.constant_globals.get(name)
+        ir = self.ir
+        if isinstance(value, bool):
+            return _Value(ir.Constant(ir.IntType(8), int(value)), "bool")
+        if isinstance(value, int) and -(1 << 63) <= value < (1 << 63):
+            constant = ir.Constant(ir.IntType(64), value)
+            self._ranges[constant] = (constant, constant, 0)
+            return _Value(constant, "int")
+        if isinstance(value, float):
+            return _Value(ir.Constant(ir.DoubleType(), value), "float")
+        return None
+
     def _load(self, name: str) -> _Value:
         if name in self.objects:
             raise Unsupported(f"`{name}` is a value class, which has no single scalar value")
@@ -1105,13 +1191,29 @@ class _FunctionLowering:
             raise Unsupported(f"`{name}` is a buffer, which has no scalar value")
         found = self.locals.get(name)
         if found is None:
+            constant = self._module_constant(name)
+            if constant is not None:
+                return constant
             raise Unsupported(f"`{name}` is not a native local")
         slot, scalar = found
         return _Value(self.builder.load(slot), scalar)
 
     def _unary(self, node: ast.UnaryOp) -> _Value:
-        operand = self._expr(node.operand)
         ir = self.ir
+        # `-1` is a literal wherever it is written, so it folds here rather
+        # than becoming a subtraction the rest of the backend cannot read as
+        # a constant (a `range` step, for one).
+        if isinstance(node.op, ast.USub) and isinstance(node.operand, ast.Constant):
+            literal = node.operand.value
+            if isinstance(literal, bool):
+                pass
+            elif isinstance(literal, int) and -(1 << 63) < -literal < (1 << 63):
+                constant = ir.Constant(ir.IntType(64), -literal)
+                self._ranges[constant] = (constant, constant, 0)
+                return _Value(constant, "int")
+            elif isinstance(literal, float):
+                return _Value(ir.Constant(ir.DoubleType(), -literal), "float")
+        operand = self._expr(node.operand)
         match node.op:
             case ast.USub():
                 if operand.scalar == "float":
@@ -1121,6 +1223,11 @@ class _FunctionLowering:
                 return _Value(self._checked_binary(zero, promoted.value, ast.Sub), "int")
             case ast.UAdd():
                 return operand
+            case ast.Invert():
+                # `~x` is `-x - 1`, which stays inside the machine range for
+                # every 64-bit input, so it needs no overflow guard.
+                promoted = self._coerce(operand, "int")
+                return _Value(self.builder.not_(promoted.value), "int")
             case ast.Not():
                 truth = self._truth(operand)
                 return _Value(self.builder.zext(self.builder.not_(truth), ir.IntType(8)), "bool")
@@ -1129,7 +1236,7 @@ class _FunctionLowering:
     def _boolop(self, node: ast.BoolOp) -> _Value:
         """`and`/`or` with native short-circuit evaluation."""
         ir = self.ir
-        result = self.builder.alloca(ir.IntType(8), name="boolop")
+        result = self._entry_alloca("bool", "boolop")
         done = self.function.append_basic_block("boolop.end")
         is_and = isinstance(node.op, ast.And)
 
@@ -1304,7 +1411,20 @@ class _FunctionLowering:
         arguments: list[object] = []
         for argument, parameter in zip(node.args, signature.parameters, strict=False):
             if parameter.is_buffer:
-                raise Unsupported("a buffer cannot be forwarded between native calls yet")
+                # A buffer is a pointer and a length in the ABI, so forwarding
+                # one is passing the pair along: the callee writes through the
+                # caller's memory, which is what the Python semantics say too.
+                if not isinstance(argument, ast.Name) or argument.id not in self.buffers:
+                    raise Unsupported("a buffer argument must be a buffer this function holds")
+                data, length, element, _borrowed = self.buffers[argument.id]
+                if element != parameter.element:
+                    raise Unsupported(
+                        f"`{qualname}` expects a `{parameter.element}` buffer, "
+                        f"and `{argument.id}` holds `{element}`"
+                    )
+                arguments.append(data)
+                arguments.append(length)
+                continue
             if parameter.is_object:
                 if not isinstance(argument, ast.Name) or argument.id not in self.objects:
                     raise Unsupported("a value class argument must be a flattened local")
@@ -1328,7 +1448,7 @@ class _FunctionLowering:
         if signature.returns_tuple:
             raise Unsupported("a tuple result cannot be forwarded between native calls yet")
         result_scalar = scalars[signature.returns[0]]
-        slot = self.builder.alloca(_llvm_type(ir, result_scalar), name="callresult")
+        slot = self._entry_alloca(result_scalar, "callresult")
         status = self.builder.call(function, [*arguments, slot])
         ok = self.builder.icmp_signed("==", status, ir.Constant(ir.IntType(32), STATUS_OK))
         continue_block = self.function.append_basic_block("call.ok")
@@ -1532,6 +1652,24 @@ class _FunctionLowering:
             lo = builder.call(self._i64_intrinsic("llvm.smin.i64"), [lo, value])
             hi = builder.call(self._i64_intrinsic("llvm.smax.i64"), [hi, value])
         return lo, hi
+
+    def _entry_alloca(self, scalar: str, name: str):  # type: ignore[no-untyped-def]
+        """Reserve one slot in the entry block, where it is executed once.
+
+        An `alloca` inside a loop body allocates again on every iteration and
+        the stack grows until the process dies; it is also invisible to the
+        pass that promotes a slot to a register, which only looks at the
+        entry block.
+        """
+        entry = self.function.blocks[0]
+        if self.builder.block is entry:
+            # Still in the entry block: the live builder must stay the one
+            # appending, or its notion of the end goes stale.
+            return self.builder.alloca(_llvm_type(self.ir, scalar), name=name)
+        builder = self.ir.IRBuilder(entry)
+        if entry.is_terminated:
+            builder.position_before(entry.instructions[-1])
+        return builder.alloca(_llvm_type(self.ir, scalar), name=name)
 
     def _entry_load(self, name: str):  # type: ignore[no-untyped-def]
         """One load of a never-rebound parameter, placed to dominate everything."""
