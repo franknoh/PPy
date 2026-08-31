@@ -62,25 +62,27 @@ print(longest(300000))
 ```
 
 ```bash
-uv run python    collatz.ppy           # 1  plain CPython, no compiler       1170 ms
-uv run ppy       collatz.ppy           # 2  optimized Python backend         1181 ms
-uv run ppy run   collatz.ppy           # 3  LLVM, JIT-compiled every run       45 ms  (+ ~1200 ms JIT)
+uv run python    collatz.ppy           # 1  plain CPython, no compiler   1197.2 ± 21.2 ms
+uv run ppy       collatz.ppy           # 2  optimized Python backend     1168.3 ± 17.7 ms
+uv run ppy run   collatz.ppy           # 3  LLVM, JIT every run            44.4 ±  1.4 ms  (+ ~1200 ms JIT)
 uv run ppy build collatz.ppy -o dist   # 4  LLVM, built once (~800 ms)...
-./dist/collatz                         #    ...then the native binary          35 ms
+./dist/collatz                         #    ...then the native binary      33.4 ±  0.9 ms
+                                       #    ...--host-cpu, not portable    30.4 ±  0.7 ms
 
-gcc -O3 collatz.c && ./a.out           # reference: the same loop in C         44 ms  (+ ~110 ms gcc)
+gcc -O3 collatz.c && ./a.out           # reference: the same loop in C     46.0 ±  1.8 ms  (+ ~110 ms gcc)
 ```
 
-Numbers are the kernel's wall time on one machine, best of five; the
-parenthesized figure is what that row spends turning source into machine
-code, and how often. Ways 3 and 4 are one compilation path, ahead of time or
-not — the binary is `ppy run` in a compiled coat, machine code taken from
-the library built next to it. They differ in one default: `ppy run` keeps
-Python-integer semantics (overflow is guarded and falls back to arbitrary
-precision — that is the 45 ms, C parity with the guards in), while
-`ppy build` produces a wrap-semantics artifact like every native compiler —
-that is the 35 ms, past C. `run --unsafe` and `build --safe` flip either
-one; bounds checks stay in both. The built binary is compiled software: it
+Numbers are the kernel's wall time on one machine — mean ± standard
+deviation over ten runs, each a fresh process; the parenthesized figure is
+what that row spends turning source into machine code, and how often.
+Ways 3 and 4 are one compilation path, ahead of time or not — the binary is
+`ppy run` in a compiled coat, machine code taken from the library built next
+to it. They differ in one default: `ppy run` keeps Python-integer semantics
+(overflow is guarded and falls back to arbitrary precision — that is the
+44.4 ms, inside C's error bar with the guards in), while `ppy build`
+produces a wrap-semantics artifact like every native compiler — that is the
+33.4 ms, past C. `run --unsafe` and `build --safe` flip either one; bounds
+checks stay in both. The built binary is compiled software: it
 launches in ~170 ms through `ppy_runtime` alone, and keeps working with the
 compiler uninstalled. (Python's floor semantics help too:
 `n // 2` lowers to one arithmetic shift exactly, where C's truncating
@@ -90,19 +92,29 @@ The same kernel through the neighbors, same machine and methodology:
 
 | compiler | kernel | integer semantics |
 |---|---:|---|
-| Numba `@njit` | 34 ms | 64-bit, wraps on overflow |
-| **PPY** `ppy build` binary | **35 ms** | 64-bit, wraps on overflow (`--safe` to keep Python ints) |
-| Codon `-release` | 36 ms | 64-bit, wraps on overflow |
-| C (`gcc -O3`) | 44 ms | 64-bit, wraps on overflow |
-| **PPY** `ppy run` | **45 ms** | **Python ints: guarded, falls back to arbitrary precision** |
-| PyPy 3.11 | 54 ms | Python ints |
-| mypyc | 74 ms | Python ints |
-| Cython (`cdef long long`) | 76 ms | 64-bit, wraps on overflow |
-| Nuitka | 776 ms | Python ints, no type specialization |
-| CPython 3.14 | 1170 ms | Python ints |
+| **PPY** `ppy build --host-cpu` | **30.4 ± 0.7 ms** | 64-bit, wraps on overflow (this machine's instruction set) |
+| **PPY** `ppy build` binary | **33.4 ± 0.9 ms** | 64-bit, wraps on overflow (`--safe` to keep Python ints) |
+| Numba `@njit` | 34.7 ± 1.0 ms | 64-bit, wraps on overflow |
+| Codon `-release` | 35.8 ± 2.2 ms | 64-bit, wraps on overflow |
+| **PPY** `ppy run` | **44.4 ± 1.4 ms** | **Python ints: guarded, falls back to arbitrary precision** |
+| C (`gcc -O3`) | 46.0 ± 1.8 ms | 64-bit, wraps on overflow |
+| PyPy 3.11 | 55.4 ± 1.7 ms | Python ints |
+| mypyc | 78.7 ± 2.4 ms | Python ints |
+| Cython (`cdef long long`) | 78.8 ± 1.1 ms | 64-bit, wraps on overflow |
+| Nuitka | 768.6 ± 9.8 ms | Python ints, no type specialization |
+| CPython 3.14 | 1197.2 ± 21.2 ms | Python ints |
 
-Same compiler, both rows: the 10 ms between them is the price of Python's
-integers, and it is a per-command default rather than a language decision —
+`--host-cpu` is the opt-in that compiles for the machine doing the build
+instead of the portable baseline — 33.4 ms to 30.4 ms here, and about 20% on
+a matmul kernel where the vectorizer has something to work with. It is off
+by default because an artifact is meant to be shipped and host code faults
+on an older CPU; JIT code under `ppy run` always targets the host, which is
+free because it never leaves the machine. Giving C the same option changes
+nothing on this kernel (`gcc -O3 -march=native`: 46.1 ± 0.8 ms), so the row
+above it is not winning on a flag C was denied.
+
+Same compiler, `run` and `build`: the 11 ms between them is the price of
+Python's integers, and it is a per-command default rather than a language decision —
 wrap semantics where a native artifact is expected, full Python semantics
 where a Python program is. Ports are the straightforward one for each tool:
 `@njit`, a `cdef long long` `.pyx`, an annotated module for mypyc, `codon
