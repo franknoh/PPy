@@ -1776,6 +1776,191 @@ def test_the_generator_covers_every_parameter_shape(write, analyze):
     assert "PyBuffer_Release" in source
 
 
+BITWISE = """
+    import ppy
+
+
+    @ppy.pure
+    @ppy.opt(3)
+    def masked(value: int, mask: int) -> int:
+        return value & ~mask
+
+
+    @ppy.pure
+    def lowest_bit(value: int) -> int:
+        return value & -value
+    """
+
+
+def test_bitwise_complement_lowers_natively(write, analyze):
+    """`x & ~mask` and `x & -x` are how bitmask code is written."""
+    path = write("bits.ppy", BITWISE)
+    module = _collect(analyze(path, backend="llvm"))["bits"]
+    assert "bits.masked" in module.functions, module.rejected
+    engine = _jit(module)
+
+    lowered = module.functions["bits.masked"]
+    binding = bind(lowered.signature, engine.address(lowered.signature.symbol), lambda v, m: v & ~m)
+    assert binding.wrapper(0b1111, 0b0101) == 0b1010
+    assert binding.wrapper(-1, 0) == -1
+    # `~` never leaves the machine range, so the extremes need no fallback.
+    assert binding.wrapper(-(2**63), 0) == -(2**63)
+    assert binding.fallbacks == 0
+
+    lowered = module.functions["bits.lowest_bit"]
+    binding = bind(lowered.signature, engine.address(lowered.signature.symbol), lambda v: v & -v)
+    assert binding.wrapper(0b1100) == 0b0100
+
+
+LOOPS = """
+    import ppy
+    from ppy import Buffer
+
+
+    @ppy.pure
+    @ppy.opt(3)
+    def first_negative(xs: Buffer[int]) -> int:
+        for i in range(len(xs)):
+            if xs[i] < 0:
+                return i
+        return -1
+
+
+    @ppy.pure
+    @ppy.opt(3)
+    def positives(xs: Buffer[int]) -> int:
+        total: int = 0
+        for i in range(len(xs)):
+            if xs[i] <= 0:
+                continue
+            total += xs[i]
+        return total
+
+
+    @ppy.pure
+    @ppy.opt(3)
+    def descending(limit: int) -> int:
+        total: int = 0
+        for i in range(limit - 1, 0, -1):
+            total += i
+            if total > 1000:
+                break
+        return total
+    """
+
+
+def test_break_and_continue_lower_natively(write, analyze):
+    """A loop with an early exit is how real code is written."""
+    path = write("loops.ppy", LOOPS)
+    module = _collect(analyze(path, backend="llvm"))["loops"]
+    for name in ("first_negative", "positives", "descending"):
+        assert f"loops.{name}" in module.functions, module.rejected
+    engine = _jit(module)
+
+    values = array.array("q", [3, 5, -2, 7])
+    lowered = module.functions["loops.first_negative"]
+    binding = bind(lowered.signature, engine.address(lowered.signature.symbol), lambda xs: -1)
+    assert binding.wrapper(values) == 2
+
+    lowered = module.functions["loops.positives"]
+    binding = bind(lowered.signature, engine.address(lowered.signature.symbol), lambda xs: 0)
+    assert binding.wrapper(values) == 15, "`continue` must still advance the counter"
+
+    lowered = module.functions["loops.descending"]
+    binding = bind(lowered.signature, engine.address(lowered.signature.symbol), lambda n: 0)
+    assert binding.wrapper(100) == 1034
+
+
+DELEGATED = """
+    import ppy
+    from ppy import Buffer
+
+
+    @ppy.opt(3)
+    def fill(xs: Buffer[int], value: int) -> int:
+        for i in range(len(xs)):
+            xs[i] = value
+        return len(xs)
+
+
+    @ppy.opt(3)
+    def fill_twice(xs: Buffer[int], value: int) -> int:
+        fill(xs, value)
+        fill(xs, value + 1)
+        return xs[0]
+    """
+
+
+def test_a_function_whose_writes_happen_in_a_callee_still_lowers(write, analyze):
+    """The write lands in the caller's buffer either way, so it may lower."""
+    path = write("delegate.ppy", DELEGATED)
+    module = _collect(analyze(path, backend="llvm"))["delegate"]
+    assert "delegate.fill_twice" in module.functions, module.rejected
+    engine = _jit(module)
+
+    lowered = module.functions["delegate.fill_twice"]
+    binding = bind(lowered.signature, engine.address(lowered.signature.symbol), lambda xs, v: 0)
+    values = array.array("q", [0, 0, 0])
+    assert binding.wrapper(values, 5) == 6
+    assert list(values) == [6, 6, 6], "the callee wrote through the caller's memory"
+
+
+CALLS_A_BOXED_HELPER = """
+    import ppy
+
+
+    @ppy.pure
+    def helper(text: str) -> int:
+        return len(text.split(","))
+
+
+    @ppy.pure
+    @ppy.opt(3)
+    def caller(n: int) -> int:
+        return helper("a,b") + n
+    """
+
+
+def test_a_call_to_a_function_that_did_not_lower_is_refused(write, analyze):
+    """Emitting the call would name a symbol nothing defines."""
+    path = write("dangling.ppy", CALLS_A_BOXED_HELPER)
+    module = _collect(analyze(path, backend="llvm"))["dangling"]
+    assert "dangling.caller" not in module.functions
+    assert "helper" in module.rejected.get("dangling.caller", "")
+    # Nothing may be left calling a symbol the module does not define.
+    assert "@ppy_dangling_helper(" not in module.ir
+
+
+CONSTANT_GLOBALS = """
+    import ppy
+
+    MOD = 10**9 + 7
+    SHIFTED = 1 << 20
+
+
+    @ppy.pure
+    @ppy.opt(3)
+    def mixed(value: int) -> int:
+        return (value % MOD) + (value & (SHIFTED - 1))
+    """
+
+
+def test_a_constant_expression_global_folds_into_native_code(write, analyze):
+    """`MOD = 10**9 + 7` is how the constant is written, not `1000000007`."""
+    path = write("consts.ppy", CONSTANT_GLOBALS)
+    module = _collect(analyze(path, backend="llvm"))["consts"]
+    assert "consts.mixed" in module.functions, module.rejected
+    engine = _jit(module)
+
+    lowered = module.functions["consts.mixed"]
+    binding = bind(
+        lowered.signature,
+        engine.address(lowered.signature.symbol),
+        lambda v: (v % (10**9 + 7)) + (v & ((1 << 20) - 1)),
+    )
+    assert binding.wrapper(123456789) == (123456789 % (10**9 + 7)) + (123456789 & ((1 << 20) - 1))
+
+
 def test_opening_the_engine_never_changes_emitted_object_code(write, analyze, tmp_path):
     """An artifact may run on another machine, so objects stay portable.
 

@@ -9,7 +9,10 @@ from pathlib import Path
 
 import pytest
 
+from ppy_compiler.analysis import types as T
+from ppy_compiler.analysis.effects import Effect
 from ppy_compiler.backend.llvm import available as llvm_available
+from ppy_compiler.diagnostics import Severity
 from ppy_compiler.driver.pipeline import build_python
 
 requires_llvm = pytest.mark.skipif(not llvm_available(), reason="llvmlite is not installed")
@@ -598,3 +601,55 @@ def test_an_invariant_computation_still_moves_out(write, analyze):
     code = _generated(analyze(path, opt_level=3), "invariant")
     header = code.split("def scaled")[1].partition("for i in range(n):")[0]
     assert "_ppy_licm" in header, "the invariant computation was not hoisted"
+
+
+STDIN_READING = """
+import sys
+
+
+def read_all() -> str:
+    return sys.stdin.read()
+
+
+def first_line() -> str:
+    return sys.stdin.readline()
+"""
+
+
+def test_the_standard_streams_are_typed(write, analyze):
+    """`sys.stdin.read().split()` is how a program reads its input."""
+    path = write("streams.ppy", STDIN_READING)
+    bundle = analyze(path)
+    assert not [d for d in bundle.diagnostics if d.severity is Severity.ERROR]
+
+    analysis = bundle.analysis.modules["streams"]
+    assert analysis.functions["streams.read_all"].inferred_ret == T.STR
+    # Reading is IO, so a reader can never pass for pure.
+    assert Effect.IO in analysis.functions["streams.first_line"].effects
+
+
+CONSTANT_GLOBALS = """
+import ppy
+
+MOD = 10**9 + 7
+WIDE = 1 << 20
+NAMED = None
+COMPUTED = len("abc")
+
+
+@ppy.pure
+def reduced(value: int) -> int:
+    return value % MOD
+"""
+
+
+def test_only_constant_expressions_become_constant_globals(write, analyze):
+    """A call is not a constant, and must not be mistaken for the `None` one."""
+    path = write("globals_.ppy", CONSTANT_GLOBALS)
+    symbols = analyze(path).symbols.modules["globals_"]
+    assert symbols.constant_globals["MOD"] == 10**9 + 7
+    assert symbols.constant_globals["WIDE"] == 1 << 20
+    assert symbols.constant_globals["NAMED"] is None
+    # `len("abc")` is computable, but it is a call: folding it would make
+    # every unfoldable global look like the constant `None`.
+    assert "COMPUTED" not in symbols.constant_globals
