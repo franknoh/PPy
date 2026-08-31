@@ -83,14 +83,22 @@ def toolchain_status() -> tuple[bool, str]:
     return True, f"{compiler}, headers in {include}"
 
 
-def emit_object(engine, ir: str, destination: Path) -> Path:  # type: ignore[no-untyped-def]
-    """Compile one LLVM module to a relocatable object file."""
+def emit_object(  # type: ignore[no-untyped-def]
+    engine, ir: str, destination: Path, *, host_cpu: bool = False
+) -> Path:
+    """Compile one LLVM module to a relocatable object file.
+
+    An object goes into an artifact that may run on another machine, so both
+    the pipeline and the code emitter stay on the portable baseline even when
+    the engine itself is tuned for this host. `host_cpu` is the opt-in that
+    trades that portability for this machine's instruction set.
+    """
     from llvmlite import binding
 
     module = binding.parse_assembly(ir)
     module.verify()
-    engine._optimize(module)
-    machine = engine.target_machine or engine._machine()
+    machine = engine.object_machine(host_cpu)
+    engine._optimize(module, machine)
     destination.parent.mkdir(parents=True, exist_ok=True)
     destination.write_bytes(machine.emit_object(module))
     return destination

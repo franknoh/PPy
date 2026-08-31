@@ -1776,6 +1776,48 @@ def test_the_generator_covers_every_parameter_shape(write, analyze):
     assert "PyBuffer_Release" in source
 
 
+def test_opening_the_engine_never_changes_emitted_object_code(write, analyze, tmp_path):
+    """An artifact may run on another machine, so objects stay portable.
+
+    In-process JIT code targets this exact host, which is free because it
+    never leaves; object code that goes into a build must not, or the
+    artifact would fault on an older CPU.
+    """
+    from ppy_compiler.backend.llvm.link import emit_object
+
+    path = write("portable.ppy", BUFFERS)
+    module = _collect(analyze(path, backend="llvm"))["portable"]
+
+    cold = JitEngine(opt_level=3)
+    warm = JitEngine(opt_level=3).open()
+    try:
+        first = emit_object(cold, module.ir, tmp_path / "cold.o").read_bytes()
+        second = emit_object(warm, module.ir, tmp_path / "warm.o").read_bytes()
+    finally:
+        warm.close()
+    assert first == second
+    assert warm.baseline_machine() is not warm.target_machine
+
+
+def test_host_cpu_opts_out_of_the_portable_baseline(write, analyze, tmp_path):
+    """`--host-cpu` is the deliberate trade: this machine's code, not portable."""
+    from ppy_compiler.backend.llvm.link import emit_object
+
+    path = write("hostcpu.ppy", BUFFERS)
+    module = _collect(analyze(path, backend="llvm"))["hostcpu"]
+
+    engine = JitEngine(opt_level=3)
+    try:
+        portable = emit_object(engine, module.ir, tmp_path / "base.o").read_bytes()
+        tuned = emit_object(engine, module.ir, tmp_path / "host.o", host_cpu=True).read_bytes()
+    finally:
+        engine.close()
+    # A baseline machine may happen to be this machine, in which case the two
+    # agree; what must never happen is the baseline picking up host tuning.
+    assert portable == emit_object(engine, module.ir, tmp_path / "again.o").read_bytes()
+    assert isinstance(tuned, bytes) and tuned
+
+
 def _wrapped(write, analyze, name, source, function, fallback=None):
     """Build a module, compile its wrapper, and bind one entry point."""
     from ppy_compiler.backend.llvm.wrapper_build import build_wrappers, wrapper_toolchain

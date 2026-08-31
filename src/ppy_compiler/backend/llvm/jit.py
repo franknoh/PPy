@@ -54,6 +54,17 @@ def _initialize() -> None:
     _INITIALIZED = True
 
 
+def host_target() -> tuple[str, str]:
+    """The host CPU's name and feature string, or empty when unknown."""
+    from llvmlite import binding
+
+    _initialize()
+    try:
+        return binding.get_host_cpu_name(), binding.get_host_cpu_features().flatten()
+    except (RuntimeError, AttributeError):
+        return "", ""
+
+
 def _host_machine(opt: int):  # type: ignore[no-untyped-def]
     """A target machine for the CPU actually running this process.
 
@@ -81,6 +92,7 @@ class JitEngine:
     opt_level: int = 2
     engine: object | None = None
     target_machine: object | None = None
+    _baseline: object | None = None
     _modules: list[object] = field(default_factory=list)
 
     def open(self) -> JitEngine:
@@ -123,8 +135,8 @@ class JitEngine:
         self._optimize(module)
         return str(module)
 
-    def _optimize(self, module: object) -> None:
-        """Run the LLVM pipeline.
+    def _optimize(self, module: object, machine: object | None = None) -> None:
+        """Run the LLVM pipeline, tuned for `machine` when one is given.
 
         Optimization level never implies unsafe arithmetic or fast math: those
         require an explicit directive (spec 3.4, 12.5), so no fast-math flags
@@ -138,7 +150,7 @@ class JitEngine:
             options.loop_vectorization = level >= 2
             options.slp_vectorization = level >= 3
             options.loop_unrolling = level >= 3
-            machine = self.target_machine or self._machine()
+            machine = machine or self.target_machine or self.baseline_machine()
             builder = binding.create_pass_builder(machine, options)
             builder.getModulePassManager().run(module, builder)  # type: ignore[arg-type]
             return
@@ -150,19 +162,38 @@ class JitEngine:
         legacy.populate(manager)
         manager.run(module)  # type: ignore[arg-type]
 
-    def _machine(self):  # type: ignore[no-untyped-def]
+    def object_machine(self, host_cpu: bool = False):  # type: ignore[no-untyped-def]
+        """The machine object code is emitted through.
+
+        `host_cpu` is the opt-in `--host-cpu` build: the artifact gets this
+        machine's instruction set and stops being portable, which is the
+        caller's stated intent. Without it, emitted code is baseline.
+        """
+        if not host_cpu:
+            return self.baseline_machine()
+        if self.target_machine is None:
+            _initialize()
+            self.target_machine = _host_machine(min(self.opt_level, 3))
+        return self.target_machine
+
+    def baseline_machine(self):  # type: ignore[no-untyped-def]
+        """A target machine for the portable baseline rather than this host.
+
+        Object code emitted through this goes into artifacts that may run on
+        another machine, exactly like a C compiler's output without
+        `-march=native`. Only in-process JIT code targets the exact host.
+        """
         from llvmlite import binding
 
-        _initialize()
-        # Emitted objects go into artifacts that may run elsewhere, so they
-        # stay on the portable baseline; only in-process JIT code (`open`)
-        # targets the exact host.
-        self.target_machine = binding.Target.from_default_triple().create_target_machine(
-            opt=min(self.opt_level, 3)
-        )
-        return self.target_machine
+        if self._baseline is None:
+            _initialize()
+            self._baseline = binding.Target.from_default_triple().create_target_machine(
+                opt=min(self.opt_level, 3)
+            )
+        return self._baseline
 
     def close(self) -> None:
         self._modules.clear()
         self.engine = None
         self.target_machine = None
+        self._baseline = None
