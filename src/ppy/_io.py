@@ -13,13 +13,8 @@ from __future__ import annotations
 
 import array as _array
 import ctypes
-import hashlib
 import os
-import subprocess
 import sys
-import sysconfig
-import tempfile
-from pathlib import Path
 from typing import get_args as _get_args
 from typing import get_origin as _get_origin
 
@@ -116,46 +111,68 @@ _SCALAR_SLOT = _array.array("q", [0])
 _TOKEN_SLOT = _array.array("b", bytes(4096))
 
 
-def _cache_directory() -> Path:
+#: Bumped whenever `_SOURCE` changes, so a stale reader is never loaded.
+#: Naming the artifact from this and the interpreter's own tag keeps the
+#: fast path free of `hashlib` and `sysconfig`, which cost more to import
+#: than everything else a launch does.
+_READER_VERSION = 1
+
+
+def _cache_directory() -> str:
     spelled = os.environ.get("PPY_CACHE_DIR")
-    root = Path(spelled) if spelled else Path.home() / ".cache" / "ppy"
-    return root / "reader"
+    root = spelled or os.path.join(os.path.expanduser("~"), ".cache", "ppy")
+    return os.path.join(root, "reader")
 
 
 def _build() -> object | None:
-    """Compile the reader once, and hand back the loaded library."""
-    compiler = os.environ.get("CC") or "cc"
-    tag = hashlib.sha256(
-        (_SOURCE + sys.version + sysconfig.get_platform()).encode("utf-8")
-    ).hexdigest()[:16]
+    """Compile the reader once, and hand back the loaded library.
+
+    Everything this needs is imported here rather than at module scope: the
+    compiler runs at most once in a program's life, and the modules it takes
+    to run it are a measurable part of every start that does not.
+    """
     directory = _cache_directory()
-    library = directory / f"ppy_reader_{tag}.so"
-    if not library.is_file():
-        try:
-            directory.mkdir(parents=True, exist_ok=True)
-        except OSError:
-            return None
-        with tempfile.TemporaryDirectory() as scratch:
-            source = Path(scratch) / "reader.c"
-            source.write_text(_SOURCE, encoding="utf-8")
-            staged = Path(scratch) / library.name
-            done = subprocess.run(
-                [compiler, "-O2", "-shared", "-fPIC", str(source), "-o", str(staged)],
-                capture_output=True,
-                text=True,
-                check=False,
-            )
-            if done.returncode != 0 or not staged.is_file():
-                return None
-            try:
-                # Rename into place, so a half-written file is never loaded.
-                staged.replace(library)
-            except OSError:
-                return None
+    name = f"ppy_reader_{_READER_VERSION}_{sys.implementation.cache_tag}.so"
+    library = os.path.join(directory, name)
+    if not os.path.isfile(library) and not _compile(library):
+        return None
     try:
-        return ctypes.CDLL(str(library))
+        return ctypes.CDLL(library)
     except OSError:
         return None
+
+
+def _compile(library: str) -> bool:
+    """Build the reader. Everything this needs is imported here: it runs at
+    most once in a machine's life, and importing it costs every start that
+    finds the artifact already there."""
+    import subprocess
+    import tempfile
+
+    compiler = os.environ.get("CC") or "cc"
+    try:
+        os.makedirs(os.path.dirname(library), exist_ok=True)
+    except OSError:
+        return False
+    with tempfile.TemporaryDirectory() as scratch:
+        source = os.path.join(scratch, "reader.c")
+        with open(source, "w", encoding="utf-8") as handle:
+            handle.write(_SOURCE)
+        staged = os.path.join(scratch, os.path.basename(library))
+        done = subprocess.run(
+            [compiler, "-O2", "-shared", "-fPIC", source, "-o", staged],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if done.returncode != 0 or not os.path.isfile(staged):
+            return False
+        try:
+            # Replace atomically, so a half-written file is never loaded.
+            os.replace(staged, library)
+        except OSError:
+            return False
+    return True
 
 
 def _reader():  # type: ignore[no-untyped-def]

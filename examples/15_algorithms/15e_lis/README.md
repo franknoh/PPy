@@ -25,15 +25,15 @@ input, interpreter startup and all. Mean ± standard deviation over 5 runs;
 
 | path | wall |
 |---|---:|
-| plain | 764 ± 12 ms |
-| ppy run | 2274 ± 123 ms |
-| ppy build | 257 ± 10 ms |
-| C scanf | 65 ± 2 ms |
+| plain | 764 ± 6 ms |
+| ppy run | 1942 ± 65 ms |
+| ppy build | 112 ± 5 ms |
+| C scanf | 68 ± 1 ms |
 
 `ppy run` compiles before it runs, which is most of its two seconds; it is
 the development path, not the one to submit. `ppy build` produces a binary
-that still starts an embedded CPython, and that startup is the ~170 ms floor
-under every row of it.
+that still starts an embedded CPython and imports the runtime: ~35 ms before
+a line of the program runs, against C's ~1 ms.
 
 ## Run it
 

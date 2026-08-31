@@ -1,0 +1,118 @@
+{
+  "abi_version": 1,
+  "program": {
+    "entry": "nqueens",
+    "modules": [
+      "nqueens"
+    ],
+    "generated": {
+      "nqueens": "nqueens.json"
+    },
+    "search_paths": [
+      "/mnt/d/Projects/PPy/examples/15_algorithms/15a_nqueens",
+      "/mnt/d/Projects/PPy/src",
+      "/mnt/d/Projects/PPy"
+    ],
+    "safeguards": "off"
+  },
+  "wrappers": {
+    "library": "ppy_wrappers_02f9cc8d8c67dd88.cpython-314-x86_64-linux-gnu.so",
+    "entries": {
+      "nqueens.solve": 0
+    }
+  },
+  "native_library": "libppy_PPy.so",
+  "python": "3.14",
+  "calling_convention": "c",
+  "entries": [
+    {
+      "python_qualname": "nqueens.solve",
+      "native_symbol": "ppy_nqueens_solve",
+      "calling_convention": "c",
+      "arguments": [
+        {
+          "name": "full",
+          "semantic_type": "int",
+          "native_type": "i64",
+          "ownership": "value"
+        },
+        {
+          "name": "columns",
+          "semantic_type": "int",
+          "native_type": "i64",
+          "ownership": "value"
+        },
+        {
+          "name": "diagonal",
+          "semantic_type": "int",
+          "native_type": "i64",
+          "ownership": "value"
+        },
+        {
+          "name": "antidiagonal",
+          "semantic_type": "int",
+          "native_type": "i64",
+          "ownership": "value"
+        }
+      ],
+      "returns": {
+        "semantic_type": "int",
+        "native_type": "i64",
+        "ownership": "value",
+        "passed_as": "out_parameter"
+      },
+      "status": {
+        "native_type": "i32",
+        "meaning": "0 = ok, non-zero = re-run the Python implementation"
+      },
+      "effects": [
+        "may_raise"
+      ],
+      "gil": "not_required",
+      "thread_safe": true,
+      "module": "nqueens",
+      "binding": "solve",
+      "abi": {
+        "parameters": [
+          {
+            "name": "full",
+            "kind": "int",
+            "element": "",
+            "elements": [],
+            "fields": [],
+            "class_name": ""
+          },
+          {
+            "name": "columns",
+            "kind": "int",
+            "element": "",
+            "elements": [],
+            "fields": [],
+            "class_name": ""
+          },
+          {
+            "name": "diagonal",
+            "kind": "int",
+            "element": "",
+            "elements": [],
+            "fields": [],
+            "class_name": ""
+          },
+          {
+            "name": "antidiagonal",
+            "kind": "int",
+            "element": "",
+            "elements": [],
+            "fields": [],
+            "class_name": ""
+          }
+        ],
+        "returns": [
+          "i64"
+        ],
+        "releases_gil": true
+      }
+    }
+  ],
+  "fused_kernels": []
+}

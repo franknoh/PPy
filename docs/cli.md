@@ -188,7 +188,9 @@ shims (floats wait until native formatting can reproduce Python's
 shortest-round-trip repr exactly). Anything else is `E1803` with the path
 that reaches it, never a workaround. There is no Python to fall back to, so
 in `--safe` mode a failed guard aborts with a message instead of retrying
-in Python; the default wrap-semantics build has almost no guards left to
+in Python; `ppy.input[int]()` reads through the C support rather than the
+runtime's reader, and answers 0 at end of input because there is no
+exception to raise; the default wrap-semantics build has almost no guards left to
 fail. On the reference machine the collatz program runs plain CPython in
 ~1.2 s, the hybrid launcher in ~170 ms, and the standalone binary in
 ~35 ms total.

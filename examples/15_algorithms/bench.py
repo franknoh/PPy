@@ -9,6 +9,8 @@ and says when a number in the documentation has drifted.
 from __future__ import annotations
 
 import json
+import os
+import shutil
 import statistics
 import subprocess
 import sys
@@ -85,15 +87,60 @@ def _commands(stem: str) -> list[tuple[str, list[str]]]:
     ]
 
 
-def _wall(command: list[str], folder: Path, data: Path) -> tuple[float, str]:
+def _wall(command: list[str], folder: Path, data: Path, env: dict) -> tuple[float, str]:
     """One run, timed from outside: what the judge's clock would show."""
     with data.open("rb") as stream:
         started = time.perf_counter()
         done = subprocess.run(
-            command, cwd=folder, stdin=stream, capture_output=True, text=True, check=True
+            command,
+            cwd=folder,
+            stdin=stream,
+            capture_output=True,
+            text=True,
+            check=True,
+            env=env,
         )
         elapsed = (time.perf_counter() - started) * 1000.0
     return elapsed, done.stdout.strip()
+
+
+#: The runtime a launcher imports at every start, staged beside the program.
+_RUNTIME = ("ppy", "ppy_runtime")
+
+
+def _staged(folder: Path, stem: str, room: Path) -> tuple[Path, dict]:
+    """Copy the program and the runtime somewhere the filesystem is fast.
+
+    A checkout on a mounted Windows drive answers `stat` and `open` several
+    times slower than a native one, and a launch is mostly imports -- 51 ms
+    against 214 ms for the same binary and the same machine. Measuring from
+    a staged copy reports what an ordinary install does, not what the mount
+    costs.
+    """
+    source_root = Path(__file__).resolve().parents[2] / "src"
+    staged_src = room / "src"
+    for package in _RUNTIME:
+        shutil.copytree(source_root / package, staged_src / package)
+    work = room / folder.name
+    work.mkdir()
+    for name in (f"{stem}.ppy", f"{stem}.c", "pyproject.toml"):
+        if (folder / name).is_file():
+            shutil.copy2(folder / name, work / name)
+    if not (work / "pyproject.toml").is_file():
+        (work / "pyproject.toml").write_text("[tool.ppy]\nstrict = false\n", encoding="utf-8")
+    environment = {**os.environ, "PYTHONPATH": str(staged_src)}
+    subprocess.run(
+        ["gcc", "-O3", "-o", f"{stem}_c", f"{stem}.c"], cwd=work, capture_output=True, check=True
+    )
+    subprocess.run(
+        [*PPY, "build", f"{stem}.ppy", "-o", "dist"],
+        cwd=work,
+        capture_output=True,
+        text=True,
+        check=True,
+        env=environment,
+    )
+    return work, environment
 
 
 def measure(only: list[str] | None = None, rounds: int = ROUNDS) -> dict:
@@ -103,23 +150,17 @@ def measure(only: list[str] | None = None, rounds: int = ROUNDS) -> dict:
         if only and not any(token in folder_name for token in only):
             continue
         folder = HERE / folder_name
-        if not (folder / "dist" / stem).is_file():
-            subprocess.run(
-                [*PPY, "build", f"{stem}.ppy", "-o", "dist"],
-                cwd=folder,
-                capture_output=True,
-                text=True,
-                check=True,
-            )
         with tempfile.TemporaryDirectory() as scratch:
-            data = Path(scratch) / "input.txt"
+            room = Path(scratch)
+            work, environment = _staged(folder, stem, room)
+            data = room / "input.txt"
             data.write_text(generate(), encoding="utf-8")
             row: dict = {}
             answers = set()
             for label, command in _commands(stem):
                 samples = []
                 for _ in range(rounds):
-                    elapsed, answer = _wall(command, folder, data)
+                    elapsed, answer = _wall(command, work, data, environment)
                     samples.append(elapsed)
                     answers.add(answer)
                 row[label] = {

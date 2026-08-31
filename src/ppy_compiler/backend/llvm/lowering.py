@@ -1291,11 +1291,20 @@ class _FunctionLowering:
         return _Value(self.builder.select(condition, then_value.value, else_value.value), scalar)
 
     def _call(self, node: ast.Call) -> _Value:
+        ir = self.ir
         if node.keywords:
             raise Unsupported("keyword arguments have no native ABI")
         target = ast.unparse(node.func)
         if self.standalone and target == "print":
             return self._standalone_print(node)
+        if self.standalone and target == "ppy.input[int]" and not node.args:
+            # No interpreter to read through: the C support reads the stream.
+            reader = self.module.globals.get("ppy_rt_read_int")
+            if reader is None:
+                reader = ir.Function(
+                    self.module, ir.FunctionType(ir.IntType(64), []), name="ppy_rt_read_int"
+                )
+            return _Value(self.builder.call(reader, []), "int")
         if target.startswith("math."):
             return self._math_call(target.removeprefix("math."), node)
         if target == "len" and len(node.args) == 1:

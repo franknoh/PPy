@@ -7,6 +7,8 @@ services, or starts background processes (spec 6).
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from ._directives import (
     DIRECTIVE_ATTR,
     Directive,
@@ -32,12 +34,6 @@ from ._importer import (
     install,
     is_installed,
     uninstall,
-)
-from ._io import (  # pylint: disable=redefined-builtin
-    input,
-    read_ints,
-    read_token,
-    reader_available,
 )
 from ._markers import (
     NUMERIC_MARKERS,
@@ -129,5 +125,26 @@ __all__ = [
     "u64",
     "uninstall",
 ]
+
+if TYPE_CHECKING:  # the names below are real; PEP 562 just defers the import
+    from ._io import (  # pylint: disable=redefined-builtin
+        input,
+        read_ints,
+        read_token,
+        reader_available,
+    )
+
+#: Reading input pulls in `ctypes` and the compiled reader, which a program
+#: that never reads should not pay for; PEP 562 defers it to first use.
+_READERS = frozenset({"input", "read_ints", "read_token", "reader_available"})
+
+
+def __getattr__(name: str) -> object:
+    if name in _READERS:
+        from . import _io
+
+        return getattr(_io, name)
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
 
 install()

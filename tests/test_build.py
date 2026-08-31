@@ -382,6 +382,63 @@ def test_standalone_builds_a_python_free_native_executable(tmp_path: Path):
 
 
 @requires_toolchain
+def test_standalone_reads_input_without_an_interpreter(tmp_path: Path):
+    """`ppy.input[int]()` is the C reader when there is no CPython to ask."""
+    (tmp_path / "pyproject.toml").write_text("[tool.ppy]\nstrict = false\n", encoding="utf-8")
+    (tmp_path / "doubled.ppy").write_text(
+        textwrap.dedent(
+            """
+            \"\"\"Reads a number and prints twice it.\"\"\"
+
+            import ppy
+
+
+            @ppy.pure
+            def twice(value: int) -> int:
+                return value + value
+
+
+            def main() -> None:
+                print(twice(ppy.input[int]()))
+
+
+            main()
+            """
+        ).lstrip("\n"),
+        encoding="utf-8",
+    )
+    built = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "ppy_compiler",
+            "build",
+            "--standalone",
+            "doubled.ppy",
+            "-o",
+            "dist",
+        ],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert built.returncode == 0, built.stderr
+    binary = tmp_path / "dist" / "doubled"
+    assert binary.is_file()
+
+    ran = subprocess.run(
+        [str(binary)], input="21\n", capture_output=True, text=True, check=False, env={}
+    )
+    assert ran.returncode == 0, ran.stderr
+    assert ran.stdout.strip() == "42"
+
+    linked = subprocess.run(["ldd", str(binary)], capture_output=True, text=True, check=False)
+    if linked.returncode == 0:
+        assert "libpython" not in linked.stdout
+
+
+@requires_toolchain
 def test_standalone_rejects_a_python_reachable_graph(tmp_path: Path):
     (tmp_path / "pyproject.toml").write_text("[tool.ppy]\n", encoding="utf-8")
     (tmp_path / "floaty.ppy").write_text(

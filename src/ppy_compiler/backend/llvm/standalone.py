@@ -31,6 +31,44 @@ void ppy_rt_print_str(const char *text, int64_t length) {
 }
 void ppy_rt_print_sep(void) { fputc(' ', stdout); }
 void ppy_rt_print_nl(void) { fputc('\\n', stdout); }
+
+/* `ppy.input[int]()` with no interpreter under it: the same buffered scan
+ * the runtime reader does, reading standard input directly. At end of input
+ * it answers 0, because a standalone binary has no exception to raise. */
+static int ppy_rt_next(void) {
+    static char room[1 << 16];
+    static long filled = 0;
+    static long position = 0;
+    if (position == filled) {
+        filled = (long)fread(room, 1, sizeof room, stdin);
+        if (filled <= 0) {
+            return -1;
+        }
+        position = 0;
+    }
+    return (unsigned char)room[position++];
+}
+
+int64_t ppy_rt_read_int(void) {
+    int c = ppy_rt_next();
+    while (c != -1 && (c < '0' || c > '9') && c != '-') {
+        c = ppy_rt_next();
+    }
+    if (c == -1) {
+        return 0;
+    }
+    int negative = 0;
+    if (c == '-') {
+        negative = 1;
+        c = ppy_rt_next();
+    }
+    int64_t value = 0;
+    while (c >= '0' && c <= '9') {
+        value = value * 10 + (c - '0');
+        c = ppy_rt_next();
+    }
+    return negative ? -value : value;
+}
 """
 
 _MAIN = """#include <stdint.h>
@@ -166,8 +204,16 @@ def build_standalone(  # type: ignore[no-untyped-def]
 def _module_shape(symbols) -> str | None:  # type: ignore[no-untyped-def]
     import ast
 
-    for statement in symbols.module.tree.body:
+    for index, statement in enumerate(symbols.module.tree.body):
         if isinstance(statement, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        # A docstring is text in the binary, not a statement that runs.
+        if (
+            index == 0
+            and isinstance(statement, ast.Expr)
+            and isinstance(statement.value, ast.Constant)
+            and isinstance(statement.value.value, str)
+        ):
             continue
         if isinstance(statement, (ast.Import, ast.ImportFrom)):
             names = getattr(statement, "module", None) or ""

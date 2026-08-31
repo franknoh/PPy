@@ -8,11 +8,11 @@ import re
 import subprocess
 import sys
 import textwrap
+from pathlib import Path
 
 import pytest
 
 import ppy
-from ppy import _io
 
 
 def _piped(text: str, program: str) -> str:
@@ -23,7 +23,7 @@ def _piped(text: str, program: str) -> str:
         capture_output=True,
         text=True,
         check=True,
-        env={**os.environ, "PYTHONPATH": str(_io.Path(__file__).parent.parent / "src")},
+        env={**os.environ, "PYTHONPATH": str(Path(__file__).parent.parent / "src")},
     )
     return done.stdout.strip()
 

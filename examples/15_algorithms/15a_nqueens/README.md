@@ -24,15 +24,39 @@ input, interpreter startup and all. Mean ± standard deviation over 5 runs;
 
 | path | wall |
 |---|---:|
-| plain | 351 ± 17 ms |
-| ppy run | 2138 ± 100 ms |
-| ppy build | 200 ± 9 ms |
-| C scanf | 8 ± 1 ms |
+| plain | 325 ± 8 ms |
+| ppy run | 1877 ± 31 ms |
+| ppy build | 50 ± 3 ms |
+| C scanf | 5 ± 0 ms |
 
 `ppy run` compiles before it runs, which is most of its two seconds; it is
 the development path, not the one to submit. `ppy build` produces a binary
-that still starts an embedded CPython, and that startup is the ~170 ms floor
-under every row of it.
+that still starts an embedded CPython and imports the runtime: ~35 ms before
+a line of the program runs, against C's ~1 ms.
+
+## Without CPython at all
+
+The `ppy build` binary above embeds an interpreter, because the program's
+glue — `try`/`except`, the `print` of a Python `int` — is Python. Written so
+that everything `main` reaches is native, the same solver builds standalone
+and there is no interpreter under it:
+
+```python
+def main() -> None:
+    n: int = ppy.input[int]()
+    print(solve((1 << n) - 1, 0, 0, 0))
+```
+
+```bash
+ppy build --standalone queens.ppy -o dist
+ldd dist/queens      # linux-vdso, libc, ld-linux -- and nothing else
+```
+
+Measured the same way, that binary runs in **7.2 ± 0.1 ms** against the C
+reference's 8.5 ± 0.7 ms: `ppy.input[int]()` lowers to the same buffered
+scan of standard input that `scanf` does, and the ~35 ms of interpreter
+startup is simply not there. What it costs is the subset — no exceptions, no
+`array.array`, no Python objects on the path from `main`.
 
 ## Run it
 
