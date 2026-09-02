@@ -99,20 +99,32 @@ def refresh_conversions(write: bool) -> list[str]:
     return stale
 
 
-def refresh_measurements(write: bool) -> tuple[list[str], bool]:
+def refresh_measurements(write: bool, record: Path | None = None) -> tuple[list[str], bool]:
     """Wall times, against what the documentation says they are.
 
     Returns what drifted and whether that is a failure. A wrong answer always
     is -- `--write` records nothing and the run fails, because a timing for a
-    program that prints the wrong number is not a baseline. Drift on a machine
-    that is not the recorded one never is: two computers are two measurements,
-    not a regression.
+    program that prints the wrong number is not a baseline. So is a machine
+    that cannot build every path: a record with columns missing would replace
+    a complete one, and the gap would read as a result. Drift on a machine
+    that is not the recorded one is neither: two computers are two
+    measurements, not a regression.
     """
     sys.path.insert(0, str(ALGORITHMS))
     from importlib import import_module
 
     bench = import_module("bench")
+    missing = bench.available()
     fresh = bench.measure()
+    if record is not None:
+        payload = {"environment": bench.environment(), "problems": fresh}
+        record.write_text(json.dumps(payload, indent=1) + "\n", encoding="utf-8")
+    if missing and write:
+        return [
+            *(f"{path}: {reason}" for path, reason in sorted(missing.items())),
+            "  nothing was recorded: a partial record would replace a whole one",
+            "  install what is missing, or measure somewhere that has it",
+        ], True
     stored = json.loads(RECORDED.read_text(encoding="utf-8")) if RECORDED.is_file() else {}
     recorded = stored.get("problems", stored)
     before_environment = stored.get("environment", {})
@@ -150,7 +162,9 @@ def refresh_measurements(write: bool) -> tuple[list[str], bool]:
     if drifted and moved:
         drifted.extend(moved)
         drifted.append("  drift across machines is not a regression; rerun with --write here")
-    if write:
+    elif drifted and not write:
+        drifted.append("  rerun with --write once these are the numbers to keep")
+    if write and not missing:
         payload = {
             "environment": here,
             "recorded": time.strftime("%Y-%m-%dT%H:%M:%S"),
@@ -186,14 +200,16 @@ def _overview(problems: dict) -> str:
         row = problems.get(name)
         if row is None:
             continue
-        reference = row["C scanf"]["mean"]
+        # Bold means "beat C", so without a C column there is nothing to beat
+        # and every cell stays plain rather than the table failing to render.
+        reference = row.get("C scanf", {}).get("mean")
         cells = []
         for path in ("plain", "ppy build", "standalone", "C scanf"):
             if path not in row:
                 cells.append("—")
                 continue
             cell = f"{row[path]['mean']:.1f} ms"
-            beats = path != "C scanf" and row[path]["mean"] < reference
+            beats = path != "C scanf" and reference is not None and row[path]["mean"] < reference
             cells.append(f"**{cell}**" if beats else cell)
         rows.append(f"| [{name[:3]}]({name}/) | {title} | " + " | ".join(cells) + " |")
     return "\n".join(header + rows) + "\n"
@@ -235,6 +251,12 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--write", action="store_true", help="fix what has drifted")
     parser.add_argument("--quick", action="store_true", help="skip the benchmark")
+    parser.add_argument(
+        "--record",
+        type=Path,
+        metavar="FILE",
+        help="also write this run's raw measurements there, drift or not",
+    )
     options = parser.parse_args()
     sys.path.insert(0, str(EXAMPLES))
 
@@ -253,13 +275,11 @@ def main() -> int:
     failed |= bool(stale) and not options.write
 
     if not options.quick:
-        drifted, fatal = refresh_measurements(options.write)
+        drifted, fatal = refresh_measurements(options.write, options.record)
         state = "recorded" if options.write else "drifted"
         print(f"measurements: {'ok' if not drifted else f'{len(drifted)} {state}'}")
         for line in drifted:
             print(f"  {line}")
-        if fatal:
-            print("\n  rerun with --write once the numbers are the ones to keep")
         failed |= fatal
 
     behind = refresh_tables(options.write)

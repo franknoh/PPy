@@ -130,6 +130,20 @@ def _commands(stem: str, standalone: str | None) -> list[tuple[str, list[str]]]:
     return rows
 
 
+def collapse(answers: dict[str, list[str]]) -> tuple[list[str], dict]:
+    """Every answer seen, and each path's -- one value only if it never varied.
+
+    A path that answers right four times out of five is not a path that
+    answers right, so a varying path keeps the list rather than a sample.
+    """
+    seen = sorted({answer for given in answers.values() for answer in given})
+    by_path = {
+        label: given[0] if len(set(given)) == 1 else sorted(set(given))
+        for label, given in answers.items()
+    }
+    return seen, by_path
+
+
 def _wall(command: list[str], folder: Path, data: Path, env: dict) -> tuple[float, str]:
     """One run, timed from outside: what the judge's clock would show."""
     program = folder / command[0] if command[0].startswith(".") else None
@@ -228,6 +242,7 @@ def environment() -> dict:
         "timing": "wall time of the whole process, measured from outside",
         "staged": "program and runtime copied to a native filesystem first",
         "semantics": "ppy build defaults to wrap semantics; ppy run keeps Python integers",
+        "missing": available(),
     }
 
 
@@ -280,11 +295,7 @@ def measure(only: list[str] | None = None, rounds: int = ROUNDS) -> dict:
                     "mean": statistics.mean(samples),
                     "stdev": statistics.stdev(samples) if len(samples) > 1 else 0.0,
                 }
-            row["answers"] = sorted({a for seen in answers.values() for a in seen})
-            row["by_path"] = {
-                label: seen[0] if len(set(seen)) == 1 else sorted(set(seen))
-                for label, seen in answers.items()
-            }
+            row["answers"], row["by_path"] = collapse(answers)
         results[folder_name] = row
     return results
 

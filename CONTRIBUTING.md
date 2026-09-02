@@ -63,13 +63,19 @@ A generated one keeps its `.py` source beside it and is regenerated with
 
 `python scripts/refresh.py` reports anything that has drifted — an example
 that no longer checks, a conversion that no longer matches, a measurement
-that has moved — and `--write` brings the first two back in line and records
-the third.
+that has moved, a README table that is behind the record — and `--write`
+brings all of them back in line. `--quick` skips the benchmark; `--record
+FILE` also writes the raw numbers of that run, drift or not.
 
 ## Measurements
 
-Numbers in the documentation come from `examples/15_algorithms/bench.py` and
-are recorded with the machine they were taken on. They are not a per-change
-gate: a scheduled workflow re-measures and reports drift beyond a tolerance,
-because absolute wall times differ between runners. If you change one, say
-what machine it was measured on.
+Numbers in the documentation come from `examples/15_algorithms/bench.py`,
+are recorded in `measurements.json` with the machine they were taken on, and
+the README tables are rendered from that file rather than typed. They are
+not a per-change gate: a scheduled workflow re-measures and reports drift
+beyond a tolerance, because absolute wall times differ between runners.
+
+`--write` refuses a machine that cannot build every path. A record with a
+column missing would replace a whole one, and the gap would read as a result
+rather than as a machine without `gcc` or without a shared libpython;
+`bench.py` says up front which paths it had to skip and why.
