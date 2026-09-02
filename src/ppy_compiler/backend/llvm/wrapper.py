@@ -520,13 +520,14 @@ def _itemsize(element: str) -> int:
     return 1 if element in {"i8", "u8"} else 8
 
 
-#: Buffer-protocol format codes each element accepts. A `bytes`-like buffer
-#: reports `B`, and `memoryview(b"...")` reports `c`.
+#: Buffer-protocol format codes each element accepts. Signedness is part of
+#: the element: accepting `B` for an `i8` would read 255 as -1, which is a
+#: different answer rather than a slower one.
 _FORMATS = {
     "float": ("d",),
     "int": ("q", "l"),
-    "i8": ("b", "c", "B"),
-    "u8": ("B", "c", "b"),
+    "i8": ("b",),
+    "u8": ("B",),
 }
 
 

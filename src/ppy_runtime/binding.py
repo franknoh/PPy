@@ -39,12 +39,15 @@ _ELEMENT_CODES = {"int": "q", "float": "d", "i8": "b", "u8": "B"}
 
 #: Buffer-protocol formats a borrowed buffer accepts per element type. `l` is
 #: a signed long, which is the same width as `q` where this matters.
+#: Buffer-protocol formats each element accepts. Signedness is part of the
+#: element, not a detail: reading `array("B", [255])` as `i8` would answer
+#: -1 where Python answers 255, so the wrong one is refused and the Python
+#: body runs instead.
 _ELEMENT_FORMATS = {
     "int": ("q", "l"),
     "float": ("d",),
-    # A `bytes`-like buffer reports `B`; `c` is what `memoryview(b"...")` says.
-    "i8": ("b", "c", "B"),
-    "u8": ("B", "c", "b"),
+    "i8": ("b",),
+    "u8": ("B",),
 }
 
 

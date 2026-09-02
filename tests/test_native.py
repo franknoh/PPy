@@ -2734,6 +2734,107 @@ def test_a_byte_buffer_is_one_byte_per_element(write, analyze):
     assert binding.fallbacks == 0
 
 
+SIGNED = """
+    import ppy
+    from ppy import Buffer
+
+
+    @ppy.pure
+    @ppy.opt(3)
+    def signed_first(xs: Buffer[ppy.i8]) -> int:
+        return xs[0]
+
+
+    @ppy.pure
+    @ppy.opt(3)
+    def unsigned_first(xs: Buffer[ppy.u8]) -> int:
+        return xs[0]
+
+
+    @ppy.opt(3)
+    def signed_set(xs: Buffer[ppy.i8], value: int) -> int:
+        xs[0] = value
+        return xs[0]
+
+
+    @ppy.opt(3)
+    def unsigned_set(xs: Buffer[ppy.u8], value: int) -> int:
+        xs[0] = value
+        return xs[0]
+    """
+
+
+def test_the_wrong_signedness_falls_back_rather_than_reinterpreting(write, analyze):
+    """`array("B", [255])` read as `i8` would answer -1: a different answer."""
+    path = write("signs.ppy", SIGNED)
+    module = _collect(analyze(path, backend="llvm"))["signs"]
+    engine = _jit(module)
+
+    for name, accepted, refused in [
+        ("signs.signed_first", array.array("b", [-1]), array.array("B", [255])),
+        ("signs.unsigned_first", array.array("B", [255]), array.array("b", [-1])),
+    ]:
+        lowered = module.functions[name]
+        binding = bind(
+            lowered.signature, engine.address(lowered.signature.symbol), lambda xs: xs[0]
+        )
+        assert binding.wrapper(accepted) == accepted[0]
+        assert binding.fallbacks == 0, "the matching signedness goes native"
+        # The refused one still answers what Python answers, through the body.
+        assert binding.wrapper(refused) == refused[0]
+        assert binding.fallbacks == 1
+
+
+def test_a_byte_buffer_accepts_the_python_types_that_hold_bytes(write, analyze):
+    """`bytearray` and a `memoryview` of one are unsigned bytes."""
+    path = write("holds.ppy", SIGNED)
+    module = _collect(analyze(path, backend="llvm"))["holds"]
+    engine = _jit(module)
+
+    lowered = module.functions["holds.unsigned_first"]
+    binding = bind(lowered.signature, engine.address(lowered.signature.symbol), lambda xs: xs[0])
+    assert binding.wrapper(bytearray([200])) == 200
+    assert binding.wrapper(memoryview(bytearray([201]))) == 201
+    assert binding.fallbacks == 0
+
+    # `bytes` is read-only, and a borrowed buffer is lent for writing too.
+    assert binding.wrapper(b"\xc8") == 200
+    assert binding.fallbacks == 1
+
+
+def test_writing_past_a_byte_element_falls_back_on_either_signedness(write, analyze):
+    """The range that fits depends on the signedness, and both are checked."""
+    path = write("edges.ppy", SIGNED)
+    module = _collect(analyze(path, backend="llvm"))["edges"]
+    engine = _jit(module)
+
+    def store(xs, value):
+        xs[0] = value
+        return xs[0]
+
+    lowered = module.functions["edges.signed_set"]
+    signed = bind(lowered.signature, engine.address(lowered.signature.symbol), store)
+    values = array.array("b", [0])
+    assert signed.wrapper(values, -128) == -128
+    assert signed.wrapper(values, 127) == 127
+    assert signed.fallbacks == 0
+    with pytest.raises(OverflowError):
+        signed.wrapper(values, 128)
+    assert signed.fallbacks == 1
+
+    lowered = module.functions["edges.unsigned_set"]
+    unsigned = bind(lowered.signature, engine.address(lowered.signature.symbol), store)
+    room = array.array("B", [0])
+    assert unsigned.wrapper(room, 0) == 0
+    assert unsigned.wrapper(room, 255) == 255
+    assert unsigned.fallbacks == 0
+    with pytest.raises(OverflowError):
+        unsigned.wrapper(room, 256)
+    with pytest.raises(OverflowError):
+        unsigned.wrapper(room, -1)
+    assert unsigned.fallbacks == 2
+
+
 def test_two_byte_elements_compare_as_integers(write, analyze):
     """Meeting as booleans would compare their truth, not their values."""
     path = write("bytecmp.ppy", BYTES)
