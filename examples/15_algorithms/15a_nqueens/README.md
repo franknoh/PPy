@@ -52,11 +52,21 @@ ppy build --standalone queens.ppy -o dist
 ldd dist/queens      # linux-vdso, libc, ld-linux -- and nothing else
 ```
 
-Measured the same way, that binary runs in **7.2 ± 0.1 ms** against the C
-reference's 8.5 ± 0.7 ms: `ppy.input[int]()` lowers to the same buffered
-scan of standard input that `scanf` does, and the ~35 ms of interpreter
-startup is simply not there. What it costs is the subset — no exceptions, no
-`array.array`, no Python objects on the path from `main`.
+Measured the same way, on the same machine, from the same staged copy:
+
+| path | wall | binary |
+|---|---:|---:|
+| `ppy build` (hybrid) | 46.5 ± 3.0 ms | 16.3 KB + runtime |
+| `ppy build --standalone` | **7.1 ± 0.6 ms** | 16.8 KB |
+| C (`gcc -O3`, `scanf`) | 5.3 ± 0.3 ms | 16.1 KB |
+
+`ppy.input[int]()` lowers to the same buffered scan of standard input that
+`scanf` does, and the ~35 ms of interpreter startup is simply not there.
+What it costs is the subset — no exceptions, no `array.array`, no Python
+objects on the path from `main` — which is why the `try`/`except EOFError`
+of the committed solution has to go, and why the other five problems here
+cannot take this path at all: they allocate buffers, and the standalone
+subset has no way to allocate one.
 
 ## Run it
 

@@ -55,24 +55,40 @@ programs is instrumented: the times below are wall time of the whole
 process, measured from outside, input and interpreter startup included.
 The C reference reads the same input with `scanf`.
 
-| | problem | plain | `ppy build` | C (`scanf`) |
-|---|---|---:|---:|---:|
-| [15a](15a_nqueens/) | N-Queens ([BOJ 9663](https://www.acmicpc.net/problem/9663)) | 325 ms | 50 ms | 5 ms |
-| [15b](15b_dijkstra/) | shortest path ([BOJ 1753](https://www.acmicpc.net/problem/1753)) | 2107 ms | 311 ms | 194 ms |
-| [15c](15c_kmp/) | substring search ([BOJ 1786](https://www.acmicpc.net/problem/1786)) | 511 ms | 79 ms | 11 ms |
-| [15d](15d_segment_tree/) | range sums ([BOJ 2042](https://www.acmicpc.net/problem/2042)) | 797 ms | 126 ms | 58 ms |
-| [15e](15e_lis/) | longest increasing subsequence ([BOJ 12015](https://www.acmicpc.net/problem/12015)) | 764 ms | 112 ms | 68 ms |
-| [15f](15f_input/) | counting inversions ([BOJ 1517](https://www.acmicpc.net/problem/1517)) | 979 ms | 106 ms | 51 ms |
+| | problem | plain | `ppy build` | `--standalone` | C (`scanf`) |
+|---|---|---:|---:|---:|---:|
+| [15a](15a_nqueens/) | N-Queens ([BOJ 9663](https://www.acmicpc.net/problem/9663)) | 325 ms | 50 ms | **7 ms** | 5 ms |
+| [15b](15b_dijkstra/) | shortest path ([BOJ 1753](https://www.acmicpc.net/problem/1753)) | 2107 ms | 311 ms | — | 194 ms |
+| [15c](15c_kmp/) | substring search ([BOJ 1786](https://www.acmicpc.net/problem/1786)) | 511 ms | 79 ms | — | 11 ms |
+| [15d](15d_segment_tree/) | range sums ([BOJ 2042](https://www.acmicpc.net/problem/2042)) | 797 ms | 126 ms | — | 58 ms |
+| [15e](15e_lis/) | longest increasing subsequence ([BOJ 12015](https://www.acmicpc.net/problem/12015)) | 764 ms | 112 ms | — | 68 ms |
+| [15f](15f_input/) | counting inversions ([BOJ 1517](https://www.acmicpc.net/problem/1517)) | 979 ms | 106 ms | — | 51 ms |
 
 `ppy run` is left out of the table because it compiles before it runs — a
 flat ~2 s on every row, which is the development path rather than the one to
-submit. The `ppy build` column is the artifact: its binary starts an
-embedded CPython and imports the runtime before the program begins, about
-35 ms against C's ~1 ms, and that floor is most of what separates the two on
-the smaller problems. `bench.py` stages the program and the runtime on a
-native filesystem before timing, because a checkout on a mounted Windows
-drive answers `stat` several times slower and a launch is mostly imports —
-the same N-Queens binary takes 48 ms staged and 214 ms from the mount.
+submit.
+
+The two `ppy build` columns are the same compiler with different amounts of
+Python left in the artifact:
+
+- **`ppy build`** is the hybrid: the kernels are native, but the glue around
+  them — `main`, the buffers, `print` of a Python `int` — is the optimized
+  Python the build wrote, so the binary embeds an interpreter and imports
+  the runtime before the program begins. That is ~35 ms, and on the smaller
+  problems it is most of what separates the column from C.
+- **`--standalone`** is a binary with no CPython in it at all. `ldd` shows
+  libc and nothing else, `ppy.input[int]()` lowers to the same buffered scan
+  of standard input that `scanf` does, and N-Queens lands at 7.1 ± 0.6 ms
+  against the C reference's 5.3 ± 0.3 ms, from a 16.8 KB binary against
+  C's 16.1 KB.
+
+The five dashes are the honest limit: a standalone build needs everything
+`main` reaches to be native, and those five allocate `array.array` buffers.
+The standalone subset has no way to allocate one — buffers reach native code
+as parameters lent by Python — so only a problem whose whole state fits in
+scalars can take that column today. N-Queens qualifies once its `try`/
+`except EOFError` is dropped, which is the variant
+[15a](15a_nqueens/)'s README shows.
 
 Five of the six are written as ordinary Python and converted:
 `ppy convert <name>.py --promote-buffers` writes the `.ppy` beside it, and
