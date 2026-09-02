@@ -489,3 +489,66 @@ def test_doctor_reports_the_native_toolchain(project: Path):
     )
     assert result.returncode == 0
     assert "native toolchain" in result.stdout
+
+
+@requires_toolchain
+def test_standalone_allocates_and_fills_its_own_buffers(tmp_path: Path):
+    """No `array.array` to make, so the program makes the memory itself."""
+    (tmp_path / "pyproject.toml").write_text("[tool.ppy]\nstrict = false\n", encoding="utf-8")
+    (tmp_path / "total.ppy").write_text(
+        textwrap.dedent(
+            """
+            \"\"\"Sums the numbers it is given.\"\"\"
+
+            import ppy
+            from ppy import Buffer
+
+
+            @ppy.pure
+            @ppy.opt(3)
+            def total(xs: Buffer[int]) -> int:
+                out: int = 0
+                for i in range(len(xs)):
+                    out += xs[i]
+                return out
+
+
+            @ppy.opt(3)
+            def doubled(xs: Buffer[int], into: Buffer[int]) -> int:
+                for i in range(len(xs)):
+                    into[i] = xs[i] + xs[i]
+                return len(xs)
+
+
+            def main() -> None:
+                count: int = ppy.input[int]()
+                values: Buffer[int] = ppy.input[Buffer[int]](count)
+                room: Buffer[int] = ppy.buffer[int](count)
+                doubled(values, room)
+                print(total(room))
+
+
+            main()
+            """
+        ).lstrip("\n"),
+        encoding="utf-8",
+    )
+    built = subprocess.run(
+        [sys.executable, "-m", "ppy_compiler", "build", "--standalone", "total.ppy", "-o", "dist"],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert built.returncode == 0, built.stderr
+
+    ran = subprocess.run(
+        [str(tmp_path / "dist" / "total")],
+        input="4\n1 2 3 4\n",
+        capture_output=True,
+        text=True,
+        check=False,
+        env={},
+    )
+    assert ran.returncode == 0, ran.stderr
+    assert ran.stdout.strip() == "20"

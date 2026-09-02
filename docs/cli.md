@@ -185,15 +185,18 @@ libc and nothing else, and startup is C startup (~a few ms). The reachable
 graph from `main` must be entirely native: functions the hybrid path could
 lower, plus `print` of integers, booleans, and string literals through C
 shims (floats wait until native formatting can reproduce Python's
-shortest-round-trip repr exactly). Anything else is `E1803` with the path
+shortest-round-trip repr exactly), plus the memory the program makes for
+itself — `ppy.buffer[int](n)` is a zeroed native allocation here and
+`ppy.input[Buffer[int]](n)` is that allocation with the input read straight
+into it, because there is no `array.array` to build. Anything else is `E1803` with the path
 that reaches it, never a workaround. There is no Python to fall back to, so
 in `--safe` mode a failed guard aborts with a message instead of retrying
 in Python; `ppy.input[int]()` reads through the C support rather than the
 runtime's reader, and answers 0 at end of input because there is no
 exception to raise; the default wrap-semantics build has almost no guards left to
-fail. On the reference machine the collatz program runs plain CPython in
-~1.2 s, the hybrid launcher in ~170 ms, and the standalone binary in
-~35 ms total.
+fail. Every problem in `examples/15_algorithms` builds this way once its
+buffers come from `ppy.buffer` rather than `array.array`, and four of the
+five with real input beat their C reference — see that folder's README.
 
 ## `ppy explain` — why it compiled that way
 

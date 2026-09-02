@@ -82,13 +82,28 @@ Python left in the artifact:
   against the C reference's 5.3 ± 0.3 ms, from a 16.8 KB binary against
   C's 16.1 KB.
 
-The five dashes are the honest limit: a standalone build needs everything
-`main` reaches to be native, and those five allocate `array.array` buffers.
-The standalone subset has no way to allocate one — buffers reach native code
-as parameters lent by Python — so only a problem whose whole state fits in
-scalars can take that column today. N-Queens qualifies once its `try`/
-`except EOFError` is dropped, which is the variant
-[15a](15a_nqueens/)'s README shows.
+The `--standalone` column now covers every problem here. A standalone build
+needs everything `main` reaches to be native, which used to rule out the five
+that allocate buffers; `ppy.buffer[int](n)` and `ppy.input[Buffer[int]](n)`
+allocate natively, so they no longer do. Written that way — no `array.array`,
+no exceptions, nothing Python on the path from `main` — each one builds a
+binary that links libc and nothing else:
+
+| problem | `--standalone` | C (`scanf`) |
+|---|---:|---:|
+| N-Queens | 7.1 ± 0.6 ms | 5.3 ± 0.3 ms |
+| shortest path | 144.5 ± 5.2 ms | 189.3 ± 4.4 ms |
+| range sums | 27.0 ± 1.7 ms | 57.8 ± 1.5 ms |
+| longest increasing subsequence | 40.2 ± 2.1 ms | 70.8 ± 2.5 ms |
+| counting inversions | 46.4 ± 5.6 ms | 52.4 ± 2.4 ms |
+
+Four of the five beat the C reference, by up to 2.1×, and for one reason:
+`ppy.input` reads into memory faster than `scanf` parses. The committed
+solutions are not written that way — they keep the `try`/`except` and the
+`array.array` that let the same file run under plain CPython, which is the
+point of a `.ppy` file. The standalone variants trade that for the subset,
+and `examples/15_algorithms/15a_nqueens/README.md` shows what the trade
+looks like.
 
 Five of the six are written as ordinary Python and converted:
 `ppy convert <name>.py --promote-buffers` writes the `.ppy` beside it, and

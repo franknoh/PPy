@@ -64,9 +64,10 @@ Measured the same way, on the same machine, from the same staged copy:
 `scanf` does, and the ~35 ms of interpreter startup is simply not there.
 What it costs is the subset — no exceptions, no `array.array`, no Python
 objects on the path from `main` — which is why the `try`/`except EOFError`
-of the committed solution has to go, and why the other five problems here
-cannot take this path at all: they allocate buffers, and the standalone
-subset has no way to allocate one.
+of the committed solution has to go. The other problems here take the same
+path once their buffers come from `ppy.buffer[int](n)` and
+`ppy.input[Buffer[int]](n)` rather than `array.array`; the table in the
+[folder README](../README.md) has their numbers.
 
 ## Run it
 
