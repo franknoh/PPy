@@ -1,4 +1,4 @@
-# 15e — Longest increasing subsequence ([BOJ 12015](https://www.acmicpc.net/problem/12015))
+# 15e — Longest increasing subsequence
 
 Input: `N`, then N integers. Output: the length of the longest strictly
 increasing subsequence. One million values here.
@@ -25,15 +25,17 @@ input, interpreter startup and all. Mean ± standard deviation over 5 runs;
 
 | path | wall |
 |---|---:|
-| plain | 764 ± 6 ms |
-| ppy run | 1942 ± 65 ms |
-| ppy build | 112 ± 5 ms |
-| C scanf | 68 ± 1 ms |
+| plain CPython | 787 ± 8 ms |
+| `ppy run` | 2297 ± 88 ms |
+| `ppy build` | 115 ± 6 ms |
+| `ppy build --standalone` | **40.2 ± 2.1 ms** |
+| C (`gcc -O3`, `scanf`) | 68 ± 2 ms |
 
 `ppy run` compiles before it runs, which is most of its two seconds; it is
 the development path, not the one to submit. `ppy build` produces a binary
 that still starts an embedded CPython and imports the runtime: ~35 ms before
-a line of the program runs, against C's ~1 ms.
+a line of the program runs, against C's ~1 ms. `--standalone` has no interpreter in it at all, which is where that
+row comes from; the [folder README](../README.md) says what the subset costs.
 
 ## Run it
 

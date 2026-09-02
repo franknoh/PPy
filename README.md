@@ -30,7 +30,7 @@ you install only what you use:
 |---|---|
 | `llvm` | the native backend (llvmlite) |
 | `numpy` / `pydantic` / `uvicorn` | the matching plugin |
-| `torch` / `jax` | the matching plugin, resolved from PyPI — pick your own CUDA index in your project if you need one |
+| `torch` / `jax` | the matching plugin, CPU builds by default — point at a CUDA index in your own project if you want one |
 
 Everything degrades cleanly: a missing library only disables its plugin, and
 `uv run ppy doctor` reports what was found. For the fastest native call
@@ -86,9 +86,11 @@ to it. They differ in one default: `ppy run` keeps Python-integer semantics
 45.4 ms, level with C with the guards in), while `ppy build` produces a
 wrap-semantics artifact like every native compiler — that is the 33.6 ms,
 past C. `run --unsafe` and `build --safe` flip either one; bounds
-checks stay in both. The built binary is compiled software: it
-launches in ~170 ms through `ppy_runtime` alone, and keeps working with the
-compiler uninstalled. (Python's floor semantics help too:
+checks stay in both. The built binary is compiled software: it starts an
+embedded interpreter and imports `ppy_runtime` — about 35 ms before the
+program begins — and keeps working with the compiler uninstalled.
+`ppy build --standalone` removes even that, for a program whose reachable
+graph is entirely native. (Python's floor semantics help too:
 `n // 2` lowers to one arithmetic shift exactly, where C's truncating
 division needs a sign fixup.)
 
@@ -247,24 +249,20 @@ prints what it found.
 - [docs/diagnostics.md](docs/diagnostics.md) — every diagnostic code
 - [docs/cli.md](docs/cli.md) — every command and option
 - [docs/compatibility.md](docs/compatibility.md) — what is stable, what moves, and what the cache and artifact ABI promise
-- [examples/README.md](examples/README.md) — 30 worked examples
+- [examples/README.md](examples/README.md) — 30 folders, 39 runnable programs
 - [CONTRIBUTING.md](CONTRIBUTING.md) — setting up, the gate, and what a change has to keep true
+- [the implementation spec](ppy-compiler-implementation-spec-v1.md) — the normative baseline the source cites by section number (`spec 11.2`, `spec 16.4`, …)
 
 ## Development
 
 ```bash
 git clone https://github.com/franknoh/PPy.git
 cd PPy
-uv sync                  # dev group: llvmlite, numpy, pydantic, pytest, linters
-uv sync --group torch    # + PyTorch (CUDA 12.8 index)
-uv sync --group jax      # + JAX (cuda12)
-uv sync --group all      # everything
-uv run ppy doctor
+uv sync              # the compiler core, LLVM, NumPy, pydantic, and the linters
+./scripts/check.sh   # the one gate; CI runs exactly this
 ```
 
-```bash
-uv run pytest -q
-uv run python examples/run_all.py             # every example x 3 paths, compared
-uv run python examples/verify_conversions.py  # every .ppy regenerated from its .py
-uv run python examples/lint_all.py            # pylint over every example
-```
+Plugin runtimes are separate groups (`uv sync --group torch|jax|uvicorn|all`),
+and everything else a contributor needs — the gate, the invariants a change
+has to keep, how examples and measurements are kept current — is in
+[CONTRIBUTING.md](CONTRIBUTING.md).

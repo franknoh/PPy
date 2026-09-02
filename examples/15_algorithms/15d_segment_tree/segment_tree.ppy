@@ -1,4 +1,4 @@
-"""Range sums with point updates: https://www.acmicpc.net/problem/2042
+"""Range sums with point updates, over a segment tree.
 
 Input:  N M K on the first line, then N numbers, then M+K command lines --
         `1 b c` assigns c to position b, `2 b c` asks for the sum over

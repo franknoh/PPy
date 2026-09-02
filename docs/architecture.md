@@ -8,16 +8,18 @@ symbol tables            analysis/symbols       declarations, imports, fields, d
      ▼
 type & effect analysis   analysis/checker       flow typing, refinements, purity fixpoint
      ▼
-     ├── driver/convert + analysis/inference    call-site fixpoint → ConversionPlan → CST rewrite
+     ├── driver/convert + analysis/inference    call-site fixpoint → ConversionPlan
+     ├── driver/rewrite                          the plan applied to source, through a CST
      ├── migration/                              rewrite passes + report behind `ppy migrate`
      ├── opt/                                   AST passes for the Python backend
      ├── backend/llvm/                          lowering → LLVM IR → wrapper → link/JIT
      └── lsp/, driver/explain                   the same analysis, served interactively
 ```
 
-Analysis produces data; only `driver/convert.py` touches source text, and only
-through a `ConversionPlan`. Nothing in `analysis/` knows the output is text,
-and nothing in the backends re-derives what the checker already proved.
+Analysis produces data; only `driver/rewrite.py` touches source text, and only
+through the `ConversionPlan` that `driver/convert.py` filled in. Nothing in
+`analysis/` knows the output is text, and nothing in the backends re-derives
+what the checker already proved.
 
 ## Modules
 
@@ -27,13 +29,13 @@ and nothing in the backends re-derives what the checker already proved.
 | `ppy_runtime` | everything a *built artifact* needs at launch: the native ABI as data (`abi`), the guarded binding trampolines (`binding`), generated-module identity and execution (`generated`, `execute`), the binder protocol (`dispatch`), and the manifest-driven launch path (`manifest`, `launch`). The hard rule: this package never imports `ppy_compiler` — uninstalling the compiler must not break a built application, and a test keeps that true by poisoning the compiler and running a launcher. |
 | `frontend/` | source loading, the module graph, ambiguity detection (`E1003`). |
 | `migration/` | the `ppy migrate` layer over the shared conversion engine: deterministic rewrite passes (`pipeline`, `dynamic`, `globals`) that prove each rewrite equivalent before making it, and the classified report (`report`) that says what remains. |
-| `analysis/` | `symbols` (declarations), `checker` (types, refinements, effects), `binding` (one shared call-argument binder), `lexical` (point-sensitive name resolution: what a name means at each statement, shared by decorator identity, reflection, and the write index), `aliasing` (flow-sensitive local alias analysis: mutation and escape resolve through what a name may refer to, not its spelling), `inference` (staged evidence/generalization fixpoint with a convergence guard), `decorators` (what each known decorator does, that unknown means opaque, and the shared `class_construction` facts behind both strict class checking and safe hoisting), `global_writes` (scope-aware project-wide write index behind `Final`), `reflection` (who reads annotations at runtime, blocking their materialization), `codec` (exact-inverse serialization of analysis facts for the cache), `render` (types back to annotation source). |
+| `analysis/` | `results` (what analysis produced — the types every other package reads), `symbols` (declarations), `checker` (types, refinements, effects), `binding` (one shared call-argument binder), `lexical` (point-sensitive name resolution: what a name means at each statement, shared by decorator identity, reflection, and the write index), `aliasing` (flow-sensitive local alias analysis: mutation and escape resolve through what a name may refer to, not its spelling), `inference` (staged evidence/generalization fixpoint with a convergence guard), `decorators` (what each known decorator does, that unknown means opaque, and the shared `class_construction` facts behind both strict class checking and safe hoisting), `global_writes` (scope-aware project-wide write index behind `Final`), `reflection` (who reads annotations at runtime, blocking their materialization), `codec` (exact-inverse serialization of analysis facts for the cache), `render` (types back to annotation source). |
 | `opt/` | AST-level passes: constant folding, inlining, LICM, loop transforms; used by the Python backend and as pre-lowering cleanup. |
 | `backend/python/` | runs optimized AST under CPython with the loader installed. |
 | `backend/llvm/` | `lowering` (AST → LLVM IR), `wrapper` (generated CPython-ABI entry points, `METH_FASTCALL`, GIL release), `fusion` (NumPy elementwise loops), `specialize`/`jit` (guarded runtime specialization), `parallel` (the worker pool), `link` (objects → shared library). |
 | `plugins/` | numpy, torch, jax, pydantic, uvicorn — see [plugins.md](plugins.md). |
 | `cache/` | the content-addressed store (SQLite) and key construction. |
-| `driver/` | CLI, pipeline orchestration, convert, fmt, lint, test, explain. |
+| `driver/` | CLI, pipeline orchestration, `convert` (what to write) and `rewrite` (writing it) either side of `plan`, fmt, lint, test, explain. |
 | `lsp/` | the language server, on the same analysis. |
 
 ## The three-path invariant
@@ -41,8 +43,8 @@ and nothing in the backends re-derives what the checker already proved.
 Plain CPython, the Python backend, and the LLVM backend must produce the same
 answer; a guard that fails at runtime falls back to the Python body rather than
 ever answering differently. The invariant is enforced, not assumed:
-`examples/run_all.py` runs all 30 examples on all three paths and diffs the
-output, and the test suite does the same per feature.
+`examples/run_all.py` runs all 39 example programs on all three paths and
+diffs the output, and the test suite does the same per feature.
 
 ## Cache and incremental builds
 
@@ -62,8 +64,16 @@ The LLVM path caches per stage, so a rebuild does only what changed:
 
 Editing one file re-lowers that file, relinks, and touches nothing else;
 a change in a module's interface invalidates its dependents through the
-dependency digests. Measured cold/no-change/one-file: 2415 / 371 / 1785 ms on
-the 30-example tree.
+dependency digests.
+
+The store is optimization state and nothing else: every artifact in it can be
+recomputed from the source it came from. A damaged SQLite index is moved aside
+as `index.sqlite.corrupt-<timestamp>`, rebuilt empty, and reported once as
+`W2101`; compilation continues with cache misses. Where even a fresh index
+cannot be written the store works in memory, every lookup a miss. Recording an
+artifact spans two tables and runs in one transaction, so a reader never sees
+a row whose dependencies have not landed. [compatibility.md](compatibility.md)
+states the contract.
 
 ## Runtime specialization
 
@@ -93,7 +103,8 @@ machines.
 `ppy/_io.py` is a runtime-only reader: a small C scanner over file
 descriptor 0, compiled on first use into the user cache and bound through
 ctypes, exposed as `ppy.input[T]()` and the lower-level `ppy.read_ints` /
-`ppy.read_token`. It lives in the `ppy` package rather than the compiler
+`ppy.read_token`; `ppy.buffer[T](n)` beside it is the allocation both a
+CPython run and a standalone binary understand. It lives in the `ppy` package rather than the compiler
 because it is useful on every path, plain CPython included, and it degrades
 to a pure-Python implementation where no C compiler exists. The checker
 types `ppy.input[T]()` from its subscript, the way it types `ppy.check[T]`.

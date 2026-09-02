@@ -1,4 +1,4 @@
-# 15f — Counting inversions ([BOJ 1517](https://www.acmicpc.net/problem/1517))
+# 15f — Counting inversions, and what input costs
 
 Input: `N`, then N integers. Output: how many pairs are out of order.
 Half a million values here.
@@ -24,15 +24,17 @@ input, interpreter startup and all. Mean ± standard deviation over 5 runs;
 
 | path | wall |
 |---|---:|
-| plain | 979 ± 19 ms |
-| ppy run | 2045 ± 95 ms |
-| ppy build | 106 ± 2 ms |
-| C scanf | 51 ± 2 ms |
+| plain CPython | 1022 ± 19 ms |
+| `ppy run` | 2215 ± 54 ms |
+| `ppy build` | 107 ± 3 ms |
+| `ppy build --standalone` | **46.4 ± 5.6 ms** |
+| C (`gcc -O3`, `scanf`) | 52 ± 2 ms |
 
 `ppy run` compiles before it runs, which is most of its two seconds; it is
 the development path, not the one to submit. `ppy build` produces a binary
 that still starts an embedded CPython and imports the runtime: ~35 ms before
-a line of the program runs, against C's ~1 ms.
+a line of the program runs, against C's ~1 ms. `--standalone` has no interpreter in it at all, which is where that
+row comes from; the [folder README](../README.md) says what the subset costs.
 
 ## Run it
 

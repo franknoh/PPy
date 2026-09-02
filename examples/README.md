@@ -25,7 +25,7 @@ rather than believed.
 | `12_buffers_and_jit` | borrowed buffers, `@ppy.fastmath`, specialization |
 | `13_value_classes` | an all-scalar dataclass with no boxed form |
 | `14_tuples` | fixed tuples as scalar ABI atoms |
-| `15_algorithms` | competitive-programming kernels, 10x to 150x |
+| `15_algorithms` | eight compute kernels against C, and six judge problems in `15a`–`15f` read from stdin |
 | `16_dynamic` | explicit dynamic boundaries |
 | `17_containers` | element inference, aliasing, local mutation |
 | `18_errors` | exception behavior as part of the contract |
@@ -41,6 +41,10 @@ rather than believed.
 | `28_threads` | a native region releasing the GIL |
 | `29_flax` | a Flax/optax training loop, converted and strict-checked |
 | `30_migrate` | a deliberately dynamic legacy script rewritten by `ppy migrate` into strict PPY |
+
+A folder of related problems keeps them in numbered subfolders, and every
+runner reaches them: `15_algorithms/15a_nqueens` and its five siblings are
+separate programs with their own README, C reference, and measurements.
 
 ## Checking all of it
 

@@ -32,7 +32,8 @@ guards on data arithmetic (64-bit wrap, bounds checks stay), and
 ## `ppy convert` — strict `.py` to `.ppy`
 
 ```bash
-ppy convert PATH [--in-place] [--force] [--dry-run] [--promote-buffers]
+ppy convert PATH [--in-place] [--force] [--dry-run] [--format]
+                 [--promote-buffers] [--hoist-classes {safe,aggressive,off}]
 ```
 
 Strict staticization: the input is expected to already be reasonably static,
@@ -141,7 +142,8 @@ and which stayed boxed, with the reason.
 ## `ppy build` — compile without running
 
 ```bash
-ppy build TARGET [--backend {llvm,python}] [-o DIR]
+ppy build TARGET [--safe] [--host-cpu] [--standalone]
+                 [--backend {llvm,python}] [-o DIR]
 ```
 
 `--backend llvm` (default) writes objects, `libppy_<project>.so`,
@@ -170,9 +172,11 @@ and the compiled `METH_FASTCALL` boundary wrapper ships alongside the
 library — a launched artifact crosses the same fast boundary a JIT run
 does, not a ctypes one. The launcher loads `ppy_runtime`, binds, and executes — it does not
 discover a project, parse, analyze, or touch LLVM, and it keeps working with
-`ppy_compiler` uninstalled. Launch wall time is ~170 ms on the reference
-machine against ~2 s for a cold `ppy run`; `examples/bench_startup.py`
-measures the categories separately.
+`ppy_compiler` uninstalled. What it does pay is starting the embedded
+interpreter and importing the runtime — about 35 ms before the program
+begins, against ~2 s for a cold `ppy run` that compiles first.
+`examples/bench_startup.py` measures the categories separately, and
+`--standalone` below removes that 35 ms too.
 
 ### `--standalone`
 
@@ -194,9 +198,12 @@ in `--safe` mode a failed guard aborts with a message instead of retrying
 in Python; `ppy.input[int]()` reads through the C support rather than the
 runtime's reader, and answers 0 at end of input because there is no
 exception to raise; the default wrap-semantics build has almost no guards left to
-fail. Every problem in `examples/15_algorithms` builds this way once its
-buffers come from `ppy.buffer` rather than `array.array`, and four of the
-five with real input beat their C reference — see that folder's README.
+fail.
+
+Every problem in `examples/15_algorithms` builds this way once its buffers
+come from `ppy.buffer` rather than `array.array`, and four of the five with
+real input beat their C reference — see that folder's README for the numbers
+and for what the subset costs to stay inside.
 
 ## `ppy explain` — why it compiled that way
 
@@ -240,7 +247,8 @@ ppy test --backend pytest tests -- -k buffers -q
 ## `ppy lint`
 
 ```bash
-ppy lint [PATH] [--backend {auto,pyright,pylint,ruff,mypy}] [--no-strict]
+ppy lint [PATH] [--backend {auto,pyright,pylint,ruff,mypy}]
+         [--all-rules] [--no-strict]
 ```
 
 External tools key off the `.py` extension, so the sources are mirrored into a

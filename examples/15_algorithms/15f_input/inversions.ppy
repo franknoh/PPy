@@ -1,4 +1,4 @@
-"""Counting inversions: https://www.acmicpc.net/problem/1517
+"""Counting inversions with a Fenwick tree.
 
 Input:  N on the first line, then N integers.
 Output: how many pairs are out of order.

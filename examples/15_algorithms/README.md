@@ -1,19 +1,22 @@
 # Algorithms
 
-Compute-heavy kernels from competitive programming.
+Two things: `algorithms.ppy`, eight compute-heavy kernels measured against
+the same eight in C, and six judge problems in `15a`–`15f`, each its own
+folder, read from standard input the way a judge sends them.
 
 ## Provenance
 
 Hand-written. `algorithms.ppy` is written directly; there is no `.py`
-source and no conversion step involved. `algorithms.c` is the same eight
+source and no conversion step involved. The six problem subfolders are
+generated from their `.py` sources — each says so in its own README. `algorithms.c` is the same eight
 kernels hand-written in C — the reference the native path is measured
 against, with the same workloads and the same printed answers.
 
 ## What it shows
 
 - Eight problems: sieve, Collatz, knapsack, edit distance, Floyd-Warshall, matmul, union-find, Fermat.
-- All three paths produce identical answers; the native path is 9x to 160x
-  faster than plain CPython.
+- All three paths produce identical answers; the native path is 11x to 166x
+  faster than plain CPython on these eight.
 - Writes go through borrowed buffers, so the caller sees them.
 
 ## Against C
@@ -49,20 +52,22 @@ range can prove.
 
 ## More problems
 
-Each subfolder is one competitive-programming problem, read from standard
-input the way a judge sends it and answered on stdout. Nothing inside the
+Each subfolder is one competitive-programming problem — the shapes a judge
+sets — read from standard input and answered on stdout. Each states its own
+input and output format, so nothing here depends on an outside site being
+up. Nothing inside the
 programs is instrumented: the times below are wall time of the whole
 process, measured from outside, input and interpreter startup included.
 The C reference reads the same input with `scanf`.
 
 | | problem | plain | `ppy build` | `--standalone` | C (`scanf`) |
 |---|---|---:|---:|---:|---:|
-| [15a](15a_nqueens/) | N-Queens ([BOJ 9663](https://www.acmicpc.net/problem/9663)) | 325 ms | 50 ms | **7 ms** | 5 ms |
-| [15b](15b_dijkstra/) | shortest path ([BOJ 1753](https://www.acmicpc.net/problem/1753)) | 2107 ms | 311 ms | — | 194 ms |
-| [15c](15c_kmp/) | substring search ([BOJ 1786](https://www.acmicpc.net/problem/1786)) | 511 ms | 79 ms | — | 11 ms |
-| [15d](15d_segment_tree/) | range sums ([BOJ 2042](https://www.acmicpc.net/problem/2042)) | 797 ms | 126 ms | — | 58 ms |
-| [15e](15e_lis/) | longest increasing subsequence ([BOJ 12015](https://www.acmicpc.net/problem/12015)) | 764 ms | 112 ms | — | 68 ms |
-| [15f](15f_input/) | counting inversions ([BOJ 1517](https://www.acmicpc.net/problem/1517)) | 979 ms | 106 ms | — | 51 ms |
+| [15a](15a_nqueens/) | N-Queens | 350 ms | 54 ms | **7 ms** | 5 ms |
+| [15b](15b_dijkstra/) | shortest path | 2215 ms | 312 ms | 145 ms | 203 ms |
+| [15c](15c_kmp/) | substring search | 555 ms | 78 ms | — | 11 ms |
+| [15d](15d_segment_tree/) | range sums | 859 ms | 132 ms | 27 ms | 61 ms |
+| [15e](15e_lis/) | longest increasing subsequence | 787 ms | 115 ms | 40 ms | 68 ms |
+| [15f](15f_input/) | counting inversions | 1022 ms | 107 ms | 46 ms | 52 ms |
 
 `ppy run` is left out of the table because it compiles before it runs — a
 flat ~2 s on every row, which is the development path rather than the one to

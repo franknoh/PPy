@@ -1,4 +1,4 @@
-# 15b — Shortest path ([BOJ 1753](https://www.acmicpc.net/problem/1753))
+# 15b — Shortest path
 
 Input: `V E`, the source `K`, then E lines of `u v w`. Output: the sum of
 the reachable distances. 200k nodes and 1.2M edges here.
@@ -27,15 +27,17 @@ input, interpreter startup and all. Mean ± standard deviation over 5 runs;
 
 | path | wall |
 |---|---:|
-| plain | 2107 ± 18 ms |
-| ppy run | 2279 ± 68 ms |
-| ppy build | 311 ± 7 ms |
-| C scanf | 194 ± 7 ms |
+| plain CPython | 2215 ± 57 ms |
+| `ppy run` | 2527 ± 83 ms |
+| `ppy build` | 312 ± 6 ms |
+| `ppy build --standalone` | **144.5 ± 5.2 ms** |
+| C (`gcc -O3`, `scanf`) | 203 ± 12 ms |
 
 `ppy run` compiles before it runs, which is most of its two seconds; it is
 the development path, not the one to submit. `ppy build` produces a binary
 that still starts an embedded CPython and imports the runtime: ~35 ms before
-a line of the program runs, against C's ~1 ms.
+a line of the program runs, against C's ~1 ms. `--standalone` has no interpreter in it at all, which is where that
+row comes from; the [folder README](../README.md) says what the subset costs.
 
 ## Run it
 

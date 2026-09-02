@@ -155,6 +155,13 @@ yourself, mark it `@ppy.reflective`, or run `ppy migrate`.
   types are still inferred — they are just not materialized;
 - orders imports into PEP 8 groups with `import ppy` ahead of first-party
   imports — the loader must install before the first `.ppy` import;
+- rewrites the `input` idioms into the typed reader, where the module reads
+  with `input` and never touches `sys.stdin` (two readers of one file
+  descriptor would not agree on where it is): `int(input())` becomes
+  `ppy.input[int]()`, `a, b = map(int, input().split())` becomes
+  `ppy.input[tuple[int, int]]()`, a bare `input()` becomes `ppy.input[str]()`
+  carrying its prompt, and a loop that fills a buffer one value at a time
+  becomes one bulk `ppy.read_ints` over the same slots;
 - with `--promote-buffers`, declares read-only numeric list parameters as
   `Buffer[T]` and rewrites the values feeding them into `array.array`
   (remarked as `R3002`, or `R3003` with the reason it could not);

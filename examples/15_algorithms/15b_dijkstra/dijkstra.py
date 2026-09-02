@@ -1,4 +1,4 @@
-"""Single-source shortest paths: https://www.acmicpc.net/problem/1753
+"""Single-source shortest paths over a weighted directed graph.
 
 Input:  V E on the first line, the source K on the second, then E lines of
         `u v w` (a directed edge from u to v of weight w).

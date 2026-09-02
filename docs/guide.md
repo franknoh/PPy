@@ -9,6 +9,8 @@ The map. Details live one link away:
 - [config.md](config.md) — every `[tool.ppy]` key
 - [diagnostics.md](diagnostics.md) — every code
 - [cli.md](cli.md) — every command and option
+- [compatibility.md](compatibility.md) — what is stable, what moves, what the cache and artifact ABI promise
+- [the implementation spec](../ppy-compiler-implementation-spec-v1.md) — the normative baseline; comments in the source cite it by section
 
 ## The three paths
 
@@ -23,52 +25,37 @@ One file, three ways. Any disagreement is a compiler bug, and the suite plus
 
 ## Measured
 
-WSL2, RTX 5080, torch 2.11+cu128, jax 0.11.1. Answers identical on all three
-paths in every row.
+Numbers live where the thing they measure lives, so there is one copy of
+each and it is regenerated rather than retyped:
 
-| algorithm | plain | ppy run | C (`gcc -O3`) |
-|---|---:|---:|---:|
-| sieve 2e6 | 191.9 ms | 9.7 ms | 14.6 ms |
-| collatz 3e5 | 1204.3 ms | 42.8 ms | 42.9 ms |
-| knapsack 400×2e4 | 476.7 ms | 5.4 ms | 2.5 ms |
-| edit distance 2000² | 531.1 ms | 3.5 ms | 3.8 ms |
-| Floyd–Warshall 220 | 539.9 ms | 3.5 ms | 5.3 ms |
-| matmul 220 | 527.4 ms | 3.7 ms | 2.2 ms |
-| union-find 5e5 | 186.2 ms | 3.2 ms | 3.9 ms |
-| fermat 6e4 | 25.9 ms | 2.8 ms | 1.8 ms |
+| what | where |
+|---|---|
+| the collatz kernel against nine other compilers | [README](../README.md#one-file-four-ways) |
+| six competitive-programming problems, end to end, against C | [examples/15_algorithms](../examples/15_algorithms/README.md) |
+| the Python/native call boundary, per call | `examples/bench_boundary.py` |
+| startup: cold build, warm build, launcher, prebuilt, JIT | `examples/bench_startup.py` |
+| what input costs, three ways | [examples/15_algorithms/15f_input](../examples/15_algorithms/15f_input/README.md) |
 
-The C column is `examples/15_algorithms/algorithms.c`: the same kernels
-hand-written, printing the same answers, compiled at the same optimization
-level the kernels declare (`@ppy.opt(3)`). Guard hoisting
-(`[tool.ppy.llvm] safeguards`) moves the Python-int overflow and bounds
-guards of multiplied index chains into one check ahead of the loop, so the
-body keeps no side exits and LLVM can strength-reduce and vectorize; the
-kernels where gcc still leads carry guards on data values no range analysis
-can prove away.
+`examples/15_algorithms/measurements.json` holds the recorded run with the
+machine it was taken on, and `scripts/refresh.py` re-measures and reports
+what has drifted past a tolerance. A scheduled workflow does the same weekly;
+absolute wall times differ between runners, so they are not a per-change gate.
+
+Two shapes recur in all of it. The native path wins where the work is a loop
+over machine-word data — that is what lowering is for. It neither helps nor
+is meant to help where the time is inside a library: a torch or jax training
+loop is `.backward()` and the optimizer, and stays exactly as fast.
 
 The Python backend is not faster and is not meant to be: it optimizes the AST,
 and the interpreter overhead is unchanged.
 
-| model training | plain | ppy run |
-|---|---:|---:|
-| torch, preprocessing | 70.9 ms | 0.9 ms |
-| torch, training loop | 507 ms | 532 ms |
-| jax, preprocessing | 69.6 ms | 0.9 ms |
-| jax, training loop | 26.5 ms | 26.3 ms |
-
-The large factor is the Python *around* the model, not the tensor math.
-The training loops are dominated by `.backward()` and the optimizer, which
-stay in the framework either way — the native path neither helps nor is it
-supposed to.
-
 Caches earn their keep inside a run, not around it: on the collatz module,
 lowering to IR costs 777 ms cold and 12 ms from the content-addressed store.
 What no cache can remove from `ppy run` is per-process — importing the
-compiler (~850 ms) and MCJIT machine-code emission (~190 ms) — and that is
-what `ppy build` pays once: its launcher runs through `ppy_runtime` alone
-(~170 ms wall, compiler not even imported). `examples/bench_startup.py`
-reports cold build, warm build, launcher, prebuilt, and JIT walls
-separately. `PPY_CACHE_DIR` moves the store itself off a slow filesystem.
+compiler and MCJIT machine-code emission — and that is what `ppy build` pays
+once. `PPY_CACHE_DIR` moves the store itself off a slow filesystem, which is
+worth doing: a checkout on a mounted Windows drive answers `stat` several
+times slower, and a launch is mostly imports.
 
 ## `.ppy` under ordinary CPython
 
@@ -87,11 +74,10 @@ project.
 
 ## Examples
 
-30 example folders (33 runnable programs) under `examples/`, each with a
-README. Where a
-folder holds both `<name>.py` and `<name>.ppy`, the `.ppy` is exactly what
-`ppy convert` writes — `ppy migrate` for the folder that says so — and
-`verify_conversions.py` regenerates it to prove it.
+30 example folders under `examples/`, 39 runnable programs, each folder with
+a README. Where a folder holds both `<name>.py` and `<name>.ppy`, the `.ppy`
+is exactly what `ppy convert` writes — `ppy migrate` for the folder that says
+so — and `verify_conversions.py` regenerates it to prove it.
 
 ```bash
 python examples/run_all.py             # every example x 3 paths, compared

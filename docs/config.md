@@ -24,6 +24,8 @@ target = "native"
 jit = true
 lto = "thin"
 cpython-api = "version-specific"
+host-cpu = false                  # build for this machine, not the baseline
+# safeguards = "hoisted"          # unset: the command decides (see below)
 
 [tool.ppy.parallel]
 enabled = true
@@ -54,6 +56,7 @@ enabled = true                    # any other keys are plugin options
 | `strict` | `true` | implicit `Any` and unsound constructs are errors; `--no-strict` downgrades the ones with a sound fallback. |
 | `opt-level` | `2` | project default, overridden per run by `-O` and per function by `@ppy.opt(n)`. |
 | `llvm.safeguards` | per command | `hoisted` proves the extreme cases once in a guard block ahead of the loop; `inline` keeps every per-operation guard in the body; `off` drops the overflow guards on data arithmetic — 64-bit wrap semantics — while keeping every bounds check. Unset, the command decides: `ppy run` uses `hoisted` (Python integers, bit for bit), `ppy build` uses `off` (a wrap-semantics artifact, like every native compiler); `run --unsafe` and `build --safe` flip them per invocation. |
+| `llvm.host-cpu` | `false` | compile object code for the CPU doing the build rather than the portable baseline: faster where the code vectorizes, and the artifact then needs a machine with the same instruction set. JIT code always targets the host, which is free because it never leaves the machine. |
 | `cache-dir` | `.ppy-cache` | the content-addressed store; relative to the root. The `PPY_CACHE_DIR` environment variable overrides it with a per-project tree underneath — the escape hatch for a repo on a slow filesystem, such as a Windows-mounted drive under WSL. |
 | `dynamic-boundaries` | `explicit` | `explicit` requires `ppy.dynamic` around dynamic features; `deny` forbids them outright (`E1505`). |
 | `build-execution` | `deny` | whether build-time stages may execute project code (JAX StableHLO export, pydantic schema builds). |

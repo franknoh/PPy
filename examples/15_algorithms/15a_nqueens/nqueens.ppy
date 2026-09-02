@@ -1,4 +1,4 @@
-"""N-Queens: https://www.acmicpc.net/problem/9663
+"""N-Queens: how many ways N queens fit on an N by N board.
 
 Input:  N on the first line.
 Output: how many ways N queens can be placed without attacking each other.

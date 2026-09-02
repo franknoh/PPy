@@ -1,4 +1,4 @@
-# 15a — N-Queens ([BOJ 9663](https://www.acmicpc.net/problem/9663))
+# 15a — N-Queens
 
 Input: `N`. Output: how many ways N queens fit on an N×N board.
 
@@ -24,15 +24,17 @@ input, interpreter startup and all. Mean ± standard deviation over 5 runs;
 
 | path | wall |
 |---|---:|
-| plain | 325 ± 8 ms |
-| ppy run | 1877 ± 31 ms |
-| ppy build | 50 ± 3 ms |
-| C scanf | 5 ± 0 ms |
+| plain CPython | 350 ± 14 ms |
+| `ppy run` | 2099 ± 78 ms |
+| `ppy build` | 54 ± 4 ms |
+| `ppy build --standalone` | **7.1 ± 0.6 ms** |
+| C (`gcc -O3`, `scanf`) | 5 ± 0 ms |
 
 `ppy run` compiles before it runs, which is most of its two seconds; it is
 the development path, not the one to submit. `ppy build` produces a binary
 that still starts an embedded CPython and imports the runtime: ~35 ms before
-a line of the program runs, against C's ~1 ms.
+a line of the program runs, against C's ~1 ms. `--standalone` has no interpreter in it at all, which is where that
+row comes from; the [folder README](../README.md) says what the subset costs.
 
 ## Without CPython at all
 

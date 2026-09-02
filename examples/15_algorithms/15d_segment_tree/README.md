@@ -1,4 +1,4 @@
-# 15d — Range sums ([BOJ 2042](https://www.acmicpc.net/problem/2042))
+# 15d — Range sums
 
 Input: `N M K`, then N numbers, then M+K commands — `1 b c` assigns,
 `2 b c` sums over [b, c). Output: the checksum of the answers.
@@ -26,15 +26,17 @@ input, interpreter startup and all. Mean ± standard deviation over 5 runs;
 
 | path | wall |
 |---|---:|
-| plain | 797 ± 13 ms |
-| ppy run | 2027 ± 75 ms |
-| ppy build | 126 ± 4 ms |
-| C scanf | 58 ± 2 ms |
+| plain CPython | 859 ± 23 ms |
+| `ppy run` | 2190 ± 45 ms |
+| `ppy build` | 132 ± 4 ms |
+| `ppy build --standalone` | **27.0 ± 1.7 ms** |
+| C (`gcc -O3`, `scanf`) | 61 ± 4 ms |
 
 `ppy run` compiles before it runs, which is most of its two seconds; it is
 the development path, not the one to submit. `ppy build` produces a binary
 that still starts an embedded CPython and imports the runtime: ~35 ms before
-a line of the program runs, against C's ~1 ms.
+a line of the program runs, against C's ~1 ms. `--standalone` has no interpreter in it at all, which is where that
+row comes from; the [folder README](../README.md) says what the subset costs.
 
 ## Run it
 

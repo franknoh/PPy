@@ -1,4 +1,4 @@
-"""Longest increasing subsequence: https://www.acmicpc.net/problem/12015
+"""Longest increasing subsequence, by patience and binary search.
 
 Input:  N on the first line, then N integers.
 Output: the length of the longest strictly increasing subsequence.
