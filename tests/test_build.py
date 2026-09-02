@@ -552,3 +552,52 @@ def test_standalone_allocates_and_fills_its_own_buffers(tmp_path: Path):
     )
     assert ran.returncode == 0, ran.stderr
     assert ran.stdout.strip() == "20"
+
+
+@requires_c_compiler
+def test_standalone_prints_a_byte_element_without_widening_it_by_hand(tmp_path: Path):
+    """A byte element is storage, so reading one hands out an `int`.
+
+    `print(b[i])` and `print(b[i] + 0)` are the same expression; a build that
+    took only the second would be making the width part of the type.
+    """
+    (tmp_path / "pyproject.toml").write_text("[tool.ppy]\nstrict = false\n", encoding="utf-8")
+    (tmp_path / "bytes.ppy").write_text(
+        textwrap.dedent(
+            """
+            \"\"\"Reads bytes back out of a byte buffer.\"\"\"
+
+            import ppy
+            from ppy import Buffer
+
+
+            def main() -> None:
+                signed: Buffer[ppy.i8] = ppy.buffer[ppy.i8](2)
+                unsigned: Buffer[ppy.u8] = ppy.buffer[ppy.u8](2)
+                signed[0] = -128
+                unsigned[0] = 250
+                unsigned[1] = 250
+                print(signed[0])
+                print(unsigned[0] + 0)
+                print(unsigned[0] + unsigned[1])
+
+
+            main()
+            """
+        ).lstrip("\n"),
+        encoding="utf-8",
+    )
+    built = subprocess.run(
+        [sys.executable, "-m", "ppy_compiler", "build", "--standalone", "bytes.ppy", "-o", "dist"],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert built.returncode == 0, built.stdout + built.stderr
+
+    ran = subprocess.run(
+        [str(tmp_path / "dist" / "bytes")], capture_output=True, text=True, check=False, env={}
+    )
+    assert ran.returncode == 0, ran.stderr
+    assert ran.stdout.split() == ["-128", "250", "500"]

@@ -2872,3 +2872,86 @@ def test_writing_a_byte_that_does_not_fit_falls_back(write, analyze):
     with pytest.raises(OverflowError):
         binding.wrapper(values, 300)
     assert binding.fallbacks == 1
+
+
+WIDENS = """
+    import ppy
+    from ppy import Buffer
+
+
+    @ppy.pure
+    @ppy.opt(3)
+    def doubled(value: int) -> int:
+        return value * 2
+
+
+    @ppy.pure
+    @ppy.opt(3)
+    def straight(xs: Buffer[ppy.u8]) -> int:
+        return xs[0]
+
+
+    @ppy.pure
+    @ppy.opt(3)
+    def forwarded(xs: Buffer[ppy.u8]) -> int:
+        return doubled(xs[0])
+
+
+    @ppy.pure
+    @ppy.opt(3)
+    def totalled(xs: Buffer[ppy.u8]) -> int:
+        return sum(xs)
+
+
+    @ppy.pure
+    @ppy.opt(3)
+    def smallest(xs: Buffer[ppy.i8]) -> int:
+        return min(xs)
+
+
+    @ppy.pure
+    @ppy.opt(3)
+    def largest(xs: Buffer[ppy.i8]) -> int:
+        return max(xs)
+    """
+
+
+def test_reading_a_byte_element_hands_out_an_integer(write, analyze):
+    """The width is storage: what a read produces is an `int`, as documented.
+
+    Returning it, passing it on, and printing it are the same expression, so
+    none of them may see the narrow type the memory happens to use.
+    """
+    path = write("widens.ppy", WIDENS)
+    module = _collect(analyze(path, backend="llvm"))["widens"]
+    engine = _jit(module)
+    values = array.array("B", [200, 100, 250])
+
+    for name, reference in [
+        ("widens.straight", lambda xs: xs[0]),
+        ("widens.forwarded", lambda xs: xs[0] * 2),
+    ]:
+        lowered = module.functions[name]
+        binding = bind(lowered.signature, engine.address(lowered.signature.symbol), reference)
+        assert binding.wrapper(values) == reference(values)
+        assert binding.fallbacks == 0
+
+
+def test_reducing_a_byte_buffer_accumulates_in_an_integer(write, analyze):
+    """`sum` of three 200s is 600, which does not fit in the element."""
+    path = write("reduce_bytes.ppy", WIDENS)
+    module = _collect(analyze(path, backend="llvm"))["reduce_bytes"]
+    engine = _jit(module)
+
+    lowered = module.functions["reduce_bytes.totalled"]
+    binding = bind(lowered.signature, engine.address(lowered.signature.symbol), sum)
+    values = array.array("B", [200, 200, 200])
+    assert binding.wrapper(values) == 600
+    assert binding.fallbacks == 0
+
+    for name, reference in [("reduce_bytes.smallest", min), ("reduce_bytes.largest", max)]:
+        lowered = module.functions[name]
+        binding = bind(lowered.signature, engine.address(lowered.signature.symbol), reference)
+        edges = array.array("b", [-128, 5, 127])
+        assert binding.wrapper(edges) == reference(edges)
+        assert binding.fallbacks == 0

@@ -53,6 +53,12 @@ _BUFFER_ELEMENTS = {"int", "float", "i8", "u8"}
 #: Buffer elements narrower than a machine word, and whether they are signed.
 _NARROW = {"i8": True, "u8": False}
 
+
+def _read_as(element: str) -> str:
+    """What a read of that element hands out: a byte comes out an `int`."""
+    return "int" if element in _NARROW else element
+
+
 #: A tuple wider than this stays boxed rather than expanding the ABI.
 _MAX_TUPLE_WIDTH = 8
 
@@ -1101,7 +1107,11 @@ class _FunctionLowering:
         data, length, element, _borrowed = self.buffers[name]
         position = self._coerce(index, "int")
         self._guard_index(position, length)
-        return _Value(self.builder.load(self.builder.gep(data, [position.value])), element)
+        loaded = _Value(self.builder.load(self.builder.gep(data, [position.value])), element)
+        # A byte element is storage, not a type: what a read hands out is an
+        # `int`, the same as under CPython. Widening here rather than at each
+        # use is what keeps `print(b[i])` and `b[i] + 0` the same expression.
+        return self._coerce(loaded, _read_as(element))
 
     def _buffer_reduction(self, name: str, operation: str) -> _Value:
         """`sum`, `min`, or `max` over a buffer, in strict source order."""
@@ -1119,14 +1129,16 @@ class _FunctionLowering:
             )
             self.builder.position_at_end(nonempty)
 
-        accumulator = self._entry_alloca(element, f"{operation}.acc")
+        carried_as = _read_as(element)
+        accumulator = self._entry_alloca(carried_as, f"{operation}.acc")
         index = self._entry_alloca("int", f"{operation}.i")
         if operation == "sum":
-            start = ir.Constant(_llvm_type(ir, element), 0)
+            start = ir.Constant(_llvm_type(ir, carried_as), 0)
             self.builder.store(start, accumulator)
             self.builder.store(zero, index)
         else:
-            self.builder.store(self.builder.load(self.builder.gep(data, [zero])), accumulator)
+            first = _Value(self.builder.load(self.builder.gep(data, [zero])), element)
+            self.builder.store(self._coerce(first, carried_as).value, accumulator)
             self.builder.store(ir.Constant(i64, 1), index)
 
         header = self.function.append_basic_block("reduce.head")
@@ -1140,25 +1152,26 @@ class _FunctionLowering:
 
         self.builder.position_at_end(body)
         position = self.builder.load(index)
-        value = _Value(self.builder.load(self.builder.gep(data, [position])), element)
-        carried = _Value(self.builder.load(accumulator), element)
+        stored = _Value(self.builder.load(self.builder.gep(data, [position])), element)
+        value = self._coerce(stored, carried_as)
+        carried = _Value(self.builder.load(accumulator), carried_as)
         if operation == "sum":
             # Sequential accumulation keeps strict Python ordering; no
             # reassociation happens without an explicit directive (spec 17.2).
             updated = self._binary(carried, value, ast.Add)
         else:
             symbol = "<" if operation == "min" else ">"
-            if element == "float":
+            if carried_as == "float":
                 keep = self.builder.fcmp_ordered(symbol, value.value, carried.value)
             else:
                 keep = self.builder.icmp_signed(symbol, value.value, carried.value)
-            updated = _Value(self.builder.select(keep, value.value, carried.value), element)
+            updated = _Value(self.builder.select(keep, value.value, carried.value), carried_as)
         self.builder.store(updated.value, accumulator)
         self.builder.store(self.builder.add(self.builder.load(index), ir.Constant(i64, 1)), index)
         self.builder.branch(header)
 
         self.builder.position_at_end(exit_block)
-        return _Value(self.builder.load(accumulator), element)
+        return _Value(self.builder.load(accumulator), carried_as)
 
     def _expr(self, node: ast.expr) -> _Value:
         ir = self.ir
