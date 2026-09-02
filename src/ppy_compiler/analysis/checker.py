@@ -294,6 +294,11 @@ def _is_fresh_allocation(node: ast.expr) -> bool:
         return True
     if isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
         return node.func.id in {"list", "dict", "set", "bytearray"}
+    # `ppy.buffer[int](n)` and `ppy.input[Buffer[int]](n)` make the memory
+    # they hand back, so nothing else can already be holding it.
+    if isinstance(node, ast.Call) and isinstance(node.func, ast.Subscript):
+        spelled = ast.unparse(node.func.value)
+        return spelled in {"ppy.buffer", "ppy.input"}
     return False
 
 
@@ -1383,6 +1388,9 @@ class _Checker:
             typed_read = self._typed_input(node, env)
             if typed_read is not None:
                 return typed_read
+            allocated = self._typed_buffer(node, env)
+            if allocated is not None:
+                return allocated
         imported = self._constant_import(node)
         if imported is not None:
             return imported
@@ -2526,6 +2534,27 @@ class _Checker:
             elif isinstance(node, ast.Name) and node.id in T.BUILTIN_MRO:
                 found.append(T.instance(node.id))
         return found
+
+    def _typed_buffer(self, node: ast.Call, env: Env) -> Binding | None:
+        """`ppy.buffer[T](n)`: `n` elements of `T`, all zero.
+
+        A native build allocates it natively and a standalone one has no
+        `array.array` to make, so the allocation is spelled once and both
+        paths understand it.
+        """
+        func = node.func
+        assert isinstance(func, ast.Subscript)
+        if self.project.resolver(self.symbols).canonical(func.value) != "ppy.buffer":
+            return None
+        if len(node.args) != 1 or node.keywords:
+            self._error("E1305", "`ppy.buffer[T]` takes how many elements to make", node)
+        element = self.annotations.resolve(func.slice)
+        for argument in node.args:
+            self._expr(argument, env)
+        self._effects = self._effects | EffectSet.of(
+            Effect.ALLOC, raises=("TypeError", "ValueError")
+        )
+        return Binding(T.instance("Buffer", element.type))
 
     def _typed_input(self, node: ast.Call, env: Env) -> Binding | None:
         """`ppy.input[T](...)`: read the next value, typed by what was asked for.

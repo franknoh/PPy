@@ -24,6 +24,9 @@ __all__ = ["EXTERNAL", "AliasInfo", "analyze_aliases"]
 #: handed as a parameter: globals, attribute reads, results of unknown calls.
 EXTERNAL = "<external>"
 
+#: Subscripted `ppy` calls that allocate what they hand back.
+_FRESH_PPY = frozenset({"ppy.buffer", "ppy.input"})
+
 #: Builtins whose result is a fresh container holding the argument's elements.
 _FRESH_FROM_ELEMENTS = frozenset(
     {"list", "sorted", "reversed", "set", "tuple", "frozenset", "dict", "bytearray"}
@@ -333,6 +336,10 @@ class _Analyzer:
                     return alloc
                 if node.func.id in _FRESH_SCALAR:
                     return frozenset()
+            # `ppy.buffer[int](n)` and `ppy.input[Buffer[int]](n)` make the
+            # memory they return, so nothing else can already alias it.
+            if isinstance(node.func, ast.Subscript) and ast.unparse(node.func.value) in _FRESH_PPY:
+                return self.fresh()
             return frozenset({EXTERNAL})
         if isinstance(node, ast.Subscript):
             base = self.eval(node.value, state)

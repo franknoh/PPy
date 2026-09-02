@@ -23,6 +23,7 @@ __all__ = ["build_standalone"]
 _SUPPORT = """#include <inttypes.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
 
 void ppy_rt_print_i64(int64_t value) { printf("%" PRId64, value); }
 void ppy_rt_print_bool(int8_t value) { fputs(value ? "True" : "False", stdout); }
@@ -47,6 +48,42 @@ static int ppy_rt_next(void) {
         position = 0;
     }
     return (unsigned char)room[position++];
+}
+
+/* A buffer a standalone program makes for itself. There is no interpreter
+ * to own it, and a program that exits is the only lifetime that matters. */
+int64_t *ppy_rt_alloc(int64_t count) {
+    int64_t *room = calloc(count > 0 ? (size_t)count : 1, sizeof(int64_t));
+    if (room == NULL) {
+        fputs("ppy: out of memory\\n", stderr);
+        exit(1);
+    }
+    return room;
+}
+
+int64_t ppy_rt_read_ints(int64_t *data, int64_t capacity) {
+    int64_t count = 0;
+    while (count < capacity) {
+        int c = ppy_rt_next();
+        while (c != -1 && (c < '0' || c > '9') && c != '-') {
+            c = ppy_rt_next();
+        }
+        if (c == -1) {
+            break;
+        }
+        int negative = 0;
+        if (c == '-') {
+            negative = 1;
+            c = ppy_rt_next();
+        }
+        int64_t value = 0;
+        while (c >= '0' && c <= '9') {
+            value = value * 10 + (c - '0');
+            c = ppy_rt_next();
+        }
+        data[count++] = negative ? -value : value;
+    }
+    return count;
 }
 
 int64_t ppy_rt_read_int(void) {
@@ -201,6 +238,18 @@ def build_standalone(  # type: ignore[no-untyped-def]
     return 0
 
 
+def _binds_a_constant(statement, constants: dict) -> bool:  # type: ignore[no-untyped-def]
+    """`MOD = 10**9 + 7` at module level: a value, not a step to run."""
+    import ast
+
+    if isinstance(statement, ast.AnnAssign) and isinstance(statement.target, ast.Name):
+        return statement.target.id in constants
+    if isinstance(statement, ast.Assign) and len(statement.targets) == 1:
+        target = statement.targets[0]
+        return isinstance(target, ast.Name) and target.id in constants
+    return False
+
+
 def _module_shape(symbols) -> str | None:  # type: ignore[no-untyped-def]
     import ast
 
@@ -214,6 +263,10 @@ def _module_shape(symbols) -> str | None:  # type: ignore[no-untyped-def]
             and isinstance(statement.value, ast.Constant)
             and isinstance(statement.value.value, str)
         ):
+            continue
+        # A proven constant global is folded into the code that reads it, so
+        # nothing has to run to bind the name.
+        if _binds_a_constant(statement, symbols.constant_globals):
             continue
         if isinstance(statement, (ast.Import, ast.ImportFrom)):
             names = getattr(statement, "module", None) or ""

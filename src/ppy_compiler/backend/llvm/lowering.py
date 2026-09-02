@@ -208,10 +208,11 @@ def eligible(
     violations = set(analysis.effects.violations())
     if allow_io:
         violations.discard(Effect.IO)
-    if written:
+    if written or analysis.writes_only_locals:
         # Those writes land in memory the caller lent us, and nowhere else --
         # whether this function performed them or a callee it handed the
-        # buffer to did.
+        # buffer to did. A write to something the function allocated itself
+        # is the same story with a shorter lifetime.
         violations.discard(Effect.WRITE_OBJECT)
     if violations:
         listed = ", ".join(sorted(str(e) for e in violations))
@@ -402,6 +403,15 @@ def _reject_callers_of_rejected(declarations, lowered, rejected) -> None:  # typ
             rejected[qualname] = f"`{callee}` has no native lowering, so this call cannot be made"
             declarations[qualname][0].blocks.clear()
             del lowered[qualname]
+
+
+#: What a standalone build can allocate for itself, and the element it holds.
+#: Both are eight bytes wide, which is what the native ABI passes.
+_ALLOCATIONS = {
+    "ppy.buffer[int]": ("int", False),
+    "ppy.buffer[float]": ("float", False),
+    "ppy.input[Buffer[int]]": ("int", True),
+}
 
 
 def _default_triple() -> str:
@@ -683,6 +693,12 @@ class _FunctionLowering:
                 self._assign(node)
             case ast.AnnAssign():
                 if node.value is not None:
+                    named = isinstance(node.target, ast.Name)
+                    if named and self.standalone:
+                        target = node.target
+                        assert isinstance(target, ast.Name)
+                        if self._standalone_buffer(target.id, node.value):
+                            return
                     self._store(node.target, self._expr(node.value))
             case ast.AugAssign():
                 self._augassign(node)
@@ -743,11 +759,52 @@ class _FunctionLowering:
         if len(node.targets) != 1:
             raise Unsupported("chained assignment has no native lowering")
         target = node.targets[0]
+        if self.standalone and isinstance(target, ast.Name):
+            allocated = self._standalone_buffer(target.id, node.value)
+            if allocated:
+                return
         values = self._tuple_expr(node.value)
         if values is not None:
             self._store_tuple(target, values)
             return
         self._store(target, self._expr(node.value))
+
+    def _standalone_buffer(self, name: str, value: ast.expr) -> bool:
+        """`xs = ppy.buffer[int](n)`, with no `array.array` to make.
+
+        There is no interpreter to hold the memory, so the buffer is a plain
+        zeroed allocation that lives as long as the process. Reading one is
+        the same allocation with the input scanned straight into it.
+        """
+        if not isinstance(value, ast.Call) or len(value.args) != 1:
+            return False
+        described = _ALLOCATIONS.get(ast.unparse(value.func))
+        if described is None:
+            return False
+        element, reads = described
+        ir = self.ir
+        count = self._coerce(self._expr(value.args[0]), "int")
+        element_type = _llvm_type(ir, element)
+        allocate = self.module.globals.get("ppy_rt_alloc")
+        if allocate is None:
+            allocate = ir.Function(
+                self.module,
+                ir.FunctionType(element_type.as_pointer(), [ir.IntType(64)]),
+                name="ppy_rt_alloc",
+            )
+        data = self.builder.call(allocate, [count.value])
+        if reads:
+            reader = self.module.globals.get("ppy_rt_read_ints")
+            if reader is None:
+                reader = ir.Function(
+                    self.module,
+                    ir.FunctionType(ir.IntType(64), [element_type.as_pointer(), ir.IntType(64)]),
+                    name="ppy_rt_read_ints",
+                )
+            self.builder.call(reader, [data, count.value])
+        self.buffers[name] = (data, count.value, element, True)
+        self.locals.pop(name, None)
+        return True
 
     def _store_tuple(self, target: ast.expr, values: _Tuple) -> None:
         """Bind a tuple to a name, or unpack it into several names."""

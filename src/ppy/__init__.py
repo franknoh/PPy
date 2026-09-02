@@ -140,6 +140,10 @@ _READERS = frozenset({"input", "read_ints", "read_token", "reader_available"})
 
 
 def __getattr__(name: str) -> object:
+    if name == "buffer":
+        from ._alloc import buffer as allocate
+
+        return allocate
     if name in _READERS:
         from . import _io
 
