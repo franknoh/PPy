@@ -71,14 +71,29 @@ class CacheStats:
         return f"{size:.1f} GiB"
 
 
-#: What a damaged index says. Anything else -- busy, locked, read-only,
-#: out of disk -- is a working index this process cannot have right now, and
-#: destroying it would be the wrong repair.
-_DAMAGE = ("malformed", "not a database", "corrupt", "encrypted")
+#: SQLite's own verdict that the file is not a usable database:
+#: SQLITE_CORRUPT, SQLITE_NOTADB, and the corrupt-VTab extension of the
+#: first. Anything else -- busy, locked, read-only, out of disk -- is a
+#: working index this process cannot have right now, and destroying it would
+#: be the wrong repair.
+_DAMAGE_CODES = frozenset({11, 26, 267})
+
+#: What a damaged index says, for the drivers that report no code. Read only
+#: when `sqlite_errorcode` is absent, never in place of it.
+_DAMAGE_WORDS = ("malformed", "not a database", "corrupt", "encrypted")
 
 
 def _is_damage(error: BaseException) -> bool:
-    return any(mark in str(error).lower() for mark in _DAMAGE)
+    """Whether the index is broken, rather than merely someone else's.
+
+    The error code is the authority: a message is localized, reworded
+    between SQLite releases, and says "database is locked" and "database
+    disk image is malformed" in the same shape.
+    """
+    code = getattr(error, "sqlite_errorcode", None)
+    if isinstance(code, int):
+        return code in _DAMAGE_CODES or (code & 0xFF) in _DAMAGE_CODES
+    return any(mark in str(error).lower() for mark in _DAMAGE_WORDS)
 
 
 def _in_memory() -> sqlite3.Connection:

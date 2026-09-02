@@ -707,3 +707,28 @@ def test_a_failed_write_leaves_no_half_recorded_artifact(tmp_path: Path):
         )
         raise RuntimeError("interrupted")
     assert store.get("abcd") is None
+
+
+def test_damage_is_judged_by_sqlites_code_not_by_its_wording():
+    """A message is localized and reworded; the error code is the authority.
+
+    "database is locked" and "database disk image is malformed" differ by a
+    few words, and only one of them means the file should be thrown away.
+    """
+    from ppy_compiler.cache.store import _is_damage
+
+    def raised(code: int, message: str) -> sqlite3.DatabaseError:
+        error = sqlite3.DatabaseError(message)
+        error.sqlite_errorcode = code
+        return error
+
+    assert _is_damage(raised(26, "file is not a database"))
+    assert _is_damage(raised(11, "database disk image is malformed"))
+    assert _is_damage(raised(267, "database disk image is malformed")), "an extended code"
+    # Busy and locked keep their index, whatever the message happens to say.
+    assert not _is_damage(raised(5, "database is locked"))
+    assert not _is_damage(raised(6, "database table is locked"))
+    assert not _is_damage(raised(5, "the corrupt word appears in this message"))
+    # Only where a driver reports no code at all does the wording decide.
+    assert _is_damage(sqlite3.DatabaseError("database disk image is malformed"))
+    assert not _is_damage(sqlite3.OperationalError("database is locked"))
