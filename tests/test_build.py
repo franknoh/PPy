@@ -11,11 +11,19 @@ from pathlib import Path
 import pytest
 
 from ppy_compiler.backend.llvm import available as llvm_available
-from ppy_compiler.backend.llvm.link import toolchain_status
+from ppy_compiler.backend.llvm.link import standalone_toolchain_status, toolchain_status
 
 requires_llvm = pytest.mark.skipif(not llvm_available(), reason="llvmlite is not installed")
 _usable, _detail = toolchain_status()
 requires_toolchain = pytest.mark.skipif(not _usable, reason=f"no native toolchain: {_detail}")
+#: A standalone build embeds no interpreter, so it asks for less: an
+#: installation with a static or header-less CPython still builds one, and
+#: skipping these for a missing libpython would skip exactly the case they
+#: exist to cover.
+_standalone, _standalone_detail = standalone_toolchain_status()
+requires_c_compiler = pytest.mark.skipif(
+    not _standalone, reason=f"no C compiler: {_standalone_detail}"
+)
 
 pytestmark = requires_llvm
 
@@ -348,7 +356,7 @@ main()
 """
 
 
-@requires_toolchain
+@requires_c_compiler
 def test_standalone_builds_a_python_free_native_executable(tmp_path: Path):
     """`--standalone`: no CPython inside, same bytes out.
 
@@ -381,7 +389,7 @@ def test_standalone_builds_a_python_free_native_executable(tmp_path: Path):
     assert ran.stdout == plain.stdout
 
 
-@requires_toolchain
+@requires_c_compiler
 def test_standalone_reads_input_without_an_interpreter(tmp_path: Path):
     """`ppy.input[int]()` is the C reader when there is no CPython to ask."""
     (tmp_path / "pyproject.toml").write_text("[tool.ppy]\nstrict = false\n", encoding="utf-8")
@@ -438,7 +446,7 @@ def test_standalone_reads_input_without_an_interpreter(tmp_path: Path):
         assert "libpython" not in linked.stdout
 
 
-@requires_toolchain
+@requires_c_compiler
 def test_standalone_rejects_a_python_reachable_graph(tmp_path: Path):
     (tmp_path / "pyproject.toml").write_text("[tool.ppy]\n", encoding="utf-8")
     (tmp_path / "floaty.ppy").write_text(
@@ -491,7 +499,7 @@ def test_doctor_reports_the_native_toolchain(project: Path):
     assert "native toolchain" in result.stdout
 
 
-@requires_toolchain
+@requires_c_compiler
 def test_standalone_allocates_and_fills_its_own_buffers(tmp_path: Path):
     """No `array.array` to make, so the program makes the memory itself."""
     (tmp_path / "pyproject.toml").write_text("[tool.ppy]\nstrict = false\n", encoding="utf-8")

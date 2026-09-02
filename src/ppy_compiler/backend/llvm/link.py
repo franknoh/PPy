@@ -26,6 +26,7 @@ __all__ = [
     "build_launcher",
     "emit_object",
     "link_shared_library",
+    "standalone_toolchain_status",
     "toolchain_status",
     "write_manifest",
 ]
@@ -72,15 +73,29 @@ def _python_library() -> tuple[Path, str] | None:
 
 
 def toolchain_status() -> tuple[bool, str]:
-    compiler = _compiler()
-    if compiler is None:
-        return False, "no C compiler (cc, gcc, or clang) is on PATH"
+    """What a hybrid build needs: a C compiler, the headers, and a libpython."""
+    usable, detail = standalone_toolchain_status()
+    if not usable:
+        return usable, detail
     include = Path(sysconfig.get_paths()["include"])
     if not (include / "Python.h").is_file():
         return False, f"CPython headers are missing from {include}"
     if _python_library() is None:
         return False, "no shared libpython to embed"
-    return True, f"{compiler}, headers in {include}"
+    return True, f"{detail}, headers in {include}"
+
+
+def standalone_toolchain_status() -> tuple[bool, str]:
+    """What a standalone build needs, which is only a C compiler.
+
+    `--standalone` links no interpreter, so an installation whose CPython is
+    static or header-less still builds one. Holding it to the hybrid path's
+    requirements would refuse the builds it exists to make.
+    """
+    compiler = _compiler()
+    if compiler is None:
+        return False, "no C compiler (cc, gcc, or clang) is on PATH"
+    return True, str(compiler)
 
 
 def emit_object(  # type: ignore[no-untyped-def]

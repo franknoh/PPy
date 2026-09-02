@@ -185,7 +185,9 @@ ppy build --standalone app.ppy
 ```
 
 Links a fully native executable with **no CPython inside** — `ldd` shows
-libc and nothing else, and startup is C startup (~a few ms). The reachable
+libc and nothing else, and startup is C startup (~a few ms). It asks less of
+the machine than the hybrid build does: a C compiler is enough, because
+there are no CPython headers to include and no libpython to embed. The reachable
 graph from `main` must be entirely native: functions the hybrid path could
 lower, plus `print` of integers, booleans, and string literals through C
 shims (floats wait until native formatting can reproduce Python's
