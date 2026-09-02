@@ -10,9 +10,11 @@ from __future__ import annotations
 
 import array as _array
 
-#: The `array` type code for each element type. Both are eight bytes wide,
-#: which is what the native ABI passes.
-_CODES = {int: "q", float: "d"}
+from ._markers import i8, u8
+
+#: The `array` type code for each element type, and how wide one is. A byte
+#: element is a byte in memory; everything else is a machine word.
+_CODES = {int: ("q", 8), float: ("d", 8), i8: ("b", 1), u8: ("B", 1)}
 
 
 class _Allocating:
@@ -27,14 +29,15 @@ class _Allocating:
         return f"ppy.buffer[{getattr(self._spec, '__name__', self._spec)!r}]"
 
     def __call__(self, count: int):  # type: ignore[no-untyped-def]
-        code = _CODES.get(self._spec)
-        if code is None:
+        described = _CODES.get(self._spec)
+        if described is None:
             raise TypeError(f"{self._spec!r} is not an element type a buffer can hold")
+        code, width = described
         if not isinstance(count, int) or isinstance(count, bool):
             raise TypeError("a buffer is made with how many elements it holds")
         if count < 0:
             raise ValueError("a buffer cannot hold fewer than no elements")
-        return _array.array(code, bytes(8 * count))
+        return _array.array(code, bytes(width * count))
 
 
 class _TypedBuffer:
@@ -43,6 +46,7 @@ class _TypedBuffer:
     ```python
     tree = ppy.buffer[int](1 << 18)
     weights = ppy.buffer[float](rows * cols)
+    text = ppy.buffer[ppy.i8](length)     # one byte per element
     ```
     """
 

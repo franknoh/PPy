@@ -414,6 +414,8 @@ def _reject_callers_of_rejected(declarations, lowered, rejected) -> None:  # typ
 _ALLOCATIONS = {
     "ppy.buffer[int]": ("int", False),
     "ppy.buffer[float]": ("float", False),
+    "ppy.buffer[ppy.i8]": ("i8", False),
+    "ppy.buffer[ppy.u8]": ("u8", False),
     "ppy.input[Buffer[int]]": ("int", True),
 }
 
@@ -799,10 +801,12 @@ class _FunctionLowering:
         if allocate is None:
             allocate = ir.Function(
                 self.module,
-                ir.FunctionType(element_type.as_pointer(), [ir.IntType(64)]),
+                ir.FunctionType(ir.IntType(8).as_pointer(), [ir.IntType(64), ir.IntType(64)]),
                 name="ppy_rt_alloc",
             )
-        data = self.builder.call(allocate, [count.value])
+        width = ir.Constant(ir.IntType(64), 1 if element in _NARROW else 8)
+        raw = self.builder.call(allocate, [count.value, width])
+        data = self.builder.bitcast(raw, element_type.as_pointer())
         if reads:
             reader = self.module.globals.get("ppy_rt_read_ints")
             if reader is None:

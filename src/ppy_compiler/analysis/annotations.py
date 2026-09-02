@@ -16,7 +16,12 @@ from ..frontend.source import span_of
 from . import types as T
 from .refinements import Facts, IntRange, width_range
 
-__all__ = ["AnnotationResolver", "Resolved", "Resolver"]
+__all__ = [
+    "AnnotationResolver",
+    "Resolved",
+    "Resolver",
+    "narrow_element",
+]
 
 
 class Resolver(Protocol):
@@ -102,7 +107,7 @@ _PASSTHROUGH = {"typing.Final", "typing.ClassVar", "typing.Required", "typing.No
 _NARROW_ELEMENTS = {(8, True): "i8", (8, False): "u8"}
 
 
-def _narrow_element(resolved: Resolved) -> T.Type | None:
+def narrow_element(resolved: Resolved) -> T.Type | None:
     """`i8`/`u8` as a buffer element: one byte, sign as declared."""
     width = resolved.facts.width
     if resolved.type != T.INT or width is None:
@@ -240,7 +245,7 @@ class AnnotationResolver:
             # `Buffer[ppy.i8]` is a byte per element, not a 64-bit int with a
             # width note on it: the width is the storage, so it has to survive
             # into the element type the ABI reads.
-            element = _narrow_element(resolved) or resolved.type
+            element = narrow_element(resolved) or resolved.type
             return Resolved(T.instance("Buffer", element), Facts(contiguous=True))
 
         resolved_args = tuple(self._resolve(a).type for a in args)

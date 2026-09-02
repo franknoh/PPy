@@ -17,7 +17,7 @@ from . import builtins as B
 from . import stdlib
 from . import types as T
 from .aliasing import EXTERNAL, AliasInfo, analyze_aliases
-from .annotations import AnnotationResolver
+from .annotations import AnnotationResolver, Resolved, narrow_element
 from .binding import bind_call, positional_values
 from .effects import Effect, EffectSet
 from .env import Binding, Env
@@ -208,6 +208,24 @@ _IN_PLACE_MUTABLE = frozenset({"list", "set", "dict", "bytearray", "collections.
 def _mutates_in_place(t: T.Type) -> bool:
     base = T.strip_literal(t)
     return isinstance(base, T.Instance) and base.name in _IN_PLACE_MUTABLE
+
+
+#: What a buffer can hold. A machine word or a byte; anything else has no
+#: native storage, so the annotation would promise something untrue.
+_HOLDABLE = frozenset({"int", "float", "i8", "u8"})
+
+
+def _is_negative(facts: Facts) -> bool:
+    """Is this count provably below zero?"""
+    if facts.has_constant and isinstance(facts.constant, int):
+        return facts.constant < 0
+    span = facts.int_range
+    return span is not None and span.high is not None and span.high < 0
+
+
+def _holdable_element(t: T.Type) -> bool:
+    base = T.strip_literal(t)
+    return isinstance(base, T.Instance) and base.name in _HOLDABLE
 
 
 def _is_fresh_allocation(node: ast.expr) -> bool:
@@ -2470,9 +2488,25 @@ class _Checker:
             return None
         if len(node.args) != 1 or node.keywords:
             self._error("E1305", "`ppy.buffer[T]` takes how many elements to make", node)
-        element = self.annotations.resolve(func.slice)
+        resolved = self.annotations.resolve(func.slice)
+        # `ppy.buffer[ppy.i8]` holds bytes, exactly as `Buffer[ppy.i8]` does.
+        element = Resolved(narrow_element(resolved) or resolved.type, resolved.facts)
+        if not _holdable_element(element.type):
+            self._error(
+                "E1306",
+                f"a buffer holds `int`, `float`, `ppy.i8`, or `ppy.u8`, not `{element.type}`",
+                node,
+            )
         for argument in node.args:
-            self._expr(argument, env)
+            count = self._expr(argument, env)
+            if T.strip_literal(count.type) not in (T.INT, T.UNKNOWN):
+                self._error(
+                    "E1301",
+                    f"a buffer is made with how many elements it holds, not `{count.type}`",
+                    argument,
+                )
+            elif _is_negative(count.facts):
+                self._error("E1401", "a buffer cannot hold fewer than no elements", argument)
         self._effects = self._effects | EffectSet.of(
             Effect.ALLOC, raises=("TypeError", "ValueError")
         )

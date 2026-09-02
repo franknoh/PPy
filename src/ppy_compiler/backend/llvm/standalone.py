@@ -52,13 +52,19 @@ static int ppy_rt_next(void) {
 
 /* A buffer a standalone program makes for itself. There is no interpreter
  * to own it, and a program that exits is the only lifetime that matters. */
-int64_t *ppy_rt_alloc(int64_t count) {
-    int64_t *room = calloc(count > 0 ? (size_t)count : 1, sizeof(int64_t));
+int64_t *ppy_rt_alloc(int64_t count, int64_t width) {
+    if (count < 0) {
+        /* CPython raises ValueError here; a standalone binary has no
+         * exception, so it says what happened and stops. */
+        fputs("ppy: a buffer cannot hold fewer than no elements\\n", stderr);
+        exit(1);
+    }
+    void *room = calloc(count > 0 ? (size_t)count : 1, (size_t)width);
     if (room == NULL) {
         fputs("ppy: out of memory\\n", stderr);
         exit(1);
     }
-    return room;
+    return (int64_t *)room;
 }
 
 int64_t ppy_rt_read_ints(int64_t *data, int64_t capacity) {
