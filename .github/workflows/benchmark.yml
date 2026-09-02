@@ -18,11 +18,10 @@ jobs:
           python-version: "3.13"
       - run: uv sync
       # Reports what moved by more than the tolerance, and refuses to record
-      # anything when the three paths stop agreeing on the answer.
-      - run: uv run python scripts/refresh.py
-      - name: record the run
-        if: always()
-        run: uv run python examples/15_algorithms/bench.py --json > benchmark.json
+      # anything when the paths stop agreeing on the answer. `--record` writes
+      # this run's raw numbers on the way past, so the benchmark runs once
+      # rather than once for the comparison and again for the artifact.
+      - run: uv run python scripts/refresh.py --record benchmark.json
       - uses: actions/upload-artifact@v4
         if: always()
         with:
