@@ -2015,3 +2015,51 @@ def test_every_emitted_code_is_registered():
         emitted.update(re.findall(r'"([EWR][0-9]{4})"', path.read_text(encoding="utf-8")))
         emitted.update(re.findall(r"\[([EWR][0-9]{4})\]", path.read_text(encoding="utf-8")))
     assert emitted <= set(CODES), f"unregistered: {sorted(emitted - set(CODES))}"
+
+
+def test_a_buffer_is_checked_for_its_element_and_its_size(write, analyze):
+    """`ppy.buffer` allocates memory, so both operands are settled statically.
+
+    A standalone binary has no CPython to raise for it, and a byte count is
+    the one argument where a wrong answer is a segmentation fault rather than
+    an exception.
+    """
+    cases = [
+        ("element.ppy", "ppy.buffer[str](4)", "E1306", "not `str`"),
+        ("negative.ppy", "ppy.buffer[int](-1)", "E1401", "fewer than no elements"),
+        ("textual.ppy", "ppy.buffer[int]('4')", "E1301", "how many elements"),
+    ]
+    for name, expression, code, wording in cases:
+        path = write(
+            name,
+            f"""
+            import ppy
+
+            def main() -> int:
+                room = {expression}
+                return len(room)
+            """,
+        )
+        diagnostics = analyze(path).diagnostics.sorted()
+        reported = [d for d in diagnostics if d.code == code]
+        assert reported, f"{expression}: expected {code}, got {[d.code for d in diagnostics]}"
+        assert wording in reported[0].message
+
+
+def test_a_byte_buffer_is_allocated_by_its_signedness(write, analyze):
+    """`ppy.i8` and `ppy.u8` are both elements, and both are one byte."""
+    path = write(
+        "bytes_alloc.ppy",
+        """
+        import ppy
+        from ppy import Buffer
+
+        def main() -> int:
+            signed: Buffer[ppy.i8] = ppy.buffer[ppy.i8](2)
+            unsigned: Buffer[ppy.u8] = ppy.buffer[ppy.u8](2)
+            signed[0] = -128
+            unsigned[0] = 255
+            return signed[0] + unsigned[0]
+        """,
+    )
+    assert [d.code for d in analyze(path).diagnostics.sorted()] == []

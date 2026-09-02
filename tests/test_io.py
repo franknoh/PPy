@@ -161,3 +161,35 @@ def test_a_prompt_is_printed_before_the_read():
         """,
     )
     assert output == "n? | 7"
+
+
+def test_a_buffer_is_zeroed_and_typed_by_its_element():
+    """`ppy.buffer[T](n)` is what a program allocates for itself."""
+    for element, code, width in [
+        (int, "q", 8),
+        (float, "d", 8),
+        (ppy.i8, "b", 1),
+        (ppy.u8, "B", 1),
+    ]:
+        room = ppy.buffer[element](3)
+        assert len(room) == 3
+        assert list(room) == [0, 0, 0] if code != "d" else list(room) == [0.0, 0.0, 0.0]
+        assert room.itemsize == width
+        assert room.typecode == code
+
+
+def test_a_buffer_refuses_an_element_it_cannot_hold():
+    with pytest.raises(TypeError, match="not an element type"):
+        ppy.buffer[str](4)
+
+
+def test_a_buffer_refuses_a_size_that_is_not_a_count():
+    with pytest.raises(ValueError, match="fewer than no elements"):
+        ppy.buffer[int](-1)
+    with pytest.raises(TypeError):
+        ppy.buffer[int]("4")
+
+
+def test_a_buffer_needs_the_element_it_is_holding():
+    with pytest.raises(TypeError, match=re.escape("ppy.buffer")):
+        ppy.buffer(int)
