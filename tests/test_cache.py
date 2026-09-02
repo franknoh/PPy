@@ -621,6 +621,43 @@ def test_an_object_the_index_lost_reads_as_a_miss(tmp_path: Path):
     assert store.read("dddd") is None
 
 
+def test_a_locked_index_is_stepped_around_not_destroyed(tmp_path: Path):
+    """Busy is another process holding a good index, not a damaged one."""
+    root = tmp_path / "cache"
+    store = CacheStore(root)
+    store.put("aaaa", "value", kind="python")
+    store.close()
+
+    holder = sqlite3.connect(store.index_path, isolation_level=None)
+    holder.execute("BEGIN EXCLUSIVE")
+    try:
+        blocked = CacheStore(root)
+        assert blocked.get("aaaa") is None, "a miss, because the index is busy"
+        assert blocked.quarantined is None, "nothing was moved aside"
+        assert blocked.disabled
+        assert not list(root.glob("*.corrupt-*"))
+    finally:
+        holder.execute("ROLLBACK")
+        holder.close()
+
+    # The index the other process was holding is intact.
+    assert CacheStore(root).read_text("aaaa") == "value"
+
+
+def test_a_cache_that_cannot_be_written_is_simply_no_cache(tmp_path: Path):
+    """Nowhere to keep an artifact is a slow build, not a failed one."""
+    root = tmp_path / "locked-out"
+    root.mkdir()
+    root.chmod(0o500)
+    try:
+        store = CacheStore(root / "cache")
+        store.put("bbbb", "value", kind="python")
+        assert store.get("bbbb") is None
+        assert store.disabled
+    finally:
+        root.chmod(0o700)
+
+
 def test_a_read_only_cache_still_compiles(tmp_path: Path):
     """Nowhere to write is a slow build, not a broken one."""
     root = tmp_path / "cache"

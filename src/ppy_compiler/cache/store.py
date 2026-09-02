@@ -71,6 +71,23 @@ class CacheStats:
         return f"{size:.1f} GiB"
 
 
+#: What a damaged index says. Anything else -- busy, locked, read-only,
+#: out of disk -- is a working index this process cannot have right now, and
+#: destroying it would be the wrong repair.
+_DAMAGE = ("malformed", "not a database", "corrupt", "encrypted")
+
+
+def _is_damage(error: BaseException) -> bool:
+    return any(mark in str(error).lower() for mark in _DAMAGE)
+
+
+def _in_memory() -> sqlite3.Connection:
+    """A cache that answers every lookup with a miss and keeps nothing."""
+    connection = sqlite3.connect(":memory:", isolation_level=None)
+    connection.executescript(_SCHEMA)
+    return connection
+
+
 class CacheStore:
     """Atomic, race-safe, content-addressed artifact storage."""
 
@@ -98,14 +115,25 @@ class CacheStore:
         if self._connection is None:
             try:
                 self._connection = self._open()
-            except sqlite3.DatabaseError:
-                # The index is optional acceleration state. A damaged one
-                # costs a rebuild, never the answer (spec 27.5).
-                self._connection = self._recover()
+            except sqlite3.DatabaseError as error:
+                if not _is_damage(error):
+                    # Busy, locked, or unwritable: another process is using a
+                    # perfectly good index. Work without one rather than
+                    # destroying theirs.
+                    self.disabled = True
+                    self._connection = _in_memory()
+                else:
+                    # The index is optional acceleration state. A damaged one
+                    # costs a rebuild, never the answer (spec 27.5).
+                    self._connection = self._recover()
         return self._connection
 
     def _open(self) -> sqlite3.Connection:
-        self.ensure()
+        try:
+            self.ensure()
+        except OSError as error:
+            # Nowhere to put a cache is a slow build, not a broken one.
+            raise sqlite3.OperationalError(f"cannot prepare the cache: {error}") from error
         connection = sqlite3.connect(self.index_path, timeout=30.0, isolation_level=None)
         connection.execute("PRAGMA journal_mode=WAL")
         connection.execute("PRAGMA synchronous=NORMAL")
@@ -152,9 +180,7 @@ class CacheStore:
             return self._open()
         except (sqlite3.DatabaseError, OSError):
             self.disabled = True
-            connection = sqlite3.connect(":memory:", isolation_level=None)
-            connection.executescript(_SCHEMA)
-            return connection
+            return _in_memory()
 
     def close(self) -> None:
         if self._connection is not None:
@@ -183,8 +209,8 @@ class CacheStore:
             return self._put(
                 key, data, kind=kind, source=source, dependencies=dependencies, suffix=suffix
             )
-        except sqlite3.DatabaseError:
-            self._recover_in_place()
+        except sqlite3.DatabaseError as error:
+            self._after(error)
             return self.object_path(
                 digest(data if isinstance(data, str) else data.decode("utf-8", "surrogateescape"))
                 + suffix
@@ -222,9 +248,15 @@ class CacheStore:
             else digest(payload)
         )
         target = self.object_path(content_hash + suffix)
-        target.parent.mkdir(parents=True, exist_ok=True)
-        if not target.exists():
-            self._write_atomic(target, payload)
+        try:
+            target.parent.mkdir(parents=True, exist_ok=True)
+            if not target.exists():
+                self._write_atomic(target, payload)
+        except OSError:
+            # Nowhere to keep it: the caller still gets the path it asked
+            # about, the lookup later misses, and the build recomputes.
+            self.disabled = True
+            return target
         now = time.time()
         # Recording an artifact touches two tables. A reader arriving between
         # them would see a row whose dependencies are not there yet.
@@ -258,12 +290,14 @@ class CacheStore:
         )
 
     def get(self, key: CacheKey | str) -> Path | None:
+        if self.disabled:
+            return None
         try:
             return self._get(key)
-        except sqlite3.DatabaseError:
+        except sqlite3.DatabaseError as error:
             # Damage can show up mid-query as easily as at open; a miss is
-            # always a safe answer.
-            self._recover_in_place()
+            # always a safe answer either way, but only damage earns a rebuild.
+            self._after(error)
             return None
 
     def _get(self, key: CacheKey | str) -> Path | None:
@@ -299,12 +333,18 @@ class CacheStore:
             self.connect().execute(
                 "INSERT OR REPLACE INTO roots(key, label) VALUES(?,?)", (key_hex, label)
             )
-        except sqlite3.DatabaseError:
-            self._recover_in_place()
+        except sqlite3.DatabaseError as error:
+            self._after(error)
 
-    def _recover_in_place(self) -> None:
-        """Rebuild after damage found while working, and keep going."""
-        self._connection = self._recover()
+    def _after(self, error: sqlite3.DatabaseError) -> None:
+        """Rebuild after damage; step aside for anything else."""
+        if _is_damage(error):
+            self._connection = self._recover()
+            return
+        with contextlib.suppress(sqlite3.DatabaseError):
+            self.close()
+        self.disabled = True
+        self._connection = _in_memory()
 
     def invalidate_source(self, source: str) -> int:
         connection = self.connect()
