@@ -22,9 +22,14 @@ __all__ = [
 ]
 
 #: `array` type codes and the element type each denotes.
+#: A byte array stores bytes, and says so: `Buffer[ppy.i8]` accepts it and
+#: the ABI passes one byte per element. Reading one still hands out an `int`.
+_I8 = T.Instance("i8", (), ("i8", "int", "object"))
+_U8 = T.Instance("u8", (), ("u8", "int", "object"))
+
 ARRAY_TYPECODES: dict[str, T.Type] = {
-    "b": T.INT,
-    "B": T.INT,
+    "b": _I8,
+    "B": _U8,
     "h": T.INT,
     "H": T.INT,
     "i": T.INT,

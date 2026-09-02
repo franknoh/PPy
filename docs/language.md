@@ -103,7 +103,7 @@ Ordinary `Annotated` aliases from `ppy`:
 |---|---|
 | `i8 i16 i32 i64 u8 u16 u32 u64` | fixed-width integer contract. A value provably outside the range is `E1401`; a check the contract mode forbids is `E1402`. |
 | `f16 f32 f64` | floating-point width. |
-| `Buffer[T]` | a borrowed writable buffer (`memoryview` over `array.array`) — zero-copy in and out of native code. |
+| `Buffer[T]` | a borrowed writable buffer (`memoryview` over `array.array`) — zero-copy in and out of native code. `T` may be `int`, `float`, or `ppy.i8`/`ppy.u8` for one byte per element. |
 | `Array[T]`, `Vector[T]` | contiguous numeric containers with a known element type. |
 | `Range(lo, hi)` | an integer refinement the checker propagates. |
 | `Dynamic` | an explicit Python-dynamic boundary value. Entering is free; leaving is not: `Dynamic -> Dynamic` flows freely, but `Dynamic -> int` is `E1508` until a `ppy.check[T]` validates it. `Any` at runtime. |
@@ -147,12 +147,15 @@ values = ppy.input[Buffer[int]](n)     # n integers, straight into a buffer
 
 Whitespace and newlines are the same thing to it, as they are to `scanf`.
 Reading goes into memory rather than through a Python object per field, so
-the buffer form is what takes a million numbers quickly: measured 9.6 ms for
-500k integers against 54.8 ms for `sys.stdin.read().split()` and 16.5 ms for
-C's `scanf`. The call takes a prompt for a scalar, printed before reading
-the way the builtin `input` does, or how many values to read for a buffer.
+the buffer form is what takes a million numbers quickly — faster than
+`sys.stdin.read().split()` and faster than C's `scanf`, measured in
+[examples/15_algorithms/15f_input](../examples/15_algorithms/15f_input/README.md).
+The call takes a prompt for a scalar, printed before reading the way the
+builtin `input` does, or how many values to read for a buffer.
 `ppy.read_ints` and `ppy.read_token` are the lower-level forms that fill a
-buffer you already have.
+buffer you already have, and `ppy.buffer[T](n)` makes one: `n` elements of
+`T`, all zero. It is `array.array` under CPython and a native allocation in a
+standalone binary, which is what lets the same source build both ways.
 
 All of them carry the IO effect, so a function that reads is never mistaken
 for a pure one, and all of them work on every path including plain CPython:
@@ -171,6 +174,14 @@ or an explicit `@ppy.native`/`@ppy.jit`/`@ppy.specialize`/`@ppy.parallel`
 gets the boundary; a two-instruction helper stays on the Python side
 (remarked as `R3004`) — while native callers keep calling its native symbol
 directly, boundary or not.
+
+A buffer's element is a machine word unless it says otherwise:
+`Buffer[ppy.i8]` and `Buffer[ppy.u8]` are one byte each, which is what text
+and packed data want — four million characters cost four megabytes rather
+than thirty-two. The width is storage, not type: reading one hands out an
+`int`, arithmetic on it is integer arithmetic, and writing a value that does
+not fit in a byte falls back to CPython rather than wrapping. An
+`array.array("b", ...)` is what such a buffer is made of.
 
 A function lowers when its types are scalars, `Buffer[T]`, homogeneous
 `list[int]`/`list[float]`, `Sequence` of those, or all-scalar `@dataclass`

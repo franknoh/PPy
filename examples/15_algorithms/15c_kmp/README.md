@@ -1,4 +1,4 @@
-# 15c — Substring search ([BOJ 1786](https://www.acmicpc.net/problem/1786))
+# 15c — Substring search
 
 Input: the text, then the pattern. Output: how many times it occurs.
 Four million characters here.
@@ -12,6 +12,8 @@ same input with `scanf`.
 ## What it shows
 
 - `ppy.read_token` fills the buffer without building a Python string.
+- `Buffer[ppy.i8]` is one byte per element, so four million characters cost
+  four megabytes rather than the thirty-two a 64-bit element would.
 - This is the one problem here whose `.ppy` is hand-written: the character
   buffer it wants has no plain-Python spelling that converts to it.
 
@@ -24,15 +26,17 @@ input, interpreter startup and all. Mean ± standard deviation over 5 runs;
 
 | path | wall |
 |---|---:|
-| plain | 511 ± 10 ms |
-| ppy run | 1930 ± 51 ms |
-| ppy build | 79 ± 3 ms |
-| C scanf | 11 ± 0 ms |
+| plain CPython | 555 ± 9 ms |
+| `ppy run` | 2115 ± 62 ms |
+| `ppy build` | 78 ± 3 ms |
+| C (`gcc -O3`, `scanf`) | 11 ± 1 ms |
 
 `ppy run` compiles before it runs, which is most of its two seconds; it is
 the development path, not the one to submit. `ppy build` produces a binary
 that still starts an embedded CPython and imports the runtime: ~35 ms before
-a line of the program runs, against C's ~1 ms.
+a line of the program runs, against C's ~1 ms. This is the one problem here
+with no `--standalone` row: its text arrives as a token, and a standalone
+build has no reader for one yet.
 
 ## Run it
 

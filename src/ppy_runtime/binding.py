@@ -25,16 +25,27 @@ _CTYPES = {
     "i8": ctypes.c_int8,
 }
 
-_ELEMENT_CTYPES = {"int": ctypes.c_int64, "float": ctypes.c_double}
+_ELEMENT_CTYPES = {
+    "int": ctypes.c_int64,
+    "float": ctypes.c_double,
+    "i8": ctypes.c_int8,
+    "u8": ctypes.c_uint8,
+}
 
 #: `array` type codes matching the native element types. Unlike a ctypes slice
 #: assignment, `array.array` rejects an out-of-range value instead of
 #: truncating it, which is what keeps Python integer semantics intact.
-_ELEMENT_CODES = {"int": "q", "float": "d"}
+_ELEMENT_CODES = {"int": "q", "float": "d", "i8": "b", "u8": "B"}
 
 #: Buffer-protocol formats a borrowed buffer accepts per element type. `l` is
 #: a signed long, which is the same width as `q` where this matters.
-_ELEMENT_FORMATS = {"int": ("q", "l"), "float": ("d",)}
+_ELEMENT_FORMATS = {
+    "int": ("q", "l"),
+    "float": ("d",),
+    # A `bytes`-like buffer reports `B`; `c` is what `memoryview(b"...")` says.
+    "i8": ("b", "c", "B"),
+    "u8": ("B", "c", "b"),
+}
 
 
 class GuardFailed(Exception):

@@ -44,10 +44,14 @@ __all__ = [
 #: The native entry point returns a status; a non-zero status means the caller
 #: must re-run the Python implementation (spec 16.9).
 
-_SCALARS = {"int", "float", "bool"}
+_SCALARS = {"int", "float", "bool", "i8", "u8"}
 
-#: Element types a native buffer parameter may carry.
-_BUFFER_ELEMENTS = {"int", "float"}
+#: Element types a native buffer parameter may carry. `i8`/`u8` are one byte
+#: each, which is what text and packed data want; everything else is a word.
+_BUFFER_ELEMENTS = {"int", "float", "i8", "u8"}
+
+#: Buffer elements narrower than a machine word, and whether they are signed.
+_NARROW = {"i8": True, "u8": False}
 
 #: A tuple wider than this stays boxed rather than expanding the ABI.
 _MAX_TUPLE_WIDTH = 8
@@ -459,11 +463,17 @@ def _releases_gil(analysis: FunctionAnalysis) -> bool:
 
 
 def _abi_name(scalar: str) -> str:
-    return {"int": "i64", "float": "double", "bool": "i8"}[scalar]
+    return {"int": "i64", "float": "double", "bool": "i8", "i8": "i8", "u8": "i8"}[scalar]
 
 
 def _llvm_type(ir, scalar: str):  # type: ignore[no-untyped-def]
-    return {"int": ir.IntType(64), "float": ir.DoubleType(), "bool": ir.IntType(8)}[scalar]
+    return {
+        "int": ir.IntType(64),
+        "float": ir.DoubleType(),
+        "bool": ir.IntType(8),
+        "i8": ir.IntType(8),
+        "u8": ir.IntType(8),
+    }[scalar]
 
 
 def _constant_value(ir, value, scalar: str):  # type: ignore[no-untyped-def]
@@ -1835,7 +1845,9 @@ class _FunctionLowering:
     def _unify(self, left: str, right: str) -> str:
         if left == "float" or right == "float":
             return "float"
-        if left == "int" or right == "int":
+        # A byte element is an integer in hand, so two of them meet as
+        # integers -- meeting as booleans would compare their truth instead.
+        if "int" in (left, right) or left in _NARROW or right in _NARROW:
             return "int"
         return "bool"
 
@@ -1843,6 +1855,20 @@ class _FunctionLowering:
         ir = self.ir
         if value.scalar == scalar:
             return value
+        # A byte element is an integer everywhere but in memory: reading one
+        # widens it, and writing one narrows it after the value is checked to
+        # fit, which is what keeps `xs[i] = 300` from silently wrapping.
+        if value.scalar in _NARROW:
+            widened = (
+                self.builder.sext(value.value, ir.IntType(64))
+                if _NARROW[value.scalar]
+                else self.builder.zext(value.value, ir.IntType(64))
+            )
+            return self._coerce(_Value(widened, "int"), scalar)
+        if scalar in _NARROW:
+            narrowed = self._coerce(value, "int")
+            self._guard_byte(narrowed, signed=_NARROW[scalar])
+            return _Value(self.builder.trunc(narrowed.value, ir.IntType(8)), scalar)
         if scalar == "float":
             widened = self._coerce(value, "int") if value.scalar == "bool" else value
             return _Value(self.builder.sitofp(widened.value, ir.DoubleType()), "float")
@@ -1853,6 +1879,18 @@ class _FunctionLowering:
         if scalar == "bool":
             return _Value(self.builder.zext(self._truth(value), ir.IntType(8)), "bool")
         raise Unsupported(f"cannot convert `{value.scalar}` to `{scalar}`")
+
+    def _guard_byte(self, value: _Value, *, signed: bool) -> None:
+        """A value that does not fit in a byte is left to CPython."""
+        ir = self.ir
+        i64 = ir.IntType(64)
+        low, high = (-128, 127) if signed else (0, 255)
+        too_small = self.builder.icmp_signed("<", value.value, ir.Constant(i64, low))
+        too_large = self.builder.icmp_signed(">", value.value, ir.Constant(i64, high))
+        outside = self.builder.or_(too_small, too_large)
+        ok = self.function.append_basic_block("byte.ok")
+        self.builder.cbranch(outside, self.fallback_block, ok)
+        self.builder.position_at_end(ok)
 
     def _truth(self, value: _Value):  # type: ignore[no-untyped-def]
         ir = self.ir

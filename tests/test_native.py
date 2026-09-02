@@ -2689,3 +2689,85 @@ def test_a_concrete_container_satisfies_the_abstract_one():
     # A set is not a sequence, and the widening does not run backwards.
     assert not T.is_assignable(T.instance("set", T.FLOAT), sequence)
     assert not T.is_assignable(sequence, T.list_of(T.FLOAT))
+
+
+BYTES = """
+    import ppy
+    from ppy import Buffer
+
+
+    @ppy.pure
+    @ppy.opt(3)
+    def total(xs: Buffer[ppy.i8]) -> int:
+        out: int = 0
+        for i in range(len(xs)):
+            out += xs[i]
+        return out
+
+
+    @ppy.pure
+    @ppy.opt(3)
+    def matches(xs: Buffer[ppy.i8], at: int, other: int) -> bool:
+        return xs[at] == xs[other]
+
+
+    @ppy.opt(3)
+    def fill(xs: Buffer[ppy.i8], value: int) -> int:
+        for i in range(len(xs)):
+            xs[i] = value
+        return len(xs)
+    """
+
+
+def test_a_byte_buffer_is_one_byte_per_element(write, analyze):
+    """`Buffer[ppy.i8]` is what text and packed data want."""
+    path = write("bytes.ppy", BYTES)
+    module = _collect(analyze(path, backend="llvm"))["bytes"]
+    assert "bytes.total" in module.functions, module.rejected
+    engine = _jit(module)
+
+    lowered = module.functions["bytes.total"]
+    assert lowered.signature.parameters[0].element == "i8"
+    binding = bind(lowered.signature, engine.address(lowered.signature.symbol), sum)
+    values = array.array("b", [1, -2, 3, 100])
+    assert binding.wrapper(values) == 102, "a signed byte widens with its sign"
+    assert binding.fallbacks == 0
+
+
+def test_two_byte_elements_compare_as_integers(write, analyze):
+    """Meeting as booleans would compare their truth, not their values."""
+    path = write("bytecmp.ppy", BYTES)
+    module = _collect(analyze(path, backend="llvm"))["bytecmp"]
+    engine = _jit(module)
+
+    lowered = module.functions["bytecmp.matches"]
+    binding = bind(
+        lowered.signature,
+        engine.address(lowered.signature.symbol),
+        lambda xs, a, b: xs[a] == xs[b],
+    )
+    values = array.array("b", [97, 98, 97])
+    assert binding.wrapper(values, 0, 2) is True
+    assert binding.wrapper(values, 0, 1) is False, "97 and 98 are both truthy"
+
+
+def test_writing_a_byte_that_does_not_fit_falls_back(write, analyze):
+    """A value outside a byte is left to CPython rather than wrapped."""
+    path = write("bytefit.ppy", BYTES)
+    module = _collect(analyze(path, backend="llvm"))["bytefit"]
+    engine = _jit(module)
+
+    lowered = module.functions["bytefit.fill"]
+
+    def fallback(xs, value):
+        for index, _current in enumerate(xs):
+            xs[index] = value
+        return len(xs)
+
+    binding = bind(lowered.signature, engine.address(lowered.signature.symbol), fallback)
+    values = array.array("b", [0, 0, 0])
+    assert binding.wrapper(values, 5) == 3
+    assert list(values) == [5, 5, 5]
+    with pytest.raises(OverflowError):
+        binding.wrapper(values, 300)
+    assert binding.fallbacks == 1

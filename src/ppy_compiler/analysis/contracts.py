@@ -258,7 +258,14 @@ def _is_buffer_like(t: T.Type) -> bool:
     if base.name not in {"list", "Sequence", "Buffer", "memoryview", "array"}:
         return False
     element = T.strip_literal(base.args[0])
-    return isinstance(element, T.Instance) and element.name in {"int", "float", "bool"}
+    # / are the byte-wide elements: one byte in memory, an int in hand.
+    return isinstance(element, T.Instance) and element.name in {
+        "int",
+        "float",
+        "bool",
+        "i8",
+        "u8",
+    }
 
 
 def _is_flat_class(t: T.Type) -> bool:

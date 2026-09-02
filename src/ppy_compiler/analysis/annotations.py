@@ -96,6 +96,21 @@ _FLOAT_MARKERS = {f"ppy.f{bits}": bits for bits in (16, 32, 64)}
 _PASSTHROUGH = {"typing.Final", "typing.ClassVar", "typing.Required", "typing.NotRequired"}
 
 
+#: Element types whose storage is narrower than a machine word, by the width
+#: the marker asks for. Only a byte is offered: it is what text and packed
+#: data need, and every wider one is the machine word already.
+_NARROW_ELEMENTS = {(8, True): "i8", (8, False): "u8"}
+
+
+def _narrow_element(resolved: Resolved) -> T.Type | None:
+    """`i8`/`u8` as a buffer element: one byte, sign as declared."""
+    width = resolved.facts.width
+    if resolved.type != T.INT or width is None:
+        return None
+    name = _NARROW_ELEMENTS.get(tuple(width))
+    return T.Instance(name, (), (name, "int", "object")) if name else None
+
+
 class AnnotationResolver:
     """Turns an annotation expression into a semantic type plus proven facts."""
 
@@ -221,7 +236,11 @@ class AnnotationResolver:
             element = self._resolve(args[0]).type if args else T.UNKNOWN
             return Resolved(T.list_of(element))
         if qualname == "ppy.Buffer":
-            element = self._resolve(args[0]).type if args else T.UNKNOWN
+            resolved = self._resolve(args[0]) if args else Resolved(T.UNKNOWN)
+            # `Buffer[ppy.i8]` is a byte per element, not a 64-bit int with a
+            # width note on it: the width is the storage, so it has to survive
+            # into the element type the ABI reads.
+            element = _narrow_element(resolved) or resolved.type
             return Resolved(T.instance("Buffer", element), Facts(contiguous=True))
 
         resolved_args = tuple(self._resolve(a).type for a in args)

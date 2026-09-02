@@ -512,13 +512,24 @@ def _box_one(atom: str, name: str) -> str:
 
 
 def _abi(scalar: str) -> str:
-    return {"int": "i64", "float": "double", "bool": "i8"}[scalar]
+    return {"int": "i64", "float": "double", "bool": "i8", "i8": "i8", "u8": "i8"}[scalar]
 
 
 def _itemsize(element: str) -> int:
-    return 8
+    """A byte element is one byte wide; everything else is a machine word."""
+    return 1 if element in {"i8", "u8"} else 8
+
+
+#: Buffer-protocol format codes each element accepts. A `bytes`-like buffer
+#: reports `B`, and `memoryview(b"...")` reports `c`.
+_FORMATS = {
+    "float": ("d",),
+    "int": ("q", "l"),
+    "i8": ("b", "c", "B"),
+    "u8": ("B", "c", "b"),
+}
 
 
 def _format_test(element: str, view: str) -> str:
-    codes = ("d",) if element == "float" else ("q", "l")
+    codes = _FORMATS.get(element, ("q", "l"))
     return " || ".join(f"{view}.format[0] == '{code}'" for code in codes)

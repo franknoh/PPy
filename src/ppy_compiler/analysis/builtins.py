@@ -32,7 +32,19 @@ _ALLOC = EffectSet.of(Effect.ALLOC)
 _IO = EffectSet.of(Effect.IO)
 
 
+#: Storage-only element types. A byte in memory is an `int` in hand: reading
+#: one hands out a Python integer, and the width is how it is stored.
+_STORAGE_ONLY = frozenset({"i8", "u8"})
+
+
 def _element_of(t: T.Type) -> T.Type:
+    found = _element_storage(t)
+    if isinstance(found, T.Instance) and found.name in _STORAGE_ONLY:
+        return T.INT
+    return found
+
+
+def _element_storage(t: T.Type) -> T.Type:
     base = T.strip_literal(t)
     if isinstance(base, T.Union_):
         # Iterating `list[float] | tuple[float, float]` yields a float either

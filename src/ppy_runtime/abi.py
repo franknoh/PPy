@@ -15,7 +15,8 @@ __all__ = ["STATUS_FALLBACK", "STATUS_OK", "NativeParam", "NativeSignature"]
 STATUS_OK = 0
 STATUS_FALLBACK = 1
 
-_ABI_NAMES = {"int": "i64", "float": "double", "bool": "i8"}
+#: `i8`/`u8` are byte-wide buffer elements; `bool` shares the width.
+_ABI_NAMES = {"int": "i64", "float": "double", "bool": "i8", "i8": "i8", "u8": "i8"}
 
 
 def _abi_name(scalar: str) -> str:
