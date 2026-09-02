@@ -246,6 +246,7 @@ prints what it found.
 - [docs/config.md](docs/config.md) — every `[tool.ppy]` key
 - [docs/diagnostics.md](docs/diagnostics.md) — every diagnostic code
 - [docs/cli.md](docs/cli.md) — every command and option
+- [docs/compatibility.md](docs/compatibility.md) — what is stable, what moves, and what the cache and artifact ABI promise
 - [examples/README.md](examples/README.md) — 30 worked examples
 
 ## Development

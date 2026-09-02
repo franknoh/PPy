@@ -26,3 +26,32 @@ jobs:
       # single source of truth for what "clean" means, so a local pass and a
       # CI pass are the same claim.
       - run: ./scripts/check.sh
+
+  # Every integration the README advertises gets a job that actually runs it.
+  # The base gate skips them all -- a skip proves nothing, so `plugin_check.sh`
+  # fails when a requested plugin's tests do not run.
+  plugins:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        plugin: ["torch", "jax", "uvicorn"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.13"
+      - run: uv sync --group ${{ matrix.plugin }}
+      - run: ./scripts/plugin_check.sh ${{ matrix.plugin }}
+
+  # A built artifact must run where the compiler is not installed, and the
+  # wheel must carry what that takes.
+  artifact:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.13"
+      - run: uv sync
+      - run: uv run pytest -q tests/test_build.py

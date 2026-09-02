@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import os
+import sqlite3
 import time
 from pathlib import Path
 from typing import ClassVar
@@ -568,3 +570,69 @@ def test_the_cache_root_honours_the_environment(monkeypatch, tmp_path):
     assert one.cache_path.is_relative_to(tmp_path / "store")
     monkeypatch.delenv("PPY_CACHE_DIR")
     assert Config(root=tmp_path / "one").cache_path == tmp_path / "one" / ".ppy-cache"
+
+
+def test_a_damaged_index_is_quarantined_and_rebuilt(tmp_path: Path):
+    """A cache is optional speed; damage costs a rebuild, never the answer."""
+    store = CacheStore(tmp_path / "cache")
+    store.put("aaaa", "first", kind="python")
+    store.close()
+
+    store.index_path.write_bytes(os.urandom(4096))
+    reopened = CacheStore(tmp_path / "cache")
+    assert reopened.get("aaaa") is None, "the entry is gone, which is a miss"
+
+    reopened.put("bbbb", "second", kind="python")
+    assert reopened.read_text("bbbb") == "second", "and the store works again"
+    assert reopened.quarantined is not None
+    assert reopened.quarantined.exists(), "the damaged index is kept, not deleted"
+    assert not reopened.disabled
+
+
+def test_damage_found_while_reading_is_recovered(tmp_path: Path):
+    """Corruption shows up mid-query as easily as at open."""
+    store = CacheStore(tmp_path / "cache")
+    store.put("cccc", "value", kind="python")
+    connection = store.connect()
+    connection.close()  # every later statement raises ProgrammingError/DatabaseError
+
+    # A store whose connection is unusable answers misses and repairs itself.
+    store._connection = _Damaged()
+    assert store.get("cccc") is None
+    assert store.read_text("cccc") is None
+
+
+class _Damaged:
+    """A connection that fails the way a corrupt index does."""
+
+    def execute(self, *_args, **_keywords):
+        raise sqlite3.DatabaseError("database disk image is malformed")
+
+    def close(self) -> None:
+        raise sqlite3.DatabaseError("database disk image is malformed")
+
+
+def test_an_object_the_index_lost_reads_as_a_miss(tmp_path: Path):
+    """The index may outlive the file it points at."""
+    store = CacheStore(tmp_path / "cache")
+    path = store.put("dddd", "payload", kind="python")
+    path.unlink()
+    assert store.get("dddd") is None
+    assert store.read("dddd") is None
+
+
+def test_a_read_only_cache_still_compiles(tmp_path: Path):
+    """Nowhere to write is a slow build, not a broken one."""
+    root = tmp_path / "cache"
+    store = CacheStore(root)
+    store.put("eeee", "value", kind="python")
+    store.close()
+    store.index_path.write_bytes(os.urandom(2048))
+    root.chmod(0o500)
+    try:
+        reopened = CacheStore(root)
+        assert reopened.get("eeee") is None
+        # An in-memory index keeps the interface working; nothing persists.
+        reopened.put("ffff", "value", kind="python")
+    finally:
+        root.chmod(0o700)

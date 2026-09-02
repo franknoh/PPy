@@ -44,7 +44,7 @@ def _normalize(line: str) -> str:
     return line.strip()
 
 
-def _run(args: list[str], cwd: Path) -> tuple[int, str]:
+def _run(args: list[str], cwd: Path) -> tuple[int, str, str]:
     done = subprocess.run(
         [sys.executable, *args],
         cwd=cwd,
@@ -56,7 +56,7 @@ def _run(args: list[str], cwd: Path) -> tuple[int, str]:
         timeout=240,
         check=False,
     )
-    return done.returncode, _clean(done.stdout)
+    return done.returncode, _clean(done.stdout), done.stderr.strip()
 
 
 def _missing_libraries(folder: Path) -> set[str]:
@@ -112,14 +112,14 @@ def main() -> int:
             check=False,
         )
         status = "ok" if checked.returncode == 0 else "CHECK FAILED"
-        results: dict[str, tuple[int, str]] = {}
+        results: dict[str, tuple[int, str, str]] = {}
         for label, args in PATHS:
             try:
                 results[label] = _run([*args, name], cwd)
             except subprocess.TimeoutExpired:
-                results[label] = (-1, "<timeout>")
-        outputs = {label: out for label, (_, out) in results.items()}
-        codes = {label: code for label, (code, _) in results.items()}
+                results[label] = (-1, "<timeout>", "timed out")
+        outputs = {label: out for label, (_, out, _err) in results.items()}
+        codes = {label: code for label, (code, _out, _err) in results.items()}
         agree = len(set(outputs.values())) == 1 and set(codes.values()) == {0}
         if status != "ok" or not agree:
             failures += 1
@@ -127,8 +127,13 @@ def main() -> int:
         rel = entry.relative_to(ROOT)
         print(f"[{mark}] {rel}  check={status}  exit={codes}")
         if not agree:
-            for label in outputs:
-                print(f"        {label}: {outputs[label]!r}"[:300])
+            for label, (code, out, error) in results.items():
+                print(f"        {label}: {out!r}"[:300])
+                # Without this the actual exception is invisible, and a
+                # failure reads as a mysterious disagreement.
+                if code != 0 and error:
+                    for line in error.splitlines()[-6:]:
+                        print(f"          | {line}"[:300])
     ran = len(entries) - len(skipped)
     for entry in skipped:
         # A skip is not a pass; say what did not run and why.

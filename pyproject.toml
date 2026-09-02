@@ -37,7 +37,9 @@ dev = [
 torch = ["torch>=2.4", "ninja>=1.11"]
 # flatbuffers is what jax.export uses to serialize StableHLO (spec 21.3).
 jax = [
-    "jax[cuda12]>=0.4",
+    # The CPU build for the same reason torch resolves from the CPU index;
+    # `jax[cuda12]` is the local override on a machine that has CUDA.
+    "jax>=0.4",
     "flatbuffers>=24.0",
     "flax>=0.12.9",
 ]
@@ -60,13 +62,20 @@ all = [
 default-groups = ["dev"]
 
 # A plugin's cache key records the accelerator runtime it was built against, so
-# which index torch resolves from is part of the project configuration.
+# which index torch resolves from is part of the project configuration. The
+# default is the CPU build, which resolves on every platform CI and
+# contributors actually use; for a CUDA machine, override it locally:
+#
+#   uv sync --group torch --index pytorch-cuda=https://download.pytorch.org/whl/cu128
+#
+# or set `UV_INDEX` in the environment. Pinning CUDA here instead would make a
+# checkout unresolvable for anyone without it.
 [tool.uv.sources]
-torch = { index = "pytorch-cuda" }
+torch = { index = "pytorch-cpu" }
 
 [[tool.uv.index]]
-name = "pytorch-cuda"
-url = "https://download.pytorch.org/whl/cu128"
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
 explicit = true
 
 [build-system]

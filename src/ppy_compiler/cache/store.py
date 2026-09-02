@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import atexit
+import contextlib
 import os
 import shutil
 import sqlite3
+import sys
 import tempfile
 import time
 from collections.abc import Iterable, Iterator
@@ -75,6 +77,11 @@ class CacheStore:
     def __init__(self, root: Path) -> None:
         self.root = root
         self._connection: sqlite3.Connection | None = None
+        #: Where a damaged index was moved, when one was found.
+        self.quarantined: Path | None = None
+        #: True once the index could not be rebuilt on disk, so every lookup
+        #: is a miss and every store is dropped.
+        self.disabled = False
         # A process that opened the index should not leave it to the garbage
         # collector, which reports the open handle as a ResourceWarning.
         atexit.register(self.close)
@@ -89,17 +96,70 @@ class CacheStore:
 
     def connect(self) -> sqlite3.Connection:
         if self._connection is None:
-            self.ensure()
-            connection = sqlite3.connect(self.index_path, timeout=30.0, isolation_level=None)
-            connection.execute("PRAGMA journal_mode=WAL")
-            connection.execute("PRAGMA synchronous=NORMAL")
-            connection.executescript(_SCHEMA)
-            self._connection = connection
+            try:
+                self._connection = self._open()
+            except sqlite3.DatabaseError:
+                # The index is optional acceleration state. A damaged one
+                # costs a rebuild, never the answer (spec 27.5).
+                self._connection = self._recover()
         return self._connection
+
+    def _open(self) -> sqlite3.Connection:
+        self.ensure()
+        connection = sqlite3.connect(self.index_path, timeout=30.0, isolation_level=None)
+        connection.execute("PRAGMA journal_mode=WAL")
+        connection.execute("PRAGMA synchronous=NORMAL")
+        connection.executescript(_SCHEMA)
+        return connection
+
+    def _quarantine(self) -> Path | None:
+        """Move a damaged index aside, keeping it for anyone who wants to look."""
+        stamp = time.strftime("%Y%m%d-%H%M%S")
+        kept: Path | None = None
+        for suffix in ("", "-wal", "-shm"):
+            broken = self.index_path.with_name(self.index_path.name + suffix)
+            if not broken.exists():
+                continue
+            aside = broken.with_name(f"{broken.name}.corrupt-{stamp}")
+            try:
+                broken.replace(aside)
+            except OSError:
+                with contextlib.suppress(OSError):
+                    broken.unlink()
+                continue
+            if not suffix:
+                kept = aside
+        return kept
+
+    def _recover(self) -> sqlite3.Connection:
+        """Rebuild the index after damage, or run without one.
+
+        Every artifact is content-addressed on disk, so losing the index
+        costs recompilation and nothing else. If even a fresh index cannot be
+        opened -- a read-only cache directory, a full disk -- the store keeps
+        working in memory and every lookup is simply a miss.
+        """
+        with contextlib.suppress(sqlite3.DatabaseError):
+            self.close()
+        aside = self._quarantine()
+        self.quarantined = aside
+        where = f" (kept at {aside})" if aside is not None else ""
+        print(
+            f"warning[W2101]: the build cache index was damaged and has been rebuilt{where}",
+            file=sys.stderr,
+        )
+        try:
+            return self._open()
+        except (sqlite3.DatabaseError, OSError):
+            self.disabled = True
+            connection = sqlite3.connect(":memory:", isolation_level=None)
+            connection.executescript(_SCHEMA)
+            return connection
 
     def close(self) -> None:
         if self._connection is not None:
-            self._connection.close()
+            with contextlib.suppress(sqlite3.DatabaseError):
+                self._connection.close()
             self._connection = None
 
     def exists(self) -> bool:
@@ -119,6 +179,27 @@ class CacheStore:
         suffix: str = "",
     ) -> Path:
         """Store an artifact atomically and index it."""
+        try:
+            return self._put(
+                key, data, kind=kind, source=source, dependencies=dependencies, suffix=suffix
+            )
+        except sqlite3.DatabaseError:
+            self._recover_in_place()
+            return self.object_path(
+                digest(data if isinstance(data, str) else data.decode("utf-8", "surrogateescape"))
+                + suffix
+            )
+
+    def _put(
+        self,
+        key: CacheKey | str,
+        data: bytes | str,
+        *,
+        kind: str | None = None,
+        source: str = "",
+        dependencies: Iterable[str] = (),
+        suffix: str = "",
+    ) -> Path:
         payload = data.encode("utf-8") if isinstance(data, str) else data
         key_hex = key.hex() if isinstance(key, CacheKey) else key
         kind = kind or (key.kind if isinstance(key, CacheKey) else "object")
@@ -148,6 +229,15 @@ class CacheStore:
         return target
 
     def get(self, key: CacheKey | str) -> Path | None:
+        try:
+            return self._get(key)
+        except sqlite3.DatabaseError:
+            # Damage can show up mid-query as easily as at open; a miss is
+            # always a safe answer.
+            self._recover_in_place()
+            return None
+
+    def _get(self, key: CacheKey | str) -> Path | None:
         key_hex = key.hex() if isinstance(key, CacheKey) else key
         connection = self.connect()
         row = connection.execute("SELECT object FROM artifacts WHERE key=?", (key_hex,)).fetchone()
@@ -162,7 +252,13 @@ class CacheStore:
 
     def read(self, key: CacheKey | str) -> bytes | None:
         path = self.get(key)
-        return path.read_bytes() if path is not None else None
+        if path is None:
+            return None
+        try:
+            return path.read_bytes()
+        except OSError:
+            # The index knew about an object the filesystem no longer has.
+            return None
 
     def read_text(self, key: CacheKey | str) -> str | None:
         data = self.read(key)
@@ -170,9 +266,16 @@ class CacheStore:
 
     def mark_root(self, key: CacheKey | str, label: str = "") -> None:
         key_hex = key.hex() if isinstance(key, CacheKey) else key
-        self.connect().execute(
-            "INSERT OR REPLACE INTO roots(key, label) VALUES(?,?)", (key_hex, label)
-        )
+        try:
+            self.connect().execute(
+                "INSERT OR REPLACE INTO roots(key, label) VALUES(?,?)", (key_hex, label)
+            )
+        except sqlite3.DatabaseError:
+            self._recover_in_place()
+
+    def _recover_in_place(self) -> None:
+        """Rebuild after damage found while working, and keep going."""
+        self._connection = self._recover()
 
     def invalidate_source(self, source: str) -> int:
         connection = self.connect()
