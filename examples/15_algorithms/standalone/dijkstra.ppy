@@ -1,0 +1,128 @@
+"""Shortest paths with no interpreter under it."""
+
+import ppy
+from ppy import Buffer
+
+INFINITY: int = 1 << 60
+
+
+def sift_down(keys: Buffer[int], nodes: Buffer[int], size: int, start: int) -> int:
+    position: int = start
+    while True:
+        left: int = 2 * position + 1
+        if left >= size:
+            break
+        best: int = left
+        right: int = left + 1
+        if right < size and keys[right] < keys[left]:
+            best = right
+        if keys[position] <= keys[best]:
+            break
+        key: int = keys[position]
+        node: int = nodes[position]
+        keys[position] = keys[best]
+        nodes[position] = nodes[best]
+        keys[best] = key
+        nodes[best] = node
+        position = best
+    return position
+
+
+def sift_up(keys: Buffer[int], nodes: Buffer[int], start: int) -> int:
+    position: int = start
+    while position > 0:
+        parent: int = (position - 1) // 2
+        if keys[parent] <= keys[position]:
+            break
+        key: int = keys[position]
+        node: int = nodes[position]
+        keys[position] = keys[parent]
+        nodes[position] = nodes[parent]
+        keys[parent] = key
+        nodes[parent] = node
+        position = parent
+    return position
+
+
+def dijkstra(
+    offsets: Buffer[int],
+    targets: Buffer[int],
+    weights: Buffer[int],
+    distance: Buffer[int],
+    keys: Buffer[int],
+    nodes: Buffer[int],
+    count: int,
+    source: int,
+) -> int:
+    for i in range(count):
+        distance[i] = INFINITY
+    distance[source] = 0
+    keys[0] = 0
+    nodes[0] = source
+    size: int = 1
+    while size > 0:
+        best: int = keys[0]
+        node: int = nodes[0]
+        size -= 1
+        keys[0] = keys[size]
+        nodes[0] = nodes[size]
+        sift_down(keys, nodes, size, 0)
+        if best <= distance[node]:
+            for edge in range(offsets[node], offsets[node + 1]):
+                neighbour: int = targets[edge]
+                relaxed: int = best + weights[edge]
+                if relaxed < distance[neighbour]:
+                    distance[neighbour] = relaxed
+                    keys[size] = relaxed
+                    nodes[size] = neighbour
+                    size += 1
+                    sift_up(keys, nodes, size - 1)
+    total: int = 0
+    for i in range(count):
+        if distance[i] < INFINITY:
+            total += distance[i]
+    return total
+
+
+def build_csr(
+    fields: Buffer[int],
+    offsets: Buffer[int],
+    targets: Buffer[int],
+    weights: Buffer[int],
+    cursor: Buffer[int],
+    count: int,
+    edges: int,
+) -> int:
+    """Turn the `u v w` triples into compressed adjacency, in place."""
+    for e in range(edges):
+        offsets[fields[e * 3] + 1] += 1
+    for i in range(count):
+        offsets[i + 1] += offsets[i]
+    for i in range(count):
+        cursor[i] = offsets[i]
+    for e in range(edges):
+        head: int = fields[e * 3]
+        at: int = cursor[head]
+        targets[at] = fields[1 + e * 3]
+        weights[at] = fields[2 + e * 3]
+        cursor[head] = at + 1
+    return offsets[count]
+
+
+def main() -> None:
+    count: int = ppy.input[int]()
+    edges: int = ppy.input[int]()
+    source: int = ppy.input[int]()
+    fields: Buffer[int] = ppy.input[Buffer[int]](edges * 3)
+    offsets: Buffer[int] = ppy.buffer[int](count + 1)
+    cursor: Buffer[int] = ppy.buffer[int](count)
+    targets: Buffer[int] = ppy.buffer[int](edges)
+    weights: Buffer[int] = ppy.buffer[int](edges)
+    distance: Buffer[int] = ppy.buffer[int](count)
+    keys: Buffer[int] = ppy.buffer[int](edges + 1)
+    nodes: Buffer[int] = ppy.buffer[int](edges + 1)
+    build_csr(fields, offsets, targets, weights, cursor, count, edges)
+    print(dijkstra(offsets, targets, weights, distance, keys, nodes, count, source))
+
+
+main()

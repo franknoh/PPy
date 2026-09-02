@@ -62,16 +62,22 @@ The C reference reads the same input with `scanf`.
 
 | | problem | plain | `ppy build` | `--standalone` | C (`scanf`) |
 |---|---|---:|---:|---:|---:|
-| [15a](15a_nqueens/) | N-Queens | 350 ms | 54 ms | **7 ms** | 5 ms |
-| [15b](15b_dijkstra/) | shortest path | 2215 ms | 312 ms | 145 ms | 203 ms |
-| [15c](15c_kmp/) | substring search | 555 ms | 78 ms | — | 11 ms |
-| [15d](15d_segment_tree/) | range sums | 859 ms | 132 ms | 27 ms | 61 ms |
-| [15e](15e_lis/) | longest increasing subsequence | 787 ms | 115 ms | 40 ms | 68 ms |
-| [15f](15f_input/) | counting inversions | 1022 ms | 107 ms | 46 ms | 52 ms |
+| [15a](15a_nqueens/) | N-Queens | 298.0 ms | 45.6 ms | 7.0 ms | 4.9 ms |
+| [15b](15b_dijkstra/) | shortest path | 1842.8 ms | 329.9 ms | **127.5 ms** | 173.8 ms |
+| [15c](15c_kmp/) | substring search | 462.6 ms | 53.7 ms | — | 10.2 ms |
+| [15d](15d_segment_tree/) | range sums | 710.1 ms | 115.4 ms | **26.0 ms** | 55.8 ms |
+| [15e](15e_lis/) | longest increasing subsequence | 692.9 ms | 106.7 ms | **39.5 ms** | 63.5 ms |
+| [15f](15f_input/) | counting inversions | 864.5 ms | 98.6 ms | **38.6 ms** | 49.4 ms |
+
+Every cell is the mean of five runs, recorded in
+[`measurements.json`](measurements.json) with the machine it was measured
+on; `bench.py` reproduces it, `scripts/refresh.py` says when a number here
+has drifted, and both fail if the paths stop agreeing on the answer. Bold is
+faster than the C reference.
 
 `ppy run` is left out of the table because it compiles before it runs — a
-flat ~2 s on every row, which is the development path rather than the one to
-submit.
+flat ~1.8 s on every row, which is the development path rather than the one
+to submit.
 
 The two `ppy build` columns are the same compiler with different amounts of
 Python left in the artifact:
@@ -83,32 +89,26 @@ Python left in the artifact:
   problems it is most of what separates the column from C.
 - **`--standalone`** is a binary with no CPython in it at all. `ldd` shows
   libc and nothing else, `ppy.input[int]()` lowers to the same buffered scan
-  of standard input that `scanf` does, and N-Queens lands at 7.1 ± 0.6 ms
-  against the C reference's 5.3 ± 0.3 ms, from a 16.8 KB binary against
-  C's 16.1 KB.
+  of standard input that `scanf` does, and N-Queens lands at 7.0 ms against
+  the C reference's 4.9 ms, from a 17.0 KB binary against C's 16.1 KB.
 
-The `--standalone` column now covers every problem here. A standalone build
-needs everything `main` reaches to be native, which used to rule out the five
-that allocate buffers; `ppy.buffer[int](n)` and `ppy.input[Buffer[int]](n)`
-allocate natively, so they no longer do. Written that way — no `array.array`,
-no exceptions, nothing Python on the path from `main` — each one builds a
-binary that links libc and nothing else:
+Four of the five standalone rows beat the C reference, by up to 2.1×, for
+one reason: `ppy.input` reads into memory faster than `scanf` parses. Only
+N-Queens, which reads a single integer and then computes, stays behind.
 
-| problem | `--standalone` | C (`scanf`) |
-|---|---:|---:|
-| N-Queens | 7.1 ± 0.6 ms | 5.3 ± 0.3 ms |
-| shortest path | 144.5 ± 5.2 ms | 189.3 ± 4.4 ms |
-| range sums | 27.0 ± 1.7 ms | 57.8 ± 1.5 ms |
-| longest increasing subsequence | 40.2 ± 2.1 ms | 70.8 ± 2.5 ms |
-| counting inversions | 46.4 ± 5.6 ms | 52.4 ± 2.4 ms |
+The column covers five of the six. A standalone build needs everything
+`main` reaches to be native, which used to rule out every problem that
+allocates a buffer; `ppy.buffer[T](n)` and `ppy.input[Buffer[int]](n)`
+allocate natively, so it no longer does. Substring search is the exception:
+its text arrives as a token and `ppy.read_token` has no standalone lowering
+yet, which is why its row is a dash.
 
-Four of the five beat the C reference, by up to 2.1×, and for one reason:
-`ppy.input` reads into memory faster than `scanf` parses. The committed
-solutions are not written that way — they keep the `try`/`except` and the
-`array.array` that let the same file run under plain CPython, which is the
-point of a `.ppy` file. The standalone variants trade that for the subset,
-and `examples/15_algorithms/15a_nqueens/README.md` shows what the trade
-looks like.
+The committed solutions are not what that column times. They keep the
+`try`/`except` and the `array.array` that let the same file run under plain
+CPython, which is the point of a `.ppy` file; the standalone variants trade
+both for the subset and live in [`standalone/`](standalone/), which says
+what the trade costs. `bench.py` builds them from there and holds them to
+the same answer as every other column.
 
 Five of the six are written as ordinary Python and converted:
 `ppy convert <name>.py --promote-buffers` writes the `.ppy` beside it, and

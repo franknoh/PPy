@@ -76,16 +76,31 @@ PROBLEMS = [
     ("15f_input", "inversions", _inversions),
 ]
 
-PATHS = ["plain", "ppy run", "ppy build", "C scanf"]
+PATHS = ["plain", "ppy run", "ppy build", "standalone", "C scanf"]
+
+#: The CPython-free variant of a problem, where the subset reaches it. It is a
+#: separate source -- no `array.array`, no `try`/`except EOFError` -- so it is
+#: built and timed as itself rather than credited to the file beside it. It
+#: still answers the same input, and the run below holds it to that.
+STANDALONE = {
+    "15a_nqueens": "nqueens",
+    "15b_dijkstra": "dijkstra",
+    "15d_segment_tree": "segment_tree",
+    "15e_lis": "lis",
+    "15f_input": "inversions",
+}
 
 
-def _commands(stem: str) -> list[tuple[str, list[str]]]:
-    return [
+def _commands(stem: str, standalone: str | None) -> list[tuple[str, list[str]]]:
+    rows = [
         ("plain", [sys.executable, f"{stem}.ppy"]),
         ("ppy run", [*PPY, "run", f"{stem}.ppy"]),
         ("ppy build", [f"./dist/{stem}"]),
-        ("C scanf", [f"./{stem}_c"]),
     ]
+    if standalone is not None:
+        rows.append(("standalone", [f"./native/{standalone}"]))
+    rows.append(("C scanf", [f"./{stem}_c"]))
+    return rows
 
 
 def _wall(command: list[str], folder: Path, data: Path, env: dict) -> tuple[float, str]:
@@ -109,7 +124,7 @@ def _wall(command: list[str], folder: Path, data: Path, env: dict) -> tuple[floa
 _RUNTIME = ("ppy", "ppy_runtime")
 
 
-def _staged(folder: Path, stem: str, room: Path) -> tuple[Path, dict]:
+def _staged(folder: Path, stem: str, room: Path, standalone: str | None) -> tuple[Path, dict]:
     """Copy the program and the runtime somewhere the filesystem is fast.
 
     A checkout on a mounted Windows drive answers `stat` and `open` several
@@ -141,6 +156,16 @@ def _staged(folder: Path, stem: str, room: Path) -> tuple[Path, dict]:
         check=True,
         env=where,
     )
+    if standalone is not None:
+        shutil.copy2(HERE / "standalone" / f"{standalone}.ppy", work / f"{standalone}.ppy")
+        subprocess.run(
+            [*PPY, "build", "--standalone", f"{standalone}.ppy", "-o", "native"],
+            cwd=work,
+            capture_output=True,
+            text=True,
+            check=True,
+            env=where,
+        )
     return work, where
 
 
@@ -193,22 +218,23 @@ def measure(only: list[str] | None = None, rounds: int = ROUNDS) -> dict:
         folder = HERE / folder_name
         with tempfile.TemporaryDirectory() as scratch:
             room = Path(scratch)
-            work, where = _staged(folder, stem, room)
+            work, where = _staged(folder, stem, room, STANDALONE.get(folder_name))
             data = room / "input.txt"
             data.write_text(generate(), encoding="utf-8")
             row: dict = {}
-            answers = set()
-            for label, command in _commands(stem):
+            answers: dict[str, str] = {}
+            for label, command in _commands(stem, STANDALONE.get(folder_name)):
                 samples = []
                 for _ in range(rounds):
                     elapsed, answer = _wall(command, work, data, where)
                     samples.append(elapsed)
-                    answers.add(answer)
+                    answers[label] = answer
                 row[label] = {
                     "mean": statistics.mean(samples),
                     "stdev": statistics.stdev(samples) if len(samples) > 1 else 0.0,
                 }
-            row["answers"] = sorted(answers)
+            row["answers"] = sorted(set(answers.values()))
+            row["by_path"] = answers
         results[folder_name] = row
     return results
 
@@ -216,16 +242,20 @@ def measure(only: list[str] | None = None, rounds: int = ROUNDS) -> dict:
 def main() -> int:
     only = [a for a in sys.argv[1:] if not a.startswith("--")]
     results = measure(only or None)
+    disagreed = any(len(row["answers"]) != 1 for row in results.values())
     if "--json" in sys.argv:
         print(json.dumps({"environment": environment(), "problems": results}, indent=1))
-        return 0
+        return 1 if disagreed else 0
     print(f"{'problem':<18}" + "".join(f"{name:>18}" for name in PATHS))
     for folder_name, row in results.items():
-        cells = "".join(f"{row[name]['mean']:9.1f} ±{row[name]['stdev']:5.1f}" for name in PATHS)
+        cells = "".join(
+            f"{row[name]['mean']:9.1f} ±{row[name]['stdev']:5.1f}" if name in row else f"{'—':>16}"
+            for name in PATHS
+        )
         print(f"{folder_name:<18}{cells}")
         if len(row["answers"]) != 1:
-            print(f"  DISAGREE: {row['answers']}")
-    return 0
+            print(f"  DISAGREE: {row['by_path']}")
+    return 1 if disagreed else 0
 
 
 if __name__ == "__main__":

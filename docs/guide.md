@@ -63,8 +63,8 @@ Importing `ppy` installs a `sys.meta_path` finder, so a plain `.py` file can
 import `.ppy` modules with no compiler and no build step:
 
 ```python
-import ppy        # installs the hook
-import geometry   # loads geometry.ppy as ordinary Python source
+import ppy  # installs the hook
+import geometry  # loads geometry.ppy as ordinary Python source
 ```
 
 Without `import ppy` the module is invisible — the hook is never implicit. If

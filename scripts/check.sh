@@ -4,7 +4,8 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 FILES=(examples/run_all.py examples/lint_all.py examples/verify_conversions.py
-       examples/bench_startup.py examples/bench_boundary.py)
+       examples/bench_startup.py examples/bench_boundary.py
+       examples/15_algorithms/bench.py scripts/refresh.py scripts/doc_examples.py)
 
 uv run ruff check src tests "${FILES[@]}"
 uv run ruff format --check src tests
@@ -13,3 +14,4 @@ uv run pytest -q
 uv run python examples/verify_conversions.py
 uv run python examples/run_all.py
 uv run python examples/lint_all.py
+uv run python scripts/doc_examples.py

@@ -18,3 +18,4 @@ examples/**/.venv/
 
 # Compiled C reference binaries built beside an example.
 *_c
+examples/**/native/

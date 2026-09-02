@@ -24,11 +24,11 @@ input, interpreter startup and all. Mean ± standard deviation over 5 runs;
 
 | path | wall |
 |---|---:|
-| plain CPython | 350 ± 14 ms |
-| `ppy run` | 2099 ± 78 ms |
-| `ppy build` | 54 ± 4 ms |
-| `ppy build --standalone` | **7.1 ± 0.6 ms** |
-| C (`gcc -O3`, `scanf`) | 5 ± 0 ms |
+| plain CPython | 298.0 ± 10.0 ms |
+| `ppy run` | 1735.8 ± 25.0 ms |
+| `ppy build` | 45.6 ± 1.6 ms |
+| `ppy build --standalone` | 7.0 ± 0.3 ms |
+| C (`gcc -O3`, `scanf`) | **4.9 ± 0.1 ms** |
 
 `ppy run` compiles before it runs, which is most of its two seconds; it is
 the development path, not the one to submit. `ppy build` produces a binary
@@ -38,10 +38,10 @@ row comes from; the [folder README](../README.md) says what the subset costs.
 
 ## Without CPython at all
 
-The `ppy build` binary above embeds an interpreter, because the program's
-glue — `try`/`except`, the `print` of a Python `int` — is Python. Written so
-that everything `main` reaches is native, the same solver builds standalone
-and there is no interpreter under it:
+The `ppy build` binary embeds an interpreter, because the program's glue —
+`try`/`except`, the `print` of a Python `int` — is Python. Written so that
+everything `main` reaches is native, the same solver builds standalone and
+there is no interpreter under it:
 
 ```python
 def main() -> None:
@@ -50,26 +50,28 @@ def main() -> None:
 ```
 
 ```bash
-ppy build --standalone queens.ppy -o dist
-ldd dist/queens      # linux-vdso, libc, ld-linux -- and nothing else
+cd ../standalone
+ppy build --standalone nqueens.ppy -o native
+ldd native/nqueens      # linux-vdso, libc, ld-linux -- and nothing else
 ```
 
-Measured the same way, on the same machine, from the same staged copy:
+That row is the `--standalone` line in the table above, and it comes out of
+a binary the size of the C one:
 
-| path | wall | binary |
-|---|---:|---:|
-| `ppy build` (hybrid) | 46.5 ± 3.0 ms | 16.3 KB + runtime |
-| `ppy build --standalone` | **7.1 ± 0.6 ms** | 16.8 KB |
-| C (`gcc -O3`, `scanf`) | 5.3 ± 0.3 ms | 16.1 KB |
+| path | binary |
+|---|---:|
+| `ppy build` (hybrid) | 16.3 KB + the runtime it imports |
+| `ppy build --standalone` | 17.0 KB |
+| C (`gcc -O3`, `scanf`) | 16.1 KB |
 
 `ppy.input[int]()` lowers to the same buffered scan of standard input that
-`scanf` does, and the ~35 ms of interpreter startup is simply not there.
-What it costs is the subset — no exceptions, no `array.array`, no Python
-objects on the path from `main` — which is why the `try`/`except EOFError`
-of the committed solution has to go. The other problems here take the same
-path once their buffers come from `ppy.buffer[int](n)` and
-`ppy.input[Buffer[int]](n)` rather than `array.array`; the table in the
-[folder README](../README.md) has their numbers.
+`scanf` does, and the ~35 ms of interpreter startup is simply not there —
+which still leaves C ahead here, because this problem reads one integer and
+then computes, so there is nothing for the faster reader to win back. What
+standalone costs is the subset: no exceptions, no `array.array`, no Python
+objects on the path from `main`, which is why the `try`/`except EOFError` of
+the committed solution has to go. [`standalone/`](../standalone/) holds that
+variant and the four others written the same way.
 
 ## Run it
 

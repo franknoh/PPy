@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import subprocess
 import sys
 import time
@@ -27,6 +28,17 @@ PPY = [sys.executable, "-m", "ppy_compiler"]
 
 #: A measurement this far from the recorded one is drift rather than noise.
 TOLERANCE = 0.25
+
+#: How each problem README names the path `bench.py` measured.
+ROWS = [
+    ("plain CPython", "plain"),
+    ("`ppy run`", "ppy run"),
+    ("`ppy build`", "ppy build"),
+    ("`ppy build --standalone`", "standalone"),
+    ("C (`gcc -O3`, `scanf`)", "C scanf"),
+]
+
+TABLE = re.compile(r"\| path \| wall \|\n\|---\|---:\|\n(?:\|.*\n)+")
 
 
 def _run(command: list[str], cwd: Path) -> subprocess.CompletedProcess:
@@ -71,12 +83,14 @@ def refresh_conversions(write: bool) -> list[str]:
     return stale
 
 
-def refresh_measurements(write: bool) -> list[str]:
+def refresh_measurements(write: bool) -> tuple[list[str], bool]:
     """Wall times, against what the documentation says they are.
 
-    A number is only worth recording if the paths still agree on the answer,
-    so a disagreement stops the record rather than baking a wrong result into
-    the baseline.
+    Returns what drifted and whether that is a failure. A wrong answer always
+    is -- `--write` records nothing and the run fails, because a timing for a
+    program that prints the wrong number is not a baseline. Drift on a machine
+    that is not the recorded one never is: two computers are two measurements,
+    not a regression.
     """
     sys.path.insert(0, str(ALGORITHMS))
     from importlib import import_module
@@ -94,7 +108,7 @@ def refresh_measurements(write: bool) -> list[str]:
         if len(row.get("answers", [])) != 1
     ]
     if wrong:
-        return [*wrong, "  nothing was recorded: a wrong answer has no useful timing"]
+        return [*wrong, "  nothing was recorded: a wrong answer has no useful timing"], True
 
     drifted = []
     moved = [
@@ -109,6 +123,8 @@ def refresh_measurements(write: bool) -> list[str]:
                 if before.get("answers") and before["answers"] != measured:
                     drifted.append(f"{problem}: the answer changed to {measured}")
                 continue
+            if path == "by_path":
+                continue
             was = before.get(path, {}).get("mean")
             if was is None:
                 drifted.append(f"{problem} / {path}: new, {measured['mean']:.1f} ms")
@@ -116,8 +132,8 @@ def refresh_measurements(write: bool) -> list[str]:
             if abs(measured["mean"] - was) > TOLERANCE * was:
                 drifted.append(f"{problem} / {path}: {was:.1f} ms -> {measured['mean']:.1f} ms")
     if drifted and moved:
-        # Comparing across machines is not a regression signal.
         drifted.extend(moved)
+        drifted.append("  drift across machines is not a regression; rerun with --write here")
     if write:
         payload = {
             "environment": here,
@@ -125,7 +141,45 @@ def refresh_measurements(write: bool) -> list[str]:
             "problems": fresh,
         }
         RECORDED.write_text(json.dumps(payload, indent=1) + "\n", encoding="utf-8")
-    return drifted
+    return drifted, bool(drifted) and not moved and not write
+
+
+def _table(row: dict) -> str:
+    """The wall-time table a problem README shows, from what was measured."""
+    timed = {label: row[path] for label, path in ROWS if path in row}
+    best = min(timed, key=lambda label: timed[label]["mean"])
+    lines = ["| path | wall |", "|---|---:|"]
+    for label, measured in timed.items():
+        cell = f"{measured['mean']:.1f} ± {measured['stdev']:.1f} ms"
+        lines.append(f"| {label} | {'**' + cell + '**' if label == best else cell} |")
+    return "\n".join(lines) + "\n"
+
+
+def refresh_tables(write: bool) -> list[str]:
+    """Every problem README's table, against the recorded measurements.
+
+    The numbers live in `measurements.json`; a README is a rendering of it,
+    so the two cannot disagree for longer than one run of this script.
+    """
+    if not RECORDED.is_file():
+        return []
+    problems = json.loads(RECORDED.read_text(encoding="utf-8")).get("problems", {})
+    behind = []
+    for name, row in problems.items():
+        document = ALGORITHMS / name / "README.md"
+        if not document.is_file():
+            continue
+        text = document.read_text(encoding="utf-8")
+        wanted = _table(row)
+        if TABLE.search(text) is None:
+            behind.append(f"{name}/README.md: no wall-time table to fill")
+            continue
+        updated = TABLE.sub(wanted.replace("\\", "\\\\"), text, count=1)
+        if updated != text:
+            behind.append(f"{name}/README.md: the table is behind measurements.json")
+            if write:
+                document.write_text(updated, encoding="utf-8")
+    return behind
 
 
 def main() -> int:
@@ -150,14 +204,21 @@ def main() -> int:
     failed |= bool(stale) and not options.write
 
     if not options.quick:
-        drifted = refresh_measurements(options.write)
+        drifted, fatal = refresh_measurements(options.write)
         state = "recorded" if options.write else "drifted"
         print(f"measurements: {'ok' if not drifted else f'{len(drifted)} {state}'}")
         for line in drifted:
             print(f"  {line}")
-        if drifted and not options.write:
-            print("\n  update the tables in the READMEs, then rerun with --write")
-        failed |= bool(drifted) and not options.write
+        if fatal:
+            print("\n  rerun with --write once the numbers are the ones to keep")
+        failed |= fatal
+
+    behind = refresh_tables(options.write)
+    state = "rewritten" if options.write else "behind"
+    print(f"tables: {'ok' if not behind else f'{len(behind)} {state}'}")
+    for line in behind:
+        print(f"  {line}")
+    failed |= bool(behind) and not options.write
 
     return 1 if failed else 0
 

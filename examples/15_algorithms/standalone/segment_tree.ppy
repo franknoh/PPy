@@ -1,0 +1,68 @@
+"""Range sums with no interpreter under it."""
+
+import ppy
+from ppy import Buffer
+
+
+def build(tree: Buffer[int], size: int) -> int:
+    for i in range(size - 1, 0, -1):
+        tree[i] = tree[2 * i] + tree[2 * i + 1]
+    return tree[1]
+
+
+def update(tree: Buffer[int], size: int, position: int, value: int) -> int:
+    index: int = position + size
+    tree[index] = value
+    index //= 2
+    while index >= 1:
+        tree[index] = tree[2 * index] + tree[2 * index + 1]
+        index //= 2
+    return tree[1]
+
+
+@ppy.pure
+def query(tree: Buffer[int], size: int, left: int, right: int) -> int:
+    total: int = 0
+    low: int = left + size
+    high: int = right + size
+    while low < high:
+        if low % 2 == 1:
+            total += tree[low]
+            low += 1
+        if high % 2 == 1:
+            high -= 1
+            total += tree[high]
+        low //= 2
+        high //= 2
+    return total
+
+
+def run_commands(tree: Buffer[int], commands: Buffer[int], size: int, rounds: int) -> int:
+    checksum: int = 0
+    for step in range(rounds):
+        base: int = step * 6
+        update(tree, size, commands[base + 1], commands[base + 2])
+        checksum += query(tree, size, commands[base + 4], commands[base + 5])
+    return checksum
+
+
+@ppy.opt(3)
+def load(tree: Buffer[int], leaves: Buffer[int], size: int) -> int:
+    for i in range(size):
+        tree[size + i] = leaves[i]
+    return size
+
+
+def main() -> None:
+    size: int = ppy.input[int]()
+    rounds: int = ppy.input[int]()
+    ignored: int = ppy.input[int]()
+    tree: Buffer[int] = ppy.buffer[int](2 * size)
+    leaves: Buffer[int] = ppy.input[Buffer[int]](size)
+    load(tree, leaves, size)
+    commands: Buffer[int] = ppy.input[Buffer[int]](rounds * 6)
+    build(tree, size)
+    print(run_commands(tree, commands, size, rounds) + ignored * 0)
+
+
+main()

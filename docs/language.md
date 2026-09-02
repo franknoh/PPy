@@ -139,10 +139,10 @@ CPython inside, for programs whose reachable graph is entirely native.
 checker types the result from the same `T`:
 
 ```python
-n = ppy.input[int]()                   # one integer
-a, b = ppy.input[tuple[int, int]]()    # two fields, line breaks irrelevant
-word = ppy.input[str]("name? ")        # a token, after printing the prompt
-values = ppy.input[Buffer[int]](n)     # n integers, straight into a buffer
+n = ppy.input[int]()  # one integer
+a, b = ppy.input[tuple[int, int]]()  # two fields, line breaks irrelevant
+word = ppy.input[str]("name? ")  # a token, after printing the prompt
+values = ppy.input[Buffer[int]](n)  # n integers, straight into a buffer
 ```
 
 Whitespace and newlines are the same thing to it, as they are to `scanf`.

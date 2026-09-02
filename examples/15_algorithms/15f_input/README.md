@@ -24,11 +24,11 @@ input, interpreter startup and all. Mean ± standard deviation over 5 runs;
 
 | path | wall |
 |---|---:|
-| plain CPython | 1022 ± 19 ms |
-| `ppy run` | 2215 ± 54 ms |
-| `ppy build` | 107 ± 3 ms |
-| `ppy build --standalone` | **46.4 ± 5.6 ms** |
-| C (`gcc -O3`, `scanf`) | 52 ± 2 ms |
+| plain CPython | 864.5 ± 24.6 ms |
+| `ppy run` | 1840.1 ± 124.9 ms |
+| `ppy build` | 98.6 ± 2.4 ms |
+| `ppy build --standalone` | **38.6 ± 1.2 ms** |
+| C (`gcc -O3`, `scanf`) | 49.4 ± 1.9 ms |
 
 `ppy run` compiles before it runs, which is most of its two seconds; it is
 the development path, not the one to submit. `ppy build` produces a binary

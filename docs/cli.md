@@ -200,10 +200,12 @@ runtime's reader, and answers 0 at end of input because there is no
 exception to raise; the default wrap-semantics build has almost no guards left to
 fail.
 
-Every problem in `examples/15_algorithms` builds this way once its buffers
-come from `ppy.buffer` rather than `array.array`, and four of the five with
-real input beat their C reference — see that folder's README for the numbers
-and for what the subset costs to stay inside.
+Five of the six problems in `examples/15_algorithms` build this way once
+their buffers come from `ppy.buffer` rather than `array.array`, and four of
+those beat their C reference. Substring search is the one that cannot: its
+text arrives as a token, and `ppy.read_token` has no standalone lowering yet.
+`examples/15_algorithms/standalone/` holds the five, timed against every
+other path by the benchmark beside them.
 
 ## `ppy explain` — why it compiled that way
 

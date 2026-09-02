@@ -1,0 +1,30 @@
+"""N-Queens with no interpreter under it at all."""
+
+import ppy
+
+
+@ppy.pure
+@ppy.opt(3)
+def solve(full: int, columns: int, diagonal: int, antidiagonal: int) -> int:
+    if columns == full:
+        return 1
+    total: int = 0
+    available: int = full & ~(columns | diagonal | antidiagonal)
+    while available != 0:
+        bit: int = available & -available
+        available -= bit
+        total += solve(
+            full,
+            columns | bit,
+            ((diagonal | bit) << 1) & full,
+            (antidiagonal | bit) >> 1,
+        )
+    return total
+
+
+def main() -> None:
+    n: int = ppy.input[int]()
+    print(solve((1 << n) - 1, 0, 0, 0))
+
+
+main()
