@@ -11,6 +11,7 @@ from __future__ import annotations
 import json
 import os
 import platform
+import shlex
 import shutil
 import statistics
 import subprocess
@@ -18,6 +19,9 @@ import sys
 import tempfile
 import time
 from pathlib import Path
+
+from ppy_compiler.backend.llvm import available as llvm_available
+from ppy_compiler.backend.llvm.link import standalone_toolchain_status, toolchain_status
 
 HERE = Path(__file__).parent
 ROUNDS = 5
@@ -91,6 +95,29 @@ STANDALONE = {
 }
 
 
+def available() -> dict[str, str]:
+    """Which paths this machine can actually build, and why not when it cannot.
+
+    Asked once, before anything is timed. Without it a missing toolchain
+    surfaces as a `FileNotFoundError` on an executable nobody wrote, which
+    says nothing about what is missing.
+    """
+    missing: dict[str, str] = {}
+    if shutil.which("gcc") is None:
+        missing["C scanf"] = "gcc is not on PATH"
+    if not llvm_available():
+        reason = "llvmlite is not installed"
+        missing["ppy run"] = missing["ppy build"] = missing["standalone"] = reason
+        return missing
+    usable, detail = toolchain_status()
+    if not usable:
+        missing["ppy build"] = detail
+    usable, detail = standalone_toolchain_status()
+    if not usable:
+        missing["standalone"] = detail
+    return missing
+
+
 def _commands(stem: str, standalone: str | None) -> list[tuple[str, list[str]]]:
     rows = [
         ("plain", [sys.executable, f"{stem}.ppy"]),
@@ -105,6 +132,9 @@ def _commands(stem: str, standalone: str | None) -> list[tuple[str, list[str]]]:
 
 def _wall(command: list[str], folder: Path, data: Path, env: dict) -> tuple[float, str]:
     """One run, timed from outside: what the judge's clock would show."""
+    program = folder / command[0] if command[0].startswith(".") else None
+    if program is not None and not program.is_file():
+        raise FileNotFoundError(f"{shlex.join(command)}: the build wrote no executable here")
     with data.open("rb") as stream:
         started = time.perf_counter()
         done = subprocess.run(
@@ -124,7 +154,9 @@ def _wall(command: list[str], folder: Path, data: Path, env: dict) -> tuple[floa
 _RUNTIME = ("ppy", "ppy_runtime")
 
 
-def _staged(folder: Path, stem: str, room: Path, standalone: str | None) -> tuple[Path, dict]:
+def _staged(
+    folder: Path, stem: str, room: Path, standalone: str | None, skipped: dict[str, str]
+) -> tuple[Path, dict]:
     """Copy the program and the runtime somewhere the filesystem is fast.
 
     A checkout on a mounted Windows drive answers `stat` and `open` several
@@ -145,17 +177,22 @@ def _staged(folder: Path, stem: str, room: Path, standalone: str | None) -> tupl
     if not (work / "pyproject.toml").is_file():
         (work / "pyproject.toml").write_text("[tool.ppy]\nstrict = false\n", encoding="utf-8")
     where = {**os.environ, "PYTHONPATH": str(staged_src)}
-    subprocess.run(
-        ["gcc", "-O3", "-o", f"{stem}_c", f"{stem}.c"], cwd=work, capture_output=True, check=True
-    )
-    subprocess.run(
-        [*PPY, "build", f"{stem}.ppy", "-o", "dist"],
-        cwd=work,
-        capture_output=True,
-        text=True,
-        check=True,
-        env=where,
-    )
+    if "C scanf" not in skipped:
+        subprocess.run(
+            ["gcc", "-O3", "-o", f"{stem}_c", f"{stem}.c"],
+            cwd=work,
+            capture_output=True,
+            check=True,
+        )
+    if "ppy build" not in skipped:
+        subprocess.run(
+            [*PPY, "build", f"{stem}.ppy", "-o", "dist"],
+            cwd=work,
+            capture_output=True,
+            text=True,
+            check=True,
+            env=where,
+        )
     if standalone is not None:
         shutil.copy2(HERE / "standalone" / f"{standalone}.ppy", work / f"{standalone}.ppy")
         subprocess.run(
@@ -211,6 +248,9 @@ def _ppy_version() -> str:
 
 def measure(only: list[str] | None = None, rounds: int = ROUNDS) -> dict:
     """Every problem on every path: milliseconds of wall time, and the answer."""
+    skipped = available()
+    for path, reason in sorted(skipped.items()):
+        print(f"skipping {path}: {reason}", file=sys.stderr)
     results: dict = {}
     for folder_name, stem, generate in PROBLEMS:
         if only and not any(token in folder_name for token in only):
@@ -218,23 +258,33 @@ def measure(only: list[str] | None = None, rounds: int = ROUNDS) -> dict:
         folder = HERE / folder_name
         with tempfile.TemporaryDirectory() as scratch:
             room = Path(scratch)
-            work, where = _staged(folder, stem, room, STANDALONE.get(folder_name))
+            variant = STANDALONE.get(folder_name)
+            if "standalone" in skipped:
+                variant = None
+            work, where = _staged(folder, stem, room, variant, skipped)
             data = room / "input.txt"
             data.write_text(generate(), encoding="utf-8")
             row: dict = {}
-            answers: dict[str, str] = {}
-            for label, command in _commands(stem, STANDALONE.get(folder_name)):
+            #: Every repetition's answer, not the last one: a path that is
+            #: right four times out of five is not a path that is right.
+            answers: dict[str, list[str]] = {}
+            for label, command in _commands(stem, variant):
+                if label in skipped:
+                    continue
                 samples = []
                 for _ in range(rounds):
                     elapsed, answer = _wall(command, work, data, where)
                     samples.append(elapsed)
-                    answers[label] = answer
+                    answers.setdefault(label, []).append(answer)
                 row[label] = {
                     "mean": statistics.mean(samples),
                     "stdev": statistics.stdev(samples) if len(samples) > 1 else 0.0,
                 }
-            row["answers"] = sorted(set(answers.values()))
-            row["by_path"] = answers
+            row["answers"] = sorted({a for seen in answers.values() for a in seen})
+            row["by_path"] = {
+                label: seen[0] if len(set(seen)) == 1 else sorted(set(seen))
+                for label, seen in answers.items()
+            }
         results[folder_name] = row
     return results
 

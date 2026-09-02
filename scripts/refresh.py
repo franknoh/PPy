@@ -40,6 +40,22 @@ ROWS = [
 
 TABLE = re.compile(r"\| path \| wall \|\n\|---\|---:\|\n(?:\|.*\n)+")
 
+#: The overview table in the folder README, which shows every problem at once.
+OVERVIEW = re.compile(
+    r"\| \| problem \| plain \| `ppy build` \| `--standalone` \| C \(`scanf`\) \|\n"
+    r"\|---\|---\|---:\|---:\|---:\|---:\|\n(?:\|.*\n)+"
+)
+
+#: How the overview names each problem, in the order it lists them.
+TITLES = {
+    "15a_nqueens": "N-Queens",
+    "15b_dijkstra": "shortest path",
+    "15c_kmp": "substring search",
+    "15d_segment_tree": "range sums",
+    "15e_lis": "longest increasing subsequence",
+    "15f_input": "counting inversions",
+}
+
 
 def _run(command: list[str], cwd: Path) -> subprocess.CompletedProcess:
     return subprocess.run(command, cwd=cwd, capture_output=True, text=True, check=False)
@@ -155,6 +171,34 @@ def _table(row: dict) -> str:
     return "\n".join(lines) + "\n"
 
 
+def _overview(problems: dict) -> str:
+    """The folder README's table: every problem, one row each.
+
+    Bold marks a cell that beat the C reference, which is a claim the numbers
+    have to keep making rather than one written down once.
+    """
+    header = [
+        "| | problem | plain | `ppy build` | `--standalone` | C (`scanf`) |",
+        "|---|---|---:|---:|---:|---:|",
+    ]
+    rows = []
+    for name, title in TITLES.items():
+        row = problems.get(name)
+        if row is None:
+            continue
+        reference = row["C scanf"]["mean"]
+        cells = []
+        for path in ("plain", "ppy build", "standalone", "C scanf"):
+            if path not in row:
+                cells.append("—")
+                continue
+            cell = f"{row[path]['mean']:.1f} ms"
+            beats = path != "C scanf" and row[path]["mean"] < reference
+            cells.append(f"**{cell}**" if beats else cell)
+        rows.append(f"| [{name[:3]}]({name}/) | {title} | " + " | ".join(cells) + " |")
+    return "\n".join(header + rows) + "\n"
+
+
 def refresh_tables(write: bool) -> list[str]:
     """Every problem README's table, against the recorded measurements.
 
@@ -164,22 +208,27 @@ def refresh_tables(write: bool) -> list[str]:
     if not RECORDED.is_file():
         return []
     problems = json.loads(RECORDED.read_text(encoding="utf-8")).get("problems", {})
-    behind = []
+    behind = _rendered(ALGORITHMS / "README.md", OVERVIEW, _overview(problems), write)
     for name, row in problems.items():
         document = ALGORITHMS / name / "README.md"
         if not document.is_file():
             continue
-        text = document.read_text(encoding="utf-8")
-        wanted = _table(row)
-        if TABLE.search(text) is None:
-            behind.append(f"{name}/README.md: no wall-time table to fill")
-            continue
-        updated = TABLE.sub(wanted.replace("\\", "\\\\"), text, count=1)
-        if updated != text:
-            behind.append(f"{name}/README.md: the table is behind measurements.json")
-            if write:
-                document.write_text(updated, encoding="utf-8")
+        behind.extend(_rendered(document, TABLE, _table(row), write))
     return behind
+
+
+def _rendered(document: Path, pattern: re.Pattern[str], wanted: str, write: bool) -> list[str]:
+    """Put `wanted` where `pattern` matches, and say whether it had to move."""
+    where = document.relative_to(EXAMPLES)
+    text = document.read_text(encoding="utf-8")
+    if pattern.search(text) is None:
+        return [f"{where}: no table here to fill"]
+    updated = pattern.sub(wanted.replace("\\", "\\\\"), text, count=1)
+    if updated == text:
+        return []
+    if write:
+        document.write_text(updated, encoding="utf-8")
+    return [f"{where}: the table is behind measurements.json"]
 
 
 def main() -> int:
