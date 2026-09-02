@@ -1983,3 +1983,35 @@ def test_a_recursive_return_settles_through_a_local(write, analyze):
     )
     analysis = analyze(path).analysis.modules["recursive"].functions["recursive.count_down"]
     assert analysis.inferred_ret == T.INT
+
+
+def test_every_diagnostic_code_is_documented_exactly_once():
+    """The registry and the reference are one claim, not two."""
+    import re
+
+    from ppy_compiler.diagnostics.codes import CODES
+
+    reference = Path(__file__).parent.parent / "docs" / "diagnostics.md"
+    rows = re.findall(r"\| `([EWR][0-9]{4})` \|", reference.read_text(encoding="utf-8"))
+
+    assert sorted(rows) == sorted(set(rows)), "a code is documented twice"
+    assert set(rows) == set(CODES), (
+        f"undocumented: {sorted(set(CODES) - set(rows))}; "
+        f"documented but unregistered: {sorted(set(rows) - set(CODES))}"
+    )
+
+
+def test_every_emitted_code_is_registered():
+    """A code a pass can emit has to be one the reference explains."""
+    import re
+
+    from ppy_compiler.diagnostics.codes import CODES
+
+    source_root = Path(__file__).parent.parent / "src" / "ppy_compiler"
+    emitted: set[str] = set()
+    for path in source_root.rglob("*.py"):
+        if path.name == "codes.py":
+            continue
+        emitted.update(re.findall(r'"([EWR][0-9]{4})"', path.read_text(encoding="utf-8")))
+        emitted.update(re.findall(r"\[([EWR][0-9]{4})\]", path.read_text(encoding="utf-8")))
+    assert emitted <= set(CODES), f"unregistered: {sorted(emitted - set(CODES))}"

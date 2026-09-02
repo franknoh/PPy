@@ -103,3 +103,9 @@ sound fallback, and never the rest.
 | `W2004` | A directive had no effect for the selected backend. |
 | `W2005` | Conversion left both a .py and a .ppy source for the same module. |
 | `W2101` | The build cache index was damaged; it was quarantined and rebuilt, and compilation continued with cache misses. |
+
+## Internal
+
+| code | meaning |
+|---|---|
+| `E9001` | An internal analysis failed to converge; the result cannot be trusted. |
