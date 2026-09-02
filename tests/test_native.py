@@ -2955,3 +2955,37 @@ def test_reducing_a_byte_buffer_accumulates_in_an_integer(write, analyze):
         edges = array.array("b", [-128, 5, 127])
         assert binding.wrapper(edges) == reference(edges)
         assert binding.fallbacks == 0
+
+
+def test_concurrent_wrapper_builds_publish_one_loadable_library(write, analyze, tmp_path):
+    """One cache directory, several compilations of the same wrapper.
+
+    The name is the source's digest, so every builder agrees on it and they
+    all write at once. Compiling straight to that name lets a reader `dlopen`
+    a file another compiler is still writing -- `file too short` -- so the
+    library has to arrive by rename or not at all.
+    """
+    import concurrent.futures
+
+    from ppy_compiler.backend.llvm.wrapper_build import build_wrappers, wrapper_toolchain
+
+    ready, detail = wrapper_toolchain()
+    if not ready:
+        pytest.skip(detail)
+
+    path = write("shared.ppy", WIDENS)
+    module = _collect(analyze(path, backend="llvm"))["shared"]
+    signatures = {q: lowered.signature for q, lowered in module.functions.items()}
+    assert signatures, module.rejected
+    cache = tmp_path / "shared-cache"
+
+    def build(_: int):
+        return build_wrappers("shared", signatures, cache)
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=8) as pool:
+        results = list(pool.map(build, range(8)))
+
+    refused = [built.reason for built in results if not built.ok]
+    assert not refused, refused
+    assert len({built.path for built in results}) == 1, "one name, one library"
+    assert not list((cache / "wrappers").glob("*.part*")), "a draft was left behind"

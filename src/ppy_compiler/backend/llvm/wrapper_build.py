@@ -12,6 +12,7 @@ import os
 import subprocess
 import sys
 import sysconfig
+import threading
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -88,6 +89,21 @@ def _fingerprint(source: str) -> str:
     )[:16]
 
 
+def _publish(draft: Path, final: Path) -> None:
+    """Move a finished artifact onto its shared name, atomically.
+
+    The bytes are the same whoever wrote them -- the name is their digest --
+    so losing the race is not a failure. Windows refuses to replace a library
+    another process has already loaded, which is exactly that case.
+    """
+    try:
+        os.replace(draft, final)
+    except OSError:
+        draft.unlink(missing_ok=True)
+        if not final.is_file():
+            raise
+
+
 def build_wrappers(
     module_name: str,
     signatures: dict[str, NativeSignature],
@@ -115,7 +131,17 @@ def build_wrappers(
     if not library.is_file():
         if notify is not None:
             notify(f"compiling {len(signatures)} Python-ABI wrapper(s)")
-        source_path.write_text(built.source, encoding="utf-8")
+        # Two compilations of the same wrapper are the normal case -- one
+        # cache, several processes -- and they agree on the name, because it
+        # is the source's digest. So build somewhere only this thread knows
+        # and publish with a rename: a reader sees the whole library or the
+        # one that was there before, never a file still being written.
+        # The stamp goes before the suffix, not after it: a compiler reads
+        # the input language from the extension, and `.c.1234.part` is not C.
+        stamp = f".{os.getpid()}.{threading.get_ident():x}.part"
+        draft_source = directory / f"{name}{stamp}.c"
+        draft_library = library.with_name(library.name + stamp)
+        draft_source.write_text(built.source, encoding="utf-8")
         compiler = os.environ.get("CC") or "cc"
         command = [
             compiler,
@@ -124,17 +150,20 @@ def build_wrappers(
             "-fPIC",
             "-I",
             sysconfig.get_paths()["include"],
-            str(source_path),
+            str(draft_source),
             "-o",
-            str(library),
+            str(draft_library),
         ]
         completed = subprocess.run(command, capture_output=True, text=True, check=False)
         if completed.returncode != 0:
             detail = (completed.stderr or completed.stdout).strip().splitlines()
-            library.unlink(missing_ok=True)
+            draft_source.unlink(missing_ok=True)
+            draft_library.unlink(missing_ok=True)
             return BuiltWrappers(
                 reason=f"the wrapper did not compile: {detail[-1] if detail else 'unknown'}"
             )
+        _publish(draft_library, library)
+        _publish(draft_source, source_path)
 
     spec = importlib.util.spec_from_file_location(name, library)
     if spec is None or spec.loader is None:
