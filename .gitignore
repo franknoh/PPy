@@ -10,6 +10,7 @@ htmlcov/
 .ppy-cache/
 *.md
 !README.md
+!CONTRIBUTING.md
 !docs/*.md
 !examples/**/*.md
 examples/**/uv.lock
