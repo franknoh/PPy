@@ -1,0 +1,30 @@
+name: benchmark
+
+# Performance is a claim this repository makes in prose, so it is measured on
+# a schedule rather than per pull request: absolute wall times differ between
+# runners, and gating every change on them would report noise as regression.
+on:
+  schedule:
+    - cron: "17 4 * * 1"
+  workflow_dispatch:
+
+jobs:
+  measure:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.13"
+      - run: uv sync
+      # Reports what moved by more than the tolerance, and refuses to record
+      # anything when the three paths stop agreeing on the answer.
+      - run: uv run python scripts/refresh.py
+      - name: record the run
+        if: always()
+        run: uv run python examples/15_algorithms/bench.py --json > benchmark.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: benchmark-${{ github.run_id }}
+          path: benchmark.json

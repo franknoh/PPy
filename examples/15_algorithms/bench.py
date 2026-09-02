@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import os
+import platform
 import shutil
 import statistics
 import subprocess
@@ -128,7 +129,7 @@ def _staged(folder: Path, stem: str, room: Path) -> tuple[Path, dict]:
             shutil.copy2(folder / name, work / name)
     if not (work / "pyproject.toml").is_file():
         (work / "pyproject.toml").write_text("[tool.ppy]\nstrict = false\n", encoding="utf-8")
-    environment = {**os.environ, "PYTHONPATH": str(staged_src)}
+    where = {**os.environ, "PYTHONPATH": str(staged_src)}
     subprocess.run(
         ["gcc", "-O3", "-o", f"{stem}_c", f"{stem}.c"], cwd=work, capture_output=True, check=True
     )
@@ -138,9 +139,49 @@ def _staged(folder: Path, stem: str, room: Path) -> tuple[Path, dict]:
         capture_output=True,
         text=True,
         check=True,
-        env=environment,
+        env=where,
     )
-    return work, environment
+    return work, where
+
+
+def environment() -> dict:
+    """What the numbers were measured on.
+
+    A wall time means nothing without this: a different CPU, interpreter, or
+    compiler is a different measurement, not a regression.
+    """
+    compiler = subprocess.run(
+        ["cc", "--version"], capture_output=True, text=True, check=False
+    ).stdout.splitlines()
+    return {
+        "python": platform.python_version(),
+        "implementation": platform.python_implementation(),
+        "platform": platform.platform(),
+        "machine": platform.machine(),
+        "processor": _cpu_name(),
+        "cores": os.cpu_count(),
+        "c_compiler": compiler[0].strip() if compiler else "unknown",
+        "ppy": _ppy_version(),
+        "rounds": ROUNDS,
+        "timing": "wall time of the whole process, measured from outside",
+        "staged": "program and runtime copied to a native filesystem first",
+        "semantics": "ppy build defaults to wrap semantics; ppy run keeps Python integers",
+    }
+
+
+def _cpu_name() -> str:
+    try:
+        for line in Path("/proc/cpuinfo").read_text(encoding="utf-8").splitlines():
+            if line.startswith("model name"):
+                return line.split(":", 1)[1].strip()
+    except OSError:
+        pass
+    return platform.processor() or "unknown"
+
+
+def _ppy_version() -> str:
+    done = subprocess.run([*PPY, "--version"], capture_output=True, text=True, check=False)
+    return (done.stdout or done.stderr).strip() or "unknown"
 
 
 def measure(only: list[str] | None = None, rounds: int = ROUNDS) -> dict:
@@ -152,7 +193,7 @@ def measure(only: list[str] | None = None, rounds: int = ROUNDS) -> dict:
         folder = HERE / folder_name
         with tempfile.TemporaryDirectory() as scratch:
             room = Path(scratch)
-            work, environment = _staged(folder, stem, room)
+            work, where = _staged(folder, stem, room)
             data = room / "input.txt"
             data.write_text(generate(), encoding="utf-8")
             row: dict = {}
@@ -160,7 +201,7 @@ def measure(only: list[str] | None = None, rounds: int = ROUNDS) -> dict:
             for label, command in _commands(stem):
                 samples = []
                 for _ in range(rounds):
-                    elapsed, answer = _wall(command, work, data, environment)
+                    elapsed, answer = _wall(command, work, data, where)
                     samples.append(elapsed)
                     answers.add(answer)
                 row[label] = {
@@ -176,7 +217,7 @@ def main() -> int:
     only = [a for a in sys.argv[1:] if not a.startswith("--")]
     results = measure(only or None)
     if "--json" in sys.argv:
-        print(json.dumps(results, indent=1))
+        print(json.dumps({"environment": environment(), "problems": results}, indent=1))
         return 0
     print(f"{'problem':<18}" + "".join(f"{name:>18}" for name in PATHS))
     for folder_name, row in results.items():

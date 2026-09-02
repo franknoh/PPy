@@ -16,6 +16,7 @@ import argparse
 import json
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -71,15 +72,36 @@ def refresh_conversions(write: bool) -> list[str]:
 
 
 def refresh_measurements(write: bool) -> list[str]:
-    """Wall times, against what the documentation says they are."""
+    """Wall times, against what the documentation says they are.
+
+    A number is only worth recording if the paths still agree on the answer,
+    so a disagreement stops the record rather than baking a wrong result into
+    the baseline.
+    """
     sys.path.insert(0, str(ALGORITHMS))
     from importlib import import_module
 
     bench = import_module("bench")
     fresh = bench.measure()
-    recorded = json.loads(RECORDED.read_text(encoding="utf-8")) if RECORDED.is_file() else {}
+    stored = json.loads(RECORDED.read_text(encoding="utf-8")) if RECORDED.is_file() else {}
+    recorded = stored.get("problems", stored)
+    before_environment = stored.get("environment", {})
+    here = bench.environment()
+
+    wrong = [
+        f"{problem}: the paths disagree -- {row['answers']}"
+        for problem, row in fresh.items()
+        if len(row.get("answers", [])) != 1
+    ]
+    if wrong:
+        return [*wrong, "  nothing was recorded: a wrong answer has no useful timing"]
 
     drifted = []
+    moved = [
+        f"  the machine changed: {key} was {before_environment[key]!r}, now {here[key]!r}"
+        for key in ("processor", "python", "platform", "c_compiler")
+        if before_environment.get(key) not in (None, here.get(key))
+    ]
     for problem, row in fresh.items():
         before = recorded.get(problem, {})
         for path, measured in row.items():
@@ -93,8 +115,16 @@ def refresh_measurements(write: bool) -> list[str]:
                 continue
             if abs(measured["mean"] - was) > TOLERANCE * was:
                 drifted.append(f"{problem} / {path}: {was:.1f} ms -> {measured['mean']:.1f} ms")
+    if drifted and moved:
+        # Comparing across machines is not a regression signal.
+        drifted.extend(moved)
     if write:
-        RECORDED.write_text(json.dumps(fresh, indent=1) + "\n", encoding="utf-8")
+        payload = {
+            "environment": here,
+            "recorded": time.strftime("%Y-%m-%dT%H:%M:%S"),
+            "problems": fresh,
+        }
+        RECORDED.write_text(json.dumps(payload, indent=1) + "\n", encoding="utf-8")
     return drifted
 
 
