@@ -57,6 +57,14 @@ TITLES = {
 }
 
 
+def _same_file(left: Path, right: Path) -> bool:
+    """Whether two paths name one file, whether or not it exists yet."""
+    try:
+        return left.samefile(right)
+    except OSError:
+        return left.resolve() == right.resolve()
+
+
 def _run(command: list[str], cwd: Path) -> subprocess.CompletedProcess:
     return subprocess.run(command, cwd=cwd, capture_output=True, text=True, check=False)
 
@@ -119,10 +127,14 @@ def refresh_measurements(write: bool, record: Path | None = None) -> tuple[list[
     if record is not None:
         payload = {"environment": bench.environment(), "problems": fresh}
         record.write_text(json.dumps(payload, indent=1) + "\n", encoding="utf-8")
-    if missing and write:
+    if missing:
+        # Fatal whether or not `--write` was asked for. A run that could not
+        # build every path has nothing to compare and nothing to record, and
+        # a scheduled job that reported success would leave a partial artifact
+        # looking like a measurement.
         return [
             *(f"{path}: {reason}" for path, reason in sorted(missing.items())),
-            "  nothing was recorded: a partial record would replace a whole one",
+            "  nothing was recorded: a partial run is not a baseline",
             "  install what is missing, or measure somewhere that has it",
         ], True
     stored = json.loads(RECORDED.read_text(encoding="utf-8")) if RECORDED.is_file() else {}
@@ -258,6 +270,11 @@ def main() -> int:
         help="also write this run's raw measurements there, drift or not",
     )
     options = parser.parse_args()
+    if options.record is not None and _same_file(options.record, RECORDED):
+        # `--record` writes whatever this run measured; the baseline is only
+        # written once the run is judged worth keeping. Pointing them at one
+        # file would let the unjudged numbers land there first.
+        parser.error(f"--record cannot be the recorded baseline ({RECORDED})")
     sys.path.insert(0, str(EXAMPLES))
 
     failed = False

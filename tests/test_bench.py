@@ -151,3 +151,25 @@ def test_a_disagreement_fails_even_when_asked_to_record(refresh, monkeypatch, tm
     assert fatal
     assert any("disagree" in line for line in lines)
     assert not (tmp_path / "absent.json").exists()
+
+
+def test_an_incomplete_machine_fails_even_when_only_reporting(refresh, monkeypatch, tmp_path):
+    """Nothing to record and nothing to compare: a partial run is not a result."""
+    monkeypatch.setattr(refresh, "RECORDED", tmp_path / "absent.json")
+    stub = ModuleType("bench")
+    stub.available = lambda: {"standalone": "no C compiler (cc, gcc, or clang) is on PATH"}
+    stub.measure = lambda: {"15a_nqueens": {**_row(plain=1.0), "answers": ["7"]}}
+    stub.environment = lambda: {"processor": "some cpu"}
+    monkeypatch.setitem(sys.modules, "bench", stub)
+
+    lines, fatal = refresh.refresh_measurements(write=False)
+    assert fatal, "a scheduled run must not report success on a partial machine"
+    assert any("no C compiler" in line for line in lines)
+
+
+def test_the_raw_record_may_not_be_the_baseline(refresh, tmp_path):
+    """`--record` writes what was measured; the baseline writes what was judged."""
+    assert refresh._same_file(refresh.RECORDED, Path(str(refresh.RECORDED)))
+    assert not refresh._same_file(tmp_path / "run.json", refresh.RECORDED)
+    # Neither existing yet is the ordinary case, and still resolves.
+    assert refresh._same_file(tmp_path / "run.json", tmp_path / "sub" / ".." / "run.json")

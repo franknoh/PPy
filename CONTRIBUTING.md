@@ -75,7 +75,10 @@ the README tables are rendered from that file rather than typed. They are
 not a per-change gate: a scheduled workflow re-measures and reports drift
 beyond a tolerance, because absolute wall times differ between runners.
 
-`--write` refuses a machine that cannot build every path. A record with a
-column missing would replace a whole one, and the gap would read as a result
-rather than as a machine without `gcc` or without a shared libpython;
-`bench.py` says up front which paths it had to skip and why.
+A machine that cannot build every path fails the run and records nothing. A
+record with a column missing would replace a whole one, and the gap would
+read as a result rather than as a machine without `gcc` or without a shared
+libpython; `bench.py` says up front which paths it had to skip and why, and
+`--record` still writes what it measured so a failed scheduled run keeps its
+evidence. That file may not be `measurements.json` itself: the baseline is
+written only once the run is judged worth keeping.
