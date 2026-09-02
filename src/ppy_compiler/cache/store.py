@@ -190,6 +190,19 @@ class CacheStore:
                 + suffix
             )
 
+    @contextlib.contextmanager
+    def _transaction(self):  # type: ignore[no-untyped-def]
+        """One unit of work across the tables an artifact spans."""
+        connection = self.connect()
+        connection.execute("BEGIN IMMEDIATE")
+        try:
+            yield connection
+        except BaseException:
+            with contextlib.suppress(sqlite3.DatabaseError):
+                connection.execute("ROLLBACK")
+            raise
+        connection.execute("COMMIT")
+
     def _put(
         self,
         key: CacheKey | str,
@@ -213,20 +226,36 @@ class CacheStore:
         if not target.exists():
             self._write_atomic(target, payload)
         now = time.time()
-        connection = self.connect()
+        # Recording an artifact touches two tables. A reader arriving between
+        # them would see a row whose dependencies are not there yet.
+        with self._transaction() as connection:
+            self._record(
+                connection, key_hex, kind, content_hash + suffix, len(payload), source, now
+            )
+            for dependency in dependencies:
+                connection.execute(
+                    "INSERT OR IGNORE INTO dependencies(key, depends_on) VALUES(?,?)",
+                    (key_hex, dependency),
+                )
+        return target
+
+    @staticmethod
+    def _record(
+        connection: sqlite3.Connection,
+        key_hex: str,
+        kind: str,
+        obj: str,
+        size: int,
+        source: str,
+        now: float,
+    ) -> None:
         connection.execute(
             "INSERT INTO artifacts(key, kind, object, size, created, accessed, source) "
             "VALUES(?,?,?,?,?,?,?) "
             "ON CONFLICT(key) DO UPDATE SET object=excluded.object, "
             "size=excluded.size, accessed=excluded.accessed",
-            (key_hex, kind, content_hash + suffix, len(payload), now, now, source),
+            (key_hex, kind, obj, size, now, now, source),
         )
-        for dependency in dependencies:
-            connection.execute(
-                "INSERT OR IGNORE INTO dependencies(key, depends_on) VALUES(?,?)",
-                (key_hex, dependency),
-            )
-        return target
 
     def get(self, key: CacheKey | str) -> Path | None:
         try:

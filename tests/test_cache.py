@@ -636,3 +636,37 @@ def test_a_read_only_cache_still_compiles(tmp_path: Path):
         reopened.put("ffff", "value", kind="python")
     finally:
         root.chmod(0o700)
+
+
+def test_concurrent_writers_share_one_index(tmp_path: Path):
+    """Several compilations against one cache is the normal case, not a race."""
+    import concurrent.futures
+
+    root = tmp_path / "cache"
+    CacheStore(root).close()
+
+    def store(index: int) -> str:
+        own = CacheStore(root)
+        own.put(f"{index:04x}", f"value-{index}", kind="python", dependencies=[f"dep-{index}"])
+        text = own.read_text(f"{index:04x}")
+        own.close()
+        return text or ""
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=8) as pool:
+        written = list(pool.map(store, range(24)))
+    assert written == [f"value-{i}" for i in range(24)]
+
+    reader = CacheStore(root)
+    assert all(reader.read_text(f"{i:04x}") == f"value-{i}" for i in range(24))
+
+
+def test_a_failed_write_leaves_no_half_recorded_artifact(tmp_path: Path):
+    """The artifact row and its dependencies land together or not at all."""
+    store = CacheStore(tmp_path / "cache")
+    with pytest.raises(RuntimeError), store._transaction() as connection:
+        connection.execute(
+            "INSERT INTO artifacts(key, kind, object, size, created, accessed, source) "
+            "VALUES('abcd','python','obj',1,0,0,'')"
+        )
+        raise RuntimeError("interrupted")
+    assert store.get("abcd") is None
