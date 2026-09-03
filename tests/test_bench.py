@@ -195,3 +195,59 @@ def test_a_refused_baseline_is_not_a_refused_record(refresh, monkeypatch, tmp_pa
     assert any("measurements.json was left alone" in line for line in lines)
     assert any(str(raw) in line for line in lines), "and says where the numbers went"
     assert raw.is_file()
+
+
+def _measured(**paths: float) -> dict:
+    return {**_row(**paths), "answers": ["7"]}
+
+
+def _compare(refresh, monkeypatch, tmp_path, before: dict, after: dict):
+    recorded = tmp_path / "measurements.json"
+    recorded.write_text(
+        json.dumps({"environment": {"processor": "same cpu"}, "problems": {"p": before}}),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(refresh, "RECORDED", recorded)
+    stub = ModuleType("bench")
+    stub.available = dict  # nothing missing
+    stub.measure = lambda: {"p": after}
+    stub.environment = lambda: {"processor": "same cpu"}
+    monkeypatch.setitem(sys.modules, "bench", stub)
+    return refresh.refresh_measurements(write=False)
+
+
+def test_a_machine_under_load_is_not_a_regression(refresh, monkeypatch, tmp_path):
+    """Every path slowed by a third, so nothing moved against the reference."""
+    before = _measured(plain=300.0, **{"ppy build": 45.0, "C scanf": 5.0})
+    after = _measured(plain=400.0, **{"ppy build": 60.0, "C scanf": 6.67})
+    lines, fatal = _compare(refresh, monkeypatch, tmp_path, before, after)
+    assert not fatal, "the ratios to C did not move"
+    assert any("moved with the machine" in line for line in lines)
+    assert any("still 9.00x C" in line for line in lines)
+
+
+def test_one_path_losing_ground_against_c_is_a_regression(refresh, monkeypatch, tmp_path):
+    """`ppy build` alone slowed down, which no amount of load explains."""
+    before = _measured(plain=300.0, **{"ppy build": 45.0, "C scanf": 5.0})
+    after = _measured(plain=300.0, **{"ppy build": 70.0, "C scanf": 5.0})
+    lines, fatal = _compare(refresh, monkeypatch, tmp_path, before, after)
+    assert fatal
+    assert any("9.00x C -> 14.00x C" in line for line in lines)
+
+
+def test_without_a_c_column_milliseconds_are_the_only_signal(refresh, monkeypatch, tmp_path):
+    """No reference to take a ratio against, so the absolute times decide."""
+    before = _measured(plain=300.0)
+    after = _measured(plain=500.0)
+    lines, fatal = _compare(refresh, monkeypatch, tmp_path, before, after)
+    assert fatal
+    assert any("300.0 ms -> 500.0 ms" in line for line in lines)
+
+
+def test_the_compiling_path_is_reported_and_never_fatal(refresh, monkeypatch, tmp_path):
+    """`ppy run` times the compiler, so it has no ratio to a compiled C run."""
+    before = _measured(**{"ppy run": 2000.0, "C scanf": 5.0})
+    after = _measured(**{"ppy run": 3000.0, "C scanf": 5.0})
+    lines, fatal = _compare(refresh, monkeypatch, tmp_path, before, after)
+    assert not fatal, "a slower compile on a busy machine is not a regression"
+    assert any("mostly compiling" in line for line in lines)

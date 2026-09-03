@@ -29,6 +29,20 @@ PPY = [sys.executable, "-m", "ppy_compiler"]
 #: A measurement this far from the recorded one is drift rather than noise.
 TOLERANCE = 0.25
 
+#: The same question asked of the ratio to the C reference, which a busy
+#: machine does not move: every path slows down together. Both have to say
+#: yes. On its own the ratio is the noisier of the two -- the reference is a
+#: few milliseconds on the smaller problems, so a wobble there moves every
+#: ratio at once -- and the milliseconds on their own cannot tell a slower
+#: machine from a slower compiler.
+RATIO_TOLERANCE = 0.15
+
+#: Paths whose wall time is mostly the compiler, not the program. There is no
+#: ratio to take against a C reference that compiled beforehand: the number
+#: moves with how busy the machine was while compiling, which is also why no
+#: published table carries this row. Movement here is reported, never fatal.
+COMPILE_BOUND = frozenset({"ppy run"})
+
 #: How each problem README names the path `bench.py` measured.
 ROWS = [
     ("plain CPython", "plain"),
@@ -157,7 +171,8 @@ def refresh_measurements(write: bool, record: Path | None = None) -> tuple[list[
             *kept,
         ], True
 
-    drifted = []
+    drifted: list[str] = []
+    load: list[str] = []
     moved = [
         f"  the machine changed: {key} was {before_environment[key]!r}, now {here[key]!r}"
         for key in ("processor", "python", "platform", "c_compiler")
@@ -176,13 +191,32 @@ def refresh_measurements(write: bool, record: Path | None = None) -> tuple[list[
             if was is None:
                 drifted.append(f"{problem} / {path}: new, {measured['mean']:.1f} ms")
                 continue
-            if abs(measured["mean"] - was) > TOLERANCE * was:
-                drifted.append(f"{problem} / {path}: {was:.1f} ms -> {measured['mean']:.1f} ms")
+            if abs(measured["mean"] - was) <= TOLERANCE * was:
+                continue
+            shift = f"{was:.1f} ms -> {measured['mean']:.1f} ms"
+            if path in COMPILE_BOUND:
+                load.append(f"{problem} / {path}: {shift}, and it is mostly compiling")
+                continue
+            now_ratio, then_ratio = _against_c(row, path), _against_c(before, path)
+            if now_ratio is None or then_ratio is None:
+                drifted.append(f"{problem} / {path}: {shift}")
+            elif abs(now_ratio - then_ratio) > RATIO_TOLERANCE * then_ratio:
+                drifted.append(
+                    f"{problem} / {path}: {then_ratio:.2f}x C -> {now_ratio:.2f}x C ({shift})"
+                )
+            else:
+                load.append(f"{problem} / {path}: {shift}, still {now_ratio:.2f}x C")
+    # Only a changed ratio is a failure. Times that all moved together are
+    # reported and recorded, because they are what this machine measured.
+    fatal = bool(drifted) and not moved and not write
     if drifted and moved:
         drifted.extend(moved)
         drifted.append("  drift across machines is not a regression; rerun with --write here")
-    elif drifted and not write:
+    elif fatal:
         drifted.append("  rerun with --write once these are the numbers to keep")
+    if load:
+        drifted.append("  these moved with the machine, not against C:")
+        drifted.extend(f"  {line}" for line in load)
     if drifted:
         drifted.extend(kept)
     if write and not missing:
@@ -192,7 +226,20 @@ def refresh_measurements(write: bool, record: Path | None = None) -> tuple[list[
             "problems": fresh,
         }
         RECORDED.write_text(json.dumps(payload, indent=1) + "\n", encoding="utf-8")
-    return drifted, bool(drifted) and not moved and not write
+    return drifted, fatal
+
+
+def _against_c(row: dict, path: str) -> float | None:
+    """How many times the C reference's wall time this path took.
+
+    A machine under load slows every path at once, so the ratio holds where
+    the milliseconds do not. Without a C column there is no ratio to take.
+    """
+    reference = row.get("C scanf", {}).get("mean")
+    measured = row.get(path, {}).get("mean")
+    if not reference or measured is None:
+        return None
+    return measured / reference
 
 
 def _table(row: dict) -> str:
