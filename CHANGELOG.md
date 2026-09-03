@@ -57,6 +57,16 @@ Speed of the compiler itself, measured before being changed.
   class's own `__or__`, `__add__` and the other operator methods were never
   consulted. Together they were 193 of the compiler's 627 self-reported
   errors, and none of them was a finding.
+- An annotation may name a common standard-library class -- `pathlib.Path`,
+  every `ast` node, `re.Pattern`, `datetime`, `collections.deque`,
+  `argparse.Namespace`, and others -- without the analyzer modeling it.
+  Each carries its real hierarchy, read from the class, so an `ast.Call` is
+  accepted where an `ast.AST` is expected; `Path / "name"` is a `Path`; and
+  `Ellipsis` and `NotImplemented` are names. `p: Path` used to be "not a
+  type the project can analyze" in every file that took a path. Resolving
+  these surfaced a few findings the unknown had been hiding, so the
+  runtime's dogfood ceiling moved from 119 to 127 while the compiler's
+  came down from 315 to 287.
 - The `math` module is modeled: all 57 functions and the five constants,
   with the exceptions the C implementation raises. Every numeric kernel
   imports it, and `math.tanh` in a reward function was an unknown

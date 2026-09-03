@@ -2432,3 +2432,53 @@ def test_a_class_can_overload_an_operator(write, analyze):
     assert str(bundle.analysis.function("ops.both").inferred_ret) == "ops.Mask"
     assert str(bundle.analysis.function("ops.left").inferred_ret) == "int"
     assert "ops.Mask.__or__" in bundle.analysis.function("ops.both").calls
+
+
+def test_common_stdlib_classes_are_types_an_annotation_may_name(write, analyze):
+    """`p: Path` was "not a type the project can analyze" in every file that took a path.
+
+    The analyzer need not know what a `Path` does to accept the name; a
+    call on one is still unknown and still says so.
+    """
+    from ppy_compiler.analysis import stdlib
+
+    assert "ast.FunctionDef" in stdlib.EXTERNAL_TYPES and "pathlib.Path" in stdlib.EXTERNAL_TYPES
+
+    path = write(
+        "paths.ppy",
+        """
+        import ast
+        from pathlib import Path
+
+        def where(p: Path, node: ast.AST) -> ast.expr:
+            return node.body[0].value
+
+        def name(p: Path) -> str:
+            return str(p)
+        """,
+    )
+    diagnostics = analyze(path, strict=False).diagnostics.sorted()
+    assert not [d for d in diagnostics if d.code == "E1101"], [d.message for d in diagnostics]
+    assert (
+        str(analyze(path, strict=False).symbols.functions["paths.where"].params[0].type)
+        == "pathlib.Path"
+    )
+
+
+def test_the_builtin_singletons_are_names(write, analyze):
+    """`return NotImplemented` is how an operator method declines."""
+    path = write(
+        "singletons.ppy",
+        """
+        class Box:
+            def __eq__(self, other: object) -> bool:
+                if not isinstance(other, Box):
+                    return NotImplemented
+                return True
+
+        def gap() -> object:
+            return Ellipsis
+        """,
+    )
+    codes = [d.code for d in analyze(path).diagnostics.sorted() if d.severity.name == "ERROR"]
+    assert "E1101" not in codes, codes

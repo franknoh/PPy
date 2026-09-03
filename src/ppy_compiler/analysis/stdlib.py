@@ -7,6 +7,8 @@ effect-unknown, which is an error in strict mode rather than a silent `Any`.
 
 from __future__ import annotations
 
+import ast
+
 from . import types as T
 from .effects import Effect, EffectSet
 from .refinements import Facts, IntRange
@@ -198,6 +200,56 @@ EXTERNAL_TYPES: dict[str, str] = {
     "threading.RLock": "threading.Lock",
     "threading.Event": "threading.Event",
 }
+
+#: The real class hierarchy of each opaque type, so that an `ast.Call` is an
+#: `ast.AST` where one is expected. Read from the classes themselves.
+EXTERNAL_MRO: dict[str, tuple[str, ...]] = {}
+
+
+def _opaque(module: str, names: tuple[str, ...]) -> None:
+    """Classes an annotation may name without the analyzer modeling them.
+
+    A parameter typed `Path` or `ast.expr` is a value the program passes
+    around and hands to the library; the analyzer needs to accept the name,
+    not to know what a `Path` can do. An attribute or call on one is still
+    unknown, and says so. `pathlib.Path` was "not a type the project can
+    analyze" in every file that took a path.
+    """
+    library = __import__(module)
+    for name in names:
+        qualname = f"{module}.{name}"
+        EXTERNAL_TYPES[qualname] = qualname
+        cls = getattr(library, name, None)
+        if isinstance(cls, type):
+            EXTERNAL_MRO[qualname] = tuple(
+                f"{base.__module__}.{base.__name__}" if base is not object else "object"
+                for base in cls.__mro__
+            )
+
+
+_opaque("pathlib", ("Path", "PurePath", "PosixPath", "WindowsPath", "PurePosixPath"))
+_opaque("re", ("Pattern", "Match"))
+_opaque("datetime", ("datetime", "date", "time", "timedelta", "timezone"))
+_opaque("collections", ("deque", "OrderedDict", "Counter", "defaultdict", "ChainMap"))
+_opaque("decimal", ("Decimal",))
+_opaque("fractions", ("Fraction",))
+_opaque("uuid", ("UUID",))
+_opaque("io", ("TextIOWrapper", "BytesIO", "StringIO", "BufferedReader", "BufferedWriter"))
+_opaque("types", ("ModuleType", "FunctionType", "SimpleNamespace"))
+_opaque("enum", ("Enum", "IntEnum", "Flag", "IntFlag"))
+_opaque("argparse", ("Namespace", "ArgumentParser"))
+_opaque("subprocess", ("CompletedProcess", "Popen"))
+_opaque("logging", ("Logger",))
+# Every node class of the `ast` module, from the module itself: a compiler
+# written in Python names them in most signatures.
+_opaque(
+    "ast",
+    tuple(
+        name
+        for name in dir(ast)
+        if isinstance(getattr(ast, name), type) and issubclass(getattr(ast, name), ast.AST)
+    ),
+)
 
 
 def instance_attribute(name: str, attribute: str) -> tuple[T.Type, EffectSet] | None:

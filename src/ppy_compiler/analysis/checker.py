@@ -1212,6 +1212,10 @@ class _Checker:
                 return Binding(T.Callable_((), inherited, "super"))
         if B.is_builtin(node.id) or node.id in {"None", "True", "False"}:
             return Binding(T.Callable_((), T.UNKNOWN, node.id))
+        if node.id in {"Ellipsis", "NotImplemented"}:
+            # The two builtin singletons that are values, not callables:
+            # `return NotImplemented` is how an operator method declines.
+            return Binding(T.OBJECT)
         self._error("E1101", f"`{node.id}` is not defined at this point", node)
         return Binding(T.UNKNOWN)
 
@@ -2265,6 +2269,14 @@ class _Checker:
         overloaded = self._operator_method(left_base, right_base, op, node)
         if overloaded is not None:
             return overloaded
+        if (
+            op is ast.Div
+            and isinstance(left_base, T.Instance)
+            and left_base.name.startswith("pathlib.")
+            and (right_base == T.STR or T.is_assignable(right_base, left_base))
+        ):
+            # `Path / "name"` is the way a path is spelled.
+            return Binding(left_base)
 
         if not (T.is_numeric(left_base) and T.is_numeric(right_base)):
             self._error(

@@ -391,7 +391,9 @@ class NameResolver:
             return info.instance(args)
         external = self.project.external_types.get(qualname)
         if external is not None:
-            return T.Instance(external, args, (external, "object"))
+            from .stdlib import EXTERNAL_MRO
+
+            return T.Instance(external, args, EXTERNAL_MRO.get(qualname, (external, "object")))
         return None
 
 
