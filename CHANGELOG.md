@@ -51,6 +51,12 @@ Speed of the compiler itself, measured before being changed.
   there and a tensor in `setup()` is `Tensor | None`, where it used to be
   `None` and every later assignment an error. A field the class body
   annotated keeps the annotation.
+- Three checker gaps the compiler's own source exposed are closed: the set
+  algebra (`a | b`, `a & b`, `a - b`, `a ^ b` on sets and frozensets) was
+  "not defined", `frozenset(...)` was typed as a `set`, and a project
+  class's own `__or__`, `__add__` and the other operator methods were never
+  consulted. Together they were 193 of the compiler's 627 self-reported
+  errors, and none of them was a finding.
 - The `math` module is modeled: all 57 functions and the five constants,
   with the exceptions the C implementation raises. Every numeric kernel
   imports it, and `math.tanh` in a reward function was an unknown
