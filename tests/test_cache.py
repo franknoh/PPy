@@ -11,6 +11,7 @@ from typing import ClassVar
 import pytest
 
 from ppy_compiler.cache import CacheKey, CacheStore, environment_fingerprint
+from ppy_compiler.cache.store import _in_memory
 
 
 @pytest.fixture
@@ -632,9 +633,9 @@ def test_a_locked_index_is_stepped_around_not_destroyed(tmp_path: Path):
     holder.execute("BEGIN EXCLUSIVE")
     try:
         blocked = CacheStore(root)
-        assert blocked.get("aaaa") is None, "a miss, because the index is busy"
+        # A miss is always a safe answer; destroying the file is not.
+        blocked.get("aaaa")
         assert blocked.quarantined is None, "nothing was moved aside"
-        assert blocked.disabled
         assert not list(root.glob("*.corrupt-*"))
     finally:
         holder.execute("ROLLBACK")
@@ -642,6 +643,46 @@ def test_a_locked_index_is_stepped_around_not_destroyed(tmp_path: Path):
 
     # The index the other process was holding is intact.
     assert CacheStore(root).read_text("aaaa") == "value"
+
+
+def test_a_store_that_stepped_aside_still_answers_its_own_writes(tmp_path: Path):
+    """The regression CI caught: `put` then `read_text` came back empty.
+
+    A moment of contention used to disable the store for the rest of its
+    life, and a disabled store refused even the entry it had just written --
+    the object was on disk, the caller got nothing back.
+    """
+    root = tmp_path / "cache"
+    store = CacheStore(root)
+    store.disabled = True
+    store._connection = _in_memory()
+
+    store.put("bbbb", "value", kind="python")
+    assert store.read_text("bbbb") == "value", "its own write, whatever the index is"
+
+
+def test_contention_mid_write_costs_a_retry_and_not_the_entry(tmp_path: Path, monkeypatch):
+    """Busy on the transaction is waited out, not taken as a verdict."""
+    store = CacheStore(tmp_path / "cache")
+    store.put("warm", "value", kind="python")
+
+    real = store._transaction
+    refusals = [0]
+
+    def busy_once():
+        """Refuse the first transaction the way a held index does."""
+        if refusals[0] < 1:
+            refusals[0] += 1
+            error = sqlite3.OperationalError("database is locked")
+            error.sqlite_errorcode = 5
+            raise error
+        return real()
+
+    monkeypatch.setattr(store, "_transaction", busy_once)
+    store.put("cccc", "value-c", kind="python")
+    assert refusals[0] == 1, "the first attempt was refused"
+    assert store.read_text("cccc") == "value-c"
+    assert not store.disabled, "one busy moment is not a broken cache"
 
 
 def test_a_cache_that_cannot_be_written_is_simply_no_cache(tmp_path: Path):

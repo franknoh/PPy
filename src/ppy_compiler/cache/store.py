@@ -71,6 +71,12 @@ class CacheStats:
         return f"{size:.1f} GiB"
 
 
+#: How long to wait out a busy index before working without one. SQLite's
+#: own busy timeout covers a locked transaction; these cover the operations
+#: it does not, and the moment between opening and using the file.
+_ATTEMPTS = 4
+_BACKOFF = 0.05
+
 #: SQLite's own verdict that the file is not a usable database:
 #: SQLITE_CORRUPT, SQLITE_NOTADB, and the corrupt-VTab extension of the
 #: first. Anything else -- busy, locked, read-only, out of disk -- is a
@@ -114,6 +120,8 @@ class CacheStore:
         #: True once the index could not be rebuilt on disk, so every lookup
         #: is a miss and every store is dropped.
         self.disabled = False
+        #: Why it is disabled, when it is, for anyone who asks.
+        self.unavailable = ""
         # A process that opened the index should not leave it to the garbage
         # collector, which reports the open handle as a ResourceWarning.
         atexit.register(self.close)
@@ -128,20 +136,32 @@ class CacheStore:
 
     def connect(self) -> sqlite3.Connection:
         if self._connection is None:
+            self._connection = self._opened()
+        return self._connection
+
+    def _opened(self) -> sqlite3.Connection:
+        """Open the index, waiting out contention before giving up on it.
+
+        Busy is not broken: another process holding the index for a moment is
+        the ordinary case, and a store that answered it by disabling itself
+        would stop seeing even its own writes.
+        """
+        error: sqlite3.DatabaseError | None = None
+        for attempt in range(_ATTEMPTS):
             try:
-                self._connection = self._open()
-            except sqlite3.DatabaseError as error:
-                if not _is_damage(error):
-                    # Busy, locked, or unwritable: another process is using a
-                    # perfectly good index. Work without one rather than
-                    # destroying theirs.
-                    self.disabled = True
-                    self._connection = _in_memory()
-                else:
+                return self._open()
+            except sqlite3.DatabaseError as raised:
+                error = raised
+                if _is_damage(raised):
                     # The index is optional acceleration state. A damaged one
                     # costs a rebuild, never the answer (spec 27.5).
-                    self._connection = self._recover()
-        return self._connection
+                    return self._recover()
+                time.sleep(_BACKOFF * (attempt + 1))
+        # Still held after waiting: work without an index rather than
+        # destroying a perfectly good one that belongs to someone else.
+        self.disabled = True
+        self.unavailable = str(error) if error is not None else "the cache index stayed busy"
+        return _in_memory()
 
     def _open(self) -> sqlite3.Connection:
         try:
@@ -150,7 +170,12 @@ class CacheStore:
             # Nowhere to put a cache is a slow build, not a broken one.
             raise sqlite3.OperationalError(f"cannot prepare the cache: {error}") from error
         connection = sqlite3.connect(self.index_path, timeout=30.0, isolation_level=None)
-        connection.execute("PRAGMA journal_mode=WAL")
+        # A journal-mode change needs the whole database for a moment and is
+        # refused outright while anyone else holds it, busy timeout or not.
+        # WAL is a speed choice; the index is correct either way, so a refusal
+        # here is not a reason to give up on the file.
+        with contextlib.suppress(sqlite3.DatabaseError):
+            connection.execute("PRAGMA journal_mode=WAL")
         connection.execute("PRAGMA synchronous=NORMAL")
         connection.executescript(_SCHEMA)
         return connection
@@ -220,16 +245,21 @@ class CacheStore:
         suffix: str = "",
     ) -> Path:
         """Store an artifact atomically and index it."""
-        try:
-            return self._put(
-                key, data, kind=kind, source=source, dependencies=dependencies, suffix=suffix
-            )
-        except sqlite3.DatabaseError as error:
-            self._after(error)
-            return self.object_path(
-                digest(data if isinstance(data, str) else data.decode("utf-8", "surrogateescape"))
-                + suffix
-            )
+        for attempt in range(_ATTEMPTS):
+            try:
+                return self._put(
+                    key, data, kind=kind, source=source, dependencies=dependencies, suffix=suffix
+                )
+            except sqlite3.DatabaseError as error:
+                # `_after` reopens unless the store gave up; retrying is what
+                # keeps a moment of contention from costing the entry.
+                self._after(error)
+                if self.disabled or attempt == _ATTEMPTS - 1:
+                    break
+        return self.object_path(
+            digest(data if isinstance(data, str) else data.decode("utf-8", "surrogateescape"))
+            + suffix
+        )
 
     @contextlib.contextmanager
     def _transaction(self):  # type: ignore[no-untyped-def]
@@ -305,8 +335,10 @@ class CacheStore:
         )
 
     def get(self, key: CacheKey | str) -> Path | None:
-        if self.disabled:
-            return None
+        # No `disabled` short circuit: a store that could not take the shared
+        # index still holds what this process put in it, and the objects are
+        # on disk where `put` wrote them. Refusing its own writes would make
+        # a busy moment look like a wrong answer.
         try:
             return self._get(key)
         except sqlite3.DatabaseError as error:
@@ -352,14 +384,18 @@ class CacheStore:
             self._after(error)
 
     def _after(self, error: sqlite3.DatabaseError) -> None:
-        """Rebuild after damage; step aside for anything else."""
+        """Rebuild after damage; reopen for anything else.
+
+        Contention mid-query says nothing about the index. Dropping the
+        connection and opening it again is the answer; `_opened` is the one
+        place that decides the file is unusable, and only after waiting.
+        """
         if _is_damage(error):
             self._connection = self._recover()
             return
         with contextlib.suppress(sqlite3.DatabaseError):
             self.close()
-        self.disabled = True
-        self._connection = _in_memory()
+        self._connection = self._opened()
 
     def invalidate_source(self, source: str) -> int:
         connection = self.connect()
