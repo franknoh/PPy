@@ -103,6 +103,6 @@ Its first three hundred seeds caught three real optimizer bugs.
 
 ## Installing
 
-Using PPY from another project (`uv add "ppy-lang[llvm] @ git+..."`) and setting
+Using PPY from another project (`uv add "ppy-lang[llvm]"`) and setting
 up this repo for development (`uv sync` and its groups) are both in the
 [README](../README.md#install).
