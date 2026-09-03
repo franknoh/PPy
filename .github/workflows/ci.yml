@@ -46,6 +46,19 @@ jobs:
 
   # A built artifact must run where the compiler is not installed, and the
   # wheel must carry what that takes.
+  # The compiler's own thirty thousand lines are the largest real corpus the
+  # converter has. Every push migrates them: no crash, no `<unknown>` shown,
+  # and no more errors than the recorded ceiling (scripts/dogfood.json).
+  dogfood:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.0.1
+        with:
+          python-version: "3.13"
+      - run: uv sync
+      - run: uv run python scripts/dogfood.py
+
   artifact:
     runs-on: ubuntu-latest
     steps:

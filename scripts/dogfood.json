@@ -1,0 +1,46 @@
+{
+ "src/ppy_compiler": {
+  "seconds": 84.7,
+  "errors": 445,
+  "by_code": {
+   "E1101": 110,
+   "E1202": 22,
+   "E1206": 62,
+   "E1301": 103,
+   "E1302": 92,
+   "E1303": 51,
+   "E1305": 5
+  },
+  "withheld": 2335,
+  "unknown_in_output": 0,
+  "traceback": false,
+  "crashed": false
+ },
+ "src/ppy_runtime": {
+  "seconds": 27.1,
+  "errors": 182,
+  "by_code": {
+   "E1101": 41,
+   "E1206": 29,
+   "E1301": 32,
+   "E1302": 44,
+   "E1303": 36
+  },
+  "withheld": 864,
+  "unknown_in_output": 0,
+  "traceback": false,
+  "crashed": false
+ },
+ "src/ppy": {
+  "seconds": 9.4,
+  "errors": 10,
+  "by_code": {
+   "E1101": 3,
+   "E1202": 7
+  },
+  "withheld": 30,
+  "unknown_in_output": 0,
+  "traceback": false,
+  "crashed": false
+ }
+}

@@ -67,6 +67,17 @@ that has moved, a README table that is behind the record — and `--write`
 brings all of them back in line. `--quick` skips the benchmark; `--record
 FILE` also writes the raw numbers of that run, drift or not.
 
+## The compiler as its own test corpus
+
+`python scripts/dogfood.py` migrates `src/ppy_compiler`, `src/ppy_runtime`,
+and `src/ppy` with `ppy migrate --dry-run` and holds three lines: no
+traceback, no `<unknown>` in any message, and no more errors than
+`scripts/dogfood.json` records for each. The count only comes down --
+`--write` records a lower one -- so a change that makes the converter worse
+at real code fails CI, and one that makes it better is asked to say so.
+It is not part of `check.sh`, because a minute of migration on every local
+run is too much; CI runs it as its own job on every push.
+
 ## Measurements
 
 Numbers in the documentation come from `examples/15_algorithms/bench.py`,
