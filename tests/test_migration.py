@@ -280,3 +280,30 @@ def test_migrated_output_still_runs(workspace: Path):
     )
     assert executed.returncode == 0, executed.stderr
     assert executed.stdout == "6\n"
+
+
+def test_a_module_that_opens_with_a_relative_import_still_converts(tmp_path):
+    """`from . import x` has no module name; the import placer used to spell it as `Name("")`.
+
+    libcst refuses an empty identifier at construction, so a package whose
+    first statement was a relative import crashed the conversion instead of
+    being converted.
+    """
+    package = tmp_path / "pkg"
+    package.mkdir()
+    (tmp_path / "pyproject.toml").write_text("[tool.ppy]\nstrict = false\n", encoding="utf-8")
+    (package / "__init__.py").write_text("", encoding="utf-8")
+    (package / "helper.py").write_text("def double(x):\n    return x * 2\n", encoding="utf-8")
+    (package / "first.py").write_text(
+        "from . import helper\n\n\ndef run(n):\n    return helper.double(n)\n", encoding="utf-8"
+    )
+    done = subprocess.run(
+        [sys.executable, "-m", "ppy_compiler", "migrate", "--dry-run", "pkg"],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert "CSTValidationError" not in done.stderr, done.stderr[-800:]
+    assert "Traceback" not in done.stderr, done.stderr[-800:]
+    assert "from . import helper" in done.stdout

@@ -375,9 +375,12 @@ def _insert_index(module: cst.Module) -> int:
             and isinstance(first, cst.Expr)
             and isinstance(first.value, cst.SimpleString)
         )
+        # `from . import x` has no module; libcst refuses an empty `Name`,
+        # so ask before spelling it.
         is_future = (
             isinstance(first, cst.ImportFrom)
-            and _dotted(first.module or cst.Name("")) == "__future__"
+            and first.module is not None
+            and _dotted(first.module) == "__future__"
         )
         if is_docstring or is_future:
             index = position + 1
