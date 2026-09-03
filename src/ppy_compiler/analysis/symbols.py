@@ -405,6 +405,11 @@ class ProjectSymbols:
         self.classes: dict[str, ClassInfo] = {}
         self.functions: dict[str, FunctionInfo] = {}
         self.external_types: dict[str, str] = {}
+        #: Alias analyses by (function node, immutable parameter names). The
+        #: analysis is a pure function of those two, and the checker runs
+        #: over every function at least twice per `analyze` and once per
+        #: inference round; the answer does not change between them.
+        self.alias_cache: dict[tuple[int, frozenset[str]], object] = {}
 
     def build(self) -> ProjectSymbols:
         from .lexical import scan_module

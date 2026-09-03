@@ -26,9 +26,13 @@ Speed of the compiler itself, measured before being changed.
   every function on every inference round, did the same snapshot-and-join
   on the `Load`/`Store` singletons inside its loop fixpoint -- a loop inside
   a loop multiplied it -- and now records without joining and joins only
-  what is asked about. A 3270-line module migrates in 6.6 s where it took
-  10.5 s, with byte-identical output; the compiler's own 26,600 lines
-  migrate in 63 s where 85 s used to end in a crash.
+  what is asked about. The alias map is also computed once per function
+  per project rather than once per checker pass -- it depends on the body
+  and on which parameters are immutable, and on nothing else, while the
+  checker runs at least twice per analysis and once per inference round. A
+  3270-line module migrates in 5.6 s where it took 10.5 s, with
+  byte-identical output; the compiler's own 26,600 lines migrate in 50 s
+  where 85 s used to end in a crash.
 - `ppy migrate` no longer crashes on a module whose first statement is a
   relative import: placing the `ppy` import spelled the missing module name
   as an empty identifier, which libcst refuses.

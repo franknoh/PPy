@@ -363,10 +363,14 @@ class _Checker:
         self._external_writes = False
         # Names are not objects: everything below that asks "what does this
         # mutate or share?" resolves the name through the alias map first.
-        self._aliases = analyze_aliases(
-            info.node,
-            frozenset(p.name for p in info.params if p.known and T.is_immutable(p.type)),
-        )
+        # The map depends on the body and on which parameters are immutable,
+        # and on nothing else, so one computed on an earlier pass still holds.
+        immutable = frozenset(p.name for p in info.params if p.known and T.is_immutable(p.type))
+        cached = self.project.alias_cache.get((id(info.node), immutable))
+        if cached is None:
+            cached = analyze_aliases(info.node, immutable)
+            self.project.alias_cache[(id(info.node), immutable)] = cached
+        self._aliases = cached  # type: ignore[assignment]
         if info.dynamic:
             self._dynamic_depth += 1
 
