@@ -14,6 +14,7 @@ import pytest
 
 from ppy_compiler.backend.llvm import available as llvm_available
 from ppy_compiler.backend.llvm.link import standalone_toolchain_status, toolchain_status
+from ppy_compiler.backend.llvm.wrapper_build import wrapper_toolchain
 
 requires_llvm = pytest.mark.skipif(not llvm_available(), reason="llvmlite is not installed")
 _usable, _detail = toolchain_status()
@@ -25,6 +26,12 @@ requires_toolchain = pytest.mark.skipif(not _usable, reason=f"no native toolchai
 _standalone, _standalone_detail = standalone_toolchain_status()
 requires_c_compiler = pytest.mark.skipif(
     not _standalone, reason=f"no C compiler: {_standalone_detail}"
+)
+#: A generated wrapper is a CPython extension: a compiler and `Python.h`, and
+#: no libpython, since the interpreter loading it already supplies the symbols.
+_wrapper, _wrapper_detail = wrapper_toolchain()
+requires_wrapper_toolchain = pytest.mark.skipif(
+    not _wrapper, reason=f"no wrapper toolchain: {_wrapper_detail}"
 )
 
 pytestmark = requires_llvm
@@ -661,7 +668,7 @@ def collatz(limit: int) -> int:
 """
 
 
-@requires_toolchain
+@requires_wrapper_toolchain
 def test_separate_processes_build_one_wrapper_without_tearing_it(tmp_path: Path):
     """The failure this guards against was between processes, not threads.
 
