@@ -2482,3 +2482,72 @@ def test_the_builtin_singletons_are_names(write, analyze):
     )
     codes = [d.code for d in analyze(path).diagnostics.sorted() if d.severity.name == "ERROR"]
     assert "E1101" not in codes, codes
+
+
+def test_super_past_a_base_the_project_does_not_define(write, analyze):
+    """`super().__init__(...)` in an `Exception` subclass was an undefined name."""
+    path = write(
+        "errors.ppy",
+        """
+        class Failure(Exception):
+            def __init__(self, count: int) -> None:
+                super().__init__(f"{count} failure(s)")
+                self.count: int = count
+        """,
+    )
+    codes = [d.code for d in analyze(path).diagnostics.sorted() if d.severity.name == "ERROR"]
+    assert "E1101" not in codes, codes
+
+
+def test_a_container_display_takes_its_declared_type(write, analyze):
+    """`stack: list[ast.AST] = [stmt]` holds AST nodes; it is not a narrower list."""
+    path = write(
+        "displays.ppy",
+        """
+        class Node:
+            pass
+
+        class Leaf(Node):
+            pass
+
+        def walk(leaf: Leaf) -> int:
+            stack: list[Node] = [leaf]
+            seen: set[Node] = {leaf}
+            by_name: dict[str, Node] = {"leaf": leaf}
+            empty: list[Node] = []
+            return len(stack) + len(seen) + len(by_name) + len(empty)
+
+        def wrong() -> int:
+            names: list[str] = [1, 2]
+            return len(names)
+        """,
+    )
+    diagnostics = analyze(path).diagnostics.sorted()
+    errors = [d for d in diagnostics if d.severity.name == "ERROR"]
+    assert len(errors) == 1, [d.message for d in errors]
+    assert "names" in errors[0].message or "list[int]" in errors[0].message
+    assert errors[0].span is not None and errors[0].span.line == 15, (
+        "the wrong display, not the right ones"
+    )
+
+
+def test_dictionary_views_take_the_set_algebra(write, analyze):
+    """`left.keys() | right.keys()` was "not defined for Iterable and Iterable"."""
+    path = write(
+        "views.ppy",
+        """
+        def merged(left: dict[str, int], right: dict[str, int]) -> int:
+            names = left.keys() | right.keys()
+            shared = left.keys() & right.keys()
+            return len(names) + len(shared)
+
+        def pairs(d: dict[str, int]) -> int:
+            total = 0
+            for key, value in d.items():
+                total += len(key) + value
+            return total
+        """,
+    )
+    bundle = analyze(path)
+    assert [d.code for d in bundle.diagnostics.sorted() if d.severity.name == "ERROR"] == []
+    assert str(bundle.analysis.function("views.merged").locals["names"]) == "frozenset[str]"

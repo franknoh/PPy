@@ -138,6 +138,36 @@ _OPERATOR_DUNDERS: dict[type[ast.operator], str] = {
 }
 
 
+def _display_fits(node: ast.expr, actual: T.Type, declared: T.Type) -> bool:
+    """Does a container written in place fit the type declared beside it?
+
+    Only displays and comprehensions: a value that already had a type keeps
+    it. The container kinds must match, and every element type the display
+    holds must be assignable to the declared element type.
+    """
+    kinds: dict[type[ast.expr], str] = {
+        ast.List: "list",
+        ast.ListComp: "list",
+        ast.Set: "set",
+        ast.SetComp: "set",
+        ast.Dict: "dict",
+        ast.DictComp: "dict",
+    }
+    kind = kinds.get(type(node))
+    if kind is None:
+        return False
+    actual = T.strip_literal(actual)
+    declared = T.strip_literal(declared)
+    if not (isinstance(actual, T.Instance) and isinstance(declared, T.Instance)):
+        return False
+    if actual.name != kind or declared.name != kind or len(actual.args) != len(declared.args):
+        return False
+    return all(
+        isinstance(held, T.NeverType) or T.is_assignable(held, wanted)
+        for held, wanted in zip(actual.args, declared.args, strict=True)
+    )
+
+
 def _is_set_like(t: T.Type) -> bool:
     return isinstance(t, T.Instance) and t.name in {"set", "frozenset"}
 
@@ -599,6 +629,13 @@ class _Checker:
         declared = Binding(resolved.type, resolved.facts)
         if node.value is not None:
             value = self._expr(node.value, env)
+            if _display_fits(node.value, value.type, resolved.type):
+                # A list, set, or dict written out in place has no type of
+                # its own yet: `[stmt]` beside `list[ast.AST]` is a list of
+                # AST nodes that happens to hold a statement, not a
+                # `list[ast.stmt]` being narrowed. Each element is held to the
+                # declared element type instead.
+                value = Binding(resolved.type, value.facts)
             if not T.is_assignable(value.type, resolved.type):
                 self._mismatch(
                     "E1301",
@@ -1210,6 +1247,11 @@ class _Checker:
             inherited = self._inherited_type()
             if inherited is not None:
                 return Binding(T.Callable_((), inherited, "super"))
+            if self._current is not None and self._current.owner is not None:
+                # The base is not the project's -- `Exception`, a library
+                # class -- so what `super()` forwards to is not modeled. It
+                # is still `super()`, not an undefined name.
+                return Binding(T.Callable_((), T.OBJECT, "super"))
         if B.is_builtin(node.id) or node.id in {"None", "True", "False"}:
             return Binding(T.Callable_((), T.UNKNOWN, node.id))
         if node.id in {"Ellipsis", "NotImplemented"}:
@@ -1857,10 +1899,12 @@ class _Checker:
                 else T.UNKNOWN,
                 "dict.get",
             ),
+            # A keys view supports the set algebra and hashes its members,
+            # which is what `frozenset` promises; an items view likewise.
             ("dict", "keys"): T.Callable_(
                 (),
                 T.instance(
-                    "Iterable",
+                    "frozenset",
                     base.args[0] if isinstance(base, T.Instance) and base.args else T.ANY,
                 ),
                 "dict.keys",
@@ -1876,7 +1920,7 @@ class _Checker:
             ("dict", "items"): T.Callable_(
                 (),
                 T.instance(
-                    "Iterable",
+                    "frozenset",
                     T.Tuple_(
                         base.args
                         if isinstance(base, T.Instance) and len(base.args) == 2

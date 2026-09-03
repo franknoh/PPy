@@ -57,6 +57,12 @@ Speed of the compiler itself, measured before being changed.
   class's own `__or__`, `__add__` and the other operator methods were never
   consulted. Together they were 193 of the compiler's 627 self-reported
   errors, and none of them was a finding.
+- `super()` in a class whose base is not the project's -- an `Exception`
+  subclass -- is `super()`, not an undefined name. A list, set, or dict
+  written out beside a declared type is held to that type's elements
+  rather than typed from its first element and then rejected
+  (`stack: list[ast.AST] = [stmt]`). Dictionary views (`keys()`, `items()`)
+  are set-like, so `left.keys() | right.keys()` is defined.
 - An annotation may name a common standard-library class -- `pathlib.Path`,
   every `ast` node, `re.Pattern`, `datetime`, `collections.deque`,
   `argparse.Namespace`, and others -- without the analyzer modeling it.
