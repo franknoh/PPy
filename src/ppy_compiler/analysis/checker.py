@@ -3247,18 +3247,25 @@ def analyze(
     # third time to record, the confirming pass does the recording, and its
     # diagnostics are kept only if it changed nothing -- which is exactly the
     # condition under which they were computed from final summaries.
-    silent = DiagnosticBag()
-    for module_symbols in ordered:
-        _Checker(
-            module_symbols,
-            symbols,
-            analysis,
-            silent,
-            strict=False,
-            record=False,
-            dynamic_policy=dynamic_policy,
-            plugins=plugins,
-        ).check_module()
+    #
+    # The seed is for the first analysis of a project. Inference calls this
+    # once per round, and by then every function carries the summary the
+    # previous round left; the confirming loop below finds what moved and
+    # runs until nothing does, exactly as it would after a seed.
+    if not symbols.seeded:
+        silent = DiagnosticBag()
+        for module_symbols in ordered:
+            _Checker(
+                module_symbols,
+                symbols,
+                analysis,
+                silent,
+                strict=False,
+                record=False,
+                dynamic_policy=dynamic_policy,
+                plugins=plugins,
+            ).check_module()
+        symbols.seeded = True
 
     for attempt in range(_FIXPOINT_ROUNDS):
         before = summaries()

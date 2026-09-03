@@ -413,6 +413,9 @@ class ProjectSymbols:
         #: over every function at least twice per `analyze` and once per
         #: inference round; the answer does not change between them.
         self.alias_cache: dict[tuple[int, frozenset[str]], object] = {}
+        #: Whether every function already carries a summary from an earlier
+        #: `analyze`, so the next one can start confirming instead of seeding.
+        self.seeded = False
 
     def build(self) -> ProjectSymbols:
         from .lexical import scan_module

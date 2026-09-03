@@ -2266,3 +2266,48 @@ def test_the_math_module_is_modeled(write, analyze):
     assert str(bundle.analysis.function("kernel.squash").inferred_ret) == "float"
     assert str(bundle.analysis.function("kernel.whole").inferred_ret) == "int"
     assert str(bundle.analysis.function("kernel.finite").inferred_ret) == "bool"
+
+
+def test_a_reanalysis_confirms_without_reseeding(write, analyze):
+    """Inference analyzes a project once per round; only the first needs a seed.
+
+    The silent seed pass gives every function a first summary. After that,
+    every function already carries one, and a confirming pass finds what
+    moved -- so the seed is skipped, and the answers must not change.
+    """
+    from ppy_compiler.analysis.checker import analyze as run_checker
+    from ppy_compiler.diagnostics import DiagnosticBag
+
+    path = write(
+        "rounds.ppy",
+        """
+        def scale(x: int) -> int:
+            return x * 2
+
+        def twice(x: int) -> int:
+            return scale(scale(x))
+
+        def report(xs: list[int]) -> int:
+            total: int = 0
+            for x in xs:
+                total += twice(x)
+            return total
+        """,
+    )
+    bundle = analyze(path)
+    assert bundle.symbols.seeded, "the first analysis seeded the summaries"
+    first = {
+        name: (str(f.effects), str(f.inferred_ret), sorted(f.calls))
+        for name, f in bundle.analysis.modules["rounds"].functions.items()
+    }
+    first_types = dict(bundle.analysis.modules["rounds"].node_types)
+
+    again = run_checker(bundle.symbols, DiagnosticBag(), strict=True)
+    second = {
+        name: (str(f.effects), str(f.inferred_ret), sorted(f.calls))
+        for name, f in again.modules["rounds"].functions.items()
+    }
+    assert second == first
+    assert {k: str(v) for k, v in again.modules["rounds"].node_types.items()} == {
+        k: str(v) for k, v in first_types.items()
+    }
