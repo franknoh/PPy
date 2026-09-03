@@ -113,3 +113,6 @@ jobs:
       - uses: pypa/gh-action-pypi-publish@release/v1
         with:
           repository-url: ${{ (github.event_name == 'workflow_dispatch' && inputs.repository == 'testpypi') && 'https://test.pypi.org/legacy/' || '' }}
+          # A re-run of a release that already got its files through should
+          # finish, not fail. The index still refuses to overwrite one.
+          skip-existing: true
