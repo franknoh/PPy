@@ -86,12 +86,15 @@ def _run_to_fixpoint(bundle, step, stage: str, diagnostics) -> None:  # type: ig
     for _iteration in range(_MAX_ITERATIONS):
         if not step():
             return
+        # These rounds discard their diagnostics, which is what makes handing
+        # over the previous analysis safe: a module nothing moved keeps it.
         bundle.analysis = analyze(
             bundle.symbols,
             DiagnosticBag(),
             strict=False,
             dynamic_policy=bundle.project.config.dynamic_boundaries,
             plugins=bundle.project.plugins,
+            previous=bundle.analysis,
         )
     # Refusing to settle is an internal error; the caller must hear about it
     # rather than receive whatever types the last round happened to hold.

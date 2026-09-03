@@ -416,6 +416,9 @@ class ProjectSymbols:
         #: Whether every function already carries a summary from an earlier
         #: `analyze`, so the next one can start confirming instead of seeding.
         self.seeded = False
+        #: The digest of each module's inputs when it was last checked, so a
+        #: later pass can tell whether checking it again could say anything new.
+        self.module_digests: dict[str, str] = {}
 
     def build(self) -> ProjectSymbols:
         from .lexical import scan_module

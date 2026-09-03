@@ -8,6 +8,7 @@ function, and diagnostics for anything the strict mode forbids.
 from __future__ import annotations
 
 import ast
+import hashlib
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -3232,10 +3233,21 @@ def analyze(
     strict: bool = True,
     dynamic_policy: str = "explicit",
     plugins: PluginRegistry | None = None,
+    previous: ProjectAnalysis | None = None,
 ) -> ProjectAnalysis:
-    """Run the effect fixpoint, then a final recording pass (spec 11.5)."""
+    """Run the effect fixpoint, then a final recording pass (spec 11.5).
+
+    With `previous`, a module whose inputs -- its own signatures and fields,
+    and those of everything it imports -- have not changed since it was last
+    checked is not checked again: the earlier `ModuleAnalysis` is the answer.
+    Inference asks this once per round and most rounds move a few modules,
+    so most of a round used to be spent confirming what nothing had touched.
+    A reused module contributes no diagnostics, so `previous` is only for
+    callers that discard them; the analyses that report run without it.
+    """
     analysis = ProjectAnalysis(symbols=symbols, diagnostics=diagnostics)
     ordered = [symbols.modules[m.name] for m in symbols.graph.order() if m.name in symbols.modules]
+    reusable: dict[str, ModuleAnalysis] = dict(previous.modules) if previous is not None else {}
 
     def summaries() -> dict[str, str]:
         return {
@@ -3273,7 +3285,13 @@ def analyze(
         bag = diagnostics if final else DiagnosticBag()
         modules: dict[str, ModuleAnalysis] = {}
         cascaded = 0
+        digests = _module_digests(symbols, ordered, strict, dynamic_policy)
         for module_symbols in ordered:
+            name = module_symbols.name
+            kept = reusable.get(name)
+            if kept is not None and symbols.module_digests.get(name) == digests[name]:
+                modules[name] = kept
+                continue
             checker = _Checker(
                 module_symbols,
                 symbols,
@@ -3284,8 +3302,11 @@ def analyze(
                 dynamic_policy=dynamic_policy,
                 plugins=plugins,
             )
-            modules[module_symbols.name] = checker.check_module()
+            modules[name] = checker.check_module()
+            symbols.module_digests[name] = digests[name]
             cascaded += checker.cascaded
+        # What this pass produced is what the next one may keep.
+        reusable = modules
         if final or summaries() == before:
             analysis.modules.update(modules)
             if cascaded:
@@ -3294,6 +3315,56 @@ def analyze(
                 diagnostics.extend(bag)
             return analysis
     return analysis
+
+
+def _module_digests(
+    symbols: ProjectSymbols, ordered: list[ModuleSymbols], strict: bool, dynamic_policy: str
+) -> dict[str, str]:
+    """A digest per module of everything its checking can read.
+
+    A module's functions see their own module's signatures and classes, and
+    reach any function or class of a module they import through attribute
+    access, so the digest is the module's own summary joined with the
+    summaries of every module its imports name -- and of every module under
+    those, since `import pkg` reaches `pkg.sub.f`. The summary of a module is
+    its functions' signatures, effects, and returns, and its classes' fields
+    and methods, which are exactly the things inference moves between passes.
+    Module globals and imports are fixed at symbol time and need no digest.
+    """
+    own: dict[str, str] = {}
+    for module_symbols in ordered:
+        parts = [_function_summary(info) for info in module_symbols.functions.values()]
+        for cls in module_symbols.classes.values():
+            parts.append(f"{cls.qualname}|{cls.fields}|{cls.field_facts}|{sorted(cls.class_vars)}")
+            parts.extend(_function_summary(method) for method in cls.methods.values())
+        own[module_symbols.name] = hashlib.blake2b(
+            "\n".join(parts).encode("utf-8"), digest_size=16
+        ).hexdigest()
+    names = sorted(own)
+    digests: dict[str, str] = {}
+    for module_symbols in ordered:
+        seen: list[str] = [f"{strict}|{dynamic_policy}", own[module_symbols.name]]
+        for edge in module_symbols.module.imports:
+            target = edge.target
+            seen.extend(
+                f"{name}:{own[name]}"
+                for name in names
+                if name == target or name.startswith(target + ".")
+            )
+        digests[module_symbols.name] = hashlib.blake2b(
+            "\n".join(seen).encode("utf-8"), digest_size=16
+        ).hexdigest()
+    return digests
+
+
+def _function_summary(info: FunctionInfo) -> str:
+    params = ";".join(
+        f"{p.name}:{p.type}:{p.facts}:{p.has_default}:{p.kind}:{p.annotated}" for p in info.params
+    )
+    return (
+        f"{info.qualname}({params})->{info.ret}|{info.ret_facts}|{info.ret_annotated}"
+        f"|{info.effects}|{info.verified_pure}|{info.dynamic}|{info.directives}"
+    )
 
 
 def _unresolved_summary(cascaded: int, modules: dict[str, ModuleAnalysis]) -> Diagnostic:

@@ -15,6 +15,13 @@ Speed of the compiler itself, measured before being changed.
 - A development tree fingerprints the compiler by the sizes and mtimes of
   its sources rather than by reading them all, which was a third of a
   second on every command.
+- Inference stops re-checking what nothing moved. Each round used to seed
+  every function's summary again and then check every module twice to
+  confirm it; now the seed runs once per project, and a module whose
+  inputs -- its own signatures and fields, and those of everything it
+  imports -- have the digest they had when it was last checked keeps its
+  analysis instead of being checked again. The answers are byte for byte
+  what they were.
 - `ppy convert` and `ppy migrate` stop repeating themselves on large
   files. The reflection index walked a module's whole tree once per
   function it held; the write index and the reflection index each walked,

@@ -2311,3 +2311,56 @@ def test_a_reanalysis_confirms_without_reseeding(write, analyze):
     assert {k: str(v) for k, v in again.modules["rounds"].node_types.items()} == {
         k: str(v) for k, v in first_types.items()
     }
+
+
+def test_a_module_nothing_moved_in_is_not_checked_again(write, analyze):
+    """An inference round hands the previous analysis over; unchanged modules keep it.
+
+    A module's checking reads its own signatures and fields and those of
+    what it imports. When none of those moved since it was last checked,
+    checking it again could only say the same thing -- so it is not checked,
+    and the earlier `ModuleAnalysis` object is the answer. When a callee's
+    signature does move, the importer is checked again and agrees with a
+    fresh analysis.
+    """
+    from ppy_compiler.analysis.checker import analyze as run_checker
+    from ppy_compiler.diagnostics import DiagnosticBag
+
+    write(
+        "lib.ppy",
+        """
+        def scale(x):
+            return x * 2
+        """,
+    )
+    path = write(
+        "app.ppy",
+        """
+        from lib import scale
+
+        def run(n: int) -> int:
+            return scale(n)
+        """,
+    )
+    bundle = analyze(path, strict=False)
+    first = bundle.analysis
+
+    again = run_checker(bundle.symbols, DiagnosticBag(), strict=False, previous=first)
+    assert again.modules["lib"] is first.modules["lib"], "nothing moved: kept"
+    assert again.modules["app"] is first.modules["app"]
+
+    # Inference learns `scale`'s parameter: the module that calls it must be
+    # looked at again, and the one that defines it too.
+    scale = bundle.symbols.functions["lib.scale"]
+    scale.params[0].type = T.INT
+    scale.params[0].inferred = True
+    moved = run_checker(bundle.symbols, DiagnosticBag(), strict=False, previous=again)
+    assert moved.modules["lib"] is not again.modules["lib"]
+    assert moved.modules["app"] is not again.modules["app"]
+    assert str(moved.function("lib.scale").inferred_ret) == "int"
+
+    fresh = run_checker(bundle.symbols, DiagnosticBag(), strict=False)
+    for name in ("lib", "app"):
+        assert {k: str(v) for k, v in moved.modules[name].node_types.items()} == {
+            k: str(v) for k, v in fresh.modules[name].node_types.items()
+        }
