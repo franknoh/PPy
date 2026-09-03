@@ -189,6 +189,14 @@ def _set(args: Sequence[Arg]) -> BuiltinResult:
     return BuiltinResult(T.set_of(element), Facts(), _ALLOC)
 
 
+def _frozenset(args: Sequence[Arg]) -> BuiltinResult:
+    # A frozenset is not a set: it hashes, it has no `add`, and `set | it`
+    # keeps the left kind. Typing it as one made every `-> frozenset[str]`
+    # function that built its answer here a wrong return.
+    element = _element_of(args[0].type) if args else T.NEVER
+    return BuiltinResult(T.instance("frozenset", T.strip_literal(element)), Facts(), _ALLOC)
+
+
 def _dict(args: Sequence[Arg]) -> BuiltinResult:
     if args:
         base = T.strip_literal(args[0].type)
@@ -393,7 +401,7 @@ BUILTINS: dict[str, Handler] = {
     "list": _list,
     "tuple": _tuple,
     "set": _set,
-    "frozenset": _set,
+    "frozenset": _frozenset,
     "dict": _dict,
     "enumerate": _enumerate,
     "zip": _zip,

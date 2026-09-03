@@ -2364,3 +2364,71 @@ def test_a_module_nothing_moved_in_is_not_checked_again(write, analyze):
         assert {k: str(v) for k, v in moved.modules[name].node_types.items()} == {
             k: str(v) for k, v in fresh.modules[name].node_types.items()
         }
+
+
+def test_set_algebra_is_typed(write, analyze):
+    """`a | b` on sets was "not defined": the numeric rules were the only rules."""
+    path = write(
+        "sets.ppy",
+        """
+        def union(a: set[str], b: set[str]) -> set[str]:
+            return a | b
+
+        def keep(a: frozenset[str], b: set[str]) -> frozenset[str]:
+            return (a & b) - frozenset({"x"})
+
+        def either(a: set[int], b: frozenset[int]) -> set[int]:
+            return a ^ b
+        """,
+    )
+    bundle = analyze(path)
+    assert [d.code for d in bundle.diagnostics.sorted() if d.severity.name == "ERROR"] == []
+    assert str(bundle.analysis.function("sets.union").inferred_ret) == "set[str]"
+    assert str(bundle.analysis.function("sets.keep").inferred_ret) == "frozenset[str]"
+    assert str(bundle.analysis.function("sets.either").inferred_ret) == "set[int]"
+
+
+def test_frozenset_is_not_a_set(write, analyze):
+    """`frozenset(...)` was typed as `set[...]`, so `-> frozenset[str]` was a wrong return."""
+    path = write(
+        "frozen.ppy",
+        """
+        def names(xs: list[str]) -> frozenset[str]:
+            return frozenset(xs)
+
+        def empty() -> frozenset[str]:
+            return frozenset()
+        """,
+    )
+    bundle = analyze(path)
+    assert [d.code for d in bundle.diagnostics.sorted() if d.severity.name == "ERROR"] == []
+    assert str(bundle.analysis.function("frozen.names").inferred_ret) == "frozenset[str]"
+
+
+def test_a_class_can_overload_an_operator(write, analyze):
+    """`EffectSet | EffectSet` is whatever `EffectSet.__or__` returns."""
+    path = write(
+        "ops.ppy",
+        """
+        class Mask:
+            def __init__(self, bits: int) -> None:
+                self.bits: int = bits
+
+            def __or__(self, other: "Mask") -> "Mask":
+                return Mask(self.bits | other.bits)
+
+            def __rsub__(self, other: int) -> int:
+                return other - self.bits
+
+        def both(a: Mask, b: Mask) -> Mask:
+            return a | b
+
+        def left(n: int, m: Mask) -> int:
+            return n - m
+        """,
+    )
+    bundle = analyze(path)
+    assert [d.code for d in bundle.diagnostics.sorted() if d.severity.name == "ERROR"] == []
+    assert str(bundle.analysis.function("ops.both").inferred_ret) == "ops.Mask"
+    assert str(bundle.analysis.function("ops.left").inferred_ret) == "int"
+    assert "ops.Mask.__or__" in bundle.analysis.function("ops.both").calls

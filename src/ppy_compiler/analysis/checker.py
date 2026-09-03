@@ -117,6 +117,31 @@ _ARITH_OPS = {
 
 _MAX_LOOP_ITERATIONS = 4
 
+#: The set algebra, which the numeric rules below do not cover.
+_SET_OPS = frozenset({ast.BitOr, ast.BitAnd, ast.Sub, ast.BitXor})
+
+#: What a class spells to overload each operator.
+_OPERATOR_DUNDERS: dict[type[ast.operator], str] = {
+    ast.Add: "__add__",
+    ast.Sub: "__sub__",
+    ast.Mult: "__mul__",
+    ast.Div: "__truediv__",
+    ast.FloorDiv: "__floordiv__",
+    ast.Mod: "__mod__",
+    ast.Pow: "__pow__",
+    ast.LShift: "__lshift__",
+    ast.RShift: "__rshift__",
+    ast.BitOr: "__or__",
+    ast.BitXor: "__xor__",
+    ast.BitAnd: "__and__",
+    ast.MatMult: "__matmul__",
+}
+
+
+def _is_set_like(t: T.Type) -> bool:
+    return isinstance(t, T.Instance) and t.name in {"set", "frozenset"}
+
+
 #: Attributes every class object exposes.
 _CLASS_DUNDERS: dict[str, T.Type] = {
     "__name__": T.STR,
@@ -2227,6 +2252,19 @@ class _Checker:
         if op is ast.Mod and left_base == T.STR:
             self._effects = self._effects.add(Effect.ALLOC)
             return Binding(T.STR)
+        if op in _SET_OPS and _is_set_like(left_base) and _is_set_like(right_base):
+            # `a | b`, `a & b`, `a - b`, `a ^ b` on sets are new sets of the
+            # left operand's kind -- `frozenset | set` is a frozenset, and the
+            # other way round a set -- holding elements of either.
+            self._effects = self._effects.add(Effect.ALLOC)
+            element = T.join(B.element_type(left_base), B.element_type(right_base))
+            if op in {ast.BitAnd, ast.Sub}:
+                element = B.element_type(left_base)
+            return Binding(T.instance(left_base.name, T.strip_literal(element)))  # type: ignore[union-attr]
+
+        overloaded = self._operator_method(left_base, right_base, op, node)
+        if overloaded is not None:
+            return overloaded
 
         if not (T.is_numeric(left_base) and T.is_numeric(right_base)):
             self._error(
@@ -2244,6 +2282,35 @@ class _Checker:
             self._warn("W2002", "arithmetic on `bool` values is legal but usually unintended", node)
 
         return self._numeric_result(left, right, left_base, right_base, op, node)
+
+    def _operator_method(
+        self, left_base: T.Type, right_base: T.Type, op: type[ast.operator], node: ast.AST
+    ) -> Binding | None:
+        """A project class's own `__add__`, `__or__`, and the rest.
+
+        `EffectSet | EffectSet` is whatever `EffectSet.__or__` returns, with
+        whatever effects it has; the reflected form on the right operand is
+        the fallback Python itself takes. Only project classes are looked
+        at: a builtin's operators are modeled above, by hand.
+        """
+        dunder = _OPERATOR_DUNDERS.get(op)
+        if dunder is None:
+            return None
+        for owner, name in ((left_base, dunder), (right_base, f"__r{dunder[2:]}")):
+            if not isinstance(owner, T.Instance):
+                continue
+            cls = self.project.classes.get(owner.name)
+            if cls is None:
+                continue
+            method = cls.find_method(name, self.project)
+            if method is None:
+                continue
+            self._effects = self._effects | method.effects
+            self._calls.add(method.qualname)
+            # An unknown return is a summary the fixpoint has not settled
+            # yet; the next pass reads the settled one.
+            return Binding(method.ret)
+        return None
 
     def _numeric_result(
         self,
