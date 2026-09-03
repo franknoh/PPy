@@ -922,7 +922,6 @@ wheels = [
 
 [[package]]
 name = "ppy-lang"
-version = "0.1.0a1"
 source = { editable = "." }
 dependencies = [
     { name = "libcst" },
@@ -1024,7 +1023,7 @@ requires-dist = [
     { name = "typing-extensions", specifier = ">=4.12" },
     { name = "uvicorn", marker = "extra == 'uvicorn'", specifier = ">=0.30" },
 ]
-provides-extras = ["llvm", "numpy", "torch", "jax", "uvicorn", "pydantic"]
+provides-extras = ["jax", "llvm", "numpy", "pydantic", "torch", "uvicorn"]
 
 [package.metadata.requires-dev]
 all = [

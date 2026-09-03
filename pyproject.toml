@@ -2,7 +2,10 @@
 # The distribution is `ppy-lang`; the packages it installs are `ppy`,
 # `ppy_compiler`, and `ppy_runtime`, which is what a program imports.
 name = "ppy-lang"
-version = "0.1.0a1"
+# Read from `COMPILER_VERSION`, which is the version the compiler keys its
+# caches on: packaging metadata that could disagree with it would be a
+# second answer to a question with one.
+dynamic = ["version"]
 description = "Pretty Python: a source-compatible, statically analyzable subset of Python"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -106,6 +109,10 @@ explicit = true
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+[tool.hatch.version]
+path = "src/ppy_compiler/version.py"
+pattern = 'COMPILER_VERSION = "(?P<version>[^"]+)"' 
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/ppy", "src/ppy_compiler", "src/ppy_runtime"]

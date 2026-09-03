@@ -95,22 +95,36 @@ written only once the run is judged worth keeping.
 ## Releasing
 
 The distribution is **`ppy-lang`**; the packages it installs are `ppy`,
-`ppy_compiler`, and `ppy_runtime`. The version is written in exactly one
-place — `COMPILER_VERSION` in `src/ppy_compiler/version.py` — and a test
-holds `ppy.__version__`, `pyproject.toml`, and the installed metadata to it,
-because the compiler keys its caches on that string and a stale copy would
-serve artifacts from a version that is not running.
+`ppy_compiler`, and `ppy_runtime`.
+
+`COMPILER_VERSION` in `src/ppy_compiler/version.py` is the version. The
+packaging metadata reads it (`[tool.hatch.version]`), so `pyproject.toml`
+does not repeat it. `ppy.__version__` is a second literal, deliberately: the
+runtime package does not import the compiler, and giving it one just to
+learn a string would be a dependency in the wrong direction. A test holds
+the two together, along with the installed distribution's metadata, because
+the compiler keys its caches on that string and a stale copy would serve
+artifacts from a version that is not running.
 
 To cut a release:
 
-1. Move `COMPILER_VERSION`, `ppy.__version__`, and `[project] version`
-   together, and write the release into `CHANGELOG.md`.
+1. Move `COMPILER_VERSION` and `ppy.__version__` together, and write the
+   release into `CHANGELOG.md`.
 2. `./scripts/check.sh`, then `uv build` and
    `uv run --with twine twine check dist/*`.
 3. Tag it `vX.Y.Z` — matching the declared version, which the workflow
    verifies — and push the tag. `.github/workflows/release.yml` runs the
    gate, builds, installs the built wheel into a clean environment and runs
    it, and publishes.
+
+A workflow pins actions by **ref**, and a ref is not a release. Some
+publishers cut releases past the last moving major tag they maintain, so
+`gh api repos/OWNER/REPO/releases/latest` can name a version that
+`uses:` cannot resolve. Check the ref itself before changing one:
+
+```bash
+gh api repos/astral-sh/setup-uv/git/ref/tags/v10.0.1 --jq .ref
+```
 
 The workflow publishes through PyPI's trusted publishing, so there is no API
 token in the repository. It needs, once: a pending publisher on PyPI for
