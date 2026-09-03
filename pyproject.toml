@@ -1,13 +1,38 @@
 [project]
-name = "ppy"
-version = "0.1.0"
+# The distribution is `ppy-lang`; the packages it installs are `ppy`,
+# `ppy_compiler`, and `ppy_runtime`, which is what a program imports.
+name = "ppy-lang"
+version = "0.1.0a1"
 description = "Pretty Python: a source-compatible, statically analyzable subset of Python"
+readme = "README.md"
 requires-python = ">=3.12"
-license = { text = "MIT" }
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "franknoh" }]
+keywords = ["python", "compiler", "llvm", "static-analysis", "jit", "native"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Programming Language :: Python :: Implementation :: CPython",
+    "Topic :: Software Development :: Compilers",
+    "Topic :: Software Development :: Interpreters",
+    "Typing :: Typed",
+]
 dependencies = [
     "libcst>=1.4",
     "typing-extensions>=4.12",
 ]
+
+[project.urls]
+Homepage = "https://github.com/franknoh/PPy"
+Repository = "https://github.com/franknoh/PPy"
+Documentation = "https://github.com/franknoh/PPy/blob/main/docs/guide.md"
+Issues = "https://github.com/franknoh/PPy/issues"
+Changelog = "https://github.com/franknoh/PPy/blob/main/CHANGELOG.md"
 
 [project.optional-dependencies]
 llvm = ["llvmlite>=0.44"]
@@ -84,6 +109,25 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/ppy", "src/ppy_compiler", "src/ppy_runtime"]
+
+# The sdist is what a distributor builds from, so it carries the tests and the
+# one script that runs them; it does not carry the examples, which are a
+# repository, cached artifacts and all.
+# Anchored with a leading slash, every one of them: an unanchored `tests`
+# matches `tests/` at any depth, which pulled a local virtualenv's
+# `site-packages/llvmlite/tests` into the archive.
+[tool.hatch.build.targets.sdist]
+include = [
+    "/src",
+    "/tests",
+    "/docs",
+    "/scripts/check.sh",
+    "/README.md",
+    "/CHANGELOG.md",
+    "/CONTRIBUTING.md",
+    "/LICENSE",
+    "/pyproject.toml",
+]
 
 # PEP 561: without this marker a type checker treats the runtime as untyped.
 [tool.hatch.build.targets.wheel.force-include]

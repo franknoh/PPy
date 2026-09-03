@@ -1,6 +1,7 @@
 __pycache__/
 *.py[cod]
 .venv/
+testenv/
 dist/
 build/
 *.egg-info/
@@ -11,6 +12,7 @@ htmlcov/
 *.md
 !README.md
 !CONTRIBUTING.md
+!CHANGELOG.md
 !docs/*.md
 !examples/**/*.md
 examples/**/uv.lock

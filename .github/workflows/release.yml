@@ -1,0 +1,67 @@
+name: release
+
+# Publishing is deliberate: a tag, or a hand-run of this workflow. The tag
+# has to name the version already in `pyproject.toml` -- a release whose
+# artifacts do not match its tag is worse than no release.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      repository:
+        description: "where to publish"
+        type: choice
+        options: ["testpypi", "pypi"]
+        default: "testpypi"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10
+        with:
+          python-version: "3.13"
+      - run: uv sync
+      # The gate that defines "clean" everywhere else defines it here too.
+      - run: ./scripts/check.sh
+      - name: the tag and the metadata must agree
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          tagged="${GITHUB_REF_NAME#v}"
+          declared=$(uv run python -c "import tomllib,pathlib;print(tomllib.loads(pathlib.Path('pyproject.toml').read_text())['project']['version'])")
+          test "$tagged" = "$declared" || {
+            echo "tag $GITHUB_REF_NAME does not name version $declared"
+            exit 1
+          }
+      - run: uv build
+      # What is about to be published is what gets installed here: the smoke
+      # test runs the wheel, not the checkout it was built from.
+      - name: the wheel runs
+        run: |
+          uv venv /tmp/release-check
+          VIRTUAL_ENV=/tmp/release-check uv pip install "$(echo dist/*.whl)[llvm]"
+          /tmp/release-check/bin/ppy --version
+          /tmp/release-check/bin/python -c "import ppy, ppy_runtime; print(ppy.__version__)"
+      - run: uv run --with twine twine check dist/*
+      - uses: actions/upload-artifact@v7
+        with:
+          name: distributions
+          path: dist/
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    environment: ${{ (github.event_name == 'workflow_dispatch' && inputs.repository) || 'pypi' }}
+    # Trusted publishing: PyPI verifies this workflow's identity, so there is
+    # no API token in the repository to leak or rotate.
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: distributions
+          path: dist/
+      - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          repository-url: ${{ (github.event_name == 'workflow_dispatch' && inputs.repository == 'testpypi') && 'https://test.pypi.org/legacy/' || '' }}

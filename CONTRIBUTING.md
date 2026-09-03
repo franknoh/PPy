@@ -75,6 +75,15 @@ the README tables are rendered from that file rather than typed. They are
 not a per-change gate: a scheduled workflow re-measures and reports drift
 beyond a tolerance, because absolute wall times differ between runners.
 
+What counts as drift needs both signals: the milliseconds moved beyond the
+tolerance *and* the ratio to the C reference moved with them. A busy machine
+slows every path at once, so the ratio holds where the times do not; and the
+reference is a few milliseconds on the smaller problems, so a wobble there
+moves every ratio at once. Either on its own reports the machine. `ppy run`
+is exempt from the ratio entirely — it is mostly the compiler, and there is
+no ratio to take against a C program that compiled beforehand — so its
+movement is reported and never fatal.
+
 A machine that cannot build every path fails the run and records nothing. A
 record with a column missing would replace a whole one, and the gap would
 read as a result rather than as a machine without `gcc` or without a shared
@@ -82,3 +91,31 @@ libpython; `bench.py` says up front which paths it had to skip and why, and
 `--record` still writes what it measured so a failed scheduled run keeps its
 evidence. That file may not be `measurements.json` itself: the baseline is
 written only once the run is judged worth keeping.
+
+## Releasing
+
+The distribution is **`ppy-lang`**; the packages it installs are `ppy`,
+`ppy_compiler`, and `ppy_runtime`. The version is written in exactly one
+place — `COMPILER_VERSION` in `src/ppy_compiler/version.py` — and a test
+holds `ppy.__version__`, `pyproject.toml`, and the installed metadata to it,
+because the compiler keys its caches on that string and a stale copy would
+serve artifacts from a version that is not running.
+
+To cut a release:
+
+1. Move `COMPILER_VERSION`, `ppy.__version__`, and `[project] version`
+   together, and write the release into `CHANGELOG.md`.
+2. `./scripts/check.sh`, then `uv build` and
+   `uv run --with twine twine check dist/*`.
+3. Tag it `vX.Y.Z` — matching the declared version, which the workflow
+   verifies — and push the tag. `.github/workflows/release.yml` runs the
+   gate, builds, installs the built wheel into a clean environment and runs
+   it, and publishes.
+
+The workflow publishes through PyPI's trusted publishing, so there is no API
+token in the repository. It needs, once: a pending publisher on PyPI for
+`ppy-lang` naming this repository, the workflow `release.yml`, and the
+environment `pypi`; the same on TestPyPI with the environment `testpypi`;
+and both environments created under the repository's settings.
+`workflow_dispatch` on the workflow publishes to TestPyPI by default, which
+is the way to rehearse one.

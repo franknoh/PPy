@@ -18,10 +18,13 @@ the language.
 Add PPY to your project with [uv](https://docs.astral.sh/uv/) (Python 3.12+):
 
 ```bash
-uv add "ppy[llvm] @ git+https://github.com/franknoh/PPy.git"
+uv add "ppy-lang[llvm]"
 ```
 
-or with pip: `pip install "ppy[llvm] @ git+https://github.com/franknoh/PPy.git"`.
+or with pip: `pip install "ppy-lang[llvm]"`. The distribution is `ppy-lang`;
+what it installs is `ppy`, so your code writes `import ppy`. Releases are
+alphas — pin an exact version. For the development tip:
+`uv add "ppy-lang[llvm] @ git+https://github.com/franknoh/PPy.git"`.
 
 The base package is the compiler and the runtime; extras enable the rest, so
 you install only what you use:
