@@ -124,9 +124,11 @@ def refresh_measurements(write: bool, record: Path | None = None) -> tuple[list[
     bench = import_module("bench")
     missing = bench.available()
     fresh = bench.measure()
+    kept = []
     if record is not None:
         payload = {"environment": bench.environment(), "problems": fresh}
         record.write_text(json.dumps(payload, indent=1) + "\n", encoding="utf-8")
+        kept = [f"  what this run measured is in {record}"]
     if missing:
         # Fatal whether or not `--write` was asked for. A run that could not
         # build every path has nothing to compare and nothing to record, and
@@ -134,7 +136,8 @@ def refresh_measurements(write: bool, record: Path | None = None) -> tuple[list[
         # looking like a measurement.
         return [
             *(f"{path}: {reason}" for path, reason in sorted(missing.items())),
-            "  nothing was recorded: a partial run is not a baseline",
+            f"  {RECORDED.name} was left alone: a partial run is not a baseline",
+            *kept,
             "  install what is missing, or measure somewhere that has it",
         ], True
     stored = json.loads(RECORDED.read_text(encoding="utf-8")) if RECORDED.is_file() else {}
@@ -148,7 +151,11 @@ def refresh_measurements(write: bool, record: Path | None = None) -> tuple[list[
         if len(row.get("answers", [])) != 1
     ]
     if wrong:
-        return [*wrong, "  nothing was recorded: a wrong answer has no useful timing"], True
+        return [
+            *wrong,
+            f"  {RECORDED.name} was left alone: a wrong answer has no useful timing",
+            *kept,
+        ], True
 
     drifted = []
     moved = [
@@ -176,6 +183,8 @@ def refresh_measurements(write: bool, record: Path | None = None) -> tuple[list[
         drifted.append("  drift across machines is not a regression; rerun with --write here")
     elif drifted and not write:
         drifted.append("  rerun with --write once these are the numbers to keep")
+    if drifted:
+        drifted.extend(kept)
     if write and not missing:
         payload = {
             "environment": here,

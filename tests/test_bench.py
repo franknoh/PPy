@@ -173,3 +173,25 @@ def test_the_raw_record_may_not_be_the_baseline(refresh, tmp_path):
     assert not refresh._same_file(tmp_path / "run.json", refresh.RECORDED)
     # Neither existing yet is the ordinary case, and still resolves.
     assert refresh._same_file(tmp_path / "run.json", tmp_path / "sub" / ".." / "run.json")
+
+
+def test_a_refused_baseline_is_not_a_refused_record(refresh, monkeypatch, tmp_path):
+    """Two different things, said as two different things.
+
+    `--record` keeps what the run measured; the baseline keeps what the run
+    proved. A partial run does the first and not the second, and reporting
+    that as "nothing was recorded" reads as though the evidence were gone too.
+    """
+    monkeypatch.setattr(refresh, "RECORDED", tmp_path / "measurements.json")
+    stub = ModuleType("bench")
+    stub.available = lambda: {"C scanf": "gcc is not on PATH"}
+    stub.measure = lambda: {"15a_nqueens": {**_row(plain=1.0), "answers": ["7"]}}
+    stub.environment = lambda: {"processor": "some cpu"}
+    monkeypatch.setitem(sys.modules, "bench", stub)
+
+    raw = tmp_path / "run.json"
+    lines, fatal = refresh.refresh_measurements(write=True, record=raw)
+    assert fatal
+    assert any("measurements.json was left alone" in line for line in lines)
+    assert any(str(raw) in line for line in lines), "and says where the numbers went"
+    assert raw.is_file()
