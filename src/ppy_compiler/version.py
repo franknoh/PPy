@@ -17,7 +17,7 @@ __all__ = ["COMPILER_VERSION", "compiler_fingerprint"]
 
 #: The released version. `src/ppy/__init__.py` and the packaging metadata
 #: carry the same string, and a test holds all three together.
-COMPILER_VERSION = "0.1.0a1"
+COMPILER_VERSION = "0.1.1a1"
 
 
 @functools.cache
