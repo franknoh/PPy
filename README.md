@@ -257,6 +257,7 @@ prints what it found.
 - [docs/guide.md](docs/guide.md) — overview, measurements, the import hook
 - [docs/language.md](docs/language.md) — the subset, directives, markers
 - [docs/conversion.md](docs/conversion.md) — how `ppy convert` and `ppy migrate` infer what they write
+- [docs/migrating.md](docs/migrating.md) — migrating a real project: profile, carve the kernels, leave the rest
 - [docs/architecture.md](docs/architecture.md) — pipeline, cache, threads
 - [docs/plugins.md](docs/plugins.md) — how each library integration works
 - [docs/config.md](docs/config.md) — every `[tool.ppy]` key

@@ -103,7 +103,10 @@ ppy migrate project/ --in-place   # rewrite what can be rewritten
 ppy check project/                # see what manual migration remains
 ```
 
-and iterating on the check findings until the project is strict PPY.
+and iterating on the check findings until the project is strict PPY. On a
+real codebase, start with the kernels rather than the repository —
+[migrating.md](migrating.md) says how to pick them and how to read what
+comes back.
 
 Before staticizing, migration runs its rewrite passes
 (`ppy_compiler/migration/`), each of which proves its rewrite equivalent

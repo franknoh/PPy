@@ -14,6 +14,9 @@ produces the same bytes everywhere:
   advisory, blocked annotations stay off, and `ppy check` picks up from
   there.
 
+Which files to hand them, on a project of any size, is
+[migrating.md](migrating.md).
+
 Honesty is machine-checked: in `examples/`, every file named `<name>.ppy`
 next to a `<name>.py` is exactly what the converter wrote, and
 `examples/verify_conversions.py` regenerates each one to prove it.

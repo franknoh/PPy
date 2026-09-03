@@ -4,6 +4,7 @@ The map. Details live one link away:
 
 - [language.md](language.md) — the subset, directives, markers, the three paths
 - [conversion.md](conversion.md) — how `ppy convert` and `ppy migrate` infer what they write
+- [migrating.md](migrating.md) — what to hand `ppy migrate` on a real project: the kernels, not the repository
 - [architecture.md](architecture.md) — pipeline, module map, cache, threads
 - [plugins.md](plugins.md) — NumPy, PyTorch, JAX, Pydantic, Uvicorn
 - [config.md](config.md) — every `[tool.ppy]` key
