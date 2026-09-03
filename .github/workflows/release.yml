@@ -25,16 +25,26 @@ jobs:
       - run: uv sync
       # The gate that defines "clean" everywhere else defines it here too.
       - run: ./scripts/check.sh
-      - name: the tag and the metadata must agree
+      # `COMPILER_VERSION` is the version -- the packaging metadata reads it
+      # rather than repeating it, so this asks the constant and not the file
+      # that no longer carries a literal.
+      - name: the tag and the version must agree
         if: startsWith(github.ref, 'refs/tags/v')
         run: |
           tagged="${GITHUB_REF_NAME#v}"
-          declared=$(uv run python -c "import tomllib,pathlib;print(tomllib.loads(pathlib.Path('pyproject.toml').read_text())['project']['version'])")
+          declared=$(uv run python -c "from ppy_compiler.version import COMPILER_VERSION as v; print(v)")
           test "$tagged" = "$declared" || {
             echo "tag $GITHUB_REF_NAME does not name version $declared"
             exit 1
           }
       - run: uv build
+      # And the artifacts have to carry it too: what gets published is named
+      # by the build backend, not by the constant this job just read.
+      - name: the artifacts carry that version
+        run: |
+          declared=$(uv run python -c "from ppy_compiler.version import COMPILER_VERSION as v; print(v)")
+          test -f "dist/ppy_lang-${declared}-py3-none-any.whl"
+          test -f "dist/ppy_lang-${declared}.tar.gz"
       # What is about to be published is what gets installed here, and it has
       # to do the job rather than merely import: every path a user takes, on
       # a program the checkout never compiled, from a directory that is not

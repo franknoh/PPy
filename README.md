@@ -4,8 +4,6 @@
 [![Python](https://img.shields.io/pypi/pyversions/ppy-lang?logo=python&logoColor=white)](https://pypi.org/project/ppy-lang/)
 [![CI](https://github.com/franknoh/PPy/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/franknoh/PPy/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
-[![Three paths](https://img.shields.io/badge/three%20paths-one%20answer-2ea44f)](docs/language.md#the-three-execution-paths)
-[![Standalone](https://img.shields.io/badge/build-CPython--free-orange)](docs/cli.md#--standalone)
 
 A statically analyzable language in Python's syntax. A `.ppy` file *is* valid
 Python: it runs under plain CPython with no compiler involved. The compiler
