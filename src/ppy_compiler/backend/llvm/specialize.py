@@ -16,6 +16,7 @@ from pathlib import Path
 
 from ...analysis.symbols import FunctionInfo
 from ...cache import CacheKey, digest
+from ...version import COMPILER_VERSION, compiler_fingerprint
 from .lowering import NativeSignature, lower_specialization
 
 __all__ = [
@@ -244,7 +245,7 @@ class Specializer:
         key = CacheKey.build(
             "jit",
             source_digest=digest(specialization.ir),
-            compiler_version="0.1.0",
+            compiler_version=f"{COMPILER_VERSION}+{compiler_fingerprint()}",
             opt_level=3,
             target="jit",
             directives=(f"{info.qualname}:{specialization.key}",),
