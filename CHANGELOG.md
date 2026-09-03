@@ -57,6 +57,16 @@ Speed of the compiler itself, measured before being changed.
   class's own `__or__`, `__add__` and the other operator methods were never
   consulted. Together they were 193 of the compiler's 627 self-reported
   errors, and none of them was a finding.
+- A name a package re-exports resolves to where it is defined: `from
+  ..diagnostics import Diagnostic` follows `diagnostics/__init__.py` to
+  `.model`. A bound method passed along as a value (`notify=reporter.note`)
+  is a callable without its receiver, however it is later called. A check
+  on an attribute narrows that attribute: after `if self.end is not None:`,
+  `self.end - 1` is an `int`, and so for `isinstance(self.node, Call)` and a
+  truthiness test, until the attribute or its owner is assigned again. A
+  walrus inside an `and` chain binds its name for the body. `dir` is a
+  builtin. The compiler's self-reported errors went from 627 to 195 across
+  these rounds, and its runtime's from 182 to 84.
 - `super()` in a class whose base is not the project's -- an `Exception`
   subclass -- is `super()`, not an undefined name. A list, set, or dict
   written out beside a declared type is held to that type's elements
