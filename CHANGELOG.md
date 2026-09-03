@@ -15,6 +15,23 @@ Speed of the compiler itself, measured before being changed.
 - A development tree fingerprints the compiler by the sizes and mtimes of
   its sources rather than by reading them all, which was a third of a
   second on every command.
+- `ppy convert` and `ppy migrate` stop repeating themselves on large
+  files. The reflection index walked a module's whole tree once per
+  function it held; the write index and the reflection index each walked,
+  parsed, and lexically scanned the whole project on their own (the latter
+  twice); the lexical scan snapshotted every statement's environment onto
+  the two `Load`/`Store` singletons and spent most of its time joining
+  them; and every migration pass walked every module whether or not the
+  module spelled anything it rewrites. The alias analysis, which runs for
+  every function on every inference round, did the same snapshot-and-join
+  on the `Load`/`Store` singletons inside its loop fixpoint -- a loop inside
+  a loop multiplied it -- and now records without joining and joins only
+  what is asked about. A 3270-line module migrates in 6.6 s where it took
+  10.5 s, with byte-identical output; the compiler's own 26,600 lines
+  migrate in 63 s where 85 s used to end in a crash.
+- `ppy migrate` no longer crashes on a module whose first statement is a
+  relative import: placing the `ppy` import spelled the missing module name
+  as an empty identifier, which libcst refuses.
 
 ## 0.1.0a1
 
