@@ -35,10 +35,24 @@ class LexicalBindings:
     """Snapshots of the binding environment across one module."""
 
     module: str
-    #: id(node) -> environment before the enclosing statement runs.
-    _at: dict[int, _Env] = field(default_factory=dict)
+    #: id(node) -> environment before the enclosing statement runs. A node
+    #: the scanner reached along more than one path holds a list of them,
+    #: joined the first time anyone asks: most nodes are never asked about,
+    #: and joining every revisit up front was the scan's largest cost.
+    _at: dict[int, _Env | list[_Env]] = field(default_factory=dict)
     #: Every binding module scope may ever hold, `global` rebindings included.
     anywhere: _Env = field(default_factory=dict)
+
+    def env_at(self, node: ast.AST) -> _Env | None:
+        """The environment recorded at `node`, resolving a pending join."""
+        found = self._at.get(id(node))
+        if isinstance(found, list):
+            merged = found[0]
+            for other in found[1:]:
+                merged = _join(merged, other)
+            self._at[id(node)] = merged
+            return merged
+        return found
 
     def targets_at(self, node: ast.expr) -> frozenset[str]:
         """The canonical things a Name/Attribute chain may mean at `node`.
@@ -53,7 +67,7 @@ class LexicalBindings:
             probe = probe.value
         if not isinstance(probe, ast.Name):
             return frozenset()
-        env = self._at.get(id(node)) or self._at.get(id(probe)) or {}
+        env = self.env_at(node) or self.env_at(probe) or {}
         bases = env.get(probe.id)
         if bases is None:
             bases = self.anywhere.get(probe.id)
@@ -72,7 +86,7 @@ class _Scanner:
     def __init__(self, module: str, package: str) -> None:
         self.module = module
         self.package = package
-        self.at: dict[int, _Env] = {}
+        self.at: dict[int, _Env | list[_Env]] = {}
         self.anywhere: _Env = {}
 
     def run(self, tree: ast.Module) -> LexicalBindings:
@@ -139,17 +153,27 @@ class _Scanner:
         return env
 
     def _snapshot(self, stmt: ast.stmt, env: _Env) -> None:
-        frozen = dict(env)
+        # No copy: every binding makes a new dict (`_bind`, `_join`), so the
+        # one in hand is never written to again. Copying it per statement was
+        # the scan's remaining cost on a module with hundreds of names.
+        frozen = env
         stack: list[ast.AST] = [stmt]
         while stack:
             node = stack.pop()
             existing = self.at.get(id(node))
             if existing is None:
                 self.at[id(node)] = frozen
+            elif isinstance(existing, list):
+                if not any(seen is frozen for seen in existing):
+                    existing.append(frozen)
             elif existing is not frozen:
-                self.at[id(node)] = _join(existing, frozen)
+                self.at[id(node)] = [existing, frozen]
             for child in ast.iter_child_nodes(node):
-                if isinstance(child, (ast.stmt, ast.Lambda)):
+                # `Load`/`Store` are shared singletons: one object under every
+                # name in the tree. Snapshotting them recorded every statement's
+                # environment on the same two nodes, and joining those was what
+                # the scan spent its time on. Nobody asks what a context means.
+                if isinstance(child, (ast.stmt, ast.Lambda, ast.expr_context)):
                     continue
                 stack.append(child)
 

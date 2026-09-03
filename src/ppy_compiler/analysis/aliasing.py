@@ -67,7 +67,9 @@ class AliasInfo:
 
     params: frozenset[str]
     #: id(node) -> name -> roots, snapshotted before the enclosing statement.
-    _at: dict[int, _State] = field(default_factory=dict)
+    #: A node reached along more than one path holds a list of states, joined
+    #: the first time anyone asks: most nodes are never asked about.
+    _at: dict[int, _State | list[_State]] = field(default_factory=dict)
     #: root -> roots of values stored into it (flow-insensitive, grows only).
     holds: dict[str, frozenset[str]] = field(default_factory=dict)
 
@@ -78,6 +80,11 @@ class AliasInfo:
         least itself, and anything else could be anything.
         """
         state = self._at.get(id(node))
+        if isinstance(state, list):
+            merged = state[0]
+            for other in state[1:]:
+                merged = _join(merged, other)
+            self._at[id(node)] = state = merged
         if state is not None and name in state:
             return state[name]
         if name in self.params:
@@ -97,7 +104,7 @@ class _Analyzer:
     def __init__(self, params: frozenset[str], immutable: frozenset[str]) -> None:
         self.params = params
         self.immutable = immutable
-        self.at: dict[int, _State] = {}
+        self.at: dict[int, _State | list[_State]] = {}
         self.holds: dict[str, set[str]] = {}
         self._alloc = 0
 
@@ -128,17 +135,27 @@ class _Analyzer:
         is visited more than once, so states union -- may-alias means every
         iteration's answer counts.
         """
-        frozen = dict(state)
+        # No copy: every statement that changes the state builds a new dict,
+        # so the one in hand is never written to again. And no join here: a
+        # revisited node keeps the list of states it was reached with, and
+        # `roots_at` joins them if anyone ever asks. `Load`/`Store` are shared
+        # singletons under every name in the tree -- snapshotting them recorded
+        # every statement's state on the same two nodes, and joining those,
+        # inside a loop inside a loop, was most of what analysis cost.
+        frozen = state
         stack: list[ast.AST] = [stmt]
         while stack:
             sub = stack.pop()
             existing = self.at.get(id(sub))
             if existing is None:
                 self.at[id(sub)] = frozen
+            elif isinstance(existing, list):
+                if not any(seen is frozen for seen in existing):
+                    existing.append(frozen)
             elif existing is not frozen:
-                self.at[id(sub)] = self.join(existing, frozen)
+                self.at[id(sub)] = [existing, frozen]
             for child in ast.iter_child_nodes(sub):
-                if isinstance(child, (ast.stmt, ast.Lambda)):
+                if isinstance(child, (ast.stmt, ast.Lambda, ast.expr_context)):
                     continue
                 stack.append(child)
 
@@ -210,6 +227,9 @@ class _Analyzer:
                 merged = after if merged is None else self.join(merged, after)
             return merged if merged is not None else state
         if isinstance(node, ast.Delete):
+            # Copy before dropping: the state in hand is shared with the
+            # snapshots taken so far, and they must keep what they saw.
+            state = dict(state)
             for target in node.targets:
                 if isinstance(target, ast.Name):
                     state.pop(target.id, None)
@@ -239,10 +259,7 @@ class _Analyzer:
         return current
 
     def join(self, left: _State, right: _State) -> _State:
-        merged: _State = {}
-        for name in left.keys() | right.keys():
-            merged[name] = left.get(name, frozenset()) | right.get(name, frozenset())
-        return merged
+        return _join(left, right)
 
     def bind(
         self, target: ast.expr, roots: frozenset[str], value: ast.expr | None, state: _State
@@ -374,6 +391,13 @@ class _Analyzer:
             if isinstance(child, ast.expr):
                 self.eval(child, state)
         return frozenset({EXTERNAL})
+
+
+def _join(left: _State, right: _State) -> _State:
+    merged: _State = {}
+    for name in left.keys() | right.keys():
+        merged[name] = left.get(name, frozenset()) | right.get(name, frozenset())
+    return merged
 
 
 def _capture_names(pattern: ast.pattern) -> set[str]:
