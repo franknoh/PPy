@@ -2105,3 +2105,128 @@ def test_purity_still_counts_a_write_the_function_handed_on(write, analyze):
     assert not shared.writes_only_locals, "the callee saw it"
     assert shared.writes_only_allocations, "and yet it is memory this function made"
     assert kept.writes_only_locals and kept.writes_only_allocations
+
+
+def test_an_unresolved_type_is_reported_once_not_everywhere_it_flowed(write, analyze):
+    """Ten call sites of a function with an unknown argument were ten errors.
+
+    They all said the same thing -- `<unknown>` -- and none of them said why.
+    The origin is the finding; the rest is a count.
+    """
+    path = write(
+        "cascade.ppy",
+        """
+        import somewhere_unmodeled
+
+        def charge(amount: float) -> float:
+            return amount * 1.1
+
+        def bill() -> float:
+            total: float = 0.0
+            for _ in range(3):
+                raw = somewhere_unmodeled.price()
+                total += charge(raw)
+                total += charge(raw + 1)
+            return total
+        """,
+    )
+    diagnostics = analyze(path, strict=False).diagnostics.sorted()
+    messages = [d.message for d in diagnostics]
+    assert not any("<unknown>" in m for m in messages), messages
+    summaries = [d for d in diagnostics if d.code == "W2006"]
+    assert len(summaries) == 1, [d.code for d in diagnostics]
+    assert "somewhere_unmodeled.price" in summaries[0].message
+    assert "not shown" in summaries[0].message
+
+
+def test_a_field_is_every_type_its_class_assigns_to_it(write, analyze):
+    """`self.buffer = None` in `__init__` and a real value later is `T | None`.
+
+    Fixing the field as `None` from the first line alone made every later
+    assignment an error -- the shape of most stateful classes.
+    """
+    path = write(
+        "fields.ppy",
+        """
+        class Reader:
+            def __init__(self) -> None:
+                self.count = None
+                self.name = "pending"
+
+            def start(self, n: int) -> None:
+                self.count = n
+
+            def total(self) -> int:
+                return 0 if self.count is None else self.count
+        """,
+    )
+    from ppy_compiler.analysis.inference import refine_with_call_sites
+
+    bundle = analyze(path, strict=False)
+    refine_with_call_sites(bundle)
+    errors = [d for d in bundle.diagnostics.sorted() if d.severity.name == "ERROR"]
+    assert errors == [], [d.message for d in errors]
+    cls = bundle.symbols.classes["fields.Reader"]
+    assert str(cls.fields["count"]) in {
+        "int | None",
+        "None | int",
+        "int | NoneType",
+        "NoneType | int",
+    }
+    assert str(cls.fields["name"]) == "str"
+
+
+def test_a_declared_field_is_not_widened_by_what_a_method_assigns(write, analyze):
+    path = write(
+        "declared.ppy",
+        """
+        class Box:
+            size: int
+
+            def __init__(self) -> None:
+                self.size = 0
+
+            def reset(self) -> None:
+                self.size = None
+        """,
+    )
+    from ppy_compiler.analysis.inference import refine_with_call_sites
+
+    bundle = analyze(path, strict=False)
+    refine_with_call_sites(bundle)
+    cls = bundle.symbols.classes["declared.Box"]
+    assert str(cls.fields["size"]) == "int", "the author said int"
+    assert "size" in cls.declared_fields
+
+
+def test_every_builtin_exception_is_a_known_name(write, analyze):
+    """`raise RuntimeError(...)` was "not defined at this point".
+
+    Thirteen exceptions were listed by hand and the other fifty-six were
+    not, so most programs that raised or caught one got an error for it.
+    """
+    import builtins
+
+    for name in dir(builtins):
+        value = getattr(builtins, name)
+        if isinstance(value, type) and issubclass(value, BaseException):
+            assert name in T.BUILTIN_MRO, name
+            assert T.BUILTIN_MRO[name][-1] == "object"
+    assert T.BUILTIN_MRO["FileNotFoundError"][1] == "OSError", "the real hierarchy, not a flat list"
+
+    path = write(
+        "raises.ppy",
+        """
+        def check(x: int) -> int:
+            if x < 0:
+                raise AssertionError("negative")
+            try:
+                return 10 // x
+            except ZeroDivisionError:
+                raise RuntimeError("zero") from None
+            except (OSError, KeyboardInterrupt):
+                raise
+        """,
+    )
+    codes = [d.code for d in analyze(path).diagnostics.sorted() if d.severity.name == "ERROR"]
+    assert "E1101" not in codes, codes

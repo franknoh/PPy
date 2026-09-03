@@ -359,6 +359,11 @@ def _fatal_findings(bundle, reporter: Reporter, strict: bool = False) -> int:  #
         plugins=bundle.project.plugins,
     )
     for diagnostic in settled:
+        if diagnostic.code == "W2006":
+            # The one warning that belongs with the errors: it says how many
+            # more there were and why they are not here.
+            reporter.emit(diagnostic)
+            continue
         if diagnostic.severity is not Severity.ERROR:
             continue
         if diagnostic.code.startswith("E15") and not strict:

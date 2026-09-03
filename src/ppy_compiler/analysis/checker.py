@@ -272,6 +272,8 @@ class _Checker:
         )
         self._effects = EffectSet()
         self._unknown: list[str] = []
+        #: Errors withheld because they only restated an unresolved type.
+        self.cascaded = 0
         self._calls: set[str] = set()
         self._dynamic_depth = 0
         self._dynamic_seen = False
@@ -3156,6 +3158,15 @@ class _Checker:
         return Binding(T.UNKNOWN)
 
     def _error(self, code: str, message: str, node: ast.AST, help: str | None = None) -> None:
+        if "<unknown>" in message:
+            # An error that has to spell `<unknown>` is a consequence of a
+            # type that was never resolved, and that unresolved type is the
+            # finding: the untyped parameter (E1201, E1304) or the call with
+            # no signature (E1306). Reporting every place the unknown flowed
+            # to buried the one line that said why, two hundred times on a
+            # large module. The count is reported once, with the origins.
+            self.cascaded += 1
+            return
         self.diagnostics.add(
             Diagnostic(code, Severity.ERROR, message, span_of(self.path, node), help=help)
         )
@@ -3254,6 +3265,7 @@ def analyze(
         final = attempt == _FIXPOINT_ROUNDS - 1
         bag = diagnostics if final else DiagnosticBag()
         modules: dict[str, ModuleAnalysis] = {}
+        cascaded = 0
         for module_symbols in ordered:
             checker = _Checker(
                 module_symbols,
@@ -3266,9 +3278,40 @@ def analyze(
                 plugins=plugins,
             )
             modules[module_symbols.name] = checker.check_module()
+            cascaded += checker.cascaded
         if final or summaries() == before:
             analysis.modules.update(modules)
+            if cascaded:
+                bag.add(_unresolved_summary(cascaded, modules))
             if bag is not diagnostics:
                 diagnostics.extend(bag)
             return analysis
     return analysis
+
+
+def _unresolved_summary(cascaded: int, modules: dict[str, ModuleAnalysis]) -> Diagnostic:
+    """One line for every error that only restated an unresolved type.
+
+    The origins it names are the calls whose signatures the analysis does
+    not know; an untyped parameter already has its own line (E1201 under
+    strict analysis, E1304 from conversion).
+    """
+    callees: dict[str, int] = {}
+    for module in modules.values():
+        for function in module.functions.values():
+            for name in function.unknown_callees:
+                callees[name] = callees.get(name, 0) + 1
+    ranked = sorted(callees, key=lambda name: (-callees[name], name))
+    shown = ", ".join(f"`{name}`" for name in ranked[:5])
+    if len(ranked) > 5:
+        shown += f", and {len(ranked) - 5} more"
+    where = f"; unknown signatures: {shown}" if shown else ""
+    plural = "s" if cascaded != 1 else ""
+    return Diagnostic(
+        "W2006",
+        Severity.WARNING,
+        f"{cascaded} further error{plural} only restated a type that could not be resolved"
+        f" and {'are' if cascaded != 1 else 'is'} not shown{where}",
+        help="resolve the origins above -- annotate the parameter, or add a stub or plugin "
+        "for the call -- and the rest follow",
+    )
