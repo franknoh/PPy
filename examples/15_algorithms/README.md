@@ -62,12 +62,12 @@ The C reference reads the same input with `scanf`.
 
 | | problem | plain | `ppy build` | `--standalone` | C (`scanf`) |
 |---|---|---:|---:|---:|---:|
-| [15a](15a_nqueens/) | N-Queens | 298.0 ms | 45.6 ms | 7.0 ms | 4.9 ms |
-| [15b](15b_dijkstra/) | shortest path | 1842.8 ms | 329.9 ms | **127.5 ms** | 173.8 ms |
-| [15c](15c_kmp/) | substring search | 462.6 ms | 53.7 ms | — | 10.2 ms |
-| [15d](15d_segment_tree/) | range sums | 710.1 ms | 115.4 ms | **26.0 ms** | 55.8 ms |
-| [15e](15e_lis/) | longest increasing subsequence | 692.9 ms | 106.7 ms | **39.5 ms** | 63.5 ms |
-| [15f](15f_input/) | counting inversions | 864.5 ms | 98.6 ms | **38.6 ms** | 49.4 ms |
+| [15a](15a_nqueens/) | N-Queens | 392.6 ms | 57.2 ms | 8.9 ms | 6.2 ms |
+| [15b](15b_dijkstra/) | shortest path | 2427.1 ms | 380.4 ms | **164.4 ms** | 234.6 ms |
+| [15c](15c_kmp/) | substring search | 565.9 ms | 67.8 ms | — | 12.8 ms |
+| [15d](15d_segment_tree/) | range sums | 871.3 ms | 136.6 ms | **27.7 ms** | 66.6 ms |
+| [15e](15e_lis/) | longest increasing subsequence | 836.4 ms | 129.9 ms | **45.7 ms** | 77.3 ms |
+| [15f](15f_input/) | counting inversions | 1089.0 ms | 107.2 ms | **42.6 ms** | 55.6 ms |
 
 Every cell is the mean of five runs, recorded in
 [`measurements.json`](measurements.json) with the machine it was measured
@@ -76,8 +76,8 @@ has drifted, and both fail if the paths stop agreeing on the answer. Bold is
 faster than the C reference.
 
 `ppy run` is left out of the table because it compiles before it runs — a
-flat ~1.8 s on every row, which is the development path rather than the one
-to submit.
+flat two seconds or so on every row, which is the development path rather
+than the one to submit.
 
 The two `ppy build` columns are the same compiler with different amounts of
 Python left in the artifact:
@@ -89,12 +89,15 @@ Python left in the artifact:
   problems it is most of what separates the column from C.
 - **`--standalone`** is a binary with no CPython in it at all. `ldd` shows
   libc and nothing else, `ppy.input[int]()` lowers to the same buffered scan
-  of standard input that `scanf` does, and N-Queens lands at 7.0 ms against
-  the C reference's 4.9 ms, from a 17.0 KB binary against C's 16.1 KB.
+  of standard input that `scanf` does, and the whole N-Queens executable is
+  17.0 KB against the C one's 16.1 KB.
 
-Four of the five standalone rows beat the C reference, by up to 2.1×, for
-one reason: `ppy.input` reads into memory faster than `scanf` parses. Only
-N-Queens, which reads a single integer and then computes, stays behind.
+Four of the five standalone rows beat the C reference for one reason:
+`ppy.input` reads into memory faster than `scanf` parses. Only N-Queens,
+which reads a single integer and then computes, stays behind — there is
+nothing there for a faster reader to win back. The table above is the
+current margin; it is rendered from the record rather than written here, so
+it does not go stale.
 
 The column covers five of the six. A standalone build needs everything
 `main` reaches to be native, which used to rule out every problem that
