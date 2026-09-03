@@ -460,6 +460,7 @@ class _Checker:
             foreign_writes=self._foreign_writes,
             writes_only_locals=not self._external_writes
             and not (self._local_writes & self._shared_escapes()),
+            writes_only_allocations=not self._external_writes,
             aliases=self._aliases,
             calls=set(self._calls),
         )

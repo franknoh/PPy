@@ -218,11 +218,13 @@ def eligible(
     violations = set(analysis.effects.violations())
     if allow_io:
         violations.discard(Effect.IO)
-    if written or analysis.writes_only_locals:
+    if written or analysis.writes_only_allocations:
         # Those writes land in memory the caller lent us, and nowhere else --
         # whether this function performed them or a callee it handed the
         # buffer to did. A write to something the function allocated itself
-        # is the same story with a shorter lifetime.
+        # is the same story with a shorter lifetime, and handing that memory
+        # on does not change it: passing a buffer to a native callee makes
+        # the write visible to that callee, not to CPython.
         violations.discard(Effect.WRITE_OBJECT)
     if violations:
         listed = ", ".join(sorted(str(e) for e in violations))

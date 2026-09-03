@@ -43,8 +43,7 @@ an optional extra, and a missing runtime disables only its plugin.
 
 ### Known limits
 
-- `--standalone` refuses a `main` that both writes a buffer it allocated and
-  passes that buffer to another function; the two separately are fine.
-- `ppy.read_token` has no standalone lowering yet.
+- `ppy.read_token` has no standalone lowering yet, which is the one thing
+  keeping the substring-search example off that path.
 - Floats do not print from a standalone binary, pending native formatting
   that reproduces CPython's shortest round-trip repr exactly.

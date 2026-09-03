@@ -2063,3 +2063,45 @@ def test_a_byte_buffer_is_allocated_by_its_signedness(write, analyze):
         """,
     )
     assert [d.code for d in analyze(path).diagnostics.sorted()] == []
+
+
+def test_purity_still_counts_a_write_the_function_handed_on(write, analyze):
+    """Two questions about one write, and only one of them is purity's.
+
+    A standalone build may lower a function that fills memory it allocated
+    and passes it along -- nothing there needs CPython. `@ppy.pure` may not
+    permit it: something else saw the object before the function returned,
+    which is exactly what spec 11.2 rules out.
+    """
+    path = write(
+        "shared_write.ppy",
+        """
+        import ppy
+        from ppy import Buffer
+
+        def observe(b: Buffer[int]) -> int:
+            return b[0]
+
+        @ppy.pure
+        def shares_what_it_wrote(n: int) -> int:
+            room: Buffer[int] = ppy.buffer[int](n)
+            room[0] = 7
+            return observe(room)
+
+        @ppy.pure
+        def keeps_it_to_itself(n: int) -> int:
+            room: Buffer[int] = ppy.buffer[int](n)
+            room[0] = 7
+            return room[0]
+        """,
+    )
+    bundle = analyze(path)
+    reported = [d for d in bundle.diagnostics.sorted() if d.code == "E1601"]
+    assert len(reported) == 1, [d.message for d in reported]
+    assert "shares_what_it_wrote" in reported[0].message
+
+    shared = bundle.analysis.function("shared_write.shares_what_it_wrote")
+    kept = bundle.analysis.function("shared_write.keeps_it_to_itself")
+    assert not shared.writes_only_locals, "the callee saw it"
+    assert shared.writes_only_allocations, "and yet it is memory this function made"
+    assert kept.writes_only_locals and kept.writes_only_allocations

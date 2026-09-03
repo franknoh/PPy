@@ -193,7 +193,11 @@ another native function, and the bitwise operators including `~`. A module
 constant written as an expression — `MOD = 10**9 + 7`, `LIMIT = 1 << 20` —
 folds into the code rather than staying a global read. A function whose
 writes all happen inside a callee it handed a buffer to lowers too: the
-write lands in the caller's memory either way. A call to a function that did
+write lands in the caller's memory either way, and so does the reverse —
+filling memory you allocated and then passing it on. That last one is not
+`@ppy.pure`, because the callee saw the object before the function returned,
+and the two are different questions about one write: purity asks whether
+anything could observe it, lowering asks whether CPython has to perform it. A call to a function that did
 not lower keeps its caller on the Python side, because the call would
 otherwise name a symbol nothing defines. The generated wrapper releases the GIL around the native
 call, so `@ppy.native` functions scale across threads. `ppy explain FILE.ppy:name` reports the decision and, when the

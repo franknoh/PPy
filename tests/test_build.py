@@ -719,3 +719,64 @@ def test_separate_processes_build_one_wrapper_without_tearing_it(tmp_path: Path)
     assert not refused, refused
     assert len({result["path"] for result in results}) == 1, "one name, one library"
     assert not list((cache / "wrappers").glob("*.part*")), "a draft was left behind"
+
+
+@requires_c_compiler
+def test_standalone_takes_a_buffer_main_filled_and_handed_on(tmp_path: Path):
+    """Writing memory you allocated and then passing it is one program.
+
+    Purity cares that the write became visible to the callee; a standalone
+    build cares whether the write needs CPython, and it does not -- the
+    memory is a native allocation and the callee is native code in the same
+    binary. Reusing the first answer for the second refused this outright.
+    """
+    (tmp_path / "pyproject.toml").write_text("[tool.ppy]\nstrict = false\n", encoding="utf-8")
+    (tmp_path / "filled.ppy").write_text(
+        textwrap.dedent(
+            """
+            \"\"\"Fills a buffer here and sums it there.\"\"\"
+
+            import ppy
+            from ppy import Buffer
+
+
+            @ppy.pure
+            @ppy.opt(3)
+            def total(xs: Buffer[int]) -> int:
+                out: int = 0
+                for i in range(len(xs)):
+                    out += xs[i]
+                return out
+
+
+            def main() -> None:
+                room: Buffer[int] = ppy.buffer[int](4)
+                room[0] = 10
+                room[3] = 32
+                print(total(room))
+
+
+            main()
+            """
+        ).lstrip("\n"),
+        encoding="utf-8",
+    )
+    built = subprocess.run(
+        [sys.executable, "-m", "ppy_compiler", "build", "--standalone", "filled.ppy", "-o", "dist"],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert built.returncode == 0, built.stdout + built.stderr
+
+    ran = subprocess.run(
+        [str(tmp_path / "dist" / "filled")], capture_output=True, text=True, check=False, env={}
+    )
+    assert ran.returncode == 0, ran.stderr
+    assert ran.stdout.strip() == "42"
+
+    plain = subprocess.run(
+        [sys.executable, "filled.ppy"], cwd=tmp_path, capture_output=True, text=True, check=False
+    )
+    assert plain.stdout == ran.stdout, "and CPython says the same"

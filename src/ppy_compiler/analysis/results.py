@@ -52,8 +52,14 @@ class FunctionAnalysis:
     #: tell what it reached.
     foreign_writes: bool = False
     #: Every mutation this function performed landed on something it allocated
-    #: itself, which spec 11.2 permits inside `@ppy.pure`.
+    #: itself, and nothing else could see that object before the function
+    #: returned, which is what spec 11.2 permits inside `@ppy.pure`.
     writes_only_locals: bool = True
+    #: Every mutation landed on something this function allocated, whether or
+    #: not it later handed that memory to a callee. Sharing makes the write
+    #: observable, which purity cares about; it does not make the write need
+    #: CPython, which is the different question the backend asks.
+    writes_only_allocations: bool = True
     calls: set[str] = field(default_factory=set)
     #: The alias map the facts above were resolved through.
     aliases: AliasInfo | None = None
