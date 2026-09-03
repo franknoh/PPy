@@ -262,12 +262,19 @@ def main(argv: list[str] | None = None) -> int:
         return commands.run_python_backend(file, program_args, options, reporter)
 
     options = parser.parse_args(argv)
-    if options.command == "run" and getattr(options, "prebuilt", None) is not None:
-        # The prebuilt fast path must not pay for the compiler's import: a
-        # built artifact runs through the runtime alone.
-        from ppy_runtime.launch import main as launch
+    if options.command == "run":
+        # Neither fast path may pay for the compiler's import. A `--prebuilt`
+        # manifest runs through the runtime alone, and so does the artifact
+        # the last run of this same program left in the cache.
+        manifest = getattr(options, "prebuilt", None)
+        if manifest is None and options.file.is_file():
+            from .warm import locate
 
-        return launch(options.prebuilt, _program_args(options.args))
+            manifest = locate(options.file, options).manifest
+        if manifest is not None:
+            from ppy_runtime.launch import main as launch
+
+            return launch(manifest, _program_args(options.args))
     from . import commands
 
     if options.version:

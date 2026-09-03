@@ -29,6 +29,20 @@ keeps Python-integer semantics by default; `--unsafe` drops the overflow
 guards on data arithmetic (64-bit wrap, bounds checks stay), and
 `--safeguards {hoisted,inline,off}` names the guard mode outright.
 
+The first `ppy run` of a program is a build into the cache followed by the
+launcher; the second is the launcher alone. Before importing the compiler,
+`ppy run` names the artifact by everything that could change it — the
+compiler's version and build, the interpreter, the configuration and flags,
+every source under the project root, the installed packages — and when a
+directory by that name holds a manifest, `ppy_runtime` runs it the way a
+built launcher would: no analysis, no LLVM, nothing the compiler imports.
+An edit anywhere in the project is a different name and a fresh build,
+whose per-module caches make it cheap. Three kinds of program stay on the
+in-process path every time, because the launcher cannot serve them: one
+that specializes at runtime (`@ppy.jit`, `@ppy.specialize`), one with a
+fused NumPy kernel, and one that imports torch or JAX; each leaves a
+`needs-jit` note in its directory so the next run knows without analyzing.
+
 ## `ppy convert` — strict `.py` to `.ppy`
 
 ```bash
@@ -174,7 +188,8 @@ does, not a ctypes one. The launcher loads `ppy_runtime`, binds, and executes �
 discover a project, parse, analyze, or touch LLVM, and it keeps working with
 `ppy_compiler` uninstalled. What it does pay is starting the embedded
 interpreter and importing the runtime — about 35 ms before the program
-begins, against ~2 s for a cold `ppy run` that compiles first.
+begins, against ~2 s for a cold `ppy run` that compiles first (a warm
+`ppy run` takes this same launcher path, from the cache).
 `examples/bench_startup.py` measures the categories separately, and
 `--standalone` below removes that 35 ms too.
 

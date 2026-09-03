@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.1.1a1 — unreleased
+
+Speed of the compiler itself, measured before being changed.
+
+- A warm `ppy run` no longer imports the compiler. The first run of a
+  program builds its artifact into the cache and launches it; the next run
+  finds the artifact by a key over everything that could change it and goes
+  straight to `ppy_runtime`. On a small program that was 1.65 s of imports,
+  LLVM initialization, and re-analysis before the first line ran; it is now
+  the launcher's few dozen milliseconds plus the key. Programs that
+  specialize at runtime, fuse NumPy kernels, or use the torch or JAX plugins
+  keep the in-process JIT, and say so in a `needs-jit` note.
+- A development tree fingerprints the compiler by the sizes and mtimes of
+  its sources rather than by reading them all, which was a third of a
+  second on every command.
+
 ## 0.1.0a1
 
 The first release, and an alpha in the ordinary sense: the language and the

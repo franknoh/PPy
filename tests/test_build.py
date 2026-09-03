@@ -780,3 +780,162 @@ def test_standalone_takes_a_buffer_main_filled_and_handed_on(tmp_path: Path):
         [sys.executable, "filled.ppy"], cwd=tmp_path, capture_output=True, text=True, check=False
     )
     assert plain.stdout == ran.stdout, "and CPython says the same"
+
+
+_SQUARES = """
+import ppy
+
+
+@ppy.pure
+@ppy.opt(3)
+def total(n: int) -> int:
+    out: int = 0
+    for i in range(n):
+        out += i * i
+    return out
+
+
+def main() -> None:
+    print(total(1000))
+
+
+main()
+"""
+
+
+def _run(tmp_path: Path, *args: str, importtime: bool = False) -> subprocess.CompletedProcess:
+    command = [sys.executable, *(["-X", "importtime"] if importtime else []), "-m", "ppy_compiler"]
+    return subprocess.run(
+        [*command, "run", *args], cwd=tmp_path, capture_output=True, text=True, check=False
+    )
+
+
+def _project(tmp_path: Path, name: str, source: str) -> Path:
+    (tmp_path / "pyproject.toml").write_text("[tool.ppy]\nstrict = false\n", encoding="utf-8")
+    path = tmp_path / name
+    path.write_text(textwrap.dedent(source).lstrip("\n"), encoding="utf-8")
+    return path
+
+
+@requires_toolchain
+def test_a_warm_run_launches_the_last_build_without_the_compiler(tmp_path: Path):
+    """The second run of one program imports neither LLVM nor the analyzer.
+
+    A warm run used to be a cold run minus code generation: the compiler was
+    imported, LLVM initialized, and the program analyzed again to find out
+    that nothing had changed. Now it is the launcher, and the imports say so.
+    """
+    _project(tmp_path, "squares.ppy", _SQUARES)
+    cold = _run(tmp_path, "squares.ppy")
+    assert cold.returncode == 0, cold.stderr
+    assert cold.stdout.strip() == "332833500"
+    runs = list((tmp_path / ".ppy-cache" / "run").iterdir())
+    assert len(runs) == 1 and (runs[0] / "ppy-bindings.json").is_file()
+
+    warm = _run(tmp_path, "squares.ppy", importtime=True)
+    assert warm.returncode == 0, warm.stderr
+    assert warm.stdout.strip() == "332833500"
+    imported = {line.split("|")[-1].strip() for line in warm.stderr.splitlines() if "|" in line}
+    heavy = {
+        name
+        for name in imported
+        if name.startswith(("llvmlite", "ppy_compiler.analysis", "ppy_compiler.backend", "libcst"))
+        or name in {"ppy_compiler.driver.commands", "ppy_compiler.driver.pipeline"}
+    }
+    assert not heavy, f"a warm run imported the compiler: {sorted(heavy)[:5]}"
+    assert "ppy_runtime.launch" in imported, "it ran through the launcher"
+
+
+@requires_toolchain
+def test_an_edited_source_misses_the_warm_cache(tmp_path: Path):
+    """The artifact is named by what it was built from; a change is a new name."""
+    path = _project(tmp_path, "squares.ppy", _SQUARES)
+    assert _run(tmp_path, "squares.ppy").stdout.strip() == "332833500"
+    path.write_text(path.read_text(encoding="utf-8").replace("total(1000)", "total(10)"))
+    edited = _run(tmp_path, "squares.ppy")
+    assert edited.returncode == 0, edited.stderr
+    assert edited.stdout.strip() == "285"
+    assert len(list((tmp_path / ".ppy-cache" / "run").iterdir())) == 2, (
+        "two programs, two artifacts"
+    )
+
+
+@requires_toolchain
+def test_the_guard_mode_is_part_of_the_artifacts_name(tmp_path: Path):
+    """`ppy run` keeps Python integers and `--unsafe` wraps; they cannot share a build."""
+    _project(
+        tmp_path,
+        "wide.ppy",
+        """
+        import ppy
+
+
+        @ppy.pure
+        @ppy.opt(3)
+        def grow(n: int) -> int:
+            value: int = 1
+            for _ in range(n):
+                value = value * 3
+            return value
+
+
+        print(grow(45))
+        """,
+    )
+    exact = str(3**45)
+    wrapped = str(((3**45) + 2**63) % 2**64 - 2**63)
+    for _ in range(2):  # cold, then warm: both must keep their semantics
+        assert _run(tmp_path, "wide.ppy").stdout.strip() == exact
+        assert _run(tmp_path, "--unsafe", "wide.ppy").stdout.strip() == wrapped
+    assert len(list((tmp_path / ".ppy-cache" / "run").iterdir())) == 2
+
+
+@requires_toolchain
+def test_a_program_that_specializes_at_runtime_keeps_the_jit_and_says_so(tmp_path: Path):
+    """`@ppy.jit` compiles while the program runs; a launcher cannot, so it is not cached."""
+    _project(
+        tmp_path,
+        "spec.ppy",
+        """
+        import ppy
+
+
+        @ppy.jit
+        def scale(x: int, k: int) -> int:
+            return x * k
+
+
+        print(sum(scale(i, 3) for i in range(100)))
+        """,
+    )
+    for _ in range(2):
+        done = _run(tmp_path, "spec.ppy")
+        assert done.returncode == 0, done.stderr
+        assert done.stdout.strip().splitlines()[-1] == "14850"
+    runs = list((tmp_path / ".ppy-cache" / "run").iterdir())
+    assert len(runs) == 1
+    assert not (runs[0] / "ppy-bindings.json").exists(), "nothing to launch"
+    assert "specializes at runtime" in (runs[0] / "needs-jit").read_text(encoding="utf-8")
+
+
+@requires_toolchain
+def test_a_program_with_nothing_native_still_has_an_artifact(tmp_path: Path):
+    """The generated Python alone is a launchable artifact; the library is optional."""
+    _project(
+        tmp_path,
+        "hello.ppy",
+        """
+        import sys
+
+
+        def greet(name: str) -> str:
+            return f"hello, {name}"
+
+
+        print(greet(sys.argv[1] if len(sys.argv) > 1 else "world"))
+        """,
+    )
+    assert _run(tmp_path, "hello.ppy", "--", "there").stdout.strip() == "hello, there"
+    assert _run(tmp_path, "hello.ppy").stdout.strip() == "hello, world"
+    manifest = next((tmp_path / ".ppy-cache" / "run").glob("*/ppy-bindings.json"))
+    assert json.loads(manifest.read_text(encoding="utf-8"))["native_library"] is None

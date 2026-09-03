@@ -5,6 +5,7 @@ from __future__ import annotations
 import ast
 import contextlib
 import json
+import os
 import shutil
 import sys
 from dataclasses import dataclass, field
@@ -47,9 +48,11 @@ __all__ = [
     "ToolchainError",
     "available",
     "compile_and_run",
+    "compile_for_run",
     "compile_project",
     "emit_ir",
     "llvm_status",
+    "needs_jit",
     "toolchain_status",
 ]
 
@@ -325,8 +328,16 @@ def compile_project(  # type: ignore[no-untyped-def]
     opt_level: int | None = None,
     output: Path | None = None,
     entry: Path | None = None,
+    launcher: bool = True,
+    natives: dict[str, NativeModule] | None = None,
 ) -> BuildArtifacts:
-    """Compile to LLVM, emit object code, link, and write the manifest (spec 4.2)."""
+    """Compile to LLVM, emit object code, link, and write the manifest (spec 4.2).
+
+    `launcher=False` leaves out the native launcher executable, for an
+    artifact that `ppy_runtime.launch` will run directly. `natives` lets a
+    caller that already lowered the modules hand them over rather than have
+    them lowered again.
+    """
     from ...driver.pipeline import build_python, module_cache_key
     from ...opt.rewrites import adjustments_for_project
 
@@ -349,7 +360,8 @@ def compile_project(  # type: ignore[no-untyped-def]
             opened.append(JitEngine(opt_level=level).open())
         return opened[0]
 
-    natives = _collect(bundle, level)
+    if natives is None:
+        natives = _collect(bundle, level)
     build_directory = output or (bundle.project.config.cache_path / "native")
     artifacts = BuildArtifacts()
     signatures: dict[str, NativeSignature] = {}
@@ -395,7 +407,7 @@ def compile_project(  # type: ignore[no-untyped-def]
 
     # The generated Python is part of the build output: it is what the launcher
     # executes, and what binds the native entry points at import time.
-    build_python(
+    output = build_python(
         bundle,
         opt_level=level,
         target="llvm",
@@ -423,13 +435,6 @@ def compile_project(  # type: ignore[no-untyped-def]
                 entry_module = name
                 break
     if entry_module is not None:
-        output = build_python(
-            bundle,
-            opt_level=level,
-            target="llvm",
-            fusion={name: native.fusion_plan for name, native in natives.items()},
-            adjustments=adjustments_for_project(bundle),
-        )
         generated_dir.mkdir(parents=True, exist_ok=True)
         listed: dict[str, str] = {}
         for name, module in output.generated.items():
@@ -477,7 +482,7 @@ def compile_project(  # type: ignore[no-untyped-def]
         wrappers=wrapper_section,
     )
 
-    if entry is not None:
+    if entry is not None and launcher:
         try:
             artifacts.launcher = build_launcher(
                 entry,
@@ -488,6 +493,91 @@ def compile_project(  # type: ignore[no-untyped-def]
         except ToolchainError as exc:
             artifacts.notes.append(f"no native launcher: {exc}")
     return artifacts
+
+
+#: Libraries whose plugins do build-time work only the in-process path does:
+#: compiled torch regions and staged JAX exports are bound by `compile_and_run`
+#: and have no place in a manifest yet.
+_IN_PROCESS_ONLY = frozenset({"torch", "jax", "flax"})
+
+
+def needs_jit(bundle, natives: dict[str, NativeModule]) -> str | None:  # type: ignore[no-untyped-def]
+    """Why this program has to run through the in-process JIT, or None.
+
+    Runtime specialization compiles while the program runs; a fused NumPy
+    kernel is bound by the compiler's own binder; a torch or JAX plugin does
+    build-time work the manifest does not carry. Everything else a launched
+    artifact does exactly as the JIT would, so everything else is cached.
+    """
+    for native in natives.values():
+        for lowered in native.functions.values():
+            info = lowered.info
+            if info.directive("jit") is not None or info.directive("specialize") is not None:
+                return f"`{info.qualname}` specializes at runtime"
+        if native.fused:
+            return f"`{native.name}` fuses NumPy expressions"
+    for name, symbols in bundle.symbols.modules.items():
+        for edge in symbols.module.imports:
+            if edge.target.partition(".")[0] in _IN_PROCESS_ONLY:
+                return f"`{name}` imports `{edge.target}`"
+    return None
+
+
+def compile_for_run(  # type: ignore[no-untyped-def]
+    bundle, reporter, directory: Path, entry: Path, *, opt_level: int | None = None
+) -> Path | None:
+    """Build the artifact a later `ppy run` will launch, or say this one cannot be.
+
+    Returns the manifest to launch now. `None` means the program needs the
+    in-process path; a marker is left so the next run knows without
+    analyzing. The artifact is built beside its final name and moved into
+    place whole, so a concurrent run never launches a half-written one.
+    """
+    from ...driver.warm import JIT_MARKER, MANIFEST
+
+    level = opt_level if opt_level is not None else bundle.project.config.opt_level
+    natives = _collect(bundle, level)
+    reason = needs_jit(bundle, natives)
+    directory.parent.mkdir(parents=True, exist_ok=True)
+    if reason is not None:
+        draft = directory.with_name(f"{directory.name}.{os.getpid()}.part")
+        draft.mkdir(exist_ok=True)
+        (draft / JIT_MARKER).write_text(reason + "\n", encoding="utf-8")
+        _publish_directory(draft, directory)
+        return None
+
+    draft = directory.with_name(f"{directory.name}.{os.getpid()}.part")
+    shutil.rmtree(draft, ignore_errors=True)
+    artifacts = compile_project(
+        bundle,
+        reporter,
+        opt_level=level,
+        output=draft,
+        entry=entry,
+        launcher=False,
+        natives=natives,
+    )
+    for note in artifacts.notes:
+        reporter.emit(Diagnostic("W2004", Severity.WARNING, note))
+    if artifacts.manifest is None or not (draft / MANIFEST).is_file():
+        shutil.rmtree(draft, ignore_errors=True)
+        return None
+    _publish_directory(draft, directory)
+    manifest = directory / MANIFEST
+    return manifest if manifest.is_file() else None
+
+
+def _publish_directory(draft: Path, final: Path) -> None:
+    """Move a finished run directory onto its name; the first one there wins."""
+    if final.exists():
+        shutil.rmtree(draft, ignore_errors=True)
+        return
+    try:
+        os.replace(draft, final)
+    except OSError:
+        shutil.rmtree(draft, ignore_errors=True)
+        if not final.exists():
+            raise
 
 
 def compile_and_run(  # type: ignore[no-untyped-def]

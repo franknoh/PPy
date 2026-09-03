@@ -57,19 +57,11 @@ def _resolve_safeguards(options: argparse.Namespace, project, command: str) -> N
     command's own default -- `run` keeps Python-integer semantics, `build`
     produces a wrap-semantics artifact like every native compiler.
     """
-    explicit = getattr(options, "safeguards", None)
-    if explicit:
-        project.config.llvm.safeguards = explicit
-        return
-    if getattr(options, "unsafe", False):
-        project.config.llvm.safeguards = "off"
-        return
-    if getattr(options, "safe", False):
-        project.config.llvm.safeguards = "hoisted"
-        return
-    if project.config.llvm.safeguards:
-        return
-    project.config.llvm.safeguards = "off" if command == "build" else "hoisted"
+    from .warm import resolved_safeguards
+
+    project.config.llvm.safeguards = resolved_safeguards(
+        options, project.config.llvm.safeguards, command
+    )
 
 
 def _prepare(
@@ -164,20 +156,30 @@ def run_llvm_backend(
     options: argparse.Namespace,
     reporter: Reporter,
 ) -> int:
-    """`ppy run foo.ppy`: compile through LLVM and execute."""
-    from ..backend.llvm import LlvmUnavailable, compile_and_run
+    """`ppy run foo.ppy`: compile through LLVM and execute.
+
+    The compile is a build into the cache, and the execute is the launcher:
+    the next run of the same program under the same compiler and
+    configuration finds the artifact by its key and never gets here (see
+    `warm.py`). Programs the launcher cannot serve -- runtime specialization,
+    fused NumPy kernels, torch or JAX plugin work -- take the in-process path
+    and leave a marker so the next run knows without analyzing.
+    """
+    from ppy_runtime.launch import main as launch
+
+    from ..backend.llvm import LlvmUnavailable, compile_and_run, compile_for_run
+    from .warm import locate
 
     prebuilt = getattr(options, "prebuilt", None)
     if prebuilt is not None:
-        # The fast path: a built artifact runs through the runtime alone.
-        # No project discovery, no analysis, no LLVM -- the manifest is the
-        # whole contract, and validation stays as cheap as reading it.
-        from ppy_runtime.launch import main as launch
-
+        # A built artifact runs through the runtime alone. No project
+        # discovery, no analysis, no LLVM -- the manifest is the whole
+        # contract, and validation stays as cheap as reading it.
         return launch(prebuilt, program_args)
     if not file.is_file():
         reporter.emit(Diagnostic("E1002", Severity.ERROR, f"{file} is not a file"))
         return 2
+    warm = locate(file, options)
     project = open_project(file, config_overrides=_overrides(options))
     _resolve_safeguards(options, project, "run")
     bundle = analyze_paths(project, collect_sources(file), backend="llvm")
@@ -185,12 +187,23 @@ def run_llvm_backend(
     if errors:
         reporter.summary(errors, 0)
         return 1
+    level = _overrides(options).get("opt_level")
     try:
+        if not warm.needs_jit:
+            manifest = compile_for_run(
+                bundle,
+                reporter,
+                warm.directory,
+                file.resolve(),
+                opt_level=level,  # type: ignore[arg-type]
+            )
+            if manifest is not None:
+                return launch(manifest, program_args)
         return compile_and_run(
             bundle,
             program_args,
             reporter,
-            opt_level=_overrides(options).get("opt_level"),  # type: ignore[arg-type]
+            opt_level=level,  # type: ignore[arg-type]
         )
     except LlvmUnavailable as exc:
         reporter.emit(
