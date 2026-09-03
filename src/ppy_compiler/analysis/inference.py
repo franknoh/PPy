@@ -180,31 +180,45 @@ def has_source_annotation(info, name: str) -> bool:  # type: ignore[no-untyped-d
 
 
 def _infer_fields(bundle) -> bool:  # type: ignore[no-untyped-def]
-    """Give each instance field the type `__init__` assigns to it.
+    """Give each instance field the join of everything its class assigns to it.
 
     `self.width = width` says as much about `width` as an annotation would,
-    and without it nothing that reads the field can be typed.
+    and without it nothing that reads the field can be typed. The assignment
+    that types a field is not only the first one in `__init__`: a field set
+    to `None` there and to a tensor in `setup()` is `Tensor | None`, and
+    fixing it as `None` from the first line alone made every later
+    assignment an error. The join only grows, so inference still settles.
     """
     changed = False
     for info in bundle.symbols.classes.values():
-        initializer = info.methods.get("__init__")
         analysis = bundle.analysis.modules.get(info.module)
-        if initializer is None or analysis is None:
+        if analysis is None or not info.methods:
             continue
-        for node in ast.walk(initializer.node):
-            if not isinstance(node, ast.Assign) or len(node.targets) != 1:
+        # `__init__` first, so the order of evidence is the order of the
+        # object's life; the join does not depend on it, the remarks might.
+        methods = sorted(info.methods.values(), key=lambda m: m.name != "__init__")
+        seen: dict[str, T.Type] = {}
+        for method in methods:
+            for node in ast.walk(method.node):
+                if not isinstance(node, ast.Assign) or len(node.targets) != 1:
+                    continue
+                target = node.targets[0]
+                if not is_self_attribute(target, method):
+                    continue
+                assigned = T.strip_literal(analysis.type_of(node.value))
+                if isinstance(assigned, (T.UnknownType, T.AnyType, T.NeverType)):
+                    continue
+                name = target.attr  # type: ignore[union-attr]
+                seen[name] = assigned if name not in seen else T.join(seen[name], assigned)
+        for name, assigned in seen.items():
+            current = info.fields.get(name, T.UNKNOWN)
+            if name in info.declared_fields:
+                # A field the class body annotated is what its author said.
                 continue
-            target = node.targets[0]
-            if not is_self_attribute(target, initializer):
-                continue
-            name = target.attr  # type: ignore[union-attr]
-            if not isinstance(info.fields.get(name, T.UNKNOWN), T.UnknownType):
-                continue
-            assigned = T.strip_literal(analysis.type_of(node.value))
-            if isinstance(assigned, (T.UnknownType, T.AnyType, T.NeverType)):
-                continue
-            info.fields[name] = assigned
-            changed = True
+            joined = assigned if isinstance(current, T.UnknownType) else T.join(current, assigned)
+            if joined != current:
+                info.fields[name] = joined
+                changed = True
     return changed
 
 

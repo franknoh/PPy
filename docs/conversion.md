@@ -37,15 +37,20 @@ placeholder for the thing being computed, not an answer.
    still widens the callee's signature, so `sink([1])` here and
    `sink(y)` with a dict there infer `list[int] | dict[str, int]`, not
    whichever came first.
-2. **Fields.** `self.x = value` in `__init__` types the field; the annotation
-   is written where the field is first assigned.
+2. **Fields.** Every `self.x = value` in the class, joined, types the field
+   -- `None` in `__init__` and a value in another method is `T | None` --
+   and the annotation is written where the field is first assigned. A field
+   the class body annotated keeps what its author wrote.
 3. **Usage.** A parameter nothing in the project calls is typed from the
    arithmetic it takes part in.
 4. **Empty containers.** `out = []` gets its element type from what is
    appended, and the annotation is written at the assignment.
 
 A parameter that still has no stable type is reported (`E1304`), never
-silently made `Any`.
+silently made `Any`. That report is the finding; the errors downstream of it
+-- every call that received the unknown, every return that carried it -- are
+not shown, since each would only say `<unknown>` again. One `W2006` line
+gives their count and names the unknown signatures behind them.
 
 ## Protocol widening
 

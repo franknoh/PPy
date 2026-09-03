@@ -196,6 +196,9 @@ class ClassInfo:
     mro: tuple[str, ...] = ()
     fields: dict[str, T.Type] = field(default_factory=dict)
     field_facts: dict[str, Facts] = field(default_factory=dict)
+    #: Fields the class body annotated. Inference fills the others in and
+    #: may widen them; these say what their author said.
+    declared_fields: set[str] = field(default_factory=set)
     class_vars: set[str] = field(default_factory=set)
     methods: dict[str, FunctionInfo] = field(default_factory=dict)
     decorators: tuple[str, ...] = ()
@@ -712,6 +715,7 @@ class ProjectSymbols:
             if isinstance(child, ast.AnnAssign) and isinstance(child.target, ast.Name):
                 resolved = annotations.resolve(child.annotation)
                 info.fields[child.target.id] = resolved.type
+                info.declared_fields.add(child.target.id)
                 facts = resolved.facts
                 if child.value is not None:
                     # `count: int = Field(ge=0)` states the same bound that
