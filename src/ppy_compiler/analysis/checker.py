@@ -168,6 +168,30 @@ def _display_fits(node: ast.expr, actual: T.Type, declared: T.Type) -> bool:
     )
 
 
+def _attribute_path(node: ast.expr) -> str | None:
+    """`self.x.y` as the key a narrowing is kept under, or None if not a plain chain.
+
+    A chain of names is a place in the object graph that a check can be
+    about; a call or a subscript in it is a fresh value every time.
+    """
+    parts: list[str] = []
+    while isinstance(node, ast.Attribute):
+        parts.append(node.attr)
+        node = node.value
+    if not isinstance(node, ast.Name) or not parts:
+        return None
+    parts.append(node.id)
+    return ".".join(reversed(parts))
+
+
+def _forget_attributes(env: Env, root: str) -> None:
+    """A write to `root` ends what was known about anything under it."""
+    prefix = root + "."
+    for name in list(env.names()):
+        if name.startswith(prefix):
+            env.remove(name)
+
+
 def _is_set_like(t: T.Type) -> bool:
     return isinstance(t, T.Instance) and t.name in {"set", "frozenset"}
 
@@ -510,7 +534,9 @@ class _Checker:
             inferred_ret=inferred,
             ret_facts=ret_facts,
             locals={
-                name: (env.get(name).type if env.get(name) else T.UNKNOWN) for name in env.names()
+                name: (env.get(name).type if env.get(name) else T.UNKNOWN)
+                for name in env.names()
+                if "." not in name  # a narrowed attribute path is not a local
             },
             dynamic=info.dynamic or self._dynamic_seen,
             unknown_callees=tuple(dict.fromkeys(self._unknown)),
@@ -548,7 +574,7 @@ class _Checker:
         for name, declared in self.symbols.globals.items():
             env.set(name, Binding(declared, self.symbols.global_facts.get(name, Facts())))
 
-    def _imported_name_type(self, module: str, origin: str) -> T.Type:
+    def _imported_name_type(self, module: str, origin: str, depth: int = 0) -> T.Type:
         qualname = f"{module}.{origin}"
         info = self.project.functions.get(qualname)
         if info is not None:
@@ -560,6 +586,13 @@ class _Checker:
             other = self.project.modules[module]
             if origin in other.globals:
                 return other.globals[origin]
+            # A package that imported the name itself: follow it to where
+            # it is defined, as the annotation resolver does.
+            onward = other.imports.get(origin)
+            if onward is not None and depth < 8:
+                if onward.origin is None:
+                    return T.Module_(onward.module)
+                return self._imported_name_type(onward.module, onward.origin, depth + 1)
         return T.UNKNOWN
 
     def _stmt(self, node: ast.stmt, env: Env) -> None:
@@ -1105,6 +1138,7 @@ class _Checker:
         if isinstance(target, ast.Name):
             binding = Binding(declared_type or value.type, value.facts)
             env.set(target.id, binding)
+            _forget_attributes(env, target.id)
             self._record(target, binding)
             if self._current is None:
                 self.symbols.globals.setdefault(target.id, binding.type)
@@ -1118,6 +1152,12 @@ class _Checker:
             self._effects = self._effects.add(Effect.WRITE_OBJECT)
             self._note_mutation(target.value, env)
             self._check_attribute_assignment(owner, target, value)
+            path = _attribute_path(target)
+            if path is not None:
+                # The write is the new truth about the attribute, and about
+                # anything reached through it.
+                _forget_attributes(env, path)
+                env.set(path, Binding(declared_type or value.type, value.facts))
         elif isinstance(target, ast.Subscript):
             self._expr(target.value, env)
             self._expr(target.slice, env)
@@ -1322,9 +1362,21 @@ class _Checker:
         scope = env.fork()
         keeps_going = isinstance(node.op, ast.And)
         parts: list[Binding] = []
+        assigned: dict[str, Binding] = {}
         for value in node.values:
             parts.append(self._expr(value, scope))
+            # A `:=` inside the chain bound a name in the fork. The name is
+            # bound for whatever follows the expression, so what it assigned
+            # -- before the chain narrowed it, which only the `if` body may
+            # rely on -- is handed back to the enclosing scope.
+            for inner in ast.walk(value):
+                if isinstance(inner, ast.NamedExpr) and isinstance(inner.target, ast.Name):
+                    bound = scope.get(inner.target.id)
+                    if bound is not None:
+                        assigned[inner.target.id] = bound
             scope = self._narrow(value, scope, keeps_going)
+        for name, bound in assigned.items():
+            env.set(name, bound)
         if all(p.facts.has_constant for p in parts):
             values = [p.facts.constant for p in parts]
             result = values[0]
@@ -1579,6 +1631,15 @@ class _Checker:
     ) -> Binding:
         info = self.project.functions.get(signature.qualname)
         if info is not None:
+            # A method reached through an instance was handed over with its
+            # receiver already bound -- one parameter fewer than the
+            # definition -- whether it is called on the spot or later, by
+            # whatever name it was passed along under.
+            bound = bound or (
+                info.is_method
+                and not info.is_static
+                and len(signature.params) + 1 == len(info.params)
+            )
             self._calls.add(info.qualname)
             self._effects = self._effects | info.effects
             self._note_callee_writes(info, node)
@@ -1715,6 +1776,11 @@ class _Checker:
         self._bound_methods.discard(id(node))
         if isinstance(owner.type, T.Module_):
             return self._module_attribute(owner.type.name, node)
+        narrowed = env.get(_attribute_path(node) or "")
+        if narrowed is not None:
+            # `if self.x is not None:` was checked above; this read is what
+            # the check was for.
+            return narrowed
         optional = self._optional_receiver(owner, node)
         if optional is not None:
             return optional
@@ -1743,7 +1809,20 @@ class _Checker:
                     if method.is_property:
                         return Binding(method.ret, method.ret_facts)
                     if method.is_method and not method.is_static:
-                        self._bound_methods.add(id(node))
+                        # Reached through an instance, the method has bound
+                        # its receiver: what a caller sees -- and what a
+                        # callback parameter receives -- starts at the next
+                        # parameter. Calls bind against this same signature.
+                        signature = method.signature()
+                        return Binding(
+                            T.Callable_(
+                                signature.params[1:],
+                                signature.ret,
+                                signature.qualname,
+                                is_async=signature.is_async,
+                                is_generator=signature.is_generator,
+                            )
+                        )
                     return Binding(method.signature())
                 found = info.lookup(node.attr, self.project)
                 if found is not None:
@@ -2460,11 +2539,16 @@ class _Checker:
             return self._narrow_compare(test, env, positive)
         if isinstance(test, ast.Call):
             return self._narrow_call(test, env, positive)
-        if isinstance(test, ast.Name) and positive:
-            binding = env.get(test.id)
-            if binding is not None and T.is_optional(binding.type):
+        if isinstance(test, ast.NamedExpr):
+            test = test.target
+        if isinstance(test, (ast.Name, ast.Attribute)) and positive:
+            key = test.id if isinstance(test, ast.Name) else _attribute_path(test)
+            binding = env.get(key or "")
+            if binding is None and isinstance(test, ast.Attribute) and key is not None:
+                binding = self._expr(test, env)
+            if key is not None and binding is not None and T.is_optional(binding.type):
                 env.set(
-                    test.id,
+                    key,
                     Binding(T.remove_none(binding.type), binding.facts.with_(non_null=True)),
                 )
         return env
@@ -2474,6 +2558,8 @@ class _Checker:
             return env
         op, right = test.ops[0], test.comparators[0]
         left = test.left
+        if isinstance(left, ast.NamedExpr):
+            left = left.target
 
         if (
             isinstance(op, (ast.Is, ast.IsNot))
@@ -2481,14 +2567,19 @@ class _Checker:
             and right.value is None
         ):
             wants_none = isinstance(op, ast.Is) == positive
-            if isinstance(left, ast.Name):
-                binding = env.get(left.id)
+            key = left.id if isinstance(left, ast.Name) else _attribute_path(left)
+            if key is not None:
+                binding = env.get(key)
+                if binding is None and isinstance(left, ast.Attribute):
+                    # Not narrowed before: what the attribute is now, so the
+                    # narrowing has something to remove `None` from.
+                    binding = self._expr(left, env)
                 if binding is not None:
                     if wants_none:
-                        env.set(left.id, Binding(T.NONE, Facts()))
+                        env.set(key, Binding(T.NONE, Facts()))
                     else:
                         env.set(
-                            left.id,
+                            key,
                             Binding(
                                 T.remove_none(binding.type), binding.facts.with_(non_null=True)
                             ),
@@ -2556,9 +2647,14 @@ class _Checker:
         if call.func.id not in {"isinstance", "issubclass"} or len(call.args) != 2:
             return self._narrow_typeguard(call, env, positive)
         subject, classes = call.args
-        if not isinstance(subject, ast.Name):
+        if isinstance(subject, ast.NamedExpr):
+            subject = subject.target
+        key = subject.id if isinstance(subject, ast.Name) else _attribute_path(subject)
+        if key is None:
             return env
-        binding = env.get(subject.id)
+        binding = env.get(key)
+        if binding is None and isinstance(subject, ast.Attribute):
+            binding = self._expr(subject, env)
         if binding is None:
             return env
         candidates = self._class_types(classes, env)
@@ -2569,12 +2665,12 @@ class _Checker:
             facts = binding.facts
             if len(candidates) == 1 and isinstance(candidates[0], T.Instance):
                 facts = facts.with_(exact_class=candidates[0].name)
-            env.set(subject.id, Binding(narrowed, facts))
+            env.set(key, Binding(narrowed, facts))
         else:
             members = list(T.members_of(binding.type))
             remaining = [m for m in members if not any(T.is_assignable(m, c) for c in candidates)]
             if remaining and len(remaining) < len(members):
-                env.set(subject.id, Binding(T.union(*remaining), binding.facts))
+                env.set(key, Binding(T.union(*remaining), binding.facts))
         return env
 
     def _narrow_typeguard(self, call: ast.Call, env: Env, positive: bool) -> Env:

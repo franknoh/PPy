@@ -402,6 +402,7 @@ BUILTINS: dict[str, Handler] = {
     "tuple": _tuple,
     "set": _set,
     "frozenset": _frozenset,
+    "dir": lambda args: BuiltinResult(T.list_of(T.STR), Facts(), _ALLOC),
     "dict": _dict,
     "enumerate": _enumerate,
     "zip": _zip,

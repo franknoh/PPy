@@ -370,7 +370,7 @@ class NameResolver:
     def _canonical_name(self, name: str) -> str | None:
         binding = self.symbols.imports.get(name)
         if binding is not None:
-            return binding.canonical
+            return self.project.reexported(binding)
         local = f"{self.symbols.name}.{name}"
         if local in self.project.classes:
             return local
@@ -518,6 +518,28 @@ class ProjectSymbols:
         return AnnotationResolver(
             self.resolver(symbols), symbols.path, self.diagnostics, strict=self.strict
         )
+
+    def reexported(self, binding: ImportBinding, depth: int = 0) -> str:
+        """Where an imported name really lives, through any package re-export.
+
+        `from ..diagnostics import Diagnostic` names a class that
+        `diagnostics/__init__.py` itself imported from `.model`. The name the
+        analysis knows it by is the defining module's, so the chain of
+        imports is followed to it. A name that is not an import in the
+        module it was taken from is that module's own, and the chain ends.
+        """
+        canonical = binding.canonical
+        if binding.origin is None or depth > 8:
+            return canonical
+        if canonical in self.classes or canonical in self.functions:
+            return canonical
+        other = self.modules.get(binding.module)
+        if other is None or binding.origin in other.globals:
+            return canonical
+        onward = other.imports.get(binding.origin)
+        if onward is None or onward.canonical == canonical:
+            return canonical
+        return self.reexported(onward, depth + 1)
 
     def register_external_type(self, qualname: str, display: str | None = None) -> None:
         self.external_types[qualname] = display or qualname.rpartition(".")[2]

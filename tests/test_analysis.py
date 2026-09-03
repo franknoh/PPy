@@ -2551,3 +2551,155 @@ def test_dictionary_views_take_the_set_algebra(write, analyze):
     bundle = analyze(path)
     assert [d.code for d in bundle.diagnostics.sorted() if d.severity.name == "ERROR"] == []
     assert str(bundle.analysis.function("views.merged").locals["names"]) == "frozenset[str]"
+
+
+def test_a_name_a_package_reexports_resolves_to_where_it_is_defined(write, analyze):
+    """`from pkg import Thing` where `pkg/__init__.py` did `from .model import Thing`."""
+    write("pkg/__init__.py", "from .model import Thing\n")
+    write(
+        "pkg/model.py",
+        """
+        class Thing:
+            def __init__(self, size: int) -> None:
+                self.size: int = size
+        """,
+    )
+    path = write(
+        "app.py",
+        """
+        from pkg import Thing
+
+        def make(n: int) -> Thing:
+            return Thing(n)
+
+        def grow(t: Thing) -> int:
+            return t.size + 1
+        """,
+    )
+    bundle = analyze(path, strict=True)
+    errors = [d for d in bundle.diagnostics.sorted() if d.severity.name == "ERROR"]
+    assert errors == [], [d.message for d in errors]
+    assert str(bundle.symbols.functions["app.make"].ret) == "pkg.model.Thing"
+    assert str(bundle.analysis.function("app.grow").inferred_ret) == "int"
+
+
+def test_a_bound_method_passed_along_has_no_self(write, analyze):
+    """`notify=reporter.note` is a callable of one argument, not two."""
+    path = write(
+        "callbacks.ppy",
+        """
+        from collections.abc import Callable
+
+        class Reporter:
+            def note(self, message: str) -> None:
+                print(message)
+
+        def build(notify: Callable[[str], None]) -> None:
+            notify("compiling")
+
+        def run(reporter: Reporter) -> None:
+            build(reporter.note)
+            reporter.note("done")
+            saved = reporter.note
+            saved("later")
+        """,
+    )
+    errors = [d for d in analyze(path).diagnostics.sorted() if d.severity.name == "ERROR"]
+    assert errors == [], [d.message for d in errors]
+
+
+def test_a_check_on_an_attribute_narrows_that_attribute(write, analyze):
+    """`if self.end is not None: self.end - 1` was `-` on `int | None`."""
+    path = write(
+        "spans.ppy",
+        """
+        class Span:
+            def __init__(self, start: int) -> None:
+                self.start: int = start
+                self.end: int | None = None
+                self.label: str | None = None
+
+            def width(self) -> int:
+                if self.end is not None:
+                    return self.end - self.start
+                return 1
+
+            def wide(self) -> int:
+                if self.end is None:
+                    return 0
+                return self.end - self.start
+
+            def named(self) -> int:
+                if self.label:
+                    return len(self.label)
+                return 0
+
+            def both(self) -> int:
+                if self.end is not None and self.label is not None:
+                    return self.end + len(self.label)
+                return 0
+
+            def forgotten(self) -> int:
+                if self.end is not None:
+                    self.end = None
+                    return self.end - 1
+                return 0
+        """,
+    )
+    diagnostics = analyze(path).diagnostics.sorted()
+    errors = [d for d in diagnostics if d.severity.name == "ERROR"]
+    assert len(errors) == 1, [d.message for d in errors]
+    assert "forgotten" in path.read_text().splitlines()[errors[0].span.line - 4], errors[0].message
+
+
+def test_isinstance_on_an_attribute_narrows_it(write, analyze):
+    path = write(
+        "shapes.ppy",
+        """
+        class Node:
+            pass
+
+        class Call(Node):
+            def __init__(self) -> None:
+                self.name: str = "f"
+
+        class Holder:
+            def __init__(self, node: Node) -> None:
+                self.node: Node = node
+
+            def label(self) -> str:
+                if isinstance(self.node, Call):
+                    return self.node.name
+                return ""
+        """,
+    )
+    errors = [d for d in analyze(path).diagnostics.sorted() if d.severity.name == "ERROR"]
+    assert errors == [], [d.message for d in errors]
+
+
+def test_a_walrus_inside_an_and_binds_for_the_body(write, analyze):
+    """`if (d := find()) is not None and d.ok:` used `d` in the body -- undefined."""
+    path = write(
+        "walrus.ppy",
+        """
+        class Directive:
+            def __init__(self) -> None:
+                self.require: bool = True
+
+        def find(name: str) -> Directive | None:
+            return Directive() if name else None
+
+        def check(name: str) -> bool:
+            if (directive := find(name)) is not None and directive.require:
+                return directive.require
+            return False
+        """,
+    )
+    errors = [d for d in analyze(path).diagnostics.sorted() if d.severity.name == "ERROR"]
+    assert errors == [], [d.message for d in errors]
+
+
+def test_dir_is_a_builtin(write, analyze):
+    path = write("names.ppy", "def names(x: object) -> list[str]:\n    return dir(x)\n")
+    errors = [d for d in analyze(path).diagnostics.sorted() if d.severity.name == "ERROR"]
+    assert errors == [], [d.message for d in errors]
