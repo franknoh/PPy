@@ -90,14 +90,17 @@ def _run_conversion(
     # and for `convert` the strict gate at the end is the stage that rejects
     # them, with the checker's own explanations.
     from ..analysis.global_writes import build_write_index
+    from ..analysis.project_scan import scan_project
     from ..analysis.reflection import build_reflection_index
 
     # `Final` needs the whole project's word, not just the files being
     # converted: a reverse dependency assigning `foo.NAME` is invisible to
     # the bundle and disqualifies the name all the same. The same goes for
-    # reflection: whoever reads `f.__annotations__` may live anywhere.
-    bundle.global_writes = build_write_index(project.root, project.config.source_roots)
-    bundle.reflection = build_reflection_index(project.root, project.config.source_roots)
+    # reflection: whoever reads `f.__annotations__` may live anywhere. Both
+    # read the same files, so both read them from one scan.
+    scan = scan_project(project.root, project.config.source_roots)
+    bundle.global_writes = build_write_index(project.root, project.config.source_roots, scan=scan)
+    bundle.reflection = build_reflection_index(project.root, project.config.source_roots, scan=scan)
 
     fatal = _fatal_findings(bundle, reporter, strict=strict)
     if fatal and not options.dry_run:

@@ -20,13 +20,10 @@ import ast
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from ..frontend.modules import resolve_module_name
+from .lexical import LexicalBindings
+from .project_scan import ProjectScan, scan_project
 
 __all__ = ["ReflectionIndex", "build_reflection_index"]
-
-_SKIP = frozenset(
-    {".venv", "venv", ".git", "__pycache__", "build", "dist", ".ppy-cache", ".tox", "node_modules"}
-)
 
 #: Callables whose argument's annotations become observable, by canonical
 #: name -- the lexical bindings resolve `sig`, `i.signature`, and the rest
@@ -69,35 +66,26 @@ class ReflectionIndex:
 
 
 def build_reflection_index(
-    root: Path, source_roots: tuple[str, ...] = ("src", ".")
+    root: Path, source_roots: tuple[str, ...] = ("src", "."), *, scan: ProjectScan | None = None
 ) -> ReflectionIndex:
+    """Index every runtime reader of annotations in the project.
+
+    `scan` is the project already walked and parsed, shared with the other
+    whole-project indexes; without one this walks the project itself.
+    """
+    if scan is None:
+        scan = scan_project(root, source_roots)
     index = ReflectionIndex()
-    search_paths = [root / entry for entry in source_roots if (root / entry).is_dir()]
-    if not search_paths:
-        search_paths = [root]
-    parsed: list[tuple[ast.Module, str]] = []
-    for path in _sources(root):
-        try:
-            tree = ast.parse(path.read_text(encoding="utf-8"))
-        except (OSError, SyntaxError):
-            index.dynamic = True
-            continue
-        parsed.append((tree, resolve_module_name(path, search_paths)))
+    # An unparseable file could read anything's annotations.
+    index.dynamic = scan.tainted
     # Observers first: a function reading its own parameter's annotations is
     # itself a reader, and its call sites can live in any file.
     observers: set[str] = set()
-    for tree, module in parsed:
-        _find_observers(tree, module, observers)
-    for tree, module in parsed:
-        _scan(tree, module, index, frozenset(observers))
+    for scanned in scan.modules:
+        _find_observers(scanned.tree, scanned.module, scanned.bindings, observers)
+    for scanned in scan.modules:
+        _scan(scanned.tree, scanned.module, scanned.bindings, index, frozenset(observers))
     return index
-
-
-def _sources(root: Path):  # type: ignore[no-untyped-def]
-    for suffix in ("*.py", "*.ppy"):
-        for path in root.rglob(suffix):
-            if not any(part in _SKIP for part in path.parts):
-                yield path
 
 
 def _own_parameters(tree: ast.Module) -> dict[int, tuple[str, frozenset[str]]]:
@@ -134,21 +122,28 @@ def _reads_a_parameter(fn, params: frozenset[str], bindings) -> bool:  # type: i
     return False
 
 
-def _find_observers(tree: ast.Module, module: str, observers: set[str]) -> None:
-    from .lexical import scan_module
-
-    bindings = scan_module(tree, module)
+def _find_observers(
+    tree: ast.Module, module: str, bindings: LexicalBindings, observers: set[str]
+) -> None:
+    # One walk for every function's parameters, then one per function for its
+    # reads. Asking `_own_parameters` inside the loop walked the whole tree
+    # once per function, which on a 3000-line module was most of a
+    # conversion's time.
+    parameters = _own_parameters(tree)
     for node in ast.walk(tree):
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-            _, params = _own_parameters(tree)[id(node)]
+            _, params = parameters[id(node)]
             if _reads_a_parameter(node, params, bindings):
                 observers.add(f"{module}.{node.name}")
 
 
-def _scan(tree: ast.Module, module: str, index: ReflectionIndex, observers: frozenset[str]) -> None:
-    from .lexical import scan_module
-
-    bindings = scan_module(tree, module)
+def _scan(
+    tree: ast.Module,
+    module: str,
+    bindings: LexicalBindings,
+    index: ReflectionIndex,
+    observers: frozenset[str],
+) -> None:
     parameters: dict[str, frozenset[str]] = {}
     for node in ast.walk(tree):
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
