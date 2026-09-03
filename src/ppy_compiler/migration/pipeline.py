@@ -60,18 +60,47 @@ def bound_names(source: str) -> frozenset[str]:
     return frozenset(found)
 
 
-def apply_passes(source: str) -> tuple[str, list[Rewrite]]:
-    """Run every migration pass over one module's source."""
+#: What each pass rewrites, as the text it must find to have anything to do.
+#: A pass walks the whole tree with metadata resolved, which is most of a
+#: migration's time on a large module; a module that never spells the name
+#: cannot contain the call, so the walk is skipped. Aliases still spell the
+#: name at their definition (`from importlib import import_module as imp`).
+_TRIGGERS: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("literal-attributes", ("getattr", "setattr", "delattr")),
+    ("static-imports", ("import_module",)),
+    ("module-namespace-writes", ("globals",)),
+)
+
+
+def passes_for(source: str) -> list:  # type: ignore[type-arg]
+    """The migration passes that could rewrite something in this source."""
     from .dynamic import LiteralAttributes, StaticImports
     from .globals import ModuleNamespaceWrites
 
+    available = {
+        "literal-attributes": LiteralAttributes,
+        "static-imports": StaticImports,
+        "module-namespace-writes": ModuleNamespaceWrites,
+    }
+    return [
+        available[name]()
+        for name, spellings in _TRIGGERS
+        if any(spelling in source for spelling in spellings)
+    ]
+
+
+def apply_passes(source: str) -> tuple[str, list[Rewrite]]:
+    """Run every migration pass that could apply over one module's source."""
+    passes = passes_for(source)
+    if not passes:
+        return source, []
     try:
         module = cst.parse_module(source)
     except cst.ParserSyntaxError:
         # The frontend will report the syntax error with a real diagnostic.
         return source, []
     rewrites: list[Rewrite] = []
-    for migration_pass in (LiteralAttributes(), StaticImports(), ModuleNamespaceWrites()):
+    for migration_pass in passes:
         module, found = migration_pass.apply(module, source)
         rewrites.extend(found)
         if found:
