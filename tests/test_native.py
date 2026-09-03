@@ -2989,3 +2989,43 @@ def test_concurrent_wrapper_builds_publish_one_loadable_library(write, analyze, 
     assert not refused, refused
     assert len({built.path for built in results}) == 1, "one name, one library"
     assert not list((cache / "wrappers").glob("*.part*")), "a draft was left behind"
+
+
+def test_a_wrapper_is_never_compiled_onto_the_name_it_publishes(
+    write, analyze, tmp_path, monkeypatch
+):
+    """The invariant behind the race, asked directly rather than by timing.
+
+    Whether two processes collide is a matter of scheduling; that the
+    compiler is pointed somewhere other than the name a reader may already
+    hold is not, so that is what this asks.
+    """
+    import types
+
+    from ppy_compiler.backend.llvm import wrapper_build
+
+    ready, detail = wrapper_build.wrapper_toolchain()
+    if not ready:
+        pytest.skip(detail)
+
+    path = write("inplace.ppy", WIDENS)
+    module = _collect(analyze(path, backend="llvm"))["inplace"]
+    signatures = {q: lowered.signature for q, lowered in module.functions.items()}
+
+    seen: list[list[str]] = []
+    real = wrapper_build.subprocess.run
+
+    def watched(command, **kwargs):
+        seen.append(list(command))
+        return real(command, check=kwargs.pop("check", False), **kwargs)
+
+    monkeypatch.setattr(wrapper_build, "subprocess", types.SimpleNamespace(run=watched))
+    built = wrapper_build.build_wrappers("inplace", signatures, tmp_path / "cache")
+    assert built.ok, built.reason
+
+    outputs = [Path(command[command.index("-o") + 1]) for command in seen if "-o" in command]
+    assert outputs, "the wrapper was never compiled"
+    assert built.path not in outputs, "compiled onto the name a reader may already hold"
+    assert built.path is not None and built.path.is_file(), "and yet it was published"
+    inputs = [Path(argument) for command in seen for argument in command if argument.endswith(".c")]
+    assert all(".part" in source.name for source in inputs), "the source is a draft too"

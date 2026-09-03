@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import contextlib
 import json
 import subprocess
 import sys
 import textwrap
+import time
 from pathlib import Path
 
 import pytest
@@ -609,3 +611,104 @@ def test_standalone_prints_a_byte_element_without_widening_it_by_hand(tmp_path: 
     )
     assert ran.returncode == 0, ran.stderr
     assert ran.stdout.split() == ["-128", "250", "500"]
+
+
+#: One builder, run as its own process: analyze, say so, then wait for the
+#: word and compile into the cache every sibling is also writing. The
+#: handshake is what makes them overlap -- analysis takes a second or two and
+#: never takes the same time twice.
+_BUILDER = """
+import json, os, sys, time
+from pathlib import Path
+
+from ppy_compiler.driver.pipeline import analyze_paths, open_project
+from ppy_compiler.backend.llvm import _collect
+from ppy_compiler.backend.llvm.wrapper_build import build_wrappers
+
+source, cache, gate = Path(sys.argv[1]), Path(sys.argv[2]), Path(sys.argv[3])
+stagger = float(sys.argv[4])
+bundle = analyze_paths(open_project(source), [source], backend="llvm")
+module = _collect(bundle)[source.stem]
+signatures = {q: lowered.signature for q, lowered in module.functions.items()}
+(gate.parent / f"ready.{os.getpid()}").touch()
+deadline = time.time() + 60
+while not gate.is_file() and time.time() < deadline:
+    time.sleep(0.005)
+# Staggered, not simultaneous: the window is one process loading the library
+# while a later one is still writing it, which needs them out of step.
+time.sleep(stagger)
+built = build_wrappers(source.stem, signatures, cache)
+print(json.dumps({"ok": built.ok, "reason": built.reason, "path": str(built.path)}))
+"""
+
+_SHARED = """
+import ppy
+
+
+@ppy.pure
+@ppy.opt(3)
+def collatz(limit: int) -> int:
+    best: int = 0
+    for start in range(1, limit):
+        n: int = start
+        steps: int = 0
+        while n != 1:
+            n = n // 2 if n % 2 == 0 else 3 * n + 1
+            steps += 1
+        if steps > best:
+            best = steps
+    return best
+"""
+
+
+@requires_toolchain
+def test_separate_processes_build_one_wrapper_without_tearing_it(tmp_path: Path):
+    """The failure this guards against was between processes, not threads.
+
+    Several compilations of one wrapper is the ordinary case -- a fresh cache
+    and a parallel run -- and they agree on the file name because it is the
+    source's digest. Each has to publish by rename, or a sibling loads a
+    library still being written.
+    """
+    (tmp_path / "pyproject.toml").write_text("[tool.ppy]\nstrict = false\n", encoding="utf-8")
+    source = tmp_path / "shared.ppy"
+    source.write_text(textwrap.dedent(_SHARED).lstrip("\n"), encoding="utf-8")
+    builder = tmp_path / "builder.py"
+    builder.write_text(textwrap.dedent(_BUILDER).lstrip("\n"), encoding="utf-8")
+    cache = tmp_path / "shared-cache"
+    gate = tmp_path / "go"
+
+    workers = 6
+    with contextlib.ExitStack() as stack:
+        running = [
+            stack.enter_context(
+                subprocess.Popen(
+                    [
+                        sys.executable,
+                        str(builder),
+                        str(source),
+                        str(cache),
+                        str(gate),
+                        str(index * 0.08),
+                    ],
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                    cwd=tmp_path,
+                )
+            )
+            for index in range(workers)
+        ]
+        deadline = time.time() + 300
+        while len(list(tmp_path.glob("ready.*"))) < workers and time.time() < deadline:
+            time.sleep(0.05)
+        gate.touch()
+        done = [(process.communicate(timeout=300), process.returncode) for process in running]
+
+    for (_out, err), code in done:
+        assert code == 0, err
+    results = [json.loads(out.strip().splitlines()[-1]) for (out, _err), _code in done]
+    refused = [result["reason"] for result in results if not result["ok"]]
+    assert not refused, refused
+    assert len({result["path"] for result in results}) == 1, "one name, one library"
+    assert not list((cache / "wrappers").glob("*.part*")), "a draft was left behind"
