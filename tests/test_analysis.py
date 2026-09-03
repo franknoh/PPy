@@ -2230,3 +2230,39 @@ def test_every_builtin_exception_is_a_known_name(write, analyze):
     )
     codes = [d.code for d in analyze(path).diagnostics.sorted() if d.severity.name == "ERROR"]
     assert "E1101" not in codes, codes
+
+
+def test_the_math_module_is_modeled(write, analyze):
+    """`math.tanh` in a reward function was an unknown signature.
+
+    Every numeric kernel imports `math`, and none of it was in the stdlib
+    table, so everything computed from a `math` call followed an unknown.
+    """
+    import math
+
+    from ppy_compiler.analysis import stdlib
+
+    public = {n for n in dir(math) if not n.startswith("_") and callable(getattr(math, n))}
+    modeled = {k.removeprefix("math.") for k in stdlib._FUNCTIONS if k.startswith("math.")}
+    assert public <= modeled, sorted(public - modeled)
+
+    path = write(
+        "kernel.ppy",
+        """
+        import math
+
+        def squash(x: float) -> float:
+            return math.tanh(x) * math.pi
+
+        def whole(x: float) -> int:
+            return math.floor(x) + math.isqrt(9)
+
+        def finite(x: float) -> bool:
+            return math.isfinite(x) and not math.isnan(x)
+        """,
+    )
+    bundle = analyze(path)
+    assert [d.code for d in bundle.diagnostics.sorted() if d.severity.name == "ERROR"] == []
+    assert str(bundle.analysis.function("kernel.squash").inferred_ret) == "float"
+    assert str(bundle.analysis.function("kernel.whole").inferred_ret) == "int"
+    assert str(bundle.analysis.function("kernel.finite").inferred_ret) == "bool"

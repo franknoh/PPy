@@ -44,6 +44,10 @@ Speed of the compiler itself, measured before being changed.
   there and a tensor in `setup()` is `Tensor | None`, where it used to be
   `None` and every later assignment an error. A field the class body
   annotated keeps the annotation.
+- The `math` module is modeled: all 57 functions and the five constants,
+  with the exceptions the C implementation raises. Every numeric kernel
+  imports it, and `math.tanh` in a reward function was an unknown
+  signature that everything computed from it followed.
 - Every builtin exception is a known name. Thirteen were listed by hand and
   `AssertionError`, `RuntimeError`, `OSError` and fifty-three others were
   "not defined at this point"; the table now reads the interpreter's own

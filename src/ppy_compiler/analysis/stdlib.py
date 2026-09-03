@@ -57,6 +57,89 @@ def _fn(qualname: str, ret: T.Type, effects: EffectSet = _NO_EFFECTS) -> tuple[T
 
 _TEXT_STREAM = T.Instance("io.TextIOWrapper", (), ("io.TextIOWrapper", "object"))
 
+_DOMAIN = EffectSet.of(raises=("ValueError",))
+_OVERFLOW = EffectSet.of(raises=("OverflowError",))
+_DOMAIN_OR_OVERFLOW = EffectSet.of(raises=("ValueError", "OverflowError"))
+
+
+def _math() -> dict[str, tuple[T.Type, EffectSet]]:
+    """The `math` module, which every numeric kernel imports and none of which
+    was modeled: `math.tanh` in a reward function was an unknown signature,
+    and everything computed from it followed. Pure functions all; the
+    effects are the exceptions the C implementation raises.
+    """
+    floats_total = [
+        "acos",
+        "acosh",
+        "asin",
+        "asinh",
+        "atan",
+        "atan2",
+        "atanh",
+        "cbrt",
+        "copysign",
+        "cos",
+        "cosh",
+        "degrees",
+        "dist",
+        "erf",
+        "erfc",
+        "exp2",
+        "expm1",
+        "fabs",
+        "fmod",
+        "fsum",
+        "hypot",
+        "log1p",
+        "nextafter",
+        "prod",
+        "radians",
+        "remainder",
+        "sin",
+        "sinh",
+        "sqrt",
+        "sumprod",
+        "tan",
+        "tanh",
+        "ulp",
+    ]
+    floats_domain = [
+        "acos",
+        "acosh",
+        "asin",
+        "atanh",
+        "gamma",
+        "lgamma",
+        "log",
+        "log10",
+        "log2",
+        "sqrt",
+        "fmod",
+        "remainder",
+    ]
+    floats_overflow = ["exp", "pow", "ldexp", "cosh", "sinh"]
+    ints = ["ceil", "floor", "trunc", "isqrt", "gcd", "lcm"]
+    ints_domain = ["factorial", "comb", "perm", "isqrt"]
+    bools = ["isclose", "isfinite", "isinf", "isnan"]
+    table: dict[str, tuple[T.Type, EffectSet]] = {}
+    for name in floats_total:
+        table[f"math.{name}"] = _fn(f"math.{name}", T.FLOAT)
+    for name in floats_domain:
+        table[f"math.{name}"] = _fn(f"math.{name}", T.FLOAT, _DOMAIN)
+    for name in floats_overflow:
+        table[f"math.{name}"] = _fn(f"math.{name}", T.FLOAT, _OVERFLOW)
+    table["math.fma"] = _fn("math.fma", T.FLOAT, _DOMAIN_OR_OVERFLOW)
+    for name in ints:
+        table[f"math.{name}"] = _fn(f"math.{name}", T.INT)
+    for name in ints_domain:
+        table[f"math.{name}"] = _fn(f"math.{name}", T.INT, _DOMAIN)
+    for name in bools:
+        table[f"math.{name}"] = _fn(f"math.{name}", T.BOOL)
+    table["math.frexp"] = _fn("math.frexp", T.Tuple_((T.FLOAT, T.INT)))
+    table["math.modf"] = _fn("math.modf", T.Tuple_((T.FLOAT, T.FLOAT)))
+    return table
+
+
 _THREAD = T.Instance("threading.Thread", (), ("threading.Thread", "object"))
 _LOCK = T.Instance("threading.Lock", (), ("threading.Lock", "object"))
 _EVENT = T.Instance("threading.Event", (), ("threading.Event", "object"))
@@ -192,10 +275,16 @@ _FUNCTIONS: dict[str, tuple[T.Type, EffectSet]] = {
     "functools.reduce": _fn(
         "functools.reduce", T.ANY, _ALLOC | EffectSet.of(Effect.PYTHON_CALLBACK)
     ),
+    **_math(),
 }
 
 #: Module attributes with a known type.
 MODULE_ATTRIBUTES: dict[str, tuple[T.Type, Facts]] = {
+    "math.pi": (T.FLOAT, Facts()),
+    "math.e": (T.FLOAT, Facts()),
+    "math.tau": (T.FLOAT, Facts()),
+    "math.inf": (T.FLOAT, Facts()),
+    "math.nan": (T.FLOAT, Facts()),
     "sys.argv": (T.list_of(T.STR), Facts()),
     "sys.stdin": (_TEXT_STREAM, Facts()),
     "sys.stdout": (_TEXT_STREAM, Facts()),
