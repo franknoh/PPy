@@ -21,11 +21,19 @@ import time
 from pathlib import Path
 
 from ppy_compiler.backend.llvm import available as llvm_available
-from ppy_compiler.backend.llvm.link import standalone_toolchain_status, toolchain_status
+from ppy_compiler.backend.llvm.link import (
+    c_compiler,
+    standalone_toolchain_status,
+    toolchain_status,
+)
 
 HERE = Path(__file__).parent
 ROUNDS = 5
 PPY = [sys.executable, "-m", "ppy_compiler"]
+
+#: What the C reference is built with. The comparison is against what this
+#: produces, so the record names it rather than whatever `cc` happens to be.
+REFERENCE_CC = os.environ.get("PPY_BENCH_CC") or "gcc"
 
 
 def _queens() -> str:
@@ -103,8 +111,8 @@ def available() -> dict[str, str]:
     says nothing about what is missing.
     """
     missing: dict[str, str] = {}
-    if shutil.which("gcc") is None:
-        missing["C scanf"] = "gcc is not on PATH"
+    if shutil.which(REFERENCE_CC) is None:
+        missing["C scanf"] = f"{REFERENCE_CC} is not on PATH"
     if not llvm_available():
         reason = "llvmlite is not installed"
         missing["ppy run"] = missing["ppy build"] = missing["standalone"] = reason
@@ -193,7 +201,7 @@ def _staged(
     where = {**os.environ, "PYTHONPATH": str(staged_src)}
     if "C scanf" not in skipped:
         subprocess.run(
-            ["gcc", "-O3", "-o", f"{stem}_c", f"{stem}.c"],
+            [REFERENCE_CC, "-O3", "-o", f"{stem}_c", f"{stem}.c"],
             cwd=work,
             capture_output=True,
             check=True,
@@ -226,9 +234,7 @@ def environment() -> dict:
     A wall time means nothing without this: a different CPU, interpreter, or
     compiler is a different measurement, not a regression.
     """
-    compiler = subprocess.run(
-        ["cc", "--version"], capture_output=True, text=True, check=False
-    ).stdout.splitlines()
+    linker = c_compiler()
     return {
         "python": platform.python_version(),
         "implementation": platform.python_implementation(),
@@ -236,7 +242,8 @@ def environment() -> dict:
         "machine": platform.machine(),
         "processor": _cpu_name(),
         "cores": os.cpu_count(),
-        "c_compiler": compiler[0].strip() if compiler else "unknown",
+        "c_compiler": _version(REFERENCE_CC),
+        "ppy_c_compiler": _version(linker) if linker else "no C compiler is on PATH",
         "ppy": _ppy_version(),
         "rounds": ROUNDS,
         "timing": "wall time of the whole process, measured from outside",
@@ -244,6 +251,24 @@ def environment() -> dict:
         "semantics": "ppy build defaults to wrap semantics; ppy run keeps Python integers",
         "missing": available(),
     }
+
+
+def _version(program: str) -> str:
+    """The first line of `program --version`, or why there is not one.
+
+    Asking a fixed `cc` would name a compiler that built none of this when
+    the reference was built with something else, and would raise on a machine
+    that has no `cc` at all.
+    """
+    found = shutil.which(program) or (program if Path(program).is_file() else None)
+    if found is None:
+        return f"{program} is not on PATH"
+    try:
+        done = subprocess.run([found, "--version"], capture_output=True, text=True, check=False)
+    except OSError as error:
+        return f"{found}: {error}"
+    lines = (done.stdout or done.stderr).splitlines()
+    return lines[0].strip() if lines else found
 
 
 def _cpu_name() -> str:

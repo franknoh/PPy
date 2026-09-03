@@ -24,6 +24,7 @@ __all__ = [
     "BuildArtifacts",
     "ToolchainError",
     "build_launcher",
+    "c_compiler",
     "emit_object",
     "link_shared_library",
     "standalone_toolchain_status",
@@ -58,6 +59,11 @@ def _compiler() -> str | None:
         if found is not None:
             return found
     return None
+
+
+def c_compiler() -> str | None:
+    """The C compiler PPY itself will use, or None when there is none."""
+    return _compiler()
 
 
 def _python_library() -> tuple[Path, str] | None:
