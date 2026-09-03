@@ -33,6 +33,21 @@ Speed of the compiler itself, measured before being changed.
   3270-line module migrates in 5.6 s where it took 10.5 s, with
   byte-identical output; the compiler's own 26,600 lines migrate in 50 s
   where 85 s used to end in a crash.
+- An error that would have to say `<unknown>` is not reported. It only
+  restates a type that was never resolved, and that unresolved type already
+  has its line -- the untyped parameter (`E1201`, `E1304`) or the call with
+  no signature (`E1306`). A 3270-line module went from 332 reported errors
+  to 35, and the 35 are the findings; one `W2006` line says how many were
+  withheld and names the unknown signatures behind them.
+- A field is typed by everything its class assigns to it, joined, rather
+  than by the first assignment in `__init__` alone: `self.buffer = None`
+  there and a tensor in `setup()` is `Tensor | None`, where it used to be
+  `None` and every later assignment an error. A field the class body
+  annotated keeps the annotation.
+- Every builtin exception is a known name. Thirteen were listed by hand and
+  `AssertionError`, `RuntimeError`, `OSError` and fifty-three others were
+  "not defined at this point"; the table now reads the interpreter's own
+  hierarchy.
 - `ppy migrate` no longer crashes on a module whose first statement is a
   relative import: placing the `ppy` import spelled the missing module name
   as an empty identifier, which libcst refuses.
