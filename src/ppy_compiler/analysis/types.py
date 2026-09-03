@@ -7,6 +7,7 @@ chosen by the backend (spec 10.4).
 
 from __future__ import annotations
 
+import builtins
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
 
@@ -155,6 +156,27 @@ BUILTIN_MRO: dict[str, tuple[str, ...]] = {
     "StopIteration": ("StopIteration", "Exception", "BaseException", "object"),
     "AttributeError": ("AttributeError", "Exception", "BaseException", "object"),
 }
+
+
+def _builtin_exceptions() -> dict[str, tuple[str, ...]]:
+    """Every builtin exception, with the hierarchy the interpreter itself reports.
+
+    Thirteen were written by hand above; the other fifty-six -- `AssertionError`,
+    `RuntimeError`, `OSError`, `KeyboardInterrupt` -- were "not defined at this
+    point" in any program that raised or caught them. Read from `builtins`
+    rather than listed, so the table cannot fall behind the interpreter again.
+    """
+    found: dict[str, tuple[str, ...]] = {}
+    for name in dir(builtins):
+        value = getattr(builtins, name)
+        if isinstance(value, type) and issubclass(value, BaseException):
+            found[name] = tuple(cls.__name__ for cls in value.__mro__)
+    return found
+
+
+BUILTIN_MRO.update(
+    {name: mro for name, mro in _builtin_exceptions().items() if name not in BUILTIN_MRO}
+)
 
 _ABSTRACT_MRO: dict[str, tuple[str, ...]] = {
     "Sequence": ("Sequence", "Iterable", "object"),
