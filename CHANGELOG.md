@@ -1,13 +1,16 @@
 # Changelog
 
-## 0.1.0a1
+## 0.1.0a1 — prepared, not yet released
 
-The first published release, and an alpha in the ordinary sense: the language
-and the diagnostics are in use and tested, and neither is promised to stay
-put. Pin an exact version.
+The first release, and an alpha in the ordinary sense: the language and the
+diagnostics are in use and tested, and neither is promised to stay put. Pin
+an exact version.
 
-Published to PyPI as **`ppy-lang`**; the packages it installs are `ppy`,
+The distribution is **`ppy-lang`**; the packages it installs are `ppy`,
 `ppy_compiler`, and `ppy_runtime`, so a program still writes `import ppy`.
+It is not on PyPI yet — the artifacts build and pass their checks, and
+publishing waits on the trusted-publisher setup described in
+[CONTRIBUTING.md](CONTRIBUTING.md#releasing). Until then, install from git.
 
 ### The language
 
