@@ -19,7 +19,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@v10
+      - uses: astral-sh/setup-uv@v10.0.1
         with:
           python-version: "3.13"
       - run: uv sync
@@ -35,14 +35,52 @@ jobs:
             exit 1
           }
       - run: uv build
-      # What is about to be published is what gets installed here: the smoke
-      # test runs the wheel, not the checkout it was built from.
+      # What is about to be published is what gets installed here, and it has
+      # to do the job rather than merely import: every path a user takes, on
+      # a program the checkout never compiled, from a directory that is not
+      # the repository.
       - name: the wheel runs
         run: |
+          set -euo pipefail
           uv venv /tmp/release-check
           VIRTUAL_ENV=/tmp/release-check uv pip install "$(echo dist/*.whl)[llvm]"
-          /tmp/release-check/bin/ppy --version
-          /tmp/release-check/bin/python -c "import ppy, ppy_runtime; print(ppy.__version__)"
+          venv=/tmp/release-check/bin
+          "$venv/ppy" --version
+          "$venv/python" -c "import ppy, ppy_runtime; print(ppy.__version__)"
+
+          mkdir -p /tmp/smoke && cd /tmp/smoke
+          printf '[tool.ppy]\nstrict = true\n' > pyproject.toml
+          cat > squares.ppy <<'PROGRAM'
+          """Sums the squares below a bound."""
+
+          import ppy
+
+
+          @ppy.pure
+          @ppy.opt(3)
+          def total(n: int) -> int:
+              out: int = 0
+              for i in range(n):
+                  out += i * i
+              return out
+
+
+          def main() -> None:
+              print(total(100000))
+
+
+          main()
+          PROGRAM
+          expected=333328333350000
+
+          "$venv/ppy" check squares.ppy
+          test "$("$venv/python" squares.ppy)" = "$expected"
+          test "$("$venv/ppy" run squares.ppy | tail -1)" = "$expected"
+          "$venv/ppy" build squares.ppy -o dist
+          test "$(./dist/squares)" = "$expected"
+          "$venv/ppy" build --standalone squares.ppy -o native
+          test "$(./native/squares)" = "$expected"
+          ! ldd native/squares | grep -q libpython
       - run: uv run --with twine twine check dist/*
       - uses: actions/upload-artifact@v7
         with:
