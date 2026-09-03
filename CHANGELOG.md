@@ -48,6 +48,18 @@ Speed of the compiler itself, measured before being changed.
   `AssertionError`, `RuntimeError`, `OSError` and fifty-three others were
   "not defined at this point"; the table now reads the interpreter's own
   hierarchy.
+- [docs/migrating.md](docs/migrating.md) says what to hand `ppy migrate` on
+  a real project: profile, find the two or three files that do the numeric
+  work, migrate those, and leave the orchestration as `.py` importing them
+  through the loader. It also says how to read the report -- `E1304` is the
+  to-do list, `W2006` is the count of what follows from it, and the rest is
+  about the code.
+- The compiler migrates itself in CI. `scripts/dogfood.py` runs the
+  converter over `src/ppy_compiler`, `src/ppy_runtime`, and `src/ppy` on
+  every push and fails on a crash, on `<unknown>` in any message, or on
+  more errors than the recorded ceiling, which only ratchets down. Thirty
+  thousand lines of real Python found the crash below, the missing
+  exceptions above, and the cascades; now they keep finding things.
 - `ppy migrate` no longer crashes on a module whose first statement is a
   relative import: placing the `ppy` import spelled the missing module name
   as an empty identifier, which libcst refuses.
