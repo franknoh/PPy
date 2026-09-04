@@ -3237,3 +3237,22 @@ def test_signatures_are_wrapped_only_past_the_limit():
     assert wrapped != long
     assert "def g(\n    parameter_0: int,\n" in wrapped
     assert all(len(line) <= 100 for line in wrapped.splitlines())
+
+
+def test_the_same_class_spelled_with_two_mros_is_one_type():
+    short = T.Instance("pathlib.Path", (), ("pathlib.Path", "pathlib.PurePath", "object"))
+    long = T.Instance(
+        "pathlib.Path",
+        (),
+        (
+            "pathlib.Path",
+            "pathlib._abc.PathBase",
+            "pathlib.PurePath",
+            "pathlib._abc.PurePathBase",
+            "object",
+        ),
+    )
+    assert short == long
+    assert len({short, long}) == 1
+    assert str(T.union(short, long)) == "pathlib.Path"
+    assert T.is_assignable(T.union(short, long), T.instance("pathlib.PurePath"))

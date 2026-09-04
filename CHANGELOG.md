@@ -125,6 +125,11 @@ Speed of the compiler itself, measured before being changed.
   and serves that record from the cache store when the file's path, size,
   and modification time match one written by this compiler. Converting one
   file of a large project costs a stat per file, not a parse.
+- A class's MRO is derived from its name, not part of a type's identity:
+  `pathlib.Path` reached through the analyzer's own table and through the
+  library's `__mro__`, which Python 3.13 spells with more bases than 3.14,
+  was a union of two types that printed alike, and `path / "x"` was an
+  error on one Python and not the other.
 - `ppy check pkg/a.py` checks `pkg.a`. A file inside a package used to be
   named from its own directory -- `a` -- so every `from . import b` in it
   was unresolved, on the one command people run most against the file they

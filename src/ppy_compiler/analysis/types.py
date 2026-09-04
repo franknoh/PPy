@@ -193,11 +193,17 @@ _ABSTRACT_MRO: dict[str, tuple[str, ...]] = {
 
 @dataclass(frozen=True, slots=True)
 class Instance(Type):
-    """An instance of a named class, with optional type arguments."""
+    """An instance of a named class, with optional type arguments.
+
+    The MRO is derived from the name, not part of the identity: the same
+    class reached through a hand-written table and through the library's
+    own `__mro__` -- which one Python spells with more bases than another --
+    is one type, not a union of two that print alike.
+    """
 
     name: str
     args: tuple[Type, ...] = ()
-    mro: tuple[str, ...] = ()
+    mro: tuple[str, ...] = field(default=(), compare=False)
 
     def __str__(self) -> str:
         if not self.args:
