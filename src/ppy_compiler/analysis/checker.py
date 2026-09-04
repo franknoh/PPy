@@ -3631,8 +3631,8 @@ def analyze(
     checked is not checked again: the earlier `ModuleAnalysis` is the answer.
     Inference asks this once per round and most rounds move a few modules,
     so most of a round used to be spent confirming what nothing had touched.
-    A reused module contributes no diagnostics, so `previous` is only for
-    callers that discard them; the analyses that report run without it.
+    A module keeps what checking it reported, so a reused module reports it
+    again: the round that settles reports every module, checked or kept.
 
     The fields a class assigns without annotating settle here too:
     `self.width = width` is typed from what the seed pass saw assigned, and
@@ -3683,9 +3683,7 @@ def analyze(
     for attempt in range(_FIXPOINT_ROUNDS):
         before = summaries()
         final = attempt == _FIXPOINT_ROUNDS - 1
-        bag = diagnostics if final else DiagnosticBag()
         modules: dict[str, ModuleAnalysis] = {}
-        cascaded = 0
         digests = _module_digests(symbols, ordered, strict, dynamic_policy)
         for module_symbols in ordered:
             name = module_symbols.name
@@ -3693,19 +3691,24 @@ def analyze(
             if kept is not None and symbols.module_digests.get(name) == digests[name]:
                 modules[name] = kept
                 continue
+            # Each module reports into its own bag, kept with the module:
+            # a later round that keeps the module keeps its report.
+            reported = DiagnosticBag()
             checker = _Checker(
                 module_symbols,
                 symbols,
                 analysis,
-                bag,
+                reported,
                 strict=strict,
                 record=True,
                 dynamic_policy=dynamic_policy,
                 plugins=plugins,
             )
-            modules[name] = checker.check_module()
+            checked = checker.check_module()
+            checked.diagnostics = reported
+            checked.cascaded = checker.cascaded
+            modules[name] = checked
             symbols.module_digests[name] = digests[name]
-            cascaded += checker.cascaded
         # What this pass produced is what the next one may keep.
         reusable = modules
         # A field that moved changes the digest of every module that reads
@@ -3713,10 +3716,13 @@ def analyze(
         moved = infer_fields(symbols, modules)
         if final or (summaries() == before and not moved):
             analysis.modules.update(modules)
+            cascaded = 0
+            for module_symbols in ordered:
+                settled = modules[module_symbols.name]
+                diagnostics.extend(settled.diagnostics.items)
+                cascaded += settled.cascaded
             if cascaded:
-                bag.add(_unresolved_summary(cascaded, modules))
-            if bag is not diagnostics:
-                diagnostics.extend(bag)
+                diagnostics.add(_unresolved_summary(cascaded, modules))
             return analysis
     return analysis
 

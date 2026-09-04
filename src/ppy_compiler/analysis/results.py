@@ -78,6 +78,11 @@ class ModuleAnalysis:
     module_effects: EffectSet = field(default_factory=EffectSet)
     dynamic_spans: list[tuple[int, int]] = field(default_factory=list)
     lowerings: dict[int, LoweringNote] = field(default_factory=dict)
+    #: What checking this module reported, kept with the module so that a
+    #: round which reuses the module reports it again.
+    diagnostics: DiagnosticBag = field(default_factory=DiagnosticBag)
+    #: How many of its errors only restated an unresolved type.
+    cascaded: int = 0
 
     @property
     def name(self) -> str:

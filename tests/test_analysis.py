@@ -3256,3 +3256,40 @@ def test_the_same_class_spelled_with_two_mros_is_one_type():
     assert len({short, long}) == 1
     assert str(T.union(short, long)) == "pathlib.Path"
     assert T.is_assignable(T.union(short, long), T.instance("pathlib.PurePath"))
+
+
+def test_a_module_kept_between_rounds_still_reports(write, analyze):
+    """A module the fixpoint did not need to recheck reports what it found."""
+    write(
+        "stable.ppy",
+        """
+        def wrong() -> int:
+            return "not an int"
+
+
+        def fine(n: int) -> int:
+            return n + 1
+        """,
+    )
+    moving = write(
+        "moving.ppy",
+        """
+        import stable
+
+
+        def depth(n: int):
+            if n == 0:
+                return 0
+            return depth(n - 1) + 1
+
+
+        def use(n: int):
+            return stable.fine(depth(n)) + depth(n)
+
+
+        def also(n: int):
+            return use(n) * 2
+        """,
+    )
+    errors = [d for d in analyze(moving).diagnostics.sorted() if d.severity.name == "ERROR"]
+    assert [d.code for d in errors] == ["E1303"], [d.message for d in errors]
