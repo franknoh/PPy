@@ -65,6 +65,14 @@ Speed of the compiler itself, measured before being changed.
   `unparse`, and the rest). `x: type` is an annotation, and what a class
   held as a value exposes is known. libcst's node classes are opaque
   types.
+- `f(*pair)` is as many arguments as the pair holds, and `[first, *rest]`
+  holds what `rest` holds. `type[Base]` is the class object of `Base` or a
+  subclass, a class is callable, and `dict[str, dict[str, int]]` is a
+  `dict[str, Any]`: `Any` is anything at any depth of an invariant
+  argument. `str.partition` and the rest of the `str` methods with a known
+  result are modeled; an external class's bases are spelled the way the
+  annotation spells them, so a `libcst.Call` is a `libcst.BaseExpression`;
+  `sqlite3`'s classes are annotations.
 - `ppy check pkg/a.py` checks `pkg.a`. A file inside a package used to be
   named from its own directory -- `a` -- so every `from . import b` in it
   was unresolved, on the one command people run most against the file they

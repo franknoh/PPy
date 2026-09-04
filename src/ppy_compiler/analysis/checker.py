@@ -192,6 +192,10 @@ def _forget_attributes(env: Env, root: str) -> None:
             env.remove(name)
 
 
+def _spread(elements: list[ast.expr]) -> bool:
+    return any(isinstance(e, ast.Starred) for e in elements)
+
+
 def _is_set_like(t: T.Type) -> bool:
     return isinstance(t, T.Instance) and t.name in {"set", "frozenset"}
 
@@ -1705,7 +1709,10 @@ class _Checker:
             if not p.has_default and p.kind not in {"var_positional", "var_keyword"}
         ]
         named = {n for n in keyword_names if n is not None}
-        if supplied > len(accepts_positional):
+        # `f(*pair)` or `f(**options)`: how many arrive is the value's
+        # business, not the call site's. The names still have to exist.
+        unpacked = None in keyword_names or any(isinstance(a, ast.Starred) for a in node.args)
+        if not unpacked and supplied > len(accepts_positional):
             self._error(
                 "E1305",
                 f"`{info.name}` takes {len(accepts_positional)} "
@@ -1714,7 +1721,7 @@ class _Checker:
             )
             return
         covered = supplied + len(named)
-        if covered < len(required):
+        if not unpacked and covered < len(required):
             missing = [p.name for p in required[supplied:] if p.name not in named]
             if missing:
                 self._error(
@@ -2128,6 +2135,12 @@ class _Checker:
             "removesuffix",
             "casefold",
             "zfill",
+            "swapcase",
+            "expandtabs",
+            "center",
+            "ljust",
+            "rjust",
+            "translate",
         }
         returns_bool = {
             "startswith",
@@ -2141,13 +2154,18 @@ class _Checker:
             "isnumeric",
             "isdecimal",
             "isidentifier",
+            "isascii",
+            "isprintable",
+            "istitle",
         }
         if attr in returns_str:
             return T.Callable_((), T.STR, f"str.{attr}")
         if attr in returns_bool:
             return T.Callable_((), T.BOOL, f"str.{attr}")
-        if attr in {"find", "rfind", "count", "index"}:
+        if attr in {"find", "rfind", "count", "index", "rindex"}:
             return T.Callable_((), T.INT, f"str.{attr}")
+        if attr in {"partition", "rpartition"}:
+            return T.Callable_((), T.Tuple_((T.STR, T.STR, T.STR)), f"str.{attr}")
         if attr in {"split", "rsplit", "splitlines"}:
             return T.Callable_((), T.list_of(T.STR), f"str.{attr}")
         if attr == "encode":
@@ -2236,11 +2254,16 @@ class _Checker:
         elements = [self._expr(e, env) for e in node.elts]
         self._effects = self._effects.add(Effect.ALLOC)
         element = T.join(*[e.type for e in elements]) if elements else T.NEVER
-        return Binding(T.list_of(T.strip_literal(element)), Facts(length=len(elements)))
+        facts = Facts() if _spread(node.elts) else Facts(length=len(elements))
+        return Binding(T.list_of(T.strip_literal(element)), facts)
 
     def _expr_Tuple(self, node: ast.Tuple, env: Env) -> Binding:
         elements = [self._expr(e, env) for e in node.elts]
         self._effects = self._effects.add(Effect.ALLOC)
+        if _spread(node.elts):
+            # `(first, *rest)` is as long as `rest` makes it.
+            element = T.join(*[e.type for e in elements])
+            return Binding(T.Tuple_((T.strip_literal(element),), homogeneous=True))
         constants = [e.facts.constant for e in elements]
         facts = Facts(length=len(elements))
         if elements and all(e.facts.has_constant for e in elements):
@@ -2273,7 +2296,10 @@ class _Checker:
         return Binding(T.STR)
 
     def _expr_Starred(self, node: ast.Starred, env: Env) -> Binding:
-        return self._expr(node.value, env)
+        # Only reached inside a display: `[a, *rest]` holds what `rest`
+        # holds. A call unwraps its starred arguments before asking.
+        spread = self._expr(node.value, env)
+        return Binding(B.element_type(spread.type))
 
     def _expr_NamedExpr(self, node: ast.NamedExpr, env: Env) -> Binding:
         value = self._expr(node.value, env)

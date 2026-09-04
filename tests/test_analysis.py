@@ -2763,3 +2763,129 @@ def test_type_is_an_annotation(write, analyze):
     )
     errors = [d for d in analyze(path).diagnostics.sorted() if d.severity.name == "ERROR"]
     assert errors == [], [d.message for d in errors]
+
+
+def test_a_starred_argument_is_as_many_arguments_as_it_holds(write, analyze):
+    path = write(
+        "spread.ppy",
+        """
+        def describe(a: int, b: int, c: int) -> int:
+            return a + b + c
+
+
+        def total(pair: tuple[int, int]) -> int:
+            return describe(1, *pair)
+        """,
+    )
+    errors = [d for d in analyze(path).diagnostics.sorted() if d.severity.name == "ERROR"]
+    assert errors == [], [d.message for d in errors]
+
+
+def test_a_starred_display_element_holds_the_elements(write, analyze):
+    path = write(
+        "spread_display.ppy",
+        """
+        def widen(first: int, rest: list[int]) -> list[int]:
+            return [first, *rest]
+
+
+        def pair_up(first: str, rest: tuple[str, ...]) -> tuple[str, ...]:
+            return (first, *rest)
+        """,
+    )
+    errors = [d for d in analyze(path).diagnostics.sorted() if d.severity.name == "ERROR"]
+    assert errors == [], [d.message for d in errors]
+
+
+def test_type_of_a_class_is_the_class_object(write, analyze):
+    path = write(
+        "factory.ppy",
+        """
+        from collections.abc import Callable
+
+
+        class Base:
+            def __init__(self) -> None:
+                self.n = 1
+
+
+        class Derived(Base):
+            pass
+
+
+        def make(kind: type[Base]) -> Base:
+            return kind()
+
+
+        def derived() -> Base:
+            return make(Derived)
+
+
+        def caster() -> Callable[[object], object]:
+            return int
+        """,
+    )
+    errors = [d for d in analyze(path).diagnostics.sorted() if d.severity.name == "ERROR"]
+    assert errors == [], [d.message for d in errors]
+
+
+def test_any_is_anything_at_any_depth(write, analyze):
+    path = write(
+        "nested.ppy",
+        """
+        from typing import Any
+
+
+        def payload() -> dict[str, Any]:
+            return {"a": {"b": 1}}
+
+
+        def rows() -> list[dict[str, Any]]:
+            return [{"n": 1, "name": "x"}]
+
+
+        def wrong() -> dict[str, int]:
+            return {"a": {"b": 1}}
+        """,
+    )
+    errors = [d for d in analyze(path).diagnostics.sorted() if d.severity.name == "ERROR"]
+    assert [d.span.line for d in errors if d.span] == [13], [d.message for d in errors]
+
+
+def test_the_partitions_are_modeled(write, analyze):
+    path = write(
+        "parts.ppy",
+        """
+        def last(qualname: str) -> str:
+            return qualname.rpartition(".")[2]
+
+
+        def head(qualname: str) -> str:
+            return qualname.partition(".")[0]
+        """,
+    )
+    errors = [d for d in analyze(path).diagnostics.sorted() if d.severity.name == "ERROR"]
+    assert errors == [], [d.message for d in errors]
+
+
+def test_an_external_class_names_its_bases_the_public_way():
+    pytest.importorskip("libcst")
+    from ppy_compiler.analysis import stdlib
+
+    assert "libcst.BaseExpression" in stdlib.EXTERNAL_MRO["libcst.Call"]
+    assert "libcst.CSTNode" in stdlib.EXTERNAL_MRO["libcst.Call"]
+
+
+def test_sqlite_types_are_annotations(write, analyze):
+    path = write(
+        "store.ppy",
+        """
+        import sqlite3
+
+
+        def open_one(connection: sqlite3.Connection) -> None:
+            pass
+        """,
+    )
+    errors = [d for d in analyze(path).diagnostics.sorted() if d.severity.name == "ERROR"]
+    assert errors == [], [d.message for d in errors]

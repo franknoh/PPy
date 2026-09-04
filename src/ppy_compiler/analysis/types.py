@@ -491,6 +491,10 @@ def is_assignable(source: Type, target: Type) -> bool:
 
     if isinstance(source, Callable_) and isinstance(target, Callable_):
         return _callable_assignable(source, target)
+    if isinstance(source, ClassObject) and isinstance(target, Callable_):
+        # A class is callable; what its constructor takes is not tracked
+        # here, what it makes is.
+        return source.instance_type is None or is_assignable(source.instance_type, target.ret)
     if isinstance(target, Callable_):
         return False
 
@@ -500,7 +504,11 @@ def is_assignable(source: Type, target: Type) -> bool:
         return is_assignable(source, target.bound or OBJECT)
 
     if isinstance(source, ClassObject) and isinstance(target, ClassObject):
-        return source.name == target.name
+        if source.name == target.name:
+            return True
+        return source.instance_type is not None and target.name in source.instance_type.resolved_mro
+    if isinstance(source, ClassObject) and isinstance(target, Instance):
+        return target.name in {"type", "object"}
     if isinstance(source, Module_) or isinstance(target, Module_):
         return source == target
 
@@ -518,7 +526,9 @@ def _instance_assignable(source: Instance, target: Instance) -> bool:
         return True
     if target.name not in source.resolved_mro:
         return False
-    if not target.args:
+    if not target.args or not source.args:
+        # Unparameterized on either side is the gradual form: `dict` is
+        # `dict[Any, Any]`.
         return True
     if len(source.args) != len(target.args):
         return False
@@ -527,10 +537,27 @@ def _instance_assignable(source: Instance, target: Instance) -> bool:
     covariant = source.name in {"tuple", "frozenset", "Sequence", "Iterable", "Iterator", "Mapping"}
     if covariant:
         return all(is_assignable(a, b) for a, b in zip(source.args, target.args, strict=False))
-    return all(
-        a == b or isinstance(b, AnyType) or isinstance(a, NeverType)
-        for a, b in zip(source.args, target.args, strict=False)
-    )
+    return all(_same_argument(a, b) for a, b in zip(source.args, target.args, strict=False))
+
+
+def _same_argument(source: Type, target: Type) -> bool:
+    """Is `source` the same type argument as `target`, where an invariant
+    position demands sameness? `Any` is anything at any depth -- a
+    `dict[str, dict[str, int]]` is a `dict[str, Any]` -- and an empty
+    display's `Never` is still anything."""
+    if source == target or isinstance(source, (AnyType, NeverType)) or isinstance(target, AnyType):
+        return True
+    if isinstance(source, Instance) and isinstance(target, Instance):
+        return (
+            source.name == target.name
+            and len(source.args) == len(target.args)
+            and all(_same_argument(a, b) for a, b in zip(source.args, target.args, strict=True))
+        )
+    if isinstance(source, Union_) and isinstance(target, Union_):
+        return len(source.members) == len(target.members) and all(
+            any(_same_argument(a, b) for b in target.members) for a in source.members
+        )
+    return False
 
 
 def _tuple_assignable(source: Tuple_, target: Type) -> bool:

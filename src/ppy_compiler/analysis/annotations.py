@@ -236,6 +236,13 @@ class AnnotationResolver:
             return self._callable(args, expr)
         if qualname in _PASSTHROUGH:
             return self._resolve(args[0]) if args else Resolved(T.UNKNOWN)
+        if qualname == "builtins.type":
+            # `type[Base]` is the class object of `Base` or a subclass; a
+            # union or an unknown underneath is some class, unspecified.
+            inner = self._resolve(args[0]).type if args else T.UNKNOWN
+            if isinstance(inner, T.Instance):
+                return Resolved(T.ClassObject(inner.name, inner))
+            return Resolved(T.instance("type"))
         if qualname == "ppy.Array":
             return self._ppy_array(args, expr)
         if qualname == "ppy.Vector":

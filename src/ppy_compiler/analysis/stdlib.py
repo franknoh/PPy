@@ -278,15 +278,22 @@ def _opaque(module: str, names: tuple[str, ...]) -> None:
     analyze" in every file that took a path.
     """
     library = __import__(module)
+
+    def spelled(base: type) -> str:
+        # `libcst.Call` is defined in `libcst._nodes.expression`; the
+        # annotation, and the table, say `libcst.BaseExpression`.
+        if base is object:
+            return "object"
+        if getattr(library, base.__name__, None) is base:
+            return f"{module}.{base.__name__}"
+        return f"{base.__module__}.{base.__name__}"
+
     for name in names:
         qualname = f"{module}.{name}"
         EXTERNAL_TYPES[qualname] = qualname
         cls = getattr(library, name, None)
         if isinstance(cls, type):
-            EXTERNAL_MRO[qualname] = tuple(
-                f"{base.__module__}.{base.__name__}" if base is not object else "object"
-                for base in cls.__mro__
-            )
+            EXTERNAL_MRO[qualname] = tuple(spelled(base) for base in cls.__mro__)
 
 
 _opaque("pathlib", ("Path", "PurePath", "PosixPath", "WindowsPath", "PurePosixPath"))
@@ -322,6 +329,10 @@ _opaque("enum", ("Enum", "IntEnum", "Flag", "IntFlag"))
 _opaque("argparse", ("Namespace", "ArgumentParser"))
 _opaque("subprocess", ("CompletedProcess", "Popen"))
 _opaque("logging", ("Logger",))
+_opaque(
+    "sqlite3",
+    ("Connection", "Cursor", "Row", "Error", "DatabaseError", "OperationalError", "IntegrityError"),
+)
 # Every node class of the `ast` module, from the module itself: a compiler
 # written in Python names them in most signatures.
 _opaque(
