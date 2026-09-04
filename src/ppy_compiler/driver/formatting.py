@@ -244,8 +244,13 @@ def normalize_module(module: cst.Module, local: frozenset[str] = frozenset()) ->
     output need not be printed and parsed again to be normalized."""
     module = _group_imports(module, local)
     module = module.with_changes(body=_space_top_level(list(module.body)))
-    module = module.visit(_WrapSignatures())
     code = module.code
+    if any(len(line) > _LINE_LIMIT for line in code.splitlines()):
+        # A signature past the limit is a line past the limit; a module
+        # with no such line has nothing to wrap, and the traversal that
+        # measured every header found that out the slow way.
+        module = module.visit(_WrapSignatures())
+        code = module.code
     code = "\n".join(line.rstrip() for line in code.splitlines())
     return code + "\n" if code and not code.endswith("\n") else code
 

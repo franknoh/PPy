@@ -3224,3 +3224,16 @@ def test_an_annotation_spelling_is_parsed_once():
 
     assert _expression("list[str]") is _expression("list[str]")
     assert _expression("list[str]").deep_equals(_expression("list[str]"))
+
+
+def test_signatures_are_wrapped_only_past_the_limit():
+    from ppy_compiler.driver.formatting import normalize_source
+
+    short = "def f(a: int, b: int) -> int:\n    return a + b\n"
+    assert normalize_source(short) == short
+    names = ", ".join(f"parameter_{i}: int" for i in range(8))
+    long = f"def g({names}) -> int:\n    return 0\n"
+    wrapped = normalize_source(long)
+    assert wrapped != long
+    assert "def g(\n    parameter_0: int,\n" in wrapped
+    assert all(len(line) <= 100 for line in wrapped.splitlines())
