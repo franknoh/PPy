@@ -69,19 +69,19 @@ def build_write_index(
     # be promising something the scan never saw.
     index.tainted = scan.tainted
     for scanned in scan.modules:
-        _scan(scanned.tree, scanned.module, scanned.bindings, index)
+        _scan(scanned.nodes, scanned.module, scanned.bindings, index)
     return index
 
 
 def _scan(
-    tree: ast.Module, module: str, bindings: LexicalBindings, index: GlobalWriteIndex
+    nodes: tuple[ast.AST, ...], module: str, bindings: LexicalBindings, index: GlobalWriteIndex
 ) -> None:
 
     def record(base: ast.expr, attr: str) -> None:
         for target in bindings.targets_at(base):
             index.writes.setdefault(target, set()).add(attr)
 
-    for node in ast.walk(tree):
+    for node in nodes:
         targets: list[ast.expr] = []
         if isinstance(node, ast.Assign):
             targets = list(node.targets)

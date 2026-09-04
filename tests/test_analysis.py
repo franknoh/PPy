@@ -3149,3 +3149,62 @@ def test_a_field_init_assigns_is_known_to_a_single_pass(write, analyze):
     errors = [d for d in bundle.diagnostics.sorted() if d.severity.name == "ERROR"]
     assert [d.span.line for d in errors if d.span] == [17], [d.message for d in errors]
     assert str(bundle.symbols.classes["fields.Arg"].fields["low"]) == "int | NoneType"
+
+
+def test_a_module_and_a_function_hand_out_their_nodes_walked_once(write, analyze):
+    import ast
+
+    path = write(
+        "walked.ppy",
+        """
+        def total(values: list[int]) -> int:
+            result = 0
+            for value in values:
+                result += value
+            return result
+        """,
+    )
+    bundle = analyze(path)
+    module = bundle.symbols.modules["walked"].module
+    assert module.nodes == tuple(ast.walk(module.tree))
+    assert module.nodes is module.nodes
+    info = bundle.symbols.functions["walked.total"]
+    assert info.nodes == tuple(ast.walk(info.node))
+    assert info.nodes is info.nodes
+    assert info.nodes[0] is info.node
+
+
+def test_a_revisited_node_keeps_each_state_once():
+    from ppy_compiler.analysis.aliasing import _Reached
+
+    first, second, third = {"a": frozenset({"x"})}, {"b": frozenset()}, {"c": frozenset()}
+    reached = _Reached(first, second)
+    reached.add(first)
+    reached.add(third)
+    reached.add(third)
+    assert list(reached) == [first, second, third]
+    assert isinstance(reached, list)
+
+
+def test_a_subclass_of_a_builtin_has_the_builtin_methods(write, analyze):
+    path = write(
+        "reached.ppy",
+        """
+        class Reached(list):
+            def __init__(self, first: int) -> None:
+                super().__init__((first,))
+                self.ids = {first}
+
+            def add(self, value: int) -> None:
+                if value not in self.ids:
+                    self.ids.add(value)
+                    self.append(value)
+
+
+        def size(reached: Reached) -> int:
+            reached.add(3)
+            return len(reached) + reached.count(3)
+        """,
+    )
+    errors = [d for d in analyze(path).diagnostics.sorted() if d.severity.name == "ERROR"]
+    assert errors == [], [d.message for d in errors]

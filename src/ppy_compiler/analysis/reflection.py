@@ -82,16 +82,16 @@ def build_reflection_index(
     # itself a reader, and its call sites can live in any file.
     observers: set[str] = set()
     for scanned in scan.modules:
-        _find_observers(scanned.tree, scanned.module, scanned.bindings, observers)
+        _find_observers(scanned.nodes, scanned.module, scanned.bindings, observers)
     for scanned in scan.modules:
-        _scan(scanned.tree, scanned.module, scanned.bindings, index, frozenset(observers))
+        _scan(scanned.nodes, scanned.module, scanned.bindings, index, frozenset(observers))
     return index
 
 
-def _own_parameters(tree: ast.Module) -> dict[int, tuple[str, frozenset[str]]]:
+def _own_parameters(nodes: tuple[ast.AST, ...]) -> dict[int, tuple[str, frozenset[str]]]:
     """id(function node) -> (its canonical tail, its parameter names)."""
     found: dict[int, tuple[str, frozenset[str]]] = {}
-    for node in ast.walk(tree):
+    for node in nodes:
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             arguments = node.args
             names = frozenset(
@@ -123,14 +123,14 @@ def _reads_a_parameter(fn, params: frozenset[str], bindings) -> bool:  # type: i
 
 
 def _find_observers(
-    tree: ast.Module, module: str, bindings: LexicalBindings, observers: set[str]
+    nodes: tuple[ast.AST, ...], module: str, bindings: LexicalBindings, observers: set[str]
 ) -> None:
     # One walk for every function's parameters, then one per function for its
     # reads. Asking `_own_parameters` inside the loop walked the whole tree
     # once per function, which on a 3000-line module was most of a
     # conversion's time.
-    parameters = _own_parameters(tree)
-    for node in ast.walk(tree):
+    parameters = _own_parameters(nodes)
+    for node in nodes:
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             _, params = parameters[id(node)]
             if _reads_a_parameter(node, params, bindings):
@@ -138,14 +138,14 @@ def _find_observers(
 
 
 def _scan(
-    tree: ast.Module,
+    nodes: tuple[ast.AST, ...],
     module: str,
     bindings: LexicalBindings,
     index: ReflectionIndex,
     observers: frozenset[str],
 ) -> None:
     parameters: dict[str, frozenset[str]] = {}
-    for node in ast.walk(tree):
+    for node in nodes:
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             arguments = node.args
             parameters[node.name] = frozenset(
@@ -176,7 +176,7 @@ def _scan(
         # be observed, so nothing may be materialized.
         index.dynamic = True
 
-    for node in ast.walk(tree):
+    for node in nodes:
         if isinstance(node, ast.Attribute) and node.attr == "__annotations__":
             record(node.value)
         elif isinstance(node, ast.Name) and node.id == "__annotations__":

@@ -149,6 +149,14 @@ class FunctionInfo:
     #: and `signature()` asks for it once per function per checked function, so
     #: it is computed once and kept.
     _generator: bool | None = field(default=None, repr=False, compare=False)
+    _nodes: tuple[ast.AST, ...] | None = field(default=None, repr=False, compare=False)
+
+    @property
+    def nodes(self) -> tuple[ast.AST, ...]:
+        """Every node of the function, in `ast.walk` order, walked once."""
+        if self._nodes is None:
+            self._nodes = tuple(ast.walk(self.node))
+        return self._nodes
 
     @property
     def is_async(self) -> bool:
@@ -507,7 +515,7 @@ class ProjectSymbols:
         """
         rebound: set[tuple[str, str]] = set()
         for symbols in self.modules.values():
-            for node in ast.walk(symbols.module.tree):
+            for node in symbols.module.nodes:
                 if isinstance(node, ast.Global):
                     rebound.update((symbols.name, name) for name in node.names)
                 elif isinstance(node, ast.Attribute) and isinstance(node.ctx, ast.Store):
@@ -520,7 +528,7 @@ class ProjectSymbols:
         for symbols in self.modules.values():
             counts: dict[str, int] = {}
             literals: dict[str, object] = {}
-            for node in ast.walk(symbols.module.tree):
+            for node in symbols.module.nodes:
                 if isinstance(node, ast.Name) and isinstance(node.ctx, (ast.Store, ast.Del)):
                     counts[node.id] = counts.get(node.id, 0) + 1
             for node in symbols.module.tree.body:
@@ -811,7 +819,7 @@ class ProjectSymbols:
         init = info.methods.get("__init__")
         if init is None:
             return
-        for node in ast.walk(init.node):
+        for node in init.nodes:
             if isinstance(node, ast.AnnAssign) and _is_self_attribute(node.target):
                 attr = node.target.attr  # type: ignore[union-attr]
                 resolved = annotations.resolve(node.annotation)

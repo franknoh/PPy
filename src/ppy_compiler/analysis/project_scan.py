@@ -35,6 +35,15 @@ class ScannedModule:
     tree: ast.Module
     is_package: bool
     bindings: LexicalBindings
+    _nodes: tuple[ast.AST, ...] | None = field(default=None, repr=False)
+
+    @property
+    def nodes(self) -> tuple[ast.AST, ...]:
+        """Every node of the tree, in `ast.walk` order, walked once for all
+        the indexes built over this scan."""
+        if self._nodes is None:
+            self._nodes = tuple(ast.walk(self.tree))
+        return self._nodes
 
 
 @dataclass(slots=True)

@@ -332,14 +332,14 @@ def parallel_report(
 def _top_level_loops(info: FunctionInfo) -> list[ast.For | ast.While | ast.ListComp]:
     return [
         node  # type: ignore[misc]
-        for node in ast.walk(info.node)
+        for node in info.nodes
         if isinstance(node, (ast.For, ast.While, ast.ListComp, ast.GeneratorExp))
     ]
 
 
 def _reductions(info: FunctionInfo) -> list[str]:
     found: list[str] = []
-    for node in ast.walk(info.node):
+    for node in info.nodes:
         if isinstance(node, ast.AugAssign) and type(node.op) in _REDUCTION_OPS:
             found.append(_REDUCTION_OPS[type(node.op)])
         elif (
@@ -386,7 +386,7 @@ def _possible_aliases(info: FunctionInfo) -> tuple[str, str] | None:
         return None
     mutated = {
         node.value.id
-        for node in ast.walk(info.node)
+        for node in info.nodes
         if isinstance(node, ast.Subscript)
         and isinstance(node.ctx, ast.Store)
         and isinstance(node.value, ast.Name)

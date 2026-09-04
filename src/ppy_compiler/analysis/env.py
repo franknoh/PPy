@@ -68,6 +68,11 @@ class Env:
         for name in self._bindings.keys() | other._bindings.keys():
             left = self._bindings.get(name)
             right = other._bindings.get(name)
+            if left is right:
+                # Untouched on both branches: the fork handed each the same
+                # binding, and joining a type with itself is the type.
+                merged[name] = left  # type: ignore[assignment]
+                continue
             if left is None or right is None:
                 # Bound on only one path: keep the type but drop all facts.
                 only = left or right

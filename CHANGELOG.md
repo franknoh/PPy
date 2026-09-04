@@ -94,6 +94,15 @@ Speed of the compiler itself, measured before being changed.
   pass saw assigned, so every path starts from the same fields and the
   reporting pass reads fields that are known. No extra pass: `ppy check`
   costs what it did.
+- Every whole-tree scan iterates a node tuple the tree's owner walked once:
+  a conversion made a dozen passes over the same trees through `ast.walk`,
+  which was a tenth of its time. A branch merge keeps a binding both sides
+  share instead of joining it with itself, and the alias snapshot's revisit
+  check is a set lookup rather than a scan of a list that grew with every
+  loop iteration the fixpoint needed.
+- A project class that subclasses a builtin has the builtin's methods:
+  `class Reached(list)` may call `self.append`, and `super().__init__(...)`
+  past a base the project does not define is a call that returns nothing.
 - `ppy check pkg/a.py` checks `pkg.a`. A file inside a package used to be
   named from its own directory -- `a` -- so every `from . import b` in it
   was unresolved, on the one command people run most against the file they

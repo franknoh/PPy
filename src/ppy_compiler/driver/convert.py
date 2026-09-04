@@ -709,7 +709,7 @@ def _rebound_globals(symbols) -> set[str]:  # type: ignore[no-untyped-def]
             if isinstance(name, ast.Name):
                 counts[name.id] = counts.get(name.id, 0) + 1
 
-    for node in ast.walk(symbols.module.tree):
+    for node in symbols.module.nodes:
         if isinstance(node, ast.Global):
             rebound.update(node.names)
         elif isinstance(node, ast.Delete):
@@ -766,7 +766,7 @@ def _plan_empty_containers(symbols, analysis, plan: ConversionPlan, module_name:
         function = analysis.functions.get(info.qualname)
         if function is None:
             continue
-        for node in ast.walk(info.node):
+        for node in info.nodes:
             if not isinstance(node, ast.Assign) or len(node.targets) != 1:
                 continue
             target = node.targets[0]
@@ -939,7 +939,7 @@ def _dynamic_findings(symbols) -> list[Diagnostic]:  # type: ignore[no-untyped-d
             span_of(symbols.path, node),
             help="wrap it in `with ppy.dynamic:` or mark the function `@ppy.dynamic`",
         )
-        for node in ast.walk(symbols.module.tree)
+        for node in symbols.module.nodes
         if (
             isinstance(node, ast.Call)
             and isinstance(node.func, ast.Name)
@@ -1013,7 +1013,7 @@ def _plan_fields(symbols, plan: ConversionPlan, module_name: str) -> None:  # ty
             if isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name)
         }
         written: set[str] = set()
-        for node in ast.walk(initializer.node):
+        for node in initializer.nodes:
             if not isinstance(node, ast.Assign) or len(node.targets) != 1:
                 continue
             target = node.targets[0]
@@ -1159,7 +1159,7 @@ def _readers_of(bundle, names: set[str]) -> dict[str, set[tuple[str, str]]]:  # 
     """Every `(function, parameter)` each of these module-level names reaches."""
     readers: dict[str, set[tuple[str, str]]] = {name: set() for name in names}
     for symbols in bundle.symbols.modules.values():
-        for node in ast.walk(symbols.module.tree):
+        for node in symbols.module.nodes:
             if not isinstance(node, ast.Call):
                 continue
             qualname = callee_qualname(bundle, symbols, node)
@@ -1244,7 +1244,7 @@ def _list_sources(  # type: ignore[no-untyped-def]
         if analysis is None:
             continue
         assignments = _module_list_assignments(symbols)
-        for node in ast.walk(symbols.module.tree):
+        for node in symbols.module.nodes:
             if not isinstance(node, ast.Call):
                 continue
             if callee_qualname(bundle, symbols, node) != qualname:

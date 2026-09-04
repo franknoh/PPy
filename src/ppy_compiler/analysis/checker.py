@@ -1227,18 +1227,14 @@ class _Checker:
         base = T.strip_literal(value.type)
         elements: list[T.Type] = []
         members = [T.strip_literal(m) for m in T.members_of(base)]
+        tuples = [m for m in members if isinstance(m, T.Tuple_) and not m.homogeneous]
         if isinstance(base, T.Tuple_) and not base.homogeneous:
             elements = list(base.items)
-        elif (
-            len(members) > 1
-            and all(isinstance(m, T.Tuple_) and not m.homogeneous for m in members)
-            and len({len(m.items) for m in members}) == 1  # type: ignore[union-attr]
-        ):
+        elif len(tuples) == len(members) > 1 and len({len(t.items) for t in tuples}) == 1:
             # `seen.get(key, (0, node))` is one tuple or the other; each
             # target is what its position holds in either.
             elements = [
-                T.join(*[m.items[index] for m in members])  # type: ignore[union-attr]
-                for index in range(len(members[0].items))  # type: ignore[union-attr]
+                T.join(*[t.items[index] for t in tuples]) for index in range(len(tuples[0].items))
             ]
         else:
             element = B.element_type(base)
@@ -1880,6 +1876,15 @@ class _Checker:
             # A class held as a value, whichever class: what every class
             # object exposes is known, the rest is that class's business.
             return Binding(_CLASS_DUNDERS.get(node.attr, T.UNKNOWN))
+        if (
+            node.attr == "__init__"
+            and isinstance(base, T.Instance)
+            and base.name not in self.project.classes
+        ):
+            # `super().__init__(...)` past a base the project does not
+            # define: what it takes is the library's business, it returns
+            # nothing.
+            return Binding(T.Callable_((), T.NONE, f"{base.name}.__init__"))
         if isinstance(base, T.Instance):
             info = self.project.classes.get(base.name)
             if info is not None:
@@ -1911,6 +1916,12 @@ class _Checker:
                 inherited_external = self._external_base_attribute(info, node.attr, owner.facts)
                 if inherited_external is not None:
                     return inherited_external
+                for entry in base.resolved_mro:
+                    # `class Reached(list)`: `self.append` is the list's.
+                    if entry != base.name and entry in T.BUILTIN_MRO:
+                        inherited = self._builtin_method(T.instance(entry), node.attr)
+                        if inherited is not None:
+                            return Binding(inherited)
                 if info.slots is not None and node.attr not in info.slots:
                     if not self._dynamic_depth:
                         self._error("E1202", f"`{info.name}` has no attribute `{node.attr}`", node)

@@ -114,7 +114,7 @@ def observed_arguments(bundle) -> dict[tuple[str, int], T.Type]:  # type: ignore
         symbols = bundle.symbols.modules.get(module_name)
         if symbols is None:
             continue
-        for node in ast.walk(symbols.module.tree):
+        for node in symbols.module.nodes:
             if not isinstance(node, ast.Call):
                 continue
             qualname = callee_qualname(bundle, symbols, node)
@@ -200,7 +200,7 @@ def modules_with_unannotated_fields(symbols) -> set[str]:  # type: ignore[no-unt
         if info.module in found:
             continue
         for method in info.methods.values():
-            for node in ast.walk(method.node):
+            for node in method.nodes:
                 if (
                     isinstance(node, ast.Assign)
                     and len(node.targets) == 1
@@ -234,7 +234,7 @@ def infer_fields(symbols, modules) -> bool:  # type: ignore[no-untyped-def]
         methods = sorted(info.methods.values(), key=lambda m: m.name != "__init__")
         seen: dict[str, T.Type] = {}
         for method in methods:
-            for node in ast.walk(method.node):
+            for node in method.nodes:
                 if not isinstance(node, ast.Assign) or len(node.targets) != 1:
                     continue
                 target = node.targets[0]
@@ -271,7 +271,7 @@ def _infer_from_usage(bundle) -> bool:  # type: ignore[no-untyped-def]
         pending = {p.name: p for p in info.params if not p.known}
         if not pending:
             continue
-        for node in ast.walk(info.node):
+        for node in info.nodes:
             if not isinstance(node, ast.BinOp):
                 continue
             for side, other in ((node.left, node.right), (node.right, node.left)):

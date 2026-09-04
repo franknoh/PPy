@@ -61,6 +61,26 @@ _FRESH_SCALAR = frozenset(
 _State = dict[str, frozenset[str]]
 
 
+class _Reached(list):  # type: ignore[type-arg]
+    """The states a node was reached with, each once.
+
+    A loop body is flowed again for every iteration the fixpoint needs, and a
+    nested loop multiplies that; scanning the list to see whether a state was
+    already recorded made the snapshot quadratic in the revisits.
+    """
+
+    __slots__ = ("ids",)
+
+    def __init__(self, first: object, second: object) -> None:
+        super().__init__((first, second))
+        self.ids = {id(first), id(second)}
+
+    def add(self, state: object) -> None:
+        if id(state) not in self.ids:
+            self.ids.add(id(state))
+            self.append(state)
+
+
 @dataclass(slots=True)
 class AliasInfo:
     """What each name may refer to, at each statement of one function."""
@@ -149,11 +169,10 @@ class _Analyzer:
             existing = self.at.get(id(sub))
             if existing is None:
                 self.at[id(sub)] = frozen
-            elif isinstance(existing, list):
-                if not any(seen is frozen for seen in existing):
-                    existing.append(frozen)
+            elif isinstance(existing, _Reached):
+                existing.add(frozen)
             elif existing is not frozen:
-                self.at[id(sub)] = [existing, frozen]
+                self.at[id(sub)] = _Reached(existing, frozen)
             for child in ast.iter_child_nodes(sub):
                 if isinstance(child, (ast.stmt, ast.Lambda, ast.expr_context)):
                     continue

@@ -20,12 +20,27 @@ class SourceFile:
     text: str
     tree: ast.Module | None = None
     _lines: list[str] | None = field(default=None, repr=False)
+    _nodes: tuple[ast.AST, ...] | None = field(default=None, repr=False)
 
     @property
     def lines(self) -> list[str]:
         if self._lines is None:
             self._lines = self.text.splitlines()
         return self._lines
+
+    @property
+    def nodes(self) -> tuple[ast.AST, ...]:
+        """Every node of the tree, in `ast.walk` order, walked once.
+
+        A whole-project pass asks for every node of every module, and a
+        conversion makes a dozen such passes over the same trees; the
+        generator walk was a tenth of its time. The tree is not changed
+        after parsing, so the tuple stands.
+        """
+        if self._nodes is None:
+            assert self.tree is not None
+            self._nodes = tuple(ast.walk(self.tree))
+        return self._nodes
 
     @property
     def is_ppy(self) -> bool:

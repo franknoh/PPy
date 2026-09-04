@@ -51,6 +51,10 @@ class Module:
         return self.source.tree
 
     @property
+    def nodes(self) -> tuple[ast.AST, ...]:
+        return self.source.nodes
+
+    @property
     def package(self) -> str:
         if self.is_package:
             return self.name
