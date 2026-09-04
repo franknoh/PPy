@@ -79,6 +79,8 @@ Speed of the compiler itself, measured before being changed.
   some class and fits `type[Base]`; `list | dict` in an `isinstance` is a
   type; `table.get(type(node.op))` may ask with a wider key than the table
   holds. A library exception is a `BaseException`.
+- `program or {}` is never `None`: an operand of `or` that is not the last
+  is the result only when it is truthy.
 - `ppy check pkg/a.py` checks `pkg.a`. A file inside a package used to be
   named from its own directory -- `a` -- so every `from . import b` in it
   was unresolved, on the one command people run most against the file they

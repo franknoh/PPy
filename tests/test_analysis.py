@@ -3029,3 +3029,23 @@ def test_any_inside_a_tuple_argument(write, analyze):
     )
     errors = [d for d in analyze(path).diagnostics.sorted() if d.severity.name == "ERROR"]
     assert errors == [], [d.message for d in errors]
+
+
+def test_or_drops_none_from_every_operand_but_the_last(write, analyze):
+    path = write(
+        "fallback.ppy",
+        """
+        def modules(program: dict[str, int] | None) -> int:
+            return (program or {}).get("modules", 0)
+
+
+        def either(first: int | None, second: int | None) -> int | None:
+            return first or second
+
+
+        def wrong(first: int | None, second: int | None) -> int:
+            return first or second
+        """,
+    )
+    errors = [d for d in analyze(path).diagnostics.sorted() if d.severity.name == "ERROR"]
+    assert [d.span.line for d in errors if d.span] == [10], [d.message for d in errors]

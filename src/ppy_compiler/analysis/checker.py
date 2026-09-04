@@ -1412,15 +1412,18 @@ class _Checker:
             scope = self._narrow(value, scope, keeps_going)
         for name, bound in assigned.items():
             env.set(name, bound)
+        types = [p.type for p in parts]
+        if isinstance(node.op, ast.Or):
+            # `program or {}`: an operand before the last is the result only
+            # when it is truthy, and `None` never is.
+            types = [*(T.remove_none(t) for t in types[:-1]), types[-1]]
         if all(p.facts.has_constant for p in parts):
             values = [p.facts.constant for p in parts]
             result = values[0]
             for value in values[1:]:
                 result = (result and value) if isinstance(node.op, ast.And) else (result or value)
-            return Binding(
-                T.join(*[p.type for p in parts]), Facts(constant=result, has_constant=True)
-            )
-        return Binding(T.join(*[p.type for p in parts]))
+            return Binding(T.join(*types), Facts(constant=result, has_constant=True))
+        return Binding(T.join(*types))
 
     def _expr_Compare(self, node: ast.Compare, env: Env) -> Binding:
         left = self._expr(node.left, env)
