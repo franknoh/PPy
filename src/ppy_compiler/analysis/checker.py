@@ -3603,7 +3603,16 @@ def analyze(
     so most of a round used to be spent confirming what nothing had touched.
     A reused module contributes no diagnostics, so `previous` is only for
     callers that discard them; the analyses that report run without it.
+
+    The fields a class assigns without annotating settle here too:
+    `self.width = width` is typed from what the seed pass saw assigned, and
+    a field assigned from another class's field in the round after. Every
+    caller -- `check`, `run`, `build`, and the conversion fixpoint -- then
+    starts from the same fields, and the reporting pass reads fields that
+    are known.
     """
+    from .inference import infer_fields, modules_with_unannotated_fields
+
     analysis = ProjectAnalysis(symbols=symbols, diagnostics=diagnostics)
     ordered = [symbols.modules[m.name] for m in symbols.graph.order() if m.name in symbols.modules]
     reusable: dict[str, ModuleAnalysis] = dict(previous.modules) if previous is not None else {}
@@ -3625,17 +3634,20 @@ def analyze(
     # runs until nothing does, exactly as it would after a seed.
     if not symbols.seeded:
         silent = DiagnosticBag()
+        recording = modules_with_unannotated_fields(symbols)
+        seeded: dict[str, ModuleAnalysis] = {}
         for module_symbols in ordered:
-            _Checker(
+            seeded[module_symbols.name] = _Checker(
                 module_symbols,
                 symbols,
                 analysis,
                 silent,
                 strict=False,
-                record=False,
+                record=module_symbols.name in recording,
                 dynamic_policy=dynamic_policy,
                 plugins=plugins,
             ).check_module()
+        infer_fields(symbols, seeded)
         symbols.seeded = True
 
     for attempt in range(_FIXPOINT_ROUNDS):
@@ -3666,7 +3678,10 @@ def analyze(
             cascaded += checker.cascaded
         # What this pass produced is what the next one may keep.
         reusable = modules
-        if final or summaries() == before:
+        # A field that moved changes the digest of every module that reads
+        # it, so the next round rechecks exactly those.
+        moved = infer_fields(symbols, modules)
+        if final or (summaries() == before and not moved):
             analysis.modules.update(modules)
             if cascaded:
                 bag.add(_unresolved_summary(cascaded, modules))

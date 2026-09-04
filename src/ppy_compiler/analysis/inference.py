@@ -21,7 +21,9 @@ from .binding import bind_ast_call
 __all__ = [
     "callee_qualname",
     "has_source_annotation",
+    "infer_fields",
     "is_self_attribute",
+    "modules_with_unannotated_fields",
     "observed_arguments",
     "refine_with_call_sites",
 ]
@@ -183,6 +185,36 @@ def has_source_annotation(info, name: str) -> bool:  # type: ignore[no-untyped-d
 
 
 def _infer_fields(bundle) -> bool:  # type: ignore[no-untyped-def]
+    return infer_fields(bundle.symbols, bundle.analysis.modules)
+
+
+def modules_with_unannotated_fields(symbols) -> set[str]:  # type: ignore[no-untyped-def]
+    """The modules with a class that assigns a `self.x` nothing annotated.
+
+    These are the modules whose methods the seed pass records, so that the
+    fields can be typed from the assignments; a module of dataclasses and
+    annotated bodies has nothing to learn and is not recorded.
+    """
+    found: set[str] = set()
+    for info in symbols.classes.values():
+        if info.module in found:
+            continue
+        for method in info.methods.values():
+            for node in ast.walk(method.node):
+                if (
+                    isinstance(node, ast.Assign)
+                    and len(node.targets) == 1
+                    and is_self_attribute(node.targets[0], method)
+                    and node.targets[0].attr not in info.fields  # type: ignore[union-attr]
+                ):
+                    found.add(info.module)
+                    break
+            if info.module in found:
+                break
+    return found
+
+
+def infer_fields(symbols, modules) -> bool:  # type: ignore[no-untyped-def]
     """Give each instance field the join of everything its class assigns to it.
 
     `self.width = width` says as much about `width` as an annotation would,
@@ -193,9 +225,9 @@ def _infer_fields(bundle) -> bool:  # type: ignore[no-untyped-def]
     assignment an error. The join only grows, so inference still settles.
     """
     changed = False
-    for info in bundle.symbols.classes.values():
-        analysis = bundle.analysis.modules.get(info.module)
-        if analysis is None or not info.methods:
+    for info in symbols.classes.values():
+        module_analysis = modules.get(info.module)
+        if module_analysis is None or not info.methods:
             continue
         # `__init__` first, so the order of evidence is the order of the
         # object's life; the join does not depend on it, the remarks might.
@@ -208,7 +240,7 @@ def _infer_fields(bundle) -> bool:  # type: ignore[no-untyped-def]
                 target = node.targets[0]
                 if not is_self_attribute(target, method):
                     continue
-                assigned = T.strip_literal(analysis.type_of(node.value))
+                assigned = T.strip_literal(module_analysis.type_of(node.value))
                 if isinstance(assigned, (T.UnknownType, T.AnyType, T.NeverType)):
                     continue
                 name = target.attr  # type: ignore[union-attr]

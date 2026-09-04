@@ -86,6 +86,14 @@ Speed of the compiler itself, measured before being changed.
   `args[0]` is written. A union of tuples unpacks position by position, so
   `count, first = seen.get(key, (0, node))` gives an `int` count. Being one
   of the constants in `x in {"a", "b"}` is being of their type.
+- `ppy check`, `run`, and `build` know the fields `__init__` assigns.
+  `self.width = width` says as much about the field as an annotation
+  would, and only `convert` and `migrate` used to hear it: the single-pass
+  path reported `has no attribute` on every read of such a field. The
+  analysis now settles those fields in its own fixpoint, from what its seed
+  pass saw assigned, so every path starts from the same fields and the
+  reporting pass reads fields that are known. No extra pass: `ppy check`
+  costs what it did.
 - `ppy check pkg/a.py` checks `pkg.a`. A file inside a package used to be
   named from its own directory -- `a` -- so every `from . import b` in it
   was unresolved, on the one command people run most against the file they

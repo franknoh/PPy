@@ -3120,3 +3120,32 @@ def test_being_one_of_the_constants_is_being_of_their_type(write, analyze):
     )
     errors = [d for d in analyze(path).diagnostics.sorted() if d.severity.name == "ERROR"]
     assert [d.span.line for d in errors if d.span] == [15], [d.message for d in errors]
+
+
+def test_a_field_init_assigns_is_known_to_a_single_pass(write, analyze):
+    path = write(
+        "fields.ppy",
+        """
+        class Facts:
+            def __init__(self, low: int | None) -> None:
+                self.low = low
+
+
+        class Arg:
+            def __init__(self, facts: Facts) -> None:
+                self.facts = facts
+                self.low = facts.low
+
+
+        def lowest(arg: Arg) -> int:
+            return arg.low or arg.facts.low or 0
+
+
+        def wrong(arg: Arg) -> int:
+            return arg.low
+        """,
+    )
+    bundle = analyze(path)
+    errors = [d for d in bundle.diagnostics.sorted() if d.severity.name == "ERROR"]
+    assert [d.span.line for d in errors if d.span] == [17], [d.message for d in errors]
+    assert str(bundle.symbols.classes["fields.Arg"].fields["low"]) == "int | NoneType"
