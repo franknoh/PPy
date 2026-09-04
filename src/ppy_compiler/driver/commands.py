@@ -64,6 +64,14 @@ def _resolve_safeguards(options: argparse.Namespace, project, command: str) -> N
     )
 
 
+def _resolve_prover(options: argparse.Namespace, project) -> None:  # type: ignore[no-untyped-def]
+    """Settle the prover before any cache key reads it: `--prover`, then
+    the project's `[tool.ppy.llvm] prover`, then off."""
+    explicit = getattr(options, "prover", None)
+    if explicit is not None:
+        project.config.llvm.prover = explicit
+
+
 def _prepare(
     target: Path, options: argparse.Namespace, *, backend: str = "python"
 ) -> AnalysisBundle:
@@ -182,6 +190,7 @@ def run_llvm_backend(
     warm = locate(file, options)
     project = open_project(file, config_overrides=_overrides(options))
     _resolve_safeguards(options, project, "run")
+    _resolve_prover(options, project)
     bundle = analyze_paths(project, collect_sources(file), backend="llvm")
     errors = reporter.report(bundle.diagnostics)
     if errors:
@@ -227,6 +236,7 @@ def build(options: argparse.Namespace, reporter: Reporter) -> int:
     project = open_project(target, config_overrides=_overrides(options))
     if backend == "llvm":
         _resolve_safeguards(options, project, "build")
+        _resolve_prover(options, project)
         _resolve_host_cpu(options, project)
     bundle = analyze_paths(project, collect_sources(target), backend=backend)
     errors = reporter.report(bundle.diagnostics)
@@ -433,6 +443,10 @@ def doctor(options: argparse.Namespace, reporter: Reporter) -> int:
     print(f"llvm backend      {status}" + (f" ({detail})" if detail else ""))
     usable, toolchain = toolchain_status()
     print(f"native toolchain  {'available' if usable else 'unavailable'} ({toolchain})")
+    from ..backend.llvm.prover import Prover
+
+    solver = f"z3 {Prover.version()}" if Prover.available() else "install ppy-lang[solver]"
+    print(f"solver            {'available' if Prover.available() else 'unavailable'} ({solver})")
 
     from ..backend.llvm.wrapper_build import wrapper_toolchain
 

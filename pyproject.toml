@@ -44,6 +44,9 @@ torch = ["torch>=2.4", "ninja>=1.11"]
 jax = ["jax>=0.4", "jaxlib>=0.4", "flatbuffers>=24.0"]
 uvicorn = ["uvicorn>=0.30"]
 pydantic = ["pydantic>=2.0"]
+solver = [
+    "z3-solver>=4.13",
+]
 
 [project.scripts]
 ppy = "ppy_compiler.driver.cli:main"
@@ -59,6 +62,7 @@ dev = [
     "llvmlite>=0.44",
     "numpy>=1.26",
     "pydantic>=2.0",
+    "z3-solver>=4.13",
 ]
 # Per-plugin groups, so a contributor installs only the runtimes they test.
 # ninja is how torch compiles a generated C++ region (spec 20.3).

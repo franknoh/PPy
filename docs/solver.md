@@ -1,9 +1,8 @@
 # Where a solver fits
 
-A plan, not a feature: nothing here is implemented yet. It says where an SMT
-solver (Z3) would earn its place in PPY, where it would not, and what the
-first cut looks like, so that the work can start from a decision rather than
-from a hunch.
+Where an SMT solver (Z3) earns its place in PPY, where it does not, and what
+is built. The first cut of section 1 is in: `llvm.prover = "z3"` or
+`--prover z3`, with `ppy-lang[solver]` installed. Section 2 is still a plan.
 
 ## The short answer
 
@@ -92,33 +91,57 @@ cheap and is what turns `i < n and n <= len(a)` into a proof.
 
 ### Cost and where it runs
 
-Only at lowering, only for functions with loops, only for chains the
-interval rules did not already settle, with a per-obligation timeout of a
-few tens of milliseconds and the result cached in the store under the
-obligation's digest and the solver's version. `ppy check` never runs it.
-`ppy run` pays it once per cache miss. A project with no solver installed
-behaves exactly as today.
+Only at lowering, only for chains the interval rules did not already settle,
+with a per-obligation timeout and the answer remembered for the process;
+the lowered module is cached under a key that names the prover and its
+version, so `ppy run` pays it once per cache miss. `ppy check` never runs
+it. A project with the prover off behaves exactly as before; one that asks
+for the prover without the solver installed gets an error, not a silently
+slower build.
 
-### The first cut
+### What is built
 
-1. `backend/llvm/obligations.py`: from a lowered chain, its hypotheses and
-   goal, as a small AST of its own -- printable, digestible, testable
-   without Z3.
-2. `backend/llvm/prover.py`: the Z3 encoding of that AST, behind an
-   `is_available()` that imports lazily. `pyproject.toml` gains an extra,
-   `ppy-lang[solver]`, pinning `z3-solver`.
-3. `lowering._checked_binary` asks the prover before emitting a guard, when
-   `llvm.prover = "z3"` in `[tool.ppy]` (default `off` until the numbers are
-   in) or `--prover z3` on the command line.
-4. `ppy explain` says, per chain, *guarded*, *hoisted*, or *proven*, and
-   what the proof rested on.
-5. The relation facts in `analysis/refinements.py`, and the checker keeping
-   them from comparisons.
+- `backend/llvm/obligations.py`: a chain as a statement about integers --
+  variables with the ranges the analysis recorded, constants, `+ - *` --
+  with the relations its variables carry as hypotheses. Printable,
+  digestible, testable without Z3, and settled by interval arithmetic
+  first: a chain of declared ranges that fits by intervals asks no solver.
+- `backend/llvm/prover.py`: the Z3 encoding, in integer arithmetic, behind
+  a lazy import and a per-obligation timeout; answers are remembered per
+  process. `ppy-lang[solver]` installs the solver; `ppy doctor` says
+  whether it is there.
+- Lowering asks the prover before it emits a guard. Every load is its own
+  variable, so two loads of one name are two symbols; an induction
+  variable carries `start <= i <= stop - 1` from the `range()` that drives
+  it, as terms, so `i * k` with `n <= 100000` and `k` in `[-50, 50]` is a
+  proof by relation, not by interval. A proven chain lowers to the plain
+  instruction with `nsw`; an unproven one is emitted exactly as before.
+- A function whose guards a proof may leave out checks each parameter's
+  declared range once on entry, and a call outside it takes the fallback.
+  `Range(lo, hi)` is a refinement the checker propagates, not a check the
+  runtime makes, and a proof that rests on it must be a proof about every
+  call that runs natively.
+- The artifact is keyed by the prover and its version, the warm `ppy run`
+  directory too. `NativeModule.proved` lists, per function, the chains a
+  proof freed.
 
-Acceptance: on `examples/15_algorithms/bench.py`, the number of guard blocks
-in the hot loops goes down, the three paths still agree on every example,
-and the bench shows the difference. If it does not, the plan stops at step 4
-and the switch stays off.
+On the two kernels in `tests/test_native.py` -- a sum of squares with
+`n <= 1000`, a weighted sum with `n <= 100000` and `k` in `[-50, 50]` --
+the body keeps only the accumulator's guard, which nothing bounds, and the
+loop's entry guard block loses its corner checks: eight fallback branches
+become two, and the three paths agree, on a call inside the declared ranges
+and on one outside them.
+
+### What is next
+
+1. `ppy explain` says, per chain, *guarded*, *hoisted*, or *proven*, and
+   what the proof rested on -- today `NativeModule.proved` holds it.
+2. Relation facts in `analysis/refinements.py`, kept from comparisons, so
+   that `i < n and n <= len(a)` reaches the prover.
+3. Terms for buffer elements whose storage width bounds them: an `i8`
+   element is in `[-128, 127]` by construction.
+4. The bench: on `examples/15_algorithms/bench.py`, whether the guards a
+   proof removes are the ones that were keeping a loop from vectorizing.
 
 ## 2. Translation validation
 

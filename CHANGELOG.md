@@ -136,9 +136,20 @@ Speed of the compiler itself, measured before being changed.
   discarded bag: `ppy check b.ppy`, with `b` importing an `a` whose error
   was already settled, said "no errors". Each module now keeps its own
   report, and the round that settles reports every module.
-- `docs/solver.md`: where an SMT solver would fit -- proving overflow
-  guards away in native loops, and validating the optimizer's rewrites --
-  and where it would not. A plan; nothing of it is implemented yet.
+- `llvm.prover = "z3"`, or `--prover z3` on `ppy run` and `ppy build`:
+  the solver proves overflow guards away where the analysis allows it. A
+  chain of `+`, `-`, `*` is stated as an obligation over integers -- each
+  load a variable with the range the analysis recorded, each induction
+  variable carrying `start <= i <= stop - 1` from its `range()` -- settled
+  by intervals when they suffice and by Z3 otherwise; a proven chain lowers
+  to the plain `nsw` instruction, an unproven one keeps its guard exactly
+  as before. A function whose guards a proof may leave out checks its
+  parameters' declared ranges once on entry, and a call outside them takes
+  the fallback, so the three paths agree on every call. Needs
+  `ppy-lang[solver]`; `ppy doctor` reports the solver; the artifact and
+  the warm run directory are keyed by the prover and its version.
+  `docs/solver.md` says where a solver fits, where it does not, and what is
+  next.
 - `ppy check pkg/a.py` checks `pkg.a`. A file inside a package used to be
   named from its own directory -- `a` -- so every `from . import b` in it
   was unresolved, on the one command people run most against the file they

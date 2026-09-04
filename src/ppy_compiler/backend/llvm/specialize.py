@@ -18,6 +18,7 @@ from ...analysis.symbols import FunctionInfo
 from ...cache import CacheKey, digest
 from ...version import COMPILER_VERSION, compiler_fingerprint
 from .lowering import NativeSignature, lower_specialization
+from .prover import Prover
 
 __all__ = [
     "DEFAULT_MAX",
@@ -190,6 +191,7 @@ class Specializer:
     cache_directory: Path | None = None
     layouts: dict = field(default_factory=dict)
     safeguards: str = "hoisted"
+    prover: Prover | None = None
     compiled: list[Specialization] = field(default_factory=list)
     refusals: list[tuple[str, str]] = field(default_factory=list)
     _sources: dict[str, tuple[FunctionInfo, ast.FunctionDef]] = field(default_factory=dict)
@@ -218,6 +220,7 @@ class Specializer:
                 symbol,
                 self.layouts,
                 safeguards=self.safeguards,
+                prover=self.prover,
             )
         except Exception as exc:  # noqa: BLE001 - a refusal keeps the generic code
             specialization.reason = f"could not lower: {exc}"

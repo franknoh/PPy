@@ -212,10 +212,25 @@ def module_cache_key(
             config.dynamic_boundaries,
             config.inference.implicit_any,
             config.llvm.safeguards or "hoisted",
+            _prover_descriptor(config),
             _target_descriptor(config),
             *extra,
         ),
     )
+
+
+def _prover_descriptor(config) -> str:  # type: ignore[no-untyped-def]
+    """Which prover shaped the lowering, and which version of it.
+
+    A proof is the solver's word, and a different solver may keep a guard
+    this one dropped; the artifact is keyed by both.
+    """
+    prover = config.llvm.prover or "off"
+    if prover == "off":
+        return "prover:off"
+    from ..backend.llvm.prover import Prover
+
+    return f"prover:{prover}:{Prover.version()}"
 
 
 def _target_descriptor(config) -> str:  # type: ignore[no-untyped-def]

@@ -15,6 +15,7 @@ import pytest
 from ppy_compiler.backend.llvm import _collect, emit_ir
 from ppy_compiler.backend.llvm import available as llvm_available
 from ppy_compiler.backend.llvm.jit import JitEngine
+from ppy_compiler.backend.llvm.prover import Prover
 from ppy_compiler.backend.llvm.runtime import bind
 
 requires_llvm = pytest.mark.skipif(not llvm_available(), reason="llvmlite is not installed")
@@ -3029,3 +3030,75 @@ def test_a_wrapper_is_never_compiled_onto_the_name_it_publishes(
     assert built.path is not None and built.path.is_file(), "and yet it was published"
     inputs = [Path(argument) for command in seen for argument in command if argument.endswith(".c")]
     assert all(".part" in source.name for source in inputs), "the source is a draft too"
+
+
+PROVABLE = """
+from typing import Annotated
+
+import ppy
+
+
+@ppy.opt(3)
+def squares(n: Annotated[int, ppy.Range(0, 1000)]) -> int:
+    total = 0
+    for i in range(n):
+        total += i * i
+    return total
+
+
+@ppy.opt(3)
+def weighted(n: Annotated[int, ppy.Range(0, 100000)], k: Annotated[int, ppy.Range(-50, 50)]) -> int:
+    total = 0
+    for i in range(n):
+        total += (i * k + 7) * 3
+    return total
+
+
+print(squares(1000), weighted(100000, -50), weighted(3, 50), weighted(3, 2**62))
+"""
+
+
+def _fallbacks(ir: str) -> int:
+    return sum(1 for line in ir.splitlines() if "br i1" in line and "fallback" in line)
+
+
+@pytest.mark.skipif(not Prover.available(), reason="z3-solver is not installed")
+def test_the_prover_leaves_out_the_guards_it_proves_away(write, analyze):
+    """`i * i` for `i` in `range(n)` with `n <= 1000` cannot overflow, and the
+    solver says so from the relation; the accumulator, which nothing bounds,
+    keeps its guard. The three paths agree either way."""
+    path = write("kernel.ppy", PROVABLE)
+    bundle = analyze(path)
+    bundle.project.config.llvm.prover = "off"
+    guarded = _collect(bundle, 3)["kernel"]
+    bundle.project.config.llvm.prover = "z3"
+    proven = _collect(bundle, 3)["kernel"]
+    assert _fallbacks(proven.ir) < _fallbacks(guarded.ir)
+    declared = proven.ir.count(".declared:")
+    assert declared == 3, "an entry check per declared range: n, n, k"
+    assert _fallbacks(proven.ir) - declared == 2, "one per accumulator, which nothing bounds"
+    assert ".declared:" not in guarded.ir
+    chains = proven.proved["kernel.squares"] + proven.proved["kernel.weighted"]
+    assert any(chain.startswith("(i#") and "* i#" in chain for chain in chains)
+    assert all("total#" not in chain.split(" given ")[0] for chain in chains)
+
+
+@pytest.mark.skipif(not Prover.available(), reason="z3-solver is not installed")
+def test_a_proven_kernel_computes_what_python_computes(tmp_path: Path):
+    (tmp_path / "pyproject.toml").write_text("[tool.ppy]\n", encoding="utf-8")
+    (tmp_path / "kernel.ppy").write_text(textwrap.dedent(PROVABLE).lstrip("\n"), encoding="utf-8")
+    plain = _run([sys.executable, "kernel.ppy"], tmp_path)
+    guarded = _ppy(["run", "--prover", "off", "kernel.ppy"], tmp_path)
+    proven = _ppy(["run", "--prover", "z3", "kernel.ppy"], tmp_path)
+    assert plain.returncode == 0, plain.stderr
+    assert proven.returncode == 0, proven.stderr
+    assert plain.stdout == guarded.stdout == proven.stdout
+    assert plain.stdout.split() == [
+        str(sum(i * i for i in range(1000))),
+        str(sum((i * -50 + 7) * 3 for i in range(100000))),
+        str(sum((i * 50 + 7) * 3 for i in range(3))),
+        # `k = 2**62` is outside the range `weighted` declares, so the proof
+        # that dropped its guards says nothing about this call: the entry
+        # check sends it to CPython, whose integers do not wrap.
+        str(sum((i * 2**62 + 7) * 3 for i in range(3))),
+    ]

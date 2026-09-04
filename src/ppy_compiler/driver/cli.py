@@ -68,6 +68,13 @@ def build_parser() -> argparse.ArgumentParser:
         "configuration (the built launcher uses this to run exactly as built)",
     )
     run.add_argument(
+        "--prover",
+        choices=("off", "z3"),
+        default=None,
+        help="prove overflow guards away with the solver where the analysis "
+        "allows it (needs ppy-lang[solver]); overrides the project configuration",
+    )
+    run.add_argument(
         "--prebuilt",
         type=Path,
         default=None,
@@ -89,6 +96,13 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="keep the Python-integer overflow guards; without it a build "
         "uses 64-bit wrap semantics for data arithmetic",
+    )
+    build.add_argument(
+        "--prover",
+        choices=("off", "z3"),
+        default=None,
+        help="prove overflow guards away with the solver where the analysis "
+        "allows it (needs ppy-lang[solver]); overrides the project configuration",
     )
     build.add_argument(
         "--host-cpu",

@@ -14,6 +14,7 @@ import subprocess
 from pathlib import Path
 
 from ...diagnostics import Diagnostic, Severity
+from . import prover_for
 from .jit import JitEngine, LlvmUnavailable, available
 from .link import ToolchainError, _compiler, emit_object
 from .lowering import LoweringResult, eligible, lower_module
@@ -203,6 +204,7 @@ def build_standalone(  # type: ignore[no-untyped-def]
         functions,
         safeguards=bundle.project.config.llvm.safeguards or "off",
         standalone=True,
+        prover=prover_for(bundle.project.config),
     )
     for qualname, reason in sorted(result.rejected.items()):
         return _fail(reporter, _chain(reached_from, qualname, reason))

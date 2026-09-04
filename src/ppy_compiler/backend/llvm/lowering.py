@@ -28,6 +28,8 @@ from ...analysis import types as T
 from ...analysis.checker import FunctionAnalysis, ModuleAnalysis
 from ...analysis.effects import Effect
 from ...analysis.symbols import FunctionInfo
+from .obligations import BinOp, Const, Obligation, Relation, Term, Var, variables
+from .prover import Prover
 
 __all__ = [
     "STATUS_FALLBACK",
@@ -83,6 +85,20 @@ _MATH_INTRINSICS = {
     "trunc": "llvm.trunc.f64",
 }
 
+#: How the obligation language spells each guarded operator.
+_OPERATOR_SPELLING = {ast.Add: "+", ast.Sub: "-", ast.Mult: "*"}
+
+
+def _declared_bounds(interval) -> tuple[int | None, int | None]:  # type: ignore[no-untyped-def]
+    """The bounds of a range as the machine can check them: a bound past the
+    word is no bound."""
+    if interval is None:
+        return None, None
+    low = interval.low if interval.low is not None and interval.low >= -(1 << 63) else None
+    high = interval.high if interval.high is not None and interval.high < (1 << 63) else None
+    return low, high
+
+
 _OVERFLOW_INTRINSICS = {
     ast.Add: "llvm.sadd.with.overflow.i64",
     ast.Sub: "llvm.ssub.with.overflow.i64",
@@ -110,6 +126,8 @@ class LoweringResult:
     ir: str
     functions: dict[str, LoweredFunction] = field(default_factory=dict)
     rejected: dict[str, str] = field(default_factory=dict)
+    #: Per function, the arithmetic whose overflow guard a proof left out.
+    proved: dict[str, tuple[str, ...]] = field(default_factory=dict)
 
 
 def _scalar_name(t: T.Type) -> str | None:
@@ -296,6 +314,7 @@ def lower_specialization(
     symbol: str,
     layouts: ClassLayouts | None = None,
     safeguards: str = "hoisted",
+    prover: Prover | None = None,
 ) -> str:
     """Emit an LLVM module holding one specialized copy of a function.
 
@@ -315,7 +334,16 @@ def lower_specialization(
     function.linkage = "external"
     declarations = {info.qualname: (function, signature)}
     _FunctionLowering(
-        ir, llvm_module, function, info, module, declarations, constants, layouts, safeguards
+        ir,
+        llvm_module,
+        function,
+        info,
+        module,
+        declarations,
+        constants,
+        layouts,
+        safeguards,
+        prover=prover,
     ).run(node)
     return str(llvm_module)
 
@@ -326,6 +354,7 @@ def lower_module(
     layouts: ClassLayouts | None = None,
     safeguards: str = "hoisted",
     standalone: bool = False,
+    prover: Prover | None = None,
 ) -> LoweringResult:
     """Emit an LLVM module for every eligible function."""
     from llvmlite import ir
@@ -351,24 +380,29 @@ def lower_module(
         declarations[qualname] = (function, signature)
 
     lowered: dict[str, LoweredFunction] = {}
+    proved: dict[str, tuple[str, ...]] = {}
     for qualname, (info, _analysis, node) in candidates.items():
         function, signature = declarations[qualname]
+        lowering = _FunctionLowering(
+            ir,
+            llvm_module,
+            function,
+            info,
+            module,
+            declarations,
+            layouts=layouts,
+            safeguards=safeguards,
+            standalone=standalone,
+            prover=prover,
+        )
         try:
-            _FunctionLowering(
-                ir,
-                llvm_module,
-                function,
-                info,
-                module,
-                declarations,
-                layouts=layouts,
-                safeguards=safeguards,
-                standalone=standalone,
-            ).run(node)
+            lowering.run(node)
         except Unsupported as exc:
             rejected[qualname] = str(exc)
             function.blocks.clear()
             continue
+        if lowering.proved:
+            proved[qualname] = tuple(lowering.proved)
         exposed, why = should_lower_native(info, _analysis)
         lowered[qualname] = LoweredFunction(info, signature, exposed=exposed, exposure_reason=why)
 
@@ -379,7 +413,7 @@ def lower_module(
         if entry is not None and not entry[0].blocks:
             entry[0].linkage = "external"
 
-    return LoweringResult(ir=str(llvm_module), functions=lowered, rejected=rejected)
+    return LoweringResult(ir=str(llvm_module), functions=lowered, rejected=rejected, proved=proved)
 
 
 def _reject_callers_of_rejected(declarations, lowered, rejected) -> None:  # type: ignore[no-untyped-def]
@@ -581,6 +615,7 @@ class _FunctionLowering:
         layouts=None,
         safeguards: str = "hoisted",
         standalone: bool = False,
+        prover: Prover | None = None,
     ) -> None:
         # Strict Python floating-point ordering unless the function opted out.
         self.fp_flags = list(FASTMATH_FLAGS) if info.directive("fastmath") is not None else []
@@ -608,6 +643,22 @@ class _FunctionLowering:
         self.safeguards = safeguards
         self.hoist_guards = safeguards != "inline"
         self.standalone = standalone
+        #: Proves an arithmetic chain fits the word, so its guard is left out.
+        self.prover = prover if safeguards != "off" else None
+        #: What each integer value is, as a statement about integers: the
+        #: term the prover reasons over. Only values the obligation language
+        #: can spell are here; a value with no term keeps its guard.
+        self._terms: dict[object, Term] = {}
+        #: The relations a loaded value carries: an induction variable's
+        #: bounds, from the `range()` that drives it.
+        self._relations: dict[Var, tuple[Relation, ...]] = {}
+        #: Per active loop, the induction variable's bounds as terms.
+        self._induction_terms: dict[str, tuple[Term | None, Term | None]] = {}
+        #: The loads made so far, so that two loads of one name are two
+        #: variables: a value between them may have changed.
+        self._loads = 0
+        #: Every chain a proof freed of its guard, spelled.
+        self.proved: list[str] = []
         self._strings = 0
         #: Open guard blocks, one per active hoistable loop, outermost first.
         self._guard_sites: list = []
@@ -679,6 +730,9 @@ class _FunctionLowering:
             self.builder.store(initial, slot)
             self.locals[parameter.name] = (slot, parameter.kind)
             position += 1
+
+        if self.prover is not None:
+            self._guard_declared_ranges()
 
         stored = {
             name.id
@@ -874,6 +928,8 @@ class _FunctionLowering:
         if not isinstance(node.target, ast.Name):
             raise Unsupported("augmented assignment to a non-local has no native lowering")
         current = self._load(node.target.id)
+        if self.prover is not None and current.scalar == "int":
+            self._term_for_load(current.value, node.target)
         value = self._expr(node.value)
         self._store(node.target, self._binary(current, value, type(node.op)))
 
@@ -966,6 +1022,11 @@ class _FunctionLowering:
                 raise Unsupported("`range` with a zero step has no native lowering")
         else:
             raise Unsupported("`range` takes at most three arguments")
+        if self.prover is not None:
+            # The defaults `range` fills in are constants the prover can read.
+            for bound in (start, stop, step):
+                if isinstance(bound, ir.Constant) and bound not in self._terms:
+                    self._terms[bound] = Const(bound.constant)
 
         site = None
         saved_induction = self._induction.get(node.target.id)
@@ -984,6 +1045,10 @@ class _FunctionLowering:
             else:
                 lo, hi = site.builder.add(stop, one), start
             self._induction[node.target.id] = (lo, hi, len(self._guard_sites))
+            if self.prover is not None:
+                self._induction_terms[node.target.id] = self._induction_bounds(
+                    start, stop, step.constant > 0
+                )
 
         slot = self._entry_alloca("int", node.target.id)
         self.builder.store(start, slot)
@@ -1015,6 +1080,8 @@ class _FunctionLowering:
         value = self.builder.load(slot)
         if site is not None:
             self._ranges[value] = self._induction[node.target.id]
+        if self.prover is not None:
+            self._term_for_load(value, node.target)
         self.builder.store(self._checked_add(value, step), slot)
         self.builder.branch(header)
 
@@ -1024,6 +1091,7 @@ class _FunctionLowering:
             self._guard_sites.pop()
             if saved_induction is None:
                 self._induction.pop(node.target.id, None)
+                self._induction_terms.pop(node.target.id, None)
             else:
                 self._induction[node.target.id] = saved_induction
 
@@ -1185,6 +1253,7 @@ class _FunctionLowering:
                     raise Unsupported("an integer literal exceeds the native machine range")
                 constant = ir.Constant(ir.IntType(64), value)
                 self._ranges[constant] = (constant, constant, 0)
+                self._terms[constant] = Const(value)
                 return _Value(constant, "int")
             case ast.Constant(value=float() as value):
                 return _Value(ir.Constant(ir.DoubleType(), value), "float")
@@ -1197,6 +1266,8 @@ class _FunctionLowering:
                     elif self.hoist_guards and node.id in self._stable:
                         anchor = self._entry_load(node.id)
                         self._ranges[loaded.value] = (anchor, anchor, 0)
+                    if self.prover is not None:
+                        self._term_for_load(loaded.value, node)
                 return loaded
             case ast.BinOp():
                 return self._binary(self._expr(node.left), self._expr(node.right), type(node.op))
@@ -1263,6 +1334,7 @@ class _FunctionLowering:
         if isinstance(value, int) and -(1 << 63) <= value < (1 << 63):
             constant = ir.Constant(ir.IntType(64), value)
             self._ranges[constant] = (constant, constant, 0)
+            self._terms[constant] = Const(value)
             return _Value(constant, "int")
         if isinstance(value, float):
             return _Value(ir.Constant(ir.DoubleType(), value), "float")
@@ -1296,6 +1368,7 @@ class _FunctionLowering:
             elif isinstance(literal, int) and -(1 << 63) < -literal < (1 << 63):
                 constant = ir.Constant(ir.IntType(64), -literal)
                 self._ranges[constant] = (constant, constant, 0)
+                self._terms[constant] = Const(-literal)
                 return _Value(constant, "int")
             elif isinstance(literal, float):
                 return _Value(ir.Constant(ir.DoubleType(), -literal), "float")
@@ -1648,6 +1721,9 @@ class _FunctionLowering:
         and the body runs the plain instruction. Same failure road either
         way -- the fallback and CPython.
         """
+        proven = self._proven_binary(left, right, op)
+        if proven is not None:
+            return proven
         hoisted = self._hoisted_binary(left, right, op)
         if hoisted is not None:
             return hoisted
@@ -1673,6 +1749,119 @@ class _FunctionLowering:
         self.builder.cbranch(overflowed, self.fallback_block, continue_block)
         self.builder.position_at_end(continue_block)
         return result
+
+    def _guard_declared_ranges(self) -> None:
+        """Check each parameter against the range it declares, at entry.
+
+        `Range(lo, hi)` is a refinement the checker propagates, not a check
+        the runtime makes; a proof that rests on it is a proof about the
+        calls inside it. So a function whose guards a proof may leave out
+        checks its declared ranges once, on entry, and a call outside them
+        takes the fallback -- CPython, the answer that is never wrong.
+        """
+        ir = self.ir
+        i64 = ir.IntType(64)
+        for param in self.info.params:
+            local = self.locals.get(param.name)
+            if local is None or local[1] != "int":
+                continue
+            low, high = _declared_bounds(param.facts.int_range)
+            if low is None and high is None:
+                continue
+            value = self.builder.load(local[0])
+            outside = None
+            if low is not None:
+                outside = self.builder.icmp_signed("<", value, ir.Constant(i64, low))
+            if high is not None:
+                above = self.builder.icmp_signed(">", value, ir.Constant(i64, high))
+                outside = above if outside is None else self.builder.or_(outside, above)
+            inside = self.function.append_basic_block(f"{param.name}.declared")
+            self.builder.cbranch(outside, self.fallback_block, inside)
+            self.builder.position_at_end(inside)
+
+    def _term_for_load(self, value, node: ast.expr) -> None:  # type: ignore[no-untyped-def]
+        """The loaded value as a variable, with its range and its relations.
+
+        Every load is its own variable: between two loads of one name the
+        name may have been assigned, and a proof that took them for the same
+        value would be a proof about a program that was not written.
+        """
+        if not isinstance(node, ast.Name):
+            return
+        # A read has the range the analysis recorded for it. A target -- the
+        # accumulator of `total += x`, the induction variable at its latch --
+        # is recorded with the value it is about to hold, so it carries no
+        # range of its own here, only the relations its name has.
+        facts = self.analysis.facts_of(node) if isinstance(node.ctx, ast.Load) else None
+        low, high = _declared_bounds(None if facts is None else facts.int_range)
+        self._loads += 1
+        variable = Var(f"{node.id}#{self._loads}", low, high)
+        self._terms[value] = variable
+        induction = self._induction_terms.get(node.id)
+        if induction is not None:
+            low, high = induction
+            relations: list[Relation] = []
+            if low is not None:
+                relations.append(Relation(low, "<=", variable))
+            if high is not None:
+                relations.append(Relation(variable, "<=", high))
+            if relations:
+                self._relations[variable] = tuple(relations)
+
+    def _induction_bounds(  # type: ignore[no-untyped-def]
+        self, start, stop, ascending: bool
+    ) -> tuple[Term | None, Term | None]:
+        """`[start, stop - 1]` or `[stop + 1, start]`, as terms, where the
+        bounds themselves have terms."""
+        start_term = self._terms.get(start)
+        stop_term = self._terms.get(stop)
+        if ascending:
+            high = None if stop_term is None else BinOp("-", stop_term, Const(1))
+            return start_term, high
+        low = None if stop_term is None else BinOp("+", stop_term, Const(1))
+        return low, start_term
+
+    def _proven_binary(self, left, right, op: type[ast.operator]):  # type: ignore[no-untyped-def]
+        """The plain instruction, when the prover shows the guard never fires.
+
+        The obligation is the chain as a statement about integers, under
+        every relation its variables carry; unproven, the guard is emitted
+        exactly as it would have been.
+        """
+        if self.prover is None or op not in _OVERFLOW_INTRINSICS:
+            return None
+        left_term = self._terms.get(left)
+        right_term = self._terms.get(right)
+        if left_term is None or right_term is None:
+            return None
+        term = BinOp(_OPERATOR_SPELLING[op], left_term, right_term)
+        obligation = Obligation(term, self._hypotheses(term))
+        if not self.prover.proves(obligation):
+            return None
+        operations = {
+            ast.Add: self.builder.add,
+            ast.Sub: self.builder.sub,
+            ast.Mult: self.builder.mul,
+        }
+        result = operations[op](left, right, flags=("nsw",))
+        self._terms[result] = term
+        self.proved.append(str(obligation))
+        return result
+
+    def _hypotheses(self, term: Term) -> tuple[Relation, ...]:
+        found: list[Relation] = []
+        seen: set[Relation] = set()
+        pending = list(variables(term))
+        while pending:
+            variable = pending.pop()
+            for relation in self._relations.get(variable, ()):
+                if relation in seen:
+                    continue
+                seen.add(relation)
+                found.append(relation)
+                pending.extend(variables(relation.left))
+                pending.extend(variables(relation.right))
+        return tuple(found)
 
     def _hoisted_binary(self, left, right, op: type[ast.operator]):  # type: ignore[no-untyped-def]
         if not self.hoist_guards or op not in _OVERFLOW_INTRINSICS:

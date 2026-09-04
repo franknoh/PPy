@@ -28,6 +28,8 @@ Everything after `--` reaches the program as `sys.argv[1:]`. `ppy run`
 keeps Python-integer semantics by default; `--unsafe` drops the overflow
 guards on data arithmetic (64-bit wrap, bounds checks stay), and
 `--safeguards {hoisted,inline,off}` names the guard mode outright.
+`--prover {off,z3}` asks the solver to prove overflow guards away where the
+analysis allows it, overriding `[tool.ppy.llvm] prover`; see `docs/solver.md`.
 
 The first `ppy run` of a program is a build into the cache followed by the
 launcher; the second is the launcher alone. Before importing the compiler,

@@ -67,6 +67,10 @@ class NativeModule:
     fused: dict[str, FusedLoop] = field(default_factory=dict)
     fusion_plan: dict[tuple[int, int], FusedLoop] = field(default_factory=dict)
     fusion_notes: list[tuple[int, str]] = field(default_factory=list)
+    #: Per function, the arithmetic whose overflow guard a proof left out.
+    #: Filled by a fresh lowering; a module rebuilt from the cache has the
+    #: same code and an empty list.
+    proved: dict[str, tuple[str, ...]] = field(default_factory=dict)
 
 
 #: Members that make attribute reads observable, so the class stays boxed.
@@ -120,6 +124,26 @@ def _value_class_layouts(bundle) -> dict[str, tuple[tuple[str, str], ...]]:  # t
     return layouts
 
 
+def prover_for(config):  # type: ignore[no-untyped-def]
+    """The prover the configuration asks for, or None.
+
+    `llvm.prover = "z3"` with the solver installed is a `Prover`; anything
+    else is no prover, and the guards are emitted as always. Asking for the
+    solver without having it is an error the command reports, not a silent
+    slower build.
+    """
+    if (config.llvm.prover or "off") != "z3":
+        return None
+    from .prover import Prover
+
+    if not Prover.available():
+        raise LlvmUnavailable(
+            "the prover is z3 but z3-solver is not installed; install `ppy-lang[solver]` "
+            'or set `prover = "off"`'
+        )
+    return Prover()
+
+
 def _collect(bundle, opt_level: int | None = None) -> dict[str, NativeModule]:  # type: ignore[no-untyped-def]
     """Lower every module in the project to LLVM IR, reusing a cached result."""
     modules: dict[str, NativeModule] = {}
@@ -156,6 +180,7 @@ def _collect(bundle, opt_level: int | None = None) -> dict[str, NativeModule]:  
             candidates,
             layouts,
             safeguards=bundle.project.config.llvm.safeguards or "hoisted",
+            prover=prover_for(bundle.project.config),
         )
         ir_text = result.ir
         if fused:
@@ -173,6 +198,7 @@ def _collect(bundle, opt_level: int | None = None) -> dict[str, NativeModule]:  
             fused=fused,
             fusion_plan=plan,
             fusion_notes=notes,
+            proved=result.proved,
         )
         modules[module.name] = native
         _store_lowering(bundle, module.name, opt_level, native)
@@ -625,6 +651,7 @@ def compile_and_run(  # type: ignore[no-untyped-def]
                 cache_directory=bundle.project.config.cache_path / "jit",
                 layouts=layouts,
                 safeguards=bundle.project.config.llvm.safeguards or "hoisted",
+                prover=prover_for(bundle.project.config),
             )
             for info, node in native.sources.values():
                 specializer.register(info, node)

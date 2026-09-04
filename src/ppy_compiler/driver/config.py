@@ -46,6 +46,10 @@ class LlvmConfig:
     #: every bounds check. None means "the command decides": `ppy run`
     #: defaults to hoisted, `ppy build` to off.
     safeguards: str | None = None
+    #: "z3" asks the solver to prove overflow guards away where the ranges
+    #: and relations the analysis established allow it; None or "off" emits
+    #: every guard as always. Needs `ppy-lang[solver]`.
+    prover: str | None = None
     #: Compile object code for the CPU that builds it rather than the
     #: portable baseline. Off by default: an artifact is meant to be shipped,
     #: and host code faults on an older machine. In-process JIT code always
@@ -187,6 +191,7 @@ def _apply(config: Config, table: Mapping[str, Any]) -> Config:
             lto=sub.get("lto", "thin"),
             cpython_api=sub.get("cpython-api", "version-specific"),
             safeguards=sub.get("safeguards"),
+            prover=sub.get("prover"),
             host_cpu=_as_bool(sub.get("host-cpu"), False),
         )
     if isinstance(sub := table.get("parallel"), Mapping):
