@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import ast
+import functools
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -107,13 +108,25 @@ class ModuleGraph:
         }
 
 
+@functools.cache
+def _resolved(directory: Path) -> Path:
+    """`directory.resolve()`, once per directory per graph build.
+
+    Resolving walks every component of the path with an lstat, and a source
+    tree's files share a few directories; on a network or a Windows-hosted
+    filesystem those lstats were most of what building a graph cost.
+    """
+    return directory.resolve()
+
+
 def resolve_module_name(path: Path, search_paths: list[Path]) -> str:
     """Derive a dotted module name for a file inside one of the search paths."""
-    path = path.resolve()
+    path = _resolved(path.parent) / path.name
     best: tuple[int, str] | None = None
     for search in search_paths:
+        resolved_search = _resolved(search)
         try:
-            relative = path.relative_to(search.resolve())
+            relative = path.relative_to(resolved_search)
         except ValueError:
             continue
         parts = list(relative.parts)
@@ -122,13 +135,20 @@ def resolve_module_name(path: Path, search_paths: list[Path]) -> str:
         else:
             parts[-1] = Path(parts[-1]).stem
         name = ".".join(parts) if parts else path.stem
-        depth = len(search.resolve().parts)
+        depth = len(resolved_search.parts)
         if best is None or depth > best[0]:
             best = (depth, name)
     return best[1] if best else path.stem
 
 
 def _candidate_files(name: str, search_paths: list[Path]) -> list[tuple[Path, bool]]:
+    return list(_probe(name, tuple(search_paths)))
+
+
+@functools.cache
+def _probe(name: str, search_paths: tuple[Path, ...]) -> tuple[tuple[Path, bool], ...]:
+    """Where module `name` could be, probed on disk once per graph build:
+    every importer of `pkg.util` used to stat the same four paths."""
     tail = name.replace(".", "/")
     found: list[tuple[Path, bool]] = []
     for search in search_paths:
@@ -139,7 +159,14 @@ def _candidate_files(name: str, search_paths: list[Path]) -> list[tuple[Path, bo
             package_file = search / tail / f"__init__{suffix}"
             if package_file.is_file():
                 found.append((package_file, True))
-    return found
+    return tuple(found)
+
+
+def forget_filesystem() -> None:
+    """Drop what was learned about the filesystem: a graph build starts with
+    it, so a file created since the last build is found."""
+    _resolved.cache_clear()
+    _probe.cache_clear()
 
 
 def _resolve_relative(module: Module, level: int, target: str) -> str:
@@ -193,6 +220,7 @@ def build_graph(
     overlays: dict[Path, str] | None = None,
 ) -> ModuleGraph:
     """Parse the entry files and, transitively, every project module they import."""
+    forget_filesystem()
     search_paths = [p for p in search_paths if p.is_dir()]
     graph = ModuleGraph(
         root=root or (entries[0].parent if entries else Path.cwd()), search_paths=search_paths

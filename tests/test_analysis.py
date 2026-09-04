@@ -3208,3 +3208,19 @@ def test_a_subclass_of_a_builtin_has_the_builtin_methods(write, analyze):
     )
     errors = [d for d in analyze(path).diagnostics.sorted() if d.severity.name == "ERROR"]
     assert errors == [], [d.message for d in errors]
+
+
+def test_normalizing_a_module_in_hand_is_normalizing_its_source():
+    import libcst as cst
+
+    from ppy_compiler.driver.formatting import normalize_module, normalize_source
+
+    source = "import sys\nimport os\ndef f(a,b):\n    return a+b\nclass C:\n    pass\n"
+    assert normalize_module(cst.parse_module(source)) == normalize_source(source)
+
+
+def test_an_annotation_spelling_is_parsed_once():
+    from ppy_compiler.driver.rewrite import _expression
+
+    assert _expression("list[str]") is _expression("list[str]")
+    assert _expression("list[str]").deep_equals(_expression("list[str]"))

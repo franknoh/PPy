@@ -491,7 +491,7 @@ class _Checker:
         # A parameter shadows a module global of the same name, so reading it
         # is not a global dependency.
         self._function_locals = {param.name for param in info.params}
-        self._function_locals |= _assigned_names(info.node)
+        self._function_locals |= _assigned_names(info)
         for param in info.params:
             facts = param.facts
             if isinstance(param.type, T.UnknownType) and not param.annotated:
@@ -2049,6 +2049,17 @@ class _Checker:
     def _builtin_method(self, base: T.Type, attr: str) -> T.Type | None:
         if not isinstance(base, (T.Instance, T.Tuple_)):
             return None
+        cache = self.project.method_cache
+        key = (base, attr)
+        try:
+            if key in cache:
+                return cache[key]
+        except TypeError:  # a type holding something unhashable
+            return self._builtin_method_of(base, attr)
+        found = cache[key] = self._builtin_method_of(base, attr)
+        return found
+
+    def _builtin_method_of(self, base: T.Instance | T.Tuple_, attr: str) -> T.Type | None:
         name = base.name if isinstance(base, T.Instance) else "tuple"
         element = B.element_type(base)
         table: dict[tuple[str, str], T.Type] = {
@@ -3554,10 +3565,10 @@ class _Checker:
         )
 
 
-def _assigned_names(node: ast.AST) -> set[str]:
+def _assigned_names(info: FunctionInfo) -> set[str]:
     """Names this function binds itself, which therefore shadow any global."""
     found: set[str] = set()
-    for child in ast.walk(node):
+    for child in info.nodes:
         if isinstance(child, ast.Name) and isinstance(child.ctx, (ast.Store, ast.Del)):
             found.add(child.id)
         elif isinstance(child, ast.arg):

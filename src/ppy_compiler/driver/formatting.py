@@ -236,7 +236,12 @@ def normalize_source(source: str, local: frozenset[str] = frozenset()) -> str:
     Deterministic and self-contained, so a converted file is byte-identical
     wherever it is produced.
     """
-    module = cst.parse_module(source)
+    return normalize_module(cst.parse_module(source), local)
+
+
+def normalize_module(module: cst.Module, local: frozenset[str] = frozenset()) -> str:
+    """`normalize_source` for a module already in hand: the rewriter's own
+    output need not be printed and parsed again to be normalized."""
     module = _group_imports(module, local)
     module = module.with_changes(body=_space_top_level(list(module.body)))
     module = module.visit(_WrapSignatures())

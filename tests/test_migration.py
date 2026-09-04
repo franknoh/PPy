@@ -307,3 +307,23 @@ def test_a_module_that_opens_with_a_relative_import_still_converts(tmp_path):
     assert "CSTValidationError" not in done.stderr, done.stderr[-800:]
     assert "Traceback" not in done.stderr, done.stderr[-800:]
     assert "from . import helper" in done.stdout
+
+
+def test_a_pass_runs_only_over_the_shape_it_rewrites():
+    import ast
+
+    from ppy_compiler.migration.pipeline import passes_for
+
+    plain = "def f(obj, name):\n    return getattr(obj, name)\n"
+    literal = 'def f(obj):\n    return getattr(obj, "name")\n'
+    namespace = 'globals()["LIMIT"] = 128\n'
+    read = 'LIMIT = globals()["LIMIT"]\n'
+
+    def names(source: str) -> list[str]:
+        return [p.name for p in passes_for(source, ast.parse(source))]
+
+    assert names(plain) == []
+    assert names(literal) == ["literal-attributes"]
+    assert names(namespace) == ["module-namespace-writes"]
+    assert names(read) == []
+    assert [p.name for p in passes_for(plain)] == ["literal-attributes"]

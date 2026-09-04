@@ -126,3 +126,23 @@ def test_a_pass_that_cannot_fire_is_not_walked():
     assert apply_passes(untouched) == (untouched, [])
     rewritten, found = apply_passes('class O:\n    pass\n\no = O()\nsetattr(o, "a", 1)\n')
     assert "o.a = 1" in rewritten and found
+
+
+def test_a_file_created_between_graph_builds_is_found(tmp_path: Path):
+    from ppy_compiler.diagnostics import DiagnosticBag
+    from ppy_compiler.frontend.modules import build_graph, resolve_module_name
+
+    entry = tmp_path / "main.ppy"
+    entry.write_text("import later\n")
+    first = build_graph([entry], [tmp_path], DiagnosticBag(), root=tmp_path)
+    assert "later" not in first.modules
+    (tmp_path / "later.ppy").write_text("X = 1\n")
+    second = build_graph([entry], [tmp_path], DiagnosticBag(), root=tmp_path)
+    assert "later" in second.modules
+    package = tmp_path / "pkg" / "inner"
+    package.mkdir(parents=True)
+    (tmp_path / "pkg" / "__init__.ppy").write_text("")
+    (package / "__init__.ppy").write_text("")
+    (package / "leaf.ppy").write_text("")
+    assert resolve_module_name(package / "leaf.ppy", [tmp_path]) == "pkg.inner.leaf"
+    assert resolve_module_name(package / "__init__.ppy", [tmp_path]) == "pkg.inner"

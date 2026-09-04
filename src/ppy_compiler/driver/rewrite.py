@@ -8,12 +8,23 @@ what the source should mean.
 
 from __future__ import annotations
 
+import functools
+
 import libcst as cst
 import libcst.matchers as m
 from libcst.metadata import MetadataWrapper, PositionProvider
 
-from .formatting import normalize_source
+from .formatting import normalize_module
 from .plan import ConversionPlan, mentions
+
+
+@functools.lru_cache(maxsize=4096)
+def _expression(text: str) -> cst.BaseExpression:
+    """`int`, `list[str]`, `Sequence[float]`: a conversion writes the same
+    few spellings hundreds of times, and each parse cost what a small file's
+    does. A CST node is immutable, so one serves every place it is written."""
+    return cst.parse_expression(text)
+
 
 __all__ = ["convert_source"]
 
@@ -57,12 +68,12 @@ class _Annotator(cst.CSTTransformer):
         returns = self.plan.returns.get(line)
         if returns is not None and updated.returns is None:
             text = _quote_if_forward(returns, line, self.plan.forward)
-            updated = updated.with_changes(returns=cst.Annotation(cst.parse_expression(text)))
+            updated = updated.with_changes(returns=cst.Annotation(_expression(text)))
         wanted = self.plan.decorators.get(line, ())
         if wanted:
             present = {_dotted(d.decorator) for d in updated.decorators}
             added = [
-                cst.Decorator(decorator=cst.parse_expression(text))
+                cst.Decorator(decorator=_expression(text))
                 for text in wanted
                 if text.partition("(")[0] not in present
             ]
@@ -78,7 +89,7 @@ class _Annotator(cst.CSTTransformer):
         if annotation is None:
             return updated
         text = _quote_if_forward(annotation, line, self.plan.forward)
-        return updated.with_changes(annotation=cst.Annotation(cst.parse_expression(text)))
+        return updated.with_changes(annotation=cst.Annotation(_expression(text)))
 
     def leave_SimpleStatementLine(
         self, original: cst.SimpleStatementLine, updated: cst.SimpleStatementLine
@@ -93,7 +104,7 @@ class _Annotator(cst.CSTTransformer):
 
         code = self.plan.buffers.get(line)
         if code is not None and isinstance(target, cst.Name):
-            wrapped = cst.parse_expression(
+            wrapped = _expression(
                 f'array.array("{code}", {cst.Module(body=[]).code_for_node(statement.value)})'
             )
             return updated.with_changes(
@@ -109,7 +120,7 @@ class _Annotator(cst.CSTTransformer):
                 body=[
                     cst.AnnAssign(
                         target=target,
-                        annotation=cst.Annotation(cst.parse_expression(text)),
+                        annotation=cst.Annotation(_expression(text)),
                         value=statement.value,
                     )
                 ]
@@ -126,7 +137,7 @@ class _Annotator(cst.CSTTransformer):
             body=[
                 cst.AnnAssign(
                     target=target,
-                    annotation=cst.Annotation(cst.parse_expression(annotation)),
+                    annotation=cst.Annotation(_expression(annotation)),
                     value=statement.value,
                 )
             ]
@@ -147,7 +158,7 @@ def _is_input_call(node: cst.BaseExpression) -> cst.Call | None:
 def _typed_read(spec: str, arguments: list[cst.Arg]) -> cst.BaseExpression:
     """`ppy.input[spec](...)`, carrying the prompt the original had."""
     prompt = "".join(cst.Module(body=()).code_for_node(a.value) for a in arguments)
-    return cst.parse_expression(f"ppy.input[{spec}]({prompt})")
+    return _expression(f"ppy.input[{spec}]({prompt})")
 
 
 class _TypedReads(cst.CSTTransformer):
@@ -250,7 +261,7 @@ def _mapped_read(value: cst.BaseExpression, width: int) -> cst.BaseExpression | 
     if _is_input_call(split.func.value) is None:
         return None
     element = _READ_AS[caster.value]
-    return cst.parse_expression(f"ppy.input[tuple[{', '.join([element] * width)}]]()")
+    return _expression(f"ppy.input[tuple[{', '.join([element] * width)}]]()")
 
 
 def convert_source(source: str, plan: ConversionPlan) -> str:
@@ -270,7 +281,7 @@ def convert_source(source: str, plan: ConversionPlan) -> str:
     # A quoted annotation only exists because the class was not bound yet.
     # Moving the class above its first use removes the reason for the quotes.
     reordered = _unquote_resolved(_hoist_classes(imported, plan.hoistable, plan.reorder_safe))
-    return normalize_source(reordered.code, frozenset(plan.local_imports))
+    return normalize_module(reordered, frozenset(plan.local_imports))
 
 
 def _insert_imports(module: cst.Module, plan: ConversionPlan) -> cst.Module:
@@ -498,7 +509,7 @@ def _annotation_names(node: cst.CSTNode) -> set[str]:
         if isinstance(expression, cst.SimpleString):
             text = expression.raw_value
             try:
-                expression = cst.parse_expression(text)
+                expression = _expression(text)
             except cst.ParserSyntaxError:
                 continue
         for name in m.findall(expression, m.Name()):
@@ -553,7 +564,7 @@ def _unquote(annotation, defined: set[str]):  # type: ignore[no-untyped-def]
         return annotation
     text = annotation.annotation.raw_value
     try:
-        expression = cst.parse_expression(text)
+        expression = _expression(text)
     except cst.ParserSyntaxError:
         return annotation
     names = {name.value for name in m.findall(expression, m.Name())}

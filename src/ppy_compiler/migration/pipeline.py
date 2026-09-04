@@ -72,8 +72,14 @@ _TRIGGERS: tuple[tuple[str, tuple[str, ...]], ...] = (
 )
 
 
-def passes_for(source: str) -> list:  # type: ignore[type-arg]
-    """The migration passes that could rewrite something in this source."""
+def passes_for(source: str, tree: ast.Module | None = None) -> list:  # type: ignore[type-arg]
+    """The migration passes that could rewrite something in this source.
+
+    The spellings are a cheap first cut; with the `tree` in hand, a pass is
+    kept only when the shape it rewrites is there. A pass over the concrete
+    syntax tree carries positions for its report, which is a traversal of
+    the whole module before the rewrite even starts.
+    """
     from .dynamic import LiteralAttributes, StaticImports
     from .globals import ModuleNamespaceWrites
 
@@ -86,12 +92,48 @@ def passes_for(source: str) -> list:  # type: ignore[type-arg]
         available[name]()
         for name, spellings in _TRIGGERS
         if any(spelling in source for spelling in spellings)
+        and (tree is None or _has_shape(name, tree))
     ]
+
+
+def _has_shape(name: str, tree: ast.Module) -> bool:
+    """Is the shape pass `name` rewrites anywhere in `tree`?
+
+    A superset of what the pass accepts -- shadowed builtins and the
+    receiver's spelling are its own business -- and never a subset, so a
+    rewrite is never skipped.
+    """
+    if name == "literal-attributes":
+        return any(
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Name)
+            and node.func.id in {"getattr", "setattr", "delattr"}
+            and len(node.args) >= 2
+            and isinstance(node.args[1], ast.Constant)
+            and isinstance(node.args[1].value, str)
+            and node.args[1].value.isidentifier()
+            for node in ast.walk(tree)
+        )
+    if name == "module-namespace-writes":
+        return any(
+            isinstance(node, ast.Subscript)
+            and isinstance(node.ctx, ast.Store)
+            and isinstance(node.value, ast.Call)
+            and isinstance(node.value.func, ast.Name)
+            and node.value.func.id == "globals"
+            for node in ast.walk(tree)
+        )
+    return True
 
 
 def apply_passes(source: str) -> tuple[str, list[Rewrite]]:
     """Run every migration pass that could apply over one module's source."""
-    passes = passes_for(source)
+    try:
+        tree = ast.parse(source)
+    except SyntaxError:
+        # The frontend will report the syntax error with a real diagnostic.
+        return source, []
+    passes = passes_for(source, tree)
     if not passes:
         return source, []
     try:

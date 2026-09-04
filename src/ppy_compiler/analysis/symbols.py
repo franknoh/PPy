@@ -422,6 +422,10 @@ class ProjectSymbols:
         #: analysis is a pure function of those two, and the checker runs
         #: over every function at least twice per `analyze` and once per
         #: inference round; the answer does not change between them.
+        #: `_builtin_method` answers per (receiver type, attribute): the
+        #: table it consults is a hundred signatures, and was built on every
+        #: attribute read.
+        self.method_cache: dict[tuple[T.Type, str], T.Type | None] = {}
         self.alias_cache: dict[tuple[int, frozenset[str]], object] = {}
         #: Whether every function already carries a summary from an earlier
         #: `analyze`, so the next one can start confirming instead of seeding.

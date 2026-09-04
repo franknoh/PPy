@@ -103,6 +103,17 @@ Speed of the compiler itself, measured before being changed.
 - A project class that subclasses a builtin has the builtin's methods:
   `class Reached(list)` may call `self.append`, and `super().__init__(...)`
   past a base the project does not define is a call that returns nothing.
+- A migration pass runs only over a module that has the shape it rewrites,
+  decided on the syntax tree rather than on a substring: `getattr` is in
+  most files, `getattr(x, "name")` in few, and a pass that found nothing
+  still paid for a position-annotated traversal of the whole module. The
+  builtin method table is built once per receiver type and attribute
+  rather than on every attribute read; an annotation's expression is
+  parsed once per spelling; the rewriter hands its module to the
+  normalizer instead of printing and parsing its own output. A path is
+  resolved once per directory and a module's file is probed for once per
+  graph build: every importer of `pkg.util` used to stat the same four
+  paths, and resolving walked every component with an lstat.
 - `ppy check pkg/a.py` checks `pkg.a`. A file inside a package used to be
   named from its own directory -- `a` -- so every `from . import b` in it
   was unresolved, on the one command people run most against the file they
