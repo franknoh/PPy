@@ -172,24 +172,37 @@ def _attribute_path(node: ast.expr) -> str | None:
     """`self.x.y` as the key a narrowing is kept under, or None if not a plain chain.
 
     A chain of names is a place in the object graph that a check can be
-    about; a call or a subscript in it is a fresh value every time.
+    about, and so is a constant subscript in it: `args[0].facts` is where
+    `args[0].facts is not None` looked. A call, or a subscript by a
+    variable, is a fresh value every time.
     """
     parts: list[str] = []
-    while isinstance(node, ast.Attribute):
-        parts.append(node.attr)
+    while isinstance(node, (ast.Attribute, ast.Subscript)):
+        if isinstance(node, ast.Attribute):
+            parts.append("." + node.attr)
+        else:
+            if not isinstance(node.slice, ast.Constant) or isinstance(node.slice.value, bool):
+                return None
+            if not isinstance(node.slice.value, (int, str)):
+                return None
+            parts.append(f"[{node.slice.value!r}]")
         node = node.value
     if not isinstance(node, ast.Name) or not parts:
         return None
     parts.append(node.id)
-    return ".".join(reversed(parts))
+    return "".join(reversed(parts))
 
 
 def _forget_attributes(env: Env, root: str) -> None:
     """A write to `root` ends what was known about anything under it."""
-    prefix = root + "."
+    prefixes = (root + ".", root + "[")
     for name in list(env.names()):
-        if name.startswith(prefix):
+        if name.startswith(prefixes):
             env.remove(name)
+
+
+def _is_place(node: ast.expr) -> bool:
+    return isinstance(node, (ast.Attribute, ast.Subscript))
 
 
 def _is_class_value(t: T.Type) -> bool:
@@ -553,7 +566,7 @@ class _Checker:
             locals={
                 name: (env.get(name).type if env.get(name) else T.UNKNOWN)
                 for name in env.names()
-                if "." not in name  # a narrowed attribute path is not a local
+                if "." not in name and "[" not in name  # a narrowed path is not a local
             },
             dynamic=info.dynamic or self._dynamic_seen,
             unknown_callees=tuple(dict.fromkeys(self._unknown)),
@@ -1200,14 +1213,33 @@ class _Checker:
                 Effect.WRITE_OBJECT, raises=("IndexError", "KeyError", "TypeError")
             )
             self._note_mutation(target.value, env)
+            container = _attribute_path(target.value) or (
+                target.value.id if isinstance(target.value, ast.Name) else None
+            )
+            if container is not None:
+                # `args[0] = ...` ends what was known about `args[0].facts`,
+                # and `args[i] = ...` about every `args[...]`.
+                _forget_attributes(env, container)
         elif isinstance(target, ast.Starred):
             self._bind_target(target.value, Binding(T.list_of(value.type)), env)
 
     def _unpack(self, target: ast.Tuple | ast.List, value: Binding, env: Env) -> None:
         base = T.strip_literal(value.type)
         elements: list[T.Type] = []
+        members = [T.strip_literal(m) for m in T.members_of(base)]
         if isinstance(base, T.Tuple_) and not base.homogeneous:
             elements = list(base.items)
+        elif (
+            len(members) > 1
+            and all(isinstance(m, T.Tuple_) and not m.homogeneous for m in members)
+            and len({len(m.items) for m in members}) == 1  # type: ignore[union-attr]
+        ):
+            # `seen.get(key, (0, node))` is one tuple or the other; each
+            # target is what its position holds in either.
+            elements = [
+                T.join(*[m.items[index] for m in members])  # type: ignore[union-attr]
+                for index in range(len(members[0].items))  # type: ignore[union-attr]
+            ]
         else:
             element = B.element_type(base)
             elements = [element] * len(target.elts)
@@ -2222,6 +2254,9 @@ class _Checker:
     def _expr_Subscript(self, node: ast.Subscript, env: Env) -> Binding:
         owner = self._expr(node.value, env)
         index = self._expr(node.slice, env)
+        narrowed = env.get(_attribute_path(node) or "")
+        if narrowed is not None:
+            return narrowed
         base = T.strip_literal(owner.type)
         is_slice = isinstance(node.slice, ast.Slice)
 
@@ -2620,7 +2655,7 @@ class _Checker:
             return self._narrow_call(test, env, positive)
         if isinstance(test, ast.NamedExpr):
             test = test.target
-        if isinstance(test, (ast.Name, ast.Attribute)) and positive:
+        if isinstance(test, (ast.Name, ast.Attribute, ast.Subscript)) and positive:
             key = test.id if isinstance(test, ast.Name) else _attribute_path(test)
             binding = env.get(key or "")
             if binding is None and isinstance(test, ast.Attribute) and key is not None:
@@ -2649,7 +2684,7 @@ class _Checker:
             key = left.id if isinstance(left, ast.Name) else _attribute_path(left)
             if key is not None:
                 binding = env.get(key)
-                if binding is None and isinstance(left, ast.Attribute):
+                if binding is None and _is_place(left):
                     # Not narrowed before: what the attribute is now, so the
                     # narrowing has something to remove `None` from.
                     binding = self._expr(left, env)
@@ -2663,6 +2698,32 @@ class _Checker:
                                 T.remove_none(binding.type), binding.facts.with_(non_null=True)
                             ),
                         )
+            return env
+
+        if (
+            isinstance(op, (ast.In, ast.NotIn))
+            and isinstance(right, (ast.Set, ast.Tuple, ast.List))
+            and right.elts
+            and all(isinstance(e, ast.Constant) for e in right.elts)
+            and isinstance(op, ast.In) == positive
+        ):
+            # Being one of the constants is being of their type: the members
+            # of `x`'s type none of them could be are gone.
+            key = left.id if isinstance(left, ast.Name) else _attribute_path(left)
+            binding = env.get(key or "")
+            if binding is None and key is not None and _is_place(left):
+                binding = self._expr(left, env)
+            if key is not None and binding is not None:
+                offered = T.strip_literal(
+                    T.join(*[T.type_of_constant(e.value) for e in right.elts])  # type: ignore[attr-defined]
+                )
+                kept = [
+                    m
+                    for m in T.members_of(binding.type)
+                    if T.is_assignable(offered, m) or T.is_assignable(m, offered)
+                ]
+                if kept and len(kept) < len(T.members_of(binding.type)):
+                    env.set(key, Binding(T.union(*kept), binding.facts))
             return env
 
         constant = self._constant_of(right, env)
@@ -2732,7 +2793,7 @@ class _Checker:
         if key is None:
             return env
         binding = env.get(key)
-        if binding is None and isinstance(subject, ast.Attribute):
+        if binding is None and _is_place(subject):
             binding = self._expr(subject, env)
         if binding is None:
             return env

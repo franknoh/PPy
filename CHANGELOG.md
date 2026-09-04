@@ -81,6 +81,11 @@ Speed of the compiler itself, measured before being changed.
   holds. A library exception is a `BaseException`.
 - `program or {}` is never `None`: an operand of `or` that is not the last
   is the result only when it is truthy.
+- A constant subscript is a place a check can be about: after
+  `if args[0].facts is not None`, `args[0].facts` is not `None`, until
+  `args[0]` is written. A union of tuples unpacks position by position, so
+  `count, first = seen.get(key, (0, node))` gives an `int` count. Being one
+  of the constants in `x in {"a", "b"}` is being of their type.
 - `ppy check pkg/a.py` checks `pkg.a`. A file inside a package used to be
   named from its own directory -- `a` -- so every `from . import b` in it
   was unresolved, on the one command people run most against the file they

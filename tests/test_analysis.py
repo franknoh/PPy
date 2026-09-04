@@ -3049,3 +3049,74 @@ def test_or_drops_none_from_every_operand_but_the_last(write, analyze):
     )
     errors = [d for d in analyze(path).diagnostics.sorted() if d.severity.name == "ERROR"]
     assert [d.span.line for d in errors if d.span] == [10], [d.message for d in errors]
+
+
+def test_a_constant_subscript_is_a_place_a_check_can_be_about(write, analyze):
+    path = write(
+        "places.ppy",
+        """
+        class Facts:
+            def __init__(self, low: int | None) -> None:
+                self.low: int | None = low
+
+
+        class Arg:
+            def __init__(self, facts: Facts | None) -> None:
+                self.facts: Facts | None = facts
+
+
+        def lowest(args: list[Arg]) -> int:
+            if args[0].facts is not None:
+                r = args[0].facts
+                return r.low or 0
+            return 0
+
+
+        def reset(args: list[Arg]) -> int:
+            if args[0].facts is not None:
+                args[0] = Arg(None)
+                return args[0].facts.low or 0
+            return 0
+        """,
+    )
+    errors = [d for d in analyze(path).diagnostics.sorted() if d.severity.name == "ERROR"]
+    assert [d.span.line for d in errors if d.span] == [21], [d.message for d in errors]
+
+
+def test_a_union_of_tuples_unpacks_position_by_position(write, analyze):
+    path = write(
+        "counts.ppy",
+        """
+        def count_up(seen: dict[str, tuple[int, str]], key: str) -> int:
+            count, label = seen.get(key, (0, 1.5))
+            return count + 1
+        """,
+    )
+    errors = [d for d in analyze(path).diagnostics.sorted() if d.severity.name == "ERROR"]
+    assert errors == [], [d.message for d in errors]
+
+
+def test_being_one_of_the_constants_is_being_of_their_type(write, analyze):
+    path = write(
+        "members.ppy",
+        """
+        def short(canonical: str | None) -> str:
+            if canonical not in {"a.b", "c.d"}:
+                return ""
+            return canonical.rpartition(".")[2]
+
+
+        def loud(name: str | None) -> str:
+            if name in ("x", "y"):
+                return name.upper()
+            return ""
+
+
+        def wrong(name: str | None) -> str:
+            if name not in ("x", "y"):
+                return name.upper()
+            return ""
+        """,
+    )
+    errors = [d for d in analyze(path).diagnostics.sorted() if d.severity.name == "ERROR"]
+    assert [d.span.line for d in errors if d.span] == [15], [d.message for d in errors]
