@@ -57,6 +57,14 @@ Speed of the compiler itself, measured before being changed.
   class's own `__or__`, `__add__` and the other operator methods were never
   consulted. Together they were 193 of the compiler's 627 self-reported
   errors, and none of them was a finding.
+- A name imported from a library module is what the library says it is:
+  `from pathlib import Path` then `Path(p)` was an unknown signature while
+  `pathlib.Path(p)` was not. `pathlib.Path` is modeled -- construction, the
+  filesystem calls with their IO effect, the spellings of other paths, the
+  string parts -- and so are the `ast` functions (`parse`, `walk`,
+  `unparse`, and the rest). `x: type` is an annotation, and what a class
+  held as a value exposes is known. libcst's node classes are opaque
+  types.
 - `ppy check pkg/a.py` checks `pkg.a`. A file inside a package used to be
   named from its own directory -- `a` -- so every `from . import b` in it
   was unresolved, on the one command people run most against the file they

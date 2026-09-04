@@ -593,6 +593,24 @@ class _Checker:
                 if onward.origin is None:
                     return T.Module_(onward.module)
                 return self._imported_name_type(onward.module, onward.origin, depth + 1)
+        # Not the project's: the same tables `module.name` resolves through,
+        # so `from pathlib import Path` and `pathlib.Path` are one thing.
+        return self._library_name_type(qualname)
+
+    def _library_name_type(self, qualname: str) -> T.Type:
+        """What a library's `module.name` is, from the standard-library tables."""
+        known = stdlib.MODULE_ATTRIBUTES.get(qualname)
+        if known is not None:
+            return known[0]
+        described = stdlib.lookup(qualname)
+        if described is not None:
+            return described[0]
+        external = self.project.external_types.get(qualname)
+        if external is not None:
+            instance = T.Instance(
+                external, (), stdlib.EXTERNAL_MRO.get(qualname, (external, "object"))
+            )
+            return T.ClassObject(external, instance)
         return T.UNKNOWN
 
     def _stmt(self, node: ast.stmt, env: Env) -> None:
@@ -1800,6 +1818,10 @@ class _Checker:
                 return Binding(dunder)
             return Binding(T.UNKNOWN)
         base = T.strip_literal(owner.type)
+        if isinstance(base, T.Instance) and base.name == "type":
+            # A class held as a value, whichever class: what every class
+            # object exposes is known, the rest is that class's business.
+            return Binding(_CLASS_DUNDERS.get(node.attr, T.UNKNOWN))
         if isinstance(base, T.Instance):
             info = self.project.classes.get(base.name)
             if info is not None:
@@ -1926,6 +1948,14 @@ class _Checker:
         described = stdlib.lookup(qualname)
         if described is not None:
             return Binding(described[0])
+        external = self.project.external_types.get(qualname)
+        if external is not None:
+            # `pathlib.Path(...)` constructs one; the class object is what the
+            # attribute names.
+            instance = T.Instance(
+                external, (), stdlib.EXTERNAL_MRO.get(qualname, (external, "object"))
+            )
+            return Binding(T.ClassObject(external, instance))
 
         if module == "math":
             result = B.math_result(node.attr)

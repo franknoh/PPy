@@ -2703,3 +2703,63 @@ def test_dir_is_a_builtin(write, analyze):
     path = write("names.ppy", "def names(x: object) -> list[str]:\n    return dir(x)\n")
     errors = [d for d in analyze(path).diagnostics.sorted() if d.severity.name == "ERROR"]
     assert errors == [], [d.message for d in errors]
+
+
+def test_a_name_imported_from_a_library_is_what_the_library_says(write, analyze):
+    """`from pathlib import Path` then `Path(p)` was an unknown signature; `pathlib.Path(p)` was not."""
+    path = write(
+        "paths.ppy",
+        """
+        from pathlib import Path
+        from math import sqrt
+        import pathlib
+
+        def size(root: str) -> int:
+            here = Path(root)
+            there = pathlib.Path(root) / "sub"
+            total = 0
+            for entry in here.glob("*.txt"):
+                if entry.is_file():
+                    total += len(entry.read_text())
+            return total + len(there.name) + int(sqrt(4.0))
+        """,
+    )
+    bundle = analyze(path)
+    errors = [d for d in bundle.diagnostics.sorted() if d.severity.name == "ERROR"]
+    assert errors == [], [d.message for d in errors]
+    assert str(bundle.analysis.function("paths.size").locals["here"]) == "pathlib.Path"
+    assert str(bundle.analysis.function("paths.size").locals["there"]) == "pathlib.Path"
+    assert "IO" in str(bundle.analysis.function("paths.size").effects)
+
+
+def test_the_ast_functions_are_modeled(write, analyze):
+    path = write(
+        "walker.ppy",
+        """
+        import ast
+
+        def names(source: str) -> list[str]:
+            tree = ast.parse(source)
+            found: list[str] = []
+            for node in ast.walk(tree):
+                if isinstance(node, ast.Name):
+                    found.append(ast.unparse(node))
+            return found
+        """,
+    )
+    bundle = analyze(path)
+    errors = [d for d in bundle.diagnostics.sorted() if d.severity.name == "ERROR"]
+    assert errors == [], [d.message for d in errors]
+    assert str(bundle.analysis.function("walker.names").locals["tree"]) == "ast.Module"
+
+
+def test_type_is_an_annotation(write, analyze):
+    path = write(
+        "kinds.ppy",
+        """
+        def name_of(kind: type) -> str:
+            return kind.__name__
+        """,
+    )
+    errors = [d for d in analyze(path).diagnostics.sorted() if d.severity.name == "ERROR"]
+    assert errors == [], [d.message for d in errors]

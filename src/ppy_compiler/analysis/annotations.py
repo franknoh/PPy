@@ -51,6 +51,7 @@ _SIMPLE: dict[str, T.Type] = {
     "builtins.bytes": T.BYTES,
     "builtins.complex": T.COMPLEX,
     "builtins.object": T.OBJECT,
+    "builtins.type": T.instance("type"),
     "builtins.bytearray": T.instance("bytearray"),
     "builtins.memoryview": T.instance("memoryview"),
     "builtins.range": T.instance("range"),

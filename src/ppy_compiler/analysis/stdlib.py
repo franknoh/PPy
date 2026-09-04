@@ -8,6 +8,7 @@ effect-unknown, which is an error in strict mode rather than a silent `Any`.
 from __future__ import annotations
 
 import ast
+import contextlib
 
 from . import types as T
 from .effects import Effect, EffectSet
@@ -58,6 +59,65 @@ def _fn(qualname: str, ret: T.Type, effects: EffectSet = _NO_EFFECTS) -> tuple[T
 
 
 _TEXT_STREAM = T.Instance("io.TextIOWrapper", (), ("io.TextIOWrapper", "object"))
+
+_PATH = T.Instance("pathlib.Path", (), ("pathlib.Path", "pathlib.PurePath", "object"))
+_AST = T.Instance("ast.AST", (), ("ast.AST", "object"))
+_AST_MODULE = T.Instance("ast.Module", (), ("ast.Module", "ast.mod", "ast.AST", "object"))
+
+
+def _path_methods() -> dict[str, tuple[T.Type, EffectSet]]:
+    """What a `Path` does: the filesystem calls carry the IO effect, the
+    spellings of other paths carry allocation, the parts are strings."""
+    table: dict[str, tuple[T.Type, EffectSet]] = {}
+    for name in ("exists", "is_file", "is_dir", "is_absolute", "is_symlink"):
+        table[name] = (T.Callable_((), T.BOOL, f"pathlib.Path.{name}"), _IO)
+    for name in ("read_text",):
+        table[name] = (T.Callable_((), T.STR, f"pathlib.Path.{name}"), _IO | _ALLOC)
+    table["read_bytes"] = (T.Callable_((), T.BYTES, "pathlib.Path.read_bytes"), _IO | _ALLOC)
+    for name in ("write_text", "write_bytes"):
+        table[name] = (T.Callable_((), T.INT, f"pathlib.Path.{name}"), _IO)
+    for name in ("mkdir", "unlink", "rmdir", "touch", "rename", "replace", "chmod"):
+        table[name] = (T.Callable_((), T.NONE, f"pathlib.Path.{name}"), _IO)
+    for name in ("resolve", "absolute", "expanduser", "readlink"):
+        table[name] = (T.Callable_((), _PATH, f"pathlib.Path.{name}"), _IO | _ALLOC)
+    for name in ("with_suffix", "with_name", "with_stem", "joinpath", "relative_to"):
+        table[name] = (T.Callable_((), _PATH, f"pathlib.Path.{name}"), _ALLOC)
+    for name in ("glob", "rglob", "iterdir"):
+        table[name] = (
+            T.Callable_((), T.instance("Iterator", _PATH), f"pathlib.Path.{name}"),
+            _IO | _ALLOC,
+        )
+    table["open"] = (T.Callable_((), _TEXT_STREAM, "pathlib.Path.open"), _IO | _ALLOC)
+    table["samefile"] = (T.Callable_((), T.BOOL, "pathlib.Path.samefile"), _IO)
+    table["stat"] = (T.Callable_((), T.ANY, "pathlib.Path.stat"), _IO)
+    for name in ("name", "stem", "suffix", "anchor", "drive", "root"):
+        table[name] = (T.STR, _NO_EFFECTS)
+    table["suffixes"] = (T.list_of(T.STR), _NO_EFFECTS)
+    table["parts"] = (T.Tuple_((T.STR,), homogeneous=True), _NO_EFFECTS)
+    table["parent"] = (_PATH, _NO_EFFECTS)
+    table["parents"] = (T.instance("Sequence", _PATH), _NO_EFFECTS)
+    return table
+
+
+def _ast_functions() -> dict[str, tuple[T.Type, EffectSet]]:
+    """The `ast` module's functions: parsing allocates and may raise, the
+    walkers hand out nodes, `unparse` and `dump` hand out text."""
+    table: dict[str, tuple[T.Type, EffectSet]] = {}
+    table["ast.parse"] = _fn(
+        "ast.parse", _AST_MODULE, _ALLOC | EffectSet.of(raises=("SyntaxError",))
+    )
+    for name in ("walk", "iter_child_nodes"):
+        table[f"ast.{name}"] = _fn(f"ast.{name}", T.instance("Iterator", _AST), _ALLOC)
+    for name in ("unparse", "dump"):
+        table[f"ast.{name}"] = _fn(f"ast.{name}", T.STR, _ALLOC)
+    table["ast.get_source_segment"] = _fn("ast.get_source_segment", T.union(T.STR, T.NONE), _ALLOC)
+    table["ast.get_docstring"] = _fn("ast.get_docstring", T.union(T.STR, T.NONE), _ALLOC)
+    for name in ("copy_location", "fix_missing_locations", "increment_lineno"):
+        table[f"ast.{name}"] = _fn(f"ast.{name}", _AST)
+    table["ast.literal_eval"] = _fn("ast.literal_eval", T.ANY, EffectSet.of(raises=("ValueError",)))
+    table["ast.iter_fields"] = _fn("ast.iter_fields", T.instance("Iterator", T.ANY), _ALLOC)
+    return table
+
 
 _DOMAIN = EffectSet.of(raises=("ValueError",))
 _OVERFLOW = EffectSet.of(raises=("OverflowError",))
@@ -149,6 +209,8 @@ _THREAD_EFFECTS = EffectSet.of(Effect.THREAD, Effect.SYNC)
 
 #: Attributes of a standard-library instance the analyzer knows.
 INSTANCE_ATTRS: dict[str, dict[str, tuple[T.Type, EffectSet]]] = {
+    "pathlib.Path": _path_methods(),
+    "pathlib.PurePath": _path_methods(),
     # The standard streams. Reading is the effect it looks like, so a function
     # that reads input is never mistaken for a pure one.
     "io.TextIOWrapper": {
@@ -228,6 +290,26 @@ def _opaque(module: str, names: tuple[str, ...]) -> None:
 
 
 _opaque("pathlib", ("Path", "PurePath", "PosixPath", "WindowsPath", "PurePosixPath"))
+# The converter's own dependency, but the analyzer runs without it.
+with contextlib.suppress(ImportError):
+    _opaque(
+        "libcst",
+        (
+            "CSTNode",
+            "Module",
+            "BaseStatement",
+            "BaseSmallStatement",
+            "SimpleStatementLine",
+            "BaseExpression",
+            "Name",
+            "Attribute",
+            "Call",
+            "FunctionDef",
+            "ClassDef",
+            "CSTTransformer",
+            "CSTVisitor",
+        ),
+    )
 _opaque("re", ("Pattern", "Match"))
 _opaque("datetime", ("datetime", "date", "time", "timedelta", "timezone"))
 _opaque("collections", ("deque", "OrderedDict", "Counter", "defaultdict", "ChainMap"))
@@ -259,6 +341,9 @@ def instance_attribute(name: str, attribute: str) -> tuple[T.Type, EffectSet] | 
 
 #: Callables the analyzer knows the result type and effects of.
 _FUNCTIONS: dict[str, tuple[T.Type, EffectSet]] = {
+    "pathlib.Path": _fn("pathlib.Path", _PATH, _ALLOC),
+    "pathlib.PurePath": _fn("pathlib.PurePath", _PATH, _ALLOC),
+    **_ast_functions(),
     "threading.Thread": (T.Callable_((), _THREAD, "threading.Thread"), _THREAD_EFFECTS),
     "threading.Lock": (T.Callable_((), _LOCK, "threading.Lock"), _THREAD_EFFECTS),
     "threading.RLock": (T.Callable_((), _LOCK, "threading.RLock"), _THREAD_EFFECTS),
