@@ -263,4 +263,14 @@ def build_graph(
             target_path, target_is_package = candidates[0]
             edge.resolved_path = target_path
             queue.append((edge.target, target_path, target_is_package))
+            if edge.is_from and target_is_package:
+                # `from pkg import mod` names a submodule as easily as a
+                # symbol. The package was found; each name that is a module
+                # of it is a module of the program too, and is followed --
+                # otherwise `from . import types as T` left `T.Type` with
+                # nothing behind it whenever `types` was not an entry itself.
+                for sub, _asname in edge.names:
+                    sub_target = f"{edge.target}.{sub}"
+                    for sub_path, sub_pkg in _candidate_files(sub_target, search_paths):
+                        queue.append((sub_target, sub_path, sub_pkg))
     return graph

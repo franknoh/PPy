@@ -2288,3 +2288,29 @@ def test_one_version_is_written_in_every_place_that_states_it():
     assert ppy.__version__ == COMPILER_VERSION
     with contextlib.suppress(importlib.metadata.PackageNotFoundError):
         assert importlib.metadata.version("ppy-lang") == COMPILER_VERSION
+
+
+def test_a_file_inside_a_package_is_checked_as_a_member_of_it(tmp_path: Path):
+    """`ppy check pkg/a.py` sees `pkg.a`, and its `from . import b` sees `pkg.b`.
+
+    Searching from the file's own directory called it `a`, lost the package,
+    and left every relative import unresolved -- on the one command people
+    run most, against the file they are editing.
+    """
+    (tmp_path / "pyproject.toml").write_text("[tool.ppy]\nstrict = true\n", encoding="utf-8")
+    package = tmp_path / "pkg"
+    package.mkdir()
+    (package / "__init__.py").write_text("", encoding="utf-8")
+    (package / "shapes.py").write_text(
+        "class Box:\n    def __init__(self, size: int) -> None:\n        self.size: int = size\n",
+        encoding="utf-8",
+    )
+    (package / "use.py").write_text(
+        "from . import shapes as S\n\n\n"
+        "def grow(box: S.Box) -> int:\n    return box.size + 1\n\n\n"
+        "def make(n: int) -> S.Box:\n    return S.Box(n)\n",
+        encoding="utf-8",
+    )
+    done = _ppy(["check", "pkg/use.py"], tmp_path)
+    assert done.returncode == 0, done.stdout + done.stderr
+    assert "no errors" in done.stdout + done.stderr

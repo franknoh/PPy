@@ -84,7 +84,11 @@ def open_project(target: Path, *, config_overrides: dict[str, object] | None = N
 
     search_paths: list[Path] = []
     entry_dir = target if target.is_dir() else target.parent
-    search_paths.append(entry_dir.resolve())
+    # A file inside a package is a member of that package: `pkg/a.py` is
+    # `pkg.a`, and its `from . import b` names `pkg.b`. Searching from its own
+    # directory would call it `a` and lose the package. The search path is
+    # the parent of the outermost package the directory sits in.
+    search_paths.append(_package_root(entry_dir.resolve()))
     for source_root in config.source_roots:
         candidate = (root / source_root).resolve()
         if candidate.is_dir() and candidate not in search_paths:
@@ -95,6 +99,15 @@ def open_project(target: Path, *, config_overrides: dict[str, object] | None = N
     return Project(
         config=config, root=root, search_paths=search_paths, store=store, plugins=plugins
     )
+
+
+def _package_root(directory: Path) -> Path:
+    """The directory to import from so that `directory` keeps its package name."""
+    while any((directory / f"__init__{suffix}").is_file() for suffix in _SOURCE_SUFFIXES):
+        if directory.parent == directory:
+            break
+        directory = directory.parent
+    return directory
 
 
 def collect_sources(target: Path, *, ppy_only: bool = False) -> list[Path]:
