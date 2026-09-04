@@ -146,3 +146,47 @@ def test_a_file_created_between_graph_builds_is_found(tmp_path: Path):
     (package / "leaf.ppy").write_text("")
     assert resolve_module_name(package / "leaf.ppy", [tmp_path]) == "pkg.inner.leaf"
     assert resolve_module_name(package / "__init__.ppy", [tmp_path]) == "pkg.inner"
+
+
+def test_a_file_that_has_not_changed_is_read_off_the_store(tmp_path: Path, monkeypatch):
+    from ppy_compiler.analysis import project_scan
+    from ppy_compiler.cache import CacheStore
+
+    root = _project(tmp_path)
+    store = CacheStore(tmp_path / "cache")
+    store.ensure()
+    fresh = scan_project(root, ("src",))
+    first = scan_project(root, ("src",), store=store)
+    assert first.reused == 0
+    assert [m.facts for m in first.modules] == [m.facts for m in fresh.modules]
+
+    def refuse(*args, **kwargs):
+        raise AssertionError("a file that has not changed was parsed again")
+
+    monkeypatch.setattr(project_scan.ast, "parse", refuse)
+    second = scan_project(root, ("src",), store=store)
+    assert second.reused == 2
+    assert [m.facts for m in second.modules] == [m.facts for m in fresh.modules]
+    writes = build_write_index(root, ("src",), scan=second)
+    reads = build_reflection_index(root, ("src",), scan=second)
+    assert writes.writes == {"store": {"LIMIT"}}
+    assert "user.decorated" in reads.observed and not reads.dynamic
+    monkeypatch.undo()
+
+    # A changed file is parsed again, and the index says what it says now.
+    (root / "src" / "user.py").write_text("import store\nstore.NAME = 'y'\n", encoding="utf-8")
+    third = scan_project(root, ("src",), store=store)
+    assert third.reused == 1
+    assert build_write_index(root, ("src",), scan=third).writes == {"store": {"NAME"}}
+
+
+def test_an_index_built_without_a_scan_may_still_use_the_store(tmp_path: Path):
+    from ppy_compiler.cache import CacheStore
+
+    root = _project(tmp_path)
+    store = CacheStore(tmp_path / "cache")
+    store.ensure()
+    alone = build_write_index(root, ("src",))
+    stored = build_write_index(root, ("src",), store=store)
+    again = build_write_index(root, ("src",), store=store)
+    assert alone.writes == stored.writes == again.writes

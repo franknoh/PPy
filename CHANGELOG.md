@@ -119,6 +119,12 @@ Speed of the compiler itself, measured before being changed.
   imports and classes seeded once per pass rather than rebuilt per
   function. Signatures are wrapped only when some line of the module is
   past the limit.
+- The whole-project scan behind `Final` and annotation materialization
+  keeps, per file, only what the two indexes need -- the attribute writes
+  it makes on other modules, the annotation readers it holds and calls --
+  and serves that record from the cache store when the file's path, size,
+  and modification time match one written by this compiler. Converting one
+  file of a large project costs a stat per file, not a parse.
 - `ppy check pkg/a.py` checks `pkg.a`. A file inside a package used to be
   named from its own directory -- `a` -- so every `from . import b` in it
   was unresolved, on the one command people run most against the file they

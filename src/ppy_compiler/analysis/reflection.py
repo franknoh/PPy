@@ -16,21 +16,22 @@ only its call sites' arguments and whatever it decorates are blocked.
 
 from __future__ import annotations
 
-import ast
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import TYPE_CHECKING
 
-from .lexical import LexicalBindings
+from .file_facts import READERS
 from .project_scan import ProjectScan, scan_project
 
+if TYPE_CHECKING:
+    from ..cache import CacheStore
+
 __all__ = ["ReflectionIndex", "build_reflection_index"]
+
 
 #: Callables whose argument's annotations become observable, by canonical
 #: name -- the lexical bindings resolve `sig`, `i.signature`, and the rest
 #: down to these before the check.
-_READERS = frozenset({"inspect.signature", "inspect.get_annotations", "typing.get_type_hints"})
-
-
 @dataclass(slots=True)
 class ReflectionIndex:
     """Names whose annotations the project observes at runtime."""
@@ -66,132 +67,45 @@ class ReflectionIndex:
 
 
 def build_reflection_index(
-    root: Path, source_roots: tuple[str, ...] = ("src", "."), *, scan: ProjectScan | None = None
+    root: Path,
+    source_roots: tuple[str, ...] = ("src", "."),
+    *,
+    scan: ProjectScan | None = None,
+    store: CacheStore | None = None,
 ) -> ReflectionIndex:
     """Index every runtime reader of annotations in the project.
 
-    `scan` is the project already walked and parsed, shared with the other
-    whole-project indexes; without one this walks the project itself.
+    `scan` is the project already walked and reduced, shared with the other
+    whole-project indexes; without one this walks the project itself, off
+    the `store` where it can.
     """
     if scan is None:
-        scan = scan_project(root, source_roots)
+        scan = scan_project(root, source_roots, store=store)
     index = ReflectionIndex()
-    # An unparseable file could read anything's annotations.
     index.dynamic = scan.tainted
-    # Observers first: a function reading its own parameter's annotations is
-    # itself a reader, and its call sites can live in any file.
-    observers: set[str] = set()
-    for scanned in scan.modules:
-        _find_observers(scanned.nodes, scanned.module, scanned.bindings, observers)
-    for scanned in scan.modules:
-        _scan(scanned.nodes, scanned.module, scanned.bindings, index, frozenset(observers))
-    return index
+    observers = frozenset(name for scanned in scan.modules for name in scanned.facts.observers)
 
-
-def _own_parameters(nodes: tuple[ast.AST, ...]) -> dict[int, tuple[str, frozenset[str]]]:
-    """id(function node) -> (its canonical tail, its parameter names)."""
-    found: dict[int, tuple[str, frozenset[str]]] = {}
-    for node in nodes:
-        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-            arguments = node.args
-            names = frozenset(
-                a.arg
-                for a in [
-                    *arguments.posonlyargs,
-                    *arguments.args,
-                    *arguments.kwonlyargs,
-                    *([arguments.vararg] if arguments.vararg else []),
-                    *([arguments.kwarg] if arguments.kwarg else []),
-                ]
-            )
-            found[id(node)] = (node.name, names)
-    return found
-
-
-def _reads_a_parameter(fn, params: frozenset[str], bindings) -> bool:  # type: ignore[no-untyped-def]
-    for node in ast.walk(fn):
-        if isinstance(node, ast.Attribute) and node.attr == "__annotations__":
-            if isinstance(node.value, ast.Name) and node.value.id in params:
-                return True
-        elif isinstance(node, ast.Call) and node.args:
-            if not bindings.targets_at(node.func) & _READERS:
-                continue
-            argument = node.args[0]
-            if isinstance(argument, ast.Name) and argument.id in params:
-                return True
-    return False
-
-
-def _find_observers(
-    nodes: tuple[ast.AST, ...], module: str, bindings: LexicalBindings, observers: set[str]
-) -> None:
-    # One walk for every function's parameters, then one per function for its
-    # reads. Asking `_own_parameters` inside the loop walked the whole tree
-    # once per function, which on a 3000-line module was most of a
-    # conversion's time.
-    parameters = _own_parameters(nodes)
-    for node in nodes:
-        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-            _, params = parameters[id(node)]
-            if _reads_a_parameter(node, params, bindings):
-                observers.add(f"{module}.{node.name}")
-
-
-def _scan(
-    nodes: tuple[ast.AST, ...],
-    module: str,
-    bindings: LexicalBindings,
-    index: ReflectionIndex,
-    observers: frozenset[str],
-) -> None:
-    parameters: dict[str, frozenset[str]] = {}
-    for node in nodes:
-        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-            arguments = node.args
-            parameters[node.name] = frozenset(
-                a.arg
-                for a in [
-                    *arguments.posonlyargs,
-                    *arguments.args,
-                    *arguments.kwonlyargs,
-                    *([arguments.vararg] if arguments.vararg else []),
-                    *([arguments.kwarg] if arguments.kwarg else []),
-                ]
-            )
-
-    def enclosing_params(name_node: ast.Name) -> bool:
-        # Reads through *some* function's parameter are the observers' own
-        # business, handled by call-site and decoration tracking below.
-        return any(name_node.id in names for names in parameters.values())
-
-    def record(target: ast.expr) -> None:
-        found = bindings.targets_at(target)
+    def record(found: tuple[str, ...], is_parameter: bool) -> None:
         if found:
             index.observed.update(found)
             index.module_annotations.update(found)
             return
-        if isinstance(target, ast.Name) and enclosing_params(target):
+        if is_parameter:
             return
         # A value nobody can name had its annotations read; anything could
         # be observed, so nothing may be materialized.
         index.dynamic = True
 
-    for node in nodes:
-        if isinstance(node, ast.Attribute) and node.attr == "__annotations__":
-            record(node.value)
-        elif isinstance(node, ast.Name) and node.id == "__annotations__":
-            # A bare read reaches the module's own mapping, wherever it
-            # appears in the file.
-            index.module_annotations.add(module)
-        elif isinstance(node, ast.Call):
-            readers = bindings.targets_at(node.func)
-            if readers & _READERS and node.args:
-                record(node.args[0])
-            elif readers & observers and node.args:
-                # Whatever reaches an observer has its annotations read.
-                record(node.args[0])
-        elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
-            for decorator in node.decorator_list:
-                target = decorator.func if isinstance(decorator, ast.Call) else decorator
-                if bindings.targets_at(target) & observers:
-                    index.observed.add(f"{module}.{node.name}")
+    for scanned in scan.modules:
+        facts = scanned.facts
+        if facts.names_own_annotations:
+            index.module_annotations.add(scanned.module)
+        for reader, found, is_parameter in facts.reads:
+            if reader is None or not observers.isdisjoint(reader) or not READERS.isdisjoint(reader):
+                # Whatever reaches a library reader or an observer has its
+                # annotations read.
+                record(found, is_parameter)
+        for decorators, qualname in facts.decorated:
+            if not observers.isdisjoint(decorators):
+                index.observed.add(qualname)
+    return index

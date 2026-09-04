@@ -318,7 +318,12 @@ ppy cache gc [--max-age-days N] [--max-bytes N]
 
 A cache key covers the source digest, compiler version, optimization level,
 directives, dependency hashes, and the fingerprints of the plugins the module
-actually imports. Nothing keys off modification time.
+actually imports. Nothing keys off modification time, with one exception: the
+record of the whole-project scan that `convert` and `migrate` make for `Final`
+and for annotation materialization is keyed by the compiler fingerprint and
+the project root, and each file's entry in it is trusted while the file's size
+and modification time still match. Hashing every file of the project is what
+that record exists to avoid.
 
 The native build is incremental per module. A rebuild with no source change
 recompiles nothing and never initializes LLVM; a rebuild after editing one
@@ -333,6 +338,7 @@ dependent's key includes the public summaries it compiled against.
 | `native` | the object file, and the linked library keyed by its inputs |
 | `python` | the generated Python |
 | `jit` | guarded specializations |
+| `scan` | the whole-project scan's record: per file, the writes it makes on other modules and the annotation readers it holds |
 
 ## `ppy clean`
 

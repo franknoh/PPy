@@ -98,7 +98,7 @@ def _run_conversion(
     # the bundle and disqualifies the name all the same. The same goes for
     # reflection: whoever reads `f.__annotations__` may live anywhere. Both
     # read the same files, so both read them from one scan.
-    scan = scan_project(project.root, project.config.source_roots)
+    scan = scan_project(project.root, project.config.source_roots, store=project.store)
     bundle.global_writes = build_write_index(project.root, project.config.source_roots, scan=scan)
     bundle.reflection = build_reflection_index(project.root, project.config.source_roots, scan=scan)
 

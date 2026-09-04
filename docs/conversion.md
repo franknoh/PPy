@@ -95,7 +95,9 @@ a list here, a tuple there — the union collapses to the shared
   root, so converting one file still sees the reverse dependency doing
   `store.NAME = ...` — spelled statically or as `s =
   importlib.import_module("store"); s.NAME = ...`, because the lexical layer
-  understands a constant `import_module` as the import it is. The scan rides
+  understands a constant `import_module` as the import it is. The scan keeps
+  its record per file in the cache store, so a file that has not changed
+  since the last conversion is not parsed again. The scan rides
   the shared lexical bindings: a
   function-scope `import other as s` shadows nothing at module level,
   `alias = store` counts for as long as the binding lasts, relative imports
