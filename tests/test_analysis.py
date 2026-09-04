@@ -2889,3 +2889,143 @@ def test_sqlite_types_are_annotations(write, analyze):
     )
     errors = [d for d in analyze(path).diagnostics.sorted() if d.severity.name == "ERROR"]
     assert errors == [], [d.message for d in errors]
+
+
+def test_a_class_that_satisfies_a_protocol_is_one(write, analyze):
+    path = write(
+        "binder.ppy",
+        """
+        from typing import Protocol
+
+
+        class Binder(Protocol):
+            def bind(self, name: str) -> int: ...
+
+
+        class Prebuilt:
+            def __init__(self) -> None:
+                self.count = 0
+
+            def bind(self, name: str) -> int:
+                return len(name)
+
+
+        class Unrelated:
+            def __init__(self) -> None:
+                self.count = 0
+
+
+        def run(binder: Binder | None) -> int:
+            return 0 if binder is None else binder.bind("x")
+
+
+        def go() -> int:
+            return run(Prebuilt())
+
+
+        def wrong() -> int:
+            return run(Unrelated())
+        """,
+    )
+    errors = [d for d in analyze(path).diagnostics.sorted() if d.severity.name == "ERROR"]
+    assert [d.span.line for d in errors if d.span] == [30], [d.message for d in errors]
+
+
+def test_a_class_with_iter_is_an_iterable(write, analyze):
+    path = write(
+        "bag.ppy",
+        """
+        from collections.abc import Iterable, Iterator
+
+
+        class Bag:
+            def __init__(self) -> None:
+                self.items: list[int] = []
+
+            def __iter__(self) -> Iterator[int]:
+                return iter(self.items)
+
+
+        def consume(items: Iterable[int]) -> int:
+            total = 0
+            for item in items:
+                total += item
+            return total
+
+
+        def drain(bag: Bag) -> int:
+            return consume(bag)
+        """,
+    )
+    errors = [d for d in analyze(path).diagnostics.sorted() if d.severity.name == "ERROR"]
+    assert errors == [], [d.message for d in errors]
+
+
+def test_an_unresolved_class_object_is_some_class():
+    some_class = T.instance("type")
+    assert T.is_assignable(some_class, T.ClassObject("int", T.INT))
+    assert T.is_assignable(some_class, T.union(T.ClassObject("int", T.INT), T.NONE))
+    assert not T.is_assignable(some_class, T.INT)
+    assert T.is_assignable(T.ClassObject("int", T.INT), T.OBJECT)
+    assert T.is_assignable(T.Callable_((), T.INT, "f"), T.OBJECT)
+
+
+def test_a_union_of_classes_is_a_type_and_everything_is_an_object(write, analyze):
+    path = write(
+        "objects.ppy",
+        """
+        import ast
+
+
+        def is_container(value: object) -> bool:
+            return isinstance(value, list | dict)
+
+
+        def hold(value: object) -> object:
+            return value
+
+
+        def a_function() -> object:
+            return hold(len)
+
+
+        def a_module() -> object:
+            return hold(ast)
+        """,
+    )
+    errors = [d for d in analyze(path).diagnostics.sorted() if d.severity.name == "ERROR"]
+    assert errors == [], [d.message for d in errors]
+
+
+def test_a_library_exception_is_a_base_exception(write, analyze):
+    path = write(
+        "damage.ppy",
+        """
+        import sqlite3
+
+
+        def damaged(error: BaseException) -> bool:
+            return True
+
+
+        def probe(error: sqlite3.DatabaseError) -> bool:
+            return damaged(error)
+        """,
+    )
+    errors = [d for d in analyze(path).diagnostics.sorted() if d.severity.name == "ERROR"]
+    assert errors == [], [d.message for d in errors]
+
+
+def test_any_inside_a_tuple_argument(write, analyze):
+    path = write(
+        "pairs.ppy",
+        """
+        from typing import Any
+
+
+        def rows() -> dict[str, tuple[str, Any]]:
+            return {"a": ("x", 1)}
+        """,
+    )
+    errors = [d for d in analyze(path).diagnostics.sorted() if d.severity.name == "ERROR"]
+    assert errors == [], [d.message for d in errors]

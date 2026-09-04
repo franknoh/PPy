@@ -438,10 +438,51 @@ class ProjectSymbols:
             self._collect_type_aliases(self.modules[module.name])
         for module in ordered:
             self._compute_mro(self.modules[module.name])
+        self._satisfy_protocols()
         for module in ordered:
             self._resolve_signatures(self.modules[module.name])
         self._mark_constant_globals()
         return self
+
+    def _satisfy_protocols(self) -> None:
+        """Structural typing, settled once: a class whose members cover a
+        project Protocol's is an instance of it, and one that defines
+        `__iter__` is an `Iterable`, with `__next__` an `Iterator`. Written
+        into the MRO before any signature is resolved, so that
+        assignability, which has no project to ask, reads it off the type.
+        Members are the methods and the class-body annotations; a field a
+        Protocol declares and a class only sets in `__init__` is not seen."""
+        protocols = [info for info in self.classes.values() if info.is_protocol]
+        for info in self.classes.values():
+            if info.is_protocol:
+                continue
+            members = self._member_names(info)
+            gained: list[str] = []
+            if "__iter__" in members:
+                gained.append("Iterable")
+                if "__next__" in members:
+                    gained.append("Iterator")
+            for protocol in protocols:
+                if protocol.qualname in info.mro:
+                    continue
+                wanted = self._member_names(protocol) - {"__init__", "__slots__"}
+                if wanted and wanted <= members:
+                    gained.append(protocol.qualname)
+            if gained:
+                kept = [entry for entry in info.mro if entry != "object"]
+                info.mro = (*kept, *(g for g in gained if g not in kept), "object")
+
+    def _member_names(self, info: ClassInfo) -> set[str]:
+        names: set[str] = set()
+        for entry in info.mro or (info.qualname,):
+            found = self.classes.get(entry)
+            if found is None:
+                continue
+            names |= set(found.methods)
+            for statement in found.node.body:
+                if isinstance(statement, ast.AnnAssign) and isinstance(statement.target, ast.Name):
+                    names.add(statement.target.id)
+        return names
 
     @staticmethod
     def _constant_value(node: ast.expr) -> object:

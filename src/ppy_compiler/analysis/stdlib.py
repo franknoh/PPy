@@ -282,8 +282,8 @@ def _opaque(module: str, names: tuple[str, ...]) -> None:
     def spelled(base: type) -> str:
         # `libcst.Call` is defined in `libcst._nodes.expression`; the
         # annotation, and the table, say `libcst.BaseExpression`.
-        if base is object:
-            return "object"
+        if base.__module__ == "builtins":
+            return base.__name__
         if getattr(library, base.__name__, None) is base:
             return f"{module}.{base.__name__}"
         return f"{base.__module__}.{base.__name__}"

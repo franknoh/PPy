@@ -468,6 +468,16 @@ def is_assignable(source: Type, target: Type) -> bool:
         return False
     if source == target:
         return True
+    if isinstance(target, Instance) and target.name == "object" and not target.args:
+        # A function, a class, a module: everything is an object.
+        return True
+    if isinstance(source, Instance) and source.name == "type" and not source.args:
+        # `type(x)` of something unresolved is some class; `type[Base]`
+        # accepts it the way `type[Any]` would.
+        if isinstance(target, ClassObject):
+            return True
+        if isinstance(target, Union_):
+            return any(isinstance(m, ClassObject) for m in target.members)
 
     # A union source is decomposed first: every one of its members has to fit
     # somewhere in the target. Asking the other way round would reject
@@ -557,6 +567,10 @@ def _same_argument(source: Type, target: Type) -> bool:
         return len(source.members) == len(target.members) and all(
             any(_same_argument(a, b) for b in target.members) for a in source.members
         )
+    if isinstance(source, Tuple_) and isinstance(target, Tuple_):
+        if source.homogeneous != target.homogeneous or len(source.items) != len(target.items):
+            return False
+        return all(_same_argument(a, b) for a, b in zip(source.items, target.items, strict=True))
     return False
 
 

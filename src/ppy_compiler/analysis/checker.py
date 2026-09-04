@@ -192,6 +192,19 @@ def _forget_attributes(env: Env, root: str) -> None:
             env.remove(name)
 
 
+def _is_class_value(t: T.Type) -> bool:
+    if isinstance(t, T.ClassObject) or t == T.NONE:
+        return True
+    return isinstance(t, T.Instance) and t.name == "type"
+
+
+#: Lookups that may ask with a wider key than the table holds: asking
+#: `table.get(type(node.op))` with a `type[operator]` of a table keyed by
+#: `type[Add] | type[Sub]` is how a table is consulted, and an absent key is
+#: the `None` the method promises.
+_LOOKUPS = frozenset({"dict.get", "dict.pop"})
+
+
 def _spread(elements: list[ast.expr]) -> bool:
     return any(isinstance(e, ast.Starred) for e in elements)
 
@@ -1678,7 +1691,10 @@ class _Checker:
                 self._native_blockers.append(f"`{info.name}` is a dynamic boundary")
             return Binding(info.ret, info.ret_facts if info.ret_annotated else Facts())
         for index, (param, argument) in enumerate(zip(signature.params, args, strict=False)):
-            if not T.is_assignable(argument.type, param.type):
+            fits = T.is_assignable(argument.type, param.type)
+            if not fits and signature.qualname in _LOOKUPS and index == 0:
+                fits = T.is_assignable(param.type, argument.type)
+            if not fits:
                 self._mismatch(
                     "E1301",
                     f"argument {index + 1} expects `{param.type}`, got `{argument.type}`",
@@ -2400,6 +2416,10 @@ class _Checker:
             if isinstance(left_base, T.DynamicType) or isinstance(right_base, T.DynamicType):
                 return Binding(T.DYNAMIC)
             return Binding(T.DYNAMIC if self._dynamic_depth else T.UNKNOWN)
+
+        if op is ast.BitOr and _is_class_value(left_base) and _is_class_value(right_base):
+            # `list | dict` in an `isinstance` is a type made of types.
+            return Binding(T.instance("type"))
 
         if op is ast.Add:
             for container in ("list", "str", "bytes"):
