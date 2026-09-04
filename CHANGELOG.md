@@ -130,6 +130,15 @@ Speed of the compiler itself, measured before being changed.
   library's `__mro__`, which Python 3.13 spells with more bases than 3.14,
   was a union of two types that printed alike, and `path / "x"` was an
   error on one Python and not the other.
+- A module the analysis did not need to recheck still reports what it
+  found. The fixpoint keeps a module whose inputs have not moved between
+  rounds, and the kept module's diagnostics lived in the earlier round's
+  discarded bag: `ppy check b.ppy`, with `b` importing an `a` whose error
+  was already settled, said "no errors". Each module now keeps its own
+  report, and the round that settles reports every module.
+- `docs/solver.md`: where an SMT solver would fit -- proving overflow
+  guards away in native loops, and validating the optimizer's rewrites --
+  and where it would not. A plan; nothing of it is implemented yet.
 - `ppy check pkg/a.py` checks `pkg.a`. A file inside a package used to be
   named from its own directory -- `a` -- so every `from . import b` in it
   was unresolved, on the one command people run most against the file they

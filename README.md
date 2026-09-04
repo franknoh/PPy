@@ -264,6 +264,7 @@ prints what it found.
 - [docs/diagnostics.md](docs/diagnostics.md) — every diagnostic code
 - [docs/cli.md](docs/cli.md) — every command and option
 - [docs/compatibility.md](docs/compatibility.md) — what is stable, what moves, and what the cache and artifact ABI promise
+- [docs/solver.md](docs/solver.md) — where an SMT solver would fit: proving overflow guards away, validating the optimizer
 - [examples/README.md](examples/README.md) — 30 folders, 39 runnable programs
 - [CONTRIBUTING.md](CONTRIBUTING.md) — setting up, the gate, and what a change has to keep true
 - [the implementation spec](ppy-compiler-implementation-spec-v1.md) — the normative baseline the source cites by section number (`spec 11.2`, `spec 16.4`, …)
