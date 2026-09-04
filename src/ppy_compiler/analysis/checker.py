@@ -406,6 +406,7 @@ class _Checker:
         self._external_writes = False
         self._aliases: AliasInfo | None = None
         self._bound_methods: set[int] = set()
+        self._module_seed: dict[str, Binding] | None = None
         #: Nodes that already produced a diagnostic, so a downstream pass does
         #: not report a second, less useful one about the same expression.
         self._reported: set[int] = set()
@@ -590,15 +591,22 @@ class _Checker:
         return analysis
 
     def _seed_module_env(self, env: Env) -> None:
-        for name, declared in _MODULE_DUNDERS.items():
-            env.set(name, Binding(declared))
-        for name, binding in self.symbols.imports.items():
-            if binding.origin is None:
-                env.set(name, Binding(T.Module_(binding.module)))
-            else:
-                env.set(name, Binding(self._imported_name_type(binding.module, binding.origin)))
-        for name, info in self.symbols.classes.items():
-            env.set(name, Binding(T.ClassObject(info.qualname, info.instance())))
+        # The dunders, the imports, and the classes do not move within a
+        # pass, and every function's environment starts from them: built
+        # once. A function's signature may have moved since the last
+        # function was checked, and a global may have been bound by a
+        # module statement, so those are read each time.
+        if self._module_seed is None:
+            seed = {name: Binding(declared) for name, declared in _MODULE_DUNDERS.items()}
+            for name, binding in self.symbols.imports.items():
+                if binding.origin is None:
+                    seed[name] = Binding(T.Module_(binding.module))
+                else:
+                    seed[name] = Binding(self._imported_name_type(binding.module, binding.origin))
+            for name, info in self.symbols.classes.items():
+                seed[name] = Binding(T.ClassObject(info.qualname, info.instance()))
+            self._module_seed = seed
+        env.update(self._module_seed)
         for name, info in self.symbols.functions.items():
             env.set(name, Binding(info.signature()))
         for name, declared in self.symbols.globals.items():

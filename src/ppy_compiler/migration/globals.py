@@ -11,19 +11,16 @@ from __future__ import annotations
 import keyword
 
 import libcst as cst
-from libcst.metadata import MetadataWrapper, PositionProvider
 
 from .pipeline import bound_names
-from .report import Rewrite
+from .report import Rewrite, rewrites_at
 
 __all__ = ["ModuleNamespaceWrites"]
 
 
 class _NamespaceRewriter(cst.CSTTransformer):
-    METADATA_DEPENDENCIES = (PositionProvider,)
-
     def __init__(self) -> None:
-        self.rewrites: list[Rewrite] = []
+        self.pending: list[tuple[cst.CSTNode, str, str]] = []
         self._depth = 0
 
     def visit_FunctionDef(self, node: cst.FunctionDef) -> bool:
@@ -66,10 +63,9 @@ class _NamespaceRewriter(cst.CSTTransformer):
         name = element.value.evaluated_value
         if not isinstance(name, str) or not name.isidentifier() or keyword.iskeyword(name):
             return updated
-        line = self.get_metadata(PositionProvider, original).start.line
-        self.rewrites.append(
-            Rewrite(
-                line,
+        self.pending.append(
+            (
+                original,
                 "module-namespace-writes",
                 f'`globals()["{name}"] = ...` became `{name} = ...`',
             )
@@ -88,5 +84,5 @@ class ModuleNamespaceWrites:
         if "globals" in bound_names(source):
             return module, []
         rewriter = _NamespaceRewriter()
-        rewritten = MetadataWrapper(module, unsafe_skip_copy=True).visit(rewriter)
-        return rewritten, rewriter.rewrites
+        rewritten = module.visit(rewriter)
+        return rewritten, rewrites_at(module, rewriter.pending)

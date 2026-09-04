@@ -17,7 +17,7 @@ import libcst as cst
 from libcst.metadata import MetadataWrapper, PositionProvider
 
 from .pipeline import bound_names
-from .report import Rewrite
+from .report import Rewrite, rewrites_at
 
 __all__ = ["LiteralAttributes", "StaticImports"]
 
@@ -51,14 +51,9 @@ def _arguments(call: cst.Call) -> list[cst.BaseExpression] | None:
 
 
 class _AttributeRewriter(cst.CSTTransformer):
-    METADATA_DEPENDENCIES = (PositionProvider,)
-
     def __init__(self, shadowed: frozenset[str]) -> None:
         self.shadowed = shadowed
-        self.rewrites: list[Rewrite] = []
-
-    def _line(self, node: cst.CSTNode) -> int:
-        return self.get_metadata(PositionProvider, node).start.line
+        self.pending: list[tuple[cst.CSTNode, str, str]] = []
 
     def leave_SimpleStatementLine(
         self, original: cst.SimpleStatementLine, updated: cst.SimpleStatementLine
@@ -74,14 +69,13 @@ class _AttributeRewriter(cst.CSTTransformer):
         arguments = _arguments(call)
         if not arguments or not _plain_base(arguments[0]):
             return updated
-        line = self._line(original)
         if builtin == "setattr" and len(arguments) == 3:
             name = _literal_name(arguments[1])
             if name is None:
                 return updated
             target = cst.Attribute(value=arguments[0], attr=cst.Name(name))
-            self.rewrites.append(
-                Rewrite(line, "literal-attributes", f"`setattr` became `.{name} = ...`")
+            self.pending.append(
+                (original, "literal-attributes", f"`setattr` became `.{name} = ...`")
             )
             return updated.with_changes(
                 body=[cst.Assign(targets=[cst.AssignTarget(target)], value=arguments[2])]
@@ -91,9 +85,7 @@ class _AttributeRewriter(cst.CSTTransformer):
             if name is None:
                 return updated
             target = cst.Attribute(value=arguments[0], attr=cst.Name(name))
-            self.rewrites.append(
-                Rewrite(line, "literal-attributes", f"`delattr` became `del .{name}`")
-            )
+            self.pending.append((original, "literal-attributes", f"`delattr` became `del .{name}`"))
             return updated.with_changes(body=[cst.Del(target=target)])
         return updated
 
@@ -110,9 +102,7 @@ class _AttributeRewriter(cst.CSTTransformer):
         name = _literal_name(arguments[1])
         if name is None:
             return updated
-        self.rewrites.append(
-            Rewrite(self._line(original), "literal-attributes", f"`getattr` became `.{name}`")
-        )
+        self.pending.append((original, "literal-attributes", f"`getattr` became `.{name}`"))
         return cst.Attribute(value=arguments[0], attr=cst.Name(name))
 
 
@@ -123,8 +113,8 @@ class LiteralAttributes:
 
     def apply(self, module: cst.Module, source: str) -> tuple[cst.Module, list[Rewrite]]:
         rewriter = _AttributeRewriter(bound_names(source) & {"setattr", "delattr", "getattr"})
-        rewritten = MetadataWrapper(module, unsafe_skip_copy=True).visit(rewriter)
-        return rewritten, rewriter.rewrites
+        rewritten = module.visit(rewriter)
+        return rewritten, rewrites_at(module, rewriter.pending)
 
 
 def _module_string(value: object) -> str | None:

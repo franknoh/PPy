@@ -46,6 +46,9 @@ class Env:
     def set(self, name: str, binding: Binding) -> None:
         self._bindings[name] = binding
 
+    def update(self, bindings: dict[str, Binding]) -> None:
+        self._bindings.update(bindings)
+
     def remove(self, name: str) -> None:
         self._bindings.pop(name, None)
 

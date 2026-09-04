@@ -113,7 +113,11 @@ Speed of the compiler itself, measured before being changed.
   normalizer instead of printing and parsing its own output. A path is
   resolved once per directory and a module's file is probed for once per
   graph build: every importer of `pkg.util` used to stat the same four
-  paths, and resolving walked every component with an lstat.
+  paths, and resolving walked every component with an lstat. A migration
+  pass resolves positions once, after it ran, and only for what it
+  rewrote; and each function's environment starts from the module's
+  imports and classes seeded once per pass rather than rebuilt per
+  function.
 - `ppy check pkg/a.py` checks `pkg.a`. A file inside a package used to be
   named from its own directory -- `a` -- so every `from . import b` in it
   was unresolved, on the one command people run most against the file they

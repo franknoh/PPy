@@ -14,6 +14,9 @@ from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
 
+import libcst as cst
+from libcst.metadata import MetadataWrapper, PositionProvider
+
 from ..diagnostics import Diagnostic, Severity
 
 __all__ = ["Classification", "MigrationReport", "Rewrite", "classify"]
@@ -36,6 +39,23 @@ class Rewrite:
     line: int
     pass_name: str
     message: str
+
+
+def rewrites_at(module: cst.Module, pending: list[tuple[cst.CSTNode, str, str]]) -> list[Rewrite]:
+    """The rewrites, with the line each node was on in `module`.
+
+    A pass reports where it rewrote, and only there; resolving positions is
+    a traversal of the whole module, so it is done once, after the pass,
+    and only when the pass rewrote something. Most modules that spell
+    `getattr` spell no `getattr(x, "name")`.
+    """
+    if not pending:
+        return []
+    positions = MetadataWrapper(module, unsafe_skip_copy=True).resolve(PositionProvider)
+    return [
+        Rewrite(positions[node].start.line, pass_name, message)
+        for node, pass_name, message in pending
+    ]
 
 
 #: `eval`/`exec` build code at runtime; no rewrite recovers static source.
