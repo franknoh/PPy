@@ -11,7 +11,6 @@ The map. Details live one link away:
 - [diagnostics.md](diagnostics.md) — every code
 - [cli.md](cli.md) — every command and option
 - [compatibility.md](compatibility.md) — what is stable, what moves, what the cache and artifact ABI promise
-- [the implementation spec](../ppy-compiler-implementation-spec-v1.md) — the normative baseline; comments in the source cite it by section
 
 ## The three paths
 
