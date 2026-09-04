@@ -57,6 +57,14 @@ Speed of the compiler itself, measured before being changed.
   class's own `__or__`, `__add__` and the other operator methods were never
   consulted. Together they were 193 of the compiler's 627 self-reported
   errors, and none of them was a finding.
+- `ppy check pkg/a.py` checks `pkg.a`. A file inside a package used to be
+  named from its own directory -- `a` -- so every `from . import b` in it
+  was unresolved, on the one command people run most against the file they
+  are editing. And `from pkg import mod` now follows `mod` into the program
+  when it is a module rather than a symbol: `from . import types as T` left
+  `T.Type` with nothing behind it whenever `types` was not itself an entry,
+  which was the compiler's own largest remaining self-reported error and
+  every one of its 3,000 withheld consequences.
 - A name a package re-exports resolves to where it is defined: `from
   ..diagnostics import Diagnostic` follows `diagnostics/__init__.py` to
   `.model`. A bound method passed along as a value (`notify=reporter.note`)
