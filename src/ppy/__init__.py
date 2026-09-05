@@ -65,6 +65,7 @@ from ._markers import (
     u32,
     u64,
 )
+from ._native import native_import, native_imports
 
 __version__ = "0.1.1a1"
 
@@ -110,6 +111,8 @@ __all__ = [
     "jax",
     "jit",
     "native",
+    "native_import",
+    "native_imports",
     "noinline",
     "opt",
     "parallel",

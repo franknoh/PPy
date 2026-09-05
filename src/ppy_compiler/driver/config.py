@@ -106,6 +106,9 @@ class Config:
     cache_dir: str = ".ppy-cache"
     dynamic_boundaries: str = "explicit"
     build_execution: str = "deny"
+    #: Whether `import ppy` may serve a `.ppy` module from its native build
+    #: when the compiler is installed. Off, every `.ppy` loads as source.
+    native_import: bool = True
     source_roots: tuple[str, ...] = ("src", ".")
     python_backend: PythonBackendConfig = field(default_factory=PythonBackendConfig)
     llvm: LlvmConfig = field(default_factory=LlvmConfig)
@@ -173,6 +176,7 @@ def _apply(config: Config, table: Mapping[str, Any]) -> Config:
     config.opt_level = level if isinstance(level, int) and 0 <= level <= 3 else config.opt_level
     config.cache_dir = table.get("cache-dir", config.cache_dir)
     config.dynamic_boundaries = table.get("dynamic-boundaries", config.dynamic_boundaries)
+    config.native_import = _as_bool(table.get("native-import"), config.native_import)
     config.build_execution = table.get("build-execution", config.build_execution)
     roots = table.get("source-roots")
     if isinstance(roots, list) and roots:

@@ -34,7 +34,8 @@ So the unit of migration is the **kernel**, not the repository:
    ```
 
 4. **Leave the orchestration as `.py`.** It imports the kernels through the
-   loader `import ppy` installs, and nothing about it changes:
+   loader `import ppy` installs, and nothing else about it changes -- no
+   bootstrap, no launcher:
 
    ```python
    import ppy  # installs the .ppy loader
@@ -44,9 +45,13 @@ So the unit of migration is the **kernel**, not the repository:
    score = reward.total(obs, prev, action)
    ```
 
-   Under plain CPython that call runs the Python body. Under `ppy run` or a
-   `ppy build` launcher, `reward.total` is native and the orchestration
-   never knows.
+   With the compiler installed, that import is native: the first process to
+   import `reward.ppy` builds it into the project's cache and binds its
+   functions, every later process finds the build, and a kernel that does
+   not check clean loads as Python with one line on stderr saying why. Under
+   plain CPython without the compiler the call runs the Python body. Under
+   `ppy run` or a `ppy build` launcher the whole program is compiled at
+   once. The orchestration never knows which.
 
 [`examples/26_project`](../examples/26_project/README.md) is this shape at
 toy scale — a `.ppy` kernel behind a `.py` application — and

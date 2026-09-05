@@ -122,7 +122,7 @@ caller.
 
 | | |
 |---|---|
-| `python f.ppy` | plain CPython. `import ppy` installs a `sys.meta_path` finder so `.py` files can import `.ppy` modules; nothing else happens. |
+| `python f.ppy` | plain CPython. `import ppy` installs a `sys.meta_path` finder so `.py` files can import `.ppy` modules -- natively when the compiler is installed and the module checks clean, as Python source otherwise. |
 | `ppy f.ppy` | the optimized Python backend: AST-level optimization (folding, inlining, LICM, loop transforms) executed by CPython. |
 | `ppy run f.ppy` | eligible functions compile through LLVM; everything else runs the Python body. |
 

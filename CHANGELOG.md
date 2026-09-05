@@ -194,6 +194,22 @@ Speed of the compiler itself, measured before being changed.
   on Python 3.13 and earlier: from 1.8 it ships `manylinux_2_28` wheels
   only, and on Ubuntu 18.04 the install fell back to building its Rust
   sources and failed. Python 3.14 has no 1.7 wheel and takes 1.8.
+- `import ppy` is the whole integration. With the compiler installed, a
+  `.ppy` module imported from a plain `.py` program is served from its
+  native build: the first process builds it into the project's cache --
+  the artifact `ppy run` builds -- and binds its functions through the
+  prebuilt binder, every later process finds the build, and a kernel that
+  does not check clean, or needs the in-process JIT, loads as Python source
+  with one line on stderr saying why. A program carved into `.ppy` kernels
+  needs no bootstrap and no launcher. `PPY_IMPORT=python` turns it off for
+  a process, `native-import = false` under `[tool.ppy]` for a project,
+  `PPY_QUIET=1` silences the notes, `ppy.native_import(False)` decides in
+  code, and `ppy.native_imports()` says which modules came in native. The
+  build itself is the compiler's (`ppy_compiler.driver.native_import`), asked
+  for by name: the runtime still never requires the compiler, and a `.ppy`
+  program without it loads as source.
+- `scripts/dogfood.py` counts the errors in a target's own files: a module
+  reached through an import is another target's business.
 - `ppy check pkg/a.py` checks `pkg.a`. A file inside a package used to be
   named from its own directory -- `a` -- so every `from . import b` in it
   was unresolved, on the one command people run most against the file they

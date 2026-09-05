@@ -20,6 +20,9 @@ source and no conversion step involved.
   `PPyAmbiguousModuleWarning` is raised.
 - `ppy convert` always inserts `import ppy`, so a converted entry point can
   import its siblings.
+- With the compiler installed the import is native: `geometry.ppy` is built
+  once into `.ppy-cache` and its functions are bound; `PPY_IMPORT=python`
+  keeps it source. Without the compiler, source it is.
 
 ## Run it
 

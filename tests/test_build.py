@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import contextlib
 import json
+import os
 import subprocess
 import sys
 import textwrap
@@ -306,8 +307,6 @@ def test_the_launcher_never_imports_the_compiler(project: Path, tmp_path: Path):
     plain = subprocess.run(
         [sys.executable, "app.ppy"], cwd=project, capture_output=True, text=True, check=False
     )
-    import os
-
     environment = dict(os.environ, PYTHONPATH=str(poison))
     ran = subprocess.run(
         [str(launcher)],
@@ -939,3 +938,63 @@ def test_a_program_with_nothing_native_still_has_an_artifact(tmp_path: Path):
     assert _run(tmp_path, "hello.ppy").stdout.strip() == "hello, world"
     manifest = next((tmp_path / ".ppy-cache" / "run").glob("*/ppy-bindings.json"))
     assert json.loads(manifest.read_text(encoding="utf-8"))["native_library"] is None
+
+
+NATIVE_IMPORT_KERNEL = """
+def total(n: int) -> int:
+    acc = 0
+    for i in range(n):
+        acc += i * i
+    return acc
+"""
+
+NATIVE_IMPORT_MAIN = """
+import ppy
+import kernel
+
+print(kernel.total(1000), type(kernel.__loader__).__name__, type(kernel.total).__name__)
+print(sorted(ppy.native_imports().items()))
+"""
+
+
+def _python(tmp_path: Path, **env: str) -> subprocess.CompletedProcess:
+    return subprocess.run(
+        [sys.executable, "main.py"],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        check=False,
+        env={**os.environ, **env},
+    )
+
+
+def test_import_ppy_serves_a_kernel_natively(tmp_path: Path):
+    """`import ppy` is the whole integration: a `.ppy` kernel imported from a
+    plain `.py` program is built once into the cache and bound natively; the
+    next process finds the build; `PPY_IMPORT=python` keeps it source."""
+    (tmp_path / "pyproject.toml").write_text("[tool.ppy]\n", encoding="utf-8")
+    (tmp_path / "kernel.ppy").write_text(NATIVE_IMPORT_KERNEL.lstrip("\n"), encoding="utf-8")
+    (tmp_path / "main.py").write_text(NATIVE_IMPORT_MAIN.lstrip("\n"), encoding="utf-8")
+    expected = str(sum(i * i for i in range(1000)))
+
+    first = _python(tmp_path)
+    assert first.returncode == 0, first.stderr
+    lines = first.stdout.splitlines()
+    assert lines[0].split() == [expected, "GeneratedLoader", "builtin_function_or_method"]
+    assert lines[1] == "[('kernel', ('total',))]"
+    assert "built kernel.ppy natively" in first.stderr
+    assert "native: kernel" in first.stderr
+
+    second = _python(tmp_path)
+    assert second.stdout == first.stdout
+    assert "built" not in second.stderr, "the second process finds the first one's build"
+
+    source = _python(tmp_path, PPY_IMPORT="python")
+    assert source.stdout.splitlines() == [f"{expected} PPySourceLoader function", "[]"]
+    assert "[ppy]" not in source.stderr
+
+    (tmp_path / "pyproject.toml").write_text(
+        "[tool.ppy]\nnative-import = false\n", encoding="utf-8"
+    )
+    off = _python(tmp_path)
+    assert off.stdout.splitlines() == [f"{expected} PPySourceLoader function", "[]"]

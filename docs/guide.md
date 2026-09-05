@@ -72,6 +72,16 @@ Without `import ppy` the module is invisible — the hook is never implicit. If
 `ppy check` rejects the ambiguity outright, so use `--in-place` to migrate a
 project.
 
+With the compiler installed, the same import is native. The first process to
+import `geometry.ppy` builds it into the project's cache — the artifact `ppy
+run` would build — and binds its functions through the prebuilt binder; every
+later process finds the build and pays nothing. A kernel that does not check
+clean, or that needs the in-process JIT, loads as Python source, and one line
+on stderr says which and why. So a program carved into `.ppy` kernels needs
+no bootstrap and no launcher: `import ppy`, and the rest is the Python it was.
+`PPY_IMPORT=python` turns the native path off for a process, `native-import =
+false` under `[tool.ppy]` for a project, and `PPY_QUIET=1` silences the notes.
+
 ## Examples
 
 30 example folders under `examples/`, 39 runnable programs, each folder with

@@ -20,7 +20,7 @@ from .execute import execute, format_traceback
 from .generated import GeneratedModule
 from .manifest import Manifest, ManifestError, load
 
-__all__ = ["main"]
+__all__ = ["PrebuiltBinder", "generated_modules", "main"]
 
 
 def _wrapper_module(manifest: Manifest):  # type: ignore[no-untyped-def]
@@ -87,7 +87,8 @@ class PrebuiltBinder(LibraryBinder):
         return binding.wrapper
 
 
-def _generated_modules(manifest: Manifest) -> dict[str, GeneratedModule]:
+def generated_modules(manifest: Manifest) -> dict[str, GeneratedModule]:
+    """The generated Python modules a manifest names, read off disk."""
     modules: dict[str, GeneratedModule] = {}
     for name, file in manifest.generated.items():
         payload = json.loads(file.read_text(encoding="utf-8"))
@@ -118,7 +119,7 @@ def main(manifest_path: Path, argv: list[str]) -> int:
             print(f"error[E1801]: cannot load {manifest.library}: {error}", file=sys.stderr)
             return 2
 
-    modules = _generated_modules(manifest)
+    modules = generated_modules(manifest)
     entry = modules.get(manifest.entry_module)
     if entry is None:
         print(

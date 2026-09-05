@@ -95,13 +95,15 @@ class _GeneratedFinder:
         if generated is None:
             return None
         spec = ModuleSpec(
-            fullname, _GeneratedLoader(generated, self.natives), origin=str(generated.source_path)
+            fullname, GeneratedLoader(generated, self.natives), origin=str(generated.source_path)
         )
         spec.has_location = True
         return spec
 
 
-class _GeneratedLoader:
+class GeneratedLoader:
+    """Executes a generated module with its native bindings in place."""
+
     def __init__(self, generated: GeneratedModule, natives=None) -> None:
         self.generated = generated
         self.natives = natives
@@ -131,8 +133,10 @@ def install_loader(modules: dict[str, GeneratedModule], natives=None) -> _Genera
     """
     try:
         import ppy
+        from ppy import _native
 
         ppy.install()
+        _native.managed()
     except ImportError:  # pragma: no cover - the runtime is a hard dependency
         pass
     finder = _GeneratedFinder(modules, natives)

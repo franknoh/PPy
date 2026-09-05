@@ -1,7 +1,8 @@
 """Import support for `.ppy` modules under plain CPython.
 
 Importing `ppy` installs a `sys.meta_path` finder so that sibling `.ppy`
-modules load as ordinary Python source. No compiler is involved here.
+modules load as ordinary Python source -- or natively, when a build of them
+exists or can be made (`_native`). No compiler is involved here.
 """
 
 from __future__ import annotations
@@ -91,6 +92,13 @@ class PPyPathFinder:
                 if not _within_roots(filename):
                     continue
                 cls._warn_if_ambiguous(fullname, directory, tail, is_package)
+                from . import _native
+
+                native = _native.spec_for(fullname, filename)
+                if native is not None:
+                    if is_package:
+                        native.submodule_search_locations = [os.path.dirname(filename)]
+                    return native
                 loader = PPySourceLoader(fullname, filename)
                 return spec_from_file_location(
                     fullname,

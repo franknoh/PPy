@@ -47,7 +47,7 @@ def migrate(target: str) -> dict:
     # Diagnostics go to stderr; stdout carries the converted source, and the
     # compiler's own source spells "<unknown>" on purpose in three places.
     report = done.stderr
-    codes = _ERROR.findall(report)
+    codes = _own_errors(report, (ROOT / target).resolve())
     withheld = _WITHHELD.search(report)
     return {
         "seconds": round(time.perf_counter() - started, 1),
@@ -58,6 +58,32 @@ def migrate(target: str) -> dict:
         "traceback": "Traceback (most recent call last)" in report + done.stdout,
         "crashed": done.returncode not in (0, 1),
     }
+
+
+def _own_errors(report: str, root: Path) -> list[str]:
+    """The codes of the errors located in the target's own files.
+
+    A module reached through an import -- `ppy` reaching `ppy_runtime` -- is
+    another target's business and counted there; an error with no location
+    is the target's.
+    """
+    codes: list[str] = []
+    lines = report.splitlines()
+    for index, line in enumerate(lines):
+        found = _ERROR.match(line)
+        if found is None:
+            continue
+        below = lines[index + 1].strip() if index + 1 < len(lines) else ""
+        if below.startswith("-->"):
+            path = below[3:].strip().rsplit(":", 2)[0]
+            try:
+                inside = Path(path).resolve().is_relative_to(root)
+            except (OSError, ValueError):
+                inside = True
+            if not inside:
+                continue
+        codes.append(found.group(1))
+    return codes
 
 
 def _count(codes: list[str]) -> dict[str, int]:
