@@ -5,6 +5,11 @@ from __future__ import annotations
 import ast
 import importlib
 import importlib.util
+import json
+import os
+import subprocess
+import sys
+import textwrap
 from pathlib import Path
 
 import pytest
@@ -775,3 +780,104 @@ def test_awaitable_annotations_are_resolved(write, analyze):
     bundle = analyze(path)
     assert not bundle.diagnostics.has_errors(), [d.message for d in bundle.diagnostics.errors]
     assert str(bundle.symbols.functions["awaitable.use"].ret) == "int"
+
+
+# -- PyTorch: regions ride in the built artifact --------------------------
+
+ROOT = Path(__file__).resolve().parent.parent
+
+
+def _launch(args: list[str], cwd: Path, **env: str) -> subprocess.CompletedProcess:
+    return subprocess.run(
+        [sys.executable, *args],
+        cwd=cwd,
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=900,
+        env={**os.environ, **env},
+    )
+
+
+def _region_toolchain_or_skip() -> None:
+    from ppy_compiler.plugins.torch_build import toolchain_ready
+
+    ready, detail = toolchain_ready()
+    if not ready:
+        pytest.skip(detail)
+
+
+@requires_torch
+def test_torch_regions_ride_in_the_artifact_and_import_ppy_serves_them(tmp_path):
+    """A `.ppy` that imports torch is cached like any other module: its ATen
+    region is compiled into the artifact, recorded in the manifest with the
+    extension beside it, and loaded by the runtime without the compiler --
+    so `import ppy` from a plain program, under whatever launcher started
+    it, gets the region on the first process and every one after."""
+    _region_toolchain_or_skip()
+    (tmp_path / "pyproject.toml").write_text(
+        "[tool.ppy]\nstrict = true\n\n[tool.ppy.plugins.torch]\ncpp-regions = true\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "model.ppy").write_text(
+        textwrap.dedent(
+            """
+            import torch
+
+
+            def layer(x: torch.Tensor, w: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
+                return torch.relu(torch.add(torch.matmul(x, w), b))
+            """
+        ).lstrip("\n"),
+        encoding="utf-8",
+    )
+    (tmp_path / "main.py").write_text(
+        textwrap.dedent(
+            """
+            import ppy
+            import torch
+
+            import model
+
+            torch.manual_seed(0)
+            x, w, b = torch.randn(4, 8), torch.randn(8, 8), torch.randn(8)
+            same = torch.equal(model.layer(x, w, b), torch.relu(torch.add(torch.matmul(x, w), b)))
+            print(type(model.__loader__).__name__, getattr(model.layer, "__ppy_region__", False), same)
+            """
+        ).lstrip("\n"),
+        encoding="utf-8",
+    )
+
+    first = _launch(["main.py"], tmp_path)
+    assert first.returncode == 0, first.stderr
+    assert first.stdout.strip() == "GeneratedLoader True True"
+    assert "built model.ppy natively" in first.stderr
+
+    second = _launch(["main.py"], tmp_path)
+    assert second.stdout == first.stdout
+    assert "built" not in second.stderr and "compiling" not in second.stderr
+
+    manifest = next((tmp_path / ".ppy-cache" / "run").glob("*/ppy-bindings.json"))
+    section = json.loads(manifest.read_text(encoding="utf-8"))["regions"]["model"]
+    assert list(section["entries"]) == ["layer"]
+    assert (manifest.parent / section["library"]).is_file(), "the extension ships beside it"
+
+
+@requires_torch
+def test_torchrun_ranks_import_the_example_kernels_natively():
+    """`examples/31_torchrun/train.py` under torchrun: every rank gets the
+    preprocessing loops and the model's ATen region natively through
+    `import ppy` alone, from one shared build."""
+    _region_toolchain_or_skip()
+    example = ROOT / "examples" / "31_torchrun"
+    done = _launch(
+        ["-m", "torch.distributed.run", "--standalone", "--nproc_per_node=2", "train.py"],
+        example,
+        OMP_NUM_THREADS="2",
+    )
+    assert done.returncode == 0, done.stderr[-3000:]
+    # The ranks share one pipe, so their reports may land in any order.
+    ranks = [line for line in done.stdout.splitlines() if line.startswith("# rank")]
+    assert len(ranks) == 2, done.stdout
+    assert {line.split()[2] for line in ranks} == {"0/2", "1/2"}, done.stdout
+    assert all("native=True region=True loader=GeneratedLoader" in line for line in ranks)

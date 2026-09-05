@@ -265,7 +265,7 @@ prints what it found.
 - [docs/cli.md](docs/cli.md) — every command and option
 - [docs/compatibility.md](docs/compatibility.md) — what is stable, what moves, and what the cache and artifact ABI promise
 - [docs/solver.md](docs/solver.md) — where an SMT solver would fit: proving overflow guards away, validating the optimizer
-- [examples/README.md](examples/README.md) — 30 folders, 39 runnable programs
+- [examples/README.md](examples/README.md) — 31 folders, 41 runnable programs
 - [CONTRIBUTING.md](CONTRIBUTING.md) — setting up, the gate, and what a change has to keep true
 
 ## Development

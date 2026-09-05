@@ -1,0 +1,78 @@
+"""The per-batch preprocessing of a trainer, as native loops over borrowed buffers.
+
+`standardize` centers and scales every row and appends the pairwise
+interactions the model trains on; `bucketize` counts how the standardized
+values spread, the kind of running statistic a trainer logs each step. Both
+index rather than slice, so their buffers are borrowed and the loops lower
+to native code writing into memory the caller owns.
+"""
+
+import array
+import math
+
+from ppy import Buffer
+
+
+def standardize(raw: Buffer[float], out: Buffer[float], rows: int, cols: int) -> float:
+    total: float = 0.0
+    for row in range(rows):
+        base: int = row * cols
+        target: int = row * cols * 2
+
+        sum_: float = 0.0
+        for i in range(cols):
+            sum_ += raw[base + i]
+        mean: float = sum_ / cols
+
+        spread: float = 0.0
+        for i in range(cols):
+            spread += (raw[base + i] - mean) * (raw[base + i] - mean)
+        deviation: float = math.sqrt(spread / cols) + 1e-8
+
+        for i in range(cols):
+            value: float = (raw[base + i] - mean) / deviation
+            out[target + i] = value
+            total += value
+        for i in range(cols):
+            interaction: float = out[target + i] * out[target + (i + 1) % cols]
+            out[target + cols + i] = interaction
+            total += interaction
+    return total
+
+
+def bucketize(
+    values: Buffer[float], count: int, counts: Buffer[int], bins: int, low: float, high: float
+) -> int:
+    """Count the first `count` values into `bins` equal slots over [low, high).
+
+    Returns how many fell outside the range.
+    """
+    width: float = (high - low) / bins
+    outside: int = 0
+    for i in range(count):
+        offset: float = (values[i] - low) / width
+        if offset < 0.0 or offset >= bins:
+            outside += 1
+        else:
+            counts[int(offset)] += 1
+    return outside
+
+
+def _check() -> None:
+    """A checksum on a fixed input, so the three paths can be compared."""
+    rows: int = 2000
+    cols: int = 16
+    seed: int = 12345
+    raw = array.array("d", [0.0] * (rows * cols))
+    for i in range(rows * cols):
+        seed = (seed * 1103515245 + 12345) % 2147483648
+        raw[i] = seed / 2147483648.0 - 0.5
+    out = array.array("d", [0.0] * (rows * cols * 2))
+    counts = array.array("q", [0] * 8)
+    total: float = standardize(raw, out, rows, cols)
+    outside: int = bucketize(out, rows * cols * 2, counts, 8, -3.0, 3.0)
+    print(f"checksum={total:.6f} outside={outside} counts={list(counts)}")
+
+
+if __name__ == "__main__":
+    _check()

@@ -42,8 +42,10 @@ An edit anywhere in the project is a different name and a fresh build,
 whose per-module caches make it cheap. Three kinds of program stay on the
 in-process path every time, because the launcher cannot serve them: one
 that specializes at runtime (`@ppy.jit`, `@ppy.specialize`), one with a
-fused NumPy kernel, and one that imports torch or JAX; each leaves a
-`needs-jit` note in its directory so the next run knows without analyzing.
+fused NumPy kernel, and one that imports JAX; each leaves a `needs-jit`
+note in its directory so the next run knows without analyzing. A program
+that imports torch is cached like any other: its ATen regions are compiled
+into the artifact and the launcher loads them from there.
 
 ## `ppy convert` — strict `.py` to `.ppy`
 
@@ -163,6 +165,7 @@ and which stayed boxed, with the reason.
 ```bash
 ppy build TARGET [--safe] [--host-cpu] [--standalone]
                  [--backend {llvm,python}] [-o DIR]
+ppy build --warm TARGET
 ```
 
 `--backend llvm` (default) writes objects, `libppy_<project>.so`,
@@ -197,6 +200,29 @@ begins, against ~2 s for a cold `ppy run` that compiles first (a warm
 `ppy run` takes this same launcher path, from the cache).
 `examples/bench_startup.py` measures the categories separately, and
 `--standalone` below removes that 35 ms too.
+
+### `--warm`
+
+```bash
+ppy build --warm train/kernels/        # every .ppy under it
+ppy build --warm train/reward.ppy
+```
+
+Builds ahead of time exactly what `ppy run FILE` and `import ppy` build on
+their first use -- the artifact in the project cache, under the key an
+import of that module will look for -- and stops. It takes no flags that
+would change the artifact (`--safe`, `--host-cpu`, `--prover`, `-o`, and
+the rest are refused): an import takes none either, so the project
+configuration is the only thing that names the build, and what a flag built
+nothing would find. Its place is the step before a launch that starts many
+processes at once. Without it, every rank of a `torchrun` imports the
+kernel, finds no build, and builds one; the builds are identical and the
+first to finish is the one kept, so the result is right, but each rank
+paid for it. With it, every rank finds the build. A module that does not
+check clean is an error here (exit 1) rather than a note on each rank's
+stderr, and a module that needs the in-process JIT is reported and skipped.
+The key covers every source under the project root, so run it after the
+last edit, not before.
 
 ### `--standalone`
 

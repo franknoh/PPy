@@ -232,6 +232,8 @@ def build(options: argparse.Namespace, reporter: Reporter) -> int:
     if not target.exists():
         reporter.emit(Diagnostic("E1002", Severity.ERROR, f"{target} does not exist"))
         return 2
+    if getattr(options, "warm", False):
+        return _warm(options, reporter, target)
     backend = options.backend
     project = open_project(target, config_overrides=_overrides(options))
     if backend == "llvm":
@@ -295,6 +297,42 @@ def build(options: argparse.Namespace, reporter: Reporter) -> int:
     for note in artifacts.notes:
         reporter.emit(Diagnostic("W2004", Severity.WARNING, note))
     return 0
+
+
+def _warm(options: argparse.Namespace, reporter: Reporter, target: Path) -> int:
+    """`ppy build --warm`: the artifact an import will look for, under the project configuration.
+
+    A flag that would key a different artifact is refused rather than
+    honored: `import ppy` takes no flags, so nothing would ever find what
+    the flag built.
+    """
+    from .native_import import warm
+
+    clashing = [
+        flag
+        for flag, given in (
+            ("--standalone", getattr(options, "standalone", False)),
+            ("--safe", getattr(options, "safe", False)),
+            ("--host-cpu", getattr(options, "host_cpu", False)),
+            ("--prover", getattr(options, "prover", None) is not None),
+            ("-o", getattr(options, "output", None) is not None),
+            ("--backend python", getattr(options, "backend", "llvm") == "python"),
+            ("--opt-level", getattr(options, "opt_level", None) is not None),
+            ("--no-strict", getattr(options, "no_strict", False)),
+        )
+        if given
+    ]
+    if clashing:
+        reporter.emit(
+            Diagnostic(
+                "E1002",
+                Severity.ERROR,
+                "--warm builds under the project configuration, as `import ppy` and "
+                f"`ppy run` do; drop {', '.join(clashing)} or set it in [tool.ppy]",
+            )
+        )
+        return 2
+    return warm(target, reporter)
 
 
 def convert(options: argparse.Namespace, reporter: Reporter) -> int:

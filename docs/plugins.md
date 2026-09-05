@@ -33,6 +33,12 @@ against another, and a module that imports none of them pays for none of them.
   `__torch_function__` override fails the guard and the Python body runs.
 - Building the region needs a C++ compiler and `ninja`; `toolchain_ready()`
   reports what is missing. CUDA is used when available.
+- A built artifact carries its regions: the extension is copied beside the
+  manifest and recorded under `regions`, and `ppy_runtime` loads it with no
+  compiler in the process -- so a warm `ppy run`, a built launcher, and a
+  `.ppy` served by `import ppy` all get the region, under any launcher
+  (`examples/31_torchrun`). A region library that has gone missing is the
+  Python body, not a broken artifact.
 - Worth ~20% on small CPU tensors; nothing on an accelerator, where kernel
   launch latency dominates. Measured honestly in `examples/21_training_torch`.
 

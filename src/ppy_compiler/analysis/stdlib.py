@@ -385,6 +385,14 @@ _FUNCTIONS: dict[str, tuple[T.Type, EffectSet]] = {
         T.Tuple_((T.STR,), homogeneous=True),
         EffectSet.of(Effect.READ_GLOBAL),
     ),
+    # Whether `.ppy` imports may be served natively, and which have been:
+    # process-wide state of the hook, like the finder itself.
+    "ppy.native_import": _fn("ppy.native_import", T.BOOL, EffectSet.of(Effect.WRITE_GLOBAL)),
+    "ppy.native_imports": _fn(
+        "ppy.native_imports",
+        T.dict_of(T.STR, T.Tuple_((T.STR,), homogeneous=True)),
+        EffectSet.of(Effect.READ_GLOBAL),
+    ),
     "time.time": _fn("time.time", T.FLOAT, _TIME),
     "time.perf_counter": _fn("time.perf_counter", T.FLOAT, _TIME),
     "time.perf_counter_ns": _fn("time.perf_counter_ns", T.INT, _TIME),

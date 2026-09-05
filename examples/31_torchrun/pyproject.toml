@@ -1,0 +1,6 @@
+[tool.ppy]
+strict = true
+opt-level = 3
+
+[tool.ppy.plugins.torch]
+cpp-regions = true

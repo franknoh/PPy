@@ -8,6 +8,7 @@ under a fingerprint of everything that could change it.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from pathlib import Path
 
 from ..cache import CacheKey, digest
 from ..diagnostics import Diagnostic, DiagnosticBag, Severity, Span
@@ -165,6 +166,10 @@ class RegionResult:
     compiled: dict[str, dict[str, object]] = field(default_factory=dict)
     diagnostics: list[Diagnostic] = field(default_factory=list)
     rejected: list[tuple[str, str]] = field(default_factory=list)
+    #: Per module: the extension library holding its regions, and the C++
+    #: symbol of each -- what a build records so the launched artifact can
+    #: load them without the compiler.
+    libraries: dict[str, tuple[Path, dict[str, str]]] = field(default_factory=dict)
 
     @property
     def count(self) -> int:
@@ -222,6 +227,8 @@ def compile_torch_regions(  # type: ignore[no-untyped-def]
                 )
             continue
 
+        if built.library is not None and built.symbols:
+            result.libraries[module_name] = (built.library, dict(built.symbols))
         for region in regions:
             entry_point = built.entry_points.get(region.name)
             if entry_point is None:

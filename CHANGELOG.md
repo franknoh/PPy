@@ -10,8 +10,23 @@ Speed of the compiler itself, measured before being changed.
   straight to `ppy_runtime`. On a small program that was 1.65 s of imports,
   LLVM initialization, and re-analysis before the first line ran; it is now
   the launcher's few dozen milliseconds plus the key. Programs that
-  specialize at runtime, fuse NumPy kernels, or use the torch or JAX plugins
-  keep the in-process JIT, and say so in a `needs-jit` note.
+  specialize at runtime, fuse NumPy kernels, or use the JAX plugin keep the
+  in-process JIT, and say so in a `needs-jit` note.
+- A built artifact carries its torch ATen regions. The extension compiled
+  against the installed PyTorch is copied beside the manifest and recorded
+  under `regions`, and `ppy_runtime` loads it with no compiler in the
+  process; a region library that has gone missing is the Python body. So a
+  program that imports torch is cached and launched like any other, and a
+  `.ppy` kernel that imports torch is served natively by `import ppy`.
+- `ppy build --warm TARGET` builds ahead of time what `ppy run` and
+  `import ppy` build on first use, for one module or every `.ppy` under a
+  directory, under the project configuration alone -- flags that would key
+  a different artifact are refused. It is the step before a launch that
+  starts many ranks at once: each finds the build instead of making its own.
+- `examples/31_torchrun`: a trainer with two `.ppy` kernels -- native
+  preprocessing loops and an ATen-region model -- that runs the same under
+  `python`, `torchrun`, and `accelerate launch`, with `import ppy` as the
+  whole integration.
 - A development tree fingerprints the compiler by the sizes and mtimes of
   its sources rather than by reading them all, which was a third of a
   second on every command.

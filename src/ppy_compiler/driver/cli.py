@@ -113,6 +113,14 @@ def build_parser() -> argparse.ArgumentParser:
     )
     build.add_argument("--backend", choices=("llvm", "python"), default="llvm")
     build.add_argument("-o", "--output", type=Path, help="output directory")
+    build.add_argument(
+        "--warm",
+        action="store_true",
+        help="build what `ppy run TARGET` and `import ppy` build on their first use into "
+        "the project cache, and stop; TARGET may be a directory, for every .ppy under it, "
+        "so a program launched on many ranks at once finds the artifact instead of "
+        "each rank building it",
+    )
 
     check = subparsers.add_parser("check", help="run all static validation")
     check.add_argument("path", type=Path, nargs="?", default=Path("."))

@@ -483,6 +483,7 @@ def compile_project(  # type: ignore[no-untyped-def]
             "search_paths": [str(path) for path in bundle.project.search_paths],
             "safeguards": bundle.project.config.llvm.safeguards or "hoisted",
         }
+    regions_section = _ship_regions(bundle, reporter, build_directory, artifacts)
     wrapper_section = None
     if signatures:
         wrappers = build_wrappers(
@@ -506,6 +507,7 @@ def compile_project(  # type: ignore[no-untyped-def]
         fused=fused,
         program=program,
         wrappers=wrapper_section,
+        regions=regions_section,
     )
 
     if entry is not None and launcher:
@@ -521,19 +523,51 @@ def compile_project(  # type: ignore[no-untyped-def]
     return artifacts
 
 
+def _ship_regions(bundle, reporter, build_directory: Path, artifacts) -> dict | None:  # type: ignore[no-untyped-def]
+    """Compile the torch ATen regions and put their libraries beside the manifest.
+
+    A region is built against the installed PyTorch into the project cache,
+    keyed by its source and that build; the artifact gets a copy of the
+    extension and records which C++ symbol serves which function, so the
+    runtime loads it the way it loads the boundary wrappers -- with no
+    compiler and no toolchain. A region that does not build is a warning
+    and the Python body, exactly as under the JIT.
+    """
+    from ...driver.staging import compile_torch_regions
+
+    regions = compile_torch_regions(bundle, notify=reporter.note)
+    for remark in regions.diagnostics:
+        if remark.severity is Severity.WARNING:
+            artifacts.notes.append(remark.message)
+        elif bundle.project.config.diagnostics.optimization_remarks:
+            reporter.emit(remark)
+    if not regions.libraries:
+        return None
+    section: dict[str, dict[str, object]] = {}
+    for module_name, (library, symbols) in sorted(regions.libraries.items()):
+        shipped = build_directory / library.name
+        if shipped != library:
+            shipped.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(library, shipped)
+        section[module_name] = {"library": shipped.name, "entries": dict(sorted(symbols.items()))}
+    return section
+
+
 #: Libraries whose plugins do build-time work only the in-process path does:
-#: compiled torch regions and staged JAX exports are bound by `compile_and_run`
-#: and have no place in a manifest yet.
-_IN_PROCESS_ONLY = frozenset({"torch", "jax", "flax"})
+#: a staged JAX export is bound by `compile_and_run` and has no place in a
+#: manifest yet. (Torch regions ride in the artifact: see `_ship_regions`.)
+_IN_PROCESS_ONLY = frozenset({"jax", "flax"})
 
 
 def needs_jit(bundle, natives: dict[str, NativeModule]) -> str | None:  # type: ignore[no-untyped-def]
     """Why this program has to run through the in-process JIT, or None.
 
     Runtime specialization compiles while the program runs; a fused NumPy
-    kernel is bound by the compiler's own binder; a torch or JAX plugin does
+    kernel is bound by the compiler's own binder; the JAX plugin does
     build-time work the manifest does not carry. Everything else a launched
-    artifact does exactly as the JIT would, so everything else is cached.
+    artifact does exactly as the JIT would, so everything else is cached --
+    a program that imports torch included: its ATen regions are compiled
+    into the artifact and loaded from it.
     """
     for native in natives.values():
         for lowered in native.functions.values():

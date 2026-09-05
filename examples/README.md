@@ -41,6 +41,7 @@ rather than believed.
 | `28_threads` | a native region releasing the GIL |
 | `29_flax` | a Flax/optax training loop, converted and strict-checked |
 | `30_migrate` | a deliberately dynamic legacy script rewritten by `ppy migrate` into strict PPY |
+| `31_torchrun` | a trainer under `torchrun` and `accelerate launch`: `import ppy` serves its kernels natively on every rank |
 
 A folder of related problems keeps them in numbered subfolders, and every
 runner reaches them: `15_algorithms/15a_nqueens` and its five siblings are

@@ -49,11 +49,49 @@ class PrebuiltBinder(LibraryBinder):
         self._entries: dict[str, dict[str, object]] = {}
         self._wrappers = _wrapper_module(manifest)
         self._wrapper_entries = manifest.wrapper_entries or {}
+        self._region_libraries = manifest.regions or {}
+        self._extensions: dict[Path, object | None] = {}
         for entry in manifest.entries:
             self._entries.setdefault(entry.module, {})[entry.binding] = entry.signature
 
     def names(self, module: str) -> frozenset[str]:
         return frozenset(self._entries.get(module, {}))
+
+    def region_names(self, module: str) -> frozenset[str]:
+        shipped = self._region_libraries.get(module)
+        return frozenset(shipped.entries) if shipped is not None else frozenset()
+
+    def region(self, module: str, function: str, fallback):  # type: ignore[no-untyped-def]
+        """Serve a compiled ATen region out of the extension the build shipped."""
+        from .regions import bind_region
+
+        shipped = self._region_libraries.get(module)
+        symbol = shipped.entries.get(function) if shipped is not None else None
+        compiled = None
+        if shipped is not None and symbol is not None:
+            compiled = getattr(self._extension(shipped.library), symbol, None)
+        binding = bind_region(function, compiled, fallback)
+        self.region_bindings.append(binding)
+        return binding.wrapper
+
+    def _extension(self, library: Path):  # type: ignore[no-untyped-def]
+        """Load a region extension once; None when it will not load here."""
+        if library in self._extensions:
+            return self._extensions[library]
+        extension = None
+        try:
+            # The extension links against libtorch, which importing torch
+            # loads; without torch there is nothing for the region to call.
+            import torch  # noqa: F401  # pylint: disable=import-outside-toplevel,unused-import
+
+            spec = importlib.util.spec_from_file_location(library.stem, library)
+            if spec is not None and spec.loader is not None:
+                extension = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(extension)
+        except Exception:  # noqa: BLE001 - a region that will not load is the Python body
+            extension = None
+        self._extensions[library] = extension
+        return extension
 
     def _fast_entry(self, signature, address: int, fallback):  # type: ignore[no-untyped-def]
         """Bind the shipped C wrapper, which holds the fallback itself."""

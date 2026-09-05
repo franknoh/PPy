@@ -998,3 +998,93 @@ def test_import_ppy_serves_a_kernel_natively(tmp_path: Path):
     )
     off = _python(tmp_path)
     assert off.stdout.splitlines() == [f"{expected} PPySourceLoader function", "[]"]
+
+
+def _ppy(tmp_path: Path, *args: str) -> subprocess.CompletedProcess:
+    return subprocess.run(
+        [sys.executable, "-m", "ppy_compiler", *args],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+
+@requires_toolchain
+def test_build_warm_prepares_what_import_ppy_serves(tmp_path: Path):
+    """`ppy build --warm` builds ahead what the first import of a kernel would
+    build, into the same place, so a program launched on many ranks at once
+    finds one artifact instead of each rank building it. A flag that would
+    key a different artifact is refused -- nothing would find it -- and a
+    kernel that does not check clean is an error before the launch, not a
+    note on every rank's stderr during it."""
+    (tmp_path / "pyproject.toml").write_text("[tool.ppy]\n", encoding="utf-8")
+    (tmp_path / "kernel.ppy").write_text(NATIVE_IMPORT_KERNEL.lstrip("\n"), encoding="utf-8")
+    (tmp_path / "main.py").write_text(NATIVE_IMPORT_MAIN.lstrip("\n"), encoding="utf-8")
+
+    warmed = _ppy(tmp_path, "build", "--warm", ".")
+    assert warmed.returncode == 0, warmed.stderr
+    assert "built kernel.ppy natively" in warmed.stderr
+    assert "warm: 1 built, 0 already built" in warmed.stderr
+
+    served = _python(tmp_path)
+    assert served.returncode == 0, served.stderr
+    assert served.stdout.splitlines()[0].split()[1] == "GeneratedLoader"
+    assert "built" not in served.stderr, "the import finds the warm build"
+
+    again = _ppy(tmp_path, "build", "--warm", "kernel.ppy")
+    assert again.returncode == 0, again.stderr
+    assert "kernel.ppy: already built" in again.stderr
+    assert "warm: 0 built, 1 already built" in again.stderr
+
+    refused = _ppy(tmp_path, "build", "--warm", "--safe", "kernel.ppy")
+    assert refused.returncode == 2
+    assert "--safe" in refused.stderr
+
+    (tmp_path / "broken.ppy").write_text(
+        "def wrong(n: int) -> int:\n    return n + missing\n", encoding="utf-8"
+    )
+    broken = _ppy(tmp_path, "build", "--warm", ".")
+    assert broken.returncode == 1
+    assert "broken.ppy" in broken.stderr
+    assert "1 with check errors" in broken.stderr
+
+
+def test_a_region_whose_library_is_gone_is_the_python_body(tmp_path: Path):
+    """The manifest's regions section names an extension beside it; a missing
+    one is the Python body, not a broken artifact -- the region only ever
+    removed Python round trips -- and the runtime needs no compiler and no
+    torch to decide that."""
+    from ppy_runtime.launch import PrebuiltBinder
+    from ppy_runtime.manifest import load
+
+    payload = {
+        "abi_version": 1,
+        "python": f"{sys.version_info.major}.{sys.version_info.minor}",
+        "program": {
+            "entry": "m",
+            "modules": ["m"],
+            "generated": {},
+            "search_paths": [],
+            "safeguards": "hoisted",
+        },
+        "entries": [],
+        "regions": {"m": {"library": "ppy_torch_0.so", "entries": {"layer": "ppy_region_m_layer"}}},
+    }
+    path = tmp_path / "ppy-bindings.json"
+    path.write_text(json.dumps(payload), encoding="utf-8")
+    assert load(path).regions is None, "no library, no regions"
+
+    (tmp_path / "ppy_torch_0.so").write_bytes(b"not an extension")
+    manifest = load(path)
+    assert manifest.regions is not None
+    assert manifest.regions["m"].entries == {"layer": "ppy_region_m_layer"}
+    binder = PrebuiltBinder(manifest, None)
+    assert binder.region_names("m") == frozenset({"layer"})
+    assert binder.region_names("other") == frozenset()
+
+    def layer(x):
+        return x
+
+    assert binder.region("m", "layer", layer) is layer, "an unloadable extension serves Python"
+    assert binder.region_bindings[0].routed is False

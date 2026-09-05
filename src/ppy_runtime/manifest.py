@@ -14,7 +14,7 @@ from pathlib import Path
 
 from .abi import NativeParam, NativeSignature
 
-__all__ = ["Manifest", "ManifestError", "NativeEntry", "load"]
+__all__ = ["Manifest", "ManifestError", "NativeEntry", "RegionLibrary", "load"]
 
 SUPPORTED_ABI = 1
 
@@ -30,6 +30,15 @@ class NativeEntry:
     signature: NativeSignature
 
 
+@dataclass(frozen=True, slots=True)
+class RegionLibrary:
+    """One generated module's compiled ATen regions: the extension holding
+    them, and the C++ symbol that serves each function."""
+
+    library: Path
+    entries: dict[str, str]
+
+
 @dataclass(slots=True)
 class Manifest:
     path: Path
@@ -43,6 +52,9 @@ class Manifest:
     #: its path next to the manifest, and the wrapper index per qualname.
     wrapper_library: Path | None = None
     wrapper_entries: dict[str, int] | None = None
+    #: Compiled torch regions per generated module, when the build shipped
+    #: any and their libraries are still beside the manifest.
+    regions: dict[str, RegionLibrary] | None = None
 
 
 def _signature(payload: dict) -> NativeSignature:
@@ -129,6 +141,18 @@ def load(path: Path) -> Manifest:
             wrapper_entries = {
                 str(name): int(index) for name, index in wrappers.get("entries", {}).items()
             }
+    regions: dict[str, RegionLibrary] = {}
+    for module, section in (payload.get("regions") or {}).items():
+        if not isinstance(section, dict) or not section.get("library"):
+            continue
+        candidate = path.parent / Path(str(section["library"])).name
+        # A missing region library is the Python body, not a broken artifact:
+        # the region only ever removed Python round trips.
+        if candidate.is_file():
+            regions[str(module)] = RegionLibrary(
+                candidate,
+                {str(name): str(symbol) for name, symbol in section.get("entries", {}).items()},
+            )
     return Manifest(
         path=path,
         library=library,
@@ -139,4 +163,5 @@ def load(path: Path) -> Manifest:
         safeguards=program.get("safeguards", "hoisted"),
         wrapper_library=wrapper_library,
         wrapper_entries=wrapper_entries,
+        regions=regions or None,
     )

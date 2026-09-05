@@ -1,0 +1,37 @@
+"""The model: one function of curated tensor operations, compiled into one ATen region.
+
+Every `at::` call inside the region still goes through the dispatcher, so
+autograd sees the graph it always did and `.backward()` is unchanged; what
+the region removes is the Python round trip between operators.
+"""
+
+import torch
+
+
+def forward_loss(
+    x: torch.Tensor,
+    y: torch.Tensor,
+    w1: torch.Tensor,
+    b1: torch.Tensor,
+    w2: torch.Tensor,
+    b2: torch.Tensor,
+) -> torch.Tensor:
+    hidden: torch.Tensor = torch.relu(torch.add(torch.matmul(x, w1), b1))
+    predicted: torch.Tensor = torch.add(torch.matmul(hidden, w2), b2)
+    residual: torch.Tensor = torch.sub(predicted, y)
+    return torch.mean(torch.mul(residual, residual))
+
+
+def _check() -> None:
+    """The loss on a fixed input, so the three paths can be compared."""
+    torch.manual_seed(0)
+    x = torch.randn(8, 4)
+    y = torch.randn(8, 1)
+    w1 = torch.randn(4, 3)
+    w2 = torch.randn(3, 1)
+    print("# aten region:", getattr(forward_loss, "__ppy_region__", False))
+    print(f"loss={forward_loss(x, y, w1, torch.zeros(3), w2, torch.zeros(1)).item():.6f}")
+
+
+if __name__ == "__main__":
+    _check()

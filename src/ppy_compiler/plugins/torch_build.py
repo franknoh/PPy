@@ -24,6 +24,11 @@ class CompiledRegions:
     source: str = ""
     directory: Path | None = None
     reason: str = ""
+    #: The extension module on disk, and the C++ symbol of each region in it:
+    #: what a manifest records so a launched artifact can load the regions
+    #: without compiling anything.
+    library: Path | None = None
+    symbols: dict[str, str] = field(default_factory=dict)
 
     @property
     def ok(self) -> bool:
@@ -123,6 +128,14 @@ def compile_regions(
         for region in usable
         if hasattr(extension, region.symbol)
     }
+    library = next(iter(sorted(directory.glob(f"{name}*.so"))), None)
     return CompiledRegions(
-        module=extension, entry_points=entry_points, source=source, directory=directory
+        module=extension,
+        entry_points=entry_points,
+        source=source,
+        directory=directory,
+        library=library,
+        symbols={
+            region.info.name: region.symbol for region in usable if region.info.name in entry_points
+        },
     )

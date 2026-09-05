@@ -82,9 +82,17 @@ no bootstrap and no launcher: `import ppy`, and the rest is the Python it was.
 `PPY_IMPORT=python` turns the native path off for a process, `native-import =
 false` under `[tool.ppy]` for a project, and `PPY_QUIET=1` silences the notes.
 
+This is also how a program under someone else's launcher gets native
+kernels. `torchrun`, `accelerate launch`, a job scheduler: each starts
+plain Python processes, and each of those runs `import ppy` and finds the
+same build. A kernel that imports torch is no exception -- its ATen regions
+are compiled into the artifact and loaded from it. `ppy build --warm DIR`
+builds every kernel under a directory ahead of the launch, so no rank
+builds anything (`examples/31_torchrun`).
+
 ## Examples
 
-30 example folders under `examples/`, 39 runnable programs, each folder with
+31 example folders under `examples/`, 41 runnable programs, each folder with
 a README. Where a folder holds both `<name>.py` and `<name>.ppy`, the `.ppy`
 is exactly what `ppy convert` writes — `ppy migrate` for the folder that says
 so — and `verify_conversions.py` regenerates it to prove it.
