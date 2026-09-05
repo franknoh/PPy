@@ -574,7 +574,13 @@ def _same_argument(source: Type, target: Type) -> bool:
             any(_same_argument(a, b) for b in target.members) for a in source.members
         )
     if isinstance(source, Tuple_) and isinstance(target, Tuple_):
-        if source.homogeneous != target.homogeneous or len(source.items) != len(target.items):
+        if target.homogeneous:
+            # A tuple is immutable, so its elements are covariant even where
+            # the container around it is not: `dict[str, tuple[object, ...]]`
+            # holds a `dict[str, tuple[str, int]]`, and a bare `tuple` --
+            # `tuple[Any, ...]` -- holds any tuple.
+            return all(is_assignable(item, target.items[0]) for item in source.items)
+        if source.homogeneous or len(source.items) != len(target.items):
             return False
         return all(_same_argument(a, b) for a, b in zip(source.items, target.items, strict=True))
     return False

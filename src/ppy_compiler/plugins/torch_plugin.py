@@ -160,6 +160,48 @@ _TENSOR_MEMBERS: dict[str, str] = {
 _DISPATCH_SENSITIVE = frozenset({"linear", "matmul", "mm", "bmm", "softmax", "log_softmax"})
 
 _TENSOR = T.Instance("torch.Tensor", (), ("torch.Tensor", "object"))
+_MODULE = T.Instance("torch.nn.Module", (), ("torch.nn.Module", "object"))
+
+#: What every `nn.Module` -- and every project class deriving from one --
+#: exposes. A method that returns the module returns `nn.Module`, not the
+#: subclass; `forward` is the subclass's own and is not here.
+_MODULE_MEMBERS: dict[str, T.Type] = {
+    "parameters": T.Callable_((), T.instance("Iterator", _TENSOR), "torch.nn.Module.parameters"),
+    "buffers": T.Callable_((), T.instance("Iterator", _TENSOR), "torch.nn.Module.buffers"),
+    "named_parameters": T.Callable_(
+        (), T.instance("Iterator", T.Tuple_((T.STR, _TENSOR))), "torch.nn.Module.named_parameters"
+    ),
+    "named_buffers": T.Callable_(
+        (), T.instance("Iterator", T.Tuple_((T.STR, _TENSOR))), "torch.nn.Module.named_buffers"
+    ),
+    "children": T.Callable_((), T.instance("Iterator", _MODULE), "torch.nn.Module.children"),
+    "modules": T.Callable_((), T.instance("Iterator", _MODULE), "torch.nn.Module.modules"),
+    "named_children": T.Callable_(
+        (), T.instance("Iterator", T.Tuple_((T.STR, _MODULE))), "torch.nn.Module.named_children"
+    ),
+    "named_modules": T.Callable_(
+        (), T.instance("Iterator", T.Tuple_((T.STR, _MODULE))), "torch.nn.Module.named_modules"
+    ),
+    "state_dict": T.Callable_((), T.dict_of(T.STR, _TENSOR), "torch.nn.Module.state_dict"),
+    "load_state_dict": T.Callable_((), T.OBJECT, "torch.nn.Module.load_state_dict"),
+    "training": T.BOOL,
+}
+for _name in (
+    "to",
+    "cuda",
+    "cpu",
+    "eval",
+    "train",
+    "float",
+    "half",
+    "double",
+    "bfloat16",
+    "requires_grad_",
+    "share_memory",
+):
+    _MODULE_MEMBERS[_name] = T.Callable_((), _MODULE, f"torch.nn.Module.{_name}")
+for _name in ("zero_grad", "apply", "register_buffer", "register_parameter", "add_module"):
+    _MODULE_MEMBERS[_name] = T.Callable_((), T.NONE, f"torch.nn.Module.{_name}")
 
 #: The ATen schema each recognized call resolves to. Routing an individual
 #: call to `torch.ops.aten.*` from Python is measurably slower than the
@@ -269,10 +311,16 @@ class TorchPlugin:
             "torch.nn.Module": "torch.nn.Module",
         }
 
+    def call_alias(self, type_name: str) -> str | None:
+        """Calling an `nn.Module` instance runs its `forward`."""
+        return "forward" if type_name == "torch.nn.Module" else None
+
     def attribute_type(self, qualname: str) -> tuple[T.Type, Facts] | None:
         attribute = qualname.rpartition(".")[2]
         if attribute == "Tensor":
             return T.ClassObject("torch.Tensor", _TENSOR), Facts()
+        if qualname == "torch.nn.Module":
+            return T.ClassObject("torch.nn.Module", _MODULE), Facts()
         if attribute in {"float32", "float16", "bfloat16", "int64", "int32", "bool"}:
             return T.Instance("torch.dtype", (), ("torch.dtype", "object")), Facts()
         if qualname == "torch.__version__":
@@ -287,7 +335,11 @@ class TorchPlugin:
     def instance_attribute(
         self, type_name: str, attribute: str, facts: Facts | None = None
     ) -> tuple[T.Type, Facts] | None:
-        """Methods and attributes of an exact `torch.Tensor` value."""
+        """Methods and attributes of an exact `torch.Tensor` value, and of an
+        `nn.Module` -- which a project class deriving from one inherits."""
+        if type_name == "torch.nn.Module":
+            member = _MODULE_MEMBERS.get(attribute)
+            return None if member is None else (member, Facts())
         if type_name != "torch.Tensor":
             return None
         kind = _TENSOR_MEMBERS.get(attribute)

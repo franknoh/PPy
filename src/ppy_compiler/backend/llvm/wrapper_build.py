@@ -116,6 +116,15 @@ def build_wrappers(
         return BuiltWrappers(reason="no native function to wrap")
     ready, detail = wrapper_toolchain()
     if not ready:
+        if notify is not None:
+            # The ctypes boundary is correct and several times slower per
+            # call; a node whose Python lacks its headers should hear that
+            # once, from the run, not only from `ppy doctor`.
+            notify(
+                f"python boundary is ctypes ({detail}); the generated CPython ABI is "
+                "several times faster per call -- install the CPython headers, or use a "
+                "uv-managed interpreter, and see `ppy doctor`"
+            )
         return BuiltWrappers(reason=detail)
 
     draft: WrapperModule = generate("ppy_wrappers_placeholder", signatures)

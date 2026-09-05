@@ -2314,3 +2314,14 @@ def test_a_file_inside_a_package_is_checked_as_a_member_of_it(tmp_path: Path):
     done = _ppy(["check", "pkg/use.py"], tmp_path)
     assert done.returncode == 0, done.stdout + done.stderr
     assert "no errors" in done.stdout + done.stderr
+
+
+def test_no_strict_may_follow_the_subcommand():
+    from ppy_compiler.driver.cli import build_parser
+
+    parser = build_parser()
+    after = parser.parse_args(["run", "--no-strict", "x.ppy"])
+    before = parser.parse_args(["--no-strict", "run", "x.ppy"])
+    neither = parser.parse_args(["run", "x.ppy"])
+    assert after.no_strict is True and before.no_strict is True
+    assert not getattr(neither, "no_strict", False)

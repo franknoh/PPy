@@ -81,6 +81,10 @@ class Plugin(Protocol):
     def attribute_type(self, qualname: str) -> tuple[T.Type, Facts] | None:
         """Type of a module-level attribute such as `numpy.pi`."""
 
+    def call_alias(self, type_name: str) -> str | None:
+        """The method that calling an instance of an external class runs, if
+        the plugin knows one: `forward` for `torch.nn.Module`."""
+
     def call(
         self,
         qualname: str,

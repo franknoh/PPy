@@ -76,6 +76,10 @@ def _element_storage(t: T.Type) -> T.Type:
             return base.args[0]
         if base.name == "dict" and base.args:
             return base.args[0]
+        if base.name in {"tuple", "list", "set", "frozenset", "dict", "Sequence", "Iterable"}:
+            # Unparameterized: what `isinstance(x, tuple)` leaves, or a
+            # library's unannotated return. It iterates, over anything.
+            return base.args[0] if base.args else T.ANY
         if base.name == "str":
             return T.STR
         if base.name == "bytes":

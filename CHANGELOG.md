@@ -168,6 +168,23 @@ Speed of the compiler itself, measured before being changed.
   `bitwise_or`, with `&`, `^` and the shifts. Being one of the constants in
   `x in {"small", "medium", "large"}` is being those literals, which a
   `Literal[...]` return type accepts.
+- An instance of a project class is callable through its `__call__`, or
+  through the method a plugin names for an external base: an `nn.Module`
+  subclass is called through `forward`. `torch.nn.Module`'s members are
+  modeled -- `parameters`, `state_dict`, `to`, `eval`, and the rest -- and
+  a method that returns the module returns the subclass it was called on.
+  A bare container iterates: `isinstance(x, tuple)` leaves a `tuple` that a
+  `for` can walk. `sys.path`, `sys.modules`, `sys.version_info` are known.
+  `--no-strict` is accepted after the subcommand as well as before it,
+  except on `convert`, which has no strictness escape hatch by design. A
+  bare `tuple` annotation is `tuple[Any, ...]`, any length, and a
+  `dict[str, tuple]` holds a `dict[str, tuple[A, B]]`.
+- A run whose Python lacks its headers says so: the ctypes boundary is
+  correct and several times slower per call than the generated CPython
+  ABI, and a node built from a system interpreter without `python3-dev`
+  used to find that out only from `ppy doctor`. On one real kernel the
+  difference was a native call at 14 us against the interpreted 5.6 us,
+  becoming 1.3 us once the headers were there.
 - `ppy check pkg/a.py` checks `pkg.a`. A file inside a package used to be
   named from its own directory -- `a` -- so every `from . import b` in it
   was unresolved, on the one command people run most against the file they

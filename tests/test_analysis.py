@@ -3477,3 +3477,88 @@ def test_an_enum_member_is_the_enum_not_the_constant_behind_it(write, analyze):
     errors = [d for d in bundle.diagnostics.sorted() if d.severity.name == "ERROR"]
     assert errors == [], [d.message for d in errors]
     assert "LOW" not in bundle.symbols.classes["levels.Level"].fields
+
+
+def test_an_instance_is_callable_through_call_or_a_plugin_alias(write, analyze):
+    path = write(
+        "callables.ppy",
+        """
+        import sys
+
+        import torch.nn as nn
+
+
+        class Adder:
+            def __init__(self, k: int) -> None:
+                self.k = k
+
+            def __call__(self, x: int) -> int:
+                return x + self.k
+
+
+        class Net(nn.Module):
+            def __init__(self) -> None:
+                super().__init__()
+                self.width = 3
+
+            def forward(self, x: int) -> int:
+                return x * self.width
+
+
+        def use(adder: Adder, net: Net) -> int:
+            sys.path.insert(0, "here")
+            weights = sum(1 for _p in net.parameters())
+            return adder(2) + net(3) + weights
+
+
+        def wrong(net: Net) -> str:
+            return net(3)
+        """,
+    )
+    errors = [d for d in analyze(path).diagnostics.sorted() if d.severity.name == "ERROR"]
+    assert [(d.span.line, d.code) for d in errors if d.span] == [(30, "E1303")], [
+        d.message for d in errors
+    ]
+
+
+def test_a_bare_container_iterates_over_anything():
+    from ppy_compiler.analysis import builtins as B
+
+    assert B.element_type(T.instance("tuple")) == T.ANY
+    assert B.element_type(T.instance("list")) == T.ANY
+    assert B.element_type(T.list_of(T.INT)) == T.INT
+
+
+def test_a_bare_tuple_holds_any_tuple_and_a_module_method_returns_the_subclass(write, analyze):
+    path = write(
+        "held.ppy",
+        """
+        from dataclasses import dataclass, field
+
+        import torch.nn as nn
+
+
+        @dataclass
+        class Bundle:
+            sources: dict[str, tuple[object, ...]] = field(default_factory=dict)
+
+
+        class Net(nn.Module):
+            def __init__(self, k: int) -> None:
+                super().__init__()
+                self.k = k
+
+            def forward(self, x: int) -> int:
+                return x * self.k
+
+
+        def bundle(names: list[str]) -> Bundle:
+            return Bundle(sources={name: (name, len(name)) for name in names})
+
+
+        def loaded(k: int) -> Net:
+            return Net(k).eval().to("cpu")
+        """,
+    )
+    errors = [d for d in analyze(path).diagnostics.sorted() if d.severity.name == "ERROR"]
+    assert errors == [], [d.message for d in errors]

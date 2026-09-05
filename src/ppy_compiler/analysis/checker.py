@@ -1610,7 +1610,49 @@ class _Checker:
         if isinstance(callee.type, T.Module_):
             self._error("E1306", "a module is not callable", node)
             return Binding(T.UNKNOWN)
+        if isinstance(callee.type, T.Instance):
+            called = self._instance_call(callee.type, node, args, keywords)
+            if called is not None:
+                return called
         return self._opaque_call(node, callee)
+
+    def _instance_call(
+        self, base: T.Instance, node: ast.Call, args: list[Binding], keywords: dict
+    ) -> Binding | None:
+        """Calling an instance of a project class: its `__call__`, or the
+        method a plugin names for an external base -- an `nn.Module` is
+        called through `forward`."""
+        info = self.project.classes.get(base.name)
+        if info is None:
+            return None
+        method = info.find_method("__call__", self.project)
+        if method is None:
+            for entry in info.mro:
+                if entry == "object" or entry in self.project.classes:
+                    continue
+                alias = self._plugin_call_alias(entry)
+                if alias is not None:
+                    method = info.find_method(alias, self.project)
+                    if method is not None:
+                        break
+        if method is None:
+            return None
+        signature = method.signature()
+        bound = T.Callable_(
+            signature.params[1:],
+            signature.ret,
+            signature.qualname,
+            is_async=signature.is_async,
+            is_generator=signature.is_generator,
+        )
+        return self._call_signature(bound, node, args, keywords, bound=True)
+
+    def _plugin_call_alias(self, type_name: str) -> str | None:
+        if self.plugins is None:
+            return None
+        plugin = self.plugins.for_qualname(type_name)
+        alias = getattr(plugin, "call_alias", None) if plugin is not None else None
+        return alias(type_name) if alias is not None else None
 
     def _widen_empty_container(
         self, func: ast.Attribute, qualname: str, args: list[Binding], env: Env
@@ -2045,6 +2087,20 @@ class _Checker:
             found = self._plugin_instance_attribute(probe, attr, facts)
             if found is not None:
                 self._effects = self._effects.add(Effect.READ_OBJECT)
+                signature = found.type
+                if isinstance(signature, T.Callable_) and signature.ret == probe:
+                    # `model.eval()` returns the model: the base's table says
+                    # "an nn.Module", and the receiver says which one.
+                    return Binding(
+                        T.Callable_(
+                            signature.params,
+                            info.instance(),
+                            signature.qualname,
+                            is_async=signature.is_async,
+                            is_generator=signature.is_generator,
+                        ),
+                        found.facts,
+                    )
                 return found
         return None
 

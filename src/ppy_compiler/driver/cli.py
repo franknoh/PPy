@@ -134,6 +134,17 @@ def build_parser() -> argparse.ArgumentParser:
         "--ir", action="store_true", help="print backend IR instead of generated Python"
     )
 
+    # Not `convert`: a convert that can be asked not to be strict is two
+    # pipelines wearing one name (see the command's own section).
+    for command in (migrate, run, build, check, explain, inspect):
+        command.add_argument(
+            "--no-strict",
+            dest="no_strict",
+            action="store_true",
+            default=argparse.SUPPRESS,
+            help="the same as the global --no-strict, accepted here too",
+        )
+
     lint = subparsers.add_parser("lint", help="run an installed type checker or linter")
     lint.add_argument("path", type=Path, nargs="?", default=Path("."))
     lint.add_argument(

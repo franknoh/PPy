@@ -196,6 +196,10 @@ class AnnotationResolver:
         if qualname in _BARE_GENERIC:
             name, arity = _BARE_GENERIC[qualname]
             self._bare_generic(name, expr)
+            if name == "tuple":
+                # A bare `tuple` is `tuple[Any, ...]`: any length, as a
+                # subscripted `tuple[Any, ...]` would be, not a 1-tuple.
+                return Resolved(T.Tuple_((T.ANY,), homogeneous=True))
             return Resolved(
                 T.Instance(name, tuple(T.ANY for _ in range(arity)), T.BUILTIN_MRO.get(name, ()))
             )
