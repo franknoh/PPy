@@ -393,6 +393,26 @@ class NameResolver:
     def type_alias(self, name: str) -> ast.expr | None:
         return self.symbols.type_aliases.get(name)
 
+    def imported_type_alias(self, name: str) -> tuple[ast.expr, ModuleSymbols] | None:
+        """An alias this module imports, with the module that defines it.
+
+        `from .obligations import Term` names `Term = Union[Var, Const, BinOp]`
+        in another module, whose names the alias's expression refers to; the
+        expression has to be read there, not here.
+        """
+        binding = self.symbols.imports.get(name)
+        if binding is None or binding.origin is None:
+            return None
+        module, _, alias = self.project.reexported(binding).rpartition(".")
+        other = self.project.modules.get(module)
+        if other is None:
+            return None
+        target = other.type_aliases.get(alias)
+        return None if target is None else (target, other)
+
+    def for_module(self, symbols: ModuleSymbols) -> NameResolver:
+        return NameResolver(symbols, self.project)
+
     def class_instance(self, qualname: str, args: tuple[T.Type, ...]) -> T.Instance | None:
         info = self.project.classes.get(qualname)
         if info is not None:

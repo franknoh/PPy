@@ -3293,3 +3293,48 @@ def test_a_module_kept_between_rounds_still_reports(write, analyze):
     )
     errors = [d for d in analyze(moving).diagnostics.sorted() if d.severity.name == "ERROR"]
     assert [d.code for d in errors] == ["E1303"], [d.message for d in errors]
+
+
+def test_a_type_alias_imported_from_another_module_is_read_there(write, analyze):
+    write(
+        "shapes.ppy",
+        """
+        from typing import Union
+
+
+        class Circle:
+            def __init__(self, r: float) -> None:
+                self.r = r
+
+
+        class Square:
+            def __init__(self, side: float) -> None:
+                self.side = side
+
+
+        Shape = Union[Circle, Square]
+        Number = int | float
+        """,
+    )
+    path = write(
+        "use.ppy",
+        """
+        from shapes import Circle, Number, Shape
+
+
+        def area(shape: Shape) -> float:
+            if isinstance(shape, Circle):
+                return 3.0 * shape.r * shape.r
+            return shape.side * shape.side
+
+
+        def half(x: Number) -> float:
+            return x / 2
+
+
+        def wrong(shape: Shape) -> int:
+            return shape
+        """,
+    )
+    errors = [d for d in analyze(path).diagnostics.sorted() if d.severity.name == "ERROR"]
+    assert [d.code for d in errors] == ["E1303"], [d.message for d in errors]

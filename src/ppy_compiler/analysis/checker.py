@@ -222,6 +222,16 @@ def _spread(elements: list[ast.expr]) -> bool:
     return any(isinstance(e, ast.Starred) for e in elements)
 
 
+def _widest_numeric(t: T.Type) -> T.Type:
+    """A union of numbers as the widest of them; anything else as it is."""
+    if not isinstance(t, T.Union_):
+        return t
+    ranks = [T.numeric_rank(member) for member in t.members]
+    if not ranks or any(rank is None for rank in ranks):
+        return t
+    return T.strip_literal(t.members[ranks.index(max(ranks))])  # type: ignore[type-var]
+
+
 def _is_set_like(t: T.Type) -> bool:
     return isinstance(t, T.Instance) and t.name in {"set", "frozenset"}
 
@@ -2545,6 +2555,10 @@ class _Checker:
             # `Path / "name"` is the way a path is spelled.
             return Binding(left_base)
 
+        # `x / 2` with `x: int | float` is arithmetic on whichever it is; the
+        # result is the widest member's.
+        left_base = _widest_numeric(left_base)
+        right_base = _widest_numeric(right_base)
         if not (T.is_numeric(left_base) and T.is_numeric(right_base)):
             self._error(
                 "E1302",

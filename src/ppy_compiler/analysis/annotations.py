@@ -399,20 +399,46 @@ class AnnotationResolver:
         return Resolved(T.Tuple_((element,), homogeneous=True), facts)
 
     def _alias(self, expr: ast.expr) -> Resolved | None:
-        """Expand a module-level type alias, guarding against a cycle."""
+        """Expand a module-level type alias, guarding against a cycle.
+
+        An alias defined here is read here. An alias imported from another
+        module is read in that module, by a resolver for it: its expression
+        names that module's classes and imports, not this one's.
+        """
         if not isinstance(expr, ast.Name):
             return None
         lookup = getattr(self.resolver, "type_alias", None)
         if lookup is None:
             return None
         target = lookup(expr.id)
-        if target is None or expr.id in self._expanding:
+        if target is not None:
+            if expr.id in self._expanding:
+                return None
+            self._expanding.add(expr.id)
+            try:
+                return self._resolve(target)
+            finally:
+                self._expanding.discard(expr.id)
+        imported = getattr(self.resolver, "imported_type_alias", None)
+        found = imported(expr.id) if imported is not None else None
+        if found is None:
             return None
-        self._expanding.add(expr.id)
+        target, other = found
+        key = f"{other.name}.{expr.id}"
+        if key in self._expanding:
+            return None
+        self._expanding.add(key)
         try:
-            return self._resolve(target)
+            there = AnnotationResolver(
+                self.resolver.for_module(other),  # type: ignore[attr-defined]
+                other.path,
+                self.diagnostics,
+                strict=self.strict,
+            )
+            there._expanding = self._expanding
+            return there._resolve(target)
         finally:
-            self._expanding.discard(expr.id)
+            self._expanding.discard(key)
 
     def _slice_items(self, node: ast.expr) -> list[ast.expr]:
         if isinstance(node, ast.Tuple):

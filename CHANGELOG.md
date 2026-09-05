@@ -150,6 +150,12 @@ Speed of the compiler itself, measured before being changed.
   the warm run directory are keyed by the prover and its version.
   `docs/solver.md` says where a solver fits, where it does not, and what is
   next.
+- A type alias imported from another module is read in the module that
+  defines it: `from .obligations import Term` with `Term = Union[Var,
+  Const, BinOp]` was "not a type the project can analyze", because the
+  alias table was the importing module's. Arithmetic on a union of numbers
+  is arithmetic on the widest of them: `x / 2` with `x: int | float` is a
+  `float`, not an undefined operator.
 - `ppy check pkg/a.py` checks `pkg.a`. A file inside a package used to be
   named from its own directory -- `a` -- so every `from . import b` in it
   was unresolved, on the one command people run most against the file they
