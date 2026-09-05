@@ -26,7 +26,11 @@ classifiers = [
     "Typing :: Typed",
 ]
 dependencies = [
-    "libcst>=1.4",
+    # libcst 1.8 ships manylinux_2_28 wheels only; a machine on glibc 2.27
+    # (Ubuntu 18.04) would fall back to building its Rust sources. 1.7 has
+    # glibc-2.17 wheels through Python 3.13; 3.14 needs 1.8 and is new anyway.
+    "libcst>=1.4,<1.8; python_version < '3.14'",
+    "libcst>=1.8; python_version >= '3.14'",
     "typing-extensions>=4.12",
 ]
 

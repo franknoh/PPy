@@ -430,6 +430,11 @@ def doctor(options: argparse.Namespace, reporter: Reporter) -> int:
     print(f"ppy               {COMPILER_VERSION}")
     print(f"python            {platform.python_version()} ({sys.implementation.name})")
     print(f"platform          {platform.system()} {platform.machine()}")
+    libc, libc_version = platform.libc_ver()
+    if libc:
+        # The compiled parts -- the wrappers, the native objects, a standalone
+        # executable -- bind to this libc; a wheel's minimum is its own.
+        print(f"libc              {libc} {libc_version}")
     print(f"project root      {project.root}")
     print(f"cache             {project.config.cache_path}")
     print(f"strict            {project.config.strict}")

@@ -185,6 +185,15 @@ Speed of the compiler itself, measured before being changed.
   used to find that out only from `ppy doctor`. On one real kernel the
   difference was a native call at 14 us against the interpreted 5.6 us,
   becoming 1.3 us once the headers were there.
+- `ppy doctor` prints the C library it found, and `docs/compatibility.md`
+  says what the platform floor is: the wheel is pure Python, everything
+  native is compiled where it runs and binds to that machine's libc, and
+  the dependencies' wheels set the minimum -- glibc 2.17 for `llvmlite`,
+  `libcst` 1.7, `z3-solver` 4.x and `numpy` up to 2.2; 2.27 for `z3-solver`
+  5.x; 2.28 for `numpy` 2.3 and `libcst` 1.8. `ppy-lang` pins `libcst<1.8`
+  on Python 3.13 and earlier: from 1.8 it ships `manylinux_2_28` wheels
+  only, and on Ubuntu 18.04 the install fell back to building its Rust
+  sources and failed. Python 3.14 has no 1.7 wheel and takes 1.8.
 - `ppy check pkg/a.py` checks `pkg.a`. A file inside a package used to be
   named from its own directory -- `a` -- so every `from . import b` in it
   was unresolved, on the one command people run most against the file they
