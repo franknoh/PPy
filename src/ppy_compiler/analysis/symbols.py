@@ -208,6 +208,14 @@ class ClassInfo:
     #: may widen them; these say what their author said.
     declared_fields: set[str] = field(default_factory=set)
     class_vars: set[str] = field(default_factory=set)
+    #: Fields with a default, which construction may leave out.
+    field_defaults: set[str] = field(default_factory=set)
+    #: Fields construction must pass by keyword: `kw_only=True` on the class,
+    #: `field(kw_only=True)`, or everything after a `KW_ONLY` marker.
+    kw_only_fields: set[str] = field(default_factory=set)
+    #: `InitVar[T]` parameters: construction takes them, instances have no
+    #: such attribute.
+    init_only: dict[str, T.Type] = field(default_factory=dict)
     methods: dict[str, FunctionInfo] = field(default_factory=dict)
     decorators: tuple[str, ...] = ()
     directives: tuple[Directive, ...] = ()
@@ -717,6 +725,8 @@ class ProjectSymbols:
             directives=directives_from(node.decorator_list, resolver),
             is_dataclass=any("dataclass" in d for d in decorators),
         )
+        if info.is_dataclass and _dataclass_option(node, "kw_only"):
+            info.kw_only_fields.add("*")
         symbols.classes[node.name] = info
         self.classes[qualname] = info
         for child in node.body:
@@ -814,11 +824,28 @@ class ProjectSymbols:
     def _resolve_class_fields(
         self, symbols: ModuleSymbols, info: ClassInfo, annotations: AnnotationResolver
     ) -> None:
+        keyword_only = "*" in info.kw_only_fields
         for child in info.node.body:
             if isinstance(child, ast.AnnAssign) and isinstance(child.target, ast.Name):
+                name = child.target.id
+                if info.is_dataclass and _is_kw_only_marker(child.annotation, annotations):
+                    # `_: KW_ONLY`: every field after it is keyword-only.
+                    keyword_only = True
+                    continue
+                init_var = _init_var(child.annotation)
+                if info.is_dataclass and init_var is not None:
+                    info.init_only[name] = annotations.resolve(init_var).type
+                    if child.value is not None:
+                        info.field_defaults.add(name)
+                    continue
                 resolved = annotations.resolve(child.annotation)
-                info.fields[child.target.id] = resolved.type
-                info.declared_fields.add(child.target.id)
+                info.fields[name] = resolved.type
+                info.declared_fields.add(name)
+                if info.is_dataclass:
+                    if _has_default(child.value):
+                        info.field_defaults.add(name)
+                    if keyword_only or _field_option(child.value, "kw_only"):
+                        info.kw_only_fields.add(name)
                 facts = resolved.facts
                 if child.value is not None:
                     # `count: int = Field(ge=0)` states the same bound that
@@ -837,6 +864,19 @@ class ProjectSymbols:
                             continue
                         if isinstance(values, (list, tuple)):
                             info.slots = tuple(str(v) for v in values)
+                    elif (
+                        isinstance(target, ast.Name)
+                        and not target.id.startswith("__")
+                        and not info.is_enum
+                    ):
+                        # `PAGE = 8` in the body: a class attribute, read
+                        # through the class and through every instance, and
+                        # not a dataclass field -- only an annotation makes
+                        # one of those. A constant has its type; anything
+                        # else is an attribute whose type is not known here.
+                        # An enum's members are the enum's business.
+                        info.fields.setdefault(target.id, _class_attribute_type(child.value))
+                        info.class_vars.add(target.id)
         self._collect_self_assignments(info, annotations)
 
     def _collect_self_assignments(self, info: ClassInfo, annotations: AnnotationResolver) -> None:
@@ -980,6 +1020,84 @@ def _with_field_bounds(facts: Facts, value: ast.expr) -> Facts:
     if low is None and high is None:
         return facts
     return facts.with_(int_range=IntRange(low, high))
+
+
+def _dataclass_option(node: ast.ClassDef, option: str) -> bool:
+    """`@dataclass(kw_only=True)`: is `option` set to a true constant?"""
+    for decorator in node.decorator_list:
+        if not isinstance(decorator, ast.Call):
+            continue
+        for keyword in decorator.keywords:
+            if (
+                keyword.arg == option
+                and isinstance(keyword.value, ast.Constant)
+                and keyword.value.value is True
+            ):
+                return True
+    return False
+
+
+def _is_field_call(value: ast.expr | None) -> bool:
+    if not isinstance(value, ast.Call):
+        return False
+    func = value.func
+    name = func.attr if isinstance(func, ast.Attribute) else getattr(func, "id", None)
+    return name == "field"
+
+
+def _field_option(value: ast.expr | None, option: str) -> bool:
+    """`field(kw_only=True)`: is `option` set to a true constant?"""
+    if not _is_field_call(value):
+        return False
+    assert isinstance(value, ast.Call)
+    return any(
+        k.arg == option and isinstance(k.value, ast.Constant) and k.value.value is True
+        for k in value.keywords
+    )
+
+
+def _has_default(value: ast.expr | None) -> bool:
+    """Does a dataclass field's right-hand side give it a default?
+
+    A plain value does; `field(...)` does when it names `default` or
+    `default_factory`, and not when it only sets options.
+    """
+    if value is None:
+        return False
+    if not _is_field_call(value):
+        return True
+    assert isinstance(value, ast.Call)
+    return any(k.arg in {"default", "default_factory"} for k in value.keywords)
+
+
+def _init_var(annotation: ast.expr) -> ast.expr | None:
+    """The `T` of `InitVar[T]`, or None for any other annotation."""
+    if not isinstance(annotation, ast.Subscript):
+        return None
+    base = annotation.value
+    name = base.attr if isinstance(base, ast.Attribute) else getattr(base, "id", None)
+    return annotation.slice if name == "InitVar" else None
+
+
+def _is_kw_only_marker(annotation: ast.expr, annotations: AnnotationResolver) -> bool:
+    del annotations
+    name = (
+        annotation.attr
+        if isinstance(annotation, ast.Attribute)
+        else getattr(annotation, "id", None)
+    )
+    return name == "KW_ONLY"
+
+
+def _class_attribute_type(value: ast.expr) -> T.Type:
+    """The type of a class-body assignment's value, when it is a constant."""
+    if isinstance(value, ast.Constant):
+        return T.type_of_constant(value.value)
+    if isinstance(value, ast.UnaryOp) and isinstance(value.op, ast.USub):
+        inner = value.operand
+        if isinstance(inner, ast.Constant) and isinstance(inner.value, (int, float)):
+            return T.type_of_constant(-inner.value)
+    return T.UNKNOWN
 
 
 def _is_class_var(annotation: ast.expr) -> bool:

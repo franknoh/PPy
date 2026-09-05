@@ -3338,3 +3338,142 @@ def test_a_type_alias_imported_from_another_module_is_read_there(write, analyze)
     )
     errors = [d for d in analyze(path).diagnostics.sorted() if d.severity.name == "ERROR"]
     assert [d.code for d in errors] == ["E1303"], [d.message for d in errors]
+
+
+def test_a_dataclass_is_built_the_way_dataclasses_builds_it(write, analyze):
+    path = write(
+        "records.ppy",
+        """
+        from dataclasses import InitVar, KW_ONLY, dataclass, field
+
+
+        @dataclass
+        class Base:
+            name: str
+            weight: float = 1.0
+
+
+        @dataclass
+        class Record(Base):
+            count: int
+            tags: list[str] = field(default_factory=list)
+            _: KW_ONLY
+            note: str = ""
+            scale: InitVar[float] = 1.0
+
+
+        @dataclass(kw_only=True)
+        class Options:
+            depth: int
+            wide: bool = False
+
+
+        def fine() -> Record:
+            return Record("a", 2.0, 3, note="x", scale=2.0)
+
+
+        def defaults() -> Record:
+            return Record("a", 2.0, 3)
+
+
+        def from_list(values: list[int]) -> Base:
+            return Base(*values)
+
+
+        def options() -> Options:
+            return Options(depth=3)
+
+
+        def missing() -> Record:
+            return Record("a")
+
+
+        def positional_keyword_only() -> Options:
+            return Options(3)
+
+
+        def unknown() -> Base:
+            return Base("a", size=2)
+        """,
+    )
+    errors = [d for d in analyze(path).diagnostics.sorted() if d.severity.name == "ERROR"]
+    assert [(d.span.line, d.code) for d in errors if d.span] == [
+        (42, "E1305"),
+        (46, "E1305"),
+        (50, "E1305"),
+    ], [d.message for d in errors]
+    assert "missing field(s): count" in errors[0].message
+    assert "0 positional field(s)" in errors[1].message
+    assert "no field `size`" in errors[2].message
+
+
+def test_a_class_body_constant_is_an_attribute_and_tuple_assignment_sets_fields(write, analyze):
+    path = write(
+        "reader.ppy",
+        """
+        class Reader:
+            PAGE = 8
+            LIMIT = -1
+
+            def __init__(self, size: int) -> None:
+                self.lo, self.hi = 0, size * 1.5
+
+            def pages(self) -> int:
+                return self.PAGE + Reader.PAGE + self.LIMIT
+
+            def span(self) -> float:
+                return self.hi - self.lo
+        """,
+    )
+    bundle = analyze(path)
+    errors = [d for d in bundle.diagnostics.sorted() if d.severity.name == "ERROR"]
+    assert errors == [], [d.message for d in errors]
+    fields = bundle.symbols.classes["reader.Reader"].fields
+    assert str(fields["hi"]) == "float" and str(fields["lo"]) == "int"
+
+
+def test_being_one_of_the_literals_is_being_those_literals(write, analyze):
+    path = write(
+        "sizes.ppy",
+        """
+        from typing import Literal
+
+
+        def size(kind: str) -> Literal["small", "medium", "large"]:
+            if kind not in {"small", "medium", "large"}:
+                raise ValueError(kind)
+            return kind
+        """,
+    )
+    errors = [d for d in analyze(path).diagnostics.sorted() if d.severity.name == "ERROR"]
+    assert errors == [], [d.message for d in errors]
+
+
+def test_an_enum_member_is_the_enum_not_the_constant_behind_it(write, analyze):
+    path = write(
+        "levels.ppy",
+        """
+        from enum import Enum
+
+
+        class Level(Enum):
+            LOW = "low"
+            HIGH = "high"
+
+
+        class Reader:
+            PAGE = 8
+
+
+        def level() -> Level:
+            return Level.LOW
+
+
+        def page(reader: Reader) -> int:
+            return reader.PAGE
+        """,
+    )
+    bundle = analyze(path)
+    errors = [d for d in bundle.diagnostics.sorted() if d.severity.name == "ERROR"]
+    assert errors == [], [d.message for d in errors]
+    assert "LOW" not in bundle.symbols.classes["levels.Level"].fields

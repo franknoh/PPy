@@ -156,6 +156,18 @@ Speed of the compiler itself, measured before being changed.
   alias table was the importing module's. Arithmetic on a union of numbers
   is arithmetic on the widest of them: `x / 2` with `x: int | float` is a
   `float`, not an undefined operator.
+- A dataclass is built the way `dataclasses` builds it: the fields of each
+  dataclass base first, a field with a default or a `field(default=...)`
+  optional, `kw_only=True`, `field(kw_only=True)` and everything after a
+  `KW_ONLY` marker by keyword only, `InitVar[T]` a constructor parameter
+  and not an attribute, and a required field left out is an error.
+  `Stats(*totals)` is checked by the list, not by position.
+- `PAGE = 8` in a class body is a class attribute, read through the class
+  and through every instance, and not a dataclass field.
+- `self.a, self.b = x, y` sets two fields. `mask | other` on arrays is
+  `bitwise_or`, with `&`, `^` and the shifts. Being one of the constants in
+  `x in {"small", "medium", "large"}` is being those literals, which a
+  `Literal[...]` return type accepts.
 - `ppy check pkg/a.py` checks `pkg.a`. A file inside a package used to be
   named from its own directory -- `a` -- so every `from . import b` in it
   was unresolved, on the one command people run most against the file they

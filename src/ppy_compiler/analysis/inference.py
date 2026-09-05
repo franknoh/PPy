@@ -201,13 +201,14 @@ def modules_with_unannotated_fields(symbols) -> set[str]:  # type: ignore[no-unt
             continue
         for method in info.methods.values():
             for node in method.nodes:
-                if (
-                    isinstance(node, ast.Assign)
-                    and len(node.targets) == 1
-                    and is_self_attribute(node.targets[0], method)
-                    and node.targets[0].attr not in info.fields  # type: ignore[union-attr]
-                ):
-                    found.add(info.module)
+                if isinstance(node, ast.Assign) and len(node.targets) == 1:
+                    for target, _value in _field_assignments(node.targets[0], node.value):
+                        if (
+                            is_self_attribute(target, method) and target.attr not in info.fields  # type: ignore[union-attr]
+                        ):
+                            found.add(info.module)
+                            break
+                if info.module in found:
                     break
             if info.module in found:
                 break
@@ -237,14 +238,14 @@ def infer_fields(symbols, modules) -> bool:  # type: ignore[no-untyped-def]
             for node in method.nodes:
                 if not isinstance(node, ast.Assign) or len(node.targets) != 1:
                     continue
-                target = node.targets[0]
-                if not is_self_attribute(target, method):
-                    continue
-                assigned = T.strip_literal(module_analysis.type_of(node.value))
-                if isinstance(assigned, (T.UnknownType, T.AnyType, T.NeverType)):
-                    continue
-                name = target.attr  # type: ignore[union-attr]
-                seen[name] = assigned if name not in seen else T.join(seen[name], assigned)
+                for target, value in _field_assignments(node.targets[0], node.value):
+                    if not is_self_attribute(target, method):
+                        continue
+                    assigned = T.strip_literal(module_analysis.type_of(value))
+                    if isinstance(assigned, (T.UnknownType, T.AnyType, T.NeverType)):
+                        continue
+                    name = target.attr  # type: ignore[union-attr]
+                    seen[name] = assigned if name not in seen else T.join(seen[name], assigned)
         for name, assigned in seen.items():
             current = info.fields.get(name, T.UNKNOWN)
             if name in info.declared_fields:
@@ -255,6 +256,18 @@ def infer_fields(symbols, modules) -> bool:  # type: ignore[no-untyped-def]
                 info.fields[name] = joined
                 changed = True
     return changed
+
+
+def _field_assignments(target: ast.expr, value: ast.expr) -> list[tuple[ast.expr, ast.expr]]:
+    """The (target, value) pairs one assignment makes: `self.a, self.b = x, y`
+    is two, each with the value that lands in it."""
+    if (
+        isinstance(target, (ast.Tuple, ast.List))
+        and isinstance(value, (ast.Tuple, ast.List))
+        and len(target.elts) == len(value.elts)
+    ):
+        return list(zip(target.elts, value.elts, strict=True))
+    return [(target, value)]
 
 
 def _infer_from_usage(bundle) -> bool:  # type: ignore[no-untyped-def]

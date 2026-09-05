@@ -1668,27 +1668,51 @@ class _Checker:
         args: list[Binding],
         keywords: dict[str | None, Binding],
     ) -> None:
-        fields = [name for name in info.fields if name not in info.class_vars]
+        fields, defaults, keyword_only, init_only = self._constructor(info)
+        positional = [name for name in fields if name not in keyword_only]
+        spread = any(isinstance(a, ast.Starred) for a in node.args)
+        unpacked = spread or None in keywords
+        miscounted = False
         for index, argument in enumerate(args):
-            if index >= len(fields):
-                self._error("E1305", f"`{info.name}` takes {len(fields)} field(s)", node)
+            if spread:
+                # `Stats(*totals)`: how many fields the list fills, and which,
+                # is the list's business.
                 break
-            expected = info.fields[fields[index]]
+            if index >= len(positional):
+                self._error(
+                    "E1305",
+                    f"`{info.name}` takes {len(positional)} positional field(s)",
+                    node,
+                )
+                miscounted = True
+                break
+            expected = fields[positional[index]]
             if not self._accepts(info, expected, argument.type):
                 self._mismatch(
                     "E1301",
-                    f"field `{fields[index]}` of `{info.name}` "
+                    f"field `{positional[index]}` of `{info.name}` "
                     f"expects `{expected}`, got `{argument.type}`",
                     node.args[index],
                     argument.type,
                 )
+        if not unpacked and not miscounted:
+            given = set(positional[: len(args)]) | {n for n in keywords if n is not None}
+            missing = [name for name in fields if name not in given and name not in defaults]
+            missing.extend(name for name in init_only if name not in given and name not in defaults)
+            if missing:
+                self._error(
+                    "E1305", f"`{info.name}` is missing field(s): {', '.join(missing)}", node
+                )
         for name, binding in keywords.items():
             if name is None:
                 continue
-            if name not in info.fields:
+            if name in init_only:
+                expected = init_only[name]
+            elif name in fields:
+                expected = fields[name]
+            else:
                 self._error("E1305", f"`{info.name}` has no field `{name}`", node)
                 continue
-            expected = info.fields[name]
             if not self._accepts(info, expected, binding.type):
                 self._mismatch(
                     "E1301",
@@ -1696,6 +1720,36 @@ class _Checker:
                     node,
                     binding.type,
                 )
+
+    def _constructor(
+        self, info: ClassInfo
+    ) -> tuple[dict[str, T.Type], set[str], set[str], dict[str, T.Type]]:
+        """The constructor `dataclasses` would write: the fields in order --
+        each dataclass base's first, then the class's own, a redefined name
+        keeping its first place -- with which have defaults, which are
+        keyword-only, and the `InitVar` parameters. Class attributes are not
+        fields."""
+        fields: dict[str, T.Type] = {}
+        defaults: set[str] = set()
+        keyword_only: set[str] = set()
+        init_only: dict[str, T.Type] = {}
+        for entry in reversed(info.mro):
+            base = self.project.classes.get(entry)
+            if base is None or not (base.is_dataclass or base is info):
+                continue
+            for name, declared in base.fields.items():
+                if name in base.class_vars or name not in base.declared_fields:
+                    continue
+                fields[name] = declared
+                if name in base.field_defaults:
+                    defaults.add(name)
+                else:
+                    defaults.discard(name)
+                if name in base.kw_only_fields:
+                    keyword_only.add(name)
+            init_only.update(base.init_only)
+            defaults.update(name for name in base.init_only if name in base.field_defaults)
+        return fields, defaults, keyword_only, init_only
 
     def _accepts(self, info: ClassInfo, expected: T.Type, actual: T.Type) -> bool:
         if T.is_assignable(actual, expected):
@@ -2758,15 +2812,19 @@ class _Checker:
             if binding is None and key is not None and _is_place(left):
                 binding = self._expr(left, env)
             if key is not None and binding is not None:
-                offered = T.strip_literal(
-                    T.join(*[T.type_of_constant(e.value) for e in right.elts])  # type: ignore[attr-defined]
-                )
+                literals = [T.type_of_constant(e.value) for e in right.elts]  # type: ignore[attr-defined]
+                offered = T.strip_literal(T.join(*literals))
                 kept = [
                     m
                     for m in T.members_of(binding.type)
                     if T.is_assignable(offered, m) or T.is_assignable(m, offered)
                 ]
-                if kept and len(kept) < len(T.members_of(binding.type)):
+                if kept and T.strip_literal(T.union(*kept)) == offered:
+                    # Being one of `{"small", "medium", "large"}` is being one
+                    # of those: the literals, which a `Literal[...]` return
+                    # type accepts and a `str` accepts too.
+                    env.set(key, Binding(T.union(*literals), binding.facts))
+                elif kept and len(kept) < len(T.members_of(binding.type)):
                     env.set(key, Binding(T.union(*kept), binding.facts))
             return env
 

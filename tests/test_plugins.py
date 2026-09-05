@@ -574,3 +574,13 @@ def test_the_jax_plugin_covers_the_flax_surface(tmp_path: Path):
     bundle = analyze_paths(open_project(path), [path], backend="python")
     errors = [d for d in bundle.diagnostics if d.severity.name == "ERROR"]
     assert not errors, [f"{d.code}: {d.message}" for d in errors]
+
+
+def test_numpy_bitwise_operators_are_ufuncs():
+    """`mask | other` on boolean arrays is `bitwise_or`, as `a + b` is `add`."""
+    plugin = NumPyPlugin()
+    assert plugin.operator("|") == "bitwise_or"
+    assert plugin.operator("&") == "bitwise_and"
+    assert plugin.operator("^") == "bitwise_xor"
+    assert plugin.operator(">>") == "right_shift"
+    assert NumPyPlugin().call("numpy.bitwise_or", [ARRAY, ARRAY], {}) is not None

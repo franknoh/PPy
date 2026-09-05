@@ -49,6 +49,11 @@ ELEMENTWISE = frozenset(
         "logical_or",
         "logical_not",
         "invert",
+        "bitwise_and",
+        "bitwise_or",
+        "bitwise_xor",
+        "left_shift",
+        "right_shift",
         "sin",
         "cos",
         "tan",
@@ -216,6 +221,11 @@ _OPERATORS = {
     "u-": "negative",
     "u+": "positive",
     "u~": "invert",
+    "|": "bitwise_or",
+    "&": "bitwise_and",
+    "^": "bitwise_xor",
+    "<<": "left_shift",
+    ">>": "right_shift",
 }
 
 
