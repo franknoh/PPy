@@ -12,6 +12,7 @@ __all__ = [
     "NUMERIC_MARKERS",
     "Array",
     "ArraySpec",
+    "Borrowed",
     "Buffer",
     "BufferSpec",
     "Contiguous",
@@ -20,7 +21,9 @@ __all__ = [
     "FloatWidth",
     "IntWidth",
     "Length",
+    "Mut",
     "NoAlias",
+    "Owned",
     "Range",
     "Shape",
     "Vector",
@@ -145,6 +148,39 @@ class NoAlias(_Meta):
 
     __slots__ = ()
     _fields = ()
+
+
+class _Ownership(_Meta):
+    """How a parameter holds what it is handed; the subclass says which way."""
+
+    __slots__ = ()
+    _fields = ()
+    mode = ""
+
+    def __class_getitem__(cls, item: Any) -> Any:
+        return Annotated[item, cls()]
+
+
+class Owned(_Ownership):
+    """`Owned[T]`: the callee takes the value and may keep, store, or return it."""
+
+    __slots__ = ()
+    mode = "owned"
+
+
+class Borrowed(_Ownership):
+    """`Borrowed[T]`: the callee reads the value for the call and no longer;
+    it may not return it, store it where it outlives the call, or mutate it."""
+
+    __slots__ = ()
+    mode = "borrowed"
+
+
+class Mut(_Ownership):
+    """`Mut[T]`: a borrow the callee may write through, for the call and no longer."""
+
+    __slots__ = ()
+    mode = "mut"
 
 
 class Shape(_Meta):

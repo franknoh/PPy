@@ -208,6 +208,7 @@ def test_a_plugin_is_not_fingerprinted_for_a_module_that_ignores_it():
 
     class _Fake(Plugin):
         def __init__(self, name: str, modules: tuple[str, ...]) -> None:
+            super().__init__()
             self.name = name
             self.modules = modules
 

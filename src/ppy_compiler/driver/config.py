@@ -95,6 +95,16 @@ class PluginConfig:
 
 
 @dataclass(slots=True)
+class GenericsConfig:
+    """How far monomorphization may go before it is refused."""
+
+    #: Distinct type-argument tuples one generic may be called with.
+    max_specializations: int = 64
+    #: Nesting of one generic's type argument inside its own type parameter.
+    max_depth: int = 8
+
+
+@dataclass(slots=True)
 class ConvertConfig:
     #: Whether `ppy convert` hands its result to the project's formatter.
     format: bool = False
@@ -133,6 +143,7 @@ class Config:
     parallel: ParallelConfig = field(default_factory=ParallelConfig)
     inference: InferenceConfig = field(default_factory=InferenceConfig)
     plugins: dict[str, PluginConfig] = field(default_factory=dict)
+    generics: GenericsConfig = field(default_factory=GenericsConfig)
     convert: ConvertConfig = field(default_factory=ConvertConfig)
     format: FormatConfig = field(default_factory=FormatConfig)
     diagnostics: DiagnosticsConfig = field(default_factory=DiagnosticsConfig)
@@ -196,6 +207,12 @@ def _apply(config: Config, table: Mapping[str, Any]) -> Config:
     config.dynamic_boundaries = table.get("dynamic-boundaries", config.dynamic_boundaries)
     config.native_import = _as_bool(table.get("native-import"), config.native_import)
     config.build_execution = table.get("build-execution", config.build_execution)
+    generics = table.get("generics", {})
+    if isinstance(generics, dict):
+        config.generics = GenericsConfig(
+            max_specializations=int(generics.get("max-specializations", 64)),
+            max_depth=int(generics.get("max-depth", 8)),
+        )
     roots = table.get("source-roots")
     if isinstance(roots, list) and roots:
         config.source_roots = tuple(str(r) for r in roots)

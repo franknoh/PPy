@@ -117,6 +117,10 @@ def narrow_element(resolved: Resolved) -> T.Type | None:
     return T.Instance(name, (), (name, "int", "object")) if name else None
 
 
+#: The ownership markers, and the fact each writes.
+_OWNERSHIP = {"ppy.Owned": "owned", "ppy.Borrowed": "borrowed", "ppy.Mut": "mut"}
+
+
 class AnnotationResolver:
     """Turns an annotation expression into a semantic type plus proven facts."""
 
@@ -128,6 +132,8 @@ class AnnotationResolver:
         self.diagnostics = diagnostics
         self.strict = strict
         self._expanding: set[str] = set()
+        #: The type parameters of the signature being resolved, by name.
+        self.type_params: dict[str, T.TypeVar_] = {}
 
     def resolve(self, expr: ast.expr | None) -> Resolved:
         if expr is None:
@@ -170,6 +176,8 @@ class AnnotationResolver:
         return Resolved(T.UNKNOWN)
 
     def _named(self, expr: ast.expr) -> Resolved:
+        if isinstance(expr, ast.Name) and expr.id in self.type_params:
+            return Resolved(self.type_params[expr.id])
         alias = self._alias(expr)
         if alias is not None:
             return alias
@@ -252,6 +260,9 @@ class AnnotationResolver:
         if qualname == "ppy.Vector":
             element = self._resolve(args[0]).type if args else T.UNKNOWN
             return Resolved(T.list_of(element))
+        if qualname in _OWNERSHIP:
+            inner = self._resolve(args[0]) if args else Resolved(T.UNKNOWN)
+            return Resolved(inner.type, inner.facts.with_(ownership=_OWNERSHIP[qualname]))
         if qualname == "ppy.Buffer":
             resolved = self._resolve(args[0]) if args else Resolved(T.UNKNOWN)
             # `Buffer[ppy.i8]` is a byte per element, not a 64-bit int with a
@@ -306,6 +317,8 @@ class AnnotationResolver:
                 return facts.with_(length=values[0])
             case "ppy.NoAlias":
                 return facts.with_(no_alias=True)
+            case "ppy.Owned" | "ppy.Borrowed" | "ppy.Mut":
+                return facts.with_(ownership=_OWNERSHIP[qualname])
             case "ppy.Contiguous":
                 return facts.with_(contiguous=True)
             case "ppy.Shape":

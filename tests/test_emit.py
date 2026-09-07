@@ -58,7 +58,7 @@ def test_emit_ir_prints_a_ppyir_module_that_reads_back(tmp_path: Path):
     assert sorted(module.functions) == ["kernel_halve", "kernel_scale"]
     scale = module.functions["kernel_scale"]
     assert scale.attributes["ppy.symbol"] == "ppy_kernel_scale"
-    assert scale.param_attributes[0] == {"ppy.kind": "list"}
+    assert scale.param_attributes[0] == {"ppy.kind": "list", "ownership": "owned"}
     assert 'overflow = "python"' in done.stdout
     again = _ppy(tmp_path, "emit", "ir", "kernel.ppy")
     assert again.stdout == done.stdout, "one input, one text"

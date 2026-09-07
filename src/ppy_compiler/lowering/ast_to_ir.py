@@ -178,13 +178,27 @@ class Frontend:
         self.module = IRModule(analysis.name)
         #: qualname -> (IR function, its native signature), for calls.
         self.declared: dict[str, tuple[IRFunction, NativeSignature]] = {}
+        #: Generic functions by qualname, lowered per instantiation.
+        self.generics: dict[str, tuple[FunctionInfo, FunctionAnalysis, ast.FunctionDef]] = {}
+        #: Instantiations made so far: (qualname, type arguments) -> declaration.
+        self.instances: dict[tuple[str, tuple[str, ...]], tuple[IRFunction, NativeSignature]] = {}
+        self._instantiating: list[tuple[str, tuple[str, ...]]] = []
 
     def build(
         self, functions: dict[str, tuple[FunctionInfo, FunctionAnalysis, ast.FunctionDef]]
     ) -> Lowered:
         lowered = Lowered(self.module)
         candidates: dict[str, tuple[FunctionInfo, FunctionAnalysis, ast.FunctionDef]] = {}
+        self.generics: dict[str, tuple[FunctionInfo, FunctionAnalysis, ast.FunctionDef]] = {}
         for qualname, (info, analysis, node) in functions.items():
+            if info.type_params:
+                # Lowered per instantiation, when a native caller names one.
+                self.generics[qualname] = (info, analysis, node)
+                lowered.rejected[qualname] = (
+                    "a generic function is specialized where it is called; "
+                    "it has no single native entry point"
+                )
+                continue
             ok, reason = eligible(info, analysis, self.layouts, allow_io=self.standalone)
             if ok:
                 candidates[qualname] = (info, analysis, node)
@@ -208,10 +222,23 @@ class Frontend:
         self._reject_callers_of_rejected(lowered)
         return lowered
 
+    def _effects_of(self, info: FunctionInfo) -> tuple[str, ...]:
+        """What the IR says the function may do: the analysis's effects, with
+        a write through a buffer spelled as the native memory write it is."""
+        analysis = self.analysis.functions.get(info.qualname)
+        effects = info.effects if analysis is None else analysis.effects
+        spelled = set(effects.spelled())
+        if analysis is not None and (analysis.mutated_params or analysis.delegated_writes):
+            spelled.add("write_memory")
+        if any(p.is_buffer for p in _signature(info, self.layouts).parameters):
+            spelled.add("read_memory")
+        return tuple(sorted(spelled))
+
     def declare(self, info: FunctionInfo, signature: NativeSignature) -> IRFunction:
         params: list[tuple[str, IRType]] = []
         attributes: dict[str, object] = {}
         kinds: list[dict[str, object]] = []
+        facts_by_name = {p.name: p.facts for p in info.params}
         for parameter in signature.parameters:
             params.append((parameter.name, _param_type(parameter)))
             described: dict[str, object] = {}
@@ -219,6 +246,16 @@ class Frontend:
                 described["ppy.kind"] = parameter.kind
             elif parameter.is_object:
                 described["ppy.class"] = parameter.class_name
+            facts = facts_by_name.get(parameter.name)
+            ownership = facts.ownership if facts is not None else None
+            if ownership is None and parameter.is_buffer:
+                # A buffer is borrowed for the call unless the program says
+                # otherwise; a `Sequence` or list is copied in, so it is owned.
+                ownership = "borrowed" if parameter.is_borrowed else "owned"
+            if ownership is not None:
+                described["ownership"] = ownership
+            if facts is not None and facts.no_alias:
+                described["noalias"] = True
             kinds.append(described)
         results = _result_types(info)
         function = self.module.add_function(
@@ -230,6 +267,7 @@ class Frontend:
                 "ppy.qualname": info.qualname,
                 "ppy.abi": "ppy",
                 "ppy.releases_gil": signature.releases_gil,
+                "effects": self._effects_of(info),
                 **({"fastmath": True} if info.directive("fastmath") is not None else {}),
                 **attributes,
             },
@@ -259,6 +297,49 @@ class Frontend:
 
     def _drop(self, qualname: str) -> None:
         self.declared[qualname][0].body.blocks.clear()
+
+    def instantiate(
+        self, qualname: str, arguments: tuple[T.Type, ...]
+    ) -> tuple[IRFunction, NativeSignature] | None:
+        """The native function `qualname[arguments]`, made now if it is new.
+
+        Monomorphization: the generic's body is lowered with its type
+        parameters replaced by the arguments, under a name that spells them,
+        so two callers with the same arguments share one function and two
+        with different ones get two. A body the arguments do not lower --
+        `a + b` on a type with no native `+` -- refuses with the reason.
+        """
+        entry = self.generics.get(qualname)
+        if entry is None:
+            return None
+        info, analysis, node = entry
+        key = (qualname, tuple(str(a) for a in arguments))
+        found = self.instances.get(key)
+        if found is not None:
+            return found
+        if key in self._instantiating:
+            raise Unsupported(f"`{qualname}` instantiates itself with the same arguments")
+        bindings = dict(zip(info.type_params, arguments, strict=True))
+        specialized = _specialized_info(info, bindings, key[1])
+        ok, reason = eligible(specialized, analysis, self.layouts, allow_io=self.standalone)
+        if not ok:
+            raise Unsupported(f"`{qualname}[{', '.join(key[1])}]` has no native lowering: {reason}")
+        signature = _signature(specialized, self.layouts, analysis)
+        function = self.declare(specialized, signature)
+        function.attributes["ppy.generic"] = qualname
+        function.attributes["ppy.type_arguments"] = key[1]
+        self.instances[key] = (function, signature)
+        self._instantiating.append(key)
+        try:
+            _FunctionLowering(self, function, signature, specialized, {}).run(node)
+        except Unsupported:
+            del self.instances[key]
+            del self.declared[specialized.qualname]
+            del self.module.functions[function.name]
+            raise
+        finally:
+            self._instantiating.pop()
+        return self.instances[key]
 
     def _reject_callers_of_rejected(self, lowered: Lowered) -> None:
         """A caller of a function that did not lower runs on CPython too."""
@@ -1127,9 +1208,34 @@ class _FunctionLowering:
         if target in {"abs", "float", "int", "bool"}:
             return self._builtin_call(target, node)
         for qualname, (function, signature) in self.frontend.declared.items():
-            if qualname.rpartition(".")[2] == target:
+            if qualname.rpartition(".")[2] == target and "ppy.generic" not in function.attributes:
                 return self._native_call(function, signature, qualname, node)
+        for qualname, (info, _analysis, _node) in self.frontend.generics.items():
+            if qualname.rpartition(".")[2] == target:
+                return self._generic_call(qualname, info, node)
         raise Unsupported(f"`{target}` has no native lowering")
+
+    def _generic_call(self, qualname: str, info: FunctionInfo, node: ast.Call) -> Value:
+        """Instantiate a generic on the argument types this body has in hand."""
+        if len(node.args) != len(info.params):
+            raise Unsupported(f"`{qualname}` called with the wrong number of arguments")
+        values = [self._expr(argument) for argument in node.args]
+        bindings: dict[T.TypeVar_, T.Type] = {}
+        for value, param in zip(values, info.params, strict=True):
+            if not T.infer(param.type, _analysis_type(value.type), bindings):
+                raise Unsupported(f"`{qualname}` cannot take a `{value.type}` for `{param.name}`")
+        arguments = tuple(bindings.get(v, v.bound or T.ANY) for v in info.type_params)
+        instance = self.frontend.instantiate(qualname, arguments)
+        if instance is None:
+            raise Unsupported(f"`{qualname}` has no native lowering")
+        function, signature = instance
+        if not function.results:
+            raise Unsupported(f"`{qualname}` returns nothing a caller can use")
+        converted = [
+            self._coerce(value, parameter.kind)
+            for value, parameter in zip(values, signature.parameters, strict=True)
+        ]
+        return core.call(self.b, function.name, tuple(converted), function.results).results[0]
 
     def _standalone_print(self, node: ast.Call) -> Value:
         for index, argument in enumerate(node.args):
@@ -1257,6 +1363,9 @@ class _FunctionLowering:
             left, right = self._coerce(left, "float"), self._coerce(right, "float")
             self._guard_nonzero(right)
             return core.div(self.b, left, right)
+        dispatched = self._struct_operator(left, right, op)
+        if dispatched is not None:
+            return dispatched
         kind = self._unify(_kind(left.type), _kind(right.type))
         left, right = self._coerce(left, kind), self._coerce(right, kind)
         if kind == "float":
@@ -1458,6 +1567,37 @@ class _FunctionLowering:
 
     # -- the rest of the arithmetic ---------------------------------------
 
+    def _struct_operator(self, left: Value, right: Value, op: type[ast.operator]) -> Value | None:
+        """`a + b` on a value class: the class's own `__add__`, called directly.
+
+        Static dispatch: the receiver's type is known, so the method is the
+        one the class defines, lowered like any other native function. A
+        class without a native `__add__` refuses rather than falling back
+        to Python's dynamic dispatch inside native code.
+        """
+        if not isinstance(left.type, StructType):
+            return None
+        dunder = _OPERATOR_DUNDERS.get(op)
+        if dunder is None:
+            raise Unsupported(f"no operator method for `{op.__name__}` on `{left.type.name}`")
+        for qualname, (function, signature) in self.frontend.declared.items():
+            if (
+                qualname.endswith(f".{dunder}")
+                and function.params
+                and (function.params[0][1] == left.type)
+            ):
+                if not function.results:
+                    raise Unsupported(f"`{qualname}` returns nothing a caller can use")
+                other = (
+                    self._coerce(right, signature.parameters[1].kind)
+                    if not isinstance(right.type, StructType)
+                    else right
+                )
+                return core.call(self.b, function.name, (left, other), function.results).results[0]
+        raise Unsupported(
+            f"`{left.type.name}` has no native `{dunder}`; native code never dispatches dynamically"
+        )
+
     def _shift(self, left: Value, right: Value, op: type[ast.operator]) -> Value:
         zero = core.const(self.b, 0, I64)
         limit = core.const(self.b, 63, I64)
@@ -1541,3 +1681,52 @@ def _constant_of(value: Value) -> object | None:
     if isinstance(owner, Operation) and owner.name == "core.const":
         return owner.attributes.get("value")
     return None
+
+
+_OPERATOR_DUNDERS: dict[type[ast.operator], str] = {
+    ast.Add: "__add__",
+    ast.Sub: "__sub__",
+    ast.Mult: "__mul__",
+    ast.Div: "__truediv__",
+    ast.FloorDiv: "__floordiv__",
+    ast.Mod: "__mod__",
+    ast.Pow: "__pow__",
+    ast.MatMult: "__matmul__",
+    ast.BitAnd: "__and__",
+    ast.BitOr: "__or__",
+    ast.BitXor: "__xor__",
+}
+
+
+def _specialized_info(
+    info: FunctionInfo, bindings: dict[T.TypeVar_, T.Type], arguments: tuple[str, ...]
+) -> FunctionInfo:
+    """`info` with its type parameters replaced: what one instantiation is."""
+    from dataclasses import replace
+
+    spelled = "_".join(a.replace(".", "_").replace("[", "_").replace("]", "") for a in arguments)
+    params = [replace(p, type=T.substitute(p.type, bindings)) for p in info.params]
+    return replace(
+        info,
+        qualname=f"{info.qualname}__{spelled}",
+        params=params,
+        ret=T.substitute(info.ret, bindings),
+        type_params=(),
+    )
+
+
+def _analysis_type(t: IRType) -> T.Type:
+    """The analysis type an IR value's type corresponds to."""
+    if t == I64:
+        return T.INT
+    if t == F64:
+        return T.FLOAT
+    if t == BOOL:
+        return T.BOOL
+    if isinstance(t, BufferType):
+        return T.instance("Buffer", _analysis_type(t.element))
+    if isinstance(t, TupleType):
+        return T.Tuple_(tuple(_analysis_type(i) for i in t.items))
+    if isinstance(t, StructType):
+        return T.Instance(t.name.replace("_", "."), (), ())
+    return T.ANY

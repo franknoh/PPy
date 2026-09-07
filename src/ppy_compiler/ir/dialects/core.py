@@ -351,6 +351,22 @@ def _verify_ret(op: Operation, checker: Checker) -> None:
     for value in op.operands:
         if isinstance(value.type, PtrType) and value.type.address_space == "stack":
             checker.error(op, "a stack pointer escapes through the return")
+        if _borrowed_parameter(value, checker) is not None:
+            checker.error(op, f"%{value.name} is borrowed and may not be returned")
+
+
+def _borrowed_parameter(value: Value, checker: Checker) -> str | None:
+    """The ownership a parameter declares, when `value` is that parameter and
+    the declaration is a borrow."""
+    function = checker.function
+    if function is None or function.entry is None:
+        return None
+    for argument, attributes in zip(
+        function.entry.arguments, function.param_attributes, strict=False
+    ):
+        if argument is value and attributes.get("ownership") in {"borrowed", "mut"}:
+            return str(attributes["ownership"])
+    return None
 
 
 def _verify_alloca(op: Operation, checker: Checker) -> None:
@@ -381,6 +397,8 @@ def _verify_store(op: Operation, checker: Checker) -> None:
         checker.error(op, "writes through a const pointer")
     if isinstance(value.type, PtrType) and value.type.address_space == "stack":
         checker.error(op, "a stack pointer escapes into memory")
+    if _borrowed_parameter(value, checker) is not None:
+        checker.error(op, f"%{value.name} is borrowed and may not be stored")
 
 
 def _verify_ptr_offset(op: Operation, checker: Checker) -> None:

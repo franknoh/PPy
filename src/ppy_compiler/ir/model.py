@@ -164,6 +164,17 @@ class Region:
     def entry(self) -> Block | None:
         return self.blocks[0] if self.blocks else None
 
+    @property
+    def function(self) -> IRFunction | None:
+        """The function this region belongs to, however deeply it nests."""
+        owner: object = self.parent
+        while owner is not None:
+            if isinstance(owner, IRFunction):
+                return owner
+            block = getattr(owner, "parent", None)
+            owner = block.region.parent if block is not None and block.region is not None else None
+        return None
+
     def add_block(self, name: str, arguments: Iterable[tuple[str | None, IRType]] = ()) -> Block:
         block = Block(name, self)
         for argument_name, type_ in arguments:
@@ -322,6 +333,7 @@ class IRFunction:
         "attributes",
         "body",
         "location",
+        "module",
         "param_attributes",
         "params",
         "results",
@@ -343,6 +355,8 @@ class IRFunction:
         self.attributes: dict[str, Attribute] = dict(attributes or {})
         self.body = Region(self)
         self.location = location
+        #: The module that holds this function, once one does.
+        self.module: IRModule | None = None
 
     @property
     def name(self) -> str:
@@ -401,6 +415,7 @@ class IRModule:
         if name in self.functions or name in self.globals:
             raise ValueError(f"@{name} is already defined in module {self.name}")
         function = IRFunction(Symbol(name, visibility), params, results, attributes, location)
+        function.module = self
         self.functions[name] = function
         return function
 

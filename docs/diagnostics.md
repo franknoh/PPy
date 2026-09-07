@@ -69,6 +69,23 @@ sound fallback, and never the rest.
 | `E1601` | A function declared `@ppy.pure` performs a forbidden effect. |
 | `E1602` | A function declared `@ppy.pure` calls a function with unknown effects. |
 
+## Ownership
+
+| code | meaning |
+|---|---|
+| `E1611` | A function returns a parameter it only borrows. |
+| `E1612` | A function stores a borrowed parameter where it outlives the call. |
+| `E1613` | A function writes through a parameter it borrows read-only; `Mut[...]` allows the write. |
+
+## Generics
+
+| code | meaning |
+|---|---|
+| `E1720` | A type parameter form other than `T` or `T: Bound` (a `ParamSpec`, a `TypeVarTuple`). |
+| `E1721` | A type argument does not satisfy its parameter's bound. |
+| `E1722` | A generic is specialized on more type-argument tuples, or a deeper type, than `[tool.ppy.generics]` allows. |
+| `E1723` | A generic calls itself with its own type parameter nested in a type: the specializations never end. |
+
 ## Directive requirements
 
 | code | meaning |
@@ -83,6 +100,13 @@ sound fallback, and never the rest.
 | `E1801` | The selected backend is unavailable in this environment. |
 | `E1802` | A construct is not supported by the selected backend. |
 | `E1803` | A standalone build requires a fully native reachable graph. |
+
+## Plugins
+
+| code | meaning |
+|---|---|
+| `E1901` | A plugin the project asked for could not be loaded, or two plugins claim one module. |
+| `E1902` | A plugin's compiler pass left the IR invalid; the pass is named. |
 
 ## Remarks
 

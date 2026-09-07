@@ -46,6 +46,7 @@ ARRAY_TYPECODES: dict[str, T.Type] = {
 }
 
 _IO = EffectSet.of(Effect.IO)
+_NETWORK = EffectSet.of(Effect.NETWORK, Effect.IO, raises=("OSError",))
 _TIME = EffectSet.of(Effect.TIME)
 _RANDOM = EffectSet.of(Effect.RANDOM)
 _ALLOC = EffectSet.of(Effect.ALLOC)
@@ -393,6 +394,12 @@ _FUNCTIONS: dict[str, tuple[T.Type, EffectSet]] = {
         T.dict_of(T.STR, T.Tuple_((T.STR,), homogeneous=True)),
         EffectSet.of(Effect.READ_GLOBAL),
     ),
+    "socket.socket": _fn("socket.socket", T.instance("socket.socket"), _NETWORK | _ALLOC),
+    "socket.create_connection": _fn(
+        "socket.create_connection", T.instance("socket.socket"), _NETWORK | _ALLOC
+    ),
+    "socket.gethostbyname": _fn("socket.gethostbyname", T.STR, _NETWORK),
+    "urllib.request.urlopen": _fn("urllib.request.urlopen", T.ANY, _NETWORK | _ALLOC),
     "time.time": _fn("time.time", T.FLOAT, _TIME),
     "time.perf_counter": _fn("time.perf_counter", T.FLOAT, _TIME),
     "time.perf_counter_ns": _fn("time.perf_counter_ns", T.INT, _TIME),

@@ -108,15 +108,58 @@ Ordinary `Annotated` aliases from `ppy`:
 | `Range(lo, hi)` | an integer refinement the checker propagates. |
 | `Dynamic` | an explicit Python-dynamic boundary value. Entering is free; leaving is not: `Dynamic -> Dynamic` flows freely, but `Dynamic -> int` is `E1508` until a `ppy.check[T]` validates it. `Any` at runtime. |
 | `Length(n)`, `Shape(...)`, `DType("f32")`, `Contiguous`, `NoAlias` | container refinements; `Shape`/`DType` are what makes a `@ppy.jax` function exportable. |
+| `Owned[T]`, `Borrowed[T]`, `Mut[T]` | how a parameter holds its value. `Borrowed` is read for the call and no longer: not returned (`E1611`), not stored where it outlives the call (`E1612`), not written (`E1613`). `Mut` is a borrow the function may write through. `Owned` hands the value over. A `Buffer[T]` is `Borrowed` unless the program says otherwise. |
+
+## Generics
+
+A function may declare type parameters the way Python 3.12 spells them:
+
+```python
+def largest[T: int | float](a: T, b: T) -> T:
+    return a if a > b else b
+```
+
+A call infers the type arguments from what it passes, checks each against
+its bound (`E1721`), and has the declared return type with them
+substituted: `largest(1, 2)` is an `int`, `largest(1.5, 2.5)` a `float`. An
+unbounded parameter has no operators -- nothing says it does -- and a
+bound that is a Protocol lends its methods' return types.
+
+Native code monomorphizes: a generic called from a native function is
+lowered once per tuple of type arguments, under a name that spells them,
+and the call goes straight to that instance; the generic itself keeps its
+Python body for every other caller. `[tool.ppy.generics]` bounds the
+process -- `max-specializations` per generic (`E1722`) and `max-depth` of
+a type argument -- and a generic that calls itself with its own parameter
+wrapped in a type is refused outright (`E1723`), because its
+specializations never end.
+
+Static dispatch: `a + b` on a value class inside native code calls the
+class's own `__add__`, lowered like any native function; native code never
+falls back to Python's dynamic dispatch, and a class without a native
+operator is refused with the reason.
 
 ## Effects and purity
 
-Every function gets an inferred effect set (I/O, global write, argument
-mutation, allocation, randomness, unknown external call). `@ppy.pure` asserts
-the set is empty of the forbidden ones, and the checker proves it
-interprocedurally — a pure function calling something with unknown effects is
-`E1602`, and a callee that mutates the caller's argument is charged to the
-caller.
+Every function gets an inferred effect set. The vocabulary is the one
+every consumer shares -- purity, native and GPU eligibility, code motion,
+inlining, parallelization, fusion, the async lowering, plugin contracts:
+
+```text
+alloc  read_object  write_object  read_memory  write_memory
+read_global  write_global  io  network  random  time
+thread  process  sync  atomic  may_raise
+python_callback  python_dynamic  gpu_launch  device_memory  external_unknown
+```
+
+`read_memory`/`write_memory` are native memory a pointer or a buffer
+reaches; `read_object`/`write_object` are Python objects. `@ppy.pure`
+asserts the set is empty of the forbidden ones -- everything but
+allocation, reads, and raising -- and the checker proves it
+interprocedurally: a pure function calling something with unknown effects
+is `E1602`, and a callee that mutates the caller's argument is charged to
+the caller. The IR carries each function's effects, and passes read them:
+an unused call to a function that only allocates and reads is dead code.
 
 ## The three execution paths
 

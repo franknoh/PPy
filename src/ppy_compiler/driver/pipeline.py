@@ -140,7 +140,9 @@ def analyze_paths(
     if not entries:
         diagnostics.add(Diagnostic("E1002", Severity.ERROR, "no PPY source files were found"))
         graph = ModuleGraph(root=project.root, search_paths=project.search_paths)
-        symbols = ProjectSymbols(graph, diagnostics, strict=project.config.strict)
+        symbols = ProjectSymbols(
+            graph, diagnostics, strict=project.config.strict, generics=project.config.generics
+        )
         analysis = ProjectAnalysis(symbols=symbols, diagnostics=diagnostics)
         return AnalysisBundle(project, graph, symbols, analysis, {}, diagnostics)
 
@@ -152,7 +154,9 @@ def analyze_paths(
         follow_imports=follow_imports,
         overlays=overlays,
     )
-    symbols = ProjectSymbols(graph, diagnostics, strict=project.config.strict)
+    symbols = ProjectSymbols(
+        graph, diagnostics, strict=project.config.strict, generics=project.config.generics
+    )
     for qualname, display in stdlib.EXTERNAL_TYPES.items():
         symbols.register_external_type(qualname, display)
     for qualname, display in project.plugins.external_types().items():

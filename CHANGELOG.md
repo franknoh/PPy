@@ -68,6 +68,29 @@ below are in the order the work landed.
   `columnar` operations, everything the model does not capture exactly
   left to pandas), and `pyarrow` (Arrow typed as Arrow, the curated
   compute named as the same `columnar` operations).
+- Effect system v2. The vocabulary every consumer shares -- purity, native
+  and GPU eligibility, code motion, fusion, the async lowering, plugin
+  contracts -- now names native memory apart from Python objects
+  (`read_memory`/`write_memory`) and adds `network`, `atomic`,
+  `python_dynamic`, `gpu_launch`, and `device_memory`; the socket and
+  urllib surface carries `network`. Every IR function carries its effects
+  and the passes read them: an unused call to a callee with none but
+  allocation and reads is dead code.
+- A light ownership model: `ppy.Owned[T]`, `ppy.Borrowed[T]`, `ppy.Mut[T]`.
+  A borrow lasts the call -- not returned (`E1611`), not stored where it
+  outlives the call (`E1612`), not written unless `Mut` (`E1613`) -- and a
+  `Buffer[T]` is borrowed unless the program says otherwise. The IR carries
+  `ownership` and `noalias` on parameters, and its verifier refuses a
+  borrowed parameter in a return or a store.
+- Generics. `def f[T: Bound](...)` declares type parameters; a call infers
+  the arguments, checks the bounds (`E1721`), and substitutes them into the
+  result. Native code monomorphizes: a generic called from native code is
+  lowered once per tuple of type arguments under a name that spells them,
+  and the call goes straight to the instance. `[tool.ppy.generics]` bounds
+  the specializations (`E1722`), and a generic that feeds its own type
+  parameter back into itself wrapped is refused (`E1723`). Inside native
+  code `a + b` on a value class dispatches statically to the class's own
+  `__add__`; native code never falls back to dynamic dispatch.
 - `ppy emit ir|llvm-ir TARGET [-o]` prints a compiler stage as text, one
   rule for every kind; `.ppyir` is the IR's on-disk form, self-describing
   down to each function's ABI, and `ppy build foo.ppyir` builds an

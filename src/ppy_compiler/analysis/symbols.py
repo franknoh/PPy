@@ -7,7 +7,7 @@ import operator
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from ..diagnostics import DiagnosticBag
+from ..diagnostics import Diagnostic, DiagnosticBag, Severity, Span
 from ..frontend.modules import Module, ModuleGraph
 from . import types as T
 from .annotations import AnnotationResolver
@@ -145,6 +145,8 @@ class FunctionInfo:
     effects: EffectSet = field(default_factory=EffectSet)
     verified_pure: bool = False
     dynamic: bool = False
+    #: `def f[T: Bound](...)`: the type parameters, resolved with the signature.
+    type_params: tuple[T.TypeVar_, ...] = ()
     #: Whether the body yields. The answer needs a walk of the whole function,
     #: and `signature()` asks for it once per function per checked function, so
     #: it is computed once and kept.
@@ -437,11 +439,20 @@ class ProjectSymbols:
     """Project-wide symbol, class, and signature tables."""
 
     def __init__(
-        self, graph: ModuleGraph, diagnostics: DiagnosticBag, *, strict: bool = True
+        self,
+        graph: ModuleGraph,
+        diagnostics: DiagnosticBag,
+        *,
+        strict: bool = True,
+        generics: object | None = None,
     ) -> None:
         self.graph = graph
         self.diagnostics = diagnostics
         self.strict = strict
+        #: The limits on monomorphization (`GenericsConfig`), or None for the defaults.
+        self.generics = generics
+        #: Per generic function, the tuples of type arguments it was called with.
+        self.specializations: dict[str, set[tuple[str, ...]]] = {}
         self.modules: dict[str, ModuleSymbols] = {}
         self.classes: dict[str, ClassInfo] = {}
         self.functions: dict[str, FunctionInfo] = {}
@@ -899,6 +910,8 @@ class ProjectSymbols:
     ) -> None:
         if info.params:
             return
+        annotations.type_params = self._type_params(info, annotations)
+        info.type_params = tuple(annotations.type_params.values())
         args = info.node.args
         entries: list[tuple[ast.arg, str, ast.expr | None]] = [
             (arg, "positional_only", None) for arg in args.posonlyargs
@@ -946,6 +959,28 @@ class ProjectSymbols:
             info.ret = resolved.type
             info.ret_facts = resolved.facts
             info.ret_annotated = True
+        annotations.type_params = {}
+
+    @staticmethod
+    def _type_params(info: FunctionInfo, annotations: AnnotationResolver) -> dict[str, T.TypeVar_]:
+        """The type parameters a `def f[T: Bound]` declares, bounds resolved."""
+        declared = getattr(info.node, "type_params", None) or ()
+        found: dict[str, T.TypeVar_] = {}
+        for entry in declared:
+            if not isinstance(entry, ast.TypeVar):
+                annotations.diagnostics.add(
+                    Diagnostic(
+                        "E1720",
+                        Severity.ERROR,
+                        f"`{info.name}` declares `{ast.unparse(entry)}`; only plain type "
+                        "parameters (`T` or `T: Bound`) are supported",
+                        Span(info.path, entry.lineno, entry.col_offset),
+                    )
+                )
+                continue
+            bound = annotations.resolve(entry.bound).type if entry.bound is not None else None
+            found[entry.name] = T.TypeVar_(entry.name, bound, owner=info.qualname)
+        return found
 
     def _implicit_param(
         self,

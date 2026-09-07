@@ -537,6 +537,45 @@ class _Checker:
         ) = previous
         return result
 
+    def _check_ownership(self, info: FunctionInfo, analysis: FunctionAnalysis) -> None:
+        """A borrow lasts the call: it is not returned, not stored where it
+        outlives the call, and -- unless it is a `Mut` borrow -- not written."""
+        for param in info.params:
+            mode = param.facts.ownership
+            if mode is None:
+                continue
+            where = info.node
+            if mode in {"borrowed", "mut"} and param.name in self._returned_names:
+                self._error(
+                    "E1611",
+                    f"`{info.name}` returns `{param.name}`, which it only borrows",
+                    where,
+                    help="take the value as `ppy.Owned[...]`, or return a copy",
+                )
+            if mode in {"borrowed", "mut"} and param.name in analysis.escaping - set(
+                self._returned_names
+            ):
+                self._error(
+                    "E1612",
+                    f"`{info.name}` stores `{param.name}`, which it only borrows, "
+                    "where it outlives the call",
+                    where,
+                    help="take the value as `ppy.Owned[...]`, or store a copy",
+                )
+            if mode == "borrowed" and (
+                param.name in analysis.mutated_params or param.name in analysis.delegated_writes
+            ):
+                self._error(
+                    "E1613",
+                    f"`{info.name}` writes through `{param.name}`, which it borrows read-only",
+                    where,
+                    help="take the value as `ppy.Mut[...]` to write through it",
+                )
+
+    @staticmethod
+    def _nesting_of(t: T.Type) -> int:
+        return _nesting(t)
+
     def _finish_function(self, info: FunctionInfo, env: Env) -> FunctionAnalysis:
         if info.is_generator:
             inferred: T.Type = T.instance(
@@ -595,6 +634,7 @@ class _Checker:
         )
         info.effects = effects
         info.verified_pure = analysis.verified_pure
+        self._check_ownership(info, analysis)
         if not info.ret_annotated:
             info.ret = inferred
             info.ret_facts = ret_facts
@@ -1830,6 +1870,8 @@ class _Checker:
             self._check_arity(
                 info, node, len(args) + (1 if bound else 0), set(keywords), skip_self=bound
             )
+            if info.type_params:
+                return self._generic_call(info, node, args, keywords, bound=bound)
             self._check_argument_types(info, node, args, keywords, bound=bound)
             if info.dynamic:
                 self._native_blockers.append(f"`{info.name}` is a dynamic boundary")
@@ -1893,6 +1935,115 @@ class _Checker:
         for name in named:
             if name not in valid:
                 self._error("E1305", f"`{info.name}` has no parameter `{name}`", node)
+
+    def _generic_call(
+        self,
+        info: FunctionInfo,
+        node: ast.Call,
+        args: list[Binding],
+        keywords: dict[str | None, Binding],
+        *,
+        bound: bool,
+    ) -> Binding:
+        """A call to `def f[T](...)`: the type arguments are what the
+        arguments say, checked against each bound, and the result is the
+        declared return with them substituted. The specialization it names
+        is counted against the project's limit, and a generic that feeds its
+        own type parameter back into itself, wrapped, is refused."""
+        offset = 1 if bound or (info.is_method and not info.is_static) else 0
+        positional = args[: len(positional_values(node.args))]
+        bindings: dict[T.TypeVar_, T.Type] = {}
+        for reached in bind_call(info.params, positional, list(keywords.items()), offset=offset):
+            param, argument = reached.param, reached.value
+            if isinstance(param.type, T.UnknownType):
+                continue
+            where = node
+            if not reached.keyword and reached.index - offset < len(node.args):
+                where = node.args[reached.index - offset]
+            if not T.infer(param.type, argument.type, bindings):
+                self._mismatch(
+                    "E1301",
+                    f"`{info.name}` parameter `{param.name}` "
+                    f"expects `{param.type}`, got `{argument.type}`",
+                    where,
+                    argument.type,
+                )
+        for variable in info.type_params:
+            chosen = bindings.get(variable)
+            if chosen is None:
+                bindings[variable] = variable.bound or T.ANY
+                continue
+            if variable.bound is not None and not T.is_assignable(chosen, variable.bound):
+                self._error(
+                    "E1721",
+                    f"`{info.name}[{variable.name}]` requires `{variable.bound}`, "
+                    f"and `{chosen}` does not satisfy it",
+                    node,
+                )
+        for reached in bind_call(info.params, positional, list(keywords.items()), offset=offset):
+            param, argument = reached.param, reached.value
+            expected = T.substitute(param.type, bindings)
+            if isinstance(expected, T.UnknownType) or T.is_assignable(argument.type, expected):
+                continue
+            where = node
+            if not reached.keyword and reached.index - offset < len(node.args):
+                where = node.args[reached.index - offset]
+            self._mismatch(
+                "E1301",
+                f"`{info.name}` parameter `{param.name}` expects `{expected}`, "
+                f"got `{argument.type}`",
+                where,
+                argument.type,
+            )
+        self._note_specialization(info, bindings, node)
+        if info.dynamic:
+            self._native_blockers.append(f"`{info.name}` is a dynamic boundary")
+        result = T.substitute(info.ret, bindings)
+        return Binding(result, info.ret_facts if info.ret_annotated else Facts())
+
+    def _note_specialization(
+        self, info: FunctionInfo, bindings: dict[T.TypeVar_, T.Type], node: ast.Call
+    ) -> None:
+        """Count the specialization this call names, and refuse an explosion."""
+        arguments = tuple(str(bindings[v]) for v in info.type_params)
+        limits = self.project.generics
+        max_specializations = limits.max_specializations if limits else 64
+        max_depth = limits.max_depth if limits else 8
+        known = self.project.specializations.setdefault(info.qualname, set())
+        if arguments not in known:
+            if len(known) >= max_specializations:
+                self._error(
+                    "E1722",
+                    f"`{info.name}` has been specialized {len(known)} times; the project "
+                    f"allows {max_specializations} (`[tool.ppy.generics] max-specializations`)",
+                    node,
+                )
+                return
+            known.add(arguments)
+        current = self._current
+        if current is not None and current.qualname == info.qualname:
+            # A recursive call: a type argument that wraps the function's own
+            # type parameter grows without bound at each level.
+            for variable in info.type_params:
+                chosen = bindings.get(variable)
+                if chosen is None or chosen == variable:
+                    continue
+                if variable in T.type_variables(chosen):
+                    self._error(
+                        "E1723",
+                        f"`{info.name}` calls itself with `{variable.name} = {chosen}`, which "
+                        f"nests its own type parameter: the specializations never end",
+                        node,
+                    )
+                    return
+        depth = max((_nesting(a) for a in bindings.values()), default=0)
+        if depth > max_depth:
+            self._error(
+                "E1722",
+                f"`{info.name}` is specialized on a type nested {depth} deep; the project "
+                f"allows {max_depth} (`[tool.ppy.generics] max-depth`)",
+                node,
+            )
 
     def _check_argument_types(
         self,
@@ -2655,6 +2806,9 @@ class _Checker:
         overloaded = self._operator_method(left_base, right_base, op, node)
         if overloaded is not None:
             return overloaded
+        generic = self._type_variable_operator(left_base, right_base, op, node)
+        if generic is not None:
+            return generic
         if (
             op is ast.Div
             and isinstance(left_base, T.Instance)
@@ -2684,6 +2838,55 @@ class _Checker:
             self._warn("W2002", "arithmetic on `bool` values is legal but usually unintended", node)
 
         return self._numeric_result(left, right, left_base, right_base, op, node)
+
+    def _type_variable_operator(
+        self, left_base: T.Type, right_base: T.Type, op: type[ast.operator], node: ast.AST
+    ) -> Binding | None:
+        """`a + b` on a type parameter: what the bound says.
+
+        A numeric bound (`T: int | float`) answers as arithmetic on the bound
+        answers; a Protocol bound answers with the dunder's return, which for
+        `def __add__(self, other: T) -> T` is `T` again; an unbounded `T`
+        has no operators, and says so.
+        """
+        variable = next((t for t in (left_base, right_base) if isinstance(t, T.TypeVar_)), None)
+        if variable is None:
+            return None
+        dunder = _OPERATOR_DUNDERS.get(op)
+        bound = variable.bound
+        if bound is None:
+            self._error(
+                "E1302",
+                f"`{_ARITH_OPS.get(op, '?')}` is not defined for `{variable}`: "
+                "it has no bound, so nothing says it has the operator",
+                node,
+                help=f"bound the parameter: `[{variable.name}: SomeProtocol]`",
+            )
+            return Binding(T.UNKNOWN)
+        members = bound.members if isinstance(bound, T.Union_) else (bound,)
+        if all(T.is_numeric(T.strip_literal(m)) for m in members):
+            other = right_base if variable is left_base else left_base
+            other = T.strip_literal(other)
+            if isinstance(other, T.TypeVar_) or T.is_numeric(other):
+                return Binding(variable if op is not ast.Div else T.FLOAT)
+            return None
+        if isinstance(bound, T.Instance) and dunder is not None:
+            cls = self.project.classes.get(bound.name)
+            method = cls.find_method(dunder, self.project) if cls is not None else None
+            if method is not None:
+                ret = method.ret
+                # `-> Self`-style: the protocol names itself, and the value
+                # is the parameter, not the protocol.
+                if isinstance(ret, T.Instance) and ret.name == bound.name:
+                    return Binding(variable)
+                return Binding(ret)
+        self._error(
+            "E1302",
+            f"`{_ARITH_OPS.get(op, '?')}` is not defined for `{variable}`: "
+            f"its bound `{bound}` has no `{dunder}`",
+            node,
+        )
+        return Binding(T.UNKNOWN)
 
     def _operator_method(
         self, left_base: T.Type, right_base: T.Type, op: type[ast.operator], node: ast.AST
@@ -3926,3 +4129,14 @@ def _unresolved_summary(cascaded: int, modules: dict[str, ModuleAnalysis]) -> Di
         help="resolve the origins above -- annotate the parameter, or add a stub or plugin "
         "for the call -- and the rest follow",
     )
+
+
+def _nesting(t: T.Type) -> int:
+    """How deep a type nests: `list[list[int]]` is 2, `int` is 0."""
+    if isinstance(t, T.Instance):
+        return 1 + max((_nesting(a) for a in t.args), default=-1) if t.args else 0
+    if isinstance(t, T.Tuple_):
+        return 1 + max((_nesting(i) for i in t.items), default=-1)
+    if isinstance(t, T.Union_):
+        return max((_nesting(m) for m in t.members), default=0)
+    return 0

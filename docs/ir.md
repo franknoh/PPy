@@ -83,6 +83,17 @@ operation and may tell the optimizer it never wraps.
 Bounds checks are explicit `core.guard`s the frontend emits; a sanitizer
 pass adds more.
 
+## Effects and ownership on the IR
+
+A function carries its `effects` -- the lower-case names of the analysis's
+vocabulary (`docs/language.md`), with a write through a buffer spelled as
+the `write_memory` it is -- and each parameter its `ownership`
+(`borrowed`, `mut`, `owned`) and `noalias`. Passes read the effects (an
+unused `core.call` to a callee with none but allocation and reads is dead),
+and the verifier holds the ownership: a `borrowed` or `mut` parameter is
+refused in a `core.ret` and as the value of a `core.store`, the same way a
+stack pointer is.
+
 ## Text and `.ppyir`
 
 `ppy_compiler.ir.encode` prints a module; `decode` reads it back. The text
