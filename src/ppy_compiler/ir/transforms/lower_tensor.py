@@ -4,9 +4,12 @@ A tensor value becomes a view -- a buffer of its elements, a stride per
 axis, an offset -- and each operation becomes core loops over that memory:
 `load`, `fill`, and `broadcast`, `reshape` of a contiguous tensor,
 `transpose`, and `slice` are views onto memory that already exists;
-`store`, the arithmetic, `concat`, `reduce`, `matmul`, and `convert` write
-freshly allocated memory. Small static tensors live on the stack, large
-and symbolic ones on the heap and are freed where the function returns.
+`store`, the arithmetic, `fused`, `concat`, `reduce`, `matmul`, and
+`convert` write freshly allocated memory -- or, when a `tensor.store` is
+the result's only reader and no operand is broadcast, straight into the
+store's buffer, with no temporary and no copy. Small static tensors live
+on the stack, large and symbolic ones on the heap and are freed where the
+function returns.
 
 A symbolic dimension is bound where a tensor naming it is loaded: `N` in a
 load of `tensor<f64, N, 3>` is the buffer's length over 3, guarded to
@@ -23,7 +26,6 @@ from dataclasses import dataclass
 from .. import shape as shapes
 from ..dialects import core, sparse
 from ..dialects import tensor as tensors
-from ..dialects.math import UNARY as _MATH_UNARY
 from ..model import Block, Builder, IRFunction, IRModule, Operation, Successor, Value
 from ..passes import Pass, PassContext
 from ..types import I32, I64, U8, BufferType, FloatType, IndexType, IntType, IRType, PtrType
@@ -121,6 +123,8 @@ class _FunctionLowering:
         self._while_parts: tuple[Block, Block, Block] | None = None
         #: Each symbolic dimension's value, once a load has bound it.
         self.symbols: dict[str, Value] = {}
+        #: Stores an operation wrote straight into: done, and erased unlowered.
+        self.absorbed: set[int] = set()
 
     def fresh(self, hint: str) -> str:
         self.counter += 1
@@ -374,6 +378,9 @@ class _FunctionLowering:
         handler = getattr(self, f"op_{name}", None)
         if handler is None:
             raise LoweringError(f"{op.name} has no lowering")
+        if id(op) in self.absorbed:
+            self.erase.append(op)
+            return
         if op.dialect != "tensor":
             # The algorithms index by number: a factorization's n, a transform's
             # length. They want the shapes they work on known.
@@ -452,6 +459,97 @@ class _FunctionLowering:
         inner, indices, _next = self.loops(op, source.shape)
         self.store(inner, target, indices, self.load(inner, source, indices))
 
+    def output(self, op: Operation, info: tensors.TensorInfo, hint: str) -> _View:
+        """Where `op` writes its result: the buffer of a `tensor.store` that is
+        the result's only reader, or fresh memory.
+
+        Writing straight into the destination saves the temporary and the
+        copy. It is safe when every element is read and written at one
+        index in one iteration, so an input the destination aliases is
+        consumed before it is overwritten: the operands must have the
+        result's own shape, since a broadcast operand is read again.
+        """
+        uses = op.results[0].uses
+        if len(uses) == 1:
+            user, position = uses[0]
+            if (
+                isinstance(user, Operation)
+                and user.name == "tensor.store"
+                and position == 0
+                and user.parent is op.parent
+                and _defined_before(user.operands[1], op)
+                and all(
+                    tensors.describe(v.type) is None or tensors.describe(v.type).shape == info.shape  # type: ignore[union-attr]
+                    for v in op.operands
+                )
+            ):
+                buffer = user.operands[1]
+                b = Builder().before(op)
+                count = self.extent(b, shapes.numel(info.shape))
+                enough = core.cmp(b, "ge", self.length(b, buffer), count)
+                core.guard(b, enough, "bounds", "the buffer holds fewer elements than the tensor")
+                self.absorbed.add(id(user))
+                return _View(buffer, info, shapes.strides_of(info.shape), 0)
+        return self.allocate(Builder().before(op), info, hint)
+
+    def op_fused(self, op: Operation) -> None:
+        """One loop over the broadcast shape; the body inlined per element."""
+        info = self.info(op.result)
+        body = op.regions[0].blocks[0]
+        views: dict[int, _View] = {}
+        iteration: shapes.Shape = ()
+        for operand in op.operands:
+            if tensors.describe(operand.type) is not None:
+                view = self.view(operand)
+                views[id(operand)] = view
+                iteration = shapes.broadcast(iteration, view.shape)
+        kind = op.attributes.get("reduce")
+        result = self.output(op, info, "fused") if kind is None else None
+        if result is None:
+            result = self.allocate(Builder().before(op), info, "fused")
+        if kind is not None:
+            inner, indices, _next = self.loops(op, result.shape)
+            self.store(inner, result, indices, _identity(inner, str(kind), info.dtype))
+        inner, indices, _next = self.loops(op, iteration)
+        mapping: dict[int, Value] = {}
+        for argument, operand in zip(body.arguments, op.operands, strict=True):
+            view = views.get(id(operand))
+            if view is None:
+                mapping[id(argument)] = operand
+            else:
+                strides = _broadcast_strides(view, iteration)
+                mapping[id(argument)] = self.load(inner, view, indices, strides)
+        produced: Value | None = None
+        for inner_op in body.operations:
+            if inner_op.name == "tensor.yield":
+                produced = mapping.get(id(inner_op.operands[0]), inner_op.operands[0])
+                break
+            clone = inner.create(
+                inner_op.name,
+                tuple(mapping.get(id(v), v) for v in inner_op.operands),
+                tuple(r.type for r in inner_op.results),
+                dict(inner_op.attributes),
+            )
+            for original, copy in zip(inner_op.results, clone.results, strict=True):
+                mapping[id(original)] = copy
+        assert produced is not None
+        if kind is None:
+            self.store(inner, result, indices, produced)
+        else:
+            axes = tuple(int(a) for a in op.attributes["axes"])  # type: ignore[union-attr]
+            keepdims = bool(op.attributes.get("keepdims", False))
+            kept = [index for axis, index in enumerate(indices) if axis not in axes]
+            if keepdims:
+                kept = [
+                    core.const(inner, 0, I64) if axis in axes else index
+                    for axis, index in enumerate(indices)
+                ]
+            current = self.load(inner, result, kept)
+            self.store(
+                inner, result, kept, _combine(inner, str(kind), info.dtype, current, produced)
+            )
+        self.views[id(op.result)] = result
+
     def op_fill(self, op: Operation) -> None:
         """One element in memory, read through zero strides."""
         info = self.info(op.result)
@@ -470,49 +568,20 @@ class _FunctionLowering:
         source = self.view(op.operands[0])
         info = self.info(op.result)
         kind = str(op.attributes["op"])
-        b = Builder().before(op)
-        result = self.allocate(b, info, kind)
+        result = self.output(op, info, kind)
         inner, indices, _next = self.loops(op, result.shape)
         value = self.load(inner, source, indices)
-        self.store(inner, result, indices, self.scalar_unary(inner, kind, value))
+        self.store(inner, result, indices, tensors.scalar_unary(inner, kind, value, self.module))
         self.views[id(op.result)] = result
-
-    def scalar_unary(self, b: Builder, kind: str, value: Value) -> Value:
-        """`kind` of one element: negation, a math function, or a special one."""
-        floating = isinstance(value.type, FloatType)
-        if kind == "neg":
-            return core.neg(b, value) if floating else core.neg(b, value, overflow="wrap")
-        if kind == "abs" and not floating:
-            negative = core.cmp(b, "lt", value, core.const(b, 0, value.type))
-            return core.select(b, negative, core.neg(b, value, overflow="wrap"), value)
-        if kind in _MATH_UNARY:
-            self.module.require("math", 1)
-            return b.create(f"math.{kind}", (value,), (value.type,)).result
-        self.module.require("special", 1)
-        return b.create(f"special.{kind}", (value,), (value.type,)).result
 
     def _elementwise(self, op: Operation, name: str) -> None:
         left, right = self.view(op.operands[0]), self.view(op.operands[1])
         result_info = self.info(op.result)
-        b = Builder().before(op)
-        result = self.allocate(b, result_info, name)
+        result = self.output(op, result_info, name)
         inner, indices, _next = self.loops(op, result.shape)
         a = self.load(inner, left, indices, _broadcast_strides(left, result.shape))
         c = self.load(inner, right, indices, _broadcast_strides(right, result.shape))
-        floating = isinstance(result_info.dtype, FloatType)
-        if name == "div":
-            value = core.div(inner, a, c)
-        elif name == "pow":
-            self.module.require("math", 1)
-            value = inner.create("math.pow", (a, c), (result_info.dtype,)).result
-        elif name in {"min", "max"}:
-            value = _extremum(inner, name, result_info.dtype, a, c)
-        else:
-            value = (
-                getattr(core, name)(inner, a, c)
-                if floating
-                else getattr(core, name)(inner, a, c, overflow="wrap")
-            )
+        value = tensors.scalar_binary(inner, name, a, c, self.module)
         self.store(inner, result, indices, value)
         self.views[id(op.result)] = result
 
@@ -1738,20 +1807,20 @@ def _combine(b: Builder, kind: str, dtype: IRType, current: Value, value: Value)
             if floating
             else core.mul(b, current, value, overflow="wrap")
         )
-    return _extremum(b, kind, dtype, current, value)
+    del dtype
+    return tensors.scalar_extremum(b, kind, current, value)
 
 
-def _extremum(b: Builder, kind: str, dtype: IRType, a: Value, c: Value) -> Value:
-    """The smaller or larger of two values. A NaN is the answer, as NumPy's
-    `minimum`/`maximum` and `min`/`max` have it: a comparison with a NaN is
-    false, so `a` wins when it is NaN or when it is the extreme, and a NaN
-    `c` wins the comparison it fails."""
-    keep_a = core.cmp(b, "le" if kind == "min" else "ge", a, c)
-    chosen = core.select(b, keep_a, a, c)
-    if not isinstance(dtype, FloatType):
-        return chosen
-    a_is_number = core.cmp(b, "eq", a, a)
-    return core.select(b, a_is_number, chosen, a)
+def _defined_before(value: Value, op: Operation) -> bool:
+    """Is `value` available where `op` stands: a block argument, or an operation
+    earlier in the same block? (The destination buffer is read there.)"""
+    owner = value.owner
+    if not isinstance(owner, Operation):
+        return True
+    block = op.parent
+    if owner.parent is not block or block is None:
+        return False
+    return block.operations.index(owner) < block.operations.index(op)
 
 
 def _symbols_of(shape: shapes.Shape) -> set[str]:

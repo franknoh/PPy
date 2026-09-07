@@ -8,7 +8,9 @@ rules in `ir.shape` -- and the verifier holds the written result to it.
 `load` and `store` move a tensor to and from a buffer of its elements in
 row-major order; `fill` makes a tensor of one scalar; everything else is
 arithmetic on the values, and says nothing about memory. `lower-tensor`
-decides that.
+decides that. `fused` holds a region computing one element from one
+element of each operand -- what `tensor-fusion` makes of a chain of
+elementwise operations -- and lowers to a single loop.
 """
 
 from __future__ import annotations
@@ -18,8 +20,9 @@ from typing import TYPE_CHECKING
 
 from .. import shape as shapes
 from ..dialect import Dialect, DialectRegistry, OpSpec
-from ..model import Builder, Operation, Value
+from ..model import Builder, IRModule, Operation, Value
 from ..types import BufferType, DialectType, FloatType, IndexType, IntType, IRType, is_scalar
+from . import core
 from . import layout as layouts
 from .math import UNARY as _MATH_UNARY
 from .special import UNARY as _SPECIAL_UNARY
@@ -36,8 +39,12 @@ __all__ = [
     "describe",
     "elementwise",
     "fill",
+    "scalar_binary",
+    "scalar_extremum",
+    "scalar_unary",
     "tensor_type",
     "unary",
+    "yield_",
 ]
 
 #: Two tensors in, one out, with broadcasting. `min` and `max` are the
@@ -219,6 +226,92 @@ def _verify_unary(op: Operation, checker: Checker) -> None:
     if kind not in _INTEGER_UNARY and not isinstance(source.dtype, FloatType):
         checker.error(op, f"tensor.unary {kind} takes a floating-point tensor, not {source.dtype}")
     _result_shape(op, checker, source.dtype, source.shape)
+
+
+#: What a fused body may hold: pure scalar arithmetic of these dialects.
+_BODY_DIALECTS = frozenset({"core", "math", "special"})
+
+
+def element_type(t: IRType) -> IRType:
+    """A tensor's element type; a scalar's own."""
+    info = describe(t)
+    return t if info is None else info.dtype
+
+
+def _verify_fused(op: Operation, checker: Checker) -> None:
+    result = describe(op.results[0].type)
+    if result is None:
+        checker.error(op, f"tensor.fused gives a tensor, not {op.results[0].type}")
+        return
+    shape: shapes.Shape = ()
+    for operand in op.operands:
+        info = describe(operand.type)
+        if info is None:
+            if not is_scalar(operand.type):
+                checker.error(op, f"tensor.fused takes tensors and scalars, not {operand.type}")
+                return
+            continue
+        try:
+            shape = shapes.broadcast(shape, info.shape)
+        except shapes.ShapeError as error:
+            checker.error(op, str(error))
+            return
+    kind = op.attributes.get("reduce")
+    if kind is not None:
+        if kind not in REDUCTIONS:
+            checker.error(op, f"fused `reduce` is one of {', '.join(REDUCTIONS)}, not {kind!r}")
+            return
+        axes = _ints(op, checker, "axes")
+        if axes is None:
+            return
+        try:
+            shape = shapes.reduce(shape, axes, bool(op.attributes.get("keepdims", False)))
+        except shapes.ShapeError as error:
+            checker.error(op, str(error))
+            return
+    if result.shape != shape:
+        checker.error(
+            op,
+            f"tensor.fused computes shape {shapes.spell_shape(shape)}, the result is written as "
+            f"{shapes.spell_shape(result.shape)}",
+        )
+    region = op.regions[0]
+    if len(region.blocks) != 1:
+        checker.error(op, "a fused body is one block")
+        return
+    body = region.blocks[0]
+    if len(body.arguments) != len(op.operands):
+        checker.error(
+            op, f"the body takes {len(body.arguments)} elements for {len(op.operands)} operands"
+        )
+        return
+    for argument, operand in zip(body.arguments, op.operands, strict=True):
+        if argument.type != element_type(operand.type):
+            checker.error(
+                op,
+                f"body argument {argument.type} does not match an element of {operand.type}",
+            )
+            return
+    terminator = body.terminator
+    if terminator is None or terminator.name != "tensor.yield":
+        checker.error(op, "a fused body ends in tensor.yield")
+        return
+    if terminator.operands[0].type != result.dtype:
+        checker.error(
+            op, f"the body yields {terminator.operands[0].type}, the result holds {result.dtype}"
+        )
+    for inner in body.operations[:-1]:
+        spec = checker.registry.op_spec(inner.name)
+        if inner.dialect not in _BODY_DIALECTS or spec is None or not spec.pure:
+            checker.error(op, f"{inner.name} is not scalar arithmetic a fused body may hold")
+            return
+
+
+def _verify_yield(op: Operation, checker: Checker) -> None:
+    block = op.parent
+    owner = block.region.parent if block is not None and block.region is not None else None
+    if not isinstance(owner, Operation) or owner.name != "tensor.fused":
+        checker.error(op, "tensor.yield ends the body of a tensor.fused")
 
 
 def _verify_broadcast(op: Operation, checker: Checker) -> None:
@@ -445,6 +538,22 @@ class TensorDialect(Dialect):
         )
         add(OpSpec("tensor.matmul", pure=True, verify=_verify_matmul, operands=2, results=1))
         add(OpSpec("tensor.convert", pure=True, verify=_verify_convert, operands=1, results=1))
+        add(OpSpec("tensor.fused", pure=True, verify=_verify_fused, results=1, regions=1))
+        add(
+            OpSpec(
+                "tensor.yield",
+                terminator=True,
+                verify=_verify_yield,
+                operands=1,
+                results=0,
+                successors=0,
+            )
+        )
+
+    def register_patterns(self, registry: object) -> None:
+        from .tensor_patterns import register
+
+        register(registry)  # type: ignore[arg-type]
 
     def verify_type(self, t: DialectType) -> str | None:
         return verify_tensor(t)
@@ -499,6 +608,62 @@ def unary(b: Builder, op: str, t: Value, name: str | None = None) -> Value:
     info = describe(t.type)
     assert info is not None
     return _typed(b, "unary", (t,), tensor_type(info.dtype, info.shape), {"op": op}, hint=name)
+
+
+def yield_(b: Builder, value: Value) -> Operation:
+    """End a fused body with the element it computed."""
+    return b.create("tensor.yield", (value,), ())
+
+
+def scalar_unary(b: Builder, kind: str, value: Value, module: IRModule | None = None) -> Value:
+    """`kind` of one element: negation, a math function, or a special function.
+
+    The math and special dialects are required of `module` when given, so
+    a body built here verifies.
+    """
+    floating = isinstance(value.type, FloatType)
+    if kind == "neg":
+        return core.neg(b, value) if floating else core.neg(b, value, overflow="wrap")
+    if kind == "abs" and not floating:
+        negative = core.cmp(b, "lt", value, core.const(b, 0, value.type))
+        return core.select(b, negative, core.neg(b, value, overflow="wrap"), value)
+    if kind in _MATH_UNARY:
+        if module is not None:
+            module.require("math", 1)
+        return b.create(f"math.{kind}", (value,), (value.type,)).result
+    if module is not None:
+        module.require("special", 1)
+    return b.create(f"special.{kind}", (value,), (value.type,)).result
+
+
+def scalar_binary(
+    b: Builder, name: str, left: Value, right: Value, module: IRModule | None = None
+) -> Value:
+    """`name` -- one of `ELEMENTWISE` -- over two elements."""
+    floating = isinstance(left.type, FloatType)
+    if name == "div":
+        return core.div(b, left, right)
+    if name == "pow":
+        if module is not None:
+            module.require("math", 1)
+        return b.create("math.pow", (left, right), (left.type,)).result
+    if name in {"min", "max"}:
+        return scalar_extremum(b, name, left, right)
+    operation = getattr(core, name)
+    return operation(b, left, right) if floating else operation(b, left, right, overflow="wrap")
+
+
+def scalar_extremum(b: Builder, kind: str, a: Value, c: Value) -> Value:
+    """The smaller or larger of two elements. A NaN is the answer, as NumPy's
+    `minimum`/`maximum` and `min`/`max` have it: a comparison with a NaN is
+    false, so `a` wins when it is NaN or when it is the extreme, and a NaN
+    `c` wins the comparison it fails."""
+    keep_a = core.cmp(b, "le" if kind == "min" else "ge", a, c)
+    chosen = core.select(b, keep_a, a, c)
+    if not isinstance(a.type, FloatType):
+        return chosen
+    a_is_number = core.cmp(b, "eq", a, a)
+    return core.select(b, a_is_number, chosen, a)
 
 
 def broadcast(b: Builder, t: Value, shape: shapes.Shape, name: str | None = None) -> Value:

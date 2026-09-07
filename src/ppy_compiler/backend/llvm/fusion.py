@@ -330,6 +330,8 @@ def _build(module: IRModule, loop: FusedLoop) -> None:
             b, "ppy.buffer_from_parts", (pointer, n), (BufferType(F64),)
         ).results[0]
 
+    # The destination first, so the lowering can write the result straight into it.
+    destination = None if loop.returns_scalar else as_buffer(arguments[0])
     arrays = [tensors.load(b, as_buffer(p), element, f"a{i}") for i, p in enumerate(array_pointers)]
 
     def emit(node: _Node) -> Value:
@@ -347,8 +349,8 @@ def _build(module: IRModule, loop: FusedLoop) -> None:
         raise ValueError(f"fused expression uses {node.op!r}, which the tensor dialect lacks")
 
     value = emit(_parse(loop.expression))
-    if not loop.returns_scalar:
-        tensors.store(b, value, as_buffer(arguments[0]))
+    if destination is not None:
+        tensors.store(b, value, destination)
         core.ret(b)
         return
     kind = "add" if loop.reduction == "mean" else loop.reduction

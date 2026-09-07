@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from .canonicalize import Canonicalize, ConstantFold, canonicalization_patterns
 from .dce import DeadCodeElimination
+from .fuse_tensor import FuseTensor, TensorCanonicalize
 from .lower_parallel import BACKENDS as PARALLEL_BACKENDS
 from .lower_parallel import LowerParallel
 from .lower_tensor import LoweringError, LowerTensor
@@ -14,10 +15,12 @@ __all__ = [
     "Canonicalize",
     "ConstantFold",
     "DeadCodeElimination",
+    "FuseTensor",
     "LowerParallel",
     "LowerTensor",
     "LoweringError",
     "SimplifyCFG",
+    "TensorCanonicalize",
     "canonicalization_patterns",
     "default_pipeline",
 ]
@@ -43,6 +46,9 @@ def default_pipeline(level: int = 1, ctx=None, parallel=None):  # type: ignore[n
         manager.add(SimplifyCFG())
     manager.add_stage("after-optimization")
     manager.add(DeadCodeElimination())
+    if level >= 1:
+        manager.add(TensorCanonicalize())
+        manager.add(FuseTensor())
     manager.add(LowerTensor())
     if parallel is not None:
         manager.add(parallel)

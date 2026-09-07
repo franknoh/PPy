@@ -184,8 +184,10 @@ row-major order, guarded by the buffer's length; `empty`, `fill %scalar`,
 functions, over every element), `add`, `sub`, `mul`, `div`, `pow`, `min`,
 `max` (with broadcasting; a NaN wins `min` and `max`, as NumPy has it),
 `broadcast`, `reshape`, `transpose {perm}`, `slice {starts, stops,
-steps}`, `concat {axis}`, `reduce {axes, op, keepdims}`, `matmul`, and
-`convert` are the values. `lower-tensor` makes memory of a tensor -- a
+steps}`, `concat {axis}`, `reduce {axes, op, keepdims}`, `matmul`,
+`convert`, and `fused` -- a region over one element of each operand,
+ending in `tensor.yield`, with an optional `reduce` at its root -- are
+the values. `lower-tensor` makes memory of a tensor -- a
 view onto memory that exists already for `load`, `fill`, `broadcast`,
 `transpose`, `slice`, and a contiguous `reshape`; fresh memory, on the
 stack when small and static and the heap otherwise, freed where the
@@ -304,8 +306,15 @@ cache that those declarations empty. With `verify_after_each` the manager
 verifies the module after every pass and names the pass that broke it.
 The shared passes are `canonicalize`, `constant-fold`, `simplify-cfg`
 (constant branches, one-target conditional branches, unreachable blocks,
-single-predecessor chains), and `dce` (unused pure operations, dead
-blocks); `transforms.default_pipeline(level)` orders them and marks the
+single-predecessor chains), `dce` (unused pure operations, dead blocks),
+`tensor-canonicalize` (the tensor dialect's own patterns: views that
+change nothing go away, two transposes or reshapes are one, arithmetic
+over `fill`s is a `fill`, `x * fill 1` is `x`), `tensor-fusion` (a chain
+of elementwise tensor operations whose intermediates have one reader, and
+a `reduce` at its root, become one `tensor.fused` -- a region computing
+one element from one element of each input -- so `lower-tensor` makes one
+loop of them with no temporaries), `lower-tensor`, and `lower-parallel`;
+`transforms.default_pipeline(level)` orders them and marks the
 stages -- `after-ir-generation`, `after-canonicalization`,
 `before-optimization`, `after-optimization`, `before-backend` -- where a
 plugin's `register_stage_pass` puts a pass of its own.

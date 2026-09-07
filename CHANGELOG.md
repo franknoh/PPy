@@ -470,6 +470,17 @@ Speed of the compiler itself, measured before being changed.
   while `matmul` and the other dispatcher-sensitive calls stay with the
   dispatcher; `ppy explain` shows the shared operation beside a call's
   lowering.
+- Tensor canonicalization and fusion on the IR. The tensor dialect's
+  patterns remove views that change nothing, compose transposes and
+  reshapes, fold arithmetic over `fill`s into one scalar computation, and
+  drop neutral elements where that is exact. `tensor-fusion` turns a chain
+  of elementwise operations whose intermediates have a single reader --
+  with a `reduce` at the root where there is one -- into `tensor.fused`, a
+  region computing one element from one element of each input, and
+  `lower-tensor` makes a single loop of it; a result whose only reader is
+  a `tensor.store` is written straight into the store's buffer. A fused
+  NumPy or torch kernel is now one loop with no temporary and no copy, and
+  the pass reports `tensor ops fused` for every group it makes.
 
 ## 0.1.0a1
 
