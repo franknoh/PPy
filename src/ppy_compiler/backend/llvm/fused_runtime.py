@@ -2,9 +2,12 @@
 
 One kernel serves every library whose arrays it was built over: a NumPy
 `ndarray` and a CPU torch `Tensor` are both `float64` storage behind a
-pointer, so the same loop runs over either once the guards hold. What the
-guards are, how a pointer is taken, and what the result is wrapped in are
-the storage's business; the kernel's is the arithmetic.
+pointer, so the same loop runs over either once the guards hold. A PyArrow
+`Array` is Arrow's layout -- a values buffer and a validity bitmap -- and
+its kernel is columnar IR over exactly that, so the array is read where it
+lies and the result is an Arrow array built over the buffers the kernel
+filled. What the guards are, how a pointer is taken, and what the result
+is wrapped in are the storage's business; the kernel's is the arithmetic.
 """
 
 from __future__ import annotations
@@ -163,6 +166,8 @@ def bind_fused(
     threads: str | int = "auto",
 ) -> FusedBinding:
     """Wrap one fused kernel in the guards its fast-path domain requires."""
+    if loop.storage == "pyarrow":
+        return _bind_arrow(loop, address, fallback)
     storage = _storage(loop.storage)
     if storage is None:
         return FusedBinding(loop, fallback, fallback, reason=f"{loop.storage} is not importable")
@@ -305,6 +310,115 @@ def bind_fused(
 
 class _Failed(Exception):
     """The kernel's own guard failed: the library's path answers."""
+
+
+# -- Arrow -----------------------------------------------------------------------------------------
+
+
+def _bind_arrow(loop: FusedLoop, address: int, fallback: Callable[..., object]) -> FusedBinding:
+    """A columnar kernel over PyArrow arrays: `float64` or `bool`, read in place.
+
+    The kernel takes the result's values and validity buffers, then each
+    array's values and validity buffers, the scalars, and the row count. An
+    array without nulls lends a bitmap of ones; a bit-packed buffer sliced
+    inside a byte, a chunked array, another type, or a shape the kernel does
+    not take runs PyArrow's own compute.
+    """
+    try:
+        import pyarrow
+    except ImportError:
+        return FusedBinding(loop, fallback, fallback, reason="pyarrow is not importable")
+
+    byte_pointer = ctypes.POINTER(ctypes.c_uint8)
+    array_count = len(loop.arrays)
+    kinds = loop.kinds or ("f64",) * array_count
+    prototype = ctypes.CFUNCTYPE(
+        ctypes.c_int32,
+        ctypes.c_void_p,
+        byte_pointer,
+        *([ctypes.c_void_p, byte_pointer] * array_count),
+        *([ctypes.c_double] * len(loop.scalars)),
+        ctypes.c_int64,
+        ctypes.POINTER(ctypes.c_int64),
+    )
+    native = prototype(address)
+    binding = FusedBinding(loop, lambda *a: None, fallback)
+    ones = bytearray()
+    types = {"f64": pyarrow.float64(), "bool": pyarrow.bool_()}
+
+    def all_valid(length: int) -> Any:
+        nonlocal ones
+        needed = (length + 7) // 8
+        if len(ones) < needed:
+            ones = bytearray(b"\xff" * max(needed, 64))
+        return (ctypes.c_uint8 * len(ones)).from_buffer(ones)
+
+    def parts(value: Any, kind: str) -> tuple[int, Any] | None:
+        """(values address, validity pointer) of an array the kernel takes, else None."""
+        if not isinstance(value, pyarrow.Array) or value.type != types[kind]:
+            return None
+        validity, values = value.buffers()[:2]
+        if values is None:
+            return None
+        if kind == "f64":
+            address_ = values.address + value.offset * _DOUBLE_SIZE
+        else:
+            if value.offset % 8:
+                return None
+            address_ = values.address + value.offset // 8
+        if validity is None or value.null_count == 0:
+            bitmap = all_valid(len(value))
+        elif value.offset % 8:
+            return None
+        else:
+            bitmap = ctypes.cast(validity.address + value.offset // 8, byte_pointer)
+        return address_, bitmap
+
+    def wrapper(*args: object) -> object:
+        if len(args) != array_count + len(loop.scalars):
+            return fallback(*args)
+        arrays = args[:array_count]
+        scalars = args[array_count:]
+        if any(type(s) not in (int, float) for s in scalars):
+            binding.fallbacks += 1
+            return fallback(*args)
+        length: int | None = None
+        atoms: list = []
+        for value, kind in zip(arrays, kinds, strict=True):
+            described = parts(value, kind)
+            if described is None or (length is not None and len(value) != length):  # type: ignore[arg-type]
+                binding.fallbacks += 1
+                return fallback(*args)
+            length = len(value)  # type: ignore[arg-type]
+            atoms.extend(described)
+        if length is None:
+            binding.fallbacks += 1
+            return fallback(*args)
+        bitmap_bytes = (length + 7) // 8
+        out_values = pyarrow.allocate_buffer(
+            length * _DOUBLE_SIZE if loop.result == "f64" else bitmap_bytes, resizable=False
+        )
+        out_validity = pyarrow.allocate_buffer(bitmap_bytes, resizable=False)
+        placeholder = ctypes.c_int64(0)
+        status = native(
+            out_values.address,
+            ctypes.cast(out_validity.address, byte_pointer),
+            *atoms,
+            *[float(s) for s in scalars],  # type: ignore[arg-type]
+            length,
+            placeholder,
+        )
+        if status != _STATUS_OK:
+            binding.fallbacks += 1
+            return fallback(*args)
+        binding.calls += 1
+        validity_buffer = out_validity if loop.nullable else None
+        return pyarrow.Array.from_buffers(types[loop.result], length, [validity_buffer, out_values])
+
+    wrapper.__name__ = loop.symbol
+    wrapper.__ppy_fused__ = loop  # type: ignore[attr-defined]
+    binding.wrapper = wrapper
+    return binding
 
 
 def _splittable(loop: FusedLoop) -> bool:

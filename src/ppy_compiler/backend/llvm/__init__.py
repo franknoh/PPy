@@ -329,7 +329,7 @@ def _fuse(symbols, analysis):  # type: ignore[no-untyped-def]
     return loops, plan, notes
 
 
-_LIBRARIES = {"numpy": "NumPy", "torch": "torch"}
+_LIBRARIES = {"numpy": "NumPy", "torch": "torch", "pyarrow": "PyArrow"}
 
 
 def _append_fused(ir_text: str, module_name: str, fused: dict[str, FusedLoop]) -> str:

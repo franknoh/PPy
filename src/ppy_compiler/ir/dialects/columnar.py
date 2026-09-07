@@ -7,7 +7,8 @@ mask allows. `columnar.table<a, column<i64>, b, column<f64, nullable>>` is a
 table of named columns. The operations are the ones pandas and PyArrow
 share (spec 51): arithmetic, comparison, and boolean logic over columns,
 with a null where any input is null; `cast`, `is_null`, `is_valid`,
-`fill_null`, `select`; `filter`, `take`, `sort_indices`, `concat`;
+`fill_null`, `select`, `fill` (one scalar, `n` rows); `filter`, `take`,
+`sort_indices`, `concat`;
 `aggregate` to a one-row column; and over tables `make`, `column_of`,
 `project`, `filter`, `take`, `concat`, `group_by`, and an inner `join`.
 `lower-columnar` makes memory and loops of them, in Arrow's layout: a
@@ -219,6 +220,17 @@ def _verify_store(op: Operation, checker: Checker) -> None:
         checker.error(op, f"the values of a column of {info.dtype} go to a buffer<{element}>")
     if info.nullable and not _is_bitmap(op.operands[2].type):
         checker.error(op, "a validity bitmap is a buffer<u8>, one bit per row")
+
+
+def _verify_fill(op: Operation, checker: Checker) -> None:
+    info = describe(op.results[0].type)
+    if info is None or info.nullable:
+        checker.error(op, f"columnar.fill gives a column without nulls, not {op.results[0].type}")
+        return
+    if op.operands[0].type != info.dtype:
+        checker.error(op, f"columnar.fill of a {op.operands[0].type} gives a column of it")
+    if op.operands[1].type != I64:
+        checker.error(op, "columnar.fill takes the row count as an i64")
 
 
 def _verify_length(op: Operation, checker: Checker) -> None:
@@ -534,6 +546,7 @@ class ColumnarDialect(Dialect):
         add(OpSpec("columnar.from_parts", verify=_verify_from_parts, results=1))
         add(OpSpec("columnar.store", verify=_verify_store, results=0))
         add(OpSpec("columnar.length", pure=True, verify=_verify_length, operands=1, results=1))
+        add(OpSpec("columnar.fill", pure=True, verify=_verify_fill, operands=2, results=1))
         for name in (*ARITHMETIC, *COMPARISON, *BOOLEAN):
             add(OpSpec(f"columnar.{name}", pure=True, verify=_verify_binary, operands=2, results=1))
         for name in ("negate", "abs", "invert"):
@@ -657,6 +670,11 @@ def from_parts(
 def store(b: Builder, column: Value, values: Value, validity: Value | None = None) -> Operation:
     operands = (column, values) if validity is None else (column, values, validity)
     return b.create("columnar.store", operands, ())
+
+
+def fill(b: Builder, scalar: Value, rows: Value, name: str | None = None) -> Value:
+    """`rows` rows of `scalar`, with no nulls."""
+    return _typed(b, "fill", (scalar, rows), column_type(scalar.type), hint=name)
 
 
 def length(b: Builder, value: Value, name: str | None = None) -> Value:

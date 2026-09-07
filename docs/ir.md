@@ -231,7 +231,8 @@ operations are the ones pandas and PyArrow share: `from_parts %values,
 (values one per row -- one bit for `bool` -- and a bit-packed validity
 bitmap); `add`, `sub`, `mul`, `div`, the six comparisons, `and`, `or`,
 `xor`, `negate`, `abs`, `invert` give a null where an input is null;
-`is_null`, `is_valid`, `fill_null`, `cast`, `select`; `filter` by a bool
+`is_null`, `is_valid`, `fill_null`, `cast`, `select`, `fill %scalar, %n`
+(one value in every row); `filter` by a bool
 column, `take` by positions (a null position is a null row), `concat`;
 `sort_indices` (ascending, nulls last, stable); `aggregate {function}` --
 `sum`, `mean`, `min`, `max`, `count`, `any`, `all` over the valid rows, a

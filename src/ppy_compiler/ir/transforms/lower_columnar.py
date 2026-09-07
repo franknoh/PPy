@@ -33,6 +33,8 @@ class _Column:
     values: Value
     validity: Value | None
     length: Value
+    #: One stored row read at every position: a `fill`.
+    constant: bool = False
 
 
 @dataclass(slots=True)
@@ -166,6 +168,8 @@ class ColumnarLowering:
 
     def _get(self, b: Builder, column: _Column, i: Value) -> tuple[Value, Value]:
         """Row `i` of `column`: its value and whether it is valid."""
+        if column.constant:
+            i = self._i64(b, 0)
         if isinstance(column.info.dtype, BoolType):
             value = self._bit(b, column.values, i)
         else:
@@ -191,6 +195,10 @@ class ColumnarLowering:
         return core.const(b, 0.0 if isinstance(dtype, FloatType) else 0, dtype)
 
     def _same_length(self, b: Builder, a: _Column, c: _Column) -> Value:
+        if a.constant:
+            return c.length
+        if c.constant:
+            return a.length
         if a.length is not c.length:
             equal = core.cmp(b, "eq", a.length, c.length)
             core.guard(b, equal, "contract", "the columns differ in length")
@@ -259,6 +267,14 @@ class ColumnarLowering:
         inner, i, _next = self.range_loop(op, self._i64(b, 0), source.length)  # type: ignore[attr-defined]
         value, valid = self._get(inner, source, i)
         self._put(inner, target, i, value, valid)
+
+    def op_columnar_fill(self, op: Operation) -> None:
+        info = columnar.describe(op.result.type)
+        assert info is not None
+        b = Builder().before(op)
+        one = self._new_column(b, info.dtype, False, self._i64(b, 1), "fill")
+        self._put(b, one, self._i64(b, 0), op.operands[0], core.const(b, True, BOOL))
+        self.columns[id(op.result)] = _Column(info, one.values, None, op.operands[1], constant=True)
 
     def op_columnar_length(self, op: Operation) -> None:
         operand = op.operands[0]

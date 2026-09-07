@@ -131,6 +131,17 @@ against another, and a module that imports none of them pays for none of them.
 
 ## PyArrow
 
+- `pyarrow.compute` over `float64` and `bool` arrays converges onto the
+  columnar dialect -- `pc.add` is `columnar.add`, `pc.greater` is
+  `columnar.greater`, `pc.if_else` is `columnar.select`, `pc.fill_null`
+  is `columnar.fill_null` -- and a maximal expression tree of them becomes
+  one kernel: columnar IR over the arrays' own values and validity
+  buffers, lowered to one loop that keeps Arrow's null semantics. The
+  kernel reads an `Array` where it lies (no copy, no `PyObject` in the
+  ABI) and answers an `Array` built over the buffers it filled; a chunked
+  array, another type, or a bitmap sliced inside a byte runs Arrow's own
+  compute.
+
 - `Array`, `ChunkedArray`, `Table`, `RecordBatch`, `Schema`, `Field`,
   `DataType`, `Buffer`, and `Scalar` are typed as Arrow, with their
   representation-level attributes (`null_count`, `offset`, `buffers`,

@@ -55,6 +55,18 @@ COLUMNAR_METHODS: dict[str, str] = {
     "reset_index": "reset_index",
 }
 FRAME_ONLY: dict[str, str] = {"assign": "project", "drop": "project", "rename": "project"}
+#: pandas' operator names, as the columnar dialect spells the operations.
+_COLUMNAR_OPERATORS: dict[str, str] = {
+    "truediv": "div",
+    "eq": "equal",
+    "ne": "not_equal",
+    "lt": "less",
+    "le": "less_equal",
+    "gt": "greater",
+    "ge": "greater_equal",
+    "and_": "and",
+    "or_": "or",
+}
 CALLBACK_METHODS = frozenset({"apply", "map", "applymap", "transform", "agg", "aggregate", "pipe"})
 READERS = frozenset({"read_csv", "read_parquet", "read_json", "read_feather", "read_excel"})
 WRITERS = frozenset({"to_csv", "to_parquet", "to_json", "to_feather", "to_excel"})
@@ -278,7 +290,7 @@ class PandasPlugin(Plugin):
                 result,
                 Facts(),
                 _ALLOC,
-                DialectOperationSpec("columnar", operation),
+                DialectOperationSpec("columnar", _COLUMNAR_OPERATORS.get(operation, operation)),
                 "elementwise over columns",
             )
         return None

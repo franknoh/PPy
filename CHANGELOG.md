@@ -506,6 +506,14 @@ Speed of the compiler itself, measured before being changed.
   struct without a copy and `arrow.to_column` makes it a column. Checked
   against NumPy on both backends and against an `ArrowArray` built by
   hand.
+- PyArrow converges onto the columnar IR. The plugin names the dialect's
+  operations, and an expression tree of `pyarrow.compute` calls over
+  `float64` and `bool` arrays -- arithmetic, comparison, boolean logic,
+  `if_else`, `fill_null`, `is_null`, `is_valid` -- is fused into one
+  kernel built as columnar IR, run over the arrays' own buffers behind
+  the same guards NumPy's kernels have, and answered as an Arrow array
+  over the buffers the kernel filled. pandas spells the same operations
+  by the same names.
 
 ## 0.1.0a1
 

@@ -57,9 +57,9 @@ _WRITE = EffectSet.of(Effect.IO, raises=("OSError", "pyarrow.ArrowInvalid"))
 #: `pyarrow.compute` functions, and the columnar operation each is.
 COMPUTE: dict[str, str] = {
     "add": "add",
-    "subtract": "subtract",
-    "multiply": "multiply",
-    "divide": "divide",
+    "subtract": "sub",
+    "multiply": "mul",
+    "divide": "div",
     "negate": "negate",
     "abs": "abs",
     "equal": "equal",
