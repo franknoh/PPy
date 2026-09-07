@@ -263,6 +263,10 @@ class AnnotationResolver:
         if qualname in _OWNERSHIP:
             inner = self._resolve(args[0]) if args else Resolved(T.UNKNOWN)
             return Resolved(inner.type, inner.facts.with_(ownership=_OWNERSHIP[qualname]))
+        if qualname in {"ppy.native.ptr", "ppy.native.const_ptr"}:
+            resolved = self._resolve(args[0]) if args else Resolved(T.UNKNOWN)
+            element = narrow_element(resolved) or resolved.type
+            return Resolved(T.Instance(qualname, (element,), (qualname, "object")))
         if qualname == "ppy.Buffer":
             resolved = self._resolve(args[0]) if args else Resolved(T.UNKNOWN)
             # `Buffer[ppy.i8]` is a byte per element, not a 64-bit int with a

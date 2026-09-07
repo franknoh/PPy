@@ -476,8 +476,8 @@ def test_unknown_dialects_and_versions_are_refused():
     x = entry.arguments[0]
     core.ret(b, x)
     b = Builder().before(entry.operations[-1])
-    bad = b.create("math.sqrt", (x,), (I64,))
-    assert _errors(module) == ["unknown dialect 'math'"]
+    bad = b.create("gpu.barrier", (x,), (I64,))
+    assert _errors(module) == ["unknown dialect 'gpu'"]
     bad.erase()
     bad = b.create("core.frobnicate", (x,), (I64,))
     assert _errors(module) == ["dialect 'core' defines no operation 'frobnicate'"]

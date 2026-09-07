@@ -23,7 +23,7 @@ SCHEMA_VERSION = 2
 class CachedLowering:
     """What `_collect` produced for one module, minus what is recomputable."""
 
-    __slots__ = ("fused", "ir", "notes", "plan", "rejected", "signatures")
+    __slots__ = ("exports", "fused", "ir", "libraries", "notes", "plan", "rejected", "signatures")
 
     def __init__(
         self,
@@ -33,6 +33,8 @@ class CachedLowering:
         fused: dict[str, FusedLoop],
         plan: dict[tuple[int, int], FusedLoop],
         notes: list[tuple[int, str]],
+        libraries: tuple[str, ...] = (),
+        exports: dict[str, str] | None = None,
     ) -> None:
         self.ir = ir
         self.signatures = signatures
@@ -40,6 +42,8 @@ class CachedLowering:
         self.fused = fused
         self.plan = plan
         self.notes = notes
+        self.libraries = libraries
+        self.exports = dict(exports or {})
 
 
 def _param(p: NativeParam) -> dict:
@@ -119,6 +123,8 @@ def encode(module) -> str:  # type: ignore[no-untyped-def]
                 [list(position), _loop(loop)] for position, loop in module.fusion_plan.items()
             ],
             "notes": [list(note) for note in module.fusion_notes],
+            "libraries": list(module.libraries),
+            "exports": dict(module.exports),
         },
         separators=(",", ":"),
     )
@@ -140,6 +146,8 @@ def decode(text: str) -> CachedLowering | None:
             fused={symbol: _read_loop(loop) for symbol, loop in raw["fused"].items()},
             plan={tuple(position): _read_loop(loop) for position, loop in raw["plan"]},
             notes=[tuple(note) for note in raw["notes"]],
+            libraries=tuple(raw.get("libraries", ())),
+            exports=dict(raw.get("exports", {})),
         )
     except (KeyError, TypeError, ValueError):
         return None

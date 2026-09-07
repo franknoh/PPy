@@ -27,10 +27,12 @@ __all__ = [
     "ToolchainError",
     "build_launcher",
     "c_compiler",
+    "c_prototype",
     "emit_object",
     "link_shared_library",
     "standalone_toolchain_status",
     "toolchain_status",
+    "write_header",
     "write_manifest",
 ]
 
@@ -46,6 +48,7 @@ class ToolchainError(RuntimeError):
 @dataclass(slots=True)
 class BuildArtifacts:
     objects: list[Path] = field(default_factory=list)
+    header: Path | None = None
     library: Path | None = None
     manifest: Path | None = None
     launcher: Path | None = None
@@ -126,16 +129,71 @@ def emit_object(  # type: ignore[no-untyped-def]
     return destination
 
 
-def link_shared_library(objects: list[Path], destination: Path) -> Path:
-    """Link the emitted objects into one loadable shared library."""
+def link_shared_library(
+    objects: list[Path], destination: Path, libraries: tuple[str, ...] = ()
+) -> Path:
+    """Link the emitted objects into one loadable shared library.
+
+    `libraries` are the names the program's C bindings gave (`"m"`); each
+    is linked by name so the dynamic loader finds it where the system has it.
+    """
     compiler = _compiler()
     if compiler is None:
         raise ToolchainError("no C compiler (cc, gcc, or clang) is on PATH")
     destination.parent.mkdir(parents=True, exist_ok=True)
     command = [compiler, "-shared", "-fPIC", "-o", str(destination), *[str(o) for o in objects]]
+    command.extend(f"-l{library}" for library in libraries)
     completed = subprocess.run(command, capture_output=True, text=True, check=False)
     if completed.returncode != 0:
         raise ToolchainError(f"link failed: {completed.stderr.strip() or completed.stdout.strip()}")
+    return destination
+
+
+_C_TYPES = {"i64": "int64_t", "double": "double", "i8": "int8_t"}
+
+
+def c_prototype(name: str, signature: NativeSignature) -> str:
+    """The C declaration of an exported function."""
+    parameters: list[str] = []
+    for parameter in signature.parameters:
+        if parameter.is_buffer:
+            element = _C_TYPES[_abi_of(parameter.element)]
+            parameters.append(f"{element} *{parameter.name}")
+            parameters.append(f"int64_t {parameter.name}_len")
+        elif parameter.is_pointer:
+            const = "const " if parameter.kind == "const_ptr" else ""
+            parameters.append(f"{const}{_C_TYPES[_abi_of(parameter.element)]} *{parameter.name}")
+        elif parameter.is_tuple or parameter.is_object:
+            for index, atom in enumerate(parameter.abi):
+                parameters.append(f"{_C_TYPES[atom]} {parameter.name}_{index}")
+        else:
+            parameters.append(f"{_C_TYPES[parameter.abi[0]]} {parameter.name}")
+    result = _C_TYPES[signature.returns[0]] if signature.returns else "void"
+    return f"{result} {name}({', '.join(parameters) or 'void'});"
+
+
+def _abi_of(scalar: str) -> str:
+    return {"int": "i64", "float": "double", "bool": "i8", "i8": "i8", "u8": "i8"}[scalar]
+
+
+def write_header(destination: Path, exports: dict[str, NativeSignature]) -> Path:
+    """A C header declaring every exported symbol of the library."""
+    guard = "PPY_" + "".join(c if c.isalnum() else "_" for c in destination.stem).upper() + "_H"
+    lines = [
+        f"#ifndef {guard}",
+        f"#define {guard}",
+        "",
+        "#include <stdint.h>",
+        "",
+        "#ifdef __cplusplus",
+        'extern "C" {',
+        "#endif",
+        "",
+    ]
+    lines.extend(c_prototype(name, signature) for name, signature in sorted(exports.items()))
+    lines.extend(["", "#ifdef __cplusplus", "}", "#endif", "", f"#endif /* {guard} */", ""])
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    destination.write_text("\n".join(lines), encoding="utf-8")
     return destination
 
 
@@ -148,12 +206,18 @@ def write_manifest(
     program: dict | None = None,
     wrappers: dict | None = None,
     regions: dict | None = None,
+    exports: dict[str, str] | None = None,
+    libraries: tuple[str, ...] = (),
 ) -> Path:
     """Write the PPY Native Binding Manifest for the built symbols (spec 26.2)."""
     payload = {
         "abi_version": MANIFEST_ABI_VERSION,
         "program": program,
         "wrappers": wrappers,
+        # Public C symbols and their C signatures, and the shared libraries
+        # the artifact's own bindings need at load time.
+        "exports": exports or {},
+        "libraries": list(libraries),
         # Compiled ATen regions, per generated module: the extension library
         # beside the manifest and the C++ symbol of each region.
         "regions": regions,

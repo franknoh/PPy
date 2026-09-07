@@ -128,6 +128,10 @@ class LoweringResult:
     rejected: dict[str, str] = field(default_factory=dict)
     #: Per function, the arithmetic whose overflow guard a proof left out.
     proved: dict[str, tuple[str, ...]] = field(default_factory=dict)
+    #: Shared libraries the C bindings need, by name.
+    libraries: tuple[str, ...] = ()
+    #: Public C symbols: name -> the qualname of the function behind it.
+    exports: dict[str, str] = field(default_factory=dict)
 
 
 def _scalar_name(t: T.Type) -> str | None:
@@ -183,10 +187,26 @@ def _class_fields(
     return base.name, tuple(fields)
 
 
+def _pointer_element(t: T.Type) -> tuple[str, str] | None:
+    """(kind, element) of a `ppy.native.ptr[T]` / `const_ptr[T]`, if `t` is one."""
+    base = T.strip_literal(t)
+    if not isinstance(base, T.Instance) or len(base.args) != 1:
+        return None
+    if base.name not in {"ppy.native.ptr", "ppy.native.const_ptr"}:
+        return None
+    element = _scalar_name(base.args[0])
+    if element is None:
+        return None
+    return ("ptr" if base.name == "ppy.native.ptr" else "const_ptr"), element
+
+
 def _native_param(name: str, t: T.Type, layouts: ClassLayouts | None = None) -> NativeParam | None:
     scalar = _scalar_name(t)
     if scalar is not None:
         return NativeParam(name, scalar)
+    pointer = _pointer_element(t)
+    if pointer is not None:
+        return NativeParam(name, pointer[0], pointer[1])
     buffer = _buffer_element(t)
     if buffer is not None:
         kind, element = buffer
@@ -234,6 +254,10 @@ def eligible(
         return False, "writes through a target the compiler cannot identify"
 
     violations = set(analysis.effects.violations())
+    # Native memory is what native code is for: a read or a write through a
+    # pointer lands where the program aimed it and needs no interpreter.
+    violations.discard(Effect.READ_MEMORY)
+    violations.discard(Effect.WRITE_MEMORY)
     if allow_io:
         violations.discard(Effect.IO)
     if written or analysis.writes_only_allocations:
@@ -286,6 +310,12 @@ def should_lower_native(info: FunctionInfo, analysis: FunctionAnalysis) -> tuple
     native caller.
     """
     del analysis
+    for param in info.params:
+        native = _native_param(param.name, param.type)
+        if native is not None and native.is_pointer:
+            # A machine address has no Python object to come from, whatever
+            # the directives ask: the function is native code's to call.
+            return False, "takes a native pointer, which has no Python boundary"
     for name in _EXPOSURE_DIRECTIVES:
         if info.directive(name) is not None:
             return True, f"@ppy.{name} asks for the boundary"
@@ -366,6 +396,10 @@ def lower_module(
     rejected: dict[str, str] = {}
     for qualname, (info, analysis, node) in functions.items():
         ok, reason = eligible(info, analysis, layouts, allow_io=standalone)
+        if ok and any(p.is_pointer for p in _signature(info, layouts).parameters):
+            # Typed pointers, C bindings, and generics are the IR road's;
+            # this road keeps such a function on CPython.
+            ok, reason = False, "takes a native pointer, which the direct road does not lower"
         if ok:
             candidates[qualname] = (info, analysis, node)
         else:

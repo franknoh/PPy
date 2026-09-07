@@ -30,6 +30,7 @@ from .link import (
     emit_object,
     link_shared_library,
     toolchain_status,
+    write_header,
     write_manifest,
 )
 from .lowering import (
@@ -72,6 +73,10 @@ class NativeModule:
     #: Filled by a fresh lowering; a module rebuilt from the cache has the
     #: same code and an empty list.
     proved: dict[str, tuple[str, ...]] = field(default_factory=dict)
+    #: Shared libraries the module's C bindings need, by name.
+    libraries: tuple[str, ...] = ()
+    #: Public C symbols the module defines: name -> qualname.
+    exports: dict[str, str] = field(default_factory=dict)
 
 
 #: Members that make attribute reads observable, so the class stays boxed.
@@ -194,6 +199,8 @@ def _collect(bundle, opt_level: int | None = None) -> dict[str, NativeModule]:  
             fusion_plan=plan,
             fusion_notes=notes,
             proved=result.proved,
+            libraries=result.libraries,
+            exports=result.exports,
         )
         modules[module.name] = native
         _store_lowering(bundle, module.name, opt_level, native)
@@ -283,6 +290,8 @@ def _module_from_cache(name: str, reused, candidates) -> NativeModule:  # type: 
         fused=dict(reused.fused),
         fusion_plan=dict(reused.plan),
         fusion_notes=list(reused.notes),
+        libraries=tuple(reused.libraries),
+        exports=dict(reused.exports),
     )
 
 
@@ -350,9 +359,9 @@ def _library_key(objects: list[Path]) -> str:
     return digest("ppy-library", *(o.read_bytes().hex() for o in sorted(objects))) + ".so"
 
 
-def _link_and_cache(artifacts, store, key: str, destination: Path) -> None:  # type: ignore[no-untyped-def]
+def _link_and_cache(artifacts, store, key: str, destination: Path, libraries=()) -> None:  # type: ignore[no-untyped-def]
     try:
-        artifacts.library = link_shared_library(artifacts.objects, destination)
+        artifacts.library = link_shared_library(artifacts.objects, destination, libraries)
     except ToolchainError as exc:
         artifacts.notes.append(str(exc))
         return
@@ -462,8 +471,15 @@ def compile_project(  # type: ignore[no-untyped-def]
         adjustments=adjustments_for_project(bundle),
     )
 
+    needed = tuple(dict.fromkeys(lib for native in natives.values() for lib in native.libraries))
+    exports: dict[str, NativeSignature] = {}
+    for native in natives.values():
+        for name, qualname in native.exports.items():
+            lowered = native.functions.get(qualname)
+            if lowered is not None:
+                exports[name] = lowered.signature
     if artifacts.objects:
-        library_key = _library_key(artifacts.objects)
+        library_key = _library_key(artifacts.objects) + ("+" + ",".join(needed) if needed else "")
         destination = build_directory / f"libppy_{bundle.project.root.name}.so"
         cached_library = store.read(library_key)
         if cached_library is not None:
@@ -472,7 +488,11 @@ def compile_project(  # type: ignore[no-untyped-def]
             artifacts.library = destination
             artifacts.reused.append("link")
         else:
-            _link_and_cache(artifacts, store, library_key, destination)
+            _link_and_cache(artifacts, store, library_key, destination, needed)
+        if exports:
+            artifacts.header = write_header(
+                build_directory / f"{bundle.project.root.name}.h", exports
+            )
     generated_dir = build_directory / "generated"
     program: dict | None = None
     entry_module = None
@@ -529,6 +549,8 @@ def compile_project(  # type: ignore[no-untyped-def]
         program=program,
         wrappers=wrapper_section,
         regions=regions_section,
+        exports={name: str(signature) for name, signature in exports.items()},
+        libraries=needed,
     )
 
     if entry is not None and launcher:
@@ -685,6 +707,8 @@ def compile_and_run(  # type: ignore[no-untyped-def]
 
     engine = JitEngine(opt_level=level).open()
     for native in natives.values():
+        for library in native.libraries:
+            engine.load_library(library)
         if native.functions or native.fused:
             engine.add(native.ir)
     engine.finalize()

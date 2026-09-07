@@ -61,6 +61,7 @@ from ..ir import (
     Value,
 )
 from ..ir.dialects import core
+from ..ir.dialects import math as math_dialect
 
 __all__ = ["Frontend", "Lowered", "lower_function", "lower_module_to_ir"]
 
@@ -85,6 +86,8 @@ def _scalar_type(kind: str) -> IRType:
 def _kind(t: IRType) -> str:
     found = _KINDS.get(t)
     if found is None:
+        if isinstance(t, PtrType):
+            raise Unsupported("a pointer is moved with `ppy.native.offset`, not arithmetic")
         raise Unsupported(f"{t} has no scalar kind")
     return found
 
@@ -182,6 +185,8 @@ class Frontend:
         self.generics: dict[str, tuple[FunctionInfo, FunctionAnalysis, ast.FunctionDef]] = {}
         #: Instantiations made so far: (qualname, type arguments) -> declaration.
         self.instances: dict[tuple[str, tuple[str, ...]], tuple[IRFunction, NativeSignature]] = {}
+        #: C bindings by qualname: the stub and its directive's options.
+        self.externs: dict[str, tuple[FunctionInfo, dict[str, object]]] = {}
         self._instantiating: list[tuple[str, tuple[str, ...]]] = []
 
     def build(
@@ -191,6 +196,12 @@ class Frontend:
         candidates: dict[str, tuple[FunctionInfo, FunctionAnalysis, ast.FunctionDef]] = {}
         self.generics: dict[str, tuple[FunctionInfo, FunctionAnalysis, ast.FunctionDef]] = {}
         for qualname, (info, analysis, node) in functions.items():
+            extern = info.directive("native.extern")
+            if extern is not None:
+                # A C binding: called, never lowered.
+                self.externs[qualname] = (info, dict(extern.options))
+                lowered.rejected[qualname] = "a C binding has no body of its own"
+                continue
             if info.type_params:
                 # Lowered per instantiation, when a native caller names one.
                 self.generics[qualname] = (info, analysis, node)
@@ -274,6 +285,11 @@ class Frontend:
             location=SourceLocation(self.spell(info.path), info.node.lineno, info.node.col_offset),
         )
         function.param_attributes = kinds
+        export = info.directive("native.export")
+        if export is not None:
+            if len(results) != 1 or isinstance(results[0], TupleType):
+                raise Unsupported("a C export returns one scalar")
+            function.attributes["ppy.export"] = str(export.options.get("name") or info.name)
         self.declared[info.qualname] = (function, signature)
         return function
 
@@ -371,6 +387,8 @@ class Frontend:
 def _param_type(parameter) -> IRType:  # type: ignore[no-untyped-def]
     if parameter.is_buffer:
         return BufferType(_scalar_type(parameter.element))
+    if parameter.is_pointer:
+        return PtrType(_scalar_type(parameter.element), mutable=parameter.kind == "ptr")
     if parameter.is_tuple:
         return TupleType(tuple(_scalar_type(e) for e in parameter.elements))
     if parameter.is_object:
@@ -475,6 +493,11 @@ class _FunctionLowering:
         ):
             if parameter.is_buffer:
                 self.buffers[parameter.name] = argument
+                continue
+            if parameter.is_pointer:
+                slot = self._alloca(argument.type, parameter.name)
+                core.store(self.b, argument, slot)
+                self.slots[parameter.name] = slot
                 continue
             if parameter.is_object:
                 self.objects[parameter.name] = argument
@@ -748,6 +771,11 @@ class _FunctionLowering:
             core.store(self.b, value, slot)
             return
         assert isinstance(slot.type, PtrType)
+        if isinstance(slot.type.pointee, PtrType):
+            if value.type != slot.type.pointee:
+                raise Unsupported("a pointer local keeps one pointer type")
+            core.store(self.b, value, slot)
+            return
         core.store(self.b, self._coerce(value, _kind(slot.type.pointee)), slot)
 
     def _if(self, node: ast.If) -> None:
@@ -1191,6 +1219,11 @@ class _FunctionLowering:
             return core.call_extern(self.b, "ppy_rt_read_int", (), (I64,)).results[0]
         if target.startswith("math."):
             return self._math_call(target.removeprefix("math."), node)
+        if target.startswith(("ppy.native.", "native.")):
+            return self._native_op(target.rpartition("native.")[2], node)
+        for qualname, (info, options) in self.frontend.externs.items():
+            if qualname.rpartition(".")[2] == target:
+                return self._extern_call(info, options, node)
         if target == "len" and len(node.args) == 1:
             argument = node.args[0]
             if isinstance(argument, ast.Name) and argument.id in self.tuples:
@@ -1236,6 +1269,87 @@ class _FunctionLowering:
             for value, parameter in zip(values, signature.parameters, strict=True)
         ]
         return core.call(self.b, function.name, tuple(converted), function.results).results[0]
+
+    def _native_op(self, operation: str, node: ast.Call) -> Value:
+        """`ppy.native.load` and the rest, as the pointer operations they are."""
+        subscript = node.func.slice if isinstance(node.func, ast.Subscript) else None
+        if operation.startswith("load"):
+            pointer = self._pointer(node.args[0])
+            loaded = core.load(self.b, pointer)
+            return self._coerce(loaded, _read_as(_kind(loaded.type)))
+        if operation.startswith("store"):
+            pointer = self._pointer(node.args[0])
+            assert isinstance(pointer.type, PtrType)
+            if not pointer.type.mutable:
+                raise Unsupported("a store through a const pointer")
+            value = self._coerce(self._expr(node.args[1]), _kind(pointer.type.pointee))
+            core.store(self.b, value, pointer)
+            return core.const(self.b, 0, I64)
+        if operation.startswith("offset"):
+            pointer = self._pointer(node.args[0])
+            count = self._coerce(self._expr(node.args[1]), "int")
+            return core.ptr_offset(self.b, pointer, count)
+        if subscript is None:
+            raise Unsupported(f"`ppy.native.{operation}` has no native lowering")
+        element = _element_type(subscript)
+        if operation.startswith(("sizeof", "alignof")):
+            width = 8 if element is None else {I64: 8, F64: 8, BOOL: 1, I8: 1, U8: 1}[element]
+            return self._int_constant(width)
+        if element is None:
+            raise Unsupported(f"`{ast.unparse(subscript)}` is not an element native memory holds")
+        if operation.startswith("stack_alloc"):
+            count = _constant_of(self._expr(node.args[0]))
+            if not isinstance(count, int) or isinstance(count, bool) or count < 1:
+                raise Unsupported("a stack allocation needs a constant, positive size")
+            return core.alloca(self.b, element, count=int(count))
+        if operation.startswith("cast"):
+            pointer = self._pointer(node.args[0])
+            assert isinstance(pointer.type, PtrType)
+            target = PtrType(element, pointer.type.address_space, pointer.type.mutable)
+            return core.cast(self.b, pointer, target)
+        raise Unsupported(f"`ppy.native.{operation}` has no native lowering")
+
+    def _pointer(self, node: ast.expr) -> Value:
+        value = self._expr(node)
+        if not isinstance(value.type, PtrType):
+            raise Unsupported("a `ppy.native` operation needs a pointer")
+        return value
+
+    def _extern_call(self, info: FunctionInfo, options: dict[str, object], node: ast.Call) -> Value:
+        """A C binding: `core.call_extern` with the stub's signature."""
+        if len(node.args) != len(info.params):
+            raise Unsupported(f"`{info.qualname}` called with the wrong number of arguments")
+        signature = _signature(info, self.frontend.layouts)
+        operands: list[Value] = []
+        for argument, parameter in zip(node.args, signature.parameters, strict=True):
+            if parameter.is_pointer:
+                operands.append(self._pointer(argument))
+            elif parameter.is_buffer:
+                if not isinstance(argument, ast.Name) or argument.id not in self.buffers:
+                    raise Unsupported("a buffer argument must be a buffer this function holds")
+                operands.append(core.buffer_data(self.b, self.buffers[argument.id]))
+            else:
+                operands.append(self._coerce(self._expr(argument), parameter.kind))
+        results: tuple[IRType, ...] = ()
+        if info.ret != T.NONE:
+            atoms = _return_atoms(info.ret)
+            if atoms is None or len(atoms) != 1:
+                raise Unsupported(f"`{info.qualname}` returns something C cannot")
+            results = (_scalar_type(atoms[0]),)
+        library = options.get("library")
+        if isinstance(library, str):
+            known = self.frontend.module.attributes.get("ppy.libraries", ())
+            assert isinstance(known, tuple)
+            if library not in known:
+                self.frontend.module.attributes["ppy.libraries"] = (*known, library)
+        call = core.call_extern(
+            self.b,
+            str(options.get("symbol") or info.name),
+            tuple(operands),
+            results,
+            abi=str(options.get("convention", "c")),
+        )
+        return call.results[0] if results else core.const(self.b, 0, I64)
 
     def _standalone_print(self, node: ast.Call) -> Value:
         for index, argument in enumerate(node.args):
@@ -1334,7 +1448,8 @@ class _FunctionLowering:
         if len(node.args) != arity:
             raise Unsupported(f"`math.{name}` takes {arity} argument(s)")
         arguments = tuple(self._coerce(self._expr(a), "float") for a in node.args)
-        return core.call_intrinsic(self.b, f"math.{name}", arguments, (F64,)).results[0]
+        self.frontend.module.require("math", 1)
+        return math_dialect.call(self.b, "abs" if name == "fabs" else name, *arguments)
 
     def _builtin_call(self, name: str, node: ast.Call) -> Value:
         if len(node.args) != 1:
@@ -1350,7 +1465,8 @@ class _FunctionLowering:
             return self._coerce(value, "int")
         if name == "abs":
             if value.type == F64:
-                return core.call_intrinsic(self.b, "math.fabs", (value,), (F64,)).results[0]
+                self.frontend.module.require("math", 1)
+                return math_dialect.call(self.b, "abs", value)
             promoted = self._coerce(value, "int")
             zero = self._int_constant(0)
             negative = core.cmp(self.b, "lt", promoted, zero)
@@ -1372,7 +1488,8 @@ class _FunctionLowering:
             if op in _ARITHMETIC:
                 return getattr(core, _ARITHMETIC[op])(self.b, left, right)
             if op is ast.Pow:
-                return core.call_intrinsic(self.b, "math.pow", (left, right), (F64,)).results[0]
+                self.frontend.module.require("math", 1)
+                return math_dialect.call(self.b, "pow", left, right)
             raise Unsupported("floating-point operator has no native lowering")
         if op in _ARITHMETIC:
             return self._checked_binary(left, right, _ARITHMETIC[op])
@@ -1730,3 +1847,23 @@ def _analysis_type(t: IRType) -> T.Type:
     if isinstance(t, StructType):
         return T.Instance(t.name.replace("_", "."), (), ())
     return T.ANY
+
+
+_ELEMENTS: dict[str, IRType] = {
+    "int": I64,
+    "float": F64,
+    "bool": BOOL,
+    "ppy.i8": I8,
+    "ppy.u8": U8,
+    "i8": I8,
+    "u8": U8,
+    "ppy.i64": I64,
+    "ppy.f64": F64,
+    "i64": I64,
+    "f64": F64,
+}
+
+
+def _element_type(annotation: ast.expr) -> IRType | None:
+    """The element an `[T]` subscript on the native namespace names."""
+    return _ELEMENTS.get(ast.unparse(annotation))

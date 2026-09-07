@@ -317,6 +317,8 @@ DIRECTIVE_NAMES = frozenset(
         "dynamic",
         "jax",
         "reflective",
+        "native.extern",
+        "native.export",
     }
 )
 
@@ -331,6 +333,15 @@ def directives_from(decorators: list[ast.expr], resolver: NameResolver) -> tuple
             continue
         name = qualname.removeprefix("ppy.")
         options: dict[str, object] = {}
+        if name == "ffi.bind":
+            # The binding layer's spelling of `native.extern`: the first
+            # argument names a library made by `ffi.library("...")` at the
+            # top of the module.
+            name = "native.extern"
+            if isinstance(decorator, ast.Call) and decorator.args:
+                library = _ffi_library_of(resolver, decorator.args[0])
+                if library is not None:
+                    options["library"] = library
         if isinstance(decorator, ast.Call):
             for index, arg in enumerate(decorator.args):
                 try:
@@ -345,8 +356,34 @@ def directives_from(decorators: list[ast.expr], resolver: NameResolver) -> tuple
                     options[keyword.arg] = ast.literal_eval(keyword.value)
                 except (ValueError, SyntaxError):
                     continue
+        if name == "native.extern" and "symbol" not in options:
+            symbol = options.pop("arg0", None)
+            if isinstance(symbol, str):
+                options["symbol"] = symbol
         found.append(Directive(name, options, decorator))
     return tuple(found)
+
+
+def _ffi_library_of(resolver: NameResolver, node: ast.expr) -> str | None:
+    """The library name behind `libm` in `@ffi.bind(libm, ...)`."""
+    if not isinstance(node, ast.Name):
+        return None
+    for statement in resolver.symbols.module.tree.body:
+        if not isinstance(statement, ast.Assign) or len(statement.targets) != 1:
+            continue
+        target = statement.targets[0]
+        if not isinstance(target, ast.Name) or target.id != node.id:
+            continue
+        value = statement.value
+        if (
+            isinstance(value, ast.Call)
+            and resolver.canonical(value.func) == "ppy.ffi.library"
+            and value.args
+            and isinstance(value.args[0], ast.Constant)
+            and isinstance(value.args[0].value, str)
+        ):
+            return value.args[0].value
+    return None
 
 
 class NameResolver:

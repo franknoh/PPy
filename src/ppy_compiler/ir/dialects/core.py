@@ -395,10 +395,13 @@ def _verify_store(op: Operation, checker: Checker) -> None:
         checker.error(op, f"stores {value.type} through {pointer.type}")
     if not pointer.type.mutable:
         checker.error(op, "writes through a const pointer")
-    if isinstance(value.type, PtrType) and value.type.address_space == "stack":
-        checker.error(op, "a stack pointer escapes into memory")
-    if _borrowed_parameter(value, checker) is not None:
-        checker.error(op, f"%{value.name} is borrowed and may not be stored")
+    # A store into the function's own stack -- a local's slot -- keeps the
+    # value inside the call; anywhere else is memory that may outlive it.
+    if pointer.type.address_space != "stack":
+        if isinstance(value.type, PtrType) and value.type.address_space == "stack":
+            checker.error(op, "a stack pointer escapes into memory")
+        if _borrowed_parameter(value, checker) is not None:
+            checker.error(op, f"%{value.name} is borrowed and may not be stored")
 
 
 def _verify_ptr_offset(op: Operation, checker: Checker) -> None:

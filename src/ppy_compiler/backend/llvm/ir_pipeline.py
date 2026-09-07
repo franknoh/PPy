@@ -123,8 +123,19 @@ def lower_module_via_ir(
     )
     optimize(lowered.module, opt_level, plugins)
     text = emit_module(lowered.module) if lowered.functions else ""
+    libraries = lowered.module.attributes.get("ppy.libraries", ())
+    exports = {
+        str(f.attributes["ppy.export"]): str(f.attributes.get("ppy.qualname", name))
+        for name, f in lowered.module.functions.items()
+        if "ppy.export" in f.attributes
+    }
     return LoweringResult(
-        ir=text, functions=lowered.functions, rejected=lowered.rejected, proved=lowered.proved
+        ir=text,
+        functions=lowered.functions,
+        rejected=lowered.rejected,
+        proved=lowered.proved,
+        libraries=tuple(str(lib) for lib in libraries),  # type: ignore[union-attr]
+        exports=exports,
     )
 
 

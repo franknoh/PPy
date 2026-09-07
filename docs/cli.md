@@ -170,7 +170,8 @@ ppy build foo.ppyir                  # from the IR alone; see `ppy emit`
 ```
 
 `--backend llvm` (default) writes objects, `libppy_<project>.so`,
-`ppy-bindings.json`, and a launcher. A build is a wrap-semantics artifact by
+`ppy-bindings.json`, a launcher, and -- when a function is
+`@ppy.native.export`ed -- a C header declaring the public symbols. A build is a wrap-semantics artifact by
 default — data arithmetic overflows at 64 bits like every native compiler's
 output, while bounds checks stay; `--safe` keeps Python's integers
 bit-for-bit instead, and the launcher always runs with exactly the mode it

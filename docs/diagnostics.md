@@ -86,6 +86,15 @@ sound fallback, and never the rest.
 | `E1722` | A generic is specialized on more type-argument tuples, or a deeper type, than `[tool.ppy.generics]` allows. |
 | `E1723` | A generic calls itself with its own type parameter nested in a type: the specializations never end. |
 
+## Native memory and C bindings
+
+| code | meaning |
+|---|---|
+| `E1630` | A `ppy.native` operation was given something that is not a native pointer. |
+| `E1631` | A write through a `ppy.native.const_ptr`. |
+| `E1632` | A C export needs a signature C can spell, with one scalar result. |
+| `E1633` | A C binding needs every parameter and its return annotated. |
+
 ## Directive requirements
 
 | code | meaning |

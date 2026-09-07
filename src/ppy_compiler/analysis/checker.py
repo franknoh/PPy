@@ -343,6 +343,28 @@ def _is_negative(facts: Facts) -> bool:
     return span is not None and span.high is not None and span.high < 0
 
 
+_WIDTHS = {"int": 8, "float": 8, "bool": 1, "i8": 1, "u8": 1}
+
+
+def _is_pointer(t: T.Type) -> bool:
+    base = T.strip_literal(t)
+    return (
+        isinstance(base, T.Instance)
+        and base.name in {"ppy.native.ptr", "ppy.native.const_ptr"}
+        and len(base.args) == 1
+    )
+
+
+def _scalar_name_of(t: T.Type) -> str:
+    base = T.strip_literal(t)
+    return base.name if isinstance(base, T.Instance) else ""
+
+
+def _read_element(element: T.Type) -> T.Type:
+    """What a read of an element hands out: a byte comes out an `int`."""
+    return T.INT if _scalar_name_of(element) in {"i8", "u8"} else element
+
+
 def _holdable_element(t: T.Type) -> bool:
     base = T.strip_literal(t)
     return isinstance(base, T.Instance) and base.name in _HOLDABLE
@@ -444,7 +466,40 @@ class _Checker:
     def _nested_functions(self) -> list[FunctionInfo]:
         return []
 
+    def _extern_stub(self, info: FunctionInfo) -> FunctionAnalysis | None:
+        """`@ppy.native.extern(...)`: the signature is the whole function.
+
+        The body is a stub; what the C function does is what the directive
+        says: nothing, if `pure=True`, otherwise reads and writes of native
+        memory. An unannotated parameter or return has no C type.
+        """
+        directive = info.directive("native.extern")
+        if directive is None:
+            return None
+        for param in info.params:
+            if not param.annotated:
+                self._error(
+                    "E1633",
+                    f"`{info.name}` is a C binding, so `{param.name}` needs a type",
+                    info.node,
+                )
+        if not info.ret_annotated:
+            self._error(
+                "E1633", f"`{info.name}` is a C binding, so it needs a return type", info.node
+            )
+        effects = (
+            EffectSet()
+            if directive.options.get("pure")
+            else EffectSet.of(Effect.READ_MEMORY, Effect.WRITE_MEMORY)
+        )
+        info.effects = effects
+        info.verified_pure = effects.is_pure
+        return FunctionAnalysis(info=info, effects=effects, inferred_ret=info.ret)
+
     def _check_function(self, info: FunctionInfo) -> FunctionAnalysis:
+        extern = self._extern_stub(info)
+        if extern is not None:
+            return extern
         previous = (
             self._effects,
             self._unknown,
@@ -1589,6 +1644,9 @@ class _Checker:
         imported = self._constant_import(node)
         if imported is not None:
             return imported
+        native = self._native_call(node, env)
+        if native is not None:
+            return native
         callee = self._expr(node.func, env)
         args = [
             self._expr(arg.value if isinstance(arg, ast.Starred) else arg, env) for arg in node.args
@@ -3201,6 +3259,99 @@ class _Checker:
             elif isinstance(node, ast.Name) and node.id in T.BUILTIN_MRO:
                 found.append(T.instance(node.id))
         return found
+
+    def _native_call(self, node: ast.Call, env: Env) -> Binding | None:
+        """`ppy.native.load(p)` and the rest of the typed-memory namespace.
+
+        A pointer is `ppy.native.ptr[T]`; reading through it is `T`, writing
+        through it takes a `T` and needs a mutable pointer, moving it keeps
+        its type, casting it reads the same memory as another element,
+        `sizeof`/`alignof` are the constants they are, and `stack_alloc`
+        makes memory the function owns.
+        """
+        func = node.func
+        subscript = func.slice if isinstance(func, ast.Subscript) else None
+        head = func.value if isinstance(func, ast.Subscript) else func
+        qualname = self.project.resolver(self.symbols).canonical(head)
+        if qualname is None or not qualname.startswith("ppy.native."):
+            return None
+        operation = qualname.removeprefix("ppy.native.")
+        args = [self._expr(argument, env) for argument in node.args]
+        if operation in {"load", "store", "offset"}:
+            if not args or not _is_pointer(args[0].type):
+                self._error("E1630", f"`ppy.native.{operation}` takes a `ppy.native.ptr[T]`", node)
+                return Binding(T.UNKNOWN)
+            pointer = T.strip_literal(args[0].type)
+            assert isinstance(pointer, T.Instance)
+            element = pointer.args[0]
+            if operation == "load":
+                if len(args) != 1:
+                    self._error(
+                        "E1305", "`ppy.native.load` takes the pointer and nothing else", node
+                    )
+                self._effects = self._effects.add(Effect.READ_MEMORY)
+                return Binding(_read_element(element))
+            if operation == "offset":
+                if len(args) != 2 or T.strip_literal(args[1].type) not in (T.INT, T.BOOL):
+                    self._error(
+                        "E1305", "`ppy.native.offset` takes the pointer and an integer", node
+                    )
+                return Binding(pointer)
+            if len(args) != 2:
+                self._error("E1305", "`ppy.native.store` takes the pointer and the value", node)
+                return Binding(T.NONE)
+            if pointer.name == "ppy.native.const_ptr":
+                self._error(
+                    "E1631",
+                    "`ppy.native.store` cannot write through a `const_ptr`",
+                    node,
+                    help="take the memory as `ppy.native.ptr[T]` to write it",
+                )
+            elif not T.is_assignable(args[1].type, _read_element(element)):
+                self._mismatch(
+                    "E1301",
+                    f"storing `{args[1].type}` through a pointer to `{element}`",
+                    node.args[1],
+                    args[1].type,
+                )
+            self._effects = self._effects.add(Effect.WRITE_MEMORY)
+            return Binding(T.NONE)
+        if subscript is None:
+            if operation in {"extern", "export"}:
+                return None
+            self._error("E1630", f"`ppy.native.{operation}` is not a function", node)
+            return Binding(T.UNKNOWN)
+        resolved = self.annotations.resolve(subscript)
+        element = Resolved(narrow_element(resolved) or resolved.type, resolved.facts).type
+        if operation in {"sizeof", "alignof"}:
+            if node.args:
+                self._error("E1305", f"`ppy.native.{operation}[T]()` takes no arguments", node)
+            width = 8 if _is_pointer(element) else _WIDTHS.get(_scalar_name_of(element))
+            if width is None:
+                self._error("E1306", f"`{element}` has no native size", node)
+                return Binding(T.INT)
+            return Binding(T.INT, Facts(constant=width, has_constant=True))
+        if operation == "stack_alloc":
+            if not _holdable_element(element):
+                self._error(
+                    "E1306",
+                    f"native memory holds `int`, `float`, `bool`, `ppy.i8`, or `ppy.u8`, "
+                    f"not `{element}`",
+                    node,
+                )
+            if len(args) != 1 or T.strip_literal(args[0].type) not in (T.INT, T.UNKNOWN):
+                self._error("E1305", "`ppy.native.stack_alloc[T](n)` takes how many elements", node)
+            self._effects = self._effects.add(Effect.ALLOC)
+            return Binding(T.Instance("ppy.native.ptr", (element,), ("ppy.native.ptr", "object")))
+        if operation == "cast":
+            if len(args) != 1 or not _is_pointer(args[0].type):
+                self._error("E1630", "`ppy.native.cast[U](p)` takes a `ppy.native.ptr[T]`", node)
+                return Binding(T.UNKNOWN)
+            pointer = T.strip_literal(args[0].type)
+            assert isinstance(pointer, T.Instance)
+            return Binding(T.Instance(pointer.name, (element,), (pointer.name, "object")))
+        self._error("E1630", f"`ppy.native.{operation}` is not part of the native namespace", node)
+        return Binding(T.UNKNOWN)
 
     def _typed_buffer(self, node: ast.Call, env: Env) -> Binding | None:
         """`ppy.buffer[T](n)`: `n` elements of `T`, all zero.

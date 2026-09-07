@@ -83,6 +83,16 @@ operation and may tell the optimizer it never wraps.
 Bounds checks are explicit `core.guard`s the frontend emits; a sanitizer
 pass adds more.
 
+## The math dialect
+
+`math.sqrt`, `sin`, `cos`, `tan`, `exp`, `exp2`, `log`, `log2`, `log10`,
+`floor`, `ceil`, `trunc`, `abs`, and `pow`: elementary functions named once
+for every backend, pure, over a floating-point value or a vector of them.
+The frontend writes `math.sqrt %x : f64` for `math.sqrt(x)`; the LLVM
+backend lowers it to the intrinsic of that name, a C backend to libm, a GPU
+backend to its device library. A math function of a constant folds, and
+`floor(floor(x))` is `floor(x)`.
+
 ## Effects and ownership on the IR
 
 A function carries its `effects` -- the lower-case names of the analysis's

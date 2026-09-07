@@ -300,6 +300,8 @@ def build(options: argparse.Namespace, reporter: Reporter) -> int:
         reporter.note(f"library:  {artifacts.library}")
     if artifacts.manifest:
         reporter.note(f"manifest: {artifacts.manifest}")
+    if artifacts.header:
+        reporter.note(f"header:   {artifacts.header}")
     if artifacts.launcher:
         reporter.note(f"launcher: {artifacts.launcher}")
     for note in artifacts.notes:

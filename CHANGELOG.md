@@ -91,6 +91,20 @@ below are in the order the work landed.
   parameter back into itself wrapped is refused (`E1723`). Inside native
   code `a + b` on a value class dispatches statically to the class's own
   `__add__`; native code never falls back to dynamic dispatch.
+- The `math` dialect: elementary functions named once for every backend,
+  pure, folding on constants, `floor(floor(x))` once. The frontend writes
+  `math.sqrt` where the source says so; the LLVM backend lowers it to the
+  intrinsic of that name.
+- `ppy.native` is the directive it was and a namespace of typed native
+  memory: `ptr[T]`/`const_ptr[T]`, `load`, `store`, `offset`, `cast[U]`,
+  `sizeof[T]()`, `alignof[T]()`, `stack_alloc[T](n)`, with a reference
+  implementation over `array` memory under CPython so the three paths
+  agree, and pointer operations in native code. `@native.extern` binds a
+  stub to a C symbol -- ctypes under CPython, a direct call in native code,
+  the library linked and loaded -- and `@native.export` gives a function a
+  public C symbol, with a header written beside the built library and a
+  trap where Python would have taken the fallback. `ppy.ffi` is the
+  binding layer over it: `library`, `bind`, `nullable`, `LengthOf`.
 - `ppy emit ir|llvm-ir TARGET [-o]` prints a compiler stage as text, one
   rule for every kind; `.ppyir` is the IR's on-disk form, self-describing
   down to each function's ABI, and `ppy build foo.ppyir` builds an

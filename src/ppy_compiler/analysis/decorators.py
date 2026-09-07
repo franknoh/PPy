@@ -59,6 +59,11 @@ _KNOWN: dict[str, DecoratorSemantics] = {
     "ppy.opt": _INERT,
     "ppy.dynamic": _INERT,
     "ppy.reflective": _INERT,
+    # A C binding hands back a caller with the stub's signature; an export
+    # only records the public name.
+    "ppy.native.extern": DecoratorSemantics(preserves_identity=False),
+    "ppy.native.export": _INERT,
+    "ppy.ffi.bind": DecoratorSemantics(preserves_identity=False),
     # Python-defined transforms with fixed meaning.
     "builtins.staticmethod": _WRAPPER,
     "builtins.classmethod": _WRAPPER,

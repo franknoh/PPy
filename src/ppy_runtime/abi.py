@@ -39,6 +39,11 @@ class NativeParam:
         return self.kind in {"list", "sequence", "view"}
 
     @property
+    def is_pointer(self) -> bool:
+        """A `ppy.native.ptr[T]`: one machine address, no Python boundary."""
+        return self.kind in {"ptr", "const_ptr"}
+
+    @property
     def is_object(self) -> bool:
         return self.kind == "object"
 
@@ -59,6 +64,8 @@ class NativeParam:
     def abi(self) -> tuple[str, ...]:
         if self.is_buffer:
             return (f"{_abi_name(self.element)}*", "i64")
+        if self.is_pointer:
+            return (f"{_abi_name(self.element)}*",)
         if self.is_tuple:
             return tuple(_abi_name(element) for element in self.elements)
         if self.is_object:
@@ -69,6 +76,8 @@ class NativeParam:
         if self.is_buffer:
             borrow = " borrowed" if self.is_borrowed else ""
             return f"{_abi_name(self.element)}*{borrow} {self.name}, i64 {self.name}_len"
+        if self.is_pointer:
+            return f"{_abi_name(self.element)}* {self.name}"
         if self.is_tuple:
             return ", ".join(
                 f"{_abi_name(element)} {self.name}{index}"

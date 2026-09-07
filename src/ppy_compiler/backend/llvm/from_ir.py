@@ -33,6 +33,7 @@ from ...ir import (
     StructType,
     TupleType,
     Value,
+    VectorType,
     VoidType,
 )
 from .lowering import FASTMATH_FLAGS, _default_triple
@@ -111,7 +112,45 @@ class _ModuleEmitter:
         for function in self.module.functions.values():
             if not function.is_declaration:
                 _FunctionEmitter(self, function).run()
+        for function in self.module.functions.values():
+            if not function.is_declaration and "ppy.export" in function.attributes:
+                self._export(function)
         return self.llvm
+
+    def _export(self, function: IRFunction) -> None:
+        """The public C symbol: the internal function behind a C signature.
+
+        A C caller has no Python to fall back to, so a failed guard is a
+        trap, never a wrong answer.
+        """
+        ir = self.ir
+        name = str(function.attributes["ppy.export"])
+        atoms = [atom for _n, t in function.params for atom in self.boundary_atoms(t)]
+        result = function.results[0] if function.results else None
+        result_type = ir.VoidType() if result is None else self.boundary_atoms(result)[0]
+        wrapper = ir.Function(self.llvm, ir.FunctionType(result_type, atoms), name=name)
+        wrapper.linkage = "external"
+        block = wrapper.append_basic_block("entry")
+        builder = ir.IRBuilder(block)
+        slot = builder.alloca(
+            self.boundary_atoms(result)[0] if result is not None else ir.IntType(64)
+        )
+        status = builder.call(self.functions[function.name], [*wrapper.args, slot])
+        ok = builder.icmp_signed("==", status, ir.Constant(ir.IntType(32), STATUS_OK))
+        good = wrapper.append_basic_block("ok")
+        bad = wrapper.append_basic_block("fail")
+        builder.cbranch(ok, good, bad)
+        builder.position_at_end(bad)
+        trap = self.llvm.globals.get("llvm.trap") or ir.Function(
+            self.llvm, ir.FunctionType(ir.VoidType(), []), name="llvm.trap"
+        )
+        builder.call(trap, [])
+        builder.unreachable()
+        builder.position_at_end(good)
+        if result is None:
+            builder.ret_void()
+        else:
+            builder.ret(builder.load(slot))
 
     # -- types -----------------------------------------------------------
 
@@ -300,8 +339,11 @@ class _FunctionEmitter:
         ir = self.ir
         b = self.builder
         name = op.local_name
+        if op.dialect == "math":
+            self._math(op)
+            return
         if op.dialect != "core":
-            raise EmitError(f"{op.name}: the LLVM backend lowers the core dialect only")
+            raise EmitError(f"{op.name}: the LLVM backend lowers the core and math dialects")
         match name:
             case "const":
                 self.set(op.result, self._constant(op.result.type, op.attributes["value"]))
@@ -392,6 +434,20 @@ class _FunctionEmitter:
                 self.continue_if(self.value(op.operands[0]), label)
             case _:
                 raise EmitError(f"{op.name} has no LLVM lowering")
+
+    def _math(self, op: Operation) -> None:
+        """A math operation is the LLVM intrinsic of that name over its type."""
+        b = self.builder
+        t = op.results[0].type
+        llvm_type = self.owner.llvm_type(t)
+        width = t.element.width if isinstance(t, VectorType) else t.width  # type: ignore[union-attr]
+        suffix = {16: "f16", 32: "f32", 64: "f64"}[width]
+        if isinstance(t, VectorType):
+            suffix = f"v{t.count}{suffix}"
+        local = "fabs" if op.local_name == "abs" else op.local_name
+        arguments = [self.value(v) for v in op.operands]
+        function = self.intrinsic(f"llvm.{local}.{suffix}", llvm_type, [llvm_type] * len(arguments))
+        self.set(op.results[0], b.call(function, arguments))
 
     def _constant(self, t: IRType, value):  # type: ignore[no-untyped-def]
         ir = self.ir

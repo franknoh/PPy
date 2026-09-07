@@ -520,6 +520,8 @@ def test_a_cached_lowering_round_trips():
         fused: ClassVar[dict] = {}
         fusion_plan: ClassVar[dict] = {}
         fusion_notes: ClassVar[list] = []
+        libraries: ClassVar[list] = ["m"]
+        exports: ClassVar[dict] = {"ppy_f": "m.f"}
 
     restored = decode(encode(_Module()))
     assert restored is not None
@@ -529,6 +531,7 @@ def test_a_cached_lowering_round_trips():
     assert signature.parameters[0].kind == "view"
     assert signature.parameters[0].element == "float"
     assert restored.rejected == {"m.g": "has effects"}
+    assert restored.libraries == ("m",) and restored.exports == {"ppy_f": "m.f"}
     assert decode('{"version": 0}') is None
     assert decode("not json") is None
 

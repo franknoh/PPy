@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING
 
 from ppy_runtime.version import VERSION as __version__
 
+from . import ffi
 from ._directives import (
     DIRECTIVE_ATTR,
     Directive,
@@ -21,7 +22,6 @@ from ._directives import (
     inline,
     jax,
     jit,
-    native,
     noinline,
     opt,
     parallel,
@@ -71,6 +71,7 @@ from ._markers import (
     u64,
 )
 from ._native import native_import, native_imports
+from ._native_api import native
 
 __all__ = [
     "DIRECTIVE_ATTR",
@@ -105,6 +106,7 @@ __all__ = [
     "f32",
     "f64",
     "fastmath",
+    "ffi",
     "i8",
     "i16",
     "i32",

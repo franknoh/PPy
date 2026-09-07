@@ -116,6 +116,15 @@ class JitEngine:
         self._modules.append(module)
         return module
 
+    def load_library(self, name: str) -> None:
+        """Make a shared library's symbols visible to the code this engine runs."""
+        import ctypes.util
+
+        from llvmlite import binding
+
+        path = ctypes.util.find_library(name) or name
+        binding.load_library_permanently(path)
+
     def finalize(self) -> None:
         if self.engine is not None:
             self.engine.finalize_object()  # type: ignore[union-attr]
