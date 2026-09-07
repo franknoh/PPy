@@ -13,6 +13,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from .analysis import region_dominators
 from .dialect import DialectRegistry
 from .dialect import registry as default_registry
 from .model import Block, IRFunction, IRModule, Operation, Region, Value
@@ -155,7 +156,7 @@ def _verify_region(region: Region, checker: Checker, defined_outside: set[int]) 
     for block in region.blocks:
         checker.block = block
         _verify_block_structure(block, region, checker)
-    dominators = _dominators(region)
+    dominators = region_dominators(region)
     # What each block may read: everything defined outside, its dominators'
     # definitions, its own arguments, and then its operations in order.
     definitions: dict[Block, set[int]] = {}
@@ -287,30 +288,3 @@ def _note_name(
 
 def _spell(value: Value) -> str:
     return f"%{value.name}" if value.name else f"a {value.type} value"
-
-
-def _dominators(region: Region) -> dict[Block, set[Block]]:
-    """Dominator sets by the classic iteration; regions are small."""
-    blocks = region.blocks
-    if not blocks:
-        return {}
-    entry = blocks[0]
-    predecessors: dict[Block, list[Block]] = {b: [] for b in blocks}
-    for block in blocks:
-        for successor in block.successors:
-            if successor in predecessors:
-                predecessors[successor].append(block)
-    everything = set(blocks)
-    dominators: dict[Block, set[Block]] = {b: set(everything) for b in blocks}
-    dominators[entry] = {entry}
-    changed = True
-    while changed:
-        changed = False
-        for block in blocks[1:]:
-            incoming = [dominators[p] for p in predecessors[block]]
-            new = set.intersection(*incoming) if incoming else set()
-            new.add(block)
-            if new != dominators[block]:
-                dominators[block] = new
-                changed = True
-    return dominators

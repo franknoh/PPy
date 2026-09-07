@@ -27,6 +27,16 @@ from .model import (
     Value,
 )
 from .parser import ParseError, parse_module
+from .passes import (
+    STAGES,
+    FunctionPass,
+    Pass,
+    PassContext,
+    PassManager,
+    PassReport,
+    PassVerificationError,
+)
+from .pattern import GreedyRewriteDriver, Pattern, PatternSet, Rewriter, RewriteResult
 from .printer import print_function, print_module
 from .types import (
     BOOL,
@@ -71,6 +81,7 @@ __all__ = [
     "I64",
     "INDEX",
     "IR_SCHEMA_VERSION",
+    "STAGES",
     "U8",
     "U16",
     "U32",
@@ -87,8 +98,10 @@ __all__ = [
     "DialectRegistry",
     "DialectType",
     "FloatType",
+    "FunctionPass",
     "FutureType",
     "Global",
+    "GreedyRewriteDriver",
     "IRFunction",
     "IRModule",
     "IRType",
@@ -98,8 +111,17 @@ __all__ = [
     "OpSpec",
     "Operation",
     "ParseError",
+    "Pass",
+    "PassContext",
+    "PassManager",
+    "PassReport",
+    "PassVerificationError",
+    "Pattern",
+    "PatternSet",
     "PtrType",
     "Region",
+    "RewriteResult",
+    "Rewriter",
     "SourceLocation",
     "StructType",
     "Successor",

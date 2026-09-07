@@ -133,3 +133,30 @@ class Dialect:
 `ppy_compiler.ir.registry()` is the process-wide registry with the builtin
 dialects; a plugin registers its own through the plugin API. Two dialects
 of one name from different classes are refused.
+
+## Passes and patterns
+
+A **pattern** roots at one operation name and rewrites through the
+`Rewriter`, which is the only way anything changes: every replacement is
+recorded, and every operation a change touched is looked at again. The
+`GreedyRewriteDriver` applies a `PatternSet` until nothing applies; a
+pattern that never settles hits the iteration cap and is named in the
+error. A rewrite happens only where the types and the operation's own
+semantics allow it -- an integer `x * 0` is `0`, a float `x * 0.0` stays,
+`neg(neg(x))` folds under `python` and `wrap` but not `checked` overflow,
+and a folded constant that does not fit its type is left for the guard.
+
+Each dialect contributes its patterns through `register_patterns`, so
+`canonicalize` is the union of what every registered dialect knows.
+
+A **pass** transforms a module and declares the analyses it `requires`,
+`preserves`, and `invalidates`; the `PassContext` serves analyses from a
+cache that those declarations empty. With `verify_after_each` the manager
+verifies the module after every pass and names the pass that broke it.
+The shared passes are `canonicalize`, `constant-fold`, `simplify-cfg`
+(constant branches, one-target conditional branches, unreachable blocks,
+single-predecessor chains), and `dce` (unused pure operations, dead
+blocks); `transforms.default_pipeline(level)` orders them and marks the
+stages -- `after-ir-generation`, `after-canonicalization`,
+`before-optimization`, `after-optimization`, `before-backend` -- where a
+plugin's `register_stage_pass` puts a pass of its own.

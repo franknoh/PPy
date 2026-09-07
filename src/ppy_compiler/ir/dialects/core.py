@@ -62,6 +62,11 @@ class CoreDialect(Dialect):
     def address_spaces(self) -> frozenset[str]:
         return ADDRESS_SPACES
 
+    def register_patterns(self, registry: object) -> None:
+        from .core_patterns import register
+
+        register(registry)  # type: ignore[arg-type]
+
     def register_operations(self, registry: DialectRegistry) -> None:
         add = registry.add_op
         add(

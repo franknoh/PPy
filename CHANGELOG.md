@@ -23,6 +23,18 @@ below are in the order the work landed.
   writes one deterministic text per module, the parser reads it back, and
   `.ppyir` is that text with a schema and dialect-version header a reader
   refuses rather than guesses at. `docs/ir.md` is the reference.
+- Passes and patterns over the IR. A pattern rewrites one operation
+  through a rewriter that records every change and revisits what it
+  touched; the greedy driver runs a pattern set to a fixed point and names
+  a pattern that never settles. The core dialect's patterns fold constants
+  by the operation's own overflow and rounding attributes, remove identity
+  elements, double negations, lossless cast round trips, and settled
+  selects and comparisons, and leave alone what floating point or checked
+  semantics forbid. A pass manager runs passes that declare what analyses
+  they require, preserve, and invalidate, caches those analyses
+  accordingly, verifies the module after every pass on request and names
+  the pass that broke it, and runs plugin passes at named stages. The
+  shared passes are canonicalize, constant-fold, simplify-cfg, and dce.
 
 Speed of the compiler itself, measured before being changed.
 
