@@ -258,6 +258,9 @@ class ModuleSymbols:
     globals: dict[str, T.Type] = field(default_factory=dict)
     global_facts: dict[str, Facts] = field(default_factory=dict)
     constant_globals: dict[str, object] = field(default_factory=dict)
+    #: Module-level names bound to `ppy.grad(f)` / `ppy.value_and_grad(f)`:
+    #: name -> (f's qualname, argnums, value_and_grad).
+    derivatives: dict[str, tuple[str, tuple[int, ...], bool]] = field(default_factory=dict)
     type_aliases: dict[str, ast.expr] = field(default_factory=dict)
     all_exports: tuple[str, ...] | None = None
     #: Point-sensitive lexical bindings for this module's tree.
@@ -270,6 +273,54 @@ class ModuleSymbols:
     @property
     def path(self) -> Path:
         return self.module.path
+
+
+def derivative_spec(
+    symbols: ModuleSymbols, call: ast.Call
+) -> tuple[str, tuple[int, ...], bool] | None:
+    """`ppy.grad(f, argnums=...)` or `ppy.value_and_grad(f)` over a function of
+    this module: (f's qualname, argnums, value_and_grad); None for any other call."""
+    func = call.func
+    if isinstance(func, ast.Attribute) and isinstance(func.value, ast.Name):
+        owner = symbols.imports.get(func.value.id)
+        if (
+            owner is None
+            or owner.canonical != "ppy"
+            or func.attr
+            not in {
+                "grad",
+                "value_and_grad",
+            }
+        ):
+            return None
+        kind = func.attr
+    elif isinstance(func, ast.Name):
+        binding = symbols.imports.get(func.id)
+        if binding is None or binding.canonical not in {"ppy.grad", "ppy.value_and_grad"}:
+            return None
+        kind = binding.canonical.rpartition(".")[2]
+    else:
+        return None
+    if not call.args or not isinstance(call.args[0], ast.Name):
+        return None
+    target = symbols.functions.get(call.args[0].id)
+    if target is None:
+        return None
+    argnums: tuple[int, ...] = (0,)
+    spelled = call.args[1] if len(call.args) > 1 else None
+    for keyword in call.keywords:
+        if keyword.arg == "argnums":
+            spelled = keyword.value
+    if spelled is not None:
+        if isinstance(spelled, ast.Constant) and isinstance(spelled.value, int):
+            argnums = (spelled.value,)
+        elif isinstance(spelled, ast.Tuple) and all(
+            isinstance(e, ast.Constant) and isinstance(e.value, int) for e in spelled.elts
+        ):
+            argnums = tuple(e.value for e in spelled.elts)  # type: ignore[union-attr]
+        else:
+            return None
+    return target.qualname, argnums, kind == "value_and_grad"
 
 
 def _contains_yield(node: ast.AST) -> bool:
@@ -535,7 +586,28 @@ class ProjectSymbols:
         for module in ordered:
             self._resolve_signatures(self.modules[module.name])
         self._mark_constant_globals()
+        self._mark_derivatives()
         return self
+
+    def _mark_derivatives(self) -> None:
+        """`df = ppy.grad(f)` at module level binds a derivative, once and for all.
+
+        Like a function definition, the name is final: reading it is no
+        global dependency, and the native frontend knows which function's
+        derivative a call through it is.
+        """
+        for symbols in self.modules.values():
+            for node in symbols.module.tree.body:
+                if not (
+                    isinstance(node, ast.Assign)
+                    and len(node.targets) == 1
+                    and isinstance(node.targets[0], ast.Name)
+                    and isinstance(node.value, ast.Call)
+                ):
+                    continue
+                spec = derivative_spec(symbols, node.value)
+                if spec is not None:
+                    symbols.derivatives[node.targets[0].id] = spec
 
     def _satisfy_protocols(self) -> None:
         """Structural typing, settled once: a class whose members cover a

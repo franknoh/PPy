@@ -21,7 +21,7 @@ from ppy_runtime.abi import NativeParam, NativeSignature
 
 from ..analysis import types as T
 from ..analysis.checker import FunctionAnalysis, ModuleAnalysis
-from ..analysis.symbols import FunctionInfo
+from ..analysis.symbols import FunctionInfo, derivative_spec
 from ..backend.llvm.lowering import (
     _ALLOCATIONS,
     _MATH_INTRINSICS,
@@ -68,6 +68,8 @@ from ..ir.dialects import cpu as cpu_dialect
 from ..ir.dialects import math as math_dialect
 from ..ir.dialects import parallel as parallel_dialect
 from ..ir.dialects import simd as simd_dialect
+from ..ir.transforms.autodiff import AutodiffError, differentiate
+from .abi import signature_from_ir
 
 __all__ = ["Frontend", "Lowered", "lower_function", "lower_module_to_ir"]
 
@@ -200,6 +202,17 @@ class Frontend:
         #: C bindings by qualname: the stub and its directive's options.
         self.externs: dict[str, tuple[FunctionInfo, dict[str, object]]] = {}
         self._instantiating: list[tuple[str, tuple[str, ...]]] = []
+        #: Module-level names bound to `ppy.grad(f)`: what each differentiates.
+        self.derivatives: dict[str, tuple[str, tuple[int, ...], bool]] = dict(
+            analysis.symbols.derivatives
+        )
+        #: Derived functions made so far, by (qualname, argnums, value_and_grad).
+        self.derived: dict[
+            tuple[str, tuple[int, ...], bool], tuple[IRFunction, NativeSignature]
+        ] = {}
+        self._pending: dict[str, tuple[FunctionInfo, FunctionAnalysis, ast.FunctionDef]] = {}
+        self._defined: dict[str, list[str]] = {}
+        self._failed: dict[str, str] = {}
 
     def build(
         self, functions: dict[str, tuple[FunctionInfo, FunctionAnalysis, ast.FunctionDef]]
@@ -229,9 +242,10 @@ class Frontend:
                 lowered.rejected[qualname] = reason
         for info, analysis, _node in candidates.values():
             self.declare(info, _signature(info, self.layouts, analysis))
-        for qualname, (info, analysis, node) in candidates.items():
+        self._pending = dict(candidates)
+        for qualname, (info, analysis, _node) in candidates.items():
             try:
-                proved = self.define(info, node, {})
+                proved = self.define_once(qualname)
             except Unsupported as error:
                 lowered.rejected[qualname] = str(error)
                 self._drop(qualname)
@@ -329,6 +343,57 @@ class Frontend:
         lowering = _FunctionLowering(self, function, signature, info, constants)
         lowering.run(node)
         return lowering.proved
+
+    def define_once(self, qualname: str) -> list[str]:
+        """Lower `qualname`'s body if it has not been; a body that did not
+        lower says so again, so a caller that needs it fails the same way."""
+        done = self._defined.get(qualname)
+        if done is not None:
+            return done
+        failed = self._failed.get(qualname)
+        if failed is not None:
+            raise Unsupported(failed)
+        entry = self._pending.get(qualname)
+        if entry is None:
+            raise Unsupported(f"`{qualname}` has no native lowering")
+        info, _analysis, node = entry
+        try:
+            proved = self.define(info, node, {})
+        except Unsupported as error:
+            self._failed[qualname] = str(error)
+            raise
+        self._defined[qualname] = proved
+        return proved
+
+    def derivative(
+        self, qualname: str, argnums: tuple[int, ...], value: bool
+    ) -> tuple[IRFunction, NativeSignature]:
+        """The native derivative of `qualname`, made from its IR the first time."""
+        key = (qualname, argnums, value)
+        found = self.derived.get(key)
+        if found is not None:
+            return found
+        entry = self.declared.get(qualname)
+        if entry is None:
+            raise Unsupported(f"`{qualname}` has no native lowering to differentiate")
+        function, _signature = entry
+        self.define_once(qualname)
+        try:
+            derived = differentiate(self.module, function, wrt=argnums, value=value)
+        except AutodiffError as error:
+            raise Unsupported(str(error)) from error
+        kind = "value_and_grad" if value else "grad"
+        derived.attributes.update(
+            {
+                "ppy.qualname": f"ppy.{kind}[{qualname}]",
+                "ppy.symbol": derived.name,
+                "ppy.abi": "ppy",
+                "effects": function.attributes.get("effects", ()),
+            }
+        )
+        made = (derived, signature_from_ir(derived))
+        self.derived[key] = made
+        return made
 
     def _drop(self, qualname: str) -> None:
         self.declared[qualname][0].body.blocks.clear()
@@ -751,6 +816,11 @@ class _FunctionLowering:
         raise Unsupported("this assignment target has no native lowering")
 
     def _tuple_expr(self, node: ast.expr) -> list[Value] | None:
+        if isinstance(node, ast.Call):
+            derivative = self._derivative_spec(node.func)
+            if derivative is not None:
+                values = self._derivative_call(derivative, node)
+                return values if len(values) > 1 else None
         if isinstance(node, ast.Tuple):
             if not node.elts or len(node.elts) > _MAX_TUPLE_WIDTH:
                 return None
@@ -1275,6 +1345,14 @@ class _FunctionLowering:
             return self._standalone_print(node)
         if self.frontend.standalone and target == "ppy.input[int]" and not node.args:
             return core.call_extern(self.b, "ppy_rt_read_int", (), (I64,)).results[0]
+        derivative = self._derivative_spec(node.func)
+        if derivative is not None:
+            values = self._derivative_call(derivative, node)
+            if len(values) != 1:
+                raise Unsupported(
+                    "a derivative giving several values is unpacked into as many names"
+                )
+            return values[0]
         if target.startswith("math."):
             return self._math_call(target.removeprefix("math."), node)
         if target.startswith(("ppy.native.", "native.")):
@@ -1305,6 +1383,26 @@ class _FunctionLowering:
             if qualname.rpartition(".")[2] == target:
                 return self._generic_call(qualname, info, node)
         raise Unsupported(f"`{target}` has no native lowering")
+
+    def _derivative_spec(self, func: ast.expr) -> tuple[str, tuple[int, ...], bool] | None:
+        """What `df(...)` or `ppy.grad(f)(...)` differentiates, or None."""
+        if isinstance(func, ast.Name):
+            return self.frontend.derivatives.get(func.id)
+        if isinstance(func, ast.Call):
+            return derivative_spec(self.frontend.analysis.symbols, func)
+        return None
+
+    def _derivative_call(
+        self, spec: tuple[str, tuple[int, ...], bool], node: ast.Call
+    ) -> list[Value]:
+        """Call the derived function: its results are the values the call gives."""
+        qualname, argnums, value = spec
+        if node.keywords:
+            raise Unsupported("keyword arguments have no native ABI")
+        function, signature = self.frontend.derivative(qualname, argnums, value)
+        arguments = self._call_arguments(signature, node.args, qualname)
+        call = core.call(self.b, function.name, tuple(arguments), function.results)
+        return list(call.results)
 
     def _generic_call(self, qualname: str, info: FunctionInfo, node: ast.Call) -> Value:
         """Instantiate a generic on the argument types this body has in hand."""

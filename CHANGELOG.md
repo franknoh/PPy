@@ -481,6 +481,18 @@ Speed of the compiler itself, measured before being changed.
   a `tensor.store` is written straight into the store's buffer. A fused
   NumPy or torch kernel is now one loop with no temporary and no copy, and
   the pass reports `tensor ops fused` for every group it makes.
+- Autodiff. `ppy.grad(f)` and `ppy.value_and_grad(f)` -- with `argnums`
+  -- differentiate a function of floats whose body is assignments and a
+  return over arithmetic, the math functions, `abs`, `erf`. Under CPython
+  the derivative is made from the source; natively the `autodiff`
+  transform differentiates the function's IR in reverse mode -- scalar
+  arithmetic, `select`, casts, and over tensors the elementwise
+  operations, `fill`, `broadcast`, `reshape`, `transpose`, `reduce` by
+  sum, `matmul`, `convert`, with a buffer parameter's gradient written to
+  a buffer -- after `promote-slots` has turned the frontend's stack slots
+  back into values. One rule table and one order of accumulation on both
+  paths, so they agree bit for bit; a branch, a loop, a write, or an
+  effect is refused with the reason (`E1660`-`E1662`).
 
 ## 0.1.0a1
 

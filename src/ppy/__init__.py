@@ -72,6 +72,7 @@ from ._markers import (
 )
 from ._native import native_import, native_imports
 from ._native_api import native
+from .autodiff import grad, value_and_grad
 
 __all__ = [
     "DIRECTIVE_ATTR",
@@ -110,6 +111,7 @@ __all__ = [
     "f64",
     "fastmath",
     "ffi",
+    "grad",
     "i8",
     "i16",
     "i32",
@@ -139,6 +141,7 @@ __all__ = [
     "u32",
     "u64",
     "uninstall",
+    "value_and_grad",
 ]
 
 if TYPE_CHECKING:  # the names below are real; PEP 562 just defers the import

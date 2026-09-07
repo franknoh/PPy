@@ -339,6 +339,32 @@ _LANE_BITS = {"int": 64, "float": 64, "bool": 8, "i8": 8, "u8": 8}
 _POSITIONAL = frozenset({"positional", "positional_only", "positional_or_keyword"})
 
 
+def _is_position(node: ast.expr) -> bool:
+    """A non-negative integer literal: one parameter position of `argnums`."""
+    return (
+        isinstance(node, ast.Constant)
+        and isinstance(node.value, int)
+        and not isinstance(node.value, bool)
+        and node.value >= 0
+    )
+
+
+#: Effects a function cannot have and be differentiated (spec 45).
+_NOT_DIFFERENTIABLE = (
+    Effect.IO,
+    Effect.NETWORK,
+    Effect.EXTERNAL_UNKNOWN,
+    Effect.PYTHON_CALLBACK,
+    Effect.PYTHON_DYNAMIC,
+    Effect.WRITE_OBJECT,
+    Effect.WRITE_MEMORY,
+    Effect.WRITE_GLOBAL,
+    Effect.ATOMIC,
+    Effect.THREAD,
+    Effect.RANDOM,
+)
+
+
 def _constant_mask(node: ast.expr) -> tuple[int, ...] | None:
     """A shuffle mask spelled as a tuple of integer literals."""
     if not isinstance(node, ast.Tuple) or not node.elts:
@@ -457,6 +483,8 @@ class _Checker:
         self._provisional_locals: set[str] = set()
         self._blockers: list[str] = []
         self._native_blockers: list[str] = []
+        #: `ppy.grad(f)` calls whose `f` is checked for effects once its body is.
+        self._derivative_checks: list[tuple[str, str, ast.AST]] = []
         self._escaping: set[str] = set()
         self._mutated: set[str] = set()
         #: Parameters handed to a callee that writes through what it is given.
@@ -484,7 +512,23 @@ class _Checker:
         self.module.module_effects = self._effects
         for info in self._all_functions():
             self.module.functions[info.qualname] = self._check_function(info)
+        self._check_derivative_effects()
         return self.module
+
+    def _check_derivative_effects(self) -> None:
+        """`E1662`: a differentiated function has an effect no derivative follows."""
+        for qualname, name, node in self._derivative_checks:
+            analysis = self.module.functions.get(qualname)
+            if analysis is None:
+                continue
+            blocking = [e for e in _NOT_DIFFERENTIABLE if e in analysis.effects]
+            if blocking:
+                spelled = ", ".join(e.value for e in blocking)
+                self._error(
+                    "E1662",
+                    f"`{name}` has effect {spelled}; a differentiated function is pure",
+                    node,
+                )
 
     def _all_functions(self) -> list[FunctionInfo]:
         found = list(self.symbols.functions.values())
@@ -3406,6 +3450,8 @@ class _Checker:
         qualname = self.project.resolver(self.symbols).canonical(head)
         if qualname is None:
             return None
+        if qualname in {"ppy.grad", "ppy.value_and_grad"}:
+            return self._grad_call(qualname, node, env)
         handlers = {
             "ppy.simd.": self._simd_call,
             "ppy.atomic.": self._atomic_call,
@@ -3417,6 +3463,69 @@ class _Checker:
             if qualname.startswith(prefix):
                 return handler(qualname.removeprefix(prefix), node, subscript, env)
         return None
+
+    def _grad_call(self, qualname: str, node: ast.Call, env: Env) -> Binding:
+        """`ppy.grad(f, argnums=...)` and `ppy.value_and_grad(f)`: a function over
+        `f`'s parameters giving the gradient -- and the value first, for the
+        latter -- with respect to the `float` parameters `argnums` name."""
+        short = qualname.rpartition(".")[2]
+        if not node.args:
+            self._error("E1660", f"`ppy.{short}(f)` takes the function to differentiate", node)
+            return Binding(T.UNKNOWN)
+        callee = T.strip_literal(self._expr(node.args[0], env).type)
+        argnums = self._argnums(node, short)
+        if not isinstance(callee, T.Callable_):
+            if not isinstance(callee, (T.AnyType, T.UnknownType)):
+                self._error("E1660", f"`ppy.{short}` takes a function of this module", node.args[0])
+            return Binding(T.UNKNOWN)
+        name = callee.qualname or "the function"
+        params = tuple(p for p in callee.params if p.kind in _POSITIONAL)
+        if T.strip_literal(callee.ret) != T.FLOAT:
+            self._error(
+                "E1661",
+                f"`{name}` returns `{callee.ret}`; a differentiated function returns `float`",
+                node.args[0],
+            )
+        for index in argnums:
+            if index >= len(params):
+                self._error(
+                    "E1661",
+                    f"`argnums` names parameter {index}; `{name}` takes {len(params)}",
+                    node,
+                )
+            elif T.strip_literal(params[index].type) != T.FLOAT:
+                self._error(
+                    "E1661",
+                    f"`{params[index].name}` is `{params[index].type}`; the gradient is taken "
+                    "with respect to a `float`",
+                    node,
+                )
+        # The function's effects are known once its body is checked, after
+        # the module's statements; the check waits for them.
+        self._derivative_checks.append((callee.qualname, name, node.args[0]))
+        gradient: T.Type = T.FLOAT if len(argnums) == 1 else T.Tuple_((T.FLOAT,) * len(argnums))
+        ret = T.Tuple_((callee.ret, gradient)) if short == "value_and_grad" else gradient
+        return Binding(T.Callable_(params, ret, f"ppy.{short}[{callee.qualname}]"))
+
+    def _argnums(self, node: ast.Call, short: str) -> tuple[int, ...]:
+        spelled = node.args[1] if len(node.args) > 1 else None
+        for keyword in node.keywords:
+            if keyword.arg == "argnums":
+                spelled = keyword.value
+            else:
+                self._error("E1660", f"`ppy.{short}` takes `f` and `argnums`", keyword.value)
+        if len(node.args) > 2:
+            self._error("E1660", f"`ppy.{short}` takes `f` and `argnums`", node)
+        if spelled is None:
+            return (0,)
+        if _is_position(spelled):
+            return (spelled.value,)  # type: ignore[attr-defined]
+        if isinstance(spelled, ast.Tuple) and spelled.elts and all(map(_is_position, spelled.elts)):
+            return tuple(element.value for element in spelled.elts)  # type: ignore[attr-defined]
+        self._error(
+            "E1660", "`argnums` is a parameter position or a tuple of them, written out", spelled
+        )
+        return (0,)
 
     def _lane_parameters(
         self, subscript: ast.expr | None, operation: str, node: ast.AST
@@ -4185,6 +4294,8 @@ class _Checker:
     def _is_module_global(self, name: str) -> bool:
         """A mutable module-level binding, which reading is an effect."""
         if name in self._function_locals or name in self.symbols.constant_globals:
+            return False
+        if name in self.symbols.derivatives:
             return False
         return (
             name in self.symbols.globals

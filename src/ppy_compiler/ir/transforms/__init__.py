@@ -2,16 +2,19 @@
 
 from __future__ import annotations
 
+from .autodiff import AutodiffError, differentiate
 from .canonicalize import Canonicalize, ConstantFold, canonicalization_patterns
 from .dce import DeadCodeElimination
 from .fuse_tensor import FuseTensor, TensorCanonicalize
 from .lower_parallel import BACKENDS as PARALLEL_BACKENDS
 from .lower_parallel import LowerParallel
 from .lower_tensor import LoweringError, LowerTensor
+from .promote_slots import PromoteSlots, promote_slots
 from .simplify_cfg import SimplifyCFG
 
 __all__ = [
     "PARALLEL_BACKENDS",
+    "AutodiffError",
     "Canonicalize",
     "ConstantFold",
     "DeadCodeElimination",
@@ -19,10 +22,13 @@ __all__ = [
     "LowerParallel",
     "LowerTensor",
     "LoweringError",
+    "PromoteSlots",
     "SimplifyCFG",
     "TensorCanonicalize",
     "canonicalization_patterns",
     "default_pipeline",
+    "differentiate",
+    "promote_slots",
 ]
 
 
