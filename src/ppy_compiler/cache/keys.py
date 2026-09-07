@@ -10,8 +10,9 @@ from dataclasses import dataclass
 
 __all__ = ["FRONTEND_SCHEMA_VERSION", "CacheKey", "digest", "environment_fingerprint"]
 
-#: Bump when the semantic AST or analysis artifact layout changes.
-FRONTEND_SCHEMA_VERSION = 1
+#: Bump when the semantic AST or analysis artifact layout changes. 2: the
+#: 0.2.0 line; nothing a 0.1.x compiler cached is served again.
+FRONTEND_SCHEMA_VERSION = 2
 
 
 def digest(*parts: object) -> str:

@@ -9,6 +9,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from ppy_runtime.version import VERSION as __version__
+
 from ._directives import (
     DIRECTIVE_ATTR,
     Directive,
@@ -66,8 +68,6 @@ from ._markers import (
     u64,
 )
 from ._native import native_import, native_imports
-
-__version__ = "0.1.1a1"
 
 __all__ = [
     "DIRECTIVE_ATTR",

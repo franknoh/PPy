@@ -1,6 +1,28 @@
 # Changelog
 
-## 0.1.1a1 — unreleased
+## 0.2.0 — unreleased
+
+The release that turns the compiler into a platform: a typed, multi-dialect
+IR between analysis and every backend, a pass and pattern infrastructure
+over it, and plugins that extend it through explicit APIs. The entries
+below are in the order the work landed.
+
+- One version, `0.2.0`, in every place that states it: the compiler
+  constant the packaging build reads, `ppy_runtime.version`, and
+  `ppy.__version__`, held together by a test. Every cache and artifact
+  schema moved with it -- the frontend cache, the lowering cache, the
+  project scan, and the binding manifest's ABI, now 2 -- so nothing a
+  0.1.x compiler produced is served by this one; a 0.1.x manifest is
+  refused with the rebuild message.
+- The typed canonical IR, `ppy_compiler.ir`: SSA values with one type
+  each, blocks with arguments and one terminator, an explicit control-flow
+  graph, and operations named in dialects. The core dialect spells overflow
+  and rounding on the operation rather than leaving a backend to guess. A
+  verifier checks structure, dominance, symbols, and every dialect's own
+  rules and returns a list of errors with their positions; the printer
+  writes one deterministic text per module, the parser reads it back, and
+  `.ppyir` is that text with a schema and dialect-version header a reader
+  refuses rather than guesses at. `docs/ir.md` is the reference.
 
 Speed of the compiler itself, measured before being changed.
 

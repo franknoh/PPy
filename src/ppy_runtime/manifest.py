@@ -16,7 +16,9 @@ from .abi import NativeParam, NativeSignature
 
 __all__ = ["Manifest", "ManifestError", "NativeEntry", "RegionLibrary", "load"]
 
-SUPPORTED_ABI = 1
+#: 2: the 0.2.0 artifact -- it carries its torch regions, and a 0.1.x
+#: manifest is refused with the rebuild message rather than half-served.
+SUPPORTED_ABI = 2
 
 
 class ManifestError(RuntimeError):

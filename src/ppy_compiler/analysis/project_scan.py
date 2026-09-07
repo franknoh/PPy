@@ -36,7 +36,7 @@ _SKIP = frozenset(
 )
 _SUFFIXES = (".py", ".ppy")
 #: Bumped when what a record holds, or how it is read off a file, changes.
-_FORMAT = 1
+_FORMAT = 2
 
 
 @dataclass(slots=True)

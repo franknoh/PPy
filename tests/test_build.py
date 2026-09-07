@@ -89,7 +89,7 @@ def test_build_writes_a_binding_manifest(project: Path):
     assert result.returncode == 0, result.stderr
 
     manifest = json.loads((project / ".ppy-cache" / "native" / "ppy-bindings.json").read_text())
-    assert manifest["abi_version"] == 1
+    assert manifest["abi_version"] == 2
     assert manifest["calling_convention"] == "c"
 
     entries = {entry["python_qualname"]: entry for entry in manifest["entries"]}
@@ -1058,8 +1058,10 @@ def test_a_region_whose_library_is_gone_is_the_python_body(tmp_path: Path):
     from ppy_runtime.launch import PrebuiltBinder
     from ppy_runtime.manifest import load
 
+    from ppy_runtime.manifest import SUPPORTED_ABI
+
     payload = {
-        "abi_version": 1,
+        "abi_version": SUPPORTED_ABI,
         "python": f"{sys.version_info.major}.{sys.version_info.minor}",
         "program": {
             "entry": "m",
@@ -1088,3 +1090,18 @@ def test_a_region_whose_library_is_gone_is_the_python_body(tmp_path: Path):
 
     assert binder.region("m", "layer", layer) is layer, "an unloadable extension serves Python"
     assert binder.region_bindings[0].routed is False
+
+
+def test_an_artifact_from_the_previous_abi_is_refused_with_the_remedy(tmp_path: Path):
+    """A manifest a 0.1.x build wrote speaks ABI 1; this runtime speaks 2 and
+    says to rebuild rather than serve an artifact it half-understands."""
+    from ppy_runtime.manifest import SUPPORTED_ABI, ManifestError, load
+
+    assert SUPPORTED_ABI == 2
+    path = tmp_path / "ppy-bindings.json"
+    path.write_text(
+        json.dumps({"abi_version": 1, "program": {"entry": "m"}, "entries": []}),
+        encoding="utf-8",
+    )
+    with pytest.raises(ManifestError, match=r"speaks ABI 1; this runtime speaks 2.*ppy build"):
+        load(path)

@@ -12,6 +12,7 @@ from ..analysis.effects import EffectSet
 from ..analysis.refinements import Facts
 
 __all__ = [
+    "PLUGIN_API_VERSION",
     "CallAdjustment",
     "CallResult",
     "Lowering",
@@ -19,6 +20,11 @@ __all__ = [
     "PluginContext",
     "PluginRegistry",
 ]
+
+
+#: The plugin interface's version, part of every plugin fingerprint: a
+#: plugin written against another one is a different plugin to the cache.
+PLUGIN_API_VERSION = 2
 
 
 class Lowering(enum.StrEnum):

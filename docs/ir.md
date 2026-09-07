@@ -1,0 +1,135 @@
+# The IR
+
+Between analysis and every backend sits one typed, SSA-form intermediate
+representation with an explicit control-flow graph. Analysis decides what a
+program means; the IR keeps that meaning in a form a backend can lower
+without reading Python again; dialects extend the IR; passes transform it;
+backends lower it. This page is the reference for the core; `docs/solver.md`
+and the plugin pages say what the other dialects add.
+
+## Shape
+
+```text
+func @abs(%x: i64) -> i64 {
+^entry:
+    %zero = core.const 0 : i64
+    %negative = core.cmp.lt %x, %zero : bool
+    core.cond_br %negative, ^neg, ^positive
+^neg:
+    %value = core.neg %x {overflow = "python"} : i64
+    core.br ^exit(%value)
+^positive:
+    core.br ^exit(%x)
+^exit(%result: i64):
+    core.ret %result
+}
+```
+
+- A **module** holds functions and globals under one symbol table, and
+  names every dialect it uses with the version it was written against.
+- A **function** has typed parameters, result types, attributes, and a body
+  region. A body-less function is a declaration (`extern func`).
+- A **region** is a list of **blocks**; the first is the entry. A block has
+  typed arguments and operations, and ends in exactly one terminator.
+  Branches pass arguments to the block they reach: there is no phi.
+- A **value** is a block argument or the result of one operation, defined
+  once and carrying exactly one type. A use must be dominated by its
+  definition; the verifier checks that along every path.
+- An **operation** is `dialect.name`, operands, results, attributes,
+  successors (for terminators), and optional nested regions.
+
+## Types
+
+```text
+void  bool  i8 i16 i32 i64  u8 u16 u32 u64  f16 f32 f64  index
+ptr<T>  ptr<T, space>  ptr<T, space, const>
+buffer<T>                    contiguous elements with a readable length
+vector<T, N>
+tuple<T, ...>
+struct<Name, field: T, ...>
+future<T>
+dialect.name<args>           a type a dialect owns; the core parses it, the dialect verifies it
+```
+
+`ptr<T, stack>` is what `core.alloca` yields; a stack pointer may not be
+returned or stored, and the verifier says so. `generic` is the host's
+address space; a dialect adds its own (`global`, `shared`, ...).
+
+## Core operations
+
+| operation | meaning |
+|---|---|
+| `core.const V : T` | a constant; `V` must fit `T` |
+| `core.add`, `sub`, `mul`, `div`, `mod`, `neg` | arithmetic on numbers or vectors of them. Integer forms carry `overflow` (`python` \| `checked` \| `wrap`); `div`/`mod` also `rounding` (`floor` \| `trunc`). The backend never guesses either. |
+| `core.and`, `or`, `xor`, `shl`, `shr` | bitwise on integers or bools |
+| `core.cmp.<eq,ne,lt,le,gt,ge>` | comparison to `bool`, or `vector<bool, N>` |
+| `core.select` | `bool ? a : b` |
+| `core.cast` | scalar-to-scalar, or pointer-to-pointer within one address space |
+| `core.br`, `cond_br`, `ret`, `unreachable` | terminators |
+| `core.alloca` | stack memory: `ptr<T, stack>` |
+| `core.load`, `store`, `ptr_offset` | pointer access; a store through `const` is refused |
+| `core.buffer_data`, `buffer_len`, `buffer_load`, `buffer_store` | buffers |
+| `core.tuple_make`, `tuple_extract {index}` | fixed tuples |
+| `core.struct_make`, `struct_extract {field}` | structs |
+| `core.call @f`, `call_extern {callee}`, `call_intrinsic {intrinsic}` | calls; a `core.call` is checked against the callee's signature |
+| `core.guard %cond {kind}` | a runtime check the function fails on: `overflow`, `bounds`, `zero_division`, `range`, `contract`, `assert` |
+
+Overflow semantics live on the operation. `python` means the true value is
+what Python computes -- the backend guards and falls back; `checked` means
+overflow is a guard failure; `wrap` means two's-complement wrap like C.
+Bounds checks are explicit `core.guard`s the frontend emits; a sanitizer
+pass adds more.
+
+## Text and `.ppyir`
+
+`ppy_compiler.ir.encode` prints a module; `decode` reads it back. The text
+is the on-disk format:
+
+```text
+ppyir 1                      the schema version
+module @name
+dialect core 1               every dialect used, with its version
+attrs {...}                  module metadata (optional)
+
+global @scale : f64 = 2.0
+extern func @sin(f64) -> f64
+func @f(%x: i64 {ownership = "borrowed"}) -> i64 attrs {effects = ["pure"]} { ... }
+```
+
+Printing is deterministic: values are named in definition order (a hint is
+kept unless an earlier value took it; the rest are numbered), attributes
+print sorted, and a module printed after being parsed prints the same
+text. A reader refuses a schema it does not have and a dialect it does not
+have or has only at an older version, with the reason, rather than
+guessing. The format is experimental in 0.2.0.
+
+## Verification
+
+`verify(module)` returns every error with the function, block, and
+operation it sits on; `verify_or_raise` turns the list into one exception.
+The core checks structure (terminators, branch targets and arguments,
+dominance, unique names, symbols), then each operation against its
+dialect's `OpSpec` (arity, required attributes, types), then the dialect's
+own rule for that operation. A dialect adds its rules through `OpSpec.verify`
+and `Dialect.verify_type`; a new dialect never touches the verifier.
+
+## Dialects
+
+A dialect is a namespace of operations and types with a version:
+
+```python
+class Dialect:
+    name: str
+    version: int
+
+    def register_types(self, registry): ...
+    def register_operations(self, registry): ...   # registry.add_op(OpSpec(...))
+    def register_patterns(self, registry): ...
+    def register_lowerings(self, registry): ...
+    def verify_type(self, t): ...
+    def address_spaces(self): ...
+```
+
+`ppy_compiler.ir.registry()` is the process-wide registry with the builtin
+dialects; a plugin registers its own through the plugin API. Two dialects
+of one name from different classes are refused.

@@ -30,6 +30,7 @@ what the checker already proved.
 | `frontend/` | source loading, the module graph, ambiguity detection (`E1003`). |
 | `migration/` | the `ppy migrate` layer over the shared conversion engine: deterministic rewrite passes (`pipeline`, `dynamic`, `globals`) that prove each rewrite equivalent before making it, and the classified report (`report`) that says what remains. |
 | `analysis/` | `results` (what analysis produced — the types every other package reads), `symbols` (declarations), `checker` (types, refinements, effects), `binding` (one shared call-argument binder), `lexical` (point-sensitive name resolution: what a name means at each statement, shared by decorator identity, reflection, and the write index), `aliasing` (flow-sensitive local alias analysis: mutation and escape resolve through what a name may refer to, not its spelling), `inference` (staged evidence/generalization fixpoint with a convergence guard), `decorators` (what each known decorator does, that unknown means opaque, and the shared `class_construction` facts behind both strict class checking and safe hoisting), `global_writes` (scope-aware project-wide write index behind `Final`), `reflection` (who reads annotations at runtime, blocking their materialization), `codec` (exact-inverse serialization of analysis facts for the cache), `render` (types back to annotation source). |
+| `ir/` | the typed canonical IR every backend lowers: `model` (modules, functions, blocks, SSA values with use lists), `types`, `dialect` (the registry and `OpSpec`), `dialects/core`, `verify`, `printer`/`parser`/`codec` (`.ppyir`). See [ir.md](ir.md). |
 | `opt/` | AST-level passes: constant folding, inlining, LICM, loop transforms; used by the Python backend and as pre-lowering cleanup. |
 | `backend/python/` | runs optimized AST under CPython with the loader installed. |
 | `backend/llvm/` | `lowering` (AST → LLVM IR), `wrapper` (generated CPython-ABI entry points, `METH_FASTCALL`, GIL release), `fusion` (NumPy elementwise loops), `specialize`/`jit` (guarded runtime specialization), `parallel` (the worker pool), `link` (objects → shared library). |
@@ -43,7 +44,7 @@ what the checker already proved.
 Plain CPython, the Python backend, and the LLVM backend must produce the same
 answer; a guard that fails at runtime falls back to the Python body rather than
 ever answering differently. The invariant is enforced, not assumed:
-`examples/run_all.py` runs all 39 example programs on all three paths and
+`examples/run_all.py` runs all 41 example programs on all three paths and
 diffs the output, and the test suite does the same per feature.
 
 ## Cache and incremental builds
