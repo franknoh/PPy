@@ -12,8 +12,9 @@ same way.
 from __future__ import annotations
 
 from ...ir import BoolType, FloatType, IntType, IRType, Operation, PtrType, VectorType
+from ...ir.dialects.special import ORDERED, UNARY
 
-__all__ = ["lower_atomic", "lower_concurrency", "lower_cpu", "lower_simd"]
+__all__ = ["lower_atomic", "lower_concurrency", "lower_cpu", "lower_simd", "lower_special"]
 
 #: LLVM's names for the memory orders.
 _ORDERING = {
@@ -390,3 +391,40 @@ def _join(emitter, op: Operation) -> None:  # type: ignore[no-untyped-def]
 
 def _bool_lanes(t: IRType) -> bool:
     return isinstance(t, VectorType) and isinstance(t.element, BoolType)
+
+
+# -- special: libm, and two expressions ---------------------------------------------------
+
+
+def lower_special(emitter, op: Operation) -> None:  # type: ignore[no-untyped-def]
+    """`special.*` as libm calls; `ndtr` and `logit` as what they are."""
+    ir = emitter.ir
+    b = emitter.builder
+    name = op.local_name
+    t = op.results[0].type
+    llvm_type = emitter.owner.llvm_type(t)
+    suffix = "f" if isinstance(t, FloatType) and t.width == 32 else ""
+    arguments = [emitter.value(v) for v in op.operands]
+    if name == "ndtr":
+        # The standard normal's distribution: erfc(-x / sqrt 2) / 2.
+        erfc = emitter.extern(f"erfc{suffix}", llvm_type, [llvm_type])
+        scaled = b.fmul(b.fneg(arguments[0]), ir.Constant(llvm_type, 0.7071067811865476))
+        emitter.set(op.results[0], b.fmul(b.call(erfc, [scaled]), ir.Constant(llvm_type, 0.5)))
+        return
+    if name == "logit":
+        log = emitter.extern(f"log{suffix}", llvm_type, [llvm_type])
+        x = arguments[0]
+        ratio = b.fdiv(x, b.fsub(ir.Constant(llvm_type, 1.0), x))
+        emitter.set(op.results[0], b.call(log, [ratio]))
+        return
+    if name in ORDERED:
+        function = emitter.extern(
+            f"{ORDERED[name]}{suffix}", llvm_type, [ir.IntType(32), llvm_type]
+        )
+        order = (
+            b.trunc(arguments[0], ir.IntType(32)) if arguments[0].type.width > 32 else arguments[0]
+        )
+        emitter.set(op.results[0], b.call(function, [order, arguments[1]]))
+        return
+    function = emitter.extern(f"{UNARY[name]}{suffix}", llvm_type, [llvm_type])
+    emitter.set(op.results[0], b.call(function, arguments))

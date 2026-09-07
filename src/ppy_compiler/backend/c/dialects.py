@@ -12,6 +12,8 @@ on them.
 from __future__ import annotations
 
 from ...ir import BoolType, FloatType, IntType, IRType, Operation, PtrType, VectorType
+from ...ir.dialects.special import ORDERED as SPECIAL_ORDERED
+from ...ir.dialects.special import UNARY as SPECIAL_UNARY
 
 __all__ = [
     "PRELUDE",
@@ -20,6 +22,7 @@ __all__ = [
     "emit_cpu",
     "emit_parallel",
     "emit_simd",
+    "emit_special",
     "vector_core",
 ]
 
@@ -638,3 +641,43 @@ def _combine_c(op: str, t, a: str, b: str, owner) -> str:  # type: ignore[no-unt
             return f"{a} {symbol} {b}"
         return _lane_arith(owner, t, symbol, a, b)
     return f"{b} {'<' if op == 'min' else '>'} {a} ? {b} : {a}"
+
+
+# -- special: libm, and two expressions --------------------------------------------------
+
+
+def emit_special(fe, op: Operation) -> None:  # type: ignore[no-untyped-def]
+    owner = fe.owner
+    name = op.local_name
+    t = op.results[0].type
+    suffix = "f" if isinstance(t, FloatType) and t.width == 32 and not owner.cpp else ""
+    arguments = [fe.value(v) for v in op.operands]
+    if name == "ndtr":
+        erfc = owner.std(f"erfc{suffix}")
+        fe.define(op.results[0], f"0.5 * {erfc}(-{arguments[0]} * 0.7071067811865476)")
+        return
+    if name == "logit":
+        log = owner.std(f"log{suffix}")
+        fe.define(op.results[0], f"{log}({arguments[0]} / (1.0 - {arguments[0]}))")
+        return
+    if name in SPECIAL_ORDERED:
+        function = _bessel(owner, SPECIAL_ORDERED[name], suffix)
+        fe.define(op.results[0], f"{function}({owner.cast(arguments[0], 'int')}, {arguments[1]})")
+        return
+    libm = SPECIAL_UNARY[name]
+    if name.startswith("bessel_"):
+        function = _bessel(owner, libm, suffix)
+    else:
+        function = owner.std(f"{libm}{suffix}")
+    fe.define(op.results[0], f"{function}({arguments[0]})")
+
+
+def _bessel(owner, name: str, suffix: str) -> str:  # type: ignore[no-untyped-def]
+    """The libm Bessel function `name`: POSIX, not ISO C, so `<math.h>`
+    declares it only under a feature macro; the unit declares it itself."""
+    function = f"{name}{suffix}"
+    real = "float" if suffix else "double"
+    order = "int, " if name in ("jn", "yn") else ""
+    linkage = 'extern "C" ' if owner.cpp else ""
+    owner.unit.prelude[f"bessel:{function}"] = f"{linkage}{real} {function}({order}{real});"
+    return function

@@ -53,6 +53,7 @@ from .dialects import (
     emit_cpu,
     emit_parallel,
     emit_simd,
+    emit_special,
     touches_vector,
     vector_core,
     vector_name,
@@ -149,6 +150,19 @@ _UNREACHABLE = """#if defined(__GNUC__) || defined(__clang__)
 class _Buffer:
     data: str
     length: str
+
+
+#: C library functions the standard headers declare: a prototype of our own
+#: would conflict with theirs, so arguments and result are cast instead.
+_LIBC: dict[str, tuple[str, tuple[str, ...], str]] = {
+    "malloc": ("void *", ("size_t",), "stdlib.h"),
+    "calloc": ("void *", ("size_t", "size_t"), "stdlib.h"),
+    "realloc": ("void *", ("void *", "size_t"), "stdlib.h"),
+    "free": ("void", ("void *",), "stdlib.h"),
+    "memcpy": ("void *", ("void *", "const void *", "size_t"), "string.h"),
+    "memmove": ("void *", ("void *", "const void *", "size_t"), "string.h"),
+    "memset": ("void *", ("void *", "int", "size_t"), "string.h"),
+}
 
 
 @dataclass(slots=True)
@@ -498,6 +512,11 @@ class _FunctionEmitter:
         b = self.buffer(v)
         self.body.append(f"    {b.data} = {data};")
         self.body.append(f"    {b.length} = {length};")
+        # The length is read only where a `core.buffer_len` or a call
+        # takes the buffer whole; a C compiler warns about the rest.
+        if not v.uses:
+            self.body.append(f"    (void){b.data};")
+        self.body.append(f"    (void){b.length};")
 
     def reads(self, v: Value) -> list[str]:
         """The expressions that read `v`: one, or a buffer's two."""
@@ -906,6 +925,23 @@ class _FunctionEmitter:
     def call_extern(self, op: Operation) -> None:
         symbol = str(op.attributes["callee"])
         shim = SHIMS.get(symbol)
+        libc = _LIBC.get(symbol)
+        if libc is not None:
+            result_type, parameter_types, header = libc
+            self.owner.unit.headers.add(header)
+            arguments = [
+                self.owner.cast(self.extern_atom(operand), expected)
+                for operand, expected in zip(op.operands, parameter_types, strict=True)
+            ]
+            call = f"{symbol}({', '.join(arguments)})"
+            if op.results:
+                wanted = self.extern_type(op.results[0])
+                if wanted != result_type:
+                    call = self.owner.cast(call, wanted)
+                self.define(op.results[0], call)
+            else:
+                self.body.append(f"    {call};")
+            return
         if shim is not None:
             self.owner.shim(symbol)
             parameter_types = [p.rsplit(" ", 1)[0] for p in shim.parameters]
@@ -980,6 +1016,7 @@ _DIALECTS = {
     "atomic": emit_atomic,
     "concurrency": emit_concurrency,
     "parallel": emit_parallel,
+    "special": emit_special,
 }
 #: Core operations that take vectors, emitted as lane helpers.
 _VECTOR_CORE = frozenset(

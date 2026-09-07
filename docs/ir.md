@@ -160,6 +160,57 @@ regions when that backend was selected. The frontend writes these for
 `parallel.range` loops (`docs/language.md`) and outlines each body into a
 private function marked `ppy.synthesized`.
 
+## Shapes and layouts
+
+A tensor's shape is a tuple of dimensions, each an integer, a symbol
+(`N`), or an expression of them in parentheses -- `(N * M)`, `(N + 1)`,
+`ceil_div(N, 32)`, `max(N, M)` -- kept in a canonical form so two
+spellings of one size compare equal (`ir/shape.py`). Shape inference for
+broadcasting, matmul, reshape, transpose, slice, reduce, and concat lives
+there too, and every tensor operation's verifier holds its written result
+to what inference says. The layout dialect names how elements sit in
+memory: `layout.row_major`, `layout.col_major`, or `layout.strided<s0,
+s1, ..., offset, K, align, A>` with a stride per axis, elements before the
+first, and the alignment of the first. A tensor operation's meaning is on
+the elements; the layout is how a backend reaches them.
+
+## The tensor dialect
+
+`tensor.tensor<f64, 4, 8>` is a 4-by-8 array of `f64`, row-major unless a
+trailing layout says otherwise. `tensor.load %buffer` and `tensor.store
+%t, %buffer` move a tensor to and from a buffer of its elements in
+row-major order, guarded by the buffer's length; `empty`, `add`, `sub`,
+`mul`, `div` (with broadcasting), `broadcast`, `reshape`, `transpose
+{perm}`, `slice {starts, stops, steps}`, `concat {axis}`, `reduce {axes,
+op, keepdims}`, `matmul`, and `convert` are the values. `lower-tensor`
+makes memory of a tensor with a static shape -- a view onto memory that
+exists already for `load`, `broadcast`, `transpose`, `slice`, and a
+contiguous `reshape`; fresh memory, on the stack when small and the heap
+when large and freed where the function returns, for the rest -- and
+loops of the operations. A symbolic shape has no static memory and is
+refused with the reason, as is a tensor that crosses a call: it travels as
+a buffer.
+
+## The linalg, fft, special, and sparse dialects
+
+`linalg.dot`, `matmul`, `solve`, `triangular_solve {lower, unit}`, and
+`cholesky` lower to loops (a singular or non-positive-definite matrix
+fails a guard); `linalg.qr`, `svd`, and `eig` call LAPACK where the build
+has it -- `dgeqrf`/`dorgqr`, `dgesvd`, `dgeev` on a column-major copy --
+and are refused with the reason where it does not. Complex values are
+real tensors whose last dimension is 2: `fft.fft`, `ifft`, `rfft`,
+`irfft {n}`, `fftn`, and `ifftn` lower to the definition of the transform
+in loops, the sum over every input for every output, until a build
+selects an FFT library. `special.erf`, `erfc`, `gamma`, `gammaln`,
+`ndtr`, `logit`, and the Bessel functions are scalar operations like the
+math dialect's, lowered to libm by both backends. `sparse.csr<T, I, rows,
+cols>` (and `csc`, `coo`) hold a matrix by its non-zeros with an explicit
+index type; `from_parts` borrows the program's buffers, `to_dense`,
+`matmul` by a dense matrix, and `reduce {axis}` give dense tensors,
+`transpose` of a CSR matrix is the CSC matrix of the same parts, `convert`
+changes the format, and `add` merges two matrices of one format into
+memory of its own.
+
 ## Effects and ownership on the IR
 
 A function carries its `effects` -- the lower-case names of the analysis's

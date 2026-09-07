@@ -403,9 +403,20 @@ class _TypeParser:
         raise TypeError_(f"{name!r} takes no type arguments")
 
     def argument(self) -> IRType | int | str:
-        """One dialect-type argument: a type, an integer, or a bare word."""
+        """One dialect-type argument: a type, an integer, a bare word, or an
+        expression in parentheses, kept as its text for the dialect to read."""
         self.skip_space()
         start = self.pos
+        if self.peek() == "(":
+            depth = 0
+            while self.pos < len(self.text):
+                char = self.text[self.pos]
+                self.pos += 1
+                depth += char == "("
+                depth -= char == ")"
+                if depth == 0:
+                    return self.text[start : self.pos]
+            raise TypeError_(f"unbalanced parentheses at {start} in {self.text!r}")
         if self.peek() in "-0123456789":
             self.pos += 1
             while self.pos < len(self.text) and self.text[self.pos].isdigit():

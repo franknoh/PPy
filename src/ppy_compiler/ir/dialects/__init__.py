@@ -12,9 +12,15 @@ def builtin_dialects() -> list[Dialect]:
     from .concurrency import ConcurrencyDialect
     from .core import CoreDialect
     from .cpu import CpuDialect
+    from .fft import FftDialect
+    from .layout import LayoutDialect
+    from .linalg import LinalgDialect
     from .math import MathDialect
     from .parallel import ParallelDialect
     from .simd import SimdDialect
+    from .sparse import SparseDialect
+    from .special import SpecialDialect
+    from .tensor import TensorDialect
 
     return [
         CoreDialect(),
@@ -24,4 +30,10 @@ def builtin_dialects() -> list[Dialect]:
         AtomicDialect(),
         ConcurrencyDialect(),
         ParallelDialect(),
+        LayoutDialect(),
+        TensorDialect(),
+        LinalgDialect(),
+        FftDialect(),
+        SpecialDialect(),
+        SparseDialect(),
     ]

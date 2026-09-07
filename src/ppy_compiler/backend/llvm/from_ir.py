@@ -38,7 +38,13 @@ from ...ir import (
 )
 from ...target import TargetInfo, host_target
 from .dialect_lowerings import EmitError as _DialectEmitError
-from .dialect_lowerings import lower_atomic, lower_concurrency, lower_cpu, lower_simd
+from .dialect_lowerings import (
+    lower_atomic,
+    lower_concurrency,
+    lower_cpu,
+    lower_simd,
+    lower_special,
+)
 from .lowering import FASTMATH_FLAGS, _default_triple
 
 __all__ = ["EmitError", "emit_module"]
@@ -812,6 +818,7 @@ _DIALECTS = {
     "cpu": lower_cpu,
     "atomic": lower_atomic,
     "concurrency": lower_concurrency,
+    "special": lower_special,
 }
 
 

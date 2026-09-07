@@ -445,6 +445,17 @@ Speed of the compiler itself, measured before being changed.
   function's outermost loops; the checker (`E1650`) and the frontend refuse
   what cannot run at once and say why, and optimization remarks say what
   became parallel.
+- The tensor family of the IR: shapes with symbols and expressions and the
+  inference the verifiers hold operations to, the layout dialect, the
+  tensor dialect and `lower-tensor` (views where memory exists, loops
+  where it must be made, on the stack or the heap), the linalg dialect
+  (loops for dot, matmul, the solves and Cholesky; LAPACK for QR, SVD, and
+  eigendecomposition where a build has it), the fft dialect (the transform
+  by its definition, complex as `(re, im)` pairs), the special dialect
+  (erf, gamma, Bessel and friends through libm on both backends), and the
+  sparse dialect (CSR, CSC, COO with explicit index types; matmul, add,
+  transpose, convert, reduce). All of it is checked against NumPy on both
+  backends.
 
 ## 0.1.0a1
 
