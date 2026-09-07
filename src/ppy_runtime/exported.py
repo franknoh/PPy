@@ -34,9 +34,13 @@ def bind_exported(
     cover (spec 21.5).
     """
     try:
-        # Executing a staged JAX artifact is plugin territory; the import is
-        # lazy, so a pure native artifact never reaches for the compiler.
-        from ppy_compiler.plugins.jax_export import runtime_call
+        if payload.lstrip().startswith(b"{"):
+            # A `ppy.xla` payload: StableHLO the compiler wrote, run by the PJRT bridge.
+            from .xla import runtime_call
+        else:
+            # Executing a staged JAX artifact is plugin territory; the import is
+            # lazy, so a pure native artifact never reaches for the compiler.
+            from ppy_compiler.plugins.jax_export import runtime_call
     except ImportError as exc:  # pragma: no cover - jax absent
         return ExportedBinding(function, fallback, fallback, reason=str(exc))
 

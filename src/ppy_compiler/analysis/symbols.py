@@ -370,6 +370,7 @@ DIRECTIVE_NAMES = frozenset(
         "reflective",
         "native.extern",
         "native.export",
+        "xla.jit",
         "cpu.target",
     }
 )

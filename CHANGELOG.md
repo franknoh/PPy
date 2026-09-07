@@ -525,6 +525,19 @@ Speed of the compiler itself, measured before being changed.
   `ppy_runtime.arrow.exported` lends
   a PyArrow array to native code as the C Data Interface's `ArrowArray`
   struct and releases it once the borrow ends.
+- `ppy.xla`, the StableHLO backend, and the PJRT bridge. `@xla.jit` marks
+  a function of scalars whose body is arithmetic and math; the compiler
+  lowers it to the IR, `backend/stablehlo` writes it as an MLIR module --
+  scalars as rank-0 tensors, the tensor dialect one to one onto StableHLO
+  (`broadcast_in_dim`, `reshape`, `transpose`, `reduce`, `dot_general`,
+  `convert`, a fused region as its body), `erf` as CHLO -- `ppy emit
+  stablehlo` shows it, and the build stages it. At run time
+  `ppy_runtime.xla` compiles the module through XLA's own bindings, caches
+  the executable by digest, bindings, platform, and device (in memory and
+  serialized on disk), and runs each call on the device; `xla.devices()`
+  names them. JAX is not on the compile path; the bridge places buffers
+  through JAX's `device_put` while that is the one public way to the
+  client. What XLA cannot take is reported as `W2007` and runs as written.
 
 ## 0.1.0a1
 

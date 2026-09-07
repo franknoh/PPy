@@ -20,8 +20,15 @@ from .reporting import Reporter
 
 __all__ = ["KINDS", "build_ir_file", "run_emit"]
 
-KINDS = ("ir", "llvm-ir", "c", "cpp", "header")
-_SUFFIXES = {"ir": ".ppyir", "llvm-ir": ".ll", "c": ".c", "cpp": ".cpp", "header": ".h"}
+KINDS = ("ir", "llvm-ir", "c", "cpp", "header", "stablehlo")
+_SUFFIXES = {
+    "ir": ".ppyir",
+    "llvm-ir": ".ll",
+    "c": ".c",
+    "cpp": ".cpp",
+    "header": ".h",
+    "stablehlo": ".mlir",
+}
 _HEADER_ONLY_SUFFIXES = {"c": ".h", "cpp": ".hpp"}
 
 
@@ -125,6 +132,8 @@ def _texts(kind: str, bundle, header_only: bool) -> dict[str, str]:  # type: ign
         return {name: encode(module) for name, module in ir_modules(bundle).items()}
     if kind == "llvm-ir":
         return emit_ir(bundle)
+    if kind == "stablehlo":
+        return _stablehlo_texts(bundle)
     if kind == "header":
         from ..backend.llvm.link import header_text
         from ..lowering.abi import signature_from_ir
@@ -148,6 +157,38 @@ def _texts(kind: str, bundle, header_only: bool) -> dict[str, str]:  # type: ign
         name: emit_module(module, language, header_only=header_only, target=machine)
         for name, module in ir_modules(bundle).items()
     }
+
+
+def _stablehlo_texts(bundle) -> dict[str, str]:  # type: ignore[no-untyped-def]
+    """Each module's `@ppy.xla.jit` functions as StableHLO; every function where none is marked.
+
+    A function XLA cannot take is left out and named in the reporter's notes;
+    a module with nothing XLA takes produces no text.
+    """
+    from ..backend.llvm.ir_pipeline import ir_modules
+    from ..backend.stablehlo import emit_module, prepare, supports
+
+    texts: dict[str, str] = {}
+    for name, module in ir_modules(bundle).items():
+        prepare(module)
+        symbols = bundle.symbols.modules.get(name)
+        marked = {
+            info.qualname
+            for info in (symbols.functions.values() if symbols is not None else ())
+            if info.directive("xla.jit") is not None
+        }
+        chosen = []
+        for function in module.functions.values():
+            if function.is_declaration:
+                continue
+            qualname = str(function.attributes.get("ppy.qualname", function.name))
+            if marked and qualname not in marked:
+                continue
+            if supports(function) is None:
+                chosen.append(function.name)
+        if chosen:
+            texts[name] = emit_module(module, tuple(chosen))
+    return texts
 
 
 def build_ir_file(path: Path, options: argparse.Namespace, reporter: Reporter) -> int:

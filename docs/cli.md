@@ -305,6 +305,7 @@ ppy emit cpp foo.ppy                 # ... as C++17, exports behind extern "C"
 ppy emit c --header-only foo.ppy     # every function static inline in a header
 ppy emit c --standalone prog.ppy     # the whole program from main(), shims and all
 ppy emit header foo.ppy              # the C declarations of the exports
+ppy emit stablehlo foo.ppy           # the @ppy.xla.jit functions as StableHLO for XLA
 ```
 
 One rule for every kind: a single file with no `-o` prints to standard

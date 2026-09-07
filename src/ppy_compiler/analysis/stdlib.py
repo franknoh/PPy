@@ -394,6 +394,14 @@ _FUNCTIONS: dict[str, tuple[T.Type, EffectSet]] = {
     "ppy.native.extern": _fn("ppy.native.extern", T.ANY, EffectSet()),
     "ppy.native.export": _fn("ppy.native.export", T.ANY, EffectSet()),
     "ppy.cpu.target": _fn("ppy.cpu.target", T.ANY, EffectSet()),
+    "ppy.xla.jit": _fn("ppy.xla.jit", T.ANY, EffectSet()),
+    "ppy.xla.compile": _fn("ppy.xla.compile", T.ANY, EffectSet()),
+    # Asking the PJRT bridge which devices exist reads process-wide state.
+    "ppy.xla.devices": _fn("ppy.xla.devices", T.list_of(T.STR), EffectSet.of(Effect.READ_GLOBAL)),
+    "ppy.xla.default_device": _fn(
+        "ppy.xla.default_device", T.union(T.STR, T.NONE), EffectSet.of(Effect.READ_GLOBAL)
+    ),
+    "ppy.xla.device_put": _fn("ppy.xla.device_put", T.ANY, EffectSet.of(Effect.READ_GLOBAL)),
     "ppy.parallel.range": _fn(
         "ppy.parallel.range", T.Instance("range", (), ("range", "object")), EffectSet()
     ),
@@ -458,6 +466,7 @@ MODULE_ATTRIBUTES: dict[str, tuple[T.Type, Facts]] = {
     "ppy.cpu": (T.Module_("ppy.cpu"), Facts()),
     "ppy.atomic": (T.Module_("ppy.atomic"), Facts()),
     "ppy.concurrent": (T.Module_("ppy.concurrent"), Facts()),
+    "ppy.xla": (T.Module_("ppy.xla"), Facts()),
     "ppy.ffi.nullable": (T.ANY, Facts()),
     "math.pi": (T.FLOAT, Facts()),
     "math.e": (T.FLOAT, Facts()),

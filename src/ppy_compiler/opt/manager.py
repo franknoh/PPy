@@ -42,6 +42,8 @@ _DIRECTIVE_NAMES = {
     "ppy.dynamic",
     "ppy.jax",
     "ppy.reflective",
+    "ppy.xla.jit",
+    "xla.jit",
     "pure",
     "opt",
     "jit",

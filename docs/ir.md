@@ -254,6 +254,21 @@ bitmap re-based to bit zero (all ones when the array has none). A bool
 array sliced inside a byte is refused by the guard rather than copied
 wrongly.
 
+## The StableHLO backend
+
+`ppy_compiler.backend.stablehlo.emit_module` writes a function of scalars
+and tensors -- one block, no memory, static shapes -- as an MLIR
+`func.func` over `tensor<...>` values: a scalar is a rank-0 tensor; `core`
+arithmetic, comparison, `select`, and `cast` are StableHLO's; the math
+functions are theirs, with `exp2`, `log2`, `log10`, and `trunc` spelled
+from what StableHLO has and `erf`/`erfc` as CHLO; `tensor.fill` and
+`broadcast` are `broadcast_in_dim`, `reshape`, `transpose`, `reduce`,
+`matmul` and `linalg.dot` are `dot_general`, `convert` is `convert`, and a
+`tensor.fused` region is its body over the broadcast shape. A buffer, a
+guard, a branch, or a symbolic shape is refused with the reason
+(`supports` says which). `ppy emit stablehlo` writes the text; the PJRT
+bridge in `ppy_runtime.xla` compiles and runs it.
+
 ## Effects and ownership on the IR
 
 A function carries its `effects` -- the lower-case names of the analysis's

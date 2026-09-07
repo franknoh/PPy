@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING
 
 from ppy_runtime.version import VERSION as __version__
 
-from . import atomic, concurrent, cpu, ffi, simd
+from . import atomic, concurrent, cpu, ffi, simd, xla
 from ._directives import (
     DIRECTIVE_ATTR,
     Directive,
@@ -142,6 +142,7 @@ __all__ = [
     "u64",
     "uninstall",
     "value_and_grad",
+    "xla",
 ]
 
 if TYPE_CHECKING:  # the names below are real; PEP 562 just defers the import
