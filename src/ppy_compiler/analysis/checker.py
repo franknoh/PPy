@@ -1651,8 +1651,7 @@ class _Checker:
         if self.plugins is None:
             return None
         plugin = self.plugins.for_qualname(type_name)
-        alias = getattr(plugin, "call_alias", None) if plugin is not None else None
-        return alias(type_name) if alias is not None else None
+        return plugin.call_alias(type_name) if plugin is not None else None
 
     def _widen_empty_container(
         self, func: ast.Attribute, qualname: str, args: list[Binding], env: Env
@@ -3575,14 +3574,14 @@ class _Checker:
         if result is None:
             return None
         self._effects = self._effects | result.effects
-        if result.lowering == "Reject":
+        if result.kind == "Reject":
             self._error("E1802", f"`{qualname}` is not supported under the current PPY mode", node)
-        if result.lowering == "PythonFallback":
+        if result.kind == "PythonFallback":
             self._native_blockers.append(f"`{qualname}` stays on the Python path: {result.reason}")
         if self.record:
             self.module.lowerings[id(node)] = LoweringNote(
                 qualname=qualname,
-                lowering=str(result.lowering),
+                lowering=str(result.kind),
                 reason=result.reason,
                 guards=result.guards,
                 line=getattr(node, "lineno", 0),
@@ -3605,10 +3604,7 @@ class _Checker:
                     break
         if plugin is None or root is None:
             return None
-        translate = getattr(plugin, "operator", None)
-        if translate is None:
-            return None
-        operation = translate(symbol)
+        operation = plugin.operator(symbol)
         if operation is None:
             return None
         qualname = f"{root}.{operation}"
@@ -3616,12 +3612,12 @@ class _Checker:
         if result is None:
             return None
         self._effects = self._effects | result.effects
-        if result.lowering == "PythonFallback":
+        if result.kind == "PythonFallback":
             self._native_blockers.append(f"`{symbol}` on `{root}` stays on the Python path")
         if self.record:
             self.module.lowerings[id(node)] = LoweringNote(
                 qualname=qualname,
-                lowering=str(result.lowering),
+                lowering=str(result.kind),
                 reason=result.reason,
                 guards=result.guards,
                 line=getattr(node, "lineno", 0),
@@ -3640,10 +3636,11 @@ class _Checker:
         if self.plugins is None:
             return None
         plugin = self.plugins.for_qualname(base.name)
-        describe = getattr(plugin, "subscript", None) if plugin is not None else None
-        if describe is None:
+        if plugin is None:
             return None
-        described = describe(base.name, is_slice=is_slice, tupled=isinstance(node.slice, ast.Tuple))
+        described = plugin.subscript(
+            base.name, is_slice=is_slice, tupled=isinstance(node.slice, ast.Tuple)
+        )
         if described is None:
             return None
         self._effects = self._effects.add(Effect.READ_OBJECT, raises=("IndexError",))
@@ -3658,13 +3655,11 @@ class _Checker:
         plugin = self.plugins.for_qualname(base.name)
         if plugin is None:
             return None
-        describe = getattr(plugin, "instance_attribute", None)
-        if describe is not None:
-            # A plugin that reads the receiver's refinements can answer exactly
-            # where a dtype was declared, instead of guessing an element type.
-            described = describe(base.name, attr, facts or Facts())
-            if described is not None:
-                return Binding(described[0], described[1])
+        # A plugin that reads the receiver's refinements can answer exactly
+        # where a dtype was declared, instead of guessing an element type.
+        described = plugin.instance_attribute(base.name, attr, facts or Facts())
+        if described is not None:
+            return Binding(described[0], described[1])
         table = _PLUGIN_INSTANCE_ATTRS.get(base.name, {})
         found = table.get(attr)
         if found is not None:

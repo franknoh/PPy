@@ -48,7 +48,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        plugin: ["torch", "jax", "uvicorn"]
+        plugin: ["torch", "jax", "uvicorn", "scipy", "pandas", "pyarrow"]
     steps:
       - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v10.0.1

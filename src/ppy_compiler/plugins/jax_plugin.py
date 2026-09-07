@@ -10,7 +10,7 @@ from ..analysis import types as T
 from ..analysis.effects import Effect, EffectSet
 from ..analysis.refinements import Facts
 from ..analysis.symbols import FunctionInfo
-from .base import CallResult, Lowering
+from .base import CallResult, Lowering, Plugin
 
 __all__ = ["STAGING_MARKERS", "JaxPlugin", "StagedFunction", "staged_functions"]
 
@@ -371,7 +371,7 @@ def _default_dtype(t: T.Type) -> str:
     return "float32"
 
 
-class JaxPlugin:
+class JaxPlugin(Plugin):
     """Recognizes staged JAX functions; eager calls stay on the Python path."""
 
     name = "jax"
@@ -388,7 +388,7 @@ class JaxPlugin:
     modules = ("jax", "jax.numpy", "jax.lax", "jaxlib", "flax", "optax")
 
     def __init__(self, options: dict[str, object] | None = None) -> None:
-        self.options = options or {}
+        super().__init__(options)
         self.allow_build_export = bool(self.options.get("allow-build-export", False))
 
     def fingerprint(self) -> str:
@@ -601,6 +601,9 @@ class JaxPlugin:
         if not self.allow_build_export:
             return False, "`allow-build-export = false` disables JAX export for this project"
         return True, ""
+
+    def stage(self, decorators: Sequence[str]) -> CallResult | None:
+        return self.staged_region(decorators)
 
     def staged_region(self, decorators: Sequence[str]) -> CallResult | None:
         """A `@jax.jit` function PPY may export to StableHLO at build time."""

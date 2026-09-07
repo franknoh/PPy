@@ -8,7 +8,7 @@ from collections.abc import Sequence
 from ..analysis import types as T
 from ..analysis.effects import Effect, EffectSet
 from ..analysis.refinements import Facts
-from .base import CallResult, Lowering
+from .base import CallResult, Lowering, Plugin
 
 __all__ = ["ATEN_SCHEMAS", "CURATED_OPS", "TorchPlugin"]
 
@@ -270,14 +270,14 @@ _OPERATORS = {
 }
 
 
-class TorchPlugin:
+class TorchPlugin(Plugin):
     """Routes recognized tensor calls through PyTorch's dispatcher, never around it."""
 
     name = "torch"
     modules = ("torch", "torch.nn", "torch.nn.functional")
 
     def __init__(self, options: dict[str, object] | None = None) -> None:
-        self.options = options or {}
+        super().__init__(options)
         self.version_policy = str(self.options.get("version-policy", "exact-minor"))
 
     def fingerprint(self) -> str:

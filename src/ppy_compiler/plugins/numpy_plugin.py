@@ -8,7 +8,7 @@ from collections.abc import Sequence
 from ..analysis import types as T
 from ..analysis.effects import Effect, EffectSet
 from ..analysis.refinements import Facts
-from .base import CallResult, Lowering
+from .base import CallResult, Lowering, Plugin
 
 __all__ = [
     "ELEMENTWISE",
@@ -229,14 +229,14 @@ _OPERATORS = {
 }
 
 
-class NumPyPlugin:
+class NumPyPlugin(Plugin):
     """Types, effects, and lowering decisions for exact `numpy.ndarray` values."""
 
     name = "numpy"
     modules = ("numpy", "numpy.linalg")
 
     def __init__(self, options: dict[str, object] | None = None) -> None:
-        self.options = options or {}
+        super().__init__(options)
         self.fusion = bool(self.options.get("fusion", True))
         self.internal_api = bool(self.options.get("internal-api", False))
 

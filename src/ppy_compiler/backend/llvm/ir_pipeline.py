@@ -37,12 +37,22 @@ def _verify_between_passes() -> bool:
     return bool(os.environ.get("PPY_IR_VERIFY"))
 
 
-def optimize(module: IRModule, level: int) -> PassContext:
-    """Verify the frontend's IR, run the shared passes, verify again."""
-    verify_or_raise(module)
-    ctx = PassContext(verify_after_each=_verify_between_passes())
-    default_pipeline(level, ctx).run(module)
-    verify_or_raise(module)
+def optimize(module: IRModule, level: int, plugins=None) -> PassContext:  # type: ignore[no-untyped-def]
+    """Verify the frontend's IR, run the shared passes, verify again.
+
+    With a project's plugins, the registry is the project's -- its dialects,
+    patterns, and lowerings -- and the plugins' passes run at their stages,
+    each verified so that one which breaks the IR is named.
+    """
+    registry = plugins.dialect_registry() if plugins is not None else None
+    verify_or_raise(module, registry)
+    external = plugins is not None and len(plugins) > 0
+    ctx = PassContext(registry, verify_after_each=_verify_between_passes() or external)
+    manager = default_pipeline(level, ctx)
+    if plugins is not None:
+        plugins.register_passes(manager)
+    manager.run(module)
+    verify_or_raise(module, registry)
     return ctx
 
 
@@ -83,7 +93,7 @@ def ir_modules(bundle) -> dict[str, IRModule]:  # type: ignore[no-untyped-def]
         )
         if not lowered.functions:
             continue
-        optimize(lowered.module, config.opt_level)
+        optimize(lowered.module, config.opt_level, bundle.project.plugins)
         modules[module.name] = lowered.module
     return modules
 
@@ -98,6 +108,7 @@ def lower_module_via_ir(
     opt_level: int = 2,
     prover: Prover | None = None,
     root: Path | None = None,
+    plugins=None,  # type: ignore[no-untyped-def]
 ) -> LoweringResult:
     from ...lowering import lower_module_to_ir
 
@@ -110,7 +121,7 @@ def lower_module_via_ir(
         prover=prover,
         root=root,
     )
-    optimize(lowered.module, opt_level)
+    optimize(lowered.module, opt_level, plugins)
     text = emit_module(lowered.module) if lowered.functions else ""
     return LoweringResult(
         ir=text, functions=lowered.functions, rejected=lowered.rejected, proved=lowered.proved

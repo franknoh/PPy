@@ -86,10 +86,76 @@ against another, and a module that imports none of them pays for none of them.
   converts a FastAPI service whose three paths return byte-identical
   responses.
 
+## SciPy
+
+- A curated surface, not a reimplementation: `scipy.special` (one- and
+  two-argument functions over scalars and arrays), `scipy.fft`,
+  `scipy.linalg` (dense solves, factorizations, norms, determinants), and
+  `scipy.sparse` (the CSR/CSC/COO constructors and their methods) are
+  typed and named as operations of the `special`, `fft`, `linalg`, and
+  `sparse` dialects, so a backend that has those lowers them and every
+  other runs SciPy.
+- `scipy.optimize`, `scipy.integrate`, and `scipy.stats` drive Python
+  callbacks; their calls carry that effect and stay Python calls.
+
+## pandas
+
+- `DataFrame`, `Series`, `Index`, and grouped frames are typed by what they
+  are. Selection, boolean filters, `assign`, arithmetic and comparison
+  operators, `isna`/`notna`/`fillna`, `astype`, `sort_values`, the
+  aggregations, grouped aggregation, `merge`/`join`, and `concat` are named
+  as `columnar` operations -- the same ones PyArrow's compute names.
+- What the model does not capture exactly -- the index, nullable dtypes,
+  `NA` against `NaN`, categoricals, time zones, extension dtypes, duplicate
+  column names, copy-or-view -- keeps the pandas implementation; a frame is
+  never treated as a 2-D tensor. `apply`/`map`/`transform` carry the
+  callback effect; `read_*`/`to_*` carry IO.
+
+## PyArrow
+
+- `Array`, `ChunkedArray`, `Table`, `RecordBatch`, `Schema`, `Field`,
+  `DataType`, `Buffer`, and `Scalar` are typed as Arrow, with their
+  representation-level attributes (`null_count`, `offset`, `buffers`,
+  `chunks`, `num_rows`, `schema`). The curated `pyarrow.compute` surface --
+  cast, filter, take, sort, arithmetic, comparison, boolean, aggregation,
+  null handling -- is named as `columnar` operations shared with pandas.
+- `pyarrow.parquet`, `pyarrow.dataset`, and `pyarrow.csv` carry IO.
+  `to_numpy` says what it is: a zero-copy view only for a fixed-width array
+  without nulls.
+
 ## Writing against the interface
 
-A plugin implements the `Plugin` protocol in `plugins/base.py`: type results
-for calls and attributes (`CallResult`), effect declarations, an optional
-build-time stage, and `fingerprint()`. Registration is explicit in the
-registry; per-plugin options live under `[tool.ppy.plugins.<name>]`, and
-`enabled = false` turns one off.
+A plugin extends `ppy_compiler.plugins.Plugin` (interface 2). Every hook
+has a no-op default, so a plugin implements what it knows and the compiler
+calls the rest without probing: `external_types`, `attribute_type`,
+`instance_attribute`, `subscript`, `call`, `operator`, `call_alias`,
+`decorator_semantics`, `adjust_call`, `stage`, and the IR hooks
+`register_dialects`, `register_passes`, `register_patterns`,
+`register_lowerings`. `fingerprint()` names the library's version and
+enters every cache key.
+
+What a `call` answers about lowering is a typed spec a backend reads, never
+backend code: `IntrinsicSpec`, `DialectOperationSpec`, `DirectCallSpec`,
+`GraphRegionSpec`, `FallbackSpec`, or `RejectSpec` (the bare `Lowering`
+kinds still work).
+
+An external plugin is a Python package with an entry point:
+
+```toml
+[project.entry-points."ppy.plugins"]
+foo = "foo.ppy_plugin:create_plugin"
+```
+
+Discovery reads the entry points without importing anything; the plugin
+is imported and loaded only for a project that names it and does not
+disable it:
+
+```toml
+[tool.ppy.plugins.foo]
+enabled = true
+```
+
+Two plugins claiming one module are reported (`E1901`) rather than settled
+by registration order; a plugin written against another interface version
+is refused with the reason; a plugin pass that leaves the IR invalid is
+named in the error (`E1902`).

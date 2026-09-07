@@ -94,8 +94,8 @@ def semantics_of(name: str, plugins=None) -> DecoratorSemantics | None:  # type:
     if found is not None:
         return found
     if plugins is not None:
-        for plugin in getattr(plugins, "_plugins", ()):
-            answer = getattr(plugin, "decorator_semantics", lambda _n: None)(name)
+        for plugin in plugins.plugins:
+            answer = plugin.decorator_semantics(name)
             if answer is not None:
                 return answer
     return None

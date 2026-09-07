@@ -7,6 +7,7 @@ import sys
 from pathlib import Path
 
 from ..diagnostics import Diagnostic, Severity
+from ..ir import PassVerificationError
 from .pipeline import (
     COMPILER_VERSION,
     AnalysisBundle,
@@ -289,6 +290,9 @@ def build(options: argparse.Namespace, reporter: Reporter) -> int:
         )
     except LlvmUnavailable as exc:
         reporter.emit(Diagnostic("E1801", Severity.ERROR, str(exc)))
+        return 2
+    except PassVerificationError as exc:
+        reporter.emit(Diagnostic("E1902", Severity.ERROR, str(exc)))
         return 2
 
     reporter.note(f"objects:  {len(artifacts.objects)}")

@@ -35,10 +35,7 @@ def find_adjustments(
         plugin = plugins.for_qualname(qualname)
         if plugin is None:
             continue
-        adjust = getattr(plugin, "adjust_call", None)
-        if adjust is None:
-            continue
-        found = adjust(qualname, node, symbols)
+        found = plugin.adjust_call(qualname, node, symbols)
         if found is not None:
             plan[(node.lineno, node.col_offset)] = found
     return plan

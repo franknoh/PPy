@@ -133,6 +133,10 @@ def analyze_paths(
 ) -> AnalysisBundle:
     """Parse, resolve, type-check, and verify contracts for the given entries."""
     diagnostics = DiagnosticBag()
+    for problem in project.plugins.problems:
+        # A plugin the project asked for and cannot have: an error, not a
+        # silently smaller compiler.
+        diagnostics.add(Diagnostic("E1901", Severity.ERROR, problem))
     if not entries:
         diagnostics.add(Diagnostic("E1002", Severity.ERROR, "no PPY source files were found"))
         graph = ModuleGraph(root=project.root, search_paths=project.search_paths)

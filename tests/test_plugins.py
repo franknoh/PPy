@@ -32,9 +32,18 @@ FLOAT = (T.FLOAT, Facts())
 
 def test_all_plugins_load_and_fingerprint():
     registry = load_plugins(Config())
-    assert {p.name for p in registry} == {"numpy", "torch", "jax", "uvicorn", "pydantic"}
+    assert {p.name for p in registry} == {
+        "numpy",
+        "torch",
+        "jax",
+        "uvicorn",
+        "pydantic",
+        "scipy",
+        "pandas",
+        "pyarrow",
+    }
     fingerprints = registry.fingerprints()
-    assert len(set(fingerprints)) == 5
+    assert len(set(fingerprints)) == 8
     assert all(":" in f for f in fingerprints)
 
 

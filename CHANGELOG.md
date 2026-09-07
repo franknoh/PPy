@@ -48,6 +48,26 @@ below are in the order the work landed.
   is keyed on the road, and CI runs the suite on both. One thing the IR
   road does that the direct road did not: `MIN // -1` takes the fallback
   instead of trapping in the division.
+- Plugin interface 2. `Plugin` is a base class with a no-op default for
+  every hook, so the compiler calls `operator`, `subscript`,
+  `instance_attribute`, `call_alias`, `decorator_semantics`, and
+  `adjust_call` directly instead of probing for them; the builtin plugins
+  extend it. What a call answers about lowering is a typed spec --
+  `IntrinsicSpec`, `DialectOperationSpec`, `DirectCallSpec`,
+  `GraphRegionSpec`, `FallbackSpec`, `RejectSpec` -- never backend code.
+  A plugin registers dialects, patterns, and passes for the IR, and the
+  pipeline runs its passes at their stages, verified, naming one that
+  breaks the IR (`E1902`). External plugins are discovered through the
+  `ppy.plugins` entry-point group without being imported, and load only
+  for a project that names them; two plugins claiming one module are a
+  reported problem (`E1901`), never a question of who registered last.
+- Three builtin plugins: `scipy` (special functions, transforms, dense
+  linear algebra, sparse matrices, typed and named as dialect operations;
+  the callback-driven families carry their effect), `pandas` (frames,
+  series, and indexes typed as what they are, the curated surface named as
+  `columnar` operations, everything the model does not capture exactly
+  left to pandas), and `pyarrow` (Arrow typed as Arrow, the curated
+  compute named as the same `columnar` operations).
 - `ppy emit ir|llvm-ir TARGET [-o]` prints a compiler stage as text, one
   rule for every kind; `.ppyir` is the IR's on-disk form, self-describing
   down to each function's ABI, and `ppy build foo.ppyir` builds an

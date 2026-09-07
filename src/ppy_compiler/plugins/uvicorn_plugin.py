@@ -19,7 +19,7 @@ from collections.abc import Sequence
 from ..analysis import types as T
 from ..analysis.effects import Effect, EffectSet
 from ..analysis.refinements import Facts
-from .base import CallAdjustment, CallResult, Lowering
+from .base import CallAdjustment, CallResult, Lowering, Plugin
 
 __all__ = ["PPY_RELOAD_PATTERN", "UvicornPlugin", "resolve_app"]
 
@@ -73,14 +73,11 @@ _CLIENT = "fastapi.testclient.TestClient"
 _RESPONSE = "httpx.Response"
 
 
-class UvicornPlugin:
+class UvicornPlugin(Plugin):
     """Resolves the ASGI application statically and keeps Uvicorn as the host."""
 
     name = "uvicorn"
     modules = ("uvicorn", "fastapi", "starlette", "httpx")
-
-    def __init__(self, options: dict[str, object] | None = None) -> None:
-        self.options = options or {}
 
     def fingerprint(self) -> str:
         versions: list[str] = []
@@ -166,7 +163,7 @@ class UvicornPlugin:
         return None
 
     def instance_attribute(
-        self, owner: str, attr: str, facts: Facts
+        self, type_name: str, attribute: str, facts: Facts | None = None
     ) -> tuple[T.Type, Facts] | None:
         """The FastAPI surface a checked project touches.
 
@@ -178,24 +175,24 @@ class UvicornPlugin:
         del facts
 
         def callable_returning(result: T.Type, name: str) -> tuple[T.Type, Facts]:
-            return (T.Callable_((), result, f"{owner}.{name}"), Facts())
+            return (T.Callable_((), result, f"{type_name}.{name}"), Facts())
 
-        if owner in {_APP, _ROUTER}:
-            if attr in _ROUTE_METHODS:
-                return callable_returning(T.ANY, attr)
-            if attr in _APP_CALLS:
-                return callable_returning(T.NONE, attr)
-        if owner == _CLIENT and attr in _CLIENT_METHODS:
-            return callable_returning(T.Instance(_RESPONSE, (), (_RESPONSE, "object")), attr)
-        if owner == _RESPONSE:
-            if attr == "status_code":
+        if type_name in {_APP, _ROUTER}:
+            if attribute in _ROUTE_METHODS:
+                return callable_returning(T.ANY, attribute)
+            if attribute in _APP_CALLS:
+                return callable_returning(T.NONE, attribute)
+        if type_name == _CLIENT and attribute in _CLIENT_METHODS:
+            return callable_returning(T.Instance(_RESPONSE, (), (_RESPONSE, "object")), attribute)
+        if type_name == _RESPONSE:
+            if attribute == "status_code":
                 return (T.INT, Facts())
-            if attr == "text":
+            if attribute == "text":
                 return (T.STR, Facts())
-            if attr == "content":
+            if attribute == "content":
                 return (T.BYTES, Facts())
-            if attr in {"json", "raise_for_status", "read"}:
-                return callable_returning(T.ANY, attr)
+            if attribute in {"json", "raise_for_status", "read"}:
+                return callable_returning(T.ANY, attribute)
             return (T.ANY, Facts())
         return None
 

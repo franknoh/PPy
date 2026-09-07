@@ -217,6 +217,7 @@ def _lower(bundle, analysis, candidates, layouts, opt_level):  # type: ignore[no
             opt_level=level,
             prover=prover_for(config),
             root=bundle.project.root,
+            plugins=bundle.project.plugins,
         )
     return lower_module(
         analysis, candidates, layouts, safeguards=safeguards, prover=prover_for(config)

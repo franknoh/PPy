@@ -84,6 +84,8 @@ class DialectRegistry:
     def __init__(self) -> None:
         self.dialects: dict[str, Dialect] = {}
         self._ops: dict[str, OpSpec] = {}
+        #: Patterns contributed outside any dialect: a plugin's rewrites.
+        self.patterns: list[object] = []
 
     def register(self, dialect: Dialect) -> None:
         if not dialect.name:
@@ -103,6 +105,10 @@ class DialectRegistry:
         if dialect not in self.dialects:
             raise ValueError(f"{spec.name} belongs to unregistered dialect {dialect!r}")
         self._ops[spec.name] = spec
+
+    def add_pattern(self, pattern: object) -> None:
+        """A rewrite pattern that belongs to no dialect of its own."""
+        self.patterns.append(pattern)
 
     def dialect(self, name: str) -> Dialect | None:
         return self.dialects.get(name)

@@ -12,6 +12,7 @@ import pytest
 
 from ppy_compiler.cache import CacheKey, CacheStore, environment_fingerprint
 from ppy_compiler.cache.store import _in_memory
+from ppy_compiler.plugins.base import Plugin
 
 
 @pytest.fixture
@@ -205,7 +206,7 @@ def test_a_plugin_is_not_fingerprinted_for_a_module_that_ignores_it():
 
     calls: list[str] = []
 
-    class _Fake:
+    class _Fake(Plugin):
         def __init__(self, name: str, modules: tuple[str, ...]) -> None:
             self.name = name
             self.modules = modules
@@ -232,7 +233,7 @@ def test_a_plugin_is_not_fingerprinted_for_a_module_that_ignores_it():
 def test_a_module_that_does_import_the_plugin_still_pins_its_version():
     from ppy_compiler.plugins.base import PluginRegistry
 
-    class _Fake:
+    class _Fake(Plugin):
         name = "torch"
         modules = ("torch",)
 
