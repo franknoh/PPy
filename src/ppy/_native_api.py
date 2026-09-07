@@ -220,10 +220,7 @@ class _Extern:
             nonlocal prototype
             if prototype is not None:
                 return prototype
-            path = None
-            if library is not None:
-                path = ctypes.util.find_library(library) or library
-            handle = ctypes.CDLL(path)
+            handle = _open_library(library)
             function = getattr(handle, symbol)
             function.argtypes = [_c_type(t) for t in annotations.values()]
             function.restype = _c_type(returns)
@@ -244,6 +241,29 @@ class _Extern:
         if library is not None:
             options["library"] = library
         return attach(call, Directive("native.extern", options))
+
+
+def _open_library(library: str | None) -> Any:
+    """The shared library `library` names: by the loader's search, by its
+    conventional file name (`libm.so`), or by path; None is the process."""
+    if library is None:
+        return ctypes.CDLL(None)
+    candidates: list[str] = []
+    found = ctypes.util.find_library(library)
+    if found:
+        candidates.append(found)
+    if "/" in library or library.endswith((".so", ".dylib", ".dll")):
+        candidates.append(library)
+    else:
+        candidates.extend(f"lib{library}{suffix}" for suffix in (".so", ".dylib", ".dll"))
+        candidates.append(library)
+    errors: list[str] = []
+    for candidate in candidates:
+        try:
+            return ctypes.CDLL(candidate)
+        except OSError as error:
+            errors.append(str(error))
+    raise OSError(f"no shared library for {library!r}: {'; '.join(errors)}")
 
 
 def _c_type(annotation: Any) -> Any:

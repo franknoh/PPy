@@ -55,6 +55,16 @@ class BuildArtifacts:
     notes: list[str] = field(default_factory=list)
     #: Modules whose object came from the cache instead of the code generator.
     reused: list[str] = field(default_factory=list)
+    #: The generated Python per module, for a build that packages it further.
+    generated: dict[str, object] = field(default_factory=dict)
+    #: What the manifest lists: every exposed signature by qualname, the
+    #: public C symbols by name, and the libraries the bindings need.
+    signatures: dict[str, NativeSignature] = field(default_factory=dict)
+    exports: dict[str, NativeSignature] = field(default_factory=dict)
+    libraries: tuple[str, ...] = ()
+    #: `--python-extension`: the importable module; `--library`: the package.
+    extension: Path | None = None
+    package: Path | None = None
 
 
 def _compiler() -> str | None:
@@ -109,20 +119,26 @@ def standalone_toolchain_status() -> tuple[bool, str]:
 
 
 def emit_object(  # type: ignore[no-untyped-def]
-    engine, ir: str, destination: Path, *, host_cpu: bool = False
+    engine, ir: str, destination: Path, *, host_cpu: bool = False, target=None
 ) -> Path:
     """Compile one LLVM module to a relocatable object file.
 
     An object goes into an artifact that may run on another machine, so both
     the pipeline and the code emitter stay on the portable baseline even when
     the engine itself is tuned for this host. `host_cpu` is the opt-in that
-    trades that portability for this machine's instruction set.
+    trades that portability for this machine's instruction set. A `target`
+    other than the host retargets the module -- its triple and data layout
+    -- and emits through that target's machine.
     """
     from llvmlite import binding
 
     module = binding.parse_assembly(ir)
     module.verify()
-    machine = engine.object_machine(host_cpu)
+    if target is not None and not target.is_host:
+        module.triple = target.triple
+        if target.data_layout:
+            module.data_layout = target.data_layout
+    machine = engine.object_machine(host_cpu, target)
     engine._optimize(module, machine)
     destination.parent.mkdir(parents=True, exist_ok=True)
     destination.write_bytes(machine.emit_object(module))
@@ -130,22 +146,62 @@ def emit_object(  # type: ignore[no-untyped-def]
 
 
 def link_shared_library(
-    objects: list[Path], destination: Path, libraries: tuple[str, ...] = ()
+    objects: list[Path], destination: Path, libraries: tuple[str, ...] = (), target=None
 ) -> Path:
     """Link the emitted objects into one loadable shared library.
 
     `libraries` are the names the program's C bindings gave (`"m"`); each
     is linked by name so the dynamic loader finds it where the system has it.
+    A `target` other than the host needs a toolchain for it: the
+    `<triple>-gcc` of a cross toolchain, or clang with `--target`.
     """
-    compiler = _compiler()
-    if compiler is None:
-        raise ToolchainError("no C compiler (cc, gcc, or clang) is on PATH")
+    command = [*_linker(target), "-shared", "-fPIC", "-o", str(destination)]
     destination.parent.mkdir(parents=True, exist_ok=True)
-    command = [compiler, "-shared", "-fPIC", "-o", str(destination), *[str(o) for o in objects]]
+    command.extend(str(o) for o in objects)
     command.extend(f"-l{library}" for library in libraries)
     completed = subprocess.run(command, capture_output=True, text=True, check=False)
     if completed.returncode != 0:
         raise ToolchainError(f"link failed: {completed.stderr.strip() or completed.stdout.strip()}")
+    return destination
+
+
+def _linker(target) -> list[str]:  # type: ignore[no-untyped-def]
+    """The command that links for `target`: the host's compiler, or a cross one."""
+    if target is None or target.is_host:
+        compiler = _compiler()
+        if compiler is None:
+            raise ToolchainError("no C compiler (cc, gcc, or clang) is on PATH")
+        return [compiler]
+    for name in (f"{target.triple}-gcc", f"{target.triple}-cc", f"{target.triple}-clang"):
+        found = shutil.which(name)
+        if found is not None:
+            return [found]
+    clang = shutil.which("clang")
+    if clang is not None:
+        return [clang, *target.link_flags]
+    raise ToolchainError(
+        f"no toolchain links for {target.triple}: install `{target.triple}-gcc` or clang"
+    )
+
+
+def write_pkg_config(
+    destination: Path, name: str, version: str, prefix: str = "${pcfiledir}/../.."
+) -> Path:
+    """A pkg-config file for a packaged library, relative to where it sits."""
+    lines = [
+        f"prefix={prefix}",
+        "libdir=${prefix}/lib",
+        "includedir=${prefix}/include",
+        "",
+        f"Name: {name}",
+        f"Description: {name}, built by ppy",
+        f"Version: {version}",
+        f"Libs: -L${{libdir}} -lppy_{name}",
+        "Cflags: -I${includedir}",
+        "",
+    ]
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    destination.write_text("\n".join(lines), encoding="utf-8")
     return destination
 
 
@@ -213,10 +269,14 @@ def write_manifest(
     regions: dict | None = None,
     exports: dict[str, str] | None = None,
     libraries: tuple[str, ...] = (),
+    target: str = "",
 ) -> Path:
     """Write the PPY Native Binding Manifest for the built symbols (spec 26.2)."""
     payload = {
         "abi_version": MANIFEST_ABI_VERSION,
+        # The triple the objects were compiled for; a runtime on another
+        # machine refuses the artifact instead of loading it.
+        "target": target,
         "program": program,
         "wrappers": wrappers,
         # Public C symbols and their C signatures, and the shared libraries

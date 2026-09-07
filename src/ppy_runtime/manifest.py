@@ -8,6 +8,7 @@ interpreter compatibility, and file presence -- nothing that reads source.
 from __future__ import annotations
 
 import json
+import platform
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -52,6 +53,8 @@ class Manifest:
     safeguards: str
     #: The prebuilt CPython-ABI wrapper extension, when the build shipped one:
     #: its path next to the manifest, and the wrapper index per qualname.
+    #: The triple the objects were compiled for ("" in an older artifact).
+    target: str = ""
     wrapper_library: Path | None = None
     wrapper_entries: dict[str, int] | None = None
     #: Compiled torch regions per generated module, when the build shipped
@@ -158,6 +161,7 @@ def load(path: Path) -> Manifest:
     return Manifest(
         path=path,
         library=library,
+        target=str(payload.get("target") or ""),
         entries=entries,
         entry_module=program.get("entry", ""),
         search_paths=[Path(p) for p in program.get("search_paths", ())],
@@ -167,3 +171,25 @@ def load(path: Path) -> Manifest:
         wrapper_entries=wrapper_entries,
         regions=regions or None,
     )
+
+
+def host_runs(target: str) -> bool:
+    """Whether this machine is the one `target` names, by architecture and OS.
+
+    The runtime has no LLVM to ask, so it compares the words a triple is
+    made of with what the platform says of itself.
+    """
+    if not target:
+        return True
+    parts = target.lower().split("-")
+    architecture = {"amd64": "x86_64", "arm64": "aarch64"}.get(parts[0], parts[0])
+    machine = platform.machine().lower()
+    machine = {"amd64": "x86_64", "arm64": "aarch64"}.get(machine, machine)
+    system = {"linux": "linux", "darwin": "darwin", "win32": "windows"}.get(
+        sys.platform, sys.platform
+    )
+    names_os = any(
+        part.startswith(system) or (system == "darwin" and part.startswith("macos"))
+        for part in parts[1:]
+    )
+    return architecture == machine and names_os

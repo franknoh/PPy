@@ -54,6 +54,7 @@ pyarrow = ["pyarrow>=15.0"]
 solver = [
     "z3-solver>=4.13",
 ]
+bind = ["libclang>=16"]
 
 [project.scripts]
 ppy = "ppy_compiler.driver.cli:main"
@@ -70,6 +71,7 @@ dev = [
     "numpy>=1.26",
     "pydantic>=2.0",
     "z3-solver>=4.13",
+    "libclang>=16",
 ]
 # Per-plugin groups, so a contributor installs only the runtimes they test.
 # ninja is how torch compiles a generated C++ region (spec 20.3).

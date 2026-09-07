@@ -50,6 +50,20 @@ def _resolve_host_cpu(options: argparse.Namespace, project) -> None:  # type: ig
         project.config.llvm.host_cpu = True
 
 
+def _resolve_target(options: argparse.Namespace, project, reporter: Reporter):  # type: ignore[no-untyped-def]
+    """The machine the build is for: `--target`, else the configuration, else here."""
+    from ..target import TargetError, configured_target
+
+    spelled = getattr(options, "triple", None)
+    if spelled:
+        project.config.llvm.target = spelled
+    try:
+        return configured_target(project.config.llvm.target)
+    except TargetError as exc:
+        reporter.emit(Diagnostic("E1002", Severity.ERROR, str(exc)))
+        return None
+
+
 def _resolve_safeguards(options: argparse.Namespace, project, command: str) -> None:  # type: ignore[no-untyped-def]
     """Settle the guard mode before any cache key reads it.
 
@@ -241,10 +255,32 @@ def build(options: argparse.Namespace, reporter: Reporter) -> int:
         return build_ir_file(target, options, reporter)
     backend = options.backend
     project = open_project(target, config_overrides=_overrides(options))
+    machine = None
     if backend == "llvm":
         _resolve_safeguards(options, project, "build")
         _resolve_prover(options, project)
         _resolve_host_cpu(options, project)
+        machine = _resolve_target(options, project, reporter)
+        if machine is None:
+            return 2
+        wants_extension = getattr(options, "python_extension", False)
+        if wants_extension and not machine.is_host:
+            reporter.emit(
+                Diagnostic(
+                    "E1002",
+                    Severity.ERROR,
+                    f"a Python extension is built against this interpreter, not for "
+                    f"{machine.triple}; drop `--target` or `--python-extension`",
+                )
+            )
+            return 2
+        if (wants_extension or getattr(options, "library", False)) and not target.is_file():
+            reporter.emit(
+                Diagnostic(
+                    "E1002", Severity.ERROR, "the build takes the module's file as its target"
+                )
+            )
+            return 2
     bundle = analyze_paths(project, collect_sources(target), backend=backend)
     errors = reporter.report(bundle.diagnostics)
     if errors:
@@ -259,6 +295,8 @@ def build(options: argparse.Namespace, reporter: Reporter) -> int:
         return 0
 
     from ..backend.llvm import LlvmUnavailable, compile_project
+    from ..backend.llvm.link import ToolchainError
+    from ..backend.llvm.packaging import PackagingError
 
     entry = target.resolve() if target.is_file() else None
     if getattr(options, "standalone", False):
@@ -280,6 +318,7 @@ def build(options: argparse.Namespace, reporter: Reporter) -> int:
         except LlvmUnavailable as exc:
             reporter.emit(Diagnostic("E1801", Severity.ERROR, str(exc)))
             return 2
+    extras = getattr(options, "python_extension", False) or getattr(options, "library", False)
     try:
         artifacts = compile_project(
             bundle,
@@ -287,14 +326,33 @@ def build(options: argparse.Namespace, reporter: Reporter) -> int:
             opt_level=_overrides(options).get("opt_level"),  # type: ignore[arg-type]
             output=options.output,
             entry=entry,
+            launcher=not extras,
+            target=machine,
+            wrappers=not getattr(options, "library", False),
         )
+        if getattr(options, "python_extension", False):
+            from ..backend.llvm.packaging import build_extension
+
+            build_extension(bundle, artifacts, entry, options.output)
+        if getattr(options, "library", False):
+            from ..backend.llvm.packaging import package_library
+
+            package_library(bundle, artifacts, options.output, machine)
     except LlvmUnavailable as exc:
         reporter.emit(Diagnostic("E1801", Severity.ERROR, str(exc)))
         return 2
     except PassVerificationError as exc:
         reporter.emit(Diagnostic("E1902", Severity.ERROR, str(exc)))
         return 2
+    except ToolchainError as exc:
+        reporter.emit(Diagnostic("E1801", Severity.ERROR, str(exc)))
+        return 2
+    except PackagingError as exc:
+        reporter.emit(Diagnostic(exc.code, Severity.ERROR, str(exc)))
+        return 2
 
+    if machine is not None and not machine.is_host:
+        reporter.note(f"target:   {machine.triple}")
     reporter.note(f"objects:  {len(artifacts.objects)}")
     if artifacts.library:
         reporter.note(f"library:  {artifacts.library}")
@@ -304,6 +362,10 @@ def build(options: argparse.Namespace, reporter: Reporter) -> int:
         reporter.note(f"header:   {artifacts.header}")
     if artifacts.launcher:
         reporter.note(f"launcher: {artifacts.launcher}")
+    if artifacts.extension:
+        reporter.note(f"extension: {artifacts.extension}")
+    if artifacts.package:
+        reporter.note(f"package:  {artifacts.package}")
     for note in artifacts.notes:
         reporter.emit(Diagnostic("W2004", Severity.WARNING, note))
     return 0
@@ -322,6 +384,9 @@ def _warm(options: argparse.Namespace, reporter: Reporter, target: Path) -> int:
         flag
         for flag, given in (
             ("--standalone", getattr(options, "standalone", False)),
+            ("--target", getattr(options, "triple", None) is not None),
+            ("--python-extension", getattr(options, "python_extension", False)),
+            ("--library", getattr(options, "library", False)),
             ("--safe", getattr(options, "safe", False)),
             ("--host-cpu", getattr(options, "host_cpu", False)),
             ("--prover", getattr(options, "prover", None) is not None),
@@ -474,10 +539,12 @@ def clean(options: argparse.Namespace, reporter: Reporter) -> int:
 def doctor(options: argparse.Namespace, reporter: Reporter) -> int:
     import platform
 
+    from ..target import host_target
+
     project = open_project(Path.cwd())
     print(f"ppy               {COMPILER_VERSION}")
     print(f"python            {platform.python_version()} ({sys.implementation.name})")
-    print(f"platform          {platform.system()} {platform.machine()}")
+    print(f"target            {host_target().describe()}")
     libc, libc_version = platform.libc_ver()
     if libc:
         # The compiled parts -- the wrappers, the native objects, a standalone
@@ -543,3 +610,36 @@ def _install_library_regions(bundle, binder, reporter) -> None:  # type: ignore[
     if bundle.project.config.diagnostics.optimization_remarks:
         for remark in result.diagnostics:
             reporter.emit(remark)
+
+
+def bind(options: argparse.Namespace, reporter: Reporter) -> int:
+    """`ppy bind header FILE`: PPY bindings for a C header, through Clang."""
+    from ..bind import BindError, bind_header
+
+    header: Path = options.header
+    if not header.is_file():
+        reporter.emit(Diagnostic("E1002", Severity.ERROR, f"{header} does not exist"))
+        return 2
+    try:
+        bindings = bind_header(
+            header,
+            library=options.library,
+            include_dirs=tuple(options.include or ()),
+        )
+    except BindError as exc:
+        reporter.emit(Diagnostic("E1806", Severity.ERROR, str(exc)))
+        return 2
+    output: Path | None = options.output
+    if output is None:
+        print(bindings.source, end="")
+    else:
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_text(bindings.source, encoding="utf-8")
+        reporter.note(f"wrote {output}")
+    counts = (
+        f"{len(bindings.functions)} function(s), {len(bindings.typedefs)} typedef(s), "
+        f"{len(bindings.enums)} enum constant(s), {len(bindings.structs)} struct(s), "
+        f"{len(bindings.constants)} constant(s)"
+    )
+    reporter.note(f"bound {counts}; left out {len(bindings.skipped)}")
+    return 0

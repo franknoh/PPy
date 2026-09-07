@@ -116,6 +116,26 @@ def build_parser() -> argparse.ArgumentParser:
         "baseline; faster where the code vectorizes, and the artifact then "
         "requires a machine with the same instruction set",
     )
+    build.add_argument(
+        "--target",
+        dest="triple",
+        metavar="TRIPLE",
+        default=None,
+        help="compile for another machine (`aarch64-linux-gnu`); the objects, the "
+        "library, and the header are made for it, and a toolchain for it links them",
+    )
+    build.add_argument(
+        "--python-extension",
+        action="store_true",
+        help="one importable CPython module -- `import foo` -- holding the native "
+        "code, its boundary, and the module's own Python for the fallbacks",
+    )
+    build.add_argument(
+        "--library",
+        action="store_true",
+        help="package the exports as a library: lib/, include/, a pkg-config file, "
+        "and the manifest, in one directory",
+    )
     build.add_argument("--backend", choices=("llvm", "python"), default="llvm")
     build.add_argument("-o", "--output", type=Path, help="output directory")
     build.add_argument(
@@ -150,6 +170,22 @@ def build_parser() -> argparse.ArgumentParser:
         "--output",
         type=Path,
         help="a file for one target; a directory (required) for a directory target",
+    )
+
+    bind = subparsers.add_parser("bind", help="write bindings for foreign code")
+    bind_kinds = bind.add_subparsers(dest="what")
+    header = bind_kinds.add_parser("header", help="PPY bindings for a C header, through Clang")
+    header.add_argument("header", type=Path)
+    header.add_argument("-o", "--output", type=Path, help="write the bindings module here")
+    header.add_argument(
+        "--library", default=None, help="the shared library the symbols live in (the header's stem)"
+    )
+    header.add_argument(
+        "-I",
+        "--include",
+        action="append",
+        type=Path,
+        help="a directory clang searches for includes",
     )
 
     check = subparsers.add_parser("check", help="run all static validation")
@@ -301,6 +337,7 @@ def main(argv: list[str] | None = None) -> int:
         "migrate",
         "run",
         "build",
+        "bind",
         "check",
         "emit",
         "fmt",
@@ -362,6 +399,11 @@ def main(argv: list[str] | None = None) -> int:
             )
         case "build":
             return commands.build(options, reporter)
+        case "bind":
+            if getattr(options, "what", None) != "header":
+                parser.parse_args(["bind", "--help"])
+                return 2
+            return commands.bind(options, reporter)
         case "emit":
             from .emit import run_emit
 

@@ -18,7 +18,7 @@ from .binding import bind, value_class_types
 from .dispatch import LibraryBinder
 from .execute import execute, format_traceback
 from .generated import GeneratedModule
-from .manifest import Manifest, ManifestError, load
+from .manifest import Manifest, ManifestError, host_runs, load
 
 __all__ = ["PrebuiltBinder", "generated_modules", "main"]
 
@@ -149,6 +149,13 @@ def main(manifest_path: Path, argv: list[str]) -> int:
         print(f"error[E1801]: {error}", file=sys.stderr)
         return 2
 
+    if not host_runs(manifest.target):
+        print(
+            f"error[E1801]: the artifact was built for {manifest.target} and this machine "
+            f"is another -- build it here, or for here, with `ppy build`",
+            file=sys.stderr,
+        )
+        return 2
     library = None
     if manifest.library is not None:
         try:

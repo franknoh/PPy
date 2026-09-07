@@ -402,6 +402,25 @@ Speed of the compiler itself, measured before being changed.
   emits a whole program from `main`; `ppy emit header` prints the export
   declarations a built library ships. `tests/test_c_backend.py` compiles
   the C and the C++ and calls them on the LLVM road's inputs.
+- `TargetInfo`, and builds for another machine. One record holds what the
+  compiler knows about a target -- triple, CPU and features, pointer
+  width, endianness, ABI, OS, object format, data layout -- the host being
+  one target among others, and the cache keys, the warm key, `ppy doctor`,
+  and the linker ask it instead of `sys.platform`. `ppy build --target
+  TRIPLE` (or `[tool.ppy.llvm] target`) retargets the objects and links
+  them with a toolchain for the triple; the wrapper and the launcher, which
+  only the running interpreter can build, are left out with a note, and
+  the manifest names its target so a runtime elsewhere refuses it.
+- `ppy build --python-extension`: one importable CPython module of the
+  native code, the generated boundary, and the module's own Python, bound
+  as it is defined through the same hook the launcher uses; and `ppy build
+  --library`: the exports laid out as `lib/`, `include/`, a pkg-config
+  file, and the manifest.
+- `ppy bind header foo.h`: PPY bindings for a C header, read through
+  libclang (`ppy-lang[bind]`) -- functions as typed `@ffi.bind` stubs,
+  typedefs, enums, structs of scalars as dataclasses, numeric `#define`s
+  as constants -- with what has no spelling yet listed by name rather than
+  guessed at.
 
 ## 0.1.0a1
 

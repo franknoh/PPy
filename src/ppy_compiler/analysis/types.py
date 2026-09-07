@@ -640,6 +640,14 @@ def is_assignable(source: Type, target: Type) -> bool:
 def _instance_assignable(source: Instance, target: Instance) -> bool:
     if target.name == "object":
         return True
+    if (
+        source.name == "ppy.native.ptr"
+        and target.name == "ppy.native.const_ptr"
+        and len(source.args) == len(target.args) == 1
+    ):
+        # Memory one may write is memory one may read: a `ptr[T]` goes
+        # where a `const_ptr[T]` is expected, never the other way.
+        return _same_argument(source.args[0], target.args[0])
     rank_s, rank_t = numeric_rank(source), numeric_rank(target)
     # Python's implicit numeric promotion: bool -> int -> float -> complex.
     if rank_s is not None and rank_t is not None and rank_s <= rank_t:

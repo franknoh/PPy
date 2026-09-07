@@ -26,6 +26,7 @@ import sys
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
+from ..target import host_target
 from ..version import COMPILER_VERSION, compiler_fingerprint
 from .config import Config, find_project_root, load_config, selected_pipeline
 
@@ -100,7 +101,7 @@ def _key(file: Path, root: Path, config: Config, options: argparse.Namespace) ->
             hasher.update(b"\x1e")
 
     feed("ppy-run", COMPILER_VERSION, compiler_fingerprint())
-    feed(sys.version_info[:3], sys.implementation.cache_tag, sys.platform, _machine())
+    feed(sys.version_info[:3], sys.implementation.cache_tag, host_target().triple)
     # Where it is matters: the manifest records absolute search paths, so a
     # project that moved needs its artifact built again where it now lives.
     feed(
@@ -129,13 +130,6 @@ def _key(file: Path, root: Path, config: Config, options: argparse.Namespace) ->
     # directory read, and any install or upgrade changes it.
     feed(*_installed())
     return hasher.hexdigest()
-
-
-def _machine() -> str:
-    try:
-        return os.uname().machine
-    except AttributeError:  # Windows has no uname
-        return os.environ.get("PROCESSOR_ARCHITECTURE", "")
 
 
 def _sources(root: Path):  # type: ignore[no-untyped-def]

@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import hashlib
-import platform
 import sys
 from collections.abc import Iterable
 from dataclasses import dataclass
+
+from ..target import host_target
 
 __all__ = ["FRONTEND_SCHEMA_VERSION", "CacheKey", "digest", "environment_fingerprint"]
 
@@ -32,8 +33,7 @@ def environment_fingerprint() -> str:
         f"{sys.version_info.major}.{sys.version_info.minor}",
         sys.implementation.name,
         getattr(sys, "abiflags", ""),
-        platform.machine(),
-        platform.system(),
+        host_target().triple,
     )
 
 

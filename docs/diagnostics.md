@@ -110,6 +110,8 @@ sound fallback, and never the rest.
 | `E1802` | A construct is not supported by the selected backend. |
 | `E1803` | A standalone build requires a fully native reachable graph. |
 | `E1804` | A header-only unit cannot carry runtime state; the feature needing it is named. |
+| `E1805` | A library build has nothing to export; `@ppy.native.export` names what to publish. |
+| `E1806` | A C header could not be imported; the reason is named. |
 
 ## Plugins
 

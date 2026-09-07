@@ -164,6 +164,7 @@ and which stayed boxed, with the reason.
 
 ```bash
 ppy build TARGET [--safe] [--host-cpu] [--standalone]
+                 [--target TRIPLE] [--python-extension] [--library]
                  [--backend {llvm,python}] [-o DIR]
 ppy build --warm TARGET
 ppy build foo.ppyir                  # from the IR alone; see `ppy emit`
@@ -202,6 +203,41 @@ begins, against ~2 s for a cold `ppy run` that compiles first (a warm
 `ppy run` takes this same launcher path, from the cache).
 `examples/bench_startup.py` measures the categories separately, and
 `--standalone` below removes that 35 ms too.
+
+### `--target`, `--python-extension`, `--library`
+
+```bash
+ppy build foo.ppy --target aarch64-linux-gnu     # objects, library, header for it
+ppy build foo.ppy --python-extension -o dist     # dist/foo.so: `import foo`
+ppy build lib.ppy --library -o dist              # dist/lib, dist/include, a .pc
+```
+
+`--target TRIPLE` (or `[tool.ppy.llvm] target`) compiles for another
+machine: the objects carry that triple and data layout, the library is
+linked with a toolchain for it -- `<triple>-gcc` on the path, or clang
+with `--target` -- and the header is the same. The parts only the running
+interpreter can build, the CPython boundary wrapper and the launcher, are
+left out with a note; the manifest names its target and a runtime on a
+different machine refuses it rather than loading it. Everything the
+compiler knows about a machine sits in one `TargetInfo` (triple, CPU and
+features, pointer width, endianness, ABI, OS, object format, data
+layout); there is no `sys.platform` to trip over elsewhere. `ppy doctor`
+prints the host's.
+
+`--python-extension` writes one importable module -- `foo.so`, `foo.pyd`
+on Windows -- holding the module's native code, the generated
+`METH_FASTCALL` boundary, and the module's own optimized Python. `import
+foo` runs that Python, so every class, constant, and helper the module
+defines exists, and each native-eligible function is bound to its
+compiled code as it is defined, keeping its Python definition as the
+fallback a refused guard runs. Nothing is bound by name at runtime and no
+manifest is read. The module still imports `ppy` for its markers, like
+the source did; it is built against the interpreter that builds it.
+
+`--library` lays the exports out for a C consumer: `lib/` with the shared
+library, `include/` with the header, `lib/pkgconfig/<name>.pc`, and the
+manifest describing the ABI. A module with no `@ppy.native.export` has
+nothing to package and says so (`E1805`).
 
 ### `--warm`
 
@@ -299,6 +335,29 @@ carries its schema and dialect versions, every function's ABI, and its
 source locations, so the build is the passes, the LLVM backend, an object,
 a library, and a manifest whose entries the runtime binds. A file from
 another schema or a dialect this compiler lacks is refused with the reason.
+
+## `ppy bind` — bindings for foreign code
+
+```bash
+ppy bind header foo.h                     # the bindings module, to stdout
+ppy bind header foo.h -o foo.ppy          # ... to a file
+ppy bind header foo.h --library foo -I include/
+```
+
+Clang reads the header -- the real parser, through libclang
+(`ppy-lang[bind]`), never a regular expression -- and the importer walks
+the declarations the header itself makes. A function becomes an
+`@ffi.bind` stub with typed parameters (`int` is `ppy.i32`, `long` the
+target's width, `double` `float`, `const T *` `native.const_ptr[T]`,
+`void *` a byte pointer); a typedef of a scalar an alias; an enum its
+constants and an `int` alias; a struct of scalars a dataclass; a `#define`
+of one number a typed constant. What has no PPY spelling yet -- a
+variadic function, a function pointer, an array or a struct passed by
+value, an opaque struct, a macro that is not one number -- is left out
+and listed by name at the end of the module. The module type-checks under
+`ppy check` and calls the library on every path, ctypes under CPython and
+directly in native code. A header Clang cannot read is refused with its
+line (`E1806`).
 
 ## `ppy explain` — why it compiled that way
 

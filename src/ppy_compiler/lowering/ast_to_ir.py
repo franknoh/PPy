@@ -1746,6 +1746,10 @@ class _FunctionLowering:
         current = _kind(value.type)
         if current == kind:
             return value
+        if kind == "const_ptr" and isinstance(value.type, PtrType) and value.type.mutable:
+            # Memory one may write is memory one may read.
+            pointer = value.type
+            return core.cast(self.b, value, PtrType(pointer.pointee, pointer.address_space, False))
         if current in _NARROW:
             widened = core.cast(self.b, value, I64)
             return self._coerce(widened, kind)

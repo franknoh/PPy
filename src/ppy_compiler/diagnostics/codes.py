@@ -57,6 +57,8 @@ CODES: dict[str, str] = {
     "E1802": "A construct is not supported by the selected backend.",
     "E1803": "A standalone build requires a fully native reachable graph.",
     "E1804": "A header-only unit cannot carry runtime state; the feature needing it is named.",
+    "E1805": "A library build has nothing to export; `@ppy.native.export` names what to publish.",
+    "E1806": "A C header could not be imported; the reason is named.",
     "E1901": "A plugin the project asked for could not be loaded, or two plugins claim one module.",
     "E1902": "A plugin's compiler pass left the IR invalid; the pass is named.",
     "W2001": "A module is shadowed by a same-named source with a different extension.",

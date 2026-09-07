@@ -14,6 +14,7 @@ from pathlib import Path
 from ...cache import CacheKey
 from ...diagnostics import Diagnostic, Severity, Span
 from ...driver.config import selected_pipeline
+from ...target import TargetInfo, configured_target
 from ..binder import LibraryBinder
 from .fusion import (
     FusedLoop,
@@ -359,21 +360,25 @@ def _library_key(objects: list[Path]) -> str:
     return digest("ppy-library", *(o.read_bytes().hex() for o in sorted(objects))) + ".so"
 
 
-def _link_and_cache(artifacts, store, key: str, destination: Path, libraries=()) -> None:  # type: ignore[no-untyped-def]
+def _link_and_cache(
+    artifacts, store, key: str, destination: Path, libraries=(), target=None
+) -> None:  # type: ignore[no-untyped-def]
     try:
-        artifacts.library = link_shared_library(artifacts.objects, destination, libraries)
+        artifacts.library = link_shared_library(artifacts.objects, destination, libraries, target)
     except ToolchainError as exc:
         artifacts.notes.append(str(exc))
         return
     try:
-        store.put(key, artifacts.library.read_bytes(), kind="native", suffix=".so")
+        store.put(key, artifacts.library.read_bytes(), kind="native", suffix=destination.suffix)
         store.mark_root(key, "library")
     except Exception:  # noqa: BLE001 - caching is an optimization
         return
 
 
-def _object_key(key: CacheKey) -> str:
+def _object_key(key: CacheKey, target: TargetInfo | None = None) -> str:
     """The key of the object file compiled from the module this key names."""
+    if target is not None and not target.is_host:
+        return f"{key.hex()}.{target.triple}.o"
     return f"{key.hex()}.o"
 
 
@@ -386,18 +391,25 @@ def compile_project(  # type: ignore[no-untyped-def]
     entry: Path | None = None,
     launcher: bool = True,
     natives: dict[str, NativeModule] | None = None,
+    target: TargetInfo | None = None,
+    wrappers: bool = True,
 ) -> BuildArtifacts:
     """Compile to LLVM, emit object code, link, and write the manifest (spec 4.2).
 
     `launcher=False` leaves out the native launcher executable, for an
     artifact that `ppy_runtime.launch` will run directly. `natives` lets a
     caller that already lowered the modules hand them over rather than have
-    them lowered again.
+    them lowered again. `target` other than the host is a cross build: the
+    objects, the library, and the header are made for it, and the parts
+    that only this interpreter can build -- the boundary wrapper and the
+    launcher -- are left out and said so. `wrappers=False` leaves the
+    boundary wrapper out on purpose, for an artifact no Python will call.
     """
     from ...driver.pipeline import build_python, module_cache_key
     from ...opt.rewrites import adjustments_for_project
 
     level = opt_level if opt_level is not None else bundle.project.config.opt_level
+    target = target or configured_target(bundle.project.config.llvm.target)
     store = bundle.project.store
     store.ensure()
 
@@ -436,7 +448,8 @@ def compile_project(  # type: ignore[no-untyped-def]
         # The object depends on exactly what the module key covers, so a hit
         # means the previous one is still correct and running the optimizer and
         # the code generator again would produce the same bytes.
-        cached = store.read(_object_key(key))
+        object_key = _object_key(key, target)
+        cached = store.read(object_key)
         if cached is not None:
             destination.parent.mkdir(parents=True, exist_ok=True)
             destination.write_bytes(cached)
@@ -445,15 +458,17 @@ def compile_project(  # type: ignore[no-untyped-def]
         else:
             try:
                 emitted = emit_object(
-                    engine(), native.ir, destination, host_cpu=bundle.project.config.llvm.host_cpu
+                    engine(),
+                    native.ir,
+                    destination,
+                    host_cpu=bundle.project.config.llvm.host_cpu,
+                    target=target,
                 )
             except Exception as exc:  # noqa: BLE001 - reported, not fatal
                 artifacts.notes.append(f"could not emit object code for {name}: {exc}")
                 continue
-            store.put(
-                _object_key(key), emitted.read_bytes(), kind="native", source=name, suffix=".o"
-            )
-            store.mark_root(_object_key(key), f"object:{name}")
+            store.put(object_key, emitted.read_bytes(), kind="native", source=name, suffix=".o")
+            store.mark_root(object_key, f"object:{name}")
             artifacts.objects.append(emitted)
         for lowered in native.functions.values():
             if lowered.exposed:
@@ -478,9 +493,17 @@ def compile_project(  # type: ignore[no-untyped-def]
             lowered = native.functions.get(qualname)
             if lowered is not None:
                 exports[name] = lowered.signature
+    artifacts.generated = dict(output.generated)
+    artifacts.signatures = dict(signatures)
+    artifacts.exports = dict(exports)
+    artifacts.libraries = needed
     if artifacts.objects:
         library_key = _library_key(artifacts.objects) + ("+" + ",".join(needed) if needed else "")
-        destination = build_directory / f"libppy_{bundle.project.root.name}.so"
+        if not target.is_host:
+            library_key = f"{target.triple}+{library_key}"
+        destination = build_directory / (
+            f"libppy_{bundle.project.root.name}{target.shared_library_suffix}"
+        )
         cached_library = store.read(library_key)
         if cached_library is not None:
             destination.parent.mkdir(parents=True, exist_ok=True)
@@ -488,7 +511,7 @@ def compile_project(  # type: ignore[no-untyped-def]
             artifacts.library = destination
             artifacts.reused.append("link")
         else:
-            _link_and_cache(artifacts, store, library_key, destination, needed)
+            _link_and_cache(artifacts, store, library_key, destination, needed, target)
         if exports:
             artifacts.header = write_header(
                 build_directory / f"{bundle.project.root.name}.h", exports
@@ -526,21 +549,26 @@ def compile_project(  # type: ignore[no-untyped-def]
         }
     regions_section = _ship_regions(bundle, reporter, build_directory, artifacts)
     wrapper_section = None
-    if signatures:
-        wrappers = build_wrappers(
+    if signatures and not target.is_host:
+        artifacts.notes.append(
+            f"the artifact targets {target.triple}: the CPython boundary wrapper and the "
+            "launcher are built on that machine, from the manifest, by `ppy build`"
+        )
+    elif signatures and wrappers:
+        built = build_wrappers(
             bundle.project.root.name,
             signatures,
             bundle.project.config.cache_path,
             notify=reporter.note,
         )
-        if wrappers.ok and wrappers.path is not None:
-            shipped = build_directory / wrappers.path.name
-            if shipped != wrappers.path:
+        if built.ok and built.path is not None:
+            shipped = build_directory / built.path.name
+            if shipped != built.path:
                 shipped.parent.mkdir(parents=True, exist_ok=True)
-                shutil.copy2(wrappers.path, shipped)
-            wrapper_section = {"library": shipped.name, "entries": dict(wrappers.entries)}
-        elif wrappers.reason:
-            artifacts.notes.append(f"the artifact uses the slower boundary: {wrappers.reason}")
+                shutil.copy2(built.path, shipped)
+            wrapper_section = {"library": shipped.name, "entries": dict(built.entries)}
+        elif built.reason:
+            artifacts.notes.append(f"the artifact uses the slower boundary: {built.reason}")
     artifacts.manifest = write_manifest(
         build_directory / "ppy-bindings.json",
         signatures,
@@ -551,9 +579,10 @@ def compile_project(  # type: ignore[no-untyped-def]
         regions=regions_section,
         exports={name: str(signature) for name, signature in exports.items()},
         libraries=needed,
+        target=target.triple,
     )
 
-    if entry is not None and launcher:
+    if entry is not None and launcher and target.is_host:
         try:
             artifacts.launcher = build_launcher(
                 entry,

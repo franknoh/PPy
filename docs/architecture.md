@@ -33,8 +33,10 @@ what the checker already proved.
 | `ir/` | the typed canonical IR every backend lowers: `model` (modules, functions, blocks, SSA values with use lists), `types`, `dialect` (the registry and `OpSpec`), `dialects/core`, `verify`, `printer`/`parser`/`codec` (`.ppyir`), `pattern` (rewrites to a fixed point), `passes` (the pass manager with analyses and stages), `transforms` (canonicalize, simplify-cfg, dce). See [ir.md](ir.md). |
 | `opt/` | AST-level passes: constant folding, inlining, LICM, loop transforms; used by the Python backend and as pre-lowering cleanup. |
 | `backend/python/` | runs optimized AST under CPython with the loader installed. |
+| `target` | `TargetInfo`: the triple, CPU and features, pointer width, endianness, ABI, OS, object format, and data layout of the machine a build is for; the host is one target among others, and nothing else consults `sys.platform`. |
+| `bind/` | `ppy bind header`: a C header read through libclang, written as `ppy.ffi` bindings. |
 | `backend/c/` | the C and C++ backends: `emit` reads the canonical IR and writes one C11 or C++17 translation unit (or a header-only form), `runtime` holds the C shims a standalone program links (the LLVM standalone build compiles the same table). |
-| `backend/llvm/` | `lowering` (AST → LLVM IR), `wrapper` (generated CPython-ABI entry points, `METH_FASTCALL`, GIL release), `fusion` (NumPy elementwise loops), `specialize`/`jit` (guarded runtime specialization), `parallel` (the worker pool), `link` (objects → shared library). |
+| `backend/llvm/` | `lowering` (AST → LLVM IR), `wrapper` (generated CPython-ABI entry points, `METH_FASTCALL`, GIL release), `fusion` (NumPy elementwise loops), `specialize`/`jit` (guarded runtime specialization), `parallel` (the worker pool), `link` (objects → shared library, for the host or a `--target`), `extension`/`packaging` (`--python-extension`, `--library`). |
 | `plugins/` | numpy, torch, jax, pydantic, uvicorn — see [plugins.md](plugins.md). |
 | `cache/` | the content-addressed store (SQLite) and key construction. |
 | `driver/` | CLI, pipeline orchestration, `convert` (what to write) and `rewrite` (writing it) either side of `plan`, fmt, lint, test, explain. |
