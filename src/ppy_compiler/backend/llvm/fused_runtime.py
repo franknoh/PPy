@@ -1,10 +1,18 @@
-"""Guarded dispatch for fused NumPy kernels (spec 19.3, 19.5, 19.10, 19.11)."""
+"""Guarded dispatch for fused kernels (spec 19.3, 19.5, 19.10, 19.11).
+
+One kernel serves every library whose arrays it was built over: a NumPy
+`ndarray` and a CPU torch `Tensor` are both `float64` storage behind a
+pointer, so the same loop runs over either once the guards hold. What the
+guards are, how a pointer is taken, and what the result is wrapped in are
+the storage's business; the kernel's is the arithmetic.
+"""
 
 from __future__ import annotations
 
 import ctypes
 from collections.abc import Callable
 from dataclasses import dataclass
+from typing import Any
 
 from .fusion import FusedLoop
 from .parallel import chunk_bounds, offset, pool
@@ -12,6 +20,7 @@ from .parallel import chunk_bounds, offset, pool
 __all__ = ["FusedBinding", "bind_fused"]
 
 _DOUBLE_SIZE = ctypes.sizeof(ctypes.c_double)
+_STATUS_OK = 0
 
 _SAFE_ERROR_STATES = frozenset({"ignore"})
 
@@ -27,6 +36,124 @@ class FusedBinding:
     reason: str = ""
 
 
+class _Storage:
+    """How one library's arrays are checked, read, and made."""
+
+    name = ""
+
+    def accepts(self, value: object) -> bool:
+        raise NotImplementedError
+
+    def shape(self, value: Any) -> tuple[int, ...]:
+        return tuple(value.shape)
+
+    def size(self, value: Any) -> int:
+        raise NotImplementedError
+
+    def pointer(self, value: Any, kind: Any) -> Any:
+        raise NotImplementedError
+
+    def empty(self, shape: tuple[int, ...]) -> Any:
+        raise NotImplementedError
+
+    def scalar(self, value: float) -> object:
+        return value
+
+    def strict(self) -> bool:
+        """Must a result be checked for a floating-point condition?"""
+        return False
+
+    def finite(self, result: Any, arrays: tuple[Any, ...]) -> bool:
+        return True
+
+
+class _NumPy(_Storage):
+    name = "numpy"
+
+    def __init__(self, numpy: Any) -> None:
+        self.numpy = numpy
+        self.float64 = numpy.dtype("float64")
+
+    def accepts(self, value: object) -> bool:
+        # An exact ndarray only: a subclass may override dispatch entirely.
+        if type(value) is not self.numpy.ndarray:
+            return False
+        if value.dtype != self.float64 or not value.dtype.isnative:  # type: ignore[attr-defined]
+            return False
+        return bool(value.flags["C_CONTIGUOUS"])  # type: ignore[attr-defined]
+
+    def size(self, value: Any) -> int:
+        return int(value.size)
+
+    def pointer(self, value: Any, kind: Any) -> Any:
+        return ctypes.cast(value.ctypes.data, kind)
+
+    def empty(self, shape: tuple[int, ...]) -> Any:
+        return self.numpy.empty(shape, dtype=self.float64)
+
+    def strict(self) -> bool:
+        """A generated loop raises no NumPy warning of its own, so unless every
+        error category is ignored the result must be checked before it is
+        trusted (spec 19.11)."""
+        state = self.numpy.geterr()
+        return not all(value in _SAFE_ERROR_STATES for value in state.values())
+
+    def finite(self, result: Any, arrays: tuple[Any, ...]) -> bool:
+        """Confirm the kernel raised no floating-point condition NumPy would
+        report. Divide-by-zero, overflow, and invalid operations all surface
+        as a non-finite value. If the inputs were finite and the output is
+        too, none occurred; otherwise the Python path re-runs and reports
+        exactly what NumPy would."""
+        if not self.numpy.isfinite(result).all():
+            return False
+        return all(self.numpy.isfinite(a).all() for a in arrays)
+
+
+class _Torch(_Storage):
+    name = "torch"
+
+    def __init__(self, torch: Any) -> None:
+        self.torch = torch
+
+    def accepts(self, value: object) -> bool:
+        # An exact Tensor on the CPU, float64, contiguous, and outside
+        # autograd: a tensor that records its history needs the dispatcher.
+        torch = self.torch
+        if type(value) is not torch.Tensor:
+            return False
+        if value.dtype is not torch.float64 or value.device.type != "cpu":  # type: ignore[attr-defined]
+            return False
+        if value.requires_grad:  # type: ignore[attr-defined]
+            return False
+        return bool(value.is_contiguous())  # type: ignore[attr-defined]
+
+    def size(self, value: Any) -> int:
+        return int(value.numel())
+
+    def pointer(self, value: Any, kind: Any) -> Any:
+        return ctypes.cast(value.data_ptr(), kind)
+
+    def empty(self, shape: tuple[int, ...]) -> Any:
+        return self.torch.empty(shape, dtype=self.torch.float64)
+
+    def scalar(self, value: float) -> object:
+        # A torch reduction is a tensor of rank 0, as the library answers.
+        return self.torch.tensor(value, dtype=self.torch.float64)
+
+
+def _storage(name: str) -> _Storage | None:
+    try:
+        if name == "torch":
+            import torch
+
+            return _Torch(torch)
+        import numpy
+
+        return _NumPy(numpy)
+    except ImportError:
+        return None
+
+
 def bind_fused(
     loop: FusedLoop,
     address: int,
@@ -36,32 +163,61 @@ def bind_fused(
     threads: str | int = "auto",
 ) -> FusedBinding:
     """Wrap one fused kernel in the guards its fast-path domain requires."""
-    try:
-        import numpy
-    except ImportError:
-        binding = FusedBinding(loop, fallback, fallback, reason="numpy is not importable")
-        return binding
+    storage = _storage(loop.storage)
+    if storage is None:
+        return FusedBinding(loop, fallback, fallback, reason=f"{loop.storage} is not importable")
 
     double = ctypes.c_double
     pointer = ctypes.POINTER(double)
     array_count = len(loop.arrays)
     scalar_count = len(loop.scalars)
 
+    # The kernel is an IR function: an `i32` status back, its result -- or a
+    # placeholder, for a map -- through a pointer after the arguments.
     if loop.returns_scalar:
         prototype = ctypes.CFUNCTYPE(
-            double, *([pointer] * array_count), *([double] * scalar_count), ctypes.c_int64
+            ctypes.c_int32,
+            *([pointer] * array_count),
+            *([double] * scalar_count),
+            ctypes.c_int64,
+            pointer,
         )
     else:
         prototype = ctypes.CFUNCTYPE(
-            None, pointer, *([pointer] * array_count), *([double] * scalar_count), ctypes.c_int64
+            ctypes.c_int32,
+            pointer,
+            *([pointer] * array_count),
+            *([double] * scalar_count),
+            ctypes.c_int64,
+            ctypes.POINTER(ctypes.c_int64),
         )
     native = prototype(address)
 
-    float64 = numpy.dtype("float64")
     binding = FusedBinding(loop, lambda *a: None, fallback)
 
     splittable = parallel and _splittable(loop)
     workers = pool(threads) if parallel else None
+
+    def reduce_chunk(pointers: list, widened: list[float], start: int, stop: int) -> float:
+        result = double(0.0)
+        status = native(
+            *[offset(p, _DOUBLE_SIZE, start) for p in pointers], *widened, stop - start, result
+        )
+        if status != _STATUS_OK:
+            raise _Failed
+        return result.value
+
+    def map_chunk(out: Any, pointers: list, widened: list[float], start: int, stop: int) -> None:
+        placeholder = ctypes.c_int64(0)
+        status = native(
+            offset(out, _DOUBLE_SIZE, start),
+            *[offset(p, _DOUBLE_SIZE, start) for p in pointers],
+            *widened,
+            stop - start,
+            placeholder,
+        )
+        if status != _STATUS_OK:
+            raise _Failed
 
     def wrapper(*args: object) -> object:
         if len(args) != array_count + scalar_count:
@@ -71,20 +227,13 @@ def bind_fused(
 
         shape = None
         for value in arrays:
-            # An exact ndarray only: a subclass may override dispatch entirely.
-            if type(value) is not numpy.ndarray:
-                binding.fallbacks += 1
-                return fallback(*args)
-            if value.dtype != float64 or not value.dtype.isnative:
-                binding.fallbacks += 1
-                return fallback(*args)
-            if not value.flags["C_CONTIGUOUS"]:
+            if not storage.accepts(value):
                 binding.fallbacks += 1
                 return fallback(*args)
             if shape is None:
-                shape = value.shape
-            elif value.shape != shape:
-                # Array-to-array broadcasting is left to NumPy in v1.
+                shape = storage.shape(value)
+            elif storage.shape(value) != shape:
+                # Array-to-array broadcasting is left to the library.
                 binding.fallbacks += 1
                 return fallback(*args)
         if shape is None:
@@ -96,15 +245,15 @@ def bind_fused(
                 binding.fallbacks += 1
                 return fallback(*args)
 
-        if loop.reduction in {"max", "min"} and arrays[0].size == 0:
-            # An empty min/max has no identity; NumPy raises, so let it.
+        if loop.reduction in {"max", "min"} and storage.size(arrays[0]) == 0:
+            # An empty min/max has no identity; the library raises, so let it.
             binding.fallbacks += 1
             return fallback(*args)
 
-        pointers = [ctypes.cast(a.ctypes.data, pointer) for a in arrays]
-        widened = [float(s) for s in scalars]
-        length = int(arrays[0].size)
-        strict = not _errors_ignored(numpy)
+        pointers = [storage.pointer(a, pointer) for a in arrays]
+        widened = [float(s) for s in scalars]  # type: ignore[arg-type]
+        length = storage.size(arrays[0])
+        strict = storage.strict()
 
         bounds = (
             chunk_bounds(length, workers.threads)
@@ -113,41 +262,35 @@ def bind_fused(
         )
         parallelized = len(bounds) > 1
 
-        if loop.returns_scalar:
+        try:
+            if loop.returns_scalar:
+                if parallelized:
+                    partials = workers.map_chunks(  # type: ignore[union-attr]
+                        lambda start, stop: reduce_chunk(pointers, widened, start, stop), length
+                    )
+                    result = _combine(loop.reduction, [float(p) for p in partials])
+                else:
+                    result = reduce_chunk(pointers, widened, 0, length)
+                if strict and not storage.finite(result, arrays):
+                    binding.fallbacks += 1
+                    return fallback(*args)
+                binding.calls += 1
+                binding.parallel_calls += int(parallelized)
+                return storage.scalar(result)
+
+            out = storage.empty(shape)
+            out_pointer = storage.pointer(out, pointer)
             if parallelized:
-                partials = workers.map_chunks(
-                    lambda start, stop: native(
-                        *[offset(p, _DOUBLE_SIZE, start) for p in pointers],
-                        *widened,
-                        stop - start,
-                    ),
+                workers.map_chunks(  # type: ignore[union-attr]
+                    lambda start, stop: map_chunk(out_pointer, pointers, widened, start, stop),
                     length,
                 )
-                result = _combine(loop.reduction, [float(p) for p in partials], length)
             else:
-                result = native(*pointers, *widened, length)
-            if strict and not _finite_result(numpy, result, arrays):
-                binding.fallbacks += 1
-                return fallback(*args)
-            binding.calls += 1
-            binding.parallel_calls += int(parallelized)
-            return float(result)
-
-        out = numpy.empty(shape, dtype=float64)
-        out_pointer = ctypes.cast(out.ctypes.data, pointer)
-        if parallelized:
-            workers.map_chunks(
-                lambda start, stop: native(
-                    offset(out_pointer, _DOUBLE_SIZE, start),
-                    *[offset(p, _DOUBLE_SIZE, start) for p in pointers],
-                    *widened,
-                    stop - start,
-                ),
-                length,
-            )
-        else:
-            native(out_pointer, *pointers, *widened, length)
-        if strict and not _finite_result(numpy, out, arrays):
+                map_chunk(out_pointer, pointers, widened, 0, length)
+        except _Failed:
+            binding.fallbacks += 1
+            return fallback(*args)
+        if strict and not storage.finite(out, arrays):
             binding.fallbacks += 1
             return fallback(*args)
         binding.calls += 1
@@ -160,46 +303,28 @@ def bind_fused(
     return binding
 
 
-def _errors_ignored(numpy) -> bool:  # type: ignore[no-untyped-def]
-    """Is NumPy's floating-point error state one the fused loop can honor?
-
-    A generated loop raises no NumPy warning of its own, so unless every error
-    category is ignored the result must be checked before it is trusted
-    (spec 19.11).
-    """
-    state = numpy.geterr()
-    return all(value in _SAFE_ERROR_STATES for value in state.values())
-
-
-def _finite_result(numpy, result, arrays) -> bool:  # type: ignore[no-untyped-def]
-    """Confirm the kernel raised no floating-point condition NumPy would report.
-
-    Divide-by-zero, overflow, and invalid operations all surface as a non-finite
-    value. If the inputs were finite and the output is too, none occurred;
-    otherwise the Python path re-runs and reports exactly what NumPy would.
-    """
-    if not numpy.isfinite(result).all():
-        return False
-    return all(numpy.isfinite(a).all() for a in arrays)
+class _Failed(Exception):
+    """The kernel's own guard failed: the library's path answers."""
 
 
 def _splittable(loop: FusedLoop) -> bool:
     """Can this kernel be split across workers without changing its result?
 
     An elementwise map writes disjoint output elements, so it always can.
-    `min` and `max` are associative once NaN propagates. `sum` and `prod` only
-    reach here when the program already permitted reassociation, so splitting
-    adds no new licence. `mean` is excluded: per-chunk means cannot be merged
-    without weighting, and unequal final chunks make that wrong.
+    `min` and `max` are associative once NaN propagates. `add` and `mul`
+    only reach here when the program already permitted reassociation, so
+    splitting adds no new licence. `mean` is excluded: per-chunk means
+    cannot be merged without weighting, and unequal final chunks make that
+    wrong.
     """
     if not loop.returns_scalar:
         return True
-    return loop.reduction in {"sum", "prod", "product", "max", "min"}
+    return loop.reduction in {"add", "mul", "max", "min"}
 
 
-def _combine(reduction: str, partials: list[float], length: int) -> float:
+def _combine(reduction: str, partials: list[float]) -> float:
     """Merge per-chunk results for a recognized reduction (spec 17.2)."""
-    if reduction in {"prod", "product"}:
+    if reduction == "mul":
         result = 1.0
         for value in partials:
             result *= value

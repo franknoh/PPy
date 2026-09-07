@@ -401,6 +401,19 @@ def _is_fresh_allocation(node: ast.expr) -> bool:
     return False
 
 
+def _converged(plugin, qualname: str, result) -> tuple[str, tuple[tuple[str, object], ...]]:  # type: ignore[no-untyped-def]
+    """The shared operation a plugin call is: what the plugin names for it,
+    else the dialect operation its own lowering is, else nothing."""
+    spec = plugin.tensor_operation(qualname)
+    if spec is None:
+        candidate = result.spec
+        if getattr(candidate, "dialect", None) is not None:
+            spec = candidate
+    if spec is None:
+        return "", ()
+    return f"{spec.dialect}.{spec.operation}", tuple(spec.attributes)
+
+
 class _Checker:
     """Checks one module. Reused across the effect fixpoint and the final pass."""
 
@@ -4390,14 +4403,21 @@ class _Checker:
         if result.kind == "PythonFallback":
             self._native_blockers.append(f"`{qualname}` stays on the Python path: {result.reason}")
         if self.record:
-            self.module.lowerings[id(node)] = LoweringNote(
-                qualname=qualname,
-                lowering=str(result.kind),
-                reason=result.reason,
-                guards=result.guards,
-                line=getattr(node, "lineno", 0),
-            )
+            self._note(plugin, qualname, result, node)
         return Binding(result.type, result.facts)
+
+    def _note(self, plugin, qualname: str, result, node: ast.AST) -> None:  # type: ignore[no-untyped-def]
+        """Record the plugin's verdict, and the shared operation the call is."""
+        operation, attributes = _converged(plugin, qualname, result)
+        self.module.lowerings[id(node)] = LoweringNote(
+            qualname=qualname,
+            lowering=str(result.kind),
+            reason=result.reason,
+            guards=result.guards,
+            line=getattr(node, "lineno", 0),
+            operation=operation,
+            attributes=attributes,
+        )
 
     def _plugin_operator(
         self, symbol: str, operands: list[Binding], node: ast.AST
@@ -4426,13 +4446,7 @@ class _Checker:
         if result.kind == "PythonFallback":
             self._native_blockers.append(f"`{symbol}` on `{root}` stays on the Python path")
         if self.record:
-            self.module.lowerings[id(node)] = LoweringNote(
-                qualname=qualname,
-                lowering=str(result.kind),
-                reason=result.reason,
-                guards=result.guards,
-                line=getattr(node, "lineno", 0),
-            )
+            self._note(plugin, qualname, result, node)
         return Binding(result.type, result.facts)
 
     def _plugin_subscript(

@@ -10,7 +10,8 @@ from ..analysis import types as T
 from ..analysis.effects import Effect, EffectSet
 from ..analysis.refinements import Facts
 from ..analysis.symbols import FunctionInfo
-from .base import CallResult, Lowering, Plugin
+from .base import CallResult, DialectOperationSpec, Lowering, Plugin
+from .convergence import converged
 
 __all__ = ["STAGING_MARKERS", "JaxPlugin", "StagedFunction", "staged_functions"]
 
@@ -445,6 +446,14 @@ class JaxPlugin(Plugin):
 
     def operator(self, symbol: str) -> str | None:
         return _OPERATORS.get(symbol)
+
+    def tensor_operation(self, qualname: str) -> DialectOperationSpec | None:
+        """`jax.numpy` spells the tensor operations as NumPy does. An eager
+        call still runs on the Python path; the shared operation is what an
+        exported region lowers to."""
+        if not qualname.startswith("jax.numpy."):
+            return None
+        return converged(qualname.rpartition(".")[2])
 
     def attribute_type(self, qualname: str) -> tuple[T.Type, Facts] | None:
         attribute = qualname.rpartition(".")[2]

@@ -1,14 +1,19 @@
 """`lower-tensor`: tensors as memory, tensor operations as loops.
 
-A tensor value with a static shape becomes a view -- a buffer of its
-elements, a stride per axis, an offset -- and each operation becomes core
-loops over that memory: `load` and `broadcast`, `reshape` of a contiguous
-tensor, `transpose`, and `slice` are views onto memory that already
-exists; `store`, the arithmetic, `concat`, `reduce`, `matmul`, and
-`convert` write freshly allocated memory. Small tensors live on the stack,
-large ones on the heap and are freed where the function returns. A
-tensor whose shape is symbolic has no static memory and is refused with
-the reason; so is a tensor that crosses a call, which travels as a buffer.
+A tensor value becomes a view -- a buffer of its elements, a stride per
+axis, an offset -- and each operation becomes core loops over that memory:
+`load`, `fill`, and `broadcast`, `reshape` of a contiguous tensor,
+`transpose`, and `slice` are views onto memory that already exists;
+`store`, the arithmetic, `concat`, `reduce`, `matmul`, and `convert` write
+freshly allocated memory. Small static tensors live on the stack, large
+and symbolic ones on the heap and are freed where the function returns.
+
+A symbolic dimension is bound where a tensor naming it is loaded: `N` in a
+load of `tensor<f64, N, 3>` is the buffer's length over 3, guarded to
+divide exactly, and every later extent, stride, and allocation over `N`
+is arithmetic on that value. A shape that names an unbound symbol, or
+two unknown dimensions in one load, is refused with the reason; so is a
+tensor that crosses a call, which travels as a buffer.
 """
 
 from __future__ import annotations
@@ -18,6 +23,7 @@ from dataclasses import dataclass
 from .. import shape as shapes
 from ..dialects import core, sparse
 from ..dialects import tensor as tensors
+from ..dialects.math import UNARY as _MATH_UNARY
 from ..model import Block, Builder, IRFunction, IRModule, Operation, Successor, Value
 from ..passes import Pass, PassContext
 from ..types import I32, I64, U8, BufferType, FloatType, IndexType, IntType, IRType, PtrType
@@ -38,12 +44,12 @@ class _View:
 
     buffer: Value
     info: tensors.TensorInfo
-    strides: tuple[int, ...]
-    offset: int
+    strides: tuple[shapes.Dim, ...]
+    offset: shapes.Dim
 
     @property
-    def shape(self) -> tuple[int, ...]:
-        return self.info.shape  # type: ignore[return-value]
+    def shape(self) -> shapes.Shape:
+        return self.info.shape
 
     def contiguous(self) -> bool:
         return self.offset == 0 and self.strides == shapes.strides_of(self.shape)
@@ -113,6 +119,8 @@ class _FunctionLowering:
         self.heap: list[tuple[Value, Block]] = []
         self.counter = 0
         self._while_parts: tuple[Block, Block, Block] | None = None
+        #: Each symbolic dimension's value, once a load has bound it.
+        self.symbols: dict[str, Value] = {}
 
     def fresh(self, hint: str) -> str:
         self.counter += 1
@@ -152,14 +160,92 @@ class _FunctionLowering:
         info = tensors.describe(value.type)
         if info is None:
             raise LoweringError(f"{value.type} is not a tensor")
-        if not info.static:
-            raise LoweringError(
-                f"@{self.function.name}: {value.type} has a symbolic shape and no static memory"
-            )
         return info
+
+    def extent(self, b: Builder, dim: shapes.Dim) -> Value:
+        """A dimension as an i64: a number, a bound symbol, or arithmetic on them."""
+        if isinstance(dim, int):
+            return core.const(b, dim, I64)
+        if isinstance(dim, shapes.Symbol):
+            bound = self.symbols.get(dim.name)
+            if bound is None:
+                raise LoweringError(
+                    f"@{self.function.name}: dimension {dim.name} is not bound; "
+                    "load a tensor whose shape names it first"
+                )
+            return bound
+        values = [self.extent(b, a) for a in dim.args]
+        if dim.op == "add":
+            total = values[0]
+            for v in values[1:]:
+                total = core.add(b, total, v, overflow="wrap")
+            return total
+        if dim.op == "mul":
+            product = values[0]
+            for v in values[1:]:
+                product = core.mul(b, product, v, overflow="wrap")
+            return product
+        if dim.op == "ceil_div":
+            top, bottom = values
+            up = core.sub(
+                b, core.add(b, top, bottom, overflow="wrap"), core.const(b, 1, I64), overflow="wrap"
+            )
+            return core.div(b, up, bottom, overflow="wrap", rounding="floor")
+        left, right = values
+        return core.select(b, core.cmp(b, "ge", left, right), left, right)
+
+    def bind_symbols(self, b: Builder, buffer: Value, info: tensors.TensorInfo) -> None:
+        """Bind the one symbol `info.shape` leaves unknown from `buffer`'s length.
+
+        The symbol must stand as a dimension on its own, once: `N` in
+        `tensor<f64, N, 3>` is the length over 3, and the length must
+        divide exactly. Two unknown dimensions cannot be told apart by one
+        length, and are refused.
+        """
+        unknown = sorted(_symbols_of(info.shape) - set(self.symbols))
+        if not unknown:
+            return
+        spelled = shapes.spell_shape(info.shape)
+        if len(unknown) > 1:
+            raise LoweringError(
+                f"@{self.function.name}: {spelled} has {len(unknown)} unknown dimensions "
+                f"({', '.join(unknown)}); one buffer length binds one"
+            )
+        name = unknown[0]
+        bare = [
+            index
+            for index, dim in enumerate(info.shape)
+            if isinstance(dim, shapes.Symbol) and dim.name == name
+        ]
+        elsewhere = any(
+            name in _symbols_of((dim,)) for index, dim in enumerate(info.shape) if index not in bare
+        )
+        if len(bare) != 1 or elsewhere:
+            raise LoweringError(
+                f"@{self.function.name}: {name} in {spelled} cannot be read from a buffer "
+                "length; a dimension is bound where it stands on its own, once"
+            )
+        rest = shapes.numel(tuple(dim for index, dim in enumerate(info.shape) if index != bare[0]))
+        length = self.length(b, buffer)
+        if rest == 1:
+            self.symbols[name] = length
+            return
+        divisor = self.extent(b, rest)
+        nonzero = core.cmp(b, "ne", divisor, core.const(b, 0, I64))
+        core.guard(b, nonzero, "bounds", f"a zero extent leaves {name} unknown")
+        remainder = core.mod(b, length, divisor, overflow="wrap", rounding="floor")
+        exact = core.cmp(b, "eq", remainder, core.const(b, 0, I64))
+        core.guard(
+            b, exact, "bounds", f"the buffer's length is not a multiple of {shapes.spell(rest)}"
+        )
+        self.symbols[name] = core.div(b, length, divisor, overflow="wrap", rounding="floor")
 
     def allocate(self, b: Builder, info: tensors.TensorInfo, hint: str) -> _View:
         """Fresh contiguous memory for a tensor of `info`'s shape."""
+        if not info.static:
+            count = self.extent(b, shapes.numel(info.shape))
+            buffer = self.allocate_dynamic(b, info.dtype, count, hint)
+            return _View(buffer, info, shapes.strides_of(info.shape), 0)
         count = max(shapes.static_numel(info.shape), 1)
         width = _width(info.dtype)
         if count * width <= STACK_LIMIT:
@@ -178,7 +264,7 @@ class _FunctionLowering:
             (pointer, core.const(b, count, I64)),
             (BufferType(info.dtype),),
         ).results[0]
-        return _View(buffer, info, shapes.strides_of(info.shape), 0)  # type: ignore[arg-type]
+        return _View(buffer, info, shapes.strides_of(info.shape), 0)
 
     def free_at_returns(self) -> None:
         if not self.heap:
@@ -201,7 +287,7 @@ class _FunctionLowering:
 
     # -- loops -----------------------------------------------------------------------
 
-    def loops(self, op: Operation, extents: tuple[int, ...]) -> tuple[Builder, list[Value], Block]:
+    def loops(self, op: Operation, extents: shapes.Shape) -> tuple[Builder, list[Value], Block]:
         """Nested counted loops over `extents`, placed where `op` stands.
 
         `op` and everything after it move to a fresh continuation block the
@@ -232,7 +318,7 @@ class _FunctionLowering:
             index = head.arguments[0]
             core.cond_br(
                 h,
-                core.cmp(h, "lt", index, core.const(h, extent, I64)),
+                core.cmp(h, "lt", index, self.extent(h, extent)),
                 Successor(body),
                 Successor(done),
             )
@@ -253,20 +339,28 @@ class _FunctionLowering:
         return Builder().before(leave), indices, continuation
 
     def address(
-        self, b: Builder, view: _View, indices: list[Value], strides: tuple[int, ...] | None = None
+        self,
+        b: Builder,
+        view: _View,
+        indices: list[Value],
+        strides: tuple[shapes.Dim, ...] | None = None,
     ) -> Value:
         """The element of `view` at `indices`, as a pointer."""
         strides = view.strides if strides is None else strides
-        offset: Value = core.const(b, view.offset, I64)
+        offset = self.extent(b, view.offset)
         for index, stride in zip(indices, strides, strict=True):
             if stride == 0:
                 continue
-            term = core.mul(b, index, core.const(b, stride, I64), overflow="wrap")
+            term = core.mul(b, index, self.extent(b, stride), overflow="wrap")
             offset = core.add(b, offset, term, overflow="wrap")
         return core.ptr_offset(b, core.buffer_data(b, view.buffer), offset)
 
     def load(
-        self, b: Builder, view: _View, indices: list[Value], strides: tuple[int, ...] | None = None
+        self,
+        b: Builder,
+        view: _View,
+        indices: list[Value],
+        strides: tuple[shapes.Dim, ...] | None = None,
     ) -> Value:
         return core.load(b, self.address(b, view, indices, strides))
 
@@ -280,6 +374,16 @@ class _FunctionLowering:
         handler = getattr(self, f"op_{name}", None)
         if handler is None:
             raise LoweringError(f"{op.name} has no lowering")
+        if op.dialect != "tensor":
+            # The algorithms index by number: a factorization's n, a transform's
+            # length. They want the shapes they work on known.
+            for value in (*op.operands, *op.results):
+                described = tensors.describe(value.type)
+                if described is not None and not described.static:
+                    raise LoweringError(
+                        f"@{self.function.name}: {op.name} works on static shapes; "
+                        f"{value.type} is symbolic"
+                    )
         handler(op)
         self.erase.append(op)
 
@@ -330,22 +434,62 @@ class _FunctionLowering:
         info = self.info(op.result)
         b = Builder().before(op)
         buffer = op.operands[0]
-        count = shapes.static_numel(info.shape)
-        enough = core.cmp(b, "ge", self.length(b, buffer), core.const(b, count, I64))
+        self.bind_symbols(b, buffer, info)
+        count = self.extent(b, shapes.numel(info.shape))
+        enough = core.cmp(b, "ge", self.length(b, buffer), count)
         core.guard(b, enough, "bounds", "the buffer holds fewer elements than the tensor")
-        self.views[id(op.result)] = _View(buffer, info, shapes.strides_of(info.shape), 0)  # type: ignore[arg-type]
+        self.views[id(op.result)] = _View(buffer, info, shapes.strides_of(info.shape), 0)
 
     def op_store(self, op: Operation) -> None:
         source = self.view(op.operands[0])
         info = self.info(op.operands[0])
         buffer = op.operands[1]
-        count = shapes.static_numel(info.shape)
         b = Builder().before(op)
-        enough = core.cmp(b, "ge", self.length(b, buffer), core.const(b, count, I64))
+        count = self.extent(b, shapes.numel(info.shape))
+        enough = core.cmp(b, "ge", self.length(b, buffer), count)
         core.guard(b, enough, "bounds", "the buffer holds fewer elements than the tensor")
-        target = _View(buffer, info, shapes.strides_of(info.shape), 0)  # type: ignore[arg-type]
+        target = _View(buffer, info, shapes.strides_of(info.shape), 0)
         inner, indices, _next = self.loops(op, source.shape)
         self.store(inner, target, indices, self.load(inner, source, indices))
+
+    def op_fill(self, op: Operation) -> None:
+        """One element in memory, read through zero strides."""
+        info = self.info(op.result)
+        b = Builder().before(op)
+        pointer = core.alloca(b, info.dtype, name=self.fresh("fill"))
+        core.store(b, op.operands[0], pointer)
+        buffer = core.call_intrinsic(
+            b,
+            "ppy.buffer_from_parts",
+            (pointer, core.const(b, 1, I64)),
+            (BufferType(info.dtype),),
+        ).results[0]
+        self.views[id(op.result)] = _View(buffer, info, (0,) * info.rank, 0)
+
+    def op_unary(self, op: Operation) -> None:
+        source = self.view(op.operands[0])
+        info = self.info(op.result)
+        kind = str(op.attributes["op"])
+        b = Builder().before(op)
+        result = self.allocate(b, info, kind)
+        inner, indices, _next = self.loops(op, result.shape)
+        value = self.load(inner, source, indices)
+        self.store(inner, result, indices, self.scalar_unary(inner, kind, value))
+        self.views[id(op.result)] = result
+
+    def scalar_unary(self, b: Builder, kind: str, value: Value) -> Value:
+        """`kind` of one element: negation, a math function, or a special one."""
+        floating = isinstance(value.type, FloatType)
+        if kind == "neg":
+            return core.neg(b, value) if floating else core.neg(b, value, overflow="wrap")
+        if kind == "abs" and not floating:
+            negative = core.cmp(b, "lt", value, core.const(b, 0, value.type))
+            return core.select(b, negative, core.neg(b, value, overflow="wrap"), value)
+        if kind in _MATH_UNARY:
+            self.module.require("math", 1)
+            return b.create(f"math.{kind}", (value,), (value.type,)).result
+        self.module.require("special", 1)
+        return b.create(f"special.{kind}", (value,), (value.type,)).result
 
     def _elementwise(self, op: Operation, name: str) -> None:
         left, right = self.view(op.operands[0]), self.view(op.operands[1])
@@ -358,6 +502,11 @@ class _FunctionLowering:
         floating = isinstance(result_info.dtype, FloatType)
         if name == "div":
             value = core.div(inner, a, c)
+        elif name == "pow":
+            self.module.require("math", 1)
+            value = inner.create("math.pow", (a, c), (result_info.dtype,)).result
+        elif name in {"min", "max"}:
+            value = _extremum(inner, name, result_info.dtype, a, c)
         else:
             value = (
                 getattr(core, name)(inner, a, c)
@@ -379,14 +528,20 @@ class _FunctionLowering:
     def op_div(self, op: Operation) -> None:
         self._elementwise(op, "div")
 
+    def op_pow(self, op: Operation) -> None:
+        self._elementwise(op, "pow")
+
+    def op_min(self, op: Operation) -> None:
+        self._elementwise(op, "min")
+
+    def op_max(self, op: Operation) -> None:
+        self._elementwise(op, "max")
+
     def op_broadcast(self, op: Operation) -> None:
         source = self.view(op.operands[0])
         info = self.info(op.result)
         self.views[id(op.result)] = _View(
-            source.buffer,
-            info,
-            _broadcast_strides(source, info.shape),
-            source.offset,  # type: ignore[arg-type]
+            source.buffer, info, _broadcast_strides(source, info.shape), source.offset
         )
 
     def op_reshape(self, op: Operation) -> None:
@@ -396,7 +551,7 @@ class _FunctionLowering:
             source = self.materialize(op, source, "reshape")
         self.views[id(op.result)] = _View(
             source.buffer, info, shapes.strides_of(info.shape), source.offset
-        )  # type: ignore[arg-type]
+        )
 
     def materialize(self, op: Operation, view: _View, hint: str) -> _View:
         """A contiguous copy of `view`, made before `op`."""
@@ -419,10 +574,12 @@ class _FunctionLowering:
         info = self.info(op.result)
         starts = tuple(int(v) for v in op.attributes["starts"])  # type: ignore[union-attr]
         steps = tuple(int(v) for v in op.attributes["steps"])  # type: ignore[union-attr]
-        offset = source.offset + sum(
-            s * stride for s, stride in zip(starts, source.strides, strict=True)
+        offset: shapes.Dim = source.offset
+        for start, stride in zip(starts, source.strides, strict=True):
+            offset = shapes.add(offset, shapes.mul(start, stride))
+        strides = tuple(
+            shapes.mul(stride, step) for stride, step in zip(source.strides, steps, strict=True)
         )
-        strides = tuple(stride * step for stride, step in zip(source.strides, steps, strict=True))
         self.views[id(op.result)] = _View(source.buffer, info, strides, offset)
 
     def op_concat(self, op: Operation) -> None:
@@ -430,16 +587,16 @@ class _FunctionLowering:
         axis = int(op.attributes["axis"])  # type: ignore[call-overload]
         b = Builder().before(op)
         result = self.allocate(b, info, "concat")
-        position = 0
+        position: shapes.Dim = 0
         for operand in op.operands:
             part = self.view(operand)
             inner, indices, _next = self.loops(op, part.shape)
             shifted = list(indices)
             shifted[axis] = core.add(
-                inner, indices[axis], core.const(inner, position, I64), overflow="wrap"
+                inner, indices[axis], self.extent(inner, position), overflow="wrap"
             )
             self.store(inner, result, shifted, self.load(inner, part, indices))
-            position += part.shape[axis]
+            position = shapes.add(position, part.shape[axis])
         self.views[id(op.result)] = result
 
     def op_reduce(self, op: Operation) -> None:
@@ -1541,7 +1698,7 @@ def one_of(b: Builder, t: IRType) -> Value:
     return core.const(b, 1, t)
 
 
-def _broadcast_strides(view: _View, target: tuple[int, ...]) -> tuple[int, ...]:
+def _broadcast_strides(view: _View, target: shapes.Shape) -> tuple[shapes.Dim, ...]:
     """The strides that read `view` as if it had `target`'s shape."""
     rank = len(target)
     padded_shape = (1,) * (rank - len(view.shape)) + view.shape
@@ -1581,8 +1738,36 @@ def _combine(b: Builder, kind: str, dtype: IRType, current: Value, value: Value)
             if floating
             else core.mul(b, current, value, overflow="wrap")
         )
-    better = core.cmp(b, "lt" if kind == "min" else "gt", value, current)
-    return core.select(b, better, value, current)
+    return _extremum(b, kind, dtype, current, value)
+
+
+def _extremum(b: Builder, kind: str, dtype: IRType, a: Value, c: Value) -> Value:
+    """The smaller or larger of two values. A NaN is the answer, as NumPy's
+    `minimum`/`maximum` and `min`/`max` have it: a comparison with a NaN is
+    false, so `a` wins when it is NaN or when it is the extreme, and a NaN
+    `c` wins the comparison it fails."""
+    keep_a = core.cmp(b, "le" if kind == "min" else "ge", a, c)
+    chosen = core.select(b, keep_a, a, c)
+    if not isinstance(dtype, FloatType):
+        return chosen
+    a_is_number = core.cmp(b, "eq", a, a)
+    return core.select(b, a_is_number, chosen, a)
+
+
+def _symbols_of(shape: shapes.Shape) -> set[str]:
+    """The names a shape depends on."""
+    found: set[str] = set()
+
+    def walk(dim: shapes.Dim) -> None:
+        if isinstance(dim, shapes.Symbol):
+            found.add(dim.name)
+        elif isinstance(dim, shapes.Expr):
+            for argument in dim.args:
+                walk(argument)
+
+    for dim in shape:
+        walk(dim)
+    return found
 
 
 def _absolute(b: Builder, value: Value) -> Value:

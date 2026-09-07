@@ -14,15 +14,10 @@ from pathlib import Path
 from ...cache import CacheKey
 from ...diagnostics import Diagnostic, Severity, Span
 from ...driver.config import selected_pipeline
+from ...plugins.torch_region import find_regions
 from ...target import TargetInfo, configured_target
 from ..binder import LibraryBinder
-from .fusion import (
-    FusedLoop,
-    FusionCandidate,
-    find_candidates,
-    find_module_candidates,
-    lower_candidate,
-)
+from .fusion import FusedLoop, find_candidates, find_module_candidates, kernel_module
 from .jit import JitEngine, LlvmUnavailable, available, llvm_status
 from .link import (
     BuildArtifacts,
@@ -313,42 +308,54 @@ def _fuse(symbols, analysis):  # type: ignore[no-untyped-def]
     for cls in symbols.classes.values():
         functions.extend(cls.methods.values())
 
+    # A function that compiles whole into an ATen region takes that road: one
+    # C++ call through the dispatcher, autograd intact, served from a built
+    # artifact. Fusing its expressions as well would only take the region away.
+    regions = {region.info.qualname for region in find_regions(symbols, analysis)}
     candidates = list(find_module_candidates(symbols.module.tree, analysis))
     for info in functions:
+        if info.qualname in regions:
+            continue
         candidates.extend(find_candidates(info, analysis))
 
     for candidate in candidates:
         loops[candidate.loop.symbol] = candidate.loop
         plan[(candidate.node.lineno, candidate.node.col_offset)] = candidate.loop
+        library = _LIBRARIES.get(candidate.loop.storage, candidate.loop.storage)
+        fused = ", ".join(candidate.operations)
         notes.append(
-            (
-                candidate.node.lineno,
-                f"NumPy expression fused into one strided loop: {', '.join(candidate.operations)}",
-            )
+            (candidate.node.lineno, f"{library} expression fused into one strided loop: {fused}")
         )
     return loops, plan, notes
 
 
+_LIBRARIES = {"numpy": "NumPy", "torch": "torch"}
+
+
 def _append_fused(ir_text: str, module_name: str, fused: dict[str, FusedLoop]) -> str:
-    """Emit the generated kernels into their own LLVM module."""
-    from llvmlite import ir as llvm_ir
+    """Build the fused kernels as tensor IR, lower them, and emit them after the module."""
+    from .from_ir import emit_module
+    from .ir_pipeline import optimize
 
-    kernels = llvm_ir.Module(name=f"{module_name}.fused")
-    for loop in fused.values():
-        lower_candidate(llvm_ir, kernels, FusionCandidate(function=None, node=None, loop=loop))
+    kernels = kernel_module(fused.values(), f"{module_name}.fused")
+    optimize(kernels, 2)
+    text = emit_module(kernels)
     if not ir_text.strip():
-        return str(kernels)
-    return ir_text + "\n" + _body_only(str(kernels))
+        return text
+    return ir_text + "\n" + _body_only(text, ir_text)
 
 
-def _body_only(text: str) -> str:
-    """Drop the module header so two LLVM modules can be concatenated."""
+def _body_only(text: str, existing: str = "") -> str:
+    """Drop the module header, and the declarations `existing` already makes,
+    so two LLVM modules can be concatenated."""
+    declared = {line for line in existing.splitlines() if line.startswith("declare ")}
     lines = [
         line
         for line in text.splitlines()
         if not line.startswith(
             ("; ModuleID", "source_filename", "target triple", "target datalayout")
         )
+        and line not in declared
     ]
     return "\n".join(lines)
 

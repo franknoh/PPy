@@ -769,7 +769,10 @@ class FuseLibraryCalls(Pass):
         ast.copy_location(call, node)
         ast.fix_missing_locations(call)
         self.context.count("expressions_fused")
-        self.context.remark(node, f"NumPy expression fused into one strided loop ({loop.symbol})")
+        library = {"numpy": "NumPy"}.get(loop.storage, loop.storage)
+        self.context.remark(
+            node, f"{library} expression fused into one strided loop ({loop.symbol})"
+        )
         return call
 
     def bindings(self) -> list[ast.stmt]:

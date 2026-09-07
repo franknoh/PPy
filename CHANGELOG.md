@@ -456,6 +456,20 @@ Speed of the compiler itself, measured before being changed.
   sparse dialect (CSR, CSC, COO with explicit index types; matmul, add,
   transpose, convert, reduce). All of it is checked against NumPy on both
   backends.
+- The numeric plugins converge onto the tensor IR. A plugin names the
+  shared operation a call is (`tensor_operation`): `numpy.multiply`,
+  `torch.mul`, and `jax.numpy.multiply` are `tensor.mul`; `numpy.sum` and
+  `torch.sum` are `tensor.reduce {op = add}`; `scipy.special.erf` over
+  arrays is `tensor.unary {op = erf}`. The fused kernels are built from
+  that vocabulary as tensor IR -- `tensor.fill`, `tensor.unary`, `pow`,
+  `min`, `max` joined the dialect, and `lower-tensor` binds a symbolic
+  dimension from the buffer a tensor is loaded from -- so nothing in the
+  fusion path writes LLVM IR any more, and one kernel runs over a NumPy
+  array or a CPU torch tensor alike behind each library's guards. The
+  torch plugin reports its curated arithmetic as the shared operations
+  while `matmul` and the other dispatcher-sensitive calls stay with the
+  dispatcher; `ppy explain` shows the shared operation beside a call's
+  lowering.
 
 ## 0.1.0a1
 

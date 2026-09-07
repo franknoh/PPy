@@ -531,14 +531,14 @@ def test_elementwise_expressions_are_fused_into_one_kernel(write, analyze):
     assert not blend.scalars
 
     notes = " ".join(note for _line, note in module.fusion_notes)
-    assert "sin" in notes and "cos" in notes and "multiply" in notes
+    assert "sin" in notes and "cos" in notes and "mul" in notes
 
 
 def test_a_fused_reduction_returns_a_scalar(write, analyze):
     path = write("reduce.ppy", FUSED)
     module = _collect(analyze(path, backend="llvm"))["reduce"]
     energy = next(loop for loop in module.fused.values() if loop.returns_scalar)
-    assert energy.reduction == "sum"
+    assert energy.reduction == "add"
     assert energy.arrays == ("a",)
 
 
@@ -717,7 +717,7 @@ def test_a_nested_reduction_is_not_folded_into_an_elementwise_tree(write, analyz
     elementwise = [loop for loop in module.fused.values() if not loop.returns_scalar]
 
     assert len(reductions) == 1
-    assert reductions[0].reduction == "sum"
+    assert reductions[0].reduction == "add"
     # `x / scale` fuses one array against one scalar operand.
     assert len(elementwise) == 1
     assert elementwise[0].arrays == ("x",) and elementwise[0].scalars == ("scale",)
@@ -759,7 +759,7 @@ def test_a_reassociating_reduction_needs_explicit_permission(write, analyze):
     module = _collect(analyze(path, backend="llvm"))["strictsum"]
     reductions = {loop.reduction for loop in module.fused.values()}
     # The elementwise `a * a` still fuses in both; only `relaxed` fuses the sum.
-    assert reductions == {"", "sum"}
+    assert reductions == {"", "add"}
 
 
 @requires_numpy
@@ -901,7 +901,7 @@ def test_a_reassociating_reduction_is_not_split_without_permission():
     elementwise = FusedLoop(symbol="s", arrays=("a",), scalars=())
     assert _splittable(elementwise)
     assert _splittable(FusedLoop(symbol="s", arrays=("a",), scalars=(), reduction="max"))
-    assert _splittable(FusedLoop(symbol="s", arrays=("a",), scalars=(), reduction="sum"))
+    assert _splittable(FusedLoop(symbol="s", arrays=("a",), scalars=(), reduction="add"))
     # Per-chunk means cannot be merged without weighting.
     assert not _splittable(FusedLoop(symbol="s", arrays=("a",), scalars=(), reduction="mean"))
 
@@ -1154,15 +1154,19 @@ def test_tuple_programs_match_plain_cpython(tmp_path: Path):
 def test_the_fusion_tables_match_what_the_plugin_claims():
     """A plugin must not advertise a kernel the backend cannot generate."""
     from ppy_compiler.backend.llvm.fusion import BINARY, REDUCTIONS, UNARY
-    from ppy_compiler.plugins.numpy_plugin import (
-        FUSIBLE_BINARY,
-        FUSIBLE_REDUCTIONS,
-        FUSIBLE_UNARY,
-    )
+    from ppy_compiler.plugins.convergence import converged
+    from ppy_compiler.plugins.numpy_plugin import FUSIBLE
 
-    assert set(UNARY) == set(FUSIBLE_UNARY)
-    assert set(FUSIBLE_BINARY) == BINARY
-    assert set(FUSIBLE_REDUCTIONS) == REDUCTIONS
+    for name in sorted(FUSIBLE):
+        spec = converged(name)
+        assert spec is not None, name
+        attributes = dict(spec.attributes)
+        if spec.operation == "unary":
+            assert attributes["op"] in UNARY, name
+        elif spec.operation == "reduce":
+            assert attributes["op"] in REDUCTIONS, name
+        else:
+            assert spec.operation in BINARY, name
 
 
 # -- borrowed buffers -----------------------------------------------------

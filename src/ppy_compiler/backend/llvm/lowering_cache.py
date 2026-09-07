@@ -17,7 +17,7 @@ from .lowering import NativeParam, NativeSignature
 __all__ = ["SCHEMA_VERSION", "CachedLowering", "decode", "encode"]
 
 #: Bumped when the shape below changes, so an old entry is simply a miss.
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 
 class CachedLowering:
@@ -98,6 +98,7 @@ def _loop(loop: FusedLoop) -> dict:
         "reduction": loop.reduction,
         "expression": loop.expression,
         "parallel": loop.parallel,
+        "storage": loop.storage,
     }
 
 
@@ -109,6 +110,7 @@ def _read_loop(raw: dict) -> FusedLoop:
         reduction=raw["reduction"],
         expression=raw["expression"],
         parallel=raw["parallel"],
+        storage=raw.get("storage", "numpy"),
     )
 
 

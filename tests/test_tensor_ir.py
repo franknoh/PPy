@@ -138,8 +138,10 @@ def test_types_infer_shapes_and_read_back():
     again = decode(text)
     assert not verify(again) and encode(again) == text
     assert "tensor.tensor<f64, N, M>" in text
-    with pytest.raises(LoweringError, match="symbolic shape"):
-        PassManager(PassContext()).add(LowerTensor()).run(module)
+    PassManager(PassContext()).add(LowerTensor()).run(module)
+    assert not verify(module)
+    lowered = encode(module)
+    assert "tensor." not in lowered.replace("tensor.tensor", ""), "N and M come from the buffers"
 
 
 def test_the_verifier_holds_shapes_and_the_lowering_refuses_tensor_calls():

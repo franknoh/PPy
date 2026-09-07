@@ -16,8 +16,14 @@ against another, and a module that imports none of them pays for none of them.
 
 - Array expressions are typed with dtype and shape refinements; `tolist()`
   and friends follow the declared dtype.
-- Elementwise expressions fuse into one strided loop with no temporaries,
-  compiled through LLVM; contiguity and shape are guarded at runtime.
+- Elementwise expressions and whole-array reductions converge onto the
+  tensor dialect -- `numpy.multiply` is `tensor.mul`, `numpy.sin` is
+  `tensor.unary {op = sin}`, `numpy.sum` is `tensor.reduce {op = add}` --
+  and a maximal expression tree of them becomes one kernel: tensor IR over
+  buffers whose length the call supplies, lowered by `lower-tensor` to one
+  strided loop with no temporaries and compiled through LLVM. An exact
+  `float64` C-contiguous array of one shape across the operands is guarded
+  at runtime; anything else runs NumPy.
 - `dot`, `matmul`, `inner`, `vdot`, `tensordot` route to the linear-algebra
   path.
 - Reduction order is preserved bit-for-bit unless the function is
@@ -41,6 +47,13 @@ against another, and a module that imports none of them pays for none of them.
   Python body, not a broken artifact.
 - Worth ~20% on small CPU tensors; nothing on an accelerator, where kernel
   launch latency dominates. Measured honestly in `examples/21_training_torch`.
+- The curated arithmetic and reductions -- `add`, `sub`, `mul`, `div`,
+  `pow`, `neg`, `abs`, `sum`, `prod`, `mean`, `max`, `min` -- are the same
+  tensor operations NumPy's are, and an expression tree of them over
+  tensors fuses into the same kind of kernel, which runs over an exact CPU
+  `float64` contiguous tensor outside autograd; a tensor that records its
+  history, or lives elsewhere, runs torch. `matmul` and the other
+  dispatcher-sensitive operations stay with the dispatcher.
 
 ## JAX
 
@@ -52,6 +65,9 @@ against another, and a module that imports none of them pays for none of them.
   `[tool.ppy] build-execution` and **off by default** (`"deny"`).
 - At runtime the artifact executes through PJRT; a mismatch falls back to the
   ordinary jitted call.
+- `jax.numpy` spells the shared tensor operations as NumPy does, and the
+  plugin names them (`jax.numpy.add` is `tensor.add`); an eager call
+  outside an exported region still runs on the Python path.
 - The plugin also models the Flax (linen) and optax surface: layer
   constructors and activations, `Module.init`/`apply` resolved through a
   class's external MRO (`class Mlp(nn.Module)` gets them from a base only
@@ -94,7 +110,9 @@ against another, and a module that imports none of them pays for none of them.
   `scipy.sparse` (the CSR/CSC/COO constructors and their methods) are
   typed and named as operations of the `special`, `fft`, `linalg`, and
   `sparse` dialects, so a backend that has those lowers them and every
-  other runs SciPy.
+  other runs SciPy. A one-argument special function over arrays is also
+  `tensor.unary` of that function, so `special.erf(x) * 2.0` fuses into
+  one loop with the arithmetic around it.
 - `scipy.optimize`, `scipy.integrate`, and `scipy.stats` drive Python
   callbacks; their calls carry that effect and stay Python calls.
 
@@ -129,10 +147,11 @@ A plugin extends `ppy_compiler.plugins.Plugin` (interface 2). Every hook
 has a no-op default, so a plugin implements what it knows and the compiler
 calls the rest without probing: `external_types`, `attribute_type`,
 `instance_attribute`, `subscript`, `call`, `operator`, `call_alias`,
-`decorator_semantics`, `adjust_call`, `stage`, and the IR hooks
-`register_dialects`, `register_passes`, `register_patterns`,
-`register_lowerings`. `fingerprint()` names the library's version and
-enters every cache key.
+`decorator_semantics`, `adjust_call`, `stage`, `tensor_operation` (the
+shared tensor operation a call converges onto, whatever its own lowering
+is), and the IR hooks `register_dialects`, `register_passes`,
+`register_patterns`, `register_lowerings`. `fingerprint()` names the
+library's version and enters every cache key.
 
 What a `call` answers about lowering is a typed spec a backend reads, never
 backend code: `IntrinsicSpec`, `DialectOperationSpec`, `DirectCallSpec`,

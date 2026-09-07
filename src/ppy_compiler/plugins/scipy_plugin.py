@@ -17,6 +17,8 @@ from ..analysis import types as T
 from ..analysis.effects import Effect, EffectSet
 from ..analysis.refinements import Facts
 from .base import CallResult, DialectOperationSpec, FallbackSpec, Plugin
+from .convergence import SPECIAL as _DIALECT_NAMES
+from .convergence import special as _converged_special
 from .numpy_plugin import _NDARRAY
 
 __all__ = ["SPECIAL", "SciPyPlugin"]
@@ -160,6 +162,14 @@ class SciPyPlugin(Plugin):
             "+": "scipy.sparse.add",
         }.get(symbol)
 
+    def tensor_operation(self, qualname: str) -> DialectOperationSpec | None:
+        """A one-argument special function over arrays is `tensor.unary` of
+        the `special` dialect's function, so it fuses with the arithmetic
+        around it."""
+        if not qualname.startswith("scipy.special."):
+            return None
+        return _converged_special(qualname.rpartition(".")[2])
+
     def call(
         self,
         qualname: str,
@@ -190,21 +200,23 @@ class SciPyPlugin(Plugin):
         if (operation in SPECIAL and len(args) == 1) or (
             operation in SPECIAL_BINARY and len(args) == 2
         ):
+            # The dialect's name for it, where SciPy's differs (`j0` is `bessel_j0`).
+            named = _DIALECT_NAMES.get(operation, operation)
             if all(_is_float_like(t) for t, _f in args):
                 return CallResult(
                     T.FLOAT,
                     Facts(),
                     _PURE,
-                    DialectOperationSpec("special", operation),
-                    f"`special.{operation}` over scalars",
+                    DialectOperationSpec("special", named),
+                    f"`special.{named}` over scalars",
                 )
             if all(_is_float_like(t) or _is_array(t) for t, _f in args):
                 return CallResult(
                     _NDARRAY,
                     Facts(),
                     _ALLOC,
-                    DialectOperationSpec("special", operation, (("elementwise", True),)),
-                    f"`special.{operation}` elementwise over arrays",
+                    DialectOperationSpec("special", named, (("elementwise", True),)),
+                    f"`special.{named}` elementwise over arrays",
                 )
             return CallResult(
                 T.ANY, Facts(), _ALLOC, FallbackSpec("operands of unknown type"), "unknown operands"

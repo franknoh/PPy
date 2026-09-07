@@ -179,17 +179,24 @@ the elements; the layout is how a backend reaches them.
 `tensor.tensor<f64, 4, 8>` is a 4-by-8 array of `f64`, row-major unless a
 trailing layout says otherwise. `tensor.load %buffer` and `tensor.store
 %t, %buffer` move a tensor to and from a buffer of its elements in
-row-major order, guarded by the buffer's length; `empty`, `add`, `sub`,
-`mul`, `div` (with broadcasting), `broadcast`, `reshape`, `transpose
-{perm}`, `slice {starts, stops, steps}`, `concat {axis}`, `reduce {axes,
-op, keepdims}`, `matmul`, and `convert` are the values. `lower-tensor`
-makes memory of a tensor with a static shape -- a view onto memory that
-exists already for `load`, `broadcast`, `transpose`, `slice`, and a
-contiguous `reshape`; fresh memory, on the stack when small and the heap
-when large and freed where the function returns, for the rest -- and
-loops of the operations. A symbolic shape has no static memory and is
-refused with the reason, as is a tensor that crosses a call: it travels as
-a buffer.
+row-major order, guarded by the buffer's length; `empty`, `fill %scalar`,
+`unary {op}` (the math dialect's functions, `neg`, and the special
+functions, over every element), `add`, `sub`, `mul`, `div`, `pow`, `min`,
+`max` (with broadcasting; a NaN wins `min` and `max`, as NumPy has it),
+`broadcast`, `reshape`, `transpose {perm}`, `slice {starts, stops,
+steps}`, `concat {axis}`, `reduce {axes, op, keepdims}`, `matmul`, and
+`convert` are the values. `lower-tensor` makes memory of a tensor -- a
+view onto memory that exists already for `load`, `fill`, `broadcast`,
+`transpose`, `slice`, and a contiguous `reshape`; fresh memory, on the
+stack when small and static and the heap otherwise, freed where the
+function returns, for the rest -- and loops of the operations. A symbolic
+dimension is bound where a tensor naming it is loaded: `N` in a load of
+`tensor<f64, N, 3>` is the buffer's length over 3, guarded to divide
+exactly, and every extent, stride, and allocation over `N` is arithmetic
+on that value; a shape naming a symbol nothing has bound, or two unknown
+dimensions in one load, is refused with the reason. The linalg, fft, and
+sparse operations work on static shapes. A tensor that crosses a call is
+refused too: it travels as a buffer.
 
 ## The linalg, fft, special, and sparse dialects
 

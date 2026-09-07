@@ -104,7 +104,9 @@ def _fused_regions(module, function: FunctionAnalysis) -> int:
     return sum(
         1
         for note in module.lowerings.values()
-        if note.lowering == "Intrinsic" and start <= note.line <= end
+        if note.lowering in {"Intrinsic", "DialectOperation"}
+        and note.operation.startswith("tensor.")
+        and start <= note.line <= end
     )
 
 

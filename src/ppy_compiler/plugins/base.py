@@ -293,6 +293,16 @@ class Plugin:
         stages it: a JAX export, an ATen region."""
         return None
 
+    def tensor_operation(self, qualname: str) -> DialectOperationSpec | None:
+        """The shared tensor operation this call converges onto, if any (spec 42).
+
+        `numpy.add`, `torch.add`, and `jax.numpy.add` are all `tensor.add`:
+        the compiler reads the answer to fuse expressions across libraries
+        and to build their kernels from the tensor dialect, whatever the
+        call's own lowering is.
+        """
+        return None
+
     # -- the IR ---------------------------------------------------------------
 
     def register_dialects(self, registry: DialectRegistry) -> None:
