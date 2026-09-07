@@ -563,6 +563,7 @@ def compile_project(  # type: ignore[no-untyped-def]
             "safeguards": bundle.project.config.llvm.safeguards or "hoisted",
         }
     regions_section = _ship_regions(bundle, reporter, build_directory, artifacts)
+    staged_section = _ship_staged(bundle, reporter, build_directory, artifacts)
     wrapper_section = None
     if signatures and not target.is_host:
         artifacts.notes.append(
@@ -592,6 +593,7 @@ def compile_project(  # type: ignore[no-untyped-def]
         program=program,
         wrappers=wrapper_section,
         regions=regions_section,
+        staged=staged_section,
         exports={name: str(signature) for name, signature in exports.items()},
         libraries=needed,
         target=target.triple,
@@ -640,9 +642,37 @@ def _ship_regions(bundle, reporter, build_directory: Path, artifacts) -> dict | 
     return section
 
 
+def _ship_staged(bundle, reporter, build_directory: Path, artifacts) -> dict | None:  # type: ignore[no-untyped-def]
+    """Stage the exported computations -- kernels as PTX, XLA modules -- beside the manifest.
+
+    Each payload is a file of its own and the manifest records which serves
+    which function, so the launcher binds it the way the JIT path does and
+    no compiler runs at launch. What does not stage is a warning and the
+    Python definition, exactly as under the JIT.
+    """
+    from ...driver.staging import stage_project
+
+    staged = stage_project(bundle)
+    for remark in staged.diagnostics:
+        if remark.severity is Severity.WARNING:
+            artifacts.notes.append(remark.message)
+        elif bundle.project.config.diagnostics.optimization_remarks:
+            reporter.emit(remark)
+    if not staged.artifacts:
+        return None
+    section: dict[str, dict[str, str]] = {}
+    for module_name, entries in sorted(staged.artifacts.items()):
+        for function, artifact in sorted(entries.items()):
+            filename = f"{module_name}.{function}.staged"
+            (build_directory / filename).write_bytes(artifact.payload)
+            section.setdefault(module_name, {})[function] = filename
+    return section
+
+
 #: Libraries whose plugins do build-time work only the in-process path does:
-#: a staged JAX export is bound by `compile_and_run` and has no place in a
-#: manifest yet. (Torch regions ride in the artifact: see `_ship_regions`.)
+#: a staged JAX export is served by the compiler's plugin at run time, which
+#: a manifest launch does not load. (Torch regions and staged kernels ride in
+#: the artifact: see `_ship_regions` and `_ship_staged`.)
 _IN_PROCESS_ONLY = frozenset({"jax", "flax"})
 
 

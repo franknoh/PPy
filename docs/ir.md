@@ -276,7 +276,13 @@ a launch of anything but a kernel, or with anything but its parameters.
 `ppy.cuda` and `ppy.hip` lower to it (`docs/language.md`); `ppy emit cuda`
 and `ppy emit hip` write device code and the host's launches as CUDA or
 HIP C++ (the C backend with the spellings in `backend/c/gpu.py`); the C,
-C++, and LLVM backends leave device code to them.
+C++, and LLVM backends leave device code to them. `backend/nvvm` writes
+the same device code as LLVM IR for NVPTX (`ppy emit nvvm-ir`) -- a kernel
+a `ptx_kernel`, positions the `llvm.nvvm.read.ptx.sreg.*` registers,
+shared memory an `addrspace(3)` array, a shuffle `llvm.nvvm.shfl.sync.*`,
+the math library libdevice -- and as PTX (`ppy emit ptx`); the build
+stages each kernel's PTX, and `ppy_runtime.cuda` loads it through the
+CUDA driver when `ppy.cuda.launch` is asked to run it.
 
 ## The StableHLO backend
 

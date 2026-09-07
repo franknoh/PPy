@@ -21,6 +21,8 @@ __all__ = [
     "WIDTHS",
     "block_dim",
     "block_id",
+    "dispatch",
+    "extent",
     "global_id",
     "grid_dim",
     "launch",
@@ -115,7 +117,7 @@ def _axis(dim: str, what: str) -> int:
     return index
 
 
-def _extent(spec: Any, what: str) -> tuple[int, int, int]:
+def extent(spec: Any, what: str) -> tuple[int, int, int]:
     sizes: tuple[Any, ...] | None
     if isinstance(spec, int) and not isinstance(spec, bool):
         sizes = (spec,)
@@ -140,13 +142,44 @@ def launch(api: str, function: Callable[..., Any], grid: Any, block: Any, argume
     """Run `function(*arguments)` once per thread of `grid` blocks of `block` threads."""
     if not callable(function):
         raise TypeError(f"{api}.launch takes a kernel function")
-    grid3 = _extent(grid, f"{api}.launch: the grid")
-    block3 = _extent(block, f"{api}.launch: the block")
+    grid3 = extent(grid, f"{api}.launch: the grid")
+    block3 = extent(block, f"{api}.launch: the block")
     threads = block3[0] * block3[1] * block3[2]
     for bz in range(grid3[2]):
         for by in range(grid3[1]):
             for bx in range(grid3[0]):
                 _run_block(function, arguments, (bx, by, bz), block3, grid3, threads, WIDTHS[api])
+
+
+def dispatch(
+    api: str, function: Callable[..., Any], grid: Any, block: Any, arguments: tuple
+) -> None:
+    """The kernel the build staged behind `function`, on the device; or its definition here.
+
+    A device that refuses -- the driver gone, memory short -- leaves the
+    arguments as they were, and the reference launch answers instead; the
+    binding records why.
+    """
+    kernel = getattr(function, "__ppy_kernel__", None)
+    definition = getattr(function, "__ppy_fallback__", function)
+    if kernel is None:
+        launch(api, definition, grid, block, arguments)
+        return
+    binding = getattr(function, "__ppy_binding__", None)
+    try:
+        kernel.launch(
+            extent(grid, f"{api}.launch: the grid"),
+            extent(block, f"{api}.launch: the block"),
+            arguments,
+        )
+    except RuntimeError as error:
+        if binding is not None:
+            binding.last_error = f"{type(error).__name__}: {error}"
+            binding.fallbacks += 1
+        launch(api, definition, grid, block, arguments)
+        return
+    if binding is not None:
+        binding.calls += 1
 
 
 def _run_block(

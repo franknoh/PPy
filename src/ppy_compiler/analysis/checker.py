@@ -3886,6 +3886,11 @@ class _Checker:
             if args:
                 self._error("E1644", f"`{spelled}()` takes no arguments", node)
             return Binding(T.INT)
+        if operation == "compiled":
+            if len(args) != 1:
+                self._error("E1644", f"`{spelled}(kernel)` takes the kernel", node)
+            self._effects = self._effects.add(Effect.READ_GLOBAL)
+            return Binding(T.BOOL)
         if operation in {"syncthreads", "syncwarp"}:
             if args:
                 self._error("E1644", f"`{spelled}()` takes no arguments", node)

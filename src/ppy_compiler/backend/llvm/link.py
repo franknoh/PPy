@@ -267,6 +267,7 @@ def write_manifest(
     program: dict | None = None,
     wrappers: dict | None = None,
     regions: dict | None = None,
+    staged: dict | None = None,
     exports: dict[str, str] | None = None,
     libraries: tuple[str, ...] = (),
     target: str = "",
@@ -286,6 +287,9 @@ def write_manifest(
         # Compiled ATen regions, per generated module: the extension library
         # beside the manifest and the C++ symbol of each region.
         "regions": regions,
+        # Staged exports, per generated module: the file beside the manifest
+        # holding each function's payload -- a kernel's PTX, an XLA module.
+        "staged": staged,
         # By name: the library sits next to the manifest, and the pair must
         # survive being moved or shipped together.
         "native_library": library.name if library else None,

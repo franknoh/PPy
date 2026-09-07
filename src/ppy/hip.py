@@ -40,6 +40,7 @@ from ._directives import _flexible
 __all__ = [
     "block_dim",
     "block_id",
+    "compiled",
     "device",
     "global_id",
     "grid_dim",
@@ -63,7 +64,12 @@ device = _flexible("hip.device")
 
 def launch(function: Callable[..., Any], grid: Any, block: Any, /, *arguments: Any) -> None:
     """Run kernel `function(*arguments)` over `grid` blocks of `block` threads, and wait."""
-    _gpu.launch("hip", function, grid, block, arguments)
+    _gpu.dispatch("hip", function, grid, block, arguments)
+
+
+def compiled(function: Callable[..., Any]) -> bool:
+    """Whether a launch of `function` runs on the device here: a kernel the build staged."""
+    return getattr(function, "__ppy_kernel__", None) is not None
 
 
 def warp_size() -> int:

@@ -50,6 +50,9 @@ class PrebuiltBinder(LibraryBinder):
         self._wrappers = _wrapper_module(manifest)
         self._wrapper_entries = manifest.wrapper_entries or {}
         self._region_libraries = manifest.regions or {}
+        for module, entries in (manifest.staged or {}).items():
+            for function, file in entries.items():
+                self.add_exported(module, function, file.read_bytes())
         self._extensions: dict[Path, object | None] = {}
         for entry in manifest.entries:
             self._entries.setdefault(entry.module, {})[entry.binding] = entry.signature

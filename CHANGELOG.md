@@ -571,6 +571,25 @@ Speed of the compiler itself, measured before being changed.
   the launch runtime. `E1644` names a misuse. A C++ unit now includes a
   header that is not C's standard library -- `pthread.h`, `omp.h` -- as it
   is spelled rather than as `<cpthread>`.
+- The NVVM backend and the CUDA launch runtime. `backend/nvvm` writes a
+  module's kernels and device functions as LLVM IR for NVPTX -- the LLVM
+  backend's own lowerings under the `nvptx64-nvidia-cuda` triple, a kernel
+  a `ptx_kernel`, positions the `llvm.nvvm.read.ptx.sreg.*` registers,
+  `barrier0`, `addrspace(3)` shared memory, `shfl.sync` shuffles (a 64-bit
+  value as two halves), libdevice's `__nv_*` for the math library -- and
+  as PTX through LLVM's NVPTX backend with libdevice linked and pruned;
+  `ppy emit nvvm-ir` and `ppy emit ptx` show them. A build stages each
+  kernel's PTX with the kinds of its parameters (cached like every
+  artifact), and under `ppy run` `cuda.launch` runs it through the CUDA
+  driver by ctypes -- no toolkit needed -- copying a `native` pointer's
+  array to the device and back; `cuda.compiled(kernel)` says whether a
+  launch runs there. Without the driver, a device, or the NVPTX backend
+  the reference launch runs and `W2008` names the reason; `PPY_CUDA_ARCH`
+  picks the PTX architecture (`sm_70` by default). A built artifact now
+  carries its staged exports -- a kernel's PTX, an `@xla.jit` function's
+  StableHLO -- as files beside the manifest, and the launcher binds them
+  without the compiler, so the warm `ppy run` path and `ppy run --prebuilt`
+  route them as the JIT path does.
 
 ## 0.1.0a1
 

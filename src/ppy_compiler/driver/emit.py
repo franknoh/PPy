@@ -20,7 +20,7 @@ from .reporting import Reporter
 
 __all__ = ["KINDS", "build_ir_file", "run_emit"]
 
-KINDS = ("ir", "llvm-ir", "c", "cpp", "header", "stablehlo", "cuda", "hip")
+KINDS = ("ir", "llvm-ir", "c", "cpp", "header", "stablehlo", "cuda", "hip", "nvvm-ir", "ptx")
 _SUFFIXES = {
     "ir": ".ppyir",
     "llvm-ir": ".ll",
@@ -30,6 +30,8 @@ _SUFFIXES = {
     "stablehlo": ".mlir",
     "cuda": ".cu",
     "hip": ".hip",
+    "nvvm-ir": ".nvvm.ll",
+    "ptx": ".ptx",
 }
 _HEADER_ONLY_SUFFIXES = {"c": ".h", "cpp": ".hpp"}
 
@@ -136,6 +138,8 @@ def _texts(kind: str, bundle, header_only: bool) -> dict[str, str]:  # type: ign
         return emit_ir(bundle)
     if kind == "stablehlo":
         return _stablehlo_texts(bundle)
+    if kind in {"nvvm-ir", "ptx"}:
+        return _device_texts(bundle, kind)
     if kind == "header":
         from ..backend.llvm.link import header_text
         from ..lowering.abi import signature_from_ir
@@ -159,6 +163,23 @@ def _texts(kind: str, bundle, header_only: bool) -> dict[str, str]:  # type: ign
         name: emit_module(module, language, header_only=header_only, target=machine)
         for name, module in ir_modules(bundle, launches=kind in {"cuda", "hip"}).items()
     }
+
+
+def _device_texts(bundle, kind: str) -> dict[str, str]:  # type: ignore[no-untyped-def]
+    """Each module's kernels and device functions as NVVM IR, or as PTX; none where it has none."""
+    from ..backend.c import EmitError
+    from ..backend.llvm.ir_pipeline import ir_modules
+    from ..backend.nvvm import NvvmError, emit_module, ptx_from_ir
+
+    texts: dict[str, str] = {}
+    for name, module in ir_modules(bundle).items():
+        try:
+            text = emit_module(module)
+            if text:
+                texts[name] = text if kind == "nvvm-ir" else ptx_from_ir(text)
+        except NvvmError as error:
+            raise EmitError(str(error)) from error
+    return texts
 
 
 def _stablehlo_texts(bundle) -> dict[str, str]:  # type: ignore[no-untyped-def]

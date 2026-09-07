@@ -147,6 +147,7 @@ sound fallback, and never the rest.
 | `W2003` | Unknown `Annotated` metadata was preserved but not interpreted. |
 | `W2004` | A directive had no effect for the selected backend. |
 | `W2007` | A function marked `@ppy.xla.jit` cannot be taken by XLA; the reason is named. |
+| `W2008` | A kernel will not run on the device; the reason is named, and the reference runs. |
 | `W2005` | Conversion left both a .py and a .ppy source for the same module. |
 | `W2006` | Errors that only restated a type the analysis could not resolve were withheld; the count and the unresolved origins are reported once. |
 | `W2101` | The build cache index was damaged; it was quarantined and rebuilt, and compilation continued with cache misses. |

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from collections.abc import Callable
 from dataclasses import dataclass
 
@@ -35,6 +36,11 @@ def bind_exported(
     """
     try:
         if payload.lstrip().startswith(b"{"):
+            if json.loads(payload.decode("utf-8")).get("kind") == "ppy.cuda":
+                # A staged kernel: PTX the launch runtime loads, found by `ppy.cuda.launch`.
+                from .cuda import kernel_binding
+
+                return kernel_binding(function, payload, fallback)
             # A `ppy.xla` payload: StableHLO the compiler wrote, run by the PJRT bridge.
             from .xla import runtime_call
         else:

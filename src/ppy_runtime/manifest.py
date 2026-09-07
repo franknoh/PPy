@@ -60,6 +60,9 @@ class Manifest:
     #: Compiled torch regions per generated module, when the build shipped
     #: any and their libraries are still beside the manifest.
     regions: dict[str, RegionLibrary] | None = None
+    #: Staged exports per generated module -- a kernel's PTX, an XLA module --
+    #: as files beside the manifest, when the build shipped any.
+    staged: dict[str, dict[str, Path]] | None = None
 
 
 def _signature(payload: dict) -> NativeSignature:
@@ -159,6 +162,15 @@ def load(path: Path) -> Manifest:
                 candidate,
                 {str(name): str(symbol) for name, symbol in section.get("entries", {}).items()},
             )
+    staged: dict[str, dict[str, Path]] = {}
+    for module, section in (payload.get("staged") or {}).items():
+        if not isinstance(section, dict):
+            continue
+        for function, filename in section.items():
+            candidate = path.parent / Path(str(filename)).name
+            # A missing payload is the Python definition, not a broken artifact.
+            if candidate.is_file():
+                staged.setdefault(str(module), {})[str(function)] = candidate
     return Manifest(
         path=path,
         library=library,
@@ -171,6 +183,7 @@ def load(path: Path) -> Manifest:
         wrapper_library=wrapper_library,
         wrapper_entries=wrapper_entries,
         regions=regions or None,
+        staged=staged or None,
     )
 
 

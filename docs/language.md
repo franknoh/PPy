@@ -335,6 +335,20 @@ until the launch runtime; `ppy emit cuda` and `ppy emit hip` write the
 kernels, the device functions, and the host functions with their launches
 as one CUDA or HIP C++ unit.
 
+Under `ppy run`, a kernel is compiled to PTX -- the gpu dialect as LLVM IR
+for NVPTX, libdevice for the math library, `ppy emit nvvm-ir` and `ppy
+emit ptx` show the two -- and `cuda.launch` runs it through the CUDA
+driver where one is present: scalars by value, a `native` pointer's whole
+array copied to the device and, when the pointer is mutable, back, so a
+launch means what the reference launch means. `cuda.compiled(kernel)`
+says whether that is so here. Where the driver, a device, or the NVPTX
+backend is missing, the reference launch runs and `W2008` says why.
+`PPY_CUDA_ARCH` names the architecture the PTX is written for (`sm_70`
+unless set; a driver compiles PTX forward). A built artifact carries its
+kernels: `ppy build` writes each staged payload beside the manifest, and
+the launcher binds it without the compiler -- as it does an `@xla.jit`
+function's StableHLO.
+
 ## XLA: `ppy.xla`
 
 ```python

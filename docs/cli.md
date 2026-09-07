@@ -304,6 +304,8 @@ ppy emit c foo.ppy                   # what the C backend makes of it: one C11 u
 ppy emit cpp foo.ppy                 # ... as C++17, exports behind extern "C"
 ppy emit cuda foo.ppy                # the kernels, device functions, and launches as CUDA C++
 ppy emit hip foo.ppy                 # ... as HIP C++
+ppy emit nvvm-ir foo.ppy             # the kernels as LLVM IR for NVPTX
+ppy emit ptx foo.ppy                 # ... as PTX (PPY_CUDA_ARCH names the architecture, sm_70 by default)
 ppy emit c --header-only foo.ppy     # every function static inline in a header
 ppy emit c --standalone prog.ppy     # the whole program from main(), shims and all
 ppy emit header foo.ppy              # the C declarations of the exports

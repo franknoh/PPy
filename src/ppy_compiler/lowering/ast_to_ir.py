@@ -1851,6 +1851,10 @@ class _FunctionLowering:
             return core.cast(b, position, I64)
         if operation == "warp_size":
             return self._int_constant(32 if api == "cuda" else 64)
+        if operation == "compiled":
+            raise Unsupported(
+                f"`{api}.compiled` asks the runtime; the function asking stays in Python"
+            )
         if operation == "syncthreads":
             gpu_dialect.barrier(b)
             return core.const(b, 0, I64)

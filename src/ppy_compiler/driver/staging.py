@@ -8,6 +8,7 @@ under a fingerprint of everything that could change it.
 from __future__ import annotations
 
 import json
+import os
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -65,6 +66,7 @@ def stage_project(bundle, diagnostics: DiagnosticBag | None = None) -> StagingRe
     """Export every staged region the project both declares and permits."""
     result = StagingResult()
     _stage_xla(bundle, result)
+    _stage_cuda(bundle, result)
     plugin = next((p for p in bundle.project.plugins if isinstance(p, JaxPlugin)), None)
     if plugin is None:
         if diagnostics is not None:
@@ -276,6 +278,137 @@ def _kind_of(t) -> str:  # type: ignore[no-untyped-def]
     if base == T.BOOL:
         return "bool"
     return "array"
+
+
+# -- ppy.cuda / ppy.hip: kernels as PTX the launch runtime loads --------------------------------
+
+
+def _stage_cuda(bundle, result: StagingResult) -> None:  # type: ignore[no-untyped-def]
+    """Every kernel as PTX with the kinds of its parameters, when this LLVM writes PTX.
+
+    The kernels of a module share one PTX text; each payload carries it with
+    the kernel's symbol. Where the NVPTX backend is missing, or a kernel did
+    not lower, the kernel is reported and its reference launch runs.
+    """
+    from ..backend.nvvm import DEFAULT_ARCH, NvvmError, available, emit_module, ptx_from_ir
+    from ..ir import BoolType, FloatType, IntType, PtrType
+
+    kernels: dict[str, list] = {}  # type: ignore[type-arg]
+    for module_name, symbols in bundle.symbols.modules.items():
+        found = [
+            info
+            for info in symbols.functions.values()
+            if any(info.directive(f"{api}.kernel") is not None for api in ("cuda", "hip"))
+        ]
+        if found:
+            kernels[module_name] = found
+    if not kernels:
+        return
+    arch = os.environ.get("PPY_CUDA_ARCH") or DEFAULT_ARCH
+
+    def key_for(symbols, info):  # type: ignore[no-untyped-def]
+        return CacheKey.build(
+            "cuda-stage",
+            source_digest=symbols.module.source.digest(),
+            compiler_version=COMPILER_VERSION,
+            opt_level=bundle.project.config.opt_level,
+            target=arch,
+            plugin_fingerprints=(),
+            extra=(info.qualname,),
+        )
+
+    def kind_of_type(t) -> dict[str, object]:  # type: ignore[no-untyped-def]
+        if isinstance(t, PtrType):
+            return {"kind": "ptr" if t.mutable else "const_ptr"}
+        if isinstance(t, FloatType):
+            return {"kind": "float"}
+        if isinstance(t, BoolType):
+            return {"kind": "bool"}
+        assert isinstance(t, IntType)
+        return {"kind": "int"}
+
+    pending: dict[str, list] = {}  # type: ignore[type-arg]
+    for module_name, infos in kernels.items():
+        symbols = bundle.symbols.modules[module_name]
+        for info in infos:
+            key = key_for(symbols, info)
+            cached = bundle.project.store.read(key)
+            if cached is not None:
+                result.artifacts.setdefault(module_name, {})[info.name] = StagedArtifact(
+                    module_name, info.name, key.hex(), cached, "", ("cuda",)
+                )
+            else:
+                pending.setdefault(module_name, []).append(info)
+    if not pending:
+        return
+
+    def decline(module_name, info, reason):  # type: ignore[no-untyped-def]
+        symbols = bundle.symbols.modules[module_name]
+        result.skipped.append((info.qualname, reason))
+        result.diagnostics.append(
+            Diagnostic(
+                "W2008",
+                Severity.WARNING,
+                f"`{info.name}` is a kernel the device will not run: {reason}; "
+                "the reference launch runs it",
+                Span(symbols.path, info.node.lineno, 0),
+            )
+        )
+
+    if not available():
+        for module_name, infos in pending.items():
+            for info in infos:
+                decline(module_name, info, "this LLVM has no NVPTX backend")
+        return
+    from ..backend.llvm.ir_pipeline import ir_modules
+
+    modules = ir_modules(bundle)
+    for module_name, infos in pending.items():
+        symbols = bundle.symbols.modules[module_name]
+        module = modules.get(module_name)
+        functions = {
+            str(f.attributes.get("ppy.qualname", "")): f
+            for f in (module.functions.values() if module is not None else ())
+            if not f.is_declaration
+        }
+        try:
+            text = emit_module(module) if module is not None else ""
+            ptx = ptx_from_ir(text, arch) if text else ""
+        except NvvmError as error:
+            for info in infos:
+                decline(module_name, info, str(error))
+            continue
+        for info in infos:
+            function = functions.get(info.qualname)
+            if function is None or not ptx:
+                decline(module_name, info, "it did not lower to device code (`ppy check` says why)")
+                continue
+            payload = json.dumps(
+                {
+                    "kind": "ppy.cuda",
+                    "function": info.qualname,
+                    "symbol": str(function.attributes.get("ppy.symbol", function.name)),
+                    "arch": arch,
+                    "params": [kind_of_type(t) for _name, t in function.params],
+                    "ptx": ptx,
+                }
+            ).encode("utf-8")
+            key = key_for(symbols, info)
+            bundle.project.store.put(
+                key, payload, kind="metadata", source=str(symbols.path), suffix=".ptx"
+            )
+            bundle.project.store.mark_root(key, f"cuda:{info.qualname}")
+            result.artifacts.setdefault(module_name, {})[info.name] = StagedArtifact(
+                module_name, info.name, key.hex(), payload, "", ("cuda",)
+            )
+            result.diagnostics.append(
+                Diagnostic(
+                    "R3001",
+                    Severity.REMARK,
+                    f"`{info.name}` compiled to PTX for {arch}",
+                    Span(symbols.path, info.node.lineno, 0),
+                )
+            )
 
 
 @dataclass(slots=True)
