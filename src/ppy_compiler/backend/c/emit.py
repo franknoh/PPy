@@ -51,6 +51,7 @@ from .dialects import (
     emit_atomic,
     emit_concurrency,
     emit_cpu,
+    emit_parallel,
     emit_simd,
     touches_vector,
     vector_core,
@@ -169,6 +170,8 @@ class _Unit:
     #: gets a trampoline, emitted once the prototypes are known.
     pthread: bool = False
     trampolines: dict[str, str] = field(default_factory=dict)
+    #: The unit has OpenMP regions: it compiles with `-fopenmp`.
+    openmp: bool = False
 
 
 def emit_module(
@@ -391,6 +394,8 @@ class _ModuleEmitter:
         if libraries:
             flags = " ".join(f"-l{name}" for name in libraries)
             lines.append(f"/* link with: {flags} */")
+        if self.unit.openmp:
+            lines.append("/* compile with: -fopenmp */")
         guard = "PPY_" + _ident(self.module.name).upper() + ("_HPP" if cpp else "_H")
         if self.header_only:
             lines += [f"#ifndef {guard}", f"#define {guard}"]
@@ -886,8 +891,13 @@ class _FunctionEmitter:
             slot = self.fresh("res")
             self.declarations.append(f"    int64_t {slot};")
             arguments.append(f"&{slot}")
-        self.fail_unless(f"{symbol}({', '.join(arguments)}) == {STATUS_OK}", "call.ok")
-        for result, t, names in zip(op.results, target.results, slots, strict=True):
+        results = list(op.results)
+        call = f"{symbol}({', '.join(arguments)})"
+        if op.attributes.get("capture_status"):
+            self.define(results.pop(), self.owner.cast(call, "int64_t"))
+        else:
+            self.fail_unless(f"{call} == {STATUS_OK}", "call.ok")
+        for result, t, names in zip(results, target.results, slots, strict=True):
             if isinstance(t, BufferType):
                 self.define_buffer(result, names[0], names[1])
             else:
@@ -969,6 +979,7 @@ _DIALECTS = {
     "cpu": emit_cpu,
     "atomic": emit_atomic,
     "concurrency": emit_concurrency,
+    "parallel": emit_parallel,
 }
 #: Core operations that take vectors, emitted as lane helpers.
 _VECTOR_CORE = frozenset(

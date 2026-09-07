@@ -20,6 +20,7 @@ from ..dialect import Dialect, DialectRegistry, OpSpec
 from ..model import Attribute, Builder, Operation, Successor, SymbolRef, Value
 from ..types import (
     BOOL,
+    I64,
     INDEX,
     BoolType,
     BufferType,
@@ -518,10 +519,15 @@ def _verify_call(op: Operation, checker: Checker) -> None:
             f"called with ({', '.join(map(str, given))})",
         )
     results = tuple(r.type for r in op.results)
-    if results != target.results:
+    expected_results = tuple(target.results)
+    if op.attributes.get("capture_status"):
+        # The callee's status comes back as a trailing i64 instead of
+        # sending this function to its fallback.
+        expected_results = (*expected_results, I64)
+    if results != expected_results:
         checker.error(
             op,
-            f"@{callee.name} returns ({', '.join(map(str, target.results))}), "
+            f"@{callee.name} returns ({', '.join(map(str, expected_results))}), "
             f"call yields ({', '.join(map(str, results))})",
         )
 
@@ -735,10 +741,17 @@ def call(
     operands: tuple[Value, ...],
     results: tuple[IRType, ...],
     names: tuple[str | None, ...] = (),
+    *,
+    capture_status: bool = False,
 ) -> Operation:
-    return b.create(
-        "core.call", operands, results, {"callee": SymbolRef(callee)}, result_names=names
-    )
+    """Call `@callee`. A failed call takes this function's fallback -- unless
+    `capture_status`, when the status is the call's trailing i64 result and
+    the caller decides, which a caller with threads to join first needs."""
+    attributes: dict[str, Attribute] = {"callee": SymbolRef(callee)}
+    if capture_status:
+        attributes["capture_status"] = True
+        results = (*results, I64)
+    return b.create("core.call", operands, results, attributes, result_names=names)
 
 
 def call_extern(

@@ -3398,6 +3398,7 @@ class _Checker:
             "ppy.atomic.": self._atomic_call,
             "ppy.cpu.": self._cpu_call,
             "ppy.concurrent.": self._concurrent_call,
+            "ppy.parallel.": self._parallel_call,
         }
         for prefix, handler in handlers.items():
             if qualname.startswith(prefix):
@@ -3792,6 +3793,22 @@ class _Checker:
             )
         self._effects = self._effects.add(Effect.SYNC, Effect.WRITE_MEMORY)
         return Binding(T.NONE)
+
+    def _parallel_call(
+        self, operation: str, node: ast.Call, subscript: ast.expr | None, env: Env
+    ) -> Binding | None:
+        """`parallel.range(...)`: a range whose iterations may run at once."""
+        del subscript
+        if operation != "range":
+            return None
+        if node.keywords or not 1 <= len(node.args) <= 3:
+            self._error("E1650", "`ppy.parallel.range` takes one to three integer bounds", node)
+        for argument in node.args:
+            bound = self._expr(argument, env)
+            if T.strip_literal(bound.type) not in (T.INT, T.BOOL, T.ANY, T.UNKNOWN):
+                self._mismatch("E1301", "a `parallel.range` bound expects", argument, bound.type)
+        self._effects = self._effects.add(Effect.THREAD)
+        return Binding(T.Instance("range", (), ("range", "object")))
 
     def _typed_buffer(self, node: ast.Call, env: Env) -> Binding | None:
         """`ppy.buffer[T](n)`: `n` elements of `T`, all zero.

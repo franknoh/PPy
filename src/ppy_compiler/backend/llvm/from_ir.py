@@ -377,6 +377,11 @@ class _FunctionEmitter:
         if lowering is not None:
             lowering(self, op)
             return
+        if op.dialect == "parallel":
+            raise EmitError(
+                f"{op.name} reached the LLVM backend: the `openmp` parallel backend is for "
+                "`ppy emit c`; select `threads`, `serial`, or `simd` for a native build"
+            )
         if op.dialect != "core":
             raise EmitError(
                 f"{op.name}: the LLVM backend has no lowering for the {op.dialect} dialect"
@@ -726,9 +731,13 @@ class _FunctionEmitter:
         if not target.results:
             arguments.append(self.entry_alloca(ir.IntType(64), "callvoid"))
         status = b.call(callee, arguments)
-        ok = b.icmp_signed("==", status, ir.Constant(ir.IntType(32), STATUS_OK))
-        self.continue_if(ok, "call.ok")
-        for result, (t, atoms) in zip(op.results, slots, strict=True):
+        results = list(op.results)
+        if op.attributes.get("capture_status"):
+            self.set(results.pop(), b.zext(status, ir.IntType(64)))
+        else:
+            ok = b.icmp_signed("==", status, ir.Constant(ir.IntType(32), STATUS_OK))
+            self.continue_if(ok, "call.ok")
+        for result, (t, atoms) in zip(results, slots, strict=True):
             loaded = [b.load(slot) for slot in atoms]
             self.set(result, self._from_atoms(t, loaded, 0)[0])
 

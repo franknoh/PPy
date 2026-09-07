@@ -108,6 +108,9 @@ def _flexible(name: str) -> _Flexible:
 pure: _Flexible = _flexible("pure")
 jit: _Flexible = _flexible("jit")
 parallel: _Flexible = _flexible("parallel")
+#: `for i in parallel.range(n)`: the iterations may run at once. Under
+#: CPython they run in order, which is one of the orders allowed.
+parallel.range = range  # type: ignore[attr-defined]
 native: _Flexible = _flexible("native")
 inline: _Flexible = _flexible("inline")
 noinline: _Flexible = _flexible("noinline")

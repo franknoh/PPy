@@ -78,6 +78,8 @@ class NativeModule:
     libraries: tuple[str, ...] = ()
     #: Public C symbols the module defines: name -> qualname.
     exports: dict[str, str] = field(default_factory=dict)
+    #: What the lowering said, as remarks; a cached module has none.
+    remarks: tuple[str, ...] = ()
 
 
 #: Members that make attribute reads observable, so the class stays boxed.
@@ -200,6 +202,7 @@ def _collect(bundle, opt_level: int | None = None) -> dict[str, NativeModule]:  
             fusion_plan=plan,
             fusion_notes=notes,
             proved=result.proved,
+            remarks=result.remarks,
             libraries=result.libraries,
             exports=result.exports,
         )
@@ -227,6 +230,7 @@ def _lower(bundle, analysis, candidates, layouts, opt_level):  # type: ignore[no
             root=bundle.project.root,
             plugins=bundle.project.plugins,
             target=configured_target(config.llvm.target),
+            parallel=config.parallel,
         )
     return lower_module(
         analysis, candidates, layouts, safeguards=safeguards, prover=prover_for(config)
@@ -952,6 +956,8 @@ def _report(native: NativeModule, reporter, bundle) -> None:  # type: ignore[no-
         return
     symbols = bundle.symbols.modules.get(native.name)
     path = symbols.path if symbols else Path(native.name)
+    for remark in native.remarks:
+        reporter.emit(Diagnostic("R3001", Severity.REMARK, remark, Span(path, 1, 0)))
     for qualname, lowered in sorted(native.functions.items()):
         reporter.emit(
             Diagnostic(

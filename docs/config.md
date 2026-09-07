@@ -31,6 +31,7 @@ host-cpu = false                  # build for this machine, not the baseline
 [tool.ppy.parallel]
 enabled = true
 threads = "auto"                  # or an integer
+backend = "threads"               # or "serial", "simd", "openmp" (C backend)
 
 [tool.ppy.inference]
 interprocedural = true
@@ -71,6 +72,7 @@ enabled = true                    # any other keys are plugin options
 | `source-roots` | `["src", "."]` | where modules are resolved from, in order. |
 | `llvm.jit` | `true` | keep compiled code in-process via MCJIT; `false` always links a shared library. |
 | `parallel.threads` | `auto` | worker pool size; `auto` uses every core, honouring `OMP_NUM_THREADS` when set. |
+| `parallel.backend` | `threads` | how a `parallel.range` loop is lowered: `threads` splits it across the worker count, `serial` runs it on the calling thread, `simd` hands the serial loop to the vectorizer, `openmp` spells it as OpenMP regions in `ppy emit c` (a native build cannot use it). Every choice gives the same answer. |
 | `inference.write-local-annotations` | `true` | conversion annotates module globals and empty containers, not just signatures. |
 | `convert.format` | `false` | same as passing `--format` to every `ppy convert` (and `ppy migrate`, which shares the engine). |
 | `convert.hoist-classes` | `safe` | which classes conversion may reorder: only provably inert definitions, any (`aggressive`), or none (`off`). |

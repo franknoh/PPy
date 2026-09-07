@@ -71,7 +71,7 @@ address space; a dialect adds its own (`global`, `shared`, ...).
 | `core.buffer_data`, `buffer_len`, `buffer_load`, `buffer_store` | buffers |
 | `core.tuple_make`, `tuple_extract {index}` | fixed tuples |
 | `core.struct_make`, `struct_extract {field}` | structs |
-| `core.call @f`, `call_extern {callee}`, `call_intrinsic {intrinsic}` | calls; a `core.call` is checked against the callee's signature |
+| `core.call @f`, `call_extern {callee}`, `call_intrinsic {intrinsic}` | calls; a `core.call` is checked against the callee's signature. A failed call takes the caller's fallback, unless `capture_status`, which hands the status back as a trailing `i64` for a caller that has threads to join first. |
 | `core.guard %cond {kind}` | a runtime check the function fails on: `overflow`, `bounds`, `zero_division`, `range`, `contract`, `assert` |
 
 Overflow semantics live on the operation. `python` means the true value is
@@ -141,6 +141,24 @@ backend implements them over the atomic dialect and the pause hint the
 same way, so a program built for one runs exactly like one built for
 another. Threads are pthreads on the targets that have them; another is
 refused with the reason.
+
+## The parallel dialect
+
+`parallel.for @body(%captures...) %begin, %end` runs `@body(captures...,
+begin, end)` -- a function that loops over its own chunk and returns
+nothing -- over the range; `parallel.reduce @body(%captures...) %begin,
+%end, %init {op, reassociate} : T` folds the chunks' results with `op`
+(`add`, `mul`, `min`, `max`) from `init`, `@body` accumulating its chunk
+from the accumulator it is handed; `parallel.map @body(%captures...)
+%begin, %end, %out` stores `@body(captures..., i)` at `out[i]`. The
+operations say nothing about how the range is split: `lower-parallel`
+decides that once per build from the configuration -- one chunk on the
+calling thread, or chunks spawned through the concurrency dialect and
+joined, with a floating-point reduction whose `reassociate` is false
+never split -- and the C backend spells what the pass left as OpenMP
+regions when that backend was selected. The frontend writes these for
+`parallel.range` loops (`docs/language.md`) and outlines each body into a
+private function marked `ppy.synthesized`.
 
 ## Effects and ownership on the IR
 

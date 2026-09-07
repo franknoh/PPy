@@ -13,6 +13,7 @@ def builtin_dialects() -> list[Dialect]:
     from .core import CoreDialect
     from .cpu import CpuDialect
     from .math import MathDialect
+    from .parallel import ParallelDialect
     from .simd import SimdDialect
 
     return [
@@ -22,4 +23,5 @@ def builtin_dialects() -> list[Dialect]:
         CpuDialect(),
         AtomicDialect(),
         ConcurrencyDialect(),
+        ParallelDialect(),
     ]

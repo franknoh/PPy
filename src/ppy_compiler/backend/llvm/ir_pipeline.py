@@ -37,18 +37,31 @@ def _verify_between_passes() -> bool:
     return bool(os.environ.get("PPY_IR_VERIFY"))
 
 
-def optimize(module: IRModule, level: int, plugins=None) -> PassContext:  # type: ignore[no-untyped-def]
+def parallel_pass(parallel):  # type: ignore[no-untyped-def]
+    """The `lower-parallel` pass for a `ParallelConfig`, or None for the default."""
+    from ...ir.transforms import LowerParallel
+    from .parallel import _requested_threads
+
+    if parallel is None:
+        return LowerParallel("threads", threads=_requested_threads("auto"))
+    backend = parallel.backend if parallel.enabled else "serial"
+    return LowerParallel(backend, threads=_requested_threads(parallel.threads))
+
+
+def optimize(module: IRModule, level: int, plugins=None, parallel=None) -> PassContext:  # type: ignore[no-untyped-def]
     """Verify the frontend's IR, run the shared passes, verify again.
 
     With a project's plugins, the registry is the project's -- its dialects,
     patterns, and lowerings -- and the plugins' passes run at their stages,
-    each verified so that one which breaks the IR is named.
+    each verified so that one which breaks the IR is named. `parallel` is
+    the project's `ParallelConfig`, which decides how a parallel loop is
+    lowered.
     """
     registry = plugins.dialect_registry() if plugins is not None else None
     verify_or_raise(module, registry)
     external = plugins is not None and len(plugins) > 0
     ctx = PassContext(registry, verify_after_each=_verify_between_passes() or external)
-    manager = default_pipeline(level, ctx)
+    manager = default_pipeline(level, ctx, parallel_pass(parallel))
     if plugins is not None:
         plugins.register_passes(manager)
     manager.run(module)
@@ -93,7 +106,7 @@ def ir_modules(bundle) -> dict[str, IRModule]:  # type: ignore[no-untyped-def]
         )
         if not lowered.functions:
             continue
-        optimize(lowered.module, config.opt_level, bundle.project.plugins)
+        optimize(lowered.module, config.opt_level, bundle.project.plugins, config.parallel)
         modules[module.name] = lowered.module
     return modules
 
@@ -110,6 +123,7 @@ def lower_module_via_ir(
     root: Path | None = None,
     plugins=None,  # type: ignore[no-untyped-def]
     target=None,  # type: ignore[no-untyped-def]
+    parallel=None,  # type: ignore[no-untyped-def]
 ) -> LoweringResult:
     from ...lowering import lower_module_to_ir
 
@@ -122,7 +136,7 @@ def lower_module_via_ir(
         prover=prover,
         root=root,
     )
-    optimize(lowered.module, opt_level, plugins)
+    ctx = optimize(lowered.module, opt_level, plugins, parallel)
     text = emit_module(lowered.module, target) if lowered.functions else ""
     libraries = lowered.module.attributes.get("ppy.libraries", ())
     exports = {
@@ -137,6 +151,7 @@ def lower_module_via_ir(
         proved=lowered.proved,
         libraries=tuple(str(lib) for lib in libraries),  # type: ignore[union-attr]
         exports=exports,
+        remarks=(*lowered.remarks, *ctx.remarks),
     )
 
 

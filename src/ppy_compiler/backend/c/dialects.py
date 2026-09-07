@@ -13,7 +13,15 @@ from __future__ import annotations
 
 from ...ir import BoolType, FloatType, IntType, IRType, Operation, PtrType, VectorType
 
-__all__ = ["PRELUDE", "emit_atomic", "emit_concurrency", "emit_cpu", "emit_simd", "vector_core"]
+__all__ = [
+    "PRELUDE",
+    "emit_atomic",
+    "emit_concurrency",
+    "emit_cpu",
+    "emit_parallel",
+    "emit_simd",
+    "vector_core",
+]
 
 #: Macros the hints and the threads need, emitted once when a unit uses them.
 PRELUDE = {
@@ -500,3 +508,133 @@ def touches_vector(op: Operation) -> bool:
 
 def _unused(t: PtrType) -> PtrType:
     return t
+
+
+# -- parallel: OpenMP, when the build selected it ----------------------------------------
+
+
+def emit_parallel(fe, op: Operation) -> None:  # type: ignore[no-untyped-def]
+    """A `parallel.*` operation the lowering pass left for OpenMP.
+
+    The region cannot `goto` the function's fallback from inside, so a
+    chunk that fails a guard raises a flag the function tests after the
+    region; every thread takes one contiguous chunk of the range.
+    """
+    owner = fe.owner
+    owner.unit.headers.add("omp.h")
+    owner.unit.headers.add("stdlib.h")
+    owner.unit.openmp = True
+    owner.unit.prelude.setdefault("atomic", PRELUDE["atomic"])
+    callee = owner.module.functions[op.attributes["callee"].name]  # type: ignore[union-attr]
+    symbol = owner.symbol_of(callee)
+    kind = op.local_name
+    trailing = {"for": 2, "reduce": 3, "map": 3}[kind]
+    captures: list[str] = []
+    for operand in op.operands[: len(op.operands) - trailing]:
+        captures.extend(fe.flatten(operand))
+    head = len(op.operands) - trailing
+    begin, end = fe.value(op.operands[head]), fe.value(op.operands[head + 1])
+    args = ", ".join(captures)
+    prefix = f"{args}, " if args else ""
+    if (
+        kind == "reduce"
+        and isinstance(op.results[0].type, FloatType)
+        and not op.attributes.get("reassociate", True)
+    ):
+        # Not split: the whole range on this thread, in order.
+        init = fe.value(op.operands[-1])
+        result = fe.define(op.results[0], init)
+        fe.fail_unless(f"{symbol}({prefix}{begin}, {end}, {result}, &{result}) == 0", "reduce.ok")
+        return
+    failed = fe.fresh("failed")
+    fe.declarations.append(f"    int64_t {failed} = 0;")
+    if kind == "for":
+        fe.body.append(
+            "    #pragma omp parallel\n    {\n"
+            f"        int64_t nt = omp_get_num_threads(), me = omp_get_thread_num();\n"
+            f"        int64_t n = {end} - {begin};\n"
+            "        int64_t size = n > 0 ? (n + nt - 1) / nt : 0;\n"
+            f"        int64_t b = {begin} + me * size;\n"
+            f"        int64_t e = b + size < {end} ? b + size : {end};\n"
+            "        int64_t out = 0;\n"
+            f"        if (b < e && {symbol}({prefix}b, e, &out) != 0) {{\n"
+            f"            __atomic_store_n(&{failed}, 1, __ATOMIC_RELAXED);\n"
+            "        }\n    }"
+        )
+        fe.fail_unless(f"{failed} == 0", "parallel.ok")
+        return
+    if kind == "map":
+        out = fe.value(op.operands[-1])
+        element = owner.c_type(callee.results[0])
+        fe.body.append(
+            "    #pragma omp parallel\n    {\n"
+            f"        int64_t nt = omp_get_num_threads(), me = omp_get_thread_num();\n"
+            f"        int64_t n = {end} - {begin};\n"
+            "        int64_t size = n > 0 ? (n + nt - 1) / nt : 0;\n"
+            f"        int64_t b = {begin} + me * size;\n"
+            f"        int64_t e = b + size < {end} ? b + size : {end};\n"
+            "        for (int64_t i = b; i < e; i++) {\n"
+            f"            {element} value;\n"
+            f"            if ({symbol}({prefix}i, &value) != 0) {{\n"
+            f"                __atomic_store_n(&{failed}, 1, __ATOMIC_RELAXED);\n"
+            "                break;\n"
+            "            }\n"
+            f"            {out}[i] = value;\n"
+            "        }\n    }"
+        )
+        fe.fail_unless(f"{failed} == 0", "parallel.ok")
+        return
+    init = fe.value(op.operands[-1])
+    t = op.results[0].type
+    element = owner.c_type(t)
+    kind_name = str(op.attributes["op"])
+    start = parallel_identity(kind_name, t, init)
+    partials = fe.fresh("partials")
+    count = fe.fresh("count")
+    fe.declarations.append(f"    {element} *{partials} = NULL;")
+    fe.declarations.append(f"    int64_t {count} = 0;")
+    fe.body.append(f"    {count} = omp_get_max_threads();")
+    fe.body.append(f"    {partials} = ({element} *)malloc(sizeof({element}) * (size_t){count});")
+    fe.fail_unless(f"{partials} != NULL", "reduce.alloc")
+    fe.body.append(
+        "    #pragma omp parallel\n    {\n"
+        f"        int64_t nt = omp_get_num_threads(), me = omp_get_thread_num();\n"
+        f"        int64_t n = {end} - {begin};\n"
+        "        int64_t size = n > 0 ? (n + nt - 1) / nt : 0;\n"
+        f"        int64_t b = {begin} + me * size;\n"
+        f"        int64_t e = b + size < {end} ? b + size : {end};\n"
+        f"        {element} part = {start};\n"
+        f"        if (b < e && {symbol}({prefix}b, e, {start}, &part) != 0) {{\n"
+        f"            __atomic_store_n(&{failed}, 1, __ATOMIC_RELAXED);\n"
+        "        }\n"
+        f"        {partials}[me] = part;\n    }}"
+    )
+    accumulator = fe.define(op.results[0], init if kind_name in {"min", "max"} else start)
+    loop = fe.fresh("j")
+    fe.declarations.append(f"    int64_t {loop};")
+    combine = _combine_c(kind_name, t, accumulator, f"{partials}[{loop}]", owner)
+    fe.body.append(
+        f"    for ({loop} = 0; {loop} < {count}; {loop}++) {{\n"
+        f"        {accumulator} = {combine};\n    }}"
+    )
+    if kind_name in {"add", "mul"}:
+        fe.body.append(f"    {accumulator} = {_combine_c(kind_name, t, init, accumulator, owner)};")
+    fe.body.append(f"    free({partials});")
+    fe.fail_unless(f"{failed} == 0", "parallel.ok")
+
+
+def parallel_identity(op: str, t, init: str) -> str:  # type: ignore[no-untyped-def]
+    if op == "add":
+        return "0.0" if isinstance(t, FloatType) else "0"
+    if op == "mul":
+        return "1.0" if isinstance(t, FloatType) else "1"
+    return init
+
+
+def _combine_c(op: str, t, a: str, b: str, owner) -> str:  # type: ignore[no-untyped-def]
+    if op in {"add", "mul"}:
+        symbol = "+" if op == "add" else "*"
+        if isinstance(t, FloatType):
+            return f"{a} {symbol} {b}"
+        return _lane_arith(owner, t, symbol, a, b)
+    return f"{b} {'<' if op == 'min' else '>'} {a} ? {b} : {a}"

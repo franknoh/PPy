@@ -51,6 +51,7 @@ CODES: dict[str, str] = {
     "E1641": "A `ppy.atomic` operation is misused; the message says how.",
     "E1642": "A `ppy.concurrent` operation is misused; the message says how.",
     "E1643": "A `ppy.cpu` operation is misused; the message says how.",
+    "E1650": "A `ppy.parallel` loop is misused; the message says how.",
     "E1701": "`@ppy.parallel(require=True)` could not be satisfied for the selected backend.",
     "E1702": "`@ppy.native(require=True)` could not be satisfied without an opaque Python call.",
     "E1720": "A type parameter form other than `T` or `T: Bound`.",

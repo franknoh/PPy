@@ -394,6 +394,9 @@ _FUNCTIONS: dict[str, tuple[T.Type, EffectSet]] = {
     "ppy.native.extern": _fn("ppy.native.extern", T.ANY, EffectSet()),
     "ppy.native.export": _fn("ppy.native.export", T.ANY, EffectSet()),
     "ppy.cpu.target": _fn("ppy.cpu.target", T.ANY, EffectSet()),
+    "ppy.parallel.range": _fn(
+        "ppy.parallel.range", T.Instance("range", (), ("range", "object")), EffectSet()
+    ),
     "ppy.native_import": _fn("ppy.native_import", T.BOOL, EffectSet.of(Effect.WRITE_GLOBAL)),
     "ppy.native_imports": _fn(
         "ppy.native_imports",

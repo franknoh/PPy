@@ -79,6 +79,11 @@ class LlvmConfig:
 class ParallelConfig:
     enabled: bool = True
     threads: str | int = "auto"
+    #: How a parallel loop is lowered: "threads" splits it across the worker
+    #: count, "serial" runs it on the calling thread, "simd" hands the serial
+    #: loop to the vectorizer, "openmp" spells it as OpenMP regions in the C
+    #: backend's output. Every choice gives the same answer.
+    backend: str = "threads"
 
 
 @dataclass(slots=True)
@@ -238,6 +243,7 @@ def _apply(config: Config, table: Mapping[str, Any]) -> Config:
         config.parallel = ParallelConfig(
             enabled=_as_bool(sub.get("enabled"), True),
             threads=sub.get("threads", "auto"),
+            backend=str(sub.get("backend", "threads")),
         )
     if isinstance(sub := table.get("inference"), Mapping):
         config.inference = InferenceConfig(

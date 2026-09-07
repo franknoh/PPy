@@ -121,7 +121,7 @@ def standalone_ir(bundle, reporter, entry: Path, opt_level: int | None = None): 
     if entry_qualname not in lowered.functions:
         return _fail(reporter, f"`{entry_qualname}` did not lower")
     level = opt_level if opt_level is not None else config.opt_level
-    optimize(lowered.module, level, bundle.project.plugins)
+    optimize(lowered.module, level, bundle.project.plugins, config.parallel)
     lowered.module.attributes["ppy.entry"] = lowered.functions[entry_qualname].signature.symbol
     return lowered.module
 

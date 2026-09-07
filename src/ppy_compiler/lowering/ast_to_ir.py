@@ -17,7 +17,7 @@ import ast
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from ppy_runtime.abi import NativeSignature
+from ppy_runtime.abi import NativeParam, NativeSignature
 
 from ..analysis import types as T
 from ..analysis.checker import FunctionAnalysis, ModuleAnalysis
@@ -66,6 +66,7 @@ from ..ir.dialects import concurrency as concurrency_dialect
 from ..ir.dialects import core
 from ..ir.dialects import cpu as cpu_dialect
 from ..ir.dialects import math as math_dialect
+from ..ir.dialects import parallel as parallel_dialect
 from ..ir.dialects import simd as simd_dialect
 
 __all__ = ["Frontend", "Lowered", "lower_function", "lower_module_to_ir"]
@@ -110,6 +111,8 @@ class Lowered:
     rejected: dict[str, str] = field(default_factory=dict)
     #: Per function, the arithmetic whose overflow guard a proof left out.
     proved: dict[str, tuple[str, ...]] = field(default_factory=dict)
+    #: What the frontend decided about parallel loops, as remarks.
+    remarks: tuple[str, ...] = ()
 
 
 def lower_module_to_ir(
@@ -186,6 +189,10 @@ class Frontend:
         self.module = IRModule(analysis.name)
         #: qualname -> (IR function, its native signature), for calls.
         self.declared: dict[str, tuple[IRFunction, NativeSignature]] = {}
+        #: Bodies outlined from parallel loops, numbered per module.
+        self.outlined = 0
+        #: What the frontend decided about parallel loops.
+        self.remarks: list[str] = []
         #: Generic functions by qualname, lowered per instantiation.
         self.generics: dict[str, tuple[FunctionInfo, FunctionAnalysis, ast.FunctionDef]] = {}
         #: Instantiations made so far: (qualname, type arguments) -> declaration.
@@ -236,6 +243,7 @@ class Frontend:
                 info, self.declared[qualname][1], exposed=exposed, exposure_reason=why
             )
         self._reject_callers_of_rejected(lowered)
+        lowered.remarks = tuple(self.remarks)
         return lowered
 
     def _effects_of(self, info: FunctionInfo) -> tuple[str, ...]:
@@ -470,6 +478,8 @@ class _FunctionLowering:
         self.objects: dict[str, Value] = {}
         self._loops: list[tuple[Block, Block]] = []
         self._labels = 0
+        #: An outlined parallel body lowers its chunk loop serially.
+        self.outlining = False
         #: What each integer value is, as a statement about integers: the
         #: term the prover reasons over. A value with no term keeps its guard.
         self._terms: dict[Value, Term] = {}
@@ -499,6 +509,27 @@ class _FunctionLowering:
         self.entry = self.function.add_entry_block()
         self.b.at_end(self.entry)
         self._location(node)
+        self._bind_parameters()
+        if self.prover is not None:
+            self._guard_declared_ranges()
+        stored = {
+            name.id
+            for statement in node.body
+            for name in ast.walk(statement)
+            if isinstance(name, ast.Name) and isinstance(name.ctx, (ast.Store, ast.Del))
+        }
+        # Integer parameters the body never rebinds: their slot holds one
+        # value forever, so a load in the entry block speaks for every read.
+        self._stable = {
+            name for name, slot in self.slots.items() if slot.type == PtrType(I64, "stack")
+        } - stored
+        self._body(node.body)
+        if self._open():
+            self._return_default()
+
+    def _bind_parameters(self) -> None:
+        """Each parameter into the representation the body reads it by."""
+        assert self.entry is not None
         for argument, parameter in zip(
             self.entry.arguments, self.signature.parameters, strict=True
         ):
@@ -525,22 +556,6 @@ class _FunctionLowering:
                 initial = self._literal(pinned, parameter.kind)
             core.store(self.b, initial, slot)
             self.slots[parameter.name] = slot
-        if self.prover is not None:
-            self._guard_declared_ranges()
-        stored = {
-            name.id
-            for statement in node.body
-            for name in ast.walk(statement)
-            if isinstance(name, ast.Name) and isinstance(name.ctx, (ast.Store, ast.Del))
-        }
-        # Integer parameters the body never rebinds: their slot holds one
-        # value forever, so a load in the entry block speaks for every read.
-        self._stable = {
-            name for name, slot in self.slots.items() if slot.type == PtrType(I64, "stack")
-        } - stored
-        self._body(node.body)
-        if self._open():
-            self._return_default()
 
     def _alloca(self, t: IRType, name: str) -> Value:
         """A stack slot in the entry block, where it is made once."""
@@ -653,6 +668,7 @@ class _FunctionLowering:
         results = self.function.results
         if not results:
             raise Unsupported("a native function must return a value")
+        self._check_thread_failures()
         expected = results[0]
         if isinstance(expected, TupleType):
             values = self._tuple_expr(node.value)
@@ -667,6 +683,7 @@ class _FunctionLowering:
 
     def _return_default(self) -> None:
         if self.info.ret == T.NONE and not self.function.results:
+            self._check_thread_failures()
             core.ret(self.b)
             return
         raise Unsupported("control flow can fall off the end without returning a value")
@@ -828,10 +845,12 @@ class _FunctionLowering:
         if isinstance(node.iter, ast.Name) and node.iter.id in self.buffers:
             self._for_buffer(node, node.iter.id)
             return
+        explicit = _parallel_range(node.iter)
         if not (
             isinstance(node.iter, ast.Call)
-            and isinstance(node.iter.func, ast.Name)
-            and node.iter.func.id == "range"
+            and (
+                explicit or (isinstance(node.iter.func, ast.Name) and node.iter.func.id == "range")
+            )
         ):
             raise Unsupported("only `for NAME in range(...)` or over a list parameter is lowered")
         bounds = [self._coerce(self._expr(a), "int") for a in node.iter.args]
@@ -852,6 +871,22 @@ class _FunctionLowering:
             raise Unsupported("`range` takes at most three arguments")
         step = self._int_constant(step_value)
         name = node.target.id
+        implicit = not explicit and self.info.directive("parallel") is not None and not self._loops
+        if (explicit or implicit) and not self.outlining:
+            if step_value != 1:
+                if explicit:
+                    raise Unsupported("a parallel loop steps by one")
+            else:
+                try:
+                    self._parallel_for(node, start, stop)
+                except Unsupported as reason:
+                    if explicit:
+                        raise
+                    self.frontend.remarks.append(
+                        f"`{self.info.qualname}`: the loop over `{name}` stays serial: {reason}"
+                    )
+                else:
+                    return
 
         site: _GuardSite | None = None
         saved_induction = self._induction.get(name)
@@ -1332,6 +1367,206 @@ class _FunctionLowering:
             return core.cast(self.b, pointer, target)
         raise Unsupported(f"`ppy.native.{operation}` has no native lowering")
 
+    # -- parallel loops: the body outlined, the range handed to the dialect ---
+
+    def _parallel_for(self, node: ast.For, start: Value, stop: Value) -> None:
+        """`for i in parallel.range(...)`: the body becomes a function over a
+        chunk `[begin, end)`, and a `parallel.for` (or `parallel.reduce`, when
+        the body accumulates into one outer scalar) runs it over the range.
+
+        The analysis comes first and emits nothing, so a body that cannot be
+        outlined leaves the caller free to lower the loop serially.
+        """
+        assert isinstance(node.target, ast.Name)
+        loop_var = node.target.id
+        for inner in ast.walk(ast.Module(body=node.body, type_ignores=[])):
+            if isinstance(inner, ast.Return):
+                raise Unsupported("a parallel body cannot `return`")
+            if isinstance(inner, ast.Break):
+                raise Unsupported("a parallel body cannot `break`")
+            if isinstance(
+                inner, (ast.FunctionDef, ast.Lambda, ast.Yield, ast.YieldFrom, ast.Await)
+            ):
+                raise Unsupported("a parallel body holds plain statements")
+        plain, augmented, reads = _body_names(node.body)
+        outer = set(self.slots) | set(self.buffers) | set(self.tuples) | set(self.objects)
+        reduction: tuple[str, str] | None = None
+        for name in sorted(plain | set(augmented)):
+            if name == loop_var or name not in outer:
+                continue
+            op = augmented.get(name)
+            reducible = (
+                name in self.slots
+                and name not in plain
+                and op in {ast.Add, ast.Mult}
+                and reduction is None
+            )
+            if not reducible:
+                raise Unsupported(f"a parallel body assigns `{name}`, which lives outside the loop")
+            reduction = (name, "add" if op is ast.Add else "mul")
+        if reduction is not None and reduction[0] in reads:
+            raise Unsupported(f"a parallel body reads its own accumulator `{reduction[0]}`")
+        captures = sorted(
+            n
+            for n in reads
+            if n in outer and n != loop_var and (reduction is None or n != reduction[0])
+        )
+        params: list[tuple[str, IRType]] = []
+        natives: list[NativeParam] = []
+        arguments: list[Value] = []
+        kinds: list[dict[str, object]] = []
+        for name in captures:
+            if name in self.tuples:
+                raise Unsupported(f"a parallel body cannot capture the tuple `{name}`")
+            if name in self.buffers:
+                buffer = self.buffers[name]
+                assert isinstance(buffer.type, BufferType)
+                described = self._parameter_named(name) or NativeParam(
+                    name, "view", _kind(buffer.type.element)
+                )
+                params.append((name, buffer.type))
+                natives.append(described)
+                arguments.append(buffer)
+                kinds.append({"ppy.kind": described.kind, "ownership": "borrowed"})
+                continue
+            if name in self.objects:
+                struct = self.objects[name]
+                described = self._parameter_named(name)
+                if described is None:
+                    raise Unsupported(f"a parallel body cannot capture `{name}`")
+                params.append((name, struct.type))
+                natives.append(described)
+                arguments.append(struct)
+                kinds.append({"ppy.class": described.class_name})
+                continue
+            slot = self.slots[name]
+            assert isinstance(slot.type, PtrType)
+            pointee = slot.type.pointee
+            if isinstance(pointee, PtrType):
+                natives.append(
+                    NativeParam(
+                        name, "ptr" if pointee.mutable else "const_ptr", _kind(pointee.pointee)
+                    )
+                )
+            elif isinstance(pointee, VectorType):
+                raise Unsupported(f"a parallel body cannot capture the vector `{name}`")
+            else:
+                natives.append(NativeParam(name, _kind(pointee)))
+            params.append((name, pointee))
+            arguments.append(core.load(self.b, slot))
+            kinds.append({})
+        params += [("__ppy_begin", I64), ("__ppy_end", I64)]
+        natives += [NativeParam("__ppy_begin", "int"), NativeParam("__ppy_end", "int")]
+        kinds += [{}, {}]
+        results: list[IRType] = []
+        if reduction is not None:
+            slot = self.slots[reduction[0]]
+            assert isinstance(slot.type, PtrType)
+            accumulator = slot.type.pointee
+            if accumulator not in (I64, F64):
+                raise Unsupported(
+                    f"a parallel reduction accumulates an `int` or a `float`, not `{reduction[0]}`"
+                )
+            params.append((reduction[0], accumulator))
+            natives.append(NativeParam(reduction[0], _kind(accumulator)))
+            kinds.append({})
+            results = [accumulator]
+        self.frontend.outlined += 1
+        name = f"{self.function.name}__par{self.frontend.outlined}"
+        body = self.frontend.module.add_function(
+            name,
+            params,
+            results,
+            visibility="private",
+            attributes={"ppy.synthesized": "parallel", "ppy.symbol": name},
+            location=SourceLocation(
+                self.frontend.spell(self.info.path), node.lineno, node.col_offset
+            ),
+        )
+        body.param_attributes = kinds
+        signature = NativeSignature(
+            qualname=name,
+            symbol=name,
+            parameters=tuple(natives),
+            returns=tuple(_kind(t) for t in results) or ("int",),
+        )
+        child = _FunctionLowering(self.frontend, body, signature, self.info, {})
+        child.run_body(node.body, loop_var, reduction[0] if reduction else None, node)
+        self.proved.extend(child.proved)
+        self.frontend.module.require("parallel", 1)
+        if reduction is None:
+            parallel_dialect.loop(self.b, name, tuple(arguments), start, stop)
+            self.frontend.remarks.append(
+                f"`{self.info.qualname}`: the loop over `{loop_var}` is a parallel loop"
+            )
+            return
+        slot = self.slots[reduction[0]]
+        init = core.load(self.b, slot)
+        floating = init.type == F64
+        reassociate = not floating or self.info.directive("fastmath") is not None
+        result = parallel_dialect.reduce(
+            self.b, name, tuple(arguments), start, stop, init, reduction[1], reassociate=reassociate
+        )
+        core.store(self.b, result, slot)
+        how = "" if reassociate else " (kept in order: `@ppy.fastmath` would let it split)"
+        self.frontend.remarks.append(
+            f"`{self.info.qualname}`: the loop over `{loop_var}` is a parallel "
+            f"{reduction[1]} reduction into `{reduction[0]}`{how}"
+        )
+
+    def _thread_failures(self) -> Value:
+        """The slot collecting the statuses of every thread this function joined."""
+        slot = self.slots.get("__ppy_thread_failures")
+        if slot is None:
+            slot = self._alloca(I64, "__ppy_thread_failures")
+            entry = self._entry_builder()
+            core.store(entry, core.const(entry, 0, I64), slot)
+            self.slots["__ppy_thread_failures"] = slot
+        return slot
+
+    def _check_thread_failures(self) -> None:
+        slot = self.slots.get("__ppy_thread_failures")
+        if slot is None:
+            return
+        ok = core.cmp(self.b, "eq", core.load(self.b, slot), core.const(self.b, 0, I64))
+        core.guard(self.b, ok, "contract", "a spawned thread failed a guard")
+
+    def _parameter_named(self, name: str) -> NativeParam | None:
+        return next((p for p in self.signature.parameters if p.name == name), None)
+
+    def run_body(
+        self, body: list[ast.stmt], loop_var: str, reduction: str | None, location: ast.AST
+    ) -> None:
+        """Lower an outlined parallel body: bind the captures, loop over the
+        chunk `[__ppy_begin, __ppy_end)`, and hand back the accumulator."""
+        self.outlining = True
+        self.entry = self.function.add_entry_block()
+        self.b.at_end(self.entry)
+        self._location(location)
+        self._bind_parameters()
+        loop = ast.For(
+            target=ast.Name(id=loop_var, ctx=ast.Store()),
+            iter=ast.Call(
+                func=ast.Name(id="range", ctx=ast.Load()),
+                args=[
+                    ast.Name(id="__ppy_begin", ctx=ast.Load()),
+                    ast.Name(id="__ppy_end", ctx=ast.Load()),
+                ],
+                keywords=[],
+            ),
+            body=body,
+            orelse=[],
+        )
+        ast.copy_location(loop, location)
+        ast.fix_missing_locations(loop)
+        self._for(loop)
+        if not self._open():
+            raise Unsupported("a parallel body runs through to the end of its chunk")
+        if reduction is None:
+            core.ret(self.b)
+        else:
+            core.ret(self.b, core.load(self.b, self.slots[reduction]))
+
     # -- the simd, atomic, cpu, and concurrent namespaces -------------------
 
     def _dialect_call(self, namespace: str, node: ast.Call) -> Value:
@@ -1566,8 +1801,12 @@ class _FunctionLowering:
         if operation == "join":
             handle = self._coerce(self._expr(args[0]), "int")
             status = concurrency_dialect.join(self.b, handle)
-            ok = core.cmp(self.b, "eq", status, core.const(self.b, 0, I64))
-            core.guard(self.b, ok, "contract", "a spawned thread failed a guard")
+            # A thread's failed guard fails this function -- at its return,
+            # once every thread it joins has been joined, so none still runs
+            # on this frame when Python takes over.
+            failures = self._thread_failures()
+            seen = core.load(self.b, failures)
+            core.store(self.b, core.bitwise(self.b, "or", seen, status), failures)
             return core.const(self.b, 0, I64)
         if operation == "thread_id":
             return concurrency_dialect.thread_id(self.b)
@@ -2093,6 +2332,44 @@ _ANNOTATION_KINDS = {
     "ppy.i64": "int",
     "ppy.f64": "float",
 }
+
+
+def _parallel_range(node: ast.expr) -> bool:
+    """Is this `parallel.range(...)` (or `ppy.parallel.range(...)`)?"""
+    return isinstance(node, ast.Call) and ast.unparse(node.func) in {
+        "parallel.range",
+        "ppy.parallel.range",
+    }
+
+
+def _body_names(body: list[ast.stmt]) -> tuple[set[str], dict[str, type], set[str]]:
+    """Names a loop body assigns outright, augments (with the operator), and reads."""
+    plain = _plain_stores(body)
+    augmented: dict[str, type] = {}
+    reads: set[str] = set()
+    for statement in body:
+        for inner in ast.walk(statement):
+            if isinstance(inner, ast.AugAssign) and isinstance(inner.target, ast.Name):
+                name = inner.target.id
+                if name in augmented and augmented[name] is not type(inner.op):
+                    plain.add(name)  # two operators: not one reduction
+                augmented[name] = type(inner.op)
+            elif isinstance(inner, ast.Name) and isinstance(inner.ctx, ast.Load):
+                reads.add(inner.id)
+    return plain, augmented, reads
+
+
+def _plain_stores(body: list[ast.stmt]) -> set[str]:
+    found: set[str] = set()
+    for statement in body:
+        for inner in ast.walk(statement):
+            if isinstance(inner, (ast.Assign, ast.AnnAssign, ast.For)):
+                targets = inner.targets if isinstance(inner, ast.Assign) else [inner.target]
+                for target in targets:
+                    for name in ast.walk(target):
+                        if isinstance(name, ast.Name):
+                            found.add(name.id)
+    return found
 
 
 def _dialect_namespace(target: str) -> str | None:

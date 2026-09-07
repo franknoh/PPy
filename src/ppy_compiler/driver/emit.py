@@ -176,7 +176,7 @@ def build_ir_file(path: Path, options: argparse.Namespace, reporter: Reporter) -
     project = open_project(path)
     level = getattr(options, "opt_level", None) or project.config.opt_level
     try:
-        optimize(module, level)
+        optimize(module, level, parallel=project.config.parallel)
         text = emit_module(module)
     except Exception as error:  # noqa: BLE001 - the verifier's or the backend's refusal
         reporter.emit(Diagnostic("E1801", Severity.ERROR, str(error)))
@@ -186,7 +186,7 @@ def build_ir_file(path: Path, options: argparse.Namespace, reporter: Reporter) -
     signatures = {
         f.attributes.get("ppy.qualname", name): signature_from_ir(f)
         for name, f in module.functions.items()
-        if not f.is_declaration
+        if not f.is_declaration and "ppy.synthesized" not in f.attributes
     }
     try:
         engine = JitEngine(opt_level=level).open()

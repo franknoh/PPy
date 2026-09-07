@@ -433,6 +433,18 @@ Speed of the compiler itself, measured before being changed.
   (`E1640`-`E1643`), and the frontend's lowering, so a program using them
   runs the same on every path. `@cpu.target("avx2")` compiles a function
   with the features on, and the boundary binds it only where they are.
+- `ppy.parallel` v2. The parallel dialect -- `parallel.for`, `reduce`,
+  `map` over an outlined body -- and `lower-parallel`, which decides once
+  per build how a range is split: one chunk on the calling thread
+  (`serial`, `simd`), chunks spawned through the concurrency dialect and
+  joined (`threads`), or OpenMP regions the C backend spells (`openmp`);
+  every choice gives the same answer, a floating-point reduction keeps its
+  order unless `@ppy.fastmath` permits otherwise, and a chunk that fails
+  a guard fails the loop. `for i in parallel.range(n)` in the language,
+  with one `+=`/`*=` reduction, and `@ppy.parallel` asking the same of a
+  function's outermost loops; the checker (`E1650`) and the frontend refuse
+  what cannot run at once and say why, and optimization remarks say what
+  became parallel.
 
 ## 0.1.0a1
 

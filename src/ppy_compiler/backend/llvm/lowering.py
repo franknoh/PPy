@@ -132,6 +132,8 @@ class LoweringResult:
     libraries: tuple[str, ...] = ()
     #: Public C symbols: name -> the qualname of the function behind it.
     exports: dict[str, str] = field(default_factory=dict)
+    #: What the lowering and the passes said about the code, as remarks.
+    remarks: tuple[str, ...] = ()
 
 
 def _scalar_name(t: T.Type) -> str | None:
