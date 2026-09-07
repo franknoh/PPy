@@ -234,6 +234,10 @@ def build(options: argparse.Namespace, reporter: Reporter) -> int:
         return 2
     if getattr(options, "warm", False):
         return _warm(options, reporter, target)
+    if target.suffix == ".ppyir":
+        from .emit import build_ir_file
+
+        return build_ir_file(target, options, reporter)
     backend = options.backend
     project = open_project(target, config_overrides=_overrides(options))
     if backend == "llvm":

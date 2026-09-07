@@ -122,6 +122,16 @@ def build_parser() -> argparse.ArgumentParser:
         "each rank building it",
     )
 
+    emit = subparsers.add_parser("emit", help="print a compiler stage as text")
+    emit.add_argument("kind", choices=("ir", "llvm-ir"), help="`ir` is the canonical IR (.ppyir)")
+    emit.add_argument("target", type=Path)
+    emit.add_argument(
+        "-o",
+        "--output",
+        type=Path,
+        help="a file for one target; a directory (required) for a directory target",
+    )
+
     check = subparsers.add_parser("check", help="run all static validation")
     check.add_argument("path", type=Path, nargs="?", default=Path("."))
     check.add_argument("--remarks", action="store_true", help="show optimization remarks")
@@ -272,6 +282,7 @@ def main(argv: list[str] | None = None) -> int:
         "run",
         "build",
         "check",
+        "emit",
         "fmt",
         "explain",
         "inspect",
@@ -331,6 +342,10 @@ def main(argv: list[str] | None = None) -> int:
             )
         case "build":
             return commands.build(options, reporter)
+        case "emit":
+            from .emit import run_emit
+
+            return run_emit(options, reporter)
         case "check":
             return commands.check(options, reporter)
         case "fmt":

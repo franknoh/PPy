@@ -60,7 +60,7 @@ address space; a dialect adds its own (`global`, `shared`, ...).
 | operation | meaning |
 |---|---|
 | `core.const V : T` | a constant; `V` must fit `T` |
-| `core.add`, `sub`, `mul`, `div`, `mod`, `neg` | arithmetic on numbers or vectors of them. Integer forms carry `overflow` (`python` \| `checked` \| `wrap`); `div`/`mod` also `rounding` (`floor` \| `trunc`). The backend never guesses either. |
+| `core.add`, `sub`, `mul`, `div`, `mod`, `neg` | arithmetic on numbers or vectors of them. Integer forms carry `overflow` (`python` \| `checked` \| `wrap` \| `proven`); `div`/`mod` also `rounding` (`floor` \| `trunc`). The backend never guesses either. |
 | `core.and`, `or`, `xor`, `shl`, `shr` | bitwise on integers or bools |
 | `core.cmp.<eq,ne,lt,le,gt,ge>` | comparison to `bool`, or `vector<bool, N>` |
 | `core.select` | `bool ? a : b` |
@@ -76,7 +76,10 @@ address space; a dialect adds its own (`global`, `shared`, ...).
 
 Overflow semantics live on the operation. `python` means the true value is
 what Python computes -- the backend guards and falls back; `checked` means
-overflow is a guard failure; `wrap` means two's-complement wrap like C.
+overflow is a guard failure; `wrap` means two's-complement wrap like C;
+`proven` means a proof -- a corner check hoisted ahead of the loop, or the
+solver -- established that the value fits, so the backend emits the plain
+operation and may tell the optimizer it never wraps.
 Bounds checks are explicit `core.guard`s the frontend emits; a sanitizer
 pass adds more.
 
@@ -123,7 +126,7 @@ class Dialect:
     version: int
 
     def register_types(self, registry): ...
-    def register_operations(self, registry): ...   # registry.add_op(OpSpec(...))
+    def register_operations(self, registry): ...  # registry.add_op(OpSpec(...))
     def register_patterns(self, registry): ...
     def register_lowerings(self, registry): ...
     def verify_type(self, t): ...
@@ -160,3 +163,31 @@ blocks); `transforms.default_pipeline(level)` orders them and marks the
 stages -- `after-ir-generation`, `after-canonicalization`,
 `before-optimization`, `after-optimization`, `before-backend` -- where a
 plugin's `register_stage_pass` puts a pass of its own.
+
+## From Python to the IR
+
+`ppy_compiler.lowering.ast_to_ir` reads an analyzed function once and
+writes IR: parameters become entry-block arguments held in stack slots,
+Python control flow becomes blocks with arguments (`and`/`or` join through
+a block argument, loops have a header, a body, a latch, and an exit), and
+every place the program must be handed back to CPython -- a division by
+zero, an index out of range, a shift past the word, a byte that does not
+fit -- is a `core.guard`. Integer arithmetic carries `overflow = "python"`,
+or `wrap` when the safeguards are off, and `//` and `%` carry
+`rounding = "floor"`. What the native subset excludes is refused with the
+reason, and a caller of a refused function is refused with it.
+
+`backend/llvm/from_ir` reads that IR and nothing else. It gives every
+function the native ABI the runtime binds -- machine atoms in, result
+slots out, an `i32` status back -- lowers `python` overflow to the
+`with.overflow` intrinsics and a branch to the function's fallback block,
+`floor` rounding to the sign-corrected sequence (or a shift for a
+power-of-two divisor), and block arguments to phis.
+
+`[tool.ppy.llvm] pipeline = "ir"` selects this road; `"ast"` (the default
+while the two are compared) is the direct AST-to-LLVM lowering.
+`PPY_LOWERING=ast|ir` overrides the setting for one process, which is how
+a differential run of the whole test suite is made; every cache and run
+artifact is keyed on the road, so the two never serve each other's
+objects. `tests/test_lowering.py` JIT-compiles the same functions both
+ways and calls them on the same inputs, fallbacks included.

@@ -30,6 +30,19 @@ jobs:
   # Every integration the README advertises gets a job that actually runs it.
   # The base gate skips them all -- a skip proves nothing, so `plugin_check.sh`
   # fails when a requested plugin's tests do not run.
+  ir-road:
+    # The canonical-IR road through the LLVM backend, held to the same suite
+    # and the same three-path example comparison as the direct road.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.0.1
+        with:
+          python-version: "3.13"
+      - run: uv sync
+      - run: PPY_LOWERING=ir uv run pytest -q
+      - run: PPY_LOWERING=ir uv run python examples/run_all.py
+
   plugins:
     runs-on: ubuntu-latest
     strategy:

@@ -17,7 +17,7 @@ from ..opt.manager import OptimizationResult, Optimizer
 from ..plugins.base import PluginRegistry
 from ..plugins.registry import load_plugins
 from ..version import COMPILER_VERSION, compiler_fingerprint
-from .config import Config, find_project_root, load_config
+from .config import Config, find_project_root, load_config, selected_pipeline
 
 __all__ = [
     "COMPILER_VERSION",
@@ -198,6 +198,9 @@ def module_cache_key(
         for d in info.directives
     ]
     config = bundle.project.config
+    if target == "llvm":
+        # The road through the backend is part of what the artifact is.
+        extra = (*extra, f"pipeline={selected_pipeline(config.llvm.pipeline)}")
     return CacheKey.build(
         target,
         source_digest=symbols.module.source.digest(),

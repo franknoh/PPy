@@ -245,13 +245,17 @@ def test_a_value_defined_on_one_branch_is_not_visible_on_the_other():
     assert _errors(module) == ["%doubled is used before it is defined"]
 
 
-def test_duplicate_value_names_and_blocks_are_errors():
+def test_duplicate_blocks_are_errors_and_duplicate_name_hints_print_apart():
+    """A name hint may repeat -- the printer numbers the later one -- but a
+    block label is an identity and may not."""
     module = IRModule("dup")
     function, _entry, b = _function(module)
     a = core.const(b, 1, I64, "same")
     c = core.const(b, 2, I64, "same")
     core.ret(b, core.add(b, a, c))
-    assert "%same is defined twice" in _errors(module)
+    assert not verify(module)
+    text = encode(module)
+    assert "%same = core.const 1" in text and "%0 = core.const 2" in text
     function.body.add_block("entry").append(Operation("core.unreachable"))
     assert "block ^entry is defined twice" in _errors(module)
 
@@ -346,7 +350,9 @@ def test_arithmetic_needs_its_overflow_and_rounding_semantics_spelled():
     x = entry.arguments[0]
     bare = b.create("core.add", (x, x), (I64,))
     core.ret(b, bare.result)
-    assert _errors(module) == ["integer core.add needs overflow in ('python', 'checked', 'wrap')"]
+    assert _errors(module) == [
+        "integer core.add needs overflow in ('python', 'checked', 'wrap', 'proven')"
+    ]
     bare.attributes["overflow"] = "wrap"
     assert not verify(module)
     entry.operations[-1].erase()

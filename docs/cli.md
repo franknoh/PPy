@@ -166,6 +166,7 @@ and which stayed boxed, with the reason.
 ppy build TARGET [--safe] [--host-cpu] [--standalone]
                  [--backend {llvm,python}] [-o DIR]
 ppy build --warm TARGET
+ppy build foo.ppyir                  # from the IR alone; see `ppy emit`
 ```
 
 `--backend llvm` (default) writes objects, `libppy_<project>.so`,
@@ -254,6 +255,29 @@ those beat their C reference. Substring search is the one that cannot: its
 text arrives as a token, and `ppy.read_token` has no standalone lowering yet.
 `examples/15_algorithms/standalone/` holds the five, timed against every
 other path by the benchmark beside them.
+
+## `ppy emit` — a compiler stage as text
+
+```bash
+ppy emit ir foo.ppy                  # the canonical IR, to stdout
+ppy emit ir foo.ppy -o foo.ppyir     # ... to a file
+ppy emit ir src/ -o build/ir/        # one .ppyir per module
+ppy emit llvm-ir foo.ppy             # what the LLVM backend makes of it
+```
+
+One rule for every kind: a single file with no `-o` prints to standard
+output, `-o FILE` writes that file, and a directory target writes one file
+per module into the directory `-o` names (and refuses to guess without
+it). `ir` is the canonical IR after the shared passes (`docs/ir.md`);
+`llvm-ir` is the optimized LLVM IR. The output is deterministic for one
+input and configuration.
+
+`.ppyir` is the IR's on-disk form, experimental in 0.2.0, and `ppy build
+foo.ppyir` builds one without the Python that produced it: the file
+carries its schema and dialect versions, every function's ABI, and its
+source locations, so the build is the passes, the LLVM backend, an object,
+a library, and a manifest whose entries the runtime binds. A file from
+another schema or a dialect this compiler lacks is refused with the reason.
 
 ## `ppy explain` — why it compiled that way
 

@@ -1056,9 +1056,7 @@ def test_a_region_whose_library_is_gone_is_the_python_body(tmp_path: Path):
     removed Python round trips -- and the runtime needs no compiler and no
     torch to decide that."""
     from ppy_runtime.launch import PrebuiltBinder
-    from ppy_runtime.manifest import load
-
-    from ppy_runtime.manifest import SUPPORTED_ABI
+    from ppy_runtime.manifest import SUPPORTED_ABI, load
 
     payload = {
         "abi_version": SUPPORTED_ABI,

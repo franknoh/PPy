@@ -254,7 +254,7 @@ class _Parser:
         c = self.cursor
         while c.peek("^"):
             c.expect("^")
-            label = c.word()
+            label = c.word(allow_dots=True)
             block = scope.define_block(label, region)
             if entry_params is not None and not region.blocks[1:] and not c.peek("("):
                 # The entry block of a function takes the parameters.
@@ -271,8 +271,13 @@ class _Parser:
                         c.expect(")")
                         break
             c.expect(":")
+            previous: SourceLocation | None = None
             while c.peek() and not c.peek("^") and not c.peek("}"):
-                block.append(self.operation(scope))
+                op = self.operation(scope)
+                if op.location is None:
+                    op.location = previous
+                previous = op.location
+                block.append(op)
 
     def operation(self, scope: _Scope) -> Operation:
         c = self.cursor
@@ -308,7 +313,7 @@ class _Parser:
                 break
         successors: list[tuple[str, list[str]]] = []
         while c.accept("^"):
-            target = c.word()
+            target = c.word(allow_dots=True)
             arguments: list[str] = []
             if c.accept("("):
                 while not c.accept(")"):

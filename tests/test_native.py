@@ -135,13 +135,15 @@ def test_multiplied_index_guards_hoist_out_of_the_loop(write, analyze):
     )
     bundle = analyze(path)
     native = _collect(bundle, 2)["kernel"]
-    assert "for.guards" in native.ir
-    assert "mul nsw" in native.ir
+    assert "mul nsw" in native.ir, "the body multiplies without a guard"
+    # The corner checks sit ahead of the loop: every multiply-with-overflow
+    # call comes before the first loop header in the text.
+    assert native.ir.index("smul.with.overflow") < native.ir.index("for.head")
 
     bundle.project.config.llvm.safeguards = "inline"
     inline = _collect(bundle, 2)["kernel"]
-    assert "for.guards" not in inline.ir
     assert "mul nsw" not in inline.ir
+    assert inline.ir.index("smul.with.overflow") > inline.ir.index("for.body")
 
 
 def test_profitability_keeps_tiny_functions_off_the_boundary(write, analyze):

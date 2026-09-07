@@ -106,7 +106,11 @@ def _region(region: Region, namer: _Namer, registry: DialectRegistry, depth: int
         # A function's entry block takes the parameters, which the signature
         # already spells; a nested region's entry lists its own.
         lines.append(_block_label(block, namer, depth, arguments=depth > 0 or index > 0))
-        lines.extend(_operation(op, namer, registry, depth + 1) for op in block.operations)
+        previous: SourceLocation | None = None
+        for op in block.operations:
+            # A location the previous operation already spelled is inherited.
+            lines.append(_operation(op, namer, registry, depth + 1, previous))
+            previous = op.location
     return "\n".join(lines) + "\n"
 
 
@@ -117,7 +121,13 @@ def _block_label(block: Block, namer: _Namer, depth: int, arguments: bool = True
     return label + ":"
 
 
-def _operation(op: Operation, namer: _Namer, registry: DialectRegistry, depth: int) -> str:
+def _operation(
+    op: Operation,
+    namer: _Namer,
+    registry: DialectRegistry,
+    depth: int,
+    previous: SourceLocation | None = None,
+) -> str:
     spec = registry.op_spec(op.name)
     parts: list[str] = []
     if op.results:
@@ -141,7 +151,7 @@ def _operation(op: Operation, namer: _Namer, registry: DialectRegistry, depth: i
         parts.append(print_attribute(attributes))
     if op.results:
         parts.append(": " + ", ".join(str(r.type) for r in op.results))
-    if op.location is not None:
+    if op.location is not None and op.location != previous:
         parts.append(f"loc({_location(op.location)})")
     line = _INDENT * depth + " ".join(parts)
     for region in op.regions:

@@ -147,6 +147,19 @@ class _SelectFold(Pattern):
         return RewriteResult.failure()
 
 
+class _GuardTrue(Pattern):
+    """A guard whose condition is known to hold has nothing to check."""
+
+    root = "core.guard"
+    name = "guard-true"
+
+    def match_and_rewrite(self, op: Operation, rewriter: Rewriter) -> RewriteResult:
+        if _constant(op.operands[0]) is True:
+            rewriter.erase_op(op, "core.guard: condition always holds")
+            return RewriteResult.success()
+        return RewriteResult.failure()
+
+
 class _CmpSelf(Pattern):
     root = "core.cmp"
     name = "cmp-self"
@@ -219,6 +232,8 @@ class _FoldBinary(Pattern):
                 folded = _INT_OPS[local](a, b)
         elif _int_like(t) and isinstance(a, int) and isinstance(b, int):
             overflow = str(op.attributes.get("overflow", "python"))
+            if overflow == "proven":
+                overflow = "python"
             if local in _INT_OPS:
                 folded = _fit(_INT_OPS[local](a, b), t, overflow)
             elif local in {"div", "mod"} and b != 0:
@@ -339,6 +354,7 @@ def canonicalization_patterns() -> list[Pattern]:
         _CastCast(),
         _SelectFold(),
         _CmpSelf(),
+        _GuardTrue(),
     ]
 
 

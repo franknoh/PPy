@@ -139,7 +139,6 @@ def _verify_function(function: IRFunction, checker: Checker) -> None:
             f"parameters are ({', '.join(map(str, param_types))})",
         )
     _verify_region(function.body, checker, defined_outside=set())
-    _verify_names(function, checker)
     checker.function = None
 
 
@@ -263,27 +262,6 @@ def _verify_op(op: Operation, checker: Checker) -> None:
                 return
     if spec.verify is not None:
         spec.verify(op, checker)
-
-
-def _verify_names(function: IRFunction, checker: Checker) -> None:
-    """A value name, when given, names one value in its function."""
-    seen: dict[str, Value] = {}
-    for block in function.body.blocks:
-        for value in block.arguments:
-            _note_name(value, seen, checker, None)
-    for op in function.operations():
-        for value in op.results:
-            _note_name(value, seen, checker, op)
-
-
-def _note_name(
-    value: Value, seen: dict[str, Value], checker: Checker, op: Operation | None
-) -> None:
-    if value.name is None:
-        return
-    if value.name in seen and seen[value.name] is not value:
-        checker.error(op, f"%{value.name} is defined twice")
-    seen[value.name] = value
 
 
 def _spell(value: Value) -> str:

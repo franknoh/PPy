@@ -48,7 +48,10 @@ __all__ = [
     "CoreDialect",
 ]
 
-OVERFLOW_MODES = ("python", "checked", "wrap")
+#: `proven`: a proof -- a corner check hoisted ahead of the loop, or the
+#: solver -- established that the true value fits, so the backend emits the
+#: plain operation and may tell the optimizer it never wraps.
+OVERFLOW_MODES = ("python", "checked", "wrap", "proven")
 ROUNDING_MODES = ("floor", "trunc")
 PREDICATES = ("eq", "ne", "lt", "le", "gt", "ge")
 ADDRESS_SPACES = frozenset({"generic", "stack"})
@@ -743,8 +746,22 @@ def call_intrinsic(
     )
 
 
-def guard(b: Builder, condition: Value, kind: str, message: str = "") -> Operation:
+def guard(b: Builder, condition: Value, kind: str, message: str = "", label: str = "") -> Operation:
     attributes: dict[str, Attribute] = {"kind": kind}
     if message:
         attributes["message"] = message
+    if label:
+        attributes["label"] = label
     return b.create("core.guard", (condition,), (), attributes)
+
+
+def checked(b: Builder, op: str, lhs: Value, rhs: Value) -> tuple[Value, Value]:
+    """`lhs op rhs` as (the wrapped result, whether it overflowed): what a
+    corner check asks, one branch for every corner rather than one each."""
+    created = b.create(
+        "core.call_intrinsic",
+        (lhs, rhs),
+        (lhs.type, BOOL),
+        {"intrinsic": f"ppy.checked_{op}"},
+    )
+    return created.results[0], created.results[1]

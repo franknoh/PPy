@@ -17,6 +17,8 @@ import sysconfig
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from ppy_runtime.manifest import SUPPORTED_ABI as MANIFEST_ABI_VERSION
+
 from .lowering import NativeParam, NativeSignature
 
 __all__ = [
@@ -33,7 +35,6 @@ __all__ = [
 ]
 
 #: Version of the PPY Native Binding Manifest schema (spec 26.2).
-from ppy_runtime.manifest import SUPPORTED_ABI as MANIFEST_ABI_VERSION
 
 _C_COMPILERS = ("cc", "gcc", "clang")
 

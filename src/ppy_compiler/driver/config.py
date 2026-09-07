@@ -33,6 +33,20 @@ class PythonBackendConfig:
     interpreter: str = "python"
 
 
+#: The roads through the LLVM backend, and the environment variable that
+#: picks one for a differential run regardless of the project.
+PIPELINES = ("ast", "ir")
+PIPELINE_ENV = "PPY_LOWERING"
+
+
+def selected_pipeline(configured: str | None) -> str:
+    """Which road: the environment for a differential run, else the project."""
+    override = os.environ.get(PIPELINE_ENV)
+    if override in PIPELINES:
+        return override
+    return configured if configured in PIPELINES else "ast"
+
+
 @dataclass(slots=True)
 class LlvmConfig:
     enabled: bool = True
@@ -55,6 +69,10 @@ class LlvmConfig:
     #: and host code faults on an older machine. In-process JIT code always
     #: targets the host, because it never leaves it.
     host_cpu: bool = False
+    #: Which road through the backend: "ast" lowers the Python AST straight
+    #: to LLVM; "ir" goes through the canonical IR and its passes. The IR
+    #: road is the 0.2.0 one; the AST road stays while the two are compared.
+    pipeline: str = "ast"
 
 
 @dataclass(slots=True)
@@ -196,6 +214,7 @@ def _apply(config: Config, table: Mapping[str, Any]) -> Config:
             cpython_api=sub.get("cpython-api", "version-specific"),
             safeguards=sub.get("safeguards"),
             prover=sub.get("prover"),
+            pipeline=str(sub.get("pipeline", "ast")),
             host_cpu=_as_bool(sub.get("host-cpu"), False),
         )
     if isinstance(sub := table.get("parallel"), Mapping):

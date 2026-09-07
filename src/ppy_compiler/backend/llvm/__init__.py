@@ -13,6 +13,7 @@ from pathlib import Path
 
 from ...cache import CacheKey
 from ...diagnostics import Diagnostic, Severity, Span
+from ...driver.config import selected_pipeline
 from ..binder import LibraryBinder
 from .fusion import (
     FusedLoop,
@@ -175,13 +176,7 @@ def _collect(bundle, opt_level: int | None = None) -> dict[str, NativeModule]:  
         fused, plan, notes = _fuse(symbols, analysis)
         if not candidates and not fused:
             continue
-        result: LoweringResult = lower_module(
-            analysis,
-            candidates,
-            layouts,
-            safeguards=bundle.project.config.llvm.safeguards or "hoisted",
-            prover=prover_for(bundle.project.config),
-        )
+        result: LoweringResult = _lower(bundle, analysis, candidates, layouts, opt_level)
         ir_text = result.ir
         if fused:
             ir_text = _append_fused(ir_text, module.name, fused)
@@ -205,11 +200,36 @@ def _collect(bundle, opt_level: int | None = None) -> dict[str, NativeModule]:  
     return modules
 
 
+def _lower(bundle, analysis, candidates, layouts, opt_level):  # type: ignore[no-untyped-def]
+    """One module's LLVM IR by the road the project selected."""
+    from ...driver.config import selected_pipeline
+    from .ir_pipeline import lower_module_via_ir
+
+    config = bundle.project.config
+    safeguards = config.llvm.safeguards or "hoisted"
+    if selected_pipeline(config.llvm.pipeline) == "ir":
+        level = opt_level if opt_level is not None else config.opt_level
+        return lower_module_via_ir(
+            analysis,
+            candidates,
+            layouts,
+            safeguards=safeguards,
+            opt_level=level,
+            prover=prover_for(config),
+            root=bundle.project.root,
+        )
+    return lower_module(
+        analysis, candidates, layouts, safeguards=safeguards, prover=prover_for(config)
+    )
+
+
 def _lowering_key(bundle, name: str, opt_level: int | None) -> str:  # type: ignore[no-untyped-def]
+    from ...driver.config import selected_pipeline
     from ...driver.pipeline import module_cache_key
 
     level = opt_level if opt_level is not None else bundle.project.config.opt_level
-    return f"{module_cache_key(bundle, name, target='llvm', opt_level=level).hex()}.lowered"
+    road = selected_pipeline(bundle.project.config.llvm.pipeline)
+    return f"{module_cache_key(bundle, name, target='llvm', opt_level=level).hex()}.{road}.lowered"
 
 
 def _cached_lowering(bundle, name: str, opt_level: int | None):  # type: ignore[no-untyped-def]
@@ -686,6 +706,7 @@ def compile_and_run(  # type: ignore[no-untyped-def]
                 layouts=layouts,
                 safeguards=bundle.project.config.llvm.safeguards or "hoisted",
                 prover=prover_for(bundle.project.config),
+                pipeline=selected_pipeline(bundle.project.config.llvm.pipeline),
             )
             for info, node in native.sources.values():
                 specializer.register(info, node)

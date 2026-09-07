@@ -35,6 +35,23 @@ below are in the order the work landed.
   accordingly, verifies the module after every pass on request and names
   the pass that broke it, and runs plugin passes at named stages. The
   shared passes are canonicalize, constant-fold, simplify-cfg, and dce.
+- The LLVM backend has a second road: Python AST to canonical IR
+  (`ppy_compiler.lowering`), the shared passes, and IR to LLVM
+  (`backend/llvm/from_ir`), which reads the IR and nothing else. It covers
+  the whole native subset the direct road covers -- scalars, fixed tuples,
+  value classes, borrowed buffers and their loops, calls between native
+  functions, math intrinsics, the standalone shims, specialization with
+  pinned constants -- with the same guard hoisting and the same solver
+  proofs, and answers alike on every input, fallbacks included: the whole
+  suite and every example pass on it. `[tool.ppy.llvm] pipeline = "ir"`
+  selects it, `PPY_LOWERING=ast|ir` overrides for one process, every cache
+  is keyed on the road, and CI runs the suite on both. One thing the IR
+  road does that the direct road did not: `MIN // -1` takes the fallback
+  instead of trapping in the division.
+- `ppy emit ir|llvm-ir TARGET [-o]` prints a compiler stage as text, one
+  rule for every kind; `.ppyir` is the IR's on-disk form, self-describing
+  down to each function's ABI, and `ppy build foo.ppyir` builds an
+  object, a library, and a manifest from it alone.
 
 Speed of the compiler itself, measured before being changed.
 
