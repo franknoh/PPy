@@ -36,6 +36,9 @@ from ...ir import (
     VectorType,
     VoidType,
 )
+from ...target import TargetInfo, host_target
+from .dialect_lowerings import EmitError as _DialectEmitError
+from .dialect_lowerings import lower_atomic, lower_concurrency, lower_cpu, lower_simd
 from .lowering import FASTMATH_FLAGS, _default_triple
 
 __all__ = ["EmitError", "emit_module"]
@@ -61,11 +64,20 @@ class EmitError(Exception):
     """IR the backend cannot lower; the verifier should have caught it."""
 
 
-def emit_module(module: IRModule) -> str:
-    """The LLVM IR text of every defined function in `module`."""
+def emit_module(module: IRModule, target: TargetInfo | None = None) -> str:
+    """The LLVM IR text of every defined function in `module`, for `target`.
+
+    The text is target-neutral but for what a dialect makes of the machine
+    -- a spin-wait hint is one instruction on x86 and another on arm --
+    so a cross build lowers for its target, and the lowering cache keys
+    on it.
+    """
     from llvmlite import ir
 
-    return str(_ModuleEmitter(ir, module).run())
+    try:
+        return str(_ModuleEmitter(ir, module, target or host_target()).run())
+    except _DialectEmitError as error:
+        raise EmitError(str(error)) from error
 
 
 @dataclass(slots=True)
@@ -83,11 +95,13 @@ class _Phi:
 
 
 class _ModuleEmitter:
-    def __init__(self, ir, module: IRModule) -> None:  # type: ignore[no-untyped-def]
+    def __init__(self, ir, module: IRModule, target: TargetInfo) -> None:  # type: ignore[no-untyped-def]
         self.ir = ir
         self.module = module
+        self.target = target
         self.llvm = ir.Module(name=module.name)
-        self.llvm.triple = _default_triple()
+        self.llvm.triple = target.triple if not target.is_host else _default_triple()
+        self._data_layout = None
         self.functions: dict[str, object] = {}
         self.strings: dict[str, object] = {}
 
@@ -108,6 +122,12 @@ class _ModuleEmitter:
             symbol = str(function.attributes.get("ppy.symbol", function.name))
             declared = ir.Function(self.llvm, self.function_type(function), name=symbol)
             declared.linkage = "external"
+            features = function.attributes.get("cpu.features")
+            if features:
+                # llvmlite knows only the enum attributes; a string attribute
+                # goes into the set behind its check, and prints as LLVM wants.
+                spelled = ",".join(f"+{f}" for f in features)  # type: ignore[union-attr]
+                set.add(declared.attributes, f'"target-features"="{spelled}"')
             self.functions[function.name] = declared
         for function in self.module.functions.values():
             if not function.is_declaration:
@@ -152,10 +172,21 @@ class _ModuleEmitter:
         else:
             builder.ret(builder.load(slot))
 
+    @property
+    def data_layout(self):  # type: ignore[no-untyped-def]
+        """The target's data layout, for the sizes of what the IR allocates."""
+        if self._data_layout is None:
+            from llvmlite import binding
+
+            self._data_layout = binding.create_target_data(self.target.data_layout)
+        return self._data_layout
+
     # -- types -----------------------------------------------------------
 
     def llvm_type(self, t: IRType):  # type: ignore[no-untyped-def]
         ir = self.ir
+        if isinstance(t, VectorType):
+            return ir.VectorType(self.llvm_type(t.element), t.count)
         if isinstance(t, BoolType):
             return ir.IntType(1)
         if isinstance(t, IntType):
@@ -342,8 +373,14 @@ class _FunctionEmitter:
         if op.dialect == "math":
             self._math(op)
             return
+        lowering = _DIALECTS.get(op.dialect)
+        if lowering is not None:
+            lowering(self, op)
+            return
         if op.dialect != "core":
-            raise EmitError(f"{op.name}: the LLVM backend lowers the core and math dialects")
+            raise EmitError(
+                f"{op.name}: the LLVM backend has no lowering for the {op.dialect} dialect"
+            )
         match name:
             case "const":
                 self.set(op.result, self._constant(op.result.type, op.attributes["value"]))
@@ -465,7 +502,7 @@ class _FunctionEmitter:
         b = self.builder
         left, right = (self.value(v) for v in op.operands)
         t = op.result.type
-        if isinstance(t, FloatType):
+        if isinstance(t.element if isinstance(t, VectorType) else t, FloatType):
             emit = {"add": b.fadd, "sub": b.fsub, "mul": b.fmul}[name]
             self.set(op.result, self._fp(emit, left, right))
             return
@@ -474,10 +511,13 @@ class _FunctionEmitter:
         if overflow == "wrap":
             self.set(op.result, emit(left, right))
             return
+        if isinstance(t, VectorType) and overflow != "proven":
+            raise EmitError(f"vector {name} carries `wrap` or `proven`, not `{overflow}`")
         if overflow == "proven":
             # The proof says no signed wrap; saying so keeps SCEV able to
             # fold the inductions this value feeds.
-            signed = t.signed if isinstance(t, IntType) else True
+            scalar = t.element if isinstance(t, VectorType) else t
+            signed = scalar.signed if isinstance(scalar, IntType) else True
             self.set(op.result, emit(left, right, flags=("nsw",) if signed else ("nuw",)))
             return
         self.set(op.result, self._checked(name, left, right, t))
@@ -502,13 +542,15 @@ class _FunctionEmitter:
         b = self.builder
         operand = self.value(op.operands[0])
         t = op.result.type
-        if isinstance(t, FloatType):
+        if isinstance(t.element if isinstance(t, VectorType) else t, FloatType):
             self.set(op.result, b.fneg(operand))
             return
-        zero = self.ir.Constant(self.owner.llvm_type(t), 0)
+        zero = self.ir.Constant(self.owner.llvm_type(t), None if isinstance(t, VectorType) else 0)
         if op.attributes.get("overflow", "python") == "wrap":
             self.set(op.result, b.sub(zero, operand))
             return
+        if isinstance(t, VectorType):
+            raise EmitError("vector neg carries `wrap`")
         self.set(op.result, self._checked("sub", zero, operand, t))
 
     def _divmod(self, op: Operation, name: str) -> None:
@@ -516,6 +558,11 @@ class _FunctionEmitter:
         b = self.builder
         left, right = (self.value(v) for v in op.operands)
         t = op.result.type
+        if isinstance(t, VectorType):
+            if isinstance(t.element, FloatType) and name == "div":
+                self.set(op.result, self._fp(b.fdiv, left, right))
+                return
+            raise EmitError(f"vector {name} over {t.element} has no LLVM lowering")
         if isinstance(t, FloatType):
             if name == "mod":
                 raise EmitError("float remainder has no LLVM lowering with Python semantics")
@@ -573,6 +620,8 @@ class _FunctionEmitter:
         b = self.builder
         left, right = (self.value(v) for v in op.operands)
         t = op.operands[0].type
+        if isinstance(t, VectorType):
+            t = t.element
         predicate = str(op.attributes["predicate"])
         symbol = {"eq": "==", "ne": "!=", "lt": "<", "le": "<=", "gt": ">", "ge": ">="}[predicate]
         if isinstance(t, FloatType):
@@ -589,6 +638,9 @@ class _FunctionEmitter:
         source = op.operands[0].type
         target = op.result.type
         llvm_target = self.owner.llvm_type(target)
+        if isinstance(source, VectorType) and isinstance(target, VectorType):
+            # The lanes convert as the scalars would; the builder takes vectors.
+            source, target = source.element, target.element
         if isinstance(source, PtrType) and isinstance(target, PtrType):
             self.set(op.result, b.bitcast(value, llvm_target))
             return
@@ -599,10 +651,11 @@ class _FunctionEmitter:
                 self.set(op.result, b.zext(value, llvm_target))
             return
         if isinstance(target, BoolType):
+            zero = None if isinstance(value.type, ir.VectorType) else 0
             if isinstance(source, FloatType):
-                self.set(op.result, b.fcmp_ordered("!=", value, ir.Constant(value.type, 0.0)))
+                self.set(op.result, b.fcmp_ordered("!=", value, ir.Constant(value.type, zero)))
             else:
-                self.set(op.result, b.icmp_signed("!=", value, ir.Constant(value.type, 0)))
+                self.set(op.result, b.icmp_signed("!=", value, ir.Constant(value.type, zero)))
             return
         source_int = isinstance(source, (IntType, IndexType))
         target_int = isinstance(target, (IntType, IndexType))
@@ -742,6 +795,15 @@ class _FunctionEmitter:
             self.set(op.results[1], b.extract_value(packed, 1))
             return
         raise EmitError(f"intrinsic {name!r} has no LLVM lowering")
+
+
+#: The dialects beyond core and math, each lowered by its own module.
+_DIALECTS = {
+    "simd": lower_simd,
+    "cpu": lower_cpu,
+    "atomic": lower_atomic,
+    "concurrency": lower_concurrency,
+}
 
 
 def _power_of_two(value) -> int | None:  # type: ignore[no-untyped-def]

@@ -101,6 +101,9 @@ class NativeSignature:
     #: The body touches no Python object once its arguments are unpacked, so
     #: the boundary may drop the GIL around the call (spec 16.6).
     releases_gil: bool = False
+    #: CPU features the code was compiled for (`@ppy.cpu.target`); the
+    #: boundary binds it only on a machine that has them all.
+    cpu_features: tuple[str, ...] = ()
 
     @property
     def ret(self) -> str:

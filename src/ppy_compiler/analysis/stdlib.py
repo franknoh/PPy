@@ -393,6 +393,7 @@ _FUNCTIONS: dict[str, tuple[T.Type, EffectSet]] = {
     "ppy.ffi.LengthOf": _fn("ppy.ffi.LengthOf", T.ANY, EffectSet()),
     "ppy.native.extern": _fn("ppy.native.extern", T.ANY, EffectSet()),
     "ppy.native.export": _fn("ppy.native.export", T.ANY, EffectSet()),
+    "ppy.cpu.target": _fn("ppy.cpu.target", T.ANY, EffectSet()),
     "ppy.native_import": _fn("ppy.native_import", T.BOOL, EffectSet.of(Effect.WRITE_GLOBAL)),
     "ppy.native_imports": _fn(
         "ppy.native_imports",
@@ -450,6 +451,10 @@ _FUNCTIONS: dict[str, tuple[T.Type, EffectSet]] = {
 MODULE_ATTRIBUTES: dict[str, tuple[T.Type, Facts]] = {
     "ppy.native": (T.Module_("ppy.native"), Facts()),
     "ppy.ffi": (T.Module_("ppy.ffi"), Facts()),
+    "ppy.simd": (T.Module_("ppy.simd"), Facts()),
+    "ppy.cpu": (T.Module_("ppy.cpu"), Facts()),
+    "ppy.atomic": (T.Module_("ppy.atomic"), Facts()),
+    "ppy.concurrent": (T.Module_("ppy.concurrent"), Facts()),
     "ppy.ffi.nullable": (T.ANY, Facts()),
     "math.pi": (T.FLOAT, Facts()),
     "math.e": (T.FLOAT, Facts()),

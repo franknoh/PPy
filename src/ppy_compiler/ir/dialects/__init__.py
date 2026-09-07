@@ -8,7 +8,18 @@ __all__ = ["builtin_dialects"]
 
 
 def builtin_dialects() -> list[Dialect]:
+    from .atomic import AtomicDialect
+    from .concurrency import ConcurrencyDialect
     from .core import CoreDialect
+    from .cpu import CpuDialect
     from .math import MathDialect
+    from .simd import SimdDialect
 
-    return [CoreDialect(), MathDialect()]
+    return [
+        CoreDialect(),
+        MathDialect(),
+        SimdDialect(),
+        CpuDialect(),
+        AtomicDialect(),
+        ConcurrencyDialect(),
+    ]

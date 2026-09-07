@@ -108,6 +108,33 @@ _PASSTHROUGH = {"typing.Final", "typing.ClassVar", "typing.Required", "typing.No
 _NARROW_ELEMENTS = {(8, True): "i8", (8, False): "u8"}
 
 
+VECTOR = "ppy.simd.Vector"
+
+
+def vector_type(element: T.Type, count: int) -> T.Instance:
+    """The analysis type of `simd.Vector[element, count]`.
+
+    The count rides as a type argument named by its number, so it prints
+    as written (`Vector[float, 4]`) and survives every place a literal
+    would be widened to the `int` it is a literal of.
+    """
+    spelled = str(count)
+    return T.Instance(
+        VECTOR, (element, T.Instance(spelled, (), (spelled, "object"))), (VECTOR, "object")
+    )
+
+
+def vector_parts(t: T.Type) -> tuple[T.Type, int] | None:
+    """(element, count) of a vector type, or None for anything else."""
+    base = T.strip_literal(t)
+    if not isinstance(base, T.Instance) or base.name != VECTOR or len(base.args) != 2:
+        return None
+    count = base.args[1]
+    if not isinstance(count, T.Instance) or not count.name.isdigit():
+        return None
+    return base.args[0], int(count.name)
+
+
 def narrow_element(resolved: Resolved) -> T.Type | None:
     """`i8`/`u8` as a buffer element: one byte, sign as declared."""
     width = resolved.facts.width
@@ -267,6 +294,8 @@ class AnnotationResolver:
             resolved = self._resolve(args[0]) if args else Resolved(T.UNKNOWN)
             element = narrow_element(resolved) or resolved.type
             return Resolved(T.Instance(qualname, (element,), (qualname, "object")))
+        if qualname == "ppy.simd.Vector":
+            return self._simd_vector(args, expr)
         if qualname == "ppy.Buffer":
             resolved = self._resolve(args[0]) if args else Resolved(T.UNKNOWN)
             # `Buffer[ppy.i8]` is a byte per element, not a 64-bit int with a
@@ -407,6 +436,18 @@ class AnnotationResolver:
         if len(args) == 1 and isinstance(args[0], ast.Tuple) and not args[0].elts:
             return Resolved(T.Tuple_(()))
         return Resolved(T.Tuple_(tuple(self._resolve(a).type for a in args)))
+
+    def _simd_vector(self, args: list[ast.expr], expr: ast.Subscript) -> Resolved:
+        """`simd.Vector[T, N]`: `N` lanes of the scalar `T`."""
+        count = self._literal_value(args[1]) if len(args) == 2 else None
+        if len(args) != 2 or not isinstance(count, int) or isinstance(count, bool) or count < 1:
+            self._error(
+                "E1640", "simd.Vector takes a lane type and a positive count: Vector[T, N]", expr
+            )
+            return Resolved(T.UNKNOWN)
+        resolved = self._resolve(args[0])
+        element = narrow_element(resolved) or resolved.type
+        return Resolved(vector_type(element, count))
 
     def _ppy_array(self, args: list[ast.expr], expr: ast.Subscript) -> Resolved:
         if len(args) != 2:

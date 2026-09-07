@@ -319,6 +319,7 @@ DIRECTIVE_NAMES = frozenset(
         "reflective",
         "native.extern",
         "native.export",
+        "cpu.target",
     }
 )
 
@@ -360,6 +361,10 @@ def directives_from(decorators: list[ast.expr], resolver: NameResolver) -> tuple
             symbol = options.pop("arg0", None)
             if isinstance(symbol, str):
                 options["symbol"] = symbol
+        if name == "cpu.target":
+            # `@cpu.target("avx2", "fma")`: the features, in order.
+            names = [options.pop(f"arg{i}") for i in range(len(options)) if f"arg{i}" in options]
+            options["features"] = tuple(str(n) for n in names)
         found.append(Directive(name, options, decorator))
     return tuple(found)
 

@@ -94,6 +94,10 @@ sound fallback, and never the rest.
 | `E1631` | A write through a `ppy.native.const_ptr`. |
 | `E1632` | A C export needs a signature C can spell, with one scalar result. |
 | `E1633` | A C binding needs every parameter and its return annotated. |
+| `E1640` | A `ppy.simd` operation is misused; the message says how. |
+| `E1641` | A `ppy.atomic` operation is misused; the message says how. |
+| `E1642` | A `ppy.concurrent` operation is misused; the message says how. |
+| `E1643` | A `ppy.cpu` operation is misused; the message says how. |
 
 ## Directive requirements
 

@@ -258,6 +258,11 @@ def eligible(
     # pointer lands where the program aimed it and needs no interpreter.
     violations.discard(Effect.READ_MEMORY)
     violations.discard(Effect.WRITE_MEMORY)
+    # Atomics, synchronization, and threads are native code's own business:
+    # `ppy.atomic` and `ppy.concurrent` lower to instructions and pthreads.
+    violations.discard(Effect.ATOMIC)
+    violations.discard(Effect.SYNC)
+    violations.discard(Effect.THREAD)
     if allow_io:
         violations.discard(Effect.IO)
     if written or analysis.writes_only_allocations:
@@ -276,7 +281,7 @@ def eligible(
             return False, "variadic parameters have no native ABI"
         if _native_param(param.name, param.type, layouts) is None:
             return False, f"parameter `{param.name}` is `{param.type}`, which has no native ABI"
-    if _return_atoms(info.ret) is None and not (allow_io and _returns_none(info.ret)):
+    if _return_atoms(info.ret) is None and not _returns_none(info.ret):
         return False, f"returns `{info.ret}`, which has no native ABI"
     return True, ""
 
@@ -310,6 +315,10 @@ def should_lower_native(info: FunctionInfo, analysis: FunctionAnalysis) -> tuple
     native caller.
     """
     del analysis
+    if _returns_none(info.ret):
+        # The boundary hands back a value; a function with none to hand
+        # back is native code's to call -- a thread's body, a helper.
+        return False, "returns nothing, which has no Python boundary"
     for param in info.params:
         native = _native_param(param.name, param.type)
         if native is not None and native.is_pointer:
@@ -520,7 +529,15 @@ def _signature(
         parameters=parameters,
         returns=tuple(_abi_name(atom) for atom in atoms),
         releases_gil=_releases_gil(analysis) if analysis is not None else False,
+        cpu_features=_cpu_features(info),
     )
+
+
+def _cpu_features(info: FunctionInfo) -> tuple[str, ...]:
+    directive = info.directive("cpu.target")
+    if directive is None:
+        return ()
+    return tuple(str(f) for f in directive.options.get("features", ()))  # type: ignore[union-attr]
 
 
 #: Effects that mean the body can reach the interpreter while it runs, so the

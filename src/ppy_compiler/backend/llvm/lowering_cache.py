@@ -75,6 +75,7 @@ def _signature(s: NativeSignature) -> dict:
         "parameters": [_param(p) for p in s.parameters],
         "returns": list(s.returns),
         "releases_gil": s.releases_gil,
+        "cpu_features": list(s.cpu_features),
     }
 
 
@@ -85,6 +86,7 @@ def _read_signature(raw: dict) -> NativeSignature:
         parameters=tuple(_read_param(p) for p in raw["parameters"]),
         returns=tuple(raw["returns"]),
         releases_gil=raw["releases_gil"],
+        cpu_features=tuple(raw.get("cpu_features", ())),
     )
 
 

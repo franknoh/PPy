@@ -151,6 +151,62 @@ for a pointer that may be null, `ffi.LengthOf("xs")` for an integer that
 is another parameter's length, and `ppy.Owned`/`ppy.Borrowed` for who keeps
 memory.
 
+## Lanes, hints, atomics, threads: `ppy.simd`, `ppy.cpu`, `ppy.atomic`, `ppy.concurrent`
+
+Four namespaces beside `ppy.native`, each with a reference implementation
+under CPython and a lowering to a dialect of the IR (`docs/ir.md`), so a
+program using them runs the same on every path.
+
+`ppy.simd` is a few scalars operated on at once. `simd.Vector[T, N]` is
+`N` lanes of `T` -- `int`, `float`, `bool`, `ppy.i8`, or `ppy.u8`;
+`splat[T, N](x)` fills one, `load[T, N](p)` reads one from a
+`native.ptr[T]`, `store(v, p)` writes it back, `extract(v, i)` and
+`insert(v, i, x)` reach one lane (the index is guarded), `shuffle(a, b,
+mask)` builds a vector from the lanes of two by a constant mask, and
+`reduce_add`, `reduce_min`, `reduce_max` fold one to a scalar in lane
+order -- first to last, so a floating-point sum is the same number
+everywhere, and a NaN lane is passed over or kept exactly as Python's
+`min` would. `+ - *` work lane by lane on numbers and integer lanes wrap
+at their width, `/` on float lanes, `& | ^` on integer and bool lanes,
+the comparisons give a `Vector[bool, N]`, and `select(mask, a, b)`
+chooses by it. A vector lives in a local; it does not cross the Python
+boundary. `E1640` names a misuse.
+
+`ppy.cpu` is the machine as a facade, with no instruction named.
+`cpu.features()` is what this machine has, in LLVM's spelling (`avx2`,
+`fma`, `neon`, `sse4.2`); the compiler folds `"avx2" in cpu.features()`
+to a constant for the machine compiling. `cpu.vector_width[T]()` is how
+many `T` a vector register holds here, also a constant. `cpu.prefetch(p,
+write=False, locality=3)` and `cpu.pause()` are hints and change no
+value. `@cpu.target("avx2", "fma")` compiles a function with those
+features on; the boundary binds it only on a machine that has them all
+and runs its Python definition elsewhere, so a program stays correct on
+every machine it reaches. `E1643` names a misuse.
+
+`ppy.atomic` is shared memory, one operation at a time, on a
+`native.ptr[int]` (or a byte pointer; `load`, `store`, and `exchange` take
+`float` too): `load`, `store`, `exchange`, `compare_exchange` -- which
+answers `(the value found, whether it swapped)` -- `fetch_add`,
+`fetch_sub`, `fetch_and`, `fetch_or`, `fetch_xor`, and `fence`. Each
+takes `order="seq_cst"` unless said otherwise (`relaxed`, `acquire`,
+`release`, `acq_rel`), and the checker holds what C11 holds: a load is
+not `release`, a store is not `acquire`, a relaxed fence orders nothing
+(`E1641`). Under CPython the operations serialize under one lock.
+
+`ppy.concurrent` is threads and what keeps them apart. `spawn(f, *args)`
+runs a function of the module -- one that returns nothing, with the
+parameters a native call takes -- on a new thread and hands back its
+handle; `join(handle)` waits for it, and a thread that failed a guard
+fails its joiner, which falls back as a whole. The synchronization
+objects are memory the program owns, so they are pointers: a mutex is one
+`int` slot (`lock`, `unlock`; zero is unlocked), a condition is one `int`
+slot counting notifications (`wait(condition, mutex)`, `notify`), a
+barrier is two `int` slots (`barrier(slots, parties)`), and every path
+implements them the same way over the atomics, spinning with the CPU's
+pause hint. `thread_id()` names the running thread. `E1642` names a
+misuse. Native code links pthreads for these; a target without them is
+refused with the reason.
+
 ## Generics
 
 A function may declare type parameters the way Python 3.12 spells them:

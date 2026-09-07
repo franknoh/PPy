@@ -81,6 +81,7 @@ def _signature(payload: dict) -> NativeSignature:
         parameters=parameters,
         returns=tuple(abi["returns"]),
         releases_gil=bool(abi.get("releases_gil", False)),
+        cpu_features=tuple(str(f) for f in abi.get("cpu_features", ())),
     )
 
 

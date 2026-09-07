@@ -12,6 +12,7 @@ import ctypes
 from collections.abc import Callable
 from dataclasses import dataclass, field
 
+from . import _cpu
 from .abi import STATUS_OK, NativeParam, NativeSignature
 
 __all__ = ["NativeBinding", "adopt", "bind", "observation_wanted", "value_class_types"]
@@ -152,6 +153,13 @@ def bind(
     When the function asked for it, repeated argument shapes are compiled into
     guarded specializations and selected here (spec 16.9).
     """
+    missing = set(signature.cpu_features) - set(_cpu.features())
+    if missing:
+        # Compiled for a machine with more than this one has: the Python
+        # definition is the function here, and says nothing about it.
+        return NativeBinding(
+            signature=signature, wrapper=fallback, fallback=fallback, fast_entry=None, owner=owner
+        )
     argument_types: list[type] = []
     for parameter in signature.parameters:
         if parameter.is_buffer:

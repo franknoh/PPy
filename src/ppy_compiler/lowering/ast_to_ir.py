@@ -59,9 +59,14 @@ from ..ir import (
     Successor,
     TupleType,
     Value,
+    VectorType,
 )
+from ..ir.dialects import atomic as atomic_dialect
+from ..ir.dialects import concurrency as concurrency_dialect
 from ..ir.dialects import core
+from ..ir.dialects import cpu as cpu_dialect
 from ..ir.dialects import math as math_dialect
+from ..ir.dialects import simd as simd_dialect
 
 __all__ = ["Frontend", "Lowered", "lower_function", "lower_module_to_ir"]
 
@@ -290,6 +295,12 @@ class Frontend:
             if len(results) != 1 or isinstance(results[0], TupleType):
                 raise Unsupported("a C export returns one scalar")
             function.attributes["ppy.export"] = str(export.options.get("name") or info.name)
+        features = info.directive("cpu.target")
+        if features is not None:
+            function.attributes["cpu.features"] = tuple(
+                str(f)
+                for f in features.options.get("features", ())  # type: ignore[union-attr]
+            )
         self.declared[info.qualname] = (function, signature)
         return function
 
@@ -771,9 +782,9 @@ class _FunctionLowering:
             core.store(self.b, value, slot)
             return
         assert isinstance(slot.type, PtrType)
-        if isinstance(slot.type.pointee, PtrType):
+        if isinstance(slot.type.pointee, (PtrType, VectorType)):
             if value.type != slot.type.pointee:
-                raise Unsupported("a pointer local keeps one pointer type")
+                raise Unsupported("a pointer or vector local keeps one type")
             core.store(self.b, value, slot)
             return
         core.store(self.b, self._coerce(value, _kind(slot.type.pointee)), slot)
@@ -1155,6 +1166,8 @@ class _FunctionLowering:
         operand = self._expr(node.operand)
         match node.op:
             case ast.USub():
+                if isinstance(operand.type, VectorType):
+                    return core.neg(self.b, operand, overflow="wrap")
                 if operand.type == F64:
                     return core.neg(self.b, operand)
                 promoted = self._coerce(operand, "int")
@@ -1192,11 +1205,18 @@ class _FunctionLowering:
     def _compare(self, node: ast.Compare) -> Value:
         if len(node.ops) != 1:
             raise Unsupported("chained comparison has no native lowering")
+        folded = self._feature_membership(node)
+        if folded is not None:
+            return folded
         predicate = _COMPARISONS.get(type(node.ops[0]))
         if predicate is None:
             raise Unsupported("comparison operator has no native lowering")
         left = self._expr(node.left)
         right = self._expr(node.comparators[0])
+        if isinstance(left.type, VectorType) or isinstance(right.type, VectorType):
+            if left.type != right.type:
+                raise Unsupported("a vector comparison takes two vectors of one type")
+            return core.cmp(self.b, predicate, left, right)
         kind = self._unify(_kind(left.type), _kind(right.type))
         return core.cmp(self.b, predicate, self._coerce(left, kind), self._coerce(right, kind))
 
@@ -1210,9 +1230,12 @@ class _FunctionLowering:
         )
 
     def _call(self, node: ast.Call) -> Value:
+        target = ast.unparse(node.func)
+        namespace = _dialect_namespace(target)
+        if namespace is not None:
+            return self._dialect_call(namespace, node)
         if node.keywords:
             raise Unsupported("keyword arguments have no native ABI")
-        target = ast.unparse(node.func)
         if self.frontend.standalone and target == "print":
             return self._standalone_print(node)
         if self.frontend.standalone and target == "ppy.input[int]" and not node.args:
@@ -1309,6 +1332,311 @@ class _FunctionLowering:
             return core.cast(self.b, pointer, target)
         raise Unsupported(f"`ppy.native.{operation}` has no native lowering")
 
+    # -- the simd, atomic, cpu, and concurrent namespaces -------------------
+
+    def _dialect_call(self, namespace: str, node: ast.Call) -> Value:
+        func = node.func
+        subscript = func.slice if isinstance(func, ast.Subscript) else None
+        head = func.value if isinstance(func, ast.Subscript) else func
+        operation = head.attr if isinstance(head, ast.Attribute) else ""
+        if namespace == "simd":
+            if node.keywords:
+                raise Unsupported("`ppy.simd` takes no keyword arguments")
+            return self._simd_op(operation, node, subscript)
+        if namespace == "atomic":
+            return self._atomic_op(operation, node)
+        if namespace == "cpu":
+            return self._cpu_op(operation, node, subscript)
+        if node.keywords:
+            raise Unsupported("`ppy.concurrent` takes no keyword arguments")
+        return self._concurrent_op(operation, node)
+
+    def _lane_kind(self, subscript: ast.expr | None, what: str) -> tuple[str, int]:
+        elements = subscript.elts if isinstance(subscript, ast.Tuple) else ()
+        if len(elements) != 2 or not isinstance(elements[1], ast.Constant):
+            raise Unsupported(f"`{what}[T, N]` takes the lane type and the count")
+        kind = _annotation_kind(elements[0])
+        count = elements[1].value
+        if kind is None or not isinstance(count, int) or isinstance(count, bool) or count < 1:
+            raise Unsupported(f"`{what}[T, N]` takes a scalar lane type and a positive count")
+        return kind, count
+
+    def _vector(self, node: ast.expr) -> Value:
+        value = self._expr(node)
+        if not isinstance(value.type, VectorType):
+            raise Unsupported("a `ppy.simd` operation needs a vector")
+        return value
+
+    def _simd_op(self, operation: str, node: ast.Call, subscript: ast.expr | None) -> Value:
+        self.frontend.module.require("simd", 1)
+        args = node.args
+        if operation == "splat":
+            kind, count = self._lane_kind(subscript, "simd.splat")
+            return simd_dialect.splat(self.b, self._coerce(self._expr(args[0]), kind), count)
+        if operation == "load":
+            kind, count = self._lane_kind(subscript, "simd.load")
+            pointer = self._pointer(args[0])
+            assert isinstance(pointer.type, PtrType)
+            if _kind(pointer.type.pointee) != kind:
+                raise Unsupported("`simd.load[T, N]` reads through a pointer to `T`")
+            return simd_dialect.load(self.b, pointer, count)
+        if operation == "store":
+            vector = self._vector(args[0])
+            pointer = self._pointer(args[1])
+            assert isinstance(pointer.type, PtrType)
+            if not pointer.type.mutable:
+                raise Unsupported("a store through a const pointer")
+            if pointer.type.pointee != vector.type.element:  # type: ignore[union-attr]
+                raise Unsupported("`simd.store(v, p)` writes lanes of `T` through a pointer to `T`")
+            simd_dialect.store(self.b, vector, pointer)
+            return core.const(self.b, 0, I64)
+        if operation == "extract":
+            vector = self._vector(args[0])
+            index = self._coerce(self._expr(args[1]), "int")
+            self._guard_lane(index, vector)
+            lane = simd_dialect.extract(self.b, vector, index)
+            return self._coerce(lane, _read_as(_kind(lane.type)))
+        if operation == "insert":
+            vector = self._vector(args[0])
+            index = self._coerce(self._expr(args[1]), "int")
+            self._guard_lane(index, vector)
+            value = self._coerce(self._expr(args[2]), _kind(vector.type.element))  # type: ignore[union-attr]
+            return simd_dialect.insert(self.b, vector, value, index)
+        if operation == "shuffle":
+            first = self._vector(args[0])
+            second = self._vector(args[1])
+            if first.type != second.type:
+                raise Unsupported("`simd.shuffle` takes two vectors of one type")
+            mask = _constant_lanes(args[2])
+            if mask is None:
+                raise Unsupported("a shuffle mask is a tuple of lane numbers")
+            return simd_dialect.shuffle(self.b, first, second, mask)
+        if operation in {"reduce_add", "reduce_min", "reduce_max"}:
+            vector = self._vector(args[0])
+            folded = simd_dialect.reduce(self.b, operation.removeprefix("reduce_"), vector)
+            return self._coerce(folded, _read_as(_kind(folded.type)))
+        if operation == "select":
+            mask, first, second = (self._vector(a) for a in args)
+            return core.select(self.b, mask, first, second)
+        raise Unsupported(f"`simd.{operation}` has no native lowering")
+
+    def _guard_lane(self, index: Value, vector: Value) -> None:
+        count = vector.type.count  # type: ignore[union-attr]
+        in_range = core.bitwise(
+            self.b,
+            "and",
+            core.cmp(self.b, "ge", index, core.const(self.b, 0, I64)),
+            core.cmp(self.b, "lt", index, core.const(self.b, count, I64)),
+        )
+        core.guard(self.b, in_range, "bounds", "lane index out of range")
+
+    def _vector_binary(self, left: Value, right: Value, op: type[ast.operator]) -> Value:
+        if left.type != right.type or not isinstance(left.type, VectorType):
+            raise Unsupported("a vector operator takes two vectors of one type")
+        element = left.type.element
+        if op in _ARITHMETIC:
+            return getattr(core, _ARITHMETIC[op])(self.b, left, right, overflow="wrap")
+        if op is ast.Div:
+            if element != F64:
+                raise Unsupported("`/` takes vectors of floats")
+            return core.div(self.b, left, right)
+        if op in _BITWISE:
+            if element == F64:
+                raise Unsupported("a bitwise operator takes vectors of integers or bools")
+            return core.bitwise(self.b, _BITWISE[op], left, right)
+        raise Unsupported("this operator has no vector lowering")
+
+    def _atomic_op(self, operation: str, node: ast.Call) -> Value:
+        self.frontend.module.require("atomic", 1)
+        order = "seq_cst"
+        for keyword in node.keywords:
+            value = keyword.value.value if isinstance(keyword.value, ast.Constant) else None
+            if keyword.arg != "order" or value not in atomic_dialect.ORDERS:
+                raise Unsupported("`ppy.atomic` takes `order=` spelled as a string constant")
+            order = str(value)
+        if operation == "fence":
+            atomic_dialect.fence(self.b, order)
+            return core.const(self.b, 0, I64)
+        pointer = self._pointer(node.args[0])
+        assert isinstance(pointer.type, PtrType)
+        kind = _kind(pointer.type.pointee)
+        values = [self._coerce(self._expr(a), kind) for a in node.args[1:]]
+        if operation == "load":
+            loaded = atomic_dialect.load(self.b, pointer, order)
+            return self._coerce(loaded, _read_as(kind))
+        if not pointer.type.mutable:
+            raise Unsupported("an atomic write through a const pointer")
+        if operation == "store":
+            atomic_dialect.store(self.b, values[0], pointer, order)
+            return core.const(self.b, 0, I64)
+        if operation == "exchange":
+            old = atomic_dialect.exchange(self.b, pointer, values[0], order)
+            return self._coerce(old, _read_as(kind))
+        if operation == "compare_exchange":
+            failure = "acquire" if order in {"release", "acq_rel"} else order
+            found, swapped = atomic_dialect.compare_exchange(
+                self.b, pointer, values[0], values[1], order, failure
+            )
+            return core.tuple_make(self.b, self._coerce(found, _read_as(kind)), swapped)
+        if operation.startswith("fetch_"):
+            old = atomic_dialect.fetch(
+                self.b, operation.removeprefix("fetch_"), pointer, values[0], order
+            )
+            return self._coerce(old, _read_as(kind))
+        raise Unsupported(f"`atomic.{operation}` has no native lowering")
+
+    def _feature_membership(self, node: ast.Compare) -> Value | None:
+        """`"avx2" in cpu.features()`: a constant, for the machine compiling."""
+        if len(node.ops) != 1 or not isinstance(node.ops[0], (ast.In, ast.NotIn)):
+            return None
+        right = node.comparators[0]
+        if not (
+            isinstance(right, ast.Call)
+            and not right.args
+            and _dialect_namespace(ast.unparse(right.func)) == "cpu"
+            and isinstance(right.func, ast.Attribute)
+            and right.func.attr == "features"
+        ):
+            return None
+        if not isinstance(node.left, ast.Constant) or not isinstance(node.left.value, str):
+            raise Unsupported("`cpu.features()` is asked about one feature name at a time")
+        from ppy_runtime._cpu import features
+
+        present = node.left.value in features()
+        return core.const(self.b, present if isinstance(node.ops[0], ast.In) else not present, BOOL)
+
+    def _cpu_op(self, operation: str, node: ast.Call, subscript: ast.expr | None) -> Value:
+        if operation == "features":
+            raise Unsupported('`cpu.features()` is folded only as `"name" in cpu.features()`')
+        if operation == "vector_width":
+            from ppy_runtime._cpu import vector_width
+
+            kind = _annotation_kind(subscript) if subscript is not None else None
+            if kind is None or node.args:
+                raise Unsupported("`cpu.vector_width[T]()` takes a scalar lane type")
+            bits = {"int": 64, "float": 64, "bool": 8, "i8": 8, "u8": 8}[kind]
+            return self._int_constant(vector_width(bits))
+        self.frontend.module.require("cpu", 1)
+        if operation == "pause":
+            cpu_dialect.pause(self.b)
+            return core.const(self.b, 0, I64)
+        if operation == "prefetch":
+            rw = "read"
+            locality = 3
+            for keyword in node.keywords:
+                value = keyword.value.value if isinstance(keyword.value, ast.Constant) else None
+                if keyword.arg == "write" and isinstance(value, bool):
+                    rw = "write" if value else "read"
+                elif keyword.arg == "locality" and isinstance(value, int):
+                    locality = value
+                else:
+                    raise Unsupported("`cpu.prefetch` takes `write=` and `locality=` constants")
+            cpu_dialect.prefetch(self.b, self._pointer(node.args[0]), rw=rw, locality=locality)
+            return core.const(self.b, 0, I64)
+        raise Unsupported(f"`cpu.{operation}` has no native lowering")
+
+    def _concurrent_op(self, operation: str, node: ast.Call) -> Value:
+        self.frontend.module.require("concurrency", 1)
+        self.frontend.module.require("atomic", 1)
+        known = self.frontend.module.attributes.get("ppy.libraries", ())
+        assert isinstance(known, tuple)
+        if "pthread" not in known:
+            self.frontend.module.attributes["ppy.libraries"] = (*known, "pthread")
+        args = node.args
+        if operation == "spawn":
+            target = args[0]
+            if not isinstance(target, ast.Name):
+                raise Unsupported("`concurrent.spawn` takes a function of this module by name")
+            found = next(
+                (
+                    (function, signature)
+                    for qualname, (function, signature) in self.frontend.declared.items()
+                    if qualname.rpartition(".")[2] == target.id
+                    and "ppy.generic" not in function.attributes
+                ),
+                None,
+            )
+            if found is None:
+                raise Unsupported(f"`{target.id}` has no native lowering to run on a thread")
+            function, signature = found
+            if function.results:
+                raise Unsupported("a spawned function returns nothing")
+            arguments = self._call_arguments(signature, args[1:], target.id)
+            return concurrency_dialect.spawn(self.b, function.name, tuple(arguments))
+        if operation == "join":
+            handle = self._coerce(self._expr(args[0]), "int")
+            status = concurrency_dialect.join(self.b, handle)
+            ok = core.cmp(self.b, "eq", status, core.const(self.b, 0, I64))
+            core.guard(self.b, ok, "contract", "a spawned thread failed a guard")
+            return core.const(self.b, 0, I64)
+        if operation == "thread_id":
+            return concurrency_dialect.thread_id(self.b)
+        slots = [self._pointer(a) for a in args[: 2 if operation == "wait" else 1]]
+        for slot in slots:
+            assert isinstance(slot.type, PtrType)
+            if slot.type.pointee != I64 or not slot.type.mutable:
+                raise Unsupported(f"`concurrent.{operation}` takes a mutable `native.ptr[int]`")
+        if operation == "lock":
+            concurrency_dialect.mutex_lock(self.b, slots[0])
+        elif operation == "unlock":
+            concurrency_dialect.mutex_unlock(self.b, slots[0])
+        elif operation == "notify":
+            concurrency_dialect.condition_notify(self.b, slots[0])
+        elif operation == "wait":
+            concurrency_dialect.condition_wait(self.b, slots[0], slots[1])
+        elif operation == "barrier":
+            parties = self._coerce(self._expr(args[1]), "int")
+            concurrency_dialect.barrier(self.b, slots[0], parties)
+        else:
+            raise Unsupported(f"`concurrent.{operation}` has no native lowering")
+        return core.const(self.b, 0, I64)
+
+    def _call_arguments(
+        self, signature: NativeSignature, spelled: list[ast.expr], qualname: str
+    ) -> list[Value]:
+        """Arguments for a native callee, each in the shape its parameter takes."""
+        if len(spelled) != len(signature.parameters):
+            raise Unsupported(f"`{qualname}` called with the wrong number of arguments")
+        arguments: list[Value] = []
+        for argument, parameter in zip(spelled, signature.parameters, strict=True):
+            if parameter.is_buffer:
+                if not isinstance(argument, ast.Name) or argument.id not in self.buffers:
+                    raise Unsupported("a buffer argument must be a buffer this function holds")
+                buffer = self.buffers[argument.id]
+                assert isinstance(buffer.type, BufferType)
+                if _kind(buffer.type.element) != parameter.element:
+                    raise Unsupported(
+                        f"`{qualname}` expects a `{parameter.element}` buffer, "
+                        f"and `{argument.id}` holds `{_kind(buffer.type.element)}`"
+                    )
+                arguments.append(buffer)
+                continue
+            if parameter.is_object:
+                if not isinstance(argument, ast.Name) or argument.id not in self.objects:
+                    raise Unsupported("a value class argument must be a flattened local")
+                struct = self.objects[argument.id]
+                assert isinstance(struct.type, StructType)
+                for attr, _scalar in parameter.fields:
+                    if struct.type.field_type(attr) is None:
+                        raise Unsupported(f"`{argument.id}` has no field `{attr}`")
+                arguments.append(struct)
+                continue
+            if parameter.is_tuple:
+                values = self._tuple_expr(argument)
+                if values is None or len(values) != len(parameter.elements):
+                    raise Unsupported("a tuple argument does not match the callee's shape")
+                items = [
+                    self._coerce(item, element)
+                    for item, element in zip(values, parameter.elements, strict=True)
+                ]
+                arguments.append(core.tuple_make(self.b, *items))
+                continue
+            if parameter.is_pointer:
+                arguments.append(self._coerce(self._pointer(argument), parameter.kind))
+                continue
+            arguments.append(self._coerce(self._expr(argument), parameter.kind))
+        return arguments
+
     def _pointer(self, node: ast.expr) -> Value:
         value = self._expr(node)
         if not isinstance(value.type, PtrType):
@@ -1398,43 +1726,7 @@ class _FunctionLowering:
     def _native_call(
         self, function: IRFunction, signature: NativeSignature, qualname: str, node: ast.Call
     ) -> Value:
-        if len(node.args) != len(signature.parameters):
-            raise Unsupported(f"`{qualname}` called with the wrong number of arguments")
-        arguments: list[Value] = []
-        for argument, parameter in zip(node.args, signature.parameters, strict=True):
-            if parameter.is_buffer:
-                if not isinstance(argument, ast.Name) or argument.id not in self.buffers:
-                    raise Unsupported("a buffer argument must be a buffer this function holds")
-                buffer = self.buffers[argument.id]
-                assert isinstance(buffer.type, BufferType)
-                if _kind(buffer.type.element) != parameter.element:
-                    raise Unsupported(
-                        f"`{qualname}` expects a `{parameter.element}` buffer, "
-                        f"and `{argument.id}` holds `{_kind(buffer.type.element)}`"
-                    )
-                arguments.append(buffer)
-                continue
-            if parameter.is_object:
-                if not isinstance(argument, ast.Name) or argument.id not in self.objects:
-                    raise Unsupported("a value class argument must be a flattened local")
-                struct = self.objects[argument.id]
-                assert isinstance(struct.type, StructType)
-                for attr, _scalar in parameter.fields:
-                    if struct.type.field_type(attr) is None:
-                        raise Unsupported(f"`{argument.id}` has no field `{attr}`")
-                arguments.append(struct)
-                continue
-            if parameter.is_tuple:
-                values = self._tuple_expr(argument)
-                if values is None or len(values) != len(parameter.elements):
-                    raise Unsupported("a tuple argument does not match the callee's shape")
-                items = [
-                    self._coerce(item, element)
-                    for item, element in zip(values, parameter.elements, strict=True)
-                ]
-                arguments.append(core.tuple_make(self.b, *items))
-                continue
-            arguments.append(self._coerce(self._expr(argument), parameter.kind))
+        arguments = self._call_arguments(signature, node.args, qualname)
         if signature.returns_tuple:
             raise Unsupported("a tuple result cannot be forwarded between native calls yet")
         if not function.results:
@@ -1475,6 +1767,8 @@ class _FunctionLowering:
         raise Unsupported(f"`{name}` has no native lowering")
 
     def _binary(self, left: Value, right: Value, op: type[ast.operator]) -> Value:
+        if isinstance(left.type, VectorType) or isinstance(right.type, VectorType):
+            return self._vector_binary(left, right, op)
         if op is ast.Div:
             left, right = self._coerce(left, "float"), self._coerce(right, "float")
             self._guard_nonzero(right)
@@ -1743,13 +2037,18 @@ class _FunctionLowering:
         return "bool"
 
     def _coerce(self, value: Value, kind: str) -> Value:
+        if isinstance(value.type, PtrType):
+            if kind == "const_ptr" and value.type.mutable:
+                # Memory one may write is memory one may read.
+                pointer = value.type
+                return core.cast(
+                    self.b, value, PtrType(pointer.pointee, pointer.address_space, False)
+                )
+            if kind in {"ptr", "const_ptr"}:
+                return value
         current = _kind(value.type)
         if current == kind:
             return value
-        if kind == "const_ptr" and isinstance(value.type, PtrType) and value.type.mutable:
-            # Memory one may write is memory one may read.
-            pointer = value.type
-            return core.cast(self.b, value, PtrType(pointer.pointee, pointer.address_space, False))
         if current in _NARROW:
             widened = core.cast(self.b, value, I64)
             return self._coerce(widened, kind)
@@ -1782,6 +2081,45 @@ class _FunctionLowering:
 
 
 _SPELLING = {"add": "+", "sub": "-", "mul": "*"}
+_NAMESPACES = ("simd", "atomic", "cpu", "concurrent")
+_ANNOTATION_KINDS = {
+    "int": "int",
+    "float": "float",
+    "bool": "bool",
+    "i8": "i8",
+    "u8": "u8",
+    "ppy.i8": "i8",
+    "ppy.u8": "u8",
+    "ppy.i64": "int",
+    "ppy.f64": "float",
+}
+
+
+def _dialect_namespace(target: str) -> str | None:
+    """Which of `ppy.simd`, `ppy.atomic`, `ppy.cpu`, `ppy.concurrent` a call spells."""
+    for namespace in _NAMESPACES:
+        if target.startswith((f"ppy.{namespace}.", f"{namespace}.")):
+            return namespace
+    return None
+
+
+def _annotation_kind(node: ast.expr | None) -> str | None:
+    """The scalar kind an annotation names, for `simd.load[float, 4]` and friends."""
+    if node is None:
+        return None
+    return _ANNOTATION_KINDS.get(ast.unparse(node))
+
+
+def _constant_lanes(node: ast.expr) -> tuple[int, ...] | None:
+    if not isinstance(node, ast.Tuple) or not node.elts:
+        return None
+    lanes = []
+    for element in node.elts:
+        value = element.value if isinstance(element, ast.Constant) else None
+        if not isinstance(value, int) or isinstance(value, bool):
+            return None
+        lanes.append(value)
+    return tuple(lanes)
 
 
 def _rebinds(body: list[ast.stmt], name: str) -> bool:

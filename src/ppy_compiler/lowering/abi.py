@@ -72,4 +72,5 @@ def signature_from_ir(function: IRFunction) -> NativeSignature:
         parameters=tuple(parameters),
         returns=tuple(abi[a] for a in atoms),
         releases_gil=bool(function.attributes.get("ppy.releases_gil", False)),
+        cpu_features=tuple(str(f) for f in function.attributes.get("cpu.features", ())),  # type: ignore[union-attr]
     )

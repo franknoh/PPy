@@ -226,6 +226,7 @@ def _lower(bundle, analysis, candidates, layouts, opt_level):  # type: ignore[no
             prover=prover_for(config),
             root=bundle.project.root,
             plugins=bundle.project.plugins,
+            target=configured_target(config.llvm.target),
         )
     return lower_module(
         analysis, candidates, layouts, safeguards=safeguards, prover=prover_for(config)
@@ -238,7 +239,10 @@ def _lowering_key(bundle, name: str, opt_level: int | None) -> str:  # type: ign
 
     level = opt_level if opt_level is not None else bundle.project.config.opt_level
     road = selected_pipeline(bundle.project.config.llvm.pipeline)
-    return f"{module_cache_key(bundle, name, target='llvm', opt_level=level).hex()}.{road}.lowered"
+    machine = configured_target(bundle.project.config.llvm.target)
+    where = "" if machine.is_host else f".{machine.triple}"
+    key = module_cache_key(bundle, name, target="llvm", opt_level=level).hex()
+    return f"{key}.{road}{where}.lowered"
 
 
 def _cached_lowering(bundle, name: str, opt_level: int | None):  # type: ignore[no-untyped-def]

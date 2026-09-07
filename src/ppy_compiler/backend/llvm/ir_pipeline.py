@@ -109,6 +109,7 @@ def lower_module_via_ir(
     prover: Prover | None = None,
     root: Path | None = None,
     plugins=None,  # type: ignore[no-untyped-def]
+    target=None,  # type: ignore[no-untyped-def]
 ) -> LoweringResult:
     from ...lowering import lower_module_to_ir
 
@@ -122,7 +123,7 @@ def lower_module_via_ir(
         root=root,
     )
     optimize(lowered.module, opt_level, plugins)
-    text = emit_module(lowered.module) if lowered.functions else ""
+    text = emit_module(lowered.module, target) if lowered.functions else ""
     libraries = lowered.module.attributes.get("ppy.libraries", ())
     exports = {
         str(f.attributes["ppy.export"]): str(f.attributes.get("ppy.qualname", name))

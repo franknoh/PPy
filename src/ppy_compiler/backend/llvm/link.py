@@ -326,6 +326,7 @@ def write_manifest(
                     ],
                     "returns": list(signature.returns),
                     "releases_gil": signature.releases_gil,
+                    "cpu_features": list(signature.cpu_features),
                 },
             }
             for signature in sorted(entries.values(), key=lambda s: s.qualname)

@@ -93,6 +93,55 @@ backend lowers it to the intrinsic of that name, a C backend to libm, a GPU
 backend to its device library. A math function of a constant folds, and
 `floor(floor(x))` is `floor(x)`.
 
+## The simd dialect
+
+`vector<T, N>` is `N` scalars operated on at once, and the core dialect's
+arithmetic, comparisons, `select`, and `cast` already take vectors (a
+vector's integer arithmetic carries `wrap` or `proven`). The simd dialect
+says what the core cannot: `simd.splat %x : vector<T, N>`, `simd.load %p :
+vector<T, N>` and `simd.store %v, %p` through a pointer to the element,
+`simd.extract %v, %i : T` and `simd.insert %v, %x, %i`, `simd.shuffle %a,
+%b {mask = (...)}` over the lanes of both by a constant mask, and
+`simd.reduce_add`, `reduce_min`, `reduce_max` to a scalar. A reduction
+walks the lanes in order, first to last: an integer sum is the reduction
+intrinsic, a floating-point sum and every minimum and maximum a chain of
+lane operations, so every backend and the reference implementation give
+one number.
+
+## The cpu dialect
+
+`cpu.prefetch %p {rw, locality}` asks for a cache line, `cpu.pause` is the
+spin-wait hint; a backend without the instruction drops the hint. A
+function compiled for a feature set carries `cpu.features = ("avx2", ...)`
+as an attribute, which the LLVM backend turns into the function's target
+features and the boundary into a check before binding.
+
+## The atomic dialect
+
+`atomic.load`, `store`, `exchange`, `compare_exchange` (two results: the
+value found and whether it swapped, with a `success` and a `failure`
+order), `fetch_add`, `fetch_sub`, `fetch_and`, `fetch_or`, `fetch_xor`,
+and `fence`, each with its memory `order` -- `relaxed`, `acquire`,
+`release`, `acq_rel`, `seq_cst`, the vocabulary of C11 and LLVM -- so a
+backend lowers to the instruction of that order and never guesses. The
+verifier holds the orders a load and a store may carry and the failure
+order of a compare-exchange.
+
+## The concurrency dialect
+
+`concurrency.spawn @f(%args...) : i64` starts a thread running the IR
+function `@f` (which returns nothing, and takes exactly those arguments)
+and hands back its handle; `join %h : i64` waits and gives the status
+`@f` returned -- zero, or the fallback status a guard failed with.
+`mutex_lock`, `mutex_unlock`, `condition_wait`, `condition_notify`,
+`barrier`, and `thread_id` complete it. The synchronization objects are
+memory the program owns: a mutex one `i64` slot, a condition one slot
+counting notifications, a barrier two slots (arrivals, generation); every
+backend implements them over the atomic dialect and the pause hint the
+same way, so a program built for one runs exactly like one built for
+another. Threads are pthreads on the targets that have them; another is
+refused with the reason.
+
 ## Effects and ownership on the IR
 
 A function carries its `effects` -- the lower-case names of the analysis's

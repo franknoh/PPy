@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING
 
 from ppy_runtime.version import VERSION as __version__
 
-from . import ffi
+from . import atomic, concurrent, cpu, ffi, simd
 from ._directives import (
     DIRECTIVE_ATTR,
     Directive,
@@ -98,8 +98,11 @@ __all__ = [
     "VectorSpec",
     "__version__",
     "add_import_root",
+    "atomic",
     "attach",
     "check",
+    "concurrent",
+    "cpu",
     "directives_of",
     "dynamic",
     "f16",
@@ -129,6 +132,7 @@ __all__ = [
     "read_token",
     "reader_available",
     "reflective",
+    "simd",
     "specialize",
     "u8",
     "u16",

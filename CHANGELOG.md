@@ -421,6 +421,18 @@ Speed of the compiler itself, measured before being changed.
   typedefs, enums, structs of scalars as dataclasses, numeric `#define`s
   as constants -- with what has no spelling yet listed by name rather than
   guessed at.
+- Four dialects and their namespaces: `simd` (`vector<T, N>` made, moved,
+  shuffled, and reduced in lane order), `cpu` (prefetch and pause hints,
+  and the `cpu.features` a function is compiled for), `atomic` (every
+  operation with its C11 memory order, verified), and `concurrency`
+  (spawn, join, and mutexes, conditions, and barriers that are memory the
+  program owns, implemented over the atomics the same way on every
+  backend). The LLVM and C backends lower all four; `ppy.simd`, `ppy.cpu`,
+  `ppy.atomic`, and `ppy.concurrent` carry them into the language with
+  reference implementations under CPython, the checker's rules
+  (`E1640`-`E1643`), and the frontend's lowering, so a program using them
+  runs the same on every path. `@cpu.target("avx2")` compiles a function
+  with the features on, and the boundary binds it only where they are.
 
 ## 0.1.0a1
 

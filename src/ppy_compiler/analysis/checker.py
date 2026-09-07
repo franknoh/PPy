@@ -18,7 +18,7 @@ from . import builtins as B
 from . import stdlib
 from . import types as T
 from .aliasing import EXTERNAL, AliasInfo, analyze_aliases
-from .annotations import AnnotationResolver, Resolved, narrow_element
+from .annotations import AnnotationResolver, Resolved, narrow_element, vector_parts, vector_type
 from .binding import bind_call, positional_values
 from .effects import Effect, EffectSet
 from .env import Binding, Env
@@ -333,6 +333,23 @@ def _mutates_in_place(t: T.Type) -> bool:
 #: What a buffer can hold. A machine word or a byte; anything else has no
 #: native storage, so the annotation would promise something untrue.
 _HOLDABLE = frozenset({"int", "float", "i8", "u8"})
+_ORDERS = ("relaxed", "acquire", "release", "acq_rel", "seq_cst")
+_RMW = frozenset({"add", "sub", "and", "or", "xor"})
+_LANE_BITS = {"int": 64, "float": 64, "bool": 8, "i8": 8, "u8": 8}
+_POSITIONAL = frozenset({"positional", "positional_only", "positional_or_keyword"})
+
+
+def _constant_mask(node: ast.expr) -> tuple[int, ...] | None:
+    """A shuffle mask spelled as a tuple of integer literals."""
+    if not isinstance(node, ast.Tuple) or not node.elts:
+        return None
+    lanes = []
+    for element in node.elts:
+        value = element.value if isinstance(element, ast.Constant) else None
+        if not isinstance(value, int) or isinstance(value, bool):
+            return None
+        lanes.append(value)
+    return tuple(lanes)
 
 
 def _is_negative(facts: Facts) -> bool:
@@ -1514,6 +1531,11 @@ class _Checker:
         plugin_result = self._plugin_operator(symbol, [operand], node)
         if plugin_result is not None:
             return plugin_result
+        if isinstance(node.op, ast.USub) and vector_parts(base) is not None:
+            element, _count = vector_parts(base)  # type: ignore[misc]
+            if T.strip_literal(element) == T.BOOL:
+                self._error("E1640", "`-` is not defined for a vector of bools", node)
+            return Binding(base)
         if isinstance(node.op, ast.USub):
             facts = Facts()
             if operand.facts.int_range is not None:
@@ -1579,6 +1601,9 @@ class _Checker:
             )
             if plugin_result is not None:
                 return plugin_result
+        lanes = self._vector_comparison(node, operands)
+        if lanes is not None:
+            return lanes
 
         constant = self._fold_compare(node, operands)
         facts = Facts(int_range=IntRange(0, 1))
@@ -1647,6 +1672,9 @@ class _Checker:
         native = self._native_call(node, env)
         if native is not None:
             return native
+        dialect = self._dialect_call(node, env)
+        if dialect is not None:
+            return dialect
         callee = self._expr(node.func, env)
         args = [
             self._expr(arg.value if isinstance(arg, ast.Starred) else arg, env) for arg in node.args
@@ -2805,6 +2833,9 @@ class _Checker:
         plugin_result = self._plugin_operator(_ARITH_OPS.get(op, ""), [left, right], node)
         if plugin_result is not None:
             return plugin_result
+        lanes = self._vector_operator(left_base, right_base, op, node)
+        if lanes is not None:
+            return lanes
 
         if isinstance(left_base, (T.AnyType, T.UnknownType)) or isinstance(
             right_base, (T.AnyType, T.UnknownType)
@@ -3352,6 +3383,415 @@ class _Checker:
             return Binding(T.Instance(pointer.name, (element,), (pointer.name, "object")))
         self._error("E1630", f"`ppy.native.{operation}` is not part of the native namespace", node)
         return Binding(T.UNKNOWN)
+
+    # -- the simd, atomic, cpu, and concurrent namespaces --------------------
+
+    def _dialect_call(self, node: ast.Call, env: Env) -> Binding | None:
+        func = node.func
+        subscript = func.slice if isinstance(func, ast.Subscript) else None
+        head = func.value if isinstance(func, ast.Subscript) else func
+        qualname = self.project.resolver(self.symbols).canonical(head)
+        if qualname is None:
+            return None
+        handlers = {
+            "ppy.simd.": self._simd_call,
+            "ppy.atomic.": self._atomic_call,
+            "ppy.cpu.": self._cpu_call,
+            "ppy.concurrent.": self._concurrent_call,
+        }
+        for prefix, handler in handlers.items():
+            if qualname.startswith(prefix):
+                return handler(qualname.removeprefix(prefix), node, subscript, env)
+        return None
+
+    def _lane_parameters(
+        self, subscript: ast.expr | None, operation: str, node: ast.AST
+    ) -> tuple[T.Type, int] | None:
+        """`[T, N]` on `simd.splat` and `simd.load`."""
+        elements = subscript.elts if isinstance(subscript, ast.Tuple) else None
+        if elements is None or len(elements) != 2:
+            self._error(
+                "E1640", f"`ppy.simd.{operation}[T, N]` takes the lane type and the count", node
+            )
+            return None
+        resolved = self.annotations.resolve(elements[0])
+        element = narrow_element(resolved) or resolved.type
+        count = elements[1].value if isinstance(elements[1], ast.Constant) else None
+        if not isinstance(count, int) or isinstance(count, bool) or count < 1:
+            self._error("E1640", f"`ppy.simd.{operation}[T, N]` takes a positive lane count", node)
+            return None
+        if not _holdable_element(element):
+            self._error(
+                "E1640",
+                f"lanes hold `int`, `float`, `bool`, `ppy.i8`, or `ppy.u8`, not `{element}`",
+                node,
+            )
+            return None
+        return element, count
+
+    def _simd_call(
+        self, operation: str, node: ast.Call, subscript: ast.expr | None, env: Env
+    ) -> Binding:
+        if node.keywords:
+            self._error("E1305", f"`ppy.simd.{operation}` takes no keyword arguments", node)
+        args = [self._expr(argument, env) for argument in node.args]
+        if operation in {"splat", "load"}:
+            lanes = self._lane_parameters(subscript, operation, node)
+            if lanes is None:
+                return Binding(T.UNKNOWN)
+            element, count = lanes
+            if len(args) != 1:
+                self._error("E1305", f"`ppy.simd.{operation}[T, N]` takes one argument", node)
+                return Binding(vector_type(element, count))
+            if operation == "splat":
+                if not T.is_assignable(args[0].type, _read_element(element)):
+                    self._mismatch(
+                        "E1301", f"a lane of `{element}` cannot hold", node.args[0], args[0].type
+                    )
+                return Binding(vector_type(element, count))
+            pointer = self._pointer_to(
+                args[0], element, node.args[0], f"simd.load[{element}, {count}]"
+            )
+            if pointer is not None:
+                self._effects = self._effects.add(Effect.READ_MEMORY)
+            return Binding(vector_type(element, count))
+        if operation == "store":
+            if len(args) != 2 or vector_parts(args[0].type) is None:
+                self._error("E1640", "`ppy.simd.store(v, p)` takes a vector and a pointer", node)
+                return Binding(T.NONE)
+            element, _count = vector_parts(args[0].type)  # type: ignore[misc]
+            pointer = self._pointer_to(args[1], element, node.args[1], "simd.store")
+            if pointer is not None and pointer.name == "ppy.native.const_ptr":
+                self._error("E1631", "`ppy.simd.store` cannot write through a `const_ptr`", node)
+            self._effects = self._effects.add(Effect.WRITE_MEMORY)
+            return Binding(T.NONE)
+        if operation in {"extract", "insert"}:
+            wanted = 2 if operation == "extract" else 3
+            if len(args) != wanted or vector_parts(args[0].type) is None:
+                shape = "(v, i)" if operation == "extract" else "(v, i, x)"
+                self._error("E1640", f"`ppy.simd.{operation}{shape}` takes a vector first", node)
+                return Binding(T.UNKNOWN)
+            element, _count = vector_parts(args[0].type)  # type: ignore[misc]
+            if T.strip_literal(args[1].type) not in (T.INT, T.BOOL):
+                self._error("E1640", "a lane index is an `int`", node.args[1])
+            if operation == "extract":
+                return Binding(_read_element(element))
+            if not T.is_assignable(args[2].type, _read_element(element)):
+                self._mismatch(
+                    "E1301", f"a lane of `{element}` cannot hold", node.args[2], args[2].type
+                )
+            return Binding(args[0].type)
+        if operation == "shuffle":
+            parts = vector_parts(args[0].type) if len(args) == 3 else None
+            if parts is None or T.strip_literal(args[1].type) != T.strip_literal(args[0].type):
+                self._error(
+                    "E1640", "`ppy.simd.shuffle(a, b, mask)` takes two vectors of one type", node
+                )
+                return Binding(T.UNKNOWN)
+            element, count = parts
+            mask = _constant_mask(node.args[2])
+            if mask is None or any(m < 0 or m >= 2 * count for m in mask):
+                self._error(
+                    "E1640",
+                    f"a shuffle mask is a tuple of lane numbers in [0, {2 * count})",
+                    node.args[2],
+                )
+                return Binding(T.UNKNOWN)
+            return Binding(vector_type(element, len(mask)))
+        if operation in {"reduce_add", "reduce_min", "reduce_max"}:
+            parts = vector_parts(args[0].type) if len(args) == 1 else None
+            if parts is None:
+                self._error("E1640", f"`ppy.simd.{operation}(v)` takes a vector", node)
+                return Binding(T.UNKNOWN)
+            element, _count = parts
+            if T.strip_literal(element) == T.BOOL:
+                self._error("E1640", f"`ppy.simd.{operation}` takes numbers, not bools", node)
+            return Binding(_read_element(element))
+        if operation == "select":
+            mask = vector_parts(args[0].type) if len(args) == 3 else None
+            chosen = vector_parts(args[1].type) if len(args) == 3 else None
+            if (
+                mask is None
+                or chosen is None
+                or T.strip_literal(mask[0]) != T.BOOL
+                or T.strip_literal(args[2].type) != T.strip_literal(args[1].type)
+                or mask[1] != chosen[1]
+            ):
+                self._error(
+                    "E1640",
+                    "`ppy.simd.select(mask, a, b)` takes a bool vector and two vectors of "
+                    "one type with its lane count",
+                    node,
+                )
+                return Binding(T.UNKNOWN)
+            return Binding(args[1].type)
+        if operation == "Vector":
+            self._error(
+                "E1640", "`ppy.simd.Vector[T, N]` is a type; make one with `splat` or `load`", node
+            )
+            return Binding(T.UNKNOWN)
+        self._error("E1640", f"`ppy.simd.{operation}` is not part of the simd namespace", node)
+        return Binding(T.UNKNOWN)
+
+    def _pointer_to(
+        self, argument: Binding, element: T.Type, node: ast.AST, what: str, code: str = "E1640"
+    ) -> T.Instance | None:
+        """The pointer type of `argument`, which must point at `element`."""
+        if not _is_pointer(argument.type):
+            self._error(code, f"`ppy.{what}` takes a `ppy.native.ptr[{element}]`", node)
+            return None
+        pointer = T.strip_literal(argument.type)
+        assert isinstance(pointer, T.Instance)
+        if T.strip_literal(pointer.args[0]) != T.strip_literal(element):
+            self._error(
+                code,
+                f"`ppy.{what}` takes a pointer to `{element}`, not `{pointer}`",
+                node,
+            )
+            return None
+        return pointer
+
+    def _vector_operator(
+        self, left: T.Type, right: T.Type, op: type[ast.operator], node: ast.AST
+    ) -> Binding | None:
+        """`a + b` on vectors: lane by lane, one vector type on both sides."""
+        parts = vector_parts(left) or vector_parts(right)
+        if parts is None:
+            return None
+        symbol = _ARITH_OPS.get(op, "?")
+        if vector_parts(left) != vector_parts(right):
+            self._error("E1640", f"`{symbol}` takes two vectors of one type", node)
+            return Binding(T.UNKNOWN)
+        element = T.strip_literal(parts[0])
+        if op in {ast.Add, ast.Sub, ast.Mult}:
+            if element == T.BOOL:
+                self._error("E1640", f"`{symbol}` is not defined for a vector of bools", node)
+            return Binding(left)
+        if op is ast.Div:
+            if element != T.FLOAT:
+                self._error(
+                    "E1640", "`/` takes vectors of floats; integer lanes have no division yet", node
+                )
+            return Binding(left)
+        if op in {ast.BitAnd, ast.BitOr, ast.BitXor}:
+            if element == T.FLOAT:
+                self._error("E1640", f"`{symbol}` takes vectors of integers or bools", node)
+            return Binding(left)
+        self._error("E1640", f"`{symbol}` is not defined for vectors", node)
+        return Binding(T.UNKNOWN)
+
+    def _vector_comparison(self, node: ast.Compare, operands: list[Binding]) -> Binding | None:
+        parts = vector_parts(operands[0].type)
+        if parts is None and not any(vector_parts(o.type) for o in operands[1:]):
+            return None
+        if len(node.ops) != 1 or parts is None or vector_parts(operands[1].type) != parts:
+            self._error("E1640", "a vector comparison takes two vectors of one type", node)
+            return Binding(T.UNKNOWN)
+        if not isinstance(node.ops[0], (ast.Eq, ast.NotEq, ast.Lt, ast.LtE, ast.Gt, ast.GtE)):
+            self._error("E1640", "vectors compare with `== != < <= > >=`", node)
+            return Binding(T.UNKNOWN)
+        return Binding(vector_type(T.BOOL, parts[1]))
+
+    def _order_keyword(self, node: ast.Call, operation: str) -> str:
+        """`order="..."` on an atomic operation; `seq_cst` unless said."""
+        order = "seq_cst"
+        for keyword in node.keywords:
+            value = keyword.value.value if isinstance(keyword.value, ast.Constant) else None
+            if keyword.arg != "order":
+                self._error(
+                    "E1641", f"`ppy.atomic.{operation}` takes `order=` and nothing else", node
+                )
+            elif value not in _ORDERS:
+                self._error(
+                    "E1641",
+                    f"`order` is one of {', '.join(repr(o) for o in _ORDERS)}, spelled as a string",
+                    keyword.value,
+                )
+            else:
+                order = str(value)
+        return order
+
+    def _atomic_call(
+        self, operation: str, node: ast.Call, subscript: ast.expr | None, env: Env
+    ) -> Binding:
+        del subscript
+        order = self._order_keyword(node, operation)
+        args = [self._expr(argument, env) for argument in node.args]
+        self._effects = self._effects.add(Effect.ATOMIC)
+        if operation == "fence":
+            if args:
+                self._error("E1305", "`ppy.atomic.fence()` takes only `order=`", node)
+            if order == "relaxed":
+                self._error("E1641", "a relaxed fence orders nothing", node)
+            return Binding(T.NONE)
+        arity = {"load": 1, "store": 2, "exchange": 2, "compare_exchange": 3}.get(operation, 2)
+        known = operation in {"load", "store", "exchange", "compare_exchange"} or (
+            operation.startswith("fetch_") and operation.removeprefix("fetch_") in _RMW
+        )
+        if not known:
+            self._error(
+                "E1641", f"`ppy.atomic.{operation}` is not part of the atomic namespace", node
+            )
+            return Binding(T.UNKNOWN)
+        if len(args) != arity or not _is_pointer(args[0].type):
+            self._error(
+                "E1641", f"`ppy.atomic.{operation}` takes a `ppy.native.ptr[int]` first", node
+            )
+            return Binding(T.UNKNOWN)
+        pointer = T.strip_literal(args[0].type)
+        assert isinstance(pointer, T.Instance)
+        element = pointer.args[0]
+        integer = _scalar_name_of(element) in {"int", "i8", "u8"}
+        if not integer and (operation.startswith("fetch_") or element != T.FLOAT):
+            self._error("E1641", f"`ppy.atomic.{operation}` takes a pointer to an integer", node)
+            return Binding(T.UNKNOWN)
+        if operation != "load" and pointer.name == "ppy.native.const_ptr":
+            self._error(
+                "E1641", f"`ppy.atomic.{operation}` cannot write through a `const_ptr`", node
+            )
+        if operation == "load" and order in {"release", "acq_rel"}:
+            self._error("E1641", f"a load is not `{order}`", node)
+        if operation == "store" and order in {"acquire", "acq_rel"}:
+            self._error("E1641", f"a store is not `{order}`", node)
+        for argument, spelled in zip(args[1:], node.args[1:], strict=True):
+            if not T.is_assignable(argument.type, _read_element(element)):
+                self._mismatch("E1301", f"a `{element}` slot cannot hold", spelled, argument.type)
+        self._effects = self._effects.add(
+            Effect.READ_MEMORY if operation == "load" else Effect.WRITE_MEMORY
+        )
+        if operation == "store":
+            return Binding(T.NONE)
+        if operation == "compare_exchange":
+            return Binding(T.Tuple_((_read_element(element), T.BOOL)))
+        return Binding(_read_element(element))
+
+    def _cpu_call(
+        self, operation: str, node: ast.Call, subscript: ast.expr | None, env: Env
+    ) -> Binding | None:
+        if operation == "target":
+            return None
+        args = [self._expr(argument, env) for argument in node.args]
+        if operation == "features":
+            if args or node.keywords:
+                self._error("E1305", "`ppy.cpu.features()` takes no arguments", node)
+            return Binding(T.Tuple_((T.STR,), homogeneous=True))
+        if operation == "vector_width":
+            resolved = self.annotations.resolve(subscript) if subscript is not None else None
+            element = (narrow_element(resolved) or resolved.type) if resolved is not None else None
+            bits = _LANE_BITS.get(_scalar_name_of(element)) if element is not None else None
+            if bits is None or args or node.keywords:
+                self._error(
+                    "E1643",
+                    "`ppy.cpu.vector_width[T]()` takes a scalar lane type and no arguments",
+                    node,
+                )
+                return Binding(T.INT)
+            from ppy_runtime._cpu import vector_width
+
+            return Binding(T.INT, Facts(constant=vector_width(bits), has_constant=True))
+        if operation == "prefetch":
+            if len(args) != 1 or not _is_pointer(args[0].type):
+                self._error("E1643", "`ppy.cpu.prefetch(p)` takes a `ppy.native.ptr[T]`", node)
+            for keyword in node.keywords:
+                value = keyword.value.value if isinstance(keyword.value, ast.Constant) else None
+                if keyword.arg == "write" and isinstance(value, bool):
+                    continue
+                if keyword.arg == "locality" and isinstance(value, int) and 0 <= value <= 3:
+                    continue
+                self._error(
+                    "E1643",
+                    "`ppy.cpu.prefetch` takes `write=` (a bool) and `locality=` (0 to 3)",
+                    node,
+                )
+            return Binding(T.NONE)
+        if operation == "pause":
+            if args or node.keywords:
+                self._error("E1305", "`ppy.cpu.pause()` takes no arguments", node)
+            return Binding(T.NONE)
+        self._error("E1643", f"`ppy.cpu.{operation}` is not part of the cpu namespace", node)
+        return Binding(T.UNKNOWN)
+
+    def _concurrent_call(
+        self, operation: str, node: ast.Call, subscript: ast.expr | None, env: Env
+    ) -> Binding:
+        del subscript
+        if node.keywords:
+            self._error("E1305", f"`ppy.concurrent.{operation}` takes no keyword arguments", node)
+        args = [self._expr(argument, env) for argument in node.args]
+        thread = T.Instance("ppy.concurrent.Thread", (), ("ppy.concurrent.Thread", "object"))
+        if operation == "spawn":
+            self._effects = self._effects.add(Effect.THREAD)
+            if not args:
+                self._error(
+                    "E1642", "`ppy.concurrent.spawn(f, *args)` takes the function to run", node
+                )
+                return Binding(thread)
+            callee = T.strip_literal(args[0].type)
+            if isinstance(callee, T.Callable_):
+                if callee.ret not in (T.NONE, T.ANY, T.UNKNOWN):
+                    self._error(
+                        "E1642",
+                        f"a spawned function returns nothing; `{callee.qualname or callee}` "
+                        f"returns `{callee.ret}`",
+                        node.args[0],
+                    )
+                positional = [p for p in callee.params if p.kind in _POSITIONAL]
+                if callee.params and len(positional) != len(args) - 1:
+                    self._error(
+                        "E1642",
+                        f"`{callee.qualname or 'the function'}` takes {len(positional)} "
+                        f"argument(s), {len(args) - 1} given",
+                        node,
+                    )
+                for parameter, argument, spelled in zip(
+                    positional, args[1:], node.args[1:], strict=False
+                ):
+                    if not T.is_assignable(argument.type, parameter.type):
+                        self._mismatch(
+                            "E1301", f"`{parameter.name}` expects", spelled, argument.type
+                        )
+            elif not isinstance(callee, (T.AnyType, T.UnknownType)):
+                self._error("E1642", "`ppy.concurrent.spawn` takes a function", node.args[0])
+            for argument in node.args[1:]:
+                self._mark_escape(argument, env, retains=True)
+            return Binding(thread)
+        if operation == "join":
+            if len(args) != 1 or T.strip_literal(args[0].type) not in (thread, T.ANY, T.UNKNOWN):
+                self._error(
+                    "E1642", "`ppy.concurrent.join(handle)` takes what `spawn` returned", node
+                )
+            self._effects = self._effects.add(Effect.THREAD)
+            return Binding(T.NONE)
+        if operation == "thread_id":
+            if args:
+                self._error("E1305", "`ppy.concurrent.thread_id()` takes no arguments", node)
+            return Binding(T.INT)
+        slots = {"lock": 1, "unlock": 1, "notify": 1, "wait": 2, "barrier": 1}
+        if operation not in slots:
+            self._error(
+                "E1642",
+                f"`ppy.concurrent.{operation}` is not part of the concurrent namespace",
+                node,
+            )
+            return Binding(T.UNKNOWN)
+        wanted = slots[operation] + (1 if operation == "barrier" else 0)
+        if len(args) != wanted:
+            self._error("E1642", f"`ppy.concurrent.{operation}` takes {wanted} argument(s)", node)
+            return Binding(T.NONE)
+        for argument, spelled in zip(args[: slots[operation]], node.args, strict=False):
+            pointer = self._pointer_to(argument, T.INT, spelled, f"concurrent.{operation}", "E1642")
+            if pointer is not None and pointer.name == "ppy.native.const_ptr":
+                self._error(
+                    "E1642",
+                    f"`ppy.concurrent.{operation}` takes a mutable `ppy.native.ptr[int]`",
+                    spelled,
+                )
+        if operation == "barrier" and T.strip_literal(args[1].type) not in (T.INT, T.BOOL):
+            self._error(
+                "E1642", "`ppy.concurrent.barrier(slots, parties)` takes an `int` count", node
+            )
+        self._effects = self._effects.add(Effect.SYNC, Effect.WRITE_MEMORY)
+        return Binding(T.NONE)
 
     def _typed_buffer(self, node: ast.Call, env: Env) -> Binding | None:
         """`ppy.buffer[T](n)`: `n` elements of `T`, all zero.

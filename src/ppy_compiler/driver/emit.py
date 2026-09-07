@@ -95,10 +95,13 @@ def _standalone_text(kind: str, bundle, reporter: Reporter, entry: Path, header_
     module = standalone_ir(bundle, reporter, entry)
     if isinstance(module, int):
         return module
+    from ..target import configured_target
+
     entry_symbol = str(module.attributes["ppy.entry"])
+    machine = configured_target(bundle.project.config.llvm.target)
     return {
         module.name: emit_module(
-            module, Language(kind), header_only=header_only, entry=entry_symbol
+            module, Language(kind), header_only=header_only, entry=entry_symbol, target=machine
         )
     }
 
@@ -137,10 +140,12 @@ def _texts(kind: str, bundle, header_only: bool) -> dict[str, str]:  # type: ign
                 texts[name] = header_text(name, exports)
         return texts
     from ..backend.c import Language, emit_module
+    from ..target import configured_target
 
     language = Language(kind)
+    machine = configured_target(bundle.project.config.llvm.target)
     return {
-        name: emit_module(module, language, header_only=header_only)
+        name: emit_module(module, language, header_only=header_only, target=machine)
         for name, module in ir_modules(bundle).items()
     }
 
