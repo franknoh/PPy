@@ -538,6 +538,23 @@ Speed of the compiler itself, measured before being changed.
   names them. JAX is not on the compile path; the bridge places buffers
   through JAX's `device_put` while that is the one public way to the
   client. What XLA cannot take is reported as `W2007` and runs as written.
+- The gpu dialect: one execution model every GPU backend meets. A function
+  is `host`, `device`, or `kernel` by its `gpu.kind`; device code reads
+  `gpu.thread_id`, `block_id`, `block_dim`, `grid_dim` (each `.x`, `.y`,
+  `.z`), waits at `barrier` and `subgroup_barrier`, trades values with
+  `subgroup_shuffle`, takes `shared_alloc` and `private_alloc` memory, and
+  is handed pointers into `global` and `constant` memory; the host launches
+  a kernel with `gpu.launch`. The verifier holds the kinds -- a device
+  operation in a host function; a guard, a buffer, a host call, or another
+  dialect in device code; a kernel that returns or takes stack memory --
+  through the new `Dialect.verify_function` hook, and the LLVM backend
+  leaves device code to the GPU backends. A program without a kernel is
+  untouched.
+- The IR's text reader ends an operation at its line. An operation with
+  nothing after its name -- `gpu.barrier`, a bare `core.ret` before the next
+  block -- used to take the following line's value or label as its own
+  operand or successor; the printed form always was one operation per line,
+  and the reader now holds it to that.
 
 ## 0.1.0a1
 

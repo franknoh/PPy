@@ -125,6 +125,8 @@ def _verify_function(function: IRFunction, checker: Checker) -> None:
         reason = checker.registry.verify_type(t)
         if reason is not None:
             checker.error(None, reason)
+    for dialect in checker.registry.dialects.values():
+        dialect.verify_function(function, checker)
     if function.is_declaration:
         checker.function = None
         return

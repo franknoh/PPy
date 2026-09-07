@@ -76,6 +76,31 @@ class _Cursor:
             return True
         return False
 
+    def peek_inline(self, what: str, limit: int) -> bool:
+        """Whether `what` comes next before the newline at `limit`.
+
+        An operation ends at its line: a reader that has already stepped
+        over that newline -- looking for a comma that was not there -- finds
+        nothing more of it. A negative `limit` is no limit.
+        """
+        pos = self.pos
+        while pos < len(self.text) and self.text[pos] in " \t\r":
+            pos += 1
+        if 0 <= limit < pos:
+            return False
+        return self.text.startswith(what, pos)
+
+    def accept_inline(self, what: str, limit: int) -> bool:
+        if self.peek_inline(what, limit):
+            self.skip()
+            self.pos += len(what)
+            return True
+        return False
+
+    def line_end(self) -> int:
+        """Where the current line ends, or -1 on the last line."""
+        return self.text.find("\n", self.pos)
+
     def expect(self, what: str) -> None:
         if not self.accept(what):
             found = self.text[self.pos : self.pos + 12]
@@ -233,9 +258,9 @@ class _Parser:
             c.expect("}")
             scope.resolve()
 
-    def location(self) -> SourceLocation | None:
+    def location(self, limit: int = -1) -> SourceLocation | None:
         c = self.cursor
-        if not c.accept("loc("):
+        if not c.accept_inline("loc(", limit):
             return None
         file = c.string()
         c.expect(":")
@@ -283,6 +308,7 @@ class _Parser:
         c = self.cursor
         c.skip()
         line = c.line
+        limit = c.line_end()
         result_names: list[str] = []
         if c.peek("%"):
             while c.accept("%"):
@@ -303,16 +329,16 @@ class _Parser:
         if (
             spec is not None
             and spec.inline_attribute is not None
-            and not any(c.peek(mark) for mark in ("%", "{", ":", "^", "loc("))
+            and not any(c.peek_inline(mark, limit) for mark in ("%", "{", ":", "^", "loc("))
         ):
             attributes[spec.inline_attribute] = self.attribute()
         operand_names: list[str] = []
-        while c.accept("%"):
+        while c.accept_inline("%", limit):
             operand_names.append(c.word())
             if not c.accept(","):
                 break
         successors: list[tuple[str, list[str]]] = []
-        while c.accept("^"):
+        while c.accept_inline("^", limit):
             target = c.word(allow_dots=True)
             arguments: list[str] = []
             if c.accept("("):
@@ -325,12 +351,12 @@ class _Parser:
             successors.append((target, arguments))
             if not c.accept(","):
                 break
-        if c.peek("{") and not c.peek("{\n"):
+        if c.peek_inline("{", limit) and not c.peek_inline("{\n", limit):
             parsed = self.attribute()
             assert isinstance(parsed, dict)
             attributes.update(parsed)
         result_types: list[IRType] = []
-        if c.accept(":"):
+        if c.accept_inline(":", limit):
             result_types.append(c.type_())
             while c.accept(","):
                 result_types.append(c.type_())
@@ -338,7 +364,7 @@ class _Parser:
             raise c.error(
                 f"{name} names {len(result_names)} result(s) but gives {len(result_types)} type(s)"
             )
-        location = self.location()
+        location = self.location(limit)
         op = Operation(name, (), result_types, attributes, (), location, result_names)
         for value_name, result in zip(result_names, op.results, strict=True):
             scope.define(value_name, result, line)
@@ -347,10 +373,11 @@ class _Parser:
             successor = Successor(scope.block_ref(target))
             op.successors.append(successor)
             scope.pending_successor(successor, arguments, line)
-        while c.peek("{"):
+        while c.peek_inline("{", limit):
             c.expect("{")
             self.region(op.add_region(), scope)
             c.expect("}")
+            limit = c.line_end()
         return op
 
     def attribute(self) -> Attribute:

@@ -53,7 +53,8 @@ dialect.name<args>           a type a dialect owns; the core parses it, the dial
 
 `ptr<T, stack>` is what `core.alloca` yields; a stack pointer may not be
 returned or stored, and the verifier says so. `generic` is the host's
-address space; a dialect adds its own (`global`, `shared`, ...).
+address space; the gpu dialect adds `global`, `shared`, `private`, and
+`constant`, and a plugin's dialect may add more.
 
 ## Core operations
 
@@ -254,6 +255,26 @@ bitmap re-based to bit zero (all ones when the array has none). A bool
 array sliced inside a byte is refused by the guard rather than copied
 wrongly.
 
+## The gpu dialect
+
+One execution model for every GPU backend. A function is `host` -- the
+default -- `device`, or `kernel`, by its `gpu.kind` attribute: a kernel
+returns nothing, takes scalars and pointers into `global` or `constant`
+memory, and is launched from the host with `gpu.launch %gx, %gy, %gz, %bx,
+%by, %bz, %args... {callee = @k}`; a device function is called from a
+kernel or another device function. In device code a thread reads its place
+from `gpu.thread_id.x`, `block_id.y`, `block_dim.z`, `grid_dim.x` (each an
+`index`), waits for its block at `barrier` and its subgroup at
+`subgroup_barrier`, trades a scalar across the subgroup with
+`subgroup_shuffle.idx|up|down|xor %v, %lane`, and takes `shared_alloc
+{count = N} : ptr<T, shared>` or `private_alloc {count = N} : ptr<T,
+private>`; atomics are the atomic dialect's over those pointers. The
+verifier holds the kinds: a device operation in a host function; a host one
+in device code -- a guard, a buffer, an intrinsic, a call to a host
+function, any other dialect; a kernel that returns or takes stack memory;
+a launch of anything but a kernel, or with anything but its parameters.
+The CPU backends leave device code to the GPU backends.
+
 ## The StableHLO backend
 
 `ppy_compiler.backend.stablehlo.emit_module` writes a function of scalars
@@ -299,7 +320,10 @@ func @f(%x: i64 {ownership = "borrowed"}) -> i64 attrs {effects = ["pure"]} { ..
 Printing is deterministic: values are named in definition order (a hint is
 kept unless an earlier value took it; the rest are numbered), attributes
 print sorted, and a module printed after being parsed prints the same
-text. A reader refuses a schema it does not have and a dialect it does not
+text. An operation is one line, and the reader ends it at its newline: one
+with nothing after its name -- `gpu.barrier` -- does not take the next
+line's value or label as its own. A reader refuses a schema it does not
+have and a dialect it does not
 have or has only at an older version, with the reason, rather than
 guessing. The format is experimental in 0.2.0.
 
@@ -310,8 +334,10 @@ operation it sits on; `verify_or_raise` turns the list into one exception.
 The core checks structure (terminators, branch targets and arguments,
 dominance, unique names, symbols), then each operation against its
 dialect's `OpSpec` (arity, required attributes, types), then the dialect's
-own rule for that operation. A dialect adds its rules through `OpSpec.verify`
-and `Dialect.verify_type`; a new dialect never touches the verifier.
+own rule for that operation. A dialect adds its rules through `OpSpec.verify`,
+`Dialect.verify_type`, and `Dialect.verify_function` -- what a whole function
+may be, such as a kernel's signature and what its body holds; a new dialect
+never touches the verifier.
 
 ## Dialects
 
@@ -328,6 +354,7 @@ class Dialect:
     def register_lowerings(self, registry): ...
     def verify_type(self, t): ...
     def address_spaces(self): ...
+    def verify_function(self, function, checker): ...
 ```
 
 `ppy_compiler.ir.registry()` is the process-wide registry with the builtin

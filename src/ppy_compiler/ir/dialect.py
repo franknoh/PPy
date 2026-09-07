@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING
 from .types import DialectType, IRType
 
 if TYPE_CHECKING:
-    from .model import Operation
+    from .model import IRFunction, Operation
     from .verify import Checker
 
 __all__ = ["Dialect", "DialectRegistry", "OpSpec", "registry"]
@@ -76,6 +76,13 @@ class Dialect:
     def address_spaces(self) -> frozenset[str]:
         """Address spaces this dialect gives pointers."""
         return frozenset()
+
+    def verify_function(self, function: IRFunction, checker: Checker) -> None:
+        """Rules over a whole function -- its attributes, what its body may hold.
+
+        The verifier asks every registered dialect after a function's own
+        checks; the default has nothing to say.
+        """
 
 
 class DialectRegistry:

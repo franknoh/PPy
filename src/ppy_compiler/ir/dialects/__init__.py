@@ -15,6 +15,7 @@ def builtin_dialects() -> list[Dialect]:
     from .core import CoreDialect
     from .cpu import CpuDialect
     from .fft import FftDialect
+    from .gpu import GpuDialect
     from .layout import LayoutDialect
     from .linalg import LinalgDialect
     from .math import MathDialect
@@ -40,4 +41,5 @@ def builtin_dialects() -> list[Dialect]:
         SparseDialect(),
         ColumnarDialect(),
         ArrowDialect(),
+        GpuDialect(),
     ]

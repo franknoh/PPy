@@ -109,7 +109,7 @@ def test_a_foreign_or_stale_ppyir_is_refused_with_the_reason(tmp_path: Path):
     assert done.returncode == 2
     assert "schema 42; this compiler reads schema 1" in done.stderr
     foreign = tmp_path / "foreign.ppyir"
-    foreign.write_text("ppyir 1\nmodule @foreign\ndialect gpu 1\n", encoding="utf-8")
+    foreign.write_text("ppyir 1\nmodule @foreign\ndialect tpu 1\n", encoding="utf-8")
     done = _ppy(tmp_path, "build", "foreign.ppyir")
     assert done.returncode == 2
-    assert "dialect 'gpu', which this compiler does not have" in done.stderr
+    assert "dialect 'tpu', which this compiler does not have" in done.stderr

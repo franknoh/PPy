@@ -36,6 +36,7 @@ from ...ir import (
     VectorType,
     VoidType,
 )
+from ...ir.dialects.gpu import kind_of
 from ...target import TargetInfo, host_target
 from .dialect_lowerings import EmitError as _DialectEmitError
 from .dialect_lowerings import (
@@ -123,7 +124,8 @@ class _ModuleEmitter:
                 variable.initializer = ir.Constant(array_type, data)
                 self.strings[name] = variable
         for function in self.module.functions.values():
-            if function.is_declaration:
+            if function.is_declaration or kind_of(function) != "host":
+                # Device code is the GPU backends'; the CPU never sees it.
                 continue
             symbol = str(function.attributes.get("ppy.symbol", function.name))
             declared = ir.Function(self.llvm, self.function_type(function), name=symbol)
@@ -136,7 +138,7 @@ class _ModuleEmitter:
                 set.add(declared.attributes, f'"target-features"="{spelled}"')
             self.functions[function.name] = declared
         for function in self.module.functions.values():
-            if not function.is_declaration:
+            if not function.is_declaration and kind_of(function) == "host":
                 _FunctionEmitter(self, function).run()
         for function in self.module.functions.values():
             if not function.is_declaration and "ppy.export" in function.attributes:

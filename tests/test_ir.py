@@ -476,8 +476,8 @@ def test_unknown_dialects_and_versions_are_refused():
     x = entry.arguments[0]
     core.ret(b, x)
     b = Builder().before(entry.operations[-1])
-    bad = b.create("gpu.barrier", (x,), (I64,))
-    assert _errors(module) == ["unknown dialect 'gpu'"]
+    bad = b.create("tpu.barrier", (x,), (I64,))
+    assert _errors(module) == ["unknown dialect 'tpu'"]
     bad.erase()
     bad = b.create("core.frobnicate", (x,), (I64,))
     assert _errors(module) == ["dialect 'core' defines no operation 'frobnicate'"]
@@ -595,3 +595,24 @@ def test_use_lists_follow_replacement_and_erasure():
     assert [op.name for op in entry.operations] == ["core.const", "core.add", "core.ret"]
     assert not verify(module)
     assert registry().op_spec("core.add") is not None and registry().op_spec("core.add").commutative
+
+
+def test_an_operation_ends_at_its_line():
+    """A bare `core.ret` before a block, or any operation with nothing after
+    its name, leaves the next line's label or value alone."""
+    module = IRModule("bare")
+    f = module.add_function("f", [("x", F64)], [F64])
+    entry = f.add_entry_block()
+    other = f.body.add_block("other")
+    core.ret(Builder(entry), entry.arguments[0])
+    b = Builder(other)
+    core.ret(b, core.const(b, 1.0, F64))
+    g = module.add_function("g", [], [])
+    core.ret(Builder(g.add_entry_block()))
+    core.ret(Builder(g.body.add_block("later")))
+    text = encode(module)
+    assert "    core.ret %x\n^other:\n" in text and "    core.ret\n^later:\n" in text
+    again = decode(text)
+    assert encode(again) == text
+    assert [block.name for block in again.functions["g"].blocks()] == ["entry", "later"]
+    assert not verify(again)
