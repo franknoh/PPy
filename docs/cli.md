@@ -264,6 +264,11 @@ ppy emit ir foo.ppy                  # the canonical IR, to stdout
 ppy emit ir foo.ppy -o foo.ppyir     # ... to a file
 ppy emit ir src/ -o build/ir/        # one .ppyir per module
 ppy emit llvm-ir foo.ppy             # what the LLVM backend makes of it
+ppy emit c foo.ppy                   # what the C backend makes of it: one C11 unit
+ppy emit cpp foo.ppy                 # ... as C++17, exports behind extern "C"
+ppy emit c --header-only foo.ppy     # every function static inline in a header
+ppy emit c --standalone prog.ppy     # the whole program from main(), shims and all
+ppy emit header foo.ppy              # the C declarations of the exports
 ```
 
 One rule for every kind: a single file with no `-o` prints to standard
@@ -272,6 +277,21 @@ per module into the directory `-o` names (and refuses to guess without
 it). `ir` is the canonical IR after the shared passes (`docs/ir.md`);
 `llvm-ir` is the optimized LLVM IR. The output is deterministic for one
 input and configuration.
+
+`c` and `cpp` are the C backend's reading of the same IR: a translation
+unit per module in the internal ABI the runtime binds (atoms in, result
+slots out, a status back), every `@native.export` behind its public C
+signature, the overflow helpers and runtime shims the unit actually uses,
+and nothing else -- so it compiles on its own with any C11 or C++17
+compiler, and answers exactly what the LLVM road answers, fallbacks
+included. `--header-only` makes every function `static inline` under an
+include guard, for a header a program includes from any number of
+translation units; a feature that needs state the process owns (reading
+standard input) is refused there with `E1804` and its name.
+`--standalone` takes a program the way `ppy build --standalone` does --
+`main` and everything it reaches, all of it native -- and ends the unit in
+a C `main`, so the text is a whole program. `header` is the declarations
+of a module's exports, the same text `ppy build` writes beside a library.
 
 `.ppyir` is the IR's on-disk form, experimental in 0.2.0, and `ppy build
 foo.ppyir` builds one without the Python that produced it: the file

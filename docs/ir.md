@@ -205,6 +205,14 @@ slots out, an `i32` status back -- lowers `python` overflow to the
 `floor` rounding to the sign-corrected sequence (or a shift for a
 power-of-two divisor), and block arguments to phis.
 
+`backend/c/emit` reads the same IR and writes C11 or C++17: the same
+ABI, `python` overflow through checking helpers (the compiler's
+`__builtin_*_overflow` where it has them, plain C otherwise), `floor`
+rounding as the sign-corrected sequence, blocks as labels and block
+arguments as parallel assignments before a `goto`. `ppy emit c` and
+`ppy emit cpp` print it; `tests/test_c_backend.py` compiles it and calls
+it on the LLVM road's inputs.
+
 `[tool.ppy.llvm] pipeline = "ir"` selects this road; `"ast"` (the default
 while the two are compared) is the direct AST-to-LLVM lowering.
 `PPY_LOWERING=ast|ir` overrides the setting for one process, which is how

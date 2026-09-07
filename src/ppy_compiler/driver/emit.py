@@ -3,7 +3,10 @@
 One rule for every kind: a single file with no `-o` goes to standard
 output, `-o FILE` writes that file, and a directory target writes one file
 per module into the directory `-o` names. `ir` is the canonical IR after
-the shared passes; `llvm-ir` is what the LLVM backend makes of it.
+the shared passes; `llvm-ir` is what the LLVM backend makes of it; `c` and
+`cpp` are what the C backend makes of it, a translation unit each, or with
+`--header-only` a header that carries the functions inline; `header` is
+the C declarations of the module's exports.
 """
 
 from __future__ import annotations
@@ -17,14 +20,28 @@ from .reporting import Reporter
 
 __all__ = ["KINDS", "build_ir_file", "run_emit"]
 
-KINDS = ("ir", "llvm-ir")
-_SUFFIXES = {"ir": ".ppyir", "llvm-ir": ".ll"}
+KINDS = ("ir", "llvm-ir", "c", "cpp", "header")
+_SUFFIXES = {"ir": ".ppyir", "llvm-ir": ".ll", "c": ".c", "cpp": ".cpp", "header": ".h"}
+_HEADER_ONLY_SUFFIXES = {"c": ".h", "cpp": ".hpp"}
 
 
 def run_emit(options: argparse.Namespace, reporter: Reporter) -> int:
     target: Path = options.target
+    header_only = bool(getattr(options, "header_only", False))
     if not target.exists():
         reporter.emit(Diagnostic("E1002", Severity.ERROR, f"{target} does not exist"))
+        return 2
+    standalone = bool(getattr(options, "standalone", False))
+    for flag, given in (("--header-only", header_only), ("--standalone", standalone)):
+        if given and options.kind not in _HEADER_ONLY_SUFFIXES:
+            reporter.emit(
+                Diagnostic("E1002", Severity.ERROR, f"`{flag}` applies to `emit c` and `emit cpp`")
+            )
+            return 2
+    if standalone and not target.is_file():
+        reporter.emit(
+            Diagnostic("E1002", Severity.ERROR, "`--standalone` takes the program's entry file")
+        )
         return 2
     output: Path | None = options.output
     if target.is_dir() and output is None:
@@ -39,14 +56,19 @@ def run_emit(options: argparse.Namespace, reporter: Reporter) -> int:
         reporter.summary(errors, 0)
         return 1
     try:
-        texts = _texts(options.kind, bundle)
+        if standalone:
+            texts = _standalone_text(options.kind, bundle, reporter, target, header_only)
+            if isinstance(texts, int):
+                return texts
+        else:
+            texts = _texts(options.kind, bundle, header_only)
     except Exception as error:  # noqa: BLE001 - the backend's refusal is the message
-        reporter.emit(Diagnostic("E1801", Severity.ERROR, str(error)))
+        reporter.emit(Diagnostic(_refusal_code(error), Severity.ERROR, str(error)))
         return 2
     if not texts:
         reporter.emit(Diagnostic("E1002", Severity.ERROR, "nothing to emit: no module lowered"))
         return 1
-    suffix = _SUFFIXES[options.kind]
+    suffix = _HEADER_ONLY_SUFFIXES[options.kind] if header_only else _SUFFIXES[options.kind]
     if target.is_file():
         text = "\n".join(texts.values())
         if output is None:
@@ -65,14 +87,62 @@ def run_emit(options: argparse.Namespace, reporter: Reporter) -> int:
     return 0
 
 
-def _texts(kind: str, bundle) -> dict[str, str]:  # type: ignore[no-untyped-def]
+def _standalone_text(kind: str, bundle, reporter: Reporter, entry: Path, header_only: bool):  # type: ignore[no-untyped-def]
+    """The whole program from `main` as one unit, or the exit status."""
+    from ..backend.c import Language, emit_module
+    from ..backend.llvm.standalone import standalone_ir
+
+    module = standalone_ir(bundle, reporter, entry)
+    if isinstance(module, int):
+        return module
+    entry_symbol = str(module.attributes["ppy.entry"])
+    return {
+        module.name: emit_module(
+            module, Language(kind), header_only=header_only, entry=entry_symbol
+        )
+    }
+
+
+def _refusal_code(error: Exception) -> str:
+    from ..backend.c import EmitError, HeaderOnlyError
+
+    if isinstance(error, HeaderOnlyError):
+        return "E1804"
+    if isinstance(error, EmitError):
+        return "E1802"
+    return "E1801"
+
+
+def _texts(kind: str, bundle, header_only: bool) -> dict[str, str]:  # type: ignore[no-untyped-def]
     from ..backend.llvm import emit_ir
     from ..backend.llvm.ir_pipeline import ir_modules
     from ..ir import encode
 
     if kind == "ir":
         return {name: encode(module) for name, module in ir_modules(bundle).items()}
-    return emit_ir(bundle)
+    if kind == "llvm-ir":
+        return emit_ir(bundle)
+    if kind == "header":
+        from ..backend.llvm.link import header_text
+        from ..lowering.abi import signature_from_ir
+
+        texts: dict[str, str] = {}
+        for name, module in ir_modules(bundle).items():
+            exports = {
+                str(f.attributes["ppy.export"]): signature_from_ir(f)
+                for f in module.functions.values()
+                if not f.is_declaration and "ppy.export" in f.attributes
+            }
+            if exports:
+                texts[name] = header_text(name, exports)
+        return texts
+    from ..backend.c import Language, emit_module
+
+    language = Language(kind)
+    return {
+        name: emit_module(module, language, header_only=header_only)
+        for name, module in ir_modules(bundle).items()
+    }
 
 
 def build_ir_file(path: Path, options: argparse.Namespace, reporter: Reporter) -> int:

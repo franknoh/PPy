@@ -11,6 +11,11 @@ __all__ = ["build_parser", "main"]
 _EXECUTION_SUFFIXES = (".ppy", ".py")
 
 
+#: What `ppy emit` prints; `driver.emit.KINDS` is the same tuple, and a test
+#: holds the two together so this module stays free of the pipeline imports.
+_EMIT_KINDS = ("ir", "llvm-ir", "c", "cpp", "header")
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="ppy",
@@ -123,8 +128,23 @@ def build_parser() -> argparse.ArgumentParser:
     )
 
     emit = subparsers.add_parser("emit", help="print a compiler stage as text")
-    emit.add_argument("kind", choices=("ir", "llvm-ir"), help="`ir` is the canonical IR (.ppyir)")
+    emit.add_argument(
+        "kind",
+        choices=_EMIT_KINDS,
+        help="`ir` is the canonical IR (.ppyir); `c`, `cpp` a translation unit; "
+        "`header` the C declarations of the exports",
+    )
     emit.add_argument("target", type=Path)
+    emit.add_argument(
+        "--header-only",
+        action="store_true",
+        help="for `c` and `cpp`: a header carrying every function inline",
+    )
+    emit.add_argument(
+        "--standalone",
+        action="store_true",
+        help="for `c` and `cpp`: the whole program from `main`, runtime shims and all",
+    )
     emit.add_argument(
         "-o",
         "--output",

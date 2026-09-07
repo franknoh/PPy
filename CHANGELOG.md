@@ -390,6 +390,18 @@ Speed of the compiler itself, measured before being changed.
 - `ppy migrate` no longer crashes on a module whose first statement is a
   relative import: placing the `ppy` import spelled the missing module name
   as an empty identifier, which libcst refuses.
+- The C backend, `ppy emit c`, and its C++ form, `ppy emit cpp`. Both read
+  the canonical IR and write one translation unit per module: every
+  function in the ABI the runtime binds, every export behind its public
+  signature (`extern "C"` in C++), the overflow helpers and runtime shims
+  the unit uses and no others, so it compiles on its own and answers what
+  the LLVM road answers, fallbacks included. The C++ output is the
+  emitter making C++ choices, never C text rewritten. `--header-only`
+  makes every function `static inline` under a guard and refuses, with
+  `E1804`, a feature that needs state the process owns; `--standalone`
+  emits a whole program from `main`; `ppy emit header` prints the export
+  declarations a built library ships. `tests/test_c_backend.py` compiles
+  the C and the C++ and calls them on the LLVM road's inputs.
 
 ## 0.1.0a1
 

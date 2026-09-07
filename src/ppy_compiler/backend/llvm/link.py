@@ -178,7 +178,14 @@ def _abi_of(scalar: str) -> str:
 
 def write_header(destination: Path, exports: dict[str, NativeSignature]) -> Path:
     """A C header declaring every exported symbol of the library."""
-    guard = "PPY_" + "".join(c if c.isalnum() else "_" for c in destination.stem).upper() + "_H"
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    destination.write_text(header_text(destination.stem, exports), encoding="utf-8")
+    return destination
+
+
+def header_text(stem: str, exports: dict[str, NativeSignature]) -> str:
+    """The C header declaring `exports`, guarded by a name made from `stem`."""
+    guard = "PPY_" + "".join(c if c.isalnum() else "_" for c in stem).upper() + "_H"
     lines = [
         f"#ifndef {guard}",
         f"#define {guard}",
@@ -192,9 +199,7 @@ def write_header(destination: Path, exports: dict[str, NativeSignature]) -> Path
     ]
     lines.extend(c_prototype(name, signature) for name, signature in sorted(exports.items()))
     lines.extend(["", "#ifdef __cplusplus", "}", "#endif", "", f"#endif /* {guard} */", ""])
-    destination.parent.mkdir(parents=True, exist_ok=True)
-    destination.write_text("\n".join(lines), encoding="utf-8")
-    return destination
+    return "\n".join(lines)
 
 
 def write_manifest(
