@@ -123,6 +123,20 @@ against another, and a module that imports none of them pays for none of them.
   operators, `isna`/`notna`/`fillna`, `astype`, `sort_values`, the
   aggregations, grouped aggregation, `merge`/`join`, and `concat` are named
   as `columnar` operations -- the same ones PyArrow's compute names.
+- An expression tree of Series arithmetic, comparison, `fillna`,
+  `isna`/`notna` fuses into the same columnar kernel PyArrow's compute
+  does. At run time an Arrow-backed Series (`pd.ArrowDtype`) is its Arrow
+  array, read in place with its nulls; a NumPy-backed `float64` Series is
+  its values behind a bitmap of ones, so a NaN stays the value it is; and
+  the answer is a Series over the callers' index, with the same backing.
+  Series whose indexes are not one index, a mix of backings, a nullable
+  extension dtype, or a bool answer over NumPy storage run pandas: the
+  index alignment, the copy-or-view rule, and the dtype are pandas' own
+  semantics and are not approximated (spec 59).
+- `ppy_runtime.arrow.exported(array)` lends a PyArrow array to native code
+  as the Arrow C Data Interface's `ArrowArray` struct -- the buffers
+  shared, no `PyObject` in the ABI -- and releases it, once, when the
+  borrow ends; `arrow.import` in the IR reads such a struct.
 - What the model does not capture exactly -- the index, nullable dtypes,
   `NA` against `NaN`, categoricals, time zones, extension dtypes, duplicate
   column names, copy-or-view -- keeps the pandas implementation; a frame is

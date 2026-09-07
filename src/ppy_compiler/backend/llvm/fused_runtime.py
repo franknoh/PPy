@@ -6,7 +6,9 @@ pointer, so the same loop runs over either once the guards hold. A PyArrow
 `Array` is Arrow's layout -- a values buffer and a validity bitmap -- and
 its kernel is columnar IR over exactly that, so the array is read where it
 lies and the result is an Arrow array built over the buffers the kernel
-filled. What the guards are, how a pointer is taken, and what the result
+filled; a pandas `Series` is that Arrow array when Arrow-backed, or its
+NumPy values behind a bitmap of ones, and comes back as a Series over its
+own index. What the guards are, how a pointer is taken, and what the result
 is wrapped in are the storage's business; the kernel's is the arithmetic.
 """
 
@@ -166,8 +168,8 @@ def bind_fused(
     threads: str | int = "auto",
 ) -> FusedBinding:
     """Wrap one fused kernel in the guards its fast-path domain requires."""
-    if loop.storage == "pyarrow":
-        return _bind_arrow(loop, address, fallback)
+    if loop.storage in {"pyarrow", "pandas"}:
+        return _bind_columnar(loop, address, fallback)
     storage = _storage(loop.storage)
     if storage is None:
         return FusedBinding(loop, fallback, fallback, reason=f"{loop.storage} is not importable")
@@ -315,19 +317,28 @@ class _Failed(Exception):
 # -- Arrow -----------------------------------------------------------------------------------------
 
 
-def _bind_arrow(loop: FusedLoop, address: int, fallback: Callable[..., object]) -> FusedBinding:
-    """A columnar kernel over PyArrow arrays: `float64` or `bool`, read in place.
+def _bind_columnar(loop: FusedLoop, address: int, fallback: Callable[..., object]) -> FusedBinding:
+    """A columnar kernel over PyArrow arrays or pandas Series, read in place.
 
     The kernel takes the result's values and validity buffers, then each
-    array's values and validity buffers, the scalars, and the row count. An
-    array without nulls lends a bitmap of ones; a bit-packed buffer sliced
-    inside a byte, a chunked array, another type, or a shape the kernel does
-    not take runs PyArrow's own compute.
+    array's values and validity buffers, the scalars, and the row count. A
+    PyArrow array is its buffers; a pandas Series is its Arrow array when it
+    is Arrow-backed, or its NumPy values with a bitmap of ones when it is
+    NumPy-backed, and the answer is a Series over the same index. An array
+    without nulls lends a bitmap of ones. A bit-packed buffer sliced inside
+    a byte, a chunked array, another type, Series whose indexes are not one
+    index, or a shape the kernel does not take run the library's own compute.
     """
     try:
         import pyarrow
     except ImportError:
         return FusedBinding(loop, fallback, fallback, reason="pyarrow is not importable")
+    pandas: Any = None
+    if loop.storage == "pandas":
+        try:
+            import pandas
+        except ImportError:
+            return FusedBinding(loop, fallback, fallback, reason="pandas is not importable")
 
     byte_pointer = ctypes.POINTER(ctypes.c_uint8)
     array_count = len(loop.arrays)
@@ -353,7 +364,7 @@ def _bind_arrow(loop: FusedLoop, address: int, fallback: Callable[..., object]) 
             ones = bytearray(b"\xff" * max(needed, 64))
         return (ctypes.c_uint8 * len(ones)).from_buffer(ones)
 
-    def parts(value: Any, kind: str) -> tuple[int, Any] | None:
+    def arrow_parts(value: Any, kind: str) -> tuple[int, Any] | None:
         """(values address, validity pointer) of an array the kernel takes, else None."""
         if not isinstance(value, pyarrow.Array) or value.type != types[kind]:
             return None
@@ -374,6 +385,38 @@ def _bind_arrow(loop: FusedLoop, address: int, fallback: Callable[..., object]) 
             bitmap = ctypes.cast(validity.address + value.offset // 8, byte_pointer)
         return address_, bitmap
 
+    def series_parts(value: Any, kind: str, keep: list) -> tuple[int, Any, str] | None:
+        """A Series' (values address, validity pointer, backing); None where the kernel stops."""
+        if not isinstance(value, pandas.Series):
+            return None
+        storage = value.array
+        if isinstance(storage, pandas.arrays.ArrowExtensionArray):
+            chunked = storage.__arrow_array__()
+            if chunked.num_chunks != 1:
+                return None
+            described = arrow_parts(chunked.chunk(0), kind)
+            return None if described is None else (*described, "arrow")
+        if kind != "f64" or not isinstance(storage, pandas.arrays.NumpyExtensionArray):
+            return None
+        values = value.to_numpy()
+        if str(values.dtype) != "float64" or not values.flags["C_CONTIGUOUS"]:
+            return None
+        keep.append(values)
+        return values.ctypes.data, all_valid(len(values)), "numpy"
+
+    def one_index(series: list) -> Any:
+        """The index every Series shares, or None: alignment is pandas' own business."""
+        first = series[0].index
+        for other in series[1:]:
+            index = other.index
+            if index is first:
+                continue
+            ranges = isinstance(first, pandas.RangeIndex) and isinstance(index, pandas.RangeIndex)
+            if ranges and first.equals(index):
+                continue
+            return None
+        return first
+
     def wrapper(*args: object) -> object:
         if len(args) != array_count + len(loop.scalars):
             return fallback(*args)
@@ -384,20 +427,33 @@ def _bind_arrow(loop: FusedLoop, address: int, fallback: Callable[..., object]) 
             return fallback(*args)
         length: int | None = None
         atoms: list = []
+        backings: set[str] = set()
+        keep: list = []
         for value, kind in zip(arrays, kinds, strict=True):
-            described = parts(value, kind)
+            if pandas is not None:
+                described = series_parts(value, kind, keep)
+                if described is not None:
+                    backings.add(described[2])
+                    described = described[:2]
+            else:
+                described = arrow_parts(value, kind)
             if described is None or (length is not None and len(value) != length):  # type: ignore[arg-type]
                 binding.fallbacks += 1
                 return fallback(*args)
             length = len(value)  # type: ignore[arg-type]
             atoms.extend(described)
-        if length is None:
+        if length is None or len(backings) > 1:
             binding.fallbacks += 1
             return fallback(*args)
+        index = None
+        if pandas is not None:
+            index = one_index(list(arrays))
+            if index is None or (backings == {"numpy"} and loop.result != "f64"):
+                binding.fallbacks += 1
+                return fallback(*args)
         bitmap_bytes = (length + 7) // 8
-        out_values = pyarrow.allocate_buffer(
-            length * _DOUBLE_SIZE if loop.result == "f64" else bitmap_bytes, resizable=False
-        )
+        values_bytes = length * _DOUBLE_SIZE if loop.result == "f64" else bitmap_bytes
+        out_values = pyarrow.allocate_buffer(values_bytes, resizable=False)
         out_validity = pyarrow.allocate_buffer(bitmap_bytes, resizable=False)
         placeholder = ctypes.c_int64(0)
         status = native(
@@ -413,7 +469,17 @@ def _bind_arrow(loop: FusedLoop, address: int, fallback: Callable[..., object]) 
             return fallback(*args)
         binding.calls += 1
         validity_buffer = out_validity if loop.nullable else None
-        return pyarrow.Array.from_buffers(types[loop.result], length, [validity_buffer, out_values])
+        result = pyarrow.Array.from_buffers(
+            types[loop.result], length, [validity_buffer, out_values]
+        )
+        if pandas is None:
+            return result
+        names = {series.name for series in arrays}  # type: ignore[attr-defined]
+        name = names.pop() if len(names) == 1 else None
+        if backings == {"arrow"}:
+            return pandas.Series(pandas.arrays.ArrowExtensionArray(result), index=index, name=name)
+        # NumPy-backed in, NumPy-backed out: the values buffer, viewed, is the Series.
+        return pandas.Series(result.to_numpy(zero_copy_only=False), index=index, name=name)
 
     wrapper.__name__ = loop.symbol
     wrapper.__ppy_fused__ = loop  # type: ignore[attr-defined]

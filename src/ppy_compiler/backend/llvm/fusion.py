@@ -2,7 +2,8 @@
 
 A maximal expression tree of array operations that converge onto a shared
 dialect -- NumPy's ufuncs, torch's elementwise operators, and SciPy's
-special functions onto `tensor`; PyArrow's compute onto `columnar` --
+special functions onto `tensor`; PyArrow's compute and pandas' Series
+arithmetic onto `columnar` --
 becomes one kernel: IR over buffers whose length the kernel learns at the
 call, lowered by `lower-tensor` to a single loop with no temporaries, and
 emitted by the backend like any function. The plugin says which operation
@@ -33,6 +34,7 @@ from ...ir.types import BOOL, F64, I64, U8, BufferType, IRType, PtrType
 __all__ = [
     "BINARY",
     "COLUMNAR",
+    "COLUMNAR_STORAGES",
     "REDUCTIONS",
     "STORAGES",
     "UNARY",
@@ -78,7 +80,10 @@ STORAGES: dict[str, str] = {
     "numpy.ndarray": "numpy",
     "torch.Tensor": "torch",
     "pyarrow.Array": "pyarrow",
+    "pandas.Series": "pandas",
 }
+#: Libraries whose kernels are columnar IR: nulls are theirs to keep.
+COLUMNAR_STORAGES = frozenset({"pyarrow", "pandas"})
 
 _OPERATOR_OP = {
     ast.Add: "add",
@@ -86,6 +91,16 @@ _OPERATOR_OP = {
     ast.Mult: "mul",
     ast.Div: "div",
     ast.Pow: "pow",
+}
+#: Operators pandas spells columnar logic and comparison with.
+_COLUMNAR_OPERATOR_OP = {ast.BitAnd: "and", ast.BitOr: "or", ast.BitXor: "xor"}
+_COMPARE_OP = {
+    ast.Eq: "equal",
+    ast.NotEq: "not_equal",
+    ast.Lt: "less",
+    ast.LtE: "less_equal",
+    ast.Gt: "greater",
+    ast.GtE: "greater_equal",
 }
 
 
@@ -251,7 +266,7 @@ def _search(
             continue
         if not shape.arrays:
             continue
-        nullable = shape.storage == "pyarrow" and operations[0] not in _NEVER_NULL
+        nullable = shape.storage in COLUMNAR_STORAGES and operations[0] not in _NEVER_NULL
         loop = FusedLoop(
             symbol="ppy_fused_" + prefix.replace(".", "_") + f"_{node.lineno}_{node.col_offset}",
             arrays=tuple(shape.arrays),
@@ -310,13 +325,19 @@ def _render(
         return f"c{float(node.value)!r}", "f64"
     if isinstance(node, ast.BinOp):
         name = _OPERATOR_OP.get(type(node.op))
-        if name is None or expect == "bool":
+        if name is None:
+            return _render_operator(node, module, shape, operations, expect)
+        if expect == "bool":
             raise _Unsupported
         operations.append(name)
         left, _ = _render(node.left, module, shape, operations, "f64")
         right, _ = _render(node.right, module, shape, operations, "f64")
         return f"({name} {left} {right})", "f64"
-    if isinstance(node, ast.UnaryOp) and isinstance(node.op, ast.USub) and expect != "bool":
+    if isinstance(node, (ast.Compare, ast.UnaryOp)) and not (
+        isinstance(node, ast.UnaryOp) and isinstance(node.op, ast.USub)
+    ):
+        return _render_operator(node, module, shape, operations, expect)
+    if isinstance(node, ast.UnaryOp) and expect != "bool":
         operations.append("neg")
         inner, _ = _render(node.operand, module, shape, operations, "f64")
         return f"(neg {inner})", "f64"
@@ -345,6 +366,44 @@ def _render(
     raise _Unsupported
 
 
+def _render_operator(
+    node: ast.expr,
+    module: ModuleAnalysis,
+    shape: _Shape,
+    operations: list[str],
+    expect: str | None,
+) -> tuple[str, str]:
+    """A comparison, `&`, `|`, `^`, or `~` between columns: the plugin named the operation."""
+    operation = _operation_of(node, module)
+    if operation is None or operation[0] != "columnar":
+        raise _Unsupported
+    if isinstance(node, ast.Compare):
+        if len(node.ops) != 1 or type(node.ops[0]) not in _COMPARE_OP:
+            raise _Unsupported
+        name = _COMPARE_OP[type(node.ops[0])]
+        operands: list[ast.expr] = [node.left, node.comparators[0]]
+    elif isinstance(node, ast.BinOp):
+        found = _COLUMNAR_OPERATOR_OP.get(type(node.op))
+        if found is None:
+            raise _Unsupported
+        name = found
+        operands = [node.left, node.right]
+    elif isinstance(node, ast.UnaryOp) and isinstance(node.op, ast.Invert):
+        name = "invert"
+        operands = [node.operand]
+    else:
+        raise _Unsupported
+    reads, gives = COLUMNAR[name]
+    if expect not in (None, "same") and expect != gives:
+        raise _Unsupported
+    operations.append(name)
+    parts = [
+        _render(operand, module, shape, operations, wanted)[0]
+        for operand, wanted in zip(operands, reads, strict=True)
+    ]
+    return f"({name} {' '.join(parts)})", gives
+
+
 def _render_columnar(
     node: ast.Call,
     name: str,
@@ -357,11 +416,15 @@ def _render_columnar(
     if described is None:
         raise _Unsupported
     reads, gives = described
-    if len(node.args) != len(reads) or (expect not in (None, "same") and expect != gives):
+    # `s.fillna(0.0)` reads its receiver first; `pc.fill_null(s, 0.0)` spells it as an argument.
+    arguments = list(node.args)
+    if isinstance(node.func, ast.Attribute) and _storage_of(node.func.value, module) is not None:
+        arguments.insert(0, node.func.value)
+    if len(arguments) != len(reads) or (expect not in (None, "same") and expect != gives):
         raise _Unsupported
     operations.append(name)
     parts = []
-    for argument, wanted in zip(node.args, reads, strict=True):
+    for argument, wanted in zip(arguments, reads, strict=True):
         if wanted == "scalar":
             if isinstance(argument, ast.Constant) and isinstance(argument.value, (int, float)):
                 parts.append(f"c{float(argument.value)!r}")
@@ -395,7 +458,7 @@ def kernel_module(loops: Iterable[FusedLoop], name: str) -> IRModule:
     module = IRModule(name)
     module.require("core", 1)
     for loop in loops:
-        if loop.storage == "pyarrow":
+        if loop.storage in COLUMNAR_STORAGES:
             module.require("columnar", 1)
             _build_columnar(module, loop)
         else:

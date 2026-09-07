@@ -4501,11 +4501,20 @@ class _Checker:
         plugin = self.plugins.for_qualname(qualname)
         if plugin is None:
             return None
-        result = plugin.call(
-            qualname,
-            [(a.type, a.facts) for a in args],
-            {k: (v.type, v.facts) for k, v in keywords.items() if k is not None},
-        )
+        typed_args = [(a.type, a.facts) for a in args]
+        typed_keywords = {k: (v.type, v.facts) for k, v in keywords.items() if k is not None}
+        result = None
+        if isinstance(node.func, ast.Attribute):
+            # A method of a plugin's class is asked for as `pandas.Series.fillna`
+            # first; `pandas.fillna` would be the module's function of that name.
+            owner = T.strip_literal(self._attribute_owners.get(id(node.func), T.UNKNOWN))
+            if isinstance(owner, T.Instance) and "." in owner.name:
+                method = f"{owner.name}.{node.func.attr}"
+                result = plugin.call(method, typed_args, typed_keywords)
+                if result is not None:
+                    qualname = method
+        if result is None:
+            result = plugin.call(qualname, typed_args, typed_keywords)
         if result is None:
             return None
         self._effects = self._effects | result.effects
@@ -4549,7 +4558,8 @@ class _Checker:
         operation = plugin.operator(symbol)
         if operation is None:
             return None
-        qualname = f"{root}.{operation}"
+        # A plugin names the operation bare (`multiply`) or in full (`pandas.mul`).
+        qualname = operation if "." in operation else f"{root}.{operation}"
         result = plugin.call(qualname, [(o.type, o.facts) for o in operands], {})
         if result is None:
             return None

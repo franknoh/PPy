@@ -514,6 +514,17 @@ Speed of the compiler itself, measured before being changed.
   the same guards NumPy's kernels have, and answered as an Arrow array
   over the buffers the kernel filled. pandas spells the same operations
   by the same names.
+- pandas converges onto the same kernels. A tree of Series arithmetic,
+  comparisons, `fillna`, `isna`/`notna` is one columnar kernel; an
+  Arrow-backed Series is read as its Arrow array, a NumPy-backed `float64`
+  Series as its values behind a bitmap of ones, and the answer is a Series
+  over the callers' index with the same backing. Alignment of different
+  indexes, mixed backings, nullable extension dtypes, and bool answers
+  over NumPy storage stay with pandas; a Series operator now resolves to
+  the plugin's operation (it was composed into a name no plugin knew).
+  `ppy_runtime.arrow.exported` lends
+  a PyArrow array to native code as the C Data Interface's `ArrowArray`
+  struct and releases it once the borrow ends.
 
 ## 0.1.0a1
 
