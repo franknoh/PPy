@@ -20,7 +20,7 @@ from .reporting import Reporter
 
 __all__ = ["KINDS", "build_ir_file", "run_emit"]
 
-KINDS = ("ir", "llvm-ir", "c", "cpp", "header", "stablehlo")
+KINDS = ("ir", "llvm-ir", "c", "cpp", "header", "stablehlo", "cuda", "hip")
 _SUFFIXES = {
     "ir": ".ppyir",
     "llvm-ir": ".ll",
@@ -28,6 +28,8 @@ _SUFFIXES = {
     "cpp": ".cpp",
     "header": ".h",
     "stablehlo": ".mlir",
+    "cuda": ".cu",
+    "hip": ".hip",
 }
 _HEADER_ONLY_SUFFIXES = {"c": ".h", "cpp": ".hpp"}
 
@@ -129,7 +131,7 @@ def _texts(kind: str, bundle, header_only: bool) -> dict[str, str]:  # type: ign
     from ..ir import encode
 
     if kind == "ir":
-        return {name: encode(module) for name, module in ir_modules(bundle).items()}
+        return {name: encode(module) for name, module in ir_modules(bundle, launches=True).items()}
     if kind == "llvm-ir":
         return emit_ir(bundle)
     if kind == "stablehlo":
@@ -155,7 +157,7 @@ def _texts(kind: str, bundle, header_only: bool) -> dict[str, str]:  # type: ign
     machine = configured_target(bundle.project.config.llvm.target)
     return {
         name: emit_module(module, language, header_only=header_only, target=machine)
-        for name, module in ir_modules(bundle).items()
+        for name, module in ir_modules(bundle, launches=kind in {"cuda", "hip"}).items()
     }
 
 

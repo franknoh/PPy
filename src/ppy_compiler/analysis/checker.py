@@ -413,6 +413,20 @@ def _holdable_element(t: T.Type) -> bool:
     return isinstance(base, T.Instance) and base.name in _HOLDABLE
 
 
+_GPU_POSITIONS = frozenset({"thread_id", "block_id", "block_dim", "grid_dim", "global_id"})
+_GPU_SHUFFLES = frozenset({"shfl", "shfl_up", "shfl_down", "shfl_xor"})
+
+
+def _gpu_extent(t: T.Type) -> bool:
+    """An `int`, or a tuple of one to three of them: a grid or a block."""
+    base = T.strip_literal(t)
+    if base in (T.INT, T.ANY, T.UNKNOWN):
+        return True
+    if not isinstance(base, T.Tuple_) or base.homogeneous:
+        return False
+    return 1 <= len(base.items) <= 3 and all(T.strip_literal(item) == T.INT for item in base.items)
+
+
 def _is_fresh_allocation(node: ast.expr) -> bool:
     """Does this expression produce an object nothing else can already hold?"""
     if isinstance(node, (ast.List, ast.Dict, ast.Set, ast.ListComp, ast.DictComp, ast.SetComp)):
@@ -3458,6 +3472,8 @@ class _Checker:
             "ppy.cpu.": self._cpu_call,
             "ppy.concurrent.": self._concurrent_call,
             "ppy.parallel.": self._parallel_call,
+            "ppy.cuda.": self._cuda_call,
+            "ppy.hip.": self._hip_call,
         }
         for prefix, handler in handlers.items():
             if qualname.startswith(prefix):
@@ -3833,6 +3849,138 @@ class _Checker:
             return Binding(T.NONE)
         self._error("E1643", f"`ppy.cpu.{operation}` is not part of the cpu namespace", node)
         return Binding(T.UNKNOWN)
+
+    # -- the cuda and hip namespaces -----------------------------------------
+
+    def _cuda_call(
+        self, operation: str, node: ast.Call, subscript: ast.expr | None, env: Env
+    ) -> Binding | None:
+        return self._gpu_call("cuda", operation, node, subscript, env)
+
+    def _hip_call(
+        self, operation: str, node: ast.Call, subscript: ast.expr | None, env: Env
+    ) -> Binding | None:
+        return self._gpu_call("hip", operation, node, subscript, env)
+
+    def _gpu_call(
+        self, api: str, operation: str, node: ast.Call, subscript: ast.expr | None, env: Env
+    ) -> Binding | None:
+        """`ppy.cuda.*` and `ppy.hip.*`: one vocabulary, typed once (spec 72, 73)."""
+        if operation in {"kernel", "device"}:
+            return None
+        spelled = f"ppy.{api}.{operation}"
+        if node.keywords:
+            self._error("E1644", f"`{spelled}` takes no keyword arguments", node)
+        args = [self._expr(argument, env) for argument in node.args]
+        if operation in _GPU_POSITIONS:
+            axis = node.args[0] if node.args else None
+            if len(args) > 1 or (
+                axis is not None
+                and not (isinstance(axis, ast.Constant) and axis.value in ("x", "y", "z"))
+            ):
+                self._error(
+                    "E1644", f'`{spelled}()` takes an axis, `"x"`, `"y"`, or `"z"`, or none', node
+                )
+            return Binding(T.INT)
+        if operation == "warp_size":
+            if args:
+                self._error("E1644", f"`{spelled}()` takes no arguments", node)
+            return Binding(T.INT)
+        if operation in {"syncthreads", "syncwarp"}:
+            if args:
+                self._error("E1644", f"`{spelled}()` takes no arguments", node)
+            self._effects = self._effects.add(Effect.SYNC)
+            return Binding(T.NONE)
+        if operation in {"shared", "local"}:
+            element = self._gpu_element(subscript, spelled, node)
+            if args:
+                self._error("E1644", f"`{spelled}[T, N]()` takes no arguments", node)
+            self._effects = self._effects.add(Effect.ALLOC)
+            if element is None:
+                return Binding(T.UNKNOWN)
+            return Binding(T.Instance("ppy.native.ptr", (element,), ("ppy.native.ptr", "object")))
+        if operation in _GPU_SHUFFLES:
+            if len(args) != 2:
+                self._error("E1644", f"`{spelled}(value, lane)` takes a scalar and a lane", node)
+                return Binding(T.UNKNOWN)
+            value = T.strip_literal(args[0].type)
+            if value not in (T.INT, T.FLOAT, T.BOOL):
+                self._error(
+                    "E1644",
+                    f"`{spelled}` moves an `int`, a `float`, or a `bool`, not `{value}`",
+                    node.args[0],
+                )
+            if T.strip_literal(args[1].type) != T.INT:
+                self._error("E1644", "a lane is an `int`", node.args[1])
+            return Binding(value)
+        if operation == "launch":
+            return self._gpu_launch(spelled, node, args)
+        self._error("E1644", f"`{spelled}` is not part of the {api} namespace", node)
+        return Binding(T.UNKNOWN)
+
+    def _gpu_element(
+        self, subscript: ast.expr | None, spelled: str, node: ast.AST
+    ) -> T.Type | None:
+        """`[T, N]` on `shared` and `local`: the element type and the count."""
+        elements = subscript.elts if isinstance(subscript, ast.Tuple) else None
+        if elements is None or len(elements) != 2:
+            self._error("E1644", f"`{spelled}[T, N]` takes the element type and the count", node)
+            return None
+        resolved = self.annotations.resolve(elements[0])
+        element = narrow_element(resolved) or resolved.type
+        count = elements[1].value if isinstance(elements[1], ast.Constant) else None
+        if not isinstance(count, int) or isinstance(count, bool) or count < 1:
+            self._error("E1644", f"`{spelled}[T, N]` takes a positive count", node)
+            return None
+        if not _holdable_element(element):
+            self._error(
+                "E1644",
+                f"`{spelled}` holds `int`, `float`, `bool`, `ppy.i8`, or `ppy.u8`, not `{element}`",
+                node,
+            )
+            return None
+        return element
+
+    def _gpu_launch(self, spelled: str, node: ast.Call, args: list[Binding]) -> Binding:
+        self._effects = self._effects.add(Effect.GPU_LAUNCH)
+        if len(args) < 3:
+            self._error(
+                "E1644",
+                f"`{spelled}(kernel, grid, block, *args)` takes the kernel, its grid, "
+                "and its block",
+                node,
+            )
+            return Binding(T.NONE)
+        callee = T.strip_literal(args[0].type)
+        if isinstance(callee, T.Callable_):
+            if callee.ret not in (T.NONE, T.ANY, T.UNKNOWN):
+                self._error(
+                    "E1644",
+                    f"a kernel returns nothing; `{callee.qualname or callee}` "
+                    f"returns `{callee.ret}`",
+                    node.args[0],
+                )
+            positional = [p for p in callee.params if p.kind in _POSITIONAL]
+            if callee.params and len(positional) != len(args) - 3:
+                self._error(
+                    "E1644",
+                    f"`{callee.qualname or 'the kernel'}` takes {len(positional)} "
+                    f"argument(s), {len(args) - 3} given",
+                    node,
+                )
+            for parameter, argument, arg_node in zip(
+                positional, args[3:], node.args[3:], strict=False
+            ):
+                if not T.is_assignable(argument.type, parameter.type):
+                    self._mismatch("E1301", f"`{parameter.name}` expects", arg_node, argument.type)
+        elif not isinstance(callee, (T.AnyType, T.UnknownType)):
+            self._error("E1644", f"`{spelled}` takes a kernel function", node.args[0])
+        for extent, arg_node in zip(args[1:3], node.args[1:3], strict=True):
+            if not _gpu_extent(extent.type):
+                self._error(
+                    "E1644", "a grid or a block is an `int` or a tuple of up to three", arg_node
+                )
+        return Binding(T.NONE)
 
     def _concurrent_call(
         self, operation: str, node: ast.Call, subscript: ast.expr | None, env: Env

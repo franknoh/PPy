@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING
 
 from ppy_runtime.version import VERSION as __version__
 
-from . import atomic, concurrent, cpu, ffi, simd, xla
+from . import atomic, concurrent, cpu, cuda, ffi, hip, simd, xla
 from ._directives import (
     DIRECTIVE_ATTR,
     Directive,
@@ -104,6 +104,7 @@ __all__ = [
     "check",
     "concurrent",
     "cpu",
+    "cuda",
     "directives_of",
     "dynamic",
     "f16",
@@ -112,6 +113,7 @@ __all__ = [
     "fastmath",
     "ffi",
     "grad",
+    "hip",
     "i8",
     "i16",
     "i32",

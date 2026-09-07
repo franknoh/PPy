@@ -273,7 +273,10 @@ verifier holds the kinds: a device operation in a host function; a host one
 in device code -- a guard, a buffer, an intrinsic, a call to a host
 function, any other dialect; a kernel that returns or takes stack memory;
 a launch of anything but a kernel, or with anything but its parameters.
-The CPU backends leave device code to the GPU backends.
+`ppy.cuda` and `ppy.hip` lower to it (`docs/language.md`); `ppy emit cuda`
+and `ppy emit hip` write device code and the host's launches as CUDA or
+HIP C++ (the C backend with the spellings in `backend/c/gpu.py`); the C,
+C++, and LLVM backends leave device code to them.
 
 ## The StableHLO backend
 

@@ -65,6 +65,7 @@ from ..ir.dialects import atomic as atomic_dialect
 from ..ir.dialects import concurrency as concurrency_dialect
 from ..ir.dialects import core
 from ..ir.dialects import cpu as cpu_dialect
+from ..ir.dialects import gpu as gpu_dialect
 from ..ir.dialects import math as math_dialect
 from ..ir.dialects import parallel as parallel_dialect
 from ..ir.dialects import simd as simd_dialect
@@ -126,10 +127,17 @@ def lower_module_to_ir(
     standalone: bool = False,
     prover: Prover | None = None,
     root: Path | None = None,
+    launches: bool = False,
 ) -> Lowered:
     """The IR of every eligible function in one module."""
     frontend = Frontend(
-        module, layouts, safeguards=safeguards, standalone=standalone, prover=prover, root=root
+        module,
+        layouts,
+        safeguards=safeguards,
+        standalone=standalone,
+        prover=prover,
+        root=root,
+        launches=launches,
     )
     return frontend.build(functions)
 
@@ -179,6 +187,7 @@ class Frontend:
         standalone: bool = False,
         prover: Prover | None = None,
         root: Path | None = None,
+        launches: bool = False,
     ) -> None:
         self.analysis = analysis
         self.layouts: ClassLayouts = dict(layouts or {})
@@ -188,6 +197,10 @@ class Frontend:
         #: Source locations are spelled relative to this, so the IR text is
         #: the same wherever the project sits.
         self.root = root
+        #: Whether a kernel launch lowers. The CPU backends have no launch
+        #: runtime yet, so for them a launching function stays in Python; the
+        #: source backends write the launch.
+        self.launches = launches
         self.module = IRModule(analysis.name)
         #: qualname -> (IR function, its native signature), for calls.
         self.declared: dict[str, tuple[IRFunction, NativeSignature]] = {}
@@ -235,7 +248,9 @@ class Frontend:
                     "it has no single native entry point"
                 )
                 continue
-            ok, reason = eligible(info, analysis, self.layouts, allow_io=self.standalone)
+            ok, reason = eligible(
+                info, analysis, self.layouts, allow_io=self.standalone, allow_launch=self.launches
+            )
             if ok:
                 candidates[qualname] = (info, analysis, node)
             else:
@@ -323,6 +338,11 @@ class Frontend:
                 str(f)
                 for f in features.options.get("features", ())  # type: ignore[union-attr]
             )
+        for api in ("cuda", "hip"):
+            if info.directive(f"{api}.kernel") is not None:
+                function.attributes["gpu.kind"] = "kernel"
+            elif info.directive(f"{api}.device") is not None:
+                function.attributes["gpu.kind"] = "device"
         self.declared[info.qualname] = (function, signature)
         return function
 
@@ -421,7 +441,13 @@ class Frontend:
             raise Unsupported(f"`{qualname}` instantiates itself with the same arguments")
         bindings = dict(zip(info.type_params, arguments, strict=True))
         specialized = _specialized_info(info, bindings, key[1])
-        ok, reason = eligible(specialized, analysis, self.layouts, allow_io=self.standalone)
+        ok, reason = eligible(
+            specialized,
+            analysis,
+            self.layouts,
+            allow_io=self.standalone,
+            allow_launch=self.launches,
+        )
         if not ok:
             raise Unsupported(f"`{qualname}[{', '.join(key[1])}]` has no native lowering: {reason}")
         signature = _signature(specialized, self.layouts, analysis)
@@ -531,6 +557,21 @@ class _FunctionLowering:
         self.hoist = frontend.safeguards != "inline"
         #: Proves an arithmetic chain fits the word, so its guard is left out.
         self.prover = frontend.prover if frontend.safeguards != "off" else None
+        #: Device code has no Python to fall back to: integers wrap and nothing guards.
+        self.device = gpu_dialect.kind_of(function) != "host"
+        if self.device:
+            self.overflow = "wrap"
+            self.prover = None
+        if gpu_dialect.kind_of(function) == "kernel":
+            if function.results:
+                raise Unsupported(
+                    "a kernel returns nothing; it writes its results through pointers"
+                )
+            if any(p.is_buffer or p.is_object or p.is_tuple for p in signature.parameters):
+                raise Unsupported(
+                    "a kernel takes scalars and `native.ptr` parameters; "
+                    "a list, a buffer, or a class stays on the host"
+                )
         self.entry: Block | None = None
         self.b = Builder()
         #: Scalar locals: name -> the stack slot holding it.
@@ -1672,6 +1713,8 @@ class _FunctionLowering:
         subscript = func.slice if isinstance(func, ast.Subscript) else None
         head = func.value if isinstance(func, ast.Subscript) else func
         operation = head.attr if isinstance(head, ast.Attribute) else ""
+        if namespace in {"cuda", "hip"}:
+            return self._gpu_op(namespace, operation, node, subscript)
         if namespace == "simd":
             if node.keywords:
                 raise Unsupported("`ppy.simd` takes no keyword arguments")
@@ -1778,6 +1821,119 @@ class _FunctionLowering:
                 raise Unsupported("a bitwise operator takes vectors of integers or bools")
             return core.bitwise(self.b, _BITWISE[op], left, right)
         raise Unsupported("this operator has no vector lowering")
+
+    # -- the cuda and hip namespaces: the gpu dialect ----------------------
+
+    def _gpu_op(
+        self, api: str, operation: str, node: ast.Call, subscript: ast.expr | None
+    ) -> Value:
+        """`cuda.*` and `hip.*` as gpu operations: one vocabulary, two spellings (spec 72, 73)."""
+        if node.keywords:
+            raise Unsupported(f"`ppy.{api}.{operation}` takes no keyword arguments")
+        self.frontend.module.require("gpu", 1)
+        b = self.b
+        if operation in gpu_dialect.POSITIONS or operation == "global_id":
+            axis = self._gpu_axis(node, api, operation)
+            if operation == "global_id":
+                position = core.add(
+                    b,
+                    core.mul(
+                        b,
+                        gpu_dialect.block_id(b, axis),
+                        gpu_dialect.block_dim(b, axis),
+                        overflow="wrap",
+                    ),
+                    gpu_dialect.thread_id(b, axis),
+                    overflow="wrap",
+                )
+            else:
+                position = getattr(gpu_dialect, operation)(b, axis)
+            return core.cast(b, position, I64)
+        if operation == "warp_size":
+            return self._int_constant(32 if api == "cuda" else 64)
+        if operation == "syncthreads":
+            gpu_dialect.barrier(b)
+            return core.const(b, 0, I64)
+        if operation == "syncwarp":
+            gpu_dialect.subgroup_barrier(b)
+            return core.const(b, 0, I64)
+        if operation in {"shared", "local"}:
+            if node.args:
+                raise Unsupported(f"`{api}.{operation}[T, N]()` takes no arguments")
+            kind, count = self._element_count(subscript, f"{api}.{operation}")
+            if operation == "shared":
+                return gpu_dialect.shared_alloc(b, _scalar_type(kind), count)
+            return gpu_dialect.private_alloc(b, _scalar_type(kind), count)
+        if operation in _SHUFFLES:
+            if len(node.args) != 2:
+                raise Unsupported(f"`{api}.{operation}(value, lane)` takes a scalar and a lane")
+            value = self._expr(node.args[0])
+            lane = self._coerce(self._expr(node.args[1]), "int")
+            return gpu_dialect.subgroup_shuffle(b, value, lane, _SHUFFLES[operation])
+        if operation == "launch":
+            return self._gpu_launch(api, node)
+        raise Unsupported(f"`{api}.{operation}` has no native lowering")
+
+    def _gpu_axis(self, node: ast.Call, api: str, operation: str) -> str:
+        if not node.args:
+            return "x"
+        axis = node.args[0]
+        if (
+            len(node.args) != 1
+            or not isinstance(axis, ast.Constant)
+            or axis.value not in gpu_dialect.DIMENSIONS
+        ):
+            raise Unsupported(f'`{api}.{operation}()` takes an axis, "x", "y", or "z", or none')
+        return str(axis.value)
+
+    def _element_count(self, subscript: ast.expr | None, what: str) -> tuple[str, int]:
+        elements = subscript.elts if isinstance(subscript, ast.Tuple) else ()
+        if len(elements) != 2 or not isinstance(elements[1], ast.Constant):
+            raise Unsupported(f"`{what}[T, N]` takes the element type and the count")
+        kind = _annotation_kind(elements[0])
+        count = elements[1].value
+        if kind is None or not isinstance(count, int) or isinstance(count, bool) or count < 1:
+            raise Unsupported(f"`{what}[T, N]` takes a scalar element type and a positive count")
+        return kind, count
+
+    def _gpu_launch(self, api: str, node: ast.Call) -> Value:
+        if not self.frontend.launches:
+            raise Unsupported(
+                "a kernel launch runs through the launch runtime, which the CPU backends do not "
+                "have yet; the function launching stays in Python"
+            )
+        if len(node.args) < 3 or not isinstance(node.args[0], ast.Name):
+            raise Unsupported(
+                f"`{api}.launch(kernel, grid, block, *args)` takes a kernel of this module by name"
+            )
+        name = node.args[0].id
+        found = next(
+            (
+                (function, signature)
+                for qualname, (function, signature) in self.frontend.declared.items()
+                if qualname.rpartition(".")[2] == name and "ppy.generic" not in function.attributes
+            ),
+            None,
+        )
+        if found is None:
+            raise Unsupported(f"`{name}` has no native lowering to launch")
+        function, signature = found
+        if gpu_dialect.kind_of(function) != "kernel":
+            raise Unsupported(f"`{name}` is not a kernel; mark it `@{api}.kernel`")
+        grid = self._gpu_extent(node.args[1])
+        block = self._gpu_extent(node.args[2])
+        arguments = self._call_arguments(signature, node.args[3:], name)
+        gpu_dialect.launch(self.b, function.name, grid, block, tuple(arguments))
+        return core.const(self.b, 0, I64)
+
+    def _gpu_extent(self, node: ast.expr) -> tuple[Value, Value, Value]:
+        spelled = list(node.elts) if isinstance(node, ast.Tuple) else [node]
+        if not 1 <= len(spelled) <= 3:
+            raise Unsupported("a grid or a block is an `int` or a tuple of up to three")
+        sizes = [self._coerce(self._expr(e), "int") for e in spelled]
+        while len(sizes) < 3:
+            sizes.append(self._int_constant(1))
+        return sizes[0], sizes[1], sizes[2]
 
     def _atomic_op(self, operation: str, node: ast.Call) -> Value:
         self.frontend.module.require("atomic", 1)
@@ -2275,7 +2431,10 @@ class _FunctionLowering:
                 below = core.cmp(self.b, "le", value, core.const(self.b, high, I64))
                 inside = below if inside is None else core.bitwise(self.b, "and", inside, below)
             assert inside is not None
-            core.guard(self.b, inside, "range", "declared range", label=f"{param.name}.declared")
+            if not self.device:
+                core.guard(
+                    self.b, inside, "range", "declared range", label=f"{param.name}.declared"
+                )
 
     def _term_for_load(self, value: Value, node: ast.expr) -> None:
         """The loaded value as a variable, with its range and its relations.
@@ -2355,7 +2514,8 @@ class _FunctionLowering:
             core.cmp(self.b, "ge", right, zero),
             core.cmp(self.b, "le", right, limit),
         )
-        core.guard(self.b, in_range, "range", "shift count outside the machine word")
+        if not self.device:
+            core.guard(self.b, in_range, "range", "shift count outside the machine word")
         if op is ast.LShift:
             return self.b.create(
                 "core.shl", (left, right), (I64,), {"overflow": self.overflow}
@@ -2363,6 +2523,8 @@ class _FunctionLowering:
         return core.shift(self.b, "shr", left, right)
 
     def _guard_nonzero(self, value: Value) -> None:
+        if self.device:
+            return
         zero = self._literal(0, _kind(value.type))
         core.guard(self.b, core.cmp(self.b, "ne", value, zero), "zero_division", "division by zero")
 
@@ -2398,7 +2560,8 @@ class _FunctionLowering:
                 core.cmp(self.b, "ge", narrowed, core.const(self.b, low, I64)),
                 core.cmp(self.b, "le", narrowed, core.const(self.b, high, I64)),
             )
-            core.guard(self.b, fits, "range", "value does not fit a byte")
+            if not self.device:
+                core.guard(self.b, fits, "range", "value does not fit a byte")
             return core.cast(self.b, narrowed, _scalar_type(kind))
         if kind == "float":
             widened = self._coerce(value, "int") if current == "bool" else value
@@ -2418,7 +2581,8 @@ class _FunctionLowering:
 
 
 _SPELLING = {"add": "+", "sub": "-", "mul": "*"}
-_NAMESPACES = ("simd", "atomic", "cpu", "concurrent")
+_NAMESPACES = ("simd", "atomic", "cpu", "concurrent", "cuda", "hip")
+_SHUFFLES = {"shfl": "idx", "shfl_up": "up", "shfl_down": "down", "shfl_xor": "xor"}
 _ANNOTATION_KINDS = {
     "int": "int",
     "float": "float",
@@ -2471,7 +2635,8 @@ def _plain_stores(body: list[ast.stmt]) -> set[str]:
 
 
 def _dialect_namespace(target: str) -> str | None:
-    """Which of `ppy.simd`, `ppy.atomic`, `ppy.cpu`, `ppy.concurrent` a call spells."""
+    """Which of `ppy.simd`, `ppy.atomic`, `ppy.cpu`, `ppy.concurrent`, `ppy.cuda`,
+    `ppy.hip` a call spells."""
     for namespace in _NAMESPACES:
         if target.startswith((f"ppy.{namespace}.", f"{namespace}.")):
             return namespace

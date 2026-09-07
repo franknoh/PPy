@@ -372,6 +372,10 @@ DIRECTIVE_NAMES = frozenset(
         "native.export",
         "xla.jit",
         "cpu.target",
+        "cuda.kernel",
+        "cuda.device",
+        "hip.kernel",
+        "hip.device",
     }
 )
 

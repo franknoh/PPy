@@ -236,11 +236,14 @@ def eligible(
     layouts: ClassLayouts | None = None,
     *,
     allow_io: bool = False,
+    allow_launch: bool = False,
 ) -> tuple[bool, str]:
     """Can this function be lowered to a native scalar entry point?
 
     `allow_io` is the standalone build's dispensation: printing goes through
     native shims there, so the IO effect alone is not disqualifying.
+    `allow_launch` is the GPU source backends': a kernel launch is written
+    as one, where the CPU backends have no launch runtime yet.
     """
     if info.is_async or info.is_generator:
         return False, "coroutines and generators use the boxed runtime"
@@ -267,6 +270,8 @@ def eligible(
     violations.discard(Effect.THREAD)
     if allow_io:
         violations.discard(Effect.IO)
+    if allow_launch:
+        violations.discard(Effect.GPU_LAUNCH)
     if written or analysis.writes_only_allocations:
         # Those writes land in memory the caller lent us, and nowhere else --
         # whether this function performed them or a callee it handed the
@@ -317,6 +322,11 @@ def should_lower_native(info: FunctionInfo, analysis: FunctionAnalysis) -> tuple
     native caller.
     """
     del analysis
+    for api in ("cuda", "hip"):
+        if any(info.directive(f"{api}.{kind}") is not None for kind in ("kernel", "device")):
+            # Device code has no CPU form to bind; a launch runs it, and under
+            # CPython its own definition is the reference.
+            return False, "device code runs where it is launched"
     if _returns_none(info.ret):
         # The boundary hands back a value; a function with none to hand
         # back is native code's to call -- a thread's body, a helper.

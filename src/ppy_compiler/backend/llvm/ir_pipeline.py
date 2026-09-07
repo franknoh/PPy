@@ -69,8 +69,13 @@ def optimize(module: IRModule, level: int, plugins=None, parallel=None) -> PassC
     return ctx
 
 
-def ir_modules(bundle) -> dict[str, IRModule]:  # type: ignore[no-untyped-def]
-    """The canonical IR of every module in the project, after the passes."""
+def ir_modules(bundle, launches: bool = False) -> dict[str, IRModule]:  # type: ignore[no-untyped-def]
+    """The canonical IR of every module in the project, after the passes.
+
+    With `launches`, a function launching a kernel lowers with its launch,
+    as the source backends and `ppy emit ir` want it; without, it stays in
+    Python, since the CPU backends have no launch runtime yet.
+    """
     from ...lowering import lower_module_to_ir
     from . import _definitions, _value_class_layouts, prover_for
 
@@ -103,6 +108,7 @@ def ir_modules(bundle) -> dict[str, IRModule]:  # type: ignore[no-untyped-def]
             safeguards=config.llvm.safeguards or "hoisted",
             prover=prover_for(config),
             root=bundle.project.root,
+            launches=launches,
         )
         if not lowered.functions:
             continue

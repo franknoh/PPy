@@ -13,7 +13,7 @@ _EXECUTION_SUFFIXES = (".ppy", ".py")
 
 #: What `ppy emit` prints; `driver.emit.KINDS` is the same tuple, and a test
 #: holds the two together so this module stays free of the pipeline imports.
-_EMIT_KINDS = ("ir", "llvm-ir", "c", "cpp", "header", "stablehlo")
+_EMIT_KINDS = ("ir", "llvm-ir", "c", "cpp", "header", "stablehlo", "cuda", "hip")
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -153,7 +153,8 @@ def build_parser() -> argparse.ArgumentParser:
         choices=_EMIT_KINDS,
         help="`ir` is the canonical IR (.ppyir); `c`, `cpp` a translation unit; "
         "`header` the C declarations of the exports; `stablehlo` the @ppy.xla.jit "
-        "functions as an MLIR module for XLA",
+        "functions as an MLIR module for XLA; `cuda`, `hip` the kernels and their "
+        "launches as CUDA or HIP C++",
     )
     emit.add_argument("target", type=Path)
     emit.add_argument(

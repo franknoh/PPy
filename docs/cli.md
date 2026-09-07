@@ -302,6 +302,8 @@ ppy emit ir src/ -o build/ir/        # one .ppyir per module
 ppy emit llvm-ir foo.ppy             # what the LLVM backend makes of it
 ppy emit c foo.ppy                   # what the C backend makes of it: one C11 unit
 ppy emit cpp foo.ppy                 # ... as C++17, exports behind extern "C"
+ppy emit cuda foo.ppy                # the kernels, device functions, and launches as CUDA C++
+ppy emit hip foo.ppy                 # ... as HIP C++
 ppy emit c --header-only foo.ppy     # every function static inline in a header
 ppy emit c --standalone prog.ppy     # the whole program from main(), shims and all
 ppy emit header foo.ppy              # the C declarations of the exports

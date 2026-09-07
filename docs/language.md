@@ -289,6 +289,52 @@ over the canonical and tensor dialects -- and `df(x, y)` in a native
 function is a call to the derived function. Both follow one rule table,
 with one order of accumulation, so the three paths agree bit for bit.
 
+## GPU kernels: `ppy.cuda` and `ppy.hip`
+
+```python
+from ppy import cuda, native
+
+
+@cuda.kernel
+def saxpy(n: int, a: float, x: native.const_ptr[float], y: native.ptr[float]) -> None:
+    i = cuda.global_id()
+    if i < n:
+        slot = native.offset(y, i)
+        native.store(slot, a * native.load(native.offset(x, i)) + native.load(slot))
+
+
+def run(n: int, a: float, x: native.const_ptr[float], y: native.ptr[float]) -> None:
+    cuda.launch(saxpy, (n + 255) // 256, 256, n, a, x, y)
+```
+
+`@cuda.kernel` marks a kernel: a function of scalars and pointers that
+returns nothing and runs once per thread of a launch; `@cuda.device` marks
+a function a kernel calls. Inside, `cuda.thread_id()`, `block_id()`,
+`block_dim()`, `grid_dim()`, and `global_id()` (the block's index times its
+size, plus the thread's) say where a thread is, each along `"x"` unless
+told `"y"` or `"z"`; `syncthreads()` waits for the block and `syncwarp()`
+for the warp; `shared[T, N]()` is `N` elements of `T` the block shares and
+`local[T, N]()` this thread's own, both `native.ptr[T]`; `shfl(v, lane)`,
+`shfl_up(v, d)`, `shfl_down(v, d)`, and `shfl_xor(v, m)` trade a scalar
+across the warp, whose size `warp_size()` gives. `cuda.launch(kernel,
+grid, block, *args)` runs the kernel over `grid` blocks of `block` threads
+-- each an `int` or a tuple of up to three -- and waits. `ppy.hip` is the
+same vocabulary spelled `hip`, with a 64-lane wavefront; a kernel marked
+by either is one kernel, and `ppy emit cuda` and `ppy emit hip` write it
+either way. `E1644` names a misuse.
+
+Under CPython a launch runs the grid one block at a time and a block's
+threads together, each a Python thread that knows its position, so
+barriers and shuffles are real: the reference, exact and slow. The
+compiler lowers a kernel to the gpu dialect of the IR (`docs/ir.md`) --
+inside device code `int` arithmetic wraps and nothing guards, as on the
+device -- and refuses what has no device form: a list or a buffer
+parameter, a returned value, a call to a host function. The CPU backends
+leave device code alone, and a function that launches stays in Python
+until the launch runtime; `ppy emit cuda` and `ppy emit hip` write the
+kernels, the device functions, and the host functions with their launches
+as one CUDA or HIP C++ unit.
+
 ## XLA: `ppy.xla`
 
 ```python

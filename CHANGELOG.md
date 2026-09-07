@@ -555,6 +555,22 @@ Speed of the compiler itself, measured before being changed.
   block -- used to take the following line's value or label as its own
   operand or successor; the printed form always was one operation per line,
   and the reader now holds it to that.
+- `ppy.cuda` and `ppy.hip`, and the CUDA/HIP source backend. `@cuda.kernel`
+  and `@cuda.device` (or `hip.`) mark device code; `thread_id`, `block_id`,
+  `block_dim`, `grid_dim`, `global_id`, `syncthreads`, `syncwarp`,
+  `shared[T, N]()`, `local[T, N]()`, the `shfl` family, and `launch(kernel,
+  grid, block, *args)` are the vocabulary, lowered to the gpu dialect by
+  the one frontend -- inside device code `int` arithmetic wraps and nothing
+  guards -- and under CPython a launch runs the grid on threads that know
+  their position, a reference with real barriers and shuffles. `ppy emit
+  cuda` and `ppy emit hip` write a module as CUDA or HIP C++: `__global__`
+  kernels, `__device__` functions, `__shared__` memory, `__shfl_sync` or
+  `__shfl`, and `<<<grid, block>>>` launches followed by a device
+  synchronization whose status the host function reports. The CPU backends
+  leave device code alone, and a launching function stays in Python until
+  the launch runtime. `E1644` names a misuse. A C++ unit now includes a
+  header that is not C's standard library -- `pthread.h`, `omp.h` -- as it
+  is spelled rather than as `<cpthread>`.
 
 ## 0.1.0a1
 

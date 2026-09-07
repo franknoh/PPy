@@ -51,6 +51,7 @@ CODES: dict[str, str] = {
     "E1641": "A `ppy.atomic` operation is misused; the message says how.",
     "E1642": "A `ppy.concurrent` operation is misused; the message says how.",
     "E1643": "A `ppy.cpu` operation is misused; the message says how.",
+    "E1644": "A `ppy.cuda` or `ppy.hip` operation is misused; the message says how.",
     "E1650": "A `ppy.parallel` loop is misused; the message says how.",
     "E1660": "`ppy.grad` or `ppy.value_and_grad` is misused; the message says how.",
     "E1661": (

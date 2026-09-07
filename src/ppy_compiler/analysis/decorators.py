@@ -65,6 +65,10 @@ _KNOWN: dict[str, DecoratorSemantics] = {
     "ppy.native.export": _INERT,
     "ppy.cpu.target": _INERT,
     "ppy.xla.jit": _INERT,
+    "ppy.cuda.kernel": _INERT,
+    "ppy.cuda.device": _INERT,
+    "ppy.hip.kernel": _INERT,
+    "ppy.hip.device": _INERT,
     "ppy.ffi.bind": DecoratorSemantics(preserves_identity=False),
     # Python-defined transforms with fixed meaning.
     "builtins.staticmethod": _WRAPPER,

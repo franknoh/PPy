@@ -402,6 +402,10 @@ _FUNCTIONS: dict[str, tuple[T.Type, EffectSet]] = {
         "ppy.xla.default_device", T.union(T.STR, T.NONE), EffectSet.of(Effect.READ_GLOBAL)
     ),
     "ppy.xla.device_put": _fn("ppy.xla.device_put", T.ANY, EffectSet.of(Effect.READ_GLOBAL)),
+    "ppy.cuda.kernel": _fn("ppy.cuda.kernel", T.ANY, EffectSet()),
+    "ppy.cuda.device": _fn("ppy.cuda.device", T.ANY, EffectSet()),
+    "ppy.hip.kernel": _fn("ppy.hip.kernel", T.ANY, EffectSet()),
+    "ppy.hip.device": _fn("ppy.hip.device", T.ANY, EffectSet()),
     "ppy.parallel.range": _fn(
         "ppy.parallel.range", T.Instance("range", (), ("range", "object")), EffectSet()
     ),
@@ -467,6 +471,8 @@ MODULE_ATTRIBUTES: dict[str, tuple[T.Type, Facts]] = {
     "ppy.atomic": (T.Module_("ppy.atomic"), Facts()),
     "ppy.concurrent": (T.Module_("ppy.concurrent"), Facts()),
     "ppy.xla": (T.Module_("ppy.xla"), Facts()),
+    "ppy.cuda": (T.Module_("ppy.cuda"), Facts()),
+    "ppy.hip": (T.Module_("ppy.hip"), Facts()),
     "ppy.ffi.nullable": (T.ANY, Facts()),
     "math.pi": (T.FLOAT, Facts()),
     "math.e": (T.FLOAT, Facts()),
