@@ -16,7 +16,10 @@ load of `tensor<f64, N, 3>` is the buffer's length over 3, guarded to
 divide exactly, and every later extent, stride, and allocation over `N`
 is arithmetic on that value. A shape that names an unbound symbol, or
 two unknown dimensions in one load, is refused with the reason; so is a
-tensor that crosses a call, which travels as a buffer.
+tensor that crosses a call, which travels as a buffer. The columnar and
+arrow dialects are lowered here too (`lower_columnar`): a column is a
+values buffer, a validity bitmap, and a length, and every operation over
+one is a loop.
 """
 
 from __future__ import annotations
@@ -29,6 +32,7 @@ from ..dialects import tensor as tensors
 from ..model import Block, Builder, IRFunction, IRModule, Operation, Successor, Value
 from ..passes import Pass, PassContext
 from ..types import I32, I64, U8, BufferType, FloatType, IndexType, IntType, IRType, PtrType
+from .lower_columnar import ColumnarLowering
 
 __all__ = ["STACK_LIMIT", "LowerTensor", "LoweringError"]
 
@@ -58,7 +62,7 @@ class _View:
 
 
 #: The dialects whose values are tensors and whose operations this pass lowers.
-DIALECTS = frozenset({"tensor", "linalg", "fft", "sparse"})
+DIALECTS = frozenset({"tensor", "linalg", "fft", "sparse", "columnar", "arrow"})
 
 
 @dataclass(slots=True)
@@ -73,7 +77,7 @@ class _Sparse:
 
 
 class LowerTensor(Pass):
-    """Rewrite every tensor, linalg, fft, and sparse operation as core loops.
+    """Rewrite every tensor, linalg, fft, sparse, columnar, and arrow operation as core loops.
 
     `lapack` says whether the factorizations may call LAPACK; without it
     they are refused with the reason.
@@ -107,10 +111,11 @@ class LowerTensor(Pass):
         return changed
 
 
-class _FunctionLowering:
+class _FunctionLowering(ColumnarLowering):
     def __init__(
         self, module: IRModule, function: IRFunction, ctx: PassContext, lapack: bool = True
     ) -> None:
+        self._setup_columnar()
         self.module = module
         self.function = function
         self.ctx = ctx

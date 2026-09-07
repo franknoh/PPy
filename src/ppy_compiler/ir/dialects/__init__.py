@@ -8,7 +8,9 @@ __all__ = ["builtin_dialects"]
 
 
 def builtin_dialects() -> list[Dialect]:
+    from .arrow import ArrowDialect
     from .atomic import AtomicDialect
+    from .columnar import ColumnarDialect
     from .concurrency import ConcurrencyDialect
     from .core import CoreDialect
     from .cpu import CpuDialect
@@ -36,4 +38,6 @@ def builtin_dialects() -> list[Dialect]:
         FftDialect(),
         SpecialDialect(),
         SparseDialect(),
+        ColumnarDialect(),
+        ArrowDialect(),
     ]

@@ -220,6 +220,39 @@ index type; `from_parts` borrows the program's buffers, `to_dense`,
 changes the format, and `add` merges two matrices of one format into
 memory of its own.
 
+## The columnar and arrow dialects
+
+`columnar.column<f64>` is a column of `f64` with no nulls;
+`columnar.column<f64, nullable>` carries a validity bitmap. A column's
+length is a run-time fact, not part of its type. `columnar.table<a,
+column<i64>, b, column<f64, nullable>>` is a table of named columns. The
+operations are the ones pandas and PyArrow share: `from_parts %values,
+%validity, %length` and `store` move a column to and from Arrow's layout
+(values one per row -- one bit for `bool` -- and a bit-packed validity
+bitmap); `add`, `sub`, `mul`, `div`, the six comparisons, `and`, `or`,
+`xor`, `negate`, `abs`, `invert` give a null where an input is null;
+`is_null`, `is_valid`, `fill_null`, `cast`, `select`; `filter` by a bool
+column, `take` by positions (a null position is a null row), `concat`;
+`sort_indices` (ascending, nulls last, stable); `aggregate {function}` --
+`sum`, `mean`, `min`, `max`, `count`, `any`, `all` over the valid rows, a
+one-row column that is null when no row was valid; and over tables `make
+{names}`, `column_of {name}`, `project {names}`, `filter`, `take`,
+`concat`, `group_by {key, aggregates}` (an integer or bool key without
+nulls; `sum`, `count`, `min`, `max` per group), and an inner `join {key}`
+on one integer key. `lower-tensor` makes loops of them all: `filter`
+counts then copies, `sort_indices` is a bottom-up merge sort, `group_by`
+sorts by the key and folds each run, `join` is a sort-merge.
+
+`arrow.array<f64>` is an Arrow array as the C Data Interface hands it
+over: `arrow.import %p` reads an `ArrowArray` struct through a `ptr<u8>`
+-- length, null count, offset, the validity and values buffers -- with no
+copy; `arrow.length`, `arrow.null_count`, and `arrow.offset` read the
+counts; `arrow.to_column` is that memory as a `columnar.column<T,
+nullable>`, the values borrowed at the array's offset and the validity
+bitmap re-based to bit zero (all ones when the array has none). A bool
+array sliced inside a byte is refused by the guard rather than copied
+wrongly.
+
 ## Effects and ownership on the IR
 
 A function carries its `effects` -- the lower-case names of the analysis's

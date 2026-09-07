@@ -493,6 +493,19 @@ Speed of the compiler itself, measured before being changed.
   back into values. One rule table and one order of accumulation on both
   paths, so they agree bit for bit; a branch, a loop, a write, or an
   effect is refused with the reason (`E1660`-`E1662`).
+- The columnar and arrow dialects. A `columnar.column<T, nullable>` is a
+  column with a validity bitmap and a run-time length, a `columnar.table`
+  a set of named columns; the operations pandas and PyArrow share --
+  arithmetic, comparison, and boolean logic with null propagation,
+  `cast`, `is_null`, `fill_null`, `select`, `filter`, `take`, `concat`,
+  `sort_indices`, `aggregate`, and over tables `project`, `group_by`, and
+  an inner `join` -- are values the verifier checks, and `lower-tensor`
+  makes loops of them in Arrow's layout: bit-packed validity, bit-packed
+  bools, a merge sort for ordering, sort-based grouping and a sort-merge
+  join. `arrow.import` reads an array from the Arrow C Data Interface
+  struct without a copy and `arrow.to_column` makes it a column. Checked
+  against NumPy on both backends and against an `ArrowArray` built by
+  hand.
 
 ## 0.1.0a1
 
