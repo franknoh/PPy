@@ -25,9 +25,9 @@ reason, as the compiler refuses it.
 from __future__ import annotations
 
 import ast
-import inspect
 import math
 import textwrap
+import types
 from collections.abc import Callable
 from typing import Any
 
@@ -149,6 +149,8 @@ class _Derivative:
 def _build(
     function: Callable[..., Any], argnums: tuple[int, ...], value: bool
 ) -> Callable[..., Any]:
+    import inspect
+
     try:
         source = textwrap.dedent(inspect.getsource(function))
     except (OSError, TypeError) as error:
@@ -341,7 +343,7 @@ class _Emitter:
         if not isinstance(node, ast.Name):
             return None
         target = self.namespace.get(node.id)
-        name = getattr(target, "__name__", None) if inspect.ismodule(target) else None
+        name = getattr(target, "__name__", None) if isinstance(target, types.ModuleType) else None
         return name if name in {"math", "numpy"} else None
 
     # -- backward ------------------------------------------------------------------------

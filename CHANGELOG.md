@@ -649,6 +649,32 @@ Speed of the compiler itself, measured before being changed.
   `.ppyir`. The lowering cache (schema 6) now keeps each module's remarks
   and proved guards, so a warm build's report says what the cold build's
   did.
+- The direct AST-to-LLVM road is gone. The IR road -- the frontend in
+  `ppy_compiler.lowering`, the passes, `from_ir` -- is the LLVM backend,
+  and the default `pipeline`; `"ast"` in a project or `PPY_LOWERING=ast`
+  is still read, answered with `W2004`, and builds on the IR road. The
+  differential test that held the two roads to each other now holds the
+  one road to CPython's own answers, and CI runs one suite. What stays of
+  the old module is the native ABI and the eligibility rules both roads
+  shared.
+- Artifact determinism, held by a test: a build's program object,
+  library, boundary wrapper, manifest, generated Python, and header, and
+  every text `ppy emit` prints, come out byte for byte the same from an
+  empty cache, a full one, and an emptied one. The one artifact that did
+  not -- the boundary wrapper, compiled from a draft named after the
+  process that wrote it, a name the C compiler records in the object --
+  is compiled from its final name now.
+- The checker reads the `ppy` package's own modules as ordinary code: a
+  helper `ppy.aio` defines and calls is not a use of the aio namespace,
+  and the same for every namespace the compiler models, so `ppy migrate`
+  over the package itself no longer reports the namespace rules against
+  their own implementations.
+- `import ppy` is light again. `ppy.aio` had imported asyncio, socket, and
+  the async runtime for every program, the native API `ctypes.util`,
+  `ppy.autodiff` `inspect`, and the CPU probe `platform` and `subprocess`,
+  together doubling the cost of importing the package and adding thirty
+  milliseconds to every launched artifact; each loads when first used, and
+  a test holds the async ones out of a plain import.
 
 ## 0.1.0a1
 

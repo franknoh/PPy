@@ -142,7 +142,10 @@ def test_build_emits_objects_and_links_a_library(project: Path):
         check=False,
     )
     if symbols.returncode == 0:
-        assert "ppy_app_distance" in symbols.stdout
+        # `total` crosses the Python boundary and is public; `distance` has
+        # native callers only, so the program keeps it to itself.
+        assert "ppy_app_total" in symbols.stdout
+        assert "ppy_app_distance" not in symbols.stdout
 
 
 @requires_toolchain

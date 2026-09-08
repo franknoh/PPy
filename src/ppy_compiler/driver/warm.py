@@ -28,7 +28,7 @@ from pathlib import Path
 
 from ..target import host_target
 from ..version import COMPILER_VERSION, compiler_fingerprint
-from .config import Config, find_project_root, load_config, selected_pipeline
+from .config import Config, find_project_root, load_config
 
 __all__ = ["JIT_MARKER", "MANIFEST", "Warm", "locate", "resolved_safeguards", "run_directory"]
 
@@ -114,7 +114,6 @@ def _key(file: Path, root: Path, config: Config, options: argparse.Namespace) ->
         config.dynamic_boundaries,
         config.inference.implicit_any,
         config.llvm.host_cpu,
-        selected_pipeline(config.llvm.pipeline),
         config.llvm.jit,
         config.llvm.target,
         config.parallel.enabled,

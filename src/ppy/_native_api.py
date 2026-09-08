@@ -20,7 +20,6 @@ from __future__ import annotations
 
 import array as _array
 import ctypes
-import ctypes.util
 from collections.abc import Callable
 from typing import Annotated, Any, TypeVar
 
@@ -248,8 +247,10 @@ def _open_library(library: str | None) -> Any:
     conventional file name (`libm.so`), or by path; None is the process."""
     if library is None:
         return ctypes.CDLL(None)
+    from ctypes import util as _ctypes_util
+
     candidates: list[str] = []
-    found = ctypes.util.find_library(library)
+    found = _ctypes_util.find_library(library)
     if found:
         candidates.append(found)
     if "/" in library or library.endswith((".so", ".dylib", ".dll")):

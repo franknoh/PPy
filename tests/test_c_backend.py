@@ -9,7 +9,7 @@ import sys
 from pathlib import Path
 
 import pytest
-from test_lowering import CASES, KERNELS, _call, _lower_both
+from test_lowering import CASES, KERNELS, _call, _lower
 
 from ppy_compiler.backend.c import HeaderOnlyError, Language, emit_module
 from ppy_compiler.backend.llvm import available as llvm_available
@@ -124,7 +124,7 @@ class _Library:
 def test_the_c_unit_answers_like_the_llvm_road_on_every_input(write, analyze, tmp_path, language):
     """Same value, same status, from a C compiler instead of LLVM."""
     path = write("kernels.ppy", KERNELS)
-    _old, new = _lower_both(analyze, path)
+    new = _lower(analyze, path)
     engine = JitEngine(opt_level=2).open()
     engine.add(new.ir)
     engine.finalize()

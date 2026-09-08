@@ -349,7 +349,7 @@ become private, a small callee or one marked `@ppy.inline` is inlined
 (`@ppy.noinline` is not; nor is a coroutine, a kernel, or a resume
 function), the ordinary cleanups run, and `global-dce` drops the private
 functions and globals nothing reaches. `ppy build` compiles the program as
-one object under the IR road; `ppy emit linked-ir` prints it.
+one object; `ppy emit linked-ir` prints it.
 
 ## Text and `.ppyir`
 
@@ -514,10 +514,10 @@ arguments as parallel assignments before a `goto`. `ppy emit c` and
 `ppy emit cpp` print it; `tests/test_c_backend.py` compiles it and calls
 it on the LLVM road's inputs.
 
-`[tool.ppy.llvm] pipeline = "ir"` selects this road; `"ast"` (the default
-while the two are compared) is the direct AST-to-LLVM lowering.
-`PPY_LOWERING=ast|ir` overrides the setting for one process, which is how
-a differential run of the whole test suite is made; every cache and run
-artifact is keyed on the road, so the two never serve each other's
-objects. `tests/test_lowering.py` JIT-compiles the same functions both
-ways and calls them on the same inputs, fallbacks included.
+This is the LLVM backend's one road. 0.2.0 began with the direct
+AST-to-LLVM lowering beside it and a differential run comparing the two on
+every input; once the IR road covered everything the direct one did, the
+direct one was removed, and `tests/test_lowering.py` now holds the IR road
+to CPython's own answers on the same inputs, fallbacks included.
+`[tool.ppy.llvm] pipeline = "ast"` and `PPY_LOWERING=ast` are still read:
+a build asking for the removed road is told (`W2004`) and takes this one.

@@ -1,11 +1,11 @@
-"""The IR road through the LLVM backend: AST -> canonical IR -> passes -> LLVM.
+"""The LLVM backend's road: AST -> canonical IR -> passes -> LLVM.
 
-`lower_module_via_ir` answers the same question `lowering.lower_module`
-does -- an LLVM module for every eligible function, and a reason for every
-other -- by way of the canonical IR. The two roads run side by side while
-the IR one proves itself function family by function family; the
-`pipeline` setting under `[tool.ppy.llvm]` (or `PPY_LOWERING` in the
-environment) picks the road, and a differential run compares them.
+`lower_module_via_ir` answers, for one module, which functions are native
+-- an LLVM module for every eligible one, and a reason for every other --
+by way of the canonical IR: the frontend in `ppy_compiler.lowering`, the
+passes in `ppy_compiler.ir.transforms`, and `from_ir`, which reads the IR
+and nothing else. It is the only road; the direct AST-to-LLVM lowering
+0.2.0 started with was removed once this one covered everything it did.
 """
 
 from __future__ import annotations
@@ -16,7 +16,6 @@ from pathlib import Path
 
 from ...analysis.checker import FunctionAnalysis, ModuleAnalysis
 from ...analysis.symbols import FunctionInfo
-from ...driver.config import PIPELINES, selected_pipeline
 from ...ir import IRModule, PassContext, encode, verify_or_raise
 from ...ir.transforms import default_pipeline
 from .from_ir import emit_module
@@ -24,12 +23,10 @@ from .lowering import ClassLayouts, LoweringResult, Unsupported
 from .prover import Prover
 
 __all__ = [
-    "PIPELINES",
     "ir_modules",
     "lower_module_via_ir",
     "lower_specialization_via_ir",
     "optimize",
-    "selected_pipeline",
 ]
 
 

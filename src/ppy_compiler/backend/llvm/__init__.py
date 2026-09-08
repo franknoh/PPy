@@ -13,7 +13,6 @@ from pathlib import Path
 
 from ...cache import CacheKey
 from ...diagnostics import Diagnostic, Severity, Span
-from ...driver.config import selected_pipeline
 from ...plugins.torch_region import find_regions
 from ...target import TargetInfo, configured_target
 from ..binder import LibraryBinder
@@ -29,13 +28,7 @@ from .link import (
     write_header,
     write_manifest,
 )
-from .lowering import (
-    LoweredFunction,
-    LoweringResult,
-    NativeSignature,
-    lower_module,
-    should_lower_native,
-)
+from .lowering import LoweredFunction, LoweringResult, NativeSignature, should_lower_native
 from .specialize import SpecializationPolicy, Specializer
 from .wrapper_build import build_wrappers
 
@@ -59,7 +52,7 @@ __all__ = [
 class NativeModule:
     name: str
     ir: str
-    #: The module's PPy IR as text, for the linker; empty on the AST road.
+    #: The module's PPy IR as text, for the linker; empty for a module with nothing native.
     ppyir: str = ""
     functions: dict[str, LoweredFunction] = field(default_factory=dict)
     rejected: dict[str, str] = field(default_factory=dict)
@@ -219,46 +212,38 @@ def _offer(available: dict, native: NativeModule) -> None:  # type: ignore[type-
 
 
 def _lower(bundle, analysis, candidates, layouts, opt_level, imports=None):  # type: ignore[no-untyped-def]
-    """One module's LLVM IR by the road the project selected."""
-    from ...driver.config import selected_pipeline
+    """One module's LLVM IR: the canonical IR, the passes, and `from_ir`."""
     from ...driver.profile import profile_for
     from .ir_pipeline import lower_module_via_ir
 
     config = bundle.project.config
-    safeguards = config.llvm.safeguards or "hoisted"
-    if selected_pipeline(config.llvm.pipeline) == "ir":
-        level = opt_level if opt_level is not None else config.opt_level
-        return lower_module_via_ir(
-            analysis,
-            candidates,
-            layouts,
-            safeguards=safeguards,
-            opt_level=level,
-            prover=prover_for(config),
-            root=bundle.project.root,
-            plugins=bundle.project.plugins,
-            target=configured_target(config.llvm.target),
-            parallel=config.parallel,
-            imports=imports,
-            sanitize=config.llvm.sanitize,
-            instrument=config.llvm.instrument,
-            profile=profile_for(config),
-        )
-    return lower_module(
-        analysis, candidates, layouts, safeguards=safeguards, prover=prover_for(config)
+    level = opt_level if opt_level is not None else config.opt_level
+    return lower_module_via_ir(
+        analysis,
+        candidates,
+        layouts,
+        safeguards=config.llvm.safeguards or "hoisted",
+        opt_level=level,
+        prover=prover_for(config),
+        root=bundle.project.root,
+        plugins=bundle.project.plugins,
+        target=configured_target(config.llvm.target),
+        parallel=config.parallel,
+        imports=imports,
+        sanitize=config.llvm.sanitize,
+        instrument=config.llvm.instrument,
+        profile=profile_for(config),
     )
 
 
 def _lowering_key(bundle, name: str, opt_level: int | None) -> str:  # type: ignore[no-untyped-def]
-    from ...driver.config import selected_pipeline
     from ...driver.pipeline import module_cache_key
 
     level = opt_level if opt_level is not None else bundle.project.config.opt_level
-    road = selected_pipeline(bundle.project.config.llvm.pipeline)
     machine = configured_target(bundle.project.config.llvm.target)
     where = "" if machine.is_host else f".{machine.triple}"
     key = module_cache_key(bundle, name, target="llvm", opt_level=level).hex()
-    return f"{key}.{road}{where}.lowered"
+    return f"{key}{where}.lowered"
 
 
 def _cached_lowering(bundle, name: str, opt_level: int | None):  # type: ignore[no-untyped-def]
@@ -355,19 +340,16 @@ _LIBRARIES = {"numpy": "NumPy", "torch": "torch", "pyarrow": "PyArrow", "pandas"
 def _linked_program(bundle, natives, level, target):  # type: ignore[no-untyped-def]
     """The program's LLVM IR from every module's IR linked and optimized as one, or None.
 
-    The IR road keeps each module's `.ppyir`; linking answers every cross-
-    module declaration with its definition, whole-program optimization
-    internalizes what Python never binds and inlines across the seams, and
-    one object comes out. The AST road, or a cache from before linking, has
-    no module IR to link and keeps one object per module.
+    Every module keeps its `.ppyir`; linking answers every cross-module
+    declaration with its definition, whole-program optimization internalizes
+    what Python never binds and inlines across the seams, and one object
+    comes out. A cache from before linking has no module IR to link and
+    keeps one object per module.
     """
-    from ...driver.config import selected_pipeline
     from ...ir import decode
     from ...ir.linker import link
     from ...ir.transforms import whole_program
 
-    if selected_pipeline(bundle.project.config.llvm.pipeline) != "ir":
-        return None
     with_functions = [native for native in natives.values() if native.functions]
     if not with_functions or any(not native.ppyir for native in with_functions):
         return None
@@ -393,21 +375,32 @@ def _linked_program(bundle, natives, level, target):  # type: ignore[no-untyped-
     return text
 
 
-def _emit_program(bundle, natives, program, level, target, build_directory, artifacts, engine):  # type: ignore[no-untyped-def]
-    """One object for the linked program, cached on every module's key."""
+def _links(natives) -> bool:  # type: ignore[no-untyped-def]
+    """Whether the modules build as one program: every module with functions has its IR."""
+    with_functions = [native for native in natives.values() if native.functions]
+    return bool(with_functions) and all(native.ppyir for native in with_functions)
+
+
+def _program_object_key(bundle, names, level, target=None) -> str:  # type: ignore[no-untyped-def]
+    """The linked program's object, keyed on every module's key: same modules, same bytes."""
     from ...cache import digest
     from ...driver.pipeline import module_cache_key
 
-    store = bundle.project.store
     keys = [
         module_cache_key(bundle, name, target="llvm", opt_level=level).hex()
-        for name in sorted(natives)
+        for name in sorted(names)
     ]
-    object_key = digest("ppy-program", *keys) + (
+    return digest("ppy-program", *keys) + (
         f".{target.triple}.o" if target is not None and not target.is_host else ".o"
     )
+
+
+def _emit_program(  # type: ignore[no-untyped-def]
+    bundle, program, cached, object_key, target, build_directory, artifacts, engine
+):
+    """One object for the linked program: the cached bytes, or emitted and cached now."""
+    store = bundle.project.store
     destination = build_directory / "program.o"
-    cached = store.read(object_key)
     if cached is not None:
         destination.parent.mkdir(parents=True, exist_ok=True)
         destination.write_bytes(cached)
@@ -551,7 +544,14 @@ def compile_project(  # type: ignore[no-untyped-def]
         natives = _collect(bundle, level)
     build_directory = output or (bundle.project.config.cache_path / "native")
     artifacts = BuildArtifacts()
-    program = _linked_program(bundle, natives, level, target)
+    # The program's object is looked up before anything links: a build the
+    # cache already holds opens neither the linker nor LLVM.
+    program_key = _program_object_key(bundle, natives, level, target)
+    cached_program = store.read(program_key) if _links(natives) else None
+    program = (
+        None if cached_program is not None else _linked_program(bundle, natives, level, target)
+    )
+    linked = cached_program is not None or program is not None
     signatures: dict[str, NativeSignature] = {}
     fused: dict[str, tuple[int, int]] = {}
 
@@ -564,7 +564,7 @@ def compile_project(  # type: ignore[no-untyped-def]
 
         if not native.functions and not native.fused:
             continue
-        if program is None:
+        if not linked:
             destination = build_directory / f"{name.replace('.', '_')}.o"
             # The object depends on exactly what the module key covers, so a hit
             # means the previous one is still correct and running the optimizer and
@@ -597,8 +597,10 @@ def compile_project(  # type: ignore[no-untyped-def]
         for symbol, loop in native.fused.items():
             fused[symbol] = (len(loop.arrays), len(loop.scalars))
 
-    if program is not None:
-        _emit_program(bundle, natives, program, level, target, build_directory, artifacts, engine)
+    if linked:
+        _emit_program(
+            bundle, program, cached_program, program_key, target, build_directory, artifacts, engine
+        )
     # The generated Python is part of the build output: it is what the launcher
     # executes, and what binds the native entry points at import time.
     output = build_python(
@@ -932,7 +934,6 @@ def compile_and_run(  # type: ignore[no-untyped-def]
                 layouts=layouts,
                 safeguards=bundle.project.config.llvm.safeguards or "hoisted",
                 prover=prover_for(bundle.project.config),
-                pipeline=selected_pipeline(bundle.project.config.llvm.pipeline),
             )
             for info, node in native.sources.values():
                 specializer.register(info, node)

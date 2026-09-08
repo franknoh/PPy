@@ -220,3 +220,22 @@ def _ppy(cwd: Path, *args: str) -> subprocess.CompletedProcess:
         text=True,
         check=False,
     )
+
+
+def test_importing_ppy_loads_neither_asyncio_nor_the_async_runtime():
+    """A program that never awaits pays nothing for `ppy.aio` at import."""
+    probe = (
+        "import sys\n"
+        "import ppy\n"
+        "from ppy import aio\n"
+        "loaded = sorted(m for m in sys.modules if m in {'asyncio', 'socket', 'ppy_runtime.aio'})\n"
+        "print(','.join(loaded))\n"
+        "print(aio.NativeFuture.__name__, 'asyncio' in sys.modules)\n"
+    )
+    done = subprocess.run(
+        [sys.executable, "-c", probe], capture_output=True, text=True, check=False
+    )
+    assert done.returncode == 0, done.stderr
+    first, second = done.stdout.splitlines()[:2]
+    assert first == "", f"`import ppy` loaded {first}"
+    assert second == "NativeFuture False", second

@@ -31,15 +31,17 @@ happened.
 
 from __future__ import annotations
 
-import asyncio
 import errno as _errno
-import socket as _socket
+import sys
 from collections.abc import Awaitable, Callable
-from typing import Any
-
-from ppy_runtime.aio import NativeFuture, NativeGuardFailed
+from typing import TYPE_CHECKING, Any
 
 from ._native_api import Pointer, _layout
+
+if TYPE_CHECKING:
+    import socket as _socket
+
+    from ppy_runtime.aio import NativeFuture, NativeGuardFailed
 
 __all__ = [
     "NativeFuture",
@@ -60,6 +62,28 @@ __all__ = [
 _sockets: dict[int, _socket.socket] = {}
 
 
+def __getattr__(name: str) -> Any:
+    """`NativeFuture` and `NativeGuardFailed` are the runtime's, loaded when first named."""
+    if name in {"NativeFuture", "NativeGuardFailed"}:
+        from ppy_runtime import aio as runtime
+
+        return getattr(runtime, name)
+    raise AttributeError(name)
+
+
+def _native(awaitable: object) -> bool:
+    """A compiled coroutine's future, or not; none exists until the runtime loads."""
+    runtime = sys.modules.get("ppy_runtime.aio")
+    return runtime is not None and isinstance(awaitable, runtime.NativeFuture)
+
+
+def _asyncio():  # type: ignore[no-untyped-def]
+    """asyncio, imported when first needed: a program that never awaits pays nothing for it."""
+    import asyncio
+
+    return asyncio
+
+
 def _register(sock: _socket.socket) -> int:
     sock.setblocking(False)
     _sockets[sock.fileno()] = sock
@@ -72,12 +96,16 @@ def _socket_of(fd: int) -> _socket.socket | None:
 
 def _negative(error: OSError) -> int:
     """The negative errno a failed socket operation answers with."""
+    import socket as _socket
+
     if isinstance(error, _socket.gaierror):
         return -_errno.EHOSTUNREACH
     return -(error.errno or _errno.EIO)
 
 
 def _address(host: str, port_number: int, passive: bool) -> tuple[int, Any]:
+    import socket as _socket
+
     flags = _socket.AI_PASSIVE if passive else 0
     found = _socket.getaddrinfo(
         host or None, port_number, _socket.AF_UNSPEC, _socket.SOCK_STREAM, 0, flags
@@ -88,11 +116,13 @@ def _address(host: str, port_number: int, passive: bool) -> tuple[int, Any]:
 
 async def sleep(seconds: float) -> None:
     """Wait `seconds`; other coroutines run meanwhile."""
-    await asyncio.sleep(seconds)
+    await _asyncio().sleep(seconds)
 
 
 def listen(host: str, port_number: int, backlog: int = 16) -> int:
     """A listening TCP socket bound to `host:port`, or a negative errno."""
+    import socket as _socket
+
     try:
         family, address = _address(host, port_number, passive=True)
         sock = _socket.socket(family, _socket.SOCK_STREAM)
@@ -121,7 +151,7 @@ async def accept(fd: int) -> int:
     if sock is None:
         return -_errno.EBADF
     try:
-        connection, _peer = await asyncio.get_running_loop().sock_accept(sock)
+        connection, _peer = await _asyncio().get_running_loop().sock_accept(sock)
     except OSError as error:
         return _negative(error)
     return _register(connection)
@@ -129,11 +159,13 @@ async def accept(fd: int) -> int:
 
 async def connect(host: str, port_number: int) -> int:
     """A socket connected to `host:port`, or a negative errno."""
+    import socket as _socket
+
     try:
         family, address = _address(host, port_number, passive=False)
         sock = _socket.socket(family, _socket.SOCK_STREAM)
         sock.setblocking(False)
-        await asyncio.get_running_loop().sock_connect(sock, address)
+        await _asyncio().get_running_loop().sock_connect(sock, address)
     except OSError as error:
         return _negative(error)
     return _register(sock)
@@ -151,7 +183,7 @@ async def read(fd: int, buffer: Pointer[Any], count: int) -> int:
     if sock is None:
         return -_errno.EBADF
     try:
-        return await asyncio.get_running_loop().sock_recv_into(sock, _view(buffer, count))
+        return await _asyncio().get_running_loop().sock_recv_into(sock, _view(buffer, count))
     except OSError as error:
         return _negative(error)
 
@@ -162,7 +194,7 @@ async def write(fd: int, buffer: Pointer[Any], count: int) -> int:
     if sock is None:
         return -_errno.EBADF
     try:
-        await asyncio.get_running_loop().sock_sendall(sock, bytes(_view(buffer, count)))
+        await _asyncio().get_running_loop().sock_sendall(sock, bytes(_view(buffer, count)))
     except OSError as error:
         return _negative(error)
     return count
@@ -176,17 +208,17 @@ def close(fd: int) -> None:
 
 def spawn(awaitable: Awaitable[Any]) -> Awaitable[Any]:
     """Start `awaitable` now, as a task the loop runs alongside; await it for its value."""
-    if isinstance(awaitable, NativeFuture):
+    if _native(awaitable):
         awaitable.start()
         return awaitable
-    return asyncio.ensure_future(awaitable)  # type: ignore[arg-type]
+    return _asyncio().ensure_future(awaitable)  # type: ignore[arg-type]
 
 
 def run(awaitable: Awaitable[Any]) -> Any:
     """`awaitable`'s value: the native loop for a compiled coroutine, asyncio otherwise."""
-    if isinstance(awaitable, NativeFuture):
+    if _native(awaitable):
         return awaitable.result()
-    return asyncio.run(awaitable)  # type: ignore[arg-type]
+    return _asyncio().run(awaitable)  # type: ignore[arg-type]
 
 
 def compiled(function: Callable[..., Any]) -> bool:

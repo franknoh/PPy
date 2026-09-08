@@ -14,12 +14,11 @@ import subprocess
 from pathlib import Path
 
 from ...diagnostics import Diagnostic, Severity
-from ...driver.config import selected_pipeline
 from ..c.runtime import program_main, support_source
 from . import prover_for
 from .jit import JitEngine, LlvmUnavailable, available
 from .link import ToolchainError, _compiler, emit_object
-from .lowering import LoweringResult, eligible, lower_module
+from .lowering import LoweringResult, eligible
 
 __all__ = ["build_standalone", "standalone_ir"]
 
@@ -157,25 +156,16 @@ def build_standalone(  # type: ignore[no-untyped-def]
     analysis = bundle.analysis.modules[module_name]
 
     config = bundle.project.config
-    if selected_pipeline(config.llvm.pipeline) == "ir":
-        from .ir_pipeline import lower_module_via_ir
+    from .ir_pipeline import lower_module_via_ir
 
-        result: LoweringResult = lower_module_via_ir(
-            analysis,
-            functions,
-            safeguards=config.llvm.safeguards or "off",
-            standalone=True,
-            opt_level=opt_level if opt_level is not None else config.opt_level,
-            prover=prover_for(config),
-        )
-    else:
-        result = lower_module(
-            analysis,
-            functions,
-            safeguards=config.llvm.safeguards or "off",
-            standalone=True,
-            prover=prover_for(config),
-        )
+    result: LoweringResult = lower_module_via_ir(
+        analysis,
+        functions,
+        safeguards=config.llvm.safeguards or "off",
+        standalone=True,
+        opt_level=opt_level if opt_level is not None else config.opt_level,
+        prover=prover_for(config),
+    )
     for qualname, reason in sorted(result.rejected.items()):
         return _fail(reporter, _chain(reached_from, qualname, reason))
     if entry_qualname not in result.functions:

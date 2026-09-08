@@ -343,7 +343,7 @@ carries its schema and dialect versions, every function's ABI, and its
 source locations, so the build is the passes, the LLVM backend, an object,
 a library, and a manifest whose entries the runtime binds. A file from
 another schema or a dialect this compiler lacks is refused with the reason.
-Under the IR road a package builds as one program: a call from one module
+A package builds as one program: a call from one module
 into another's native function is a declaration the linker answers with the
 definition, the linked program is optimized as a whole -- what Python never
 binds is internalized, small callees are inlined across the seam, dead
@@ -417,9 +417,8 @@ removed the frontend's guard; `overflow` checks every wrapping or proven
 not null; `alignment` that it is aligned for what it points at. A failed
 check is not a fallback: the function returns a sanitizer status and the
 boundary raises `ppy_runtime.binding.SanitizerFailure` naming the kind and
-the function (a standalone program exits as it does for a guard). The
-checks are the IR road's, so `--sanitize` selects it; `[tool.ppy.llvm]
-sanitize = ["bounds"]` configures the same. `lifetime` and `alias` are
+the function (a standalone program exits as it does for a guard).
+`[tool.ppy.llvm] sanitize = ["bounds"]` configures the same. `lifetime` and `alias` are
 refused with the reason: stack lifetime is held by the verifier, aliasing
 has no runtime check yet.
 

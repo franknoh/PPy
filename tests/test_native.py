@@ -3019,23 +3019,31 @@ def test_a_wrapper_is_never_compiled_onto_the_name_it_publishes(
     module = _collect(analyze(path, backend="llvm"))["inplace"]
     signatures = {q: lowered.signature for q, lowered in module.functions.items()}
 
-    seen: list[list[str]] = []
+    seen: list[tuple[list[str], Path | None]] = []
     real = wrapper_build.subprocess.run
 
     def watched(command, **kwargs):
-        seen.append(list(command))
+        where = Path(kwargs["cwd"]) if kwargs.get("cwd") else None
+        seen.append((list(command), where))
         return real(command, check=kwargs.pop("check", False), **kwargs)
 
     monkeypatch.setattr(wrapper_build, "subprocess", types.SimpleNamespace(run=watched))
     built = wrapper_build.build_wrappers("inplace", signatures, tmp_path / "cache")
     assert built.ok, built.reason
 
-    outputs = [Path(command[command.index("-o") + 1]) for command in seen if "-o" in command]
+    outputs = [Path(c[c.index("-o") + 1]) for c, _where in seen if "-o" in c]
     assert outputs, "the wrapper was never compiled"
     assert built.path not in outputs, "compiled onto the name a reader may already hold"
     assert built.path is not None and built.path.is_file(), "and yet it was published"
-    inputs = [Path(argument) for command in seen for argument in command if argument.endswith(".c")]
-    assert all(".part" in source.name for source in inputs), "the source is a draft too"
+    inputs = [
+        (where / argument if where is not None else Path(argument))
+        for c, where in seen
+        for argument in c
+        if argument.endswith(".c")
+    ]
+    assert all(".part" in source.parent.name for source in inputs), "the source is in a draft too"
+    final = built.path.name.partition(".")[0] + ".c"
+    assert all(source.name == final for source in inputs), "compiled under the name it publishes"
 
 
 PROVABLE = """

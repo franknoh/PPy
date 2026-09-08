@@ -103,13 +103,13 @@ def build_parser() -> argparse.ArgumentParser:
         metavar="KINDS",
         default=None,
         help="instrument the native code with checks that raise rather than fall back: "
-        "a comma-separated list of bounds, overflow, pointer, alignment (the IR road)",
+        "a comma-separated list of bounds, overflow, pointer, alignment",
     )
     run.add_argument(
         "--profile",
         action="store_true",
         help="count blocks, branches, and calls while the program runs, and write a "
-        "`.ppyprof` profile when it ends, for `--pgo` (the IR road, in-process)",
+        "`.ppyprof` profile when it ends, for `--pgo` (in-process, never the warm artifact)",
     )
     run.add_argument(
         "--profile-out",
@@ -125,7 +125,7 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         metavar="FILE",
         help="optimize with the profile a `--profile` run wrote: hot and cold functions, "
-        "branch weights, inlining (the IR road)",
+        "branch weights, inlining",
     )
     run.add_argument("args", nargs=argparse.REMAINDER)
 
@@ -136,7 +136,7 @@ def build_parser() -> argparse.ArgumentParser:
         metavar="KINDS",
         default=None,
         help="instrument the native code with checks that raise rather than fall back: "
-        "a comma-separated list of bounds, overflow, pointer, alignment (the IR road)",
+        "a comma-separated list of bounds, overflow, pointer, alignment",
     )
     build.add_argument(
         "--pgo",
@@ -144,7 +144,7 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         metavar="FILE",
         help="optimize with the profile a `ppy run --profile` wrote: hot and cold functions, "
-        "branch weights, inlining (the IR road)",
+        "branch weights, inlining",
     )
     build.add_argument(
         "--report-opt",

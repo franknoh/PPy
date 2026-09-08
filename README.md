@@ -252,6 +252,28 @@ The plugin's exact version is part of every cache key, so an artifact built
 against one build of a library is never reused against another. `ppy doctor`
 prints what it found.
 
+## The compiler platform
+
+Between the analysis and every backend sits one typed canonical IR
+([docs/ir.md](docs/ir.md)): SSA values, blocks, an explicit control-flow
+graph, and operations named in dialects — `core`, `math`, `simd`, `cpu`,
+`atomic`, `concurrency`, `parallel`, `tensor`, `linalg`, `fft`, `sparse`,
+`columnar`, `arrow`, `gpu`, `async`, `prof` — with a verifier, a printer and
+parser (`.ppyir` is public text), a pass manager, and rewrite patterns.
+Every backend reads that IR and nothing else: LLVM (JIT and object code, for
+the host or a `--target`), C11 and C++17 source, CUDA and HIP source, NVVM
+IR and PTX for a device, StableHLO for XLA. What a program can ask for
+grew with it — `ppy.simd`, `ppy.cpu`, `ppy.atomic`, `ppy.concurrent`,
+`ppy.cuda` and `ppy.hip` kernels, `ppy.xla.jit`, `ppy.aio` coroutines with
+a native runtime, `ppy.autodiff` — and every one of them is inert under
+plain CPython. A package builds as one program: modules link at the IR,
+whole-program optimization inlines across them, and one object comes out.
+For the developer there are sanitizers (`--sanitize`), the stage debugger
+(`ppy inspect --stage`), the optimization report (`--report-opt`), and
+profile-guided optimization (`ppy run --profile`, `ppy build --pgo`).
+Plugins register dialects, passes, patterns, and lowerings through the same
+APIs the builtin ones use.
+
 ## Docs
 
 - [docs/guide.md](docs/guide.md) — overview, measurements, the import hook
@@ -259,6 +281,7 @@ prints what it found.
 - [docs/conversion.md](docs/conversion.md) — how `ppy convert` and `ppy migrate` infer what they write
 - [docs/migrating.md](docs/migrating.md) — migrating a real project: profile, carve the kernels, leave the rest
 - [docs/architecture.md](docs/architecture.md) — pipeline, cache, threads
+- [docs/ir.md](docs/ir.md) — the canonical IR: dialects, passes, `.ppyir`, the linker, sanitizers, profiles
 - [docs/plugins.md](docs/plugins.md) — how each library integration works
 - [docs/config.md](docs/config.md) — every `[tool.ppy]` key
 - [docs/diagnostics.md](docs/diagnostics.md) — every diagnostic code

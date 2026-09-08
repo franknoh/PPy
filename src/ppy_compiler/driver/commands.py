@@ -47,8 +47,7 @@ def _overrides(options: argparse.Namespace) -> dict[str, object]:
 def _resolve_sanitize(options: argparse.Namespace, project, reporter: Reporter):  # type: ignore[no-untyped-def]
     """Settle the sanitizers before any cache key reads them; a refusal is the exit code.
 
-    `--sanitize` overrides `[tool.ppy.llvm] sanitize`. The checks are the
-    IR road's, so asking for them selects it.
+    `--sanitize` overrides `[tool.ppy.llvm] sanitize`.
     """
     from ..ir.transforms import sanitizer_kinds
 
@@ -63,8 +62,6 @@ def _resolve_sanitize(options: argparse.Namespace, project, reporter: Reporter):
         reporter.emit(Diagnostic("E1002", Severity.ERROR, str(error)))
         return 2
     project.config.llvm.sanitize = kinds
-    if kinds:
-        project.config.llvm.pipeline = "ir"
     return None
 
 
@@ -74,7 +71,6 @@ def _resolve_profile(options: argparse.Namespace, project, reporter: Reporter): 
     `--pgo FILE` overrides `[tool.ppy.llvm] pgo`, which is relative to the
     project root; the file is read now so a missing or foreign one is
     refused before anything is built. `--profile` instruments the run.
-    Both are the IR road's, so asking for either selects it.
     """
     from .profile import ProfileError, load_profile
 
@@ -92,11 +88,24 @@ def _resolve_profile(options: argparse.Namespace, project, reporter: Reporter): 
             reporter.emit(Diagnostic("E1002", Severity.ERROR, str(error)))
             return 2
         project.config.llvm.pgo = str(path)
-        project.config.llvm.pipeline = "ir"
     if getattr(options, "profile", False):
         project.config.llvm.instrument = True
-        project.config.llvm.pipeline = "ir"
     return None
+
+
+def _answer_removed_road(project, reporter: Reporter) -> None:  # type: ignore[no-untyped-def]
+    """A project or environment naming the direct AST road is told it is gone; the IR road runs."""
+    from .config import PIPELINE_ENV, asks_for_removed_pipeline
+
+    if asks_for_removed_pipeline(project.config.llvm.pipeline):
+        reporter.emit(
+            Diagnostic(
+                "W2004",
+                Severity.WARNING,
+                f'`pipeline = "ast"` (or {PIPELINE_ENV}=ast) names the direct AST road, which '
+                "0.2.0 removed; the IR road runs",
+            )
+        )
 
 
 def _resolve_host_cpu(options: argparse.Namespace, project) -> None:  # type: ignore[no-untyped-def]
@@ -259,6 +268,7 @@ def run_llvm_backend(
         return 2
     warm = locate(file, options)
     project = open_project(file, config_overrides=_overrides(options))
+    _answer_removed_road(project, reporter)
     _resolve_safeguards(options, project, "run")
     if _resolve_sanitize(options, project, reporter) is not None:
         return 2
@@ -328,6 +338,7 @@ def build(options: argparse.Namespace, reporter: Reporter) -> int:
     project = open_project(target, config_overrides=_overrides(options))
     machine = None
     if backend == "llvm":
+        _answer_removed_road(project, reporter)
         _resolve_safeguards(options, project, "build")
         if _resolve_sanitize(options, project, reporter) is not None:
             return 2

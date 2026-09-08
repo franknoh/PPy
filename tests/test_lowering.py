@@ -1,21 +1,22 @@
-"""AST -> canonical IR -> LLVM, held against the AST -> LLVM road it replaces.
+"""AST -> canonical IR -> LLVM: the one road, held to Python's own answers.
 
-The two roads must agree on every answer, including which calls fall back
-to CPython. The differential test here JIT-compiles the same functions
-both ways and calls them on the same inputs; `PPY_LOWERING=ir` runs the
-whole suite the same way.
+The IR road must answer as CPython does on every input, including which
+calls fall back to it. The test here JIT-compiles the same functions and
+calls them on the same inputs Python is given; the functions themselves
+are the reference.
 """
 
 from __future__ import annotations
 
 import ctypes
+import math
+import textwrap
 from pathlib import Path
 
 import pytest
 
 from ppy_compiler.backend.llvm import available as llvm_available
 from ppy_compiler.backend.llvm.jit import JitEngine
-from ppy_compiler.backend.llvm.lowering import lower_module
 from ppy_compiler.ir import encode, verify
 from ppy_compiler.lowering import lower_module_to_ir
 from ppy_runtime.abi import STATUS_FALLBACK, STATUS_OK
@@ -96,6 +97,39 @@ CASES: dict[str, list[tuple]] = {
     "twice": [(3,), (2**21,)],
 }
 
+_WORD = 2**63
+
+
+def _python(name: str, arguments: tuple) -> tuple[int, object]:
+    """What CPython answers, and whether the native code may answer it or must fall back."""
+    namespace: dict = {}
+    exec(textwrap.dedent(KERNELS), namespace)  # the kernels above, the reference
+    try:
+        value = namespace[name](*arguments)
+    except (ZeroDivisionError, ValueError, OverflowError):
+        return STATUS_FALLBACK, None
+    if isinstance(value, bool) or not isinstance(value, int):
+        return STATUS_OK, value
+    if -_WORD <= value < _WORD and _intermediate_fits(name, arguments):
+        return STATUS_OK, value
+    return STATUS_FALLBACK, value
+
+
+def _intermediate_fits(name: str, arguments: tuple) -> bool:
+    if name == "shifted":
+        n, k = arguments
+        return 0 <= k < 64 and -_WORD <= n << k < _WORD
+    if name == "cube":
+        (n,) = arguments
+        return -_WORD <= n * n < _WORD and -_WORD <= n * n * n < _WORD
+    if name == "twice":
+        (n,) = arguments
+        return _intermediate_fits("cube", (n,)) and -_WORD <= 2 * n**3 < _WORD
+    if name == "floor_mod":
+        a, b = arguments
+        return b != 0 and not (a == -_WORD and b == -1)
+    return True
+
 
 def _c_type(kind: str):  # type: ignore[no-untyped-def]
     return {"int": ctypes.c_int64, "float": ctypes.c_double, "bool": ctypes.c_int8}[kind]
@@ -119,7 +153,7 @@ def _call(engine, signature, arguments):  # type: ignore[no-untyped-def]
     return status, value
 
 
-def _lower_both(analyze, path: Path):  # type: ignore[no-untyped-def]
+def _lower(analyze, path: Path):  # type: ignore[no-untyped-def]
     from ppy_compiler.backend.llvm import _definitions, _value_class_layouts
     from ppy_compiler.backend.llvm.ir_pipeline import lower_module_via_ir
 
@@ -136,39 +170,43 @@ def _lower_both(analyze, path: Path):  # type: ignore[no-untyped-def]
         if function_analysis is not None:
             candidates[info.qualname] = (info, function_analysis, node)
     layouts = _value_class_layouts(bundle)
-    old = lower_module(analysis, candidates, layouts, safeguards="inline")
-    new = lower_module_via_ir(analysis, candidates, layouts, safeguards="inline", opt_level=2)
-    return old, new
+    return lower_module_via_ir(analysis, candidates, layouts, safeguards="inline", opt_level=2)
 
 
 @requires_llvm
-def test_both_roads_lower_the_same_functions(write, analyze):
+def test_the_road_lowers_every_kernel_with_its_abi(write, analyze):
     path = write("kernels.ppy", KERNELS)
-    old, new = _lower_both(analyze, path)
-    assert sorted(new.functions) == sorted(old.functions)
-    assert new.rejected == old.rejected
-    for qualname, lowered in new.functions.items():
-        assert lowered.signature == old.functions[qualname].signature
+    lowered = _lower(analyze, path)
+    assert sorted(lowered.functions) == sorted(f"kernels.{name}" for name in CASES)
+    assert not lowered.rejected
+    assert lowered.functions["kernels.mixed"].signature.returns == ("double",)
+    assert lowered.functions["kernels.parity"].signature.returns == ("i8",)
+    assert [p.kind for p in lowered.functions["kernels.clamp"].signature.parameters] == ["int"] * 3
+    assert lowered.ppyir.startswith("ppyir"), "the module's own IR travels with the lowering"
 
 
 @requires_llvm
-def test_both_roads_answer_alike_on_every_input(write, analyze):
+def test_the_road_answers_as_python_does_on_every_input(write, analyze):
     """Same value, same status -- including the calls that fall back to CPython."""
     path = write("kernels.ppy", KERNELS)
-    old, new = _lower_both(analyze, path)
-    old_engine = JitEngine(opt_level=2).open()
-    old_engine.add(old.ir)
-    old_engine.finalize()
-    new_engine = JitEngine(opt_level=2).open()
-    new_engine.add(new.ir)
-    new_engine.finalize()
+    lowered = _lower(analyze, path)
+    engine = JitEngine(opt_level=2).open()
+    engine.add(lowered.ir)
+    engine.finalize()
     checked = 0
     for name, cases in CASES.items():
-        signature = new.functions[f"kernels.{name}"].signature
+        signature = lowered.functions[f"kernels.{name}"].signature
         for arguments in cases:
-            expected = _call(old_engine, signature, arguments)
-            got = _call(new_engine, signature, arguments)
-            assert got == expected, f"{name}{arguments}: ir road {got}, ast road {expected}"
+            expected_status, expected = _python(name, arguments)
+            status, value = _call(engine, signature, arguments)
+            assert status == expected_status, (
+                f"{name}{arguments}: status {status}, python {expected_status}"
+            )
+            if status == STATUS_OK:
+                if isinstance(expected, float):
+                    assert math.isclose(value, expected, rel_tol=1e-12), f"{name}{arguments}"
+                else:
+                    assert value == expected, f"{name}{arguments}: {value}, python {expected}"
             checked += 1
     assert checked == sum(len(cases) for cases in CASES.values())
 
@@ -176,11 +214,11 @@ def test_both_roads_answer_alike_on_every_input(write, analyze):
 @requires_llvm
 def test_fallbacks_happen_where_python_semantics_demand_them(write, analyze):
     path = write("kernels.ppy", KERNELS)
-    _old, new = _lower_both(analyze, path)
+    lowered = _lower(analyze, path)
     engine = JitEngine(opt_level=2).open()
-    engine.add(new.ir)
+    engine.add(lowered.ir)
     engine.finalize()
-    functions = new.functions
+    functions = lowered.functions
     assert _call(engine, functions["kernels.cube"].signature, (10,)) == (STATUS_OK, 1000)
     assert _call(engine, functions["kernels.cube"].signature, (3037000500,))[0] == STATUS_FALLBACK
     assert _call(engine, functions["kernels.floor_mod"].signature, (-7, 2)) == (STATUS_OK, -3)
@@ -253,3 +291,32 @@ def test_what_the_subset_excludes_is_refused_with_the_reason(write, analyze):
     assert lowered.rejected["kernels.chained"] == "chained comparison has no native lowering"
     assert "`kernels.chained` has no native lowering" in lowered.rejected["kernels.caller"]
     assert not verify(lowered.module), "dropped functions leave no half-built bodies behind"
+
+
+def test_the_direct_road_is_gone_and_asking_for_it_is_answered(write, tmp_path):
+    """`pipeline = "ast"` and `PPY_LOWERING=ast` select the one road there is, with a word."""
+    import os
+    import subprocess
+    import sys
+
+    from ppy_compiler.driver.config import selected_pipeline
+
+    assert selected_pipeline("ast") == "ir" and selected_pipeline(None) == "ir"
+    (tmp_path / "pyproject.toml").write_text(
+        '[tool.ppy]\nstrict = true\n\n[tool.ppy.llvm]\npipeline = "ast"\n', encoding="utf-8"
+    )
+    (tmp_path / "prog.ppy").write_text(
+        "def f(n: int) -> int:\n    return n + 1\n\n\nprint(f(2))\n", encoding="utf-8"
+    )
+    if not llvm_available():
+        return
+    done = subprocess.run(
+        [sys.executable, "-m", "ppy_compiler", "build", "prog.ppy", "-o", "dist"],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        check=False,
+        env={**os.environ, "PPY_LOWERING": "ast"},
+    )
+    assert done.returncode == 0, done.stderr
+    assert "W2004" in done.stderr and "direct AST road" in done.stderr, done.stderr

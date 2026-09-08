@@ -9,8 +9,6 @@ cpuinfo`, `sysctl` -- so no compiler is needed to give it.
 
 from __future__ import annotations
 
-import platform
-import subprocess
 import sys
 from functools import cache
 
@@ -41,6 +39,8 @@ _DARWIN_OPTIONAL = {
 @cache
 def features() -> tuple[str, ...]:
     """The CPU features of this machine, sorted, in LLVM's spelling."""
+    import platform
+
     found: set[str] = set()
     if sys.platform.startswith("linux"):
         try:
@@ -54,6 +54,8 @@ def features() -> tuple[str, ...]:
         except OSError:
             pass
     elif sys.platform == "darwin":
+        import subprocess
+
         for key, name in _DARWIN_OPTIONAL.items():
             try:
                 answer = subprocess.run(
@@ -72,6 +74,8 @@ def features() -> tuple[str, ...]:
 
 def vector_bits() -> int:
     """The widest vector register this machine computes with, in bits."""
+    import platform
+
     have = set(features())
     if "avx512f" in have:
         return 512

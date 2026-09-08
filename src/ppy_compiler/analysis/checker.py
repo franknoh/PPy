@@ -3387,6 +3387,8 @@ class _Checker:
         qualname = self.project.resolver(self.symbols).canonical(head)
         if qualname is None or not qualname.startswith("ppy.native."):
             return None
+        if self._own_namespace(qualname):
+            return None
         operation = qualname.removeprefix("ppy.native.")
         args = [self._expr(argument, env) for argument in node.args]
         if operation in {"load", "store", "offset"}:
@@ -3467,12 +3469,24 @@ class _Checker:
 
     # -- the simd, atomic, cpu, and concurrent namespaces --------------------
 
+    def _own_namespace(self, qualname: str) -> bool:
+        """Whether the module being checked is the `ppy` package's own code.
+
+        The `ppy` modules are the Python implementations of what the
+        compiler lowers -- `ppy.aio`, `ppy.cuda`, `ppy.concurrent` over
+        `ppy.atomic` -- so when the compiler reads one of them, as `ppy
+        migrate` over the package does, a call into a namespace is the
+        implementation itself, ordinary Python, not a program's use of it.
+        """
+        module = self.symbols.name
+        return qualname.rpartition(".")[0] == module or module == "ppy" or module.startswith("ppy.")
+
     def _dialect_call(self, node: ast.Call, env: Env) -> Binding | None:
         func = node.func
         subscript = func.slice if isinstance(func, ast.Subscript) else None
         head = func.value if isinstance(func, ast.Subscript) else func
         qualname = self.project.resolver(self.symbols).canonical(head)
-        if qualname is None:
+        if qualname is None or self._own_namespace(qualname):
             return None
         if qualname in {"ppy.grad", "ppy.value_and_grad"}:
             return self._grad_call(qualname, node, env)

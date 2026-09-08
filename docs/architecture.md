@@ -12,7 +12,12 @@ type & effect analysis   analysis/checker       flow typing, refinements, purity
      ├── driver/rewrite                          the plan applied to source, through a CST
      ├── migration/                              rewrite passes + report behind `ppy migrate`
      ├── opt/                                   AST passes for the Python backend
-     ├── backend/llvm/                          lowering → LLVM IR → wrapper → link/JIT
+     ├── lowering/                              typed AST → canonical IR (ir/)
+     │      ir/transforms                       passes; ir/linker joins modules into a program
+     │      ├── backend/llvm/                   IR → LLVM IR → wrapper → link/JIT
+     │      ├── backend/c/                      IR → C11, C++17, CUDA, HIP source
+     │      ├── backend/nvvm/                   IR → NVVM IR → PTX, launched by ppy_runtime.cuda
+     │      └── backend/stablehlo/              IR → StableHLO, run by ppy_runtime.xla
      └── lsp/, driver/explain                   the same analysis, served interactively
 ```
 
@@ -25,18 +30,21 @@ what the checker already proved.
 
 | package | contents |
 |---|---|
-| `ppy` (runtime) | the import hook and the inert directives/markers. This is all a plain CPython run ever loads. |
-| `ppy_runtime` | everything a *built artifact* needs at launch: the native ABI as data (`abi`), the guarded binding trampolines (`binding`), generated-module identity and execution (`generated`, `execute`), the binder protocol (`dispatch`), and the manifest-driven launch path (`manifest`, `launch`). The hard rule: this package never imports `ppy_compiler` — uninstalling the compiler must not break a built application, and a test keeps that true by poisoning the compiler and running a launcher. |
+| `ppy` (runtime) | the import hook and the inert directives/markers, and the modules a program writes against -- `native`, `ffi`, `simd`, `cpu`, `atomic`, `concurrent`, `autodiff`, `cuda`, `hip`, `xla`, `aio` -- each a Python implementation that answers the same as the compiled one. This is all a plain CPython run ever loads. |
+| `ppy_runtime` | everything a *built artifact* needs at launch: the native ABI as data (`abi`), the guarded binding trampolines (`binding`), generated-module identity and execution (`generated`, `execute`), the binder protocol (`dispatch`), and the manifest-driven launch path (`manifest`, `launch`), and the runtimes native code calls into: `aio` (the epoll loop, one C file compiled once), `cuda` (the driver API through ctypes, launching PTX), `xla` (the PJRT bridge), `exported` and `regions` (staged artifacts and compiled torch regions). The hard rule: this package never imports `ppy_compiler` — uninstalling the compiler must not break a built application, and a test keeps that true by poisoning the compiler and running a launcher. |
 | `frontend/` | source loading, the module graph, ambiguity detection (`E1003`). |
 | `migration/` | the `ppy migrate` layer over the shared conversion engine: deterministic rewrite passes (`pipeline`, `dynamic`, `globals`) that prove each rewrite equivalent before making it, and the classified report (`report`) that says what remains. |
 | `analysis/` | `results` (what analysis produced — the types every other package reads), `symbols` (declarations), `checker` (types, refinements, effects), `binding` (one shared call-argument binder), `lexical` (point-sensitive name resolution: what a name means at each statement, shared by decorator identity, reflection, and the write index), `aliasing` (flow-sensitive local alias analysis: mutation and escape resolve through what a name may refer to, not its spelling), `inference` (staged evidence/generalization fixpoint with a convergence guard), `decorators` (what each known decorator does, that unknown means opaque, and the shared `class_construction` facts behind both strict class checking and safe hoisting), `global_writes` (scope-aware project-wide write index behind `Final`), `reflection` (who reads annotations at runtime, blocking their materialization), `codec` (exact-inverse serialization of analysis facts for the cache), `render` (types back to annotation source). |
-| `ir/` | the typed canonical IR every backend lowers: `model` (modules, functions, blocks, SSA values with use lists), `types`, `dialect` (the registry and `OpSpec`), `dialects/core`, `verify`, `printer`/`parser`/`codec` (`.ppyir`), `pattern` (rewrites to a fixed point), `passes` (the pass manager with analyses and stages), `transforms` (canonicalize, simplify-cfg, dce). See [ir.md](ir.md). |
+| `lowering/` | the frontend of the native road: `ast_to_ir` turns a typed, effect-checked function into canonical IR (guards spelled, overflow and rounding on the operation, cross-module calls as declarations), `abi` the native signatures. |
+| `ir/` | the typed canonical IR every backend lowers: `model` (modules, functions, blocks, SSA values with use lists), `types`, `dialect` (the registry and `OpSpec`), `dialects/` (core, math, simd, cpu, atomic, concurrency, parallel, layout, tensor, linalg, fft, special, sparse, columnar, arrow, gpu, async, prof), `verify`, `printer`/`parser`/`codec` (`.ppyir`), `pattern` (rewrites to a fixed point), `passes` (the pass manager with analyses and stages), `transforms/` (canonicalize, simplify-cfg, dce, promote-slots, tensor fusion and lowering, columnar lowering, parallel lowering, async lowering, autodiff, sanitize, profile, whole-program), `linker` (modules into one program). See [ir.md](ir.md). |
 | `opt/` | AST-level passes: constant folding, inlining, LICM, loop transforms; used by the Python backend and as pre-lowering cleanup. |
 | `backend/python/` | runs optimized AST under CPython with the loader installed. |
 | `target` | `TargetInfo`: the triple, CPU and features, pointer width, endianness, ABI, OS, object format, and data layout of the machine a build is for; the host is one target among others, and nothing else consults `sys.platform`. |
 | `bind/` | `ppy bind header`: a C header read through libclang, written as `ppy.ffi` bindings. |
-| `backend/c/` | the C and C++ backends: `emit` reads the canonical IR and writes one C11 or C++17 translation unit (or a header-only form), `runtime` holds the C shims a standalone program links (the LLVM standalone build compiles the same table). |
-| `backend/llvm/` | `lowering` (AST → LLVM IR), `wrapper` (generated CPython-ABI entry points, `METH_FASTCALL`, GIL release), `fusion` (NumPy elementwise loops), `specialize`/`jit` (guarded runtime specialization), `parallel` (the worker pool), `link` (objects → shared library, for the host or a `--target`), `extension`/`packaging` (`--python-extension`, `--library`). |
+| `backend/c/` | the source backends: `emit` reads the canonical IR and writes one C11 or C++17 translation unit (or a header-only form), and with `gpu` the CUDA or HIP spelling of the same IR, kernels and launches included; `runtime` holds the C shims a standalone program links (the LLVM standalone build compiles the same table). |
+| `backend/nvvm/` | the device backend: IR → NVVM IR → PTX through LLVM's NVPTX target with libdevice linked in; `ppy_runtime.cuda` launches it. |
+| `backend/stablehlo/` | IR → StableHLO for `@ppy.xla.jit` functions; `ppy_runtime.xla` compiles and runs it through PJRT. |
+| `backend/llvm/` | `ir_pipeline` (the passes, sanitizers, and profile around a module's IR) and `from_ir` (canonical IR → LLVM IR, dialect by dialect; `lowering` keeps the native ABI and eligibility rules, `lowering_cache` what a build reuses), `wrapper` (generated CPython-ABI entry points, `METH_FASTCALL`, GIL release), `fusion` (NumPy elementwise loops), `specialize`/`jit` (guarded runtime specialization), `parallel` (the worker pool), `link` (objects → shared library, for the host or a `--target`), `extension`/`packaging` (`--python-extension`, `--library`). |
 | `plugins/` | numpy, torch, jax, pydantic, uvicorn — see [plugins.md](plugins.md). |
 | `cache/` | the content-addressed store (SQLite) and key construction. |
 | `driver/` | CLI, pipeline orchestration, `convert` (what to write) and `rewrite` (writing it) either side of `plan`, fmt, lint, test, explain. |
@@ -62,11 +70,11 @@ The LLVM path caches per stage, so a rebuild does only what changed:
 
 | stage | keyed by | on a no-change rebuild |
 |---|---|---|
-| lowering (IR + ABI decisions) | module source + deps + opt level | reused; LLVM never loads |
-| object code | the lowering key | reused |
+| lowering (canonical IR, LLVM IR, ABI decisions, remarks) | module source + deps + opt level + sanitizers + profile | reused; LLVM never loads |
+| the program's object | every module's lowering key | reused; nothing links |
 | linked library | the set of object keys | reused |
 
-Editing one file re-lowers that file, relinks, and touches nothing else;
+Editing one file re-lowers that file, links the program again, and touches nothing else;
 a change in a module's interface invalidates its dependents through the
 dependency digests.
 
