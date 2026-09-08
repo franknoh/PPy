@@ -46,6 +46,7 @@ ARRAY_TYPECODES: dict[str, T.Type] = {
 }
 
 _IO = EffectSet.of(Effect.IO)
+_NETWORK = EffectSet.of(Effect.NETWORK, Effect.IO, raises=("OSError",))
 _TIME = EffectSet.of(Effect.TIME)
 _RANDOM = EffectSet.of(Effect.RANDOM)
 _ALLOC = EffectSet.of(Effect.ALLOC)
@@ -387,12 +388,39 @@ _FUNCTIONS: dict[str, tuple[T.Type, EffectSet]] = {
     ),
     # Whether `.ppy` imports may be served natively, and which have been:
     # process-wide state of the hook, like the finder itself.
+    "ppy.ffi.library": _fn("ppy.ffi.library", T.instance("ppy.ffi.Library"), EffectSet()),
+    "ppy.ffi.bind": _fn("ppy.ffi.bind", T.ANY, EffectSet()),
+    "ppy.ffi.LengthOf": _fn("ppy.ffi.LengthOf", T.ANY, EffectSet()),
+    "ppy.native.extern": _fn("ppy.native.extern", T.ANY, EffectSet()),
+    "ppy.native.export": _fn("ppy.native.export", T.ANY, EffectSet()),
+    "ppy.cpu.target": _fn("ppy.cpu.target", T.ANY, EffectSet()),
+    "ppy.xla.jit": _fn("ppy.xla.jit", T.ANY, EffectSet()),
+    "ppy.xla.compile": _fn("ppy.xla.compile", T.ANY, EffectSet()),
+    # Asking the PJRT bridge which devices exist reads process-wide state.
+    "ppy.xla.devices": _fn("ppy.xla.devices", T.list_of(T.STR), EffectSet.of(Effect.READ_GLOBAL)),
+    "ppy.xla.default_device": _fn(
+        "ppy.xla.default_device", T.union(T.STR, T.NONE), EffectSet.of(Effect.READ_GLOBAL)
+    ),
+    "ppy.xla.device_put": _fn("ppy.xla.device_put", T.ANY, EffectSet.of(Effect.READ_GLOBAL)),
+    "ppy.cuda.kernel": _fn("ppy.cuda.kernel", T.ANY, EffectSet()),
+    "ppy.cuda.device": _fn("ppy.cuda.device", T.ANY, EffectSet()),
+    "ppy.hip.kernel": _fn("ppy.hip.kernel", T.ANY, EffectSet()),
+    "ppy.hip.device": _fn("ppy.hip.device", T.ANY, EffectSet()),
+    "ppy.parallel.range": _fn(
+        "ppy.parallel.range", T.Instance("range", (), ("range", "object")), EffectSet()
+    ),
     "ppy.native_import": _fn("ppy.native_import", T.BOOL, EffectSet.of(Effect.WRITE_GLOBAL)),
     "ppy.native_imports": _fn(
         "ppy.native_imports",
         T.dict_of(T.STR, T.Tuple_((T.STR,), homogeneous=True)),
         EffectSet.of(Effect.READ_GLOBAL),
     ),
+    "socket.socket": _fn("socket.socket", T.instance("socket.socket"), _NETWORK | _ALLOC),
+    "socket.create_connection": _fn(
+        "socket.create_connection", T.instance("socket.socket"), _NETWORK | _ALLOC
+    ),
+    "socket.gethostbyname": _fn("socket.gethostbyname", T.STR, _NETWORK),
+    "urllib.request.urlopen": _fn("urllib.request.urlopen", T.ANY, _NETWORK | _ALLOC),
     "time.time": _fn("time.time", T.FLOAT, _TIME),
     "time.perf_counter": _fn("time.perf_counter", T.FLOAT, _TIME),
     "time.perf_counter_ns": _fn("time.perf_counter_ns", T.INT, _TIME),
@@ -436,6 +464,17 @@ _FUNCTIONS: dict[str, tuple[T.Type, EffectSet]] = {
 
 #: Module attributes with a known type.
 MODULE_ATTRIBUTES: dict[str, tuple[T.Type, Facts]] = {
+    "ppy.native": (T.Module_("ppy.native"), Facts()),
+    "ppy.ffi": (T.Module_("ppy.ffi"), Facts()),
+    "ppy.simd": (T.Module_("ppy.simd"), Facts()),
+    "ppy.cpu": (T.Module_("ppy.cpu"), Facts()),
+    "ppy.atomic": (T.Module_("ppy.atomic"), Facts()),
+    "ppy.concurrent": (T.Module_("ppy.concurrent"), Facts()),
+    "ppy.xla": (T.Module_("ppy.xla"), Facts()),
+    "ppy.cuda": (T.Module_("ppy.cuda"), Facts()),
+    "ppy.hip": (T.Module_("ppy.hip"), Facts()),
+    "ppy.aio": (T.Module_("ppy.aio"), Facts()),
+    "ppy.ffi.nullable": (T.ANY, Facts()),
     "math.pi": (T.FLOAT, Facts()),
     "math.e": (T.FLOAT, Facts()),
     "math.tau": (T.FLOAT, Facts()),

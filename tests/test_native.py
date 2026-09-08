@@ -135,13 +135,15 @@ def test_multiplied_index_guards_hoist_out_of_the_loop(write, analyze):
     )
     bundle = analyze(path)
     native = _collect(bundle, 2)["kernel"]
-    assert "for.guards" in native.ir
-    assert "mul nsw" in native.ir
+    assert "mul nsw" in native.ir, "the body multiplies without a guard"
+    # The corner checks sit ahead of the loop: every multiply-with-overflow
+    # call comes before the first loop header in the text.
+    assert native.ir.index("smul.with.overflow") < native.ir.index("for.head")
 
     bundle.project.config.llvm.safeguards = "inline"
     inline = _collect(bundle, 2)["kernel"]
-    assert "for.guards" not in inline.ir
     assert "mul nsw" not in inline.ir
+    assert inline.ir.index("smul.with.overflow") > inline.ir.index("for.body")
 
 
 def test_profitability_keeps_tiny_functions_off_the_boundary(write, analyze):
@@ -529,14 +531,14 @@ def test_elementwise_expressions_are_fused_into_one_kernel(write, analyze):
     assert not blend.scalars
 
     notes = " ".join(note for _line, note in module.fusion_notes)
-    assert "sin" in notes and "cos" in notes and "multiply" in notes
+    assert "sin" in notes and "cos" in notes and "mul" in notes
 
 
 def test_a_fused_reduction_returns_a_scalar(write, analyze):
     path = write("reduce.ppy", FUSED)
     module = _collect(analyze(path, backend="llvm"))["reduce"]
     energy = next(loop for loop in module.fused.values() if loop.returns_scalar)
-    assert energy.reduction == "sum"
+    assert energy.reduction == "add"
     assert energy.arrays == ("a",)
 
 
@@ -715,7 +717,7 @@ def test_a_nested_reduction_is_not_folded_into_an_elementwise_tree(write, analyz
     elementwise = [loop for loop in module.fused.values() if not loop.returns_scalar]
 
     assert len(reductions) == 1
-    assert reductions[0].reduction == "sum"
+    assert reductions[0].reduction == "add"
     # `x / scale` fuses one array against one scalar operand.
     assert len(elementwise) == 1
     assert elementwise[0].arrays == ("x",) and elementwise[0].scalars == ("scale",)
@@ -757,7 +759,7 @@ def test_a_reassociating_reduction_needs_explicit_permission(write, analyze):
     module = _collect(analyze(path, backend="llvm"))["strictsum"]
     reductions = {loop.reduction for loop in module.fused.values()}
     # The elementwise `a * a` still fuses in both; only `relaxed` fuses the sum.
-    assert reductions == {"", "sum"}
+    assert reductions == {"", "add"}
 
 
 @requires_numpy
@@ -899,7 +901,7 @@ def test_a_reassociating_reduction_is_not_split_without_permission():
     elementwise = FusedLoop(symbol="s", arrays=("a",), scalars=())
     assert _splittable(elementwise)
     assert _splittable(FusedLoop(symbol="s", arrays=("a",), scalars=(), reduction="max"))
-    assert _splittable(FusedLoop(symbol="s", arrays=("a",), scalars=(), reduction="sum"))
+    assert _splittable(FusedLoop(symbol="s", arrays=("a",), scalars=(), reduction="add"))
     # Per-chunk means cannot be merged without weighting.
     assert not _splittable(FusedLoop(symbol="s", arrays=("a",), scalars=(), reduction="mean"))
 
@@ -1152,15 +1154,19 @@ def test_tuple_programs_match_plain_cpython(tmp_path: Path):
 def test_the_fusion_tables_match_what_the_plugin_claims():
     """A plugin must not advertise a kernel the backend cannot generate."""
     from ppy_compiler.backend.llvm.fusion import BINARY, REDUCTIONS, UNARY
-    from ppy_compiler.plugins.numpy_plugin import (
-        FUSIBLE_BINARY,
-        FUSIBLE_REDUCTIONS,
-        FUSIBLE_UNARY,
-    )
+    from ppy_compiler.plugins.convergence import converged
+    from ppy_compiler.plugins.numpy_plugin import FUSIBLE
 
-    assert set(UNARY) == set(FUSIBLE_UNARY)
-    assert set(FUSIBLE_BINARY) == BINARY
-    assert set(FUSIBLE_REDUCTIONS) == REDUCTIONS
+    for name in sorted(FUSIBLE):
+        spec = converged(name)
+        assert spec is not None, name
+        attributes = dict(spec.attributes)
+        if spec.operation == "unary":
+            assert attributes["op"] in UNARY, name
+        elif spec.operation == "reduce":
+            assert attributes["op"] in REDUCTIONS, name
+        else:
+            assert spec.operation in BINARY, name
 
 
 # -- borrowed buffers -----------------------------------------------------
@@ -3013,23 +3019,31 @@ def test_a_wrapper_is_never_compiled_onto_the_name_it_publishes(
     module = _collect(analyze(path, backend="llvm"))["inplace"]
     signatures = {q: lowered.signature for q, lowered in module.functions.items()}
 
-    seen: list[list[str]] = []
+    seen: list[tuple[list[str], Path | None]] = []
     real = wrapper_build.subprocess.run
 
     def watched(command, **kwargs):
-        seen.append(list(command))
+        where = Path(kwargs["cwd"]) if kwargs.get("cwd") else None
+        seen.append((list(command), where))
         return real(command, check=kwargs.pop("check", False), **kwargs)
 
     monkeypatch.setattr(wrapper_build, "subprocess", types.SimpleNamespace(run=watched))
     built = wrapper_build.build_wrappers("inplace", signatures, tmp_path / "cache")
     assert built.ok, built.reason
 
-    outputs = [Path(command[command.index("-o") + 1]) for command in seen if "-o" in command]
+    outputs = [Path(c[c.index("-o") + 1]) for c, _where in seen if "-o" in c]
     assert outputs, "the wrapper was never compiled"
     assert built.path not in outputs, "compiled onto the name a reader may already hold"
     assert built.path is not None and built.path.is_file(), "and yet it was published"
-    inputs = [Path(argument) for command in seen for argument in command if argument.endswith(".c")]
-    assert all(".part" in source.name for source in inputs), "the source is a draft too"
+    inputs = [
+        (where / argument if where is not None else Path(argument))
+        for c, where in seen
+        for argument in c
+        if argument.endswith(".c")
+    ]
+    assert all(".part" in source.parent.name for source in inputs), "the source is in a draft too"
+    final = built.path.name.partition(".")[0] + ".c"
+    assert all(source.name == final for source in inputs), "compiled under the name it publishes"
 
 
 PROVABLE = """

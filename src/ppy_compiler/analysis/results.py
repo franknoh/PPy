@@ -29,6 +29,10 @@ class LoweringNote:
     reason: str
     guards: tuple[str, ...] = ()
     line: int = 0
+    #: The shared IR operation the call converges onto (`tensor.add`), with
+    #: its attributes, when the plugin names one; empty otherwise.
+    operation: str = ""
+    attributes: tuple[tuple[str, object], ...] = ()
 
 
 @dataclass(slots=True)

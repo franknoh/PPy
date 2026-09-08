@@ -20,7 +20,7 @@ interpreter = "python"
 
 [tool.ppy.llvm]
 enabled = true
-target = "native"
+target = "native"                 # or a triple: "aarch64-linux-gnu"
 jit = true
 lto = "thin"
 cpython-api = "version-specific"
@@ -31,6 +31,7 @@ host-cpu = false                  # build for this machine, not the baseline
 [tool.ppy.parallel]
 enabled = true
 threads = "auto"                  # or an integer
+backend = "threads"               # or "serial", "simd", "openmp" (C backend)
 
 [tool.ppy.inference]
 interprocedural = true
@@ -58,6 +59,13 @@ enabled = true                    # any other keys are plugin options
 | `opt-level` | `2` | project default, overridden per run by `-O` and per function by `@ppy.opt(n)`. |
 | `llvm.safeguards` | per command | `hoisted` proves the extreme cases once in a guard block ahead of the loop; `inline` keeps every per-operation guard in the body; `off` drops the overflow guards on data arithmetic — 64-bit wrap semantics — while keeping every bounds check. Unset, the command decides: `ppy run` uses `hoisted` (Python integers, bit for bit), `ppy build` uses `off` (a wrap-semantics artifact, like every native compiler); `run --unsafe` and `build --safe` flip them per invocation. |
 | `llvm.prover` | `off` | `z3` proves overflow guards away where the ranges the analysis established allow it: a chain of `+`, `-`, `*` over values with declared ranges and `range()` bounds that provably fits a 64-bit word is emitted without its guard, and the function checks its parameters' declared ranges once on entry so that a call outside them takes the fallback. Needs `ppy-lang[solver]`; without the solver the setting is an error. Never runs in `ppy check`. |
+| `plugins.<name>.enabled` | builtin: `true`; external: unset | a builtin plugin (`numpy`, `torch`, `jax`, `uvicorn`, `pydantic`, `scipy`, `pandas`, `pyarrow`) runs unless disabled; an installed external plugin runs only when its section exists and does not disable it. |
+| `generics.max-specializations` | `64` | how many distinct type-argument tuples one generic may be called with before `E1722`. |
+| `generics.max-depth` | `8` | how deeply a type argument may nest before `E1722`. |
+| `llvm.pipeline` | `ir` | the road through the LLVM backend: the canonical IR (`docs/ir.md`) and its passes. `ast`, the direct AST-to-LLVM lowering 0.2.0 started with, was removed once the IR road covered everything it did; a project (or `PPY_LOWERING=ast`) still naming it is told so (`W2004`) and builds on the IR road. |
+| `llvm.sanitize` | `[]` | sanitizers to instrument every build with: `bounds`, `overflow`, `pointer`, `alignment`; `--sanitize` overrides for one run. |
+| `llvm.pgo` | unset | a `.ppyprof` from `ppy run --profile`, relative to the project root, that guides every build; `--pgo FILE` overrides for one run. |
+| `llvm.target` | `native` | the machine `ppy build` compiles for: `native` is this one; a triple (`aarch64-linux-gnu`, `x86_64-pc-windows-msvc`) is a cross build, and `ppy build --target` overrides it for one invocation. See `ppy build --target` in `docs/cli.md`. |
 | `llvm.host-cpu` | `false` | compile object code for the CPU doing the build rather than the portable baseline: faster where the code vectorizes, and the artifact then needs a machine with the same instruction set. JIT code always targets the host, which is free because it never leaves the machine. |
 | `cache-dir` | `.ppy-cache` | the content-addressed store; relative to the root. The `PPY_CACHE_DIR` environment variable overrides it with a per-project tree underneath — the escape hatch for a repo on a slow filesystem, such as a Windows-mounted drive under WSL. |
 | `native-import` | `true` | whether `import ppy` may serve a `.ppy` module from its native build when the compiler is installed; `false` loads every `.ppy` as source. `PPY_IMPORT=python` does the same for one process. |
@@ -66,6 +74,7 @@ enabled = true                    # any other keys are plugin options
 | `source-roots` | `["src", "."]` | where modules are resolved from, in order. |
 | `llvm.jit` | `true` | keep compiled code in-process via MCJIT; `false` always links a shared library. |
 | `parallel.threads` | `auto` | worker pool size; `auto` uses every core, honouring `OMP_NUM_THREADS` when set. |
+| `parallel.backend` | `threads` | how a `parallel.range` loop is lowered: `threads` splits it across the worker count, `serial` runs it on the calling thread, `simd` hands the serial loop to the vectorizer, `openmp` spells it as OpenMP regions in `ppy emit c` (a native build cannot use it). Every choice gives the same answer. |
 | `inference.write-local-annotations` | `true` | conversion annotates module globals and empty containers, not just signatures. |
 | `convert.format` | `false` | same as passing `--format` to every `ppy convert` (and `ppy migrate`, which shares the engine). |
 | `convert.hoist-classes` | `safe` | which classes conversion may reorder: only provably inert definitions, any (`aggressive`), or none (`off`). |

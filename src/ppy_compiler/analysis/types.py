@@ -41,6 +41,7 @@ __all__ = [
     "Union_",
     "UnknownType",
     "dict_of",
+    "infer",
     "instance",
     "is_assignable",
     "is_exact_builtin",
@@ -51,6 +52,8 @@ __all__ = [
     "numeric_rank",
     "remove_none",
     "set_of",
+    "substitute",
+    "type_variables",
     "union",
 ]
 
@@ -298,11 +301,112 @@ class ClassObject(Type):
 
 @dataclass(frozen=True, slots=True)
 class TypeVar_(Type):
+    """A type parameter of a generic function: `T` in `def f[T](x: T)`.
+
+    `bound` is the constraint a type argument must satisfy; `owner` names
+    the function that declares it, so two functions' `T`s are two types.
+    """
+
     name: str
     bound: Type | None = None
+    owner: str = ""
 
     def __str__(self) -> str:
         return self.name
+
+
+def substitute(t: Type, bindings: dict[TypeVar_, Type]) -> Type:
+    """`t` with every type variable in `bindings` replaced."""
+    if isinstance(t, TypeVar_):
+        return bindings.get(t, t)
+    if isinstance(t, Instance):
+        if not t.args:
+            return t
+        return Instance(t.name, tuple(substitute(a, bindings) for a in t.args), t.mro)
+    if isinstance(t, Tuple_):
+        return Tuple_(tuple(substitute(i, bindings) for i in t.items), t.homogeneous)
+    if isinstance(t, Union_):
+        return union(*[substitute(m, bindings) for m in t.members])
+    if isinstance(t, Callable_):
+        return Callable_(
+            tuple(substitute(p, bindings) for p in t.params),
+            substitute(t.ret, bindings),
+            t.qualname,
+        )
+    if isinstance(t, ClassObject) and t.instance_type is not None:
+        inner = substitute(t.instance_type, bindings)
+        return ClassObject(t.name, inner if isinstance(inner, Instance) else t.instance_type)
+    return t
+
+
+def type_variables(t: Type) -> tuple[TypeVar_, ...]:
+    """Every type variable `t` mentions, in order of first appearance."""
+    found: list[TypeVar_] = []
+
+    def walk(node: Type) -> None:
+        if isinstance(node, TypeVar_):
+            if node not in found:
+                found.append(node)
+        elif isinstance(node, Instance):
+            for a in node.args:
+                walk(a)
+        elif isinstance(node, Tuple_):
+            for i in node.items:
+                walk(i)
+        elif isinstance(node, Union_):
+            for m in node.members:
+                walk(m)
+        elif isinstance(node, Callable_):
+            for p in node.params:
+                walk(p)
+            walk(node.ret)
+
+    walk(t)
+    return tuple(found)
+
+
+def infer(pattern: Type, actual: Type, bindings: dict[TypeVar_, Type]) -> bool:
+    """Bind the type variables in `pattern` so that `actual` fits it.
+
+    A variable already bound must be joined with what it sees again:
+    `f(1, 2.5)` binds `T` to `float`. Returns False where the shapes
+    cannot match at all; assignability of the bound result is the caller's
+    check.
+    """
+    pattern = strip_literal(pattern)
+    actual = strip_literal(actual)
+    if isinstance(pattern, TypeVar_):
+        seen = bindings.get(pattern)
+        if seen is None:
+            bindings[pattern] = actual
+        elif seen != actual:
+            if is_assignable(actual, seen):
+                return True
+            if is_assignable(seen, actual):
+                bindings[pattern] = actual
+                return True
+            joined = join(seen, actual)
+            if isinstance(joined, Union_):
+                return False
+            bindings[pattern] = joined
+        return True
+    if isinstance(pattern, Instance) and isinstance(actual, Instance):
+        if pattern.name != actual.name or len(pattern.args) != len(actual.args):
+            return not pattern.args
+        return all(infer(p, a, bindings) for p, a in zip(pattern.args, actual.args, strict=True))
+    if isinstance(pattern, Tuple_) and isinstance(actual, Tuple_):
+        if pattern.homogeneous or actual.homogeneous:
+            element = pattern.items[0] if pattern.items else ANY
+            return all(infer(element, a, bindings) for a in actual.items)
+        if len(pattern.items) != len(actual.items):
+            return False
+        return all(infer(p, a, bindings) for p, a in zip(pattern.items, actual.items, strict=True))
+    if isinstance(pattern, Callable_) and isinstance(actual, Callable_):
+        ok = infer(pattern.ret, actual.ret, bindings)
+        for p, a in zip(pattern.params, actual.params, strict=False):
+            ok = infer(p, a, bindings) and ok
+        return ok
+    return True
 
 
 ANY = AnyType()
@@ -536,6 +640,14 @@ def is_assignable(source: Type, target: Type) -> bool:
 def _instance_assignable(source: Instance, target: Instance) -> bool:
     if target.name == "object":
         return True
+    if (
+        source.name == "ppy.native.ptr"
+        and target.name == "ppy.native.const_ptr"
+        and len(source.args) == len(target.args) == 1
+    ):
+        # Memory one may write is memory one may read: a `ptr[T]` goes
+        # where a `const_ptr[T]` is expected, never the other way.
+        return _same_argument(source.args[0], target.args[0])
     rank_s, rank_t = numeric_rank(source), numeric_rank(target)
     # Python's implicit numeric promotion: bool -> int -> float -> complex.
     if rank_s is not None and rank_t is not None and rank_s <= rank_t:

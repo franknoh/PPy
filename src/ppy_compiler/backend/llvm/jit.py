@@ -94,6 +94,7 @@ class JitEngine:
     target_machine: object | None = None
     _baseline: object | None = None
     _modules: list[object] = field(default_factory=list)
+    _cross: dict[str, object] = field(default_factory=dict)
 
     def open(self) -> JitEngine:
         from llvmlite import binding
@@ -116,6 +117,15 @@ class JitEngine:
         self._modules.append(module)
         return module
 
+    def load_library(self, name: str) -> None:
+        """Make a shared library's symbols visible to the code this engine runs."""
+        import ctypes.util
+
+        from llvmlite import binding
+
+        path = ctypes.util.find_library(name) or name
+        binding.load_library_permanently(path)
+
     def finalize(self) -> None:
         if self.engine is not None:
             self.engine.finalize_object()  # type: ignore[union-attr]
@@ -125,6 +135,15 @@ class JitEngine:
         if self.engine is None:
             raise LlvmUnavailable("the execution engine is not open")
         return self.engine.get_function_address(symbol)  # type: ignore[union-attr]
+
+    def global_address(self, symbol: str) -> int:
+        """Where a module-level variable lives, or 0 when no module defines it."""
+        if self.engine is None:
+            raise LlvmUnavailable("the execution engine is not open")
+        try:
+            return self.engine.get_global_value_address(symbol)  # type: ignore[union-attr]
+        except (RuntimeError, NameError):
+            return 0
 
     def optimized_ir(self, ir: str) -> str:
         from llvmlite import binding
@@ -162,13 +181,17 @@ class JitEngine:
         legacy.populate(manager)
         manager.run(module)  # type: ignore[arg-type]
 
-    def object_machine(self, host_cpu: bool = False):  # type: ignore[no-untyped-def]
+    def object_machine(self, host_cpu: bool = False, target=None):  # type: ignore[no-untyped-def]
         """The machine object code is emitted through.
 
         `host_cpu` is the opt-in `--host-cpu` build: the artifact gets this
         machine's instruction set and stops being portable, which is the
-        caller's stated intent. Without it, emitted code is baseline.
+        caller's stated intent. Without it, emitted code is baseline. A
+        `target` other than the host is a cross build: its own machine,
+        with the CPU and features the target names.
         """
+        if target is not None and not target.is_host:
+            return self.cross_machine(target)
         if not host_cpu:
             return self.baseline_machine()
         if self.target_machine is None:
@@ -192,8 +215,28 @@ class JitEngine:
             )
         return self._baseline
 
+    def cross_machine(self, target):  # type: ignore[no-untyped-def]
+        """A target machine for another triple, made once per target."""
+        from llvmlite import binding
+
+        machine = self._cross.get(target.triple)
+        if machine is None:
+            _initialize()
+            for step in ("initialize_all_targets", "initialize_all_asmprinters"):
+                initializer = getattr(binding, step, None)
+                if initializer is not None:
+                    with contextlib.suppress(RuntimeError):
+                        initializer()
+            llvm_target = binding.Target.from_triple(target.triple)
+            machine = llvm_target.create_target_machine(
+                cpu=target.cpu, features=target.features, opt=min(self.opt_level, 3), reloc="pic"
+            )
+            self._cross[target.triple] = machine
+        return machine
+
     def close(self) -> None:
         self._modules.clear()
         self.engine = None
         self.target_machine = None
         self._baseline = None
+        self._cross.clear()

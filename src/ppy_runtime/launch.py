@@ -18,7 +18,7 @@ from .binding import bind, value_class_types
 from .dispatch import LibraryBinder
 from .execute import execute, format_traceback
 from .generated import GeneratedModule
-from .manifest import Manifest, ManifestError, load
+from .manifest import Manifest, ManifestError, host_runs, load
 
 __all__ = ["PrebuiltBinder", "generated_modules", "main"]
 
@@ -50,6 +50,9 @@ class PrebuiltBinder(LibraryBinder):
         self._wrappers = _wrapper_module(manifest)
         self._wrapper_entries = manifest.wrapper_entries or {}
         self._region_libraries = manifest.regions or {}
+        for module, entries in (manifest.staged or {}).items():
+            for function, file in entries.items():
+                self.add_exported(module, function, file.read_bytes())
         self._extensions: dict[Path, object | None] = {}
         for entry in manifest.entries:
             self._entries.setdefault(entry.module, {})[entry.binding] = entry.signature
@@ -118,7 +121,9 @@ class PrebuiltBinder(LibraryBinder):
         address = ctypes.cast(symbol, ctypes.c_void_p).value or 0
         if not address:
             return fallback
-        entry = self._fast_entry(signature, address, fallback)
+        # A coroutine's future needs the Python-side wrapping; the C wrapper
+        # would hand back the bare handle.
+        entry = None if signature.future else self._fast_entry(signature, address, fallback)
         if entry is not None:
             return entry
         binding = bind(signature, address, fallback, owner=self._library)
@@ -149,6 +154,13 @@ def main(manifest_path: Path, argv: list[str]) -> int:
         print(f"error[E1801]: {error}", file=sys.stderr)
         return 2
 
+    if not host_runs(manifest.target):
+        print(
+            f"error[E1801]: the artifact was built for {manifest.target} and this machine "
+            f"is another -- build it here, or for here, with `ppy build`",
+            file=sys.stderr,
+        )
+        return 2
     library = None
     if manifest.library is not None:
         try:

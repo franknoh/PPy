@@ -17,7 +17,7 @@ from pathlib import Path
 from ...analysis.symbols import FunctionInfo
 from ...cache import CacheKey, digest
 from ...version import COMPILER_VERSION, compiler_fingerprint
-from .lowering import NativeSignature, lower_specialization
+from .lowering import NativeSignature
 from .prover import Prover
 
 __all__ = [
@@ -212,7 +212,9 @@ class Specializer:
         symbol = f"ppy_{info.qualname.replace('.', '_')}__spec_{key.suffix()}"
         specialization = Specialization(key=key, symbol=symbol)
         try:
-            text = lower_specialization(
+            from .ir_pipeline import lower_specialization_via_ir
+
+            text = lower_specialization_via_ir(
                 self.module_analysis,
                 info,
                 node,

@@ -1,6 +1,114 @@
 # Changelog
 
-## 0.1.1a1 — unreleased
+## 0.2.0 — unreleased
+
+The release that turns the compiler into a platform: a typed, multi-dialect
+IR between analysis and every backend, a pass and pattern infrastructure
+over it, and plugins that extend it through explicit APIs. The entries
+below are in the order the work landed.
+
+- One version, `0.2.0`, in every place that states it: the compiler
+  constant the packaging build reads, `ppy_runtime.version`, and
+  `ppy.__version__`, held together by a test. Every cache and artifact
+  schema moved with it -- the frontend cache, the lowering cache, the
+  project scan, and the binding manifest's ABI, now 2 -- so nothing a
+  0.1.x compiler produced is served by this one; a 0.1.x manifest is
+  refused with the rebuild message.
+- The typed canonical IR, `ppy_compiler.ir`: SSA values with one type
+  each, blocks with arguments and one terminator, an explicit control-flow
+  graph, and operations named in dialects. The core dialect spells overflow
+  and rounding on the operation rather than leaving a backend to guess. A
+  verifier checks structure, dominance, symbols, and every dialect's own
+  rules and returns a list of errors with their positions; the printer
+  writes one deterministic text per module, the parser reads it back, and
+  `.ppyir` is that text with a schema and dialect-version header a reader
+  refuses rather than guesses at. `docs/ir.md` is the reference.
+- Passes and patterns over the IR. A pattern rewrites one operation
+  through a rewriter that records every change and revisits what it
+  touched; the greedy driver runs a pattern set to a fixed point and names
+  a pattern that never settles. The core dialect's patterns fold constants
+  by the operation's own overflow and rounding attributes, remove identity
+  elements, double negations, lossless cast round trips, and settled
+  selects and comparisons, and leave alone what floating point or checked
+  semantics forbid. A pass manager runs passes that declare what analyses
+  they require, preserve, and invalidate, caches those analyses
+  accordingly, verifies the module after every pass on request and names
+  the pass that broke it, and runs plugin passes at named stages. The
+  shared passes are canonicalize, constant-fold, simplify-cfg, and dce.
+- The LLVM backend has a second road: Python AST to canonical IR
+  (`ppy_compiler.lowering`), the shared passes, and IR to LLVM
+  (`backend/llvm/from_ir`), which reads the IR and nothing else. It covers
+  the whole native subset the direct road covers -- scalars, fixed tuples,
+  value classes, borrowed buffers and their loops, calls between native
+  functions, math intrinsics, the standalone shims, specialization with
+  pinned constants -- with the same guard hoisting and the same solver
+  proofs, and answers alike on every input, fallbacks included: the whole
+  suite and every example pass on it. `[tool.ppy.llvm] pipeline = "ir"`
+  selects it, `PPY_LOWERING=ast|ir` overrides for one process, every cache
+  is keyed on the road, and CI runs the suite on both. One thing the IR
+  road does that the direct road did not: `MIN // -1` takes the fallback
+  instead of trapping in the division.
+- Plugin interface 2. `Plugin` is a base class with a no-op default for
+  every hook, so the compiler calls `operator`, `subscript`,
+  `instance_attribute`, `call_alias`, `decorator_semantics`, and
+  `adjust_call` directly instead of probing for them; the builtin plugins
+  extend it. What a call answers about lowering is a typed spec --
+  `IntrinsicSpec`, `DialectOperationSpec`, `DirectCallSpec`,
+  `GraphRegionSpec`, `FallbackSpec`, `RejectSpec` -- never backend code.
+  A plugin registers dialects, patterns, and passes for the IR, and the
+  pipeline runs its passes at their stages, verified, naming one that
+  breaks the IR (`E1902`). External plugins are discovered through the
+  `ppy.plugins` entry-point group without being imported, and load only
+  for a project that names them; two plugins claiming one module are a
+  reported problem (`E1901`), never a question of who registered last.
+- Three builtin plugins: `scipy` (special functions, transforms, dense
+  linear algebra, sparse matrices, typed and named as dialect operations;
+  the callback-driven families carry their effect), `pandas` (frames,
+  series, and indexes typed as what they are, the curated surface named as
+  `columnar` operations, everything the model does not capture exactly
+  left to pandas), and `pyarrow` (Arrow typed as Arrow, the curated
+  compute named as the same `columnar` operations).
+- Effect system v2. The vocabulary every consumer shares -- purity, native
+  and GPU eligibility, code motion, fusion, the async lowering, plugin
+  contracts -- now names native memory apart from Python objects
+  (`read_memory`/`write_memory`) and adds `network`, `atomic`,
+  `python_dynamic`, `gpu_launch`, and `device_memory`; the socket and
+  urllib surface carries `network`. Every IR function carries its effects
+  and the passes read them: an unused call to a callee with none but
+  allocation and reads is dead code.
+- A light ownership model: `ppy.Owned[T]`, `ppy.Borrowed[T]`, `ppy.Mut[T]`.
+  A borrow lasts the call -- not returned (`E1611`), not stored where it
+  outlives the call (`E1612`), not written unless `Mut` (`E1613`) -- and a
+  `Buffer[T]` is borrowed unless the program says otherwise. The IR carries
+  `ownership` and `noalias` on parameters, and its verifier refuses a
+  borrowed parameter in a return or a store.
+- Generics. `def f[T: Bound](...)` declares type parameters; a call infers
+  the arguments, checks the bounds (`E1721`), and substitutes them into the
+  result. Native code monomorphizes: a generic called from native code is
+  lowered once per tuple of type arguments under a name that spells them,
+  and the call goes straight to the instance. `[tool.ppy.generics]` bounds
+  the specializations (`E1722`), and a generic that feeds its own type
+  parameter back into itself wrapped is refused (`E1723`). Inside native
+  code `a + b` on a value class dispatches statically to the class's own
+  `__add__`; native code never falls back to dynamic dispatch.
+- The `math` dialect: elementary functions named once for every backend,
+  pure, folding on constants, `floor(floor(x))` once. The frontend writes
+  `math.sqrt` where the source says so; the LLVM backend lowers it to the
+  intrinsic of that name.
+- `ppy.native` is the directive it was and a namespace of typed native
+  memory: `ptr[T]`/`const_ptr[T]`, `load`, `store`, `offset`, `cast[U]`,
+  `sizeof[T]()`, `alignof[T]()`, `stack_alloc[T](n)`, with a reference
+  implementation over `array` memory under CPython so the three paths
+  agree, and pointer operations in native code. `@native.extern` binds a
+  stub to a C symbol -- ctypes under CPython, a direct call in native code,
+  the library linked and loaded -- and `@native.export` gives a function a
+  public C symbol, with a header written beside the built library and a
+  trap where Python would have taken the fallback. `ppy.ffi` is the
+  binding layer over it: `library`, `bind`, `nullable`, `LengthOf`.
+- `ppy emit ir|llvm-ir TARGET [-o]` prints a compiler stage as text, one
+  rule for every kind; `.ppyir` is the IR's on-disk form, self-describing
+  down to each function's ABI, and `ppy build foo.ppyir` builds an
+  object, a library, and a manifest from it alone.
 
 Speed of the compiler itself, measured before being changed.
 
@@ -282,6 +390,291 @@ Speed of the compiler itself, measured before being changed.
 - `ppy migrate` no longer crashes on a module whose first statement is a
   relative import: placing the `ppy` import spelled the missing module name
   as an empty identifier, which libcst refuses.
+- The C backend, `ppy emit c`, and its C++ form, `ppy emit cpp`. Both read
+  the canonical IR and write one translation unit per module: every
+  function in the ABI the runtime binds, every export behind its public
+  signature (`extern "C"` in C++), the overflow helpers and runtime shims
+  the unit uses and no others, so it compiles on its own and answers what
+  the LLVM road answers, fallbacks included. The C++ output is the
+  emitter making C++ choices, never C text rewritten. `--header-only`
+  makes every function `static inline` under a guard and refuses, with
+  `E1804`, a feature that needs state the process owns; `--standalone`
+  emits a whole program from `main`; `ppy emit header` prints the export
+  declarations a built library ships. `tests/test_c_backend.py` compiles
+  the C and the C++ and calls them on the LLVM road's inputs.
+- `TargetInfo`, and builds for another machine. One record holds what the
+  compiler knows about a target -- triple, CPU and features, pointer
+  width, endianness, ABI, OS, object format, data layout -- the host being
+  one target among others, and the cache keys, the warm key, `ppy doctor`,
+  and the linker ask it instead of `sys.platform`. `ppy build --target
+  TRIPLE` (or `[tool.ppy.llvm] target`) retargets the objects and links
+  them with a toolchain for the triple; the wrapper and the launcher, which
+  only the running interpreter can build, are left out with a note, and
+  the manifest names its target so a runtime elsewhere refuses it.
+- `ppy build --python-extension`: one importable CPython module of the
+  native code, the generated boundary, and the module's own Python, bound
+  as it is defined through the same hook the launcher uses; and `ppy build
+  --library`: the exports laid out as `lib/`, `include/`, a pkg-config
+  file, and the manifest.
+- `ppy bind header foo.h`: PPY bindings for a C header, read through
+  libclang (`ppy-lang[bind]`) -- functions as typed `@ffi.bind` stubs,
+  typedefs, enums, structs of scalars as dataclasses, numeric `#define`s
+  as constants -- with what has no spelling yet listed by name rather than
+  guessed at.
+- Four dialects and their namespaces: `simd` (`vector<T, N>` made, moved,
+  shuffled, and reduced in lane order), `cpu` (prefetch and pause hints,
+  and the `cpu.features` a function is compiled for), `atomic` (every
+  operation with its C11 memory order, verified), and `concurrency`
+  (spawn, join, and mutexes, conditions, and barriers that are memory the
+  program owns, implemented over the atomics the same way on every
+  backend). The LLVM and C backends lower all four; `ppy.simd`, `ppy.cpu`,
+  `ppy.atomic`, and `ppy.concurrent` carry them into the language with
+  reference implementations under CPython, the checker's rules
+  (`E1640`-`E1643`), and the frontend's lowering, so a program using them
+  runs the same on every path. `@cpu.target("avx2")` compiles a function
+  with the features on, and the boundary binds it only where they are.
+- `ppy.parallel` v2. The parallel dialect -- `parallel.for`, `reduce`,
+  `map` over an outlined body -- and `lower-parallel`, which decides once
+  per build how a range is split: one chunk on the calling thread
+  (`serial`, `simd`), chunks spawned through the concurrency dialect and
+  joined (`threads`), or OpenMP regions the C backend spells (`openmp`);
+  every choice gives the same answer, a floating-point reduction keeps its
+  order unless `@ppy.fastmath` permits otherwise, and a chunk that fails
+  a guard fails the loop. `for i in parallel.range(n)` in the language,
+  with one `+=`/`*=` reduction, and `@ppy.parallel` asking the same of a
+  function's outermost loops; the checker (`E1650`) and the frontend refuse
+  what cannot run at once and say why, and optimization remarks say what
+  became parallel.
+- The tensor family of the IR: shapes with symbols and expressions and the
+  inference the verifiers hold operations to, the layout dialect, the
+  tensor dialect and `lower-tensor` (views where memory exists, loops
+  where it must be made, on the stack or the heap), the linalg dialect
+  (loops for dot, matmul, the solves and Cholesky; LAPACK for QR, SVD, and
+  eigendecomposition where a build has it), the fft dialect (the transform
+  by its definition, complex as `(re, im)` pairs), the special dialect
+  (erf, gamma, Bessel and friends through libm on both backends), and the
+  sparse dialect (CSR, CSC, COO with explicit index types; matmul, add,
+  transpose, convert, reduce). All of it is checked against NumPy on both
+  backends.
+- The numeric plugins converge onto the tensor IR. A plugin names the
+  shared operation a call is (`tensor_operation`): `numpy.multiply`,
+  `torch.mul`, and `jax.numpy.multiply` are `tensor.mul`; `numpy.sum` and
+  `torch.sum` are `tensor.reduce {op = add}`; `scipy.special.erf` over
+  arrays is `tensor.unary {op = erf}`. The fused kernels are built from
+  that vocabulary as tensor IR -- `tensor.fill`, `tensor.unary`, `pow`,
+  `min`, `max` joined the dialect, and `lower-tensor` binds a symbolic
+  dimension from the buffer a tensor is loaded from -- so nothing in the
+  fusion path writes LLVM IR any more, and one kernel runs over a NumPy
+  array or a CPU torch tensor alike behind each library's guards. The
+  torch plugin reports its curated arithmetic as the shared operations
+  while `matmul` and the other dispatcher-sensitive calls stay with the
+  dispatcher; `ppy explain` shows the shared operation beside a call's
+  lowering.
+- Tensor canonicalization and fusion on the IR. The tensor dialect's
+  patterns remove views that change nothing, compose transposes and
+  reshapes, fold arithmetic over `fill`s into one scalar computation, and
+  drop neutral elements where that is exact. `tensor-fusion` turns a chain
+  of elementwise operations whose intermediates have a single reader --
+  with a `reduce` at the root where there is one -- into `tensor.fused`, a
+  region computing one element from one element of each input, and
+  `lower-tensor` makes a single loop of it; a result whose only reader is
+  a `tensor.store` is written straight into the store's buffer. A fused
+  NumPy or torch kernel is now one loop with no temporary and no copy, and
+  the pass reports `tensor ops fused` for every group it makes.
+- Autodiff. `ppy.grad(f)` and `ppy.value_and_grad(f)` -- with `argnums`
+  -- differentiate a function of floats whose body is assignments and a
+  return over arithmetic, the math functions, `abs`, `erf`. Under CPython
+  the derivative is made from the source; natively the `autodiff`
+  transform differentiates the function's IR in reverse mode -- scalar
+  arithmetic, `select`, casts, and over tensors the elementwise
+  operations, `fill`, `broadcast`, `reshape`, `transpose`, `reduce` by
+  sum, `matmul`, `convert`, with a buffer parameter's gradient written to
+  a buffer -- after `promote-slots` has turned the frontend's stack slots
+  back into values. One rule table and one order of accumulation on both
+  paths, so they agree bit for bit; a branch, a loop, a write, or an
+  effect is refused with the reason (`E1660`-`E1662`).
+- The columnar and arrow dialects. A `columnar.column<T, nullable>` is a
+  column with a validity bitmap and a run-time length, a `columnar.table`
+  a set of named columns; the operations pandas and PyArrow share --
+  arithmetic, comparison, and boolean logic with null propagation,
+  `cast`, `is_null`, `fill_null`, `select`, `filter`, `take`, `concat`,
+  `sort_indices`, `aggregate`, and over tables `project`, `group_by`, and
+  an inner `join` -- are values the verifier checks, and `lower-tensor`
+  makes loops of them in Arrow's layout: bit-packed validity, bit-packed
+  bools, a merge sort for ordering, sort-based grouping and a sort-merge
+  join. `arrow.import` reads an array from the Arrow C Data Interface
+  struct without a copy and `arrow.to_column` makes it a column. Checked
+  against NumPy on both backends and against an `ArrowArray` built by
+  hand.
+- PyArrow converges onto the columnar IR. The plugin names the dialect's
+  operations, and an expression tree of `pyarrow.compute` calls over
+  `float64` and `bool` arrays -- arithmetic, comparison, boolean logic,
+  `if_else`, `fill_null`, `is_null`, `is_valid` -- is fused into one
+  kernel built as columnar IR, run over the arrays' own buffers behind
+  the same guards NumPy's kernels have, and answered as an Arrow array
+  over the buffers the kernel filled. pandas spells the same operations
+  by the same names.
+- pandas converges onto the same kernels. A tree of Series arithmetic,
+  comparisons, `fillna`, `isna`/`notna` is one columnar kernel; an
+  Arrow-backed Series is read as its Arrow array, a NumPy-backed `float64`
+  Series as its values behind a bitmap of ones, and the answer is a Series
+  over the callers' index with the same backing. Alignment of different
+  indexes, mixed backings, nullable extension dtypes, and bool answers
+  over NumPy storage stay with pandas; a Series operator now resolves to
+  the plugin's operation (it was composed into a name no plugin knew).
+  `ppy_runtime.arrow.exported` lends
+  a PyArrow array to native code as the C Data Interface's `ArrowArray`
+  struct and releases it once the borrow ends.
+- `ppy.xla`, the StableHLO backend, and the PJRT bridge. `@xla.jit` marks
+  a function of scalars whose body is arithmetic and math; the compiler
+  lowers it to the IR, `backend/stablehlo` writes it as an MLIR module --
+  scalars as rank-0 tensors, the tensor dialect one to one onto StableHLO
+  (`broadcast_in_dim`, `reshape`, `transpose`, `reduce`, `dot_general`,
+  `convert`, a fused region as its body), `erf` as CHLO -- `ppy emit
+  stablehlo` shows it, and the build stages it. At run time
+  `ppy_runtime.xla` compiles the module through XLA's own bindings, caches
+  the executable by digest, bindings, platform, and device (in memory and
+  serialized on disk), and runs each call on the device; `xla.devices()`
+  names them. JAX is not on the compile path; the bridge places buffers
+  through JAX's `device_put` while that is the one public way to the
+  client. What XLA cannot take is reported as `W2007` and runs as written.
+- The gpu dialect: one execution model every GPU backend meets. A function
+  is `host`, `device`, or `kernel` by its `gpu.kind`; device code reads
+  `gpu.thread_id`, `block_id`, `block_dim`, `grid_dim` (each `.x`, `.y`,
+  `.z`), waits at `barrier` and `subgroup_barrier`, trades values with
+  `subgroup_shuffle`, takes `shared_alloc` and `private_alloc` memory, and
+  is handed pointers into `global` and `constant` memory; the host launches
+  a kernel with `gpu.launch`. The verifier holds the kinds -- a device
+  operation in a host function; a guard, a buffer, a host call, or another
+  dialect in device code; a kernel that returns or takes stack memory --
+  through the new `Dialect.verify_function` hook, and the LLVM backend
+  leaves device code to the GPU backends. A program without a kernel is
+  untouched.
+- The IR's text reader ends an operation at its line. An operation with
+  nothing after its name -- `gpu.barrier`, a bare `core.ret` before the next
+  block -- used to take the following line's value or label as its own
+  operand or successor; the printed form always was one operation per line,
+  and the reader now holds it to that.
+- `ppy.cuda` and `ppy.hip`, and the CUDA/HIP source backend. `@cuda.kernel`
+  and `@cuda.device` (or `hip.`) mark device code; `thread_id`, `block_id`,
+  `block_dim`, `grid_dim`, `global_id`, `syncthreads`, `syncwarp`,
+  `shared[T, N]()`, `local[T, N]()`, the `shfl` family, and `launch(kernel,
+  grid, block, *args)` are the vocabulary, lowered to the gpu dialect by
+  the one frontend -- inside device code `int` arithmetic wraps and nothing
+  guards -- and under CPython a launch runs the grid on threads that know
+  their position, a reference with real barriers and shuffles. `ppy emit
+  cuda` and `ppy emit hip` write a module as CUDA or HIP C++: `__global__`
+  kernels, `__device__` functions, `__shared__` memory, `__shfl_sync` or
+  `__shfl`, and `<<<grid, block>>>` launches followed by a device
+  synchronization whose status the host function reports. The CPU backends
+  leave device code alone, and a launching function stays in Python until
+  the launch runtime. `E1644` names a misuse. A C++ unit now includes a
+  header that is not C's standard library -- `pthread.h`, `omp.h` -- as it
+  is spelled rather than as `<cpthread>`.
+- The NVVM backend and the CUDA launch runtime. `backend/nvvm` writes a
+  module's kernels and device functions as LLVM IR for NVPTX -- the LLVM
+  backend's own lowerings under the `nvptx64-nvidia-cuda` triple, a kernel
+  a `ptx_kernel`, positions the `llvm.nvvm.read.ptx.sreg.*` registers,
+  `barrier0`, `addrspace(3)` shared memory, `shfl.sync` shuffles (a 64-bit
+  value as two halves), libdevice's `__nv_*` for the math library -- and
+  as PTX through LLVM's NVPTX backend with libdevice linked and pruned;
+  `ppy emit nvvm-ir` and `ppy emit ptx` show them. A build stages each
+  kernel's PTX with the kinds of its parameters (cached like every
+  artifact), and under `ppy run` `cuda.launch` runs it through the CUDA
+  driver by ctypes -- no toolkit needed -- copying a `native` pointer's
+  array to the device and back; `cuda.compiled(kernel)` says whether a
+  launch runs there. Without the driver, a device, or the NVPTX backend
+  the reference launch runs and `W2008` names the reason; `PPY_CUDA_ARCH`
+  picks the PTX architecture (`sm_70` by default). A built artifact now
+  carries its staged exports -- a kernel's PTX, an `@xla.jit` function's
+  StableHLO -- as files beside the manifest, and the launcher binds them
+  without the compiler, so the warm `ppy run` path and `ppy run --prebuilt`
+  route them as the JIT path does.
+- `ppy.aio`, the async dialect, and the native async runtime. `aio.sleep`,
+  `accept`, `connect`, `read`, `write` are awaitables, `spawn` starts a
+  task, `listen`, `port`, `close` are immediate, and `run` drives a
+  coroutine; sockets are ints and answer a negative errno rather than
+  raising, so every path says the same. An `async def` of scalars and
+  pointers whose awaits are these and other coroutines lowers to the async
+  dialect -- `create`, `start`, `await`, the IO operations -- and
+  `lower-async` makes it a starter and a resume function over a frame the
+  runtime owns, spilling what lives across an await; the LLVM and C
+  backends call the runtime, one C file compiled once into the cache
+  (Linux, epoll; elsewhere asyncio runs everything). Calling a compiled
+  coroutine hands back a `NativeFuture` that `aio.run` drives and asyncio
+  can await; a built artifact links the runtime in. A guard failing inside
+  a running coroutine fails its future and `aio.run` raises
+  `NativeGuardFailed`. `E1645` names a misuse.
+- The IR linker and the package-level build. A call from one module into
+  another's native function now lowers as a declaration (`ppy.external`)
+  the driver only allows for a callee it has already lowered, so the JIT
+  resolves it across modules and `ppy build` links the modules' IR into one
+  program: definitions answer declarations, shared generic instances are
+  kept once, colliding private symbols are renamed with their references,
+  dialects and libraries are merged. Whole-program optimization then
+  internalizes what Python never binds, inlines small callees and
+  `@ppy.inline` ones across module seams (`@ppy.noinline` holds), and drops
+  dead private code, and one object comes out; `ppy emit linked-ir` prints
+  the program. `.ppyir` is public from 0.2.0 at schema 1.
+- Sanitizers, the IR stage debugger, and the optimization report. `ppy run`
+  and `ppy build` take `--sanitize bounds,overflow,pointer,alignment` (or
+  `[tool.ppy.llvm] sanitize`): the `sanitize` pass instruments the IR
+  before optimization -- every buffer index, every wrapping or proven
+  integer operation, every load and store through a pointer -- and a check
+  that fails returns a sanitizer status the boundary turns into
+  `SanitizerFailure` rather than a fallback; `lifetime` and `alias` are
+  refused with the reason. The IR gained the null pointer constant and the
+  pointer-to-integer cast the checks need. `ppy inspect --stage` prints
+  the program at any stage -- analysis, ir, canonical, tensor, columnar,
+  optimized, gpu, stablehlo, llvm -- and `ppy build --report-opt` (or
+  `--report-opt-json FILE`) reports what became native, what stayed in
+  Python and why, the guards proofs removed, and every remark under a
+  stable category.
+- Profile-guided optimization. `ppy run --profile foo.ppy` is a JIT run
+  with the `instrument-profile` pass in the pipeline: every native
+  function counts its blocks and the taken edge of every branch into a
+  counter array the module carries next to its legend, the boundary
+  records the kinds of value -- shapes, dtypes, column schemas -- each
+  function is called with, and when the program ends the counters are read
+  back and `foo.ppyprof` written, merged into one already there. `ppy
+  build --pgo foo.ppyprof` (or `[tool.ppy.llvm] pgo`, or `ppy run --pgo`)
+  applies it at the same point of the pipeline to every function whose
+  graph still matches: hot and cold functions, branch weights, loop trip
+  counts, all as IR attributes the inliner reads -- a hot callee at four
+  times the budget, a cold one or an unreached call left alone -- and the
+  LLVM backend writes as `!prof` metadata and `hot`/`cold` attributes. A
+  changed function is named by `W2009` and built without the profile; the
+  report shows the profile first; every cache key and the warm run
+  directory carry the profile's content. The prof dialect is public in
+  `.ppyir`. The lowering cache (schema 6) now keeps each module's remarks
+  and proved guards, so a warm build's report says what the cold build's
+  did.
+- The direct AST-to-LLVM road is gone. The IR road -- the frontend in
+  `ppy_compiler.lowering`, the passes, `from_ir` -- is the LLVM backend,
+  and the default `pipeline`; `"ast"` in a project or `PPY_LOWERING=ast`
+  is still read, answered with `W2004`, and builds on the IR road. The
+  differential test that held the two roads to each other now holds the
+  one road to CPython's own answers, and CI runs one suite. What stays of
+  the old module is the native ABI and the eligibility rules both roads
+  shared.
+- Artifact determinism, held by a test: a build's program object,
+  library, boundary wrapper, manifest, generated Python, and header, and
+  every text `ppy emit` prints, come out byte for byte the same from an
+  empty cache, a full one, and an emptied one. The one artifact that did
+  not -- the boundary wrapper, compiled from a draft named after the
+  process that wrote it, a name the C compiler records in the object --
+  is compiled from its final name now.
+- The checker reads the `ppy` package's own modules as ordinary code: a
+  helper `ppy.aio` defines and calls is not a use of the aio namespace,
+  and the same for every namespace the compiler models, so `ppy migrate`
+  over the package itself no longer reports the namespace rules against
+  their own implementations.
+- `import ppy` is light again. `ppy.aio` had imported asyncio, socket, and
+  the async runtime for every program, the native API `ctypes.util`,
+  `ppy.autodiff` `inspect`, and the CPU probe `platform` and `subprocess`,
+  together doubling the cost of importing the package and adding thirty
+  milliseconds to every launched artifact; each loads when first used, and
+  a test holds the async ones out of a plain import.
 
 ## 0.1.0a1
 

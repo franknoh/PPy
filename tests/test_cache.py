@@ -12,6 +12,7 @@ import pytest
 
 from ppy_compiler.cache import CacheKey, CacheStore, environment_fingerprint
 from ppy_compiler.cache.store import _in_memory
+from ppy_compiler.plugins.base import Plugin
 
 
 @pytest.fixture
@@ -205,8 +206,9 @@ def test_a_plugin_is_not_fingerprinted_for_a_module_that_ignores_it():
 
     calls: list[str] = []
 
-    class _Fake:
+    class _Fake(Plugin):
         def __init__(self, name: str, modules: tuple[str, ...]) -> None:
+            super().__init__()
             self.name = name
             self.modules = modules
 
@@ -232,7 +234,7 @@ def test_a_plugin_is_not_fingerprinted_for_a_module_that_ignores_it():
 def test_a_module_that_does_import_the_plugin_still_pins_its_version():
     from ppy_compiler.plugins.base import PluginRegistry
 
-    class _Fake:
+    class _Fake(Plugin):
         name = "torch"
         modules = ("torch",)
 
@@ -298,8 +300,8 @@ def test_an_object_file_is_reused_rather_than_regenerated(tmp_path: Path):
     status = _build(tmp_path, "cache", "status").stdout
     assert "native" in status, status
 
-    from ppy_compiler.backend.llvm import _object_key
-    from ppy_compiler.driver.pipeline import analyze_paths, module_cache_key, open_project
+    from ppy_compiler.backend.llvm import _program_object_key
+    from ppy_compiler.driver.pipeline import analyze_paths, open_project
 
     path = tmp_path / "hot.ppy"
     project = open_project(path)
@@ -307,9 +309,8 @@ def test_an_object_file_is_reused_rather_than_regenerated(tmp_path: Path):
     # default guard mode is the wrap-semantics `off`.
     project.config.llvm.safeguards = "off"
     bundle = analyze_paths(project, [path], backend="llvm")
-    key = module_cache_key(bundle, "hot", target="llvm", opt_level=3)
     store = bundle.project.store
-    assert store.read(_object_key(key)) is not None
+    assert store.read(_program_object_key(bundle, ["hot"], 3)) is not None
 
 
 def test_changing_the_source_invalidates_the_object(tmp_path: Path):
@@ -384,13 +385,8 @@ def test_a_rebuild_with_no_change_recompiles_nothing(tmp_path: Path):
     )
     assert _build(tmp_path, "build", "src").returncode == 0
 
-    from ppy_compiler.backend.llvm import _cached_lowering, _object_key
-    from ppy_compiler.driver.pipeline import (
-        analyze_paths,
-        collect_sources,
-        module_cache_key,
-        open_project,
-    )
+    from ppy_compiler.backend.llvm import _cached_lowering, _program_object_key
+    from ppy_compiler.driver.pipeline import analyze_paths, collect_sources, open_project
 
     sources = list(collect_sources(tmp_path / "src", ppy_only=True))
     project = open_project(tmp_path / "src")
@@ -398,9 +394,9 @@ def test_a_rebuild_with_no_change_recompiles_nothing(tmp_path: Path):
     # default guard mode is the wrap-semantics `off`.
     project.config.llvm.safeguards = "off"
     bundle = analyze_paths(project, sources, backend="llvm")
-    key = module_cache_key(bundle, "hot", target="llvm", opt_level=3)
     assert _cached_lowering(bundle, "hot", 3) is not None, "lowering was not cached"
-    assert bundle.project.store.read(_object_key(key)) is not None, "the object was not cached"
+    program = _program_object_key(bundle, ["hot"], 3)
+    assert bundle.project.store.read(program) is not None, "the program's object was not cached"
 
 
 def test_only_the_changed_module_is_recompiled(tmp_path: Path):
@@ -499,6 +495,9 @@ def test_a_cached_lowering_round_trips():
     class _Module:
         name = "m"
         ir = "; ir"
+        ppyir = ""
+        proved: ClassVar[dict] = {}
+        remarks: ClassVar[tuple] = ()
         functions: ClassVar[dict] = {
             "m.f": type(
                 "L",
@@ -518,6 +517,8 @@ def test_a_cached_lowering_round_trips():
         fused: ClassVar[dict] = {}
         fusion_plan: ClassVar[dict] = {}
         fusion_notes: ClassVar[list] = []
+        libraries: ClassVar[list] = ["m"]
+        exports: ClassVar[dict] = {"ppy_f": "m.f"}
 
     restored = decode(encode(_Module()))
     assert restored is not None
@@ -527,6 +528,7 @@ def test_a_cached_lowering_round_trips():
     assert signature.parameters[0].kind == "view"
     assert signature.parameters[0].element == "float"
     assert restored.rejected == {"m.g": "has effects"}
+    assert restored.libraries == ("m",) and restored.exports == {"ppy_f": "m.f"}
     assert decode('{"version": 0}') is None
     assert decode("not json") is None
 

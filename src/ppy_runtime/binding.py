@@ -12,7 +12,8 @@ import ctypes
 from collections.abc import Callable
 from dataclasses import dataclass, field
 
-from .abi import STATUS_OK, NativeParam, NativeSignature
+from . import _cpu
+from .abi import SANITIZERS, STATUS_OK, STATUS_SANITIZER_BASE, NativeParam, NativeSignature
 
 __all__ = ["NativeBinding", "adopt", "bind", "observation_wanted", "value_class_types"]
 
@@ -49,6 +50,10 @@ _ELEMENT_FORMATS = {
     "i8": ("b",),
     "u8": ("B",),
 }
+
+
+class SanitizerFailure(RuntimeError):
+    """A `--sanitize` check failed in native code; the message names the kind and the function."""
 
 
 class GuardFailed(Exception):
@@ -152,6 +157,13 @@ def bind(
     When the function asked for it, repeated argument shapes are compiled into
     guarded specializations and selected here (spec 16.9).
     """
+    missing = set(signature.cpu_features) - set(_cpu.features())
+    if missing:
+        # Compiled for a machine with more than this one has: the Python
+        # definition is the function here, and says nothing about it.
+        return NativeBinding(
+            signature=signature, wrapper=fallback, fallback=fallback, fast_entry=None, owner=owner
+        )
     argument_types: list[type] = []
     for parameter in signature.parameters:
         if parameter.is_buffer:
@@ -172,6 +184,22 @@ def bind(
         for p in signature.parameters
     ]
     finalizers = [_result_for(atom) for atom in signature.returns]
+    if signature.future:
+        from .aio import NativeFuture, runtime_for
+
+        runtime = runtime_for(owner)
+        if runtime is None:
+            # No async runtime here: the coroutine is its Python definition.
+            return NativeBinding(
+                signature=signature,
+                wrapper=fallback,
+                fallback=fallback,
+                fast_entry=None,
+                owner=owner,
+            )
+        kind = signature.future
+        finalizers = [lambda bits: NativeFuture(bits, kind, runtime, signature.qualname)]
+        fast_entry = None
     returns_tuple = signature.returns_tuple
     # Without a way to register one, a specialization could not be reached.
     observing = observation_wanted(specializer, policy, info) and (
@@ -234,6 +262,11 @@ def bind(
         target = entry or native
         status = target(*atoms, *[ctypes.byref(slot) for slot in slots])
         if status != STATUS_OK:
+            if status >= STATUS_SANITIZER_BASE:
+                kind = SANITIZERS[min(status - STATUS_SANITIZER_BASE, len(SANITIZERS) - 1)]
+                raise SanitizerFailure(
+                    f"sanitizer: a {kind} check failed in `{signature.qualname}`"
+                )
             binding.fallbacks += 1
             return fallback(*args)
         binding.calls += 1

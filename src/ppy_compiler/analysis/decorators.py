@@ -59,6 +59,17 @@ _KNOWN: dict[str, DecoratorSemantics] = {
     "ppy.opt": _INERT,
     "ppy.dynamic": _INERT,
     "ppy.reflective": _INERT,
+    # A C binding hands back a caller with the stub's signature; an export
+    # only records the public name.
+    "ppy.native.extern": DecoratorSemantics(preserves_identity=False),
+    "ppy.native.export": _INERT,
+    "ppy.cpu.target": _INERT,
+    "ppy.xla.jit": _INERT,
+    "ppy.cuda.kernel": _INERT,
+    "ppy.cuda.device": _INERT,
+    "ppy.hip.kernel": _INERT,
+    "ppy.hip.device": _INERT,
+    "ppy.ffi.bind": DecoratorSemantics(preserves_identity=False),
     # Python-defined transforms with fixed meaning.
     "builtins.staticmethod": _WRAPPER,
     "builtins.classmethod": _WRAPPER,
@@ -94,8 +105,8 @@ def semantics_of(name: str, plugins=None) -> DecoratorSemantics | None:  # type:
     if found is not None:
         return found
     if plugins is not None:
-        for plugin in getattr(plugins, "_plugins", ()):
-            answer = getattr(plugin, "decorator_semantics", lambda _n: None)(name)
+        for plugin in plugins.plugins:
+            answer = plugin.decorator_semantics(name)
             if answer is not None:
                 return answer
     return None

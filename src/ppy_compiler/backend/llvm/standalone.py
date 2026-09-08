@@ -14,122 +14,13 @@ import subprocess
 from pathlib import Path
 
 from ...diagnostics import Diagnostic, Severity
+from ..c.runtime import program_main, support_source
 from . import prover_for
 from .jit import JitEngine, LlvmUnavailable, available
 from .link import ToolchainError, _compiler, emit_object
-from .lowering import LoweringResult, eligible, lower_module
+from .lowering import LoweringResult, eligible
 
-__all__ = ["build_standalone"]
-
-_SUPPORT = """#include <inttypes.h>
-#include <stdint.h>
-#include <stdio.h>
-#include <stdlib.h>
-
-void ppy_rt_print_i64(int64_t value) { printf("%" PRId64, value); }
-void ppy_rt_print_bool(int8_t value) { fputs(value ? "True" : "False", stdout); }
-void ppy_rt_print_str(const char *text, int64_t length) {
-    fwrite(text, 1, (size_t)length, stdout);
-}
-void ppy_rt_print_sep(void) { fputc(' ', stdout); }
-void ppy_rt_print_nl(void) { fputc('\\n', stdout); }
-
-/* `ppy.input[int]()` with no interpreter under it: the same buffered scan
- * the runtime reader does, reading standard input directly. At end of input
- * it answers 0, because a standalone binary has no exception to raise. */
-static int ppy_rt_next(void) {
-    static char room[1 << 16];
-    static long filled = 0;
-    static long position = 0;
-    if (position == filled) {
-        filled = (long)fread(room, 1, sizeof room, stdin);
-        if (filled <= 0) {
-            return -1;
-        }
-        position = 0;
-    }
-    return (unsigned char)room[position++];
-}
-
-/* A buffer a standalone program makes for itself. There is no interpreter
- * to own it, and a program that exits is the only lifetime that matters. */
-int64_t *ppy_rt_alloc(int64_t count, int64_t width) {
-    if (count < 0) {
-        /* CPython raises ValueError here; a standalone binary has no
-         * exception, so it says what happened and stops. */
-        fputs("ppy: a buffer cannot hold fewer than no elements\\n", stderr);
-        exit(1);
-    }
-    void *room = calloc(count > 0 ? (size_t)count : 1, (size_t)width);
-    if (room == NULL) {
-        fputs("ppy: out of memory\\n", stderr);
-        exit(1);
-    }
-    return (int64_t *)room;
-}
-
-int64_t ppy_rt_read_ints(int64_t *data, int64_t capacity) {
-    int64_t count = 0;
-    while (count < capacity) {
-        int c = ppy_rt_next();
-        while (c != -1 && (c < '0' || c > '9') && c != '-') {
-            c = ppy_rt_next();
-        }
-        if (c == -1) {
-            break;
-        }
-        int negative = 0;
-        if (c == '-') {
-            negative = 1;
-            c = ppy_rt_next();
-        }
-        int64_t value = 0;
-        while (c >= '0' && c <= '9') {
-            value = value * 10 + (c - '0');
-            c = ppy_rt_next();
-        }
-        data[count++] = negative ? -value : value;
-    }
-    return count;
-}
-
-int64_t ppy_rt_read_int(void) {
-    int c = ppy_rt_next();
-    while (c != -1 && (c < '0' || c > '9') && c != '-') {
-        c = ppy_rt_next();
-    }
-    if (c == -1) {
-        return 0;
-    }
-    int negative = 0;
-    if (c == '-') {
-        negative = 1;
-        c = ppy_rt_next();
-    }
-    int64_t value = 0;
-    while (c >= '0' && c <= '9') {
-        value = value * 10 + (c - '0');
-        c = ppy_rt_next();
-    }
-    return negative ? -value : value;
-}
-"""
-
-_MAIN = """#include <stdint.h>
-#include <stdio.h>
-
-int32_t {symbol}(int64_t *out);
-
-int main(void) {{
-    int64_t out = 0;
-    int32_t status = {symbol}(&out);
-    if (status != 0) {{
-        fputs("ppy: a native guard failed and there is no Python to fall back to\\n", stderr);
-        return 70;
-    }}
-    return 0;
-}}
-"""
+__all__ = ["build_standalone", "standalone_ir"]
 
 
 def _fail(reporter, message: str, help_text: str | None = None) -> int:  # type: ignore[no-untyped-def]
@@ -137,15 +28,13 @@ def _fail(reporter, message: str, help_text: str | None = None) -> int:  # type:
     return 1
 
 
-def build_standalone(  # type: ignore[no-untyped-def]
-    bundle, reporter, entry: Path, output: Path | None, opt_level: int | None = None
-) -> int:
-    if not available():
-        raise LlvmUnavailable("llvmlite is not installed, so the LLVM backend is unavailable")
-    compiler = _compiler()
-    if compiler is None:
-        raise ToolchainError("no C compiler (cc, gcc, or clang) is on PATH")
+def _program(bundle, reporter, entry: Path):  # type: ignore[no-untyped-def]
+    """The functions a standalone program is made of, or the exit status.
 
+    `main` in the entry module, and every project function it reaches,
+    each of which must lower; the first that cannot is reported with the
+    path that reaches it.
+    """
     module_name = None
     for name, symbols in bundle.symbols.modules.items():
         if symbols.path == entry.resolve():
@@ -198,13 +87,84 @@ def build_standalone(  # type: ignore[no-untyped-def]
         if not ok:
             return _fail(reporter, _chain(reached_from, qualname, reason))
         functions[qualname] = (info, function, info.node)
+    return module_name, entry_qualname, functions, reached_from
 
-    result: LoweringResult = lower_module(
+
+def standalone_ir(bundle, reporter, entry: Path, opt_level: int | None = None):  # type: ignore[no-untyped-def]
+    """The canonical IR of a whole standalone program, or the exit status.
+
+    What `ppy emit c --standalone` hands the C backend: the same reachable
+    graph a standalone build compiles, lowered with the standalone shims
+    and run through the shared passes. The result carries the entry's
+    symbol as `ppy.entry`.
+    """
+    from ...lowering import lower_module_to_ir
+    from .ir_pipeline import optimize
+
+    program = _program(bundle, reporter, entry)
+    if isinstance(program, int):
+        return program
+    module_name, entry_qualname, functions, reached_from = program
+    analysis = bundle.analysis.modules[module_name]
+    config = bundle.project.config
+    lowered = lower_module_to_ir(
         analysis,
         functions,
-        safeguards=bundle.project.config.llvm.safeguards or "off",
+        safeguards=config.llvm.safeguards or "off",
         standalone=True,
-        prover=prover_for(bundle.project.config),
+        prover=prover_for(config),
+        root=bundle.project.root,
+    )
+    for qualname, reason in sorted(lowered.rejected.items()):
+        return _fail(reporter, _chain(reached_from, qualname, reason))
+    if entry_qualname not in lowered.functions:
+        return _fail(reporter, f"`{entry_qualname}` did not lower")
+    level = opt_level if opt_level is not None else config.opt_level
+    optimize(
+        lowered.module,
+        level,
+        bundle.project.plugins,
+        config.parallel,
+        sanitize=config.llvm.sanitize,
+    )
+    lowered.module.attributes["ppy.entry"] = lowered.functions[entry_qualname].signature.symbol
+    return lowered.module
+
+
+def _runtime_sources(result) -> list[str]:  # type: ignore[no-untyped-def]
+    """Runtime sources a standalone program compiles in: the async runtime, when it awaits."""
+    if "ppy_aio" not in tuple(getattr(result, "libraries", ())):
+        return []
+    from ppy_runtime.aio import source_path
+
+    return [str(source_path())]
+
+
+def build_standalone(  # type: ignore[no-untyped-def]
+    bundle, reporter, entry: Path, output: Path | None, opt_level: int | None = None
+) -> int:
+    if not available():
+        raise LlvmUnavailable("llvmlite is not installed, so the LLVM backend is unavailable")
+    compiler = _compiler()
+    if compiler is None:
+        raise ToolchainError("no C compiler (cc, gcc, or clang) is on PATH")
+
+    program = _program(bundle, reporter, entry)
+    if isinstance(program, int):
+        return program
+    module_name, entry_qualname, functions, reached_from = program
+    analysis = bundle.analysis.modules[module_name]
+
+    config = bundle.project.config
+    from .ir_pipeline import lower_module_via_ir
+
+    result: LoweringResult = lower_module_via_ir(
+        analysis,
+        functions,
+        safeguards=config.llvm.safeguards or "off",
+        standalone=True,
+        opt_level=opt_level if opt_level is not None else config.opt_level,
+        prover=prover_for(config),
     )
     for qualname, reason in sorted(result.rejected.items()):
         return _fail(reporter, _chain(reached_from, qualname, reason))
@@ -219,10 +179,12 @@ def build_standalone(  # type: ignore[no-untyped-def]
     emit_object(engine, result.ir, object_path, host_cpu=bundle.project.config.llvm.host_cpu)
 
     support = build_directory / "ppy_support.c"
-    support.write_text(_SUPPORT, encoding="utf-8")
+    support.write_text(support_source(), encoding="utf-8")
     main_c = build_directory / f"{module_name}_main.c"
+    symbol = result.functions[entry_qualname].signature.symbol
     main_c.write_text(
-        _MAIN.format(symbol=result.functions[entry_qualname].signature.symbol),
+        f"#include <stdint.h>\n#include <stdio.h>\n\nint32_t {symbol}(int64_t *out);\n\n"
+        + program_main(symbol),
         encoding="utf-8",
     )
     destination = build_directory / entry.stem
@@ -231,6 +193,7 @@ def build_standalone(  # type: ignore[no-untyped-def]
         "-O2",
         str(main_c),
         str(support),
+        *_runtime_sources(result),
         str(object_path),
         "-o",
         str(destination),

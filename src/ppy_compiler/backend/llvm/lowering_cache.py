@@ -17,13 +17,25 @@ from .lowering import NativeParam, NativeSignature
 __all__ = ["SCHEMA_VERSION", "CachedLowering", "decode", "encode"]
 
 #: Bumped when the shape below changes, so an old entry is simply a miss.
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 6
 
 
 class CachedLowering:
     """What `_collect` produced for one module, minus what is recomputable."""
 
-    __slots__ = ("fused", "ir", "notes", "plan", "rejected", "signatures")
+    __slots__ = (
+        "exports",
+        "fused",
+        "ir",
+        "libraries",
+        "notes",
+        "plan",
+        "ppyir",
+        "proved",
+        "rejected",
+        "remarks",
+        "signatures",
+    )
 
     def __init__(
         self,
@@ -33,13 +45,23 @@ class CachedLowering:
         fused: dict[str, FusedLoop],
         plan: dict[tuple[int, int], FusedLoop],
         notes: list[tuple[int, str]],
+        libraries: tuple[str, ...] = (),
+        exports: dict[str, str] | None = None,
+        ppyir: str = "",
+        proved: dict[str, tuple[str, ...]] | None = None,
+        remarks: tuple[str, ...] = (),
     ) -> None:
         self.ir = ir
+        self.ppyir = ppyir
+        self.proved = dict(proved or {})
+        self.remarks = tuple(remarks)
         self.signatures = signatures
         self.rejected = rejected
         self.fused = fused
         self.plan = plan
         self.notes = notes
+        self.libraries = libraries
+        self.exports = dict(exports or {})
 
 
 def _param(p: NativeParam) -> dict:
@@ -71,6 +93,7 @@ def _signature(s: NativeSignature) -> dict:
         "parameters": [_param(p) for p in s.parameters],
         "returns": list(s.returns),
         "releases_gil": s.releases_gil,
+        "cpu_features": list(s.cpu_features),
     }
 
 
@@ -81,6 +104,7 @@ def _read_signature(raw: dict) -> NativeSignature:
         parameters=tuple(_read_param(p) for p in raw["parameters"]),
         returns=tuple(raw["returns"]),
         releases_gil=raw["releases_gil"],
+        cpu_features=tuple(raw.get("cpu_features", ())),
     )
 
 
@@ -92,6 +116,10 @@ def _loop(loop: FusedLoop) -> dict:
         "reduction": loop.reduction,
         "expression": loop.expression,
         "parallel": loop.parallel,
+        "storage": loop.storage,
+        "kinds": list(loop.kinds),
+        "result": loop.result,
+        "nullable": loop.nullable,
     }
 
 
@@ -103,6 +131,10 @@ def _read_loop(raw: dict) -> FusedLoop:
         reduction=raw["reduction"],
         expression=raw["expression"],
         parallel=raw["parallel"],
+        storage=raw.get("storage", "numpy"),
+        kinds=tuple(raw.get("kinds", ())),
+        result=raw.get("result", "f64"),
+        nullable=raw.get("nullable", True),
     )
 
 
@@ -112,6 +144,7 @@ def encode(module) -> str:  # type: ignore[no-untyped-def]
         {
             "version": SCHEMA_VERSION,
             "ir": module.ir,
+            "ppyir": module.ppyir,
             "signatures": {q: _signature(f.signature) for q, f in module.functions.items()},
             "rejected": dict(module.rejected),
             "fused": {symbol: _loop(loop) for symbol, loop in module.fused.items()},
@@ -119,6 +152,10 @@ def encode(module) -> str:  # type: ignore[no-untyped-def]
                 [list(position), _loop(loop)] for position, loop in module.fusion_plan.items()
             ],
             "notes": [list(note) for note in module.fusion_notes],
+            "libraries": list(module.libraries),
+            "exports": dict(module.exports),
+            "proved": {q: list(names) for q, names in module.proved.items()},
+            "remarks": list(module.remarks),
         },
         separators=(",", ":"),
     )
@@ -140,6 +177,11 @@ def decode(text: str) -> CachedLowering | None:
             fused={symbol: _read_loop(loop) for symbol, loop in raw["fused"].items()},
             plan={tuple(position): _read_loop(loop) for position, loop in raw["plan"]},
             notes=[tuple(note) for note in raw["notes"]],
+            libraries=tuple(raw.get("libraries", ())),
+            exports=dict(raw.get("exports", {})),
+            ppyir=str(raw.get("ppyir", "")),
+            proved={q: tuple(names) for q, names in raw.get("proved", {}).items()},
+            remarks=tuple(raw.get("remarks", ())),
         )
     except (KeyError, TypeError, ValueError):
         return None

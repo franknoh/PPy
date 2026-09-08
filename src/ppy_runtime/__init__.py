@@ -6,4 +6,6 @@ manifest -- uninstalling the compiler must not break it (spec: runtime
 separation).
 """
 
-__version__ = "0.1.0"
+from .version import VERSION as __version__
+
+__all__ = ["__version__"]

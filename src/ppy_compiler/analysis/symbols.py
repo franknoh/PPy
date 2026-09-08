@@ -7,7 +7,7 @@ import operator
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from ..diagnostics import DiagnosticBag
+from ..diagnostics import Diagnostic, DiagnosticBag, Severity, Span
 from ..frontend.modules import Module, ModuleGraph
 from . import types as T
 from .annotations import AnnotationResolver
@@ -145,6 +145,8 @@ class FunctionInfo:
     effects: EffectSet = field(default_factory=EffectSet)
     verified_pure: bool = False
     dynamic: bool = False
+    #: `def f[T: Bound](...)`: the type parameters, resolved with the signature.
+    type_params: tuple[T.TypeVar_, ...] = ()
     #: Whether the body yields. The answer needs a walk of the whole function,
     #: and `signature()` asks for it once per function per checked function, so
     #: it is computed once and kept.
@@ -256,6 +258,9 @@ class ModuleSymbols:
     globals: dict[str, T.Type] = field(default_factory=dict)
     global_facts: dict[str, Facts] = field(default_factory=dict)
     constant_globals: dict[str, object] = field(default_factory=dict)
+    #: Module-level names bound to `ppy.grad(f)` / `ppy.value_and_grad(f)`:
+    #: name -> (f's qualname, argnums, value_and_grad).
+    derivatives: dict[str, tuple[str, tuple[int, ...], bool]] = field(default_factory=dict)
     type_aliases: dict[str, ast.expr] = field(default_factory=dict)
     all_exports: tuple[str, ...] | None = None
     #: Point-sensitive lexical bindings for this module's tree.
@@ -268,6 +273,54 @@ class ModuleSymbols:
     @property
     def path(self) -> Path:
         return self.module.path
+
+
+def derivative_spec(
+    symbols: ModuleSymbols, call: ast.Call
+) -> tuple[str, tuple[int, ...], bool] | None:
+    """`ppy.grad(f, argnums=...)` or `ppy.value_and_grad(f)` over a function of
+    this module: (f's qualname, argnums, value_and_grad); None for any other call."""
+    func = call.func
+    if isinstance(func, ast.Attribute) and isinstance(func.value, ast.Name):
+        owner = symbols.imports.get(func.value.id)
+        if (
+            owner is None
+            or owner.canonical != "ppy"
+            or func.attr
+            not in {
+                "grad",
+                "value_and_grad",
+            }
+        ):
+            return None
+        kind = func.attr
+    elif isinstance(func, ast.Name):
+        binding = symbols.imports.get(func.id)
+        if binding is None or binding.canonical not in {"ppy.grad", "ppy.value_and_grad"}:
+            return None
+        kind = binding.canonical.rpartition(".")[2]
+    else:
+        return None
+    if not call.args or not isinstance(call.args[0], ast.Name):
+        return None
+    target = symbols.functions.get(call.args[0].id)
+    if target is None:
+        return None
+    argnums: tuple[int, ...] = (0,)
+    spelled = call.args[1] if len(call.args) > 1 else None
+    for keyword in call.keywords:
+        if keyword.arg == "argnums":
+            spelled = keyword.value
+    if spelled is not None:
+        if isinstance(spelled, ast.Constant) and isinstance(spelled.value, int):
+            argnums = (spelled.value,)
+        elif isinstance(spelled, ast.Tuple) and all(
+            isinstance(e, ast.Constant) and isinstance(e.value, int) for e in spelled.elts
+        ):
+            argnums = tuple(e.value for e in spelled.elts)  # type: ignore[union-attr]
+        else:
+            return None
+    return target.qualname, argnums, kind == "value_and_grad"
 
 
 def _contains_yield(node: ast.AST) -> bool:
@@ -315,6 +368,14 @@ DIRECTIVE_NAMES = frozenset(
         "dynamic",
         "jax",
         "reflective",
+        "native.extern",
+        "native.export",
+        "xla.jit",
+        "cpu.target",
+        "cuda.kernel",
+        "cuda.device",
+        "hip.kernel",
+        "hip.device",
     }
 )
 
@@ -329,6 +390,15 @@ def directives_from(decorators: list[ast.expr], resolver: NameResolver) -> tuple
             continue
         name = qualname.removeprefix("ppy.")
         options: dict[str, object] = {}
+        if name == "ffi.bind":
+            # The binding layer's spelling of `native.extern`: the first
+            # argument names a library made by `ffi.library("...")` at the
+            # top of the module.
+            name = "native.extern"
+            if isinstance(decorator, ast.Call) and decorator.args:
+                library = _ffi_library_of(resolver, decorator.args[0])
+                if library is not None:
+                    options["library"] = library
         if isinstance(decorator, ast.Call):
             for index, arg in enumerate(decorator.args):
                 try:
@@ -343,8 +413,38 @@ def directives_from(decorators: list[ast.expr], resolver: NameResolver) -> tuple
                     options[keyword.arg] = ast.literal_eval(keyword.value)
                 except (ValueError, SyntaxError):
                     continue
+        if name == "native.extern" and "symbol" not in options:
+            symbol = options.pop("arg0", None)
+            if isinstance(symbol, str):
+                options["symbol"] = symbol
+        if name == "cpu.target":
+            # `@cpu.target("avx2", "fma")`: the features, in order.
+            names = [options.pop(f"arg{i}") for i in range(len(options)) if f"arg{i}" in options]
+            options["features"] = tuple(str(n) for n in names)
         found.append(Directive(name, options, decorator))
     return tuple(found)
+
+
+def _ffi_library_of(resolver: NameResolver, node: ast.expr) -> str | None:
+    """The library name behind `libm` in `@ffi.bind(libm, ...)`."""
+    if not isinstance(node, ast.Name):
+        return None
+    for statement in resolver.symbols.module.tree.body:
+        if not isinstance(statement, ast.Assign) or len(statement.targets) != 1:
+            continue
+        target = statement.targets[0]
+        if not isinstance(target, ast.Name) or target.id != node.id:
+            continue
+        value = statement.value
+        if (
+            isinstance(value, ast.Call)
+            and resolver.canonical(value.func) == "ppy.ffi.library"
+            and value.args
+            and isinstance(value.args[0], ast.Constant)
+            and isinstance(value.args[0].value, str)
+        ):
+            return value.args[0].value
+    return None
 
 
 class NameResolver:
@@ -437,11 +537,20 @@ class ProjectSymbols:
     """Project-wide symbol, class, and signature tables."""
 
     def __init__(
-        self, graph: ModuleGraph, diagnostics: DiagnosticBag, *, strict: bool = True
+        self,
+        graph: ModuleGraph,
+        diagnostics: DiagnosticBag,
+        *,
+        strict: bool = True,
+        generics: object | None = None,
     ) -> None:
         self.graph = graph
         self.diagnostics = diagnostics
         self.strict = strict
+        #: The limits on monomorphization (`GenericsConfig`), or None for the defaults.
+        self.generics = generics
+        #: Per generic function, the tuples of type arguments it was called with.
+        self.specializations: dict[str, set[tuple[str, ...]]] = {}
         self.modules: dict[str, ModuleSymbols] = {}
         self.classes: dict[str, ClassInfo] = {}
         self.functions: dict[str, FunctionInfo] = {}
@@ -482,7 +591,28 @@ class ProjectSymbols:
         for module in ordered:
             self._resolve_signatures(self.modules[module.name])
         self._mark_constant_globals()
+        self._mark_derivatives()
         return self
+
+    def _mark_derivatives(self) -> None:
+        """`df = ppy.grad(f)` at module level binds a derivative, once and for all.
+
+        Like a function definition, the name is final: reading it is no
+        global dependency, and the native frontend knows which function's
+        derivative a call through it is.
+        """
+        for symbols in self.modules.values():
+            for node in symbols.module.tree.body:
+                if not (
+                    isinstance(node, ast.Assign)
+                    and len(node.targets) == 1
+                    and isinstance(node.targets[0], ast.Name)
+                    and isinstance(node.value, ast.Call)
+                ):
+                    continue
+                spec = derivative_spec(symbols, node.value)
+                if spec is not None:
+                    symbols.derivatives[node.targets[0].id] = spec
 
     def _satisfy_protocols(self) -> None:
         """Structural typing, settled once: a class whose members cover a
@@ -899,6 +1029,8 @@ class ProjectSymbols:
     ) -> None:
         if info.params:
             return
+        annotations.type_params = self._type_params(info, annotations)
+        info.type_params = tuple(annotations.type_params.values())
         args = info.node.args
         entries: list[tuple[ast.arg, str, ast.expr | None]] = [
             (arg, "positional_only", None) for arg in args.posonlyargs
@@ -946,6 +1078,28 @@ class ProjectSymbols:
             info.ret = resolved.type
             info.ret_facts = resolved.facts
             info.ret_annotated = True
+        annotations.type_params = {}
+
+    @staticmethod
+    def _type_params(info: FunctionInfo, annotations: AnnotationResolver) -> dict[str, T.TypeVar_]:
+        """The type parameters a `def f[T: Bound]` declares, bounds resolved."""
+        declared = getattr(info.node, "type_params", None) or ()
+        found: dict[str, T.TypeVar_] = {}
+        for entry in declared:
+            if not isinstance(entry, ast.TypeVar):
+                annotations.diagnostics.add(
+                    Diagnostic(
+                        "E1720",
+                        Severity.ERROR,
+                        f"`{info.name}` declares `{ast.unparse(entry)}`; only plain type "
+                        "parameters (`T` or `T: Bound`) are supported",
+                        Span(info.path, entry.lineno, entry.col_offset),
+                    )
+                )
+                continue
+            bound = annotations.resolve(entry.bound).type if entry.bound is not None else None
+            found[entry.name] = T.TypeVar_(entry.name, bound, owner=info.qualname)
+        return found
 
     def _implicit_param(
         self,

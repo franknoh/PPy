@@ -158,7 +158,10 @@ def _print_function(
         if notes:
             print("library lowering:")
             for note in notes:
-                print(f"  line {note.line}: {note.qualname} -> {note.lowering} ({note.reason})")
+                print(
+                    f"  line {note.line}: {note.qualname} -> {note.lowering}"
+                    f"{_shared(note)} ({note.reason})"
+                )
                 for guard in note.guards:
                     print(f"      guard: {guard}")
     _print_rewrites(bundle, info, start, end)
@@ -222,6 +225,16 @@ def _llvm_backend(report: ContractReport | None) -> str:
     return f"boxed: {report.native_reason}"
 
 
+def _shared(note) -> str:  # type: ignore[no-untyped-def]
+    """` = tensor.unary {op = sin}`: the shared operation a call converges onto."""
+    if not note.operation:
+        return ""
+    if not note.attributes:
+        return f" = {note.operation}"
+    spelled = ", ".join(f"{key} = {value}" for key, value in note.attributes)
+    return f" = {note.operation} {{{spelled}}}"
+
+
 def _print_module(bundle: AnalysisBundle, module_name: str, line: int) -> None:
     module = bundle.analysis.modules.get(module_name)
     print(f"module: {module_name}")
@@ -230,7 +243,7 @@ def _print_module(bundle: AnalysisBundle, module_name: str, line: int) -> None:
     print(f"module effects: {module.module_effects}")
     for note in module.lowerings.values():
         if note.line == line:
-            print(f"line {line}: {note.qualname} -> {note.lowering} ({note.reason})")
+            print(f"line {line}: {note.qualname} -> {note.lowering}{_shared(note)} ({note.reason})")
     for start, end in module.dynamic_spans:
         if start <= line <= end:
             print(f"line {line} is inside a ppy.dynamic boundary (lines {start}-{end})")

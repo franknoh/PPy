@@ -12,6 +12,9 @@ case "$plugin" in
   torch)   library=torch;   examples=(09_torch 21_training_torch 31_torchrun) ;;
   jax)     library=jax;     examples=(22_training_jax 25_jax_export 29_flax) ;;
   uvicorn) library=uvicorn; examples=(27_uvicorn) ;;
+  scipy)   library=scipy;   examples=() ;;
+  pandas)  library=pandas;  examples=() ;;
+  pyarrow) library=pyarrow; examples=() ;;
   *) echo "unknown plugin: $plugin" >&2; exit 2 ;;
 esac
 
@@ -23,11 +26,13 @@ uv run python -c "import ${library}" || {
 report=$(mktemp)
 trap 'rm -f "$report"' EXIT
 uv run pytest -q -k "$plugin" tests/test_plugins.py tests/test_library_integration.py \
-  | tee "$report"
+  tests/test_plugin_api.py | tee "$report"
 
 if ! grep -qE "[0-9]+ passed" "$report"; then
   echo "no ${plugin} test ran: a skipped plugin proves nothing" >&2
   exit 1
 fi
 
-uv run python examples/run_all.py "${examples[@]}"
+if [ "${#examples[@]}" -gt 0 ]; then
+  uv run python examples/run_all.py "${examples[@]}"
+fi

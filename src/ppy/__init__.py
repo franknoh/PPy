@@ -9,6 +9,9 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from ppy_runtime.version import VERSION as __version__
+
+from . import aio, atomic, concurrent, cpu, cuda, ffi, hip, simd, xla
 from ._directives import (
     DIRECTIVE_ATTR,
     Directive,
@@ -19,7 +22,6 @@ from ._directives import (
     inline,
     jax,
     jit,
-    native,
     noinline,
     opt,
     parallel,
@@ -39,6 +41,7 @@ from ._markers import (
     NUMERIC_MARKERS,
     Array,
     ArraySpec,
+    Borrowed,
     Buffer,
     BufferSpec,
     Contiguous,
@@ -47,7 +50,9 @@ from ._markers import (
     FloatWidth,
     IntWidth,
     Length,
+    Mut,
     NoAlias,
+    Owned,
     Range,
     Shape,
     Vector,
@@ -66,14 +71,15 @@ from ._markers import (
     u64,
 )
 from ._native import native_import, native_imports
-
-__version__ = "0.1.1a1"
+from ._native_api import native
+from .autodiff import grad, value_and_grad
 
 __all__ = [
     "DIRECTIVE_ATTR",
     "NUMERIC_MARKERS",
     "Array",
     "ArraySpec",
+    "Borrowed",
     "Buffer",
     "BufferSpec",
     "Contiguous",
@@ -83,7 +89,9 @@ __all__ = [
     "FloatWidth",
     "IntWidth",
     "Length",
+    "Mut",
     "NoAlias",
+    "Owned",
     "PPyAmbiguousModuleWarning",
     "Range",
     "Shape",
@@ -91,14 +99,22 @@ __all__ = [
     "VectorSpec",
     "__version__",
     "add_import_root",
+    "aio",
+    "atomic",
     "attach",
     "check",
+    "concurrent",
+    "cpu",
+    "cuda",
     "directives_of",
     "dynamic",
     "f16",
     "f32",
     "f64",
     "fastmath",
+    "ffi",
+    "grad",
+    "hip",
     "i8",
     "i16",
     "i32",
@@ -121,12 +137,15 @@ __all__ = [
     "read_token",
     "reader_available",
     "reflective",
+    "simd",
     "specialize",
     "u8",
     "u16",
     "u32",
     "u64",
     "uninstall",
+    "value_and_grad",
+    "xla",
 ]
 
 if TYPE_CHECKING:  # the names below are real; PEP 562 just defers the import

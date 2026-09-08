@@ -13,14 +13,10 @@ from pathlib import Path
 
 from ...cache import CacheKey
 from ...diagnostics import Diagnostic, Severity, Span
+from ...plugins.torch_region import find_regions
+from ...target import TargetInfo, configured_target
 from ..binder import LibraryBinder
-from .fusion import (
-    FusedLoop,
-    FusionCandidate,
-    find_candidates,
-    find_module_candidates,
-    lower_candidate,
-)
+from .fusion import FusedLoop, find_candidates, find_module_candidates, kernel_module
 from .jit import JitEngine, LlvmUnavailable, available, llvm_status
 from .link import (
     BuildArtifacts,
@@ -29,15 +25,10 @@ from .link import (
     emit_object,
     link_shared_library,
     toolchain_status,
+    write_header,
     write_manifest,
 )
-from .lowering import (
-    LoweredFunction,
-    LoweringResult,
-    NativeSignature,
-    lower_module,
-    should_lower_native,
-)
+from .lowering import LoweredFunction, LoweringResult, NativeSignature, should_lower_native
 from .specialize import SpecializationPolicy, Specializer
 from .wrapper_build import build_wrappers
 
@@ -61,6 +52,8 @@ __all__ = [
 class NativeModule:
     name: str
     ir: str
+    #: The module's PPy IR as text, for the linker; empty for a module with nothing native.
+    ppyir: str = ""
     functions: dict[str, LoweredFunction] = field(default_factory=dict)
     rejected: dict[str, str] = field(default_factory=dict)
     sources: dict[str, tuple] = field(default_factory=dict)
@@ -68,9 +61,13 @@ class NativeModule:
     fusion_plan: dict[tuple[int, int], FusedLoop] = field(default_factory=dict)
     fusion_notes: list[tuple[int, str]] = field(default_factory=list)
     #: Per function, the arithmetic whose overflow guard a proof left out.
-    #: Filled by a fresh lowering; a module rebuilt from the cache has the
-    #: same code and an empty list.
     proved: dict[str, tuple[str, ...]] = field(default_factory=dict)
+    #: Shared libraries the module's C bindings need, by name.
+    libraries: tuple[str, ...] = ()
+    #: Public C symbols the module defines: name -> qualname.
+    exports: dict[str, str] = field(default_factory=dict)
+    #: What the lowering and the passes said, as remarks; cached with the module.
+    remarks: tuple[str, ...] = ()
 
 
 #: Members that make attribute reads observable, so the class stays boxed.
@@ -148,6 +145,7 @@ def _collect(bundle, opt_level: int | None = None) -> dict[str, NativeModule]:  
     """Lower every module in the project to LLVM IR, reusing a cached result."""
     modules: dict[str, NativeModule] = {}
     layouts = _value_class_layouts(bundle)
+    available: dict[str, tuple] = {}  # type: ignore[type-arg]
     for module in bundle.graph.order():
         analysis = bundle.analysis.modules.get(module.name)
         symbols = bundle.symbols.modules.get(module.name)
@@ -170,17 +168,14 @@ def _collect(bundle, opt_level: int | None = None) -> dict[str, NativeModule]:  
         reused = _cached_lowering(bundle, module.name, opt_level)
         if reused is not None:
             modules[module.name] = _module_from_cache(module.name, reused, candidates)
+            _offer(available, modules[module.name])
             continue
 
         fused, plan, notes = _fuse(symbols, analysis)
         if not candidates and not fused:
             continue
-        result: LoweringResult = lower_module(
-            analysis,
-            candidates,
-            layouts,
-            safeguards=bundle.project.config.llvm.safeguards or "hoisted",
-            prover=prover_for(bundle.project.config),
+        result: LoweringResult = _lower(
+            bundle, analysis, candidates, layouts, opt_level, available.get
         )
         ir_text = result.ir
         if fused:
@@ -188,6 +183,7 @@ def _collect(bundle, opt_level: int | None = None) -> dict[str, NativeModule]:  
         native = NativeModule(
             name=module.name,
             ir=ir_text,
+            ppyir=result.ppyir,
             functions=result.functions,
             rejected=result.rejected,
             sources={
@@ -199,17 +195,55 @@ def _collect(bundle, opt_level: int | None = None) -> dict[str, NativeModule]:  
             fusion_plan=plan,
             fusion_notes=notes,
             proved=result.proved,
+            remarks=result.remarks,
+            libraries=result.libraries,
+            exports=result.exports,
         )
         modules[module.name] = native
+        _offer(available, native)
         _store_lowering(bundle, module.name, opt_level, native)
     return modules
+
+
+def _offer(available: dict, native: NativeModule) -> None:  # type: ignore[type-arg]
+    """What `native` lowered, for the modules after it to call natively."""
+    for qualname, lowered in native.functions.items():
+        available[qualname] = (lowered.info, lowered.signature)
+
+
+def _lower(bundle, analysis, candidates, layouts, opt_level, imports=None):  # type: ignore[no-untyped-def]
+    """One module's LLVM IR: the canonical IR, the passes, and `from_ir`."""
+    from ...driver.profile import profile_for
+    from .ir_pipeline import lower_module_via_ir
+
+    config = bundle.project.config
+    level = opt_level if opt_level is not None else config.opt_level
+    return lower_module_via_ir(
+        analysis,
+        candidates,
+        layouts,
+        safeguards=config.llvm.safeguards or "hoisted",
+        opt_level=level,
+        prover=prover_for(config),
+        root=bundle.project.root,
+        plugins=bundle.project.plugins,
+        target=configured_target(config.llvm.target),
+        parallel=config.parallel,
+        imports=imports,
+        sanitize=config.llvm.sanitize,
+        instrument=config.llvm.instrument,
+        profile=profile_for(config),
+    )
 
 
 def _lowering_key(bundle, name: str, opt_level: int | None) -> str:  # type: ignore[no-untyped-def]
     from ...driver.pipeline import module_cache_key
 
     level = opt_level if opt_level is not None else bundle.project.config.opt_level
-    return f"{module_cache_key(bundle, name, target='llvm', opt_level=level).hex()}.lowered"
+    machine = configured_target(bundle.project.config.llvm.target)
+    where = "" if machine.is_host else f".{machine.triple}"
+    key = module_cache_key(bundle, name, target="llvm", opt_level=level).hex()
+    return f"{key}{where}.lowered"
 
 
 def _cached_lowering(bundle, name: str, opt_level: int | None):  # type: ignore[no-untyped-def]
@@ -256,12 +290,17 @@ def _module_from_cache(name: str, reused, candidates) -> NativeModule:  # type: 
     return NativeModule(
         name=name,
         ir=reused.ir,
+        ppyir=reused.ppyir,
         functions=functions,
         rejected=dict(reused.rejected),
         sources=sources,
         fused=dict(reused.fused),
         fusion_plan=dict(reused.plan),
         fusion_notes=list(reused.notes),
+        libraries=tuple(reused.libraries),
+        exports=dict(reused.exports),
+        proved=dict(reused.proved),
+        remarks=tuple(reused.remarks),
     )
 
 
@@ -274,42 +313,146 @@ def _fuse(symbols, analysis):  # type: ignore[no-untyped-def]
     for cls in symbols.classes.values():
         functions.extend(cls.methods.values())
 
+    # A function that compiles whole into an ATen region takes that road: one
+    # C++ call through the dispatcher, autograd intact, served from a built
+    # artifact. Fusing its expressions as well would only take the region away.
+    regions = {region.info.qualname for region in find_regions(symbols, analysis)}
     candidates = list(find_module_candidates(symbols.module.tree, analysis))
     for info in functions:
+        if info.qualname in regions:
+            continue
         candidates.extend(find_candidates(info, analysis))
 
     for candidate in candidates:
         loops[candidate.loop.symbol] = candidate.loop
         plan[(candidate.node.lineno, candidate.node.col_offset)] = candidate.loop
+        library = _LIBRARIES.get(candidate.loop.storage, candidate.loop.storage)
+        fused = ", ".join(candidate.operations)
         notes.append(
-            (
-                candidate.node.lineno,
-                f"NumPy expression fused into one strided loop: {', '.join(candidate.operations)}",
-            )
+            (candidate.node.lineno, f"{library} expression fused into one strided loop: {fused}")
         )
     return loops, plan, notes
 
 
+_LIBRARIES = {"numpy": "NumPy", "torch": "torch", "pyarrow": "PyArrow", "pandas": "pandas"}
+
+
+def _linked_program(bundle, natives, level, target):  # type: ignore[no-untyped-def]
+    """The program's LLVM IR from every module's IR linked and optimized as one, or None.
+
+    Every module keeps its `.ppyir`; linking answers every cross-module
+    declaration with its definition, whole-program optimization internalizes
+    what Python never binds and inlines across the seams, and one object
+    comes out. A cache from before linking has no module IR to link and
+    keeps one object per module.
+    """
+    from ...ir import decode
+    from ...ir.linker import link
+    from ...ir.transforms import whole_program
+
+    with_functions = [native for native in natives.values() if native.functions]
+    if not with_functions or any(not native.ppyir for native in with_functions):
+        return None
+    linked = link([decode(native.ppyir) for native in with_functions], bundle.project.root.name)
+    if linked.unresolved:
+        return None
+    exposed = {
+        qualname
+        for native in with_functions
+        for qualname, lowered in native.functions.items()
+        if lowered.exposed
+    }
+    keep = {
+        name
+        for name, function in linked.module.functions.items()
+        if function.attributes.get("ppy.qualname") in exposed
+    }
+    whole_program(linked.module, keep, level)
+    text = from_ir_emit(linked.module, target)
+    for native in with_functions:
+        if native.fused:
+            text = _append_fused(text, native.name, native.fused)
+    return text
+
+
+def _links(natives) -> bool:  # type: ignore[no-untyped-def]
+    """Whether the modules build as one program: every module with functions has its IR."""
+    with_functions = [native for native in natives.values() if native.functions]
+    return bool(with_functions) and all(native.ppyir for native in with_functions)
+
+
+def _program_object_key(bundle, names, level, target=None) -> str:  # type: ignore[no-untyped-def]
+    """The linked program's object, keyed on every module's key: same modules, same bytes."""
+    from ...cache import digest
+    from ...driver.pipeline import module_cache_key
+
+    keys = [
+        module_cache_key(bundle, name, target="llvm", opt_level=level).hex()
+        for name in sorted(names)
+    ]
+    return digest("ppy-program", *keys) + (
+        f".{target.triple}.o" if target is not None and not target.is_host else ".o"
+    )
+
+
+def _emit_program(  # type: ignore[no-untyped-def]
+    bundle, program, cached, object_key, target, build_directory, artifacts, engine
+):
+    """One object for the linked program: the cached bytes, or emitted and cached now."""
+    store = bundle.project.store
+    destination = build_directory / "program.o"
+    if cached is not None:
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        destination.write_bytes(cached)
+        artifacts.objects.append(destination)
+        artifacts.reused.append("program")
+        return
+    try:
+        emitted = emit_object(
+            engine(),
+            program,
+            destination,
+            host_cpu=bundle.project.config.llvm.host_cpu,
+            target=target,
+        )
+    except Exception as exc:  # noqa: BLE001 - reported, not fatal
+        artifacts.notes.append(f"could not emit object code for the program: {exc}")
+        return
+    store.put(object_key, emitted.read_bytes(), kind="native", source="program", suffix=".o")
+    store.mark_root(object_key, "object:program")
+    artifacts.objects.append(emitted)
+
+
+def from_ir_emit(module, target=None) -> str:  # type: ignore[no-untyped-def]
+    from .from_ir import emit_module
+
+    return emit_module(module, target)
+
+
 def _append_fused(ir_text: str, module_name: str, fused: dict[str, FusedLoop]) -> str:
-    """Emit the generated kernels into their own LLVM module."""
-    from llvmlite import ir as llvm_ir
+    """Build the fused kernels as tensor IR, lower them, and emit them after the module."""
+    from .from_ir import emit_module
+    from .ir_pipeline import optimize
 
-    kernels = llvm_ir.Module(name=f"{module_name}.fused")
-    for loop in fused.values():
-        lower_candidate(llvm_ir, kernels, FusionCandidate(function=None, node=None, loop=loop))
+    kernels = kernel_module(fused.values(), f"{module_name}.fused")
+    optimize(kernels, 2)
+    text = emit_module(kernels)
     if not ir_text.strip():
-        return str(kernels)
-    return ir_text + "\n" + _body_only(str(kernels))
+        return text
+    return ir_text + "\n" + _body_only(text, ir_text)
 
 
-def _body_only(text: str) -> str:
-    """Drop the module header so two LLVM modules can be concatenated."""
+def _body_only(text: str, existing: str = "") -> str:
+    """Drop the module header, and the declarations `existing` already makes,
+    so two LLVM modules can be concatenated."""
+    declared = {line for line in existing.splitlines() if line.startswith("declare ")}
     lines = [
         line
         for line in text.splitlines()
         if not line.startswith(
             ("; ModuleID", "source_filename", "target triple", "target datalayout")
         )
+        and line not in declared
     ]
     return "\n".join(lines)
 
@@ -329,21 +472,25 @@ def _library_key(objects: list[Path]) -> str:
     return digest("ppy-library", *(o.read_bytes().hex() for o in sorted(objects))) + ".so"
 
 
-def _link_and_cache(artifacts, store, key: str, destination: Path) -> None:  # type: ignore[no-untyped-def]
+def _link_and_cache(
+    artifacts, store, key: str, destination: Path, libraries=(), target=None
+) -> None:  # type: ignore[no-untyped-def]
     try:
-        artifacts.library = link_shared_library(artifacts.objects, destination)
+        artifacts.library = link_shared_library(artifacts.objects, destination, libraries, target)
     except ToolchainError as exc:
         artifacts.notes.append(str(exc))
         return
     try:
-        store.put(key, artifacts.library.read_bytes(), kind="native", suffix=".so")
+        store.put(key, artifacts.library.read_bytes(), kind="native", suffix=destination.suffix)
         store.mark_root(key, "library")
     except Exception:  # noqa: BLE001 - caching is an optimization
         return
 
 
-def _object_key(key: CacheKey) -> str:
+def _object_key(key: CacheKey, target: TargetInfo | None = None) -> str:
     """The key of the object file compiled from the module this key names."""
+    if target is not None and not target.is_host:
+        return f"{key.hex()}.{target.triple}.o"
     return f"{key.hex()}.o"
 
 
@@ -356,18 +503,25 @@ def compile_project(  # type: ignore[no-untyped-def]
     entry: Path | None = None,
     launcher: bool = True,
     natives: dict[str, NativeModule] | None = None,
+    target: TargetInfo | None = None,
+    wrappers: bool = True,
 ) -> BuildArtifacts:
     """Compile to LLVM, emit object code, link, and write the manifest (spec 4.2).
 
     `launcher=False` leaves out the native launcher executable, for an
     artifact that `ppy_runtime.launch` will run directly. `natives` lets a
     caller that already lowered the modules hand them over rather than have
-    them lowered again.
+    them lowered again. `target` other than the host is a cross build: the
+    objects, the library, and the header are made for it, and the parts
+    that only this interpreter can build -- the boundary wrapper and the
+    launcher -- are left out and said so. `wrappers=False` leaves the
+    boundary wrapper out on purpose, for an artifact no Python will call.
     """
     from ...driver.pipeline import build_python, module_cache_key
     from ...opt.rewrites import adjustments_for_project
 
     level = opt_level if opt_level is not None else bundle.project.config.opt_level
+    target = target or configured_target(bundle.project.config.llvm.target)
     store = bundle.project.store
     store.ensure()
 
@@ -390,6 +544,14 @@ def compile_project(  # type: ignore[no-untyped-def]
         natives = _collect(bundle, level)
     build_directory = output or (bundle.project.config.cache_path / "native")
     artifacts = BuildArtifacts()
+    # The program's object is looked up before anything links: a build the
+    # cache already holds opens neither the linker nor LLVM.
+    program_key = _program_object_key(bundle, natives, level, target)
+    cached_program = store.read(program_key) if _links(natives) else None
+    program = (
+        None if cached_program is not None else _linked_program(bundle, natives, level, target)
+    )
+    linked = cached_program is not None or program is not None
     signatures: dict[str, NativeSignature] = {}
     fused: dict[str, tuple[int, int]] = {}
 
@@ -402,35 +564,43 @@ def compile_project(  # type: ignore[no-untyped-def]
 
         if not native.functions and not native.fused:
             continue
-        destination = build_directory / f"{name.replace('.', '_')}.o"
-        # The object depends on exactly what the module key covers, so a hit
-        # means the previous one is still correct and running the optimizer and
-        # the code generator again would produce the same bytes.
-        cached = store.read(_object_key(key))
-        if cached is not None:
-            destination.parent.mkdir(parents=True, exist_ok=True)
-            destination.write_bytes(cached)
-            artifacts.objects.append(destination)
-            artifacts.reused.append(name)
-        else:
-            try:
-                emitted = emit_object(
-                    engine(), native.ir, destination, host_cpu=bundle.project.config.llvm.host_cpu
-                )
-            except Exception as exc:  # noqa: BLE001 - reported, not fatal
-                artifacts.notes.append(f"could not emit object code for {name}: {exc}")
-                continue
-            store.put(
-                _object_key(key), emitted.read_bytes(), kind="native", source=name, suffix=".o"
-            )
-            store.mark_root(_object_key(key), f"object:{name}")
-            artifacts.objects.append(emitted)
+        if not linked:
+            destination = build_directory / f"{name.replace('.', '_')}.o"
+            # The object depends on exactly what the module key covers, so a hit
+            # means the previous one is still correct and running the optimizer and
+            # the code generator again would produce the same bytes.
+            object_key = _object_key(key, target)
+            cached = store.read(object_key)
+            if cached is not None:
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                destination.write_bytes(cached)
+                artifacts.objects.append(destination)
+                artifacts.reused.append(name)
+            else:
+                try:
+                    emitted = emit_object(
+                        engine(),
+                        native.ir,
+                        destination,
+                        host_cpu=bundle.project.config.llvm.host_cpu,
+                        target=target,
+                    )
+                except Exception as exc:  # noqa: BLE001 - reported, not fatal
+                    artifacts.notes.append(f"could not emit object code for {name}: {exc}")
+                    continue
+                store.put(object_key, emitted.read_bytes(), kind="native", source=name, suffix=".o")
+                store.mark_root(object_key, f"object:{name}")
+                artifacts.objects.append(emitted)
         for lowered in native.functions.values():
             if lowered.exposed:
                 signatures[lowered.signature.qualname] = lowered.signature
         for symbol, loop in native.fused.items():
             fused[symbol] = (len(loop.arrays), len(loop.scalars))
 
+    if linked:
+        _emit_program(
+            bundle, program, cached_program, program_key, target, build_directory, artifacts, engine
+        )
     # The generated Python is part of the build output: it is what the launcher
     # executes, and what binds the native entry points at import time.
     output = build_python(
@@ -441,9 +611,24 @@ def compile_project(  # type: ignore[no-untyped-def]
         adjustments=adjustments_for_project(bundle),
     )
 
+    needed = tuple(dict.fromkeys(lib for native in natives.values() for lib in native.libraries))
+    exports: dict[str, NativeSignature] = {}
+    for native in natives.values():
+        for name, qualname in native.exports.items():
+            lowered = native.functions.get(qualname)
+            if lowered is not None:
+                exports[name] = lowered.signature
+    artifacts.generated = dict(output.generated)
+    artifacts.signatures = dict(signatures)
+    artifacts.exports = dict(exports)
+    artifacts.libraries = needed
     if artifacts.objects:
-        library_key = _library_key(artifacts.objects)
-        destination = build_directory / f"libppy_{bundle.project.root.name}.so"
+        library_key = _library_key(artifacts.objects) + ("+" + ",".join(needed) if needed else "")
+        if not target.is_host:
+            library_key = f"{target.triple}+{library_key}"
+        destination = build_directory / (
+            f"libppy_{bundle.project.root.name}{target.shared_library_suffix}"
+        )
         cached_library = store.read(library_key)
         if cached_library is not None:
             destination.parent.mkdir(parents=True, exist_ok=True)
@@ -451,7 +636,11 @@ def compile_project(  # type: ignore[no-untyped-def]
             artifacts.library = destination
             artifacts.reused.append("link")
         else:
-            _link_and_cache(artifacts, store, library_key, destination)
+            _link_and_cache(artifacts, store, library_key, destination, needed, target)
+        if exports:
+            artifacts.header = write_header(
+                build_directory / f"{bundle.project.root.name}.h", exports
+            )
     generated_dir = build_directory / "generated"
     program: dict | None = None
     entry_module = None
@@ -484,22 +673,28 @@ def compile_project(  # type: ignore[no-untyped-def]
             "safeguards": bundle.project.config.llvm.safeguards or "hoisted",
         }
     regions_section = _ship_regions(bundle, reporter, build_directory, artifacts)
+    staged_section = _ship_staged(bundle, reporter, build_directory, artifacts)
     wrapper_section = None
-    if signatures:
-        wrappers = build_wrappers(
+    if signatures and not target.is_host:
+        artifacts.notes.append(
+            f"the artifact targets {target.triple}: the CPython boundary wrapper and the "
+            "launcher are built on that machine, from the manifest, by `ppy build`"
+        )
+    elif signatures and wrappers:
+        built = build_wrappers(
             bundle.project.root.name,
             signatures,
             bundle.project.config.cache_path,
             notify=reporter.note,
         )
-        if wrappers.ok and wrappers.path is not None:
-            shipped = build_directory / wrappers.path.name
-            if shipped != wrappers.path:
+        if built.ok and built.path is not None:
+            shipped = build_directory / built.path.name
+            if shipped != built.path:
                 shipped.parent.mkdir(parents=True, exist_ok=True)
-                shutil.copy2(wrappers.path, shipped)
-            wrapper_section = {"library": shipped.name, "entries": dict(wrappers.entries)}
-        elif wrappers.reason:
-            artifacts.notes.append(f"the artifact uses the slower boundary: {wrappers.reason}")
+                shutil.copy2(built.path, shipped)
+            wrapper_section = {"library": shipped.name, "entries": dict(built.entries)}
+        elif built.reason:
+            artifacts.notes.append(f"the artifact uses the slower boundary: {built.reason}")
     artifacts.manifest = write_manifest(
         build_directory / "ppy-bindings.json",
         signatures,
@@ -508,9 +703,13 @@ def compile_project(  # type: ignore[no-untyped-def]
         program=program,
         wrappers=wrapper_section,
         regions=regions_section,
+        staged=staged_section,
+        exports={name: str(signature) for name, signature in exports.items()},
+        libraries=needed,
+        target=target.triple,
     )
 
-    if entry is not None and launcher:
+    if entry is not None and launcher and target.is_host:
         try:
             artifacts.launcher = build_launcher(
                 entry,
@@ -553,9 +752,37 @@ def _ship_regions(bundle, reporter, build_directory: Path, artifacts) -> dict | 
     return section
 
 
+def _ship_staged(bundle, reporter, build_directory: Path, artifacts) -> dict | None:  # type: ignore[no-untyped-def]
+    """Stage the exported computations -- kernels as PTX, XLA modules -- beside the manifest.
+
+    Each payload is a file of its own and the manifest records which serves
+    which function, so the launcher binds it the way the JIT path does and
+    no compiler runs at launch. What does not stage is a warning and the
+    Python definition, exactly as under the JIT.
+    """
+    from ...driver.staging import stage_project
+
+    staged = stage_project(bundle)
+    for remark in staged.diagnostics:
+        if remark.severity is Severity.WARNING:
+            artifacts.notes.append(remark.message)
+        elif bundle.project.config.diagnostics.optimization_remarks:
+            reporter.emit(remark)
+    if not staged.artifacts:
+        return None
+    section: dict[str, dict[str, str]] = {}
+    for module_name, entries in sorted(staged.artifacts.items()):
+        for function, artifact in sorted(entries.items()):
+            filename = f"{module_name}.{function}.staged"
+            (build_directory / filename).write_bytes(artifact.payload)
+            section.setdefault(module_name, {})[function] = filename
+    return section
+
+
 #: Libraries whose plugins do build-time work only the in-process path does:
-#: a staged JAX export is bound by `compile_and_run` and has no place in a
-#: manifest yet. (Torch regions ride in the artifact: see `_ship_regions`.)
+#: a staged JAX export is served by the compiler's plugin at run time, which
+#: a manifest launch does not load. (Torch regions and staged kernels ride in
+#: the artifact: see `_ship_regions` and `_ship_staged`.)
 _IN_PROCESS_ONLY = frozenset({"jax", "flax"})
 
 
@@ -641,9 +868,15 @@ def _publish_directory(draft: Path, final: Path) -> None:
 
 
 def compile_and_run(  # type: ignore[no-untyped-def]
-    bundle, program_args, reporter, *, opt_level: int | None = None
+    bundle, program_args, reporter, *, opt_level: int | None = None, profile_out: Path | None = None
 ) -> int:
-    """`ppy run`: JIT-compile the native subset, then execute with CPython as host."""
+    """`ppy run`: JIT-compile the native subset, then execute with CPython as host.
+
+    With `profile_out`, the run is a profiling run: the modules were
+    instrumented, the boundary records what each native function is called
+    with, and when the program ends the counters are read back and the
+    profile written there, merged into one already at that path.
+    """
     if not available():
         raise LlvmUnavailable("llvmlite is not installed, so the LLVM backend is unavailable")
 
@@ -664,14 +897,29 @@ def compile_and_run(  # type: ignore[no-untyped-def]
 
     engine = JitEngine(opt_level=level).open()
     for native in natives.values():
+        for library in native.libraries:
+            if library == "ppy_aio":
+                from ppy_runtime.aio import library_path
+
+                runtime = library_path()
+                if runtime is not None:
+                    engine.load_library(str(runtime))
+                continue
+            engine.load_library(library)
         if native.functions or native.fused:
             engine.add(native.ir)
     engine.finalize()
 
+    collector = None
+    if profile_out is not None:
+        from ...driver.profile import Collector
+
+        collector = Collector()
     binder = _Binder(
         threads=bundle.project.config.parallel.threads
         if bundle.project.config.parallel.enabled
-        else 1
+        else 1,
+        profile=collector,
     )
     layouts = _value_class_layouts(bundle)
     for name, native in natives.items():
@@ -768,6 +1016,21 @@ def compile_and_run(  # type: ignore[no-untyped-def]
     )
     if result.exception is not None:
         sys.stderr.write(format_traceback(result.exception))
+    if collector is not None and profile_out is not None:
+        from ...version import COMPILER_VERSION
+
+        program = (
+            str(bundle.symbols.modules[bundle.entry].path)
+            if bundle.entry in bundle.symbols.modules
+            else str(bundle.entry)
+        )
+        written = collector.harvest(engine, natives, COMPILER_VERSION, program).write(profile_out)
+        shown: Path = profile_out
+        with contextlib.suppress(ValueError, OSError):
+            shown = profile_out.resolve().relative_to(Path.cwd())
+        reporter.note(
+            f"profile: {shown} ({len(written.functions)} function(s), {written.runs} run(s))"
+        )
     return result.exit_code
 
 
@@ -781,9 +1044,11 @@ def _binding_name(info) -> str:  # type: ignore[no-untyped-def]
 class _Binder(LibraryBinder):
     """Serves guarded native entry points to generated modules as they load."""
 
-    def __init__(self, threads: str | int = "auto") -> None:
+    def __init__(self, threads: str | int = "auto", profile=None) -> None:  # type: ignore[no-untyped-def]
         super().__init__()
         self.threads = threads
+        #: A profiling run's collector: every binding handed out records its calls.
+        self.profile = profile
         self._entries: dict[str, dict[str, tuple]] = {}
         self._fused: dict[str, dict[str, tuple]] = {}
         self.bindings: list = []
@@ -851,7 +1116,7 @@ class _Binder(LibraryBinder):
                     if direct is not None:
                         binding = adopt(signature, direct, fallback, owner=(engine, wrappers))
                         self.bindings.append(binding)
-                        return direct
+                        return self._recorded(qualname, direct)
                 fast_entry = wrappers.bind(qualname, address, types)
         binding = make_binding(
             signature,
@@ -865,14 +1130,25 @@ class _Binder(LibraryBinder):
             register=register,
         )
         self.bindings.append(binding)
-        return binding.wrapper
+        return self._recorded(qualname, binding.wrapper)
+
+    def _recorded(self, qualname: str, entry):  # type: ignore[no-untyped-def]
+        if self.profile is None:
+            return entry
+        return self.profile.wrap(qualname, entry)
 
 
 def _report(native: NativeModule, reporter, bundle) -> None:  # type: ignore[no-untyped-def]
-    if not bundle.project.config.diagnostics.optimization_remarks:
-        return
     symbols = bundle.symbols.modules.get(native.name)
     path = symbols.path if symbols else Path(native.name)
+    for remark in native.remarks:
+        if remark.startswith("profile: stale for "):
+            # A profile that no longer matches is a warning whatever the remark setting.
+            reporter.emit(Diagnostic("W2009", Severity.WARNING, remark, Span(path, 1, 0)))
+    if not bundle.project.config.diagnostics.optimization_remarks:
+        return
+    for remark in native.remarks:
+        reporter.emit(Diagnostic("R3001", Severity.REMARK, remark, Span(path, 1, 0)))
     for qualname, lowered in sorted(native.functions.items()):
         reporter.emit(
             Diagnostic(

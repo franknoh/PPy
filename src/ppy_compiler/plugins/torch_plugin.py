@@ -8,7 +8,8 @@ from collections.abc import Sequence
 from ..analysis import types as T
 from ..analysis.effects import Effect, EffectSet
 from ..analysis.refinements import Facts
-from .base import CallResult, Lowering
+from .base import CallResult, DialectOperationSpec, Lowering, Plugin
+from .convergence import converged
 
 __all__ = ["ATEN_SCHEMAS", "CURATED_OPS", "TorchPlugin"]
 
@@ -270,14 +271,14 @@ _OPERATORS = {
 }
 
 
-class TorchPlugin:
+class TorchPlugin(Plugin):
     """Routes recognized tensor calls through PyTorch's dispatcher, never around it."""
 
     name = "torch"
     modules = ("torch", "torch.nn", "torch.nn.functional")
 
     def __init__(self, options: dict[str, object] | None = None) -> None:
-        self.options = options or {}
+        super().__init__(options)
         self.version_policy = str(self.options.get("version-policy", "exact-minor"))
 
     def fingerprint(self) -> str:
@@ -376,6 +377,12 @@ class TorchPlugin:
     def operator(self, symbol: str) -> str | None:
         return _OPERATORS.get(symbol)
 
+    def tensor_operation(self, qualname: str) -> DialectOperationSpec | None:
+        operation = qualname.rpartition(".")[2]
+        if operation not in CURATED_OPS or operation in _DISPATCH_SENSITIVE:
+            return None
+        return converged(operation)
+
     def schema_for(self, operation: str, args: Sequence[T.Type]) -> str | None:
         """The ATen schema a curated call corresponds to, for diagnostics.
 
@@ -444,7 +451,7 @@ class TorchPlugin:
         operation: str,
         args: Sequence[tuple[T.Type, Facts]],
         keywords: dict[str, tuple[T.Type, Facts]],
-    ) -> tuple[Lowering, str, tuple[str, ...]]:
+    ) -> tuple[Lowering | DialectOperationSpec, str, tuple[str, ...]]:
         for arg_type, _facts in args:
             base = T.strip_literal(arg_type)
             if isinstance(base, (T.AnyType, T.UnknownType)):
@@ -467,6 +474,20 @@ class TorchPlugin:
             "supported device and layout",
             "operator schema matches the installed build",
         )
+        spec = self.tensor_operation(f"torch.{operation}")
+        if spec is not None and not keywords:
+            # The shared tensor operation: one fused loop over CPU float64
+            # storage when the runtime guards hold, the ATen counterpart when
+            # the whole function compiles into a region.
+            return (
+                spec,
+                (
+                    f"`{operation}` is `{spec.dialect}.{spec.operation}` of the shared "
+                    "tensor IR; a fused loop runs it over CPU float64 storage, and a "
+                    "region calls its ATen counterpart"
+                ),
+                (*guards, "CPU float64 tensor outside autograd"),
+            )
         if operation in _DISPATCH_SENSITIVE:
             return (
                 Lowering.DIRECT_NATIVE_CALL,

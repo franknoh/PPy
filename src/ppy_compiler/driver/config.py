@@ -33,6 +33,25 @@ class PythonBackendConfig:
     interpreter: str = "python"
 
 
+#: The one road through the LLVM backend. `"ast"` -- in the setting or as
+#: `PPY_LOWERING=ast` -- named the direct AST lowering 0.2.0 removed; it is
+#: still read, and a build that asks for it is told (`W2004`).
+PIPELINES = ("ir",)
+PIPELINE_ENV = "PPY_LOWERING"
+REMOVED_PIPELINE = "ast"
+
+
+def selected_pipeline(configured: str | None) -> str:
+    """The IR road, whatever was asked for: there is no other."""
+    del configured
+    return "ir"
+
+
+def asks_for_removed_pipeline(configured: str | None) -> bool:
+    """Whether the project or the environment names the direct road that is gone."""
+    return configured == REMOVED_PIPELINE or os.environ.get(PIPELINE_ENV) == REMOVED_PIPELINE
+
+
 @dataclass(slots=True)
 class LlvmConfig:
     enabled: bool = True
@@ -55,12 +74,27 @@ class LlvmConfig:
     #: and host code faults on an older machine. In-process JIT code always
     #: targets the host, because it never leaves it.
     host_cpu: bool = False
+    #: The road through the backend: the canonical IR and its passes. "ast",
+    #: the direct lowering 0.2.0 removed, is still read and answered.
+    pipeline: str = "ir"
+    #: The sanitizers a build instruments the IR with (`bounds`, `overflow`,
+    #: `pointer`, `alignment`); a failed check raises rather than falls back.
+    sanitize: tuple[str, ...] = ()
+    #: A `.ppyprof` from `ppy run --profile` that guides the build (`--pgo FILE`).
+    pgo: str | None = None
+    #: Place profile counters in the IR; `ppy run --profile` sets it for its run.
+    instrument: bool = False
 
 
 @dataclass(slots=True)
 class ParallelConfig:
     enabled: bool = True
     threads: str | int = "auto"
+    #: How a parallel loop is lowered: "threads" splits it across the worker
+    #: count, "serial" runs it on the calling thread, "simd" hands the serial
+    #: loop to the vectorizer, "openmp" spells it as OpenMP regions in the C
+    #: backend's output. Every choice gives the same answer.
+    backend: str = "threads"
 
 
 @dataclass(slots=True)
@@ -74,6 +108,16 @@ class InferenceConfig:
 class PluginConfig:
     enabled: bool = True
     options: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(slots=True)
+class GenericsConfig:
+    """How far monomorphization may go before it is refused."""
+
+    #: Distinct type-argument tuples one generic may be called with.
+    max_specializations: int = 64
+    #: Nesting of one generic's type argument inside its own type parameter.
+    max_depth: int = 8
 
 
 @dataclass(slots=True)
@@ -115,6 +159,7 @@ class Config:
     parallel: ParallelConfig = field(default_factory=ParallelConfig)
     inference: InferenceConfig = field(default_factory=InferenceConfig)
     plugins: dict[str, PluginConfig] = field(default_factory=dict)
+    generics: GenericsConfig = field(default_factory=GenericsConfig)
     convert: ConvertConfig = field(default_factory=ConvertConfig)
     format: FormatConfig = field(default_factory=FormatConfig)
     diagnostics: DiagnosticsConfig = field(default_factory=DiagnosticsConfig)
@@ -178,6 +223,12 @@ def _apply(config: Config, table: Mapping[str, Any]) -> Config:
     config.dynamic_boundaries = table.get("dynamic-boundaries", config.dynamic_boundaries)
     config.native_import = _as_bool(table.get("native-import"), config.native_import)
     config.build_execution = table.get("build-execution", config.build_execution)
+    generics = table.get("generics", {})
+    if isinstance(generics, dict):
+        config.generics = GenericsConfig(
+            max_specializations=int(generics.get("max-specializations", 64)),
+            max_depth=int(generics.get("max-depth", 8)),
+        )
     roots = table.get("source-roots")
     if isinstance(roots, list) and roots:
         config.source_roots = tuple(str(r) for r in roots)
@@ -196,12 +247,16 @@ def _apply(config: Config, table: Mapping[str, Any]) -> Config:
             cpython_api=sub.get("cpython-api", "version-specific"),
             safeguards=sub.get("safeguards"),
             prover=sub.get("prover"),
+            pipeline=str(sub.get("pipeline", "ir")),
             host_cpu=_as_bool(sub.get("host-cpu"), False),
+            sanitize=tuple(str(kind) for kind in (sub.get("sanitize") or ())),
+            pgo=str(sub["pgo"]) if sub.get("pgo") else None,
         )
     if isinstance(sub := table.get("parallel"), Mapping):
         config.parallel = ParallelConfig(
             enabled=_as_bool(sub.get("enabled"), True),
             threads=sub.get("threads", "auto"),
+            backend=str(sub.get("backend", "threads")),
         )
     if isinstance(sub := table.get("inference"), Mapping):
         config.inference = InferenceConfig(

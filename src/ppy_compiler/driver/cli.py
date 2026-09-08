@@ -11,6 +11,23 @@ __all__ = ["build_parser", "main"]
 _EXECUTION_SUFFIXES = (".ppy", ".py")
 
 
+#: What `ppy emit` prints; `driver.emit.KINDS` is the same tuple, and a test
+#: holds the two together so this module stays free of the pipeline imports.
+_EMIT_KINDS = (
+    "ir",
+    "linked-ir",
+    "llvm-ir",
+    "c",
+    "cpp",
+    "header",
+    "stablehlo",
+    "cuda",
+    "hip",
+    "nvvm-ir",
+    "ptx",
+)
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="ppy",
@@ -81,10 +98,67 @@ def build_parser() -> argparse.ArgumentParser:
         help="bind native symbols from the library a `ppy build` manifest names, "
         "instead of JIT-compiling them",
     )
+    run.add_argument(
+        "--sanitize",
+        metavar="KINDS",
+        default=None,
+        help="instrument the native code with checks that raise rather than fall back: "
+        "a comma-separated list of bounds, overflow, pointer, alignment",
+    )
+    run.add_argument(
+        "--profile",
+        action="store_true",
+        help="count blocks, branches, and calls while the program runs, and write a "
+        "`.ppyprof` profile when it ends, for `--pgo` (in-process, never the warm artifact)",
+    )
+    run.add_argument(
+        "--profile-out",
+        type=Path,
+        default=None,
+        metavar="FILE",
+        help="where `--profile` writes; a profile already there is merged "
+        "(default: <entry>.ppyprof in the working directory)",
+    )
+    run.add_argument(
+        "--pgo",
+        type=Path,
+        default=None,
+        metavar="FILE",
+        help="optimize with the profile a `--profile` run wrote: hot and cold functions, "
+        "branch weights, inlining",
+    )
     run.add_argument("args", nargs=argparse.REMAINDER)
 
     build = subparsers.add_parser("build", help="compile without running")
     build.add_argument("target", type=Path)
+    build.add_argument(
+        "--sanitize",
+        metavar="KINDS",
+        default=None,
+        help="instrument the native code with checks that raise rather than fall back: "
+        "a comma-separated list of bounds, overflow, pointer, alignment",
+    )
+    build.add_argument(
+        "--pgo",
+        type=Path,
+        default=None,
+        metavar="FILE",
+        help="optimize with the profile a `ppy run --profile` wrote: hot and cold functions, "
+        "branch weights, inlining",
+    )
+    build.add_argument(
+        "--report-opt",
+        action="store_true",
+        help="print the optimization report: what became native, what did not and why, "
+        "and every remark by category",
+    )
+    build.add_argument(
+        "--report-opt-json",
+        type=Path,
+        default=None,
+        metavar="FILE",
+        help="write the optimization report as JSON to FILE",
+    )
     build.add_argument(
         "--standalone",
         action="store_true",
@@ -111,6 +185,26 @@ def build_parser() -> argparse.ArgumentParser:
         "baseline; faster where the code vectorizes, and the artifact then "
         "requires a machine with the same instruction set",
     )
+    build.add_argument(
+        "--target",
+        dest="triple",
+        metavar="TRIPLE",
+        default=None,
+        help="compile for another machine (`aarch64-linux-gnu`); the objects, the "
+        "library, and the header are made for it, and a toolchain for it links them",
+    )
+    build.add_argument(
+        "--python-extension",
+        action="store_true",
+        help="one importable CPython module -- `import foo` -- holding the native "
+        "code, its boundary, and the module's own Python for the fallbacks",
+    )
+    build.add_argument(
+        "--library",
+        action="store_true",
+        help="package the exports as a library: lib/, include/, a pkg-config file, "
+        "and the manifest, in one directory",
+    )
     build.add_argument("--backend", choices=("llvm", "python"), default="llvm")
     build.add_argument("-o", "--output", type=Path, help="output directory")
     build.add_argument(
@@ -120,6 +214,50 @@ def build_parser() -> argparse.ArgumentParser:
         "the project cache, and stop; TARGET may be a directory, for every .ppy under it, "
         "so a program launched on many ranks at once finds the artifact instead of "
         "each rank building it",
+    )
+
+    emit = subparsers.add_parser("emit", help="print a compiler stage as text")
+    emit.add_argument(
+        "kind",
+        choices=_EMIT_KINDS,
+        help="`ir` is the canonical IR (.ppyir); `linked-ir` the whole program as one "
+        "optimized module; `c`, `cpp` a translation unit; "
+        "`header` the C declarations of the exports; `stablehlo` the @ppy.xla.jit "
+        "functions as an MLIR module for XLA; `cuda`, `hip` the kernels and their "
+        "launches as CUDA or HIP C++; `nvvm-ir`, `ptx` the kernels as NVPTX LLVM IR or PTX",
+    )
+    emit.add_argument("target", type=Path)
+    emit.add_argument(
+        "--header-only",
+        action="store_true",
+        help="for `c` and `cpp`: a header carrying every function inline",
+    )
+    emit.add_argument(
+        "--standalone",
+        action="store_true",
+        help="for `c` and `cpp`: the whole program from `main`, runtime shims and all",
+    )
+    emit.add_argument(
+        "-o",
+        "--output",
+        type=Path,
+        help="a file for one target; a directory (required) for a directory target",
+    )
+
+    bind = subparsers.add_parser("bind", help="write bindings for foreign code")
+    bind_kinds = bind.add_subparsers(dest="what")
+    header = bind_kinds.add_parser("header", help="PPY bindings for a C header, through Clang")
+    header.add_argument("header", type=Path)
+    header.add_argument("-o", "--output", type=Path, help="write the bindings module here")
+    header.add_argument(
+        "--library", default=None, help="the shared library the symbols live in (the header's stem)"
+    )
+    header.add_argument(
+        "-I",
+        "--include",
+        action="append",
+        type=Path,
+        help="a directory clang searches for includes",
     )
 
     check = subparsers.add_parser("check", help="run all static validation")
@@ -140,6 +278,22 @@ def build_parser() -> argparse.ArgumentParser:
     inspect.add_argument("--backend", choices=("python", "llvm"), default="python")
     inspect.add_argument(
         "--ir", action="store_true", help="print backend IR instead of generated Python"
+    )
+    inspect.add_argument(
+        "--stage",
+        choices=(
+            "analysis",
+            "ir",
+            "canonical",
+            "optimized",
+            "tensor",
+            "columnar",
+            "gpu",
+            "stablehlo",
+            "llvm",
+        ),
+        default=None,
+        help="print the program as that stage of the compiler holds it",
     )
 
     # Not `convert`: a convert that can be asked not to be strict is two
@@ -271,7 +425,9 @@ def main(argv: list[str] | None = None) -> int:
         "migrate",
         "run",
         "build",
+        "bind",
         "check",
+        "emit",
         "fmt",
         "explain",
         "inspect",
@@ -300,7 +456,7 @@ def main(argv: list[str] | None = None) -> int:
         # manifest runs through the runtime alone, and so does the artifact
         # the last run of this same program left in the cache.
         manifest = getattr(options, "prebuilt", None)
-        if manifest is None and options.file.is_file():
+        if manifest is None and options.file.is_file() and not options.profile:
             from .warm import locate
 
             manifest = locate(options.file, options).manifest
@@ -331,6 +487,15 @@ def main(argv: list[str] | None = None) -> int:
             )
         case "build":
             return commands.build(options, reporter)
+        case "bind":
+            if getattr(options, "what", None) != "header":
+                parser.parse_args(["bind", "--help"])
+                return 2
+            return commands.bind(options, reporter)
+        case "emit":
+            from .emit import run_emit
+
+            return run_emit(options, reporter)
         case "check":
             return commands.check(options, reporter)
         case "fmt":

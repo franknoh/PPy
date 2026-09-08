@@ -164,12 +164,17 @@ and which stayed boxed, with the reason.
 
 ```bash
 ppy build TARGET [--safe] [--host-cpu] [--standalone]
+                 [--target TRIPLE] [--python-extension] [--library]
                  [--backend {llvm,python}] [-o DIR]
+                 [--sanitize KINDS] [--pgo FILE]
+                 [--report-opt] [--report-opt-json FILE]
 ppy build --warm TARGET
+ppy build foo.ppyir                  # from the IR alone; see `ppy emit`
 ```
 
 `--backend llvm` (default) writes objects, `libppy_<project>.so`,
-`ppy-bindings.json`, and a launcher. A build is a wrap-semantics artifact by
+`ppy-bindings.json`, a launcher, and -- when a function is
+`@ppy.native.export`ed -- a C header declaring the public symbols. A build is a wrap-semantics artifact by
 default — data arithmetic overflows at 64 bits like every native compiler's
 output, while bounds checks stay; `--safe` keeps Python's integers
 bit-for-bit instead, and the launcher always runs with exactly the mode it
@@ -200,6 +205,41 @@ begins, against ~2 s for a cold `ppy run` that compiles first (a warm
 `ppy run` takes this same launcher path, from the cache).
 `examples/bench_startup.py` measures the categories separately, and
 `--standalone` below removes that 35 ms too.
+
+### `--target`, `--python-extension`, `--library`
+
+```bash
+ppy build foo.ppy --target aarch64-linux-gnu     # objects, library, header for it
+ppy build foo.ppy --python-extension -o dist     # dist/foo.so: `import foo`
+ppy build lib.ppy --library -o dist              # dist/lib, dist/include, a .pc
+```
+
+`--target TRIPLE` (or `[tool.ppy.llvm] target`) compiles for another
+machine: the objects carry that triple and data layout, the library is
+linked with a toolchain for it -- `<triple>-gcc` on the path, or clang
+with `--target` -- and the header is the same. The parts only the running
+interpreter can build, the CPython boundary wrapper and the launcher, are
+left out with a note; the manifest names its target and a runtime on a
+different machine refuses it rather than loading it. Everything the
+compiler knows about a machine sits in one `TargetInfo` (triple, CPU and
+features, pointer width, endianness, ABI, OS, object format, data
+layout); there is no `sys.platform` to trip over elsewhere. `ppy doctor`
+prints the host's.
+
+`--python-extension` writes one importable module -- `foo.so`, `foo.pyd`
+on Windows -- holding the module's native code, the generated
+`METH_FASTCALL` boundary, and the module's own optimized Python. `import
+foo` runs that Python, so every class, constant, and helper the module
+defines exists, and each native-eligible function is bound to its
+compiled code as it is defined, keeping its Python definition as the
+fallback a refused guard runs. Nothing is bound by name at runtime and no
+manifest is read. The module still imports `ppy` for its markers, like
+the source did; it is built against the interpreter that builds it.
+
+`--library` lays the exports out for a C consumer: `lib/` with the shared
+library, `include/` with the header, `lib/pkgconfig/<name>.pc`, and the
+manifest describing the ABI. A module with no `@ppy.native.export` has
+nothing to package and says so (`E1805`).
 
 ### `--warm`
 
@@ -255,6 +295,84 @@ text arrives as a token, and `ppy.read_token` has no standalone lowering yet.
 `examples/15_algorithms/standalone/` holds the five, timed against every
 other path by the benchmark beside them.
 
+## `ppy emit` — a compiler stage as text
+
+```bash
+ppy emit ir foo.ppy                  # the canonical IR, to stdout
+ppy emit ir foo.ppy -o foo.ppyir     # ... to a file
+ppy emit ir src/ -o build/ir/        # one .ppyir per module
+ppy emit linked-ir app.ppy           # the whole program: every module linked and optimized as one
+ppy emit llvm-ir foo.ppy             # what the LLVM backend makes of it
+ppy emit c foo.ppy                   # what the C backend makes of it: one C11 unit
+ppy emit cpp foo.ppy                 # ... as C++17, exports behind extern "C"
+ppy emit cuda foo.ppy                # the kernels, device functions, and launches as CUDA C++
+ppy emit hip foo.ppy                 # ... as HIP C++
+ppy emit nvvm-ir foo.ppy             # the kernels as LLVM IR for NVPTX
+ppy emit ptx foo.ppy                 # ... as PTX (PPY_CUDA_ARCH names the architecture, sm_70 by default)
+ppy emit c --header-only foo.ppy     # every function static inline in a header
+ppy emit c --standalone prog.ppy     # the whole program from main(), shims and all
+ppy emit header foo.ppy              # the C declarations of the exports
+ppy emit stablehlo foo.ppy           # the @ppy.xla.jit functions as StableHLO for XLA
+```
+
+One rule for every kind: a single file with no `-o` prints to standard
+output, `-o FILE` writes that file, and a directory target writes one file
+per module into the directory `-o` names (and refuses to guess without
+it). `ir` is the canonical IR after the shared passes (`docs/ir.md`);
+`llvm-ir` is the optimized LLVM IR. The output is deterministic for one
+input and configuration.
+
+`c` and `cpp` are the C backend's reading of the same IR: a translation
+unit per module in the internal ABI the runtime binds (atoms in, result
+slots out, a status back), every `@native.export` behind its public C
+signature, the overflow helpers and runtime shims the unit actually uses,
+and nothing else -- so it compiles on its own with any C11 or C++17
+compiler, and answers exactly what the LLVM road answers, fallbacks
+included. `--header-only` makes every function `static inline` under an
+include guard, for a header a program includes from any number of
+translation units; a feature that needs state the process owns (reading
+standard input) is refused there with `E1804` and its name.
+`--standalone` takes a program the way `ppy build --standalone` does --
+`main` and everything it reaches, all of it native -- and ends the unit in
+a C `main`, so the text is a whole program. `header` is the declarations
+of a module's exports, the same text `ppy build` writes beside a library.
+
+`.ppyir` is the IR's on-disk form -- public from 0.2.0 at schema 1 -- and
+`ppy build foo.ppyir` builds one without the Python that produced it: the file
+carries its schema and dialect versions, every function's ABI, and its
+source locations, so the build is the passes, the LLVM backend, an object,
+a library, and a manifest whose entries the runtime binds. A file from
+another schema or a dialect this compiler lacks is refused with the reason.
+A package builds as one program: a call from one module
+into another's native function is a declaration the linker answers with the
+definition, the linked program is optimized as a whole -- what Python never
+binds is internalized, small callees are inlined across the seam, dead
+private code goes -- and one object comes out; `ppy emit linked-ir` shows
+that program.
+
+## `ppy bind` — bindings for foreign code
+
+```bash
+ppy bind header foo.h                     # the bindings module, to stdout
+ppy bind header foo.h -o foo.ppy          # ... to a file
+ppy bind header foo.h --library foo -I include/
+```
+
+Clang reads the header -- the real parser, through libclang
+(`ppy-lang[bind]`), never a regular expression -- and the importer walks
+the declarations the header itself makes. A function becomes an
+`@ffi.bind` stub with typed parameters (`int` is `ppy.i32`, `long` the
+target's width, `double` `float`, `const T *` `native.const_ptr[T]`,
+`void *` a byte pointer); a typedef of a scalar an alias; an enum its
+constants and an `int` alias; a struct of scalars a dataclass; a `#define`
+of one number a typed constant. What has no PPY spelling yet -- a
+variadic function, a function pointer, an array or a struct passed by
+value, an opaque struct, a macro that is not one number -- is left out
+and listed by name at the end of the module. The module type-checks under
+`ppy check` and calls the library on every path, ctypes under CPython and
+directly in native code. A header Clang cannot read is refused with its
+line (`E1806`).
+
 ## `ppy explain` — why it compiled that way
 
 ```bash
@@ -270,12 +388,92 @@ call's lowering with its guards.
 
 ```bash
 ppy inspect TARGET [--backend {python,llvm}] [--ir]
+ppy inspect TARGET --stage {analysis,ir,canonical,optimized,tensor,columnar,gpu,stablehlo,llvm}
 ```
 
 The optimized Python by default, including plugin rewrites, so it is what to
 read when a result differs from plain CPython. `--ir` prints what the native
 path compiles: LLVM IR, then the C for the CPython-ABI wrappers, then the C++
-for any ATen region.
+for any ATen region. `--stage` prints the program as one stage of the
+compiler holds it: `analysis` is what the checker knows of every function
+(type, effects, whether it is native, bound, a kernel, a coroutine, marked
+for XLA); `ir` the frontend's module before any pass; `canonical` after
+canonicalization; `tensor` after fusion and before the tensor dialect
+lowers to loops, `columnar` the same point for the modules holding
+columnar operations; `optimized` what a backend receives; `gpu` the device
+code alone; `stablehlo` and `llvm` what those backends write.
+
+## Sanitizers: `--sanitize`
+
+```bash
+ppy run --sanitize bounds,overflow foo.ppy
+ppy build --sanitize pointer,alignment .
+```
+
+A sanitizer instruments the IR with checks the program did not ask for:
+`bounds` checks every buffer index, whether or not a proof or a hoist
+removed the frontend's guard; `overflow` checks every wrapping or proven
+`int` operation; `pointer` checks that a pointer read or written through is
+not null; `alignment` that it is aligned for what it points at. A failed
+check is not a fallback: the function returns a sanitizer status and the
+boundary raises `ppy_runtime.binding.SanitizerFailure` naming the kind and
+the function (a standalone program exits as it does for a guard).
+`[tool.ppy.llvm] sanitize = ["bounds"]` configures the same. `lifetime` and `alias` are
+refused with the reason: stack lifetime is held by the verifier, aliasing
+has no runtime check yet.
+
+## Optimization report: `--report-opt`
+
+`ppy build --report-opt` prints, per module, which functions became native
+and are bound to Python, which stay in Python and why, how many guards a
+proof removed, and every remark the passes left, filed under a stable
+category -- `function inlined`, `tensor ops fused`, `columnar ops fused`,
+`parallel loop emitted`, `GPU kernel emitted`, `StableHLO region emitted`,
+`bounds guard removed`, `overflow guard proven unnecessary`, `allocation
+stack-promoted`, `generic specialization emitted`, `sanitizer checks
+inserted`, `dead code removed` -- and what the build staged for XLA or a
+device. `--report-opt-json FILE` writes the same as JSON, keyed the same
+way, so a tool can count by category across versions. A build guided by a
+profile lists it first: the file, its runs, and every measured function's
+calls, hotness, and argument kinds.
+
+## Profile-guided optimization: `--profile`, `--pgo`
+
+```bash
+ppy run --profile foo.ppy            # runs, then writes foo.ppyprof
+ppy run --profile --profile-out p.ppyprof foo.ppy -- args
+ppy build --pgo foo.ppyprof foo.ppy
+ppy run --pgo foo.ppyprof foo.ppy
+```
+
+A profiling run is a JIT run with counters: every native function counts
+its blocks and the taken edge of every conditional branch, and the boundary
+records what kinds of value each native function was called with -- an
+`int`, an `ndarray[float64;4x3]`, a `DataFrame[a:int64,b:float64;1000
+rows]`, a `list[400]`. When the program ends the counters are read back
+through the engine and the profile is written as JSON: per function, its
+calls, every block's count, every branch's (taken, not taken), the loop
+trip counts these imply, the argument kinds, and which generic it is an
+instance of. A profile already at the path is merged, so several runs --
+or several inputs -- add up; `runs` says how many.
+
+A build with `--pgo` (or `[tool.ppy.llvm] pgo = "foo.ppyprof"`, relative
+to the project root) reads the counts back at the same point of the
+pipeline. A function whose graph still matches what was measured is
+annotated: it is `hot` (at least a twentieth of the most-called function's
+calls, and at least two), `cold` (never called), or neither; every
+conditional branch carries its weights, every loop's back edge its
+average trip count. The inliner inlines a hot callee at four times the
+usual budget, leaves a cold one alone, and leaves alone a call the
+profile never reached; LLVM receives the entry counts and branch weights
+as `!prof` metadata, which drive its block placement, its estimated trip
+counts, and its own unrolling and inlining heuristics, and `hot`/`cold`
+as function attributes. A function that changed since the profile was
+recorded is named by `W2009` and built as if there were no profile; a
+missing or foreign profile is refused (`E1002`). A profile changes what
+is fast, never what is computed: the program's output under `--pgo` is
+the program's output. The profile's content is part of every cache key
+and of the warm run directory's name, so a new profile is a new build.
 
 ## `ppy test`
 

@@ -16,8 +16,14 @@ against another, and a module that imports none of them pays for none of them.
 
 - Array expressions are typed with dtype and shape refinements; `tolist()`
   and friends follow the declared dtype.
-- Elementwise expressions fuse into one strided loop with no temporaries,
-  compiled through LLVM; contiguity and shape are guarded at runtime.
+- Elementwise expressions and whole-array reductions converge onto the
+  tensor dialect -- `numpy.multiply` is `tensor.mul`, `numpy.sin` is
+  `tensor.unary {op = sin}`, `numpy.sum` is `tensor.reduce {op = add}` --
+  and a maximal expression tree of them becomes one kernel: tensor IR over
+  buffers whose length the call supplies, lowered by `lower-tensor` to one
+  strided loop with no temporaries and compiled through LLVM. An exact
+  `float64` C-contiguous array of one shape across the operands is guarded
+  at runtime; anything else runs NumPy.
 - `dot`, `matmul`, `inner`, `vdot`, `tensordot` route to the linear-algebra
   path.
 - Reduction order is preserved bit-for-bit unless the function is
@@ -41,6 +47,13 @@ against another, and a module that imports none of them pays for none of them.
   Python body, not a broken artifact.
 - Worth ~20% on small CPU tensors; nothing on an accelerator, where kernel
   launch latency dominates. Measured honestly in `examples/21_training_torch`.
+- The curated arithmetic and reductions -- `add`, `sub`, `mul`, `div`,
+  `pow`, `neg`, `abs`, `sum`, `prod`, `mean`, `max`, `min` -- are the same
+  tensor operations NumPy's are, and an expression tree of them over
+  tensors fuses into the same kind of kernel, which runs over an exact CPU
+  `float64` contiguous tensor outside autograd; a tensor that records its
+  history, or lives elsewhere, runs torch. `matmul` and the other
+  dispatcher-sensitive operations stay with the dispatcher.
 
 ## JAX
 
@@ -52,6 +65,9 @@ against another, and a module that imports none of them pays for none of them.
   `[tool.ppy] build-execution` and **off by default** (`"deny"`).
 - At runtime the artifact executes through PJRT; a mismatch falls back to the
   ordinary jitted call.
+- `jax.numpy` spells the shared tensor operations as NumPy does, and the
+  plugin names them (`jax.numpy.add` is `tensor.add`); an eager call
+  outside an exported region still runs on the Python path.
 - The plugin also models the Flax (linen) and optax surface: layer
   constructors and activations, `Module.init`/`apply` resolved through a
   class's external MRO (`class Mlp(nn.Module)` gets them from a base only
@@ -86,10 +102,104 @@ against another, and a module that imports none of them pays for none of them.
   converts a FastAPI service whose three paths return byte-identical
   responses.
 
+## SciPy
+
+- A curated surface, not a reimplementation: `scipy.special` (one- and
+  two-argument functions over scalars and arrays), `scipy.fft`,
+  `scipy.linalg` (dense solves, factorizations, norms, determinants), and
+  `scipy.sparse` (the CSR/CSC/COO constructors and their methods) are
+  typed and named as operations of the `special`, `fft`, `linalg`, and
+  `sparse` dialects, so a backend that has those lowers them and every
+  other runs SciPy. A one-argument special function over arrays is also
+  `tensor.unary` of that function, so `special.erf(x) * 2.0` fuses into
+  one loop with the arithmetic around it.
+- `scipy.optimize`, `scipy.integrate`, and `scipy.stats` drive Python
+  callbacks; their calls carry that effect and stay Python calls.
+
+## pandas
+
+- `DataFrame`, `Series`, `Index`, and grouped frames are typed by what they
+  are. Selection, boolean filters, `assign`, arithmetic and comparison
+  operators, `isna`/`notna`/`fillna`, `astype`, `sort_values`, the
+  aggregations, grouped aggregation, `merge`/`join`, and `concat` are named
+  as `columnar` operations -- the same ones PyArrow's compute names.
+- An expression tree of Series arithmetic, comparison, `fillna`,
+  `isna`/`notna` fuses into the same columnar kernel PyArrow's compute
+  does. At run time an Arrow-backed Series (`pd.ArrowDtype`) is its Arrow
+  array, read in place with its nulls; a NumPy-backed `float64` Series is
+  its values behind a bitmap of ones, so a NaN stays the value it is; and
+  the answer is a Series over the callers' index, with the same backing.
+  Series whose indexes are not one index, a mix of backings, a nullable
+  extension dtype, or a bool answer over NumPy storage run pandas: the
+  index alignment, the copy-or-view rule, and the dtype are pandas' own
+  semantics and are not approximated (spec 59).
+- `ppy_runtime.arrow.exported(array)` lends a PyArrow array to native code
+  as the Arrow C Data Interface's `ArrowArray` struct -- the buffers
+  shared, no `PyObject` in the ABI -- and releases it, once, when the
+  borrow ends; `arrow.import` in the IR reads such a struct.
+- What the model does not capture exactly -- the index, nullable dtypes,
+  `NA` against `NaN`, categoricals, time zones, extension dtypes, duplicate
+  column names, copy-or-view -- keeps the pandas implementation; a frame is
+  never treated as a 2-D tensor. `apply`/`map`/`transform` carry the
+  callback effect; `read_*`/`to_*` carry IO.
+
+## PyArrow
+
+- `pyarrow.compute` over `float64` and `bool` arrays converges onto the
+  columnar dialect -- `pc.add` is `columnar.add`, `pc.greater` is
+  `columnar.greater`, `pc.if_else` is `columnar.select`, `pc.fill_null`
+  is `columnar.fill_null` -- and a maximal expression tree of them becomes
+  one kernel: columnar IR over the arrays' own values and validity
+  buffers, lowered to one loop that keeps Arrow's null semantics. The
+  kernel reads an `Array` where it lies (no copy, no `PyObject` in the
+  ABI) and answers an `Array` built over the buffers it filled; a chunked
+  array, another type, or a bitmap sliced inside a byte runs Arrow's own
+  compute.
+
+- `Array`, `ChunkedArray`, `Table`, `RecordBatch`, `Schema`, `Field`,
+  `DataType`, `Buffer`, and `Scalar` are typed as Arrow, with their
+  representation-level attributes (`null_count`, `offset`, `buffers`,
+  `chunks`, `num_rows`, `schema`). The curated `pyarrow.compute` surface --
+  cast, filter, take, sort, arithmetic, comparison, boolean, aggregation,
+  null handling -- is named as `columnar` operations shared with pandas.
+- `pyarrow.parquet`, `pyarrow.dataset`, and `pyarrow.csv` carry IO.
+  `to_numpy` says what it is: a zero-copy view only for a fixed-width array
+  without nulls.
+
 ## Writing against the interface
 
-A plugin implements the `Plugin` protocol in `plugins/base.py`: type results
-for calls and attributes (`CallResult`), effect declarations, an optional
-build-time stage, and `fingerprint()`. Registration is explicit in the
-registry; per-plugin options live under `[tool.ppy.plugins.<name>]`, and
-`enabled = false` turns one off.
+A plugin extends `ppy_compiler.plugins.Plugin` (interface 2). Every hook
+has a no-op default, so a plugin implements what it knows and the compiler
+calls the rest without probing: `external_types`, `attribute_type`,
+`instance_attribute`, `subscript`, `call`, `operator`, `call_alias`,
+`decorator_semantics`, `adjust_call`, `stage`, `tensor_operation` (the
+shared tensor operation a call converges onto, whatever its own lowering
+is), and the IR hooks `register_dialects`, `register_passes`,
+`register_patterns`, `register_lowerings`. `fingerprint()` names the
+library's version and enters every cache key.
+
+What a `call` answers about lowering is a typed spec a backend reads, never
+backend code: `IntrinsicSpec`, `DialectOperationSpec`, `DirectCallSpec`,
+`GraphRegionSpec`, `FallbackSpec`, or `RejectSpec` (the bare `Lowering`
+kinds still work).
+
+An external plugin is a Python package with an entry point:
+
+```toml
+[project.entry-points."ppy.plugins"]
+foo = "foo.ppy_plugin:create_plugin"
+```
+
+Discovery reads the entry points without importing anything; the plugin
+is imported and loaded only for a project that names it and does not
+disable it:
+
+```toml
+[tool.ppy.plugins.foo]
+enabled = true
+```
+
+Two plugins claiming one module are reported (`E1901`) rather than settled
+by registration order; a plugin written against another interface version
+is refused with the reason; a plugin pass that leaves the IR invalid is
+named in the error (`E1902`).

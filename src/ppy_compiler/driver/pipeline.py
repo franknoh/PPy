@@ -133,10 +133,16 @@ def analyze_paths(
 ) -> AnalysisBundle:
     """Parse, resolve, type-check, and verify contracts for the given entries."""
     diagnostics = DiagnosticBag()
+    for problem in project.plugins.problems:
+        # A plugin the project asked for and cannot have: an error, not a
+        # silently smaller compiler.
+        diagnostics.add(Diagnostic("E1901", Severity.ERROR, problem))
     if not entries:
         diagnostics.add(Diagnostic("E1002", Severity.ERROR, "no PPY source files were found"))
         graph = ModuleGraph(root=project.root, search_paths=project.search_paths)
-        symbols = ProjectSymbols(graph, diagnostics, strict=project.config.strict)
+        symbols = ProjectSymbols(
+            graph, diagnostics, strict=project.config.strict, generics=project.config.generics
+        )
         analysis = ProjectAnalysis(symbols=symbols, diagnostics=diagnostics)
         return AnalysisBundle(project, graph, symbols, analysis, {}, diagnostics)
 
@@ -148,7 +154,9 @@ def analyze_paths(
         follow_imports=follow_imports,
         overlays=overlays,
     )
-    symbols = ProjectSymbols(graph, diagnostics, strict=project.config.strict)
+    symbols = ProjectSymbols(
+        graph, diagnostics, strict=project.config.strict, generics=project.config.generics
+    )
     for qualname, display in stdlib.EXTERNAL_TYPES.items():
         symbols.register_external_type(qualname, display)
     for qualname, display in project.plugins.external_types().items():
@@ -198,6 +206,15 @@ def module_cache_key(
         for d in info.directives
     ]
     config = bundle.project.config
+    if target == "llvm":
+        if config.llvm.sanitize:
+            extra = (*extra, f"sanitize={','.join(sorted(config.llvm.sanitize))}")
+        if config.llvm.instrument:
+            extra = (*extra, "profile=instrument")
+        if config.llvm.pgo:
+            from .profile import profile_digest
+
+            extra = (*extra, f"pgo={profile_digest(config.llvm.pgo)}")
     return CacheKey.build(
         target,
         source_digest=symbols.module.source.digest(),

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from collections.abc import Callable
 from dataclasses import dataclass
 
@@ -34,9 +35,18 @@ def bind_exported(
     cover (spec 21.5).
     """
     try:
-        # Executing a staged JAX artifact is plugin territory; the import is
-        # lazy, so a pure native artifact never reaches for the compiler.
-        from ppy_compiler.plugins.jax_export import runtime_call
+        if payload.lstrip().startswith(b"{"):
+            if json.loads(payload.decode("utf-8")).get("kind") == "ppy.cuda":
+                # A staged kernel: PTX the launch runtime loads, found by `ppy.cuda.launch`.
+                from .cuda import kernel_binding
+
+                return kernel_binding(function, payload, fallback)
+            # A `ppy.xla` payload: StableHLO the compiler wrote, run by the PJRT bridge.
+            from .xla import runtime_call
+        else:
+            # Executing a staged JAX artifact is plugin territory; the import is
+            # lazy, so a pure native artifact never reaches for the compiler.
+            from ppy_compiler.plugins.jax_export import runtime_call
     except ImportError as exc:  # pragma: no cover - jax absent
         return ExportedBinding(function, fallback, fallback, reason=str(exc))
 

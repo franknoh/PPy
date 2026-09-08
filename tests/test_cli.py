@@ -2269,16 +2269,18 @@ def test_a_module_that_also_reads_stdin_keeps_its_input(workspace: Path):
 def test_one_version_is_written_in_every_place_that_states_it():
     """`COMPILER_VERSION` is the version; the others must not disagree.
 
-    The compiler keys its caches on it, `ppy.__version__` is what a program
-    reads at runtime, and the distribution metadata is what a resolver sees.
-    The packaging build reads the constant directly, so the literal that can
-    drift is the runtime's -- which is why it is checked here, and why the
-    two packages stay independent rather than importing each other for it.
+    The compiler keys its caches on it, `ppy.__version__` and
+    `ppy_runtime.__version__` are what a program reads at runtime, and the
+    distribution metadata is what a resolver sees. The packaging build reads
+    the compiler's constant directly, so the literal that can drift is the
+    runtime's -- which is why it is checked here, and why the runtime stays
+    independent rather than importing the compiler for it.
     """
     import importlib.metadata
     import tomllib
 
     import ppy
+    import ppy_runtime
     from ppy_compiler.version import COMPILER_VERSION
 
     root = Path(__file__).resolve().parent.parent
@@ -2286,6 +2288,7 @@ def test_one_version_is_written_in_every_place_that_states_it():
     assert declared["project"]["name"] == "ppy-lang", "the distribution name is what PyPI serves"
     assert "version" in declared["project"].get("dynamic", []), "read, not repeated"
     assert ppy.__version__ == COMPILER_VERSION
+    assert ppy_runtime.__version__ == COMPILER_VERSION
     with contextlib.suppress(importlib.metadata.PackageNotFoundError):
         assert importlib.metadata.version("ppy-lang") == COMPILER_VERSION
 

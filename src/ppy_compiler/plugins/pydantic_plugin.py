@@ -8,21 +8,21 @@ from collections.abc import Sequence
 from ..analysis import types as T
 from ..analysis.effects import Effect, EffectSet
 from ..analysis.refinements import Facts
-from .base import CallResult, Lowering
+from .base import CallResult, Lowering, Plugin
 
 __all__ = ["PydanticPlugin"]
 
 PLUGIN_VERSION = 1
 
 
-class PydanticPlugin:
+class PydanticPlugin(Plugin):
     """Types `BaseModel` subclasses and turns field constraints into refinements."""
 
     name = "pydantic"
     modules = ("pydantic",)
 
     def __init__(self, options: dict[str, object] | None = None) -> None:
-        self.options = options or {}
+        super().__init__(options)
         self.schema_execution = str(self.options.get("schema-execution", "deny"))
 
     def fingerprint(self) -> str:

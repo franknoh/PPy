@@ -17,6 +17,8 @@ import sysconfig
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from ppy_runtime.manifest import SUPPORTED_ABI as MANIFEST_ABI_VERSION
+
 from .lowering import NativeParam, NativeSignature
 
 __all__ = [
@@ -25,15 +27,16 @@ __all__ = [
     "ToolchainError",
     "build_launcher",
     "c_compiler",
+    "c_prototype",
     "emit_object",
     "link_shared_library",
     "standalone_toolchain_status",
     "toolchain_status",
+    "write_header",
     "write_manifest",
 ]
 
 #: Version of the PPY Native Binding Manifest schema (spec 26.2).
-MANIFEST_ABI_VERSION = 1
 
 _C_COMPILERS = ("cc", "gcc", "clang")
 
@@ -45,12 +48,23 @@ class ToolchainError(RuntimeError):
 @dataclass(slots=True)
 class BuildArtifacts:
     objects: list[Path] = field(default_factory=list)
+    header: Path | None = None
     library: Path | None = None
     manifest: Path | None = None
     launcher: Path | None = None
     notes: list[str] = field(default_factory=list)
     #: Modules whose object came from the cache instead of the code generator.
     reused: list[str] = field(default_factory=list)
+    #: The generated Python per module, for a build that packages it further.
+    generated: dict[str, object] = field(default_factory=dict)
+    #: What the manifest lists: every exposed signature by qualname, the
+    #: public C symbols by name, and the libraries the bindings need.
+    signatures: dict[str, NativeSignature] = field(default_factory=dict)
+    exports: dict[str, NativeSignature] = field(default_factory=dict)
+    libraries: tuple[str, ...] = ()
+    #: `--python-extension`: the importable module; `--library`: the package.
+    extension: Path | None = None
+    package: Path | None = None
 
 
 def _compiler() -> str | None:
@@ -105,37 +119,150 @@ def standalone_toolchain_status() -> tuple[bool, str]:
 
 
 def emit_object(  # type: ignore[no-untyped-def]
-    engine, ir: str, destination: Path, *, host_cpu: bool = False
+    engine, ir: str, destination: Path, *, host_cpu: bool = False, target=None
 ) -> Path:
     """Compile one LLVM module to a relocatable object file.
 
     An object goes into an artifact that may run on another machine, so both
     the pipeline and the code emitter stay on the portable baseline even when
     the engine itself is tuned for this host. `host_cpu` is the opt-in that
-    trades that portability for this machine's instruction set.
+    trades that portability for this machine's instruction set. A `target`
+    other than the host retargets the module -- its triple and data layout
+    -- and emits through that target's machine.
     """
     from llvmlite import binding
 
     module = binding.parse_assembly(ir)
     module.verify()
-    machine = engine.object_machine(host_cpu)
+    if target is not None and not target.is_host:
+        module.triple = target.triple
+        if target.data_layout:
+            module.data_layout = target.data_layout
+    machine = engine.object_machine(host_cpu, target)
     engine._optimize(module, machine)
     destination.parent.mkdir(parents=True, exist_ok=True)
     destination.write_bytes(machine.emit_object(module))
     return destination
 
 
-def link_shared_library(objects: list[Path], destination: Path) -> Path:
-    """Link the emitted objects into one loadable shared library."""
-    compiler = _compiler()
-    if compiler is None:
-        raise ToolchainError("no C compiler (cc, gcc, or clang) is on PATH")
+def link_shared_library(
+    objects: list[Path], destination: Path, libraries: tuple[str, ...] = (), target=None
+) -> Path:
+    """Link the emitted objects into one loadable shared library.
+
+    `libraries` are the names the program's C bindings gave (`"m"`); each
+    is linked by name so the dynamic loader finds it where the system has it.
+    A `target` other than the host needs a toolchain for it: the
+    `<triple>-gcc` of a cross toolchain, or clang with `--target`.
+    """
+    command = [*_linker(target), "-shared", "-fPIC", "-o", str(destination)]
     destination.parent.mkdir(parents=True, exist_ok=True)
-    command = [compiler, "-shared", "-fPIC", "-o", str(destination), *[str(o) for o in objects]]
+    command.extend(str(o) for o in objects)
+    for library in libraries:
+        if library == "ppy_aio":
+            # The async runtime is compiled into the library, so the artifact stands alone.
+            from ppy_runtime.aio import source_path
+
+            command.append(str(source_path()))
+        else:
+            command.append(f"-l{library}")
     completed = subprocess.run(command, capture_output=True, text=True, check=False)
     if completed.returncode != 0:
         raise ToolchainError(f"link failed: {completed.stderr.strip() or completed.stdout.strip()}")
     return destination
+
+
+def _linker(target) -> list[str]:  # type: ignore[no-untyped-def]
+    """The command that links for `target`: the host's compiler, or a cross one."""
+    if target is None or target.is_host:
+        compiler = _compiler()
+        if compiler is None:
+            raise ToolchainError("no C compiler (cc, gcc, or clang) is on PATH")
+        return [compiler]
+    for name in (f"{target.triple}-gcc", f"{target.triple}-cc", f"{target.triple}-clang"):
+        found = shutil.which(name)
+        if found is not None:
+            return [found]
+    clang = shutil.which("clang")
+    if clang is not None:
+        return [clang, *target.link_flags]
+    raise ToolchainError(
+        f"no toolchain links for {target.triple}: install `{target.triple}-gcc` or clang"
+    )
+
+
+def write_pkg_config(
+    destination: Path, name: str, version: str, prefix: str = "${pcfiledir}/../.."
+) -> Path:
+    """A pkg-config file for a packaged library, relative to where it sits."""
+    lines = [
+        f"prefix={prefix}",
+        "libdir=${prefix}/lib",
+        "includedir=${prefix}/include",
+        "",
+        f"Name: {name}",
+        f"Description: {name}, built by ppy",
+        f"Version: {version}",
+        f"Libs: -L${{libdir}} -lppy_{name}",
+        "Cflags: -I${includedir}",
+        "",
+    ]
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    destination.write_text("\n".join(lines), encoding="utf-8")
+    return destination
+
+
+_C_TYPES = {"i64": "int64_t", "double": "double", "i8": "int8_t"}
+
+
+def c_prototype(name: str, signature: NativeSignature) -> str:
+    """The C declaration of an exported function."""
+    parameters: list[str] = []
+    for parameter in signature.parameters:
+        if parameter.is_buffer:
+            element = _C_TYPES[_abi_of(parameter.element)]
+            parameters.append(f"{element} *{parameter.name}")
+            parameters.append(f"int64_t {parameter.name}_len")
+        elif parameter.is_pointer:
+            const = "const " if parameter.kind == "const_ptr" else ""
+            parameters.append(f"{const}{_C_TYPES[_abi_of(parameter.element)]} *{parameter.name}")
+        elif parameter.is_tuple or parameter.is_object:
+            for index, atom in enumerate(parameter.abi):
+                parameters.append(f"{_C_TYPES[atom]} {parameter.name}_{index}")
+        else:
+            parameters.append(f"{_C_TYPES[parameter.abi[0]]} {parameter.name}")
+    result = _C_TYPES[signature.returns[0]] if signature.returns else "void"
+    return f"{result} {name}({', '.join(parameters) or 'void'});"
+
+
+def _abi_of(scalar: str) -> str:
+    return {"int": "i64", "float": "double", "bool": "i8", "i8": "i8", "u8": "i8"}[scalar]
+
+
+def write_header(destination: Path, exports: dict[str, NativeSignature]) -> Path:
+    """A C header declaring every exported symbol of the library."""
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    destination.write_text(header_text(destination.stem, exports), encoding="utf-8")
+    return destination
+
+
+def header_text(stem: str, exports: dict[str, NativeSignature]) -> str:
+    """The C header declaring `exports`, guarded by a name made from `stem`."""
+    guard = "PPY_" + "".join(c if c.isalnum() else "_" for c in stem).upper() + "_H"
+    lines = [
+        f"#ifndef {guard}",
+        f"#define {guard}",
+        "",
+        "#include <stdint.h>",
+        "",
+        "#ifdef __cplusplus",
+        'extern "C" {',
+        "#endif",
+        "",
+    ]
+    lines.extend(c_prototype(name, signature) for name, signature in sorted(exports.items()))
+    lines.extend(["", "#ifdef __cplusplus", "}", "#endif", "", f"#endif /* {guard} */", ""])
+    return "\n".join(lines)
 
 
 def write_manifest(
@@ -147,15 +274,29 @@ def write_manifest(
     program: dict | None = None,
     wrappers: dict | None = None,
     regions: dict | None = None,
+    staged: dict | None = None,
+    exports: dict[str, str] | None = None,
+    libraries: tuple[str, ...] = (),
+    target: str = "",
 ) -> Path:
     """Write the PPY Native Binding Manifest for the built symbols (spec 26.2)."""
     payload = {
         "abi_version": MANIFEST_ABI_VERSION,
+        # The triple the objects were compiled for; a runtime on another
+        # machine refuses the artifact instead of loading it.
+        "target": target,
         "program": program,
         "wrappers": wrappers,
+        # Public C symbols and their C signatures, and the shared libraries
+        # the artifact's own bindings need at load time.
+        "exports": exports or {},
+        "libraries": list(libraries),
         # Compiled ATen regions, per generated module: the extension library
         # beside the manifest and the C++ symbol of each region.
         "regions": regions,
+        # Staged exports, per generated module: the file beside the manifest
+        # holding each function's payload -- a kernel's PTX, an XLA module.
+        "staged": staged,
         # By name: the library sits next to the manifest, and the pair must
         # survive being moved or shipped together.
         "native_library": library.name if library else None,
@@ -196,6 +337,8 @@ def write_manifest(
                     ],
                     "returns": list(signature.returns),
                     "releases_gil": signature.releases_gil,
+                    "cpu_features": list(signature.cpu_features),
+                    "future": signature.future,
                 },
             }
             for signature in sorted(entries.values(), key=lambda s: s.qualname)

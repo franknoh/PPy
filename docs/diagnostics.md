@@ -69,6 +69,42 @@ sound fallback, and never the rest.
 | `E1601` | A function declared `@ppy.pure` performs a forbidden effect. |
 | `E1602` | A function declared `@ppy.pure` calls a function with unknown effects. |
 
+## Ownership
+
+| code | meaning |
+|---|---|
+| `E1611` | A function returns a parameter it only borrows. |
+| `E1612` | A function stores a borrowed parameter where it outlives the call. |
+| `E1613` | A function writes through a parameter it borrows read-only; `Mut[...]` allows the write. |
+
+## Generics
+
+| code | meaning |
+|---|---|
+| `E1720` | A type parameter form other than `T` or `T: Bound` (a `ParamSpec`, a `TypeVarTuple`). |
+| `E1721` | A type argument does not satisfy its parameter's bound. |
+| `E1722` | A generic is specialized on more type-argument tuples, or a deeper type, than `[tool.ppy.generics]` allows. |
+| `E1723` | A generic calls itself with its own type parameter nested in a type: the specializations never end. |
+
+## Native memory and C bindings
+
+| code | meaning |
+|---|---|
+| `E1630` | A `ppy.native` operation was given something that is not a native pointer. |
+| `E1631` | A write through a `ppy.native.const_ptr`. |
+| `E1632` | A C export needs a signature C can spell, with one scalar result. |
+| `E1633` | A C binding needs every parameter and its return annotated. |
+| `E1640` | A `ppy.simd` operation is misused; the message says how. |
+| `E1641` | A `ppy.atomic` operation is misused; the message says how. |
+| `E1642` | A `ppy.concurrent` operation is misused; the message says how. |
+| `E1643` | A `ppy.cpu` operation is misused; the message says how. |
+| `E1644` | A `ppy.cuda` or `ppy.hip` operation is misused; the message says how. |
+| `E1645` | A `ppy.aio` operation is misused; the message says how. |
+| `E1650` | A `ppy.parallel` loop is misused; the message says how. |
+| `E1660` | `ppy.grad` or `ppy.value_and_grad` is misused; the message says how. |
+| `E1661` | A function cannot be differentiated as typed: it must return `float`, and `argnums` names `float` parameters. |
+| `E1662` | A function with an effect no derivative follows -- I/O, a write, a thread -- is differentiated. |
+
 ## Directive requirements
 
 | code | meaning |
@@ -83,6 +119,16 @@ sound fallback, and never the rest.
 | `E1801` | The selected backend is unavailable in this environment. |
 | `E1802` | A construct is not supported by the selected backend. |
 | `E1803` | A standalone build requires a fully native reachable graph. |
+| `E1804` | A header-only unit cannot carry runtime state; the feature needing it is named. |
+| `E1805` | A library build has nothing to export; `@ppy.native.export` names what to publish. |
+| `E1806` | A C header could not be imported; the reason is named. |
+
+## Plugins
+
+| code | meaning |
+|---|---|
+| `E1901` | A plugin the project asked for could not be loaded, or two plugins claim one module. |
+| `E1902` | A plugin's compiler pass left the IR invalid; the pass is named. |
 
 ## Remarks
 
@@ -101,6 +147,9 @@ sound fallback, and never the rest.
 | `W2002` | A `bool` value takes part in arithmetic, which is legal but usually unintended. |
 | `W2003` | Unknown `Annotated` metadata was preserved but not interpreted. |
 | `W2004` | A directive had no effect for the selected backend. |
+| `W2007` | A function marked `@ppy.xla.jit` cannot be taken by XLA; the reason is named. |
+| `W2008` | A kernel will not run on the device; the reason is named, and the reference runs. |
+| `W2009` | A function changed since the profile given to `--pgo` was recorded; its counts were ignored and it was built as without a profile. |
 | `W2005` | Conversion left both a .py and a .ppy source for the same module. |
 | `W2006` | Errors that only restated a type the analysis could not resolve were withheld; the count and the unresolved origins are reported once. |
 | `W2101` | The build cache index was damaged; it was quarantined and rebuilt, and compilation continued with cache misses. |

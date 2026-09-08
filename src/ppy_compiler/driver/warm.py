@@ -26,6 +26,7 @@ import sys
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
+from ..target import host_target
 from ..version import COMPILER_VERSION, compiler_fingerprint
 from .config import Config, find_project_root, load_config
 
@@ -100,7 +101,7 @@ def _key(file: Path, root: Path, config: Config, options: argparse.Namespace) ->
             hasher.update(b"\x1e")
 
     feed("ppy-run", COMPILER_VERSION, compiler_fingerprint())
-    feed(sys.version_info[:3], sys.implementation.cache_tag, sys.platform, _machine())
+    feed(sys.version_info[:3], sys.implementation.cache_tag, host_target().triple)
     # Where it is matters: the manifest records absolute search paths, so a
     # project that moved needs its artifact built again where it now lives.
     feed(
@@ -118,6 +119,8 @@ def _key(file: Path, root: Path, config: Config, options: argparse.Namespace) ->
         config.parallel.enabled,
         config.parallel.threads,
         resolved_safeguards(options, config.llvm.safeguards, "run"),
+        getattr(options, "sanitize", None) or ",".join(sorted(config.llvm.sanitize)),
+        _profile_fingerprint(getattr(options, "pgo", None) or config.llvm.pgo),
         getattr(options, "prover", None) or config.llvm.prover or "off",
         sorted((name, sorted(asdict(plugin).items())) for name, plugin in config.plugins.items()),
     )
@@ -130,11 +133,14 @@ def _key(file: Path, root: Path, config: Config, options: argparse.Namespace) ->
     return hasher.hexdigest()
 
 
-def _machine() -> str:
+def _profile_fingerprint(named) -> str:  # type: ignore[no-untyped-def]
+    """The content of the profile a run is guided by; a run without one feeds nothing."""
+    if not named:
+        return ""
     try:
-        return os.uname().machine
-    except AttributeError:  # Windows has no uname
-        return os.environ.get("PROCESSOR_ARCHITECTURE", "")
+        return hashlib.blake2b(Path(named).read_bytes(), digest_size=16).hexdigest()
+    except OSError:
+        return f"missing:{named}"
 
 
 def _sources(root: Path):  # type: ignore[no-untyped-def]

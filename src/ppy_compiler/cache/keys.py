@@ -3,15 +3,17 @@
 from __future__ import annotations
 
 import hashlib
-import platform
 import sys
 from collections.abc import Iterable
 from dataclasses import dataclass
 
+from ..target import host_target
+
 __all__ = ["FRONTEND_SCHEMA_VERSION", "CacheKey", "digest", "environment_fingerprint"]
 
-#: Bump when the semantic AST or analysis artifact layout changes.
-FRONTEND_SCHEMA_VERSION = 1
+#: Bump when the semantic AST or analysis artifact layout changes. 2: the
+#: 0.2.0 line; nothing a 0.1.x compiler cached is served again.
+FRONTEND_SCHEMA_VERSION = 2
 
 
 def digest(*parts: object) -> str:
@@ -31,8 +33,7 @@ def environment_fingerprint() -> str:
         f"{sys.version_info.major}.{sys.version_info.minor}",
         sys.implementation.name,
         getattr(sys, "abiflags", ""),
-        platform.machine(),
-        platform.system(),
+        host_target().triple,
     )
 
 

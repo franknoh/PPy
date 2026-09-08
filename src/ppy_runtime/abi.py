@@ -14,6 +14,10 @@ __all__ = ["STATUS_FALLBACK", "STATUS_OK", "NativeParam", "NativeSignature"]
 
 STATUS_OK = 0
 STATUS_FALLBACK = 1
+#: A sanitizer's check failed: `STATUS_SANITIZER_BASE + SANITIZERS.index(kind)`.
+#: Unlike a fallback, the boundary raises; nothing Python could do would be right.
+STATUS_SANITIZER_BASE = 2
+SANITIZERS = ("bounds", "overflow", "pointer", "alignment")
 
 #: `i8`/`u8` are byte-wide buffer elements; `bool` shares the width.
 _ABI_NAMES = {"int": "i64", "float": "double", "bool": "i8", "i8": "i8", "u8": "i8"}
@@ -39,6 +43,11 @@ class NativeParam:
         return self.kind in {"list", "sequence", "view"}
 
     @property
+    def is_pointer(self) -> bool:
+        """A `ppy.native.ptr[T]`: one machine address, no Python boundary."""
+        return self.kind in {"ptr", "const_ptr"}
+
+    @property
     def is_object(self) -> bool:
         return self.kind == "object"
 
@@ -59,6 +68,8 @@ class NativeParam:
     def abi(self) -> tuple[str, ...]:
         if self.is_buffer:
             return (f"{_abi_name(self.element)}*", "i64")
+        if self.is_pointer:
+            return (f"{_abi_name(self.element)}*",)
         if self.is_tuple:
             return tuple(_abi_name(element) for element in self.elements)
         if self.is_object:
@@ -69,6 +80,8 @@ class NativeParam:
         if self.is_buffer:
             borrow = " borrowed" if self.is_borrowed else ""
             return f"{_abi_name(self.element)}*{borrow} {self.name}, i64 {self.name}_len"
+        if self.is_pointer:
+            return f"{_abi_name(self.element)}* {self.name}"
         if self.is_tuple:
             return ", ".join(
                 f"{_abi_name(element)} {self.name}{index}"
@@ -92,6 +105,12 @@ class NativeSignature:
     #: The body touches no Python object once its arguments are unpacked, so
     #: the boundary may drop the GIL around the call (spec 16.6).
     releases_gil: bool = False
+    #: CPU features the code was compiled for (`@ppy.cpu.target`); the
+    #: boundary binds it only on a machine that has them all.
+    cpu_features: tuple[str, ...] = ()
+    #: A coroutine: the boundary hands back a future the runtime completes,
+    #: carrying this kind -- `int`, `float`, `bool`, or `none`.
+    future: str = ""
 
     @property
     def ret(self) -> str:

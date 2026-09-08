@@ -7,6 +7,7 @@ import sys
 from pathlib import Path
 
 from ..diagnostics import Diagnostic, Severity
+from ..ir import PassVerificationError
 from .pipeline import (
     COMPILER_VERSION,
     AnalysisBundle,
@@ -43,10 +44,88 @@ def _overrides(options: argparse.Namespace) -> dict[str, object]:
     return overrides
 
 
+def _resolve_sanitize(options: argparse.Namespace, project, reporter: Reporter):  # type: ignore[no-untyped-def]
+    """Settle the sanitizers before any cache key reads them; a refusal is the exit code.
+
+    `--sanitize` overrides `[tool.ppy.llvm] sanitize`.
+    """
+    from ..ir.transforms import sanitizer_kinds
+
+    spelled = getattr(options, "sanitize", None)
+    kinds = project.config.llvm.sanitize
+    try:
+        if spelled is not None:
+            kinds = tuple(sorted(sanitizer_kinds(spelled)))
+        elif kinds:
+            kinds = tuple(sorted(sanitizer_kinds(list(kinds))))
+    except ValueError as error:
+        reporter.emit(Diagnostic("E1002", Severity.ERROR, str(error)))
+        return 2
+    project.config.llvm.sanitize = kinds
+    return None
+
+
+def _resolve_profile(options: argparse.Namespace, project, reporter: Reporter):  # type: ignore[no-untyped-def]
+    """Settle `--pgo` and `--profile` before any cache key reads them; a refusal is the exit code.
+
+    `--pgo FILE` overrides `[tool.ppy.llvm] pgo`, which is relative to the
+    project root; the file is read now so a missing or foreign one is
+    refused before anything is built. `--profile` instruments the run.
+    """
+    from .profile import ProfileError, load_profile
+
+    spelled = getattr(options, "pgo", None)
+    configured = project.config.llvm.pgo
+    path = None
+    if spelled is not None:
+        path = Path(spelled).resolve()
+    elif configured:
+        path = (project.root / configured).resolve()
+    if path is not None:
+        try:
+            load_profile(path)
+        except ProfileError as error:
+            reporter.emit(Diagnostic("E1002", Severity.ERROR, str(error)))
+            return 2
+        project.config.llvm.pgo = str(path)
+    if getattr(options, "profile", False):
+        project.config.llvm.instrument = True
+    return None
+
+
+def _answer_removed_road(project, reporter: Reporter) -> None:  # type: ignore[no-untyped-def]
+    """A project or environment naming the direct AST road is told it is gone; the IR road runs."""
+    from .config import PIPELINE_ENV, asks_for_removed_pipeline
+
+    if asks_for_removed_pipeline(project.config.llvm.pipeline):
+        reporter.emit(
+            Diagnostic(
+                "W2004",
+                Severity.WARNING,
+                f'`pipeline = "ast"` (or {PIPELINE_ENV}=ast) names the direct AST road, which '
+                "0.2.0 removed; the IR road runs",
+            )
+        )
+
+
 def _resolve_host_cpu(options: argparse.Namespace, project) -> None:  # type: ignore[no-untyped-def]
     """Settle host targeting before any cache key reads it."""
     if getattr(options, "host_cpu", False):
         project.config.llvm.host_cpu = True
+
+
+def _resolve_target(options: argparse.Namespace, project, reporter: Reporter):  # type: ignore[no-untyped-def]
+    """The machine the build is for: `--target`, else the configuration, else here."""
+    from ..target import TargetError, configured_target
+
+    spelled = getattr(options, "triple", None)
+    if spelled:
+        project.config.llvm.target = spelled
+    try:
+        return configured_target(project.config.llvm.target)
+    except TargetError as exc:
+        reporter.emit(Diagnostic("E1002", Severity.ERROR, str(exc)))
+        return None
 
 
 def _resolve_safeguards(options: argparse.Namespace, project, command: str) -> None:  # type: ignore[no-untyped-def]
@@ -189,7 +268,12 @@ def run_llvm_backend(
         return 2
     warm = locate(file, options)
     project = open_project(file, config_overrides=_overrides(options))
+    _answer_removed_road(project, reporter)
     _resolve_safeguards(options, project, "run")
+    if _resolve_sanitize(options, project, reporter) is not None:
+        return 2
+    if _resolve_profile(options, project, reporter) is not None:
+        return 2
     _resolve_prover(options, project)
     bundle = analyze_paths(project, collect_sources(file), backend="llvm")
     errors = reporter.report(bundle.diagnostics)
@@ -198,6 +282,18 @@ def run_llvm_backend(
         return 1
     level = _overrides(options).get("opt_level")
     try:
+        if getattr(options, "profile", False):
+            # A profiling run is the JIT, every time: the counters live in the
+            # engine, and the profile is read from it when the program ends.
+            from .profile import default_output
+
+            return compile_and_run(
+                bundle,
+                program_args,
+                reporter,
+                opt_level=level,  # type: ignore[arg-type]
+                profile_out=getattr(options, "profile_out", None) or default_output(file),
+            )
         if not warm.needs_jit:
             manifest = compile_for_run(
                 bundle,
@@ -234,12 +330,43 @@ def build(options: argparse.Namespace, reporter: Reporter) -> int:
         return 2
     if getattr(options, "warm", False):
         return _warm(options, reporter, target)
+    if target.suffix == ".ppyir":
+        from .emit import build_ir_file
+
+        return build_ir_file(target, options, reporter)
     backend = options.backend
     project = open_project(target, config_overrides=_overrides(options))
+    machine = None
     if backend == "llvm":
+        _answer_removed_road(project, reporter)
         _resolve_safeguards(options, project, "build")
+        if _resolve_sanitize(options, project, reporter) is not None:
+            return 2
+        if _resolve_profile(options, project, reporter) is not None:
+            return 2
         _resolve_prover(options, project)
         _resolve_host_cpu(options, project)
+        machine = _resolve_target(options, project, reporter)
+        if machine is None:
+            return 2
+        wants_extension = getattr(options, "python_extension", False)
+        if wants_extension and not machine.is_host:
+            reporter.emit(
+                Diagnostic(
+                    "E1002",
+                    Severity.ERROR,
+                    f"a Python extension is built against this interpreter, not for "
+                    f"{machine.triple}; drop `--target` or `--python-extension`",
+                )
+            )
+            return 2
+        if (wants_extension or getattr(options, "library", False)) and not target.is_file():
+            reporter.emit(
+                Diagnostic(
+                    "E1002", Severity.ERROR, "the build takes the module's file as its target"
+                )
+            )
+            return 2
     bundle = analyze_paths(project, collect_sources(target), backend=backend)
     errors = reporter.report(bundle.diagnostics)
     if errors:
@@ -254,6 +381,8 @@ def build(options: argparse.Namespace, reporter: Reporter) -> int:
         return 0
 
     from ..backend.llvm import LlvmUnavailable, compile_project
+    from ..backend.llvm.link import ToolchainError
+    from ..backend.llvm.packaging import PackagingError
 
     entry = target.resolve() if target.is_file() else None
     if getattr(options, "standalone", False):
@@ -275,6 +404,7 @@ def build(options: argparse.Namespace, reporter: Reporter) -> int:
         except LlvmUnavailable as exc:
             reporter.emit(Diagnostic("E1801", Severity.ERROR, str(exc)))
             return 2
+    extras = getattr(options, "python_extension", False) or getattr(options, "library", False)
     try:
         artifacts = compile_project(
             bundle,
@@ -282,18 +412,48 @@ def build(options: argparse.Namespace, reporter: Reporter) -> int:
             opt_level=_overrides(options).get("opt_level"),  # type: ignore[arg-type]
             output=options.output,
             entry=entry,
+            launcher=not extras,
+            target=machine,
+            wrappers=not getattr(options, "library", False),
         )
+        if getattr(options, "report_opt", False) or getattr(options, "report_opt_json", None):
+            _report_optimization(bundle, options, artifacts)
+        if getattr(options, "python_extension", False):
+            from ..backend.llvm.packaging import build_extension
+
+            build_extension(bundle, artifacts, entry, options.output)
+        if getattr(options, "library", False):
+            from ..backend.llvm.packaging import package_library
+
+            package_library(bundle, artifacts, options.output, machine)
     except LlvmUnavailable as exc:
         reporter.emit(Diagnostic("E1801", Severity.ERROR, str(exc)))
         return 2
+    except PassVerificationError as exc:
+        reporter.emit(Diagnostic("E1902", Severity.ERROR, str(exc)))
+        return 2
+    except ToolchainError as exc:
+        reporter.emit(Diagnostic("E1801", Severity.ERROR, str(exc)))
+        return 2
+    except PackagingError as exc:
+        reporter.emit(Diagnostic(exc.code, Severity.ERROR, str(exc)))
+        return 2
 
+    if machine is not None and not machine.is_host:
+        reporter.note(f"target:   {machine.triple}")
     reporter.note(f"objects:  {len(artifacts.objects)}")
     if artifacts.library:
         reporter.note(f"library:  {artifacts.library}")
     if artifacts.manifest:
         reporter.note(f"manifest: {artifacts.manifest}")
+    if artifacts.header:
+        reporter.note(f"header:   {artifacts.header}")
     if artifacts.launcher:
         reporter.note(f"launcher: {artifacts.launcher}")
+    if artifacts.extension:
+        reporter.note(f"extension: {artifacts.extension}")
+    if artifacts.package:
+        reporter.note(f"package:  {artifacts.package}")
     for note in artifacts.notes:
         reporter.emit(Diagnostic("W2004", Severity.WARNING, note))
     return 0
@@ -312,6 +472,9 @@ def _warm(options: argparse.Namespace, reporter: Reporter, target: Path) -> int:
         flag
         for flag, given in (
             ("--standalone", getattr(options, "standalone", False)),
+            ("--target", getattr(options, "triple", None) is not None),
+            ("--python-extension", getattr(options, "python_extension", False)),
+            ("--library", getattr(options, "library", False)),
             ("--safe", getattr(options, "safe", False)),
             ("--host-cpu", getattr(options, "host_cpu", False)),
             ("--prover", getattr(options, "prover", None) is not None),
@@ -370,6 +533,20 @@ def inspect(options: argparse.Namespace, reporter: Reporter) -> int:
     if errors:
         return 1
 
+    stage = getattr(options, "stage", None)
+    if stage is not None:
+        from .stages import stage_texts
+
+        try:
+            texts = stage_texts(bundle, stage)
+        except Exception as exc:  # noqa: BLE001 - a stage the machine cannot reach is a report
+            reporter.emit(Diagnostic("E1801", Severity.ERROR, str(exc)))
+            return 2
+        for name, text in texts.items():
+            print(f"; ---- {name} [{stage}] ----")
+            print(text, end="" if text.endswith("\n") else "\n")
+        return 0
+
     if options.backend == "llvm" or options.ir:
         from ..backend.llvm import LlvmUnavailable, emit_ir
 
@@ -397,6 +574,30 @@ def inspect(options: argparse.Namespace, reporter: Reporter) -> int:
         print(f"# ---- {name} -> {generated.artifact} ----")
         print(generated.code)
     return 0
+
+
+def _report_optimization(bundle, options: argparse.Namespace, artifacts) -> None:  # type: ignore[no-untyped-def]
+    """`--report-opt`: what the build decided, printed or written as JSON."""
+    from ..backend.llvm import _collect
+    from .profile import profile_for
+    from .report import optimization_report, render_report, report_json
+    from .staging import stage_project
+
+    natives = _collect(bundle, _overrides(options).get("opt_level"))  # type: ignore[arg-type]
+    report = optimization_report(
+        bundle,
+        natives,
+        stage_project(bundle),
+        sanitizers=bundle.project.config.llvm.sanitize,
+        profile=profile_for(bundle.project.config),
+    )
+    report["notes"] = list(artifacts.notes)
+    if getattr(options, "report_opt", False):
+        print(render_report(report), end="")
+    destination = getattr(options, "report_opt_json", None)
+    if destination is not None:
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        destination.write_text(report_json(report), encoding="utf-8")
 
 
 def _generated_native_sources(bundle) -> dict[str, str]:  # type: ignore[no-untyped-def]
@@ -464,10 +665,12 @@ def clean(options: argparse.Namespace, reporter: Reporter) -> int:
 def doctor(options: argparse.Namespace, reporter: Reporter) -> int:
     import platform
 
+    from ..target import host_target
+
     project = open_project(Path.cwd())
     print(f"ppy               {COMPILER_VERSION}")
     print(f"python            {platform.python_version()} ({sys.implementation.name})")
-    print(f"platform          {platform.system()} {platform.machine()}")
+    print(f"target            {host_target().describe()}")
     libc, libc_version = platform.libc_ver()
     if libc:
         # The compiled parts -- the wrappers, the native objects, a standalone
@@ -533,3 +736,36 @@ def _install_library_regions(bundle, binder, reporter) -> None:  # type: ignore[
     if bundle.project.config.diagnostics.optimization_remarks:
         for remark in result.diagnostics:
             reporter.emit(remark)
+
+
+def bind(options: argparse.Namespace, reporter: Reporter) -> int:
+    """`ppy bind header FILE`: PPY bindings for a C header, through Clang."""
+    from ..bind import BindError, bind_header
+
+    header: Path = options.header
+    if not header.is_file():
+        reporter.emit(Diagnostic("E1002", Severity.ERROR, f"{header} does not exist"))
+        return 2
+    try:
+        bindings = bind_header(
+            header,
+            library=options.library,
+            include_dirs=tuple(options.include or ()),
+        )
+    except BindError as exc:
+        reporter.emit(Diagnostic("E1806", Severity.ERROR, str(exc)))
+        return 2
+    output: Path | None = options.output
+    if output is None:
+        print(bindings.source, end="")
+    else:
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_text(bindings.source, encoding="utf-8")
+        reporter.note(f"wrote {output}")
+    counts = (
+        f"{len(bindings.functions)} function(s), {len(bindings.typedefs)} typedef(s), "
+        f"{len(bindings.enums)} enum constant(s), {len(bindings.structs)} struct(s), "
+        f"{len(bindings.constants)} constant(s)"
+    )
+    reporter.note(f"bound {counts}; left out {len(bindings.skipped)}")
+    return 0

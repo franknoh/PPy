@@ -94,6 +94,9 @@ class Facts:
     non_null: bool = False
     contiguous: bool = False
     no_alias: bool = False
+    #: How a parameter holds its value: "owned", "borrowed", "mut", or None
+    #: for the default -- a scalar is a copy, a buffer is borrowed.
+    ownership: str | None = None
     shape: tuple[int | str, ...] | None = None
     dtype: str | None = None
     width: tuple[int, bool] | None = None

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import importlib.util
 import os
+import shutil
 import subprocess
 import sys
 import sysconfig
@@ -69,8 +70,6 @@ class BuiltWrappers:
 
 
 def wrapper_toolchain() -> tuple[bool, str]:
-    import shutil
-
     compiler = os.environ.get("CC") or shutil.which("cc") or shutil.which("gcc")
     if compiler is None:
         return False, "no C compiler (cc or gcc) is on PATH"
@@ -112,6 +111,8 @@ def build_wrappers(
     notify=None,
 ) -> BuiltWrappers:
     """Generate, compile, and import the Python-ABI wrappers for a module."""
+    # A coroutine hands back a future the Python side wraps; no C wrapper for it.
+    signatures = {name: s for name, s in signatures.items() if not s.future}
     if not signatures:
         return BuiltWrappers(reason="no native function to wrap")
     ready, detail = wrapper_toolchain()
@@ -145,10 +146,13 @@ def build_wrappers(
         # is the source's digest. So build somewhere only this thread knows
         # and publish with a rename: a reader sees the whole library or the
         # one that was there before, never a file still being written.
-        # The stamp goes before the suffix, not after it: a compiler reads
-        # the input language from the extension, and `.c.1234.part` is not C.
+        # The source keeps its final name inside a directory only this thread
+        # knows, and the compiler runs from there: it records the input's name
+        # in the object, so a name that varied would make bytes that varied.
         stamp = f".{os.getpid()}.{threading.get_ident():x}.part"
-        draft_source = directory / f"{name}{stamp}.c"
+        draft_directory = directory / f"{name}{stamp}"
+        draft_directory.mkdir(exist_ok=True)
+        draft_source = draft_directory / f"{name}.c"
         draft_library = library.with_name(library.name + stamp)
         draft_source.write_text(built.source, encoding="utf-8")
         compiler = os.environ.get("CC") or "cc"
@@ -159,20 +163,23 @@ def build_wrappers(
             "-fPIC",
             "-I",
             sysconfig.get_paths()["include"],
-            str(draft_source),
+            draft_source.name,
             "-o",
             str(draft_library),
         ]
-        completed = subprocess.run(command, capture_output=True, text=True, check=False)
+        completed = subprocess.run(
+            command, cwd=draft_directory, capture_output=True, text=True, check=False
+        )
         if completed.returncode != 0:
             detail = (completed.stderr or completed.stdout).strip().splitlines()
-            draft_source.unlink(missing_ok=True)
+            shutil.rmtree(draft_directory, ignore_errors=True)
             draft_library.unlink(missing_ok=True)
             return BuiltWrappers(
                 reason=f"the wrapper did not compile: {detail[-1] if detail else 'unknown'}"
             )
         _publish(draft_library, library)
         _publish(draft_source, source_path)
+        shutil.rmtree(draft_directory, ignore_errors=True)
 
     spec = importlib.util.spec_from_file_location(name, library)
     if spec is None or spec.loader is None:

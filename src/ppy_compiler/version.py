@@ -15,9 +15,10 @@ from pathlib import Path
 
 __all__ = ["COMPILER_VERSION", "compiler_fingerprint"]
 
-#: The released version. `src/ppy/__init__.py` and the packaging metadata
-#: carry the same string, and a test holds all three together.
-COMPILER_VERSION = "0.1.1a1"
+#: The released version. The packaging build reads this literal;
+#: `ppy_runtime.version` carries the runtime's copy, `ppy.__version__` reads
+#: that, and a test holds them together.
+COMPILER_VERSION = "0.2.0"
 
 
 @functools.cache

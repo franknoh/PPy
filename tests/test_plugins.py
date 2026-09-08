@@ -15,7 +15,7 @@ from ppy_compiler.analysis import types as T
 from ppy_compiler.analysis.effects import Effect
 from ppy_compiler.analysis.refinements import Facts
 from ppy_compiler.driver.config import Config, PluginConfig
-from ppy_compiler.plugins.base import Lowering, PluginRegistry
+from ppy_compiler.plugins.base import DialectOperationSpec, Lowering, PluginRegistry
 from ppy_compiler.plugins.jax_plugin import JaxPlugin
 from ppy_compiler.plugins.numpy_plugin import NumPyPlugin
 from ppy_compiler.plugins.pydantic_plugin import PydanticPlugin
@@ -32,9 +32,18 @@ FLOAT = (T.FLOAT, Facts())
 
 def test_all_plugins_load_and_fingerprint():
     registry = load_plugins(Config())
-    assert {p.name for p in registry} == {"numpy", "torch", "jax", "uvicorn", "pydantic"}
+    assert {p.name for p in registry} == {
+        "numpy",
+        "torch",
+        "jax",
+        "uvicorn",
+        "pydantic",
+        "scipy",
+        "pandas",
+        "pyarrow",
+    }
     fingerprints = registry.fingerprints()
-    assert len(set(fingerprints)) == 5
+    assert len(set(fingerprints)) == 8
     assert all(":" in f for f in fingerprints)
 
 
@@ -65,7 +74,8 @@ def test_numpy_fingerprint_tracks_the_installed_build():
 def test_numpy_elementwise_fuses_into_one_loop():
     result = NumPyPlugin().call("numpy.sin", [ARRAY], {})
     assert result is not None
-    assert result.lowering is Lowering.INTRINSIC
+    assert result.kind is Lowering.DIALECT_OPERATION
+    assert result.spec == DialectOperationSpec("tensor", "unary", (("op", "sin"),))
     assert "fused" in result.reason
     assert Effect.ALLOC in result.effects
 
@@ -80,7 +90,7 @@ def test_numpy_guards_cover_the_documented_fast_path_domain():
     assert "floating-point error state" in guards
 
 
-def test_numpy_claims_intrinsic_only_where_a_kernel_exists():
+def test_numpy_claims_a_tensor_operation_only_where_one_exists():
     """A plugin must not report a lowering the backend cannot perform."""
     from ppy_compiler.plugins.numpy_plugin import FUSIBLE
 
@@ -88,7 +98,7 @@ def test_numpy_claims_intrinsic_only_where_a_kernel_exists():
     fused = plugin.call("numpy.sin", [ARRAY], {})
     unfused = plugin.call("numpy.tanh", [ARRAY], {})
     assert "sin" in FUSIBLE and "tanh" not in FUSIBLE
-    assert fused.lowering is Lowering.INTRINSIC
+    assert fused.kind is Lowering.DIALECT_OPERATION
     assert unfused.lowering is Lowering.DIRECT_NATIVE_CALL
     assert "no generated kernel" in unfused.reason
 
@@ -122,7 +132,7 @@ def test_numpy_out_keyword_keeps_overlap_safe_semantics():
 
 def test_numpy_reduction_keeps_strict_float_order():
     result = NumPyPlugin().call("numpy.sum", [ARRAY], {})
-    assert result.lowering is Lowering.INTRINSIC
+    assert result.spec == DialectOperationSpec("tensor", "reduce", (("op", "add"),))
     assert "strict floating-point order" in result.reason
 
 
@@ -183,7 +193,12 @@ def test_numpy_lowering_decisions_are_recorded(write, analyze):
     )
     bundle = analyze(path)
     notes = list(bundle.analysis.modules["np_low"].lowerings.values())
-    assert any(n.qualname == "numpy.sin" and n.lowering == "Intrinsic" for n in notes)
+    assert any(
+        n.qualname == "numpy.sin"
+        and n.lowering == "DialectOperation"
+        and n.operation == "tensor.unary"
+        for n in notes
+    )
 
 
 @requires_numpy

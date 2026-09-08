@@ -1,74 +1,121 @@
-"""Fused NumPy elementwise loops (spec 19.4).
+"""Fused elementwise loops over library arrays, built as tensor or columnar IR (spec 19.4).
 
-A recognized elementwise expression tree becomes one broadcast-free strided
-loop over `float64` data instead of one Python dispatch and one temporary array
-per node. The loop runs only behind the guards the plugin demands: exact
-`numpy.ndarray`, a supported dtype, native byte order, C-contiguity, and
-matching shapes (spec 19.3, 19.5).
+A maximal expression tree of array operations that converge onto a shared
+dialect -- NumPy's ufuncs, torch's elementwise operators, and SciPy's
+special functions onto `tensor`; PyArrow's compute and pandas' Series
+arithmetic onto `columnar` --
+becomes one kernel: IR over buffers whose length the kernel learns at the
+call, lowered by `lower-tensor` to a single loop with no temporaries, and
+emitted by the backend like any function. The plugin says which operation
+a call is; the compiler builds the kernel. Nothing here writes LLVM IR.
+
+The loop runs only behind the guards the plugin demands: an exact array of
+the library's own class, `float64` in native byte order, C-contiguous, one
+shape across the operands (spec 19.3, 19.5); for Arrow, an array of
+`float64` or `bool` whose bitmaps start on a byte.
 """
 
 from __future__ import annotations
 
 import ast
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 
 from ...analysis import types as T
 from ...analysis.checker import ModuleAnalysis
 from ...analysis.symbols import FunctionInfo
-from ...plugins.numpy_plugin import FUSIBLE_BINARY, FUSIBLE_REDUCTIONS, FUSIBLE_UNARY
+from ...ir import IRModule
+from ...ir import shape as shapes
+from ...ir.dialects import columnar, core
+from ...ir.dialects import tensor as tensors
+from ...ir.model import Builder, Value
+from ...ir.types import BOOL, F64, I64, U8, BufferType, IRType, PtrType
 
 __all__ = [
     "BINARY",
+    "COLUMNAR",
+    "COLUMNAR_STORAGES",
+    "REDUCTIONS",
+    "STORAGES",
     "UNARY",
     "FusedLoop",
     "FusionCandidate",
     "find_candidates",
     "find_module_candidates",
-    "lower_candidate",
+    "kernel_module",
 ]
 
-#: The LLVM intrinsic implementing each unary ufunc. An empty name means the
-#: operation is a single instruction rather than a call.
-_UNARY_INTRINSICS = {
-    "sin": "llvm.sin.f64",
-    "cos": "llvm.cos.f64",
-    "exp": "llvm.exp.f64",
-    "log": "llvm.log.f64",
-    "log2": "llvm.log2.f64",
-    "log10": "llvm.log10.f64",
-    "sqrt": "llvm.sqrt.f64",
-    "absolute": "llvm.fabs.f64",
-    "abs": "llvm.fabs.f64",
-    "negative": "",
+#: Elementwise operations with two operands: the tensor dialect's.
+BINARY = frozenset(tensors.ELEMENTWISE)
+#: Elementwise operations with one operand: the tensor dialect's.
+UNARY = frozenset(tensors.UNARY)
+#: Whole-array reductions, and `mean`, which is a sum over the count.
+REDUCTIONS = frozenset({*tensors.REDUCTIONS, "mean"})
+
+#: The columnar operations a kernel takes, with the element kinds they read
+#: and give: `f64` values, `bool` masks, or the operand's own (`same`).
+COLUMNAR: dict[str, tuple[tuple[str, ...], str]] = {
+    **dict.fromkeys(columnar.ARITHMETIC, (("f64", "f64"), "f64")),
+    **dict.fromkeys(columnar.COMPARISON, (("f64", "f64"), "bool")),
+    **dict.fromkeys(columnar.BOOLEAN, (("bool", "bool"), "bool")),
+    "negate": (("f64",), "f64"),
+    "abs": (("f64",), "f64"),
+    "invert": (("bool",), "bool"),
+    "is_null": (("same",), "bool"),
+    "is_valid": (("same",), "bool"),
+    "fill_null": (("f64", "scalar"), "f64"),
+    "select": (("bool", "f64", "f64"), "f64"),
 }
-
-#: Derived from what the plugin claims, so a claim without an implementation
-#: fails loudly at import rather than silently falling back at run time.
-UNARY = {name: _UNARY_INTRINSICS[name] for name in sorted(FUSIBLE_UNARY)}
-
-#: Binary ufuncs lowered to a single machine instruction per element.
-BINARY = set(FUSIBLE_BINARY)
-
-#: Reductions lowered to a sequential accumulation.
-REDUCTIONS = set(FUSIBLE_REDUCTIONS)
+#: Columnar operations whose result has no nulls.
+_NEVER_NULL = frozenset({"is_null", "is_valid", "fill_null"})
 
 #: Reductions whose fused form reassociates the accumulation. NumPy sums
-#: pairwise, so a sequential loop is a different -- and observably different --
-#: order. These fuse only where the program permits reassociation (spec 19.8).
-REASSOCIATING = frozenset({"sum", "prod", "product", "mean"})
+#: pairwise and torch vectorizes, so a sequential loop is a different --
+#: and observably different -- order. These fuse only where the program
+#: permits reassociation (spec 19.8).
+REASSOCIATING = frozenset({"add", "mul", "mean"})
 
-_OPERATOR_UFUNC = {
+#: The array classes a kernel runs over, by the library that owns them.
+STORAGES: dict[str, str] = {
+    "numpy.ndarray": "numpy",
+    "torch.Tensor": "torch",
+    "pyarrow.Array": "pyarrow",
+    "pandas.Series": "pandas",
+}
+#: Libraries whose kernels are columnar IR: nulls are theirs to keep.
+COLUMNAR_STORAGES = frozenset({"pyarrow", "pandas"})
+
+_OPERATOR_OP = {
     ast.Add: "add",
-    ast.Sub: "subtract",
-    ast.Mult: "multiply",
-    ast.Div: "true_divide",
-    ast.Pow: "power",
+    ast.Sub: "sub",
+    ast.Mult: "mul",
+    ast.Div: "div",
+    ast.Pow: "pow",
+}
+#: Operators pandas spells columnar logic and comparison with.
+_COLUMNAR_OPERATOR_OP = {ast.BitAnd: "and", ast.BitOr: "or", ast.BitXor: "xor"}
+_COMPARE_OP = {
+    ast.Eq: "equal",
+    ast.NotEq: "not_equal",
+    ast.Lt: "less",
+    ast.LtE: "less_equal",
+    ast.Gt: "greater",
+    ast.GtE: "greater_equal",
 }
 
 
 @dataclass(slots=True)
 class FusedLoop:
-    """One fused kernel: an expression over N arrays producing one array."""
+    """One fused kernel: an expression over N arrays producing one array.
+
+    `expression` is a small prefix program over the dialect's vocabulary,
+    `(add a0 (sin a1))`, with leaves `a<i>` (an array), `s<i>` (a scalar
+    argument), and `c<value>` (a constant); unary and binary names never
+    collide, so arity tells them apart. `storage` names the library whose
+    arrays the kernel runs over; for Arrow, `kinds` says whether each array
+    holds `f64` values or `bool` masks, `result` what the kernel gives, and
+    `nullable` whether the result carries a validity bitmap.
+    """
 
     symbol: str
     arrays: tuple[str, ...]
@@ -76,6 +123,10 @@ class FusedLoop:
     reduction: str = ""
     expression: str = ""
     parallel: bool = False
+    storage: str = "numpy"
+    kinds: tuple[str, ...] = ()
+    result: str = "f64"
+    nullable: bool = True
 
     @property
     def returns_scalar(self) -> bool:
@@ -84,7 +135,7 @@ class FusedLoop:
 
 @dataclass(slots=True)
 class FusionCandidate:
-    """An expression the NumPy plugin marked `Intrinsic` and PPY can fuse."""
+    """An expression a plugin placed on a shared dialect and PPY can fuse."""
 
     function: FunctionInfo | None
     node: ast.expr | None
@@ -99,10 +150,22 @@ class _Shape:
     def __init__(self) -> None:
         self.arrays: list[str] = []
         self.scalars: list[str] = []
+        self.storage: str = ""
+        #: What each array holds, once an operation has said.
+        self.kinds: dict[str, str] = {}
 
-    def array(self, name: str) -> int:
+    def array(self, name: str, storage: str, kind: str | None) -> int:
+        if self.storage and storage != self.storage:
+            # One kernel, one library: a NumPy array and a torch tensor in
+            # one expression is the library's own business.
+            raise _Unsupported
+        self.storage = storage
         if name not in self.arrays:
             self.arrays.append(name)
+        if kind is not None:
+            known = self.kinds.setdefault(name, kind)
+            if known != kind:
+                raise _Unsupported
         return self.arrays.index(name)
 
     def scalar(self, name: str) -> int:
@@ -115,22 +178,30 @@ class _Unsupported(Exception):
     pass
 
 
-def _is_array(node: ast.expr, module: ModuleAnalysis) -> bool:
+def _storage_of(node: ast.expr, module: ModuleAnalysis) -> str | None:
+    """The library whose array this expression is, or None for a non-array."""
     base = T.strip_literal(module.type_of(node))
-    return isinstance(base, T.Instance) and base.name == "numpy.ndarray"
+    if isinstance(base, T.Instance):
+        return STORAGES.get(base.name)
+    return None
 
 
-def _ufunc_of(node: ast.expr, module: ModuleAnalysis) -> str | None:
+def _operation_of(
+    node: ast.expr, module: ModuleAnalysis
+) -> tuple[str, str, dict[str, object]] | None:
+    """The shared operation the plugin says this call is: (`tensor`, `add`,
+    {}), (`tensor`, `unary`, {op: sin}), (`columnar`, `select`, {}); None
+    when it is not one a kernel takes."""
     note = module.lowerings.get(id(node))
-    if note is None or note.lowering != "Intrinsic":
+    if note is None:
         return None
-    return note.qualname.rpartition(".")[2]
+    dialect, _, name = note.operation.partition(".")
+    if dialect not in {"tensor", "columnar"} or not name:
+        return None
+    return dialect, name, dict(note.attributes)
 
 
-def find_candidates(
-    function: FunctionInfo,
-    module: ModuleAnalysis,
-) -> list[FusionCandidate]:
+def find_candidates(function: FunctionInfo, module: ModuleAnalysis) -> list[FusionCandidate]:
     """Find maximal fusible expression trees inside one function."""
     return _search(
         function.node,
@@ -170,31 +241,32 @@ def _search(
     for node in ast.walk(root):
         if not isinstance(node, ast.expr) or id(node) in claimed:
             continue
-        ufunc = _ufunc_of(node, module)
-        if ufunc is None:
+        operation = _operation_of(node, module)
+        if operation is None:
             continue
-        if ufunc not in UNARY and ufunc not in BINARY and ufunc not in REDUCTIONS:
-            continue
+        dialect, name, attributes = operation
         shape = _Shape()
         operations: list[str] = []
         reduction = ""
         try:
-            if ufunc in REDUCTIONS:
+            if dialect == "tensor" and name == "reduce":
                 # A reduction is only fusible as the root of the tree: its
                 # operand collapses to one value, so nothing can wrap it.
+                kind = str(attributes.get("op", ""))
                 if not isinstance(node, ast.Call) or len(node.args) != 1 or node.keywords:
                     continue
-                if ufunc in REASSOCIATING and not fastmath:
+                if kind not in REDUCTIONS or (kind in REASSOCIATING and not fastmath):
                     continue
-                reduction = ufunc
-                operations.append(ufunc)
-                expression = _render(node.args[0], module, shape, operations)
+                reduction = kind
+                operations.append(kind)
+                expression, result = _render(node.args[0], module, shape, operations, "f64")
             else:
-                expression = _render(node, module, shape, operations)
+                expression, result = _render(node, module, shape, operations, None)
         except _Unsupported:
             continue
         if not shape.arrays:
             continue
+        nullable = shape.storage in COLUMNAR_STORAGES and operations[0] not in _NEVER_NULL
         loop = FusedLoop(
             symbol="ppy_fused_" + prefix.replace(".", "_") + f"_{node.lineno}_{node.col_offset}",
             arrays=tuple(shape.arrays),
@@ -202,6 +274,10 @@ def _search(
             reduction=reduction,
             expression=expression,
             parallel=parallel,
+            storage=shape.storage,
+            kinds=tuple(shape.kinds.get(name, "f64") for name in shape.arrays),
+            result=result,
+            nullable=nullable,
         )
         found.append(
             FusionCandidate(
@@ -217,142 +293,325 @@ def _search(
     return found
 
 
-def _render(node: ast.expr, module: ModuleAnalysis, shape: _Shape, operations: list[str]) -> str:
-    """Render one expression node into a small postfix program."""
+def _render(
+    node: ast.expr,
+    module: ModuleAnalysis,
+    shape: _Shape,
+    operations: list[str],
+    expect: str | None,
+) -> tuple[str, str]:
+    """Render one expression node into the kernel's small prefix program.
+
+    Returns the text and what it computes: `f64` or `bool`. `expect` is
+    what the enclosing operation reads, which decides what an array leaf
+    holds; None leaves the leaf to whoever reads it next.
+    """
     if isinstance(node, ast.Name):
-        if _is_array(node, module):
-            return f"a{shape.array(node.id)}"
+        storage = _storage_of(node, module)
+        if storage is not None:
+            kind = None if expect in (None, "same") else expect
+            index = shape.array(node.id, storage, kind)
+            return f"a{index}", kind or shape.kinds.get(node.id, "f64")
         base = T.strip_literal(module.type_of(node))
-        if base in (T.FLOAT, T.INT, T.BOOL):
-            return f"s{shape.scalar(node.id)}"
+        if base in (T.FLOAT, T.INT, T.BOOL) and expect != "bool":
+            return f"s{shape.scalar(node.id)}", "f64"
         raise _Unsupported
     if (
         isinstance(node, ast.Constant)
         and isinstance(node.value, (int, float))
         and not isinstance(node.value, bool)
+        and expect != "bool"
     ):
-        return f"c{float(node.value)!r}"
+        return f"c{float(node.value)!r}", "f64"
     if isinstance(node, ast.BinOp):
-        ufunc = _OPERATOR_UFUNC.get(type(node.op))
-        if ufunc is None or ufunc not in BINARY:
+        name = _OPERATOR_OP.get(type(node.op))
+        if name is None:
+            return _render_operator(node, module, shape, operations, expect)
+        if expect == "bool":
             raise _Unsupported
-        operations.append(ufunc)
-        left = _render(node.left, module, shape, operations)
-        right = _render(node.right, module, shape, operations)
-        return f"({ufunc} {left} {right})"
-    if isinstance(node, ast.UnaryOp) and isinstance(node.op, ast.USub):
-        operations.append("negative")
-        return f"(negative {_render(node.operand, module, shape, operations)})"
+        operations.append(name)
+        left, _ = _render(node.left, module, shape, operations, "f64")
+        right, _ = _render(node.right, module, shape, operations, "f64")
+        return f"({name} {left} {right})", "f64"
+    if isinstance(node, (ast.Compare, ast.UnaryOp)) and not (
+        isinstance(node, ast.UnaryOp) and isinstance(node.op, ast.USub)
+    ):
+        return _render_operator(node, module, shape, operations, expect)
+    if isinstance(node, ast.UnaryOp) and expect != "bool":
+        operations.append("neg")
+        inner, _ = _render(node.operand, module, shape, operations, "f64")
+        return f"(neg {inner})", "f64"
     if isinstance(node, ast.Call):
-        ufunc = _ufunc_of(node, module)
-        if ufunc is None:
+        operation = _operation_of(node, module)
+        if operation is None or node.keywords:
             raise _Unsupported
-        if node.keywords:
-            raise _Unsupported
-        if ufunc in REDUCTIONS:
+        dialect, name, attributes = operation
+        if dialect == "columnar":
+            return _render_columnar(node, name, module, shape, operations, expect)
+        if name == "reduce" or expect == "bool":
             # A nested reduction changes the shape, so the tree stops here.
             raise _Unsupported
-        if ufunc in UNARY and len(node.args) == 1:
-            operations.append(ufunc)
-            return f"({ufunc} {_render(node.args[0], module, shape, operations)})"
-        if ufunc in BINARY and len(node.args) == 2:
-            operations.append(ufunc)
-            left = _render(node.args[0], module, shape, operations)
-            right = _render(node.args[1], module, shape, operations)
-            return f"({ufunc} {left} {right})"
+        if name == "unary" and len(node.args) == 1:
+            kind = str(attributes.get("op", ""))
+            if kind not in UNARY:
+                raise _Unsupported
+            operations.append(kind)
+            inner, _ = _render(node.args[0], module, shape, operations, "f64")
+            return f"({kind} {inner})", "f64"
+        if name in BINARY and len(node.args) == 2:
+            operations.append(name)
+            left, _ = _render(node.args[0], module, shape, operations, "f64")
+            right, _ = _render(node.args[1], module, shape, operations, "f64")
+            return f"({name} {left} {right})", "f64"
     raise _Unsupported
 
 
-def lower_candidate(ir, llvm_module, candidate: FusionCandidate):  # type: ignore[no-untyped-def]
-    """Emit the LLVM function implementing one fused loop.
+def _render_operator(
+    node: ast.expr,
+    module: ModuleAnalysis,
+    shape: _Shape,
+    operations: list[str],
+    expect: str | None,
+) -> tuple[str, str]:
+    """A comparison, `&`, `|`, `^`, or `~` between columns: the plugin named the operation."""
+    operation = _operation_of(node, module)
+    if operation is None or operation[0] != "columnar":
+        raise _Unsupported
+    if isinstance(node, ast.Compare):
+        if len(node.ops) != 1 or type(node.ops[0]) not in _COMPARE_OP:
+            raise _Unsupported
+        name = _COMPARE_OP[type(node.ops[0])]
+        operands: list[ast.expr] = [node.left, node.comparators[0]]
+    elif isinstance(node, ast.BinOp):
+        found = _COLUMNAR_OPERATOR_OP.get(type(node.op))
+        if found is None:
+            raise _Unsupported
+        name = found
+        operands = [node.left, node.right]
+    elif isinstance(node, ast.UnaryOp) and isinstance(node.op, ast.Invert):
+        name = "invert"
+        operands = [node.operand]
+    else:
+        raise _Unsupported
+    reads, gives = COLUMNAR[name]
+    if expect not in (None, "same") and expect != gives:
+        raise _Unsupported
+    operations.append(name)
+    parts = [
+        _render(operand, module, shape, operations, wanted)[0]
+        for operand, wanted in zip(operands, reads, strict=True)
+    ]
+    return f"({name} {' '.join(parts)})", gives
 
-    Signature: `void sym(double* out, double* a0, .., double s0, .., i64 n)`,
-    or `double sym(double* a0, .., double s0, .., i64 n)` for a reduction.
+
+def _render_columnar(
+    node: ast.Call,
+    name: str,
+    module: ModuleAnalysis,
+    shape: _Shape,
+    operations: list[str],
+    expect: str | None,
+) -> tuple[str, str]:
+    described = COLUMNAR.get(name)
+    if described is None:
+        raise _Unsupported
+    reads, gives = described
+    # `s.fillna(0.0)` reads its receiver first; `pc.fill_null(s, 0.0)` spells it as an argument.
+    arguments = list(node.args)
+    if isinstance(node.func, ast.Attribute) and _storage_of(node.func.value, module) is not None:
+        arguments.insert(0, node.func.value)
+    if len(arguments) != len(reads) or (expect not in (None, "same") and expect != gives):
+        raise _Unsupported
+    operations.append(name)
+    parts = []
+    for argument, wanted in zip(arguments, reads, strict=True):
+        if wanted == "scalar":
+            if isinstance(argument, ast.Constant) and isinstance(argument.value, (int, float)):
+                parts.append(f"c{float(argument.value)!r}")
+                continue
+            if isinstance(argument, ast.Name) and _storage_of(argument, module) is None:
+                base = T.strip_literal(module.type_of(argument))
+                if base in (T.FLOAT, T.INT):
+                    parts.append(f"s{shape.scalar(argument.id)}")
+                    continue
+            raise _Unsupported
+        text, _kind = _render(argument, module, shape, operations, wanted)
+        parts.append(text)
+    return f"({name} {' '.join(parts)})", gives
+
+
+# -- the kernels, as tensor or columnar IR ------------------------------------------------
+
+
+def kernel_module(loops: Iterable[FusedLoop], name: str) -> IRModule:
+    """The IR module holding one function per fused loop.
+
+    A tensor kernel takes each array as a pointer, each scalar as an `f64`,
+    and the element count `n` last: `sym(out, a0.., s0.., n)` for a map and
+    `sym(a0.., s0.., n) -> f64` for a reduction. Inside, every array is a
+    `tensor<f64, N>` loaded from a buffer of `n` elements, so `N` is `n`
+    and the whole expression is tensor arithmetic `lower-tensor` turns
+    into one loop. A columnar kernel takes the result's values and validity
+    buffers, then each array's, then the scalars and `n`, and is columnar
+    arithmetic over columns of `n` rows.
     """
-    loop = candidate.loop
-    double = ir.DoubleType()
-    i64 = ir.IntType(64)
+    module = IRModule(name)
+    module.require("core", 1)
+    for loop in loops:
+        if loop.storage in COLUMNAR_STORAGES:
+            module.require("columnar", 1)
+            _build_columnar(module, loop)
+        else:
+            module.require("tensor", 1)
+            _build(module, loop)
+    return module
 
-    array_args = [double.as_pointer() for _ in loop.arrays]
-    scalar_args = [double for _ in loop.scalars]
-    if loop.returns_scalar:
-        signature = ir.FunctionType(double, [*array_args, *scalar_args, i64])
-    else:
-        signature = ir.FunctionType(
-            ir.VoidType(), [double.as_pointer(), *array_args, *scalar_args, i64]
-        )
 
-    function = ir.Function(llvm_module, signature, name=loop.symbol)
+def _build(module: IRModule, loop: FusedLoop) -> None:
+    params: list[tuple[str, object]] = []
+    if not loop.returns_scalar:
+        params.append(("out", PtrType(F64)))
+    params.extend((f"a{i}", PtrType(F64)) for i in range(len(loop.arrays)))
+    params.extend((f"s{i}", F64) for i in range(len(loop.scalars)))
+    params.append(("n", I64))
+    function = module.add_function(
+        loop.symbol,
+        params,
+        [F64] if loop.returns_scalar else [],  # type: ignore[arg-type]
+    )
+    entry = function.add_entry_block()
+    b = Builder(entry)
+    arguments = list(entry.arguments)
+    n = arguments[-1]
     offset = 0 if loop.returns_scalar else 1
-    out = None if loop.returns_scalar else function.args[0]
-    arrays = list(function.args[offset : offset + len(loop.arrays)])
-    scalars = list(function.args[offset + len(loop.arrays) : -1])
-    length = function.args[-1]
+    array_pointers = arguments[offset : offset + len(loop.arrays)]
+    scalar_values = arguments[offset + len(loop.arrays) : -1]
+    element = tensors.tensor_type(F64, (shapes.Symbol("N"),))
 
-    entry = function.append_basic_block("entry")
-    builder = ir.IRBuilder(entry)
+    def as_buffer(pointer: Value) -> Value:
+        return core.call_intrinsic(
+            b, "ppy.buffer_from_parts", (pointer, n), (BufferType(F64),)
+        ).results[0]
 
-    accumulator = None
-    index = builder.alloca(i64, name="i")
-    if loop.returns_scalar:
-        accumulator = builder.alloca(double, name="acc")
-        if loop.reduction in {"max", "min"}:
-            # An empty reduction has no identity to start from; NumPy raises,
-            # so the caller's fallback must handle it.
-            builder.store(builder.load(builder.gep(arrays[0], [ir.Constant(i64, 0)])), accumulator)
-            builder.store(ir.Constant(i64, 1), index)
-        else:
-            initial = 1.0 if loop.reduction in {"prod", "product"} else 0.0
-            builder.store(ir.Constant(double, initial), accumulator)
-            builder.store(ir.Constant(i64, 0), index)
+    # The destination first, so the lowering can write the result straight into it.
+    destination = None if loop.returns_scalar else as_buffer(arguments[0])
+    arrays = [tensors.load(b, as_buffer(p), element, f"a{i}") for i, p in enumerate(array_pointers)]
+
+    def emit(node: _Node) -> Value:
+        if node.op == "array":
+            return arrays[node.array]
+        if node.op == "scalar":
+            return tensors.fill(b, scalar_values[node.scalar], element)
+        if node.op == "constant":
+            return tensors.fill(b, core.const(b, node.constant, F64), element)
+        operands = [emit(child) for child in node.operands]
+        if node.op in UNARY and len(operands) == 1:
+            return tensors.unary(b, node.op, operands[0])
+        if node.op in BINARY and len(operands) == 2:
+            return tensors.elementwise(b, node.op, operands[0], operands[1])
+        raise ValueError(f"fused expression uses {node.op!r}, which the tensor dialect lacks")
+
+    value = emit(_parse(loop.expression))
+    if destination is not None:
+        tensors.store(b, value, destination)
+        core.ret(b)
+        return
+    kind = "add" if loop.reduction == "mean" else loop.reduction
+    reduced = tensors.reduce(b, value, (0,), kind, name="total")
+    slot = core.alloca(b, F64, name="result")
+    tensors.store(
+        b,
+        reduced,
+        core.call_intrinsic(
+            b, "ppy.buffer_from_parts", (slot, core.const(b, 1, I64)), (BufferType(F64),)
+        ).results[0],
+    )
+    total = core.load(b, slot)
+    if loop.reduction == "mean":
+        total = core.div(b, total, core.cast(b, n, F64))
+    core.ret(b, total)
+
+
+_KINDS: dict[str, IRType] = {"f64": F64, "bool": BOOL}
+
+
+def _build_columnar(module: IRModule, loop: FusedLoop) -> None:
+    kinds = loop.kinds or ("f64",) * len(loop.arrays)
+    result_type = _KINDS[loop.result]
+    params: list[tuple[str, object]] = [
+        ("out", PtrType(columnar.values_element(result_type))),
+        ("outv", PtrType(U8)),
+    ]
+    for i, kind in enumerate(kinds):
+        params.append((f"a{i}", PtrType(columnar.values_element(_KINDS[kind]))))
+        params.append((f"v{i}", PtrType(U8)))
+    params.extend((f"s{i}", F64) for i in range(len(loop.scalars)))
+    params.append(("n", I64))
+    function = module.add_function(loop.symbol, params, [])  # type: ignore[arg-type]
+    entry = function.add_entry_block()
+    b = Builder(entry)
+    arguments = list(entry.arguments)
+    n = arguments[-1]
+    bits = b.create(
+        "core.shr",
+        (core.add(b, n, core.const(b, 7, I64), overflow="wrap"), core.const(b, 3, I64)),
+        (I64,),
+    ).result
+
+    def as_buffer(pointer: Value, count: Value, element: IRType) -> Value:
+        return core.call_intrinsic(
+            b, "ppy.buffer_from_parts", (pointer, count), (BufferType(element),)
+        ).results[0]
+
+    def rows_of(dtype: IRType) -> Value:
+        return bits if dtype is BOOL else n
+
+    scalar_values = arguments[2 + 2 * len(kinds) : -1]
+    columns = []
+    for i, kind in enumerate(kinds):
+        dtype = _KINDS[kind]
+        values = as_buffer(arguments[2 + 2 * i], rows_of(dtype), columnar.values_element(dtype))
+        validity = as_buffer(arguments[3 + 2 * i], bits, U8)
+        columns.append(columnar.from_parts(b, values, validity, n, dtype, f"a{i}"))
+
+    def scalar_of(node: _Node) -> Value:
+        if node.op == "scalar":
+            return scalar_values[node.scalar]
+        return core.const(b, node.constant, F64)
+
+    def emit(node: _Node) -> Value:
+        if node.op == "array":
+            return columns[node.array]
+        if node.op in {"scalar", "constant"}:
+            return columnar.fill(b, scalar_of(node), n)
+        if node.op == "fill_null":
+            return columnar.fill_null(b, emit(node.operands[0]), scalar_of(node.operands[1]))
+        operands = [emit(child) for child in node.operands]
+        if node.op in {"negate", "abs", "invert"}:
+            return columnar.unary(b, node.op, operands[0])
+        if node.op == "is_null":
+            return columnar.is_null(b, operands[0])
+        if node.op == "is_valid":
+            return columnar.is_valid(b, operands[0])
+        if node.op == "select":
+            return columnar.select(b, operands[0], operands[1], operands[2])
+        if (
+            node.op in columnar.ARITHMETIC
+            or node.op in columnar.COMPARISON
+            or node.op in columnar.BOOLEAN
+        ):
+            return columnar.binary(b, node.op, operands[0], operands[1])
+        raise ValueError(f"fused expression uses {node.op!r}, which the columnar dialect lacks")
+
+    value = emit(_parse(loop.expression))
+    out = as_buffer(arguments[0], rows_of(result_type), columnar.values_element(result_type))
+    info = columnar.describe(value.type)
+    assert info is not None
+    if info.nullable:
+        columnar.store(b, value, out, as_buffer(arguments[1], bits, U8))
     else:
-        builder.store(ir.Constant(i64, 0), index)
-
-    header = function.append_basic_block("head")
-    body = function.append_basic_block("body")
-    exit_block = function.append_basic_block("end")
-    builder.branch(header)
-
-    builder.position_at_end(header)
-    current = builder.load(index)
-    builder.cbranch(builder.icmp_signed("<", current, length), body, exit_block)
-
-    builder.position_at_end(body)
-    position = builder.load(index)
-    emitter = _Emitter(ir, llvm_module, builder, arrays, scalars, position)
-    value = emitter.evaluate(_parse(loop.expression))
-
-    if loop.returns_scalar:
-        carried = builder.load(accumulator)
-        if loop.reduction in {"prod", "product"}:
-            updated = builder.fmul(carried, value)
-        elif loop.reduction in {"max", "min"}:
-            # NumPy's min/max propagate NaN, and doing the same keeps the
-            # reduction associative, so no reassociation contract is needed.
-            symbol = ">" if loop.reduction == "max" else "<"
-            better = builder.fcmp_ordered(symbol, value, carried)
-            unordered = builder.fcmp_unordered("!=", value, value)
-            updated = builder.select(builder.or_(better, unordered), value, carried)
-        else:
-            # `sum` and `mean` accumulate in strict index order: no
-            # reassociation without an explicit directive (spec 19.8).
-            updated = builder.fadd(carried, value)
-        builder.store(updated, accumulator)
-    else:
-        builder.store(value, builder.gep(out, [position]))
-
-    builder.store(builder.add(builder.load(index), ir.Constant(i64, 1)), index)
-    builder.branch(header)
-
-    builder.position_at_end(exit_block)
-    if loop.returns_scalar:
-        total = builder.load(accumulator)
-        if loop.reduction == "mean":
-            total = builder.fdiv(total, builder.sitofp(length, double))
-        builder.ret(total)
-    else:
-        builder.ret_void()
-    return function
+        columnar.store(b, value, out)
+    core.ret(b)
 
 
 @dataclass(slots=True)
@@ -365,7 +624,7 @@ class _Node:
 
 
 def _parse(text: str) -> _Node:
-    """Parse the postfix program rendered by `_render`."""
+    """Parse the prefix program rendered by `_render`."""
     tokens = text.replace("(", " ( ").replace(")", " ) ").split()
     position = 0
 
@@ -388,52 +647,3 @@ def _parse(text: str) -> _Node:
         return _Node("constant", constant=float(token[1:]))
 
     return parse()
-
-
-class _Emitter:
-    def __init__(self, ir, module, builder, arrays, scalars, position):  # type: ignore[no-untyped-def]
-        self.ir = ir
-        self.module = module
-        self.builder = builder
-        self.arrays = arrays
-        self.scalars = scalars
-        self.position = position
-
-    def evaluate(self, node: _Node):  # type: ignore[no-untyped-def]
-        ir = self.ir
-        if node.op == "array":
-            pointer = self.builder.gep(self.arrays[node.array], [self.position])
-            return self.builder.load(pointer)
-        if node.op == "scalar":
-            return self.scalars[node.scalar]
-        if node.op == "constant":
-            return ir.Constant(ir.DoubleType(), node.constant)
-
-        operands = [self.evaluate(child) for child in node.operands]
-        if node.op == "negative":
-            return self.builder.fneg(operands[0])
-        if node.op in UNARY:
-            return self.builder.call(self._intrinsic(UNARY[node.op], 1), operands)
-        if node.op == "add":
-            return self.builder.fadd(*operands)
-        if node.op == "subtract":
-            return self.builder.fsub(*operands)
-        if node.op == "multiply":
-            return self.builder.fmul(*operands)
-        if node.op in {"true_divide", "divide"}:
-            return self.builder.fdiv(*operands)
-        if node.op == "power":
-            return self.builder.call(self._intrinsic("llvm.pow.f64", 2), operands)
-        if node.op in {"minimum", "maximum"}:
-            symbol = "<" if node.op == "minimum" else ">"
-            keep = self.builder.fcmp_ordered(symbol, operands[0], operands[1])
-            return self.builder.select(keep, operands[0], operands[1])
-        raise _Unsupported(node.op)
-
-    def _intrinsic(self, name: str, arity: int):  # type: ignore[no-untyped-def]
-        ir = self.ir
-        existing = self.module.globals.get(name)
-        if existing is not None:
-            return existing
-        double = ir.DoubleType()
-        return ir.Function(self.module, ir.FunctionType(double, [double] * arity), name=name)

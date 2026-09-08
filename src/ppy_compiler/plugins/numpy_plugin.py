@@ -8,7 +8,8 @@ from collections.abc import Sequence
 from ..analysis import types as T
 from ..analysis.effects import Effect, EffectSet
 from ..analysis.refinements import Facts
-from .base import CallResult, Lowering
+from .base import CallResult, DialectOperationSpec, Lowering, Plugin
+from .convergence import converged
 
 __all__ = [
     "ELEMENTWISE",
@@ -90,17 +91,22 @@ ELEMENTWISE = frozenset(
 #: Reductions supported for the v1 fast path (spec 19.8).
 REDUCTIONS = frozenset({"sum", "prod", "product", "min", "max", "mean", "any", "all"})
 
-#: Operations the LLVM backend has a generated kernel for. Only these are
-#: reported as `Intrinsic`; the rest are typed but left to NumPy's own dispatch.
+#: Operations that converge onto the tensor dialect, so a kernel is built for
+#: them; the rest are typed but left to NumPy's own dispatch.
 FUSIBLE_UNARY = frozenset(
     {
         "sin",
         "cos",
+        "tan",
         "exp",
+        "exp2",
         "log",
         "log2",
         "log10",
         "sqrt",
+        "floor",
+        "ceil",
+        "trunc",
         "absolute",
         "abs",
         "negative",
@@ -229,14 +235,21 @@ _OPERATORS = {
 }
 
 
-class NumPyPlugin:
+def _spell(spec: DialectOperationSpec) -> str:
+    attributes = dict(spec.attributes)
+    if "op" in attributes:
+        return f"{spec.dialect}.{spec.operation} {attributes['op']}"
+    return f"{spec.dialect}.{spec.operation}"
+
+
+class NumPyPlugin(Plugin):
     """Types, effects, and lowering decisions for exact `numpy.ndarray` values."""
 
     name = "numpy"
     modules = ("numpy", "numpy.linalg")
 
     def __init__(self, options: dict[str, object] | None = None) -> None:
-        self.options = options or {}
+        super().__init__(options)
         self.fusion = bool(self.options.get("fusion", True))
         self.internal_api = bool(self.options.get("internal-api", False))
 
@@ -303,6 +316,10 @@ class NumPyPlugin:
         """The ufunc implementing a Python operator, if any."""
         return _OPERATORS.get(symbol)
 
+    def tensor_operation(self, qualname: str) -> DialectOperationSpec | None:
+        operation = qualname.rpartition(".")[2]
+        return converged(operation) if operation in FUSIBLE else None
+
     def call(
         self,
         qualname: str,
@@ -342,7 +359,7 @@ class NumPyPlugin:
         if "out" in keywords:
             # `out=` aliases a caller-visible buffer (spec 19.10).
             effects = effects.add(Effect.WRITE_OBJECT)
-            if lowering is Lowering.INTRINSIC:
+            if isinstance(lowering, DialectOperationSpec):
                 lowering = Lowering.DIRECT_NATIVE_CALL
                 reason = "`out=` requires overlap-safe NumPy semantics"
         return CallResult(result_type, Facts(), effects, lowering, reason, guards)
@@ -356,7 +373,12 @@ class NumPyPlugin:
         has_axis = "axis" in keywords or len(args) > 1
         result_type: T.Type = _NDARRAY if has_axis else self._scalar_result(operation, args)
         lowering, reason, guards = self._fast_path(operation, args, keywords)
-        if lowering is Lowering.INTRINSIC and operation in {"sum", "prod", "product", "mean"}:
+        if isinstance(lowering, DialectOperationSpec) and operation in {
+            "sum",
+            "prod",
+            "product",
+            "mean",
+        }:
             # Strict float reduction order is retained unless reassociation is
             # explicitly permitted (spec 19.8).
             reason = "fused strided reduction with strict floating-point order"
@@ -389,7 +411,7 @@ class NumPyPlugin:
         operation: str,
         args: Sequence[tuple[T.Type, Facts]],
         keywords: dict[str, tuple[T.Type, Facts]],
-    ) -> tuple[Lowering, str, tuple[str, ...]]:
+    ) -> tuple[Lowering | DialectOperationSpec, str, tuple[str, ...]]:
         """Decide the lowering for one operation (spec 19.3)."""
         if not self.fusion:
             return Lowering.PYTHON_FALLBACK, "fusion is disabled by project configuration", ()
@@ -428,7 +450,8 @@ class NumPyPlugin:
             "identical shapes across array operands",
             "a floating-point error state the generated loop can honor",
         )
-        if operation not in FUSIBLE:
+        spec = converged(operation) if operation in FUSIBLE else None
+        if spec is None:
             return (
                 Lowering.DIRECT_NATIVE_CALL,
                 f"`{operation}` has no generated kernel, so NumPy's own loop runs",
@@ -441,8 +464,8 @@ class NumPyPlugin:
                 (),
             )
         return (
-            Lowering.INTRINSIC,
-            f"`{operation}` fused into one strided loop",
+            spec,
+            f"`{operation}` is `{_spell(spec)}`, fused into one strided loop",
             guards,
         )
 

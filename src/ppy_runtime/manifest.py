@@ -8,6 +8,7 @@ interpreter compatibility, and file presence -- nothing that reads source.
 from __future__ import annotations
 
 import json
+import platform
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -16,7 +17,9 @@ from .abi import NativeParam, NativeSignature
 
 __all__ = ["Manifest", "ManifestError", "NativeEntry", "RegionLibrary", "load"]
 
-SUPPORTED_ABI = 1
+#: 2: the 0.2.0 artifact -- it carries its torch regions, and a 0.1.x
+#: manifest is refused with the rebuild message rather than half-served.
+SUPPORTED_ABI = 2
 
 
 class ManifestError(RuntimeError):
@@ -50,11 +53,16 @@ class Manifest:
     safeguards: str
     #: The prebuilt CPython-ABI wrapper extension, when the build shipped one:
     #: its path next to the manifest, and the wrapper index per qualname.
+    #: The triple the objects were compiled for ("" in an older artifact).
+    target: str = ""
     wrapper_library: Path | None = None
     wrapper_entries: dict[str, int] | None = None
     #: Compiled torch regions per generated module, when the build shipped
     #: any and their libraries are still beside the manifest.
     regions: dict[str, RegionLibrary] | None = None
+    #: Staged exports per generated module -- a kernel's PTX, an XLA module --
+    #: as files beside the manifest, when the build shipped any.
+    staged: dict[str, dict[str, Path]] | None = None
 
 
 def _signature(payload: dict) -> NativeSignature:
@@ -76,6 +84,8 @@ def _signature(payload: dict) -> NativeSignature:
         parameters=parameters,
         returns=tuple(abi["returns"]),
         releases_gil=bool(abi.get("releases_gil", False)),
+        cpu_features=tuple(str(f) for f in abi.get("cpu_features", ())),
+        future=str(abi.get("future", "")),
     )
 
 
@@ -153,9 +163,19 @@ def load(path: Path) -> Manifest:
                 candidate,
                 {str(name): str(symbol) for name, symbol in section.get("entries", {}).items()},
             )
+    staged: dict[str, dict[str, Path]] = {}
+    for module, section in (payload.get("staged") or {}).items():
+        if not isinstance(section, dict):
+            continue
+        for function, filename in section.items():
+            candidate = path.parent / Path(str(filename)).name
+            # A missing payload is the Python definition, not a broken artifact.
+            if candidate.is_file():
+                staged.setdefault(str(module), {})[str(function)] = candidate
     return Manifest(
         path=path,
         library=library,
+        target=str(payload.get("target") or ""),
         entries=entries,
         entry_module=program.get("entry", ""),
         search_paths=[Path(p) for p in program.get("search_paths", ())],
@@ -164,4 +184,27 @@ def load(path: Path) -> Manifest:
         wrapper_library=wrapper_library,
         wrapper_entries=wrapper_entries,
         regions=regions or None,
+        staged=staged or None,
     )
+
+
+def host_runs(target: str) -> bool:
+    """Whether this machine is the one `target` names, by architecture and OS.
+
+    The runtime has no LLVM to ask, so it compares the words a triple is
+    made of with what the platform says of itself.
+    """
+    if not target:
+        return True
+    parts = target.lower().split("-")
+    architecture = {"amd64": "x86_64", "arm64": "aarch64"}.get(parts[0], parts[0])
+    machine = platform.machine().lower()
+    machine = {"amd64": "x86_64", "arm64": "aarch64"}.get(machine, machine)
+    system = {"linux": "linux", "darwin": "darwin", "win32": "windows"}.get(
+        sys.platform, sys.platform
+    )
+    names_os = any(
+        part.startswith(system) or (system == "darwin" and part.startswith("macos"))
+        for part in parts[1:]
+    )
+    return architecture == machine and names_os
