@@ -15,8 +15,8 @@ writes, and `verify_conversions.py` regenerates it to prove it:
 
 | | plain | ppy run |
 |---|---:|---:|
-| preprocessing | 66.2 ms | **0.9 ms** |
-| 100 training steps | 1244.9 ms | 715.3 ms |
+| preprocessing | 53.9 ms | **0.8 ms** |
+| 100 training steps | 208.3 ms | 163.4 ms |
 
 `checksum` and the loss trajectory are identical on both paths.
 

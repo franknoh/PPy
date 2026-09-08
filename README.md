@@ -80,14 +80,14 @@ into memory rather than through a Python object per field. Piping the limit
 in, `echo 300000 |` before each of these:
 
 ```bash
-uv run python    collatz.ppy           # 1  plain CPython, no compiler   1170.2 ±  9.1 ms
-uv run ppy       collatz.ppy           # 2  optimized Python backend     1167.9 ± 13.1 ms
-uv run ppy run   collatz.ppy           # 3  LLVM, JIT every run            45.4 ±  1.3 ms  (+ ~1200 ms JIT)
-uv run ppy build collatz.ppy -o dist   # 4  LLVM, built once (~800 ms)...
-./dist/collatz                         #    ...then the native binary      33.6 ±  1.1 ms
-                                       #    ...--host-cpu, not portable    31.8 ±  0.9 ms
+uv run python    collatz.ppy           # 1  plain CPython, no compiler   1047.8 ±  3.4 ms
+uv run ppy       collatz.ppy           # 2  optimized Python backend     1055.2 ± 17.0 ms
+uv run ppy run   collatz.ppy           # 3  LLVM, built on the first run   39.3 ±  0.4 ms  (+ ~640 ms, once)
+uv run ppy build collatz.ppy -o dist   # 4  LLVM, built once (~640 ms)...
+./dist/collatz                         #    ...then the native binary      29.5 ±  0.4 ms
+                                       #    ...--host-cpu, not portable    27.5 ±  0.5 ms
 
-gcc -O3 collatz.c && ./a.out           # reference: the same loop in C     45.0 ±  0.6 ms  (+ ~110 ms gcc)
+gcc -O3 collatz.c && ./a.out           # reference: the same loop in C     40.4 ±  0.6 ms  (+ ~90 ms gcc)
 ```
 
 Numbers are the kernel's wall time on one machine — mean ± standard
@@ -95,12 +95,13 @@ deviation over ten runs, each a fresh process; the parenthesized figure is
 what that row spends turning source into machine code, and how often.
 Ways 3 and 4 are one compilation path, ahead of time or not — the binary is
 `ppy run` in a compiled coat, machine code taken from the library built next
-to it. They differ in one default: `ppy run` keeps Python-integer semantics
-(overflow is guarded and falls back to arbitrary precision — that is the
-45.4 ms, level with C with the guards in), while `ppy build` produces a
-wrap-semantics artifact like every native compiler — that is the 33.6 ms,
-past C. `run --unsafe` and `build --safe` flip either one; bounds
-checks stay in both. The built binary is compiled software: it starts an
+to it, and the first `ppy run` is that build into the cache, every later
+one the launcher alone. They differ in one default: `ppy run` keeps
+Python-integer semantics (overflow is guarded and falls back to arbitrary
+precision — that is the 39.3 ms, level with C with the guards in), while
+`ppy build` produces a wrap-semantics artifact like every native compiler —
+that is the 29.5 ms, past C. `run --unsafe` and `build --safe` flip either
+one; bounds checks stay in both. The built binary is compiled software: it starts an
 embedded interpreter and imports `ppy_runtime` — about 35 ms before the
 program begins — and keeps working with the compiler uninstalled.
 `ppy build --standalone` removes even that, for a program whose reachable
@@ -112,34 +113,35 @@ The same kernel through the neighbors, same machine and methodology:
 
 | compiler | kernel | integer semantics |
 |---|---:|---|
-| **PPY** `ppy build --host-cpu` | **31.8 ± 0.9 ms** | 64-bit, wraps on overflow (this machine's instruction set) |
-| **PPY** `ppy build` binary | **33.6 ± 1.1 ms** | 64-bit, wraps on overflow (`--safe` to keep Python ints) |
-| Codon `-release` | 35.9 ± 1.9 ms | 64-bit, wraps on overflow |
-| Numba `@njit` | 36.5 ± 1.0 ms | 64-bit, wraps on overflow |
-| C (`gcc -O3`) | 45.0 ± 0.6 ms | 64-bit, wraps on overflow |
-| **PPY** `ppy run` | **45.4 ± 1.3 ms** | **Python ints: guarded, falls back to arbitrary precision** |
-| PyPy 3.11 | 56.9 ± 2.5 ms | Python ints |
-| mypyc | 78.4 ± 1.4 ms | Python ints |
-| Cython (`cdef long long`) | 81.4 ± 3.0 ms | 64-bit, wraps on overflow |
-| Nuitka | 776.9 ± 11.6 ms | Python ints, no type specialization |
-| CPython 3.14 | 1170.2 ± 9.1 ms | Python ints |
+| **PPY** `ppy build --host-cpu` | **27.5 ± 0.5 ms** | 64-bit, wraps on overflow (this machine's instruction set) |
+| **PPY** `ppy build` binary | **29.5 ± 0.4 ms** | 64-bit, wraps on overflow (`--safe` to keep Python ints) |
+| Numba `@njit` | 31.4 ± 0.7 ms | 64-bit, wraps on overflow |
+| **PPY** `ppy run` | **39.3 ± 0.4 ms** | **Python ints: guarded, falls back to arbitrary precision** |
+| C (`gcc -O3`) | 40.4 ± 0.6 ms | 64-bit, wraps on overflow |
+| Codon `-release` | 44.5 ± 0.9 ms | 64-bit, wraps on overflow |
+| PyPy 3.11 | 52.5 ± 1.7 ms | Python ints |
+| Cython (`cdef long long`) | 61.7 ± 0.9 ms | 64-bit, wraps on overflow |
+| mypyc | 69.5 ± 1.2 ms | Python ints |
+| Nuitka | 700.9 ± 4.0 ms | Python ints, no type specialization |
+| CPython 3.14 | 1047.8 ± 3.4 ms | Python ints |
 
 `--host-cpu` is the opt-in that compiles for the machine doing the build
-instead of the portable baseline — 33.6 ms to 31.8 ms here, and about 20% on
-a matmul kernel where the vectorizer has something to work with. It is off
+instead of the portable baseline — 29.5 ms to 27.5 ms here, and about a
+third on a matmul kernel where the vectorizer has something to work with. It is off
 by default because an artifact is meant to be shipped and host code faults
 on an older CPU; JIT code under `ppy run` always targets the host, which is
 free because it never leaves the machine. Giving C the same option changes
-nothing on this kernel (`gcc -O3 -march=native`: 45.5 ± 1.2 ms), so the row
-above it is not winning on a flag C was denied.
+nothing on this kernel (`gcc -O3 -march=native`: 40.2 ± 1.0 ms), so the rows
+above it are not winning on a flag C was denied.
 
-Same compiler, `run` and `build`: the 12 ms between them is the price of
+Same compiler, `run` and `build`: the 10 ms between them is the price of
 Python's integers, and it is a per-command default rather than a language decision —
 wrap semantics where a native artifact is expected, full Python semantics
 where a Python program is. Ports are the straightforward one for each tool:
 `@njit`, a `cdef long long` `.pyx`, an annotated module for mypyc, `codon
-build -release`, `nuitka --module`; Numba 0.67, Cython 3.3, mypy 2.3.1,
-Nuitka on CPython 3.13, Codon 0.19.6, PyPy 3.11.15 (warm).
+build -release`, `nuitka --module`; Numba 0.67 (warm), Cython 3.3, mypy
+2.3.1, Nuitka 4.2 on CPython 3.13, Codon 0.19.6, PyPy 3.11.15 (warm), gcc
+13.3, CPython 3.14.5.
 
 ## Turning ordinary Python into it
 

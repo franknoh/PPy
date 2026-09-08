@@ -381,7 +381,7 @@ def _links(natives) -> bool:  # type: ignore[no-untyped-def]
     return bool(with_functions) and all(native.ppyir for native in with_functions)
 
 
-def _program_object_key(bundle, names, level, target=None) -> str:  # type: ignore[no-untyped-def]
+def _program_object_key(bundle, names, level, target=None, for_host: bool = False) -> str:  # type: ignore[no-untyped-def]
     """The linked program's object, keyed on every module's key: same modules, same bytes."""
     from ...cache import digest
     from ...driver.pipeline import module_cache_key
@@ -390,13 +390,16 @@ def _program_object_key(bundle, names, level, target=None) -> str:  # type: igno
         module_cache_key(bundle, name, target="llvm", opt_level=level).hex()
         for name in sorted(names)
     ]
+    flavour = ".host" if for_host else ""
     return digest("ppy-program", *keys) + (
-        f".{target.triple}.o" if target is not None and not target.is_host else ".o"
+        f".{target.triple}{flavour}.o"
+        if target is not None and not target.is_host
+        else f"{flavour}.o"
     )
 
 
 def _emit_program(  # type: ignore[no-untyped-def]
-    bundle, program, cached, object_key, target, build_directory, artifacts, engine
+    bundle, program, cached, object_key, target, build_directory, artifacts, engine, for_host
 ):
     """One object for the linked program: the cached bytes, or emitted and cached now."""
     store = bundle.project.store
@@ -412,7 +415,7 @@ def _emit_program(  # type: ignore[no-untyped-def]
             engine(),
             program,
             destination,
-            host_cpu=bundle.project.config.llvm.host_cpu,
+            host_cpu=for_host,
             target=target,
         )
     except Exception as exc:  # noqa: BLE001 - reported, not fatal
@@ -487,11 +490,12 @@ def _link_and_cache(
         return
 
 
-def _object_key(key: CacheKey, target: TargetInfo | None = None) -> str:
-    """The key of the object file compiled from the module this key names."""
+def _object_key(key: CacheKey, target: TargetInfo | None = None, for_host: bool = False) -> str:
+    """The key of the object file compiled from the module this key names; host code is its own."""
+    flavour = ".host" if for_host else ""
     if target is not None and not target.is_host:
-        return f"{key.hex()}.{target.triple}.o"
-    return f"{key.hex()}.o"
+        return f"{key.hex()}.{target.triple}{flavour}.o"
+    return f"{key.hex()}{flavour}.o"
 
 
 def compile_project(  # type: ignore[no-untyped-def]
@@ -505,6 +509,7 @@ def compile_project(  # type: ignore[no-untyped-def]
     natives: dict[str, NativeModule] | None = None,
     target: TargetInfo | None = None,
     wrappers: bool = True,
+    host_cpu: bool | None = None,
 ) -> BuildArtifacts:
     """Compile to LLVM, emit object code, link, and write the manifest (spec 4.2).
 
@@ -516,12 +521,15 @@ def compile_project(  # type: ignore[no-untyped-def]
     that only this interpreter can build -- the boundary wrapper and the
     launcher -- are left out and said so. `wrappers=False` leaves the
     boundary wrapper out on purpose, for an artifact no Python will call.
+    `host_cpu` overrides the project's setting: the run artifact passes
+    True, because it never leaves the machine that built it.
     """
     from ...driver.pipeline import build_python, module_cache_key
     from ...opt.rewrites import adjustments_for_project
 
     level = opt_level if opt_level is not None else bundle.project.config.opt_level
     target = target or configured_target(bundle.project.config.llvm.target)
+    for_host = bundle.project.config.llvm.host_cpu if host_cpu is None else host_cpu
     store = bundle.project.store
     store.ensure()
 
@@ -546,7 +554,7 @@ def compile_project(  # type: ignore[no-untyped-def]
     artifacts = BuildArtifacts()
     # The program's object is looked up before anything links: a build the
     # cache already holds opens neither the linker nor LLVM.
-    program_key = _program_object_key(bundle, natives, level, target)
+    program_key = _program_object_key(bundle, natives, level, target, for_host)
     cached_program = store.read(program_key) if _links(natives) else None
     program = (
         None if cached_program is not None else _linked_program(bundle, natives, level, target)
@@ -569,7 +577,7 @@ def compile_project(  # type: ignore[no-untyped-def]
             # The object depends on exactly what the module key covers, so a hit
             # means the previous one is still correct and running the optimizer and
             # the code generator again would produce the same bytes.
-            object_key = _object_key(key, target)
+            object_key = _object_key(key, target, for_host)
             cached = store.read(object_key)
             if cached is not None:
                 destination.parent.mkdir(parents=True, exist_ok=True)
@@ -582,7 +590,7 @@ def compile_project(  # type: ignore[no-untyped-def]
                         engine(),
                         native.ir,
                         destination,
-                        host_cpu=bundle.project.config.llvm.host_cpu,
+                        host_cpu=for_host,
                         target=target,
                     )
                 except Exception as exc:  # noqa: BLE001 - reported, not fatal
@@ -599,7 +607,15 @@ def compile_project(  # type: ignore[no-untyped-def]
 
     if linked:
         _emit_program(
-            bundle, program, cached_program, program_key, target, build_directory, artifacts, engine
+            bundle,
+            program,
+            cached_program,
+            program_key,
+            target,
+            build_directory,
+            artifacts,
+            engine,
+            for_host,
         )
     # The generated Python is part of the build output: it is what the launcher
     # executes, and what binds the native entry points at import time.
@@ -817,8 +833,11 @@ def compile_for_run(  # type: ignore[no-untyped-def]
 
     Returns the manifest to launch now. `None` means the program needs the
     in-process path; a marker is left so the next run knows without
-    analyzing. The artifact is built beside its final name and moved into
-    place whole, so a concurrent run never launches a half-written one.
+    analyzing. The objects are compiled for this machine's CPU, as JIT code
+    always was: the artifact lives in this project's cache under a name that
+    carries the CPU's features, and never ships. The artifact is built beside
+    its final name and moved into place whole, so a concurrent run never
+    launches a half-written one.
     """
     from ...driver.warm import JIT_MARKER, MANIFEST
 
@@ -843,6 +862,7 @@ def compile_for_run(  # type: ignore[no-untyped-def]
         entry=entry,
         launcher=False,
         natives=natives,
+        host_cpu=True,
     )
     for note in artifacts.notes:
         reporter.emit(Diagnostic("W2004", Severity.WARNING, note))

@@ -6,11 +6,32 @@ The map. Details live one link away:
 - [conversion.md](conversion.md) — how `ppy convert` and `ppy migrate` infer what they write
 - [migrating.md](migrating.md) — what to hand `ppy migrate` on a real project: the kernels, not the repository
 - [architecture.md](architecture.md) — pipeline, module map, cache, threads
+- [ir.md](ir.md) — the canonical IR: dialects, passes, `.ppyir`, the linker, sanitizers, profiles
 - [plugins.md](plugins.md) — NumPy, PyTorch, JAX, Pydantic, Uvicorn
 - [config.md](config.md) — every `[tool.ppy]` key
 - [diagnostics.md](diagnostics.md) — every code
 - [cli.md](cli.md) — every command and option
 - [compatibility.md](compatibility.md) — what is stable, what moves, what the cache and artifact ABI promise
+
+## The compiler as a platform
+
+Since 0.2.0 one typed canonical IR sits between the analysis and every
+backend ([ir.md](ir.md)): SSA values, blocks, an explicit control-flow
+graph, operations named in dialects, a verifier, a printer and parser
+(`.ppyir` is public text), a pass manager, and rewrite patterns. The LLVM
+backend reads that IR and nothing else, and so do the C and C++ source
+backends, the CUDA and HIP source backends, the NVVM/PTX device backend,
+and the StableHLO backend for XLA. A program writes to the same IR through
+the `ppy` namespaces -- `ppy.native` memory and FFI, `ppy.simd`, `ppy.cpu`,
+`ppy.atomic`, `ppy.concurrent`, `ppy.parallel.range`, `ppy.grad`,
+`ppy.aio` coroutines, `ppy.cuda` and `ppy.hip` kernels, `ppy.xla.jit` --
+each with a Python reference implementation, so every path still answers
+alike; [language.md](language.md) has each one. A package builds as one
+program: modules link at the IR and whole-program optimization inlines
+across them. For looking inside there are `ppy emit` (any stage as text,
+IR to PTX), `ppy inspect --stage`, `ppy build --report-opt`, the
+sanitizers (`--sanitize`), and profile-guided optimization (`ppy run
+--profile`, `ppy build --pgo`); [cli.md](cli.md) has each flag.
 
 ## The three paths
 
@@ -30,7 +51,7 @@ each and it is regenerated rather than retyped:
 
 | what | where |
 |---|---|
-| the collatz kernel against nine other compilers | [README](../README.md#one-file-four-ways) |
+| the collatz kernel against C and six other compilers | [README](../README.md#one-file-four-ways) |
 | six competitive-programming problems, end to end, against C | [examples/15_algorithms](../examples/15_algorithms/README.md) |
 | the Python/native call boundary, per call | `examples/bench_boundary.py` |
 | startup: cold build, warm build, launcher, prebuilt, JIT | `examples/bench_startup.py` |
@@ -49,8 +70,10 @@ loop is `.backward()` and the optimizer, and stays exactly as fast.
 The Python backend is not faster and is not meant to be: it optimizes the AST,
 and the interpreter overhead is unchanged.
 
-Caches earn their keep inside a run, not around it: on the collatz module,
-lowering to IR costs 777 ms cold and 12 ms from the content-addressed store.
+Caches earn their keep inside a run, not around it: on the collatz module a
+cold `ppy build` takes 640 ms and a warm one, every stage answered from the
+content-addressed store, 350 ms; a warm `ppy run` is the launcher alone, 93
+ms of wall time (`examples/bench_startup.py`).
 What no cache can remove from `ppy run` is per-process — importing the
 compiler and MCJIT machine-code emission — and that is what `ppy build` pays
 once. `PPY_CACHE_DIR` moves the store itself off a slow filesystem, which is

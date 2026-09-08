@@ -18,6 +18,9 @@ to test:
 uv sync --group torch     # PyTorch, CPU wheels
 uv sync --group jax       # JAX and Flax, CPU wheels
 uv sync --group uvicorn   # FastAPI and Uvicorn
+uv sync --group scipy     # SciPy
+uv sync --group pandas    # pandas
+uv sync --group pyarrow   # PyArrow
 uv sync --group all       # everything
 ```
 
@@ -36,7 +39,7 @@ format, pylint, the test suite, the conversion check, the three-path example
 run, and the example lint. CI runs that script and nothing else, so a local
 pass and a CI pass are the same claim. Run it before every commit.
 
-A plugin's own claim is `./scripts/plugin_check.sh <torch|jax|uvicorn>`,
+A plugin's own claim is `./scripts/plugin_check.sh <torch|jax|uvicorn|scipy|pandas|pyarrow>`,
 which fails if the plugin's tests all skip — a skipped test proves nothing.
 
 ## What a change has to keep true
@@ -75,6 +78,10 @@ traceback, no `<unknown>` in any message, and no more errors than
 `scripts/dogfood.json` records for each. The count only comes down --
 `--write` records a lower one -- so a change that makes the converter worse
 at real code fails CI, and one that makes it better is asked to say so.
+The exception was 0.2.0, which re-recorded the ceilings upward once: the
+corpus roughly doubled, and the count is a property of the corpus as much
+as of the converter. Ceilings are recorded on Python 3.13, the version the
+job runs, because counts can differ between versions.
 It is not part of `check.sh`, because a minute of migration on every local
 run is too much; CI runs it as its own job on every push.
 

@@ -675,6 +675,11 @@ Speed of the compiler itself, measured before being changed.
   together doubling the cost of importing the package and adding thirty
   milliseconds to every launched artifact; each loads when first used, and
   a test holds the async ones out of a plain import.
+- The artifact a warm `ppy run` launches is compiled for the machine's own
+  CPU again, as JIT code always was and `ppy build` never is without
+  `--host-cpu`; the run directory's name and the program object's key carry
+  the CPU's features, so a cache carried to another machine never serves
+  it. A test holds both.
 
 ## 0.1.0a1
 
