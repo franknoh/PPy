@@ -105,6 +105,28 @@ def build_parser() -> argparse.ArgumentParser:
         help="instrument the native code with checks that raise rather than fall back: "
         "a comma-separated list of bounds, overflow, pointer, alignment (the IR road)",
     )
+    run.add_argument(
+        "--profile",
+        action="store_true",
+        help="count blocks, branches, and calls while the program runs, and write a "
+        "`.ppyprof` profile when it ends, for `--pgo` (the IR road, in-process)",
+    )
+    run.add_argument(
+        "--profile-out",
+        type=Path,
+        default=None,
+        metavar="FILE",
+        help="where `--profile` writes; a profile already there is merged "
+        "(default: <entry>.ppyprof in the working directory)",
+    )
+    run.add_argument(
+        "--pgo",
+        type=Path,
+        default=None,
+        metavar="FILE",
+        help="optimize with the profile a `--profile` run wrote: hot and cold functions, "
+        "branch weights, inlining (the IR road)",
+    )
     run.add_argument("args", nargs=argparse.REMAINDER)
 
     build = subparsers.add_parser("build", help="compile without running")
@@ -115,6 +137,14 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="instrument the native code with checks that raise rather than fall back: "
         "a comma-separated list of bounds, overflow, pointer, alignment (the IR road)",
+    )
+    build.add_argument(
+        "--pgo",
+        type=Path,
+        default=None,
+        metavar="FILE",
+        help="optimize with the profile a `ppy run --profile` wrote: hot and cold functions, "
+        "branch weights, inlining (the IR road)",
     )
     build.add_argument(
         "--report-opt",
@@ -426,7 +456,7 @@ def main(argv: list[str] | None = None) -> int:
         # manifest runs through the runtime alone, and so does the artifact
         # the last run of this same program left in the cache.
         manifest = getattr(options, "prebuilt", None)
-        if manifest is None and options.file.is_file():
+        if manifest is None and options.file.is_file() and not options.profile:
             from .warm import locate
 
             manifest = locate(options.file, options).manifest

@@ -38,6 +38,7 @@ from ...ir import (
     VoidType,
 )
 from ...ir.dialects.gpu import kind_of
+from ...ir.transforms.profile import PROFILE_MAP
 from ...target import TargetInfo, host_target
 from .aio_lowering import lower_async
 from .dialect_lowerings import EmitError as _DialectEmitError
@@ -49,6 +50,7 @@ from .dialect_lowerings import (
     lower_special,
 )
 from .lowering import FASTMATH_FLAGS, _default_triple
+from .prof_lowering import branch_weights, function_profile, lower_prof, profile_globals
 
 __all__ = ["EmitError", "emit_module"]
 
@@ -113,9 +115,14 @@ class _ModuleEmitter:
         self._data_layout = None
         self.functions: dict[str, object] = {}
         self.strings: dict[str, object] = {}
+        #: The counter array of an instrumented module, for `prof.hit`.
+        self.profile_counters = None
 
     def run(self):  # type: ignore[no-untyped-def]
         ir = self.ir
+        legend = self.module.attributes.get(PROFILE_MAP)
+        if legend:
+            profile_globals(self, str(legend))
         for name, item in self.module.globals.items():
             if isinstance(item.type, BufferType) and isinstance(item.value, str):
                 data = bytearray(item.value.encode("utf-8"))
@@ -141,6 +148,7 @@ class _ModuleEmitter:
             symbol = str(function.attributes.get("ppy.symbol", function.name))
             declared = ir.Function(self.llvm, self.function_type(function), name=symbol)
             declared.linkage = "external"
+            function_profile(self, declared, function)
             features = function.attributes.get("cpu.features")
             if features:
                 # llvmlite knows only the enum attributes; a string attribute
@@ -470,11 +478,14 @@ class _FunctionEmitter:
             case "cond_br":
                 for successor in op.successors:
                     self._branch_arguments(successor)
-                b.cbranch(
+                branch = b.cbranch(
                     self.value(op.operands[0]),
                     self.blocks[id(op.successors[0].block)],
                     self.blocks[id(op.successors[1].block)],
                 )
+                weights = op.attributes.get("ppy.weights")
+                if isinstance(weights, tuple) and len(weights) == 2:
+                    branch_weights(self, branch, weights)
             case "ret":
                 self._ret(op)
             case "unreachable":
@@ -881,6 +892,7 @@ _DIALECTS = {
     "concurrency": lower_concurrency,
     "special": lower_special,
     "async": lower_async,
+    "prof": lower_prof,
 }
 
 

@@ -88,6 +88,10 @@ CODES: dict[str, str] = {
     "W2004": "A directive had no effect for the selected backend.",
     "W2007": "A function marked `@ppy.xla.jit` cannot be taken by XLA; the reason is named.",
     "W2008": "A kernel will not run on the device; the reason is named, and the reference runs.",
+    "W2009": (
+        "A function changed since the profile given to `--pgo` was recorded; its counts were "
+        "ignored and it was built as without a profile."
+    ),
     "R3003": "A list parameter is close to being a borrowed buffer but something blocks it.",
     "W2101": (
         "The build cache index was damaged; it was quarantined and rebuilt, "

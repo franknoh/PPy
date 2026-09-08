@@ -166,7 +166,8 @@ and which stayed boxed, with the reason.
 ppy build TARGET [--safe] [--host-cpu] [--standalone]
                  [--target TRIPLE] [--python-extension] [--library]
                  [--backend {llvm,python}] [-o DIR]
-                 [--sanitize KINDS] [--report-opt] [--report-opt-json FILE]
+                 [--sanitize KINDS] [--pgo FILE]
+                 [--report-opt] [--report-opt-json FILE]
 ppy build --warm TARGET
 ppy build foo.ppyir                  # from the IR alone; see `ppy emit`
 ```
@@ -433,7 +434,47 @@ category -- `function inlined`, `tensor ops fused`, `columnar ops fused`,
 stack-promoted`, `generic specialization emitted`, `sanitizer checks
 inserted`, `dead code removed` -- and what the build staged for XLA or a
 device. `--report-opt-json FILE` writes the same as JSON, keyed the same
-way, so a tool can count by category across versions.
+way, so a tool can count by category across versions. A build guided by a
+profile lists it first: the file, its runs, and every measured function's
+calls, hotness, and argument kinds.
+
+## Profile-guided optimization: `--profile`, `--pgo`
+
+```bash
+ppy run --profile foo.ppy            # runs, then writes foo.ppyprof
+ppy run --profile --profile-out p.ppyprof foo.ppy -- args
+ppy build --pgo foo.ppyprof foo.ppy
+ppy run --pgo foo.ppyprof foo.ppy
+```
+
+A profiling run is a JIT run with counters: every native function counts
+its blocks and the taken edge of every conditional branch, and the boundary
+records what kinds of value each native function was called with -- an
+`int`, an `ndarray[float64;4x3]`, a `DataFrame[a:int64,b:float64;1000
+rows]`, a `list[400]`. When the program ends the counters are read back
+through the engine and the profile is written as JSON: per function, its
+calls, every block's count, every branch's (taken, not taken), the loop
+trip counts these imply, the argument kinds, and which generic it is an
+instance of. A profile already at the path is merged, so several runs --
+or several inputs -- add up; `runs` says how many.
+
+A build with `--pgo` (or `[tool.ppy.llvm] pgo = "foo.ppyprof"`, relative
+to the project root) reads the counts back at the same point of the
+pipeline. A function whose graph still matches what was measured is
+annotated: it is `hot` (at least a twentieth of the most-called function's
+calls, and at least two), `cold` (never called), or neither; every
+conditional branch carries its weights, every loop's back edge its
+average trip count. The inliner inlines a hot callee at four times the
+usual budget, leaves a cold one alone, and leaves alone a call the
+profile never reached; LLVM receives the entry counts and branch weights
+as `!prof` metadata, which drive its block placement, its estimated trip
+counts, and its own unrolling and inlining heuristics, and `hot`/`cold`
+as function attributes. A function that changed since the profile was
+recorded is named by `W2009` and built as if there were no profile; a
+missing or foreign profile is refused (`E1002`). A profile changes what
+is fast, never what is computed: the program's output under `--pgo` is
+the program's output. The profile's content is part of every cache key
+and of the warm run directory's name, so a new profile is a new build.
 
 ## `ppy test`
 

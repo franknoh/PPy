@@ -630,6 +630,25 @@ Speed of the compiler itself, measured before being changed.
   `--report-opt-json FILE`) reports what became native, what stayed in
   Python and why, the guards proofs removed, and every remark under a
   stable category.
+- Profile-guided optimization. `ppy run --profile foo.ppy` is a JIT run
+  with the `instrument-profile` pass in the pipeline: every native
+  function counts its blocks and the taken edge of every branch into a
+  counter array the module carries next to its legend, the boundary
+  records the kinds of value -- shapes, dtypes, column schemas -- each
+  function is called with, and when the program ends the counters are read
+  back and `foo.ppyprof` written, merged into one already there. `ppy
+  build --pgo foo.ppyprof` (or `[tool.ppy.llvm] pgo`, or `ppy run --pgo`)
+  applies it at the same point of the pipeline to every function whose
+  graph still matches: hot and cold functions, branch weights, loop trip
+  counts, all as IR attributes the inliner reads -- a hot callee at four
+  times the budget, a cold one or an unreached call left alone -- and the
+  LLVM backend writes as `!prof` metadata and `hot`/`cold` attributes. A
+  changed function is named by `W2009` and built without the profile; the
+  report shows the profile first; every cache key and the warm run
+  directory carry the profile's content. The prof dialect is public in
+  `.ppyir`. The lowering cache (schema 6) now keeps each module's remarks
+  and proved guards, so a warm build's report says what the cold build's
+  did.
 
 ## 0.1.0a1
 

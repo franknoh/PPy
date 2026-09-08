@@ -6,6 +6,9 @@ not bound to Python, not a C export, not a kernel or a resume function the
 runtime reaches by address. `Inline` copies a small callee -- or one marked
 `ppy.inline` -- into its caller, so a call across modules costs what a
 call within one did, and the constants of one side reach the other.
+A profile the build was given speaks here too: a callee the profile
+found hot is inlined at four times the budget, one it never saw is not
+inlined, and neither is a call the profile never reached.
 `GlobalDCE` then drops the private functions and globals nothing reaches.
 `whole_program` runs them in that order, with the ordinary cleanups between.
 """
@@ -108,6 +111,7 @@ class Inline(Pass):
     def __init__(self, budget: int = INLINE_BUDGET) -> None:
         self.budget = budget
         self._counter = 0
+        self._held = 0
 
     def run(self, module: IRModule, ctx: PassContext) -> bool:
         changed = False
@@ -115,6 +119,7 @@ class Inline(Pass):
             if function.is_declaration:
                 continue
             inlined = 0
+            self._held = 0
             for op in list(function.operations()):
                 if (
                     op.name != "core.call"
@@ -123,17 +128,21 @@ class Inline(Pass):
                 ):
                     continue
                 callee = module.functions.get(op.attributes["callee"].name)  # type: ignore[union-attr]
-                if callee is None or not self._inlinable(callee, function):
+                if callee is None or not self._inlinable(callee, function, op):
                     continue
                 self._inline(function, op, callee)
                 inlined += 1
+            if inlined or self._held:
+                held = f", {self._held} left by the profile" if self._held else ""
+                ctx.remark(f"@{function.name}: {inlined} call(s) inlined{held}")
             if inlined:
                 changed = True
                 ctx.invalidate(function)
-                ctx.remark(f"@{function.name}: {inlined} call(s) inlined")
         return changed
 
-    def _inlinable(self, callee: IRFunction, caller: IRFunction) -> bool:
+    def _inlinable(
+        self, callee: IRFunction, caller: IRFunction, call: Operation | None = None
+    ) -> bool:
         if callee.is_declaration or callee is caller:
             return False
         attributes = callee.attributes
@@ -153,7 +162,11 @@ class Inline(Pass):
                 return False  # recursion
         if attributes.get("ppy.inline"):
             return True
-        return len(operations) <= self.budget
+        if attributes.get("ppy.profile.cold") or _never_reached(call):
+            self._held += 1
+            return False
+        budget = self.budget * 4 if attributes.get("ppy.profile.hot") else self.budget
+        return len(operations) <= budget
 
     def _inline(self, caller: IRFunction, call: Operation, callee: IRFunction) -> None:
         self._counter += 1
@@ -212,6 +225,14 @@ class Inline(Pass):
         b = Builder().before(call)
         core.br(b, Successor(entry, list(call.operands)))
         call.erase()
+
+
+def _never_reached(call: Operation | None) -> bool:
+    """Whether the profile measured the call's block and saw it run zero times."""
+    if call is None or call.parent is None or call.parent.terminator is None:
+        return False
+    count = call.parent.terminator.attributes.get("ppy.profile.count")
+    return isinstance(count, int) and not isinstance(count, bool) and count == 0
 
 
 def whole_program(module: IRModule, keep: set[str], level: int = 2) -> PassContext:

@@ -68,14 +68,12 @@ class NativeModule:
     fusion_plan: dict[tuple[int, int], FusedLoop] = field(default_factory=dict)
     fusion_notes: list[tuple[int, str]] = field(default_factory=list)
     #: Per function, the arithmetic whose overflow guard a proof left out.
-    #: Filled by a fresh lowering; a module rebuilt from the cache has the
-    #: same code and an empty list.
     proved: dict[str, tuple[str, ...]] = field(default_factory=dict)
     #: Shared libraries the module's C bindings need, by name.
     libraries: tuple[str, ...] = ()
     #: Public C symbols the module defines: name -> qualname.
     exports: dict[str, str] = field(default_factory=dict)
-    #: What the lowering said, as remarks; a cached module has none.
+    #: What the lowering and the passes said, as remarks; cached with the module.
     remarks: tuple[str, ...] = ()
 
 
@@ -223,6 +221,7 @@ def _offer(available: dict, native: NativeModule) -> None:  # type: ignore[type-
 def _lower(bundle, analysis, candidates, layouts, opt_level, imports=None):  # type: ignore[no-untyped-def]
     """One module's LLVM IR by the road the project selected."""
     from ...driver.config import selected_pipeline
+    from ...driver.profile import profile_for
     from .ir_pipeline import lower_module_via_ir
 
     config = bundle.project.config
@@ -242,6 +241,8 @@ def _lower(bundle, analysis, candidates, layouts, opt_level, imports=None):  # t
             parallel=config.parallel,
             imports=imports,
             sanitize=config.llvm.sanitize,
+            instrument=config.llvm.instrument,
+            profile=profile_for(config),
         )
     return lower_module(
         analysis, candidates, layouts, safeguards=safeguards, prover=prover_for(config)
@@ -313,6 +314,8 @@ def _module_from_cache(name: str, reused, candidates) -> NativeModule:  # type: 
         fusion_notes=list(reused.notes),
         libraries=tuple(reused.libraries),
         exports=dict(reused.exports),
+        proved=dict(reused.proved),
+        remarks=tuple(reused.remarks),
     )
 
 
@@ -863,9 +866,15 @@ def _publish_directory(draft: Path, final: Path) -> None:
 
 
 def compile_and_run(  # type: ignore[no-untyped-def]
-    bundle, program_args, reporter, *, opt_level: int | None = None
+    bundle, program_args, reporter, *, opt_level: int | None = None, profile_out: Path | None = None
 ) -> int:
-    """`ppy run`: JIT-compile the native subset, then execute with CPython as host."""
+    """`ppy run`: JIT-compile the native subset, then execute with CPython as host.
+
+    With `profile_out`, the run is a profiling run: the modules were
+    instrumented, the boundary records what each native function is called
+    with, and when the program ends the counters are read back and the
+    profile written there, merged into one already at that path.
+    """
     if not available():
         raise LlvmUnavailable("llvmlite is not installed, so the LLVM backend is unavailable")
 
@@ -899,10 +908,16 @@ def compile_and_run(  # type: ignore[no-untyped-def]
             engine.add(native.ir)
     engine.finalize()
 
+    collector = None
+    if profile_out is not None:
+        from ...driver.profile import Collector
+
+        collector = Collector()
     binder = _Binder(
         threads=bundle.project.config.parallel.threads
         if bundle.project.config.parallel.enabled
-        else 1
+        else 1,
+        profile=collector,
     )
     layouts = _value_class_layouts(bundle)
     for name, native in natives.items():
@@ -1000,6 +1015,21 @@ def compile_and_run(  # type: ignore[no-untyped-def]
     )
     if result.exception is not None:
         sys.stderr.write(format_traceback(result.exception))
+    if collector is not None and profile_out is not None:
+        from ...version import COMPILER_VERSION
+
+        program = (
+            str(bundle.symbols.modules[bundle.entry].path)
+            if bundle.entry in bundle.symbols.modules
+            else str(bundle.entry)
+        )
+        written = collector.harvest(engine, natives, COMPILER_VERSION, program).write(profile_out)
+        shown: Path = profile_out
+        with contextlib.suppress(ValueError, OSError):
+            shown = profile_out.resolve().relative_to(Path.cwd())
+        reporter.note(
+            f"profile: {shown} ({len(written.functions)} function(s), {written.runs} run(s))"
+        )
     return result.exit_code
 
 
@@ -1013,9 +1043,11 @@ def _binding_name(info) -> str:  # type: ignore[no-untyped-def]
 class _Binder(LibraryBinder):
     """Serves guarded native entry points to generated modules as they load."""
 
-    def __init__(self, threads: str | int = "auto") -> None:
+    def __init__(self, threads: str | int = "auto", profile=None) -> None:  # type: ignore[no-untyped-def]
         super().__init__()
         self.threads = threads
+        #: A profiling run's collector: every binding handed out records its calls.
+        self.profile = profile
         self._entries: dict[str, dict[str, tuple]] = {}
         self._fused: dict[str, dict[str, tuple]] = {}
         self.bindings: list = []
@@ -1083,7 +1115,7 @@ class _Binder(LibraryBinder):
                     if direct is not None:
                         binding = adopt(signature, direct, fallback, owner=(engine, wrappers))
                         self.bindings.append(binding)
-                        return direct
+                        return self._recorded(qualname, direct)
                 fast_entry = wrappers.bind(qualname, address, types)
         binding = make_binding(
             signature,
@@ -1097,14 +1129,23 @@ class _Binder(LibraryBinder):
             register=register,
         )
         self.bindings.append(binding)
-        return binding.wrapper
+        return self._recorded(qualname, binding.wrapper)
+
+    def _recorded(self, qualname: str, entry):  # type: ignore[no-untyped-def]
+        if self.profile is None:
+            return entry
+        return self.profile.wrap(qualname, entry)
 
 
 def _report(native: NativeModule, reporter, bundle) -> None:  # type: ignore[no-untyped-def]
-    if not bundle.project.config.diagnostics.optimization_remarks:
-        return
     symbols = bundle.symbols.modules.get(native.name)
     path = symbols.path if symbols else Path(native.name)
+    for remark in native.remarks:
+        if remark.startswith("profile: stale for "):
+            # A profile that no longer matches is a warning whatever the remark setting.
+            reporter.emit(Diagnostic("W2009", Severity.WARNING, remark, Span(path, 1, 0)))
+    if not bundle.project.config.diagnostics.optimization_remarks:
+        return
     for remark in native.remarks:
         reporter.emit(Diagnostic("R3001", Severity.REMARK, remark, Span(path, 1, 0)))
     for qualname, lowered in sorted(native.functions.items()):

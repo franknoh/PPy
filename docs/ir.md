@@ -427,6 +427,31 @@ guard carries a `sanitize:<kind>` label, and both backends return
 the boundary raises rather than re-running the Python. Coroutines' resume
 functions and device code are left alone: neither has a status to fail with.
 
+## Profiles
+
+The prof dialect is two operations with no results: `prof.hit {counter =
+N}` adds one to counter `N` when its block runs, `prof.hit_if %c {counter
+= N}` adds one when `%c` holds. `instrument-profile`
+(`ir/transforms/profile.py`) places a `hit` at the start of every block of
+every host function and a `hit_if` on the condition of every
+`core.cond_br`, so the taken edge is counted without touching the graph,
+and leaves the legend -- counters to functions, blocks, and branches, with
+each function's graph digest -- on the module as `ppy.profile.map`. The
+LLVM backend writes the counters as one `i64` array per module and the
+legend as a string next to it (`__ppy_prof_counters_<module>`,
+`__ppy_prof_map_<module>`), each `hit` an atomic add, and `ppy run
+--profile` reads both back through the engine when the program ends; the
+C backend keeps a file-static array. `annotate-profile` runs at the same
+point of the pipeline with a recorded profile: a function whose digest
+still matches gets `ppy.profile.calls` and `ppy.profile.hot` or
+`ppy.profile.cold`, each terminator `ppy.profile.count`, each `cond_br`
+`ppy.weights = [taken, not_taken]`, each back edge `ppy.profile.trips`;
+one whose digest moved is left alone and named in a remark. The inliner
+reads the hotness and the counts, the LLVM backend writes them as
+`function_entry_count` and `branch_weights` metadata and the `hot` and
+`cold` attributes. Both passes work right after canonicalization, so the
+graph a profile keys on is the graph a build sees.
+
 ## Passes and patterns
 
 A **pattern** roots at one operation name and rewrites through the

@@ -68,6 +68,37 @@ def _resolve_sanitize(options: argparse.Namespace, project, reporter: Reporter):
     return None
 
 
+def _resolve_profile(options: argparse.Namespace, project, reporter: Reporter):  # type: ignore[no-untyped-def]
+    """Settle `--pgo` and `--profile` before any cache key reads them; a refusal is the exit code.
+
+    `--pgo FILE` overrides `[tool.ppy.llvm] pgo`, which is relative to the
+    project root; the file is read now so a missing or foreign one is
+    refused before anything is built. `--profile` instruments the run.
+    Both are the IR road's, so asking for either selects it.
+    """
+    from .profile import ProfileError, load_profile
+
+    spelled = getattr(options, "pgo", None)
+    configured = project.config.llvm.pgo
+    path = None
+    if spelled is not None:
+        path = Path(spelled).resolve()
+    elif configured:
+        path = (project.root / configured).resolve()
+    if path is not None:
+        try:
+            load_profile(path)
+        except ProfileError as error:
+            reporter.emit(Diagnostic("E1002", Severity.ERROR, str(error)))
+            return 2
+        project.config.llvm.pgo = str(path)
+        project.config.llvm.pipeline = "ir"
+    if getattr(options, "profile", False):
+        project.config.llvm.instrument = True
+        project.config.llvm.pipeline = "ir"
+    return None
+
+
 def _resolve_host_cpu(options: argparse.Namespace, project) -> None:  # type: ignore[no-untyped-def]
     """Settle host targeting before any cache key reads it."""
     if getattr(options, "host_cpu", False):
@@ -231,6 +262,8 @@ def run_llvm_backend(
     _resolve_safeguards(options, project, "run")
     if _resolve_sanitize(options, project, reporter) is not None:
         return 2
+    if _resolve_profile(options, project, reporter) is not None:
+        return 2
     _resolve_prover(options, project)
     bundle = analyze_paths(project, collect_sources(file), backend="llvm")
     errors = reporter.report(bundle.diagnostics)
@@ -239,6 +272,18 @@ def run_llvm_backend(
         return 1
     level = _overrides(options).get("opt_level")
     try:
+        if getattr(options, "profile", False):
+            # A profiling run is the JIT, every time: the counters live in the
+            # engine, and the profile is read from it when the program ends.
+            from .profile import default_output
+
+            return compile_and_run(
+                bundle,
+                program_args,
+                reporter,
+                opt_level=level,  # type: ignore[arg-type]
+                profile_out=getattr(options, "profile_out", None) or default_output(file),
+            )
         if not warm.needs_jit:
             manifest = compile_for_run(
                 bundle,
@@ -285,6 +330,8 @@ def build(options: argparse.Namespace, reporter: Reporter) -> int:
     if backend == "llvm":
         _resolve_safeguards(options, project, "build")
         if _resolve_sanitize(options, project, reporter) is not None:
+            return 2
+        if _resolve_profile(options, project, reporter) is not None:
             return 2
         _resolve_prover(options, project)
         _resolve_host_cpu(options, project)
@@ -521,12 +568,17 @@ def inspect(options: argparse.Namespace, reporter: Reporter) -> int:
 def _report_optimization(bundle, options: argparse.Namespace, artifacts) -> None:  # type: ignore[no-untyped-def]
     """`--report-opt`: what the build decided, printed or written as JSON."""
     from ..backend.llvm import _collect
+    from .profile import profile_for
     from .report import optimization_report, render_report, report_json
     from .staging import stage_project
 
     natives = _collect(bundle, _overrides(options).get("opt_level"))  # type: ignore[arg-type]
     report = optimization_report(
-        bundle, natives, stage_project(bundle), sanitizers=bundle.project.config.llvm.sanitize
+        bundle,
+        natives,
+        stage_project(bundle),
+        sanitizers=bundle.project.config.llvm.sanitize,
+        profile=profile_for(bundle.project.config),
     )
     report["notes"] = list(artifacts.notes)
     if getattr(options, "report_opt", False):

@@ -211,6 +211,12 @@ def module_cache_key(
         extra = (*extra, f"pipeline={selected_pipeline(config.llvm.pipeline)}")
         if config.llvm.sanitize:
             extra = (*extra, f"sanitize={','.join(sorted(config.llvm.sanitize))}")
+        if config.llvm.instrument:
+            extra = (*extra, "profile=instrument")
+        if config.llvm.pgo:
+            from .profile import profile_digest
+
+            extra = (*extra, f"pgo={profile_digest(config.llvm.pgo)}")
     return CacheKey.build(
         target,
         source_digest=symbols.module.source.digest(),

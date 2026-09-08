@@ -21,6 +21,7 @@ def builtin_dialects() -> list[Dialect]:
     from .linalg import LinalgDialect
     from .math import MathDialect
     from .parallel import ParallelDialect
+    from .prof import ProfDialect
     from .simd import SimdDialect
     from .sparse import SparseDialect
     from .special import SpecialDialect
@@ -44,4 +45,5 @@ def builtin_dialects() -> list[Dialect]:
         ArrowDialect(),
         GpuDialect(),
         AsyncDialect(),
+        ProfDialect(),
     ]

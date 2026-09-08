@@ -136,6 +136,15 @@ class JitEngine:
             raise LlvmUnavailable("the execution engine is not open")
         return self.engine.get_function_address(symbol)  # type: ignore[union-attr]
 
+    def global_address(self, symbol: str) -> int:
+        """Where a module-level variable lives, or 0 when no module defines it."""
+        if self.engine is None:
+            raise LlvmUnavailable("the execution engine is not open")
+        try:
+            return self.engine.get_global_value_address(symbol)  # type: ignore[union-attr]
+        except (RuntimeError, NameError):
+            return 0
+
     def optimized_ir(self, ir: str) -> str:
         from llvmlite import binding
 

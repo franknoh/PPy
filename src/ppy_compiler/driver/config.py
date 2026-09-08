@@ -76,6 +76,10 @@ class LlvmConfig:
     #: The sanitizers a build instruments the IR with (`bounds`, `overflow`,
     #: `pointer`, `alignment`); a failed check raises rather than falls back.
     sanitize: tuple[str, ...] = ()
+    #: A `.ppyprof` from `ppy run --profile` that guides the build (`--pgo FILE`).
+    pgo: str | None = None
+    #: Place profile counters in the IR; `ppy run --profile` sets it for its run.
+    instrument: bool = False
 
 
 @dataclass(slots=True)
@@ -242,6 +246,7 @@ def _apply(config: Config, table: Mapping[str, Any]) -> Config:
             pipeline=str(sub.get("pipeline", "ast")),
             host_cpu=_as_bool(sub.get("host-cpu"), False),
             sanitize=tuple(str(kind) for kind in (sub.get("sanitize") or ())),
+            pgo=str(sub["pgo"]) if sub.get("pgo") else None,
         )
     if isinstance(sub := table.get("parallel"), Mapping):
         config.parallel = ParallelConfig(

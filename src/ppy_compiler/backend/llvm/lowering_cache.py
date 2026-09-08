@@ -17,7 +17,7 @@ from .lowering import NativeParam, NativeSignature
 __all__ = ["SCHEMA_VERSION", "CachedLowering", "decode", "encode"]
 
 #: Bumped when the shape below changes, so an old entry is simply a miss.
-SCHEMA_VERSION = 5
+SCHEMA_VERSION = 6
 
 
 class CachedLowering:
@@ -31,7 +31,9 @@ class CachedLowering:
         "notes",
         "plan",
         "ppyir",
+        "proved",
         "rejected",
+        "remarks",
         "signatures",
     )
 
@@ -46,9 +48,13 @@ class CachedLowering:
         libraries: tuple[str, ...] = (),
         exports: dict[str, str] | None = None,
         ppyir: str = "",
+        proved: dict[str, tuple[str, ...]] | None = None,
+        remarks: tuple[str, ...] = (),
     ) -> None:
         self.ir = ir
         self.ppyir = ppyir
+        self.proved = dict(proved or {})
+        self.remarks = tuple(remarks)
         self.signatures = signatures
         self.rejected = rejected
         self.fused = fused
@@ -148,6 +154,8 @@ def encode(module) -> str:  # type: ignore[no-untyped-def]
             "notes": [list(note) for note in module.fusion_notes],
             "libraries": list(module.libraries),
             "exports": dict(module.exports),
+            "proved": {q: list(names) for q, names in module.proved.items()},
+            "remarks": list(module.remarks),
         },
         separators=(",", ":"),
     )
@@ -172,6 +180,8 @@ def decode(text: str) -> CachedLowering | None:
             libraries=tuple(raw.get("libraries", ())),
             exports=dict(raw.get("exports", {})),
             ppyir=str(raw.get("ppyir", "")),
+            proved={q: tuple(names) for q, names in raw.get("proved", {}).items()},
+            remarks=tuple(raw.get("remarks", ())),
         )
     except (KeyError, TypeError, ValueError):
         return None

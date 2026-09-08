@@ -63,6 +63,7 @@ from .dialects import (
     vector_name,
 )
 from .gpu import emit_gpu
+from .prof import emit_prof
 from .runtime import SHIMS, definition, program_main
 
 __all__ = ["EmitError", "HeaderOnlyError", "Language", "emit_module"]
@@ -1113,6 +1114,7 @@ _DIALECTS = {
     "special": emit_special,
     "gpu": emit_gpu,
     "async": emit_async,
+    "prof": emit_prof,
 }
 #: Core operations that take vectors, emitted as lane helpers.
 _VECTOR_CORE = frozenset(

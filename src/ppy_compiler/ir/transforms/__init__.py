@@ -10,6 +10,14 @@ from .lower_async import AsyncLoweringError, LowerAsync, lower_async
 from .lower_parallel import BACKENDS as PARALLEL_BACKENDS
 from .lower_parallel import LowerParallel
 from .lower_tensor import LoweringError, LowerTensor
+from .profile import (
+    AnnotateProfile,
+    FunctionProfile,
+    Instrument,
+    Profile,
+    ProfileError,
+    cfg_digest,
+)
 from .promote_slots import PromoteSlots, promote_slots
 from .sanitize import Sanitize, sanitize, sanitizer_kinds
 from .simplify_cfg import SimplifyCFG
@@ -17,23 +25,29 @@ from .whole_program import GlobalDCE, Inline, internalize, whole_program
 
 __all__ = [
     "PARALLEL_BACKENDS",
+    "AnnotateProfile",
     "AsyncLoweringError",
     "AutodiffError",
     "Canonicalize",
     "ConstantFold",
     "DeadCodeElimination",
+    "FunctionProfile",
     "FuseTensor",
     "GlobalDCE",
     "Inline",
+    "Instrument",
     "LowerAsync",
     "LowerParallel",
     "LowerTensor",
     "LoweringError",
+    "Profile",
+    "ProfileError",
     "PromoteSlots",
     "Sanitize",
     "SimplifyCFG",
     "TensorCanonicalize",
     "canonicalization_patterns",
+    "cfg_digest",
     "default_pipeline",
     "differentiate",
     "internalize",
@@ -45,7 +59,15 @@ __all__ = [
 ]
 
 
-def default_pipeline(level: int = 1, ctx=None, parallel=None, sanitize=(), until=None):  # type: ignore[no-untyped-def]
+def default_pipeline(  # type: ignore[no-untyped-def]
+    level: int = 1,
+    ctx=None,
+    parallel=None,
+    sanitize=(),
+    until=None,
+    instrument: bool = False,
+    profile=None,
+):
     """The passes a module goes through before a backend, by optimization level.
 
     `parallel` is the `LowerParallel` pass for the build's configuration;
@@ -54,6 +76,9 @@ def default_pipeline(level: int = 1, ctx=None, parallel=None, sanitize=(), until
     before the optimizations, so what the optimizer removes they still
     hold. `until` stops the pipeline at a point -- `none` before any pass,
     `after-canonicalization`, `after-fusion` -- for `ppy inspect --stage`.
+    `instrument` places the profile counters, `profile` applies a recorded
+    profile; both work right after canonicalization, so a profile keys on
+    the graph a build sees at the same point.
     """
     from ..passes import PassManager
 
@@ -66,6 +91,10 @@ def default_pipeline(level: int = 1, ctx=None, parallel=None, sanitize=(), until
     manager.add_stage("after-canonicalization")
     if until == "after-canonicalization":
         return manager
+    if profile is not None:
+        manager.add(AnnotateProfile(profile))
+    if instrument:
+        manager.add(Instrument())
     if sanitize:
         manager.add(Sanitize(frozenset(sanitize)))
     manager.add_stage("before-optimization")

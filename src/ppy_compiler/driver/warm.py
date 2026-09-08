@@ -121,6 +121,7 @@ def _key(file: Path, root: Path, config: Config, options: argparse.Namespace) ->
         config.parallel.threads,
         resolved_safeguards(options, config.llvm.safeguards, "run"),
         getattr(options, "sanitize", None) or ",".join(sorted(config.llvm.sanitize)),
+        _profile_fingerprint(getattr(options, "pgo", None) or config.llvm.pgo),
         getattr(options, "prover", None) or config.llvm.prover or "off",
         sorted((name, sorted(asdict(plugin).items())) for name, plugin in config.plugins.items()),
     )
@@ -131,6 +132,16 @@ def _key(file: Path, root: Path, config: Config, options: argparse.Namespace) ->
     # directory read, and any install or upgrade changes it.
     feed(*_installed())
     return hasher.hexdigest()
+
+
+def _profile_fingerprint(named) -> str:  # type: ignore[no-untyped-def]
+    """The content of the profile a run is guided by; a run without one feeds nothing."""
+    if not named:
+        return ""
+    try:
+        return hashlib.blake2b(Path(named).read_bytes(), digest_size=16).hexdigest()
+    except OSError:
+        return f"missing:{named}"
 
 
 def _sources(root: Path):  # type: ignore[no-untyped-def]

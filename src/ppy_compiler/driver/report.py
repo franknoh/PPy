@@ -9,11 +9,14 @@ of a remark stays free to improve.
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 __all__ = ["CATEGORIES", "categorize", "optimization_report", "render_report"]
 
 #: (category, the words that file a remark under it), first match wins.
 CATEGORIES: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("profile stale", ("stale",)),
+    ("profile applied", ("profile",)),
     ("function inlined", ("inlined",)),
     ("columnar ops fused", ("columnar", "column")),
     ("tensor ops fused", ("fused", "fusion")),
@@ -42,13 +45,14 @@ def categorize(remark: str) -> str:
     return "note"
 
 
-def optimization_report(bundle, natives, staged=None, sanitizers=()) -> dict:  # type: ignore[no-untyped-def]
-    """Everything the build decided, per module and function."""
+def optimization_report(bundle, natives, staged=None, sanitizers=(), profile=None) -> dict:  # type: ignore[no-untyped-def]
+    """Everything the build decided, per module and function; with `profile`, what guided it."""
     report: dict = {
         "project": bundle.project.root.name,
         "opt_level": bundle.project.config.opt_level,
         "pipeline": bundle.project.config.llvm.pipeline,
         "sanitizers": sorted(sanitizers),
+        "profile": _profile_section(profile),
         "modules": {},
         "staged": [],
     }
@@ -94,6 +98,59 @@ def optimization_report(bundle, natives, staged=None, sanitizers=()) -> dict:  #
     return report
 
 
+def _shown(path: str) -> str:
+    """A path relative to the working directory when it is under it; the report stays portable."""
+    if not path:
+        return ""
+    try:
+        return str(Path(path).resolve().relative_to(Path.cwd()))
+    except (ValueError, OSError):
+        return path
+
+
+def _profile_section(profile) -> dict | None:  # type: ignore[no-untyped-def]
+    """The profile a build was guided by: every measured function's calls, kind, and arguments."""
+    if profile is None:
+        return None
+    functions: dict = {}
+    for qualname, record in sorted(profile.functions.items()):
+        functions[qualname] = {
+            "calls": record.calls,
+            "kind": profile.kind(qualname),
+            "arguments": {position: dict(kinds) for position, kinds in record.arguments.items()},
+            "generic": record.generic,
+        }
+    return {
+        "file": _shown(profile.path),
+        "runs": profile.runs,
+        "hot_threshold": profile.hot_threshold(),
+        "functions": functions,
+    }
+
+
+def _render_profile(section: dict) -> list[str]:  # type: ignore[type-arg]
+    runs = section["runs"]
+    lines = [
+        (
+            f"profile: {section['file'] or 'given'} ({runs} run{'s' if runs != 1 else ''}, "
+            f"hot from {section['hot_threshold']} calls)"
+        )
+    ]
+    for qualname, entry in section["functions"].items():
+        kind = entry["kind"] or "boundary only"
+        line = f"  {qualname}: {kind}, {entry['calls']} calls"
+        if entry["generic"]:
+            line += f" (an instance of {entry['generic']})"
+        arguments = "; ".join(
+            f"{position}: " + ", ".join(f"{k} x{n}" for k, n in sorted(kinds.items()))
+            for position, kinds in sorted(entry["arguments"].items())
+        )
+        if arguments:
+            line += f"; arguments {arguments}"
+        lines.append(line)
+    return lines
+
+
 def render_report(report: dict) -> str:
     """The report as the terminal shows it."""
     lines = [
@@ -102,6 +159,8 @@ def render_report(report: dict) -> str:
         + (f", sanitizers: {', '.join(report['sanitizers'])}" if report["sanitizers"] else "")
         + ")"
     ]
+    if report.get("profile"):
+        lines.extend(_render_profile(report["profile"]))
     for name, module in report["modules"].items():
         lines.append(f"module {name}")
         for qualname, entry in module["functions"].items():

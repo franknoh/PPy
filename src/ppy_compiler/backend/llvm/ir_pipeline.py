@@ -48,9 +48,16 @@ def parallel_pass(parallel):  # type: ignore[no-untyped-def]
     return LowerParallel(backend, threads=_requested_threads(parallel.threads))
 
 
-def optimize(
-    module: IRModule, level: int, plugins=None, parallel=None, sanitize=(), until=None
-) -> PassContext:  # type: ignore[no-untyped-def]
+def optimize(  # type: ignore[no-untyped-def]
+    module: IRModule,
+    level: int,
+    plugins=None,
+    parallel=None,
+    sanitize=(),
+    until=None,
+    instrument: bool = False,
+    profile=None,
+) -> PassContext:
     """Verify the frontend's IR, run the shared passes, verify again.
 
     With a project's plugins, the registry is the project's -- its dialects,
@@ -63,7 +70,15 @@ def optimize(
     verify_or_raise(module, registry)
     external = plugins is not None and len(plugins) > 0
     ctx = PassContext(registry, verify_after_each=_verify_between_passes() or external)
-    manager = default_pipeline(level, ctx, parallel_pass(parallel), sanitize=sanitize, until=until)
+    manager = default_pipeline(
+        level,
+        ctx,
+        parallel_pass(parallel),
+        sanitize=sanitize,
+        until=until,
+        instrument=instrument,
+        profile=profile,
+    )
     if plugins is not None:
         plugins.register_passes(manager)
     manager.run(module)
@@ -78,6 +93,7 @@ def ir_modules(bundle, launches: bool = False, until=None) -> dict[str, IRModule
     as the source backends and `ppy emit ir` want it; without, it stays in
     Python, since the CPU backends have no launch runtime yet.
     """
+    from ...driver.profile import profile_for
     from ...lowering import lower_module_to_ir
     from . import _definitions, _value_class_layouts, prover_for
 
@@ -125,6 +141,8 @@ def ir_modules(bundle, launches: bool = False, until=None) -> dict[str, IRModule
             config.parallel,
             sanitize=config.llvm.sanitize,
             until=until,
+            instrument=config.llvm.instrument,
+            profile=profile_for(config),
         )
         modules[module.name] = lowered.module
     return modules
@@ -145,6 +163,8 @@ def lower_module_via_ir(
     parallel=None,  # type: ignore[no-untyped-def]
     imports=None,  # type: ignore[no-untyped-def]
     sanitize=(),  # type: ignore[no-untyped-def]
+    instrument: bool = False,
+    profile=None,  # type: ignore[no-untyped-def]
 ) -> LoweringResult:
     from ...lowering import lower_module_to_ir
 
@@ -158,7 +178,15 @@ def lower_module_via_ir(
         root=root,
         imports=imports,
     )
-    ctx = optimize(lowered.module, opt_level, plugins, parallel, sanitize=sanitize)
+    ctx = optimize(
+        lowered.module,
+        opt_level,
+        plugins,
+        parallel,
+        sanitize=sanitize,
+        instrument=instrument,
+        profile=profile,
+    )
     text = emit_module(lowered.module, target) if lowered.functions else ""
     libraries = lowered.module.attributes.get("ppy.libraries", ())
     exports = {

@@ -502,6 +502,8 @@ def test_a_cached_lowering_round_trips():
         name = "m"
         ir = "; ir"
         ppyir = ""
+        proved: ClassVar[dict] = {}
+        remarks: ClassVar[tuple] = ()
         functions: ClassVar[dict] = {
             "m.f": type(
                 "L",
