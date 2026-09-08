@@ -1,0 +1,45 @@
+from typing import Protocol
+
+
+class Named(Protocol):
+    def name(self) -> str: ...
+
+
+class Point:
+    def __init__(self, x: int, y: int) -> None:
+        self.x = x
+        self.y = y
+
+    def name(self) -> str:
+        return f"({self.x}, {self.y})"
+
+
+def largest[T: int | float](a: T, b: T) -> T:
+    return a if a > b else b
+
+
+def label[T: Named](thing: T) -> str:
+    return "at " + thing.name()
+
+
+def first[T](items: list[T]) -> T:
+    return items[0]
+
+
+def clamp[T: int | float](x: T, lo: T, hi: T) -> T:
+    return largest(lo, x) if x < hi else hi
+
+
+def sweep(n: int) -> float:
+    total = 0.0
+    for i in range(n):
+        total += clamp(i * 0.25, 1.0, 10.0) + largest(i, 3)
+    return total
+
+
+def main() -> None:
+    print(largest(1, 2), largest(1.5, 2.5), label(Point(3, 4)), first([7, 8, 9]))
+    print(clamp(15, 0, 10), clamp(-2.5, 0.0, 1.0), sweep(1000))
+
+
+main()

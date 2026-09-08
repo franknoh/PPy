@@ -117,7 +117,19 @@ def _missing_libraries(folder: Path) -> set[str]:
     import ast
     import importlib.util
 
-    optional = {"torch", "jax", "uvicorn", "fastapi", "numpy", "pydantic", "flax", "optax"}
+    optional = {
+        "torch",
+        "jax",
+        "uvicorn",
+        "fastapi",
+        "numpy",
+        "pydantic",
+        "flax",
+        "optax",
+        "pandas",
+        "pyarrow",
+        "scipy",
+    }
     needed: set[str] = set()
     for source in [*folder.rglob("*.py"), *folder.rglob("*.ppy")]:
         if "__pycache__" in source.parts or ".ppy-cache" in source.parts:

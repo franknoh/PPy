@@ -17,6 +17,9 @@ source and no conversion step involved.
   both `build-execution = "allow"` and `[tool.ppy.plugins.jax]
   allow-build-export = true`. With either removed the functions stay ordinary
   jitted calls and `ppy` reports which, and why.
+- `ppy.xla` ([39_xla](../39_xla/)) is the JAX-free form: a scalar function
+  marked `@xla.jit` is emitted as StableHLO by the compiler itself and run
+  through PJRT, with no trace and no JAX in the compiler.
 
 ## Run it
 

@@ -1,0 +1,47 @@
+import ppy
+from ppy import aio, native
+
+
+async def wait_and_double(n: int) -> int:
+    total = 0
+    for _ in range(2):
+        await aio.sleep(0.005)
+        total = total + n
+    return total
+
+
+async def echo_once(listening: int) -> int:
+    client = await aio.accept(listening)
+    room = native.stack_alloc[ppy.u8](8)
+    got = await aio.read(client, room, 8)
+    sent = await aio.write(client, room, got)
+    aio.close(client)
+    return sent
+
+
+async def send_hello(port: int) -> int:
+    fd = await aio.connect("127.0.0.1", port)
+    message = native.stack_alloc[ppy.u8](3)
+    native.store(message, 104)
+    native.store(native.offset(message, 1), 105)
+    native.store(native.offset(message, 2), 33)
+    await aio.write(fd, message, 3)
+    back = native.stack_alloc[ppy.u8](8)
+    got = await aio.read(fd, back, 8)
+    aio.close(fd)
+    return got * 100 + native.load(native.offset(back, 2))
+
+
+async def main() -> int:
+    doubled = await wait_and_double(21)
+    listening = aio.listen("127.0.0.1", 0)
+    port = aio.port(listening)
+    served = aio.spawn(echo_once(listening))
+    got = await send_hello(port)
+    sent = await served
+    aio.close(listening)
+    return doubled * 1000000 + got * 1000 + sent
+
+
+print(aio.run(main()))
+print(f"# compiled coroutine here: {aio.compiled(main)}")

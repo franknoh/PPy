@@ -1,0 +1,54 @@
+import math
+
+import ppy
+from ppy import ffi, native
+
+libm = ffi.library("m")
+
+
+@ffi.bind(libm, symbol="hypot", pure=True)
+def c_hypot(x: float, y: float) -> float: ...
+
+
+@ppy.native
+def fill(p: native.ptr[float], n: int, scale: float) -> float:
+    total = 0.0
+    for i in range(n):
+        q = native.offset(p, i)
+        native.store(q, scale * i)
+        total += native.load(q)
+    return total
+
+
+@native.export(name="ppy_norm")
+def norm(p: native.const_ptr[float], n: int) -> float:
+    acc = 0.0
+    for i in range(n):
+        acc = c_hypot(acc, native.load(native.offset(p, i)))
+    return acc
+
+
+def scratch(n: int) -> int:
+    buf = native.stack_alloc[int](8)
+    acc = 0
+    for i in range(8):
+        native.store(native.offset(buf, i), i * n)
+    for i in range(8):
+        acc += native.load(native.offset(buf, i))
+    return acc + native.sizeof[float]() + native.alignof[ppy.i8]()
+
+
+def bytes_of(p: native.const_ptr[ppy.u8], n: int) -> int:
+    total = 0
+    for i in range(n):
+        total += native.load(native.offset(p, i))
+    return total
+
+
+def main() -> None:
+    memory = native.stack_alloc[float](4)
+    print(fill(memory, 4, 1.5), scratch(3), bytes_of(native.cast[ppy.u8](memory), 8))
+    print(f"{norm(memory, 4):.6f} {math.hypot(0.0, 1.5, 3.0, 4.5):.6f}")
+
+
+main()

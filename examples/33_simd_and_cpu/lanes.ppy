@@ -1,0 +1,56 @@
+import ppy
+from ppy import cpu, native, simd
+
+
+def dot(a: native.const_ptr[float], b: native.const_ptr[float]) -> float:
+    return simd.reduce_add(simd.load[float, 4](a) * simd.load[float, 4](b))
+
+
+def ramp(p: native.ptr[int], start: int) -> int:
+    v = simd.splat[int, 4](start)
+    v = simd.insert(v, 1, start + 1)
+    v = simd.insert(v, 2, start + 2)
+    v = simd.insert(v, 3, start + 3)
+    simd.store(v + v, p)
+    return simd.reduce_max(v) - simd.reduce_min(v)
+
+
+def mix(p: native.ptr[float]) -> float:
+    v = simd.load[float, 4](p)
+    w = simd.shuffle(v, v, (3, 2, 1, 0))
+    chosen = simd.select(v > w, v, w)
+    simd.store(chosen / simd.splat[float, 4](2.0), p)
+    return simd.extract(chosen, 0) + simd.reduce_add(-w)
+
+
+def bytes_sum(p: native.const_ptr[ppy.u8]) -> int:
+    v = simd.load[ppy.u8, 8](p)
+    return simd.reduce_add(v & simd.splat[ppy.u8, 8](15))
+
+
+def warm(p: native.const_ptr[float], n: int) -> float:
+    for i in range(n):
+        cpu.prefetch(native.offset(p, i), locality=2)
+    cpu.pause()
+    return native.load(native.offset(p, n - 1))
+
+
+def main() -> None:
+    a = native.stack_alloc[float](4)
+    b = native.stack_alloc[float](4)
+    for i in range(4):
+        native.store(native.offset(a, i), 1.0 + i)
+        native.store(native.offset(b, i), 0.5 * i)
+    print(dot(a, b))
+    ints = native.stack_alloc[int](4)
+    print(ramp(ints, 9223372036854775805), native.load(native.offset(ints, 3)))
+    print(mix(a), native.load(native.offset(a, 0)), native.load(native.offset(a, 3)))
+    raw = native.stack_alloc[ppy.u8](8)
+    for i in range(8):
+        native.store(native.offset(raw, i), 240 + i)
+    print(bytes_sum(raw), warm(b, 4))
+    print(f"# vector width for float: {cpu.vector_width[float]()} lanes")
+    print(f"# avx2 here: {'avx2' in cpu.features()}")
+
+
+main()

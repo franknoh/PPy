@@ -1,0 +1,25 @@
+import math
+
+from ppy import xla
+
+
+@xla.jit
+def f(x: float, y: float) -> float:
+    product = math.sin(x) * y
+    return (product + (x if product > 0.0 else -x)) / 2.0
+
+
+@xla.jit
+def branchy(x: float) -> float:
+    if x > 0.0:
+        return x
+    return -x
+
+
+def main() -> None:
+    print(round(f(0.3, 2.0), 9), round(f(-1.25, 0.5), 9), round(f(7.0, -3.0), 9))
+    print(branchy(-2.0), branchy(1.5))
+    print(f"# devices: {xla.devices()}")
+
+
+main()

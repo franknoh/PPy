@@ -680,6 +680,15 @@ Speed of the compiler itself, measured before being changed.
   `--host-cpu`; the run directory's name and the program object's key carry
   the CPU's features, so a cache carried to another machine never serves
   it. A test holds both.
+- Eleven examples for what 0.2.0 added, each hand-written and each held to
+  the three paths: native memory and a `libm` binding, `ppy.simd` and
+  `ppy.cpu`, atomics and threads, `parallel.range`, derivatives, `ppy.aio`
+  coroutines, `ppy.cuda` kernels, `ppy.xla`, generics, columnar pandas
+  expressions, and the toolbox of `ppy emit`, `ppy inspect --stage`, the
+  report, the sanitizers, and PGO; the existing examples point at them. The
+  runners skip an example that needs pandas, pyarrow, or scipy where those
+  are missing. Found on the way: a type parameter bounded by a Protocol now
+  lends its methods to attribute calls, as it already did to operators.
 
 ## 0.1.0a1
 

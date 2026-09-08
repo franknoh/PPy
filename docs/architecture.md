@@ -55,7 +55,7 @@ what the checker already proved.
 Plain CPython, the Python backend, and the LLVM backend must produce the same
 answer; a guard that fails at runtime falls back to the Python body rather than
 ever answering differently. The invariant is enforced, not assumed:
-`examples/run_all.py` runs all 41 example programs on all three paths and
+`examples/run_all.py` runs all 52 example programs on all three paths and
 diffs the output, and the test suite does the same per feature.
 
 ## Cache and incremental builds

@@ -1,0 +1,29 @@
+def compute(xs: list[int]) -> int:
+    total = 0
+    for x in xs:
+        if x % 4 == 0:
+            total = total + x
+        else:
+            total = total - 1
+    return total
+
+
+def pick(xs: list[int], i: int) -> int:
+    return xs[i] * 2
+
+
+def unused(n: int) -> int:
+    return n * 7
+
+
+def main() -> None:
+    xs: list[int] = []
+    for i in range(400):
+        xs.append(i)
+    acc = 0
+    for _ in range(50):
+        acc = acc + compute(xs)
+    print(acc, pick(xs, 399))
+
+
+main()

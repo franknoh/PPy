@@ -115,7 +115,7 @@ builds anything (`examples/31_torchrun`).
 
 ## Examples
 
-31 example folders under `examples/`, 41 runnable programs, each folder with
+42 example folders under `examples/`, 52 runnable programs, each folder with
 a README. Where a folder holds both `<name>.py` and `<name>.ppy`, the `.ppy`
 is exactly what `ppy convert` writes — `ppy migrate` for the folder that says
 so — and `verify_conversions.py` regenerates it to prove it.

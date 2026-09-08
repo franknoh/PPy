@@ -14,6 +14,9 @@ source and no conversion step involved.
   change to one invalidates exactly what it should.
 - Cross-module inference: a function's parameter types come from call sites in
   other files.
+- Since 0.2.0 a package builds as one program: each module's IR links into
+  one, whole-program optimization inlines across the seams, and one object
+  comes out. `ppy emit linked-ir src/app.ppy` prints the linked program.
 
 ## Run it
 
