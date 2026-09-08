@@ -18,7 +18,7 @@ __all__ = ["COMPILER_VERSION", "compiler_fingerprint"]
 #: The released version. The packaging build reads this literal;
 #: `ppy_runtime.version` carries the runtime's copy, `ppy.__version__` reads
 #: that, and a test holds them together.
-COMPILER_VERSION = "0.2.0"
+COMPILER_VERSION = "0.3.0a1"
 
 
 @functools.cache
