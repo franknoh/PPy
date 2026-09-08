@@ -9,8 +9,9 @@ pip install "ppy-lang[llvm]"     # or with pip
 
 The distribution is `ppy-lang`; what it installs is three packages, `ppy`
 (the runtime and the directives), `ppy_compiler`, and `ppy_runtime`.
-Releases are alphas — the language and the diagnostics may still move — so
-pin an exact version. For the development tip instead:
+Before 1.0 a minor release may move the language and the diagnostics — the
+[changelog](changelog.md) says what moved — so pin an exact version
+(`ppy-lang[llvm]==0.2.0`). For the development tip instead:
 
 ```bash
 uv add "ppy-lang[llvm] @ git+https://github.com/franknoh/PPy.git"

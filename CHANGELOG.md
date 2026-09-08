@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.2.0 — unreleased
+## 0.2.0 — 2026-09-08
 
 The release that turns the compiler into a platform: a typed, multi-dialect
 IR between analysis and every backend, a pass and pattern infrastructure
