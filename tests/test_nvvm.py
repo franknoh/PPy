@@ -14,7 +14,7 @@ from test_gpu_frontend import PROGRAM, _filled, _ppy, _program
 from ppy import cuda, native
 from ppy_compiler.backend.llvm import available as llvm_available
 from ppy_compiler.backend.nvvm import available as nvptx_available
-from ppy_compiler.backend.nvvm import emit_module, ptx_from_ir
+from ppy_compiler.backend.nvvm import emit_module, libdevice_path, ptx_from_ir
 from ppy_runtime import cuda as runtime
 
 requires_llvm = pytest.mark.skipif(not llvm_available(), reason="llvmlite is not installed")
@@ -22,6 +22,9 @@ requires_nvptx = pytest.mark.skipif(
     not (llvm_available() and nvptx_available()), reason="this LLVM has no NVPTX backend"
 )
 requires_device = pytest.mark.skipif(runtime.driver() is None, reason="no CUDA driver or device")
+requires_libdevice = pytest.mark.skipif(
+    libdevice_path() is None, reason="libdevice (the CUDA toolkit) is not installed"
+)
 
 MATH_PROGRAM = """
     import math
@@ -73,6 +76,7 @@ def test_device_code_is_written_as_nvptx_ir(write, analyze):
 
 
 @requires_nvptx
+@requires_libdevice
 def test_ptx_is_written_for_the_kernels_and_the_cli_emits_it(write, analyze, tmp_path):
     _bundle, module = _ir(write, analyze, "gpu_prog", PROGRAM)
     ptx = ptx_from_ir(emit_module(module))
