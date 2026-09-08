@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.0 — unreleased
+
+Work toward the next release, on `dev`; alphas of it are tagged `v0.3.0aN`.
+
 ## 0.2.0 — 2026-09-08
 
 The release that turns the compiler into a platform: a typed, multi-dialect
