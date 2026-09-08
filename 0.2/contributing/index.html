@@ -3444,6 +3444,50 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#branches" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Branches
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#commits" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Commits
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#pull-requests" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Pull requests
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#issues" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Issues
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#the-gate" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3582,6 +3626,50 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#branches" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Branches
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#commits" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Commits
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#pull-requests" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Pull requests
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#issues" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Issues
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#the-gate" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3669,12 +3757,12 @@
 
 <h1 id="contributing">Contributing<a class="headerlink" href="#contributing" title="Permanent link">&para;</a></h1>
 <h2 id="setting-up">Setting up<a class="headerlink" href="#setting-up" title="Permanent link">&para;</a></h2>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>uv<span class="w"> </span>sync<span class="w">            </span><span class="c1"># the compiler core, LLVM, NumPy, pydantic, and the linters</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>uv<span class="w"> </span>sync<span class="w">            </span><span class="c1"># the compiler core, LLVM, NumPy, pydantic, the linters, the docs tools</span>
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>./scripts/check.sh<span class="w"> </span><span class="c1"># the one gate; CI runs exactly this</span>
 </code></pre></div>
 <p><code>uv sync</code> installs the <code>dev</code> group. That is what a contributor to the
-compiler needs and more than a user needs: a user installs <code>ppy</code> and gets the
-compiler, the runtime, and nothing else.</p>
+compiler needs and more than a user needs: a user installs <code>ppy-lang</code> and gets
+the compiler, the runtime, and nothing else.</p>
 <p>The plugin runtimes are separate groups, so you install only what you intend
 to test:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>uv<span class="w"> </span>sync<span class="w"> </span>--group<span class="w"> </span>torch<span class="w">     </span><span class="c1"># PyTorch, CPU wheels</span>
@@ -3690,10 +3778,97 @@ On a CUDA machine, override it for your checkout rather than for the
 repository:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>uv<span class="w"> </span>sync<span class="w"> </span>--group<span class="w"> </span>torch<span class="w"> </span>--index<span class="w"> </span>pytorch-cuda<span class="o">=</span>https://download.pytorch.org/whl/cu128
 </code></pre></div>
+<h2 id="branches">Branches<a class="headerlink" href="#branches" title="Permanent link">&para;</a></h2>
+<p>Two long-lived branches, and short-lived ones for work:</p>
+<table>
+<thead>
+<tr>
+<th>branch</th>
+<th>holds</th>
+<th>declares</th>
+<th>publishes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>main</code></td>
+<td>the current stable release, and fixes to it</td>
+<td><code>X.Y.Z</code></td>
+<td>the docs site's <code>latest</code> follows it; a tag <code>vX.Y.Z</code> publishes to PyPI</td>
+</tr>
+<tr>
+<td><code>dev</code></td>
+<td>everything in progress toward the next release</td>
+<td><code>X.Y.0aN</code></td>
+<td>the docs site's <code>dev</code> follows it; a tag <code>vX.Y.0aN</code> publishes an alpha to PyPI</td>
+</tr>
+<tr>
+<td>anything else</td>
+<td>one change</td>
+<td>—</td>
+<td>nothing; deleted when merged</td>
+</tr>
+</tbody>
+</table>
+<p>Work branches off <code>dev</code> and merges back into it by pull request; name it for
+the change (<code>columnar-join</code>, <code>fix-e1306-protocol-bound</code>), not for yourself.
+<code>main</code> receives <code>dev</code> when a release is cut, or a fix that has to ship
+before the next one, and nothing else. <code>main</code> is protected: it takes pull
+requests whose checks passed, never a direct push, never a force-push, and it
+cannot be deleted. When a branch has merged, delete it — the repository keeps
+<code>main</code>, <code>dev</code>, <code>gh-pages</code> (the built site, written by the docs workflow), and
+whatever is being worked on right now.</p>
+<h2 id="commits">Commits<a class="headerlink" href="#commits" title="Permanent link">&para;</a></h2>
+<p>One line, and it says what changed as a sentence someone else could read
+without the diff:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>the documentation as a site: MkDocs from docs/, an example gallery and API pages generated at build time
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>call an nn.Module through forward, know its members, and say when the boundary is ctypes
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>pin libcst below 1.8 where a glibc-2.17 wheel exists, and say which libc a machine has
+</code></pre></div>
+<p>Lower case, no trailing period, no prefix tags (<code>feat:</code>, <code>fix:</code>), no body,
+no trailers. The reasoning goes in the pull request, the code comments, and
+the changelog, each of which outlives a commit message in <code>git log</code>. A
+branch may carry several commits while it is open; each is still one line.</p>
+<p>Every commit that changes behavior gets a line under the unreleased section
+of <code>CHANGELOG.md</code> in the same pull request, in the order the work landed,
+written for a user: what they can do now, or what stopped happening to them.</p>
+<h2 id="pull-requests">Pull requests<a class="headerlink" href="#pull-requests" title="Permanent link">&para;</a></h2>
+<p>A pull request is one change, into <code>dev</code> (or into <code>main</code> for a release or a
+fix that cannot wait). Before opening it:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>./scripts/check.sh<span class="w">                          </span><span class="c1"># the gate, green</span>
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>python<span class="w"> </span>scripts/refresh.py<span class="w"> </span>--quick<span class="w">           </span><span class="c1"># examples and tables in step</span>
+<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>python<span class="w"> </span>examples/record_outputs.py<span class="w"> </span>&lt;folder&gt;<span class="w">  </span><span class="c1"># if an example's output moved</span>
+</code></pre></div>
+<p>The description says what changed and why in a few paragraphs, in the same
+register as the commit lines; a reader six months from now should be able to
+reconstruct the decision from it. Link the issue it closes with <code>Closes #N</code>.
+CI runs the gate on Python 3.12, 3.13, and 3.14, the plugin suites (each
+fails if all its tests skipped), the dogfood migration, and a built
+artifact; all of them have to pass. A pull request is merged with a merge
+commit whose subject is the pull request's title, and its branch is deleted.</p>
+<p>Review is for the invariants below and for whether the change says what it
+does — in its diagnostics, its docs, and its tests. Style is the gate's
+business, not the reviewer's.</p>
+<h2 id="issues">Issues<a class="headerlink" href="#issues" title="Permanent link">&para;</a></h2>
+<p>Open one for a bug, a program the compiler answers differently on one of
+the three paths, a diagnostic that is wrong or unhelpful, or a feature with
+a program that should work and does not. Include:</p>
+<ul>
+<li>the <code>.ppy</code> (or <code>.py</code>) that shows it, as small as it can be made;</li>
+<li>the command, and what it printed against what you expected — the three
+  paths' outputs when they disagree;</li>
+<li><code>ppy doctor</code> and <code>ppy --version</code>.</li>
+</ul>
+<p>A disagreement between <code>python f.ppy</code>, <code>ppy f.ppy</code>, and <code>ppy run f.ppy</code> is
+always a bug, whatever the program does. A performance report needs the
+numbers and the machine (<code>examples/15_algorithms/bench.py --json</code> records
+both). Questions about whether something is meant to work are issues too;
+the answer becomes documentation.</p>
 <h2 id="the-gate">The gate<a class="headerlink" href="#the-gate" title="Permanent link">&para;</a></h2>
 <p><code>./scripts/check.sh</code> is the single source of truth for "clean": ruff, ruff
 format, pylint, the test suite, the conversion check, the three-path example
-run, and the example lint. CI runs that script and nothing else, so a local
+run, the example lint, the documentation's code fences, and a strict build
+of the documentation site. CI runs that script and nothing else, so a local
 pass and a CI pass are the same claim. Run it before every commit.</p>
 <p>A plugin's own claim is <code>./scripts/plugin_check.sh &lt;torch|jax|uvicorn|scipy|pandas|pyarrow&gt;</code>,
 which fails if the plugin's tests all skip — a skipped test proves nothing.</p>
@@ -3711,6 +3886,8 @@ which fails if the plugin's tests all skip — a skipped test proves nothing.</p
   working with the compiler uninstalled, and a test enforces it.</li>
 <li><strong>A generated <code>.ppy</code> is exactly what <code>ppy convert</code> writes.</strong> Never hand-edit
   one; <code>examples/verify_conversions.py</code> regenerates and diffs them.</li>
+<li><strong>Every diagnostic code is documented once.</strong> <code>docs/reference/diagnostics.md</code>
+  and the registry are one claim, and a test holds them together.</li>
 </ul>
 <h2 id="examples">Examples<a class="headerlink" href="#examples" title="Permanent link">&para;</a></h2>
 <p>An example is either hand-written or generated, and its README says which.
@@ -3724,7 +3901,7 @@ folder and puts what it printed back into the README, so a command and its
 answer sit side by side and a change to either is a change to the file.
 Run it with the plugin groups installed (<code>uv sync --group all</code>) so the torch,
 JAX, and pandas examples record rather than fail; a tool the repository does
-not install (<code>torchrun</code>, <code>accelerate</code>) is shown as not run.</p>
+not install (<code>accelerate</code>) is shown as not run.</p>
 <p><code>python scripts/refresh.py</code> reports anything that has drifted — an example
 that no longer checks, a conversion that no longer matches, a measurement
 that has moved, a README table that is behind the record — and <code>--write</code>
@@ -3746,9 +3923,11 @@ run is too much; CI runs it as its own job on every push.</p>
 <h2 id="measurements">Measurements<a class="headerlink" href="#measurements" title="Permanent link">&para;</a></h2>
 <p>Numbers in the documentation come from <code>examples/15_algorithms/bench.py</code>,
 are recorded in <code>measurements.json</code> with the machine they were taken on, and
-the README tables are rendered from that file rather than typed. They are
-not a per-change gate: a scheduled workflow re-measures and reports drift
-beyond a tolerance, because absolute wall times differ between runners.</p>
+the README tables are rendered from that file rather than typed. The C
+reference is built with gcc and with clang, and both columns are shown;
+the drift check takes its ratio against gcc. They are not a per-change
+gate: a scheduled workflow re-measures and reports drift beyond a
+tolerance, because absolute wall times differ between runners.</p>
 <p>What counts as drift needs both signals: the milliseconds moved beyond the
 tolerance <em>and</em> the ratio to the C reference moved with them. A busy machine
 slows every path at once, so the ratio holds where the times do not; and the
@@ -3764,6 +3943,10 @@ libpython; <code>bench.py</code> says up front which paths it had to skip and wh
 <code>--record</code> still writes what it measured so a failed scheduled run keeps its
 evidence. That file may not be <code>measurements.json</code> itself: the baseline is
 written only once the run is judged worth keeping.</p>
+<p>Measure from a checkout on a native filesystem. A launcher built from a
+project on a mounted Windows drive bakes that path into <code>sys.path</code>, and
+every import-bound number roughly quadruples; the numbers in the tree were
+taken from a worktree under <code>/tmp</code>, one session, nothing else running.</p>
 <h2 id="releasing">Releasing<a class="headerlink" href="#releasing" title="Permanent link">&para;</a></h2>
 <p>The distribution is <strong><code>ppy-lang</code></strong>; the packages it installs are <code>ppy</code>,
 <code>ppy_compiler</code>, and <code>ppy_runtime</code>.</p>
@@ -3775,30 +3958,47 @@ learn a string would be a dependency in the wrong direction. A test holds
 the two together, along with the installed distribution's metadata, because
 the compiler keys its caches on that string and a stale copy would serve
 artifacts from a version that is not running.</p>
-<p>To cut a release:</p>
+<p>Versions follow the release model above: <code>dev</code> declares the <em>next</em> release
+with an alpha suffix (<code>0.3.0a1</code>, then <code>a2</code> as alphas ship), <code>main</code> declares
+a stable <code>X.Y.Z</code>. A build from <code>dev</code> never carries a stable number it has
+not earned, and <code>pip</code> and <code>uv</code> never pick an alpha unless asked
+(<code>--prerelease allow</code>, or an exact pin).</p>
+<p><strong>An alpha</strong>, from <code>dev</code>:</p>
 <ol>
-<li>Move <code>COMPILER_VERSION</code> and <code>ppy.__version__</code> together, and write the
-   release into <code>CHANGELOG.md</code>.</li>
+<li>Write what shipped into the unreleased section of <code>CHANGELOG.md</code> if it is
+   not there yet; leave the heading <code>— unreleased</code>.</li>
+<li><code>./scripts/check.sh</code>, then tag the commit <code>vX.Y.0aN</code> — matching the
+   declared version, which the workflow verifies — and push the tag.</li>
+<li>Move <code>COMPILER_VERSION</code> and <code>ppy.__version__</code> to <code>aN+1</code> in the next pull
+   request.</li>
+</ol>
+<p><strong>A stable release</strong>, onto <code>main</code>:</p>
+<ol>
+<li>On <code>dev</code>, move <code>COMPILER_VERSION</code> and <code>ppy.__version__</code> to <code>X.Y.0</code> and
+   date the changelog section (<code>## X.Y.0 — YYYY-MM-DD</code>), in a pull request.</li>
+<li>Merge <code>dev</code> into <code>main</code> by pull request.</li>
 <li><code>./scripts/check.sh</code>, then <code>uv build</code> and
    <code>uv run --with twine twine check dist/*</code>.</li>
-<li>Tag it <code>vX.Y.Z</code> — matching the declared version, which the workflow
-   verifies — and push the tag. <code>.github/workflows/release.yml</code> runs the
-   gate, builds, installs the built wheel into a clean environment and runs
-   it, and publishes.</li>
+<li>Tag <code>main</code> <code>vX.Y.0</code> and push the tag. <code>.github/workflows/release.yml</code>
+   runs the gate, builds, installs the built wheel into a clean environment
+   and runs it, and publishes to PyPI; the docs workflow deploys the release
+   as <code>X.Y</code> and moves <code>latest</code> onto it.</li>
+<li>Back on <code>dev</code>, move the version to <code>X.(Y+1).0a1</code> and open the next
+   changelog section.</li>
 </ol>
+<p><code>workflow_dispatch</code> on the release workflow publishes to TestPyPI by
+default, which is the way to rehearse either kind. The workflow publishes
+through PyPI's trusted publishing, so there is no API token in the
+repository; it needs, once, a pending publisher on PyPI for <code>ppy-lang</code>
+naming this repository, the workflow <code>release.yml</code>, and the environment
+<code>pypi</code>, the same on TestPyPI with the environment <code>testpypi</code>, and both
+environments under the repository's settings.</p>
 <p>A workflow pins actions by <strong>ref</strong>, and a ref is not a release. Some
 publishers cut releases past the last moving major tag they maintain, so
 <code>gh api repos/OWNER/REPO/releases/latest</code> can name a version that
 <code>uses:</code> cannot resolve. Check the ref itself before changing one:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>gh<span class="w"> </span>api<span class="w"> </span>repos/astral-sh/setup-uv/git/ref/tags/v10.0.1<span class="w"> </span>--jq<span class="w"> </span>.ref
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>gh<span class="w"> </span>api<span class="w"> </span>repos/astral-sh/setup-uv/git/ref/tags/v10.0.1<span class="w"> </span>--jq<span class="w"> </span>.ref
 </code></pre></div>
-<p>The workflow publishes through PyPI's trusted publishing, so there is no API
-token in the repository. It needs, once: a pending publisher on PyPI for
-<code>ppy-lang</code> naming this repository, the workflow <code>release.yml</code>, and the
-environment <code>pypi</code>; the same on TestPyPI with the environment <code>testpypi</code>;
-and both environments created under the repository's settings.
-<code>workflow_dispatch</code> on the workflow publishes to TestPyPI by default, which
-is the way to rehearse one.</p>
 
 
 
