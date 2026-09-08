@@ -590,6 +590,21 @@ Speed of the compiler itself, measured before being changed.
   StableHLO -- as files beside the manifest, and the launcher binds them
   without the compiler, so the warm `ppy run` path and `ppy run --prebuilt`
   route them as the JIT path does.
+- `ppy.aio`, the async dialect, and the native async runtime. `aio.sleep`,
+  `accept`, `connect`, `read`, `write` are awaitables, `spawn` starts a
+  task, `listen`, `port`, `close` are immediate, and `run` drives a
+  coroutine; sockets are ints and answer a negative errno rather than
+  raising, so every path says the same. An `async def` of scalars and
+  pointers whose awaits are these and other coroutines lowers to the async
+  dialect -- `create`, `start`, `await`, the IO operations -- and
+  `lower-async` makes it a starter and a resume function over a frame the
+  runtime owns, spilling what lives across an await; the LLVM and C
+  backends call the runtime, one C file compiled once into the cache
+  (Linux, epoll; elsewhere asyncio runs everything). Calling a compiled
+  coroutine hands back a `NativeFuture` that `aio.run` drives and asyncio
+  can await; a built artifact links the runtime in. A guard failing inside
+  a running coroutine fails its future and `aio.run` raises
+  `NativeGuardFailed`. `E1645` names a misuse.
 
 ## 0.1.0a1
 

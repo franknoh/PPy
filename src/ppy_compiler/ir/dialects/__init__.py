@@ -8,6 +8,7 @@ __all__ = ["builtin_dialects"]
 
 
 def builtin_dialects() -> list[Dialect]:
+    from .aio import AsyncDialect
     from .arrow import ArrowDialect
     from .atomic import AtomicDialect
     from .columnar import ColumnarDialect
@@ -42,4 +43,5 @@ def builtin_dialects() -> list[Dialect]:
         ColumnarDialect(),
         ArrowDialect(),
         GpuDialect(),
+        AsyncDialect(),
     ]

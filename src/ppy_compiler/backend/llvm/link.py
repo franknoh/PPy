@@ -158,7 +158,14 @@ def link_shared_library(
     command = [*_linker(target), "-shared", "-fPIC", "-o", str(destination)]
     destination.parent.mkdir(parents=True, exist_ok=True)
     command.extend(str(o) for o in objects)
-    command.extend(f"-l{library}" for library in libraries)
+    for library in libraries:
+        if library == "ppy_aio":
+            # The async runtime is compiled into the library, so the artifact stands alone.
+            from ppy_runtime.aio import source_path
+
+            command.append(str(source_path()))
+        else:
+            command.append(f"-l{library}")
     completed = subprocess.run(command, capture_output=True, text=True, check=False)
     if completed.returncode != 0:
         raise ToolchainError(f"link failed: {completed.stderr.strip() or completed.stdout.strip()}")
@@ -331,6 +338,7 @@ def write_manifest(
                     "returns": list(signature.returns),
                     "releases_gil": signature.releases_gil,
                     "cpu_features": list(signature.cpu_features),
+                    "future": signature.future,
                 },
             }
             for signature in sorted(entries.values(), key=lambda s: s.qualname)

@@ -237,6 +237,7 @@ def eligible(
     *,
     allow_io: bool = False,
     allow_launch: bool = False,
+    allow_async: bool = False,
 ) -> tuple[bool, str]:
     """Can this function be lowered to a native scalar entry point?
 
@@ -245,8 +246,10 @@ def eligible(
     `allow_launch` is the GPU source backends': a kernel launch is written
     as one, where the CPU backends have no launch runtime yet.
     """
-    if info.is_async or info.is_generator:
-        return False, "coroutines and generators use the boxed runtime"
+    if info.is_generator:
+        return False, "generators use the boxed runtime"
+    if info.is_async and not allow_async:
+        return False, "a coroutine runs natively only where the async runtime does"
     written = analysis.mutated_params | analysis.delegated_writes
     for name in sorted(written):
         declared = next((p.type for p in info.params if p.name == name), None)
@@ -272,6 +275,10 @@ def eligible(
         violations.discard(Effect.IO)
     if allow_launch:
         violations.discard(Effect.GPU_LAUNCH)
+    if allow_async:
+        # A sleep and a socket are the async runtime's own business.
+        violations.discard(Effect.TIME)
+        violations.discard(Effect.NETWORK)
     if written or analysis.writes_only_allocations:
         # Those writes land in memory the caller lent us, and nowhere else --
         # whether this function performed them or a callee it handed the
@@ -322,6 +329,9 @@ def should_lower_native(info: FunctionInfo, analysis: FunctionAnalysis) -> tuple
     native caller.
     """
     del analysis
+    if info.is_async:
+        # The future is the boundary value; a coroutine is called to be run.
+        return True, "a coroutine's future crosses the boundary"
     for api in ("cuda", "hip"):
         if any(info.directive(f"{api}.{kind}") is not None for kind in ("kernel", "device")):
             # Device code has no CPU form to bind; a launch runs it, and under
@@ -535,13 +545,21 @@ def _signature(
         _native_param(p.name, p.type, layouts) or NativeParam(p.name, "int") for p in info.params
     )
     atoms = _return_atoms(info.ret) or ("int",)
+    returns = tuple(_abi_name(atom) for atom in atoms)
+    future = ""
+    if info.is_async:
+        # A coroutine hands back the runtime's future, an i64 handle, and
+        # the boundary reads the kind it carries from `future`.
+        future = "none" if _returns_none(info.ret) else atoms[0]
+        returns = ("i64",)
     return NativeSignature(
         qualname=info.qualname,
         symbol="ppy_" + info.qualname.replace(".", "_"),
         parameters=parameters,
-        returns=tuple(_abi_name(atom) for atom in atoms),
+        returns=returns,
         releases_gil=_releases_gil(analysis) if analysis is not None else False,
         cpu_features=_cpu_features(info),
+        future=future,
     )
 
 

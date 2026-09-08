@@ -112,6 +112,8 @@ def build_wrappers(
     notify=None,
 ) -> BuiltWrappers:
     """Generate, compile, and import the Python-ABI wrappers for a module."""
+    # A coroutine hands back a future the Python side wraps; no C wrapper for it.
+    signatures = {name: s for name, s in signatures.items() if not s.future}
     if not signatures:
         return BuiltWrappers(reason="no native function to wrap")
     ready, detail = wrapper_toolchain()

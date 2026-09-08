@@ -180,6 +180,22 @@ def bind(
         for p in signature.parameters
     ]
     finalizers = [_result_for(atom) for atom in signature.returns]
+    if signature.future:
+        from .aio import NativeFuture, runtime_for
+
+        runtime = runtime_for(owner)
+        if runtime is None:
+            # No async runtime here: the coroutine is its Python definition.
+            return NativeBinding(
+                signature=signature,
+                wrapper=fallback,
+                fallback=fallback,
+                fast_entry=None,
+                owner=owner,
+            )
+        kind = signature.future
+        finalizers = [lambda bits: NativeFuture(bits, kind, runtime, signature.qualname)]
+        fast_entry = None
     returns_tuple = signature.returns_tuple
     # Without a way to register one, a specialization could not be reached.
     observing = observation_wanted(specializer, policy, info) and (

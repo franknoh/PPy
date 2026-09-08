@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING
 
 from ppy_runtime.version import VERSION as __version__
 
-from . import atomic, concurrent, cpu, cuda, ffi, hip, simd, xla
+from . import aio, atomic, concurrent, cpu, cuda, ffi, hip, simd, xla
 from ._directives import (
     DIRECTIVE_ATTR,
     Directive,
@@ -99,6 +99,7 @@ __all__ = [
     "VectorSpec",
     "__version__",
     "add_import_root",
+    "aio",
     "atomic",
     "attach",
     "check",

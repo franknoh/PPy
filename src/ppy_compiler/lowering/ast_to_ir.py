@@ -18,6 +18,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from ppy_runtime.abi import NativeParam, NativeSignature
+from ppy_runtime.aio import available as aio_available
 
 from ..analysis import types as T
 from ..analysis.checker import FunctionAnalysis, ModuleAnalysis
@@ -45,10 +46,12 @@ from ..ir import (
     I8,
     I64,
     U8,
+    VOID,
     Block,
     BlockArgument,
     BufferType,
     Builder,
+    FutureType,
     IRFunction,
     IRModule,
     IRType,
@@ -61,6 +64,7 @@ from ..ir import (
     Value,
     VectorType,
 )
+from ..ir.dialects import aio as aio_dialect
 from ..ir.dialects import atomic as atomic_dialect
 from ..ir.dialects import concurrency as concurrency_dialect
 from ..ir.dialects import core
@@ -128,6 +132,7 @@ def lower_module_to_ir(
     prover: Prover | None = None,
     root: Path | None = None,
     launches: bool = False,
+    asynchronous: bool | None = None,
 ) -> Lowered:
     """The IR of every eligible function in one module."""
     frontend = Frontend(
@@ -138,6 +143,7 @@ def lower_module_to_ir(
         prover=prover,
         root=root,
         launches=launches,
+        asynchronous=asynchronous,
     )
     return frontend.build(functions)
 
@@ -188,6 +194,7 @@ class Frontend:
         prover: Prover | None = None,
         root: Path | None = None,
         launches: bool = False,
+        asynchronous: bool | None = None,
     ) -> None:
         self.analysis = analysis
         self.layouts: ClassLayouts = dict(layouts or {})
@@ -201,6 +208,9 @@ class Frontend:
         #: runtime yet, so for them a launching function stays in Python; the
         #: source backends write the launch.
         self.launches = launches
+        #: Whether a coroutine lowers: only where the native async runtime is
+        #: -- Linux, a C compiler -- so elsewhere every coroutine stays with asyncio.
+        self.asynchronous = aio_available() if asynchronous is None else asynchronous
         self.module = IRModule(analysis.name)
         #: qualname -> (IR function, its native signature), for calls.
         self.declared: dict[str, tuple[IRFunction, NativeSignature]] = {}
@@ -249,7 +259,12 @@ class Frontend:
                 )
                 continue
             ok, reason = eligible(
-                info, analysis, self.layouts, allow_io=self.standalone, allow_launch=self.launches
+                info,
+                analysis,
+                self.layouts,
+                allow_io=self.standalone,
+                allow_launch=self.launches,
+                allow_async=self.asynchronous,
             )
             if ok:
                 candidates[qualname] = (info, analysis, node)
@@ -343,6 +358,9 @@ class Frontend:
                 function.attributes["gpu.kind"] = "kernel"
             elif info.directive(f"{api}.device") is not None:
                 function.attributes["gpu.kind"] = "device"
+        if info.is_async:
+            aio_dialect.mark_async(function)
+            self.module.require("async", 1)
         self.declared[info.qualname] = (function, signature)
         return function
 
@@ -447,6 +465,7 @@ class Frontend:
             self.layouts,
             allow_io=self.standalone,
             allow_launch=self.launches,
+            allow_async=self.asynchronous,
         )
         if not ok:
             raise Unsupported(f"`{qualname}[{', '.join(key[1])}]` has no native lowering: {reason}")
@@ -474,7 +493,7 @@ class Frontend:
             for qualname in lowered.functions:
                 function = self.declared[qualname][0]
                 for op in function.operations():
-                    if op.name != "core.call":
+                    if op.name not in {"core.call", "async.create"}:
                         continue
                     callee = op.attributes["callee"].name  # type: ignore[union-attr]
                     target = self.module.functions.get(callee)
@@ -572,6 +591,14 @@ class _FunctionLowering:
                     "a kernel takes scalars and `native.ptr` parameters; "
                     "a list, a buffer, or a class stays on the host"
                 )
+        if aio_dialect.is_async(function):
+            if any(p.is_buffer or p.is_object or p.is_tuple for p in signature.parameters):
+                raise Unsupported(
+                    "a coroutine takes scalars and `native.ptr` parameters; "
+                    "a list, a buffer, or a class keeps it in Python"
+                )
+            if len(function.results) > 1 or any(isinstance(t, TupleType) for t in function.results):
+                raise Unsupported("a coroutine returns one scalar or nothing")
         self.entry: Block | None = None
         self.b = Builder()
         #: Scalar locals: name -> the stack slot holding it.
@@ -763,7 +790,7 @@ class _FunctionLowering:
                 return
             case ast.Expr(value=ast.Constant()):
                 return
-            case ast.Expr(value=ast.Call()):
+            case ast.Expr(value=ast.Call() | ast.Await()):
                 self._expr(node.value)
             case _:
                 raise Unsupported(f"`{type(node).__name__}` has no native lowering")
@@ -1239,6 +1266,8 @@ class _FunctionLowering:
                 return self._ifexp(node)
             case ast.Call():
                 return self._call(node)
+            case ast.Await():
+                return self._await(node)
             case ast.Attribute():
                 if isinstance(node.value, ast.Name) and node.value.id in self.objects:
                     return self._field(node.value.id, node.attr)
@@ -1713,6 +1742,8 @@ class _FunctionLowering:
         subscript = func.slice if isinstance(func, ast.Subscript) else None
         head = func.value if isinstance(func, ast.Subscript) else func
         operation = head.attr if isinstance(head, ast.Attribute) else ""
+        if namespace == "aio":
+            return self._aio_op(operation, node)
         if namespace in {"cuda", "hip"}:
             return self._gpu_op(namespace, operation, node, subscript)
         if namespace == "simd":
@@ -1938,6 +1969,91 @@ class _FunctionLowering:
         while len(sizes) < 3:
             sizes.append(self._int_constant(1))
         return sizes[0], sizes[1], sizes[2]
+
+    # -- coroutines: awaits and the aio namespace -----------------------------
+
+    def _await(self, node: ast.Await) -> Value:
+        if not aio_dialect.is_async(self.function):
+            raise Unsupported("`await` belongs in an `async def`")
+        value = self._expr(node.value)
+        if not isinstance(value.type, FutureType):
+            raise Unsupported(
+                "awaits something the compiler does not know; the coroutine stays in Python"
+            )
+        result = aio_dialect.await_(self.b, value)
+        return result if result is not None else core.const(self.b, 0, I64)
+
+    def _aio_op(self, operation: str, node: ast.Call) -> Value:
+        """`aio.*` as async operations; the loop itself stays Python's to drive (spec 76)."""
+        if node.keywords:
+            raise Unsupported("`ppy.aio` takes no keyword arguments")
+        module = self.frontend.module
+        module.require("async", 1)
+        known = module.attributes.get("ppy.libraries", ())
+        assert isinstance(known, tuple)
+        if "ppy_aio" not in known:
+            module.attributes["ppy.libraries"] = (*known, "ppy_aio")
+        args = node.args
+        b = self.b
+
+        def integer(index: int) -> Value:
+            return self._coerce(self._expr(args[index]), "int")
+
+        if operation == "sleep" and len(args) == 1:
+            return aio_dialect.sleep(b, self._coerce(self._expr(args[0]), "float"))
+        if operation == "accept" and len(args) == 1:
+            return aio_dialect.accept(b, integer(0))
+        if operation == "connect" and len(args) == 2:
+            host, length = self._string_constant(args[0], "aio.connect")
+            return aio_dialect.connect(b, host, length, integer(1))
+        if operation in {"read", "write"} and len(args) == 3:
+            pointer = self._pointer(args[1])
+            assert isinstance(pointer.type, PtrType)
+            if pointer.type.pointee != U8:
+                raise Unsupported(f"`aio.{operation}` moves bytes through a `native.ptr[ppy.u8]`")
+            if operation == "read":
+                if not pointer.type.mutable:
+                    raise Unsupported("`aio.read` fills a mutable `native.ptr[ppy.u8]`")
+                return aio_dialect.read(b, integer(0), pointer, integer(2))
+            return aio_dialect.write(b, integer(0), self._coerce(pointer, "const_ptr"), integer(2))
+        if operation == "listen" and len(args) in {2, 3}:
+            host, length = self._string_constant(args[0], "aio.listen")
+            backlog = integer(2) if len(args) == 3 else self._int_constant(16)
+            return aio_dialect.listen(b, host, length, integer(1), backlog)
+        if operation == "spawn" and len(args) == 1:
+            future = self._expr(args[0])
+            if not isinstance(future.type, FutureType):
+                raise Unsupported("`aio.spawn` starts a coroutine of this module")
+            aio_dialect.start(b, future)
+            return future
+        if operation == "port" and len(args) == 1:
+            return aio_dialect.port(b, integer(0))
+        if operation == "close" and len(args) == 1:
+            aio_dialect.close(b, integer(0))
+            return core.const(b, 0, I64)
+        if operation in {"run", "compiled"}:
+            raise Unsupported(
+                f"`aio.{operation}` drives the loop from Python; "
+                "the function calling it stays there"
+            )
+        raise Unsupported(f"`aio.{operation}` has no native lowering with these arguments")
+
+    def _string_constant(self, node: ast.expr, what: str) -> tuple[Value, Value]:
+        """A string literal as constant bytes: its pointer and its length."""
+        if not isinstance(node, ast.Constant) or not isinstance(node.value, str):
+            raise Unsupported(f"`{what}` takes the host as a string constant")
+        module = self.frontend.module
+        text = module.add_global(
+            f"ppy.str.{len(module.globals)}", BufferType(U8), node.value, visibility="private"
+        )
+        pointer = self.b.create(
+            "core.call_intrinsic",
+            (),
+            (PtrType(U8),),
+            {"intrinsic": "ppy.string_data", "symbol": text.symbol.name},
+        ).result
+        constant = core.cast(self.b, pointer, PtrType(U8, "generic", False))
+        return constant, core.const(self.b, len(node.value.encode("utf-8")), I64)
 
     def _atomic_op(self, operation: str, node: ast.Call) -> Value:
         self.frontend.module.require("atomic", 1)
@@ -2223,6 +2339,12 @@ class _FunctionLowering:
     def _native_call(
         self, function: IRFunction, signature: NativeSignature, qualname: str, node: ast.Call
     ) -> Value:
+        if aio_dialect.is_async(function):
+            if not aio_dialect.is_async(self.function):
+                raise Unsupported(f"`{qualname}` is a coroutine; only a coroutine awaits it")
+            started = self._call_arguments(signature, node.args, qualname)
+            inner = function.results[0] if function.results else VOID
+            return aio_dialect.create(self.b, function.name, tuple(started), inner)
         arguments = self._call_arguments(signature, node.args, qualname)
         if signature.returns_tuple:
             raise Unsupported("a tuple result cannot be forwarded between native calls yet")
@@ -2585,7 +2707,7 @@ class _FunctionLowering:
 
 
 _SPELLING = {"add": "+", "sub": "-", "mul": "*"}
-_NAMESPACES = ("simd", "atomic", "cpu", "concurrent", "cuda", "hip")
+_NAMESPACES = ("simd", "atomic", "cpu", "concurrent", "cuda", "hip", "aio")
 _SHUFFLES = {"shfl": "idx", "shfl_up": "up", "shfl_down": "down", "shfl_xor": "xor"}
 _ANNOTATION_KINDS = {
     "int": "int",

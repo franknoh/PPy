@@ -121,7 +121,9 @@ class PrebuiltBinder(LibraryBinder):
         address = ctypes.cast(symbol, ctypes.c_void_p).value or 0
         if not address:
             return fallback
-        entry = self._fast_entry(signature, address, fallback)
+        # A coroutine's future needs the Python-side wrapping; the C wrapper
+        # would hand back the bare handle.
+        entry = None if signature.future else self._fast_entry(signature, address, fallback)
         if entry is not None:
             return entry
         binding = bind(signature, address, fallback, owner=self._library)

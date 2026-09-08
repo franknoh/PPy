@@ -6,6 +6,7 @@ from .autodiff import AutodiffError, differentiate
 from .canonicalize import Canonicalize, ConstantFold, canonicalization_patterns
 from .dce import DeadCodeElimination
 from .fuse_tensor import FuseTensor, TensorCanonicalize
+from .lower_async import AsyncLoweringError, LowerAsync, lower_async
 from .lower_parallel import BACKENDS as PARALLEL_BACKENDS
 from .lower_parallel import LowerParallel
 from .lower_tensor import LoweringError, LowerTensor
@@ -14,11 +15,13 @@ from .simplify_cfg import SimplifyCFG
 
 __all__ = [
     "PARALLEL_BACKENDS",
+    "AsyncLoweringError",
     "AutodiffError",
     "Canonicalize",
     "ConstantFold",
     "DeadCodeElimination",
     "FuseTensor",
+    "LowerAsync",
     "LowerParallel",
     "LowerTensor",
     "LoweringError",
@@ -28,6 +31,7 @@ __all__ = [
     "canonicalization_patterns",
     "default_pipeline",
     "differentiate",
+    "lower_async",
     "promote_slots",
 ]
 
@@ -42,6 +46,7 @@ def default_pipeline(level: int = 1, ctx=None, parallel=None):  # type: ignore[n
 
     manager = PassManager(ctx)
     manager.add_stage("after-ir-generation")
+    manager.add(LowerAsync())
     manager.add(Canonicalize())
     manager.add_stage("after-canonicalization")
     manager.add_stage("before-optimization")

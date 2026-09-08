@@ -126,6 +126,15 @@ def standalone_ir(bundle, reporter, entry: Path, opt_level: int | None = None): 
     return lowered.module
 
 
+def _runtime_sources(result) -> list[str]:  # type: ignore[no-untyped-def]
+    """Runtime sources a standalone program compiles in: the async runtime, when it awaits."""
+    if "ppy_aio" not in tuple(getattr(result, "libraries", ())):
+        return []
+    from ppy_runtime.aio import source_path
+
+    return [str(source_path())]
+
+
 def build_standalone(  # type: ignore[no-untyped-def]
     bundle, reporter, entry: Path, output: Path | None, opt_level: int | None = None
 ) -> int:
@@ -188,6 +197,7 @@ def build_standalone(  # type: ignore[no-untyped-def]
         "-O2",
         str(main_c),
         str(support),
+        *_runtime_sources(result),
         str(object_path),
         "-o",
         str(destination),

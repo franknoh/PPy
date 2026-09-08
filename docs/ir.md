@@ -143,6 +143,28 @@ same way, so a program built for one runs exactly like one built for
 another. Threads are pthreads on the targets that have them; another is
 refused with the reason.
 
+## The async dialect
+
+A function carrying `ppy.async = true` is a coroutine. Before the lowering
+it awaits: `async.create @f(%args) : future<T>` makes another coroutine
+(not yet running), `async.start %fut` runs one as a task, `async.await
+%fut : T` waits for a future, and `sleep`, `accept`, `connect`, `read`,
+and `write` are the runtime's operations that complete later, each a
+`future`; `listen`, `port`, and `close` are immediate. `lower-async`,
+first in the pipeline, makes each coroutine two functions. The starter
+keeps its name and parameters, takes a frame of `slots` words with
+`frame_new`, stores the arguments, and `spawn`s it through its resume
+function, returning the future; the resume function (`ppy.abi = "resume"`)
+takes the frame, reads its state, and jumps to the segment after the await
+that state names; a segment runs to its next await, records the state,
+`suspend`s on the awaited future, and returns; `result` reads what the
+awaited future carried, `complete` fulfils the frame's own future, and a
+guard becomes a branch to `fail`, since a running coroutine has no Python
+to fall back to. Stack slots become words of the frame, and a value read
+across an await is spilled to one. The LLVM and C backends lower the
+low-level operations to calls into the runtime (`ppy_runtime/aio/ppy_aio.c`);
+a future is an `i64` handle.
+
 ## The parallel dialect
 
 `parallel.for @body(%captures...) %begin, %end` runs `@body(captures...,

@@ -104,6 +104,9 @@ class NativeSignature:
     #: CPU features the code was compiled for (`@ppy.cpu.target`); the
     #: boundary binds it only on a machine that has them all.
     cpu_features: tuple[str, ...] = ()
+    #: A coroutine: the boundary hands back a future the runtime completes,
+    #: carrying this kind -- `int`, `float`, `bool`, or `none`.
+    future: str = ""
 
     @property
     def ret(self) -> str:

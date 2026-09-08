@@ -427,6 +427,11 @@ def _gpu_extent(t: T.Type) -> bool:
     return 1 <= len(base.items) <= 3 and all(T.strip_literal(item) == T.INT for item in base.items)
 
 
+def _awaitable_of(result: T.Type) -> T.Type:
+    """What calling a coroutine hands back: an awaitable of its result."""
+    return T.Instance("Awaitable", (result,), ("Awaitable", "object"))
+
+
 def _is_fresh_allocation(node: ast.expr) -> bool:
     """Does this expression produce an object nothing else can already hold?"""
     if isinstance(node, (ast.List, ast.Dict, ast.Set, ast.ListComp, ast.DictComp, ast.SetComp)):
@@ -2032,6 +2037,9 @@ class _Checker:
             self._check_argument_types(info, node, args, keywords, bound=bound)
             if info.dynamic:
                 self._native_blockers.append(f"`{info.name}` is a dynamic boundary")
+            if info.is_async:
+                # Calling a coroutine makes an awaitable of its result.
+                return Binding(_awaitable_of(info.ret))
             return Binding(info.ret, info.ret_facts if info.ret_annotated else Facts())
         for index, (param, argument) in enumerate(zip(signature.params, args, strict=False)):
             fits = T.is_assignable(argument.type, param.type)
@@ -2044,6 +2052,8 @@ class _Checker:
                     node.args[index] if index < len(node.args) else node,
                     argument.type,
                 )
+        if signature.is_async:
+            return Binding(_awaitable_of(signature.ret))
         return Binding(signature.ret)
 
     def _check_arity(
@@ -3474,6 +3484,7 @@ class _Checker:
             "ppy.parallel.": self._parallel_call,
             "ppy.cuda.": self._cuda_call,
             "ppy.hip.": self._hip_call,
+            "ppy.aio.": self._aio_call,
         }
         for prefix, handler in handlers.items():
             if qualname.startswith(prefix):
@@ -3986,6 +3997,128 @@ class _Checker:
                     "E1644", "a grid or a block is an `int` or a tuple of up to three", arg_node
                 )
         return Binding(T.NONE)
+
+    # -- the aio namespace -------------------------------------------------------
+
+    def _aio_call(
+        self, operation: str, node: ast.Call, subscript: ast.expr | None, env: Env
+    ) -> Binding | None:
+        """`ppy.aio.*`: awaitables that sleep and speak on sockets (spec 76, 77)."""
+        del subscript
+        spelled = f"ppy.aio.{operation}"
+        if node.keywords:
+            self._error("E1645", f"`{spelled}` takes no keyword arguments", node)
+        args = [self._expr(argument, env) for argument in node.args]
+
+        def awaiting(inner: T.Type) -> Binding:
+            return Binding(T.Instance("Awaitable", (inner,), ("Awaitable", "object")))
+
+        def expect(shapes: tuple[str, ...], optional: int = 0) -> bool:
+            wanted = len(shapes)
+            if not wanted - optional <= len(args) <= wanted:
+                self._error("E1645", f"`{spelled}` takes ({', '.join(shapes)})", node)
+                return False
+            ok = True
+            for shape, argument, arg_node in zip(shapes, args, node.args, strict=False):
+                base = T.strip_literal(argument.type)
+                if isinstance(base, (T.AnyType, T.UnknownType)):
+                    continue
+                if shape == "int" and base not in (T.INT, T.BOOL):
+                    self._mismatch("E1301", "an `int` is expected, not", arg_node, argument.type)
+                    ok = False
+                elif shape == "float" and base not in (T.INT, T.FLOAT, T.BOOL):
+                    self._mismatch("E1301", "a number is expected, not", arg_node, argument.type)
+                    ok = False
+                elif shape == "str" and base != T.STR:
+                    self._mismatch("E1301", "a `str` is expected, not", arg_node, argument.type)
+                    ok = False
+                elif shape == "bytes" and not (
+                    _is_pointer(argument.type)
+                    and _scalar_name_of(T.strip_literal(argument.type).args[0]) == "u8"  # type: ignore[attr-defined]
+                ):
+                    self._error(
+                        "E1645", f"`{spelled}` moves bytes through a `native.ptr[ppy.u8]`", arg_node
+                    )
+                    ok = False
+            return ok
+
+        if operation == "sleep":
+            expect(("float",))
+            self._effects = self._effects.add(Effect.TIME).add(Effect.SYNC)
+            return awaiting(T.NONE)
+        if operation == "listen":
+            expect(("str", "int", "int"), optional=1)
+            self._effects = self._effects.add(Effect.NETWORK)
+            return Binding(T.INT)
+        if operation == "port":
+            expect(("int",))
+            self._effects = self._effects.add(Effect.NETWORK)
+            return Binding(T.INT)
+        if operation == "accept":
+            expect(("int",))
+            self._effects = self._effects.add(Effect.NETWORK).add(Effect.SYNC)
+            return awaiting(T.INT)
+        if operation == "connect":
+            expect(("str", "int"))
+            self._effects = self._effects.add(Effect.NETWORK).add(Effect.SYNC)
+            return awaiting(T.INT)
+        if operation in {"read", "write"}:
+            expect(("int", "bytes", "int"))
+            self._effects = self._effects.add(Effect.NETWORK).add(Effect.SYNC)
+            if operation == "read":
+                self._effects = self._effects.add(Effect.WRITE_MEMORY)
+            else:
+                self._effects = self._effects.add(Effect.READ_MEMORY)
+            return awaiting(T.INT)
+        if operation == "close":
+            expect(("int",))
+            self._effects = self._effects.add(Effect.NETWORK)
+            return Binding(T.NONE)
+        if operation == "spawn":
+            self._effects = self._effects.add(Effect.SYNC)
+            if len(args) != 1:
+                self._error("E1645", f"`{spelled}(coroutine)` takes what to start", node)
+                return Binding(T.ANY)
+            base = T.strip_literal(args[0].type)
+            if (
+                isinstance(base, T.Instance)
+                and base.args
+                and base.name
+                in {
+                    "Coroutine",
+                    "Awaitable",
+                }
+            ):
+                return awaiting(base.args[-1])
+            if not isinstance(base, (T.AnyType, T.UnknownType)):
+                self._error("E1645", f"`{spelled}` takes a coroutine", node.args[0])
+            return Binding(T.ANY)
+        if operation == "run":
+            self._effects = self._effects.add(Effect.SYNC).add(Effect.IO)
+            if len(args) != 1:
+                self._error("E1645", f"`{spelled}(awaitable)` takes what to run", node)
+                return Binding(T.ANY)
+            base = T.strip_literal(args[0].type)
+            if (
+                isinstance(base, T.Instance)
+                and base.args
+                and base.name
+                in {
+                    "Coroutine",
+                    "Awaitable",
+                }
+            ):
+                return Binding(base.args[-1])
+            if not isinstance(base, (T.AnyType, T.UnknownType)):
+                self._error("E1645", f"`{spelled}` takes an awaitable", node.args[0])
+            return Binding(T.ANY)
+        if operation == "compiled":
+            if len(args) != 1:
+                self._error("E1645", f"`{spelled}(coroutine)` takes the function", node)
+            self._effects = self._effects.add(Effect.READ_GLOBAL)
+            return Binding(T.BOOL)
+        self._error("E1645", f"`{spelled}` is not part of the aio namespace", node)
+        return Binding(T.UNKNOWN)
 
     def _concurrent_call(
         self, operation: str, node: ast.Call, subscript: ast.expr | None, env: Env

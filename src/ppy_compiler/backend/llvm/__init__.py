@@ -782,6 +782,13 @@ def compile_and_run(  # type: ignore[no-untyped-def]
     engine = JitEngine(opt_level=level).open()
     for native in natives.values():
         for library in native.libraries:
+            if library == "ppy_aio":
+                from ppy_runtime.aio import library_path
+
+                runtime = library_path()
+                if runtime is not None:
+                    engine.load_library(str(runtime))
+                continue
             engine.load_library(library)
         if native.functions or native.fused:
             engine.add(native.ir)

@@ -473,6 +473,7 @@ MODULE_ATTRIBUTES: dict[str, tuple[T.Type, Facts]] = {
     "ppy.xla": (T.Module_("ppy.xla"), Facts()),
     "ppy.cuda": (T.Module_("ppy.cuda"), Facts()),
     "ppy.hip": (T.Module_("ppy.hip"), Facts()),
+    "ppy.aio": (T.Module_("ppy.aio"), Facts()),
     "ppy.ffi.nullable": (T.ANY, Facts()),
     "math.pi": (T.FLOAT, Facts()),
     "math.e": (T.FLOAT, Facts()),

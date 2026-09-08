@@ -23,6 +23,7 @@ from ...ir import (
     BoolType,
     BufferType,
     FloatType,
+    FutureType,
     IndexType,
     IntType,
     IRFunction,
@@ -38,6 +39,7 @@ from ...ir import (
 )
 from ...ir.dialects.gpu import kind_of
 from ...target import TargetInfo, host_target
+from .aio_lowering import lower_async
 from .dialect_lowerings import EmitError as _DialectEmitError
 from .dialect_lowerings import (
     lower_atomic,
@@ -211,6 +213,9 @@ class _ModuleEmitter:
             return ir.LiteralStructType([self.llvm_type(item) for _name, item in t.fields])
         if isinstance(t, VoidType):
             return ir.VoidType()
+        if isinstance(t, FutureType):
+            # A future is the runtime's handle.
+            return ir.IntType(64)
         raise EmitError(f"{t} has no LLVM representation")
 
     def boundary_atoms(self, t: IRType) -> list:  # type: ignore[type-arg]
@@ -229,6 +234,10 @@ class _ModuleEmitter:
     def function_type(self, function: IRFunction):  # type: ignore[no-untyped-def]
         ir = self.ir
         atoms = [atom for _name, t in function.params for atom in self.boundary_atoms(t)]
+        if function.attributes.get("ppy.abi") == "resume":
+            # A coroutine's resume function: the frame in, nothing out; the
+            # runtime, not a caller, learns how it ended.
+            return ir.FunctionType(ir.VoidType(), atoms)
         outs = [atom.as_pointer() for t in function.results for atom in self.boundary_atoms(t)]
         if not outs:
             outs = [ir.IntType(64).as_pointer()]
@@ -250,6 +259,8 @@ class _FunctionEmitter:
         self.fallback = None
         self.outs: list = []
         self._slots = 0
+        #: A coroutine's resume function returns nothing to no caller.
+        self.resume = function.attributes.get("ppy.abi") == "resume"
 
     # -- helpers ----------------------------------------------------------
 
@@ -308,7 +319,17 @@ class _FunctionEmitter:
             for op in block.operations:
                 self._op(op)
         with self.builder.goto_block(self.fallback):
-            self.builder.ret(ir.Constant(ir.IntType(32), STATUS_FALLBACK))
+            if self.resume:
+                # A callee's guard failed inside a coroutine: its future fails.
+                from .aio_lowering import runtime_function
+
+                frame = self.builder.bitcast(self.llvm.args[0], ir.IntType(8).as_pointer())
+                self.builder.call(
+                    runtime_function(self, "ppy_aio_fail"), [frame, ir.Constant(ir.IntType(64), 0)]
+                )
+                self.builder.ret_void()
+            else:
+                self.builder.ret(ir.Constant(ir.IntType(32), STATUS_FALLBACK))
         for phis in self.phis.values():
             for phi in phis:
                 for value, block in phi.incoming:
@@ -710,6 +731,9 @@ class _FunctionEmitter:
     def _ret(self, op: Operation) -> None:
         ir = self.ir
         b = self.builder
+        if self.resume:
+            b.ret_void()
+            return
         if not op.operands:
             b.store(ir.Constant(ir.IntType(64), 0), self.outs[0])
         else:
@@ -821,6 +845,7 @@ _DIALECTS = {
     "atomic": lower_atomic,
     "concurrency": lower_concurrency,
     "special": lower_special,
+    "async": lower_async,
 }
 
 
