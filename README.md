@@ -29,9 +29,9 @@ uv add "ppy-lang[llvm]"
 or with pip: `pip install "ppy-lang[llvm]"`. The distribution is `ppy-lang`
 and what it installs is `ppy`, so your code writes `import ppy`.
 
-Releases are alphas — the language and the diagnostics are in use and
-tested, and neither is promised to stay put — so pin an exact version:
-`uv add "ppy-lang[llvm]==0.1.0a1"`. For the development tip instead:
+Before 1.0 a minor release may move the language and the diagnostics — the
+[changelog](CHANGELOG.md) says what moved — so pin an exact version:
+`uv add "ppy-lang[llvm]==0.2.0"`. For the development tip instead:
 
 ```bash
 uv add "ppy-lang[llvm] @ git+https://github.com/franknoh/PPy.git"
