@@ -4,7 +4,7 @@ Between analysis and every backend sits one typed, SSA-form intermediate
 representation with an explicit control-flow graph. Analysis decides what a
 program means; the IR keeps that meaning in a form a backend can lower
 without reading Python again; dialects extend the IR; passes transform it;
-backends lower it. This page is the reference for the core; `docs/solver.md`
+backends lower it. This page is the reference for the core; [Where a solver fits](solver.md)
 and the plugin pages say what the other dialects add.
 
 ## Shape
@@ -180,7 +180,7 @@ calling thread, or chunks spawned through the concurrency dialect and
 joined, with a floating-point reduction whose `reassociate` is false
 never split -- and the C backend spells what the pass left as OpenMP
 regions when that backend was selected. The frontend writes these for
-`parallel.range` loops (`docs/language.md`) and outlines each body into a
+`parallel.range` loops ([Parallel loops](../guide/parallel.md)) and outlines each body into a
 private function marked `ppy.synthesized`.
 
 ## Shapes and layouts
@@ -295,7 +295,7 @@ verifier holds the kinds: a device operation in a host function; a host one
 in device code -- a guard, a buffer, an intrinsic, a call to a host
 function, any other dialect; a kernel that returns or takes stack memory;
 a launch of anything but a kernel, or with anything but its parameters.
-`ppy.cuda` and `ppy.hip` lower to it (`docs/language.md`); `ppy emit cuda`
+`ppy.cuda` and `ppy.hip` lower to it ([GPU kernels](../guide/gpu.md)); `ppy emit cuda`
 and `ppy emit hip` write device code and the host's launches as CUDA or
 HIP C++ (the C backend with the spellings in `backend/c/gpu.py`); the C,
 C++, and LLVM backends leave device code to them. `backend/nvvm` writes
@@ -324,7 +324,7 @@ bridge in `ppy_runtime.xla` compiles and runs it.
 ## Effects and ownership on the IR
 
 A function carries its `effects` -- the lower-case names of the analysis's
-vocabulary (`docs/language.md`), with a write through a buffer spelled as
+vocabulary ([Effects and purity](../guide/effects.md)), with a write through a buffer spelled as
 the `write_memory` it is -- and each parameter its `ownership`
 (`borrowed`, `mut`, `owned`) and `noalias`. Passes read the effects (an
 unused `core.call` to a callee with none but allocation and reads is dead),

@@ -15,7 +15,7 @@ produces the same bytes everywhere:
   there.
 
 Which files to hand them, on a project of any size, is
-[migrating.md](migrating.md).
+[Migrating a real project](migrating.md).
 
 Honesty is machine-checked: in `examples/`, every file named `<name>.ppy`
 next to a `<name>.py` is exactly what the converter wrote, and

@@ -257,7 +257,7 @@ prints what it found.
 ## The compiler platform
 
 Between the analysis and every backend sits one typed canonical IR
-([docs/ir.md](docs/ir.md)): SSA values, blocks, an explicit control-flow
+([docs/internals/ir.md](docs/internals/ir.md)): SSA values, blocks, an explicit control-flow
 graph, and operations named in dialects — `core`, `math`, `simd`, `cpu`,
 `atomic`, `concurrency`, `parallel`, `tensor`, `linalg`, `fft`, `sparse`,
 `columnar`, `arrow`, `gpu`, `async`, `prof` — with a verifier, a printer and
@@ -278,18 +278,22 @@ APIs the builtin ones use.
 
 ## Docs
 
-- [docs/guide.md](docs/guide.md) — overview, measurements, the import hook
-- [docs/language.md](docs/language.md) — the subset, directives, markers
-- [docs/conversion.md](docs/conversion.md) — how `ppy convert` and `ppy migrate` infer what they write
-- [docs/migrating.md](docs/migrating.md) — migrating a real project: profile, carve the kernels, leave the rest
-- [docs/architecture.md](docs/architecture.md) — pipeline, cache, threads
-- [docs/ir.md](docs/ir.md) — the canonical IR: dialects, passes, `.ppyir`, the linker, sanitizers, profiles
-- [docs/plugins.md](docs/plugins.md) — how each library integration works
-- [docs/config.md](docs/config.md) — every `[tool.ppy]` key
-- [docs/diagnostics.md](docs/diagnostics.md) — every diagnostic code
+The documentation site is **[ppy.franknoh.dev](https://ppy.franknoh.dev/)**:
+getting started, the guide, every example, the CLI, the API, and the
+internals, built from `docs/` on every push. The same pages, in the tree:
+
+- [docs/getting-started.md](docs/getting-started.md) — install, the first file, the three paths, check, build
+- [docs/guide/](docs/guide/index.md) — the subset, directives and markers, native memory, SIMD, threads, parallel loops, derivatives, coroutines, GPU kernels, XLA, generics
 - [docs/cli.md](docs/cli.md) — every command and option
-- [docs/compatibility.md](docs/compatibility.md) — what is stable, what moves, and what the cache and artifact ABI promise
-- [docs/solver.md](docs/solver.md) — where an SMT solver would fit: proving overflow guards away, validating the optimizer
+- [docs/reference/config.md](docs/reference/config.md) — every `[tool.ppy]` key
+- [docs/reference/diagnostics.md](docs/reference/diagnostics.md) — every diagnostic code
+- [docs/reference/compatibility.md](docs/reference/compatibility.md) — what is stable, what moves, and what the cache and artifact ABI promise
+- [docs/internals/architecture.md](docs/internals/architecture.md) — pipeline, cache, threads
+- [docs/internals/ir.md](docs/internals/ir.md) — the canonical IR: dialects, passes, `.ppyir`, the linker, sanitizers, profiles
+- [docs/internals/conversion.md](docs/internals/conversion.md) — how `ppy convert` and `ppy migrate` infer what they write
+- [docs/internals/migrating.md](docs/internals/migrating.md) — migrating a real project: profile, carve the kernels, leave the rest
+- [docs/internals/plugins.md](docs/internals/plugins.md) — how each library integration works
+- [docs/internals/solver.md](docs/internals/solver.md) — where an SMT solver fits: proving overflow guards away, validating the optimizer
 - [examples/README.md](examples/README.md) — 42 folders, 52 runnable programs
 - [CONTRIBUTING.md](CONTRIBUTING.md) — setting up, the gate, and what a change has to keep true
 

@@ -2,7 +2,7 @@
 
 `model` is the data structure, `types` the types, `dialect` the extension
 point, `dialects.core` what every backend lowers, `verify` the rules,
-`printer`/`parser`/`codec` the text form. See `docs/ir.md`.
+`printer`/`parser`/`codec` the text form. See `docs/internals/ir.md`.
 """
 
 from __future__ import annotations

@@ -36,7 +36,7 @@ what the checker already proved.
 | `migration/` | the `ppy migrate` layer over the shared conversion engine: deterministic rewrite passes (`pipeline`, `dynamic`, `globals`) that prove each rewrite equivalent before making it, and the classified report (`report`) that says what remains. |
 | `analysis/` | `results` (what analysis produced — the types every other package reads), `symbols` (declarations), `checker` (types, refinements, effects), `binding` (one shared call-argument binder), `lexical` (point-sensitive name resolution: what a name means at each statement, shared by decorator identity, reflection, and the write index), `aliasing` (flow-sensitive local alias analysis: mutation and escape resolve through what a name may refer to, not its spelling), `inference` (staged evidence/generalization fixpoint with a convergence guard), `decorators` (what each known decorator does, that unknown means opaque, and the shared `class_construction` facts behind both strict class checking and safe hoisting), `global_writes` (scope-aware project-wide write index behind `Final`), `reflection` (who reads annotations at runtime, blocking their materialization), `codec` (exact-inverse serialization of analysis facts for the cache), `render` (types back to annotation source). |
 | `lowering/` | the frontend of the native road: `ast_to_ir` turns a typed, effect-checked function into canonical IR (guards spelled, overflow and rounding on the operation, cross-module calls as declarations), `abi` the native signatures. |
-| `ir/` | the typed canonical IR every backend lowers: `model` (modules, functions, blocks, SSA values with use lists), `types`, `dialect` (the registry and `OpSpec`), `dialects/` (core, math, simd, cpu, atomic, concurrency, parallel, layout, tensor, linalg, fft, special, sparse, columnar, arrow, gpu, async, prof), `verify`, `printer`/`parser`/`codec` (`.ppyir`), `pattern` (rewrites to a fixed point), `passes` (the pass manager with analyses and stages), `transforms/` (canonicalize, simplify-cfg, dce, promote-slots, tensor fusion and lowering, columnar lowering, parallel lowering, async lowering, autodiff, sanitize, profile, whole-program), `linker` (modules into one program). See [ir.md](ir.md). |
+| `ir/` | the typed canonical IR every backend lowers: `model` (modules, functions, blocks, SSA values with use lists), `types`, `dialect` (the registry and `OpSpec`), `dialects/` (core, math, simd, cpu, atomic, concurrency, parallel, layout, tensor, linalg, fft, special, sparse, columnar, arrow, gpu, async, prof), `verify`, `printer`/`parser`/`codec` (`.ppyir`), `pattern` (rewrites to a fixed point), `passes` (the pass manager with analyses and stages), `transforms/` (canonicalize, simplify-cfg, dce, promote-slots, tensor fusion and lowering, columnar lowering, parallel lowering, async lowering, autodiff, sanitize, profile, whole-program), `linker` (modules into one program). See [The IR](ir.md). |
 | `opt/` | AST-level passes: constant folding, inlining, LICM, loop transforms; used by the Python backend and as pre-lowering cleanup. |
 | `backend/python/` | runs optimized AST under CPython with the loader installed. |
 | `target` | `TargetInfo`: the triple, CPU and features, pointer width, endianness, ABI, OS, object format, and data layout of the machine a build is for; the host is one target among others, and nothing else consults `sys.platform`. |
@@ -45,7 +45,7 @@ what the checker already proved.
 | `backend/nvvm/` | the device backend: IR → NVVM IR → PTX through LLVM's NVPTX target with libdevice linked in; `ppy_runtime.cuda` launches it. |
 | `backend/stablehlo/` | IR → StableHLO for `@ppy.xla.jit` functions; `ppy_runtime.xla` compiles and runs it through PJRT. |
 | `backend/llvm/` | `ir_pipeline` (the passes, sanitizers, and profile around a module's IR) and `from_ir` (canonical IR → LLVM IR, dialect by dialect; `lowering` keeps the native ABI and eligibility rules, `lowering_cache` what a build reuses), `wrapper` (generated CPython-ABI entry points, `METH_FASTCALL`, GIL release), `fusion` (NumPy elementwise loops), `specialize`/`jit` (guarded runtime specialization), `parallel` (the worker pool), `link` (objects → shared library, for the host or a `--target`), `extension`/`packaging` (`--python-extension`, `--library`). |
-| `plugins/` | numpy, torch, jax, pydantic, uvicorn — see [plugins.md](plugins.md). |
+| `plugins/` | numpy, torch, jax, pydantic, uvicorn — see [Plugins](plugins.md). |
 | `cache/` | the content-addressed store (SQLite) and key construction. |
 | `driver/` | CLI, pipeline orchestration, `convert` (what to write) and `rewrite` (writing it) either side of `plan`, fmt, lint, test, explain. |
 | `lsp/` | the language server, on the same analysis. |
@@ -84,7 +84,7 @@ as `index.sqlite.corrupt-<timestamp>`, rebuilt empty, and reported once as
 `W2101`; compilation continues with cache misses. Where even a fresh index
 cannot be written the store works in memory, every lookup a miss. Recording an
 artifact spans two tables and runs in one transaction, so a reader never sees
-a row whose dependencies have not landed. [compatibility.md](compatibility.md)
+a row whose dependencies have not landed. [Compatibility](../reference/compatibility.md)
 states the contract.
 
 ## Runtime specialization

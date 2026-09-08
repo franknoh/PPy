@@ -1,0 +1,176 @@
+site_name: PPY
+site_url: https://ppy.franknoh.dev/
+site_description: A statically analyzable language in Python's syntax, and a compiler whose three paths agree
+repo_url: https://github.com/franknoh/PPy
+repo_name: franknoh/PPy
+edit_uri: edit/main/docs/
+copyright: MIT License
+
+theme:
+  name: material
+  language: en
+  icon:
+    repo: fontawesome/brands/github
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: indigo
+      accent: deep purple
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: indigo
+      accent: deep purple
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to light mode
+  features:
+    - navigation.tabs
+    - navigation.tabs.sticky
+    - navigation.sections
+    - navigation.indexes
+    - navigation.top
+    - navigation.footer
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+    - content.code.annotate
+    - content.tabs.link
+    - toc.follow
+
+extra:
+  version:
+    provider: mike
+    default: latest
+
+plugins:
+  - search
+  - gen-files:
+      scripts:
+        - docs/gen/gallery.py
+        - docs/gen/reference.py
+        - docs/gen/repo.py
+  - mkdocstrings:
+      handlers:
+        python:
+          paths: [src]
+          options:
+            docstring_style: google
+            show_source: false
+            show_root_heading: true
+            show_symbol_type_heading: true
+            show_symbol_type_toc: true
+            members_order: source
+            filters: ["!^_"]
+            merge_init_into_class: true
+            show_if_no_docstring: false
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - md_in_html
+  - footnotes
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.details
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+
+nav:
+  - Home: index.md
+  - Getting started: getting-started.md
+  - Installing: installing.md
+  - Guide:
+      - guide/index.md
+      - The subset: guide/subset.md
+      - Directives and markers: guide/directives.md
+      - Native memory and FFI: guide/native.md
+      - Lanes and the machine: guide/simd-cpu.md
+      - Atomics and threads: guide/concurrency.md
+      - Parallel loops: guide/parallel.md
+      - Derivatives: guide/autodiff.md
+      - Coroutines: guide/aio.md
+      - GPU kernels: guide/gpu.md
+      - XLA: guide/xla.md
+      - Generics: guide/generics.md
+      - Effects and the three paths: guide/effects.md
+      - Input and native lowering: guide/native-lowering.md
+  - Examples:
+      - howto/index.md
+      - Basics:
+          - howto/01_basics.md
+          - howto/02_arbitrary_precision.md
+          - howto/03_effects_and_contracts.md
+          - howto/04_classes.md
+          - howto/08_native_data.md
+          - howto/10_narrowing.md
+          - howto/11_numerics.md
+          - howto/13_value_classes.md
+          - howto/14_tuples.md
+          - howto/16_dynamic.md
+          - howto/17_containers.md
+          - howto/18_errors.md
+          - howto/19_strings.md
+      - Native code:
+          - howto/12_buffers_and_jit.md
+          - howto/15_algorithms.md
+          - howto/28_threads.md
+          - howto/32_native_memory.md
+          - howto/33_simd_and_cpu.md
+          - howto/34_atomics_and_threads.md
+          - howto/35_parallel_range.md
+          - howto/36_autodiff.md
+          - howto/37_aio.md
+          - howto/40_generics.md
+          - howto/42_toolbox.md
+      - Accelerators:
+          - howto/38_cuda.md
+          - howto/39_xla.md
+      - Libraries:
+          - howto/05_numpy.md
+          - howto/06_pydantic.md
+          - howto/07_parallel.md
+          - howto/09_torch.md
+          - howto/21_training_torch.md
+          - howto/22_training_jax.md
+          - howto/25_jax_export.md
+          - howto/27_uvicorn.md
+          - howto/29_flax.md
+          - howto/31_torchrun.md
+          - howto/41_columnar.md
+      - Conversion and projects:
+          - howto/20_inventory.md
+          - howto/23_inference.md
+          - howto/24_interop.md
+          - howto/26_project.md
+          - howto/30_migrate.md
+  - CLI: cli.md
+  - API:
+      - api/index.md
+      - ppy: api/ppy.md
+      - ppy_runtime: api/runtime.md
+      - Plugin API: api/plugins.md
+      - IR: api/ir.md
+  - Reference:
+      - reference/index.md
+      - Diagnostics: reference/diagnostics.md
+      - Configuration: reference/config.md
+      - Performance: reference/performance.md
+      - Compatibility: reference/compatibility.md
+  - Internals:
+      - internals/index.md
+      - Architecture: internals/architecture.md
+      - The IR: internals/ir.md
+      - Conversion and inference: internals/conversion.md
+      - Migrating a real project: internals/migrating.md
+      - Plugins: internals/plugins.md
+      - Where a solver fits: internals/solver.md
+  - Contributing: contributing.md
+  - Changelog: changelog.md
