@@ -1,19 +1,20 @@
-# 15a — N-Queens
+# 15a — N-Queens, and the cost of an interpreter
 
-Input: `N`. Output: how many ways N queens fit on an N×N board.
+Input: `N`. Output: how many ways N queens fit on an N×N board. There is
+almost no input to read, so this is the one problem where the wall clock is
+startup plus compute — which makes it the cleanest look at what an
+embedded interpreter costs, and what disappears when `--standalone` leaves
+it out.
 
-## Provenance
+## A bitmask solver, lowered whole
 
-Generated, not hand-written. `nqueens.ppy` is exactly what
-`ppy convert nqueens.py --promote-buffers` writes, and
-`examples/verify_conversions.py` checks that on every run. `nqueens.c` is the same solution hand-written in C, reading the
-same input with `scanf`.
+```python
+def solve(full: int, columns: int, diagonal: int, antidiagonal: int) -> int:
+```
 
-## What it shows
-
-- Recursion lowers natively, and so do the operators a bitmask solution is
-  made of: `~`, unary `-`, the shifts, and the masks.
-- No input to speak of, so the wall clock here is startup plus compute.
+Recursion lowers natively, and so do the operators a bitmask solution is
+made of: `~`, unary `-`, the shifts, and the masks. The whole solver is one
+native call tree with no Python frame in it.
 
 ## Numbers
 
@@ -31,18 +32,16 @@ input, interpreter startup and all. Mean ± standard deviation over 5 runs;
 | C (`gcc -O3`, `scanf`) | **4.8 ± 0.2 ms** |
 | C (`clang -O3`, `scanf`) | 5.4 ± 0.2 ms |
 
-`ppy run` compiles before it runs, which is most of its two seconds; it is
-the development path, not the one to submit. `ppy build` produces a binary
-that still starts an embedded CPython and imports the runtime: ~35 ms before
-a line of the program runs, against C's ~1 ms. `--standalone` has no interpreter in it at all, which is where that
-row comes from; the [folder README](../README.md) says what the subset costs.
+`ppy run` compiles before it runs, which is most of its time; it is the
+development path, not the one to submit. `ppy build` produces a binary that
+still starts an embedded CPython and imports the runtime: ~35 ms before a
+line of the program runs, against C's ~1 ms. `--standalone` has no
+interpreter in it at all, which is where that row comes from.
 
 ## Without CPython at all
 
-The `ppy build` binary embeds an interpreter, because the program's glue —
-`try`/`except`, the `print` of a Python `int` — is Python. Written so that
-everything `main` reaches is native, the same solver builds standalone and
-there is no interpreter under it:
+Written so that everything `main` reaches is native, the same solver
+builds standalone and there is no interpreter under it:
 
 ```python
 def main() -> None:
@@ -56,8 +55,7 @@ ppy build --standalone nqueens.ppy -o native
 ldd native/nqueens      # linux-vdso, libc, ld-linux -- and nothing else
 ```
 
-That row is the `--standalone` line in the table above, and it comes out of
-a binary the size of the C one:
+It comes out of a binary the size of the C one:
 
 | path | binary |
 |---|---:|
@@ -67,14 +65,17 @@ a binary the size of the C one:
 
 `ppy.input[int]()` lowers to the same buffered scan of standard input that
 `scanf` does, and the ~35 ms of interpreter startup is simply not there —
-which still leaves C ahead here, because this problem reads one integer and
-then computes, so there is nothing for the faster reader to win back. What
-standalone costs is the subset: no exceptions, no `array.array`, no Python
-objects on the path from `main`, which is why the `try`/`except EOFError` of
-the committed solution has to go. [`standalone/`](../standalone/) holds that
-variant and the four others written the same way.
+which still leaves C slightly ahead here, because this problem reads one
+integer and then computes, so there is nothing for the faster reader to win
+back. What standalone costs is the subset: no exceptions, no `array.array`,
+no Python objects on the path from `main`, which is why the
+`try`/`except EOFError` of the committed solution has to go.
+[`standalone/`](../standalone/) holds that variant and the four others
+written the same way.
 
 ## Run it
+
+`input.txt` holds `12`; the answer is 14200.
 
 ```bash
 python  nqueens.ppy < input.txt
@@ -118,3 +119,8 @@ clang -O3 nqueens.c -o nqueens_clang && ./nqueens_clang < input.txt
 ```
 
 <!-- outputs:end -->
+
+Generated, not hand-written: `nqueens.ppy` is exactly what
+`ppy convert nqueens.py --promote-buffers` writes, and
+`examples/verify_conversions.py` checks that on every run. `nqueens.c` is
+the same solution hand-written in C, reading the same input with `scanf`.

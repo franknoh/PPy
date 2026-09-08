@@ -1,20 +1,23 @@
-# 15e — Longest increasing subsequence
+# 15e — Longest increasing subsequence of a million values
 
 Input: `N`, then N integers. Output: the length of the longest strictly
-increasing subsequence. One million values here.
+increasing subsequence. One million values at the judge size; the
+standalone binary reads and solves them in 36 ms against gcc's 59 and
+clang's 56.
 
-## Provenance
+## One loop nest, no allocation
 
-Generated, not hand-written. `lis.ppy` is exactly what
-`ppy convert lis.py --promote-buffers` writes, and
-`examples/verify_conversions.py` checks that on every run. `lis.c` is the same solution hand-written in C, reading the
-same input with `scanf`.
+```python
+while low < high:
+    middle: int = (low + high) // 2
+```
 
-## What it shows
-
-- The inner binary search is a `while` over indices with no allocation, so
-  the whole kernel is one native loop nest.
-- The read loop in the source converts into one bulk `ppy.read_ints`.
+The inner binary search is a `while` over indices with no allocation, so
+the whole kernel is one native loop nest over a borrowed buffer. The read
+loop in the original source — one `int(input())` per value — converted into
+a single bulk `ppy.read_ints` over the same slots, which is where the
+standalone row gets its margin: a million integers go into memory without
+a Python object each.
 
 ## Numbers
 
@@ -32,13 +35,15 @@ input, interpreter startup and all. Mean ± standard deviation over 5 runs;
 | C (`gcc -O3`, `scanf`) | 59.0 ± 2.8 ms |
 | C (`clang -O3`, `scanf`) | 55.5 ± 1.7 ms |
 
-`ppy run` compiles before it runs, which is most of its two seconds; it is
-the development path, not the one to submit. `ppy build` produces a binary
-that still starts an embedded CPython and imports the runtime: ~35 ms before
-a line of the program runs, against C's ~1 ms. `--standalone` has no interpreter in it at all, which is where that
-row comes from; the [folder README](../README.md) says what the subset costs.
+`ppy run` compiles before it runs; it is the development path, not the one
+to submit. `ppy build` still starts an embedded CPython and imports the
+runtime, ~35 ms, before the program begins. `--standalone` has no
+interpreter in it; the [folder README](../README.md) says what the subset
+costs.
 
 ## Run it
+
+`input.txt` holds ten values; the answer is 5.
 
 ```bash
 python  lis.ppy < input.txt
@@ -82,3 +87,8 @@ clang -O3 lis.c -o lis_clang && ./lis_clang < input.txt
 ```
 
 <!-- outputs:end -->
+
+Generated, not hand-written: `lis.ppy` is exactly what
+`ppy convert lis.py --promote-buffers` writes, and
+`examples/verify_conversions.py` checks that on every run. `lis.c` is the
+same solution hand-written in C, reading the same input with `scanf`.

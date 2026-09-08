@@ -1,0 +1,466 @@
+ppyir 1
+module @echo
+dialect async 1
+dialect core 1
+attrs {ppy.libraries = ["ppy_aio"]}
+
+private global @ppy.str.0 : buffer<u8> = "127.0.0.1"
+private global @ppy.str.1 : buffer<u8> = "127.0.0.1"
+
+func @echo_wait_and_double(%n: i64) -> future<i64> attrs {effects = ["may_raise", "sync", "time"], ppy.abi = "ppy", ppy.async = true, ppy.async.lowered = true, ppy.qualname = "echo.wait_and_double", ppy.releases_gil = true, ppy.symbol = "ppy_echo_wait_and_double"} loc("examples/37_aio/echo.ppy":5:0) {
+^entry:
+    %frame = async.frame_new {slots = 7} : ptr<i64>
+    %0 = core.const 3 : i64
+    %1 = core.ptr_offset %frame, %0 : ptr<i64>
+    core.store %n, %1
+    %future = async.spawn %frame {callee = @echo_wait_and_double_resume} : future<i64>
+    core.ret %future
+}
+
+func @echo_echo_once(%listening: i64) -> future<i64> attrs {effects = ["alloc", "network", "read_memory", "sync", "write_memory"], ppy.abi = "ppy", ppy.async = true, ppy.async.lowered = true, ppy.qualname = "echo.echo_once", ppy.releases_gil = true, ppy.symbol = "ppy_echo_echo_once"} loc("examples/37_aio/echo.ppy":13:0) {
+^entry:
+    %frame = async.frame_new {slots = 17} : ptr<i64>
+    %0 = core.const 3 : i64
+    %1 = core.ptr_offset %frame, %0 : ptr<i64>
+    core.store %listening, %1
+    %future = async.spawn %frame {callee = @echo_echo_once_resume} : future<i64>
+    core.ret %future
+}
+
+func @echo_send_hello(%port: i64) -> future<i64> attrs {effects = ["alloc", "network", "read_memory", "sync", "write_memory"], ppy.abi = "ppy", ppy.async = true, ppy.async.lowered = true, ppy.qualname = "echo.send_hello", ppy.releases_gil = true, ppy.symbol = "ppy_echo_send_hello"} loc("examples/37_aio/echo.ppy":22:0) {
+^entry:
+    %frame = async.frame_new {slots = 20} : ptr<i64>
+    %0 = core.const 3 : i64
+    %1 = core.ptr_offset %frame, %0 : ptr<i64>
+    core.store %port, %1
+    %future = async.spawn %frame {callee = @echo_send_hello_resume} : future<i64>
+    core.ret %future
+}
+
+func @echo_main() -> future<i64> attrs {effects = ["alloc", "may_raise", "network", "read_memory", "sync", "time", "write_memory"], ppy.abi = "ppy", ppy.async = true, ppy.async.lowered = true, ppy.qualname = "echo.main", ppy.releases_gil = true, ppy.symbol = "ppy_echo_main"} loc("examples/37_aio/echo.ppy":35:0) {
+^entry:
+    %frame = async.frame_new {slots = 9} : ptr<i64>
+    %future = async.spawn %frame {callee = @echo_main_resume} : future<i64>
+    core.ret %future
+}
+
+func @echo_wait_and_double_resume(%frame: ptr<i64>) -> () attrs {ppy.abi = "resume", ppy.async.resume = "echo_wait_and_double", ppy.symbol = "ppy_echo_wait_and_double_resume"} loc("examples/37_aio/echo.ppy":5:0) {
+^entry:
+    %0 = core.const 2 : i64
+    %1 = core.ptr_offset %frame, %0 : ptr<i64>
+    %state = core.load %1 : i64
+    %2 = core.const 1 : i64
+    %3 = core.cmp.eq %state, %2 : bool
+    core.cond_br %3, ^for.body4.resume2, ^dispatch3
+^dispatch3:
+    %4 = core.const 3 : i64
+    %5 = core.ptr_offset %frame, %4 : ptr<i64>
+    %6 = core.load %5 : i64
+    %7 = core.const 4 : i64
+    %8 = core.ptr_offset %frame, %7 : ptr<i64>
+    core.store %6, %8 loc("examples/37_aio/echo.ppy":5:0)
+    %9 = core.const 0 : i64 loc("examples/37_aio/echo.ppy":6:4)
+    %10 = core.const 5 : i64
+    %11 = core.ptr_offset %frame, %10 : ptr<i64>
+    core.store %9, %11 loc("examples/37_aio/echo.ppy":6:4)
+    %12 = core.const 0 : i64 loc("examples/37_aio/echo.ppy":7:4)
+    %13 = core.const 4 : i64
+    %14 = core.ptr_offset %frame, %13 : ptr<i64>
+    %n_entry = core.load %14 : i64
+    %15 = core.const 6 : i64
+    %16 = core.ptr_offset %frame, %15 : ptr<i64>
+    core.store %12, %16 loc("examples/37_aio/echo.ppy":7:4)
+    core.br ^for.head3
+^for.body4.resume2:
+    %17 = core.const 5 : i64
+    %18 = core.ptr_offset %frame, %17 : ptr<i64>
+    %19 = core.load %18 : i64 loc("examples/37_aio/echo.ppy":9:8)
+    %20 = core.const 4 : i64
+    %21 = core.ptr_offset %frame, %20 : ptr<i64>
+    %22 = core.load %21 : i64 loc("examples/37_aio/echo.ppy":9:8)
+    %23 = core.add %19, %22 {overflow = "python"} : i64
+    %24 = core.const 5 : i64
+    %25 = core.ptr_offset %frame, %24 : ptr<i64>
+    core.store %23, %25 loc("examples/37_aio/echo.ppy":9:8)
+    %26 = core.const 6 : i64
+    %27 = core.ptr_offset %frame, %26 : ptr<i64>
+    %28 = core.load %27 : i64 loc("examples/37_aio/echo.ppy":9:8)
+    %29 = core.const 1 : i64
+    %30 = core.add %28, %29 {overflow = "python"} : i64 loc("examples/37_aio/echo.ppy":9:8)
+    %31 = core.const 6 : i64
+    %32 = core.ptr_offset %frame, %31 : ptr<i64>
+    core.store %30, %32 loc("examples/37_aio/echo.ppy":9:8)
+    core.br ^for.head3
+^for.head3:
+    %33 = core.const 6 : i64
+    %34 = core.ptr_offset %frame, %33 : ptr<i64>
+    %35 = core.load %34 : i64 loc("examples/37_aio/echo.ppy":7:4)
+    %36 = core.const 2 : i64
+    %37 = core.cmp.lt %35, %36 : bool loc("examples/37_aio/echo.ppy":7:4)
+    core.cond_br %37, ^for.body4, ^for.end6
+^for.end6:
+    %38 = core.const 5 : i64
+    %39 = core.ptr_offset %frame, %38 : ptr<i64>
+    %40 = core.load %39 : i64 loc("examples/37_aio/echo.ppy":10:4)
+    async.complete %frame, %40
+    core.ret
+^for.body4:
+    %41 = core.const 0.005 : f64 loc("examples/37_aio/echo.ppy":8:8)
+    %42 = async.sleep %41 : future<void>
+    %43 = core.const 1 : i64
+    %44 = core.const 2 : i64
+    %45 = core.ptr_offset %frame, %44 : ptr<i64>
+    core.store %43, %45
+    async.suspend %frame, %42
+    core.ret
+}
+
+func @echo_echo_once_resume(%frame: ptr<i64>) -> () attrs {ppy.abi = "resume", ppy.async.resume = "echo_echo_once", ppy.symbol = "ppy_echo_echo_once_resume"} loc("examples/37_aio/echo.ppy":13:0) {
+^entry:
+    %0 = core.const 2 : i64
+    %1 = core.ptr_offset %frame, %0 : ptr<i64>
+    %state = core.load %1 : i64
+    %2 = core.const 1 : i64
+    %3 = core.cmp.eq %state, %2 : bool
+    core.cond_br %3, ^begin1.resume2, ^dispatch5
+^dispatch5:
+    %4 = core.const 2 : i64
+    %5 = core.cmp.eq %state, %4 : bool
+    core.cond_br %5, ^begin1.resume2.resume3, ^dispatch6
+^dispatch6:
+    %6 = core.const 3 : i64
+    %7 = core.cmp.eq %state, %6 : bool
+    core.cond_br %7, ^begin1.resume2.resume3.resume4, ^dispatch7
+^dispatch7:
+    %8 = core.const 3 : i64
+    %9 = core.ptr_offset %frame, %8 : ptr<i64>
+    %10 = core.load %9 : i64
+    %11 = core.const 4 : i64
+    %12 = core.ptr_offset %frame, %11 : ptr<i64>
+    core.store %10, %12 loc("examples/37_aio/echo.ppy":13:0)
+    %13 = core.const 4 : i64
+    %14 = core.ptr_offset %frame, %13 : ptr<i64>
+    %15 = core.load %14 : i64 loc("examples/37_aio/echo.ppy":14:4)
+    %16 = core.const 4 : i64
+    %17 = core.ptr_offset %frame, %16 : ptr<i64>
+    %listening_entry = core.load %17 : i64 loc("examples/37_aio/echo.ppy":14:4)
+    %18 = async.accept %15 : future<i64>
+    %19 = core.const 1 : i64
+    %20 = core.const 2 : i64
+    %21 = core.ptr_offset %frame, %20 : ptr<i64>
+    core.store %19, %21
+    async.suspend %frame, %18
+    core.ret
+^begin1.resume2.resume3.resume4:
+    %22 = async.result %frame : i64
+    %23 = core.const 16 : i64
+    %24 = core.ptr_offset %frame, %23 : ptr<i64>
+    core.store %22, %24 loc("examples/37_aio/echo.ppy":17:4)
+    %25 = core.const 5 : i64
+    %26 = core.ptr_offset %frame, %25 : ptr<i64>
+    %27 = core.load %26 : i64 loc("examples/37_aio/echo.ppy":18:4)
+    async.close %27
+    %28 = core.const 16 : i64
+    %29 = core.ptr_offset %frame, %28 : ptr<i64>
+    %30 = core.load %29 : i64 loc("examples/37_aio/echo.ppy":19:4)
+    async.complete %frame, %30
+    core.ret
+^begin1.resume2.resume3:
+    %31 = async.result %frame : i64
+    %32 = core.const 15 : i64
+    %33 = core.ptr_offset %frame, %32 : ptr<i64>
+    core.store %31, %33 loc("examples/37_aio/echo.ppy":16:4)
+    %34 = core.const 14 : i64
+    %35 = core.ptr_offset %frame, %34 : ptr<i64>
+    %36 = core.cast %35 : ptr<ptr<u8>>
+    %37 = core.load %36 : ptr<u8> loc("examples/37_aio/echo.ppy":17:4)
+    %38 = core.const 5 : i64
+    %39 = core.ptr_offset %frame, %38 : ptr<i64>
+    %40 = core.load %39 : i64 loc("examples/37_aio/echo.ppy":17:4)
+    %41 = core.cast %37 : ptr<u8, generic, const>
+    %42 = core.const 15 : i64
+    %43 = core.ptr_offset %frame, %42 : ptr<i64>
+    %44 = core.load %43 : i64 loc("examples/37_aio/echo.ppy":17:4)
+    %45 = async.write %40, %41, %44 : future<i64>
+    %46 = core.const 3 : i64
+    %47 = core.const 2 : i64
+    %48 = core.ptr_offset %frame, %47 : ptr<i64>
+    core.store %46, %48
+    async.suspend %frame, %45
+    core.ret
+^begin1.resume2:
+    %49 = async.result %frame : i64
+    %50 = core.const 5 : i64
+    %51 = core.ptr_offset %frame, %50 : ptr<i64>
+    core.store %49, %51 loc("examples/37_aio/echo.ppy":14:4)
+    %52 = core.const 6 : i64
+    %53 = core.ptr_offset %frame, %52 : ptr<i64>
+    %54 = core.cast %53 : ptr<u8>
+    %55 = core.const 14 : i64
+    %56 = core.ptr_offset %frame, %55 : ptr<i64>
+    %57 = core.cast %56 : ptr<ptr<u8>>
+    core.store %54, %57 loc("examples/37_aio/echo.ppy":15:4)
+    %58 = core.const 14 : i64
+    %59 = core.ptr_offset %frame, %58 : ptr<i64>
+    %60 = core.cast %59 : ptr<ptr<u8>>
+    %61 = core.load %60 : ptr<u8> loc("examples/37_aio/echo.ppy":16:4)
+    %62 = core.const 5 : i64
+    %63 = core.ptr_offset %frame, %62 : ptr<i64>
+    %64 = core.load %63 : i64 loc("examples/37_aio/echo.ppy":16:4)
+    %65 = core.const 8 : i64
+    %66 = async.read %64, %61, %65 : future<i64>
+    %67 = core.const 2 : i64
+    %68 = core.const 2 : i64
+    %69 = core.ptr_offset %frame, %68 : ptr<i64>
+    core.store %67, %69
+    async.suspend %frame, %66
+    core.ret
+}
+
+func @echo_send_hello_resume(%frame: ptr<i64>) -> () attrs {ppy.abi = "resume", ppy.async.resume = "echo_send_hello", ppy.symbol = "ppy_echo_send_hello_resume"} loc("examples/37_aio/echo.ppy":22:0) {
+^entry:
+    %0 = core.const 2 : i64
+    %1 = core.ptr_offset %frame, %0 : ptr<i64>
+    %state = core.load %1 : i64
+    %2 = core.const 1 : i64
+    %3 = core.cmp.eq %state, %2 : bool
+    core.cond_br %3, ^begin1.resume8, ^dispatch11
+^dispatch11:
+    %4 = core.const 2 : i64
+    %5 = core.cmp.eq %state, %4 : bool
+    core.cond_br %5, ^begin1.ok2.ok4.ok6.resume9, ^dispatch12
+^dispatch12:
+    %6 = core.const 3 : i64
+    %7 = core.cmp.eq %state, %6 : bool
+    core.cond_br %7, ^begin1.ok2.ok4.ok6.resume9.resume10, ^dispatch13
+^dispatch13:
+    %8 = core.const 3 : i64
+    %9 = core.ptr_offset %frame, %8 : ptr<i64>
+    %10 = core.load %9 : i64
+    %11 = core.const 4 : i64
+    %12 = core.ptr_offset %frame, %11 : ptr<i64>
+    core.store %10, %12 loc("examples/37_aio/echo.ppy":22:0)
+    %13 = core.call_intrinsic {intrinsic = "ppy.string_data", symbol = "ppy.str.0"} : ptr<u8> loc("examples/37_aio/echo.ppy":23:4)
+    %14 = core.cast %13 : ptr<u8, generic, const>
+    %15 = core.const 9 : i64
+    %16 = core.const 4 : i64
+    %17 = core.ptr_offset %frame, %16 : ptr<i64>
+    %18 = core.load %17 : i64 loc("examples/37_aio/echo.ppy":23:4)
+    %19 = core.const 4 : i64
+    %20 = core.ptr_offset %frame, %19 : ptr<i64>
+    %port_entry = core.load %20 : i64 loc("examples/37_aio/echo.ppy":23:4)
+    %21 = async.connect %14, %15, %18 : future<i64>
+    %22 = core.const 1 : i64
+    %23 = core.const 2 : i64
+    %24 = core.ptr_offset %frame, %23 : ptr<i64>
+    core.store %22, %24
+    async.suspend %frame, %21
+    core.ret
+^begin1.ok2.ok4.ok6.resume9.resume10:
+    %25 = async.result %frame : i64
+    %26 = core.const 19 : i64
+    %27 = core.ptr_offset %frame, %26 : ptr<i64>
+    core.store %25, %27 loc("examples/37_aio/echo.ppy":30:4)
+    %28 = core.const 5 : i64
+    %29 = core.ptr_offset %frame, %28 : ptr<i64>
+    %30 = core.load %29 : i64 loc("examples/37_aio/echo.ppy":31:4)
+    async.close %30
+    %31 = core.const 19 : i64
+    %32 = core.ptr_offset %frame, %31 : ptr<i64>
+    %33 = core.load %32 : i64 loc("examples/37_aio/echo.ppy":32:4)
+    %34 = core.const 100 : i64
+    %35 = core.mul %33, %34 {overflow = "python"} : i64
+    %36 = core.const 18 : i64
+    %37 = core.ptr_offset %frame, %36 : ptr<i64>
+    %38 = core.cast %37 : ptr<ptr<u8>>
+    %39 = core.load %38 : ptr<u8> loc("examples/37_aio/echo.ppy":32:4)
+    %40 = core.const 2 : i64
+    %41 = core.ptr_offset %39, %40 : ptr<u8>
+    %42 = core.load %41 : u8
+    %43 = core.cast %42 : i64
+    %44 = core.add %35, %43 {overflow = "python"} : i64
+    async.complete %frame, %44
+    core.ret
+^begin1.ok2.ok4.ok6.resume9:
+    %45 = async.result %frame : i64
+    %46 = core.const 10 : i64
+    %47 = core.ptr_offset %frame, %46 : ptr<i64>
+    %48 = core.cast %47 : ptr<u8>
+    %49 = core.const 18 : i64
+    %50 = core.ptr_offset %frame, %49 : ptr<i64>
+    %51 = core.cast %50 : ptr<ptr<u8>>
+    core.store %48, %51 loc("examples/37_aio/echo.ppy":29:4)
+    %52 = core.const 18 : i64
+    %53 = core.ptr_offset %frame, %52 : ptr<i64>
+    %54 = core.cast %53 : ptr<ptr<u8>>
+    %55 = core.load %54 : ptr<u8> loc("examples/37_aio/echo.ppy":30:4)
+    %56 = core.const 5 : i64
+    %57 = core.ptr_offset %frame, %56 : ptr<i64>
+    %58 = core.load %57 : i64 loc("examples/37_aio/echo.ppy":30:4)
+    %59 = core.const 8 : i64
+    %60 = async.read %58, %55, %59 : future<i64>
+    %61 = core.const 3 : i64
+    %62 = core.const 2 : i64
+    %63 = core.ptr_offset %frame, %62 : ptr<i64>
+    core.store %61, %63
+    async.suspend %frame, %60
+    core.ret
+^begin1.resume8:
+    %64 = async.result %frame : i64
+    %65 = core.const 5 : i64
+    %66 = core.ptr_offset %frame, %65 : ptr<i64>
+    core.store %64, %66 loc("examples/37_aio/echo.ppy":23:4)
+    %67 = core.const 6 : i64
+    %68 = core.ptr_offset %frame, %67 : ptr<i64>
+    %69 = core.cast %68 : ptr<u8>
+    %70 = core.const 9 : i64
+    %71 = core.ptr_offset %frame, %70 : ptr<i64>
+    %72 = core.cast %71 : ptr<ptr<u8>>
+    core.store %69, %72 loc("examples/37_aio/echo.ppy":24:4)
+    %73 = core.const 9 : i64
+    %74 = core.ptr_offset %frame, %73 : ptr<i64>
+    %75 = core.cast %74 : ptr<ptr<u8>>
+    %76 = core.load %75 : ptr<u8> loc("examples/37_aio/echo.ppy":25:4)
+    %77 = core.const 104 : u8
+    core.store %77, %76 loc("examples/37_aio/echo.ppy":25:4)
+    %78 = core.const 9 : i64
+    %79 = core.ptr_offset %frame, %78 : ptr<i64>
+    %80 = core.cast %79 : ptr<ptr<u8>>
+    %81 = core.load %80 : ptr<u8> loc("examples/37_aio/echo.ppy":26:4)
+    %82 = core.const 1 : i64
+    %83 = core.ptr_offset %81, %82 : ptr<u8>
+    %84 = core.const 105 : u8
+    core.store %84, %83 loc("examples/37_aio/echo.ppy":26:4)
+    %85 = core.const 9 : i64
+    %86 = core.ptr_offset %frame, %85 : ptr<i64>
+    %87 = core.cast %86 : ptr<ptr<u8>>
+    %88 = core.load %87 : ptr<u8> loc("examples/37_aio/echo.ppy":27:4)
+    %89 = core.const 2 : i64
+    %90 = core.ptr_offset %88, %89 : ptr<u8>
+    %91 = core.const 33 : u8
+    core.store %91, %90 loc("examples/37_aio/echo.ppy":27:4)
+    %92 = core.const 9 : i64
+    %93 = core.ptr_offset %frame, %92 : ptr<i64>
+    %94 = core.cast %93 : ptr<ptr<u8>>
+    %95 = core.load %94 : ptr<u8> loc("examples/37_aio/echo.ppy":28:4)
+    %96 = core.const 5 : i64
+    %97 = core.ptr_offset %frame, %96 : ptr<i64>
+    %98 = core.load %97 : i64 loc("examples/37_aio/echo.ppy":28:4)
+    %99 = core.cast %95 : ptr<u8, generic, const>
+    %100 = core.const 3 : i64
+    %101 = async.write %98, %99, %100 : future<i64>
+    %102 = core.const 2 : i64
+    %103 = core.const 2 : i64
+    %104 = core.ptr_offset %frame, %103 : ptr<i64>
+    core.store %102, %104
+    async.suspend %frame, %101
+    core.ret
+}
+
+func @echo_main_resume(%frame: ptr<i64>) -> () attrs {ppy.abi = "resume", ppy.async.resume = "echo_main", ppy.symbol = "ppy_echo_main_resume"} loc("examples/37_aio/echo.ppy":35:0) {
+^entry:
+    %0 = core.const 2 : i64
+    %1 = core.ptr_offset %frame, %0 : ptr<i64>
+    %state = core.load %1 : i64
+    %2 = core.const 1 : i64
+    %3 = core.cmp.eq %state, %2 : bool
+    core.cond_br %3, ^begin1.resume2, ^dispatch5
+^dispatch5:
+    %4 = core.const 2 : i64
+    %5 = core.cmp.eq %state, %4 : bool
+    core.cond_br %5, ^begin1.resume2.resume3, ^dispatch6
+^dispatch6:
+    %6 = core.const 3 : i64
+    %7 = core.cmp.eq %state, %6 : bool
+    core.cond_br %7, ^begin1.resume2.resume3.resume4, ^dispatch7
+^dispatch7:
+    %8 = core.const 21 : i64 loc("examples/37_aio/echo.ppy":36:4)
+    %9 = core.call %8 {callee = @echo_wait_and_double} : future<i64>
+    %10 = core.const 1 : i64
+    %11 = core.const 2 : i64
+    %12 = core.ptr_offset %frame, %11 : ptr<i64>
+    core.store %10, %12
+    async.suspend %frame, %9
+    core.ret
+^begin1.resume2.resume3.resume4:
+    %13 = async.result %frame : i64
+    %14 = core.const 8 : i64
+    %15 = core.ptr_offset %frame, %14 : ptr<i64>
+    core.store %13, %15 loc("examples/37_aio/echo.ppy":41:4)
+    %16 = core.const 4 : i64
+    %17 = core.ptr_offset %frame, %16 : ptr<i64>
+    %18 = core.load %17 : i64 loc("examples/37_aio/echo.ppy":42:4)
+    async.close %18
+    %19 = core.const 3 : i64
+    %20 = core.ptr_offset %frame, %19 : ptr<i64>
+    %21 = core.load %20 : i64 loc("examples/37_aio/echo.ppy":43:4)
+    %22 = core.const 1000000 : i64
+    %23 = core.mul %21, %22 {overflow = "python"} : i64
+    %24 = core.const 7 : i64
+    %25 = core.ptr_offset %frame, %24 : ptr<i64>
+    %26 = core.load %25 : i64 loc("examples/37_aio/echo.ppy":43:4)
+    %27 = core.const 1000 : i64
+    %28 = core.mul %26, %27 {overflow = "python"} : i64
+    %29 = core.add %23, %28 {overflow = "python"} : i64
+    %30 = core.const 8 : i64
+    %31 = core.ptr_offset %frame, %30 : ptr<i64>
+    %32 = core.load %31 : i64 loc("examples/37_aio/echo.ppy":43:4)
+    %33 = core.add %29, %32 {overflow = "python"} : i64
+    async.complete %frame, %33
+    core.ret
+^begin1.resume2.resume3:
+    %34 = async.result %frame : i64
+    %35 = core.const 7 : i64
+    %36 = core.ptr_offset %frame, %35 : ptr<i64>
+    core.store %34, %36 loc("examples/37_aio/echo.ppy":40:4)
+    %37 = core.const 6 : i64
+    %38 = core.ptr_offset %frame, %37 : ptr<i64>
+    %39 = core.cast %38 : ptr<future<i64>>
+    %40 = core.load %39 : future<i64> loc("examples/37_aio/echo.ppy":41:4)
+    %41 = core.const 3 : i64
+    %42 = core.const 2 : i64
+    %43 = core.ptr_offset %frame, %42 : ptr<i64>
+    core.store %41, %43
+    async.suspend %frame, %40
+    core.ret
+^begin1.resume2:
+    %44 = async.result %frame : i64
+    %45 = core.const 3 : i64
+    %46 = core.ptr_offset %frame, %45 : ptr<i64>
+    core.store %44, %46 loc("examples/37_aio/echo.ppy":36:4)
+    %47 = core.call_intrinsic {intrinsic = "ppy.string_data", symbol = "ppy.str.1"} : ptr<u8> loc("examples/37_aio/echo.ppy":37:4)
+    %48 = core.cast %47 : ptr<u8, generic, const>
+    %49 = core.const 9 : i64
+    %50 = core.const 16 : i64
+    %51 = core.const 0 : i64
+    %52 = async.listen %48, %49, %51, %50 : i64
+    %53 = core.const 4 : i64
+    %54 = core.ptr_offset %frame, %53 : ptr<i64>
+    core.store %52, %54 loc("examples/37_aio/echo.ppy":37:4)
+    %55 = core.const 4 : i64
+    %56 = core.ptr_offset %frame, %55 : ptr<i64>
+    %57 = core.load %56 : i64 loc("examples/37_aio/echo.ppy":38:4)
+    %58 = async.port %57 : i64
+    %59 = core.const 5 : i64
+    %60 = core.ptr_offset %frame, %59 : ptr<i64>
+    core.store %58, %60 loc("examples/37_aio/echo.ppy":38:4)
+    %61 = core.const 4 : i64
+    %62 = core.ptr_offset %frame, %61 : ptr<i64>
+    %63 = core.load %62 : i64 loc("examples/37_aio/echo.ppy":39:4)
+    %64 = core.call %63 {callee = @echo_echo_once} : future<i64>
+    async.start %64 loc("examples/37_aio/echo.ppy":39:4)
+    %65 = core.const 6 : i64
+    %66 = core.ptr_offset %frame, %65 : ptr<i64>
+    %67 = core.cast %66 : ptr<future<i64>>
+    core.store %64, %67 loc("examples/37_aio/echo.ppy":39:4)
+    %68 = core.const 5 : i64
+    %69 = core.ptr_offset %frame, %68 : ptr<i64>
+    %70 = core.load %69 : i64 loc("examples/37_aio/echo.ppy":40:4)
+    %71 = core.call %70 {callee = @echo_send_hello} : future<i64>
+    %72 = core.const 2 : i64
+    %73 = core.const 2 : i64
+    %74 = core.ptr_offset %frame, %73 : ptr<i64>
+    core.store %72, %74
+    async.suspend %frame, %71
+    core.ret
+}

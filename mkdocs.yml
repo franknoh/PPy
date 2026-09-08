@@ -40,6 +40,9 @@ theme:
     - content.tabs.link
     - toc.follow
 
+extra_css:
+  - stylesheets/extra.css
+
 extra:
   version:
     provider: mike
