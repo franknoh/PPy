@@ -1,0 +1,166 @@
+optimization report: PPy (O2, ir road)
+module ranges
+  ranges.count_odd: native, bound to Python
+  ranges.dot: native, bound to Python
+  ranges.dot_relaxed: native, bound to Python
+  ranges.fill: native, native callers only
+  ranges.squares: native, native callers only
+  ranges.main: Python -- has effects that must run on CPython: IO
+  block merged: 18
+  dead code removed: 114
+  note: 10
+  parallel loop emitted: 12
+    - `ranges.squares`: the loop over `i` is a parallel loop
+    - `ranges.dot`: the loop over `i` is a parallel add reduction into `total` (kept in order: `@ppy.fastmath` would let it split)
+    - `ranges.dot_relaxed`: the loop over `i` is a parallel add reduction into `total`
+    - `ranges.count_odd`: the loop over `i` is a parallel add reduction into `hits`
+    - `ranges.fill`: the loop over `i` is a parallel loop
+    - `ranges.fill`: the loop over `j` is a parallel add reduction into `acc` (kept in order: `@ppy.fastmath` would let it split)
+    - @ranges_count_odd__par4: core.cmp: folded 2 and 0
+    - @ranges_count_odd__par4: core.guard: condition always holds
+    - simplify-cfg: ^for.guards1 merged into ^entry
+    - simplify-cfg: ^for.setup2 merged into ^entry
+    - simplify-cfg: ^for.latch5 merged into ^for.body4
+    - simplify-cfg: ^for.guards1 merged into ^entry
+    - simplify-cfg: ^for.setup2 merged into ^entry
+    - simplify-cfg: ^for.latch5 merged into ^for.body4
+    - simplify-cfg: ^for.guards1 merged into ^entry
+    - simplify-cfg: ^for.setup2 merged into ^entry
+    - simplify-cfg: ^for.latch5 merged into ^for.body4
+    - simplify-cfg: ^for.guards1 merged into ^entry
+    - simplify-cfg: ^for.setup2 merged into ^entry
+    - simplify-cfg: ^for.latch5 merged into ^endif9
+    - simplify-cfg: ^for.guards1 merged into ^entry
+    - simplify-cfg: ^for.setup2 merged into ^entry
+    - simplify-cfg: ^for.latch5 merged into ^for.body4
+    - simplify-cfg: ^for.guards1 merged into ^entry
+    - simplify-cfg: ^for.setup2 merged into ^entry
+    - simplify-cfg: ^for.latch5 merged into ^for.body4
+    - dce: unused core.const removed
+    - dce: unused core.const removed
+    - dce: unused core.const removed
+    - dce: unused core.const removed
+    - dce: unused core.const removed
+    - dce: unused core.const removed
+    - dce: unused core.select removed
+    - dce: unused core.cmp removed
+    - dce: unused core.select removed
+    - dce: unused core.cmp removed
+    - dce: unused core.select removed
+    - dce: unused core.cmp removed
+    - dce: unused core.select removed
+    - dce: unused core.cmp removed
+    - dce: unused core.select removed
+    - dce: unused core.cmp removed
+    - dce: unused core.select removed
+    - dce: unused core.cmp removed
+    - dce: unused core.const removed
+    - dce: unused core.const removed
+    - dce: unused core.const removed
+    - dce: unused core.sub removed
+    - dce: unused core.const removed
+    - dce: unused core.const removed
+    - dce: unused core.sub removed
+    - dce: unused core.const removed
+    - parallel loop over @ranges_squares__par1 lowered to 16 chunks
+    - parallel reduction over @ranges_dot__par2 lowered to one chunk
+    - parallel reduction over @ranges_dot_relaxed__par3 lowered to 16 chunks
+    - parallel reduction over @ranges_count_odd__par4 lowered to 16 chunks
+    - parallel loop over @ranges_fill__par5 lowered to 16 chunks
+    - parallel reduction over @ranges_fill__par6 lowered to one chunk
+    - @ranges_squares: core.add: identity element removed
+    - @ranges_squares: core.add: identity element removed
+    - @ranges_squares: core.add: identity element removed
+    - @ranges_squares: core.add: identity element removed
+    - @ranges_squares: core.add: identity element removed
+    - @ranges_squares: core.add: identity element removed
+    - @ranges_squares: core.add: identity element removed
+    - @ranges_squares: core.add: identity element removed
+    - @ranges_squares: core.add: identity element removed
+    - @ranges_squares: core.add: identity element removed
+    - @ranges_squares: core.add: identity element removed
+    - @ranges_squares: core.add: identity element removed
+    - @ranges_squares: core.add: identity element removed
+    - @ranges_squares: core.add: identity element removed
+    - @ranges_squares: core.add: identity element removed
+    - @ranges_squares: core.mul: identity element removed
+    - @ranges_squares: core.add: identity element removed
+    - @ranges_squares: core.mul: multiplied by zero
+    - @ranges_squares: core.add: identity element removed
+    - @ranges_squares: core.sub: folded 16 and 1
+    - @ranges_squares: core.sub: identity element removed
+    - @ranges_dot_relaxed: core.add: identity element removed
+    - @ranges_dot_relaxed: core.add: identity element removed
+    - @ranges_dot_relaxed: core.add: identity element removed
+    - @ranges_dot_relaxed: core.add: identity element removed
+    - @ranges_dot_relaxed: core.add: identity element removed
+    - @ranges_dot_relaxed: core.add: identity element removed
+    - @ranges_dot_relaxed: core.add: identity element removed
+    - @ranges_dot_relaxed: core.add: identity element removed
+    - @ranges_dot_relaxed: core.add: identity element removed
+    - @ranges_dot_relaxed: core.add: identity element removed
+    - @ranges_dot_relaxed: core.add: identity element removed
+    - @ranges_dot_relaxed: core.add: identity element removed
+    - @ranges_dot_relaxed: core.add: identity element removed
+    - @ranges_dot_relaxed: core.add: identity element removed
+    - @ranges_dot_relaxed: core.add: identity element removed
+    - @ranges_dot_relaxed: core.mul: identity element removed
+    - @ranges_dot_relaxed: core.add: identity element removed
+    - @ranges_dot_relaxed: core.mul: multiplied by zero
+    - @ranges_dot_relaxed: core.add: identity element removed
+    - @ranges_dot_relaxed: core.sub: folded 16 and 1
+    - @ranges_dot_relaxed: core.sub: identity element removed
+    - @ranges_count_odd: core.add: identity element removed
+    - @ranges_count_odd: core.add: identity element removed
+    - @ranges_count_odd: core.add: identity element removed
+    - @ranges_count_odd: core.add: identity element removed
+    - @ranges_count_odd: core.add: identity element removed
+    - @ranges_count_odd: core.add: identity element removed
+    - @ranges_count_odd: core.add: identity element removed
+    - @ranges_count_odd: core.add: identity element removed
+    - @ranges_count_odd: core.add: identity element removed
+    - @ranges_count_odd: core.add: identity element removed
+    - @ranges_count_odd: core.add: identity element removed
+    - @ranges_count_odd: core.add: identity element removed
+    - @ranges_count_odd: core.add: identity element removed
+    - @ranges_count_odd: core.add: identity element removed
+    - @ranges_count_odd: core.add: identity element removed
+    - @ranges_count_odd: core.mul: identity element removed
+    - @ranges_count_odd: core.add: identity element removed
+    - @ranges_count_odd: core.mul: multiplied by zero
+    - @ranges_count_odd: core.add: identity element removed
+    - @ranges_count_odd: core.sub: folded 16 and 1
+    - @ranges_count_odd: core.sub: identity element removed
+    - @ranges_fill: core.add: identity element removed
+    - @ranges_fill: core.add: identity element removed
+    - @ranges_fill: core.add: identity element removed
+    - @ranges_fill: core.add: identity element removed
+    - @ranges_fill: core.add: identity element removed
+    - @ranges_fill: core.add: identity element removed
+    - @ranges_fill: core.add: identity element removed
+    - @ranges_fill: core.add: identity element removed
+    - @ranges_fill: core.add: identity element removed
+    - @ranges_fill: core.add: identity element removed
+    - @ranges_fill: core.add: identity element removed
+    - @ranges_fill: core.add: identity element removed
+    - @ranges_fill: core.add: identity element removed
+    - @ranges_fill: core.add: identity element removed
+    - @ranges_fill: core.add: identity element removed
+    - @ranges_fill: core.mul: identity element removed
+    - @ranges_fill: core.add: identity element removed
+    - @ranges_fill: core.mul: multiplied by zero
+    - @ranges_fill: core.add: identity element removed
+    - @ranges_fill: core.sub: folded 16 and 1
+    - @ranges_fill: core.sub: identity element removed
+    - dce: unused core.const removed
+    - dce: unused core.const removed
+    - dce: unused core.const removed
+    - dce: unused core.const removed
+    - dce: unused core.const removed
+    - dce: unused core.const removed
+    - dce: unused core.const removed
+    - dce: unused core.const removed
+    - dce: unused core.const removed
+    - dce: unused core.const removed
+    - dce: unused core.const removed
+    - dce: unused core.const removed

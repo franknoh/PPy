@@ -1,42 +1,60 @@
-# GPU kernels
+# A CUDA kernel in Python, run three ways
 
-A saxpy and a block reduction with shared memory and a warp shuffle, written
-once in `ppy.cuda`: the reference launch under CPython, PTX through the CUDA
-driver under `ppy run` where a device is present, and CUDA or HIP source
-from `ppy emit`.
+`saxpy.ppy` holds two kernels — a saxpy and a block reduction with shared
+memory and a warp shuffle — written once in `ppy.cuda`. Under plain
+CPython the launch runs the grid as Python threads that know their
+position, so the barrier and the shuffle are real. Under `ppy run` on a
+machine with a device, the same kernels compile to PTX and run through the
+CUDA driver. `ppy emit cuda` and `ppy emit hip` write them as source for
+either vendor's toolchain. The printed totals are identical.
 
-## Provenance
+## Kernels, device functions, and where a thread is
 
-Hand-written. `saxpy.ppy` is written directly; there is no `.py` source and
-no conversion step involved.
+```python
+@cuda.kernel
+def saxpy(n: int, a: float, x: native.const_ptr[float], y: native.ptr[float]) -> None:
+    i = cuda.global_id()
+    if i < n:
+        slot = native.offset(y, i)
+        native.store(slot, fma(a, native.load(native.offset(x, i)), native.load(slot)))
+```
 
-## What it shows
+`@cuda.kernel` marks a function of scalars and pointers that runs once per
+thread of a launch and returns nothing; `@cuda.device` marks `fma`, a
+function a kernel calls. `thread_id`, `block_id`, `block_dim`, and
+`global_id` say where a thread is. `cuda.launch(kernel, grid, block,
+*args)` runs the kernel over `grid` blocks of `block` threads and waits; a
+`native` pointer's whole array goes to the device and, when the pointer is
+mutable, comes back, so a launch means what the reference launch means.
 
-- `@cuda.kernel` marks a function of scalars and pointers that runs once
-  per thread of a launch, `@cuda.device` one a kernel calls; `thread_id`,
-  `block_id`, `block_dim`, `global_id` say where a thread is.
-- `cuda.shared[float, 64]()` is memory a block shares, `syncthreads` waits
-  for the block, and `shfl_xor` trades a scalar across the warp -- the
-  reference launch runs a block's threads together, each a Python thread that
-  knows its position, so the barrier and the shuffle are real.
-- `cuda.launch(kernel, grid, block, *args)` runs the kernel and waits; a
-  `native` pointer's whole array goes to the device and, when the pointer is
-  mutable, comes back, so a launch means what the reference launch means.
-- Inside device code `int` arithmetic wraps and nothing guards, as on the
-  device; the CPU backends leave device code alone.
-- `cuda.compiled(saxpy)` says whether PTX ran; without a driver, a device,
-  or the NVPTX backend the reference runs and `W2008` says why. The line
-  that prints it starts with `# `.
+## Shared memory, a barrier, a shuffle
+
+`block_max` parks each thread's value in `cuda.shared[float, 64]()`, waits
+at `syncthreads`, trades with its neighbour through `shfl_xor(mine, 1)`,
+and lets thread 0 finish the reduction. Inside device code `int` arithmetic
+wraps and nothing guards, as on the device; the IR's gpu dialect verifier
+refuses what has no device form — a list or buffer parameter, a returned
+value, a call to a host function.
+
+## Where it ran
+
+`cuda.compiled(saxpy)` says whether PTX ran; without a driver, a device, or
+the NVPTX backend the reference launch runs and `W2008` says why. The line
+that prints it starts with `# `, the mark for output that may differ by
+machine. `PPY_CUDA_ARCH` picks the architecture the PTX is written for
+(`sm_70` unless set). A built artifact carries its kernels: `ppy build`
+stages each PTX beside the manifest and the launcher binds it without the
+compiler.
 
 ## Run it
 
 ```bash
 python  saxpy.ppy
-ppy run saxpy.ppy                 # PTX through the driver where there is a device
-ppy emit cuda saxpy.ppy           # the kernels, the device function, and the launch as CUDA C++
-ppy emit hip saxpy.ppy            # the same as HIP
-ppy emit ptx saxpy.ppy            # what the driver receives (PPY_CUDA_ARCH picks the target)
-ppy inspect saxpy.ppy --stage gpu # the device code alone, as IR
+ppy run saxpy.ppy
+ppy emit cuda saxpy.ppy
+ppy emit hip saxpy.ppy
+ppy emit ptx saxpy.ppy
+ppy inspect saxpy.ppy --stage gpu
 ```
 
 <!-- outputs:start -->
@@ -81,28 +99,9 @@ static inline int ppy_ovf_add_i64(int64_t a, int64_t b, int64_t *out) {
 
 extern "C" {
 
-static __device__ double ppy_saxpy_fma(double a0, double a1, double a2);
-__global__ void ppy_saxpy_saxpy(int64_t a0, double a1, const double *a2, double *a3);
-__global__ void ppy_saxpy_block_max(const double *a0, double *a1);
-int32_t ppy_saxpy_run(int64_t a0, double a1, const double *a2, double *a3, int64_t *out0);
-
-static __device__ double ppy_saxpy_fma(double a0, double a1, double a2) {
-    double v1_a_addr[1];
-    double v2_x_addr[1];
-    double v3_y_addr[1];
-    double v4_v;
-    double v5_v;
-    double v6_v;
-    double v7_v;
-    double v8_v;
-    *v1_a_addr = a0;
-    *v2_x_addr = a1;
-    *v3_y_addr = a2;
-    v4_v = *v1_a_addr;
-    v5_v = *v2_x_addr;
-    v6_v = v4_v * v5_v;
-… 305 more lines
 ```
+
+*345 lines in all — [full output](outputs/03-ppy-emit-cuda-saxpy-ppy.txt).*
 
 **`ppy emit hip saxpy.ppy`**
 
@@ -127,28 +126,9 @@ static inline int ppy_ovf_add_i64(int64_t a, int64_t b, int64_t *out) {
 
 extern "C" {
 
-static __device__ double ppy_saxpy_fma(double a0, double a1, double a2);
-__global__ void ppy_saxpy_saxpy(int64_t a0, double a1, const double *a2, double *a3);
-__global__ void ppy_saxpy_block_max(const double *a0, double *a1);
-int32_t ppy_saxpy_run(int64_t a0, double a1, const double *a2, double *a3, int64_t *out0);
-
-static __device__ double ppy_saxpy_fma(double a0, double a1, double a2) {
-    double v1_a_addr[1];
-    double v2_x_addr[1];
-    double v3_y_addr[1];
-    double v4_v;
-    double v5_v;
-    double v6_v;
-    double v7_v;
-    double v8_v;
-    *v1_a_addr = a0;
-    *v2_x_addr = a1;
-    *v3_y_addr = a2;
-    v4_v = *v1_a_addr;
-    v5_v = *v2_x_addr;
-    v6_v = v4_v * v5_v;
-… 305 more lines
 ```
+
+*345 lines in all — [full output](outputs/04-ppy-emit-hip-saxpy-ppy.txt).*
 
 **`ppy emit ptx saxpy.ppy`**
 
@@ -173,30 +153,11 @@ static __device__ double ppy_saxpy_fma(double a0, double a1, double a2) {
 {
 	.reg .pred 	%p<2>;
 	.reg .b32 	%r<4>;
-	.reg .b64 	%rd<17>;
-
-	ld.param.b64 	%rd5, [ppy_saxpy_saxpy_param_0];
-	ld.param.b64 	%rd6, [ppy_saxpy_saxpy_param_3];
-	cvta.to.global.u64 	%rd1, %rd6;
-	ld.param.b64 	%rd7, [ppy_saxpy_saxpy_param_2];
-	cvta.to.global.u64 	%rd2, %rd7;
-	mov.u32 	%r1, %ctaid.x;
-	mov.u32 	%r2, %ntid.x;
-	mul.wide.u32 	%rd8, %r1, %r2;
-	mov.u32 	%r3, %tid.x;
-	cvt.u64.u32 	%rd9, %r3;
-	add.s64 	%rd3, %rd8, %rd9;
-	setp.ge.s64 	%p1, %rd3, %rd5;
-	@%p1 bra 	$L__BB0_2;
-	ld.param.b64 	%rd4, [ppy_saxpy_saxpy_param_1];
-	shl.b64 	%rd10, %rd3, 3;
-	add.s64 	%rd11, %rd1, %rd10;
-	add.s64 	%rd12, %rd2, %rd10;
-	ld.global.b64 	%rd13, [%rd12];
-… 106 more lines
 ```
 
-**`ppy inspect saxpy.ppy --stage gpu # the device code alone, as IR`**
+*146 lines in all — [full output](outputs/05-ppy-emit-ptx-saxpy-ppy.txt).*
+
+**`ppy inspect saxpy.ppy --stage gpu`**
 
 ```text
 ; ---- saxpy [gpu] ----
@@ -219,27 +180,15 @@ func @saxpy_fma(%a: f64, %x: f64, %y: f64) -> f64 attrs {effects = [], gpu.kind 
 func @saxpy_saxpy(%n: i64, %a: f64, %x: ptr<f64, generic, const>, %y: ptr<f64>) -> () attrs {effects = ["read_memory", "write_memory"], gpu.kind = "kernel", ppy.abi = "ppy", ppy.qualname = "saxpy.saxpy", ppy.releases_gil = true, ppy.symbol = "ppy_saxpy_saxpy"} loc("examples/38_cuda/saxpy.ppy":10:0) {
 ^entry:
     %n_addr = core.alloca : ptr<i64, stack> loc("examples/38_cuda/saxpy.ppy":10:0)
-    core.store %n, %n_addr
-    %a_addr = core.alloca : ptr<f64, stack>
-    core.store %a, %a_addr
-    %x_addr = core.alloca : ptr<ptr<f64, generic, const>, stack>
-    core.store %x, %x_addr
-    %y_addr = core.alloca : ptr<ptr<f64>, stack>
-    core.store %y, %y_addr
-    %0 = gpu.block_id.x : index loc("examples/38_cuda/saxpy.ppy":11:4)
-    %1 = gpu.block_dim.x : index
-    %2 = core.mul %0, %1 {overflow = "wrap"} : index
-    %3 = gpu.thread_id.x : index
-    %4 = core.add %2, %3 {overflow = "wrap"} : index
-    %5 = core.cast %4 : i64
-    %i_addr = core.alloca : ptr<i64, stack>
-    core.store %5, %i_addr
-    %6 = core.load %i_addr : i64 loc("examples/38_cuda/saxpy.ppy":12:4)
-    %7 = core.load %n_addr : i64
-    %n_entry = core.load %n_addr : i64
-    %8 = core.cmp.lt %6, %7 : bool
-    %slot_addr = core.alloca : ptr<ptr<f64>, stack>
-… 125 more lines
 ```
 
+*165 lines in all — [full output](outputs/06-ppy-inspect-saxpy-ppy-stage-gpu.txt).*
+
 <!-- outputs:end -->
+
+## Read on
+
+- [GPU kernels](../../docs/guide/gpu.md) — the whole `ppy.cuda`/`ppy.hip` vocabulary.
+- [The IR: the gpu dialect](../../docs/internals/ir.md) — one execution model for every GPU backend.
+
+`saxpy.ppy` is hand-written; there is no `.py` source and no conversion step.

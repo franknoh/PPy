@@ -1,37 +1,55 @@
-# Generics
+# Generics, inferred at the call and monomorphized in native code
 
-Type parameters the way Python 3.12 spells them, inferred at each call and
-checked against their bounds; native code monomorphizes, one instance per
-tuple of type arguments.
+`largest(1, 2)` is an `int`. `largest(1.5, 2.5)` is a `float`. One
+definition, Python 3.12's `def largest[T: int | float]` syntax, and the
+call site decides `T`, checks it against the bound, and gets the declared
+return type with `T` substituted. Native code goes further: every tuple of
+type arguments a native caller uses becomes its own compiled instance, and
+the call goes straight to it.
 
-## Provenance
+## Bounds lend what they promise
 
-Hand-written. `generic.ppy` is written directly; there is no `.py` source
-and no conversion step involved.
+```python
+class Named(Protocol):
+    def name(self) -> str: ...
 
-## What it shows
 
-- `largest(1, 2)` is an `int` and `largest(1.5, 2.5)` a `float`: the call
-  infers `T`, checks it against `int | float` (`E1721` otherwise), and has
-  the declared return type with `T` substituted.
-- A bound that is a `Protocol` lends its methods: `label` may call `name()`
-  because `Named` says so, a class whose members cover the protocol's is an
-  instance of it, and an unbounded `T` has no operators at all.
-- `sweep` is native and calls `clamp` and `largest` with `float` and `int`
-  arguments: each generic is lowered once per tuple of type arguments under a
-  name that spells them (`ppy emit ir` shows them, marked `ppy.generic`), and
-  the calls go straight to those instances. The generics keep their Python
-  bodies for every other caller.
-- `[tool.ppy.generics]` bounds the process -- `max-specializations` per
-  generic and `max-depth` of a type argument -- and a generic that calls
-  itself with its own parameter wrapped in a type is refused outright.
+def label[T: Named](thing: T) -> str:
+    return "at " + thing.name()
+```
+
+An unbounded `T` has no operators at all — nothing says it does. A bound
+of `int | float` lends comparison and arithmetic; a bound that is a
+`Protocol` lends its methods, so `label` may call `name()`, and `Point`,
+whose members cover `Named`'s, is an instance of it without declaring so.
+A type argument that does not satisfy its bound is `E1721`.
+
+## One instance per tuple of type arguments
+
+```python
+def sweep(n: int) -> float:
+    total = 0.0
+    for i in range(n):
+        total += clamp(i * 0.25, 1.0, 10.0) + largest(i, 3)
+    return total
+```
+
+`sweep` is native and calls `clamp` with floats and `largest` with ints.
+Each generic is lowered once per tuple of type arguments under a name that
+spells them — `ppy emit ir` shows the instances, marked `ppy.generic` — and
+the calls inside `sweep` are direct native calls to those instances. The
+generics keep their Python bodies for every other caller.
+`[tool.ppy.generics]` bounds the process (`max-specializations` per
+generic, `max-depth` of a type argument), and a generic that calls itself
+with its own parameter wrapped in a type is refused outright (`E1723`)
+because its specializations would never end.
 
 ## Run it
 
 ```bash
 python  generic.ppy
 ppy run generic.ppy
-ppy emit ir generic.ppy   # the monomorphized instances
+ppy emit ir generic.ppy
 ```
 
 <!-- outputs:start -->
@@ -74,27 +92,15 @@ func @generic_sweep(%n: i64) -> f64 attrs {effects = ["may_raise"], ppy.abi = "p
     core.store %2, %i_addr loc("examples/40_generics/generic.ppy":35:4)
     core.br ^for.head3
 ^for.head3:
-    %5 = core.load %i_addr : i64 loc("examples/40_generics/generic.ppy":35:4)
-    %6 = core.cmp.lt %5, %1 : bool
-    core.cond_br %6, ^for.body4, ^for.end6
-^for.body4:
-    %7 = core.load %total_addr : f64 loc("examples/40_generics/generic.ppy":36:8)
-    %8 = core.load %i_addr : i64
-    %9 = core.const 0.25 : f64
-    %10 = core.cast %8 : f64
-    %11 = core.mul %10, %9 : f64
-    %12 = core.const 1.0 : f64
-    %13 = core.const 10.0 : f64
-    %14 = core.call %11, %12, %13 {callee = @generic_clamp__float} : f64
-    %15 = core.load %i_addr : i64
-    %16 = core.call %15, %4 {callee = @generic_largest__int} : i64
-    %17 = core.cast %16 : f64
-    %18 = core.add %14, %17 : f64
-    %19 = core.add %7, %18 : f64
-    core.store %19, %total_addr
-    %20 = core.load %i_addr : i64
-    %21 = core.add %20, %3 {overflow = "python"} : i64
-… 57 more lines
 ```
 
+*97 lines in all — [full output](outputs/03-ppy-emit-ir-generic-ppy.txt).*
+
 <!-- outputs:end -->
+
+## Read on
+
+- [Generics](../../docs/guide/generics.md) — bounds, monomorphization, static dispatch.
+- [Value classes](../13_value_classes/README.md) — operators on a value class, dispatched statically.
+
+`generic.ppy` is hand-written; there is no `.py` source and no conversion step.

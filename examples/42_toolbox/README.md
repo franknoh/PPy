@@ -1,18 +1,13 @@
-# The toolbox
+# Every way of looking inside a build, on one program
 
-One small program, and every way 0.2.0 has of looking inside its build:
-the IR at each stage, the source backends, the optimization report, the
-sanitizers, and profile-guided optimization.
+`toolbox.ppy` is deliberately ordinary — a loop with a branch, an indexed
+read, a function nobody calls — so that the tools have something to say.
+The IR at each stage, the C and LLVM the backends write, the optimization
+report, the sanitizers, and a profile-guided build all run on it below, and
+the program prints the same line under every one of them. A tool changes
+what you can see, or what is fast; never what is computed.
 
-## Provenance
-
-Hand-written. `toolbox.ppy` is written directly; there is no `.py` source
-and no conversion step involved.
-
-## What it shows
-
-The program is ordinary -- a loop with a branch, an indexed read, a
-function nobody calls -- so that the tools have something to say.
+## The IR at each stage
 
 ```bash
 ppy inspect toolbox.ppy --stage analysis   # what the checker knows of each function
@@ -23,10 +18,24 @@ ppy emit c toolbox.ppy                     # one C11 translation unit; `cpp` for
 ppy emit llvm-ir toolbox.ppy               # what LLVM is handed
 ```
 
+`analysis` says of each function whether it is native, whether it gets a
+Python boundary, and why: `unused` is native but has "native callers only",
+because a two-instruction body is not worth a boundary crossing. `emit c`
+writes a translation unit that compiles alone with any C11 compiler and
+answers what the LLVM road answers, guards and fallbacks included.
+
+## The report
+
 ```bash
-ppy build toolbox.ppy --report-opt         # native or not and why, every remark by category
+ppy build toolbox.ppy --report-opt
 ppy build toolbox.ppy --report-opt-json report.json
 ```
+
+Native or not and why, then every remark the passes left, by stable
+category — `block merged`, `dead code removed`, `function inlined`,
+`bounds guard removed` — so a tool can count them across versions.
+
+## Sanitizers
 
 ```bash
 ppy run --sanitize bounds,overflow toolbox.ppy
@@ -34,8 +43,10 @@ ppy run --sanitize bounds,overflow toolbox.ppy
 
 A sanitizer instruments the IR with checks the program did not ask for:
 every buffer index, every wrapping or proven integer operation. A check that
-fails is not a fallback: the function returns a sanitizer status and the
+fails is not a fallback. The function returns a sanitizer status and the
 boundary raises `SanitizerFailure` naming the kind and the function.
+
+## Profile-guided optimization
 
 ```bash
 ppy run --profile toolbox.ppy              # runs, then writes toolbox.ppyprof
@@ -43,13 +54,13 @@ ppy build --pgo toolbox.ppyprof toolbox.ppy --report-opt
 ppy run --pgo toolbox.ppyprof toolbox.ppy
 ```
 
-The profiling run counts every block and the taken edge of every branch, and
-records what each native function was called with (`list[400]`, fifty
+The profiling run counts every block and the taken edge of every branch,
+and records what each native function was called with (`list[400]`, fifty
 times). The guided build annotates what still matches: `compute` is hot,
 `unused` is cold and never inlined, the branch on `x % 4` carries the
 weights the run measured, and LLVM receives them as `!prof` metadata. The
-report lists the profile first. A profile changes what is fast, never what
-is computed: the program prints the same line under every command above.
+report lists the profile first. A function edited since the profile was
+recorded is named (`W2009`) and built as without one.
 
 ## Run it
 
@@ -125,28 +136,9 @@ func @toolbox_compute(%xs: buffer<i64> {ownership = "owned", ppy.kind = "list"})
     %6 = core.const 1 : i64
     core.br ^each.head1 loc("examples/42_toolbox/toolbox.ppy":3:4)
 ^each.head1:
-    %7 = core.load %xs_i_addr : i64 loc("examples/42_toolbox/toolbox.ppy":3:4)
-    %8 = core.cmp.lt %7, %3 : bool
-    core.cond_br %8, ^each.body2, ^each.end4
-^each.body2:
-    %9 = core.load %xs_i_addr : i64 loc("examples/42_toolbox/toolbox.ppy":3:4)
-    %10 = core.buffer_load %xs, %9 : i64
-    core.store %10, %x_addr
-    %11 = core.load %x_addr : i64 loc("examples/42_toolbox/toolbox.ppy":4:8)
-    %12 = core.mod %11, %4 {overflow = "python", rounding = "floor"} : i64
-    %13 = core.cmp.eq %12, %5 : bool
-    core.cond_br %13, ^then5, ^else6
-^each.end4:
-    %14 = core.load %total_addr : i64 loc("examples/42_toolbox/toolbox.ppy":8:4)
-    core.ret %14
-^then5:
-    %15 = core.load %total_addr : i64 loc("examples/42_toolbox/toolbox.ppy":5:12)
-    %16 = core.load %x_addr : i64
-    %17 = core.add %15, %16 {overflow = "python"} : i64
-    core.store %17, %total_addr
-    core.br ^endif7
-… 42 more lines
 ```
+
+*82 lines in all — [full output](outputs/04-ppy-emit-ir-toolbox-ppy.txt).*
 
 **`ppy emit c toolbox.ppy`**
 
@@ -171,28 +163,9 @@ static inline int ppy_ovf_add_i64(int64_t a, int64_t b, int64_t *out) {
 
 static inline int ppy_ovf_sub_i64(int64_t a, int64_t b, int64_t *out) {
 #if defined(__GNUC__) || defined(__clang__)
-    return __builtin_sub_overflow(a, b, out);
-#else
-    if ((b < 0 && a > INT64_MAX + b) || (b > 0 && a < INT64_MIN + b)) {
-        return 1;
-    }
-    *out = a - b;
-    return 0;
-#endif
-}
-
-static inline int ppy_ovf_mul_i64(int64_t a, int64_t b, int64_t *out) {
-#if defined(__GNUC__) || defined(__clang__)
-    return __builtin_mul_overflow(a, b, out);
-#else
-    if (a > 0) {
-        if (b > 0) { if (a > INT64_MAX / b) return 1; }
-        else if (b < INT64_MIN / a) return 1;
-    } else if (b > 0) {
-        if (a < INT64_MIN / b) return 1;
-    } else if (a != 0 && b < INT64_MAX / a) return 1;
-… 150 more lines
 ```
+
+*190 lines in all — [full output](outputs/05-ppy-emit-c-toolbox-ppy.txt).*
 
 **`ppy build toolbox.ppy --report-opt`**
 
@@ -229,8 +202,8 @@ module toolbox
 
 ```text
 optimization report: PPy (O2, ir road)
-profile: toolbox.ppyprof (1 run, hot from 2 calls)
-  toolbox.compute: hot, 50 calls; arguments 0: list[400] x50
+profile: toolbox.ppyprof (2 runs, hot from 5 calls)
+  toolbox.compute: hot, 100 calls; arguments 0: list[400] x100
   toolbox.pick: cold, 0 calls
   toolbox.unused: cold, 0 calls
 module toolbox
@@ -244,12 +217,19 @@ module toolbox
   profile applied: 3
     - @toolbox_compute: core.cmp: folded 4 and 0
     - @toolbox_compute: core.guard: condition always holds
-    - profile: `toolbox.compute` is hot (50 call(s)); 2 branch(es) weighted, 1 loop(s) with trip counts
+    - profile: `toolbox.compute` is hot (100 call(s)); 2 branch(es) weighted, 1 loop(s) with trip counts
     - profile: `toolbox.pick` is cold (0 call(s)); 0 branch(es) weighted, 0 loop(s) with trip counts
     - profile: `toolbox.unused` is cold (0 call(s)); 0 branch(es) weighted, 0 loop(s) with trip counts
     - simplify-cfg: ^each.latch3 merged into ^endif7
-    - dce: unused core.const removed
-    - dce: unused core.const removed
 ```
 
+*22 lines in all — [full output](outputs/09-ppy-build-pgo-toolbox-ppyprof-toolbox-pp.txt).*
+
 <!-- outputs:end -->
+
+## Read on
+
+- [CLI](../../docs/cli.md) — `emit`, `inspect`, `--report-opt`, `--sanitize`, `--profile`/`--pgo` in full.
+- [The IR](../../docs/internals/ir.md) — sanitizers and profiles as passes.
+
+`toolbox.ppy` is hand-written; there is no `.py` source and no conversion step.

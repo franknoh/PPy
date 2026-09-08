@@ -1,36 +1,52 @@
-# Parallel ranges
+# `parallel.range`: say the iterations may run at once
 
-`for i in parallel.range(n)` says the iterations may run at once. Under
-CPython they run in order, which is one of the orders allowed; natively the
-body becomes a function over a chunk of the range, and the build's parallel
-backend decides how the chunks run.
+`for i in parallel.range(n)` is a promise about the loop, not an
+instruction to the machine. Under CPython the iterations run in order,
+which is one of the orders allowed. Natively the body becomes a function
+over a chunk of the range, and `[tool.ppy.parallel] backend` decides how
+the chunks run — `threads`, `serial`, `simd`, or `openmp` for the C
+backend — and every choice prints the same numbers.
 
-## Provenance
+## Writes split freely; a float sum keeps its order
 
-Hand-written. `ranges.ppy` is written directly; there is no `.py` source and
-no conversion step involved.
+```python
+def squares(out: native.ptr[int], n: int) -> int:
+    for i in parallel.range(n):
+        native.store(native.offset(out, i), i * i)
+    return native.load(native.offset(out, n - 1))
 
-## What it shows
 
-- A loop that writes through a pointer or a buffer splits freely.
-- One `+=` into an outer `int` or `float` is a reduction. An integer
-  reduction splits freely; a floating-point one keeps its order, because the
-  answer would change otherwise -- `dot` prints twelve digits and they are
-  the same on every path -- unless the function is `@ppy.fastmath`, which
-  permits the reassociation and is why `dot_relaxed` prints six.
-- `@ppy.parallel` on a function asks the same of its outermost `range`
-  loops without spelling `parallel.range`; a loop that does not pass the
-  analysis stays serial and says why in an optimization remark.
-- `[tool.ppy.parallel] backend` chooses `threads`, `serial`, `simd`, or
-  `openmp` (for `ppy emit c`), and every choice gives the same answer.
+def dot(a: Buffer[float], b: Buffer[float]) -> float:
+    total = 0.0
+    for i in parallel.range(len(a)):
+        total += a[i] * b[i]
+    return total
+```
+
+A loop that writes through a pointer or a buffer splits without ceremony.
+One `+=` into an outer `int` or `float` is a reduction, lowered as a
+`parallel.reduce`: an integer reduction (`count_odd`) splits freely; a
+floating-point one keeps its order, because the answer would change
+otherwise — `dot` prints twelve digits and they are the same on every
+path. `@ppy.fastmath` permits the reassociation, which is why `dot_relaxed`
+prints six.
+
+## What the body may not do
+
+Assign a variable that lives outside the loop, `break`, or `return`. A
+function that does is refused with the reason (`E1650`). `@ppy.parallel` on
+a function asks the same of its outermost `range` loops without spelling
+`parallel.range`; a loop that does not pass the analysis stays serial and
+says why in an optimization remark — `fill` has two such loops, and
+`--report-opt` names what happened to each.
 
 ## Run it
 
 ```bash
 python  ranges.ppy
 ppy run ranges.ppy
-ppy build --report-opt ranges.ppy    # which loops became parallel, and why the rest did not
-ppy emit c ranges.ppy                # the loops as C; `backend = "openmp"` spells them as OpenMP
+ppy build ranges.ppy --report-opt
+ppy emit c ranges.ppy
 ```
 
 <!-- outputs:start -->
@@ -56,7 +72,7 @@ ppy emit c ranges.ppy                # the loops as C; `backend = "openmp"` spel
 500000.0
 ```
 
-**`ppy build --report-opt ranges.ppy`**
+**`ppy build ranges.ppy --report-opt`**
 
 ```text
 optimization report: PPy (O2, ir road)
@@ -79,28 +95,9 @@ module ranges
     - `ranges.fill`: the loop over `j` is a parallel add reduction into `acc` (kept in order: `@ppy.fastmath` would let it split)
     - @ranges_count_odd__par4: core.cmp: folded 2 and 0
     - @ranges_count_odd__par4: core.guard: condition always holds
-    - simplify-cfg: ^for.guards1 merged into ^entry
-    - simplify-cfg: ^for.setup2 merged into ^entry
-    - simplify-cfg: ^for.latch5 merged into ^for.body4
-    - simplify-cfg: ^for.guards1 merged into ^entry
-    - simplify-cfg: ^for.setup2 merged into ^entry
-    - simplify-cfg: ^for.latch5 merged into ^for.body4
-    - simplify-cfg: ^for.guards1 merged into ^entry
-    - simplify-cfg: ^for.setup2 merged into ^entry
-    - simplify-cfg: ^for.latch5 merged into ^for.body4
-    - simplify-cfg: ^for.guards1 merged into ^entry
-    - simplify-cfg: ^for.setup2 merged into ^entry
-    - simplify-cfg: ^for.latch5 merged into ^endif9
-    - simplify-cfg: ^for.guards1 merged into ^entry
-    - simplify-cfg: ^for.setup2 merged into ^entry
-    - simplify-cfg: ^for.latch5 merged into ^for.body4
-    - simplify-cfg: ^for.guards1 merged into ^entry
-    - simplify-cfg: ^for.setup2 merged into ^entry
-    - simplify-cfg: ^for.latch5 merged into ^for.body4
-    - dce: unused core.const removed
-    - dce: unused core.const removed
-… 126 more lines
 ```
+
+*166 lines in all — [full output](outputs/03-ppy-build-ranges-ppy-report-opt.txt).*
 
 **`ppy emit c ranges.ppy`**
 
@@ -125,27 +122,15 @@ module ranges
 #error "the atomic operations in this unit need the __atomic builtins of GCC or Clang"
 #endif
 
-typedef struct ppy_ctx_ranges_squares__par1 {
-    int64_t *a0;
-    int64_t a1;
-    int64_t a2;
-} ppy_ctx_ranges_squares__par1;
-
-typedef struct ppy_ctx_ranges_dot_relaxed__par3__task {
-    double *a0;
-    int64_t a1;
-    double *a2;
-    int64_t a3;
-    int64_t a4;
-    int64_t a5;
-    double a6;
-    double *a7;
-} ppy_ctx_ranges_dot_relaxed__par3__task;
-
-typedef struct ppy_ctx_ranges_count_odd__par4__task {
-    int64_t a0;
-    int64_t *a1;
-… 3094 more lines
 ```
 
+*3134 lines in all — [full output](outputs/04-ppy-emit-c-ranges-ppy.txt).*
+
 <!-- outputs:end -->
+
+## Read on
+
+- [Parallel loops](../../docs/guide/parallel.md) — the rules and the backends.
+- [Parallel fused kernels](../07_parallel/README.md) — `@ppy.parallel` on a NumPy expression.
+
+`ranges.ppy` is hand-written; there is no `.py` source and no conversion step.
