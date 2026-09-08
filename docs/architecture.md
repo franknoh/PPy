@@ -98,7 +98,8 @@ flattened to scalar SSA values at the ABI, with reads guarded on exact class.
 
 JIT-compiled code targets the exact host CPU — its name and feature set are
 handed to LLVM, so AVX2/FMA and friends are on where the machine has them
-(measured ~20% on a matmul kernel; memory-bound kernels are unchanged).
+(measured a third faster on a 384×384 matmul kernel; memory-bound kernels
+are unchanged).
 That is free because JIT code never leaves the machine that made it.
 
 Emitted objects, built artifacts, and standalone binaries stay on the
@@ -129,8 +130,8 @@ implementation itself, so a refused guard is a C-to-Python call, not a
 `NotImplemented` bounced through a Python frame. No Python code stands on
 the call path at all (`@ppy.jit` keeps a thin Python watcher only while it
 is still learning which argument shapes repeat). Measured against a plain
-Python call at 29 ns: 51 ns forced-native two-int call, 70 ns borrowed
-buffer, 80 ns guard failure into the fallback
+Python call at 28 ns: 47 ns forced-native two-int call, 65 ns borrowed
+buffer, 86 ns guard failure into the fallback
 (`examples/bench_boundary.py`). Built artifacts ship the compiled wrapper
 and bind through it at launch; the ctypes trampoline remains only as the
 fallback where no C toolchain exists (`W2004` says so once).
@@ -139,6 +140,6 @@ fallback where no C toolchain exists (`W2004` says so once).
 
 Generated wrappers release the GIL around native calls
 (`Py_BEGIN_ALLOW_THREADS`), so `@ppy.native` functions scale on threads:
-measured 1.94× on two threads against 1.02× for the same code on plain
-CPython. `@ppy.parallel` loops run on a process-wide worker pool sized by
+measured 1.95× on two threads against 0.98× for the same code on plain
+CPython (`examples/28_threads`). `@ppy.parallel` loops run on a process-wide worker pool sized by
 `[tool.ppy.parallel] threads`.

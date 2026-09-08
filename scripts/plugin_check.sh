@@ -7,7 +7,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-plugin="${1:?usage: plugin_check.sh <torch|jax|uvicorn>}"
+plugin="${1:?usage: plugin_check.sh <torch|jax|uvicorn|scipy|pandas|pyarrow>}"
 case "$plugin" in
   torch)   library=torch;   examples=(09_torch 21_training_torch 31_torchrun) ;;
   jax)     library=jax;     examples=(22_training_jax 25_jax_export 29_flax) ;;

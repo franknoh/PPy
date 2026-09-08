@@ -15,7 +15,7 @@ against, with the same workloads and the same printed answers.
 ## What it shows
 
 - Eight problems: sieve, Collatz, knapsack, edit distance, Floyd-Warshall, matmul, union-find, Fermat.
-- All three paths produce identical answers; the native path is 11x to 166x
+- All three paths produce identical answers; the native path is 10x to 145x
   faster than plain CPython on these eight.
 - Writes go through borrowed buffers, so the caller sees them.
 
@@ -27,18 +27,18 @@ column:
 
 | kernel | plain | `ppy run` | `ppy build` | C (`gcc -O3`) |
 |---|---:|---:|---:|---:|
-| sieve 2e6 | 198.0 ± 8.2 | 9.8 ± 0.7 | 9.7 ± 0.7 | 15.5 ± 0.7 |
-| collatz 3e5 | 1235.2 ± 17.6 | 44.5 ± 1.3 | 33.1 ± 0.6 | 45.8 ± 2.2 |
-| knapsack 400×2e4 | 476.6 ± 9.5 | 5.3 ± 0.3 | 3.9 ± 0.2 | 2.8 ± 0.3 |
-| edit 2000×2000 | 530.7 ± 7.1 | 3.2 ± 0.4 | 3.2 ± 0.3 | 4.1 ± 0.6 |
-| floyd 220 | 496.3 ± 10.1 | 3.5 ± 0.2 | 3.2 ± 0.1 | 5.8 ± 0.5 |
-| matmul 220 | 528.9 ± 6.7 | 4.0 ± 0.3 | 3.8 ± 0.1 | 2.7 ± 0.4 |
-| union-find 5e5 | 184.6 ± 8.4 | 3.7 ± 0.6 | 3.7 ± 0.3 | 4.3 ± 0.5 |
-| fermat 6e4 | 26.9 ± 0.8 | 2.4 ± 0.1 | 2.7 ± 0.2 | 1.9 ± 0.1 |
+| sieve 2e6 | 169.3 ± 2.5 | 8.9 ± 0.3 | 8.8 ± 0.7 | 13.9 ± 1.1 |
+| collatz 3e5 | 1096.5 ± 8.9 | 40.3 ± 0.6 | 30.4 ± 0.8 | 41.4 ± 0.9 |
+| knapsack 400×2e4 | 417.7 ± 2.5 | 5.1 ± 0.2 | 3.7 ± 0.4 | 2.5 ± 0.1 |
+| edit 2000×2000 | 462.2 ± 4.8 | 2.8 ± 0.3 | 3.2 ± 0.5 | 3.6 ± 0.0 |
+| floyd 220 | 434.2 ± 3.0 | 3.2 ± 0.0 | 3.0 ± 0.1 | 5.1 ± 0.1 |
+| matmul 220 | 465.6 ± 2.6 | 3.6 ± 0.3 | 3.6 ± 0.3 | 2.2 ± 0.1 |
+| union-find 5e5 | 143.6 ± 2.2 | 3.0 ± 0.2 | 3.0 ± 0.2 | 3.7 ± 0.2 |
+| fermat 6e4 | 24.0 ± 0.4 | 2.8 ± 0.0 | 2.5 ± 0.1 | 1.8 ± 0.1 |
 
 The `ppy run` column keeps Python-integer semantics: overflow is guarded and
 falls back to arbitrary precision. `ppy build` is the wrap-semantics
-artifact, which is where collatz picks up its remaining 11 ms and knapsack
+artifact, which is where collatz picks up its remaining 10 ms and knapsack
 its 1.4 ms; the other kernels are already guard-free in the loop and do not
 move. `--host-cpu` is within the noise on all eight, so it is not shown.
 
@@ -46,9 +46,9 @@ Guard hoisting (`[tool.ppy.llvm] safeguards`) is what closed most of the old
 gaps: a multiplied index like `i * n + k` proves its extreme cases once in a
 guard block ahead of the loop, and the body runs plain `mul nsw` with no side
 exits — which is what lets LLVM strength-reduce and vectorize. PPY wins
-sieve, edit distance, floyd, and union-find, draws collatz, and gcc keeps
-matmul, knapsack, and fermat, whose remaining guards live on data values no
-range can prove.
+sieve, edit distance, floyd, and union-find, and collatz once the artifact
+wraps (with Python's integers it draws); gcc keeps matmul, knapsack, and
+fermat, whose remaining guards live on data values no range can prove.
 
 ## More problems
 
@@ -62,12 +62,12 @@ The C reference reads the same input with `scanf`.
 
 | | problem | plain | `ppy build` | `--standalone` | C (`scanf`) |
 |---|---|---:|---:|---:|---:|
-| [15a](15a_nqueens/) | N-Queens | 392.6 ms | 57.2 ms | 8.9 ms | 6.2 ms |
-| [15b](15b_dijkstra/) | shortest path | 2427.1 ms | 380.4 ms | **164.4 ms** | 234.6 ms |
-| [15c](15c_kmp/) | substring search | 565.9 ms | 67.8 ms | — | 12.8 ms |
-| [15d](15d_segment_tree/) | range sums | 871.3 ms | 136.6 ms | **27.7 ms** | 66.6 ms |
-| [15e](15e_lis/) | longest increasing subsequence | 836.4 ms | 129.9 ms | **45.7 ms** | 77.3 ms |
-| [15f](15f_input/) | counting inversions | 1089.0 ms | 107.2 ms | **42.6 ms** | 55.6 ms |
+| [15a](15a_nqueens/) | N-Queens | 136.4 ms | 39.1 ms | 5.3 ms | 4.5 ms |
+| [15b](15b_dijkstra/) | shortest path | 1461.0 ms | 235.8 ms | **97.7 ms** | 138.6 ms |
+| [15c](15c_kmp/) | substring search | 286.0 ms | 50.4 ms | — | 8.9 ms |
+| [15d](15d_segment_tree/) | range sums | 477.8 ms | 102.8 ms | **22.8 ms** | 50.5 ms |
+| [15e](15e_lis/) | longest increasing subsequence | 508.7 ms | 95.9 ms | **36.2 ms** | 57.7 ms |
+| [15f](15f_input/) | counting inversions | 573.7 ms | 88.7 ms | **36.8 ms** | 44.8 ms |
 
 Every cell is the mean of five runs, recorded in
 [`measurements.json`](measurements.json) with the machine it was measured
@@ -131,8 +131,8 @@ values = ppy.input[Buffer[int]](n)
 ```
 
 It goes straight into memory rather than building a Python object per field
-— 9.6 ms for 500k integers against 54.8 ms for `sys.stdin.read().split()`
-and 16.5 ms for C's `scanf`. The conversion writes it for you: `int(input())`
+— 12.6 ms for 500k integers against 49.8 ms for `sys.stdin.read().split()`
+and 20.6 ms for C's `scanf`. The conversion writes it for you: `int(input())`
 becomes `ppy.input[int]()`, `a, b = map(int, input().split())` becomes the
 tuple read, and a loop that fills a buffer one value at a time becomes one
 bulk `ppy.read_ints`. A module that also touches `sys.stdin` keeps the

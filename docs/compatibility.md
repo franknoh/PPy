@@ -1,6 +1,6 @@
 # Compatibility
 
-PPY is version 0.1. The surface is wide, and not all of it is equally
+PPY is version 0.2. The surface is wide, and not all of it is equally
 settled. This says which parts you may build on, which will move, and what
 happens when the two sides of a boundary disagree.
 
@@ -17,10 +17,14 @@ happens when the two sides of a boundary disagree.
 | the language subset — statements, expressions, the type system | settling | new constructs are added; accepted code is not un-accepted without a note |
 | `ppy.pure`, `ppy.opt`, `ppy.native`, `ppy.jit`, `ppy.dynamic`, `ppy.check` | settling | the directives a program is written around |
 | `ppy.input`, `ppy.buffer`, `ppy.read_ints`, `ppy.read_token` | experimental | added in 0.1; the spelling may still change |
+| `ppy.native` memory and `ppy.ffi`; `ppy.simd`, `ppy.cpu`, `ppy.atomic`, `ppy.concurrent`, `ppy.parallel.range`; `ppy.grad` | settling | added in 0.2; each has a reference implementation under CPython, and a lowering that agrees with it |
+| `ppy.aio`, `ppy.cuda`, `ppy.hip`, `ppy.xla` | experimental | added in 0.2; the runtimes behind them (epoll, the CUDA driver, PJRT) are the newest code in the tree |
+| the canonical IR (`ppy_compiler.ir`) and `.ppyir` | settling | the text carries a schema and dialect versions a reader refuses rather than guesses at; public from 0.2.0 at schema 1 |
+| `ppy emit`, `ppy inspect --stage`, `--report-opt`, `--sanitize`, `--profile`/`--pgo` | experimental | developer tools; the text they print is for people and may be reworded |
 | `ppy check` / `ppy run` / `ppy build` and their flags | settling | flags are added; removals get a deprecation release |
 | `ppy convert` / `ppy migrate` output | settling | the output is regenerated from source, so a change shows up as a diff, not a break |
 | diagnostic codes (`E1xxx`, `W2xxx`, `R3xxx`) | settling | a code keeps its meaning; new codes are added freely |
-| the plugin interface in `plugins/base.py` | experimental | written for the plugins in this repository |
+| the plugin interface in `plugins/base.py` | settling | the second version: types, effects, lowerings, and the IR hooks (`register_dialects`, `register_passes`, `register_patterns`, `register_lowerings`) the builtin plugins use themselves |
 | the cache format | internal | see below; never read it yourself |
 | the built-artifact ABI | versioned | see below |
 
@@ -78,7 +82,7 @@ The floor is set by the dependencies' wheels, not by PPY:
 | `z3-solver` 4.13 to 4.15 | manylinux2014 | 2.17 |
 | `z3-solver` 5.x | manylinux_2_27 | 2.27 |
 | `numpy` up to 2.2 (Python 3.12) | manylinux2014 | 2.17 |
-| `numpy` 2.3 | manylinux_2_28 | 2.28 |
+| `numpy` 2.3 and later | manylinux_2_28 | 2.28 |
 
 `libcst` is the one dependency that moved past glibc 2.27: from 1.8 it ships
 `manylinux_2_28` wheels only, and an installer that cannot use them falls

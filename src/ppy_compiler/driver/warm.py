@@ -119,6 +119,9 @@ def _key(file: Path, root: Path, config: Config, options: argparse.Namespace) ->
         config.parallel.enabled,
         config.parallel.threads,
         resolved_safeguards(options, config.llvm.safeguards, "run"),
+        # The artifact is compiled for this CPU; a cache carried to another machine
+        # of the same triple must not serve it.
+        *_cpu_features(),
         getattr(options, "sanitize", None) or ",".join(sorted(config.llvm.sanitize)),
         _profile_fingerprint(getattr(options, "pgo", None) or config.llvm.pgo),
         getattr(options, "prover", None) or config.llvm.prover or "off",
@@ -131,6 +134,13 @@ def _key(file: Path, root: Path, config: Config, options: argparse.Namespace) ->
     # directory read, and any install or upgrade changes it.
     feed(*_installed())
     return hasher.hexdigest()
+
+
+def _cpu_features() -> tuple[str, ...]:
+    """This machine's CPU features, as the run artifact's object code assumes them."""
+    from ppy_runtime._cpu import features
+
+    return features()
 
 
 def _profile_fingerprint(named) -> str:  # type: ignore[no-untyped-def]
