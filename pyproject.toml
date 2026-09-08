@@ -72,6 +72,10 @@ dev = [
     "pydantic>=2.0",
     "z3-solver>=4.13",
     "libclang>=16",
+    "mkdocs-material>=9.7.7",
+    "mkdocstrings[python]>=1.0.6",
+    "mike>=2.2.0",
+    "mkdocs-gen-files>=0.6.1",
 ]
 # Per-plugin groups, so a contributor installs only the runtimes they test.
 # ninja is how torch compiles a generated C++ region (spec 20.3).

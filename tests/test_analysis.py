@@ -1991,7 +1991,7 @@ def test_every_diagnostic_code_is_documented_exactly_once():
 
     from ppy_compiler.diagnostics.codes import CODES
 
-    reference = Path(__file__).parent.parent / "docs" / "diagnostics.md"
+    reference = Path(__file__).parent.parent / "docs" / "reference" / "diagnostics.md"
     rows = re.findall(r"\| `([EWR][0-9]{4})` \|", reference.read_text(encoding="utf-8"))
 
     assert sorted(rows) == sorted(set(rows)), "a code is documented twice"

@@ -22,7 +22,7 @@ below are in the order the work landed.
   rules and returns a list of errors with their positions; the printer
   writes one deterministic text per module, the parser reads it back, and
   `.ppyir` is that text with a schema and dialect-version header a reader
-  refuses rather than guesses at. `docs/ir.md` is the reference.
+  refuses rather than guesses at. `docs/internals/ir.md` is the reference.
 - Passes and patterns over the IR. A pattern rewrites one operation
   through a rewriter that records every change and revisits what it
   touched; the greedy driver runs a pattern set to a fixed point and names
@@ -271,7 +271,7 @@ Speed of the compiler itself, measured before being changed.
   the fallback, so the three paths agree on every call. Needs
   `ppy-lang[solver]`; `ppy doctor` reports the solver; the artifact and
   the warm run directory are keyed by the prover and its version.
-  `docs/solver.md` says where a solver fits, where it does not, and what is
+  `docs/internals/solver.md` says where a solver fits, where it does not, and what is
   next.
 - A type alias imported from another module is read in the module that
   defines it: `from .obligations import Term` with `Term = Union[Var,
@@ -308,7 +308,7 @@ Speed of the compiler itself, measured before being changed.
   used to find that out only from `ppy doctor`. On one real kernel the
   difference was a native call at 14 us against the interpreted 5.6 us,
   becoming 1.3 us once the headers were there.
-- `ppy doctor` prints the C library it found, and `docs/compatibility.md`
+- `ppy doctor` prints the C library it found, and `docs/reference/compatibility.md`
   says what the platform floor is: the wheel is pure Python, everything
   native is compiled where it runs and binds to that machine's libc, and
   the dependencies' wheels set the minimum -- glibc 2.17 for `llvmlite`,
@@ -375,7 +375,7 @@ Speed of the compiler itself, measured before being changed.
   `AssertionError`, `RuntimeError`, `OSError` and fifty-three others were
   "not defined at this point"; the table now reads the interpreter's own
   hierarchy.
-- [docs/migrating.md](docs/migrating.md) says what to hand `ppy migrate` on
+- [docs/internals/migrating.md](docs/internals/migrating.md) says what to hand `ppy migrate` on
   a real project: profile, find the two or three files that do the numeric
   work, migrate those, and leave the orchestration as `.py` importing them
   through the loader. It also says how to read the report -- `E1304` is the
@@ -689,6 +689,18 @@ Speed of the compiler itself, measured before being changed.
   runners skip an example that needs pandas, pyarrow, or scipy where those
   are missing. Found on the way: a type parameter bounded by a Protocol now
   lends its methods to attribute calls, as it already did to operators.
+- The documentation is a site, [ppy.franknoh.dev](https://ppy.franknoh.dev/),
+  built with MkDocs from `docs/` on every push to `main` and every release
+  tag, versioned by mike (`dev` for the tip, `X.Y` and `latest` for a
+  release). The language reference is split into one page per topic under
+  `docs/guide/`, the configuration, diagnostics, and compatibility pages
+  live under `docs/reference/`, the architecture, IR, conversion,
+  migration, plugin, and solver pages under `docs/internals/`, and the
+  example gallery, the performance tables, the API pages, the contributing
+  page, and this changelog are generated at build time from the examples'
+  READMEs, the recorded measurements, the docstrings, and the repository's
+  own files, so none of them is a second copy. The gate builds the site
+  with `--strict`, so a broken link fails it.
 
 ## 0.1.0a1
 

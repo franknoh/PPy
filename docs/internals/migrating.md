@@ -53,9 +53,9 @@ So the unit of migration is the **kernel**, not the repository:
    `ppy run` or a `ppy build` launcher the whole program is compiled at
    once. The orchestration never knows which.
 
-[`examples/26_project`](../examples/26_project/README.md) is this shape at
+[`examples/26_project`](../howto/26_project.md) is this shape at
 toy scale — a `.ppy` kernel behind a `.py` application — and
-[`examples/24_interop`](../examples/24_interop/README.md) is the import hook
+[`examples/24_interop`](../howto/24_interop.md) is the import hook
 on its own.
 
 ## Reading the report
@@ -106,6 +106,6 @@ pull request.
 ## What to expect from the numbers
 
 On a kernel file that types cleanly, `ppy run` gives the JIT and `ppy build`
-gives an artifact; the [algorithms folder](../examples/15_algorithms/README.md)
+gives an artifact; the [algorithms folder](../howto/15_algorithms.md)
 has the measured spread between plain CPython, the native path, and C. On
 the orchestration, expect nothing, and do not migrate it to find out.

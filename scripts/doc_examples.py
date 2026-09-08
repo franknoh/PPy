@@ -23,7 +23,7 @@ FENCE = re.compile(r"(?<=\n)```python\n(.*?)```", re.DOTALL)
 
 
 def _sources() -> list[Path]:
-    return [ROOT / "README.md", *sorted((ROOT / "docs").glob("*.md"))]
+    return [ROOT / "README.md", *sorted((ROOT / "docs").rglob("*.md"))]
 
 
 def _formatted(block: str) -> str | None:

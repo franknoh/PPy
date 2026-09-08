@@ -51,7 +51,7 @@ which fails if the plugin's tests all skip — a skipped test proves nothing.
   runs the Python body; it never answers differently.
 - **The cache is disposable.** Corrupting or deleting any part of it may cost
   a rebuild and must never cost the answer. See
-  [docs/compatibility.md](docs/compatibility.md).
+  [docs/reference/compatibility.md](docs/reference/compatibility.md).
 - **`ppy_runtime` never imports `ppy_compiler`.** A built artifact keeps
   working with the compiler uninstalled, and a test enforces it.
 - **A generated `.ppy` is exactly what `ppy convert` writes.** Never hand-edit

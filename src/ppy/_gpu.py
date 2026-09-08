@@ -4,7 +4,7 @@ A launch runs the grid one block at a time and a block's threads together,
 each a Python thread that knows its position, so `syncthreads` is a real
 barrier and a shuffle really trades values between the lanes of a warp.
 It is exact and slow: the reference a compiled kernel is held to. The
-compiler lowers the same calls to the gpu dialect (`docs/ir.md`), and the
+compiler lowers the same calls to the gpu dialect (`docs/internals/ir.md`), and the
 source backends write them as CUDA or HIP.
 """
 

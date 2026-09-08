@@ -1,6 +1,6 @@
 # CLI reference
 
-What any of it is for is in [guide.md](guide.md).
+What any of it is for is in the [guide](guide/index.md).
 
 ## Global options
 
@@ -29,7 +29,7 @@ keeps Python-integer semantics by default; `--unsafe` drops the overflow
 guards on data arithmetic (64-bit wrap, bounds checks stay), and
 `--safeguards {hoisted,inline,off}` names the guard mode outright.
 `--prover {off,z3}` asks the solver to prove overflow guards away where the
-analysis allows it, overriding `[tool.ppy.llvm] prover`; see `docs/solver.md`.
+analysis allows it, overriding `[tool.ppy.llvm] prover`; see [Where a solver fits](internals/solver.md).
 
 The first `ppy run` of a program is a build into the cache followed by the
 launcher; the second is the launcher alone. Before importing the compiler,
@@ -109,7 +109,7 @@ ppy check project/                # see what manual migration remains
 
 and iterating on the check findings until the project is strict PPY. On a
 real codebase, start with the kernels rather than the repository —
-[migrating.md](migrating.md) says how to pick them and how to read what
+[Migrating a real project](internals/migrating.md) says how to pick them and how to read what
 comes back.
 
 Before staticizing, migration runs its rewrite passes
@@ -318,7 +318,7 @@ ppy emit stablehlo foo.ppy           # the @ppy.xla.jit functions as StableHLO f
 One rule for every kind: a single file with no `-o` prints to standard
 output, `-o FILE` writes that file, and a directory target writes one file
 per module into the directory `-o` names (and refuses to guess without
-it). `ir` is the canonical IR after the shared passes (`docs/ir.md`);
+it). `ir` is the canonical IR after the shared passes ([The IR](internals/ir.md));
 `llvm-ir` is the optimized LLVM IR. The output is deterministic for one
 input and configuration.
 
@@ -592,7 +592,7 @@ LSP over stdio.
 ## Configuration
 
 CLI options override `[tool.ppy]` in `pyproject.toml` for one invocation.
-Every key, with defaults, is in [config.md](config.md).
+Every key, with defaults, is in [Configuration](reference/config.md).
 
 ## Exit codes
 
