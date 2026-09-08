@@ -332,6 +332,25 @@ and the verifier holds the ownership: a `borrowed` or `mut` parameter is
 refused in a `core.ret` and as the value of a `core.store`, the same way a
 stack pointer is.
 
+## Linking and the program
+
+Each module lowers on its own. A call into another module's native function
+is a declaration -- a function with no body, carrying the callee's symbol,
+marked `ppy.external` -- that the driver only lets a module make for a
+callee it has already lowered, so a declaration always has its definition
+somewhere in the program. `ppy_compiler.ir.linker.link` puts the modules
+together: definitions answer declarations, a generic instance two modules
+both made is kept once, a private symbol two modules both spell -- a
+string constant, a helper -- is renamed after its module and every
+reference follows, dialects are required at the newest version any module
+asked for, and libraries are the union. `whole_program` then optimizes the
+program as one unit: functions Python never binds and no address reaches
+become private, a small callee or one marked `@ppy.inline` is inlined
+(`@ppy.noinline` is not; nor is a coroutine, a kernel, or a resume
+function), the ordinary cleanups run, and `global-dce` drops the private
+functions and globals nothing reaches. `ppy build` compiles the program as
+one object under the IR road; `ppy emit linked-ir` prints it.
+
 ## Text and `.ppyir`
 
 `ppy_compiler.ir.encode` prints a module; `decode` reads it back. The text
@@ -356,7 +375,9 @@ with nothing after its name -- `gpu.barrier` -- does not take the next
 line's value or label as its own. A reader refuses a schema it does not
 have and a dialect it does not
 have or has only at an older version, with the reason, rather than
-guessing. The format is experimental in 0.2.0.
+guessing. The format is public from 0.2.0: schema 1 is what `ppy emit ir`
+and `ppy emit linked-ir` write and `ppy build` reads, and a change to its
+shape is a new schema number, never a silent one.
 
 ## Verification
 

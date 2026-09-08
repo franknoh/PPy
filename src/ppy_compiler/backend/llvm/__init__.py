@@ -59,6 +59,8 @@ __all__ = [
 class NativeModule:
     name: str
     ir: str
+    #: The module's PPy IR as text, for the linker; empty on the AST road.
+    ppyir: str = ""
     functions: dict[str, LoweredFunction] = field(default_factory=dict)
     rejected: dict[str, str] = field(default_factory=dict)
     sources: dict[str, tuple] = field(default_factory=dict)
@@ -152,6 +154,7 @@ def _collect(bundle, opt_level: int | None = None) -> dict[str, NativeModule]:  
     """Lower every module in the project to LLVM IR, reusing a cached result."""
     modules: dict[str, NativeModule] = {}
     layouts = _value_class_layouts(bundle)
+    available: dict[str, tuple] = {}  # type: ignore[type-arg]
     for module in bundle.graph.order():
         analysis = bundle.analysis.modules.get(module.name)
         symbols = bundle.symbols.modules.get(module.name)
@@ -174,18 +177,22 @@ def _collect(bundle, opt_level: int | None = None) -> dict[str, NativeModule]:  
         reused = _cached_lowering(bundle, module.name, opt_level)
         if reused is not None:
             modules[module.name] = _module_from_cache(module.name, reused, candidates)
+            _offer(available, modules[module.name])
             continue
 
         fused, plan, notes = _fuse(symbols, analysis)
         if not candidates and not fused:
             continue
-        result: LoweringResult = _lower(bundle, analysis, candidates, layouts, opt_level)
+        result: LoweringResult = _lower(
+            bundle, analysis, candidates, layouts, opt_level, available.get
+        )
         ir_text = result.ir
         if fused:
             ir_text = _append_fused(ir_text, module.name, fused)
         native = NativeModule(
             name=module.name,
             ir=ir_text,
+            ppyir=result.ppyir,
             functions=result.functions,
             rejected=result.rejected,
             sources={
@@ -202,11 +209,18 @@ def _collect(bundle, opt_level: int | None = None) -> dict[str, NativeModule]:  
             exports=result.exports,
         )
         modules[module.name] = native
+        _offer(available, native)
         _store_lowering(bundle, module.name, opt_level, native)
     return modules
 
 
-def _lower(bundle, analysis, candidates, layouts, opt_level):  # type: ignore[no-untyped-def]
+def _offer(available: dict, native: NativeModule) -> None:  # type: ignore[type-arg]
+    """What `native` lowered, for the modules after it to call natively."""
+    for qualname, lowered in native.functions.items():
+        available[qualname] = (lowered.info, lowered.signature)
+
+
+def _lower(bundle, analysis, candidates, layouts, opt_level, imports=None):  # type: ignore[no-untyped-def]
     """One module's LLVM IR by the road the project selected."""
     from ...driver.config import selected_pipeline
     from .ir_pipeline import lower_module_via_ir
@@ -226,6 +240,7 @@ def _lower(bundle, analysis, candidates, layouts, opt_level):  # type: ignore[no
             plugins=bundle.project.plugins,
             target=configured_target(config.llvm.target),
             parallel=config.parallel,
+            imports=imports,
         )
     return lower_module(
         analysis, candidates, layouts, safeguards=safeguards, prover=prover_for(config)
@@ -288,6 +303,7 @@ def _module_from_cache(name: str, reused, candidates) -> NativeModule:  # type: 
     return NativeModule(
         name=name,
         ir=reused.ir,
+        ppyir=reused.ppyir,
         functions=functions,
         rejected=dict(reused.rejected),
         sources=sources,
@@ -330,6 +346,90 @@ def _fuse(symbols, analysis):  # type: ignore[no-untyped-def]
 
 
 _LIBRARIES = {"numpy": "NumPy", "torch": "torch", "pyarrow": "PyArrow", "pandas": "pandas"}
+
+
+def _linked_program(bundle, natives, level, target):  # type: ignore[no-untyped-def]
+    """The program's LLVM IR from every module's IR linked and optimized as one, or None.
+
+    The IR road keeps each module's `.ppyir`; linking answers every cross-
+    module declaration with its definition, whole-program optimization
+    internalizes what Python never binds and inlines across the seams, and
+    one object comes out. The AST road, or a cache from before linking, has
+    no module IR to link and keeps one object per module.
+    """
+    from ...driver.config import selected_pipeline
+    from ...ir import decode
+    from ...ir.linker import link
+    from ...ir.transforms import whole_program
+
+    if selected_pipeline(bundle.project.config.llvm.pipeline) != "ir":
+        return None
+    with_functions = [native for native in natives.values() if native.functions]
+    if not with_functions or any(not native.ppyir for native in with_functions):
+        return None
+    linked = link([decode(native.ppyir) for native in with_functions], bundle.project.root.name)
+    if linked.unresolved:
+        return None
+    exposed = {
+        qualname
+        for native in with_functions
+        for qualname, lowered in native.functions.items()
+        if lowered.exposed
+    }
+    keep = {
+        name
+        for name, function in linked.module.functions.items()
+        if function.attributes.get("ppy.qualname") in exposed
+    }
+    whole_program(linked.module, keep, level)
+    text = from_ir_emit(linked.module, target)
+    for native in with_functions:
+        if native.fused:
+            text = _append_fused(text, native.name, native.fused)
+    return text
+
+
+def _emit_program(bundle, natives, program, level, target, build_directory, artifacts, engine):  # type: ignore[no-untyped-def]
+    """One object for the linked program, cached on every module's key."""
+    from ...cache import digest
+    from ...driver.pipeline import module_cache_key
+
+    store = bundle.project.store
+    keys = [
+        module_cache_key(bundle, name, target="llvm", opt_level=level).hex()
+        for name in sorted(natives)
+    ]
+    object_key = digest("ppy-program", *keys) + (
+        f".{target.triple}.o" if target is not None and not target.is_host else ".o"
+    )
+    destination = build_directory / "program.o"
+    cached = store.read(object_key)
+    if cached is not None:
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        destination.write_bytes(cached)
+        artifacts.objects.append(destination)
+        artifacts.reused.append("program")
+        return
+    try:
+        emitted = emit_object(
+            engine(),
+            program,
+            destination,
+            host_cpu=bundle.project.config.llvm.host_cpu,
+            target=target,
+        )
+    except Exception as exc:  # noqa: BLE001 - reported, not fatal
+        artifacts.notes.append(f"could not emit object code for the program: {exc}")
+        return
+    store.put(object_key, emitted.read_bytes(), kind="native", source="program", suffix=".o")
+    store.mark_root(object_key, "object:program")
+    artifacts.objects.append(emitted)
+
+
+def from_ir_emit(module, target=None) -> str:  # type: ignore[no-untyped-def]
+    from .from_ir import emit_module
+
+    return emit_module(module, target)
 
 
 def _append_fused(ir_text: str, module_name: str, fused: dict[str, FusedLoop]) -> str:
@@ -447,6 +547,7 @@ def compile_project(  # type: ignore[no-untyped-def]
         natives = _collect(bundle, level)
     build_directory = output or (bundle.project.config.cache_path / "native")
     artifacts = BuildArtifacts()
+    program = _linked_program(bundle, natives, level, target)
     signatures: dict[str, NativeSignature] = {}
     fused: dict[str, tuple[int, int]] = {}
 
@@ -459,38 +560,41 @@ def compile_project(  # type: ignore[no-untyped-def]
 
         if not native.functions and not native.fused:
             continue
-        destination = build_directory / f"{name.replace('.', '_')}.o"
-        # The object depends on exactly what the module key covers, so a hit
-        # means the previous one is still correct and running the optimizer and
-        # the code generator again would produce the same bytes.
-        object_key = _object_key(key, target)
-        cached = store.read(object_key)
-        if cached is not None:
-            destination.parent.mkdir(parents=True, exist_ok=True)
-            destination.write_bytes(cached)
-            artifacts.objects.append(destination)
-            artifacts.reused.append(name)
-        else:
-            try:
-                emitted = emit_object(
-                    engine(),
-                    native.ir,
-                    destination,
-                    host_cpu=bundle.project.config.llvm.host_cpu,
-                    target=target,
-                )
-            except Exception as exc:  # noqa: BLE001 - reported, not fatal
-                artifacts.notes.append(f"could not emit object code for {name}: {exc}")
-                continue
-            store.put(object_key, emitted.read_bytes(), kind="native", source=name, suffix=".o")
-            store.mark_root(object_key, f"object:{name}")
-            artifacts.objects.append(emitted)
+        if program is None:
+            destination = build_directory / f"{name.replace('.', '_')}.o"
+            # The object depends on exactly what the module key covers, so a hit
+            # means the previous one is still correct and running the optimizer and
+            # the code generator again would produce the same bytes.
+            object_key = _object_key(key, target)
+            cached = store.read(object_key)
+            if cached is not None:
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                destination.write_bytes(cached)
+                artifacts.objects.append(destination)
+                artifacts.reused.append(name)
+            else:
+                try:
+                    emitted = emit_object(
+                        engine(),
+                        native.ir,
+                        destination,
+                        host_cpu=bundle.project.config.llvm.host_cpu,
+                        target=target,
+                    )
+                except Exception as exc:  # noqa: BLE001 - reported, not fatal
+                    artifacts.notes.append(f"could not emit object code for {name}: {exc}")
+                    continue
+                store.put(object_key, emitted.read_bytes(), kind="native", source=name, suffix=".o")
+                store.mark_root(object_key, f"object:{name}")
+                artifacts.objects.append(emitted)
         for lowered in native.functions.values():
             if lowered.exposed:
                 signatures[lowered.signature.qualname] = lowered.signature
         for symbol, loop in native.fused.items():
             fused[symbol] = (len(loop.arrays), len(loop.scalars))
 
+    if program is not None:
+        _emit_program(bundle, natives, program, level, target, build_directory, artifacts, engine)
     # The generated Python is part of the build output: it is what the launcher
     # executes, and what binds the native entry points at import time.
     output = build_python(

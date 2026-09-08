@@ -20,7 +20,19 @@ from .reporting import Reporter
 
 __all__ = ["KINDS", "build_ir_file", "run_emit"]
 
-KINDS = ("ir", "llvm-ir", "c", "cpp", "header", "stablehlo", "cuda", "hip", "nvvm-ir", "ptx")
+KINDS = (
+    "ir",
+    "linked-ir",
+    "llvm-ir",
+    "c",
+    "cpp",
+    "header",
+    "stablehlo",
+    "cuda",
+    "hip",
+    "nvvm-ir",
+    "ptx",
+)
 _SUFFIXES = {
     "ir": ".ppyir",
     "llvm-ir": ".ll",
@@ -32,6 +44,7 @@ _SUFFIXES = {
     "hip": ".hip",
     "nvvm-ir": ".nvvm.ll",
     "ptx": ".ptx",
+    "linked-ir": ".ppyir",
 }
 _HEADER_ONLY_SUFFIXES = {"c": ".h", "cpp": ".hpp"}
 
@@ -134,6 +147,16 @@ def _texts(kind: str, bundle, header_only: bool) -> dict[str, str]:  # type: ign
 
     if kind == "ir":
         return {name: encode(module) for name, module in ir_modules(bundle, launches=True).items()}
+    if kind == "linked-ir":
+        from ..ir.linker import link
+        from ..ir.transforms import whole_program
+
+        modules = ir_modules(bundle, launches=True)
+        if not modules:
+            return {}
+        linked = link(list(modules.values()), bundle.project.root.name)
+        whole_program(linked.module, set(linked.module.functions), bundle.project.config.opt_level)
+        return {linked.module.name: encode(linked.module)}
     if kind == "llvm-ir":
         return emit_ir(bundle)
     if kind == "stablehlo":

@@ -17,13 +17,23 @@ from .lowering import NativeParam, NativeSignature
 __all__ = ["SCHEMA_VERSION", "CachedLowering", "decode", "encode"]
 
 #: Bumped when the shape below changes, so an old entry is simply a miss.
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 
 
 class CachedLowering:
     """What `_collect` produced for one module, minus what is recomputable."""
 
-    __slots__ = ("exports", "fused", "ir", "libraries", "notes", "plan", "rejected", "signatures")
+    __slots__ = (
+        "exports",
+        "fused",
+        "ir",
+        "libraries",
+        "notes",
+        "plan",
+        "ppyir",
+        "rejected",
+        "signatures",
+    )
 
     def __init__(
         self,
@@ -35,8 +45,10 @@ class CachedLowering:
         notes: list[tuple[int, str]],
         libraries: tuple[str, ...] = (),
         exports: dict[str, str] | None = None,
+        ppyir: str = "",
     ) -> None:
         self.ir = ir
+        self.ppyir = ppyir
         self.signatures = signatures
         self.rejected = rejected
         self.fused = fused
@@ -126,6 +138,7 @@ def encode(module) -> str:  # type: ignore[no-untyped-def]
         {
             "version": SCHEMA_VERSION,
             "ir": module.ir,
+            "ppyir": module.ppyir,
             "signatures": {q: _signature(f.signature) for q, f in module.functions.items()},
             "rejected": dict(module.rejected),
             "fused": {symbol: _loop(loop) for symbol, loop in module.fused.items()},
@@ -158,6 +171,7 @@ def decode(text: str) -> CachedLowering | None:
             notes=[tuple(note) for note in raw["notes"]],
             libraries=tuple(raw.get("libraries", ())),
             exports=dict(raw.get("exports", {})),
+            ppyir=str(raw.get("ppyir", "")),
         )
     except (KeyError, TypeError, ValueError):
         return None

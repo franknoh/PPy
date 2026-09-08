@@ -12,6 +12,7 @@ from .lower_parallel import LowerParallel
 from .lower_tensor import LoweringError, LowerTensor
 from .promote_slots import PromoteSlots, promote_slots
 from .simplify_cfg import SimplifyCFG
+from .whole_program import GlobalDCE, Inline, internalize, whole_program
 
 __all__ = [
     "PARALLEL_BACKENDS",
@@ -21,6 +22,8 @@ __all__ = [
     "ConstantFold",
     "DeadCodeElimination",
     "FuseTensor",
+    "GlobalDCE",
+    "Inline",
     "LowerAsync",
     "LowerParallel",
     "LowerTensor",
@@ -31,8 +34,10 @@ __all__ = [
     "canonicalization_patterns",
     "default_pipeline",
     "differentiate",
+    "internalize",
     "lower_async",
     "promote_slots",
+    "whole_program",
 ]
 
 

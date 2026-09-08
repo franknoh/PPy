@@ -364,6 +364,10 @@ class _ModuleEmitter:
                     f"static uint8_t {_ident(name)}[{max(len(data), 1)}] = {{{literal}}};\n"
                 )
         defined = [f for f in self.module.functions.values() if not f.is_declaration]
+        for function in self.module.functions.values():
+            if function.is_declaration and function.attributes.get("ppy.external"):
+                # Another module's function: its prototype, never static.
+                self.unit.prototypes.append(self.prototype(function)[len(self.storage) :] + ";")
         device = [f for f in defined if kind_of(f) != "host"]
         # Device code is the GPU backends': CUDA and HIP write it first, C and C++ leave it.
         defined = [f for f in defined if kind_of(f) == "host"]

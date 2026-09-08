@@ -14,6 +14,7 @@ the caller records the function as running on CPython.
 from __future__ import annotations
 
 import ast
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -133,6 +134,7 @@ def lower_module_to_ir(
     root: Path | None = None,
     launches: bool = False,
     asynchronous: bool | None = None,
+    imports: ImportResolver | None = None,
 ) -> Lowered:
     """The IR of every eligible function in one module."""
     frontend = Frontend(
@@ -144,6 +146,7 @@ def lower_module_to_ir(
         root=root,
         launches=launches,
         asynchronous=asynchronous,
+        imports=imports,
     )
     return frontend.build(functions)
 
@@ -181,6 +184,11 @@ def lower_function(
     return frontend.module
 
 
+#: What the driver answers when a module calls a function of another: the
+#: callee's info and native signature, or None when it did not lower.
+ImportResolver = Callable[[str], "tuple[FunctionInfo, NativeSignature] | None"]
+
+
 class Frontend:
     """Builds one IR module for one analyzed Python module."""
 
@@ -195,6 +203,7 @@ class Frontend:
         root: Path | None = None,
         launches: bool = False,
         asynchronous: bool | None = None,
+        imports: ImportResolver | None = None,
     ) -> None:
         self.analysis = analysis
         self.layouts: ClassLayouts = dict(layouts or {})
@@ -211,6 +220,9 @@ class Frontend:
         #: Whether a coroutine lowers: only where the native async runtime is
         #: -- Linux, a C compiler -- so elsewhere every coroutine stays with asyncio.
         self.asynchronous = aio_available() if asynchronous is None else asynchronous
+        #: Native functions of other modules a call may reach, by qualname; the
+        #: driver offers what it has already lowered, so a declaration always resolves.
+        self.imports = imports
         self.module = IRModule(analysis.name)
         #: qualname -> (IR function, its native signature), for calls.
         self.declared: dict[str, tuple[IRFunction, NativeSignature]] = {}
@@ -337,6 +349,8 @@ class Frontend:
                 "ppy.releases_gil": signature.releases_gil,
                 "effects": self._effects_of(info),
                 **({"fastmath": True} if info.directive("fastmath") is not None else {}),
+                **({"ppy.inline": True} if info.directive("inline") is not None else {}),
+                **({"ppy.noinline": True} if info.directive("noinline") is not None else {}),
                 **attributes,
             },
             location=SourceLocation(self.spell(info.path), info.node.lineno, info.node.col_offset),
@@ -361,6 +375,36 @@ class Frontend:
         if info.is_async:
             aio_dialect.mark_async(function)
             self.module.require("async", 1)
+        self.declared[info.qualname] = (function, signature)
+        return function
+
+    def declare_external(self, info: FunctionInfo, signature: NativeSignature) -> IRFunction:
+        """Another module's native function, declared here by its symbol for the link to resolve."""
+        known = self.declared.get(info.qualname)
+        if known is not None:
+            return known[0]
+        params = [(p.name, _param_type(p)) for p in signature.parameters]
+        if signature.future:
+            # A coroutine's declaration keeps the shape its starter had before
+            # `lower-async`, which turns the result into the future.
+            results: tuple[IRType, ...] = (
+                () if signature.future == "none" else (_scalar_type(signature.future),)
+            )
+        else:
+            results = _result_types(info)
+        function = self.module.add_function(
+            info.qualname.replace(".", "_"),
+            params,
+            results,
+            visibility="extern",
+            attributes={
+                "ppy.symbol": signature.symbol,
+                "ppy.qualname": info.qualname,
+                "ppy.abi": "ppy",
+                "ppy.external": True,
+                **({"ppy.async": True} if signature.future else {}),
+            },
+        )
         self.declared[info.qualname] = (function, signature)
         return function
 
@@ -497,7 +541,9 @@ class Frontend:
                         continue
                     callee = op.attributes["callee"].name  # type: ignore[union-attr]
                     target = self.module.functions.get(callee)
-                    if target is None or target.is_declaration:
+                    if target is None or (
+                        target.is_declaration and not target.attributes.get("ppy.external")
+                    ):
                         blocked[qualname] = callee
                         break
             if not blocked:
@@ -1452,6 +1498,13 @@ class _FunctionLowering:
         for qualname, (info, _analysis, _node) in self.frontend.generics.items():
             if qualname.rpartition(".")[2] == target:
                 return self._generic_call(qualname, info, node)
+        binding = self.frontend.analysis.symbols.imports.get(target)
+        if binding is not None and self.frontend.imports is not None:
+            found = self.frontend.imports(binding.canonical)
+            if found is not None:
+                info, signature = found
+                function = self.frontend.declare_external(info, signature)
+                return self._native_call(function, signature, binding.canonical, node)
         raise Unsupported(f"`{target}` has no native lowering")
 
     def _derivative_spec(self, func: ast.expr) -> tuple[str, tuple[int, ...], bool] | None:

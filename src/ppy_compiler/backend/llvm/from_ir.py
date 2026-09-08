@@ -126,7 +126,16 @@ class _ModuleEmitter:
                 variable.initializer = ir.Constant(array_type, data)
                 self.strings[name] = variable
         for function in self.module.functions.values():
-            if function.is_declaration or kind_of(function) != "host":
+            if function.is_declaration:
+                if function.attributes.get("ppy.external"):
+                    # Another module's function, resolved when the objects are linked.
+                    symbol = str(function.attributes.get("ppy.symbol", function.name))
+                    external = self.llvm.globals.get(symbol) or ir.Function(
+                        self.llvm, self.function_type(function), name=symbol
+                    )
+                    self.functions[function.name] = external
+                continue
+            if kind_of(function) != "host":
                 # Device code is the GPU backends'; the CPU never sees it.
                 continue
             symbol = str(function.attributes.get("ppy.symbol", function.name))

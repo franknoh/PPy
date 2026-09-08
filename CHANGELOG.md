@@ -605,6 +605,17 @@ Speed of the compiler itself, measured before being changed.
   can await; a built artifact links the runtime in. A guard failing inside
   a running coroutine fails its future and `aio.run` raises
   `NativeGuardFailed`. `E1645` names a misuse.
+- The IR linker and the package-level build. A call from one module into
+  another's native function now lowers as a declaration (`ppy.external`)
+  the driver only allows for a callee it has already lowered, so the JIT
+  resolves it across modules and `ppy build` links the modules' IR into one
+  program: definitions answer declarations, shared generic instances are
+  kept once, colliding private symbols are renamed with their references,
+  dialects and libraries are merged. Whole-program optimization then
+  internalizes what Python never binds, inlines small callees and
+  `@ppy.inline` ones across module seams (`@ppy.noinline` holds), and drops
+  dead private code, and one object comes out; `ppy emit linked-ir` prints
+  the program. `.ppyir` is public from 0.2.0 at schema 1.
 
 ## 0.1.0a1
 

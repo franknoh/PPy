@@ -17,7 +17,7 @@ from pathlib import Path
 from ...analysis.checker import FunctionAnalysis, ModuleAnalysis
 from ...analysis.symbols import FunctionInfo
 from ...driver.config import PIPELINES, selected_pipeline
-from ...ir import IRModule, PassContext, verify_or_raise
+from ...ir import IRModule, PassContext, encode, verify_or_raise
 from ...ir.transforms import default_pipeline
 from .from_ir import emit_module
 from .lowering import ClassLayouts, LoweringResult, Unsupported
@@ -82,6 +82,7 @@ def ir_modules(bundle, launches: bool = False) -> dict[str, IRModule]:  # type: 
     config = bundle.project.config
     layouts = _value_class_layouts(bundle)
     modules: dict[str, IRModule] = {}
+    available: dict[str, tuple] = {}  # type: ignore[type-arg]
     for module in bundle.graph.order():
         analysis = bundle.analysis.modules.get(module.name)
         symbols = bundle.symbols.modules.get(module.name)
@@ -109,9 +110,12 @@ def ir_modules(bundle, launches: bool = False) -> dict[str, IRModule]:  # type: 
             prover=prover_for(config),
             root=bundle.project.root,
             launches=launches,
+            imports=available.get,
         )
         if not lowered.functions:
             continue
+        for qualname, entry in lowered.functions.items():
+            available[qualname] = (entry.info, entry.signature)
         optimize(lowered.module, config.opt_level, bundle.project.plugins, config.parallel)
         modules[module.name] = lowered.module
     return modules
@@ -130,6 +134,7 @@ def lower_module_via_ir(
     plugins=None,  # type: ignore[no-untyped-def]
     target=None,  # type: ignore[no-untyped-def]
     parallel=None,  # type: ignore[no-untyped-def]
+    imports=None,  # type: ignore[no-untyped-def]
 ) -> LoweringResult:
     from ...lowering import lower_module_to_ir
 
@@ -141,6 +146,7 @@ def lower_module_via_ir(
         standalone=standalone,
         prover=prover,
         root=root,
+        imports=imports,
     )
     ctx = optimize(lowered.module, opt_level, plugins, parallel)
     text = emit_module(lowered.module, target) if lowered.functions else ""
@@ -152,6 +158,7 @@ def lower_module_via_ir(
     }
     return LoweringResult(
         ir=text,
+        ppyir=encode(lowered.module) if lowered.functions else "",
         functions=lowered.functions,
         rejected=lowered.rejected,
         proved=lowered.proved,

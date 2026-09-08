@@ -299,6 +299,7 @@ other path by the benchmark beside them.
 ppy emit ir foo.ppy                  # the canonical IR, to stdout
 ppy emit ir foo.ppy -o foo.ppyir     # ... to a file
 ppy emit ir src/ -o build/ir/        # one .ppyir per module
+ppy emit linked-ir app.ppy           # the whole program: every module linked and optimized as one
 ppy emit llvm-ir foo.ppy             # what the LLVM backend makes of it
 ppy emit c foo.ppy                   # what the C backend makes of it: one C11 unit
 ppy emit cpp foo.ppy                 # ... as C++17, exports behind extern "C"
@@ -334,12 +335,18 @@ standard input) is refused there with `E1804` and its name.
 a C `main`, so the text is a whole program. `header` is the declarations
 of a module's exports, the same text `ppy build` writes beside a library.
 
-`.ppyir` is the IR's on-disk form, experimental in 0.2.0, and `ppy build
-foo.ppyir` builds one without the Python that produced it: the file
+`.ppyir` is the IR's on-disk form -- public from 0.2.0 at schema 1 -- and
+`ppy build foo.ppyir` builds one without the Python that produced it: the file
 carries its schema and dialect versions, every function's ABI, and its
 source locations, so the build is the passes, the LLVM backend, an object,
 a library, and a manifest whose entries the runtime binds. A file from
 another schema or a dialect this compiler lacks is refused with the reason.
+Under the IR road a package builds as one program: a call from one module
+into another's native function is a declaration the linker answers with the
+definition, the linked program is optimized as a whole -- what Python never
+binds is internalized, small callees are inlined across the seam, dead
+private code goes -- and one object comes out; `ppy emit linked-ir` shows
+that program.
 
 ## `ppy bind` — bindings for foreign code
 

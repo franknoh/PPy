@@ -501,6 +501,7 @@ def test_a_cached_lowering_round_trips():
     class _Module:
         name = "m"
         ir = "; ir"
+        ppyir = ""
         functions: ClassVar[dict] = {
             "m.f": type(
                 "L",

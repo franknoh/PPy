@@ -124,6 +124,8 @@ class LoweredFunction:
 @dataclass(slots=True)
 class LoweringResult:
     ir: str
+    #: The module's own IR as text (`.ppyir`), for the linker; empty on the AST road.
+    ppyir: str = ""
     functions: dict[str, LoweredFunction] = field(default_factory=dict)
     rejected: dict[str, str] = field(default_factory=dict)
     #: Per function, the arithmetic whose overflow guard a proof left out.
