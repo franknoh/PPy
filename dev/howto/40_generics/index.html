@@ -27,7 +27,7 @@
     
     
       
-        <title>Generics - PPY</title>
+        <title>Generics, inferred at the call and monomorphized in native code - PPY</title>
       
     
     
@@ -55,6 +55,8 @@
     
       <link rel="stylesheet" href="../../assets/_mkdocstrings.css">
     
+      <link rel="stylesheet" href="../../stylesheets/extra.css">
+    
     <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
     
       
@@ -80,7 +82,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#generics" class="md-skip">
+        <a href="#generics-inferred-at-the-call-and-monomorphized-in-native-code" class="md-skip">
           Skip to content
         </a>
       
@@ -120,7 +122,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Generics
+              Generics, inferred at the call and monomorphized in native code
             
           </span>
         </div>
@@ -1222,7 +1224,7 @@
   <span class="md-ellipsis">
     
   
-    Basics
+    Three annotations, one native loop
   
 
     
@@ -1250,7 +1252,7 @@
   <span class="md-ellipsis">
     
   
-    Arbitrary precision
+    A machine word until it is not
   
 
     
@@ -1278,7 +1280,7 @@
   <span class="md-ellipsis">
     
   
-    Effects and contracts
+    What @ppy.pure refuses
   
 
     
@@ -1306,7 +1308,7 @@
   <span class="md-ellipsis">
     
   
-    Classes
+    Classes the checker can see through
   
 
     
@@ -1334,7 +1336,7 @@
   <span class="md-ellipsis">
     
   
-    Native data
+    What crosses the boundary as machine values
   
 
     
@@ -1362,7 +1364,7 @@
   <span class="md-ellipsis">
     
   
-    Narrowing
+    Every way a type gets narrower
   
 
     
@@ -1390,7 +1392,7 @@
   <span class="md-ellipsis">
     
   
-    Numerics
+    Where PPY refuses to differ from CPython
   
 
     
@@ -1418,7 +1420,7 @@
   <span class="md-ellipsis">
     
   
-    Value classes
+    A dataclass with no boxed form
   
 
     
@@ -1446,7 +1448,7 @@
   <span class="md-ellipsis">
     
   
-    Tuples
+    Tuples as scalar atoms
   
 
     
@@ -1474,7 +1476,7 @@
   <span class="md-ellipsis">
     
   
-    Dynamic boundaries
+    The escape hatch, and its price
   
 
     
@@ -1502,7 +1504,7 @@
   <span class="md-ellipsis">
     
   
-    Containers
+    Containers, inferred and owned
   
 
     
@@ -1530,7 +1532,7 @@
   <span class="md-ellipsis">
     
   
-    Exceptions
+    Exceptions are part of the contract
   
 
     
@@ -1558,7 +1560,7 @@
   <span class="md-ellipsis">
     
   
-    Strings
+    Strings stay on CPython, and say so
   
 
     
@@ -1675,7 +1677,7 @@
   <span class="md-ellipsis">
     
   
-    Buffers and JIT
+    Borrow the memory, keep the order, specialize the rest
   
 
     
@@ -1703,7 +1705,7 @@
   <span class="md-ellipsis">
     
   
-    Algorithms
+    Eight kernels and six judge problems, against C
   
 
     
@@ -1731,7 +1733,7 @@
   <span class="md-ellipsis">
     
   
-    Threads
+    One native function, two threads, 1.95×
   
 
     
@@ -1759,7 +1761,7 @@
   <span class="md-ellipsis">
     
   
-    Native memory
+    Typed pointers, stack memory, a C function, a C symbol
   
 
     
@@ -1787,7 +1789,7 @@
   <span class="md-ellipsis">
     
   
-    Lanes and the machine
+    Four lanes at a time, and the machine as a fact
   
 
     
@@ -1815,7 +1817,7 @@
   <span class="md-ellipsis">
     
   
-    Atomics and threads
+    Four threads, one counter, one answer
   
 
     
@@ -1843,7 +1845,7 @@
   <span class="md-ellipsis">
     
   
-    Parallel ranges
+    parallel.range: say the iterations may run at once
   
 
     
@@ -1871,7 +1873,7 @@
   <span class="md-ellipsis">
     
   
-    Derivatives
+    A derivative that agrees to the last bit
   
 
     
@@ -1899,7 +1901,7 @@
   <span class="md-ellipsis">
     
   
-    Coroutines
+    An echo server and its client, as coroutines that compile
   
 
     
@@ -1936,7 +1938,7 @@
   <span class="md-ellipsis">
     
   
-    Generics
+    Generics, inferred at the call and monomorphized in native code
   
 
     
@@ -1954,7 +1956,7 @@
   <span class="md-ellipsis">
     
   
-    Generics
+    Generics, inferred at the call and monomorphized in native code
   
 
     
@@ -1980,10 +1982,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#provenance" class="md-nav__link">
+  <a href="#bounds-lend-what-they-promise" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Provenance
+        Bounds lend what they promise
       
     </span>
   </a>
@@ -1991,10 +1993,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#what-it-shows" class="md-nav__link">
+  <a href="#one-instance-per-tuple-of-type-arguments" class="md-nav__link">
     <span class="md-ellipsis">
       
-        What it shows
+        One instance per tuple of type arguments
       
     </span>
   </a>
@@ -2017,6 +2019,17 @@
     <span class="md-ellipsis">
       
         What it prints
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#read-on" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Read on
       
     </span>
   </a>
@@ -2057,7 +2070,7 @@
   <span class="md-ellipsis">
     
   
-    The toolbox
+    Every way of looking inside a build, on one program
   
 
     
@@ -2154,7 +2167,7 @@
   <span class="md-ellipsis">
     
   
-    GPU kernels
+    A CUDA kernel in Python, run three ways
   
 
     
@@ -2182,7 +2195,7 @@
   <span class="md-ellipsis">
     
   
-    XLA
+    StableHLO from the compiler, no JAX required
   
 
     
@@ -2297,7 +2310,7 @@
   <span class="md-ellipsis">
     
   
-    NumPy fusion
+    One NumPy expression, one loop
   
 
     
@@ -2325,7 +2338,7 @@
   <span class="md-ellipsis">
     
   
-    Pydantic
+    Pydantic models, typed and still validated
   
 
     
@@ -2353,7 +2366,7 @@
   <span class="md-ellipsis">
     
   
-    Parallelism
+    The same fused kernel, on every core
   
 
     
@@ -2381,7 +2394,7 @@
   <span class="md-ellipsis">
     
   
-    PyTorch ATen regions
+    A PyTorch layer as one C++ call
   
 
     
@@ -2409,7 +2422,7 @@
   <span class="md-ellipsis">
     
   
-    Training a torch MLP
+    A torch training script, converted, and where the time went
   
 
     
@@ -2437,7 +2450,7 @@
   <span class="md-ellipsis">
     
   
-    Training a JAX MLP
+    The same trainer with JAX, and why the step does not get faster
   
 
     
@@ -2465,7 +2478,7 @@
   <span class="md-ellipsis">
     
   
-    JAX export
+    Export a @jax.jit function at build time
   
 
     
@@ -2493,7 +2506,7 @@
   <span class="md-ellipsis">
     
   
-    Serving over Uvicorn
+    A FastAPI service that checks strict, as written
   
 
     
@@ -2521,7 +2534,7 @@
   <span class="md-ellipsis">
     
   
-    Flax
+    A Flax training loop, strict-checked as written
   
 
     
@@ -2549,7 +2562,7 @@
   <span class="md-ellipsis">
     
   
-    A trainer under torchrun and accelerate launch
+    Native kernels on every rank, with import ppy as the integration
   
 
     
@@ -2577,7 +2590,7 @@
   <span class="md-ellipsis">
     
   
-    Columnar expressions
+    A pandas expression as one kernel, nulls included
   
 
     
@@ -2680,7 +2693,7 @@
   <span class="md-ellipsis">
     
   
-    Inventory
+    Untyped Python in, strict PPY out
   
 
     
@@ -2708,7 +2721,7 @@
   <span class="md-ellipsis">
     
   
-    Inference
+    How far inference reaches without a single annotation
   
 
     
@@ -2736,7 +2749,7 @@
   <span class="md-ellipsis">
     
   
-    Interop
+    Import a .ppy module from plain Python
   
 
     
@@ -2764,7 +2777,7 @@
   <span class="md-ellipsis">
     
   
-    Project layout
+    A project is one call graph, and one program
   
 
     
@@ -2792,7 +2805,7 @@
   <span class="md-ellipsis">
     
   
-    Migration
+    Five dynamic idioms, rewritten and proven equivalent
   
 
     
@@ -3571,10 +3584,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#provenance" class="md-nav__link">
+  <a href="#bounds-lend-what-they-promise" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Provenance
+        Bounds lend what they promise
       
     </span>
   </a>
@@ -3582,10 +3595,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#what-it-shows" class="md-nav__link">
+  <a href="#one-instance-per-tuple-of-type-arguments" class="md-nav__link">
     <span class="md-ellipsis">
       
-        What it shows
+        One instance per tuple of type arguments
       
     </span>
   </a>
@@ -3608,6 +3621,17 @@
     <span class="md-ellipsis">
       
         What it prints
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#read-on" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Read on
       
     </span>
   </a>
@@ -3645,136 +3669,234 @@
   
 
 
-<h1 id="generics">Generics<a class="headerlink" href="#generics" title="Permanent link">&para;</a></h1>
-<p>Type parameters the way Python 3.12 spells them, inferred at each call and
-checked against their bounds; native code monomorphizes, one instance per
-tuple of type arguments.</p>
-<h2 id="provenance">Provenance<a class="headerlink" href="#provenance" title="Permanent link">&para;</a></h2>
-<p>Hand-written. <code>generic.ppy</code> is written directly; there is no <code>.py</code> source
-and no conversion step involved.</p>
-<h2 id="what-it-shows">What it shows<a class="headerlink" href="#what-it-shows" title="Permanent link">&para;</a></h2>
-<ul>
-<li><code>largest(1, 2)</code> is an <code>int</code> and <code>largest(1.5, 2.5)</code> a <code>float</code>: the call
-  infers <code>T</code>, checks it against <code>int | float</code> (<code>E1721</code> otherwise), and has
-  the declared return type with <code>T</code> substituted.</li>
-<li>A bound that is a <code>Protocol</code> lends its methods: <code>label</code> may call <code>name()</code>
-  because <code>Named</code> says so, a class whose members cover the protocol's is an
-  instance of it, and an unbounded <code>T</code> has no operators at all.</li>
-<li><code>sweep</code> is native and calls <code>clamp</code> and <code>largest</code> with <code>float</code> and <code>int</code>
-  arguments: each generic is lowered once per tuple of type arguments under a
-  name that spells them (<code>ppy emit ir</code> shows them, marked <code>ppy.generic</code>), and
-  the calls go straight to those instances. The generics keep their Python
-  bodies for every other caller.</li>
-<li><code>[tool.ppy.generics]</code> bounds the process -- <code>max-specializations</code> per
-  generic and <code>max-depth</code> of a type argument -- and a generic that calls
-  itself with its own parameter wrapped in a type is refused outright.</li>
-</ul>
+<h1 id="generics-inferred-at-the-call-and-monomorphized-in-native-code">Generics, inferred at the call and monomorphized in native code<a class="headerlink" href="#generics-inferred-at-the-call-and-monomorphized-in-native-code" title="Permanent link">&para;</a></h1>
+<p><code>largest(1, 2)</code> is an <code>int</code>. <code>largest(1.5, 2.5)</code> is a <code>float</code>. One
+definition, Python 3.12's <code>def largest[T: int | float]</code> syntax, and the
+call site decides <code>T</code>, checks it against the bound, and gets the declared
+return type with <code>T</code> substituted. Native code goes further: every tuple of
+type arguments a native caller uses becomes its own compiled instance, and
+the call goes straight to it.</p>
+<h2 id="bounds-lend-what-they-promise">Bounds lend what they promise<a class="headerlink" href="#bounds-lend-what-they-promise" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="k">class</span><span class="w"> </span><span class="nc">Named</span><span class="p">(</span><span class="n">Protocol</span><span class="p">):</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">name</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span> <span class="o">...</span>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="k">def</span><span class="w"> </span><span class="nf">label</span><span class="p">[</span><span class="n">T</span><span class="p">:</span> <span class="n">Named</span><span class="p">](</span><span class="n">https</span><span class="p">:</span><span class="o">//</span><span class="n">github</span><span class="o">.</span><span class="n">com</span><span class="o">/</span><span class="n">franknoh</span><span class="o">/</span><span class="n">PPy</span><span class="o">/</span><span class="n">blob</span><span class="o">/</span><span class="n">main</span><span class="o">/</span><span class="n">examples</span><span class="o">/</span><span class="mi">40</span><span class="n">_generics</span><span class="o">/</span><span class="n">thing</span><span class="p">:</span> <span class="n">T</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>    <span class="k">return</span> <span class="s2">"at "</span> <span class="o">+</span> <span class="n">thing</span><span class="o">.</span><span class="n">name</span><span class="p">()</span>
+</code></pre></div>
+<p>An unbounded <code>T</code> has no operators at all — nothing says it does. A bound
+of <code>int | float</code> lends comparison and arithmetic; a bound that is a
+<code>Protocol</code> lends its methods, so <code>label</code> may call <code>name()</code>, and <code>Point</code>,
+whose members cover <code>Named</code>'s, is an instance of it without declaring so.
+A type argument that does not satisfy its bound is <code>E1721</code>.</p>
+<h2 id="one-instance-per-tuple-of-type-arguments">One instance per tuple of type arguments<a class="headerlink" href="#one-instance-per-tuple-of-type-arguments" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="k">def</span><span class="w"> </span><span class="nf">sweep</span><span class="p">(</span><span class="n">n</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">float</span><span class="p">:</span>
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>    <span class="n">total</span> <span class="o">=</span> <span class="mf">0.0</span>
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">n</span><span class="p">):</span>
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>        <span class="n">total</span> <span class="o">+=</span> <span class="n">clamp</span><span class="p">(</span><span class="n">i</span> <span class="o">*</span> <span class="mf">0.25</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">,</span> <span class="mf">10.0</span><span class="p">)</span> <span class="o">+</span> <span class="n">largest</span><span class="p">(</span><span class="n">i</span><span class="p">,</span> <span class="mi">3</span><span class="p">)</span>
+<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>    <span class="k">return</span> <span class="n">total</span>
+</code></pre></div>
+<p><code>sweep</code> is native and calls <code>clamp</code> with floats and <code>largest</code> with ints.
+Each generic is lowered once per tuple of type arguments under a name that
+spells them — <code>ppy emit ir</code> shows the instances, marked <code>ppy.generic</code> — and
+the calls inside <code>sweep</code> are direct native calls to those instances. The
+generics keep their Python bodies for every other caller.
+<code>[tool.ppy.generics]</code> bounds the process (<code>max-specializations</code> per
+generic, <code>max-depth</code> of a type argument), and a generic that calls itself
+with its own parameter wrapped in a type is refused outright (<code>E1723</code>)
+because its specializations would never end.</p>
 <h2 id="run-it">Run it<a class="headerlink" href="#run-it" title="Permanent link">&para;</a></h2>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>python<span class="w">  </span>generic.ppy
-<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>ppy<span class="w"> </span>run<span class="w"> </span>generic.ppy
-<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>ppy<span class="w"> </span>emit<span class="w"> </span>ir<span class="w"> </span>generic.ppy<span class="w">   </span><span class="c1"># the monomorphized instances</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>python<span class="w">  </span>generic.ppy
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>ppy<span class="w"> </span>run<span class="w"> </span>generic.ppy
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>ppy<span class="w"> </span>emit<span class="w"> </span>ir<span class="w"> </span>generic.ppy
 </code></pre></div>
 <!-- outputs:start -->
 <h2 id="what-it-prints">What it prints<a class="headerlink" href="#what-it-prints" title="Permanent link">&para;</a></h2>
 <p><strong><code>python  generic.ppy</code></strong></p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>2 2.5 at (3, 4) 7
-<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>10 0.0 509303.5
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>2 2.5 at (3, 4) 7
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>10 0.0 509303.5
 </code></pre></div>
 <p><strong><code>ppy run generic.ppy</code></strong></p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>2 2.5 at (3, 4) 7
-<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>10 0.0 509303.5
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>2 2.5 at (3, 4) 7
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>10 0.0 509303.5
 </code></pre></div>
 <p><strong><code>ppy emit ir generic.ppy</code></strong></p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>ppyir 1
-<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>module @generic
-<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>dialect core 1
-<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>
-<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>func @generic_sweep(%n: i64) -&gt; f64 attrs {effects = ["may_raise"], ppy.abi = "ppy", ppy.qualname = "generic.sweep", ppy.releases_gil = true, ppy.symbol = "ppy_generic_sweep"} loc("examples/40_generics/generic.ppy":33:0) {
-<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>^entry:
-<a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a>    %n_addr = core.alloca : ptr&lt;i64, stack&gt; loc("examples/40_generics/generic.ppy":33:0)
-<a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a>    core.store %n, %n_addr
-<a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a>    %0 = core.const 0.0 : f64 loc("examples/40_generics/generic.ppy":34:4)
-<a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a>    %total_addr = core.alloca : ptr&lt;f64, stack&gt;
-<a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a>    core.store %0, %total_addr
-<a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a>    %1 = core.load %n_addr : i64 loc("examples/40_generics/generic.ppy":35:4)
-<a id="__codelineno-3-13" name="__codelineno-3-13" href="#__codelineno-3-13"></a>    %n_entry = core.load %n_addr : i64
-<a id="__codelineno-3-14" name="__codelineno-3-14" href="#__codelineno-3-14"></a>    %2 = core.const 0 : i64
-<a id="__codelineno-3-15" name="__codelineno-3-15" href="#__codelineno-3-15"></a>    %3 = core.const 1 : i64
-<a id="__codelineno-3-16" name="__codelineno-3-16" href="#__codelineno-3-16"></a>    %i_addr = core.alloca : ptr&lt;i64, stack&gt;
-<a id="__codelineno-3-17" name="__codelineno-3-17" href="#__codelineno-3-17"></a>    %4 = core.const 3 : i64
-<a id="__codelineno-3-18" name="__codelineno-3-18" href="#__codelineno-3-18"></a>    core.store %2, %i_addr loc("examples/40_generics/generic.ppy":35:4)
-<a id="__codelineno-3-19" name="__codelineno-3-19" href="#__codelineno-3-19"></a>    core.br ^for.head3
-<a id="__codelineno-3-20" name="__codelineno-3-20" href="#__codelineno-3-20"></a>^for.head3:
-<a id="__codelineno-3-21" name="__codelineno-3-21" href="#__codelineno-3-21"></a>    %5 = core.load %i_addr : i64 loc("examples/40_generics/generic.ppy":35:4)
-<a id="__codelineno-3-22" name="__codelineno-3-22" href="#__codelineno-3-22"></a>    %6 = core.cmp.lt %5, %1 : bool
-<a id="__codelineno-3-23" name="__codelineno-3-23" href="#__codelineno-3-23"></a>    core.cond_br %6, ^for.body4, ^for.end6
-<a id="__codelineno-3-24" name="__codelineno-3-24" href="#__codelineno-3-24"></a>^for.body4:
-<a id="__codelineno-3-25" name="__codelineno-3-25" href="#__codelineno-3-25"></a>    %7 = core.load %total_addr : f64 loc("examples/40_generics/generic.ppy":36:8)
-<a id="__codelineno-3-26" name="__codelineno-3-26" href="#__codelineno-3-26"></a>    %8 = core.load %i_addr : i64
-<a id="__codelineno-3-27" name="__codelineno-3-27" href="#__codelineno-3-27"></a>    %9 = core.const 0.25 : f64
-<a id="__codelineno-3-28" name="__codelineno-3-28" href="#__codelineno-3-28"></a>    %10 = core.cast %8 : f64
-<a id="__codelineno-3-29" name="__codelineno-3-29" href="#__codelineno-3-29"></a>    %11 = core.mul %10, %9 : f64
-<a id="__codelineno-3-30" name="__codelineno-3-30" href="#__codelineno-3-30"></a>    %12 = core.const 1.0 : f64
-<a id="__codelineno-3-31" name="__codelineno-3-31" href="#__codelineno-3-31"></a>    %13 = core.const 10.0 : f64
-<a id="__codelineno-3-32" name="__codelineno-3-32" href="#__codelineno-3-32"></a>    %14 = core.call %11, %12, %13 {callee = @generic_clamp__float} : f64
-<a id="__codelineno-3-33" name="__codelineno-3-33" href="#__codelineno-3-33"></a>    %15 = core.load %i_addr : i64
-<a id="__codelineno-3-34" name="__codelineno-3-34" href="#__codelineno-3-34"></a>    %16 = core.call %15, %4 {callee = @generic_largest__int} : i64
-<a id="__codelineno-3-35" name="__codelineno-3-35" href="#__codelineno-3-35"></a>    %17 = core.cast %16 : f64
-<a id="__codelineno-3-36" name="__codelineno-3-36" href="#__codelineno-3-36"></a>    %18 = core.add %14, %17 : f64
-<a id="__codelineno-3-37" name="__codelineno-3-37" href="#__codelineno-3-37"></a>    %19 = core.add %7, %18 : f64
-<a id="__codelineno-3-38" name="__codelineno-3-38" href="#__codelineno-3-38"></a>    core.store %19, %total_addr
-<a id="__codelineno-3-39" name="__codelineno-3-39" href="#__codelineno-3-39"></a>    %20 = core.load %i_addr : i64
-<a id="__codelineno-3-40" name="__codelineno-3-40" href="#__codelineno-3-40"></a>    %21 = core.add %20, %3 {overflow = "python"} : i64
-<a id="__codelineno-3-41" name="__codelineno-3-41" href="#__codelineno-3-41"></a>… 57 more lines
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>ppyir 1
+<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>module @generic
+<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>dialect core 1
+<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a>
+<a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a>func @generic_sweep(%n: i64) -&gt; f64 attrs {effects = ["may_raise"], ppy.abi = "ppy", ppy.qualname = "generic.sweep", ppy.releases_gil = true, ppy.symbol = "ppy_generic_sweep"} loc("examples/40_generics/generic.ppy":33:0) {
+<a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a>^entry:
+<a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a>    %n_addr = core.alloca : ptr&lt;i64, stack&gt; loc("examples/40_generics/generic.ppy":33:0)
+<a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a>    core.store %n, %n_addr
+<a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a>    %0 = core.const 0.0 : f64 loc("examples/40_generics/generic.ppy":34:4)
+<a id="__codelineno-5-10" name="__codelineno-5-10" href="#__codelineno-5-10"></a>    %total_addr = core.alloca : ptr&lt;f64, stack&gt;
+<a id="__codelineno-5-11" name="__codelineno-5-11" href="#__codelineno-5-11"></a>    core.store %0, %total_addr
+<a id="__codelineno-5-12" name="__codelineno-5-12" href="#__codelineno-5-12"></a>    %1 = core.load %n_addr : i64 loc("examples/40_generics/generic.ppy":35:4)
+<a id="__codelineno-5-13" name="__codelineno-5-13" href="#__codelineno-5-13"></a>    %n_entry = core.load %n_addr : i64
+<a id="__codelineno-5-14" name="__codelineno-5-14" href="#__codelineno-5-14"></a>    %2 = core.const 0 : i64
+<a id="__codelineno-5-15" name="__codelineno-5-15" href="#__codelineno-5-15"></a>    %3 = core.const 1 : i64
+<a id="__codelineno-5-16" name="__codelineno-5-16" href="#__codelineno-5-16"></a>    %i_addr = core.alloca : ptr&lt;i64, stack&gt;
+<a id="__codelineno-5-17" name="__codelineno-5-17" href="#__codelineno-5-17"></a>    %4 = core.const 3 : i64
+<a id="__codelineno-5-18" name="__codelineno-5-18" href="#__codelineno-5-18"></a>    core.store %2, %i_addr loc("examples/40_generics/generic.ppy":35:4)
+<a id="__codelineno-5-19" name="__codelineno-5-19" href="#__codelineno-5-19"></a>    core.br ^for.head3
+<a id="__codelineno-5-20" name="__codelineno-5-20" href="#__codelineno-5-20"></a>^for.head3:
 </code></pre></div>
+<details class="note">
+<summary>All 97 lines</summary>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>ppyir 1
+<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>module @generic
+<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>dialect core 1
+<a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a>
+<a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a>func @generic_sweep(%n: i64) -&gt; f64 attrs {effects = ["may_raise"], ppy.abi = "ppy", ppy.qualname = "generic.sweep", ppy.releases_gil = true, ppy.symbol = "ppy_generic_sweep"} loc("examples/40_generics/generic.ppy":33:0) {
+<a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a>^entry:
+<a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a>    %n_addr = core.alloca : ptr&lt;i64, stack&gt; loc("examples/40_generics/generic.ppy":33:0)
+<a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a>    core.store %n, %n_addr
+<a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a>    %0 = core.const 0.0 : f64 loc("examples/40_generics/generic.ppy":34:4)
+<a id="__codelineno-6-10" name="__codelineno-6-10" href="#__codelineno-6-10"></a>    %total_addr = core.alloca : ptr&lt;f64, stack&gt;
+<a id="__codelineno-6-11" name="__codelineno-6-11" href="#__codelineno-6-11"></a>    core.store %0, %total_addr
+<a id="__codelineno-6-12" name="__codelineno-6-12" href="#__codelineno-6-12"></a>    %1 = core.load %n_addr : i64 loc("examples/40_generics/generic.ppy":35:4)
+<a id="__codelineno-6-13" name="__codelineno-6-13" href="#__codelineno-6-13"></a>    %n_entry = core.load %n_addr : i64
+<a id="__codelineno-6-14" name="__codelineno-6-14" href="#__codelineno-6-14"></a>    %2 = core.const 0 : i64
+<a id="__codelineno-6-15" name="__codelineno-6-15" href="#__codelineno-6-15"></a>    %3 = core.const 1 : i64
+<a id="__codelineno-6-16" name="__codelineno-6-16" href="#__codelineno-6-16"></a>    %i_addr = core.alloca : ptr&lt;i64, stack&gt;
+<a id="__codelineno-6-17" name="__codelineno-6-17" href="#__codelineno-6-17"></a>    %4 = core.const 3 : i64
+<a id="__codelineno-6-18" name="__codelineno-6-18" href="#__codelineno-6-18"></a>    core.store %2, %i_addr loc("examples/40_generics/generic.ppy":35:4)
+<a id="__codelineno-6-19" name="__codelineno-6-19" href="#__codelineno-6-19"></a>    core.br ^for.head3
+<a id="__codelineno-6-20" name="__codelineno-6-20" href="#__codelineno-6-20"></a>^for.head3:
+<a id="__codelineno-6-21" name="__codelineno-6-21" href="#__codelineno-6-21"></a>    %5 = core.load %i_addr : i64 loc("examples/40_generics/generic.ppy":35:4)
+<a id="__codelineno-6-22" name="__codelineno-6-22" href="#__codelineno-6-22"></a>    %6 = core.cmp.lt %5, %1 : bool
+<a id="__codelineno-6-23" name="__codelineno-6-23" href="#__codelineno-6-23"></a>    core.cond_br %6, ^for.body4, ^for.end6
+<a id="__codelineno-6-24" name="__codelineno-6-24" href="#__codelineno-6-24"></a>^for.body4:
+<a id="__codelineno-6-25" name="__codelineno-6-25" href="#__codelineno-6-25"></a>    %7 = core.load %total_addr : f64 loc("examples/40_generics/generic.ppy":36:8)
+<a id="__codelineno-6-26" name="__codelineno-6-26" href="#__codelineno-6-26"></a>    %8 = core.load %i_addr : i64
+<a id="__codelineno-6-27" name="__codelineno-6-27" href="#__codelineno-6-27"></a>    %9 = core.const 0.25 : f64
+<a id="__codelineno-6-28" name="__codelineno-6-28" href="#__codelineno-6-28"></a>    %10 = core.cast %8 : f64
+<a id="__codelineno-6-29" name="__codelineno-6-29" href="#__codelineno-6-29"></a>    %11 = core.mul %10, %9 : f64
+<a id="__codelineno-6-30" name="__codelineno-6-30" href="#__codelineno-6-30"></a>    %12 = core.const 1.0 : f64
+<a id="__codelineno-6-31" name="__codelineno-6-31" href="#__codelineno-6-31"></a>    %13 = core.const 10.0 : f64
+<a id="__codelineno-6-32" name="__codelineno-6-32" href="#__codelineno-6-32"></a>    %14 = core.call %11, %12, %13 {callee = @generic_clamp__float} : f64
+<a id="__codelineno-6-33" name="__codelineno-6-33" href="#__codelineno-6-33"></a>    %15 = core.load %i_addr : i64
+<a id="__codelineno-6-34" name="__codelineno-6-34" href="#__codelineno-6-34"></a>    %16 = core.call %15, %4 {callee = @generic_largest__int} : i64
+<a id="__codelineno-6-35" name="__codelineno-6-35" href="#__codelineno-6-35"></a>    %17 = core.cast %16 : f64
+<a id="__codelineno-6-36" name="__codelineno-6-36" href="#__codelineno-6-36"></a>    %18 = core.add %14, %17 : f64
+<a id="__codelineno-6-37" name="__codelineno-6-37" href="#__codelineno-6-37"></a>    %19 = core.add %7, %18 : f64
+<a id="__codelineno-6-38" name="__codelineno-6-38" href="#__codelineno-6-38"></a>    core.store %19, %total_addr
+<a id="__codelineno-6-39" name="__codelineno-6-39" href="#__codelineno-6-39"></a>    %20 = core.load %i_addr : i64
+<a id="__codelineno-6-40" name="__codelineno-6-40" href="#__codelineno-6-40"></a>    %21 = core.add %20, %3 {overflow = "python"} : i64
+<a id="__codelineno-6-41" name="__codelineno-6-41" href="#__codelineno-6-41"></a>    core.store %21, %i_addr
+<a id="__codelineno-6-42" name="__codelineno-6-42" href="#__codelineno-6-42"></a>    core.br ^for.head3
+<a id="__codelineno-6-43" name="__codelineno-6-43" href="#__codelineno-6-43"></a>^for.end6:
+<a id="__codelineno-6-44" name="__codelineno-6-44" href="#__codelineno-6-44"></a>    %22 = core.load %total_addr : f64 loc("examples/40_generics/generic.ppy":37:4)
+<a id="__codelineno-6-45" name="__codelineno-6-45" href="#__codelineno-6-45"></a>    core.ret %22
+<a id="__codelineno-6-46" name="__codelineno-6-46" href="#__codelineno-6-46"></a>}
+<a id="__codelineno-6-47" name="__codelineno-6-47" href="#__codelineno-6-47"></a>
+<a id="__codelineno-6-48" name="__codelineno-6-48" href="#__codelineno-6-48"></a>func @generic_clamp__float(%x: f64, %lo: f64, %hi: f64) -&gt; f64 attrs {effects = [], ppy.abi = "ppy", ppy.generic = "generic.clamp", ppy.qualname = "generic.clamp__float", ppy.releases_gil = true, ppy.symbol = "ppy_generic_clamp__float", ppy.type_arguments = ["float"]} loc("examples/40_generics/generic.ppy":29:0) {
+<a id="__codelineno-6-49" name="__codelineno-6-49" href="#__codelineno-6-49"></a>^entry:
+<a id="__codelineno-6-50" name="__codelineno-6-50" href="#__codelineno-6-50"></a>    %x_addr = core.alloca : ptr&lt;f64, stack&gt; loc("examples/40_generics/generic.ppy":29:0)
+<a id="__codelineno-6-51" name="__codelineno-6-51" href="#__codelineno-6-51"></a>    core.store %x, %x_addr
+<a id="__codelineno-6-52" name="__codelineno-6-52" href="#__codelineno-6-52"></a>    %lo_addr = core.alloca : ptr&lt;f64, stack&gt;
+<a id="__codelineno-6-53" name="__codelineno-6-53" href="#__codelineno-6-53"></a>    core.store %lo, %lo_addr
+<a id="__codelineno-6-54" name="__codelineno-6-54" href="#__codelineno-6-54"></a>    %hi_addr = core.alloca : ptr&lt;f64, stack&gt;
+<a id="__codelineno-6-55" name="__codelineno-6-55" href="#__codelineno-6-55"></a>    core.store %hi, %hi_addr
+<a id="__codelineno-6-56" name="__codelineno-6-56" href="#__codelineno-6-56"></a>    %0 = core.load %x_addr : f64 loc("examples/40_generics/generic.ppy":30:4)
+<a id="__codelineno-6-57" name="__codelineno-6-57" href="#__codelineno-6-57"></a>    %1 = core.load %hi_addr : f64
+<a id="__codelineno-6-58" name="__codelineno-6-58" href="#__codelineno-6-58"></a>    %2 = core.cmp.lt %0, %1 : bool
+<a id="__codelineno-6-59" name="__codelineno-6-59" href="#__codelineno-6-59"></a>    %3 = core.load %lo_addr : f64
+<a id="__codelineno-6-60" name="__codelineno-6-60" href="#__codelineno-6-60"></a>    %4 = core.load %x_addr : f64
+<a id="__codelineno-6-61" name="__codelineno-6-61" href="#__codelineno-6-61"></a>    %5 = core.call %3, %4 {callee = @generic_largest__float} : f64
+<a id="__codelineno-6-62" name="__codelineno-6-62" href="#__codelineno-6-62"></a>    %6 = core.load %hi_addr : f64
+<a id="__codelineno-6-63" name="__codelineno-6-63" href="#__codelineno-6-63"></a>    %7 = core.select %2, %5, %6 : f64
+<a id="__codelineno-6-64" name="__codelineno-6-64" href="#__codelineno-6-64"></a>    core.ret %7
+<a id="__codelineno-6-65" name="__codelineno-6-65" href="#__codelineno-6-65"></a>}
+<a id="__codelineno-6-66" name="__codelineno-6-66" href="#__codelineno-6-66"></a>
+<a id="__codelineno-6-67" name="__codelineno-6-67" href="#__codelineno-6-67"></a>func @generic_largest__float(%a: f64, %b: f64) -&gt; f64 attrs {effects = [], ppy.abi = "ppy", ppy.generic = "generic.largest", ppy.qualname = "generic.largest__float", ppy.releases_gil = true, ppy.symbol = "ppy_generic_largest__float", ppy.type_arguments = ["float"]} loc("examples/40_generics/generic.ppy":17:0) {
+<a id="__codelineno-6-68" name="__codelineno-6-68" href="#__codelineno-6-68"></a>^entry:
+<a id="__codelineno-6-69" name="__codelineno-6-69" href="#__codelineno-6-69"></a>    %a_addr = core.alloca : ptr&lt;f64, stack&gt; loc("examples/40_generics/generic.ppy":17:0)
+<a id="__codelineno-6-70" name="__codelineno-6-70" href="#__codelineno-6-70"></a>    core.store %a, %a_addr
+<a id="__codelineno-6-71" name="__codelineno-6-71" href="#__codelineno-6-71"></a>    %b_addr = core.alloca : ptr&lt;f64, stack&gt;
+<a id="__codelineno-6-72" name="__codelineno-6-72" href="#__codelineno-6-72"></a>    core.store %b, %b_addr
+<a id="__codelineno-6-73" name="__codelineno-6-73" href="#__codelineno-6-73"></a>    %0 = core.load %a_addr : f64 loc("examples/40_generics/generic.ppy":18:4)
+<a id="__codelineno-6-74" name="__codelineno-6-74" href="#__codelineno-6-74"></a>    %1 = core.load %b_addr : f64
+<a id="__codelineno-6-75" name="__codelineno-6-75" href="#__codelineno-6-75"></a>    %2 = core.cmp.gt %0, %1 : bool
+<a id="__codelineno-6-76" name="__codelineno-6-76" href="#__codelineno-6-76"></a>    %3 = core.load %a_addr : f64
+<a id="__codelineno-6-77" name="__codelineno-6-77" href="#__codelineno-6-77"></a>    %4 = core.load %b_addr : f64
+<a id="__codelineno-6-78" name="__codelineno-6-78" href="#__codelineno-6-78"></a>    %5 = core.select %2, %3, %4 : f64
+<a id="__codelineno-6-79" name="__codelineno-6-79" href="#__codelineno-6-79"></a>    core.ret %5
+<a id="__codelineno-6-80" name="__codelineno-6-80" href="#__codelineno-6-80"></a>}
+<a id="__codelineno-6-81" name="__codelineno-6-81" href="#__codelineno-6-81"></a>
+<a id="__codelineno-6-82" name="__codelineno-6-82" href="#__codelineno-6-82"></a>func @generic_largest__int(%a: i64, %b: i64) -&gt; i64 attrs {effects = [], ppy.abi = "ppy", ppy.generic = "generic.largest", ppy.qualname = "generic.largest__int", ppy.releases_gil = true, ppy.symbol = "ppy_generic_largest__int", ppy.type_arguments = ["int"]} loc("examples/40_generics/generic.ppy":17:0) {
+<a id="__codelineno-6-83" name="__codelineno-6-83" href="#__codelineno-6-83"></a>^entry:
+<a id="__codelineno-6-84" name="__codelineno-6-84" href="#__codelineno-6-84"></a>    %a_addr = core.alloca : ptr&lt;i64, stack&gt; loc("examples/40_generics/generic.ppy":17:0)
+<a id="__codelineno-6-85" name="__codelineno-6-85" href="#__codelineno-6-85"></a>    core.store %a, %a_addr
+<a id="__codelineno-6-86" name="__codelineno-6-86" href="#__codelineno-6-86"></a>    %b_addr = core.alloca : ptr&lt;i64, stack&gt;
+<a id="__codelineno-6-87" name="__codelineno-6-87" href="#__codelineno-6-87"></a>    core.store %b, %b_addr
+<a id="__codelineno-6-88" name="__codelineno-6-88" href="#__codelineno-6-88"></a>    %0 = core.load %a_addr : i64 loc("examples/40_generics/generic.ppy":18:4)
+<a id="__codelineno-6-89" name="__codelineno-6-89" href="#__codelineno-6-89"></a>    %a_entry = core.load %a_addr : i64
+<a id="__codelineno-6-90" name="__codelineno-6-90" href="#__codelineno-6-90"></a>    %1 = core.load %b_addr : i64
+<a id="__codelineno-6-91" name="__codelineno-6-91" href="#__codelineno-6-91"></a>    %b_entry = core.load %b_addr : i64
+<a id="__codelineno-6-92" name="__codelineno-6-92" href="#__codelineno-6-92"></a>    %2 = core.cmp.gt %0, %1 : bool
+<a id="__codelineno-6-93" name="__codelineno-6-93" href="#__codelineno-6-93"></a>    %3 = core.load %a_addr : i64
+<a id="__codelineno-6-94" name="__codelineno-6-94" href="#__codelineno-6-94"></a>    %4 = core.load %b_addr : i64
+<a id="__codelineno-6-95" name="__codelineno-6-95" href="#__codelineno-6-95"></a>    %5 = core.select %2, %3, %4 : i64
+<a id="__codelineno-6-96" name="__codelineno-6-96" href="#__codelineno-6-96"></a>    core.ret %5
+<a id="__codelineno-6-97" name="__codelineno-6-97" href="#__codelineno-6-97"></a>}
+</code></pre></div>
+</details>
 <!-- outputs:end -->
 
+<h2 id="read-on">Read on<a class="headerlink" href="#read-on" title="Permanent link">&para;</a></h2>
+<ul>
+<li><a href="../../guide/generics/">Generics</a> — bounds, monomorphization, static dispatch.</li>
+<li><a href="../13_value_classes/">Value classes</a> — operators on a value class, dispatched statically.</li>
+</ul>
+<p><code>generic.ppy</code> is hand-written; there is no <code>.py</code> source and no conversion step.</p>
 <h2 id="40_genericsgenericppy"><code>40_generics/generic.ppy</code><a class="headerlink" href="#40_genericsgenericppy" title="Permanent link">&para;</a></h2>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Protocol</span>
-<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>
-<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>
-<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="k">class</span><span class="w"> </span><span class="nc">Named</span><span class="p">(</span><span class="n">Protocol</span><span class="p">):</span>
-<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">name</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span> <span class="o">...</span>
-<a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a>
-<a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a>
-<a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a><span class="k">class</span><span class="w"> </span><span class="nc">Point</span><span class="p">:</span>
-<a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a>    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">y</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">x</span> <span class="o">=</span> <span class="n">x</span>
-<a id="__codelineno-4-11" name="__codelineno-4-11" href="#__codelineno-4-11"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">y</span> <span class="o">=</span> <span class="n">y</span>
-<a id="__codelineno-4-12" name="__codelineno-4-12" href="#__codelineno-4-12"></a>
-<a id="__codelineno-4-13" name="__codelineno-4-13" href="#__codelineno-4-13"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">name</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
-<a id="__codelineno-4-14" name="__codelineno-4-14" href="#__codelineno-4-14"></a>        <span class="k">return</span> <span class="sa">f</span><span class="s2">"(</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">x</span><span class="si">}</span><span class="s2">, </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">y</span><span class="si">}</span><span class="s2">)"</span>
-<a id="__codelineno-4-15" name="__codelineno-4-15" href="#__codelineno-4-15"></a>
-<a id="__codelineno-4-16" name="__codelineno-4-16" href="#__codelineno-4-16"></a>
-<a id="__codelineno-4-17" name="__codelineno-4-17" href="#__codelineno-4-17"></a><span class="k">def</span><span class="w"> </span><span class="nf">largest</span><span class="p">[</span><span class="n">T</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="nb">float</span><span class="p">](</span><span class="n">a</span><span class="p">:</span> <span class="n">T</span><span class="p">,</span> <span class="n">b</span><span class="p">:</span> <span class="n">T</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">T</span><span class="p">:</span>
-<a id="__codelineno-4-18" name="__codelineno-4-18" href="#__codelineno-4-18"></a>    <span class="k">return</span> <span class="n">a</span> <span class="k">if</span> <span class="n">a</span> <span class="o">&gt;</span> <span class="n">b</span> <span class="k">else</span> <span class="n">b</span>
-<a id="__codelineno-4-19" name="__codelineno-4-19" href="#__codelineno-4-19"></a>
-<a id="__codelineno-4-20" name="__codelineno-4-20" href="#__codelineno-4-20"></a>
-<a id="__codelineno-4-21" name="__codelineno-4-21" href="#__codelineno-4-21"></a><span class="k">def</span><span class="w"> </span><span class="nf">label</span><span class="p">[</span><span class="n">T</span><span class="p">:</span> <span class="n">Named</span><span class="p">](</span><span class="n">thing</span><span class="p">:</span> <span class="n">T</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
-<a id="__codelineno-4-22" name="__codelineno-4-22" href="#__codelineno-4-22"></a>    <span class="k">return</span> <span class="s2">"at "</span> <span class="o">+</span> <span class="n">thing</span><span class="o">.</span><span class="n">name</span><span class="p">()</span>
-<a id="__codelineno-4-23" name="__codelineno-4-23" href="#__codelineno-4-23"></a>
-<a id="__codelineno-4-24" name="__codelineno-4-24" href="#__codelineno-4-24"></a>
-<a id="__codelineno-4-25" name="__codelineno-4-25" href="#__codelineno-4-25"></a><span class="k">def</span><span class="w"> </span><span class="nf">first</span><span class="p">[</span><span class="n">T</span><span class="p">](</span><span class="n">items</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">T</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="n">T</span><span class="p">:</span>
-<a id="__codelineno-4-26" name="__codelineno-4-26" href="#__codelineno-4-26"></a>    <span class="k">return</span> <span class="n">items</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
-<a id="__codelineno-4-27" name="__codelineno-4-27" href="#__codelineno-4-27"></a>
-<a id="__codelineno-4-28" name="__codelineno-4-28" href="#__codelineno-4-28"></a>
-<a id="__codelineno-4-29" name="__codelineno-4-29" href="#__codelineno-4-29"></a><span class="k">def</span><span class="w"> </span><span class="nf">clamp</span><span class="p">[</span><span class="n">T</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="nb">float</span><span class="p">](</span><span class="n">x</span><span class="p">:</span> <span class="n">T</span><span class="p">,</span> <span class="n">lo</span><span class="p">:</span> <span class="n">T</span><span class="p">,</span> <span class="n">hi</span><span class="p">:</span> <span class="n">T</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">T</span><span class="p">:</span>
-<a id="__codelineno-4-30" name="__codelineno-4-30" href="#__codelineno-4-30"></a>    <span class="k">return</span> <span class="n">largest</span><span class="p">(</span><span class="n">lo</span><span class="p">,</span> <span class="n">x</span><span class="p">)</span> <span class="k">if</span> <span class="n">x</span> <span class="o">&lt;</span> <span class="n">hi</span> <span class="k">else</span> <span class="n">hi</span>
-<a id="__codelineno-4-31" name="__codelineno-4-31" href="#__codelineno-4-31"></a>
-<a id="__codelineno-4-32" name="__codelineno-4-32" href="#__codelineno-4-32"></a>
-<a id="__codelineno-4-33" name="__codelineno-4-33" href="#__codelineno-4-33"></a><span class="k">def</span><span class="w"> </span><span class="nf">sweep</span><span class="p">(</span><span class="n">n</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">float</span><span class="p">:</span>
-<a id="__codelineno-4-34" name="__codelineno-4-34" href="#__codelineno-4-34"></a>    <span class="n">total</span> <span class="o">=</span> <span class="mf">0.0</span>
-<a id="__codelineno-4-35" name="__codelineno-4-35" href="#__codelineno-4-35"></a>    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">n</span><span class="p">):</span>
-<a id="__codelineno-4-36" name="__codelineno-4-36" href="#__codelineno-4-36"></a>        <span class="n">total</span> <span class="o">+=</span> <span class="n">clamp</span><span class="p">(</span><span class="n">i</span> <span class="o">*</span> <span class="mf">0.25</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">,</span> <span class="mf">10.0</span><span class="p">)</span> <span class="o">+</span> <span class="n">largest</span><span class="p">(</span><span class="n">i</span><span class="p">,</span> <span class="mi">3</span><span class="p">)</span>
-<a id="__codelineno-4-37" name="__codelineno-4-37" href="#__codelineno-4-37"></a>    <span class="k">return</span> <span class="n">total</span>
-<a id="__codelineno-4-38" name="__codelineno-4-38" href="#__codelineno-4-38"></a>
-<a id="__codelineno-4-39" name="__codelineno-4-39" href="#__codelineno-4-39"></a>
-<a id="__codelineno-4-40" name="__codelineno-4-40" href="#__codelineno-4-40"></a><span class="k">def</span><span class="w"> </span><span class="nf">main</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<a id="__codelineno-4-41" name="__codelineno-4-41" href="#__codelineno-4-41"></a>    <span class="nb">print</span><span class="p">(</span><span class="n">largest</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">),</span> <span class="n">largest</span><span class="p">(</span><span class="mf">1.5</span><span class="p">,</span> <span class="mf">2.5</span><span class="p">),</span> <span class="n">label</span><span class="p">(</span><span class="n">Point</span><span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="mi">4</span><span class="p">)),</span> <span class="n">first</span><span class="p">([</span><span class="mi">7</span><span class="p">,</span> <span class="mi">8</span><span class="p">,</span> <span class="mi">9</span><span class="p">]))</span>
-<a id="__codelineno-4-42" name="__codelineno-4-42" href="#__codelineno-4-42"></a>    <span class="nb">print</span><span class="p">(</span><span class="n">clamp</span><span class="p">(</span><span class="mi">15</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">10</span><span class="p">),</span> <span class="n">clamp</span><span class="p">(</span><span class="o">-</span><span class="mf">2.5</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">),</span> <span class="n">sweep</span><span class="p">(</span><span class="mi">1000</span><span class="p">))</span>
-<a id="__codelineno-4-43" name="__codelineno-4-43" href="#__codelineno-4-43"></a>
-<a id="__codelineno-4-44" name="__codelineno-4-44" href="#__codelineno-4-44"></a>
-<a id="__codelineno-4-45" name="__codelineno-4-45" href="#__codelineno-4-45"></a><span class="n">main</span><span class="p">()</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Protocol</span>
+<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>
+<a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a>
+<a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="k">class</span><span class="w"> </span><span class="nc">Named</span><span class="p">(</span><span class="n">Protocol</span><span class="p">):</span>
+<a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">name</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span> <span class="o">...</span>
+<a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a>
+<a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a>
+<a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a><span class="k">class</span><span class="w"> </span><span class="nc">Point</span><span class="p">:</span>
+<a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a>    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">y</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-7-10" name="__codelineno-7-10" href="#__codelineno-7-10"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">x</span> <span class="o">=</span> <span class="n">x</span>
+<a id="__codelineno-7-11" name="__codelineno-7-11" href="#__codelineno-7-11"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">y</span> <span class="o">=</span> <span class="n">y</span>
+<a id="__codelineno-7-12" name="__codelineno-7-12" href="#__codelineno-7-12"></a>
+<a id="__codelineno-7-13" name="__codelineno-7-13" href="#__codelineno-7-13"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">name</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<a id="__codelineno-7-14" name="__codelineno-7-14" href="#__codelineno-7-14"></a>        <span class="k">return</span> <span class="sa">f</span><span class="s2">"(</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">x</span><span class="si">}</span><span class="s2">, </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">y</span><span class="si">}</span><span class="s2">)"</span>
+<a id="__codelineno-7-15" name="__codelineno-7-15" href="#__codelineno-7-15"></a>
+<a id="__codelineno-7-16" name="__codelineno-7-16" href="#__codelineno-7-16"></a>
+<a id="__codelineno-7-17" name="__codelineno-7-17" href="#__codelineno-7-17"></a><span class="k">def</span><span class="w"> </span><span class="nf">largest</span><span class="p">[</span><span class="n">T</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="nb">float</span><span class="p">](</span><span class="n">a</span><span class="p">:</span> <span class="n">T</span><span class="p">,</span> <span class="n">b</span><span class="p">:</span> <span class="n">T</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">T</span><span class="p">:</span>
+<a id="__codelineno-7-18" name="__codelineno-7-18" href="#__codelineno-7-18"></a>    <span class="k">return</span> <span class="n">a</span> <span class="k">if</span> <span class="n">a</span> <span class="o">&gt;</span> <span class="n">b</span> <span class="k">else</span> <span class="n">b</span>
+<a id="__codelineno-7-19" name="__codelineno-7-19" href="#__codelineno-7-19"></a>
+<a id="__codelineno-7-20" name="__codelineno-7-20" href="#__codelineno-7-20"></a>
+<a id="__codelineno-7-21" name="__codelineno-7-21" href="#__codelineno-7-21"></a><span class="k">def</span><span class="w"> </span><span class="nf">label</span><span class="p">[</span><span class="n">T</span><span class="p">:</span> <span class="n">Named</span><span class="p">](</span><span class="n">thing</span><span class="p">:</span> <span class="n">T</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<a id="__codelineno-7-22" name="__codelineno-7-22" href="#__codelineno-7-22"></a>    <span class="k">return</span> <span class="s2">"at "</span> <span class="o">+</span> <span class="n">thing</span><span class="o">.</span><span class="n">name</span><span class="p">()</span>
+<a id="__codelineno-7-23" name="__codelineno-7-23" href="#__codelineno-7-23"></a>
+<a id="__codelineno-7-24" name="__codelineno-7-24" href="#__codelineno-7-24"></a>
+<a id="__codelineno-7-25" name="__codelineno-7-25" href="#__codelineno-7-25"></a><span class="k">def</span><span class="w"> </span><span class="nf">first</span><span class="p">[</span><span class="n">T</span><span class="p">](</span><span class="n">items</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">T</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="n">T</span><span class="p">:</span>
+<a id="__codelineno-7-26" name="__codelineno-7-26" href="#__codelineno-7-26"></a>    <span class="k">return</span> <span class="n">items</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+<a id="__codelineno-7-27" name="__codelineno-7-27" href="#__codelineno-7-27"></a>
+<a id="__codelineno-7-28" name="__codelineno-7-28" href="#__codelineno-7-28"></a>
+<a id="__codelineno-7-29" name="__codelineno-7-29" href="#__codelineno-7-29"></a><span class="k">def</span><span class="w"> </span><span class="nf">clamp</span><span class="p">[</span><span class="n">T</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="nb">float</span><span class="p">](</span><span class="n">x</span><span class="p">:</span> <span class="n">T</span><span class="p">,</span> <span class="n">lo</span><span class="p">:</span> <span class="n">T</span><span class="p">,</span> <span class="n">hi</span><span class="p">:</span> <span class="n">T</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">T</span><span class="p">:</span>
+<a id="__codelineno-7-30" name="__codelineno-7-30" href="#__codelineno-7-30"></a>    <span class="k">return</span> <span class="n">largest</span><span class="p">(</span><span class="n">lo</span><span class="p">,</span> <span class="n">x</span><span class="p">)</span> <span class="k">if</span> <span class="n">x</span> <span class="o">&lt;</span> <span class="n">hi</span> <span class="k">else</span> <span class="n">hi</span>
+<a id="__codelineno-7-31" name="__codelineno-7-31" href="#__codelineno-7-31"></a>
+<a id="__codelineno-7-32" name="__codelineno-7-32" href="#__codelineno-7-32"></a>
+<a id="__codelineno-7-33" name="__codelineno-7-33" href="#__codelineno-7-33"></a><span class="k">def</span><span class="w"> </span><span class="nf">sweep</span><span class="p">(</span><span class="n">n</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">float</span><span class="p">:</span>
+<a id="__codelineno-7-34" name="__codelineno-7-34" href="#__codelineno-7-34"></a>    <span class="n">total</span> <span class="o">=</span> <span class="mf">0.0</span>
+<a id="__codelineno-7-35" name="__codelineno-7-35" href="#__codelineno-7-35"></a>    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">n</span><span class="p">):</span>
+<a id="__codelineno-7-36" name="__codelineno-7-36" href="#__codelineno-7-36"></a>        <span class="n">total</span> <span class="o">+=</span> <span class="n">clamp</span><span class="p">(</span><span class="n">i</span> <span class="o">*</span> <span class="mf">0.25</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">,</span> <span class="mf">10.0</span><span class="p">)</span> <span class="o">+</span> <span class="n">largest</span><span class="p">(</span><span class="n">i</span><span class="p">,</span> <span class="mi">3</span><span class="p">)</span>
+<a id="__codelineno-7-37" name="__codelineno-7-37" href="#__codelineno-7-37"></a>    <span class="k">return</span> <span class="n">total</span>
+<a id="__codelineno-7-38" name="__codelineno-7-38" href="#__codelineno-7-38"></a>
+<a id="__codelineno-7-39" name="__codelineno-7-39" href="#__codelineno-7-39"></a>
+<a id="__codelineno-7-40" name="__codelineno-7-40" href="#__codelineno-7-40"></a><span class="k">def</span><span class="w"> </span><span class="nf">main</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-7-41" name="__codelineno-7-41" href="#__codelineno-7-41"></a>    <span class="nb">print</span><span class="p">(</span><span class="n">largest</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">),</span> <span class="n">largest</span><span class="p">(</span><span class="mf">1.5</span><span class="p">,</span> <span class="mf">2.5</span><span class="p">),</span> <span class="n">label</span><span class="p">(</span><span class="n">Point</span><span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="mi">4</span><span class="p">)),</span> <span class="n">first</span><span class="p">([</span><span class="mi">7</span><span class="p">,</span> <span class="mi">8</span><span class="p">,</span> <span class="mi">9</span><span class="p">]))</span>
+<a id="__codelineno-7-42" name="__codelineno-7-42" href="#__codelineno-7-42"></a>    <span class="nb">print</span><span class="p">(</span><span class="n">clamp</span><span class="p">(</span><span class="mi">15</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">10</span><span class="p">),</span> <span class="n">clamp</span><span class="p">(</span><span class="o">-</span><span class="mf">2.5</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">),</span> <span class="n">sweep</span><span class="p">(</span><span class="mi">1000</span><span class="p">))</span>
+<a id="__codelineno-7-43" name="__codelineno-7-43" href="#__codelineno-7-43"></a>
+<a id="__codelineno-7-44" name="__codelineno-7-44" href="#__codelineno-7-44"></a>
+<a id="__codelineno-7-45" name="__codelineno-7-45" href="#__codelineno-7-45"></a><span class="n">main</span><span class="p">()</span>
 </code></pre></div>
 <p>The folder in the repository: <a href="https://github.com/franknoh/PPy/blob/main/examples/40_generics"><code>examples/40_generics</code></a>.</p>
 
@@ -3814,7 +3936,7 @@ and no conversion step involved.</p>
       <nav class="md-footer__inner md-grid" aria-label="Footer" >
         
           
-          <a href="../37_aio/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Coroutines">
+          <a href="../37_aio/" class="md-footer__link md-footer__link--prev" aria-label="Previous: An echo server and its client, as coroutines that compile">
             <div class="md-footer__button md-icon">
               
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
@@ -3824,20 +3946,20 @@ and no conversion step involved.</p>
                 Previous
               </span>
               <div class="md-ellipsis">
-                Coroutines
+                An echo server and its client, as coroutines that compile
               </div>
             </div>
           </a>
         
         
           
-          <a href="../42_toolbox/" class="md-footer__link md-footer__link--next" aria-label="Next: The toolbox">
+          <a href="../42_toolbox/" class="md-footer__link md-footer__link--next" aria-label="Next: Every way of looking inside a build, on one program">
             <div class="md-footer__title">
               <span class="md-footer__direction">
                 Next
               </span>
               <div class="md-ellipsis">
-                The toolbox
+                Every way of looking inside a build, on one program
               </div>
             </div>
             <div class="md-footer__button md-icon">

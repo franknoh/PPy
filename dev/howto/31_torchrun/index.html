@@ -27,7 +27,7 @@
     
     
       
-        <title>A trainer under torchrun and accelerate launch - PPY</title>
+        <title>Native kernels on every rank, with import ppy as the integration - PPY</title>
       
     
     
@@ -55,6 +55,8 @@
     
       <link rel="stylesheet" href="../../assets/_mkdocstrings.css">
     
+      <link rel="stylesheet" href="../../stylesheets/extra.css">
+    
     <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
     
       
@@ -80,7 +82,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#a-trainer-under-torchrun-and-accelerate-launch" class="md-skip">
+        <a href="#native-kernels-on-every-rank-with-import-ppy-as-the-integration" class="md-skip">
           Skip to content
         </a>
       
@@ -120,7 +122,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              A trainer under torchrun and accelerate launch
+              Native kernels on every rank, with import ppy as the integration
             
           </span>
         </div>
@@ -1222,7 +1224,7 @@
   <span class="md-ellipsis">
     
   
-    Basics
+    Three annotations, one native loop
   
 
     
@@ -1250,7 +1252,7 @@
   <span class="md-ellipsis">
     
   
-    Arbitrary precision
+    A machine word until it is not
   
 
     
@@ -1278,7 +1280,7 @@
   <span class="md-ellipsis">
     
   
-    Effects and contracts
+    What @ppy.pure refuses
   
 
     
@@ -1306,7 +1308,7 @@
   <span class="md-ellipsis">
     
   
-    Classes
+    Classes the checker can see through
   
 
     
@@ -1334,7 +1336,7 @@
   <span class="md-ellipsis">
     
   
-    Native data
+    What crosses the boundary as machine values
   
 
     
@@ -1362,7 +1364,7 @@
   <span class="md-ellipsis">
     
   
-    Narrowing
+    Every way a type gets narrower
   
 
     
@@ -1390,7 +1392,7 @@
   <span class="md-ellipsis">
     
   
-    Numerics
+    Where PPY refuses to differ from CPython
   
 
     
@@ -1418,7 +1420,7 @@
   <span class="md-ellipsis">
     
   
-    Value classes
+    A dataclass with no boxed form
   
 
     
@@ -1446,7 +1448,7 @@
   <span class="md-ellipsis">
     
   
-    Tuples
+    Tuples as scalar atoms
   
 
     
@@ -1474,7 +1476,7 @@
   <span class="md-ellipsis">
     
   
-    Dynamic boundaries
+    The escape hatch, and its price
   
 
     
@@ -1502,7 +1504,7 @@
   <span class="md-ellipsis">
     
   
-    Containers
+    Containers, inferred and owned
   
 
     
@@ -1530,7 +1532,7 @@
   <span class="md-ellipsis">
     
   
-    Exceptions
+    Exceptions are part of the contract
   
 
     
@@ -1558,7 +1560,7 @@
   <span class="md-ellipsis">
     
   
-    Strings
+    Strings stay on CPython, and say so
   
 
     
@@ -1673,7 +1675,7 @@
   <span class="md-ellipsis">
     
   
-    Buffers and JIT
+    Borrow the memory, keep the order, specialize the rest
   
 
     
@@ -1701,7 +1703,7 @@
   <span class="md-ellipsis">
     
   
-    Algorithms
+    Eight kernels and six judge problems, against C
   
 
     
@@ -1729,7 +1731,7 @@
   <span class="md-ellipsis">
     
   
-    Threads
+    One native function, two threads, 1.95×
   
 
     
@@ -1757,7 +1759,7 @@
   <span class="md-ellipsis">
     
   
-    Native memory
+    Typed pointers, stack memory, a C function, a C symbol
   
 
     
@@ -1785,7 +1787,7 @@
   <span class="md-ellipsis">
     
   
-    Lanes and the machine
+    Four lanes at a time, and the machine as a fact
   
 
     
@@ -1813,7 +1815,7 @@
   <span class="md-ellipsis">
     
   
-    Atomics and threads
+    Four threads, one counter, one answer
   
 
     
@@ -1841,7 +1843,7 @@
   <span class="md-ellipsis">
     
   
-    Parallel ranges
+    parallel.range: say the iterations may run at once
   
 
     
@@ -1869,7 +1871,7 @@
   <span class="md-ellipsis">
     
   
-    Derivatives
+    A derivative that agrees to the last bit
   
 
     
@@ -1897,7 +1899,7 @@
   <span class="md-ellipsis">
     
   
-    Coroutines
+    An echo server and its client, as coroutines that compile
   
 
     
@@ -1925,7 +1927,7 @@
   <span class="md-ellipsis">
     
   
-    Generics
+    Generics, inferred at the call and monomorphized in native code
   
 
     
@@ -1953,7 +1955,7 @@
   <span class="md-ellipsis">
     
   
-    The toolbox
+    Every way of looking inside a build, on one program
   
 
     
@@ -2050,7 +2052,7 @@
   <span class="md-ellipsis">
     
   
-    GPU kernels
+    A CUDA kernel in Python, run three ways
   
 
     
@@ -2078,7 +2080,7 @@
   <span class="md-ellipsis">
     
   
-    XLA
+    StableHLO from the compiler, no JAX required
   
 
     
@@ -2195,7 +2197,7 @@
   <span class="md-ellipsis">
     
   
-    NumPy fusion
+    One NumPy expression, one loop
   
 
     
@@ -2223,7 +2225,7 @@
   <span class="md-ellipsis">
     
   
-    Pydantic
+    Pydantic models, typed and still validated
   
 
     
@@ -2251,7 +2253,7 @@
   <span class="md-ellipsis">
     
   
-    Parallelism
+    The same fused kernel, on every core
   
 
     
@@ -2279,7 +2281,7 @@
   <span class="md-ellipsis">
     
   
-    PyTorch ATen regions
+    A PyTorch layer as one C++ call
   
 
     
@@ -2307,7 +2309,7 @@
   <span class="md-ellipsis">
     
   
-    Training a torch MLP
+    A torch training script, converted, and where the time went
   
 
     
@@ -2335,7 +2337,7 @@
   <span class="md-ellipsis">
     
   
-    Training a JAX MLP
+    The same trainer with JAX, and why the step does not get faster
   
 
     
@@ -2363,7 +2365,7 @@
   <span class="md-ellipsis">
     
   
-    JAX export
+    Export a @jax.jit function at build time
   
 
     
@@ -2391,7 +2393,7 @@
   <span class="md-ellipsis">
     
   
-    Serving over Uvicorn
+    A FastAPI service that checks strict, as written
   
 
     
@@ -2419,7 +2421,7 @@
   <span class="md-ellipsis">
     
   
-    Flax
+    A Flax training loop, strict-checked as written
   
 
     
@@ -2456,7 +2458,7 @@
   <span class="md-ellipsis">
     
   
-    A trainer under torchrun and accelerate launch
+    Native kernels on every rank, with import ppy as the integration
   
 
     
@@ -2474,7 +2476,7 @@
   <span class="md-ellipsis">
     
   
-    A trainer under torchrun and accelerate launch
+    Native kernels on every rank, with import ppy as the integration
   
 
     
@@ -2500,10 +2502,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#provenance" class="md-nav__link">
+  <a href="#where-the-time-goes-on-the-python-side-of-a-trainer" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Provenance
+        Where the time goes on the Python side of a trainer
       
     </span>
   </a>
@@ -2511,10 +2513,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#what-it-shows" class="md-nav__link">
+  <a href="#warm-the-cache-before-the-launch" class="md-nav__link">
     <span class="md-ellipsis">
       
-        What it shows
+        Warm the cache before the launch
       
     </span>
   </a>
@@ -2548,6 +2550,17 @@
     <span class="md-ellipsis">
       
         What it prints
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#read-on" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Read on
       
     </span>
   </a>
@@ -2599,7 +2612,7 @@
   <span class="md-ellipsis">
     
   
-    Columnar expressions
+    A pandas expression as one kernel, nulls included
   
 
     
@@ -2702,7 +2715,7 @@
   <span class="md-ellipsis">
     
   
-    Inventory
+    Untyped Python in, strict PPY out
   
 
     
@@ -2730,7 +2743,7 @@
   <span class="md-ellipsis">
     
   
-    Inference
+    How far inference reaches without a single annotation
   
 
     
@@ -2758,7 +2771,7 @@
   <span class="md-ellipsis">
     
   
-    Interop
+    Import a .ppy module from plain Python
   
 
     
@@ -2786,7 +2799,7 @@
   <span class="md-ellipsis">
     
   
-    Project layout
+    A project is one call graph, and one program
   
 
     
@@ -2814,7 +2827,7 @@
   <span class="md-ellipsis">
     
   
-    Migration
+    Five dynamic idioms, rewritten and proven equivalent
   
 
     
@@ -3593,10 +3606,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#provenance" class="md-nav__link">
+  <a href="#where-the-time-goes-on-the-python-side-of-a-trainer" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Provenance
+        Where the time goes on the Python side of a trainer
       
     </span>
   </a>
@@ -3604,10 +3617,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#what-it-shows" class="md-nav__link">
+  <a href="#warm-the-cache-before-the-launch" class="md-nav__link">
     <span class="md-ellipsis">
       
-        What it shows
+        Warm the cache before the launch
       
     </span>
   </a>
@@ -3641,6 +3654,17 @@
     <span class="md-ellipsis">
       
         What it prints
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#read-on" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Read on
       
     </span>
   </a>
@@ -3689,45 +3713,37 @@
   
 
 
-<h1 id="a-trainer-under-torchrun-and-accelerate-launch">A trainer under <code>torchrun</code> and <code>accelerate launch</code><a class="headerlink" href="#a-trainer-under-torchrun-and-accelerate-launch" title="Permanent link">&para;</a></h1>
-<p>The same program, the same kernels, native on every rank -- with <code>import ppy</code>
-as the whole integration.</p>
+<h1 id="native-kernels-on-every-rank-with-import-ppy-as-the-integration">Native kernels on every rank, with <code>import ppy</code> as the integration<a class="headerlink" href="#native-kernels-on-every-rank-with-import-ppy-as-the-integration" title="Permanent link">&para;</a></h1>
+<p><code>train.py</code> is a plain PyTorch trainer. It does not know whether it was
+started by <code>python</code>, <code>torchrun</code>, or <code>accelerate launch</code>; it reads <code>RANK</code>
+and <code>WORLD_SIZE</code> from the environment like any trainer and imports two
+<code>.ppy</code> modules. Each rank's <code>import ppy</code> finds the kernels' native build in
+the project cache, and preprocessing that took 110 ms per rank in Python
+takes 1.6 ms. No bootstrap, no launcher of its own, no <code>ppy run</code>.</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">ppy</span>  <span class="c1"># first: the import hook, serving .ppy modules from their native build</span>
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="kn">import</span><span class="w"> </span><span class="nn">torch</span>
 <a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>
 <a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="kn">import</span><span class="w"> </span><span class="nn">features</span>  <span class="c1"># features.ppy: the preprocessing loops, native</span>
 <a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="kn">import</span><span class="w"> </span><span class="nn">model</span>  <span class="c1"># model.ppy: the model as one ATen region, native</span>
 </code></pre></div>
-<h2 id="provenance">Provenance<a class="headerlink" href="#provenance" title="Permanent link">&para;</a></h2>
-<p>Hand-written. <code>features.ppy</code>, <code>model.ppy</code>, and <code>train.py</code> are written
-directly; there is no conversion step involved.</p>
-<h2 id="what-it-shows">What it shows<a class="headerlink" href="#what-it-shows" title="Permanent link">&para;</a></h2>
-<ul>
-<li><code>train.py</code> is plain Python and knows nothing about how it was started. It
-  reads the environment every launcher agrees on (<code>RANK</code>, <code>WORLD_SIZE</code>,
-  <code>LOCAL_RANK</code>) and runs the same under <code>python</code>, <code>torchrun</code>, and
-  <code>accelerate launch</code>. There is no bootstrap, no hook of its own, and no
-  <code>ppy run</code>: the launcher starts ordinary interpreters, and each one's
-  <code>import ppy</code> finds the kernels' native build.</li>
-<li><code>features.ppy</code> holds the per-batch arithmetic -- standardizing rows,
-  appending interactions, bucketing the result -- as loops over borrowed
-  buffers. That is where the time goes on the Python side of a trainer, and
-  where the native path wins.</li>
-<li><code>model.ppy</code> imports torch. Until now that alone kept a module on the
-  in-process JIT; its ATen region is compiled into the artifact instead, the
-  extension ships beside the manifest, and the runtime loads it without the
-  compiler. <code>.backward()</code> sees the same graph: every <code>at::</code> call still goes
-  through the dispatcher.</li>
-<li>The first process to import a kernel builds it into <code>.ppy-cache/</code>; every
-  process after that finds the build. Under a launcher the ranks start
-  together, so without a warm cache each builds the same artifact and the
-  first to finish is kept -- correct, but paid for N times. <code>ppy build --warm .</code>
-  before the launch builds every kernel once, and no rank builds anything.</li>
-<li><code>PPY_IMPORT=python</code> runs the same files as plain Python, for the comparison
-  below. <code>PPY_QUIET=1</code> silences the per-rank <code>[ppy]</code> notes.</li>
-</ul>
+<h2 id="where-the-time-goes-on-the-python-side-of-a-trainer">Where the time goes on the Python side of a trainer<a class="headerlink" href="#where-the-time-goes-on-the-python-side-of-a-trainer" title="Permanent link">&para;</a></h2>
+<p><code>features.ppy</code> holds the per-batch arithmetic — standardizing rows,
+appending interactions, bucketing the result — as loops over borrowed
+buffers. Those loops are what a trainer spends its Python time on, and
+they lower to native code writing into memory the caller owns.
+<code>model.ppy</code> imports torch: its <code>forward_loss</code> is one function of curated
+tensor operations, compiled into an ATen region that ships beside the
+manifest and loads without the compiler in the process. <code>.backward()</code> sees
+the same graph.</p>
+<h2 id="warm-the-cache-before-the-launch">Warm the cache before the launch<a class="headerlink" href="#warm-the-cache-before-the-launch" title="Permanent link">&para;</a></h2>
+<p>The first process to import a kernel builds it into <code>.ppy-cache/</code>; every
+process after that finds the build. Under a launcher the ranks start
+together, so without a warm cache each builds the same artifact and the
+first to finish is kept — correct, but paid for N times. <code>ppy build --warm .</code>
+before the launch builds every kernel once, and no rank builds anything. A
+cold first build of the torch region takes tens of seconds, once.</p>
 <h2 id="measured">Measured<a class="headerlink" href="#measured" title="Permanent link">&para;</a></h2>
-<p>CPU, 2 ranks, each on 20 000 rows x 16 columns; 100 steps of a 32-unit MLP.</p>
+<p>CPU, 2 ranks, each on 20,000 rows × 16 columns; 100 steps of a 32-unit MLP.</p>
 <table>
 <thead>
 <tr>
@@ -3745,31 +3761,27 @@ directly; there is no conversion step involved.</p>
 <tr>
 <td>100 training steps (<code>forward_loss</code> region)</td>
 <td style="text-align: right;">399 ms</td>
-<td style="text-align: right;">250-600 ms</td>
+<td style="text-align: right;">250–600 ms</td>
 </tr>
 </tbody>
 </table>
-<p>The checksums, bucket counts, and loss trajectories are identical on both
-paths and under every launcher. The preprocessing is the point: the loops
-lower to native code writing into memory the caller owns. The region
-removes four Python round trips per step and is worth about 20% on small
-CPU tensors (<code>21_training_torch</code> measures that in isolation); here the
-step time is dominated by the tensor work itself and the run-to-run noise
-of a 2-rank CPU launch is wider than the gain. On an accelerator the region
-changes nothing measurable.</p>
-<p>A cold first launch pays for the region: compiling it against the installed
-PyTorch takes tens of seconds, once, into <code>.ppy-cache/torch/</code>. <code>ppy build
---warm .</code> moves that cost to before the launch.</p>
+<p>Checksums, bucket counts, and loss trajectories are identical on both paths
+and under every launcher. The preprocessing is the point. The region removes
+four Python round trips per step, which <a href="../21_training_torch/">21_training_torch</a>
+measures at about 20% in isolation; here the step is dominated by the
+tensor work and the run-to-run noise of a two-rank CPU launch is wider than
+the gain. On an accelerator the region changes nothing measurable.
+<code>PPY_IMPORT=python</code> runs the same files as plain Python; <code>PPY_QUIET=1</code>
+silences the per-rank notes.</p>
 <h2 id="run-it">Run it<a class="headerlink" href="#run-it" title="Permanent link">&para;</a></h2>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>ppy<span class="w"> </span>build<span class="w"> </span>--warm<span class="w"> </span>.<span class="w">                                              </span><span class="c1"># once, before the launch</span>
-<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>python<span class="w"> </span>train.py<span class="w">                                                 </span><span class="c1"># one process</span>
-<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>torchrun<span class="w"> </span>--standalone<span class="w"> </span>--nproc_per_node<span class="o">=</span><span class="m">2</span><span class="w"> </span>train.py<span class="w">               </span><span class="c1"># two ranks</span>
-<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>accelerate<span class="w"> </span>launch<span class="w"> </span>--multi_gpu<span class="w"> </span>--num_processes<span class="w"> </span><span class="m">2</span><span class="w"> </span>train.py<span class="w">        </span><span class="c1"># the same two ranks, via accelerate</span>
-<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="nv">PPY_IMPORT</span><span class="o">=</span>python<span class="w"> </span>python<span class="w"> </span>train.py<span class="w">                               </span><span class="c1"># the Python comparison</span>
-<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>
-<a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a>ppy<span class="w"> </span>check<span class="w"> </span>.<span class="w">                                                     </span><span class="c1"># kernels and trainer, strict</span>
-<a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>python<span class="w"> </span>features.ppy<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span>ppy<span class="w"> </span>run<span class="w"> </span>features.ppy<span class="w">                     </span><span class="c1"># the kernels' own checks</span>
-<a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a>python<span class="w"> </span>model.ppy<span class="w">    </span><span class="o">&amp;&amp;</span><span class="w"> </span>ppy<span class="w"> </span>run<span class="w"> </span>model.ppy
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>ppy<span class="w"> </span>build<span class="w"> </span>--warm<span class="w"> </span>.
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>python<span class="w"> </span>train.py
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>torchrun<span class="w"> </span>--standalone<span class="w"> </span>--nproc_per_node<span class="o">=</span><span class="m">2</span><span class="w"> </span>train.py
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>accelerate<span class="w"> </span>launch<span class="w"> </span>--multi_gpu<span class="w"> </span>--num_processes<span class="w"> </span><span class="m">2</span><span class="w"> </span>train.py
+<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="nv">PPY_IMPORT</span><span class="o">=</span>python<span class="w"> </span>python<span class="w"> </span>train.py
+<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>ppy<span class="w"> </span>check<span class="w"> </span>.
+<a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a>python<span class="w"> </span>features.ppy<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span>ppy<span class="w"> </span>run<span class="w"> </span>features.ppy
+<a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>python<span class="w"> </span>model.ppy<span class="w">    </span><span class="o">&amp;&amp;</span><span class="w"> </span>ppy<span class="w"> </span>run<span class="w"> </span>model.ppy
 </code></pre></div>
 <!-- outputs:start -->
 <h2 id="what-it-prints">What it prints<a class="headerlink" href="#what-it-prints" title="Permanent link">&para;</a></h2>
@@ -3777,23 +3789,23 @@ PyTorch takes tens of seconds, once, into <code>.ppy-cache/torch/</code>. <code>
 <p><em>(prints nothing; exits 0)</em></p>
 <p><strong><code>python train.py</code></strong></p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a># rank 0/1 device=cpu native=True region=True loader=GeneratedLoader
-<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>rank 0: prep       2.1 ms   checksum=-21015.470416 outside=4103
-<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>rank 0: train    281.4 ms   loss 1.0412 -&gt; 1.0107
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>rank 0: prep       1.6 ms   checksum=-21015.470416 outside=4103
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>rank 0: train    811.9 ms   loss 1.0412 -&gt; 1.0107
 </code></pre></div>
 <p><strong><code>torchrun --standalone --nproc_per_node=2 train.py</code></strong></p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a># rank 0/2 device=cpu native=True region=True loader=GeneratedLoader
-<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>rank 0: prep       2.1 ms   checksum=-21015.470416 outside=4103
-<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>rank 0: train    598.9 ms   loss 1.0412 -&gt; 1.0123
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>rank 0: prep       2.2 ms   checksum=-21015.470416 outside=4103
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>rank 0: train    748.5 ms   loss 1.0412 -&gt; 1.0123
 <a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a># rank 1/2 device=cpu native=True region=True loader=GeneratedLoader
-<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>rank 1: prep       2.0 ms   checksum=-20883.104755 outside=4005
-<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>rank 1: train    602.6 ms   loss 1.0486 -&gt; 1.0239
+<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>rank 1: prep       1.9 ms   checksum=-20883.104755 outside=4005
+<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>rank 1: train    749.1 ms   loss 1.0486 -&gt; 1.0239
 </code></pre></div>
 <p><strong><code>accelerate launch --multi_gpu --num_processes 2 train.py</code></strong></p>
 <p><em>not run here: <code>accelerate</code> is not installed</em></p>
 <p><strong><code>PPY_IMPORT=python python train.py</code></strong></p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a># rank 0/1 device=cpu native=False region=False loader=PPySourceLoader
-<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>rank 0: prep     110.5 ms   checksum=-21015.470416 outside=4103
-<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>rank 0: train    188.5 ms   loss 1.0412 -&gt; 1.0107
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>rank 0: prep     125.3 ms   checksum=-21015.470416 outside=4103
+<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>rank 0: train   4182.5 ms   loss 1.0412 -&gt; 1.0107
 </code></pre></div>
 <p><strong><code>ppy check .</code></strong></p>
 <p><em>(prints nothing; exits 0)</em></p>
@@ -3812,6 +3824,14 @@ PyTorch takes tens of seconds, once, into <code>.ppy-cache/torch/</code>. <code>
 <p><code>accelerate</code> is not a dependency of this repository; <code>--multi_gpu</code> is what
 makes it launch several processes, and the script runs them on the CPU when
 there is no CUDA device.</p>
+<h2 id="read-on">Read on<a class="headerlink" href="#read-on" title="Permanent link">&para;</a></h2>
+<ul>
+<li><a href="../24_interop/">Interop</a> — the import hook on its own.</li>
+<li><a href="../../cli/">CLI: <code>ppy build --warm</code></a> — what a warm build keys on.</li>
+<li><a href="../../internals/migrating/">Migrating a real project</a> — kernels as <code>.ppy</code>, orchestration as <code>.py</code>.</li>
+</ul>
+<p><code>features.ppy</code>, <code>model.ppy</code>, and <code>train.py</code> are hand-written; there is no
+conversion step.</p>
 <h2 id="31_torchrunfeaturesppy"><code>31_torchrun/features.ppy</code><a class="headerlink" href="#31_torchrunfeaturesppy" title="Permanent link">&para;</a></h2>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="sd">"""The per-batch preprocessing of a trainer, as native loops over borrowed buffers.</span>
 <a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>
@@ -3969,7 +3989,7 @@ there is no CUDA device.</p>
       <nav class="md-footer__inner md-grid" aria-label="Footer" >
         
           
-          <a href="../29_flax/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Flax">
+          <a href="../29_flax/" class="md-footer__link md-footer__link--prev" aria-label="Previous: A Flax training loop, strict-checked as written">
             <div class="md-footer__button md-icon">
               
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
@@ -3979,20 +3999,20 @@ there is no CUDA device.</p>
                 Previous
               </span>
               <div class="md-ellipsis">
-                Flax
+                A Flax training loop, strict-checked as written
               </div>
             </div>
           </a>
         
         
           
-          <a href="../41_columnar/" class="md-footer__link md-footer__link--next" aria-label="Next: Columnar expressions">
+          <a href="../41_columnar/" class="md-footer__link md-footer__link--next" aria-label="Next: A pandas expression as one kernel, nulls included">
             <div class="md-footer__title">
               <span class="md-footer__direction">
                 Next
               </span>
               <div class="md-ellipsis">
-                Columnar expressions
+                A pandas expression as one kernel, nulls included
               </div>
             </div>
             <div class="md-footer__button md-icon">

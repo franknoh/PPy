@@ -27,7 +27,7 @@
     
     
       
-        <title>Atomics and threads - PPY</title>
+        <title>Four threads, one counter, one answer - PPY</title>
       
     
     
@@ -55,6 +55,8 @@
     
       <link rel="stylesheet" href="../../assets/_mkdocstrings.css">
     
+      <link rel="stylesheet" href="../../stylesheets/extra.css">
+    
     <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
     
       
@@ -80,7 +82,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#atomics-and-threads" class="md-skip">
+        <a href="#four-threads-one-counter-one-answer" class="md-skip">
           Skip to content
         </a>
       
@@ -120,7 +122,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Atomics and threads
+              Four threads, one counter, one answer
             
           </span>
         </div>
@@ -1222,7 +1224,7 @@
   <span class="md-ellipsis">
     
   
-    Basics
+    Three annotations, one native loop
   
 
     
@@ -1250,7 +1252,7 @@
   <span class="md-ellipsis">
     
   
-    Arbitrary precision
+    A machine word until it is not
   
 
     
@@ -1278,7 +1280,7 @@
   <span class="md-ellipsis">
     
   
-    Effects and contracts
+    What @ppy.pure refuses
   
 
     
@@ -1306,7 +1308,7 @@
   <span class="md-ellipsis">
     
   
-    Classes
+    Classes the checker can see through
   
 
     
@@ -1334,7 +1336,7 @@
   <span class="md-ellipsis">
     
   
-    Native data
+    What crosses the boundary as machine values
   
 
     
@@ -1362,7 +1364,7 @@
   <span class="md-ellipsis">
     
   
-    Narrowing
+    Every way a type gets narrower
   
 
     
@@ -1390,7 +1392,7 @@
   <span class="md-ellipsis">
     
   
-    Numerics
+    Where PPY refuses to differ from CPython
   
 
     
@@ -1418,7 +1420,7 @@
   <span class="md-ellipsis">
     
   
-    Value classes
+    A dataclass with no boxed form
   
 
     
@@ -1446,7 +1448,7 @@
   <span class="md-ellipsis">
     
   
-    Tuples
+    Tuples as scalar atoms
   
 
     
@@ -1474,7 +1476,7 @@
   <span class="md-ellipsis">
     
   
-    Dynamic boundaries
+    The escape hatch, and its price
   
 
     
@@ -1502,7 +1504,7 @@
   <span class="md-ellipsis">
     
   
-    Containers
+    Containers, inferred and owned
   
 
     
@@ -1530,7 +1532,7 @@
   <span class="md-ellipsis">
     
   
-    Exceptions
+    Exceptions are part of the contract
   
 
     
@@ -1558,7 +1560,7 @@
   <span class="md-ellipsis">
     
   
-    Strings
+    Strings stay on CPython, and say so
   
 
     
@@ -1675,7 +1677,7 @@
   <span class="md-ellipsis">
     
   
-    Buffers and JIT
+    Borrow the memory, keep the order, specialize the rest
   
 
     
@@ -1703,7 +1705,7 @@
   <span class="md-ellipsis">
     
   
-    Algorithms
+    Eight kernels and six judge problems, against C
   
 
     
@@ -1731,7 +1733,7 @@
   <span class="md-ellipsis">
     
   
-    Threads
+    One native function, two threads, 1.95×
   
 
     
@@ -1759,7 +1761,7 @@
   <span class="md-ellipsis">
     
   
-    Native memory
+    Typed pointers, stack memory, a C function, a C symbol
   
 
     
@@ -1787,7 +1789,7 @@
   <span class="md-ellipsis">
     
   
-    Lanes and the machine
+    Four lanes at a time, and the machine as a fact
   
 
     
@@ -1824,7 +1826,7 @@
   <span class="md-ellipsis">
     
   
-    Atomics and threads
+    Four threads, one counter, one answer
   
 
     
@@ -1842,7 +1844,7 @@
   <span class="md-ellipsis">
     
   
-    Atomics and threads
+    Four threads, one counter, one answer
   
 
     
@@ -1868,10 +1870,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#provenance" class="md-nav__link">
+  <a href="#atomics-with-c11s-orders-and-c11s-rules" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Provenance
+        Atomics with C11's orders, and C11's rules
       
     </span>
   </a>
@@ -1879,10 +1881,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#what-it-shows" class="md-nav__link">
+  <a href="#threads-and-what-keeps-them-apart" class="md-nav__link">
     <span class="md-ellipsis">
       
-        What it shows
+        Threads and what keeps them apart
       
     </span>
   </a>
@@ -1905,6 +1907,17 @@
     <span class="md-ellipsis">
       
         What it prints
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#read-on" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Read on
       
     </span>
   </a>
@@ -1945,7 +1958,7 @@
   <span class="md-ellipsis">
     
   
-    Parallel ranges
+    parallel.range: say the iterations may run at once
   
 
     
@@ -1973,7 +1986,7 @@
   <span class="md-ellipsis">
     
   
-    Derivatives
+    A derivative that agrees to the last bit
   
 
     
@@ -2001,7 +2014,7 @@
   <span class="md-ellipsis">
     
   
-    Coroutines
+    An echo server and its client, as coroutines that compile
   
 
     
@@ -2029,7 +2042,7 @@
   <span class="md-ellipsis">
     
   
-    Generics
+    Generics, inferred at the call and monomorphized in native code
   
 
     
@@ -2057,7 +2070,7 @@
   <span class="md-ellipsis">
     
   
-    The toolbox
+    Every way of looking inside a build, on one program
   
 
     
@@ -2154,7 +2167,7 @@
   <span class="md-ellipsis">
     
   
-    GPU kernels
+    A CUDA kernel in Python, run three ways
   
 
     
@@ -2182,7 +2195,7 @@
   <span class="md-ellipsis">
     
   
-    XLA
+    StableHLO from the compiler, no JAX required
   
 
     
@@ -2297,7 +2310,7 @@
   <span class="md-ellipsis">
     
   
-    NumPy fusion
+    One NumPy expression, one loop
   
 
     
@@ -2325,7 +2338,7 @@
   <span class="md-ellipsis">
     
   
-    Pydantic
+    Pydantic models, typed and still validated
   
 
     
@@ -2353,7 +2366,7 @@
   <span class="md-ellipsis">
     
   
-    Parallelism
+    The same fused kernel, on every core
   
 
     
@@ -2381,7 +2394,7 @@
   <span class="md-ellipsis">
     
   
-    PyTorch ATen regions
+    A PyTorch layer as one C++ call
   
 
     
@@ -2409,7 +2422,7 @@
   <span class="md-ellipsis">
     
   
-    Training a torch MLP
+    A torch training script, converted, and where the time went
   
 
     
@@ -2437,7 +2450,7 @@
   <span class="md-ellipsis">
     
   
-    Training a JAX MLP
+    The same trainer with JAX, and why the step does not get faster
   
 
     
@@ -2465,7 +2478,7 @@
   <span class="md-ellipsis">
     
   
-    JAX export
+    Export a @jax.jit function at build time
   
 
     
@@ -2493,7 +2506,7 @@
   <span class="md-ellipsis">
     
   
-    Serving over Uvicorn
+    A FastAPI service that checks strict, as written
   
 
     
@@ -2521,7 +2534,7 @@
   <span class="md-ellipsis">
     
   
-    Flax
+    A Flax training loop, strict-checked as written
   
 
     
@@ -2549,7 +2562,7 @@
   <span class="md-ellipsis">
     
   
-    A trainer under torchrun and accelerate launch
+    Native kernels on every rank, with import ppy as the integration
   
 
     
@@ -2577,7 +2590,7 @@
   <span class="md-ellipsis">
     
   
-    Columnar expressions
+    A pandas expression as one kernel, nulls included
   
 
     
@@ -2680,7 +2693,7 @@
   <span class="md-ellipsis">
     
   
-    Inventory
+    Untyped Python in, strict PPY out
   
 
     
@@ -2708,7 +2721,7 @@
   <span class="md-ellipsis">
     
   
-    Inference
+    How far inference reaches without a single annotation
   
 
     
@@ -2736,7 +2749,7 @@
   <span class="md-ellipsis">
     
   
-    Interop
+    Import a .ppy module from plain Python
   
 
     
@@ -2764,7 +2777,7 @@
   <span class="md-ellipsis">
     
   
-    Project layout
+    A project is one call graph, and one program
   
 
     
@@ -2792,7 +2805,7 @@
   <span class="md-ellipsis">
     
   
-    Migration
+    Five dynamic idioms, rewritten and proven equivalent
   
 
     
@@ -3571,10 +3584,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#provenance" class="md-nav__link">
+  <a href="#atomics-with-c11s-orders-and-c11s-rules" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Provenance
+        Atomics with C11's orders, and C11's rules
       
     </span>
   </a>
@@ -3582,10 +3595,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#what-it-shows" class="md-nav__link">
+  <a href="#threads-and-what-keeps-them-apart" class="md-nav__link">
     <span class="md-ellipsis">
       
-        What it shows
+        Threads and what keeps them apart
       
     </span>
   </a>
@@ -3608,6 +3621,17 @@
     <span class="md-ellipsis">
       
         What it prints
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#read-on" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Read on
       
     </span>
   </a>
@@ -3645,110 +3669,128 @@
   
 
 
-<h1 id="atomics-and-threads">Atomics and threads<a class="headerlink" href="#atomics-and-threads" title="Permanent link">&para;</a></h1>
-<p>Shared memory one operation at a time, and threads with what keeps them
-apart: <code>ppy.atomic</code> and <code>ppy.concurrent</code>, over memory the program owns.</p>
-<h2 id="provenance">Provenance<a class="headerlink" href="#provenance" title="Permanent link">&para;</a></h2>
-<p>Hand-written. <code>counters.ppy</code> is written directly; there is no <code>.py</code> source
-and no conversion step involved.</p>
-<h2 id="what-it-shows">What it shows<a class="headerlink" href="#what-it-shows" title="Permanent link">&para;</a></h2>
-<ul>
-<li><code>atomic.fetch_add</code>, <code>compare_exchange</code>, <code>exchange</code>, <code>load</code>, and <code>fence</code>
-  take an <code>order</code> the checker holds to what C11 holds: a relaxed fence
-  orders nothing, a load is never <code>release</code>.</li>
-<li><code>concurrent.spawn(f, *args)</code> runs a function of the module on a new
-  thread and <code>join</code> waits; four workers add to one counter and to one total
-  behind a mutex, and the answer is the same on every path because the
-  operations are the same operations.</li>
-<li>A mutex is one <code>int</code> slot and a condition one more: <code>wait</code>, <code>notify</code>, and
-  the spin under the CPU's pause hint are implemented the same way over the
-  atomics on every path. Under CPython the atomics serialize under one lock.</li>
-<li>Native code links pthreads for these; a target without them is refused
-  with the reason.</li>
-</ul>
+<h1 id="four-threads-one-counter-one-answer">Four threads, one counter, one answer<a class="headerlink" href="#four-threads-one-counter-one-answer" title="Permanent link">&para;</a></h1>
+<p>Four workers each add 500 to a shared counter with <code>atomic.fetch_add</code> and
+500 × 2 to a shared total behind a mutex. The program prints <code>2000 4000</code> on
+plain CPython, on the Python backend, and natively — because <code>ppy.atomic</code>
+and <code>ppy.concurrent</code> are the same operations on every path, over memory the
+program owns.</p>
+<h2 id="atomics-with-c11s-orders-and-c11s-rules">Atomics with C11's orders, and C11's rules<a class="headerlink" href="#atomics-with-c11s-orders-and-c11s-rules" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="k">def</span><span class="w"> </span><span class="nf">worker</span><span class="p">(</span><span class="n">counter</span><span class="p">:</span> <span class="n">native</span><span class="o">.</span><span class="n">ptr</span><span class="p">[</span><span class="nb">int</span><span class="p">],</span> <span class="n">mutex</span><span class="p">:</span> <span class="n">native</span><span class="o">.</span><span class="n">ptr</span><span class="p">[</span><span class="nb">int</span><span class="p">],</span> <span class="n">total</span><span class="p">:</span> <span class="n">native</span><span class="o">.</span><span class="n">ptr</span><span class="p">[</span><span class="nb">int</span><span class="p">],</span> <span class="n">rounds</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>    <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">rounds</span><span class="p">):</span>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>        <span class="n">atomic</span><span class="o">.</span><span class="n">fetch_add</span><span class="p">(</span><span class="n">counter</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="n">order</span><span class="o">=</span><span class="s2">"relaxed"</span><span class="p">)</span>
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>        <span class="n">concurrent</span><span class="o">.</span><span class="n">lock</span><span class="p">(</span><span class="n">mutex</span><span class="p">)</span>
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>        <span class="n">native</span><span class="o">.</span><span class="n">store</span><span class="p">(</span><span class="n">total</span><span class="p">,</span> <span class="n">native</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">total</span><span class="p">)</span> <span class="o">+</span> <span class="mi">2</span><span class="p">)</span>
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>        <span class="n">concurrent</span><span class="o">.</span><span class="n">unlock</span><span class="p">(</span><span class="n">mutex</span><span class="p">)</span>
+</code></pre></div>
+<p><code>load</code>, <code>store</code>, <code>exchange</code>, <code>compare_exchange</code>, the <code>fetch_*</code> family, and
+<code>fence</code> each take an <code>order</code> — <code>relaxed</code>, <code>acquire</code>, <code>release</code>, <code>acq_rel</code>,
+<code>seq_cst</code> — and the checker holds what C11 holds: a load is never
+<code>release</code>, a store never <code>acquire</code>, a relaxed fence orders nothing
+(<code>E1641</code>). Natively each lowers to the instruction of that order; under
+CPython the operations serialize under one lock, which is a valid
+implementation of every order.</p>
+<h2 id="threads-and-what-keeps-them-apart">Threads and what keeps them apart<a class="headerlink" href="#threads-and-what-keeps-them-apart" title="Permanent link">&para;</a></h2>
+<p><code>concurrent.spawn(f, *args)</code> runs a function of the module on a new thread
+and hands back a handle; <code>join</code> waits. The synchronization objects are
+memory the program owns: a mutex is one <code>int</code> slot, a condition one more
+counting notifications, and <code>wait</code>/<code>notify</code> spin under the CPU's pause hint
+over the same atomics on every path. <code>signal</code> shows the pattern — a waiter
+blocks on a condition until the main thread sets a flag and notifies. A
+thread that fails a guard fails its joiner, and the function falls back as
+a whole. Native code links pthreads; a target without them is refused with
+the reason.</p>
 <h2 id="run-it">Run it<a class="headerlink" href="#run-it" title="Permanent link">&para;</a></h2>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>python<span class="w">  </span>counters.ppy
-<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>ppy<span class="w"> </span>run<span class="w"> </span>counters.ppy
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>python<span class="w">  </span>counters.ppy
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>ppy<span class="w"> </span>run<span class="w"> </span>counters.ppy
 </code></pre></div>
 <!-- outputs:start -->
 <h2 id="what-it-prints">What it prints<a class="headerlink" href="#what-it-prints" title="Permanent link">&para;</a></h2>
 <p><strong><code>python  counters.ppy</code></strong></p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>2000 4000
-<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>2000 True 7 1
-<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>40
-</code></pre></div>
-<p><strong><code>ppy run counters.ppy</code></strong></p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>2000 4000
 <a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>2000 True 7 1
 <a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>40
 </code></pre></div>
+<p><strong><code>ppy run counters.ppy</code></strong></p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>2000 4000
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>2000 True 7 1
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>40
+</code></pre></div>
 <!-- outputs:end -->
 
+<h2 id="read-on">Read on<a class="headerlink" href="#read-on" title="Permanent link">&para;</a></h2>
+<ul>
+<li><a href="../../guide/concurrency/">Atomics and threads</a> — the two namespaces in full.</li>
+<li><a href="../28_threads/">Threads</a> — the other direction: Python threads calling native code.</li>
+<li><a href="../35_parallel_range/">Parallel range</a> — when you want the split done for you.</li>
+</ul>
+<p><code>counters.ppy</code> is hand-written; there is no <code>.py</code> source and no conversion
+step.</p>
 <h2 id="34_atomics_and_threadscountersppy"><code>34_atomics_and_threads/counters.ppy</code><a class="headerlink" href="#34_atomics_and_threadscountersppy" title="Permanent link">&para;</a></h2>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ppy</span><span class="w"> </span><span class="kn">import</span> <span class="n">atomic</span><span class="p">,</span> <span class="n">concurrent</span><span class="p">,</span> <span class="n">native</span>
-<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>
-<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>
-<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="k">def</span><span class="w"> </span><span class="nf">worker</span><span class="p">(</span>
-<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>    <span class="n">counter</span><span class="p">:</span> <span class="n">native</span><span class="o">.</span><span class="n">ptr</span><span class="p">[</span><span class="nb">int</span><span class="p">],</span> <span class="n">mutex</span><span class="p">:</span> <span class="n">native</span><span class="o">.</span><span class="n">ptr</span><span class="p">[</span><span class="nb">int</span><span class="p">],</span> <span class="n">total</span><span class="p">:</span> <span class="n">native</span><span class="o">.</span><span class="n">ptr</span><span class="p">[</span><span class="nb">int</span><span class="p">],</span> <span class="n">rounds</span><span class="p">:</span> <span class="nb">int</span>
-<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a>    <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">rounds</span><span class="p">):</span>
-<a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a>        <span class="n">atomic</span><span class="o">.</span><span class="n">fetch_add</span><span class="p">(</span><span class="n">counter</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="n">order</span><span class="o">=</span><span class="s2">"relaxed"</span><span class="p">)</span>
-<a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a>        <span class="n">concurrent</span><span class="o">.</span><span class="n">lock</span><span class="p">(</span><span class="n">mutex</span><span class="p">)</span>
-<a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a>        <span class="n">native</span><span class="o">.</span><span class="n">store</span><span class="p">(</span><span class="n">total</span><span class="p">,</span> <span class="n">native</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">total</span><span class="p">)</span> <span class="o">+</span> <span class="mi">2</span><span class="p">)</span>
-<a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a>        <span class="n">concurrent</span><span class="o">.</span><span class="n">unlock</span><span class="p">(</span><span class="n">mutex</span><span class="p">)</span>
-<a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a>
-<a id="__codelineno-3-13" name="__codelineno-3-13" href="#__codelineno-3-13"></a>
-<a id="__codelineno-3-14" name="__codelineno-3-14" href="#__codelineno-3-14"></a><span class="k">def</span><span class="w"> </span><span class="nf">waiter</span><span class="p">(</span>
-<a id="__codelineno-3-15" name="__codelineno-3-15" href="#__codelineno-3-15"></a>    <span class="n">flag</span><span class="p">:</span> <span class="n">native</span><span class="o">.</span><span class="n">ptr</span><span class="p">[</span><span class="nb">int</span><span class="p">],</span> <span class="n">mutex</span><span class="p">:</span> <span class="n">native</span><span class="o">.</span><span class="n">ptr</span><span class="p">[</span><span class="nb">int</span><span class="p">],</span> <span class="n">condition</span><span class="p">:</span> <span class="n">native</span><span class="o">.</span><span class="n">ptr</span><span class="p">[</span><span class="nb">int</span><span class="p">],</span> <span class="n">out</span><span class="p">:</span> <span class="n">native</span><span class="o">.</span><span class="n">ptr</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span>
-<a id="__codelineno-3-16" name="__codelineno-3-16" href="#__codelineno-3-16"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<a id="__codelineno-3-17" name="__codelineno-3-17" href="#__codelineno-3-17"></a>    <span class="n">concurrent</span><span class="o">.</span><span class="n">lock</span><span class="p">(</span><span class="n">mutex</span><span class="p">)</span>
-<a id="__codelineno-3-18" name="__codelineno-3-18" href="#__codelineno-3-18"></a>    <span class="k">while</span> <span class="n">native</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">flag</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
-<a id="__codelineno-3-19" name="__codelineno-3-19" href="#__codelineno-3-19"></a>        <span class="n">concurrent</span><span class="o">.</span><span class="n">wait</span><span class="p">(</span><span class="n">condition</span><span class="p">,</span> <span class="n">mutex</span><span class="p">)</span>
-<a id="__codelineno-3-20" name="__codelineno-3-20" href="#__codelineno-3-20"></a>    <span class="n">native</span><span class="o">.</span><span class="n">store</span><span class="p">(</span><span class="n">out</span><span class="p">,</span> <span class="n">native</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">flag</span><span class="p">)</span> <span class="o">*</span> <span class="mi">10</span><span class="p">)</span>
-<a id="__codelineno-3-21" name="__codelineno-3-21" href="#__codelineno-3-21"></a>    <span class="n">concurrent</span><span class="o">.</span><span class="n">unlock</span><span class="p">(</span><span class="n">mutex</span><span class="p">)</span>
-<a id="__codelineno-3-22" name="__codelineno-3-22" href="#__codelineno-3-22"></a>
-<a id="__codelineno-3-23" name="__codelineno-3-23" href="#__codelineno-3-23"></a>
-<a id="__codelineno-3-24" name="__codelineno-3-24" href="#__codelineno-3-24"></a><span class="k">def</span><span class="w"> </span><span class="nf">run</span><span class="p">(</span>
-<a id="__codelineno-3-25" name="__codelineno-3-25" href="#__codelineno-3-25"></a>    <span class="n">counter</span><span class="p">:</span> <span class="n">native</span><span class="o">.</span><span class="n">ptr</span><span class="p">[</span><span class="nb">int</span><span class="p">],</span> <span class="n">mutex</span><span class="p">:</span> <span class="n">native</span><span class="o">.</span><span class="n">ptr</span><span class="p">[</span><span class="nb">int</span><span class="p">],</span> <span class="n">total</span><span class="p">:</span> <span class="n">native</span><span class="o">.</span><span class="n">ptr</span><span class="p">[</span><span class="nb">int</span><span class="p">],</span> <span class="n">rounds</span><span class="p">:</span> <span class="nb">int</span>
-<a id="__codelineno-3-26" name="__codelineno-3-26" href="#__codelineno-3-26"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
-<a id="__codelineno-3-27" name="__codelineno-3-27" href="#__codelineno-3-27"></a>    <span class="n">first</span> <span class="o">=</span> <span class="n">concurrent</span><span class="o">.</span><span class="n">spawn</span><span class="p">(</span><span class="n">worker</span><span class="p">,</span> <span class="n">counter</span><span class="p">,</span> <span class="n">mutex</span><span class="p">,</span> <span class="n">total</span><span class="p">,</span> <span class="n">rounds</span><span class="p">)</span>
-<a id="__codelineno-3-28" name="__codelineno-3-28" href="#__codelineno-3-28"></a>    <span class="n">second</span> <span class="o">=</span> <span class="n">concurrent</span><span class="o">.</span><span class="n">spawn</span><span class="p">(</span><span class="n">worker</span><span class="p">,</span> <span class="n">counter</span><span class="p">,</span> <span class="n">mutex</span><span class="p">,</span> <span class="n">total</span><span class="p">,</span> <span class="n">rounds</span><span class="p">)</span>
-<a id="__codelineno-3-29" name="__codelineno-3-29" href="#__codelineno-3-29"></a>    <span class="n">third</span> <span class="o">=</span> <span class="n">concurrent</span><span class="o">.</span><span class="n">spawn</span><span class="p">(</span><span class="n">worker</span><span class="p">,</span> <span class="n">counter</span><span class="p">,</span> <span class="n">mutex</span><span class="p">,</span> <span class="n">total</span><span class="p">,</span> <span class="n">rounds</span><span class="p">)</span>
-<a id="__codelineno-3-30" name="__codelineno-3-30" href="#__codelineno-3-30"></a>    <span class="n">fourth</span> <span class="o">=</span> <span class="n">concurrent</span><span class="o">.</span><span class="n">spawn</span><span class="p">(</span><span class="n">worker</span><span class="p">,</span> <span class="n">counter</span><span class="p">,</span> <span class="n">mutex</span><span class="p">,</span> <span class="n">total</span><span class="p">,</span> <span class="n">rounds</span><span class="p">)</span>
-<a id="__codelineno-3-31" name="__codelineno-3-31" href="#__codelineno-3-31"></a>    <span class="n">concurrent</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">first</span><span class="p">)</span>
-<a id="__codelineno-3-32" name="__codelineno-3-32" href="#__codelineno-3-32"></a>    <span class="n">concurrent</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">second</span><span class="p">)</span>
-<a id="__codelineno-3-33" name="__codelineno-3-33" href="#__codelineno-3-33"></a>    <span class="n">concurrent</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">third</span><span class="p">)</span>
-<a id="__codelineno-3-34" name="__codelineno-3-34" href="#__codelineno-3-34"></a>    <span class="n">concurrent</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">fourth</span><span class="p">)</span>
-<a id="__codelineno-3-35" name="__codelineno-3-35" href="#__codelineno-3-35"></a>    <span class="n">atomic</span><span class="o">.</span><span class="n">fence</span><span class="p">()</span>
-<a id="__codelineno-3-36" name="__codelineno-3-36" href="#__codelineno-3-36"></a>    <span class="k">return</span> <span class="n">atomic</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">counter</span><span class="p">)</span>
-<a id="__codelineno-3-37" name="__codelineno-3-37" href="#__codelineno-3-37"></a>
-<a id="__codelineno-3-38" name="__codelineno-3-38" href="#__codelineno-3-38"></a>
-<a id="__codelineno-3-39" name="__codelineno-3-39" href="#__codelineno-3-39"></a><span class="k">def</span><span class="w"> </span><span class="nf">signal</span><span class="p">(</span>
-<a id="__codelineno-3-40" name="__codelineno-3-40" href="#__codelineno-3-40"></a>    <span class="n">flag</span><span class="p">:</span> <span class="n">native</span><span class="o">.</span><span class="n">ptr</span><span class="p">[</span><span class="nb">int</span><span class="p">],</span> <span class="n">mutex</span><span class="p">:</span> <span class="n">native</span><span class="o">.</span><span class="n">ptr</span><span class="p">[</span><span class="nb">int</span><span class="p">],</span> <span class="n">condition</span><span class="p">:</span> <span class="n">native</span><span class="o">.</span><span class="n">ptr</span><span class="p">[</span><span class="nb">int</span><span class="p">],</span> <span class="n">out</span><span class="p">:</span> <span class="n">native</span><span class="o">.</span><span class="n">ptr</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span>
-<a id="__codelineno-3-41" name="__codelineno-3-41" href="#__codelineno-3-41"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
-<a id="__codelineno-3-42" name="__codelineno-3-42" href="#__codelineno-3-42"></a>    <span class="n">waiting</span> <span class="o">=</span> <span class="n">concurrent</span><span class="o">.</span><span class="n">spawn</span><span class="p">(</span><span class="n">waiter</span><span class="p">,</span> <span class="n">flag</span><span class="p">,</span> <span class="n">mutex</span><span class="p">,</span> <span class="n">condition</span><span class="p">,</span> <span class="n">out</span><span class="p">)</span>
-<a id="__codelineno-3-43" name="__codelineno-3-43" href="#__codelineno-3-43"></a>    <span class="n">concurrent</span><span class="o">.</span><span class="n">lock</span><span class="p">(</span><span class="n">mutex</span><span class="p">)</span>
-<a id="__codelineno-3-44" name="__codelineno-3-44" href="#__codelineno-3-44"></a>    <span class="n">native</span><span class="o">.</span><span class="n">store</span><span class="p">(</span><span class="n">flag</span><span class="p">,</span> <span class="mi">4</span><span class="p">)</span>
-<a id="__codelineno-3-45" name="__codelineno-3-45" href="#__codelineno-3-45"></a>    <span class="n">concurrent</span><span class="o">.</span><span class="n">notify</span><span class="p">(</span><span class="n">condition</span><span class="p">)</span>
-<a id="__codelineno-3-46" name="__codelineno-3-46" href="#__codelineno-3-46"></a>    <span class="n">concurrent</span><span class="o">.</span><span class="n">unlock</span><span class="p">(</span><span class="n">mutex</span><span class="p">)</span>
-<a id="__codelineno-3-47" name="__codelineno-3-47" href="#__codelineno-3-47"></a>    <span class="n">concurrent</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">waiting</span><span class="p">)</span>
-<a id="__codelineno-3-48" name="__codelineno-3-48" href="#__codelineno-3-48"></a>    <span class="k">return</span> <span class="n">native</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">out</span><span class="p">)</span>
-<a id="__codelineno-3-49" name="__codelineno-3-49" href="#__codelineno-3-49"></a>
-<a id="__codelineno-3-50" name="__codelineno-3-50" href="#__codelineno-3-50"></a>
-<a id="__codelineno-3-51" name="__codelineno-3-51" href="#__codelineno-3-51"></a><span class="k">def</span><span class="w"> </span><span class="nf">main</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<a id="__codelineno-3-52" name="__codelineno-3-52" href="#__codelineno-3-52"></a>    <span class="n">counter</span> <span class="o">=</span> <span class="n">native</span><span class="o">.</span><span class="n">stack_alloc</span><span class="p">[</span><span class="nb">int</span><span class="p">](</span><span class="mi">1</span><span class="p">)</span>
-<a id="__codelineno-3-53" name="__codelineno-3-53" href="#__codelineno-3-53"></a>    <span class="n">mutex</span> <span class="o">=</span> <span class="n">native</span><span class="o">.</span><span class="n">stack_alloc</span><span class="p">[</span><span class="nb">int</span><span class="p">](</span><span class="mi">1</span><span class="p">)</span>
-<a id="__codelineno-3-54" name="__codelineno-3-54" href="#__codelineno-3-54"></a>    <span class="n">total</span> <span class="o">=</span> <span class="n">native</span><span class="o">.</span><span class="n">stack_alloc</span><span class="p">[</span><span class="nb">int</span><span class="p">](</span><span class="mi">1</span><span class="p">)</span>
-<a id="__codelineno-3-55" name="__codelineno-3-55" href="#__codelineno-3-55"></a>    <span class="nb">print</span><span class="p">(</span><span class="n">run</span><span class="p">(</span><span class="n">counter</span><span class="p">,</span> <span class="n">mutex</span><span class="p">,</span> <span class="n">total</span><span class="p">,</span> <span class="mi">500</span><span class="p">),</span> <span class="n">native</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">total</span><span class="p">))</span>
-<a id="__codelineno-3-56" name="__codelineno-3-56" href="#__codelineno-3-56"></a>    <span class="n">old</span><span class="p">,</span> <span class="n">swapped</span> <span class="o">=</span> <span class="n">atomic</span><span class="o">.</span><span class="n">compare_exchange</span><span class="p">(</span><span class="n">counter</span><span class="p">,</span> <span class="mi">2000</span><span class="p">,</span> <span class="mi">7</span><span class="p">)</span>
-<a id="__codelineno-3-57" name="__codelineno-3-57" href="#__codelineno-3-57"></a>    <span class="nb">print</span><span class="p">(</span><span class="n">old</span><span class="p">,</span> <span class="n">swapped</span><span class="p">,</span> <span class="n">atomic</span><span class="o">.</span><span class="n">exchange</span><span class="p">(</span><span class="n">counter</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span> <span class="n">atomic</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">counter</span><span class="p">,</span> <span class="n">order</span><span class="o">=</span><span class="s2">"acquire"</span><span class="p">))</span>
-<a id="__codelineno-3-58" name="__codelineno-3-58" href="#__codelineno-3-58"></a>    <span class="n">flag</span> <span class="o">=</span> <span class="n">native</span><span class="o">.</span><span class="n">stack_alloc</span><span class="p">[</span><span class="nb">int</span><span class="p">](</span><span class="mi">1</span><span class="p">)</span>
-<a id="__codelineno-3-59" name="__codelineno-3-59" href="#__codelineno-3-59"></a>    <span class="n">condition</span> <span class="o">=</span> <span class="n">native</span><span class="o">.</span><span class="n">stack_alloc</span><span class="p">[</span><span class="nb">int</span><span class="p">](</span><span class="mi">1</span><span class="p">)</span>
-<a id="__codelineno-3-60" name="__codelineno-3-60" href="#__codelineno-3-60"></a>    <span class="n">out</span> <span class="o">=</span> <span class="n">native</span><span class="o">.</span><span class="n">stack_alloc</span><span class="p">[</span><span class="nb">int</span><span class="p">](</span><span class="mi">1</span><span class="p">)</span>
-<a id="__codelineno-3-61" name="__codelineno-3-61" href="#__codelineno-3-61"></a>    <span class="nb">print</span><span class="p">(</span><span class="n">signal</span><span class="p">(</span><span class="n">flag</span><span class="p">,</span> <span class="n">mutex</span><span class="p">,</span> <span class="n">condition</span><span class="p">,</span> <span class="n">out</span><span class="p">))</span>
-<a id="__codelineno-3-62" name="__codelineno-3-62" href="#__codelineno-3-62"></a>
-<a id="__codelineno-3-63" name="__codelineno-3-63" href="#__codelineno-3-63"></a>
-<a id="__codelineno-3-64" name="__codelineno-3-64" href="#__codelineno-3-64"></a><span class="n">main</span><span class="p">()</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ppy</span><span class="w"> </span><span class="kn">import</span> <span class="n">atomic</span><span class="p">,</span> <span class="n">concurrent</span><span class="p">,</span> <span class="n">native</span>
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>
+<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>
+<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="k">def</span><span class="w"> </span><span class="nf">worker</span><span class="p">(</span>
+<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>    <span class="n">counter</span><span class="p">:</span> <span class="n">native</span><span class="o">.</span><span class="n">ptr</span><span class="p">[</span><span class="nb">int</span><span class="p">],</span> <span class="n">mutex</span><span class="p">:</span> <span class="n">native</span><span class="o">.</span><span class="n">ptr</span><span class="p">[</span><span class="nb">int</span><span class="p">],</span> <span class="n">total</span><span class="p">:</span> <span class="n">native</span><span class="o">.</span><span class="n">ptr</span><span class="p">[</span><span class="nb">int</span><span class="p">],</span> <span class="n">rounds</span><span class="p">:</span> <span class="nb">int</span>
+<a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a>    <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">rounds</span><span class="p">):</span>
+<a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a>        <span class="n">atomic</span><span class="o">.</span><span class="n">fetch_add</span><span class="p">(</span><span class="n">counter</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="n">order</span><span class="o">=</span><span class="s2">"relaxed"</span><span class="p">)</span>
+<a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a>        <span class="n">concurrent</span><span class="o">.</span><span class="n">lock</span><span class="p">(</span><span class="n">mutex</span><span class="p">)</span>
+<a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a>        <span class="n">native</span><span class="o">.</span><span class="n">store</span><span class="p">(</span><span class="n">total</span><span class="p">,</span> <span class="n">native</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">total</span><span class="p">)</span> <span class="o">+</span> <span class="mi">2</span><span class="p">)</span>
+<a id="__codelineno-4-11" name="__codelineno-4-11" href="#__codelineno-4-11"></a>        <span class="n">concurrent</span><span class="o">.</span><span class="n">unlock</span><span class="p">(</span><span class="n">mutex</span><span class="p">)</span>
+<a id="__codelineno-4-12" name="__codelineno-4-12" href="#__codelineno-4-12"></a>
+<a id="__codelineno-4-13" name="__codelineno-4-13" href="#__codelineno-4-13"></a>
+<a id="__codelineno-4-14" name="__codelineno-4-14" href="#__codelineno-4-14"></a><span class="k">def</span><span class="w"> </span><span class="nf">waiter</span><span class="p">(</span>
+<a id="__codelineno-4-15" name="__codelineno-4-15" href="#__codelineno-4-15"></a>    <span class="n">flag</span><span class="p">:</span> <span class="n">native</span><span class="o">.</span><span class="n">ptr</span><span class="p">[</span><span class="nb">int</span><span class="p">],</span> <span class="n">mutex</span><span class="p">:</span> <span class="n">native</span><span class="o">.</span><span class="n">ptr</span><span class="p">[</span><span class="nb">int</span><span class="p">],</span> <span class="n">condition</span><span class="p">:</span> <span class="n">native</span><span class="o">.</span><span class="n">ptr</span><span class="p">[</span><span class="nb">int</span><span class="p">],</span> <span class="n">out</span><span class="p">:</span> <span class="n">native</span><span class="o">.</span><span class="n">ptr</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span>
+<a id="__codelineno-4-16" name="__codelineno-4-16" href="#__codelineno-4-16"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-4-17" name="__codelineno-4-17" href="#__codelineno-4-17"></a>    <span class="n">concurrent</span><span class="o">.</span><span class="n">lock</span><span class="p">(</span><span class="n">mutex</span><span class="p">)</span>
+<a id="__codelineno-4-18" name="__codelineno-4-18" href="#__codelineno-4-18"></a>    <span class="k">while</span> <span class="n">native</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">flag</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+<a id="__codelineno-4-19" name="__codelineno-4-19" href="#__codelineno-4-19"></a>        <span class="n">concurrent</span><span class="o">.</span><span class="n">wait</span><span class="p">(</span><span class="n">condition</span><span class="p">,</span> <span class="n">mutex</span><span class="p">)</span>
+<a id="__codelineno-4-20" name="__codelineno-4-20" href="#__codelineno-4-20"></a>    <span class="n">native</span><span class="o">.</span><span class="n">store</span><span class="p">(</span><span class="n">out</span><span class="p">,</span> <span class="n">native</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">flag</span><span class="p">)</span> <span class="o">*</span> <span class="mi">10</span><span class="p">)</span>
+<a id="__codelineno-4-21" name="__codelineno-4-21" href="#__codelineno-4-21"></a>    <span class="n">concurrent</span><span class="o">.</span><span class="n">unlock</span><span class="p">(</span><span class="n">mutex</span><span class="p">)</span>
+<a id="__codelineno-4-22" name="__codelineno-4-22" href="#__codelineno-4-22"></a>
+<a id="__codelineno-4-23" name="__codelineno-4-23" href="#__codelineno-4-23"></a>
+<a id="__codelineno-4-24" name="__codelineno-4-24" href="#__codelineno-4-24"></a><span class="k">def</span><span class="w"> </span><span class="nf">run</span><span class="p">(</span>
+<a id="__codelineno-4-25" name="__codelineno-4-25" href="#__codelineno-4-25"></a>    <span class="n">counter</span><span class="p">:</span> <span class="n">native</span><span class="o">.</span><span class="n">ptr</span><span class="p">[</span><span class="nb">int</span><span class="p">],</span> <span class="n">mutex</span><span class="p">:</span> <span class="n">native</span><span class="o">.</span><span class="n">ptr</span><span class="p">[</span><span class="nb">int</span><span class="p">],</span> <span class="n">total</span><span class="p">:</span> <span class="n">native</span><span class="o">.</span><span class="n">ptr</span><span class="p">[</span><span class="nb">int</span><span class="p">],</span> <span class="n">rounds</span><span class="p">:</span> <span class="nb">int</span>
+<a id="__codelineno-4-26" name="__codelineno-4-26" href="#__codelineno-4-26"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+<a id="__codelineno-4-27" name="__codelineno-4-27" href="#__codelineno-4-27"></a>    <span class="n">first</span> <span class="o">=</span> <span class="n">concurrent</span><span class="o">.</span><span class="n">spawn</span><span class="p">(</span><span class="n">worker</span><span class="p">,</span> <span class="n">counter</span><span class="p">,</span> <span class="n">mutex</span><span class="p">,</span> <span class="n">total</span><span class="p">,</span> <span class="n">rounds</span><span class="p">)</span>
+<a id="__codelineno-4-28" name="__codelineno-4-28" href="#__codelineno-4-28"></a>    <span class="n">second</span> <span class="o">=</span> <span class="n">concurrent</span><span class="o">.</span><span class="n">spawn</span><span class="p">(</span><span class="n">worker</span><span class="p">,</span> <span class="n">counter</span><span class="p">,</span> <span class="n">mutex</span><span class="p">,</span> <span class="n">total</span><span class="p">,</span> <span class="n">rounds</span><span class="p">)</span>
+<a id="__codelineno-4-29" name="__codelineno-4-29" href="#__codelineno-4-29"></a>    <span class="n">third</span> <span class="o">=</span> <span class="n">concurrent</span><span class="o">.</span><span class="n">spawn</span><span class="p">(</span><span class="n">worker</span><span class="p">,</span> <span class="n">counter</span><span class="p">,</span> <span class="n">mutex</span><span class="p">,</span> <span class="n">total</span><span class="p">,</span> <span class="n">rounds</span><span class="p">)</span>
+<a id="__codelineno-4-30" name="__codelineno-4-30" href="#__codelineno-4-30"></a>    <span class="n">fourth</span> <span class="o">=</span> <span class="n">concurrent</span><span class="o">.</span><span class="n">spawn</span><span class="p">(</span><span class="n">worker</span><span class="p">,</span> <span class="n">counter</span><span class="p">,</span> <span class="n">mutex</span><span class="p">,</span> <span class="n">total</span><span class="p">,</span> <span class="n">rounds</span><span class="p">)</span>
+<a id="__codelineno-4-31" name="__codelineno-4-31" href="#__codelineno-4-31"></a>    <span class="n">concurrent</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">first</span><span class="p">)</span>
+<a id="__codelineno-4-32" name="__codelineno-4-32" href="#__codelineno-4-32"></a>    <span class="n">concurrent</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">second</span><span class="p">)</span>
+<a id="__codelineno-4-33" name="__codelineno-4-33" href="#__codelineno-4-33"></a>    <span class="n">concurrent</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">third</span><span class="p">)</span>
+<a id="__codelineno-4-34" name="__codelineno-4-34" href="#__codelineno-4-34"></a>    <span class="n">concurrent</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">fourth</span><span class="p">)</span>
+<a id="__codelineno-4-35" name="__codelineno-4-35" href="#__codelineno-4-35"></a>    <span class="n">atomic</span><span class="o">.</span><span class="n">fence</span><span class="p">()</span>
+<a id="__codelineno-4-36" name="__codelineno-4-36" href="#__codelineno-4-36"></a>    <span class="k">return</span> <span class="n">atomic</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">counter</span><span class="p">)</span>
+<a id="__codelineno-4-37" name="__codelineno-4-37" href="#__codelineno-4-37"></a>
+<a id="__codelineno-4-38" name="__codelineno-4-38" href="#__codelineno-4-38"></a>
+<a id="__codelineno-4-39" name="__codelineno-4-39" href="#__codelineno-4-39"></a><span class="k">def</span><span class="w"> </span><span class="nf">signal</span><span class="p">(</span>
+<a id="__codelineno-4-40" name="__codelineno-4-40" href="#__codelineno-4-40"></a>    <span class="n">flag</span><span class="p">:</span> <span class="n">native</span><span class="o">.</span><span class="n">ptr</span><span class="p">[</span><span class="nb">int</span><span class="p">],</span> <span class="n">mutex</span><span class="p">:</span> <span class="n">native</span><span class="o">.</span><span class="n">ptr</span><span class="p">[</span><span class="nb">int</span><span class="p">],</span> <span class="n">condition</span><span class="p">:</span> <span class="n">native</span><span class="o">.</span><span class="n">ptr</span><span class="p">[</span><span class="nb">int</span><span class="p">],</span> <span class="n">out</span><span class="p">:</span> <span class="n">native</span><span class="o">.</span><span class="n">ptr</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span>
+<a id="__codelineno-4-41" name="__codelineno-4-41" href="#__codelineno-4-41"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+<a id="__codelineno-4-42" name="__codelineno-4-42" href="#__codelineno-4-42"></a>    <span class="n">waiting</span> <span class="o">=</span> <span class="n">concurrent</span><span class="o">.</span><span class="n">spawn</span><span class="p">(</span><span class="n">waiter</span><span class="p">,</span> <span class="n">flag</span><span class="p">,</span> <span class="n">mutex</span><span class="p">,</span> <span class="n">condition</span><span class="p">,</span> <span class="n">out</span><span class="p">)</span>
+<a id="__codelineno-4-43" name="__codelineno-4-43" href="#__codelineno-4-43"></a>    <span class="n">concurrent</span><span class="o">.</span><span class="n">lock</span><span class="p">(</span><span class="n">mutex</span><span class="p">)</span>
+<a id="__codelineno-4-44" name="__codelineno-4-44" href="#__codelineno-4-44"></a>    <span class="n">native</span><span class="o">.</span><span class="n">store</span><span class="p">(</span><span class="n">flag</span><span class="p">,</span> <span class="mi">4</span><span class="p">)</span>
+<a id="__codelineno-4-45" name="__codelineno-4-45" href="#__codelineno-4-45"></a>    <span class="n">concurrent</span><span class="o">.</span><span class="n">notify</span><span class="p">(</span><span class="n">condition</span><span class="p">)</span>
+<a id="__codelineno-4-46" name="__codelineno-4-46" href="#__codelineno-4-46"></a>    <span class="n">concurrent</span><span class="o">.</span><span class="n">unlock</span><span class="p">(</span><span class="n">mutex</span><span class="p">)</span>
+<a id="__codelineno-4-47" name="__codelineno-4-47" href="#__codelineno-4-47"></a>    <span class="n">concurrent</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">waiting</span><span class="p">)</span>
+<a id="__codelineno-4-48" name="__codelineno-4-48" href="#__codelineno-4-48"></a>    <span class="k">return</span> <span class="n">native</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">out</span><span class="p">)</span>
+<a id="__codelineno-4-49" name="__codelineno-4-49" href="#__codelineno-4-49"></a>
+<a id="__codelineno-4-50" name="__codelineno-4-50" href="#__codelineno-4-50"></a>
+<a id="__codelineno-4-51" name="__codelineno-4-51" href="#__codelineno-4-51"></a><span class="k">def</span><span class="w"> </span><span class="nf">main</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-4-52" name="__codelineno-4-52" href="#__codelineno-4-52"></a>    <span class="n">counter</span> <span class="o">=</span> <span class="n">native</span><span class="o">.</span><span class="n">stack_alloc</span><span class="p">[</span><span class="nb">int</span><span class="p">](</span><span class="mi">1</span><span class="p">)</span>
+<a id="__codelineno-4-53" name="__codelineno-4-53" href="#__codelineno-4-53"></a>    <span class="n">mutex</span> <span class="o">=</span> <span class="n">native</span><span class="o">.</span><span class="n">stack_alloc</span><span class="p">[</span><span class="nb">int</span><span class="p">](</span><span class="mi">1</span><span class="p">)</span>
+<a id="__codelineno-4-54" name="__codelineno-4-54" href="#__codelineno-4-54"></a>    <span class="n">total</span> <span class="o">=</span> <span class="n">native</span><span class="o">.</span><span class="n">stack_alloc</span><span class="p">[</span><span class="nb">int</span><span class="p">](</span><span class="mi">1</span><span class="p">)</span>
+<a id="__codelineno-4-55" name="__codelineno-4-55" href="#__codelineno-4-55"></a>    <span class="nb">print</span><span class="p">(</span><span class="n">run</span><span class="p">(</span><span class="n">counter</span><span class="p">,</span> <span class="n">mutex</span><span class="p">,</span> <span class="n">total</span><span class="p">,</span> <span class="mi">500</span><span class="p">),</span> <span class="n">native</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">total</span><span class="p">))</span>
+<a id="__codelineno-4-56" name="__codelineno-4-56" href="#__codelineno-4-56"></a>    <span class="n">old</span><span class="p">,</span> <span class="n">swapped</span> <span class="o">=</span> <span class="n">atomic</span><span class="o">.</span><span class="n">compare_exchange</span><span class="p">(</span><span class="n">counter</span><span class="p">,</span> <span class="mi">2000</span><span class="p">,</span> <span class="mi">7</span><span class="p">)</span>
+<a id="__codelineno-4-57" name="__codelineno-4-57" href="#__codelineno-4-57"></a>    <span class="nb">print</span><span class="p">(</span><span class="n">old</span><span class="p">,</span> <span class="n">swapped</span><span class="p">,</span> <span class="n">atomic</span><span class="o">.</span><span class="n">exchange</span><span class="p">(</span><span class="n">counter</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span> <span class="n">atomic</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">counter</span><span class="p">,</span> <span class="n">order</span><span class="o">=</span><span class="s2">"acquire"</span><span class="p">))</span>
+<a id="__codelineno-4-58" name="__codelineno-4-58" href="#__codelineno-4-58"></a>    <span class="n">flag</span> <span class="o">=</span> <span class="n">native</span><span class="o">.</span><span class="n">stack_alloc</span><span class="p">[</span><span class="nb">int</span><span class="p">](</span><span class="mi">1</span><span class="p">)</span>
+<a id="__codelineno-4-59" name="__codelineno-4-59" href="#__codelineno-4-59"></a>    <span class="n">condition</span> <span class="o">=</span> <span class="n">native</span><span class="o">.</span><span class="n">stack_alloc</span><span class="p">[</span><span class="nb">int</span><span class="p">](</span><span class="mi">1</span><span class="p">)</span>
+<a id="__codelineno-4-60" name="__codelineno-4-60" href="#__codelineno-4-60"></a>    <span class="n">out</span> <span class="o">=</span> <span class="n">native</span><span class="o">.</span><span class="n">stack_alloc</span><span class="p">[</span><span class="nb">int</span><span class="p">](</span><span class="mi">1</span><span class="p">)</span>
+<a id="__codelineno-4-61" name="__codelineno-4-61" href="#__codelineno-4-61"></a>    <span class="nb">print</span><span class="p">(</span><span class="n">signal</span><span class="p">(</span><span class="n">flag</span><span class="p">,</span> <span class="n">mutex</span><span class="p">,</span> <span class="n">condition</span><span class="p">,</span> <span class="n">out</span><span class="p">))</span>
+<a id="__codelineno-4-62" name="__codelineno-4-62" href="#__codelineno-4-62"></a>
+<a id="__codelineno-4-63" name="__codelineno-4-63" href="#__codelineno-4-63"></a>
+<a id="__codelineno-4-64" name="__codelineno-4-64" href="#__codelineno-4-64"></a><span class="n">main</span><span class="p">()</span>
 </code></pre></div>
 <p>The folder in the repository: <a href="https://github.com/franknoh/PPy/blob/main/examples/34_atomics_and_threads"><code>examples/34_atomics_and_threads</code></a>.</p>
 
@@ -3788,7 +3830,7 @@ and no conversion step involved.</p>
       <nav class="md-footer__inner md-grid" aria-label="Footer" >
         
           
-          <a href="../33_simd_and_cpu/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Lanes and the machine">
+          <a href="../33_simd_and_cpu/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Four lanes at a time, and the machine as a fact">
             <div class="md-footer__button md-icon">
               
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
@@ -3798,20 +3840,20 @@ and no conversion step involved.</p>
                 Previous
               </span>
               <div class="md-ellipsis">
-                Lanes and the machine
+                Four lanes at a time, and the machine as a fact
               </div>
             </div>
           </a>
         
         
           
-          <a href="../35_parallel_range/" class="md-footer__link md-footer__link--next" aria-label="Next: Parallel ranges">
+          <a href="../35_parallel_range/" class="md-footer__link md-footer__link--next" aria-label="Next: parallel.range: say the iterations may run at once">
             <div class="md-footer__title">
               <span class="md-footer__direction">
                 Next
               </span>
               <div class="md-ellipsis">
-                Parallel ranges
+                parallel.range: say the iterations may run at once
               </div>
             </div>
             <div class="md-footer__button md-icon">
