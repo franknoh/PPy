@@ -1,0 +1,4793 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="A statically analyzable language in Python's syntax, and a compiler whose three paths agree">
+      
+      
+      
+        <link rel="canonical" href="https://ppy.franknoh.dev/0.2/cli/">
+      
+      
+        <link rel="prev" href="../howto/30_migrate/">
+      
+      
+        <link rel="next" href="../api/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-ProperDocs 1.6.7, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>CLI - PPY</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.ec1eaa64.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/_mkdocstrings.css">
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="deep-purple">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#cli-reference" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+      <div data-md-color-scheme="default" data-md-component="outdated" hidden>
+        
+      </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow md-header--lifted" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="PPY" class="md-header__button md-logo" aria-label="PPY" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            PPY
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              CLI
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="deep-purple"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="deep-purple"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/franknoh/PPy" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    franknoh/PPy
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+    
+      
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href=".." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../getting-started/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Getting started
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../installing/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Installing
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../guide/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Guide
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../howto/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Examples
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+    
+  
+  
+    <li class="md-tabs__item md-tabs__item--active">
+      <a href="./" class="md-tabs__link">
+        
+  
+  
+    
+  
+  CLI
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../api/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  API
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../reference/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Reference
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../internals/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Internals
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../contributing/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Contributing
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../changelog/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Changelog
+
+      </a>
+    </li>
+  
+
+      
+    </ul>
+  </div>
+</nav>
+    
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="PPY" class="md-nav__button md-logo" aria-label="PPY" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    PPY
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/franknoh/PPy" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    franknoh/PPy
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../getting-started/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting started
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../installing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Installing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../guide/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Guide
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_4" id="__nav_4_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Guide
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../guide/subset/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The subset
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../guide/directives/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Directives and markers
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../guide/native/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Native memory and FFI
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../guide/simd-cpu/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Lanes and the machine
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../guide/concurrency/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Atomics and threads
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../guide/parallel/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Parallel loops
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../guide/autodiff/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Derivatives
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../guide/aio/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Coroutines
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../guide/gpu/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    GPU kernels
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../guide/xla/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    XLA
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../guide/generics/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Generics
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../guide/effects/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Effects and the three paths
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../guide/native-lowering/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Input and native lowering
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../howto/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Examples
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_5" id="__nav_5_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Examples
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_5_2" id="__nav_5_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Basics
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_5_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Basics
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../howto/01_basics/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Basics
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../howto/02_arbitrary_precision/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Arbitrary precision
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../howto/03_effects_and_contracts/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Effects and contracts
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../howto/04_classes/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Classes
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../howto/08_native_data/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Native data
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../howto/10_narrowing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Narrowing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../howto/11_numerics/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Numerics
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../howto/13_value_classes/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Value classes
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../howto/14_tuples/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tuples
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../howto/16_dynamic/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Dynamic boundaries
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../howto/17_containers/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Containers
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../howto/18_errors/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Exceptions
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../howto/19_strings/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Strings
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_5_3" id="__nav_5_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Native code
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_5_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Native code
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../howto/12_buffers_and_jit/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Buffers and JIT
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../howto/15_algorithms/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Algorithms
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../howto/28_threads/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Threads
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../howto/32_native_memory/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Native memory
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../howto/33_simd_and_cpu/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Lanes and the machine
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../howto/34_atomics_and_threads/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Atomics and threads
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../howto/35_parallel_range/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Parallel ranges
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../howto/36_autodiff/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Derivatives
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../howto/37_aio/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Coroutines
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../howto/40_generics/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Generics
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../howto/42_toolbox/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The toolbox
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_5_4" id="__nav_5_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Accelerators
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_5_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Accelerators
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../howto/38_cuda/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    GPU kernels
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../howto/39_xla/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    XLA
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5_5" id="__nav_5_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Libraries
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_5_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Libraries
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../howto/05_numpy/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    NumPy fusion
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../howto/06_pydantic/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Pydantic
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../howto/07_parallel/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Parallelism
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../howto/09_torch/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    PyTorch ATen regions
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../howto/21_training_torch/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Training a torch MLP
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../howto/22_training_jax/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Training a JAX MLP
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../howto/25_jax_export/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    JAX export
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../howto/27_uvicorn/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Serving over Uvicorn
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../howto/29_flax/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Flax
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../howto/31_torchrun/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    A trainer under torchrun and accelerate launch
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../howto/41_columnar/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Columnar expressions
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_5_6" id="__nav_5_6_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Conversion and projects
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_5_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Conversion and projects
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../howto/20_inventory/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Inventory
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../howto/23_inference/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Inference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../howto/24_interop/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Interop
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../howto/26_project/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Project layout
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../howto/30_migrate/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Migration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CLI
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CLI
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#global-options" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Global options
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#running-a-file" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Running a file
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#ppy-convert-strict-py-to-ppy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ppy convert — strict .py to .ppy
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#ppy-migrate-permissive-python-to-ppy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ppy migrate — permissive Python to PPY
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#ppy-check-static-validation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ppy check — static validation
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#ppy-build-compile-without-running" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ppy build — compile without running
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="ppy build — compile without running">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#-target-python-extension-library" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        --target, --python-extension, --library
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#-warm" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        --warm
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#-standalone" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        --standalone
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#ppy-emit-a-compiler-stage-as-text" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ppy emit — a compiler stage as text
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#ppy-bind-bindings-for-foreign-code" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ppy bind — bindings for foreign code
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#ppy-explain-why-it-compiled-that-way" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ppy explain — why it compiled that way
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#ppy-inspect-generated-artifacts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ppy inspect — generated artifacts
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#sanitizers-sanitize" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Sanitizers: --sanitize
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#optimization-report-report-opt" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Optimization report: --report-opt
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#profile-guided-optimization-profile-pgo" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Profile-guided optimization: --profile, --pgo
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#ppy-test" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ppy test
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#ppy-lint" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ppy lint
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#ppy-fmt-formatting" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ppy fmt — formatting
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#ppy-cache" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ppy cache
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#ppy-clean" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ppy clean
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#ppy-doctor" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ppy doctor
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#ppy-lsp" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ppy lsp
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Configuration
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#exit-codes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Exit codes
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../api/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_7" id="__nav_7_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    API
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/ppy/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ppy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/runtime/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ppy_runtime
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/plugins/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Plugin API
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/ir/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    IR
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../reference/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_8" id="__nav_8_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/diagnostics/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Diagnostics
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/config/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/performance/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Performance
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/compatibility/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Compatibility
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../internals/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Internals
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_9" id="__nav_9_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Internals
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../internals/architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../internals/ir/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The IR
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../internals/conversion/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Conversion and inference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../internals/migrating/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Migrating a real project
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../internals/plugins/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Plugins
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../internals/solver/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Where a solver fits
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../contributing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Contributing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../changelog/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Changelog
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#global-options" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Global options
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#running-a-file" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Running a file
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#ppy-convert-strict-py-to-ppy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ppy convert — strict .py to .ppy
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#ppy-migrate-permissive-python-to-ppy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ppy migrate — permissive Python to PPY
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#ppy-check-static-validation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ppy check — static validation
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#ppy-build-compile-without-running" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ppy build — compile without running
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="ppy build — compile without running">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#-target-python-extension-library" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        --target, --python-extension, --library
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#-warm" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        --warm
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#-standalone" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        --standalone
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#ppy-emit-a-compiler-stage-as-text" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ppy emit — a compiler stage as text
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#ppy-bind-bindings-for-foreign-code" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ppy bind — bindings for foreign code
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#ppy-explain-why-it-compiled-that-way" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ppy explain — why it compiled that way
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#ppy-inspect-generated-artifacts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ppy inspect — generated artifacts
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#sanitizers-sanitize" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Sanitizers: --sanitize
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#optimization-report-report-opt" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Optimization report: --report-opt
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#profile-guided-optimization-profile-pgo" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Profile-guided optimization: --profile, --pgo
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#ppy-test" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ppy test
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#ppy-lint" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ppy lint
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#ppy-fmt-formatting" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ppy fmt — formatting
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#ppy-cache" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ppy cache
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#ppy-clean" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ppy clean
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#ppy-doctor" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ppy doctor
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#ppy-lsp" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ppy lsp
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Configuration
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#exit-codes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Exit codes
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="cli-reference">CLI reference<a class="headerlink" href="#cli-reference" title="Permanent link">&para;</a></h1>
+<p>What any of it is for is in the <a href="../guide/">guide</a>.</p>
+<h2 id="global-options">Global options<a class="headerlink" href="#global-options" title="Permanent link">&para;</a></h2>
+<p>Before the subcommand.</p>
+<table>
+<thead>
+<tr>
+<th>option</th>
+<th>effect</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--version</code></td>
+<td>print the version and exit</td>
+</tr>
+<tr>
+<td><code>-q</code>, <code>--quiet</code></td>
+<td>only errors</td>
+</tr>
+<tr>
+<td><code>--color {auto,always,never}</code></td>
+<td>ANSI colour in diagnostics</td>
+</tr>
+<tr>
+<td><code>-O</code>, <code>--opt-level {0,1,2,3}</code></td>
+<td>override <code>[tool.ppy] opt-level</code></td>
+</tr>
+<tr>
+<td><code>--no-strict</code></td>
+<td>downgrade strict-mode errors where a sound fallback exists</td>
+</tr>
+</tbody>
+</table>
+<p><code>-O</code> overrides the project default, not a per-function <code>@ppy.opt(n)</code>, which is
+a contract on that function.</p>
+<h2 id="running-a-file">Running a file<a class="headerlink" href="#running-a-file" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>ppy<span class="w"> </span>FILE.ppy<span class="w"> </span><span class="o">[</span>--<span class="w"> </span>ARGS...<span class="o">]</span><span class="w">        </span><span class="c1"># optimized Python backend</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>ppy<span class="w"> </span>run<span class="w"> </span>FILE.ppy<span class="w"> </span><span class="o">[</span>--<span class="w"> </span>ARGS...<span class="o">]</span><span class="w">    </span><span class="c1"># compile through LLVM, then run</span>
+</code></pre></div>
+<p>Everything after <code>--</code> reaches the program as <code>sys.argv[1:]</code>. <code>ppy run</code>
+keeps Python-integer semantics by default; <code>--unsafe</code> drops the overflow
+guards on data arithmetic (64-bit wrap, bounds checks stay), and
+<code>--safeguards {hoisted,inline,off}</code> names the guard mode outright.
+<code>--prover {off,z3}</code> asks the solver to prove overflow guards away where the
+analysis allows it, overriding <code>[tool.ppy.llvm] prover</code>; see <a href="../internals/solver/">Where a solver fits</a>.</p>
+<p>The first <code>ppy run</code> of a program is a build into the cache followed by the
+launcher; the second is the launcher alone. Before importing the compiler,
+<code>ppy run</code> names the artifact by everything that could change it — the
+compiler's version and build, the interpreter, the configuration and flags,
+every source under the project root, the installed packages — and when a
+directory by that name holds a manifest, <code>ppy_runtime</code> runs it the way a
+built launcher would: no analysis, no LLVM, nothing the compiler imports.
+An edit anywhere in the project is a different name and a fresh build,
+whose per-module caches make it cheap. Three kinds of program stay on the
+in-process path every time, because the launcher cannot serve them: one
+that specializes at runtime (<code>@ppy.jit</code>, <code>@ppy.specialize</code>), one with a
+fused NumPy kernel, and one that imports JAX; each leaves a <code>needs-jit</code>
+note in its directory so the next run knows without analyzing. A program
+that imports torch is cached like any other: its ATen regions are compiled
+into the artifact and the launcher loads them from there.</p>
+<h2 id="ppy-convert-strict-py-to-ppy"><code>ppy convert</code> — strict <code>.py</code> to <code>.ppy</code><a class="headerlink" href="#ppy-convert-strict-py-to-ppy" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>ppy<span class="w"> </span>convert<span class="w"> </span>PATH<span class="w"> </span><span class="o">[</span>--in-place<span class="o">]</span><span class="w"> </span><span class="o">[</span>--force<span class="o">]</span><span class="w"> </span><span class="o">[</span>--dry-run<span class="o">]</span><span class="w"> </span><span class="o">[</span>--format<span class="o">]</span>
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="w">                 </span><span class="o">[</span>--promote-buffers<span class="o">]</span><span class="w"> </span><span class="o">[</span>--hoist-classes<span class="w"> </span><span class="o">{</span>safe,aggressive,off<span class="o">}]</span>
+</code></pre></div>
+<p>Strict staticization: the input is expected to already be reasonably static,
+and the output must be valid strict PPY. After planning the annotations, the
+converter re-analyzes its own output in strict mode; whatever <code>ppy check</code>
+would reject tomorrow — a dynamic feature without its <code>ppy.dynamic</code> boundary,
+a parameter no annotation reaches, an unvouched decorator holding one back —
+<code>ppy convert</code> refuses to produce today, with the checker's own explanation of
+why and a pointer to <code>ppy migrate</code>.</p>
+<p><code>PATH</code> is a file or a directory; a directory is analyzed as one call graph, so
+a function's types can come from call sites in other files.</p>
+<table>
+<thead>
+<tr>
+<th>option</th>
+<th>effect</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--dry-run</code></td>
+<td>print, write nothing</td>
+</tr>
+<tr>
+<td><code>--force</code></td>
+<td>overwrite an existing <code>.ppy</code></td>
+</tr>
+<tr>
+<td><code>--in-place</code></td>
+<td>write the <code>.ppy</code> and remove the <code>.py</code> it came from</td>
+</tr>
+<tr>
+<td><code>--format</code></td>
+<td>hand the result to the project's formatter afterwards</td>
+</tr>
+<tr>
+<td><code>--promote-buffers</code></td>
+<td>declare read-only numeric list parameters as <code>Buffer[T]</code> and rewrite the values feeding them into <code>array.array</code></td>
+</tr>
+<tr>
+<td><code>--hoist-classes {safe,aggressive,off}</code></td>
+<td>which classes may move above their uses; <code>safe</code> (default) moves only provably inert definitions</td>
+</tr>
+</tbody>
+</table>
+<p>There is deliberately no <code>--no-strict</code> here: a convert that can be asked not
+to be strict is two pipelines wearing one name. The permissive pipeline is
+<code>ppy migrate</code>.</p>
+<p>Conversion is atomic: an error anywhere means no file is written anywhere, so
+<code>--in-place</code> can never leave a tree half <code>.py</code> and half <code>.ppy</code>.</p>
+<p>Without <code>--in-place</code> both <code>foo.py</code> and <code>foo.ppy</code> are left on disk, which a
+project may not contain — the module would be ambiguous — so the converter
+warns and <code>ppy check</code> then refuses.</p>
+<p>In a converted module <code>import ppy</code> is placed before any sibling import, because
+that import is what installs the loader those modules need.</p>
+<h2 id="ppy-migrate-permissive-python-to-ppy"><code>ppy migrate</code> — permissive Python to PPY<a class="headerlink" href="#ppy-migrate-permissive-python-to-ppy" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>ppy<span class="w"> </span>migrate<span class="w"> </span>PATH<span class="w"> </span><span class="o">[</span>--in-place<span class="o">]</span><span class="w"> </span><span class="o">[</span>--force<span class="o">]</span><span class="w"> </span><span class="o">[</span>--dry-run<span class="o">]</span><span class="w"> </span><span class="o">[</span>--diff<span class="o">]</span><span class="w"> </span><span class="o">[</span>--report<span class="w"> </span>FILE<span class="o">]</span>
+</code></pre></div>
+<p>The migration tool for normal existing Python. It shares every flag and every
+guarantee of <code>ppy convert</code> — deterministic output, atomic failure, one call
+graph per directory — but it writes work-in-progress code on purpose: dynamic
+features convert faithfully with an advisory (<code>E1504</code>) instead of an error,
+functions whose annotations could not be written stay untouched, and <code>ppy
+check</code> is the command that later insists on the remaining boundaries. The
+natural workflow is</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>ppy<span class="w"> </span>migrate<span class="w"> </span>project/<span class="w"> </span>--in-place<span class="w">   </span><span class="c1"># rewrite what can be rewritten</span>
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>ppy<span class="w"> </span>check<span class="w"> </span>project/<span class="w">                </span><span class="c1"># see what manual migration remains</span>
+</code></pre></div>
+<p>and iterating on the check findings until the project is strict PPY. On a
+real codebase, start with the kernels rather than the repository —
+<a href="../internals/migrating/">Migrating a real project</a> says how to pick them and how to read what
+comes back.</p>
+<p>Before staticizing, migration runs its rewrite passes
+(<code>ppy_compiler/migration/</code>), each of which proves its rewrite equivalent
+before making it:</p>
+<table>
+<thead>
+<tr>
+<th>pass</th>
+<th>rewrite</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>literal-attributes</code></td>
+<td><code>setattr(o, "name", v)</code> → <code>o.name = v</code>; two-argument <code>getattr</code> → <code>o.name</code>; <code>delattr</code> → <code>del o.name</code> — constant, identifier-shaped names only, and only when the builtin still means the builtin</td>
+</tr>
+<tr>
+<td><code>static-imports</code></td>
+<td><code>m = importlib.import_module("pkg.mod")</code> → <code>import pkg.mod as m</code>, under any spelling the lexical bindings resolve to importlib's importer (<code>il.import_module</code>, a <code>from importlib import import_module as imp</code> alias); an import that fed only rewritten calls is removed with them</td>
+</tr>
+<tr>
+<td><code>module-namespace-writes</code></td>
+<td><code>globals()["NAME"] = value</code> in the module body → <code>NAME = value</code> (function scope differs, and stays)</td>
+</tr>
+</tbody>
+</table>
+<p>Afterwards the strict checker runs over the result once more — not to fail
+the migration, but to classify what remains:</p>
+<table>
+<thead>
+<tr>
+<th>classification</th>
+<th>meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>AUTOFIXED</code></td>
+<td>a pass rewrote the site; nothing left to do</td>
+</tr>
+<tr>
+<td><code>REQUIRES_REWRITE</code></td>
+<td>valid Python the analysis cannot yet hold still; needs a manual rewrite</td>
+</tr>
+<tr>
+<td><code>DYNAMIC_BOUNDARY</code></td>
+<td>needs an explicit <code>ppy.dynamic</code> boundary to stay dynamic</td>
+</tr>
+<tr>
+<td><code>UNSUPPORTED</code></td>
+<td><code>eval</code>/<code>exec</code>-class constructs no rewrite recovers</td>
+</tr>
+<tr>
+<td><code>OPTIMIZATION_OPPORTUNITY</code></td>
+<td>already valid, and one change away from a faster lowering</td>
+</tr>
+</tbody>
+</table>
+<p>After writing, migration re-analyzes its own final output in strict mode --
+the same pass <code>ppy convert</code> gates on -- and classifies what the strict
+language still rejects. A strict failure is not a migration failure: the
+files land either way, and the report carries the verdict as <code>strict_ready</code>
+and <code>strict_errors</code>, so</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>ppy<span class="w"> </span>migrate<span class="w"> </span>project/<span class="w"> </span>--report<span class="w"> </span>migration.json
+</code></pre></div>
+<p>is by itself an accurate account of how far the migration got.</p>
+<p><code>--report FILE</code> writes the full accounting as JSON; the summary block prints
+either way. <code>--diff</code> prints a unified diff of what migration would write and
+writes nothing, which is the right first command on a project you have not
+migrated before.</p>
+<h2 id="ppy-check-static-validation"><code>ppy check</code> — static validation<a class="headerlink" href="#ppy-check-static-validation" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>ppy<span class="w"> </span>check<span class="w"> </span><span class="o">[</span>PATH<span class="o">]</span><span class="w"> </span><span class="o">[</span>--remarks<span class="o">]</span>
+</code></pre></div>
+<p>Types, effects, purity and native contracts, dynamic-feature policy. Exits
+non-zero on any error. <code>--remarks</code> also prints which functions lowered natively
+and which stayed boxed, with the reason.</p>
+<h2 id="ppy-build-compile-without-running"><code>ppy build</code> — compile without running<a class="headerlink" href="#ppy-build-compile-without-running" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>ppy<span class="w"> </span>build<span class="w"> </span>TARGET<span class="w"> </span><span class="o">[</span>--safe<span class="o">]</span><span class="w"> </span><span class="o">[</span>--host-cpu<span class="o">]</span><span class="w"> </span><span class="o">[</span>--standalone<span class="o">]</span>
+<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="w">                 </span><span class="o">[</span>--target<span class="w"> </span>TRIPLE<span class="o">]</span><span class="w"> </span><span class="o">[</span>--python-extension<span class="o">]</span><span class="w"> </span><span class="o">[</span>--library<span class="o">]</span>
+<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="w">                 </span><span class="o">[</span>--backend<span class="w"> </span><span class="o">{</span>llvm,python<span class="o">}]</span><span class="w"> </span><span class="o">[</span>-o<span class="w"> </span>DIR<span class="o">]</span>
+<a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="w">                 </span><span class="o">[</span>--sanitize<span class="w"> </span>KINDS<span class="o">]</span><span class="w"> </span><span class="o">[</span>--pgo<span class="w"> </span>FILE<span class="o">]</span>
+<a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="w">                 </span><span class="o">[</span>--report-opt<span class="o">]</span><span class="w"> </span><span class="o">[</span>--report-opt-json<span class="w"> </span>FILE<span class="o">]</span>
+<a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a>ppy<span class="w"> </span>build<span class="w"> </span>--warm<span class="w"> </span>TARGET
+<a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a>ppy<span class="w"> </span>build<span class="w"> </span>foo.ppyir<span class="w">                  </span><span class="c1"># from the IR alone; see `ppy emit`</span>
+</code></pre></div>
+<p><code>--backend llvm</code> (default) writes objects, <code>libppy_&lt;project&gt;.so</code>,
+<code>ppy-bindings.json</code>, a launcher, and -- when a function is
+<code>@ppy.native.export</code>ed -- a C header declaring the public symbols. A build is a wrap-semantics artifact by
+default — data arithmetic overflows at 64 bits like every native compiler's
+output, while bounds checks stay; <code>--safe</code> keeps Python's integers
+bit-for-bit instead, and the launcher always runs with exactly the mode it
+was built with. It is a native executable that embeds the
+interpreter and is <code>ppy run</code> in a compiled coat: it enters the same CLI, the
+same pipeline, and the same guarded bindings, and only takes its machine code
+from the library built next to it instead of a JIT (<code>ppy run --prebuilt
+MANIFEST</code> is the spelled-out form, and takes the same runtime-only fast
+path — no analysis, manifest validation only). A manifest that names a library which has
+gone missing is an error, never a silent fall back to interpretation; a
+program with nothing native simply binds nothing, like <code>ppy run</code> would.
+<code>--host-cpu</code> compiles the object code for the machine doing the build
+rather than the portable baseline: faster where the code vectorizes (about
+a third on a matmul kernel), and the artifact then requires a CPU with the same
+instruction set, so it is off by default. <code>-o</code> puts the artifacts somewhere
+other than the cache. With the JAX plugin
+enabled and permitted, staged functions are exported here too.</p>
+<p>The artifact is complete: the manifest carries the full native ABI and a
+program section, <code>generated/</code> holds the optimized Python the build wrote,
+and the compiled <code>METH_FASTCALL</code> boundary wrapper ships alongside the
+library — a launched artifact crosses the same fast boundary a JIT run
+does, not a ctypes one. The launcher loads <code>ppy_runtime</code>, binds, and executes — it does not
+discover a project, parse, analyze, or touch LLVM, and it keeps working with
+<code>ppy_compiler</code> uninstalled. What it does pay is starting the embedded
+interpreter and importing the runtime — about 35 ms before the program
+begins, against about 0.7 s for a cold <code>ppy run</code> that compiles first (a warm
+<code>ppy run</code> takes this same launcher path, from the cache).
+<code>examples/bench_startup.py</code> measures the categories separately, and
+<code>--standalone</code> below removes that 35 ms too.</p>
+<h3 id="-target-python-extension-library"><code>--target</code>, <code>--python-extension</code>, <code>--library</code><a class="headerlink" href="#-target-python-extension-library" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>ppy<span class="w"> </span>build<span class="w"> </span>foo.ppy<span class="w"> </span>--target<span class="w"> </span>aarch64-linux-gnu<span class="w">     </span><span class="c1"># objects, library, header for it</span>
+<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>ppy<span class="w"> </span>build<span class="w"> </span>foo.ppy<span class="w"> </span>--python-extension<span class="w"> </span>-o<span class="w"> </span>dist<span class="w">     </span><span class="c1"># dist/foo.so: `import foo`</span>
+<a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a>ppy<span class="w"> </span>build<span class="w"> </span>lib.ppy<span class="w"> </span>--library<span class="w"> </span>-o<span class="w"> </span>dist<span class="w">              </span><span class="c1"># dist/lib, dist/include, a .pc</span>
+</code></pre></div>
+<p><code>--target TRIPLE</code> (or <code>[tool.ppy.llvm] target</code>) compiles for another
+machine: the objects carry that triple and data layout, the library is
+linked with a toolchain for it -- <code>&lt;triple&gt;-gcc</code> on the path, or clang
+with <code>--target</code> -- and the header is the same. The parts only the running
+interpreter can build, the CPython boundary wrapper and the launcher, are
+left out with a note; the manifest names its target and a runtime on a
+different machine refuses it rather than loading it. Everything the
+compiler knows about a machine sits in one <code>TargetInfo</code> (triple, CPU and
+features, pointer width, endianness, ABI, OS, object format, data
+layout); there is no <code>sys.platform</code> to trip over elsewhere. <code>ppy doctor</code>
+prints the host's.</p>
+<p><code>--python-extension</code> writes one importable module -- <code>foo.so</code>, <code>foo.pyd</code>
+on Windows -- holding the module's native code, the generated
+<code>METH_FASTCALL</code> boundary, and the module's own optimized Python. <code>import
+foo</code> runs that Python, so every class, constant, and helper the module
+defines exists, and each native-eligible function is bound to its
+compiled code as it is defined, keeping its Python definition as the
+fallback a refused guard runs. Nothing is bound by name at runtime and no
+manifest is read. The module still imports <code>ppy</code> for its markers, like
+the source did; it is built against the interpreter that builds it.</p>
+<p><code>--library</code> lays the exports out for a C consumer: <code>lib/</code> with the shared
+library, <code>include/</code> with the header, <code>lib/pkgconfig/&lt;name&gt;.pc</code>, and the
+manifest describing the ABI. A module with no <code>@ppy.native.export</code> has
+nothing to package and says so (<code>E1805</code>).</p>
+<h3 id="-warm"><code>--warm</code><a class="headerlink" href="#-warm" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>ppy<span class="w"> </span>build<span class="w"> </span>--warm<span class="w"> </span>train/kernels/<span class="w">        </span><span class="c1"># every .ppy under it</span>
+<a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>ppy<span class="w"> </span>build<span class="w"> </span>--warm<span class="w"> </span>train/reward.ppy
+</code></pre></div>
+<p>Builds ahead of time exactly what <code>ppy run FILE</code> and <code>import ppy</code> build on
+their first use -- the artifact in the project cache, under the key an
+import of that module will look for -- and stops. It takes no flags that
+would change the artifact (<code>--safe</code>, <code>--host-cpu</code>, <code>--prover</code>, <code>-o</code>, and
+the rest are refused): an import takes none either, so the project
+configuration is the only thing that names the build, and what a flag built
+nothing would find. Its place is the step before a launch that starts many
+processes at once. Without it, every rank of a <code>torchrun</code> imports the
+kernel, finds no build, and builds one; the builds are identical and the
+first to finish is the one kept, so the result is right, but each rank
+paid for it. With it, every rank finds the build. A module that does not
+check clean is an error here (exit 1) rather than a note on each rank's
+stderr, and a module that needs the in-process JIT is reported and skipped.
+The key covers every source under the project root, so run it after the
+last edit, not before.</p>
+<h3 id="-standalone"><code>--standalone</code><a class="headerlink" href="#-standalone" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>ppy<span class="w"> </span>build<span class="w"> </span>--standalone<span class="w"> </span>app.ppy
+</code></pre></div>
+<p>Links a fully native executable with <strong>no CPython inside</strong> — <code>ldd</code> shows
+libc and nothing else, and startup is C startup (~a few ms). It asks less of
+the machine than the hybrid build does: a C compiler is enough, because
+there are no CPython headers to include and no libpython to embed. The reachable
+graph from <code>main</code> must be entirely native: functions the hybrid path could
+lower, plus <code>print</code> of integers, booleans, and string literals through C
+shims (floats wait until native formatting can reproduce Python's
+shortest-round-trip repr exactly), plus the memory the program makes for
+itself — <code>ppy.buffer[int](n)</code> is a zeroed native allocation here and
+<code>ppy.input[Buffer[int]](n)</code> is that allocation with the input read straight
+into it, because there is no <code>array.array</code> to build. Anything else is <code>E1803</code> with the path
+that reaches it, never a workaround. There is no Python to fall back to, so
+in <code>--safe</code> mode a failed guard aborts with a message instead of retrying
+in Python; <code>ppy.input[int]()</code> reads through the C support rather than the
+runtime's reader, and answers 0 at end of input because there is no
+exception to raise; the default wrap-semantics build has almost no guards left to
+fail.</p>
+<p>Five of the six problems in <code>examples/15_algorithms</code> build this way once
+their buffers come from <code>ppy.buffer</code> rather than <code>array.array</code>, and four of
+those beat their C reference. Substring search is the one that cannot: its
+text arrives as a token, and <code>ppy.read_token</code> has no standalone lowering yet.
+<code>examples/15_algorithms/standalone/</code> holds the five, timed against every
+other path by the benchmark beside them.</p>
+<h2 id="ppy-emit-a-compiler-stage-as-text"><code>ppy emit</code> — a compiler stage as text<a class="headerlink" href="#ppy-emit-a-compiler-stage-as-text" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>ppy<span class="w"> </span>emit<span class="w"> </span>ir<span class="w"> </span>foo.ppy<span class="w">                  </span><span class="c1"># the canonical IR, to stdout</span>
+<a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>ppy<span class="w"> </span>emit<span class="w"> </span>ir<span class="w"> </span>foo.ppy<span class="w"> </span>-o<span class="w"> </span>foo.ppyir<span class="w">     </span><span class="c1"># ... to a file</span>
+<a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a>ppy<span class="w"> </span>emit<span class="w"> </span>ir<span class="w"> </span>src/<span class="w"> </span>-o<span class="w"> </span>build/ir/<span class="w">        </span><span class="c1"># one .ppyir per module</span>
+<a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a>ppy<span class="w"> </span>emit<span class="w"> </span>linked-ir<span class="w"> </span>app.ppy<span class="w">           </span><span class="c1"># the whole program: every module linked and optimized as one</span>
+<a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a>ppy<span class="w"> </span>emit<span class="w"> </span>llvm-ir<span class="w"> </span>foo.ppy<span class="w">             </span><span class="c1"># what the LLVM backend makes of it</span>
+<a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a>ppy<span class="w"> </span>emit<span class="w"> </span>c<span class="w"> </span>foo.ppy<span class="w">                   </span><span class="c1"># what the C backend makes of it: one C11 unit</span>
+<a id="__codelineno-10-7" name="__codelineno-10-7" href="#__codelineno-10-7"></a>ppy<span class="w"> </span>emit<span class="w"> </span>cpp<span class="w"> </span>foo.ppy<span class="w">                 </span><span class="c1"># ... as C++17, exports behind extern "C"</span>
+<a id="__codelineno-10-8" name="__codelineno-10-8" href="#__codelineno-10-8"></a>ppy<span class="w"> </span>emit<span class="w"> </span>cuda<span class="w"> </span>foo.ppy<span class="w">                </span><span class="c1"># the kernels, device functions, and launches as CUDA C++</span>
+<a id="__codelineno-10-9" name="__codelineno-10-9" href="#__codelineno-10-9"></a>ppy<span class="w"> </span>emit<span class="w"> </span>hip<span class="w"> </span>foo.ppy<span class="w">                 </span><span class="c1"># ... as HIP C++</span>
+<a id="__codelineno-10-10" name="__codelineno-10-10" href="#__codelineno-10-10"></a>ppy<span class="w"> </span>emit<span class="w"> </span>nvvm-ir<span class="w"> </span>foo.ppy<span class="w">             </span><span class="c1"># the kernels as LLVM IR for NVPTX</span>
+<a id="__codelineno-10-11" name="__codelineno-10-11" href="#__codelineno-10-11"></a>ppy<span class="w"> </span>emit<span class="w"> </span>ptx<span class="w"> </span>foo.ppy<span class="w">                 </span><span class="c1"># ... as PTX (PPY_CUDA_ARCH names the architecture, sm_70 by default)</span>
+<a id="__codelineno-10-12" name="__codelineno-10-12" href="#__codelineno-10-12"></a>ppy<span class="w"> </span>emit<span class="w"> </span>c<span class="w"> </span>--header-only<span class="w"> </span>foo.ppy<span class="w">     </span><span class="c1"># every function static inline in a header</span>
+<a id="__codelineno-10-13" name="__codelineno-10-13" href="#__codelineno-10-13"></a>ppy<span class="w"> </span>emit<span class="w"> </span>c<span class="w"> </span>--standalone<span class="w"> </span>prog.ppy<span class="w">     </span><span class="c1"># the whole program from main(), shims and all</span>
+<a id="__codelineno-10-14" name="__codelineno-10-14" href="#__codelineno-10-14"></a>ppy<span class="w"> </span>emit<span class="w"> </span>header<span class="w"> </span>foo.ppy<span class="w">              </span><span class="c1"># the C declarations of the exports</span>
+<a id="__codelineno-10-15" name="__codelineno-10-15" href="#__codelineno-10-15"></a>ppy<span class="w"> </span>emit<span class="w"> </span>stablehlo<span class="w"> </span>foo.ppy<span class="w">           </span><span class="c1"># the @ppy.xla.jit functions as StableHLO for XLA</span>
+</code></pre></div>
+<p>One rule for every kind: a single file with no <code>-o</code> prints to standard
+output, <code>-o FILE</code> writes that file, and a directory target writes one file
+per module into the directory <code>-o</code> names (and refuses to guess without
+it). <code>ir</code> is the canonical IR after the shared passes (<a href="../internals/ir/">The IR</a>);
+<code>llvm-ir</code> is the optimized LLVM IR. The output is deterministic for one
+input and configuration.</p>
+<p><code>c</code> and <code>cpp</code> are the C backend's reading of the same IR: a translation
+unit per module in the internal ABI the runtime binds (atoms in, result
+slots out, a status back), every <code>@native.export</code> behind its public C
+signature, the overflow helpers and runtime shims the unit actually uses,
+and nothing else -- so it compiles on its own with any C11 or C++17
+compiler, and answers exactly what the LLVM road answers, fallbacks
+included. <code>--header-only</code> makes every function <code>static inline</code> under an
+include guard, for a header a program includes from any number of
+translation units; a feature that needs state the process owns (reading
+standard input) is refused there with <code>E1804</code> and its name.
+<code>--standalone</code> takes a program the way <code>ppy build --standalone</code> does --
+<code>main</code> and everything it reaches, all of it native -- and ends the unit in
+a C <code>main</code>, so the text is a whole program. <code>header</code> is the declarations
+of a module's exports, the same text <code>ppy build</code> writes beside a library.</p>
+<p><code>.ppyir</code> is the IR's on-disk form -- public from 0.2.0 at schema 1 -- and
+<code>ppy build foo.ppyir</code> builds one without the Python that produced it: the file
+carries its schema and dialect versions, every function's ABI, and its
+source locations, so the build is the passes, the LLVM backend, an object,
+a library, and a manifest whose entries the runtime binds. A file from
+another schema or a dialect this compiler lacks is refused with the reason.
+A package builds as one program: a call from one module
+into another's native function is a declaration the linker answers with the
+definition, the linked program is optimized as a whole -- what Python never
+binds is internalized, small callees are inlined across the seam, dead
+private code goes -- and one object comes out; <code>ppy emit linked-ir</code> shows
+that program.</p>
+<h2 id="ppy-bind-bindings-for-foreign-code"><code>ppy bind</code> — bindings for foreign code<a class="headerlink" href="#ppy-bind-bindings-for-foreign-code" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a>ppy<span class="w"> </span><span class="nb">bind</span><span class="w"> </span>header<span class="w"> </span>foo.h<span class="w">                     </span><span class="c1"># the bindings module, to stdout</span>
+<a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a>ppy<span class="w"> </span><span class="nb">bind</span><span class="w"> </span>header<span class="w"> </span>foo.h<span class="w"> </span>-o<span class="w"> </span>foo.ppy<span class="w">          </span><span class="c1"># ... to a file</span>
+<a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a>ppy<span class="w"> </span><span class="nb">bind</span><span class="w"> </span>header<span class="w"> </span>foo.h<span class="w"> </span>--library<span class="w"> </span>foo<span class="w"> </span>-I<span class="w"> </span>include/
+</code></pre></div>
+<p>Clang reads the header -- the real parser, through libclang
+(<code>ppy-lang[bind]</code>), never a regular expression -- and the importer walks
+the declarations the header itself makes. A function becomes an
+<code>@ffi.bind</code> stub with typed parameters (<code>int</code> is <code>ppy.i32</code>, <code>long</code> the
+target's width, <code>double</code> <code>float</code>, <code>const T *</code> <code>native.const_ptr[T]</code>,
+<code>void *</code> a byte pointer); a typedef of a scalar an alias; an enum its
+constants and an <code>int</code> alias; a struct of scalars a dataclass; a <code>#define</code>
+of one number a typed constant. What has no PPY spelling yet -- a
+variadic function, a function pointer, an array or a struct passed by
+value, an opaque struct, a macro that is not one number -- is left out
+and listed by name at the end of the module. The module type-checks under
+<code>ppy check</code> and calls the library on every path, ctypes under CPython and
+directly in native code. A header Clang cannot read is refused with its
+line (<code>E1806</code>).</p>
+<h2 id="ppy-explain-why-it-compiled-that-way"><code>ppy explain</code> — why it compiled that way<a class="headerlink" href="#ppy-explain-why-it-compiled-that-way" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a>ppy<span class="w"> </span>explain<span class="w"> </span>LOCATION
+</code></pre></div>
+<p><code>LOCATION</code> is a <code>FILE:LINE</code>, a function name or qualname, or a diagnostic code.
+For a function it reports the semantic type, effects, purity, the backend
+decision, the representation chosen for every parameter, and each library
+call's lowering with its guards.</p>
+<h2 id="ppy-inspect-generated-artifacts"><code>ppy inspect</code> — generated artifacts<a class="headerlink" href="#ppy-inspect-generated-artifacts" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a>ppy<span class="w"> </span>inspect<span class="w"> </span>TARGET<span class="w"> </span><span class="o">[</span>--backend<span class="w"> </span><span class="o">{</span>python,llvm<span class="o">}]</span><span class="w"> </span><span class="o">[</span>--ir<span class="o">]</span>
+<a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a>ppy<span class="w"> </span>inspect<span class="w"> </span>TARGET<span class="w"> </span>--stage<span class="w"> </span><span class="o">{</span>analysis,ir,canonical,optimized,tensor,columnar,gpu,stablehlo,llvm<span class="o">}</span>
+</code></pre></div>
+<p>The optimized Python by default, including plugin rewrites, so it is what to
+read when a result differs from plain CPython. <code>--ir</code> prints what the native
+path compiles: LLVM IR, then the C for the CPython-ABI wrappers, then the C++
+for any ATen region. <code>--stage</code> prints the program as one stage of the
+compiler holds it: <code>analysis</code> is what the checker knows of every function
+(type, effects, whether it is native, bound, a kernel, a coroutine, marked
+for XLA); <code>ir</code> the frontend's module before any pass; <code>canonical</code> after
+canonicalization; <code>tensor</code> after fusion and before the tensor dialect
+lowers to loops, <code>columnar</code> the same point for the modules holding
+columnar operations; <code>optimized</code> what a backend receives; <code>gpu</code> the device
+code alone; <code>stablehlo</code> and <code>llvm</code> what those backends write.</p>
+<h2 id="sanitizers-sanitize">Sanitizers: <code>--sanitize</code><a class="headerlink" href="#sanitizers-sanitize" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a>ppy<span class="w"> </span>run<span class="w"> </span>--sanitize<span class="w"> </span>bounds,overflow<span class="w"> </span>foo.ppy
+<a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a>ppy<span class="w"> </span>build<span class="w"> </span>--sanitize<span class="w"> </span>pointer,alignment<span class="w"> </span>.
+</code></pre></div>
+<p>A sanitizer instruments the IR with checks the program did not ask for:
+<code>bounds</code> checks every buffer index, whether or not a proof or a hoist
+removed the frontend's guard; <code>overflow</code> checks every wrapping or proven
+<code>int</code> operation; <code>pointer</code> checks that a pointer read or written through is
+not null; <code>alignment</code> that it is aligned for what it points at. A failed
+check is not a fallback: the function returns a sanitizer status and the
+boundary raises <code>ppy_runtime.binding.SanitizerFailure</code> naming the kind and
+the function (a standalone program exits as it does for a guard).
+<code>[tool.ppy.llvm] sanitize = ["bounds"]</code> configures the same. <code>lifetime</code> and <code>alias</code> are
+refused with the reason: stack lifetime is held by the verifier, aliasing
+has no runtime check yet.</p>
+<h2 id="optimization-report-report-opt">Optimization report: <code>--report-opt</code><a class="headerlink" href="#optimization-report-report-opt" title="Permanent link">&para;</a></h2>
+<p><code>ppy build --report-opt</code> prints, per module, which functions became native
+and are bound to Python, which stay in Python and why, how many guards a
+proof removed, and every remark the passes left, filed under a stable
+category -- <code>function inlined</code>, <code>tensor ops fused</code>, <code>columnar ops fused</code>,
+<code>parallel loop emitted</code>, <code>GPU kernel emitted</code>, <code>StableHLO region emitted</code>,
+<code>bounds guard removed</code>, <code>overflow guard proven unnecessary</code>, <code>allocation
+stack-promoted</code>, <code>generic specialization emitted</code>, <code>sanitizer checks
+inserted</code>, <code>dead code removed</code> -- and what the build staged for XLA or a
+device. <code>--report-opt-json FILE</code> writes the same as JSON, keyed the same
+way, so a tool can count by category across versions. A build guided by a
+profile lists it first: the file, its runs, and every measured function's
+calls, hotness, and argument kinds.</p>
+<h2 id="profile-guided-optimization-profile-pgo">Profile-guided optimization: <code>--profile</code>, <code>--pgo</code><a class="headerlink" href="#profile-guided-optimization-profile-pgo" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a>ppy<span class="w"> </span>run<span class="w"> </span>--profile<span class="w"> </span>foo.ppy<span class="w">            </span><span class="c1"># runs, then writes foo.ppyprof</span>
+<a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a>ppy<span class="w"> </span>run<span class="w"> </span>--profile<span class="w"> </span>--profile-out<span class="w"> </span>p.ppyprof<span class="w"> </span>foo.ppy<span class="w"> </span>--<span class="w"> </span>args
+<a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a>ppy<span class="w"> </span>build<span class="w"> </span>--pgo<span class="w"> </span>foo.ppyprof<span class="w"> </span>foo.ppy
+<a id="__codelineno-15-4" name="__codelineno-15-4" href="#__codelineno-15-4"></a>ppy<span class="w"> </span>run<span class="w"> </span>--pgo<span class="w"> </span>foo.ppyprof<span class="w"> </span>foo.ppy
+</code></pre></div>
+<p>A profiling run is a JIT run with counters: every native function counts
+its blocks and the taken edge of every conditional branch, and the boundary
+records what kinds of value each native function was called with -- an
+<code>int</code>, an <code>ndarray[float64;4x3]</code>, a <code>DataFrame[a:int64,b:float64;1000
+rows]</code>, a <code>list[400]</code>. When the program ends the counters are read back
+through the engine and the profile is written as JSON: per function, its
+calls, every block's count, every branch's (taken, not taken), the loop
+trip counts these imply, the argument kinds, and which generic it is an
+instance of. A profile already at the path is merged, so several runs --
+or several inputs -- add up; <code>runs</code> says how many.</p>
+<p>A build with <code>--pgo</code> (or <code>[tool.ppy.llvm] pgo = "foo.ppyprof"</code>, relative
+to the project root) reads the counts back at the same point of the
+pipeline. A function whose graph still matches what was measured is
+annotated: it is <code>hot</code> (at least a twentieth of the most-called function's
+calls, and at least two), <code>cold</code> (never called), or neither; every
+conditional branch carries its weights, every loop's back edge its
+average trip count. The inliner inlines a hot callee at four times the
+usual budget, leaves a cold one alone, and leaves alone a call the
+profile never reached; LLVM receives the entry counts and branch weights
+as <code>!prof</code> metadata, which drive its block placement, its estimated trip
+counts, and its own unrolling and inlining heuristics, and <code>hot</code>/<code>cold</code>
+as function attributes. A function that changed since the profile was
+recorded is named by <code>W2009</code> and built as if there were no profile; a
+missing or foreign profile is refused (<code>E1002</code>). A profile changes what
+is fast, never what is computed: the program's output under <code>--pgo</code> is
+the program's output. The profile's content is part of every cache key
+and of the warm run directory's name, so a new profile is a new build.</p>
+<h2 id="ppy-test"><code>ppy test</code><a class="headerlink" href="#ppy-test" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a>ppy<span class="w"> </span><span class="nb">test</span><span class="w"> </span><span class="o">[</span>PATH<span class="o">]</span><span class="w"> </span><span class="o">[</span>--backend<span class="w"> </span><span class="o">{</span>differential,pytest<span class="o">}]</span><span class="w"> </span><span class="o">[</span>--<span class="w"> </span>ARGS...<span class="o">]</span>
+</code></pre></div>
+<p><code>differential</code> (default) runs each program on all three paths and compares
+stdout, stderr, and exit status.</p>
+<p><code>pytest</code> runs an ordinary test suite with the <code>.ppy</code> import hook already
+installed and the project's source roots registered, so tests can import the
+modules under test. Arguments after <code>--</code> reach pytest.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a>ppy<span class="w"> </span><span class="nb">test</span><span class="w"> </span>--backend<span class="w"> </span>pytest<span class="w"> </span>tests<span class="w"> </span>--<span class="w"> </span>-k<span class="w"> </span>buffers<span class="w"> </span>-q
+</code></pre></div>
+<h2 id="ppy-lint"><code>ppy lint</code><a class="headerlink" href="#ppy-lint" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a>ppy<span class="w"> </span>lint<span class="w"> </span><span class="o">[</span>PATH<span class="o">]</span><span class="w"> </span><span class="o">[</span>--backend<span class="w"> </span><span class="o">{</span>auto,pyright,pylint,ruff,mypy<span class="o">}]</span>
+<a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a><span class="w">         </span><span class="o">[</span>--all-rules<span class="o">]</span><span class="w"> </span><span class="o">[</span>--no-strict<span class="o">]</span>
+</code></pre></div>
+<p>External tools key off the <code>.py</code> extension, so the sources are mirrored into a
+staging tree, the tool runs there, and the paths in its output are mapped back
+to the <code>.ppy</code> files you have. <code>auto</code> picks the first installed backend. A type checker runs in its strict
+mode — <code>pyright</code> gets <code>typeCheckingMode = "strict"</code> — while a linter runs the
+project's own rule selection, because "every rule there is" is not the same
+kind of setting. <code>--all-rules</code> turns <code>ruff</code> up to <code>--select ALL</code> when that is
+what you want; <code>--no-strict</code> turns a type checker down.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a>ppy<span class="w"> </span>lint<span class="w"> </span>--backend<span class="w"> </span>pyright<span class="w"> </span>src
+</code></pre></div>
+<p>The staging tree mirrors the project: every tool config at the root
+(<code>pyproject.toml</code>, <code>pyrightconfig.json</code>, <code>.pylintrc</code>, <code>ruff.toml</code>,
+<code>mypy.ini</code>, ...) and every plain <code>.py</code> module is copied in alongside the
+staged sources, so imports resolve and the project's own configuration —
+<code>extraPaths</code>, per-rule overrides, execution environments — keeps applying.</p>
+<h2 id="ppy-fmt-formatting"><code>ppy fmt</code> — formatting<a class="headerlink" href="#ppy-fmt-formatting" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a>ppy<span class="w"> </span>fmt<span class="w"> </span><span class="o">[</span>PATH<span class="o">]</span><span class="w"> </span><span class="o">[</span>--check<span class="o">]</span>
+</code></pre></div>
+<p>The built-in pass runs first and settles what an external formatter has no
+opinion about: import grouping that keeps <code>ppy</code> ahead of a sibling module, and
+a signature wrapped after annotation. An installed <code>ruff</code> or <code>black</code> then
+applies the project's own style on top. <code>--check</code> writes nothing and exits
+non-zero if a file would change. An installed formatter that fails — bad
+config, crash, timeout — is an error (<code>E1802</code>), not a silent fallback.</p>
+<p><code>ppy convert</code> uses the built-in normalizer only, so a converted file is
+byte-identical on every machine. Pass <code>--format</code>, or set
+<code>[tool.ppy.convert] format = true</code>, to apply the project's style on top.</p>
+<h2 id="ppy-cache"><code>ppy cache</code><a class="headerlink" href="#ppy-cache" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a>ppy<span class="w"> </span>cache<span class="w"> </span>status
+<a id="__codelineno-21-2" name="__codelineno-21-2" href="#__codelineno-21-2"></a>ppy<span class="w"> </span>cache<span class="w"> </span>clean
+<a id="__codelineno-21-3" name="__codelineno-21-3" href="#__codelineno-21-3"></a>ppy<span class="w"> </span>cache<span class="w"> </span>gc<span class="w"> </span><span class="o">[</span>--max-age-days<span class="w"> </span>N<span class="o">]</span><span class="w"> </span><span class="o">[</span>--max-bytes<span class="w"> </span>N<span class="o">]</span>
+</code></pre></div>
+<p>A cache key covers the source digest, compiler version, optimization level,
+directives, dependency hashes, and the fingerprints of the plugins the module
+actually imports. Nothing keys off modification time, with one exception: the
+record of the whole-project scan that <code>convert</code> and <code>migrate</code> make for <code>Final</code>
+and for annotation materialization is keyed by the compiler fingerprint and
+the project root, and each file's entry in it is trusted while the file's size
+and modification time still match. Hashing every file of the project is what
+that record exists to avoid.</p>
+<p>The native build is incremental per module. A rebuild with no source change
+recompiles nothing and never initializes LLVM; a rebuild after editing one
+module recompiles that module alone, and relinks only because its object
+changed. Editing a module invalidates the modules that depend on it, because a
+dependent's key includes the public summaries it compiled against.</p>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>lowered</code></td>
+<td>what lowering decided: the IR and each function's native ABI</td>
+</tr>
+<tr>
+<td><code>llvm</code></td>
+<td>the optimized IR</td>
+</tr>
+<tr>
+<td><code>native</code></td>
+<td>the object file, and the linked library keyed by its inputs</td>
+</tr>
+<tr>
+<td><code>python</code></td>
+<td>the generated Python</td>
+</tr>
+<tr>
+<td><code>jit</code></td>
+<td>guarded specializations</td>
+</tr>
+<tr>
+<td><code>scan</code></td>
+<td>the whole-project scan's record: per file, the writes it makes on other modules and the annotation readers it holds</td>
+</tr>
+</tbody>
+</table>
+<h2 id="ppy-clean"><code>ppy clean</code><a class="headerlink" href="#ppy-clean" title="Permanent link">&para;</a></h2>
+<p>Removes the whole cache directory. <code>ppy cache clean</code> empties it but leaves the
+directory; neither touches an output directory named with <code>build -o</code>.</p>
+<h2 id="ppy-doctor"><code>ppy doctor</code><a class="headerlink" href="#ppy-doctor" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a>ppy<span class="w"> </span>doctor<span class="w"> </span><span class="o">[</span>--verbose<span class="o">]</span>
+</code></pre></div>
+<p>Versions, project root, cache location, effective configuration, whether the
+LLVM backend and native toolchain are usable, and each plugin's fingerprint.
+Run it first when something compiles on one machine and not another.</p>
+<h2 id="ppy-lsp"><code>ppy lsp</code><a class="headerlink" href="#ppy-lsp" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a>ppy<span class="w"> </span>lsp<span class="w"> </span><span class="o">[</span>--root<span class="w"> </span>DIR<span class="o">]</span>
+</code></pre></div>
+<p>LSP over stdio.</p>
+<h2 id="configuration">Configuration<a class="headerlink" href="#configuration" title="Permanent link">&para;</a></h2>
+<p>CLI options override <code>[tool.ppy]</code> in <code>pyproject.toml</code> for one invocation.
+Every key, with defaults, is in <a href="../reference/config/">Configuration</a>.</p>
+<h2 id="exit-codes">Exit codes<a class="headerlink" href="#exit-codes" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>code</th>
+<th>meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>0</code></td>
+<td>success</td>
+</tr>
+<tr>
+<td><code>1</code></td>
+<td>ran and reported a problem: a failed check, a differential mismatch, files <code>fmt --check</code> would reformat</td>
+</tr>
+<tr>
+<td><code>2</code></td>
+<td>could not run: a missing path, an unreadable file, an unavailable backend</td>
+</tr>
+</tbody>
+</table>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+  <script>var tabs=__md_get("__tabs");if(Array.isArray(tabs))e:for(var set of document.querySelectorAll(".tabbed-set")){var labels=set.querySelector(".tabbed-labels");for(var tab of tabs)for(var label of labels.getElementsByTagName("label"))if(label.innerText.trim()===tab){var input=document.getElementById(label.htmlFor);input.checked=!0;continue e}}</script>
+
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+    
+      
+      <nav class="md-footer__inner md-grid" aria-label="Footer" >
+        
+          
+          <a href="../howto/30_migrate/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Migration">
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+            </div>
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Previous
+              </span>
+              <div class="md-ellipsis">
+                Migration
+              </div>
+            </div>
+          </a>
+        
+        
+          
+          <a href="../api/" class="md-footer__link md-footer__link--next" aria-label="Next: API">
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Next
+              </span>
+              <div class="md-ellipsis">
+                API
+              </div>
+            </div>
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4 11v2h12l-5.5 5.5 1.42 1.42L19.84 12l-7.92-7.92L10.5 5.5 16 11z"/></svg>
+            </div>
+          </a>
+        
+      </nav>
+    
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">
+      MIT License
+    </div>
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.tabs", "navigation.tabs.sticky", "navigation.sections", "navigation.indexes", "navigation.top", "navigation.footer", "search.suggest", "search.highlight", "content.code.copy", "content.code.annotate", "content.tabs.link", "toc.follow"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"default": "latest", "provider": "mike"}}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>
