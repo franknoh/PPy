@@ -1,11 +1,13 @@
 name: docs
 
 # The documentation site at https://ppy.franknoh.dev/, built with MkDocs and
-# published to the gh-pages branch by mike. A push to main deploys `dev`; a
-# release tag deploys its major.minor and moves `latest` onto it.
+# published to the gh-pages branch by mike. `main` is the release: a push
+# there deploys the declared major.minor and moves `latest` onto it. `dev`
+# is the tip and deploys `dev`. A release tag does what its branch does, so
+# the site never shows an alpha as `latest`.
 on:
   push:
-    branches: [main]
+    branches: [main, dev]
     tags: ["v*"]
   workflow_dispatch:
 
@@ -34,15 +36,26 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git fetch origin gh-pages --depth=1 || true
-      - name: deploy a release
-        if: startsWith(github.ref, 'refs/tags/v')
+      # What this checkout declares itself to be decides where it lands.
+      - name: read the declared version
+        id: version
         run: |
-          version="${GITHUB_REF_NAME#v}"
-          series="${version%.*}"
-          uv run mike deploy --push --update-aliases "$series" latest
+          declared=$(uv run python -c "from ppy_compiler.version import COMPILER_VERSION as v; print(v)")
+          series="${declared%.*}"
+          case "$declared" in
+            *a*|*b*|*rc*) stable=false ;;
+            *) stable=true ;;
+          esac
+          echo "declared=$declared" >> "$GITHUB_OUTPUT"
+          echo "series=$series" >> "$GITHUB_OUTPUT"
+          echo "stable=$stable" >> "$GITHUB_OUTPUT"
+      - name: deploy the release
+        if: steps.version.outputs.stable == 'true' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
+        run: |
+          uv run mike deploy --push --update-aliases "${{ steps.version.outputs.series }}" latest
           uv run mike set-default --push latest
       - name: deploy the development tip
-        if: github.ref == 'refs/heads/main'
+        if: github.ref == 'refs/heads/dev' || (steps.version.outputs.stable != 'true' && github.ref != 'refs/heads/main')
         run: |
           uv run mike deploy --push dev
           if ! git show origin/gh-pages:index.html >/dev/null 2>&1; then
