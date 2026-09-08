@@ -44,6 +44,30 @@ def _overrides(options: argparse.Namespace) -> dict[str, object]:
     return overrides
 
 
+def _resolve_sanitize(options: argparse.Namespace, project, reporter: Reporter):  # type: ignore[no-untyped-def]
+    """Settle the sanitizers before any cache key reads them; a refusal is the exit code.
+
+    `--sanitize` overrides `[tool.ppy.llvm] sanitize`. The checks are the
+    IR road's, so asking for them selects it.
+    """
+    from ..ir.transforms import sanitizer_kinds
+
+    spelled = getattr(options, "sanitize", None)
+    kinds = project.config.llvm.sanitize
+    try:
+        if spelled is not None:
+            kinds = tuple(sorted(sanitizer_kinds(spelled)))
+        elif kinds:
+            kinds = tuple(sorted(sanitizer_kinds(list(kinds))))
+    except ValueError as error:
+        reporter.emit(Diagnostic("E1002", Severity.ERROR, str(error)))
+        return 2
+    project.config.llvm.sanitize = kinds
+    if kinds:
+        project.config.llvm.pipeline = "ir"
+    return None
+
+
 def _resolve_host_cpu(options: argparse.Namespace, project) -> None:  # type: ignore[no-untyped-def]
     """Settle host targeting before any cache key reads it."""
     if getattr(options, "host_cpu", False):
@@ -205,6 +229,8 @@ def run_llvm_backend(
     warm = locate(file, options)
     project = open_project(file, config_overrides=_overrides(options))
     _resolve_safeguards(options, project, "run")
+    if _resolve_sanitize(options, project, reporter) is not None:
+        return 2
     _resolve_prover(options, project)
     bundle = analyze_paths(project, collect_sources(file), backend="llvm")
     errors = reporter.report(bundle.diagnostics)
@@ -258,6 +284,8 @@ def build(options: argparse.Namespace, reporter: Reporter) -> int:
     machine = None
     if backend == "llvm":
         _resolve_safeguards(options, project, "build")
+        if _resolve_sanitize(options, project, reporter) is not None:
+            return 2
         _resolve_prover(options, project)
         _resolve_host_cpu(options, project)
         machine = _resolve_target(options, project, reporter)
@@ -330,6 +358,8 @@ def build(options: argparse.Namespace, reporter: Reporter) -> int:
             target=machine,
             wrappers=not getattr(options, "library", False),
         )
+        if getattr(options, "report_opt", False) or getattr(options, "report_opt_json", None):
+            _report_optimization(bundle, options, artifacts)
         if getattr(options, "python_extension", False):
             from ..backend.llvm.packaging import build_extension
 
@@ -445,6 +475,20 @@ def inspect(options: argparse.Namespace, reporter: Reporter) -> int:
     if errors:
         return 1
 
+    stage = getattr(options, "stage", None)
+    if stage is not None:
+        from .stages import stage_texts
+
+        try:
+            texts = stage_texts(bundle, stage)
+        except Exception as exc:  # noqa: BLE001 - a stage the machine cannot reach is a report
+            reporter.emit(Diagnostic("E1801", Severity.ERROR, str(exc)))
+            return 2
+        for name, text in texts.items():
+            print(f"; ---- {name} [{stage}] ----")
+            print(text, end="" if text.endswith("\n") else "\n")
+        return 0
+
     if options.backend == "llvm" or options.ir:
         from ..backend.llvm import LlvmUnavailable, emit_ir
 
@@ -472,6 +516,25 @@ def inspect(options: argparse.Namespace, reporter: Reporter) -> int:
         print(f"# ---- {name} -> {generated.artifact} ----")
         print(generated.code)
     return 0
+
+
+def _report_optimization(bundle, options: argparse.Namespace, artifacts) -> None:  # type: ignore[no-untyped-def]
+    """`--report-opt`: what the build decided, printed or written as JSON."""
+    from ..backend.llvm import _collect
+    from .report import optimization_report, render_report, report_json
+    from .staging import stage_project
+
+    natives = _collect(bundle, _overrides(options).get("opt_level"))  # type: ignore[arg-type]
+    report = optimization_report(
+        bundle, natives, stage_project(bundle), sanitizers=bundle.project.config.llvm.sanitize
+    )
+    report["notes"] = list(artifacts.notes)
+    if getattr(options, "report_opt", False):
+        print(render_report(report), end="")
+    destination = getattr(options, "report_opt_json", None)
+    if destination is not None:
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        destination.write_text(report_json(report), encoding="utf-8")
 
 
 def _generated_native_sources(bundle) -> dict[str, str]:  # type: ignore[no-untyped-def]

@@ -209,6 +209,8 @@ def module_cache_key(
     if target == "llvm":
         # The road through the backend is part of what the artifact is.
         extra = (*extra, f"pipeline={selected_pipeline(config.llvm.pipeline)}")
+        if config.llvm.sanitize:
+            extra = (*extra, f"sanitize={','.join(sorted(config.llvm.sanitize))}")
     return CacheKey.build(
         target,
         source_digest=symbols.module.source.digest(),

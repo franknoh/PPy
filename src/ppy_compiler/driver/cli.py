@@ -98,10 +98,37 @@ def build_parser() -> argparse.ArgumentParser:
         help="bind native symbols from the library a `ppy build` manifest names, "
         "instead of JIT-compiling them",
     )
+    run.add_argument(
+        "--sanitize",
+        metavar="KINDS",
+        default=None,
+        help="instrument the native code with checks that raise rather than fall back: "
+        "a comma-separated list of bounds, overflow, pointer, alignment (the IR road)",
+    )
     run.add_argument("args", nargs=argparse.REMAINDER)
 
     build = subparsers.add_parser("build", help="compile without running")
     build.add_argument("target", type=Path)
+    build.add_argument(
+        "--sanitize",
+        metavar="KINDS",
+        default=None,
+        help="instrument the native code with checks that raise rather than fall back: "
+        "a comma-separated list of bounds, overflow, pointer, alignment (the IR road)",
+    )
+    build.add_argument(
+        "--report-opt",
+        action="store_true",
+        help="print the optimization report: what became native, what did not and why, "
+        "and every remark by category",
+    )
+    build.add_argument(
+        "--report-opt-json",
+        type=Path,
+        default=None,
+        metavar="FILE",
+        help="write the optimization report as JSON to FILE",
+    )
     build.add_argument(
         "--standalone",
         action="store_true",
@@ -221,6 +248,22 @@ def build_parser() -> argparse.ArgumentParser:
     inspect.add_argument("--backend", choices=("python", "llvm"), default="python")
     inspect.add_argument(
         "--ir", action="store_true", help="print backend IR instead of generated Python"
+    )
+    inspect.add_argument(
+        "--stage",
+        choices=(
+            "analysis",
+            "ir",
+            "canonical",
+            "optimized",
+            "tensor",
+            "columnar",
+            "gpu",
+            "stablehlo",
+            "llvm",
+        ),
+        default=None,
+        help="print the program as that stage of the compiler holds it",
     )
 
     # Not `convert`: a convert that can be asked not to be strict is two

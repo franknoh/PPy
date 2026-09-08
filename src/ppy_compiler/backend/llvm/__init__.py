@@ -241,6 +241,7 @@ def _lower(bundle, analysis, candidates, layouts, opt_level, imports=None):  # t
             target=configured_target(config.llvm.target),
             parallel=config.parallel,
             imports=imports,
+            sanitize=config.llvm.sanitize,
         )
     return lower_module(
         analysis, candidates, layouts, safeguards=safeguards, prover=prover_for(config)

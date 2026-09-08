@@ -616,6 +616,20 @@ Speed of the compiler itself, measured before being changed.
   `@ppy.inline` ones across module seams (`@ppy.noinline` holds), and drops
   dead private code, and one object comes out; `ppy emit linked-ir` prints
   the program. `.ppyir` is public from 0.2.0 at schema 1.
+- Sanitizers, the IR stage debugger, and the optimization report. `ppy run`
+  and `ppy build` take `--sanitize bounds,overflow,pointer,alignment` (or
+  `[tool.ppy.llvm] sanitize`): the `sanitize` pass instruments the IR
+  before optimization -- every buffer index, every wrapping or proven
+  integer operation, every load and store through a pointer -- and a check
+  that fails returns a sanitizer status the boundary turns into
+  `SanitizerFailure` rather than a fallback; `lifetime` and `alias` are
+  refused with the reason. The IR gained the null pointer constant and the
+  pointer-to-integer cast the checks need. `ppy inspect --stage` prints
+  the program at any stage -- analysis, ir, canonical, tensor, columnar,
+  optimized, gpu, stablehlo, llvm -- and `ppy build --report-opt` (or
+  `--report-opt-json FILE`) reports what became native, what stayed in
+  Python and why, the guards proofs removed, and every remark under a
+  stable category.
 
 ## 0.1.0a1
 

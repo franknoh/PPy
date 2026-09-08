@@ -26,7 +26,7 @@ import enum
 import math
 from dataclasses import dataclass, field
 
-from ppy_runtime.abi import STATUS_FALLBACK, STATUS_OK
+from ppy_runtime.abi import SANITIZERS, STATUS_FALLBACK, STATUS_OK, STATUS_SANITIZER_BASE
 
 from ...ir import (
     BoolType,
@@ -784,7 +784,14 @@ class _FunctionEmitter:
                 self.call_intrinsic(op)
             case "guard":
                 label = str(op.attributes.get("label") or f"{op.attributes['kind']}.ok")
-                self.fail_unless(self.value(op.operands[0]), label)
+                if label.startswith("sanitize:"):
+                    # A sanitizer's check returns its status; nothing falls back.
+                    status = STATUS_SANITIZER_BASE + SANITIZERS.index(label.partition(":")[2])
+                    self.body.append(
+                        f"    if (!({self.value(op.operands[0])})) return {status}; /* {label} */"
+                    )
+                else:
+                    self.fail_unless(self.value(op.operands[0]), label)
             case _:
                 raise EmitError(f"{op.name} has no C lowering")
 
@@ -799,6 +806,8 @@ class _FunctionEmitter:
                 return "INFINITY" if number > 0 else "-INFINITY"
             text = repr(number)
             return text if ("." in text or "e" in text) else f"{text}.0"
+        if isinstance(t, PtrType):
+            return f"(({self.owner.c_type(t)})0)"
         number = int(value)  # type: ignore[call-overload]
         if isinstance(t, IntType) and not t.signed:
             return f"UINT64_C({number})"
@@ -953,6 +962,9 @@ class _FunctionEmitter:
         target = op.result.type
         if isinstance(source, PtrType) and isinstance(target, PtrType):
             self.define(op.result, f"(({self.owner.c_type(target)})({value}))")
+            return
+        if isinstance(source, PtrType):
+            self.define(op.result, f"((int64_t)(intptr_t)({value}))")
             return
         if isinstance(target, BoolType):
             zero = "0.0" if isinstance(source, FloatType) else "0"

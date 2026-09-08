@@ -16,7 +16,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from ppy_runtime.abi import STATUS_FALLBACK, STATUS_OK
+from ppy_runtime.abi import SANITIZERS, STATUS_FALLBACK, STATUS_OK, STATUS_SANITIZER_BASE
 
 from ...ir import (
     Block,
@@ -268,6 +268,8 @@ class _FunctionEmitter:
         self.fallback = None
         self.outs: list = []
         self._slots = 0
+        #: The blocks a failed sanitizer check returns through, by kind.
+        self.sanitized: dict[str, object] = {}
         #: A coroutine's resume function returns nothing to no caller.
         self.resume = function.attributes.get("ppy.abi") == "resume"
 
@@ -299,6 +301,22 @@ class _FunctionEmitter:
     def continue_if(self, condition, label: str) -> None:  # type: ignore[no-untyped-def]
         keep = self.llvm.append_basic_block(label)
         self.builder.cbranch(condition, keep, self.fallback)
+        self.builder.position_at_end(keep)
+
+    def _sanitizer_check(self, condition, label: str) -> None:  # type: ignore[no-untyped-def]
+        """A sanitizer's check: failing it returns the sanitizer status, never falls back."""
+        ir = self.ir
+        kind = label.partition(":")[2]
+        target = self.sanitized.get(kind)
+        if target is None:
+            target = self.llvm.append_basic_block(f"sanitized.{kind}")
+            with self.builder.goto_block(target):
+                self.builder.ret(
+                    ir.Constant(ir.IntType(32), STATUS_SANITIZER_BASE + SANITIZERS.index(kind))
+                )
+            self.sanitized[kind] = target
+        keep = self.llvm.append_basic_block(label)
+        self.builder.cbranch(condition, keep, target)
         self.builder.position_at_end(keep)
 
     def intrinsic(self, name: str, result, arguments: list):  # type: ignore[no-untyped-def]
@@ -511,7 +529,10 @@ class _FunctionEmitter:
                 self._call_intrinsic(op)
             case "guard":
                 label = str(op.attributes.get("label") or f"{op.attributes['kind']}.ok")
-                self.continue_if(self.value(op.operands[0]), label)
+                if label.startswith("sanitize:"):
+                    self._sanitizer_check(self.value(op.operands[0]), label)
+                else:
+                    self.continue_if(self.value(op.operands[0]), label)
             case _:
                 raise EmitError(f"{op.name} has no LLVM lowering")
 
@@ -536,6 +557,8 @@ class _FunctionEmitter:
             return ir.Constant(llvm_type, int(bool(value)))
         if isinstance(t, FloatType):
             return ir.Constant(llvm_type, float(value))
+        if isinstance(t, PtrType):
+            return ir.Constant(llvm_type, None)
         return ir.Constant(llvm_type, int(value))
 
     def _fp(self, emit, left, right):  # type: ignore[no-untyped-def]
@@ -686,6 +709,9 @@ class _FunctionEmitter:
             source, target = source.element, target.element
         if isinstance(source, PtrType) and isinstance(target, PtrType):
             self.set(op.result, b.bitcast(value, llvm_target))
+            return
+        if isinstance(source, PtrType):
+            self.set(op.result, b.ptrtoint(value, llvm_target))
             return
         if isinstance(source, BoolType):
             if isinstance(target, FloatType):

@@ -208,6 +208,10 @@ def _verify_const(op: Operation, checker: Checker) -> None:
     elif isinstance(t, FloatType):
         if not isinstance(value, (int, float)) or isinstance(value, bool):
             checker.error(op, f"a float constant needs a number, not {value!r}")
+    elif isinstance(t, PtrType):
+        # The one pointer constant is null, spelled 0.
+        if value != 0 or isinstance(value, bool):
+            checker.error(op, f"a pointer constant is null, spelled 0, not {value!r}")
     else:
         checker.error(op, f"no constant of type {t}")
 
@@ -304,6 +308,9 @@ def _verify_cast(op: Operation, checker: Checker) -> None:
     if isinstance(source, PtrType) and isinstance(target, PtrType):
         if source.address_space != target.address_space:
             checker.error(op, f"a cast keeps the address space: {source} to {target}")
+        return
+    if isinstance(source, PtrType) and target == I64:
+        # A pointer as the address it holds, for a check on it.
         return
     if not (is_scalar(source) and is_scalar(target)):
         checker.error(op, f"no cast from {source} to {target}")

@@ -413,6 +413,20 @@ class Dialect:
 dialects; a plugin registers its own through the plugin API. Two dialects
 of one name from different classes are refused.
 
+## Sanitizers
+
+`sanitize` (`ir/transforms/sanitize.py`) instruments a module before the
+optimizations run: `bounds` guards every `core.buffer_load` and
+`buffer_store` index; `overflow` turns every `wrap` or `proven` integer
+`add`, `sub`, `mul` into the checked form and guards the overflow flag;
+`pointer` guards every load and store through a non-stack pointer against
+null (`core.const 0 : ptr<T>` is the null pointer); `alignment` guards the
+address (`core.cast ptr -> i64`) against the element's size. A sanitizer
+guard carries a `sanitize:<kind>` label, and both backends return
+`STATUS_SANITIZER_BASE + kind` for it instead of the fallback status, so
+the boundary raises rather than re-running the Python. Coroutines' resume
+functions and device code are left alone: neither has a status to fail with.
+
 ## Passes and patterns
 
 A **pattern** roots at one operation name and rewrites through the

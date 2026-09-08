@@ -13,7 +13,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 
 from . import _cpu
-from .abi import STATUS_OK, NativeParam, NativeSignature
+from .abi import SANITIZERS, STATUS_OK, STATUS_SANITIZER_BASE, NativeParam, NativeSignature
 
 __all__ = ["NativeBinding", "adopt", "bind", "observation_wanted", "value_class_types"]
 
@@ -50,6 +50,10 @@ _ELEMENT_FORMATS = {
     "i8": ("b",),
     "u8": ("B",),
 }
+
+
+class SanitizerFailure(RuntimeError):
+    """A `--sanitize` check failed in native code; the message names the kind and the function."""
 
 
 class GuardFailed(Exception):
@@ -258,6 +262,11 @@ def bind(
         target = entry or native
         status = target(*atoms, *[ctypes.byref(slot) for slot in slots])
         if status != STATUS_OK:
+            if status >= STATUS_SANITIZER_BASE:
+                kind = SANITIZERS[min(status - STATUS_SANITIZER_BASE, len(SANITIZERS) - 1)]
+                raise SanitizerFailure(
+                    f"sanitizer: a {kind} check failed in `{signature.qualname}`"
+                )
             binding.fallbacks += 1
             return fallback(*args)
         binding.calls += 1

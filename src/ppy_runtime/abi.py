@@ -14,6 +14,10 @@ __all__ = ["STATUS_FALLBACK", "STATUS_OK", "NativeParam", "NativeSignature"]
 
 STATUS_OK = 0
 STATUS_FALLBACK = 1
+#: A sanitizer's check failed: `STATUS_SANITIZER_BASE + SANITIZERS.index(kind)`.
+#: Unlike a fallback, the boundary raises; nothing Python could do would be right.
+STATUS_SANITIZER_BASE = 2
+SANITIZERS = ("bounds", "overflow", "pointer", "alignment")
 
 #: `i8`/`u8` are byte-wide buffer elements; `bool` shares the width.
 _ABI_NAMES = {"int": "i64", "float": "double", "bool": "i8", "i8": "i8", "u8": "i8"}

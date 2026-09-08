@@ -73,6 +73,9 @@ class LlvmConfig:
     #: to LLVM; "ir" goes through the canonical IR and its passes. The IR
     #: road is the 0.2.0 one; the AST road stays while the two are compared.
     pipeline: str = "ast"
+    #: The sanitizers a build instruments the IR with (`bounds`, `overflow`,
+    #: `pointer`, `alignment`); a failed check raises rather than falls back.
+    sanitize: tuple[str, ...] = ()
 
 
 @dataclass(slots=True)
@@ -238,6 +241,7 @@ def _apply(config: Config, table: Mapping[str, Any]) -> Config:
             prover=sub.get("prover"),
             pipeline=str(sub.get("pipeline", "ast")),
             host_cpu=_as_bool(sub.get("host-cpu"), False),
+            sanitize=tuple(str(kind) for kind in (sub.get("sanitize") or ())),
         )
     if isinstance(sub := table.get("parallel"), Mapping):
         config.parallel = ParallelConfig(

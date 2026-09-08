@@ -166,6 +166,7 @@ and which stayed boxed, with the reason.
 ppy build TARGET [--safe] [--host-cpu] [--standalone]
                  [--target TRIPLE] [--python-extension] [--library]
                  [--backend {llvm,python}] [-o DIR]
+                 [--sanitize KINDS] [--report-opt] [--report-opt-json FILE]
 ppy build --warm TARGET
 ppy build foo.ppyir                  # from the IR alone; see `ppy emit`
 ```
@@ -386,12 +387,53 @@ call's lowering with its guards.
 
 ```bash
 ppy inspect TARGET [--backend {python,llvm}] [--ir]
+ppy inspect TARGET --stage {analysis,ir,canonical,optimized,tensor,columnar,gpu,stablehlo,llvm}
 ```
 
 The optimized Python by default, including plugin rewrites, so it is what to
 read when a result differs from plain CPython. `--ir` prints what the native
 path compiles: LLVM IR, then the C for the CPython-ABI wrappers, then the C++
-for any ATen region.
+for any ATen region. `--stage` prints the program as one stage of the
+compiler holds it: `analysis` is what the checker knows of every function
+(type, effects, whether it is native, bound, a kernel, a coroutine, marked
+for XLA); `ir` the frontend's module before any pass; `canonical` after
+canonicalization; `tensor` after fusion and before the tensor dialect
+lowers to loops, `columnar` the same point for the modules holding
+columnar operations; `optimized` what a backend receives; `gpu` the device
+code alone; `stablehlo` and `llvm` what those backends write.
+
+## Sanitizers: `--sanitize`
+
+```bash
+ppy run --sanitize bounds,overflow foo.ppy
+ppy build --sanitize pointer,alignment .
+```
+
+A sanitizer instruments the IR with checks the program did not ask for:
+`bounds` checks every buffer index, whether or not a proof or a hoist
+removed the frontend's guard; `overflow` checks every wrapping or proven
+`int` operation; `pointer` checks that a pointer read or written through is
+not null; `alignment` that it is aligned for what it points at. A failed
+check is not a fallback: the function returns a sanitizer status and the
+boundary raises `ppy_runtime.binding.SanitizerFailure` naming the kind and
+the function (a standalone program exits as it does for a guard). The
+checks are the IR road's, so `--sanitize` selects it; `[tool.ppy.llvm]
+sanitize = ["bounds"]` configures the same. `lifetime` and `alias` are
+refused with the reason: stack lifetime is held by the verifier, aliasing
+has no runtime check yet.
+
+## Optimization report: `--report-opt`
+
+`ppy build --report-opt` prints, per module, which functions became native
+and are bound to Python, which stay in Python and why, how many guards a
+proof removed, and every remark the passes left, filed under a stable
+category -- `function inlined`, `tensor ops fused`, `columnar ops fused`,
+`parallel loop emitted`, `GPU kernel emitted`, `StableHLO region emitted`,
+`bounds guard removed`, `overflow guard proven unnecessary`, `allocation
+stack-promoted`, `generic specialization emitted`, `sanitizer checks
+inserted`, `dead code removed` -- and what the build staged for XLA or a
+device. `--report-opt-json FILE` writes the same as JSON, keyed the same
+way, so a tool can count by category across versions.
 
 ## `ppy test`
 

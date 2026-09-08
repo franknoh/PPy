@@ -120,6 +120,7 @@ def _key(file: Path, root: Path, config: Config, options: argparse.Namespace) ->
         config.parallel.enabled,
         config.parallel.threads,
         resolved_safeguards(options, config.llvm.safeguards, "run"),
+        getattr(options, "sanitize", None) or ",".join(sorted(config.llvm.sanitize)),
         getattr(options, "prover", None) or config.llvm.prover or "off",
         sorted((name, sorted(asdict(plugin).items())) for name, plugin in config.plugins.items()),
     )
