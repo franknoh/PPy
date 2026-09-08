@@ -2277,6 +2277,10 @@ class _Checker:
 
     def _attribute(self, owner: Binding, node: ast.Attribute, env: Env) -> Binding:
         self._bound_methods.discard(id(node))
+        if isinstance(owner.type, T.TypeVar_) and owner.type.bound is not None:
+            # A type parameter has what its bound has: a Protocol bound lends its
+            # methods and a class bound its members, as the operators already do.
+            owner = Binding(owner.type.bound, owner.facts)
         if isinstance(owner.type, T.Module_):
             return self._module_attribute(owner.type.name, node)
         narrowed = env.get(_attribute_path(node) or "")

@@ -408,3 +408,35 @@ def test_a_value_class_operator_dispatches_statically(write, analyze):
     module = ir_modules(bundle)["vec"]
     assert "vec_total_cents" in module.functions
     assert T.INT is not None
+
+
+def test_a_protocol_bound_lends_its_methods_to_a_type_parameter(write, analyze):
+    path = write(
+        "gen.ppy",
+        """
+        from typing import Protocol
+
+
+        class Named(Protocol):
+            def name(self) -> str: ...
+
+
+        class Point:
+            def __init__(self, x: int) -> None:
+                self.x = x
+
+            def name(self) -> str:
+                return str(self.x)
+
+
+        def label[T: Named](thing: T) -> str:
+            return "at " + thing.name()
+
+
+        def use() -> str:
+            return label(Point(3))
+        """,
+    )
+    bundle = analyze(path)
+    assert _codes(bundle) == []
+    assert str(bundle.symbols.modules["gen"].functions["use"].ret) == "str"

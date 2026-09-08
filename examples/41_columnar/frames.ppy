@@ -1,0 +1,24 @@
+import pandas as pd
+
+import ppy
+
+
+@ppy.pure
+def blend(s: pd.Series, t: pd.Series) -> pd.Series:
+    return s * t + s.fillna(0.0)
+
+
+@ppy.pure
+def above(s: pd.Series, t: pd.Series) -> pd.Series:
+    return (s > t) & t.notna()
+
+
+def main() -> None:
+    s = pd.Series([1.0, float("nan"), 3.0, 4.0, 2.5], name="s")
+    t = pd.Series([2.0, 2.0, float("nan"), 0.5, 2.5], name="t")
+    print(blend(s, t).tolist())
+    print(above(s, t).tolist())
+    print(float(blend(s, t).sum()), int(above(s, t).sum()))
+
+
+main()

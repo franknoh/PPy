@@ -1,5 +1,5 @@
 [MAIN]
-ignored-modules = torch, jax, jax.numpy, numpy, pydantic, uvicorn, fastapi, fastapi.testclient, flax, flax.linen, optax, geometry, ppy
+ignored-modules = torch, jax, jax.numpy, numpy, pydantic, uvicorn, fastapi, fastapi.testclient, flax, flax.linen, optax, geometry, ppy, pandas, pyarrow, pyarrow.compute, scipy
 
 [MESSAGES CONTROL]
 enable = all
@@ -13,6 +13,7 @@ disable =
     consider-using-enumerate,
     eval-used,
     wrong-import-position,
+    unused-argument,
 
 [FORMAT]
 max-line-length = 100

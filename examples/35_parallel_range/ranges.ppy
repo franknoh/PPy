@@ -1,0 +1,60 @@
+import array
+
+import ppy
+from ppy import Buffer, native, parallel
+
+
+def squares(out: native.ptr[int], n: int) -> int:
+    for i in parallel.range(n):
+        native.store(native.offset(out, i), i * i)
+    return native.load(native.offset(out, n - 1))
+
+
+def dot(a: Buffer[float], b: Buffer[float]) -> float:
+    total = 0.0
+    for i in parallel.range(len(a)):
+        total += a[i] * b[i]
+    return total
+
+
+@ppy.fastmath
+def dot_relaxed(a: Buffer[float], b: Buffer[float]) -> float:
+    total = 0.0
+    for i in parallel.range(len(a)):
+        total += a[i] * b[i]
+    return total
+
+
+def count_odd(xs: Buffer[int], scale: int) -> int:
+    hits = 0
+    for i in parallel.range(0, len(xs)):
+        if xs[i] % 2 == 1:
+            hits += scale
+    return hits
+
+
+@ppy.parallel
+def fill(out: native.ptr[float], n: int, base: float) -> float:
+    for i in range(n):
+        native.store(native.offset(out, i), base + i)
+    acc = 0.0
+    for j in range(n):
+        acc += native.load(native.offset(out, j))
+    return acc
+
+
+def main() -> None:
+    n = 100000
+    slots = native.stack_alloc[int](n)
+    print(squares(slots, n))
+    a = memoryview(array.array("d", [0.001 * i for i in range(n)]))
+    b = memoryview(array.array("d", [1.0 / (1 + i) for i in range(n)]))
+    print(f"{dot(a, b):.12f}")
+    print(f"{dot_relaxed(a, b):.6f}")
+    odds = memoryview(array.array("q", [i % 3 for i in range(n)]))
+    print(count_odd(odds, 3))
+    room = native.stack_alloc[float](1000)
+    print(fill(room, 1000, 0.5))
+
+
+main()

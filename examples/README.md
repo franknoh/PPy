@@ -42,6 +42,17 @@ rather than believed.
 | `29_flax` | a Flax/optax training loop, converted and strict-checked |
 | `30_migrate` | a deliberately dynamic legacy script rewritten by `ppy migrate` into strict PPY |
 | `31_torchrun` | a trainer under `torchrun` and `accelerate launch`: `import ppy` serves its kernels natively on every rank |
+| `32_native_memory` | typed pointers, stack memory, a `libm` binding, and a function exported as a C symbol |
+| `33_simd_and_cpu` | vector lanes with `ppy.simd`, and the machine as a facade with `ppy.cpu` |
+| `34_atomics_and_threads` | `ppy.atomic` and `ppy.concurrent`: counters, a mutex, a condition, four workers |
+| `35_parallel_range` | `parallel.range` loops, reductions that keep their order, and the parallel backends |
+| `36_autodiff` | `ppy.grad` and `value_and_grad`, the same rule table on every path |
+| `37_aio` | an echo server and its client as `ppy.aio` coroutines, native runtime or asyncio |
+| `38_cuda` | a saxpy and a block reduction in `ppy.cuda`: reference launch, PTX, CUDA and HIP source |
+| `39_xla` | `@xla.jit` functions as StableHLO, run through PJRT where a device is present |
+| `40_generics` | type parameters, bounds, and Protocols, monomorphized in native code |
+| `41_columnar` | pandas Series expressions fused as one kernel over the columnar dialect |
+| `42_toolbox` | `ppy emit`, `ppy inspect --stage`, `--report-opt`, `--sanitize`, `--profile`, and `--pgo` on one program |
 
 A folder of related problems keeps them in numbered subfolders, and every
 runner reaches them: `15_algorithms/15a_nqueens` and its five siblings are

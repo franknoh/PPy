@@ -12,6 +12,9 @@ source and no conversion step involved.
 - `@ppy.parallel` marks a loop as splittable; the compiler still has to prove it.
 - A reassociating reduction is not split without `@ppy.fastmath`, because the answer would change.
 - The split result is bit-identical to the serial kernel and to NumPy.
+- `parallel.range` ([35_parallel_range](../35_parallel_range/)) is the 0.2.0
+  spelling for a loop the program itself declares splittable, pointers and
+  buffers included; `@ppy.parallel` stays the switch for the fused NumPy loops here.
 
 ## Run it
 

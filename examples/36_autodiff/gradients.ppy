@@ -1,0 +1,39 @@
+import math
+
+import ppy
+
+
+def f(x: float, y: float) -> float:
+    return math.sin(x) * y + x * x
+
+
+def g(x: float) -> float:
+    return math.exp(-x * x) * math.cos(3.0 * x)
+
+
+df = ppy.grad(f)
+both = ppy.value_and_grad(f, argnums=1)
+dg = ppy.grad(g)
+
+
+def slope(x: float, y: float) -> float:
+    return df(x, y)
+
+
+def pair(x: float, y: float) -> float:
+    v, grad_y = both(x, y)
+    return v * 2.0 + grad_y
+
+
+def newton(x: float) -> float:
+    for _ in range(6):
+        x = x - g(x) / dg(x)
+    return x
+
+
+def main() -> None:
+    print(f"{slope(0.7, 2.0):.9f} {pair(0.7, 2.0):.9f}")
+    print(f"{dg(0.3):.9f} {newton(0.4):.9f} {g(newton(0.4)):.1e}")
+
+
+main()

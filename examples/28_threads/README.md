@@ -15,6 +15,9 @@ no conversion step involved.
   twice as long as one.
 - A function with an effect that can reach the interpreter keeps the GIL, and
   one that performs I/O is not lowered natively at all.
+- `ppy.concurrent` and `ppy.atomic` ([34_atomics_and_threads](../34_atomics_and_threads/))
+  are threads and shared memory inside native code; this example is the other
+  direction, Python threads calling one native function.
 
 Borrowed buffers are covered too: the boundary pins the memory for the whole
 call, which is the guarantee NumPy relies on when it does the same thing.

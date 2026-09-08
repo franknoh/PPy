@@ -1,0 +1,61 @@
+from ppy import cuda, native
+
+
+@cuda.device
+def fma(a: float, x: float, y: float) -> float:
+    return a * x + y
+
+
+@cuda.kernel
+def saxpy(n: int, a: float, x: native.const_ptr[float], y: native.ptr[float]) -> None:
+    i = cuda.global_id()
+    if i < n:
+        slot = native.offset(y, i)
+        native.store(slot, fma(a, native.load(native.offset(x, i)), native.load(slot)))
+
+
+@cuda.kernel
+def block_max(x: native.const_ptr[float], out: native.ptr[float]) -> None:
+    parked = cuda.shared[float, 64]()
+    tid = cuda.thread_id()
+    native.store(native.offset(parked, tid), native.load(native.offset(x, cuda.global_id())))
+    cuda.syncthreads()
+    mine = native.load(native.offset(parked, tid))
+    other = cuda.shfl_xor(mine, 1)
+    mine = other if other > mine else mine
+    native.store(native.offset(parked, tid), mine)
+    cuda.syncthreads()
+    if tid == 0:
+        best = native.load(parked)
+        for k in range(1, cuda.block_dim()):
+            candidate = native.load(native.offset(parked, k))
+            best = candidate if candidate > best else best
+        native.store(native.offset(out, cuda.block_id()), best)
+
+
+def run(n: int, a: float, x: native.const_ptr[float], y: native.ptr[float]) -> None:
+    cuda.launch(saxpy, (n + 255) // 256, 256, n, a, x, y)
+
+
+def main() -> None:
+    n = 300
+    x = native.stack_alloc[float](n)
+    y = native.stack_alloc[float](n)
+    for i in range(n):
+        native.store(native.offset(x, i), float(i))
+        native.store(native.offset(y, i), 1.0)
+    run(n, 2.0, x, y)
+    total = 0.0
+    for i in range(n):
+        total += native.load(native.offset(y, i))
+    print(total)
+    values = native.stack_alloc[float](128)
+    for i in range(128):
+        native.store(native.offset(values, i), float((i * 37) % 101))
+    out = native.stack_alloc[float](2)
+    cuda.launch(block_max, 2, 64, values, out)
+    print(native.load(out), native.load(native.offset(out, 1)))
+    print(f"# kernels compiled for a device here: {cuda.compiled(saxpy)}")
+
+
+main()

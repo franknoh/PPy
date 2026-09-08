@@ -1,0 +1,64 @@
+from ppy import atomic, concurrent, native
+
+
+def worker(
+    counter: native.ptr[int], mutex: native.ptr[int], total: native.ptr[int], rounds: int
+) -> None:
+    for _ in range(rounds):
+        atomic.fetch_add(counter, 1, order="relaxed")
+        concurrent.lock(mutex)
+        native.store(total, native.load(total) + 2)
+        concurrent.unlock(mutex)
+
+
+def waiter(
+    flag: native.ptr[int], mutex: native.ptr[int], condition: native.ptr[int], out: native.ptr[int]
+) -> None:
+    concurrent.lock(mutex)
+    while native.load(flag) == 0:
+        concurrent.wait(condition, mutex)
+    native.store(out, native.load(flag) * 10)
+    concurrent.unlock(mutex)
+
+
+def run(
+    counter: native.ptr[int], mutex: native.ptr[int], total: native.ptr[int], rounds: int
+) -> int:
+    first = concurrent.spawn(worker, counter, mutex, total, rounds)
+    second = concurrent.spawn(worker, counter, mutex, total, rounds)
+    third = concurrent.spawn(worker, counter, mutex, total, rounds)
+    fourth = concurrent.spawn(worker, counter, mutex, total, rounds)
+    concurrent.join(first)
+    concurrent.join(second)
+    concurrent.join(third)
+    concurrent.join(fourth)
+    atomic.fence()
+    return atomic.load(counter)
+
+
+def signal(
+    flag: native.ptr[int], mutex: native.ptr[int], condition: native.ptr[int], out: native.ptr[int]
+) -> int:
+    waiting = concurrent.spawn(waiter, flag, mutex, condition, out)
+    concurrent.lock(mutex)
+    native.store(flag, 4)
+    concurrent.notify(condition)
+    concurrent.unlock(mutex)
+    concurrent.join(waiting)
+    return native.load(out)
+
+
+def main() -> None:
+    counter = native.stack_alloc[int](1)
+    mutex = native.stack_alloc[int](1)
+    total = native.stack_alloc[int](1)
+    print(run(counter, mutex, total, 500), native.load(total))
+    old, swapped = atomic.compare_exchange(counter, 2000, 7)
+    print(old, swapped, atomic.exchange(counter, 1), atomic.load(counter, order="acquire"))
+    flag = native.stack_alloc[int](1)
+    condition = native.stack_alloc[int](1)
+    out = native.stack_alloc[int](1)
+    print(signal(flag, mutex, condition, out))
+
+
+main()
