@@ -1,0 +1,22 @@
+optimization report: PPy (O2, ir road)
+profile: toolbox.ppyprof (2 runs, hot from 5 calls)
+  toolbox.compute: hot, 100 calls; arguments 0: list[400] x100
+  toolbox.pick: cold, 0 calls
+  toolbox.unused: cold, 0 calls
+module toolbox
+  toolbox.compute: native, bound to Python
+  toolbox.pick: native, bound to Python
+  toolbox.unused: native, native callers only
+  toolbox.main: Python -- has effects that must run on CPython: IO
+  block merged: 1
+  dead code removed: 2
+  note: 2
+  profile applied: 3
+    - @toolbox_compute: core.cmp: folded 4 and 0
+    - @toolbox_compute: core.guard: condition always holds
+    - profile: `toolbox.compute` is hot (100 call(s)); 2 branch(es) weighted, 1 loop(s) with trip counts
+    - profile: `toolbox.pick` is cold (0 call(s)); 0 branch(es) weighted, 0 loop(s) with trip counts
+    - profile: `toolbox.unused` is cold (0 call(s)); 0 branch(es) weighted, 0 loop(s) with trip counts
+    - simplify-cfg: ^each.latch3 merged into ^endif7
+    - dce: unused core.const removed
+    - dce: unused core.const removed

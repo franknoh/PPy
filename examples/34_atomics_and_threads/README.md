@@ -1,27 +1,41 @@
-# Atomics and threads
+# Four threads, one counter, one answer
 
-Shared memory one operation at a time, and threads with what keeps them
-apart: `ppy.atomic` and `ppy.concurrent`, over memory the program owns.
+Four workers each add 500 to a shared counter with `atomic.fetch_add` and
+500 × 2 to a shared total behind a mutex. The program prints `2000 4000` on
+plain CPython, on the Python backend, and natively — because `ppy.atomic`
+and `ppy.concurrent` are the same operations on every path, over memory the
+program owns.
 
-## Provenance
+## Atomics with C11's orders, and C11's rules
 
-Hand-written. `counters.ppy` is written directly; there is no `.py` source
-and no conversion step involved.
+```python
+def worker(counter: native.ptr[int], mutex: native.ptr[int], total: native.ptr[int], rounds: int) -> None:
+    for _ in range(rounds):
+        atomic.fetch_add(counter, 1, order="relaxed")
+        concurrent.lock(mutex)
+        native.store(total, native.load(total) + 2)
+        concurrent.unlock(mutex)
+```
 
-## What it shows
+`load`, `store`, `exchange`, `compare_exchange`, the `fetch_*` family, and
+`fence` each take an `order` — `relaxed`, `acquire`, `release`, `acq_rel`,
+`seq_cst` — and the checker holds what C11 holds: a load is never
+`release`, a store never `acquire`, a relaxed fence orders nothing
+(`E1641`). Natively each lowers to the instruction of that order; under
+CPython the operations serialize under one lock, which is a valid
+implementation of every order.
 
-- `atomic.fetch_add`, `compare_exchange`, `exchange`, `load`, and `fence`
-  take an `order` the checker holds to what C11 holds: a relaxed fence
-  orders nothing, a load is never `release`.
-- `concurrent.spawn(f, *args)` runs a function of the module on a new
-  thread and `join` waits; four workers add to one counter and to one total
-  behind a mutex, and the answer is the same on every path because the
-  operations are the same operations.
-- A mutex is one `int` slot and a condition one more: `wait`, `notify`, and
-  the spin under the CPU's pause hint are implemented the same way over the
-  atomics on every path. Under CPython the atomics serialize under one lock.
-- Native code links pthreads for these; a target without them is refused
-  with the reason.
+## Threads and what keeps them apart
+
+`concurrent.spawn(f, *args)` runs a function of the module on a new thread
+and hands back a handle; `join` waits. The synchronization objects are
+memory the program owns: a mutex is one `int` slot, a condition one more
+counting notifications, and `wait`/`notify` spin under the CPU's pause hint
+over the same atomics on every path. `signal` shows the pattern — a waiter
+blocks on a condition until the main thread sets a flag and notifies. A
+thread that fails a guard fails its joiner, and the function falls back as
+a whole. Native code links pthreads; a target without them is refused with
+the reason.
 
 ## Run it
 
@@ -50,3 +64,12 @@ ppy run counters.ppy
 ```
 
 <!-- outputs:end -->
+
+## Read on
+
+- [Atomics and threads](../../docs/guide/concurrency.md) — the two namespaces in full.
+- [Threads](../28_threads/README.md) — the other direction: Python threads calling native code.
+- [Parallel range](../35_parallel_range/README.md) — when you want the split done for you.
+
+`counters.ppy` is hand-written; there is no `.py` source and no conversion
+step.

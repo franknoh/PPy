@@ -1,16 +1,39 @@
-# Strings
+# Strings stay on CPython, and say so
 
-String work stays on CPython, and says so.
+PPY does not pretend to lower `str.split`. String methods are fully typed —
+`name.split(" ")` is a `list[str]`, `part[0].upper()` a `str` — so the code
+checks in strict mode, and it runs as ordinary Python on every path. The
+compiler's job here is to say clearly which calls kept a function boxed,
+and `ppy explain` does.
 
-## Provenance
+## Typed, checked, not lowered
 
-Hand-written. `strings.ppy` is written directly; there is no `.py`
-source and no conversion step involved.
+```python
+@ppy.pure
+def is_palindrome(text: str) -> bool:
+    cleaned: str = text.lower().replace(" ", "")
+    left: int = 0
+    right: int = len(cleaned) - 1
+    while left < right:
+        if cleaned[left] != cleaned[right]:
+            return False
+        left += 1
+        right -= 1
+    return True
+```
 
-## What it shows
+The loop is native-shaped, but `cleaned[left]` indexes a `str`, and a
+Python string has no native representation. The function is pure — the
+checker proves that — and it stays on the Python side.
 
-- String methods are typed, so the code checks; they have no native lowering, so they stay boxed.
-- `ppy explain` reports which calls kept the function boxed.
+```bash
+ppy explain strings.ppy:is_palindrome    # the first construct that blocked lowering
+```
+
+Text that needs to be fast goes through a byte buffer instead:
+`Buffer[ppy.u8]` is one byte per character and lowers, which is how
+[substring search](../15_algorithms/15c_kmp/README.md) scans four million
+characters natively.
 
 ## Run it
 
@@ -48,3 +71,10 @@ True False
 ```
 
 <!-- outputs:end -->
+
+## Read on
+
+- [Input and native lowering](../../docs/guide/native-lowering.md) — what lowers, what does not, and `ppy explain`.
+- [Algorithms: substring search](../15_algorithms/15c_kmp/README.md) — text as bytes, at C speed.
+
+`strings.ppy` is hand-written; there is no `.py` source and no conversion step.

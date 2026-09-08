@@ -1,17 +1,35 @@
-# Containers
+# Containers, inferred and owned
 
-Element types, aliasing, and local mutation.
+`out = []` has no element type until something goes into it. The checker
+waits: `out.append(i * i)` makes it a `list[int]`, and the annotation is
+inferred, not demanded. Filling a container you allocated is allowed inside
+`@ppy.pure`; filling one that came in as an argument is not, and the
+checker tells them apart through aliases.
 
-## Provenance
+## Element types from first use
 
-Hand-written. `containers.ppy` is written directly; there is no `.py`
-source and no conversion step involved.
+```python
+@ppy.pure
+def grow(count: int) -> list[int]:
+    out = []
+    for i in range(count):
+        out.append(i * i)
+    return out
+```
 
-## What it shows
+`seen = set()` becomes a `set[str]` at `seen.add(value)`; `counts` is
+declared `dict[int, int]` and `counts.get(value, 0) + 1` checks against it.
+None of these functions is native — a dict or a set has no native form —
+but all of them are strict, typed, and pure.
 
-- An empty container gets its element type from what is first put into it.
-- Filling a container the function allocated is permitted inside `@ppy.pure`.
-- Mutating a parameter, or sharing a local before mutating it, is not.
+## Local mutation is pure; shared mutation is not
+
+`flatten` extends a list it created, so it is pure. Had it extended `rows`,
+the write would be an effect on an argument and `@ppy.pure` would fail with
+`E1601`. The distinction is by alias, not by name: `ys = xs; ys.append(1)`
+mutates `xs` whatever it is called, and the analysis follows the alias to
+say so. That same alias map is what lets `ppy convert` declare a read-only
+parameter as `Sequence[T]` rather than `list[T]`.
 
 ## Run it
 
@@ -52,3 +70,11 @@ ppy run containers.ppy
 ```
 
 <!-- outputs:end -->
+
+## Read on
+
+- [Conversion and inference](../../docs/internals/conversion.md) — protocol widening and the alias analysis behind it.
+- [Effects and purity](../../docs/guide/effects.md) — what a pure function may and may not touch.
+
+`containers.ppy` is hand-written; there is no `.py` source and no conversion
+step.

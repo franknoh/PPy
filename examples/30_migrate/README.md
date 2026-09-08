@@ -1,48 +1,84 @@
-# Migration
+# Five dynamic idioms, rewritten and proven equivalent
 
-A little legacy telemetry script, dynamic in all the usual harmless ways —
-`importlib.import_module`, `globals()` writes, `setattr`/`getattr` on
-constant names — run through `ppy migrate` instead of `ppy convert`.
+`legacy.py` is a small telemetry script that is dynamic in all the usual
+harmless ways: `importlib.import_module("math")`, `globals()["SCALE"] = 4`,
+`setattr(first, "flagged", True)`, `getattr(first, "flagged")`. `ppy
+convert` would refuse it. `ppy migrate` rewrites each site to the static
+form it always meant, proves the rewrite equivalent first, and then
+staticizes as usual — and the result checks strict with nothing left over.
 
-## Provenance
+## Before and after
 
-Generated, not hand-written. `legacy.ppy` is exactly what
-`ppy migrate legacy.py` writes; `verify_conversions.py` regenerates it to
-prove that.
+```python
+math = importlib.import_module("math")
+globals()["SCALE"] = 4
+setattr(first, "flagged", True)
+print(getattr(first, "flagged"), scaled, spread(scaled))
+```
 
-## What it shows
+becomes
 
-- The migration passes rewrite what was static all along: `setattr(first,
-  "flagged", True)` becomes `first.flagged = True`, `globals()["SCALE"] = 4`
-  becomes `SCALE = 4`, and `math = importlib.import_module("math")` becomes
-  `import math` — after which the `import importlib` that fed it is removed
-  as freight with no cargo. Five sites, each proven equivalent before it is
-  touched.
-- Staticization then runs as usual over the rewritten code: fourteen
-  annotations, `Final` on the constant, `@ppy.pure` where proven.
-- The result passes `ppy check` under `strict = true` with nothing left
-  over — this migration ends where `ppy convert` starts.
-- `ppy migrate --report migration.json` writes the full accounting;
-  `ppy migrate --diff` shows it before it happens.
+```python
+import math
+SCALE: Final[int] = 4
+first.flagged = True
+print(first.flagged, scaled, spread(scaled))
+```
+
+The `import importlib` that fed the first line is removed as freight with no
+cargo. Then the ordinary conversion runs over the rewritten code: fourteen
+annotations, `Final` on the constant, `Sequence` where a parameter is only
+read, `@ppy.pure` on `spread`. This migration ends where `ppy convert`
+starts.
+
+## What a migration reports
+
+`ppy migrate --report migration.json` writes the full accounting: what was
+`AUTOFIXED`, what `REQUIRES_REWRITE`, what needs a `DYNAMIC_BOUNDARY`, and
+whether the output is `strict_ready`. `--diff` shows the rewrite before it
+happens. On a real codebase the unit of migration is a kernel file, not the
+repository; [Migrating a real project](../../docs/internals/migrating.md)
+says which files to hand it.
 
 ## Run it
 
 ```bash
-python legacy.ppy    # plain CPython
-ppy legacy.ppy       # optimized backend
-ppy run legacy.ppy   # the LLVM path
+ppy migrate legacy.py --diff
+python  legacy.ppy
+ppy run legacy.ppy
 ```
 
 <!-- outputs:start -->
 ## What it prints
 
-**`python legacy.ppy`**
+**`ppy migrate legacy.py --diff`**
 
 ```text
-True [2.0, 5.0, 8.0] 6
+--- ./legacy.py
++++ ./legacy.ppy
+@@ -1,32 +1,34 @@
+ """A little legacy telemetry script, dynamic in all the usual harmless ways."""
++import math
++from collections.abc import Sequence
++from typing import Final
+ 
+-import importlib
++import ppy
+ 
+-math = importlib.import_module("math")
+-
+-globals()["SCALE"] = 4
++SCALE: Final[int] = 4
+ 
+ 
+ class Reading:
+-    def __init__(self, value):
+-        self.value = value
 ```
 
-**`ppy legacy.ppy`**
+*52 lines in all — [full output](outputs/01-ppy-migrate-legacy-py-diff.txt).*
+
+**`python  legacy.ppy`**
 
 ```text
 True [2.0, 5.0, 8.0] 6
@@ -55,3 +91,12 @@ True [2.0, 5.0, 8.0] 6
 ```
 
 <!-- outputs:end -->
+
+## Read on
+
+- [CLI: `ppy migrate`](../../docs/cli.md) — the passes and the report's categories.
+- [Dynamic boundaries](../16_dynamic/README.md) — what stays dynamic on purpose.
+
+Generated, not hand-written: `legacy.ppy` is exactly what `ppy migrate
+legacy.py` writes, and `examples/verify_conversions.py` checks that on every
+run.

@@ -1,0 +1,165 @@
+; ---- saxpy [gpu] ----
+func @saxpy_fma(%a: f64, %x: f64, %y: f64) -> f64 attrs {effects = [], gpu.kind = "device", ppy.abi = "ppy", ppy.qualname = "saxpy.fma", ppy.releases_gil = true, ppy.symbol = "ppy_saxpy_fma"} loc("examples/38_cuda/saxpy.ppy":5:0) {
+^entry:
+    %a_addr = core.alloca : ptr<f64, stack> loc("examples/38_cuda/saxpy.ppy":5:0)
+    core.store %a, %a_addr
+    %x_addr = core.alloca : ptr<f64, stack>
+    core.store %x, %x_addr
+    %y_addr = core.alloca : ptr<f64, stack>
+    core.store %y, %y_addr
+    %0 = core.load %a_addr : f64 loc("examples/38_cuda/saxpy.ppy":6:4)
+    %1 = core.load %x_addr : f64
+    %2 = core.mul %0, %1 : f64
+    %3 = core.load %y_addr : f64
+    %4 = core.add %2, %3 : f64
+    core.ret %4
+}
+
+func @saxpy_saxpy(%n: i64, %a: f64, %x: ptr<f64, generic, const>, %y: ptr<f64>) -> () attrs {effects = ["read_memory", "write_memory"], gpu.kind = "kernel", ppy.abi = "ppy", ppy.qualname = "saxpy.saxpy", ppy.releases_gil = true, ppy.symbol = "ppy_saxpy_saxpy"} loc("examples/38_cuda/saxpy.ppy":10:0) {
+^entry:
+    %n_addr = core.alloca : ptr<i64, stack> loc("examples/38_cuda/saxpy.ppy":10:0)
+    core.store %n, %n_addr
+    %a_addr = core.alloca : ptr<f64, stack>
+    core.store %a, %a_addr
+    %x_addr = core.alloca : ptr<ptr<f64, generic, const>, stack>
+    core.store %x, %x_addr
+    %y_addr = core.alloca : ptr<ptr<f64>, stack>
+    core.store %y, %y_addr
+    %0 = gpu.block_id.x : index loc("examples/38_cuda/saxpy.ppy":11:4)
+    %1 = gpu.block_dim.x : index
+    %2 = core.mul %0, %1 {overflow = "wrap"} : index
+    %3 = gpu.thread_id.x : index
+    %4 = core.add %2, %3 {overflow = "wrap"} : index
+    %5 = core.cast %4 : i64
+    %i_addr = core.alloca : ptr<i64, stack>
+    core.store %5, %i_addr
+    %6 = core.load %i_addr : i64 loc("examples/38_cuda/saxpy.ppy":12:4)
+    %7 = core.load %n_addr : i64
+    %n_entry = core.load %n_addr : i64
+    %8 = core.cmp.lt %6, %7 : bool
+    %slot_addr = core.alloca : ptr<ptr<f64>, stack>
+    core.cond_br %8, ^then1, ^else2 loc("examples/38_cuda/saxpy.ppy":12:4)
+^then1:
+    %9 = core.load %y_addr : ptr<f64> loc("examples/38_cuda/saxpy.ppy":13:8)
+    %10 = core.load %i_addr : i64
+    %11 = core.ptr_offset %9, %10 : ptr<f64>
+    core.store %11, %slot_addr
+    %12 = core.load %slot_addr : ptr<f64> loc("examples/38_cuda/saxpy.ppy":14:8)
+    %13 = core.load %a_addr : f64
+    %14 = core.load %x_addr : ptr<f64, generic, const>
+    %15 = core.load %i_addr : i64
+    %16 = core.ptr_offset %14, %15 : ptr<f64, generic, const>
+    %17 = core.load %16 : f64
+    %18 = core.load %slot_addr : ptr<f64>
+    %19 = core.load %18 : f64
+    %20 = core.call %13, %17, %19 {callee = @saxpy_fma} : f64
+    core.store %20, %12
+    core.br ^endif3
+^else2:
+    core.br ^endif3 loc("examples/38_cuda/saxpy.ppy":14:8)
+^endif3:
+    core.ret loc("examples/38_cuda/saxpy.ppy":14:8)
+}
+
+func @saxpy_block_max(%x: ptr<f64, generic, const>, %out: ptr<f64>) -> () attrs {effects = ["alloc", "may_raise", "read_memory", "sync", "write_memory"], gpu.kind = "kernel", ppy.abi = "ppy", ppy.qualname = "saxpy.block_max", ppy.releases_gil = true, ppy.symbol = "ppy_saxpy_block_max"} loc("examples/38_cuda/saxpy.ppy":18:0) {
+^entry:
+    %x_addr = core.alloca : ptr<ptr<f64, generic, const>, stack> loc("examples/38_cuda/saxpy.ppy":18:0)
+    core.store %x, %x_addr
+    %out_addr = core.alloca : ptr<ptr<f64>, stack>
+    core.store %out, %out_addr
+    %0 = gpu.shared_alloc {count = 64} : ptr<f64, shared> loc("examples/38_cuda/saxpy.ppy":19:4)
+    %parked_addr = core.alloca : ptr<ptr<f64, shared>, stack>
+    core.store %0, %parked_addr
+    %1 = gpu.thread_id.x : index loc("examples/38_cuda/saxpy.ppy":20:4)
+    %2 = core.cast %1 : i64
+    %tid_addr = core.alloca : ptr<i64, stack>
+    core.store %2, %tid_addr
+    %3 = core.load %parked_addr : ptr<f64, shared> loc("examples/38_cuda/saxpy.ppy":21:4)
+    %4 = core.load %tid_addr : i64
+    %5 = core.ptr_offset %3, %4 : ptr<f64, shared>
+    %6 = core.load %x_addr : ptr<f64, generic, const>
+    %7 = gpu.block_id.x : index
+    %8 = gpu.block_dim.x : index
+    %9 = core.mul %7, %8 {overflow = "wrap"} : index
+    %10 = gpu.thread_id.x : index
+    %11 = core.add %9, %10 {overflow = "wrap"} : index
+    %12 = core.cast %11 : i64
+    %13 = core.ptr_offset %6, %12 : ptr<f64, generic, const>
+    %14 = core.load %13 : f64
+    core.store %14, %5
+    gpu.barrier loc("examples/38_cuda/saxpy.ppy":22:4)
+    %15 = core.load %parked_addr : ptr<f64, shared> loc("examples/38_cuda/saxpy.ppy":23:4)
+    %16 = core.load %tid_addr : i64
+    %17 = core.ptr_offset %15, %16 : ptr<f64, shared>
+    %18 = core.load %17 : f64
+    %mine_addr = core.alloca : ptr<f64, stack>
+    core.store %18, %mine_addr
+    %19 = core.load %mine_addr : f64 loc("examples/38_cuda/saxpy.ppy":24:4)
+    %20 = core.const 1 : i64
+    %21 = gpu.subgroup_shuffle.xor %19, %20 : f64
+    %other_addr = core.alloca : ptr<f64, stack>
+    core.store %21, %other_addr
+    %22 = core.load %other_addr : f64 loc("examples/38_cuda/saxpy.ppy":25:4)
+    %23 = core.load %mine_addr : f64
+    %24 = core.cmp.gt %22, %23 : bool
+    %25 = core.load %other_addr : f64
+    %26 = core.load %mine_addr : f64
+    %27 = core.select %24, %25, %26 : f64
+    core.store %27, %mine_addr
+    %28 = core.load %parked_addr : ptr<f64, shared> loc("examples/38_cuda/saxpy.ppy":26:4)
+    %29 = core.load %tid_addr : i64
+    %30 = core.ptr_offset %28, %29 : ptr<f64, shared>
+    %31 = core.load %mine_addr : f64
+    core.store %31, %30
+    gpu.barrier loc("examples/38_cuda/saxpy.ppy":27:4)
+    %32 = core.load %tid_addr : i64 loc("examples/38_cuda/saxpy.ppy":28:4)
+    %33 = core.const 0 : i64
+    %34 = core.cmp.eq %32, %33 : bool
+    %best_addr = core.alloca : ptr<f64, stack>
+    %35 = core.const 1 : i64
+    %36 = core.const 1 : i64
+    %k_addr = core.alloca : ptr<i64, stack>
+    %candidate_addr = core.alloca : ptr<f64, stack>
+    core.cond_br %34, ^then1, ^else2 loc("examples/38_cuda/saxpy.ppy":28:4)
+^then1:
+    %37 = core.load %parked_addr : ptr<f64, shared> loc("examples/38_cuda/saxpy.ppy":29:8)
+    %38 = core.load %37 : f64
+    core.store %38, %best_addr
+    %39 = gpu.block_dim.x : index loc("examples/38_cuda/saxpy.ppy":30:8)
+    %40 = core.cast %39 : i64
+    core.store %35, %k_addr
+    core.br ^for.head6
+^else2:
+    core.br ^endif3 loc("examples/38_cuda/saxpy.ppy":33:8)
+^endif3:
+    core.ret loc("examples/38_cuda/saxpy.ppy":33:8)
+^for.head6:
+    %41 = core.load %k_addr : i64 loc("examples/38_cuda/saxpy.ppy":30:8)
+    %42 = core.cmp.lt %41, %40 : bool
+    core.cond_br %42, ^for.body7, ^for.end9
+^for.body7:
+    %43 = core.load %parked_addr : ptr<f64, shared> loc("examples/38_cuda/saxpy.ppy":31:12)
+    %44 = core.load %k_addr : i64
+    %45 = core.ptr_offset %43, %44 : ptr<f64, shared>
+    %46 = core.load %45 : f64
+    core.store %46, %candidate_addr
+    %47 = core.load %candidate_addr : f64 loc("examples/38_cuda/saxpy.ppy":32:12)
+    %48 = core.load %best_addr : f64
+    %49 = core.cmp.gt %47, %48 : bool
+    %50 = core.load %candidate_addr : f64
+    %51 = core.load %best_addr : f64
+    %52 = core.select %49, %50, %51 : f64
+    core.store %52, %best_addr
+    %53 = core.load %k_addr : i64
+    %54 = core.add %53, %36 {overflow = "wrap"} : i64
+    core.store %54, %k_addr
+    core.br ^for.head6
+^for.end9:
+    %55 = core.load %out_addr : ptr<f64> loc("examples/38_cuda/saxpy.ppy":33:8)
+    %56 = gpu.block_id.x : index
+    %57 = core.cast %56 : i64
+    %58 = core.ptr_offset %55, %57 : ptr<f64>
+    %59 = core.load %best_addr : f64
+    core.store %59, %58
+    core.br ^endif3
+}

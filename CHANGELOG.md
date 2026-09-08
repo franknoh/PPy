@@ -4,6 +4,15 @@
 
 Work toward the next release, on `dev`; alphas of it are tagged `v0.3.0aN`.
 
+- Every example README is rewritten to say what the program does and why it
+  is fast in the first paragraph, show the lines of code that matter, and
+  end with the commands and what each one prints. A long output is shown to
+  its first twenty lines and kept whole under the folder's `outputs/`, which
+  the documentation site unfolds in place; the six judge problems gained a
+  small `input.txt` so their commands run as written, and the toolbox README
+  runs the inspect, emit, report, sanitizer, and profile commands it is
+  about.
+
 ## 0.2.0 — 2026-09-08
 
 The release that turns the compiler into a platform: a typed, multi-dialect
