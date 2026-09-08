@@ -3583,57 +3583,67 @@ semantics — overflow is guarded and falls back to arbitrary precision.</p>
 <tbody>
 <tr>
 <td><strong>PPY</strong> <code>ppy build --host-cpu</code></td>
-<td style="text-align: right;"><strong>27.5 ± 0.5 ms</strong></td>
+<td style="text-align: right;"><strong>28.8 ± 0.5 ms</strong></td>
 <td>64-bit, wraps on overflow (this machine's instruction set)</td>
 </tr>
 <tr>
-<td><strong>PPY</strong> <code>ppy build</code> binary</td>
-<td style="text-align: right;"><strong>29.5 ± 0.4 ms</strong></td>
+<td>C (<code>clang -O3 -march=native</code>)</td>
+<td style="text-align: right;">30.8 ± 0.7 ms</td>
+<td>64-bit, wraps on overflow</td>
+</tr>
+<tr>
+<td><strong>PPY</strong> <code>ppy build</code></td>
+<td style="text-align: right;"><strong>30.8 ± 0.4 ms</strong></td>
 <td>64-bit, wraps on overflow (<code>--safe</code> to keep Python ints)</td>
 </tr>
 <tr>
 <td>Numba <code>@njit</code></td>
-<td style="text-align: right;">31.4 ± 0.7 ms</td>
+<td style="text-align: right;">32.5 ± 0.9 ms</td>
+<td>64-bit, wraps on overflow</td>
+</tr>
+<tr>
+<td>C (<code>clang -O3</code>)</td>
+<td style="text-align: right;">32.8 ± 0.5 ms</td>
 <td>64-bit, wraps on overflow</td>
 </tr>
 <tr>
 <td><strong>PPY</strong> <code>ppy run</code></td>
-<td style="text-align: right;"><strong>39.3 ± 0.4 ms</strong></td>
+<td style="text-align: right;"><strong>41.7 ± 1.8 ms</strong></td>
 <td><strong>Python ints: guarded, falls back to arbitrary precision</strong></td>
 </tr>
 <tr>
 <td>C (<code>gcc -O3</code>)</td>
-<td style="text-align: right;">40.4 ± 0.6 ms</td>
+<td style="text-align: right;">41.9 ± 0.9 ms</td>
 <td>64-bit, wraps on overflow</td>
 </tr>
 <tr>
 <td>Codon <code>-release</code></td>
-<td style="text-align: right;">44.5 ± 0.9 ms</td>
+<td style="text-align: right;">42.1 ± 12.1 ms</td>
 <td>64-bit, wraps on overflow</td>
 </tr>
 <tr>
 <td>PyPy 3.11</td>
-<td style="text-align: right;">52.5 ± 1.7 ms</td>
+<td style="text-align: right;">52.8 ± 0.5 ms</td>
 <td>Python ints</td>
 </tr>
 <tr>
 <td>Cython (<code>cdef long long</code>)</td>
-<td style="text-align: right;">61.7 ± 0.9 ms</td>
+<td style="text-align: right;">61.6 ± 0.8 ms</td>
 <td>64-bit, wraps on overflow</td>
 </tr>
 <tr>
 <td>mypyc</td>
-<td style="text-align: right;">69.5 ± 1.2 ms</td>
+<td style="text-align: right;">71.6 ± 1.4 ms</td>
 <td>Python ints</td>
 </tr>
 <tr>
 <td>Nuitka</td>
-<td style="text-align: right;">700.9 ± 4.0 ms</td>
+<td style="text-align: right;">714.7 ± 12.8 ms</td>
 <td>Python ints, no type specialization</td>
 </tr>
 <tr>
 <td>CPython 3.14</td>
-<td style="text-align: right;">1047.8 ± 3.4 ms</td>
+<td style="text-align: right;">1068.8 ± 5.5 ms</td>
 <td>Python ints</td>
 </tr>
 </tbody>
@@ -3651,60 +3661,67 @@ input from standard input.</p>
 <th style="text-align: right;"><code>ppy build</code></th>
 <th style="text-align: right;"><code>--standalone</code></th>
 <th style="text-align: right;">C (<code>gcc -O3</code>)</th>
+<th style="text-align: right;">C (<code>clang -O3</code>)</th>
 </tr>
 </thead>
 <tbody>
 <tr>
 <td><a href="../../howto/15_algorithms/">N-Queens</a> <code>15a_nqueens</code></td>
-<td style="text-align: right;">136.4 ± 8.3 ms</td>
-<td style="text-align: right;">118.8 ± 138.3 ms</td>
-<td style="text-align: right;">39.1 ± 0.7 ms</td>
-<td style="text-align: right;">5.3 ± 0.2 ms</td>
-<td style="text-align: right;">4.5 ± 0.1 ms</td>
+<td style="text-align: right;">135.5 ± 1.8 ms</td>
+<td style="text-align: right;">123.1 ± 143.6 ms</td>
+<td style="text-align: right;">41.2 ± 1.4 ms</td>
+<td style="text-align: right;">5.6 ± 0.4 ms</td>
+<td style="text-align: right;">4.8 ± 0.2 ms</td>
+<td style="text-align: right;">5.4 ± 0.2 ms</td>
 </tr>
 <tr>
 <td><a href="../../howto/15_algorithms/">Shortest paths</a> <code>15b_dijkstra</code></td>
-<td style="text-align: right;">1461.0 ± 25.5 ms</td>
-<td style="text-align: right;">262.2 ± 203.0 ms</td>
-<td style="text-align: right;">235.8 ± 2.7 ms</td>
-<td style="text-align: right;">97.7 ± 4.4 ms</td>
-<td style="text-align: right;">138.6 ± 0.7 ms</td>
+<td style="text-align: right;">1511.0 ± 10.5 ms</td>
+<td style="text-align: right;">286.5 ± 225.4 ms</td>
+<td style="text-align: right;">251.9 ± 2.6 ms</td>
+<td style="text-align: right;">104.8 ± 4.3 ms</td>
+<td style="text-align: right;">147.3 ± 2.2 ms</td>
+<td style="text-align: right;">141.6 ± 4.6 ms</td>
 </tr>
 <tr>
 <td><a href="../../howto/15_algorithms/">Substring search</a> <code>15c_kmp</code></td>
-<td style="text-align: right;">286.0 ± 8.1 ms</td>
-<td style="text-align: right;">133.9 ± 150.4 ms</td>
-<td style="text-align: right;">50.4 ± 1.1 ms</td>
+<td style="text-align: right;">283.0 ± 2.9 ms</td>
+<td style="text-align: right;">137.3 ± 153.8 ms</td>
+<td style="text-align: right;">52.4 ± 2.0 ms</td>
 <td style="text-align: right;">—</td>
-<td style="text-align: right;">8.9 ± 0.3 ms</td>
+<td style="text-align: right;">9.4 ± 0.3 ms</td>
+<td style="text-align: right;">9.0 ± 0.2 ms</td>
 </tr>
 <tr>
 <td><a href="../../howto/15_algorithms/">Range sums</a> <code>15d_segment_tree</code></td>
-<td style="text-align: right;">477.8 ± 10.2 ms</td>
-<td style="text-align: right;">199.8 ± 270.5 ms</td>
-<td style="text-align: right;">102.8 ± 0.5 ms</td>
-<td style="text-align: right;">22.8 ± 0.7 ms</td>
-<td style="text-align: right;">50.5 ± 2.2 ms</td>
+<td style="text-align: right;">482.8 ± 7.7 ms</td>
+<td style="text-align: right;">220.4 ± 303.9 ms</td>
+<td style="text-align: right;">113.0 ± 6.0 ms</td>
+<td style="text-align: right;">23.9 ± 0.8 ms</td>
+<td style="text-align: right;">50.7 ± 1.2 ms</td>
+<td style="text-align: right;">51.8 ± 1.1 ms</td>
 </tr>
 <tr>
 <td><a href="../../howto/15_algorithms/">Longest increasing subsequence</a> <code>15e_lis</code></td>
-<td style="text-align: right;">508.7 ± 10.9 ms</td>
-<td style="text-align: right;">159.2 ± 140.0 ms</td>
-<td style="text-align: right;">95.9 ± 2.6 ms</td>
-<td style="text-align: right;">36.2 ± 0.6 ms</td>
-<td style="text-align: right;">57.7 ± 0.3 ms</td>
+<td style="text-align: right;">507.0 ± 10.7 ms</td>
+<td style="text-align: right;">166.0 ± 151.2 ms</td>
+<td style="text-align: right;">102.9 ± 4.2 ms</td>
+<td style="text-align: right;">35.9 ± 0.8 ms</td>
+<td style="text-align: right;">59.0 ± 2.8 ms</td>
+<td style="text-align: right;">55.5 ± 1.7 ms</td>
 </tr>
 <tr>
 <td><a href="../../howto/15_algorithms/">Counting inversions</a> <code>15f_input</code></td>
-<td style="text-align: right;">573.7 ± 9.3 ms</td>
-<td style="text-align: right;">164.9 ± 159.9 ms</td>
-<td style="text-align: right;">88.7 ± 0.9 ms</td>
-<td style="text-align: right;">36.8 ± 0.9 ms</td>
-<td style="text-align: right;">44.8 ± 1.1 ms</td>
+<td style="text-align: right;">630.0 ± 11.7 ms</td>
+<td style="text-align: right;">175.0 ± 162.7 ms</td>
+<td style="text-align: right;">94.6 ± 2.3 ms</td>
+<td style="text-align: right;">37.6 ± 0.6 ms</td>
+<td style="text-align: right;">46.0 ± 1.1 ms</td>
+<td style="text-align: right;">45.4 ± 0.8 ms</td>
 </tr>
 </tbody>
 </table>
-<p>Recorded on Intel(R) Core(TM) Ultra 9 386H, 16 cores, CPython 3.14.5, Linux-6.6.114.1-microsoft-standard-WSL2-x86_64-with-glibc2.39, at 2026-09-08T18:08:37.</p>
+<p>Recorded on Intel(R) Core(TM) Ultra 9 386H, 16 cores, CPython 3.14.5, Linux-6.6.114.1-microsoft-standard-WSL2-x86_64-with-glibc2.39, at 2026-09-08T23:22:19.</p>
 <p>The <code>ppy run</code> column includes the first run's build into the cache, which is
 why its deviation is wide; from the second run on it is the launcher alone.
 <code>--standalone</code> is a native executable with no interpreter inside.</p>

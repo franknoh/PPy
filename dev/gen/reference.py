@@ -14,13 +14,14 @@ import mkdocs_gen_files
 ROOT = Path(__file__).resolve().parent.parent.parent
 RECORDED = ROOT / "examples" / "15_algorithms" / "measurements.json"
 
-PATHS = ["plain", "ppy run", "ppy build", "standalone", "C scanf"]
+PATHS = ["plain", "ppy run", "ppy build", "standalone", "C gcc", "C clang"]
 LABELS = {
     "plain": "CPython",
     "ppy run": "`ppy run`",
     "ppy build": "`ppy build`",
     "standalone": "`--standalone`",
-    "C scanf": "C (`gcc -O3`)",
+    "C gcc": "C (`gcc -O3`)",
+    "C clang": "C (`clang -O3`)",
 }
 PROBLEMS = {
     "15a_nqueens": "N-Queens",

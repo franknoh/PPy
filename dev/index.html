@@ -563,10 +563,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#what-it-is-and-is-not" class="md-nav__link">
+  <a href="#by-the-numbers" class="md-nav__link">
     <span class="md-ellipsis">
       
-        What it is, and is not
+        By the numbers
       
     </span>
   </a>
@@ -585,10 +585,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#020-the-compiler-as-a-platform" class="md-nav__link">
+  <a href="#what-it-is-and-is-not" class="md-nav__link">
     <span class="md-ellipsis">
       
-        0.2.0: the compiler as a platform
+        What it is, and is not
       
     </span>
   </a>
@@ -3525,10 +3525,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#what-it-is-and-is-not" class="md-nav__link">
+  <a href="#by-the-numbers" class="md-nav__link">
     <span class="md-ellipsis">
       
-        What it is, and is not
+        By the numbers
       
     </span>
   </a>
@@ -3547,10 +3547,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#020-the-compiler-as-a-platform" class="md-nav__link">
+  <a href="#what-it-is-and-is-not" class="md-nav__link">
     <span class="md-ellipsis">
       
-        0.2.0: the compiler as a platform
+        What it is, and is not
       
     </span>
   </a>
@@ -3578,10 +3578,10 @@
 
 
 <h1 id="ppy">PPY<a class="headerlink" href="#ppy" title="Permanent link">&para;</a></h1>
-<p><strong>A statically analyzable language in Python's syntax.</strong> A <code>.ppy</code> file <em>is</em>
-valid Python: it runs under plain CPython with no compiler involved. The
-compiler adds static checking, an optimized Python backend, and an LLVM
-native backend — and all three must produce the same answer.</p>
+<p><strong>Python's syntax, compiled.</strong> A <code>.ppy</code> file <em>is</em> valid Python and runs under
+plain CPython with no compiler involved. The compiler adds a strict static
+checker, an optimized Python backend, and an LLVM native backend — and the
+three must print the same answer, or it is a bug.</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">ppy</span>
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>
 <a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>
@@ -3601,12 +3601,13 @@ native backend — and all three must produce the same answer.</p>
 <a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a>
 <a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a><span class="nb">print</span><span class="p">(</span><span class="n">longest</span><span class="p">(</span><span class="n">ppy</span><span class="o">.</span><span class="n">input</span><span class="p">[</span><span class="nb">int</span><span class="p">]()))</span>
 </code></pre></div>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="nb">echo</span><span class="w"> </span><span class="m">300000</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>python<span class="w">    </span>collatz.ppy<span class="w">   </span><span class="c1"># plain CPython                 1047.8 ms</span>
-<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="nb">echo</span><span class="w"> </span><span class="m">300000</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>ppy<span class="w"> </span>run<span class="w">   </span>collatz.ppy<span class="w">   </span><span class="c1"># LLVM, built on the first run    39.3 ms</span>
-<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="nb">echo</span><span class="w"> </span><span class="m">300000</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>ppy<span class="w"> </span>build<span class="w"> </span>collatz.ppy<span class="w"> </span>-o<span class="w"> </span>dist<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span>./dist/collatz<span class="w">   </span><span class="c1">#        29.5 ms</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="nb">echo</span><span class="w"> </span><span class="m">300000</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>python<span class="w">    </span>collatz.ppy<span class="w">      </span><span class="c1"># plain CPython                 1068.8 ms</span>
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="nb">echo</span><span class="w"> </span><span class="m">300000</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>ppy<span class="w"> </span>run<span class="w">   </span>collatz.ppy<span class="w">      </span><span class="c1"># LLVM, Python's integers         41.7 ms</span>
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="nb">echo</span><span class="w"> </span><span class="m">300000</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>ppy<span class="w"> </span>build<span class="w"> </span>collatz.ppy<span class="w"> </span>-o<span class="w"> </span>dist<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span>./dist/collatz<span class="w">   </span><span class="c1"># native    30.8 ms</span>
 </code></pre></div>
-<p>The same loop in C, <code>gcc -O3</code>, takes 40.4 ms. The numbers, the machine, and
-the neighbouring compilers are on the <a href="reference/performance/">performance page</a>.</p>
+<p>The same loop in C: <code>gcc -O3</code> 41.9 ms, <code>clang -O3</code> 32.8 ms. One machine, ten
+fresh processes each; the full table with Numba, Codon, PyPy, Cython, mypyc,
+and Nuitka is on the <a href="reference/performance/">performance page</a>.</p>
 <div class="grid cards">
 <ul>
 <li>
@@ -3623,8 +3624,8 @@ derivatives, coroutines, GPU kernels, XLA, generics.</p>
 <li>
 <p><strong><a href="howto/">Examples</a></strong></p>
 <hr />
-<p>42 folders, 52 programs, every one printing the same output on all
-three paths.</p>
+<p>42 folders, 52 programs — the code, the commands, and what they print,
+the same on all three paths.</p>
 </li>
 <li>
 <p><strong><a href="cli/">CLI</a></strong></p>
@@ -3640,19 +3641,37 @@ sanitizers, and profile-guided optimization.</p>
 <li>
 <p><strong><a href="internals/">Internals</a></strong></p>
 <hr />
-<p>The pipeline, the IR and its dialects, the cache, the solver — in the
-order someone adding a backend would read them.</p>
+<p>The pipeline, the IR and its dialects, the cache, the solver.</p>
 </li>
 </ul>
 </div>
-<h2 id="what-it-is-and-is-not">What it is, and is not<a class="headerlink" href="#what-it-is-and-is-not" title="Permanent link">&para;</a></h2>
-<p>PPY is source-compatible with Python's syntax and ecosystem, not with every
-dynamic Python behavior: <code>exec</code>/<code>eval</code>, monkey-patching, dynamic namespace
-mutation, and unrestricted runtime reflection are deliberately restricted —
-or isolated behind an explicit <code>ppy.dynamic</code> boundary — in exchange for
-analysis, optimization, and native compilation that can be trusted. Running
-existing Python is a migration feature (<code>ppy migrate</code>), not the definition of
-the language.</p>
+<h2 id="by-the-numbers">By the numbers<a class="headerlink" href="#by-the-numbers" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>3</strong> execution paths that must agree, checked on every example</td>
+<td><strong>1,110</strong> tests on Python 3.12, 3.13, and 3.14, <strong>74%</strong> statement coverage</td>
+</tr>
+<tr>
+<td><strong>42</strong> example folders, <strong>52</strong> programs, every conversion regenerated to prove it</td>
+<td><strong>76</strong> diagnostic codes, each documented once</td>
+</tr>
+<tr>
+<td><strong>18</strong> IR dialects, <strong>7</strong> backends off one IR: LLVM, C11, C++17, CUDA, HIP, NVVM/PTX, StableHLO</td>
+<td><strong>8</strong> library plugins: NumPy, PyTorch, JAX/Flax, pydantic, FastAPI/Uvicorn, SciPy, pandas, PyArrow</td>
+</tr>
+<tr>
+<td><strong>47 ns</strong> for a native two-<code>int</code> call, against <strong>28 ns</strong> for a plain Python call</td>
+<td><strong>0</strong> Python frames on the native call path</td>
+</tr>
+</tbody>
+</table>
 <h2 id="the-three-paths">The three paths<a class="headerlink" href="#the-three-paths" title="Permanent link">&para;</a></h2>
 <table>
 <thead>
@@ -3676,21 +3695,18 @@ the language.</p>
 </tr>
 </tbody>
 </table>
-<p>Any observable difference between the three is a compiler bug. The test
-suite and <code>examples/run_all.py</code> compare all three on every example. <code>ppy
-build</code> is the third path ahead of time, and <code>ppy build --standalone</code> is a
-native executable with no CPython inside.</p>
-<h2 id="020-the-compiler-as-a-platform">0.2.0: the compiler as a platform<a class="headerlink" href="#020-the-compiler-as-a-platform" title="Permanent link">&para;</a></h2>
-<p>Between the analysis and every backend sits one typed canonical IR
-(<a href="internals/ir/">The IR</a>): SSA values, blocks, an explicit control-flow
-graph, operations named in dialects, a verifier, a printer and parser
-(<code>.ppyir</code> is public text), a pass manager, and rewrite patterns. The LLVM,
-C/C++, CUDA/HIP source, NVVM/PTX, and StableHLO backends all read that IR
-and nothing else. A program writes to the same IR through the <code>ppy</code>
-namespaces — <code>ppy.native</code>, <code>ppy.simd</code>, <code>ppy.cpu</code>, <code>ppy.atomic</code>,
-<code>ppy.concurrent</code>, <code>ppy.parallel.range</code>, <code>ppy.grad</code>, <code>ppy.aio</code>, <code>ppy.cuda</code>
-and <code>ppy.hip</code>, <code>ppy.xla.jit</code> — each with a reference implementation that
-is inert under plain CPython.</p>
+<p><code>ppy build</code> is the third path ahead of time — a launcher and a library that
+keep working with the compiler uninstalled — and <code>ppy build --standalone</code> is
+a native executable with no CPython inside. A guard that fails at runtime
+falls back to the Python body; it never answers differently.</p>
+<h2 id="what-it-is-and-is-not">What it is, and is not<a class="headerlink" href="#what-it-is-and-is-not" title="Permanent link">&para;</a></h2>
+<p>PPY is source-compatible with Python's syntax and ecosystem, not with every
+dynamic Python behavior: <code>exec</code>/<code>eval</code>, monkey-patching, dynamic namespace
+mutation, and unrestricted runtime reflection are deliberately restricted —
+or isolated behind an explicit <code>ppy.dynamic</code> boundary — in exchange for
+analysis, optimization, and native compilation that can be trusted. Running
+existing Python is a migration feature (<code>ppy migrate</code>), not the definition of
+the language.</p>
 
 
 

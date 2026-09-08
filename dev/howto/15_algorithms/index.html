@@ -3714,7 +3714,7 @@ against, with the same workloads and the same printed answers.</p>
 <h2 id="what-it-shows">What it shows<a class="headerlink" href="#what-it-shows" title="Permanent link">&para;</a></h2>
 <ul>
 <li>Eight problems: sieve, Collatz, knapsack, edit distance, Floyd-Warshall, matmul, union-find, Fermat.</li>
-<li>All three paths produce identical answers; the native path is 10x to 145x
+<li>All three paths produce identical answers; the native path is 9x to 160x
   faster than plain CPython on these eight.</li>
 <li>Writes go through borrowed buffers, so the caller sees them.</li>
 </ul>
@@ -3730,64 +3730,73 @@ column:</p>
 <th style="text-align: right;"><code>ppy run</code></th>
 <th style="text-align: right;"><code>ppy build</code></th>
 <th style="text-align: right;">C (<code>gcc -O3</code>)</th>
+<th style="text-align: right;">C (<code>clang -O3</code>)</th>
 </tr>
 </thead>
 <tbody>
 <tr>
 <td>sieve 2e6</td>
-<td style="text-align: right;">169.3 ± 2.5</td>
-<td style="text-align: right;">8.9 ± 0.3</td>
-<td style="text-align: right;">8.8 ± 0.7</td>
-<td style="text-align: right;">13.9 ± 1.1</td>
+<td style="text-align: right;">173.1 ± 2.9</td>
+<td style="text-align: right;">9.2 ± 0.5</td>
+<td style="text-align: right;"><strong>8.8 ± 0.4</strong></td>
+<td style="text-align: right;">13.9 ± 0.6</td>
+<td style="text-align: right;">13.8 ± 0.3</td>
 </tr>
 <tr>
 <td>collatz 3e5</td>
-<td style="text-align: right;">1096.5 ± 8.9</td>
-<td style="text-align: right;">40.3 ± 0.6</td>
-<td style="text-align: right;">30.4 ± 0.8</td>
-<td style="text-align: right;">41.4 ± 0.9</td>
+<td style="text-align: right;">1111.0 ± 13.1</td>
+<td style="text-align: right;">39.9 ± 0.8</td>
+<td style="text-align: right;"><strong>30.3 ± 0.4</strong></td>
+<td style="text-align: right;">41.4 ± 0.5</td>
+<td style="text-align: right;">32.2 ± 0.3</td>
 </tr>
 <tr>
 <td>knapsack 400×2e4</td>
-<td style="text-align: right;">417.7 ± 2.5</td>
-<td style="text-align: right;">5.1 ± 0.2</td>
-<td style="text-align: right;">3.7 ± 0.4</td>
-<td style="text-align: right;">2.5 ± 0.1</td>
+<td style="text-align: right;">423.1 ± 2.7</td>
+<td style="text-align: right;">5.0 ± 0.1</td>
+<td style="text-align: right;">3.6 ± 0.2</td>
+<td style="text-align: right;">2.4 ± 0.1</td>
+<td style="text-align: right;"><strong>2.1 ± 0.3</strong></td>
 </tr>
 <tr>
 <td>edit 2000×2000</td>
-<td style="text-align: right;">462.2 ± 4.8</td>
-<td style="text-align: right;">2.8 ± 0.3</td>
-<td style="text-align: right;">3.2 ± 0.5</td>
-<td style="text-align: right;">3.6 ± 0.0</td>
+<td style="text-align: right;">471.4 ± 6.5</td>
+<td style="text-align: right;"><strong>2.9 ± 0.1</strong></td>
+<td style="text-align: right;"><strong>2.9 ± 0.3</strong></td>
+<td style="text-align: right;">3.6 ± 0.1</td>
+<td style="text-align: right;">3.5 ± 0.2</td>
 </tr>
 <tr>
 <td>floyd 220</td>
-<td style="text-align: right;">434.2 ± 3.0</td>
-<td style="text-align: right;">3.2 ± 0.0</td>
-<td style="text-align: right;">3.0 ± 0.1</td>
-<td style="text-align: right;">5.1 ± 0.1</td>
+<td style="text-align: right;">436.3 ± 5.3</td>
+<td style="text-align: right;">3.4 ± 0.5</td>
+<td style="text-align: right;">3.1 ± 0.2</td>
+<td style="text-align: right;">5.0 ± 0.1</td>
+<td style="text-align: right;"><strong>2.8 ± 0.0</strong></td>
 </tr>
 <tr>
 <td>matmul 220</td>
-<td style="text-align: right;">465.6 ± 2.6</td>
-<td style="text-align: right;">3.6 ± 0.3</td>
-<td style="text-align: right;">3.6 ± 0.3</td>
-<td style="text-align: right;">2.2 ± 0.1</td>
+<td style="text-align: right;">473.9 ± 5.7</td>
+<td style="text-align: right;">3.6 ± 0.4</td>
+<td style="text-align: right;">3.5 ± 0.1</td>
+<td style="text-align: right;"><strong>2.1 ± 0.1</strong></td>
+<td style="text-align: right;">3.4 ± 0.1</td>
 </tr>
 <tr>
 <td>union-find 5e5</td>
-<td style="text-align: right;">143.6 ± 2.2</td>
-<td style="text-align: right;">3.0 ± 0.2</td>
-<td style="text-align: right;">3.0 ± 0.2</td>
-<td style="text-align: right;">3.7 ± 0.2</td>
+<td style="text-align: right;">149.6 ± 3.8</td>
+<td style="text-align: right;"><strong>3.2 ± 0.2</strong></td>
+<td style="text-align: right;"><strong>3.2 ± 0.4</strong></td>
+<td style="text-align: right;">3.6 ± 0.2</td>
+<td style="text-align: right;">3.8 ± 0.3</td>
 </tr>
 <tr>
 <td>fermat 6e4</td>
-<td style="text-align: right;">24.0 ± 0.4</td>
-<td style="text-align: right;">2.8 ± 0.0</td>
-<td style="text-align: right;">2.5 ± 0.1</td>
+<td style="text-align: right;">23.9 ± 0.3</td>
+<td style="text-align: right;">2.3 ± 0.1</td>
+<td style="text-align: right;">2.6 ± 0.2</td>
 <td style="text-align: right;">1.8 ± 0.1</td>
+<td style="text-align: right;"><strong>1.5 ± 0.1</strong></td>
 </tr>
 </tbody>
 </table>
@@ -3795,14 +3804,17 @@ column:</p>
 falls back to arbitrary precision. <code>ppy build</code> is the wrap-semantics
 artifact, which is where collatz picks up its remaining 10 ms and knapsack
 its 1.4 ms; the other kernels are already guard-free in the loop and do not
-move. <code>--host-cpu</code> is within the noise on all eight, so it is not shown.</p>
+move. <code>--host-cpu</code> is within the noise on all eight, so it is not shown.
+Bold is the fastest cell in the row.</p>
 <p>Guard hoisting (<code>[tool.ppy.llvm] safeguards</code>) is what closed most of the old
 gaps: a multiplied index like <code>i * n + k</code> proves its extreme cases once in a
 guard block ahead of the loop, and the body runs plain <code>mul nsw</code> with no side
-exits — which is what lets LLVM strength-reduce and vectorize. PPY wins
-sieve, edit distance, floyd, and union-find, and collatz once the artifact
-wraps (with Python's integers it draws); gcc keeps matmul, knapsack, and
-fermat, whose remaining guards live on data values no range can prove.</p>
+exits — which is what lets LLVM strength-reduce and vectorize. Against both
+compilers PPY wins sieve, edit distance, and union-find, and collatz once the
+artifact wraps; floyd beats gcc and loses to clang by a third of a
+millisecond; gcc and clang keep knapsack, matmul, and fermat, whose remaining
+guards live on data values no range can prove. gcc 13.3 and clang 22.1, both
+<code>-O3</code>, no <code>-march</code>.</p>
 <h2 id="more-problems">More problems<a class="headerlink" href="#more-problems" title="Permanent link">&para;</a></h2>
 <p>Each subfolder is one competitive-programming problem — the shapes a judge
 sets — read from standard input and answered on stdout. Each states its own
@@ -3819,57 +3831,64 @@ The C reference reads the same input with <code>scanf</code>.</p>
 <th style="text-align: right;">plain</th>
 <th style="text-align: right;"><code>ppy build</code></th>
 <th style="text-align: right;"><code>--standalone</code></th>
-<th style="text-align: right;">C (<code>scanf</code>)</th>
+<th style="text-align: right;">C (<code>gcc</code>)</th>
+<th style="text-align: right;">C (<code>clang</code>)</th>
 </tr>
 </thead>
 <tbody>
 <tr>
 <td><a href="https://github.com/franknoh/PPy/blob/main/examples/15_algorithms/15a_nqueens">15a</a></td>
 <td>N-Queens</td>
-<td style="text-align: right;">136.4 ms</td>
-<td style="text-align: right;">39.1 ms</td>
-<td style="text-align: right;">5.3 ms</td>
-<td style="text-align: right;">4.5 ms</td>
+<td style="text-align: right;">135.5 ms</td>
+<td style="text-align: right;">41.2 ms</td>
+<td style="text-align: right;">5.6 ms</td>
+<td style="text-align: right;">4.8 ms</td>
+<td style="text-align: right;">5.4 ms</td>
 </tr>
 <tr>
 <td><a href="https://github.com/franknoh/PPy/blob/main/examples/15_algorithms/15b_dijkstra">15b</a></td>
 <td>shortest path</td>
-<td style="text-align: right;">1461.0 ms</td>
-<td style="text-align: right;">235.8 ms</td>
-<td style="text-align: right;"><strong>97.7 ms</strong></td>
-<td style="text-align: right;">138.6 ms</td>
+<td style="text-align: right;">1511.0 ms</td>
+<td style="text-align: right;">251.9 ms</td>
+<td style="text-align: right;"><strong>104.8 ms</strong></td>
+<td style="text-align: right;">147.3 ms</td>
+<td style="text-align: right;">141.6 ms</td>
 </tr>
 <tr>
 <td><a href="https://github.com/franknoh/PPy/blob/main/examples/15_algorithms/15c_kmp">15c</a></td>
 <td>substring search</td>
-<td style="text-align: right;">286.0 ms</td>
-<td style="text-align: right;">50.4 ms</td>
+<td style="text-align: right;">283.0 ms</td>
+<td style="text-align: right;">52.4 ms</td>
 <td style="text-align: right;">—</td>
-<td style="text-align: right;">8.9 ms</td>
+<td style="text-align: right;">9.4 ms</td>
+<td style="text-align: right;">9.0 ms</td>
 </tr>
 <tr>
 <td><a href="https://github.com/franknoh/PPy/blob/main/examples/15_algorithms/15d_segment_tree">15d</a></td>
 <td>range sums</td>
-<td style="text-align: right;">477.8 ms</td>
-<td style="text-align: right;">102.8 ms</td>
-<td style="text-align: right;"><strong>22.8 ms</strong></td>
-<td style="text-align: right;">50.5 ms</td>
+<td style="text-align: right;">482.8 ms</td>
+<td style="text-align: right;">113.0 ms</td>
+<td style="text-align: right;"><strong>23.9 ms</strong></td>
+<td style="text-align: right;">50.7 ms</td>
+<td style="text-align: right;">51.8 ms</td>
 </tr>
 <tr>
 <td><a href="https://github.com/franknoh/PPy/blob/main/examples/15_algorithms/15e_lis">15e</a></td>
 <td>longest increasing subsequence</td>
-<td style="text-align: right;">508.7 ms</td>
-<td style="text-align: right;">95.9 ms</td>
-<td style="text-align: right;"><strong>36.2 ms</strong></td>
-<td style="text-align: right;">57.7 ms</td>
+<td style="text-align: right;">507.0 ms</td>
+<td style="text-align: right;">102.9 ms</td>
+<td style="text-align: right;"><strong>35.9 ms</strong></td>
+<td style="text-align: right;">59.0 ms</td>
+<td style="text-align: right;">55.5 ms</td>
 </tr>
 <tr>
 <td><a href="https://github.com/franknoh/PPy/blob/main/examples/15_algorithms/15f_input">15f</a></td>
 <td>counting inversions</td>
-<td style="text-align: right;">573.7 ms</td>
-<td style="text-align: right;">88.7 ms</td>
-<td style="text-align: right;"><strong>36.8 ms</strong></td>
-<td style="text-align: right;">44.8 ms</td>
+<td style="text-align: right;">630.0 ms</td>
+<td style="text-align: right;">94.6 ms</td>
+<td style="text-align: right;"><strong>37.6 ms</strong></td>
+<td style="text-align: right;">46.0 ms</td>
+<td style="text-align: right;">45.4 ms</td>
 </tr>
 </tbody>
 </table>
