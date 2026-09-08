@@ -49,15 +49,21 @@ ROWS = [
     ("`ppy run`", "ppy run"),
     ("`ppy build`", "ppy build"),
     ("`ppy build --standalone`", "standalone"),
-    ("C (`gcc -O3`, `scanf`)", "C scanf"),
+    ("C (`gcc -O3`, `scanf`)", "C gcc"),
+    ("C (`clang -O3`, `scanf`)", "C clang"),
 ]
+
+#: The C reference a ratio is taken against. Two compilers are two columns;
+#: the drift check needs one denominator, and gcc is the one every record
+#: so far has had.
+REFERENCE = "C gcc"
 
 TABLE = re.compile(r"\| path \| wall \|\n\|---\|---:\|\n(?:\|.*\n)+")
 
 #: The overview table in the folder README, which shows every problem at once.
 OVERVIEW = re.compile(
-    r"\| \| problem \| plain \| `ppy build` \| `--standalone` \| C \(`scanf`\) \|\n"
-    r"\|---\|---\|---:\|---:\|---:\|---:\|\n(?:\|.*\n)+"
+    r"\| \| problem \| plain \| `ppy build` \| `--standalone` \| C \(`gcc`\) \| C \(`clang`\) \|\n"
+    r"\|---\|---\|---:\|---:\|---:\|---:\|---:\|\n(?:\|.*\n)+"
 )
 
 #: How the overview names each problem, in the order it lists them.
@@ -175,7 +181,7 @@ def refresh_measurements(write: bool, record: Path | None = None) -> tuple[list[
     load: list[str] = []
     moved = [
         f"  the machine changed: {key} was {before_environment[key]!r}, now {here[key]!r}"
-        for key in ("processor", "python", "platform", "c_compiler")
+        for key in ("processor", "python", "platform", "c_compilers")
         if before_environment.get(key) not in (None, here.get(key))
     ]
     for problem, row in fresh.items():
@@ -235,7 +241,7 @@ def _against_c(row: dict, path: str) -> float | None:
     A machine under load slows every path at once, so the ratio holds where
     the milliseconds do not. Without a C column there is no ratio to take.
     """
-    reference = row.get("C scanf", {}).get("mean")
+    reference = row.get(REFERENCE, {}).get("mean")
     measured = row.get(path, {}).get("mean")
     if not reference or measured is None:
         return None
@@ -256,12 +262,12 @@ def _table(row: dict) -> str:
 def _overview(problems: dict) -> str:
     """The folder README's table: every problem, one row each.
 
-    Bold marks a cell that beat the C reference, which is a claim the numbers
-    have to keep making rather than one written down once.
+    Bold marks a cell that beat both C references, which is a claim the
+    numbers have to keep making rather than one written down once.
     """
     header = [
-        "| | problem | plain | `ppy build` | `--standalone` | C (`scanf`) |",
-        "|---|---|---:|---:|---:|---:|",
+        "| | problem | plain | `ppy build` | `--standalone` | C (`gcc`) | C (`clang`) |",
+        "|---|---|---:|---:|---:|---:|---:|",
     ]
     rows = []
     for name, title in TITLES.items():
@@ -270,14 +276,17 @@ def _overview(problems: dict) -> str:
             continue
         # Bold means "beat C", so without a C column there is nothing to beat
         # and every cell stays plain rather than the table failing to render.
-        reference = row.get("C scanf", {}).get("mean")
+        c_columns = ("C gcc", "C clang")
+        references = [row[path]["mean"] for path in c_columns if path in row]
+        fastest_c = min(references) if references else None
         cells = []
-        for path in ("plain", "ppy build", "standalone", "C scanf"):
+        for path in ("plain", "ppy build", "standalone", *c_columns):
             if path not in row:
                 cells.append("—")
                 continue
             cell = f"{row[path]['mean']:.1f} ms"
-            beats = path != "C scanf" and reference is not None and row[path]["mean"] < reference
+            measured = row[path]["mean"]
+            beats = path not in c_columns and fastest_c is not None and measured < fastest_c
             cells.append(f"**{cell}**" if beats else cell)
         rows.append(f"| [{name[:3]}]({name}/) | {title} | " + " | ".join(cells) + " |")
     return "\n".join(header + rows) + "\n"

@@ -1,7 +1,9 @@
 # Examples
 
 Each folder holds one example and a `README.md` explaining it. Code carries no
-comments; the explanation lives in the markdown.
+comments; the explanation lives in the markdown, and every README ends with
+the commands to run and what each one prints (`record_outputs.py` keeps the
+second in step with the first).
 
 Where a folder holds both `<name>.py` and `<name>.ppy`, the `.ppy` is **exactly**
 what `ppy convert <name>.py` writes — `ppy migrate` for the folder whose README

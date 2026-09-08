@@ -37,3 +37,30 @@ ppy service.ppy   # raw ASGI handler, no server
 ppy api.ppy       # FastAPI routes through TestClient
 ppy run api.ppy   # the same, native-eligible helpers through LLVM
 ```
+
+<!-- outputs:start -->
+## What it prints
+
+**`ppy service.ppy`**
+
+```text
+{"hello": "/", "count": 3} 200 404
+```
+
+**`ppy api.ppy`**
+
+```text
+{'service': 'inventory'}
+{'item_id': 7, 'q': 'fast'}
+{'label': 'bolt x12', 'cost': 6.0}
+```
+
+**`ppy run api.ppy`**
+
+```text
+{'service': 'inventory'}
+{'item_id': 7, 'q': 'fast'}
+{'label': 'bolt x12', 'cost': 6.0}
+```
+
+<!-- outputs:end -->

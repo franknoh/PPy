@@ -56,9 +56,9 @@ def test_a_path_that_answers_differently_between_runs_is_reported(bench):
 
 
 def test_paths_that_always_agree_collapse_to_the_answer(bench):
-    answers, by_path = bench.collapse({"plain": ["7"] * 5, "C scanf": ["7"] * 5})
+    answers, by_path = bench.collapse({"plain": ["7"] * 5, "C gcc": ["7"] * 5})
     assert answers == ["7"]
-    assert by_path == {"plain": "7", "C scanf": "7"}
+    assert by_path == {"plain": "7", "C gcc": "7"}
 
 
 def test_the_standalone_column_appears_only_where_there_is_one(bench):
@@ -66,7 +66,7 @@ def test_the_standalone_column_appears_only_where_there_is_one(bench):
     without = dict(bench._commands("kmp", None))
     assert "standalone" in with_variant
     assert "standalone" not in without
-    assert list(without) == ["plain", "ppy run", "ppy build", "C scanf"]
+    assert list(without) == ["plain", "ppy run", "ppy build", "C gcc", "C clang"]
 
 
 def test_a_missing_executable_says_so_rather_than_failing_to_open_it(bench, tmp_path: Path):
@@ -80,24 +80,28 @@ def test_the_overview_renders_without_a_c_reference(refresh):
     """No C column is a machine without gcc, not a table that cannot be drawn."""
     problems = {"15a_nqueens": _row(plain=300.0, **{"ppy build": 45.0, "standalone": 7.0})}
     table = refresh._overview(problems)
-    assert "| 300.0 ms | 45.0 ms | 7.0 ms | — |" in table
+    assert "| 300.0 ms | 45.0 ms | 7.0 ms | — | — |" in table
     assert "**" not in table, "nothing is bold without a reference to beat"
 
 
-def test_the_overview_bolds_only_what_beat_the_c_reference(refresh):
+def test_the_overview_bolds_only_what_beat_both_c_references(refresh):
     problems = {
-        "15a_nqueens": _row(plain=300.0, **{"ppy build": 45.0, "standalone": 7.0, "C scanf": 5.0}),
-        "15d_segment_tree": _row(
-            plain=710.0, **{"ppy build": 115.0, "standalone": 26.0, "C scanf": 55.0}
+        "15a_nqueens": _row(
+            plain=300.0, **{"ppy build": 45.0, "standalone": 7.0, "C gcc": 5.0, "C clang": 6.0}
         ),
+        "15d_segment_tree": _row(
+            plain=710.0, **{"ppy build": 115.0, "standalone": 26.0, "C gcc": 55.0, "C clang": 30.0}
+        ),
+        "15e_lis": _row(plain=500.0, **{"ppy build": 96.0, "standalone": 36.0, "C gcc": 58.0}),
     }
     lines = refresh._overview(problems).splitlines()
     assert "**" not in lines[2], "N-Queens does not beat C"
     assert "**26.0 ms**" in lines[3] and "**115.0 ms**" not in lines[3]
+    assert "**36.0 ms**" in lines[4] and "| — |" in lines[4], "one compiler is still a reference"
 
 
 def test_a_problem_table_marks_the_fastest_path(refresh):
-    row = _row(plain=300.0, **{"ppy run": 1700.0, "ppy build": 45.0, "C scanf": 5.0})
+    row = _row(plain=300.0, **{"ppy run": 1700.0, "ppy build": 45.0, "C gcc": 5.0})
     table = refresh._table(row)
     assert "| C (`gcc -O3`, `scanf`) | **5.0 ± 0.5 ms** |" in table
     assert "| `ppy build --standalone` |" not in table, "an unmeasured path gets no row"
@@ -108,7 +112,7 @@ def test_an_incomplete_machine_does_not_overwrite_a_whole_record(refresh, monkey
     recorded = tmp_path / "measurements.json"
     whole = {
         "environment": {"processor": "some cpu"},
-        "problems": {"15a_nqueens": {**_row(plain=1.0, **{"C scanf": 2.0}), "answers": ["7"]}},
+        "problems": {"15a_nqueens": {**_row(plain=1.0, **{"C gcc": 2.0}), "answers": ["7"]}},
     }
     recorded.write_text(json.dumps(whole), encoding="utf-8")
     monkeypatch.setattr(refresh, "RECORDED", recorded)
@@ -129,7 +133,7 @@ def test_a_partial_run_still_writes_the_raw_numbers_it_took(refresh, monkeypatch
     """`--record` is this run's evidence, kept whether or not it is a baseline."""
     monkeypatch.setattr(refresh, "RECORDED", tmp_path / "absent.json")
     stub = ModuleType("bench")
-    stub.available = lambda: {"C scanf": "gcc is not on PATH"}
+    stub.available = lambda: {"C gcc": "gcc is not on PATH"}
     stub.measure = lambda: {"15a_nqueens": {**_row(plain=1.0), "answers": ["7"]}}
     stub.environment = lambda: {"processor": "some cpu"}
     monkeypatch.setitem(sys.modules, "bench", stub)
@@ -184,7 +188,7 @@ def test_a_refused_baseline_is_not_a_refused_record(refresh, monkeypatch, tmp_pa
     """
     monkeypatch.setattr(refresh, "RECORDED", tmp_path / "measurements.json")
     stub = ModuleType("bench")
-    stub.available = lambda: {"C scanf": "gcc is not on PATH"}
+    stub.available = lambda: {"C gcc": "gcc is not on PATH"}
     stub.measure = lambda: {"15a_nqueens": {**_row(plain=1.0), "answers": ["7"]}}
     stub.environment = lambda: {"processor": "some cpu"}
     monkeypatch.setitem(sys.modules, "bench", stub)
@@ -218,8 +222,8 @@ def _compare(refresh, monkeypatch, tmp_path, before: dict, after: dict):
 
 def test_a_machine_under_load_is_not_a_regression(refresh, monkeypatch, tmp_path):
     """Every path slowed by a third, so nothing moved against the reference."""
-    before = _measured(plain=300.0, **{"ppy build": 45.0, "C scanf": 5.0})
-    after = _measured(plain=400.0, **{"ppy build": 60.0, "C scanf": 6.67})
+    before = _measured(plain=300.0, **{"ppy build": 45.0, "C gcc": 5.0})
+    after = _measured(plain=400.0, **{"ppy build": 60.0, "C gcc": 6.67})
     lines, fatal = _compare(refresh, monkeypatch, tmp_path, before, after)
     assert not fatal, "the ratios to C did not move"
     assert any("moved with the machine" in line for line in lines)
@@ -228,8 +232,8 @@ def test_a_machine_under_load_is_not_a_regression(refresh, monkeypatch, tmp_path
 
 def test_one_path_losing_ground_against_c_is_a_regression(refresh, monkeypatch, tmp_path):
     """`ppy build` alone slowed down, which no amount of load explains."""
-    before = _measured(plain=300.0, **{"ppy build": 45.0, "C scanf": 5.0})
-    after = _measured(plain=300.0, **{"ppy build": 70.0, "C scanf": 5.0})
+    before = _measured(plain=300.0, **{"ppy build": 45.0, "C gcc": 5.0})
+    after = _measured(plain=300.0, **{"ppy build": 70.0, "C gcc": 5.0})
     lines, fatal = _compare(refresh, monkeypatch, tmp_path, before, after)
     assert fatal
     assert any("9.00x C -> 14.00x C" in line for line in lines)
@@ -246,8 +250,8 @@ def test_without_a_c_column_milliseconds_are_the_only_signal(refresh, monkeypatc
 
 def test_the_compiling_path_is_reported_and_never_fatal(refresh, monkeypatch, tmp_path):
     """`ppy run` times the compiler, so it has no ratio to a compiled C run."""
-    before = _measured(**{"ppy run": 2000.0, "C scanf": 5.0})
-    after = _measured(**{"ppy run": 3000.0, "C scanf": 5.0})
+    before = _measured(**{"ppy run": 2000.0, "C gcc": 5.0})
+    after = _measured(**{"ppy run": 3000.0, "C gcc": 5.0})
     lines, fatal = _compare(refresh, monkeypatch, tmp_path, before, after)
     assert not fatal, "a slower compile on a busy machine is not a regression"
     assert any("mostly compiling" in line for line in lines)

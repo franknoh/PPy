@@ -30,3 +30,28 @@ python  frames.ppy
 ppy run frames.ppy
 ppy inspect frames.ppy --stage columnar   # the columnar dialect before it lowers to loops
 ```
+
+<!-- outputs:start -->
+## What it prints
+
+**`python  frames.ppy`**
+
+```text
+[3.0, nan, nan, 6.0, 8.75]
+[False, False, False, True, False]
+17.75 1
+```
+
+**`ppy run frames.ppy`**
+
+```text
+[3.0, nan, nan, 6.0, 8.75]
+[False, False, False, True, False]
+17.75 1
+```
+
+**`ppy inspect frames.ppy --stage columnar`**
+
+*(prints nothing; exits 0)*
+
+<!-- outputs:end -->

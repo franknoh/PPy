@@ -20,3 +20,26 @@ python  basics.ppy
 ppy     basics.ppy
 ppy run basics.ppy
 ```
+
+<!-- outputs:start -->
+## What it prints
+
+**`python  basics.ppy`**
+
+```text
+49 285 111
+```
+
+**`ppy     basics.ppy`**
+
+```text
+49 285 111
+```
+
+**`ppy run basics.ppy`**
+
+```text
+49 285 111
+```
+
+<!-- outputs:end -->

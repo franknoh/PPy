@@ -27,11 +27,12 @@ input, interpreter startup and all. Mean ± standard deviation over 5 runs;
 
 | path | wall |
 |---|---:|
-| plain CPython | 1461.0 ± 25.5 ms |
-| `ppy run` | 262.2 ± 203.0 ms |
-| `ppy build` | 235.8 ± 2.7 ms |
-| `ppy build --standalone` | **97.7 ± 4.4 ms** |
-| C (`gcc -O3`, `scanf`) | 138.6 ± 0.7 ms |
+| plain CPython | 1511.0 ± 10.5 ms |
+| `ppy run` | 286.5 ± 225.4 ms |
+| `ppy build` | 251.9 ± 2.6 ms |
+| `ppy build --standalone` | **104.8 ± 4.3 ms** |
+| C (`gcc -O3`, `scanf`) | 147.3 ± 2.2 ms |
+| C (`clang -O3`, `scanf`) | 141.6 ± 4.6 ms |
 
 `ppy run` compiles before it runs, which is most of its two seconds; it is
 the development path, not the one to submit. `ppy build` produces a binary
@@ -45,5 +46,41 @@ row comes from; the [folder README](../README.md) says what the subset costs.
 python  dijkstra.ppy < input.txt
 ppy run dijkstra.ppy < input.txt
 ppy build dijkstra.ppy -o dist && ./dist/dijkstra < input.txt
-gcc -O3 dijkstra.c -o dijkstra_c && ./dijkstra_c < input.txt
+gcc   -O3 dijkstra.c -o dijkstra_c     && ./dijkstra_c     < input.txt
+clang -O3 dijkstra.c -o dijkstra_clang && ./dijkstra_clang < input.txt
 ```
+
+<!-- outputs:start -->
+## What it prints
+
+**`python  dijkstra.ppy < input.txt`**
+
+```text
+23
+```
+
+**`ppy run dijkstra.ppy < input.txt`**
+
+```text
+23
+```
+
+**`ppy build dijkstra.ppy -o dist && ./dist/dijkstra < input.txt`**
+
+```text
+23
+```
+
+**`gcc   -O3 dijkstra.c -o dijkstra_c     && ./dijkstra_c     < input.txt`**
+
+```text
+23
+```
+
+**`clang -O3 dijkstra.c -o dijkstra_clang && ./dijkstra_clang < input.txt`**
+
+```text
+23
+```
+
+<!-- outputs:end -->

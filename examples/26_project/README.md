@@ -24,3 +24,19 @@ source and no conversion step involved.
 ppy check src
 ppy run   src/app.ppy
 ```
+
+<!-- outputs:start -->
+## What it prints
+
+**`ppy check src`**
+
+*(prints nothing; exits 0)*
+
+**`ppy run   src/app.ppy`**
+
+```text
+4.0
+5.0
+```
+
+<!-- outputs:end -->

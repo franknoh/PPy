@@ -19,3 +19,35 @@ python  arbitrary_precision.ppy
 ppy     arbitrary_precision.ppy
 ppy run arbitrary_precision.ppy
 ```
+
+<!-- outputs:start -->
+## What it prints
+
+**`python  arbitrary_precision.ppy`**
+
+```text
+27
+1000000000000000000000
+-3 -5
+caught ZeroDivisionError
+```
+
+**`ppy     arbitrary_precision.ppy`**
+
+```text
+27
+1000000000000000000000
+-3 -5
+caught ZeroDivisionError
+```
+
+**`ppy run arbitrary_precision.ppy`**
+
+```text
+27
+1000000000000000000000
+-3 -5
+caught ZeroDivisionError
+```
+
+<!-- outputs:end -->

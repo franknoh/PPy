@@ -34,3 +34,35 @@ python  inventory.py
 ppy     inventory.ppy
 ppy run inventory.ppy
 ```
+
+<!-- outputs:start -->
+## What it prints
+
+**`python  inventory.py`**
+
+```text
+total=255.5 avg=63.88 root=15.98
+('bolt', 120, 0.2)
+['washer', 'bracket']
+units: 555
+```
+
+**`ppy     inventory.ppy`**
+
+```text
+total=255.5 avg=63.88 root=15.98
+('bolt', 120, 0.2)
+['washer', 'bracket']
+units: 555
+```
+
+**`ppy run inventory.ppy`**
+
+```text
+total=255.5 avg=63.88 root=15.98
+('bolt', 120, 0.2)
+['washer', 'bracket']
+units: 555
+```
+
+<!-- outputs:end -->

@@ -64,6 +64,15 @@ A generated one keeps its `.py` source beside it and is regenerated with
 `ppy convert <name>.py` (some folders add `--promote-buffers`; see
 `examples/verify_conversions.py`).
 
+Every README ends with `## Run it`, the commands, and `## What it prints`,
+their output. The second is written by `python examples/record_outputs.py`
+(one folder: `record_outputs.py 40_`), which runs each command in the
+folder and puts what it printed back into the README, so a command and its
+answer sit side by side and a change to either is a change to the file.
+Run it with the plugin groups installed (`uv sync --group all`) so the torch,
+JAX, and pandas examples record rather than fail; a tool the repository does
+not install (`torchrun`, `accelerate`) is shown as not run.
+
 `python scripts/refresh.py` reports anything that has drifted — an example
 that no longer checks, a conversion that no longer matches, a measurement
 that has moved, a README table that is behind the record — and `--write`

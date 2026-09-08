@@ -18,3 +18,26 @@ python  pydantic_models.ppy
 ppy     pydantic_models.ppy
 ppy run pydantic_models.ppy
 ```
+
+<!-- outputs:start -->
+## What it prints
+
+**`python  pydantic_models.ppy`**
+
+```text
+145.7586 124 ada
+```
+
+**`ppy     pydantic_models.ppy`**
+
+```text
+145.7586 124 ada
+```
+
+**`ppy run pydantic_models.ppy`**
+
+```text
+145.7586 124 ada
+```
+
+<!-- outputs:end -->

@@ -31,9 +31,11 @@ HERE = Path(__file__).parent
 ROUNDS = 5
 PPY = [sys.executable, "-m", "ppy_compiler"]
 
-#: What the C reference is built with. The comparison is against what this
-#: produces, so the record names it rather than whatever `cc` happens to be.
-REFERENCE_CC = os.environ.get("PPY_BENCH_CC") or "gcc"
+#: What the C references are built with, in the order the tables show them.
+#: The comparison is against what these produce, so the record names them
+#: rather than whatever `cc` happens to be; `PPY_BENCH_CC=gcc` narrows it.
+REFERENCE_CCS = tuple((os.environ.get("PPY_BENCH_CC") or "gcc,clang").split(","))
+REFERENCES = {f"C {cc}": cc for cc in REFERENCE_CCS}
 
 
 def _queens() -> str:
@@ -88,7 +90,7 @@ PROBLEMS = [
     ("15f_input", "inversions", _inversions),
 ]
 
-PATHS = ["plain", "ppy run", "ppy build", "standalone", "C scanf"]
+PATHS = ["plain", "ppy run", "ppy build", "standalone", *REFERENCES]
 
 #: The CPython-free variant of a problem, where the subset reaches it. It is a
 #: separate source -- no `array.array`, no `try`/`except EOFError` -- so it is
@@ -111,8 +113,9 @@ def available() -> dict[str, str]:
     says nothing about what is missing.
     """
     missing: dict[str, str] = {}
-    if shutil.which(REFERENCE_CC) is None:
-        missing["C scanf"] = f"{REFERENCE_CC} is not on PATH"
+    for label, compiler in REFERENCES.items():
+        if shutil.which(compiler) is None:
+            missing[label] = f"{compiler} is not on PATH"
     if not llvm_available():
         reason = "llvmlite is not installed"
         missing["ppy run"] = missing["ppy build"] = missing["standalone"] = reason
@@ -134,7 +137,7 @@ def _commands(stem: str, standalone: str | None) -> list[tuple[str, list[str]]]:
     ]
     if standalone is not None:
         rows.append(("standalone", [f"./native/{standalone}"]))
-    rows.append(("C scanf", [f"./{stem}_c"]))
+    rows.extend((label, [f"./{stem}_{compiler}"]) for label, compiler in REFERENCES.items())
     return rows
 
 
@@ -199,9 +202,11 @@ def _staged(
     if not (work / "pyproject.toml").is_file():
         (work / "pyproject.toml").write_text("[tool.ppy]\nstrict = false\n", encoding="utf-8")
     where = {**os.environ, "PYTHONPATH": str(staged_src)}
-    if "C scanf" not in skipped:
+    for label, compiler in REFERENCES.items():
+        if label in skipped:
+            continue
         subprocess.run(
-            [REFERENCE_CC, "-O3", "-o", f"{stem}_c", f"{stem}.c"],
+            [compiler, "-O3", "-o", f"{stem}_{compiler}", f"{stem}.c"],
             cwd=work,
             capture_output=True,
             check=True,
@@ -242,7 +247,7 @@ def environment() -> dict:
         "machine": platform.machine(),
         "processor": _cpu_name(),
         "cores": os.cpu_count(),
-        "c_compiler": _version(REFERENCE_CC),
+        "c_compilers": {compiler: _version(compiler) for compiler in REFERENCE_CCS},
         "ppy_c_compiler": _version(linker) if linker else "no C compiler is on PATH",
         "ppy": _ppy_version(),
         "rounds": ROUNDS,

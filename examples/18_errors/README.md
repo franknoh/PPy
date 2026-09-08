@@ -19,3 +19,38 @@ python  errors.ppy
 ppy     errors.ppy
 ppy run errors.ppy
 ```
+
+<!-- outputs:start -->
+## What it prints
+
+**`python  errors.ppy`**
+
+```text
+3 0
+3 -4
+caught ZeroDivisionError
+20
+caught IndexError
+```
+
+**`ppy     errors.ppy`**
+
+```text
+3 0
+3 -4
+caught ZeroDivisionError
+20
+caught IndexError
+```
+
+**`ppy run errors.ppy`**
+
+```text
+3 0
+3 -4
+caught ZeroDivisionError
+20
+caught IndexError
+```
+
+<!-- outputs:end -->

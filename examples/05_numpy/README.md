@@ -22,3 +22,26 @@ python  numpy_fusion.ppy
 ppy     numpy_fusion.ppy
 ppy run numpy_fusion.ppy
 ```
+
+<!-- outputs:start -->
+## What it prints
+
+**`python  numpy_fusion.ppy`**
+
+```text
+5.29e-05 2.22324428 1
+```
+
+**`ppy     numpy_fusion.ppy`**
+
+```text
+5.29e-05 2.22324428 1
+```
+
+**`ppy run numpy_fusion.ppy`**
+
+```text
+5.29e-05 2.22324428 1
+```
+
+<!-- outputs:end -->

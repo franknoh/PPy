@@ -28,3 +28,24 @@ call, which is the guarantee NumPy relies on when it does the same thing.
 python  threads.ppy
 ppy run threads.ppy
 ```
+
+<!-- outputs:start -->
+## What it prints
+
+**`python  threads.ppy`**
+
+```text
+1 thread    3029.9 ms
+2 threads   6173.7 ms
+scaling       0.98x
+```
+
+**`ppy run threads.ppy`**
+
+```text
+1 thread     121.0 ms
+2 threads    119.7 ms
+scaling       2.02x
+```
+
+<!-- outputs:end -->

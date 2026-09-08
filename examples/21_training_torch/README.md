@@ -52,3 +52,36 @@ ppy check train.ppy
 ppy build train.ppy
 ppy run   train.ppy
 ```
+
+<!-- outputs:start -->
+## What it prints
+
+**`python    train.py`**
+
+```text
+# device: cpu
+# native prep: False
+# aten region: False
+prep      60.3 ms   checksum=-21282.454900
+train    333.3 ms   loss 1.0250 -> 1.0019
+```
+
+**`ppy check train.ppy`**
+
+*(prints nothing; exits 0)*
+
+**`ppy build train.ppy`**
+
+*(prints nothing; exits 0)*
+
+**`ppy run   train.ppy`**
+
+```text
+# device: cpu
+# native prep: False
+# aten region: True
+prep       0.9 ms   checksum=-21282.454900
+train    324.8 ms   loss 1.0250 -> 1.0019
+```
+
+<!-- outputs:end -->
