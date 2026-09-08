@@ -33,3 +33,32 @@ python train.ppy    # plain CPython
 ppy train.ppy       # optimized backend
 ppy run train.ppy   # native-eligible helpers through LLVM
 ```
+
+<!-- outputs:start -->
+## What it prints
+
+**`python train.ppy`**
+
+```text
+device=cpu
+loss 3.0810 -> 0.0105
+learned
+```
+
+**`ppy train.ppy`**
+
+```text
+device=cpu
+loss 3.0810 -> 0.0105
+learned
+```
+
+**`ppy run train.ppy`**
+
+```text
+device=cpu
+loss 3.0810 -> 0.0105
+learned
+```
+
+<!-- outputs:end -->

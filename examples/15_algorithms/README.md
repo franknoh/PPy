@@ -15,7 +15,7 @@ against, with the same workloads and the same printed answers.
 ## What it shows
 
 - Eight problems: sieve, Collatz, knapsack, edit distance, Floyd-Warshall, matmul, union-find, Fermat.
-- All three paths produce identical answers; the native path is 10x to 145x
+- All three paths produce identical answers; the native path is 9x to 160x
   faster than plain CPython on these eight.
 - Writes go through borrowed buffers, so the caller sees them.
 
@@ -25,30 +25,33 @@ Same machine, same session, kernel wall time — mean ± standard deviation
 over 7 runs, each a fresh process. Every row prints the same answer in every
 column:
 
-| kernel | plain | `ppy run` | `ppy build` | C (`gcc -O3`) |
-|---|---:|---:|---:|---:|
-| sieve 2e6 | 169.3 ± 2.5 | 8.9 ± 0.3 | 8.8 ± 0.7 | 13.9 ± 1.1 |
-| collatz 3e5 | 1096.5 ± 8.9 | 40.3 ± 0.6 | 30.4 ± 0.8 | 41.4 ± 0.9 |
-| knapsack 400×2e4 | 417.7 ± 2.5 | 5.1 ± 0.2 | 3.7 ± 0.4 | 2.5 ± 0.1 |
-| edit 2000×2000 | 462.2 ± 4.8 | 2.8 ± 0.3 | 3.2 ± 0.5 | 3.6 ± 0.0 |
-| floyd 220 | 434.2 ± 3.0 | 3.2 ± 0.0 | 3.0 ± 0.1 | 5.1 ± 0.1 |
-| matmul 220 | 465.6 ± 2.6 | 3.6 ± 0.3 | 3.6 ± 0.3 | 2.2 ± 0.1 |
-| union-find 5e5 | 143.6 ± 2.2 | 3.0 ± 0.2 | 3.0 ± 0.2 | 3.7 ± 0.2 |
-| fermat 6e4 | 24.0 ± 0.4 | 2.8 ± 0.0 | 2.5 ± 0.1 | 1.8 ± 0.1 |
+| kernel | plain | `ppy run` | `ppy build` | C (`gcc -O3`) | C (`clang -O3`) |
+|---|---:|---:|---:|---:|---:|
+| sieve 2e6 | 173.1 ± 2.9 | 9.2 ± 0.5 | **8.8 ± 0.4** | 13.9 ± 0.6 | 13.8 ± 0.3 |
+| collatz 3e5 | 1111.0 ± 13.1 | 39.9 ± 0.8 | **30.3 ± 0.4** | 41.4 ± 0.5 | 32.2 ± 0.3 |
+| knapsack 400×2e4 | 423.1 ± 2.7 | 5.0 ± 0.1 | 3.6 ± 0.2 | 2.4 ± 0.1 | **2.1 ± 0.3** |
+| edit 2000×2000 | 471.4 ± 6.5 | **2.9 ± 0.1** | **2.9 ± 0.3** | 3.6 ± 0.1 | 3.5 ± 0.2 |
+| floyd 220 | 436.3 ± 5.3 | 3.4 ± 0.5 | 3.1 ± 0.2 | 5.0 ± 0.1 | **2.8 ± 0.0** |
+| matmul 220 | 473.9 ± 5.7 | 3.6 ± 0.4 | 3.5 ± 0.1 | **2.1 ± 0.1** | 3.4 ± 0.1 |
+| union-find 5e5 | 149.6 ± 3.8 | **3.2 ± 0.2** | **3.2 ± 0.4** | 3.6 ± 0.2 | 3.8 ± 0.3 |
+| fermat 6e4 | 23.9 ± 0.3 | 2.3 ± 0.1 | 2.6 ± 0.2 | 1.8 ± 0.1 | **1.5 ± 0.1** |
 
 The `ppy run` column keeps Python-integer semantics: overflow is guarded and
 falls back to arbitrary precision. `ppy build` is the wrap-semantics
 artifact, which is where collatz picks up its remaining 10 ms and knapsack
 its 1.4 ms; the other kernels are already guard-free in the loop and do not
 move. `--host-cpu` is within the noise on all eight, so it is not shown.
+Bold is the fastest cell in the row.
 
 Guard hoisting (`[tool.ppy.llvm] safeguards`) is what closed most of the old
 gaps: a multiplied index like `i * n + k` proves its extreme cases once in a
 guard block ahead of the loop, and the body runs plain `mul nsw` with no side
-exits — which is what lets LLVM strength-reduce and vectorize. PPY wins
-sieve, edit distance, floyd, and union-find, and collatz once the artifact
-wraps (with Python's integers it draws); gcc keeps matmul, knapsack, and
-fermat, whose remaining guards live on data values no range can prove.
+exits — which is what lets LLVM strength-reduce and vectorize. Against both
+compilers PPY wins sieve, edit distance, and union-find, and collatz once the
+artifact wraps; floyd beats gcc and loses to clang by a third of a
+millisecond; gcc and clang keep knapsack, matmul, and fermat, whose remaining
+guards live on data values no range can prove. gcc 13.3 and clang 22.1, both
+`-O3`, no `-march`.
 
 ## More problems
 
@@ -60,14 +63,14 @@ programs is instrumented: the times below are wall time of the whole
 process, measured from outside, input and interpreter startup included.
 The C reference reads the same input with `scanf`.
 
-| | problem | plain | `ppy build` | `--standalone` | C (`scanf`) |
-|---|---|---:|---:|---:|---:|
-| [15a](15a_nqueens/) | N-Queens | 136.4 ms | 39.1 ms | 5.3 ms | 4.5 ms |
-| [15b](15b_dijkstra/) | shortest path | 1461.0 ms | 235.8 ms | **97.7 ms** | 138.6 ms |
-| [15c](15c_kmp/) | substring search | 286.0 ms | 50.4 ms | — | 8.9 ms |
-| [15d](15d_segment_tree/) | range sums | 477.8 ms | 102.8 ms | **22.8 ms** | 50.5 ms |
-| [15e](15e_lis/) | longest increasing subsequence | 508.7 ms | 95.9 ms | **36.2 ms** | 57.7 ms |
-| [15f](15f_input/) | counting inversions | 573.7 ms | 88.7 ms | **36.8 ms** | 44.8 ms |
+| | problem | plain | `ppy build` | `--standalone` | C (`gcc`) | C (`clang`) |
+|---|---|---:|---:|---:|---:|---:|
+| [15a](15a_nqueens/) | N-Queens | 135.5 ms | 41.2 ms | 5.6 ms | 4.8 ms | 5.4 ms |
+| [15b](15b_dijkstra/) | shortest path | 1511.0 ms | 251.9 ms | **104.8 ms** | 147.3 ms | 141.6 ms |
+| [15c](15c_kmp/) | substring search | 283.0 ms | 52.4 ms | — | 9.4 ms | 9.0 ms |
+| [15d](15d_segment_tree/) | range sums | 482.8 ms | 113.0 ms | **23.9 ms** | 50.7 ms | 51.8 ms |
+| [15e](15e_lis/) | longest increasing subsequence | 507.0 ms | 102.9 ms | **35.9 ms** | 59.0 ms | 55.5 ms |
+| [15f](15f_input/) | counting inversions | 630.0 ms | 94.6 ms | **37.6 ms** | 46.0 ms | 45.4 ms |
 
 Every cell is the mean of five runs, recorded in
 [`measurements.json`](measurements.json) with the machine it was measured

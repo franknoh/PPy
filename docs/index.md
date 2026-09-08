@@ -1,9 +1,9 @@
 # PPY
 
-**A statically analyzable language in Python's syntax.** A `.ppy` file *is*
-valid Python: it runs under plain CPython with no compiler involved. The
-compiler adds static checking, an optimized Python backend, and an LLVM
-native backend — and all three must produce the same answer.
+**Python's syntax, compiled.** A `.ppy` file *is* valid Python and runs under
+plain CPython with no compiler involved. The compiler adds a strict static
+checker, an optimized Python backend, and an LLVM native backend — and the
+three must print the same answer, or it is a bug.
 
 ```python
 import ppy
@@ -27,13 +27,14 @@ print(longest(ppy.input[int]()))
 ```
 
 ```bash
-echo 300000 | python    collatz.ppy   # plain CPython                 1047.8 ms
-echo 300000 | ppy run   collatz.ppy   # LLVM, built on the first run    39.3 ms
-echo 300000 | ppy build collatz.ppy -o dist && ./dist/collatz   #        29.5 ms
+echo 300000 | python    collatz.ppy      # plain CPython                 1068.8 ms
+echo 300000 | ppy run   collatz.ppy      # LLVM, Python's integers         41.7 ms
+echo 300000 | ppy build collatz.ppy -o dist && ./dist/collatz   # native    30.8 ms
 ```
 
-The same loop in C, `gcc -O3`, takes 40.4 ms. The numbers, the machine, and
-the neighbouring compilers are on the [performance page](reference/performance.md).
+The same loop in C: `gcc -O3` 41.9 ms, `clang -O3` 32.8 ms. One machine, ten
+fresh processes each; the full table with Numba, Codon, PyPy, Cython, mypyc,
+and Nuitka is on the [performance page](reference/performance.md).
 
 <div class="grid cards" markdown>
 
@@ -54,8 +55,8 @@ the neighbouring compilers are on the [performance page](reference/performance.m
 
     ---
 
-    42 folders, 52 programs, every one printing the same output on all
-    three paths.
+    42 folders, 52 programs — the code, the commands, and what they print,
+    the same on all three paths.
 
 -   **[CLI](cli.md)**
 
@@ -74,10 +75,31 @@ the neighbouring compilers are on the [performance page](reference/performance.m
 
     ---
 
-    The pipeline, the IR and its dialects, the cache, the solver — in the
-    order someone adding a backend would read them.
+    The pipeline, the IR and its dialects, the cache, the solver.
 
 </div>
+
+## By the numbers
+
+| | |
+|---|---|
+| **3** execution paths that must agree, checked on every example | **1,110** tests on Python 3.12, 3.13, and 3.14, **74%** statement coverage |
+| **42** example folders, **52** programs, every conversion regenerated to prove it | **76** diagnostic codes, each documented once |
+| **18** IR dialects, **7** backends off one IR: LLVM, C11, C++17, CUDA, HIP, NVVM/PTX, StableHLO | **8** library plugins: NumPy, PyTorch, JAX/Flax, pydantic, FastAPI/Uvicorn, SciPy, pandas, PyArrow |
+| **47 ns** for a native two-`int` call, against **28 ns** for a plain Python call | **0** Python frames on the native call path |
+
+## The three paths
+
+| | |
+|---|---|
+| `python f.ppy` | plain CPython, no compiler |
+| `ppy f.ppy` | the optimized Python backend |
+| `ppy run f.ppy` | LLVM native; the first run builds into the cache, every later one is the launcher alone |
+
+`ppy build` is the third path ahead of time — a launcher and a library that
+keep working with the compiler uninstalled — and `ppy build --standalone` is
+a native executable with no CPython inside. A guard that fails at runtime
+falls back to the Python body; it never answers differently.
 
 ## What it is, and is not
 
@@ -88,29 +110,3 @@ or isolated behind an explicit `ppy.dynamic` boundary — in exchange for
 analysis, optimization, and native compilation that can be trusted. Running
 existing Python is a migration feature (`ppy migrate`), not the definition of
 the language.
-
-## The three paths
-
-| | |
-|---|---|
-| `python f.ppy` | plain CPython, no compiler |
-| `ppy f.ppy` | the optimized Python backend |
-| `ppy run f.ppy` | LLVM native; the first run builds into the cache, every later one is the launcher alone |
-
-Any observable difference between the three is a compiler bug. The test
-suite and `examples/run_all.py` compare all three on every example. `ppy
-build` is the third path ahead of time, and `ppy build --standalone` is a
-native executable with no CPython inside.
-
-## 0.2.0: the compiler as a platform
-
-Between the analysis and every backend sits one typed canonical IR
-([The IR](internals/ir.md)): SSA values, blocks, an explicit control-flow
-graph, operations named in dialects, a verifier, a printer and parser
-(`.ppyir` is public text), a pass manager, and rewrite patterns. The LLVM,
-C/C++, CUDA/HIP source, NVVM/PTX, and StableHLO backends all read that IR
-and nothing else. A program writes to the same IR through the `ppy`
-namespaces — `ppy.native`, `ppy.simd`, `ppy.cpu`, `ppy.atomic`,
-`ppy.concurrent`, `ppy.parallel.range`, `ppy.grad`, `ppy.aio`, `ppy.cuda`
-and `ppy.hip`, `ppy.xla.jit` — each with a reference implementation that
-is inert under plain CPython.

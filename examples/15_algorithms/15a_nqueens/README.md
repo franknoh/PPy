@@ -24,11 +24,12 @@ input, interpreter startup and all. Mean ± standard deviation over 5 runs;
 
 | path | wall |
 |---|---:|
-| plain CPython | 136.4 ± 8.3 ms |
-| `ppy run` | 118.8 ± 138.3 ms |
-| `ppy build` | 39.1 ± 0.7 ms |
-| `ppy build --standalone` | 5.3 ± 0.2 ms |
-| C (`gcc -O3`, `scanf`) | **4.5 ± 0.1 ms** |
+| plain CPython | 135.5 ± 1.8 ms |
+| `ppy run` | 123.1 ± 143.6 ms |
+| `ppy build` | 41.2 ± 1.4 ms |
+| `ppy build --standalone` | 5.6 ± 0.4 ms |
+| C (`gcc -O3`, `scanf`) | **4.8 ± 0.2 ms** |
+| C (`clang -O3`, `scanf`) | 5.4 ± 0.2 ms |
 
 `ppy run` compiles before it runs, which is most of its two seconds; it is
 the development path, not the one to submit. `ppy build` produces a binary
@@ -79,5 +80,41 @@ variant and the four others written the same way.
 python  nqueens.ppy < input.txt
 ppy run nqueens.ppy < input.txt
 ppy build nqueens.ppy -o dist && ./dist/nqueens < input.txt
-gcc -O3 nqueens.c -o nqueens_c && ./nqueens_c < input.txt
+gcc   -O3 nqueens.c -o nqueens_c     && ./nqueens_c     < input.txt
+clang -O3 nqueens.c -o nqueens_clang && ./nqueens_clang < input.txt
 ```
+
+<!-- outputs:start -->
+## What it prints
+
+**`python  nqueens.ppy < input.txt`**
+
+```text
+14200
+```
+
+**`ppy run nqueens.ppy < input.txt`**
+
+```text
+14200
+```
+
+**`ppy build nqueens.ppy -o dist && ./dist/nqueens < input.txt`**
+
+```text
+14200
+```
+
+**`gcc   -O3 nqueens.c -o nqueens_c     && ./nqueens_c     < input.txt`**
+
+```text
+14200
+```
+
+**`clang -O3 nqueens.c -o nqueens_clang && ./nqueens_clang < input.txt`**
+
+```text
+14200
+```
+
+<!-- outputs:end -->

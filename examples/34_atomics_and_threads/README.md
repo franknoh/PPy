@@ -29,3 +29,24 @@ and no conversion step involved.
 python  counters.ppy
 ppy run counters.ppy
 ```
+
+<!-- outputs:start -->
+## What it prints
+
+**`python  counters.ppy`**
+
+```text
+2000 4000
+2000 True 7 1
+40
+```
+
+**`ppy run counters.ppy`**
+
+```text
+2000 4000
+2000 True 7 1
+40
+```
+
+<!-- outputs:end -->

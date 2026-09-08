@@ -77,6 +77,66 @@ python features.ppy && ppy run features.ppy                     # the kernels' o
 python model.ppy    && ppy run model.ppy
 ```
 
+<!-- outputs:start -->
+## What it prints
+
+**`ppy build --warm .`**
+
+*(prints nothing; exits 0)*
+
+**`python train.py`**
+
+```text
+# rank 0/1 device=cpu native=True region=True loader=GeneratedLoader
+rank 0: prep       2.1 ms   checksum=-21015.470416 outside=4103
+rank 0: train    281.4 ms   loss 1.0412 -> 1.0107
+```
+
+**`torchrun --standalone --nproc_per_node=2 train.py`**
+
+```text
+# rank 0/2 device=cpu native=True region=True loader=GeneratedLoader
+rank 0: prep       2.1 ms   checksum=-21015.470416 outside=4103
+rank 0: train    598.9 ms   loss 1.0412 -> 1.0123
+# rank 1/2 device=cpu native=True region=True loader=GeneratedLoader
+rank 1: prep       2.0 ms   checksum=-20883.104755 outside=4005
+rank 1: train    602.6 ms   loss 1.0486 -> 1.0239
+```
+
+**`accelerate launch --multi_gpu --num_processes 2 train.py`**
+
+*not run here: `accelerate` is not installed*
+
+**`PPY_IMPORT=python python train.py`**
+
+```text
+# rank 0/1 device=cpu native=False region=False loader=PPySourceLoader
+rank 0: prep     110.5 ms   checksum=-21015.470416 outside=4103
+rank 0: train    188.5 ms   loss 1.0412 -> 1.0107
+```
+
+**`ppy check .`**
+
+*(prints nothing; exits 0)*
+
+**`python features.ppy && ppy run features.ppy`**
+
+```text
+checksum=-2083.056718 outside=134 counts=[452, 3853, 11555, 16790, 16661, 11022, 3174, 359]
+checksum=-2083.056718 outside=134 counts=[452, 3853, 11555, 16790, 16661, 11022, 3174, 359]
+```
+
+**`python model.ppy    && ppy run model.ppy`**
+
+```text
+# aten region: False
+loss=4.584410
+# aten region: True
+loss=4.584410
+```
+
+<!-- outputs:end -->
+
 `accelerate` is not a dependency of this repository; `--multi_gpu` is what
 makes it launch several processes, and the script runs them on the CPU when
 there is no CUDA device.

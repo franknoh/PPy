@@ -20,3 +20,35 @@ python  containers.ppy
 ppy     containers.ppy
 ppy run containers.ppy
 ```
+
+<!-- outputs:start -->
+## What it prints
+
+**`python  containers.ppy`**
+
+```text
+[(1, 1), (2, 2), (3, 3)]
+[0, 1, 4, 9, 16, 25]
+3
+[1, 2, 3, 4, 5]
+```
+
+**`ppy     containers.ppy`**
+
+```text
+[(1, 1), (2, 2), (3, 3)]
+[0, 1, 4, 9, 16, 25]
+3
+[1, 2, 3, 4, 5]
+```
+
+**`ppy run containers.ppy`**
+
+```text
+[(1, 1), (2, 2), (3, 3)]
+[0, 1, 4, 9, 16, 25]
+3
+[1, 2, 3, 4, 5]
+```
+
+<!-- outputs:end -->

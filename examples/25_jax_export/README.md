@@ -27,3 +27,19 @@ source and no conversion step involved.
 ppy build model.ppy
 ppy run   model.ppy
 ```
+
+<!-- outputs:start -->
+## What it prints
+
+**`ppy build model.ppy`**
+
+*(prints nothing; exits 0)*
+
+**`ppy run   model.ppy`**
+
+```text
+cpu
+[0.0, 0.0, 0.0]
+```
+
+<!-- outputs:end -->

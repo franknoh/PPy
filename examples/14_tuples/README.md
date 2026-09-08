@@ -19,3 +19,32 @@ python  tuples.ppy
 ppy     tuples.ppy
 ppy run tuples.ppy
 ```
+
+<!-- outputs:start -->
+## What it prints
+
+**`python  tuples.ppy`**
+
+```text
+(2.0, 3.0)
+25.0
+(3, 2) (-4, 3)
+```
+
+**`ppy     tuples.ppy`**
+
+```text
+(2.0, 3.0)
+25.0
+(3, 2) (-4, 3)
+```
+
+**`ppy run tuples.ppy`**
+
+```text
+(2.0, 3.0)
+25.0
+(3, 2) (-4, 3)
+```
+
+<!-- outputs:end -->

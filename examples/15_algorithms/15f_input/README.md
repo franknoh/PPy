@@ -24,11 +24,12 @@ input, interpreter startup and all. Mean ± standard deviation over 5 runs;
 
 | path | wall |
 |---|---:|
-| plain CPython | 573.7 ± 9.3 ms |
-| `ppy run` | 164.9 ± 159.9 ms |
-| `ppy build` | 88.7 ± 0.9 ms |
-| `ppy build --standalone` | **36.8 ± 0.9 ms** |
-| C (`gcc -O3`, `scanf`) | 44.8 ± 1.1 ms |
+| plain CPython | 630.0 ± 11.7 ms |
+| `ppy run` | 175.0 ± 162.7 ms |
+| `ppy build` | 94.6 ± 2.3 ms |
+| `ppy build --standalone` | **37.6 ± 0.6 ms** |
+| C (`gcc -O3`, `scanf`) | 46.0 ± 1.1 ms |
+| C (`clang -O3`, `scanf`) | 45.4 ± 0.8 ms |
 
 `ppy run` compiles before it runs, which is most of its two seconds; it is
 the development path, not the one to submit. `ppy build` produces a binary
@@ -42,5 +43,41 @@ row comes from; the [folder README](../README.md) says what the subset costs.
 python  inversions.ppy < input.txt
 ppy run inversions.ppy < input.txt
 ppy build inversions.ppy -o dist && ./dist/inversions < input.txt
-gcc -O3 inversions.c -o inversions_c && ./inversions_c < input.txt
+gcc   -O3 inversions.c -o inversions_c     && ./inversions_c     < input.txt
+clang -O3 inversions.c -o inversions_clang && ./inversions_clang < input.txt
 ```
+
+<!-- outputs:start -->
+## What it prints
+
+**`python  inversions.ppy < input.txt`**
+
+```text
+14
+```
+
+**`ppy run inversions.ppy < input.txt`**
+
+```text
+14
+```
+
+**`ppy build inversions.ppy -o dist && ./dist/inversions < input.txt`**
+
+```text
+14
+```
+
+**`gcc   -O3 inversions.c -o inversions_c     && ./inversions_c     < input.txt`**
+
+```text
+14
+```
+
+**`clang -O3 inversions.c -o inversions_clang && ./inversions_clang < input.txt`**
+
+```text
+14
+```
+
+<!-- outputs:end -->

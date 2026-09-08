@@ -25,11 +25,12 @@ input, interpreter startup and all. Mean ± standard deviation over 5 runs;
 
 | path | wall |
 |---|---:|
-| plain CPython | 508.7 ± 10.9 ms |
-| `ppy run` | 159.2 ± 140.0 ms |
-| `ppy build` | 95.9 ± 2.6 ms |
-| `ppy build --standalone` | **36.2 ± 0.6 ms** |
-| C (`gcc -O3`, `scanf`) | 57.7 ± 0.3 ms |
+| plain CPython | 507.0 ± 10.7 ms |
+| `ppy run` | 166.0 ± 151.2 ms |
+| `ppy build` | 102.9 ± 4.2 ms |
+| `ppy build --standalone` | **35.9 ± 0.8 ms** |
+| C (`gcc -O3`, `scanf`) | 59.0 ± 2.8 ms |
+| C (`clang -O3`, `scanf`) | 55.5 ± 1.7 ms |
 
 `ppy run` compiles before it runs, which is most of its two seconds; it is
 the development path, not the one to submit. `ppy build` produces a binary
@@ -43,5 +44,41 @@ row comes from; the [folder README](../README.md) says what the subset costs.
 python  lis.ppy < input.txt
 ppy run lis.ppy < input.txt
 ppy build lis.ppy -o dist && ./dist/lis < input.txt
-gcc -O3 lis.c -o lis_c && ./lis_c < input.txt
+gcc   -O3 lis.c -o lis_c     && ./lis_c     < input.txt
+clang -O3 lis.c -o lis_clang && ./lis_clang < input.txt
 ```
+
+<!-- outputs:start -->
+## What it prints
+
+**`python  lis.ppy < input.txt`**
+
+```text
+5
+```
+
+**`ppy run lis.ppy < input.txt`**
+
+```text
+5
+```
+
+**`ppy build lis.ppy -o dist && ./dist/lis < input.txt`**
+
+```text
+5
+```
+
+**`gcc   -O3 lis.c -o lis_c     && ./lis_c     < input.txt`**
+
+```text
+5
+```
+
+**`clang -O3 lis.c -o lis_clang && ./lis_clang < input.txt`**
+
+```text
+5
+```
+
+<!-- outputs:end -->

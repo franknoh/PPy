@@ -29,3 +29,17 @@ source and no conversion step involved.
 ```bash
 python consumer.py
 ```
+
+<!-- outputs:start -->
+## What it prints
+
+**`python consumer.py`**
+
+```text
+area     : 12.0
+perimeter: 14.0
+loaded   : geometry.ppy
+hook     : True
+```
+
+<!-- outputs:end -->

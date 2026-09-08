@@ -100,6 +100,9 @@ plugins = [
     { include-group = "torch" },
     { include-group = "jax" },
     { include-group = "uvicorn" },
+    { include-group = "scipy" },
+    { include-group = "pandas" },
+    { include-group = "pyarrow" },
 ]
 all = [
     { include-group = "dev" },

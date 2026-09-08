@@ -23,3 +23,41 @@ python  parallel.ppy
 ppy     parallel.ppy
 ppy run parallel.ppy
 ```
+
+<!-- outputs:start -->
+## What it prints
+
+**`python  parallel.ppy`**
+
+```text
+fused serial         88.5 ms   sample=-0.249979000059
+fused parallel      104.2 ms   sample=-0.249979000059
+numpy               105.4 ms   sample=-0.249979000059
+bit-identical: True
+strict == numpy: True
+relaxed close   : True
+```
+
+**`ppy     parallel.ppy`**
+
+```text
+fused serial         91.0 ms   sample=-0.249979000059
+fused parallel       91.2 ms   sample=-0.249979000059
+numpy                94.7 ms   sample=-0.249979000059
+bit-identical: True
+strict == numpy: True
+relaxed close   : True
+```
+
+**`ppy run parallel.ppy`**
+
+```text
+fused serial         21.4 ms   sample=-0.249979000059
+fused parallel       13.4 ms   sample=-0.249979000059
+numpy                21.5 ms   sample=-0.249979000059
+bit-identical: True
+strict == numpy: True
+relaxed close   : True
+```
+
+<!-- outputs:end -->

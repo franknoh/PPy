@@ -26,10 +26,11 @@ input, interpreter startup and all. Mean ± standard deviation over 5 runs;
 
 | path | wall |
 |---|---:|
-| plain CPython | 286.0 ± 8.1 ms |
-| `ppy run` | 133.9 ± 150.4 ms |
-| `ppy build` | 50.4 ± 1.1 ms |
-| C (`gcc -O3`, `scanf`) | **8.9 ± 0.3 ms** |
+| plain CPython | 283.0 ± 2.9 ms |
+| `ppy run` | 137.3 ± 153.8 ms |
+| `ppy build` | 52.4 ± 2.0 ms |
+| C (`gcc -O3`, `scanf`) | 9.4 ± 0.3 ms |
+| C (`clang -O3`, `scanf`) | **9.0 ± 0.2 ms** |
 
 `ppy run` compiles before it runs, which is most of its two seconds; it is
 the development path, not the one to submit. `ppy build` produces a binary
@@ -44,5 +45,41 @@ build has no reader for one yet.
 python  kmp.ppy < input.txt
 ppy run kmp.ppy < input.txt
 ppy build kmp.ppy -o dist && ./dist/kmp < input.txt
-gcc -O3 kmp.c -o kmp_c && ./kmp_c < input.txt
+gcc   -O3 kmp.c -o kmp_c     && ./kmp_c     < input.txt
+clang -O3 kmp.c -o kmp_clang && ./kmp_clang < input.txt
 ```
+
+<!-- outputs:start -->
+## What it prints
+
+**`python  kmp.ppy < input.txt`**
+
+```text
+1
+```
+
+**`ppy run kmp.ppy < input.txt`**
+
+```text
+1
+```
+
+**`ppy build kmp.ppy -o dist && ./dist/kmp < input.txt`**
+
+```text
+1
+```
+
+**`gcc   -O3 kmp.c -o kmp_c     && ./kmp_c     < input.txt`**
+
+```text
+1
+```
+
+**`clang -O3 kmp.c -o kmp_clang && ./kmp_clang < input.txt`**
+
+```text
+1
+```
+
+<!-- outputs:end -->

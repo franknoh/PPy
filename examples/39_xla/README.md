@@ -29,3 +29,43 @@ python  device_math.ppy
 ppy run device_math.ppy               # through PJRT where the bridge is installed (uv sync --group jax)
 ppy emit stablehlo device_math.ppy    # the StableHLO for `f`
 ```
+
+<!-- outputs:start -->
+## What it prints
+
+**`python  device_math.ppy`**
+
+```text
+0.445520207 0.387753845 -4.485479898
+2.0 1.5
+# devices: ['cpu:0']
+```
+
+**`ppy run device_math.ppy`**
+
+```text
+0.445520207 0.387753845 -4.485479898
+2.0 1.5
+# devices: ['cpu:0']
+```
+
+**`ppy emit stablehlo device_math.ppy`**
+
+```text
+module @device_math {
+  func.func public @device_math_f(%x: tensor<f64>, %y: tensor<f64>) -> (tensor<f64>) {
+    %1 = stablehlo.sine %x : tensor<f64>
+    %2 = stablehlo.multiply %1, %y : tensor<f64>
+    %3 = stablehlo.constant dense<0.00000000000000000e+00> : tensor<f64>
+    %4 = stablehlo.compare GT, %2, %3, FLOAT : (tensor<f64>, tensor<f64>) -> tensor<i1>
+    %5 = stablehlo.negate %x : tensor<f64>
+    %6 = stablehlo.select %4, %x, %5 : tensor<i1>, tensor<f64>
+    %7 = stablehlo.add %2, %6 : tensor<f64>
+    %8 = stablehlo.constant dense<2.00000000000000000e+00> : tensor<f64>
+    %9 = stablehlo.divide %7, %8 : tensor<f64>
+    return %9 : tensor<f64>
+  }
+}
+```
+
+<!-- outputs:end -->

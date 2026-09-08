@@ -32,3 +32,68 @@ python  echo.ppy
 ppy run echo.ppy
 ppy emit ir echo.ppy   # the async dialect: create, await, the IO operations
 ```
+
+<!-- outputs:start -->
+## What it prints
+
+**`python  echo.ppy`**
+
+```text
+42333003
+# compiled coroutine here: False
+```
+
+**`ppy run echo.ppy`**
+
+```text
+42333003
+# compiled coroutine here: True
+```
+
+**`ppy emit ir echo.ppy`**
+
+```text
+ppyir 1
+module @echo
+dialect async 1
+dialect core 1
+attrs {ppy.libraries = ["ppy_aio"]}
+
+private global @ppy.str.0 : buffer<u8> = "127.0.0.1"
+private global @ppy.str.1 : buffer<u8> = "127.0.0.1"
+
+func @echo_wait_and_double(%n: i64) -> future<i64> attrs {effects = ["may_raise", "sync", "time"], ppy.abi = "ppy", ppy.async = true, ppy.async.lowered = true, ppy.qualname = "echo.wait_and_double", ppy.releases_gil = true, ppy.symbol = "ppy_echo_wait_and_double"} loc("examples/37_aio/echo.ppy":5:0) {
+^entry:
+    %frame = async.frame_new {slots = 7} : ptr<i64>
+    %0 = core.const 3 : i64
+    %1 = core.ptr_offset %frame, %0 : ptr<i64>
+    core.store %n, %1
+    %future = async.spawn %frame {callee = @echo_wait_and_double_resume} : future<i64>
+    core.ret %future
+}
+
+func @echo_echo_once(%listening: i64) -> future<i64> attrs {effects = ["alloc", "network", "read_memory", "sync", "write_memory"], ppy.abi = "ppy", ppy.async = true, ppy.async.lowered = true, ppy.qualname = "echo.echo_once", ppy.releases_gil = true, ppy.symbol = "ppy_echo_echo_once"} loc("examples/37_aio/echo.ppy":13:0) {
+^entry:
+    %frame = async.frame_new {slots = 17} : ptr<i64>
+    %0 = core.const 3 : i64
+    %1 = core.ptr_offset %frame, %0 : ptr<i64>
+    core.store %listening, %1
+    %future = async.spawn %frame {callee = @echo_echo_once_resume} : future<i64>
+    core.ret %future
+}
+
+func @echo_send_hello(%port: i64) -> future<i64> attrs {effects = ["alloc", "network", "read_memory", "sync", "write_memory"], ppy.abi = "ppy", ppy.async = true, ppy.async.lowered = true, ppy.qualname = "echo.send_hello", ppy.releases_gil = true, ppy.symbol = "ppy_echo_send_hello"} loc("examples/37_aio/echo.ppy":22:0) {
+^entry:
+    %frame = async.frame_new {slots = 20} : ptr<i64>
+    %0 = core.const 3 : i64
+    %1 = core.ptr_offset %frame, %0 : ptr<i64>
+    core.store %port, %1
+    %future = async.spawn %frame {callee = @echo_send_hello_resume} : future<i64>
+    core.ret %future
+}
+
+func @echo_main() -> future<i64> attrs {effects = ["alloc", "may_raise", "network", "read_memory", "sync", "time", "write_memory"], ppy.abi = "ppy", ppy.async = true, ppy.async.lowered = true, ppy.qualname = "echo.main", ppy.releases_gil = true, ppy.symbol = "ppy_echo_main"} loc("examples/37_aio/echo.ppy":35:0) {
+… 426 more lines
+```
+
+<!-- outputs:end -->

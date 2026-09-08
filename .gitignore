@@ -21,6 +21,11 @@ examples/**/.venv/
 
 # Compiled C reference binaries built beside an example.
 *_c
+*_clang
 examples/**/native/
 # the built documentation site
 site/
+# what an example writes when its README's commands are run
+*.ppyprof
+examples/**/report.json
+examples/**/input.txt.out

@@ -50,3 +50,70 @@ ppy convert pipeline.py --dry-run
 python  pipeline.py
 ppy run pipeline.ppy
 ```
+
+<!-- outputs:start -->
+## What it prints
+
+**`ppy convert pipeline.py --dry-run`**
+
+```text
+# ---- ./pipeline.ppy ----
+import math
+from collections.abc import Sequence
+
+import ppy
+
+
+class Summary:
+    def __init__(self, mean: float, deviation: float, count: int) -> None:
+        self.mean: float = mean
+        self.deviation: float = deviation
+        self.count: int = count
+
+    def scaled(self, factor: float) -> 'Summary':
+        return Summary(self.mean * factor, self.deviation * factor, self.count)
+
+    def shifted(self, offset: float) -> 'Summary':
+        return Summary(self.mean + offset, self.deviation, self.count)
+
+    @ppy.pure
+    def describe(self) -> str:
+        return f"n={self.count} mean={self.mean:.3f} sd={self.deviation:.3f}"
+
+
+@ppy.pure
+def clamp(value: float, low: float, high: float) -> float:
+    if value < low:
+        return low
+    if value > high:
+        return high
+    return value
+
+
+@ppy.pure
+def normalize(value: float, mean: float, spread: float) -> float:
+    return clamp((value - mean) / spread, -3.0, 3.0)
+
+
+def summarize(readings: Sequence[float]) -> Summary | None:
+    count: int = len(readings)
+… 34 more lines
+```
+
+**`python  pipeline.py`**
+
+```text
+n=8 mean=5.000 sd=2.000 first=-1.5
+empty
+n=8 mean=10.000 sd=4.000
+```
+
+**`ppy run pipeline.ppy`**
+
+```text
+n=8 mean=5.000 sd=2.000 first=-1.5
+empty
+n=8 mean=10.000 sd=4.000
+```
+
+<!-- outputs:end -->

@@ -32,3 +32,26 @@ python legacy.ppy    # plain CPython
 ppy legacy.ppy       # optimized backend
 ppy run legacy.ppy   # the LLVM path
 ```
+
+<!-- outputs:start -->
+## What it prints
+
+**`python legacy.ppy`**
+
+```text
+True [2.0, 5.0, 8.0] 6
+```
+
+**`ppy legacy.ppy`**
+
+```text
+True [2.0, 5.0, 8.0] 6
+```
+
+**`ppy run legacy.ppy`**
+
+```text
+True [2.0, 5.0, 8.0] 6
+```
+
+<!-- outputs:end -->

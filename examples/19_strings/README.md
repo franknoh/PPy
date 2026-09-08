@@ -19,3 +19,32 @@ python  strings.ppy
 ppy     strings.ppy
 ppy run strings.ppy
 ```
+
+<!-- outputs:start -->
+## What it prints
+
+**`python  strings.ppy`**
+
+```text
+ALK
+True False
+[('a', 3), ('b', 2), ('c', 1)]
+```
+
+**`ppy     strings.ppy`**
+
+```text
+ALK
+True False
+[('a', 3), ('b', 2), ('c', 1)]
+```
+
+**`ppy run strings.ppy`**
+
+```text
+ALK
+True False
+[('a', 3), ('b', 2), ('c', 1)]
+```
+
+<!-- outputs:end -->

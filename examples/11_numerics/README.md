@@ -19,3 +19,38 @@ python  numerics.ppy
 ppy     numerics.ppy
 ppy run numerics.ppy
 ```
+
+<!-- outputs:start -->
+## What it prints
+
+**`python  numerics.ppy`**
+
+```text
+1000000
+2432902008176640000
+265252859812191058636308480000000
+-4 3
+1 -1
+```
+
+**`ppy     numerics.ppy`**
+
+```text
+1000000
+2432902008176640000
+265252859812191058636308480000000
+-4 3
+1 -1
+```
+
+**`ppy run numerics.ppy`**
+
+```text
+1000000
+2432902008176640000
+265252859812191058636308480000000
+-4 3
+1 -1
+```
+
+<!-- outputs:end -->

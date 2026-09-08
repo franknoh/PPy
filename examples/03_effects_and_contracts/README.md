@@ -20,3 +20,38 @@ python  effects.ppy
 ppy     effects.ppy
 ppy run effects.ppy
 ```
+
+<!-- outputs:start -->
+## What it prints
+
+**`python  effects.ppy`**
+
+```text
+[2.0, 4.0] 255 1.5
+1
+2
+3
+42
+```
+
+**`ppy     effects.ppy`**
+
+```text
+[2.0, 4.0] 255 1.5
+1
+2
+3
+42
+```
+
+**`ppy run effects.ppy`**
+
+```text
+[2.0, 4.0] 255 1.5
+1
+2
+3
+42
+```
+
+<!-- outputs:end -->
