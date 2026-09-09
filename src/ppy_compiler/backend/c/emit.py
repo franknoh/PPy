@@ -1006,7 +1006,7 @@ class _FunctionEmitter:
             # A name or a literal reads the same anywhere.
             return True
         producer = v.owner
-        if not isinstance(producer, Operation):
+        if not isinstance(producer, Operation) or producer.parent is None:
             return False
         block = producer.parent
         users: list[Operation] = []
@@ -1072,12 +1072,13 @@ class _FunctionEmitter:
             user, index = user.result.uses[0]
         if not isinstance(user, Operation) or user.name != "core.store" or index != 0:
             return None
-        if user.parent is not v.owner.parent:
+        block = v.owner.parent
+        if block is None or user.parent is not block:
             return None
         slot = self.slots.get(id(user.operands[1]))
         if slot is None:
             return None
-        operations = v.owner.parent.operations
+        operations = block.operations
         between = operations[operations.index(v.owner) + 1 : operations.index(user)]
         if not all(_pure(op) for op in between):
             return None
@@ -1097,7 +1098,10 @@ class _FunctionEmitter:
             return False
         if user.name == "core.ret" and isinstance(v.type, (TupleType, StructType, BoolType)):
             return False
-        operations = user.parent.operations
+        block = user.parent
+        if block is None:
+            return False
+        operations = block.operations
         return operations.index(user) == operations.index(v.owner) + 1
 
     def define_buffer(self, v: Value, data: str, length: str) -> None:
@@ -1541,21 +1545,24 @@ class _FunctionEmitter:
 
             return self._capture(emit, at)
 
-        loop = self.loop_stack[-1] if self.loop_stack else None
-        at_header = (
-            loop is not None
-            and block is loop.header
-            and self.body is loop.writer
-            and len(self.body) == loop.start + 1
-        )
+        # The loop whose header this block is, when its `while (1)` line is the
+        # last thing written: the test can then be the loop's own.
+        header: _Loop | None = None
+        if self.loop_stack:
+            loop = self.loop_stack[-1]
+            if (
+                block is loop.header
+                and self.body is loop.writer
+                and len(self.body) == loop.start + 1
+            ):
+                header = loop
         if kinds == ("jump", "jump"):
             then_lines, else_lines = jump(then, depth + 1), jump(otherwise, depth + 1)
             self._if_else(condition, self.negated(chooser), then_lines, else_lines)
         elif kinds == ("own", "jump"):
             else_lines = jump(otherwise, depth + 1)
-            if at_header and _only_break(else_lines):
-                # The header's test is the loop's own.
-                self.body[loop.start] = "    " * (depth - 1) + f"while ({condition}) {{"
+            if header is not None and _only_break(else_lines):
+                self.body[header.start] = "    " * (depth - 1) + f"while ({condition}) {{"
                 self.body.extend(own(then, depth))
             elif _leaves(else_lines):
                 self._if(self.negated(chooser), else_lines)
@@ -1564,8 +1571,10 @@ class _FunctionEmitter:
                 self._if_else(condition, self.negated(chooser), own(then, depth + 1), else_lines)
         elif kinds == ("jump", "own"):
             then_lines = jump(then, depth + 1)
-            if at_header and _only_break(then_lines):
-                self.body[loop.start] = "    " * (depth - 1) + f"while ({self.negated(chooser)}) {{"
+            if header is not None and _only_break(then_lines):
+                self.body[header.start] = (
+                    "    " * (depth - 1) + f"while ({self.negated(chooser)}) {{"
+                )
                 self.body.extend(own(otherwise, depth))
             elif _leaves(then_lines):
                 self._if(condition, then_lines)
