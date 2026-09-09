@@ -3765,6 +3765,14 @@
 <h2 id="030-unreleased">0.3.0 — unreleased<a class="headerlink" href="#030-unreleased" title="Permanent link">&para;</a></h2>
 <p>Work toward the next release, on <code>dev</code>; alphas of it are tagged <code>v0.3.0aN</code>.</p>
 <ul>
+<li>Three examples compare PPY with the tools that do the same job, code and
+  numbers side by side: the parallel ranges against Numba, Taichi, Mojo, and
+  NumPy; the CUDA kernels against CuPy and Numba; the eight algorithm kernels
+  against Numba, Mojo, and Codon. Each counterpart is in the example's
+  <code>compare/</code> folder, written the way its tool wants it, and
+  <code>examples/compare.py</code> holds them all to one answer and tabulates the
+  timings. The CUDA table says plainly what PPY lacks: an array that lives
+  on the device between launches.</li>
 <li>A parallel body that writes a buffer element, <code>out[i] = i * i</code> under
   <code>parallel.range</code>, lowers: the store writes through <code>out</code> and binds nothing
   outside the loop, which is what the guide promised and what the check

@@ -1801,6 +1801,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#the-eight-kernels-against-numba-mojo-and-codon" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The eight kernels against Numba, Mojo, and Codon
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#the-six-problems" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3677,6 +3688,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#the-eight-kernels-against-numba-mojo-and-codon" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The eight kernels against Numba, Mojo, and Codon
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#the-six-problems" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3880,6 +3902,105 @@ millisecond; gcc and clang keep knapsack, matmul, and fermat, whose
 remaining guards live on data values no range can prove. gcc 13.3 and
 clang 22.1, both <code>-O3</code>, no <code>-march</code>. Writes go through borrowed buffers,
 so the caller sees them.</p>
+<h2 id="the-eight-kernels-against-numba-mojo-and-codon">The eight kernels against Numba, Mojo, and Codon<a class="headerlink" href="#the-eight-kernels-against-numba-mojo-and-codon" title="Permanent link">&para;</a></h2>
+<p>The same eight kernels ported to three tools that compile Python-shaped
+code, in <a href="https://github.com/franknoh/PPy/blob/main/examples/15_algorithms/compare"><code>compare/</code></a>: <a href="https://github.com/franknoh/PPy/blob/main/examples/15_algorithms/compare/algorithms_numba.py"><code>algorithms_numba.py</code></a>,
+<a href="https://github.com/franknoh/PPy/blob/main/examples/15_algorithms/compare/algorithms.mojo"><code>algorithms.mojo</code></a>, and <a href="https://github.com/franknoh/PPy/blob/main/examples/15_algorithms/compare/algorithms_codon.py"><code>algorithms_codon.py</code></a>.
+Kernel wall time inside the program, mean ± standard deviation over 7 runs,
+each a fresh process, in milliseconds; every column prints every answer the
+same. Bold is the fastest cell in the row.</p>
+<table>
+<thead>
+<tr>
+<th>kernel</th>
+<th style="text-align: right;"><code>ppy run</code></th>
+<th style="text-align: right;"><code>ppy build</code></th>
+<th style="text-align: right;">Numba <code>@njit</code></th>
+<th style="text-align: right;">Mojo</th>
+<th style="text-align: right;">Codon</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>sieve 2e6</td>
+<td style="text-align: right;">9.1 ± 0.5</td>
+<td style="text-align: right;">8.8 ± 0.3</td>
+<td style="text-align: right;"><strong>7.5 ± 0.2</strong></td>
+<td style="text-align: right;">12.2 ± 1.1</td>
+<td style="text-align: right;">8.1 ± 0.4</td>
+</tr>
+<tr>
+<td>collatz 3e5</td>
+<td style="text-align: right;">40.2 ± 0.8</td>
+<td style="text-align: right;"><strong>30.5 ± 0.4</strong></td>
+<td style="text-align: right;">31.7 ± 0.3</td>
+<td style="text-align: right;">67.7 ± 0.7</td>
+<td style="text-align: right;">32.8 ± 1.2</td>
+</tr>
+<tr>
+<td>knapsack 400x2e4</td>
+<td style="text-align: right;">4.9 ± 0.1</td>
+<td style="text-align: right;">3.5 ± 0.1</td>
+<td style="text-align: right;">4.3 ± 0.1</td>
+<td style="text-align: right;"><strong>2.1 ± 0.0</strong></td>
+<td style="text-align: right;">5.7 ± 0.2</td>
+</tr>
+<tr>
+<td>edit 2000x2000</td>
+<td style="text-align: right;">2.9 ± 0.1</td>
+<td style="text-align: right;">2.7 ± 0.1</td>
+<td style="text-align: right;"><strong>1.8 ± 0.2</strong></td>
+<td style="text-align: right;">8.0 ± 0.2</td>
+<td style="text-align: right;">2.4 ± 0.1</td>
+</tr>
+<tr>
+<td>floyd 220</td>
+<td style="text-align: right;">3.1 ± 0.1</td>
+<td style="text-align: right;">3.0 ± 0.0</td>
+<td style="text-align: right;">2.5 ± 0.1</td>
+<td style="text-align: right;">3.0 ± 0.2</td>
+<td style="text-align: right;"><strong>1.3 ± 0.3</strong></td>
+</tr>
+<tr>
+<td>matmul 220</td>
+<td style="text-align: right;">3.6 ± 0.1</td>
+<td style="text-align: right;">3.5 ± 0.1</td>
+<td style="text-align: right;"><strong>3.4 ± 0.3</strong></td>
+<td style="text-align: right;">7.7 ± 0.1</td>
+<td style="text-align: right;">3.8 ± 0.1</td>
+</tr>
+<tr>
+<td>union-find 5e5</td>
+<td style="text-align: right;">3.1 ± 0.1</td>
+<td style="text-align: right;">3.1 ± 0.1</td>
+<td style="text-align: right;"><strong>2.5 ± 0.1</strong></td>
+<td style="text-align: right;">6.7 ± 0.6</td>
+<td style="text-align: right;">3.9 ± 0.3</td>
+</tr>
+<tr>
+<td>fermat 6e4</td>
+<td style="text-align: right;">2.3 ± 0.1</td>
+<td style="text-align: right;">2.5 ± 0.1</td>
+<td style="text-align: right;">1.7 ± 0.1</td>
+<td style="text-align: right;">2.1 ± 0.0</td>
+<td style="text-align: right;"><strong>1.6 ± 0.1</strong></td>
+</tr>
+</tbody>
+</table>
+<p><code>ppy run</code> keeps Python's integers -- overflow is guarded and falls back to
+arbitrary precision -- and the other four columns wrap at 64 bits, which is
+where collatz picks up its 10 ms. Numba is the fastest column on six of the
+eight against <code>ppy build</code>, by ten to thirty percent; the Numba port is the
+PPY source with <code>@njit</code> in place of the annotations and NumPy arrays in
+place of <code>array.array</code>, timed after one warm call so its compile is not in
+the number. Codon takes the same source with <code>List[int]</code> annotations and
+runs it with <code>codon run -release</code> (the <code>build</code> link needed a <code>libz</code> this
+machine lacks). The Mojo port is typed by hand -- <code>List[Int64]</code>, <code>mut</code>
+parameters, an <code>Int</code> for every index and an <code>Int64</code> for every element --
+and is the plain <code>List</code> version without <code>UnsafePointer</code>; it is the slowest
+on five of the eight and the fastest on knapsack. Numba 0.67.0 on CPython
+3.12.13, Mojo 1.0.0 (<code>-O3</code>), Codon 0.19.6, PPY on CPython 3.13.13; Intel
+Core Ultra 9 386H; <a href="https://github.com/franknoh/PPy/blob/main/examples/compare.py"><code>examples/compare.py</code></a> produced the table.</p>
 <h2 id="the-six-problems">The six problems<a class="headerlink" href="#the-six-problems" title="Permanent link">&para;</a></h2>
 <p>Each subfolder is one competitive-programming problem — the shapes a judge
 sets — read from standard input and answered on stdout, with its own input

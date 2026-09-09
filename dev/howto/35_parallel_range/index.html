@@ -1952,6 +1952,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#compared-with-numba-taichi-mojo-and-numpy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Compared with Numba, Taichi, Mojo, and NumPy
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#run-it" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3655,6 +3666,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#compared-with-numba-taichi-mojo-and-numpy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Compared with Numba, Taichi, Mojo, and NumPy
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#run-it" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3741,6 +3763,100 @@ says why in an optimization remark — <code>fill</code> has two, and <code>--re
 names what happened to each. <code>[tool.ppy.parallel] backend</code> chooses
 <code>threads</code>, <code>serial</code>, <code>simd</code>, or <code>openmp</code> (for <code>ppy emit c</code>), and every choice
 gives the same answer.</p>
+<h2 id="compared-with-numba-taichi-mojo-and-numpy">Compared with Numba, Taichi, Mojo, and NumPy<a class="headerlink" href="#compared-with-numba-taichi-mojo-and-numpy" title="Permanent link">&para;</a></h2>
+<p>The same four kernels over eight million elements, each written the way its
+tool wants it, in <a href="https://github.com/franknoh/PPy/blob/main/examples/35_parallel_range/compare"><code>compare/</code></a>: <a href="https://github.com/franknoh/PPy/blob/main/examples/35_parallel_range/compare/ranges_bench.ppy"><code>ranges_bench.ppy</code></a>
+(this example's kernels, with a relaxed <code>dot</code> beside the ordered one),
+<a href="https://github.com/franknoh/PPy/blob/main/examples/35_parallel_range/compare/ranges_numba.py"><code>ranges_numba.py</code></a>, <a href="https://github.com/franknoh/PPy/blob/main/examples/35_parallel_range/compare/ranges_taichi.py"><code>ranges_taichi.py</code></a>,
+<a href="https://github.com/franknoh/PPy/blob/main/examples/35_parallel_range/compare/ranges.mojo"><code>ranges.mojo</code></a>, and <a href="https://github.com/franknoh/PPy/blob/main/examples/35_parallel_range/compare/ranges_numpy.py"><code>ranges_numpy.py</code></a>.
+Each program prints its answers, then the best of five warm calls per kernel;
+<a href="https://github.com/franknoh/PPy/blob/main/examples/compare.py"><code>examples/compare.py</code></a> runs each program five times and reports
+the mean and standard deviation across processes, in milliseconds. All five
+print the same answers. The ordered sums agree to the last digit; the
+reassociated ones differ from them in the thirteenth.</p>
+<table>
+<thead>
+<tr>
+<th>kernel</th>
+<th style="text-align: right;">PPY <code>ppy run</code></th>
+<th style="text-align: right;">Numba <code>prange</code></th>
+<th style="text-align: right;">Taichi</th>
+<th style="text-align: right;">Mojo</th>
+<th style="text-align: right;">NumPy</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>squares</td>
+<td style="text-align: right;">1.31 ± 0.07</td>
+<td style="text-align: right;"><strong>0.84 ± 0.22</strong></td>
+<td style="text-align: right;">1.02 ± 0.03</td>
+<td style="text-align: right;">1.00 ± 0.06</td>
+<td style="text-align: right;">13.47 ± 0.51</td>
+</tr>
+<tr>
+<td>dot, in order</td>
+<td style="text-align: right;"><strong>6.14 ± 0.26</strong></td>
+<td style="text-align: right;">—</td>
+<td style="text-align: right;">—</td>
+<td style="text-align: right;">15.28 ± 0.29</td>
+<td style="text-align: right;">—</td>
+</tr>
+<tr>
+<td>dot, reassociated</td>
+<td style="text-align: right;">1.68 ± 0.11</td>
+<td style="text-align: right;">1.07 ± 0.15</td>
+<td style="text-align: right;">1.46 ± 0.03</td>
+<td style="text-align: right;">1.54 ± 0.08</td>
+<td style="text-align: right;"><strong>1.04 ± 0.05</strong></td>
+</tr>
+<tr>
+<td>count_odd</td>
+<td style="text-align: right;">0.99 ± 0.07</td>
+<td style="text-align: right;"><strong>0.71 ± 0.59</strong></td>
+<td style="text-align: right;">1.21 ± 0.03</td>
+<td style="text-align: right;">1.44 ± 0.27</td>
+<td style="text-align: right;">28.10 ± 0.84</td>
+</tr>
+<tr>
+<td>fill, serial</td>
+<td style="text-align: right;">6.15 ± 0.15</td>
+<td style="text-align: right;">7.54 ± 0.08</td>
+<td style="text-align: right;"><strong>4.20 ± 0.46</strong></td>
+<td style="text-align: right;">20.04 ± 0.21</td>
+<td style="text-align: right;">15.32 ± 0.81</td>
+</tr>
+</tbody>
+</table>
+<p>What each port asked for:</p>
+<ul>
+<li><strong>PPY</strong> is the source above: typed parameters, <code>parallel.range</code>, and the
+  same file runs on CPython. <code>dot</code> keeps the order of a serial sum by
+  design, which is why it is the slow row; <code>@ppy.fastmath</code> is the relaxed one.</li>
+<li><strong>Numba</strong> is <code>@njit(parallel=True)</code> and <code>prange</code> over NumPy arrays, with no
+  annotations. A <code>prange</code> sum reassociates on its own -- the plain reduction
+  measures 1.46 ± 0.80 ms, <code>fastmath=True</code> the 1.07 in the table -- so there
+  is no ordered <code>dot</code> to write. Integers wrap at 64 bits silently.</li>
+<li><strong>Taichi</strong> wants the arrays as <code>ti.field</code>s declared with their shapes at
+  module level and the kernels written over them; the outermost loop of a
+  kernel is parallel on its own, and the ordered second loop of <code>fill</code> needs
+  <code>ti.loop_config(serialize=True)</code>. With the defaults, <code>squares</code> overflowed
+  in 32-bit and <code>dot</code> accumulated in <code>f32</code>, both silently:
+  <code>ti.init(default_ip=ti.i64, default_fp=ti.f64)</code> is what makes the answers
+  match.</li>
+<li><strong>Mojo</strong> is a different language -- Mojo 1.0's <code>def</code>, <code>var</code>, <code>mut</code>
+  parameters, <code>List[Int64]</code>, <code>Int64(i)</code> where the index meets the element --
+  compiled to a binary. <code>parallelize</code> now lives in <code>max.algorithm</code>, the MAX
+  package, and takes a function of one index, so a reduction is partial sums
+  per worker written by hand. This is the straightforward <code>List</code> port, without
+  <code>UnsafePointer</code> or SIMD types; its serial loops are the slowest here.</li>
+<li><strong>NumPy</strong> has no loop to write, and no way to keep one: each step is an
+  array expression with a temporary, <code>dot</code> is BLAS, and <code>count_odd</code> builds
+  two eight-million-element temporaries to count.</li>
+</ul>
+<p>Intel Core Ultra 9 386H (16 threads), threads backend; Numba 0.67.0, Taichi
+1.7.4, NumPy 2.5.3 on CPython 3.12.13, Mojo 1.0.0, PPY on CPython 3.13.13,
+from a checkout on a native filesystem.</p>
 <h2 id="run-it">Run it<a class="headerlink" href="#run-it" title="Permanent link">&para;</a></h2>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>python<span class="w">  </span>ranges.ppy
 <a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>ppy<span class="w"> </span>run<span class="w"> </span>ranges.ppy
