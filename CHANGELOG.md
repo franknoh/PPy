@@ -4,6 +4,14 @@
 
 Work toward the next release, on `dev`; alphas of it are tagged `v0.3.0aN`.
 
+- Three examples compare PPY with the tools that do the same job, code and
+  numbers side by side: the parallel ranges against Numba, Taichi, Mojo, and
+  NumPy; the CUDA kernels against CuPy and Numba; the eight algorithm kernels
+  against Numba, Mojo, and Codon. Each counterpart is in the example's
+  `compare/` folder, written the way its tool wants it, and
+  `examples/compare.py` holds them all to one answer and tabulates the
+  timings. The CUDA table says plainly what PPY lacks: an array that lives
+  on the device between launches.
 - A parallel body that writes a buffer element, `out[i] = i * i` under
   `parallel.range`, lowers: the store writes through `out` and binds nothing
   outside the loop, which is what the guide promised and what the check

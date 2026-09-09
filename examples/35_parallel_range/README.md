@@ -40,6 +40,57 @@ names what happened to each. `[tool.ppy.parallel] backend` chooses
 `threads`, `serial`, `simd`, or `openmp` (for `ppy emit c`), and every choice
 gives the same answer.
 
+## Compared with Numba, Taichi, Mojo, and NumPy
+
+The same four kernels over eight million elements, each written the way its
+tool wants it, in [`compare/`](compare/): [`ranges_bench.ppy`](compare/ranges_bench.ppy)
+(this example's kernels, with a relaxed `dot` beside the ordered one),
+[`ranges_numba.py`](compare/ranges_numba.py), [`ranges_taichi.py`](compare/ranges_taichi.py),
+[`ranges.mojo`](compare/ranges.mojo), and [`ranges_numpy.py`](compare/ranges_numpy.py).
+Each program prints its answers, then the best of five warm calls per kernel;
+[`examples/compare.py`](../compare.py) runs each program five times and reports
+the mean and standard deviation across processes, in milliseconds. All five
+print the same answers. The ordered sums agree to the last digit; the
+reassociated ones differ from them in the thirteenth.
+
+| kernel | PPY `ppy run` | Numba `prange` | Taichi | Mojo | NumPy |
+|---|---:|---:|---:|---:|---:|
+| squares | 1.31 ± 0.07 | **0.84 ± 0.22** | 1.02 ± 0.03 | 1.00 ± 0.06 | 13.47 ± 0.51 |
+| dot, in order | **6.14 ± 0.26** | — | — | 15.28 ± 0.29 | — |
+| dot, reassociated | 1.68 ± 0.11 | 1.07 ± 0.15 | 1.46 ± 0.03 | 1.54 ± 0.08 | **1.04 ± 0.05** |
+| count_odd | 0.99 ± 0.07 | **0.71 ± 0.59** | 1.21 ± 0.03 | 1.44 ± 0.27 | 28.10 ± 0.84 |
+| fill, serial | 6.15 ± 0.15 | 7.54 ± 0.08 | **4.20 ± 0.46** | 20.04 ± 0.21 | 15.32 ± 0.81 |
+
+What each port asked for:
+
+- **PPY** is the source above: typed parameters, `parallel.range`, and the
+  same file runs on CPython. `dot` keeps the order of a serial sum by
+  design, which is why it is the slow row; `@ppy.fastmath` is the relaxed one.
+- **Numba** is `@njit(parallel=True)` and `prange` over NumPy arrays, with no
+  annotations. A `prange` sum reassociates on its own -- the plain reduction
+  measures 1.46 ± 0.80 ms, `fastmath=True` the 1.07 in the table -- so there
+  is no ordered `dot` to write. Integers wrap at 64 bits silently.
+- **Taichi** wants the arrays as `ti.field`s declared with their shapes at
+  module level and the kernels written over them; the outermost loop of a
+  kernel is parallel on its own, and the ordered second loop of `fill` needs
+  `ti.loop_config(serialize=True)`. With the defaults, `squares` overflowed
+  in 32-bit and `dot` accumulated in `f32`, both silently:
+  `ti.init(default_ip=ti.i64, default_fp=ti.f64)` is what makes the answers
+  match.
+- **Mojo** is a different language -- Mojo 1.0's `def`, `var`, `mut`
+  parameters, `List[Int64]`, `Int64(i)` where the index meets the element --
+  compiled to a binary. `parallelize` now lives in `max.algorithm`, the MAX
+  package, and takes a function of one index, so a reduction is partial sums
+  per worker written by hand. This is the straightforward `List` port, without
+  `UnsafePointer` or SIMD types; its serial loops are the slowest here.
+- **NumPy** has no loop to write, and no way to keep one: each step is an
+  array expression with a temporary, `dot` is BLAS, and `count_odd` builds
+  two eight-million-element temporaries to count.
+
+Intel Core Ultra 9 386H (16 threads), threads backend; Numba 0.67.0, Taichi
+1.7.4, NumPy 2.5.3 on CPython 3.12.13, Mojo 1.0.0, PPY on CPython 3.13.13,
+from a checkout on a native filesystem.
+
 ## Run it
 
 ```bash

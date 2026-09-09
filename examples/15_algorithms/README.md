@@ -45,6 +45,41 @@ remaining guards live on data values no range can prove. gcc 13.3 and
 clang 22.1, both `-O3`, no `-march`. Writes go through borrowed buffers,
 so the caller sees them.
 
+## The eight kernels against Numba, Mojo, and Codon
+
+The same eight kernels ported to three tools that compile Python-shaped
+code, in [`compare/`](compare/): [`algorithms_numba.py`](compare/algorithms_numba.py),
+[`algorithms.mojo`](compare/algorithms.mojo), and [`algorithms_codon.py`](compare/algorithms_codon.py).
+Kernel wall time inside the program, mean ± standard deviation over 7 runs,
+each a fresh process, in milliseconds; every column prints every answer the
+same. Bold is the fastest cell in the row.
+
+| kernel | `ppy run` | `ppy build` | Numba `@njit` | Mojo | Codon |
+|---|---:|---:|---:|---:|---:|
+| sieve 2e6 | 9.1 ± 0.5 | 8.8 ± 0.3 | **7.5 ± 0.2** | 12.2 ± 1.1 | 8.1 ± 0.4 |
+| collatz 3e5 | 40.2 ± 0.8 | **30.5 ± 0.4** | 31.7 ± 0.3 | 67.7 ± 0.7 | 32.8 ± 1.2 |
+| knapsack 400x2e4 | 4.9 ± 0.1 | 3.5 ± 0.1 | 4.3 ± 0.1 | **2.1 ± 0.0** | 5.7 ± 0.2 |
+| edit 2000x2000 | 2.9 ± 0.1 | 2.7 ± 0.1 | **1.8 ± 0.2** | 8.0 ± 0.2 | 2.4 ± 0.1 |
+| floyd 220 | 3.1 ± 0.1 | 3.0 ± 0.0 | 2.5 ± 0.1 | 3.0 ± 0.2 | **1.3 ± 0.3** |
+| matmul 220 | 3.6 ± 0.1 | 3.5 ± 0.1 | **3.4 ± 0.3** | 7.7 ± 0.1 | 3.8 ± 0.1 |
+| union-find 5e5 | 3.1 ± 0.1 | 3.1 ± 0.1 | **2.5 ± 0.1** | 6.7 ± 0.6 | 3.9 ± 0.3 |
+| fermat 6e4 | 2.3 ± 0.1 | 2.5 ± 0.1 | 1.7 ± 0.1 | 2.1 ± 0.0 | **1.6 ± 0.1** |
+
+`ppy run` keeps Python's integers -- overflow is guarded and falls back to
+arbitrary precision -- and the other four columns wrap at 64 bits, which is
+where collatz picks up its 10 ms. Numba is the fastest column on six of the
+eight against `ppy build`, by ten to thirty percent; the Numba port is the
+PPY source with `@njit` in place of the annotations and NumPy arrays in
+place of `array.array`, timed after one warm call so its compile is not in
+the number. Codon takes the same source with `List[int]` annotations and
+runs it with `codon run -release` (the `build` link needed a `libz` this
+machine lacks). The Mojo port is typed by hand -- `List[Int64]`, `mut`
+parameters, an `Int` for every index and an `Int64` for every element --
+and is the plain `List` version without `UnsafePointer`; it is the slowest
+on five of the eight and the fastest on knapsack. Numba 0.67.0 on CPython
+3.12.13, Mojo 1.0.0 (`-O3`), Codon 0.19.6, PPY on CPython 3.13.13; Intel
+Core Ultra 9 386H; [`examples/compare.py`](../compare.py) produced the table.
+
 ## The six problems
 
 Each subfolder is one competitive-programming problem — the shapes a judge

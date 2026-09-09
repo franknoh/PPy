@@ -45,6 +45,36 @@ machine. `PPY_CUDA_ARCH` picks the architecture the PTX is written for
 stages each PTX beside the manifest and the launcher binds it without the
 compiler.
 
+## Compared with CuPy and Numba
+
+The same two kernels over sixteen million doubles in [`compare/`](compare/):
+[`saxpy_bench.ppy`](compare/saxpy_bench.ppy), [`saxpy_cupy.py`](compare/saxpy_cupy.py),
+and [`saxpy_numba.py`](compare/saxpy_numba.py), each timing the best of warm
+launches with the device synchronized, over five processes; milliseconds.
+
+| | PPY `cuda.launch` | CuPy | Numba CUDA |
+|---|---:|---:|---:|
+| saxpy, arrays on the device | — | **0.67 ± 0.02** | 0.71 ± 0.01 |
+| block max, arrays on the device | — | **1.97 ± 0.02** | 1.99 ± 0.02 |
+| saxpy, arrays copied in and out per launch | 170.46 ± 1.73 | 46.11 ± 0.22 | **35.48 ± 0.30** |
+| block max, array copied in per launch | 81.72 ± 0.51 | **12.06 ± 0.04** | 13.46 ± 0.11 |
+
+A PPY kernel reads like Numba's: a Python function with `cuda.global_id()`,
+shared memory, a shuffle, and the same file runs on CPython through the
+reference launch. CuPy's saxpy is one line, an `ElementwiseKernel` or plain
+array arithmetic; its block max is CUDA C in a string, handed to `RawKernel`.
+
+What the table says about PPY is the memory model, not the kernel: PPY has
+no array that lives on the device. `cuda.launch` copies every array in and
+each mutable one back, so a launch over three 128 MB arrays is the copies,
+and PPY's copies are four to five times slower than CuPy's and Numba's for
+the same traffic. A program that keeps its data on the device between
+launches wants CuPy or Numba today; device-resident buffers are the missing
+piece here.
+
+NVIDIA GeForce RTX 5080 Laptop GPU, driver 610.71, CUDA 13.3; CuPy 14.2.0,
+Numba 0.67.0 on CPython 3.12.13; PPY on CPython 3.13.13.
+
 ## Run it
 
 ```bash
