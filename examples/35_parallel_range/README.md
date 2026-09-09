@@ -250,7 +250,7 @@ module ranges
 
 **`ppy emit c ranges.ppy`**
 
-*3134 lines: [outputs/04-ppy-emit-c-ranges-ppy.txt](outputs/04-ppy-emit-c-ranges-ppy.txt)*
+*1267 lines: [outputs/04-ppy-emit-c-ranges-ppy.txt](outputs/04-ppy-emit-c-ranges-ppy.txt)*
 
 <!-- outputs:end -->
 
