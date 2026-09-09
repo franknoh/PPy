@@ -121,11 +121,33 @@ def _embed(folder: str, text: str) -> str:
     return _FILED_OUTPUT.sub(filed, text)
 
 
+def _links(folder: str, text: str) -> str:
+    """The README's links resolved for the site -- in prose only. A fenced block
+    or a code span keeps its text: `ppy.check[int](eval(source))` is code, not
+    a link to `eval(source)`."""
+    out: list[str] = []
+    fenced = False
+    for line in text.split("\n"):
+        if line.lstrip().startswith("```"):
+            fenced = not fenced
+            out.append(line)
+            continue
+        if fenced:
+            out.append(line)
+            continue
+        pieces = re.split(r"(`[^`]*`)", line)
+        for index, piece in enumerate(pieces):
+            if index % 2 == 0:
+                pieces[index] = _LINK.sub(lambda m: f"]({_resolve(folder, m.group(1))})", piece)
+        out.append("".join(pieces))
+    return "\n".join(out)
+
+
 def _readme(folder: str) -> tuple[str, str, str]:
     """The README's title, its first paragraph, and its body with links resolved."""
     text = (EXAMPLES / folder / "README.md").read_text(encoding="utf-8")
     text = _embed(folder, text)
-    text = _LINK.sub(lambda m: f"]({_resolve(folder, m.group(1))})", text)
+    text = _links(folder, text)
     lines = text.splitlines()
     title = lines[0].lstrip("# ").strip()
     body = lines[1:]
