@@ -1,13 +1,11 @@
-# Four lanes at a time, and the machine as a fact
+# Lanes and the machine
 
 `ppy.simd` is a few scalars operated on at once; `ppy.cpu` is the machine
-as a facade with no instruction named. A `Vector[float, 4]` dot product,
-an integer ramp that wraps exactly where the hardware would, a shuffle and
-a select, a byte mask, a prefetch hint — each with a reference
-implementation under CPython and a lowering to the simd and cpu dialects of
-the IR, so the numbers match on every path down to the wrap.
+as a facade with no instruction named. Both have a reference implementation
+under CPython and a lowering to a dialect of the IR, so the numbers match on
+every path down to the wrap.
 
-## The whole vocabulary in four functions
+## The simd vocabulary
 
 ```python
 def dot(a: native.const_ptr[float], b: native.const_ptr[float]) -> float:
@@ -22,27 +20,27 @@ def mix(p: native.ptr[float]) -> float:
     return simd.extract(chosen, 0) + simd.reduce_add(-w)
 ```
 
-`splat`, `load`, `store`, `insert`, `extract`, `shuffle`, `select`, and
-the three reductions are the entire surface. `+ - * /`, `& | ^`, and the
+`splat`, `load`, `store`, `insert`, `extract`, `shuffle`, `select`, and the
+three reductions are the whole surface. `+ - * /`, `& | ^`, and the
 comparisons work lane by lane; a comparison gives a `Vector[bool, N]` for
 `select`. A floating-point `reduce_add` folds in lane order, first to last,
-so the sum is one number everywhere, not a number close to it.
+so the sum is one number everywhere. `bytes_sum` masks eight `u8` lanes with
+`& 15` and reduces.
 
-## Integer lanes wrap at their width
+## Integer lanes wrap
 
 `ramp` starts three below the largest `int` and adds a lane-wise `v + v`.
-Vector integer arithmetic carries `wrap` semantics, exactly as the machine
-would — there is no unbounded integer in a register — and the reference
-implementation wraps the same way, so `python` and `ppy run` print the same
-wrapped value. `bytes_sum` masks eight `u8` lanes with `& 15` and reduces.
+Vector integer arithmetic carries `wrap` semantics — there is no unbounded
+integer in a register — and the reference implementation wraps the same
+way, so `python` and `ppy run` print the same wrapped value.
 
-## The machine, folded to constants
+## The machine as constants
 
 `cpu.prefetch(p, locality=2)` and `cpu.pause()` are hints and change no
 value. `cpu.vector_width[float]()` and `"avx2" in cpu.features()` are facts
 about the machine compiling, folded to constants natively. The two lines
-that print them start with `# `, which is how an example marks output that
-is allowed to differ between machines.
+that print them start with `# `, which is how an example marks output
+allowed to differ between machines.
 
 ## Run it
 
@@ -78,9 +76,7 @@ ppy run lanes.ppy
 
 <!-- outputs:end -->
 
-## Read on
-
-- [Lanes and the machine](../../docs/guide/simd-cpu.md) — `ppy.simd` and `ppy.cpu` in full.
-- [The IR: the simd and cpu dialects](../../docs/internals/ir.md) — what the operations lower to.
+Read on: [Lanes and the machine](../../docs/guide/simd-cpu.md) ·
+[The IR: the simd and cpu dialects](../../docs/internals/ir.md)
 
 `lanes.ppy` is hand-written; there is no `.py` source and no conversion step.

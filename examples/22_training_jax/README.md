@@ -1,12 +1,10 @@
-# The same trainer with JAX, and why the step does not get faster
+# Training a JAX MLP
 
-Same shape as the [torch trainer](../21_training_torch/README.md): a
-standardization loop over 20,000 rows, then 100 steps of a two-layer MLP,
-converted by `ppy convert` with no hand editing. Preprocessing goes from
-about 63 ms to under 1 ms. The training loop stays exactly where it was —
-about 25 ms either way — and that is the honest result: XLA compiled the
-step on its first call, and there is no per-operator Python overhead left
-for PPY to remove.
+The same trainer as [21_training_torch](../21_training_torch/README.md)
+with JAX, converted by `ppy convert` with no hand editing. Preprocessing
+goes from about 63 ms to under 1 ms. The training step stays where it was —
+about 25 ms for 100 steps either way — because XLA compiled it on its first
+call and there is no per-operator Python overhead left to remove.
 
 ## Borrowed buffers, again
 
@@ -61,8 +59,8 @@ ppy run train.ppy
 ```text
 # device: cpu
 # native prep: False
-prep      67.8 ms   checksum=-21433.891867
-train     96.8 ms   loss 1.0663 -> 1.0109
+prep      66.5 ms   checksum=-21433.891867
+train     91.2 ms   loss 1.0663 -> 1.0109
 ```
 
 **`ppy run train.ppy`**
@@ -71,15 +69,13 @@ train     96.8 ms   loss 1.0663 -> 1.0109
 # device: cpu
 # native prep: False
 prep       0.9 ms   checksum=-21433.891867
-train     94.5 ms   loss 1.0663 -> 1.0109
+train     93.7 ms   loss 1.0663 -> 1.0109
 ```
 
 <!-- outputs:end -->
 
-## Read on
-
-- [Plugins: JAX](../../docs/internals/plugins.md) — export, the policy gate, and the Flax surface.
-- [Flax](../29_flax/README.md) — a Flax/optax training loop, converted and strict-checked.
+Read on: [Plugins: JAX](../../docs/internals/plugins.md) ·
+[Flax](../29_flax/README.md)
 
 Generated, not hand-written: `train.ppy` is exactly what
 `ppy convert train.py --promote-buffers` writes, and

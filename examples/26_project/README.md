@@ -1,13 +1,11 @@
-# A project is one call graph, and one program
+# A multi-module project
 
-`src/app.ppy` calls `geometry.perimeter` from `src/geometry.ppy`. `ppy
-check src` analyzes both as one call graph — a function's parameter types
-may come from call sites in another file — and `ppy build` links both
-modules' IR into one program, inlines across the seam, and emits one
-object. A change to `geometry.ppy` invalidates `app.ppy`'s cache entry
-because the dependency digest is part of its key, and nothing else.
+Two modules analyzed as one call graph and built as one program.
+`src/app.ppy` calls `geometry.perimeter` from `src/geometry.ppy`; `ppy check
+src` types both together, and `ppy build` links both modules' IR into one
+object.
 
-## Two modules, one graph
+## One graph
 
 ```python
 @ppy.pure
@@ -20,8 +18,9 @@ def perimeter(points: list[tuple[float, float]]) -> float:
     return total
 ```
 
+A function's parameter types may come from call sites in another file.
 `distance` takes four `f64`; `perimeter` calls it from a loop over tuples.
-Both lower, and after linking the call is a direct native call — the
+Both lower, and after linking the call is a direct native call: the
 whole-program pass inlines a small callee across modules, makes functions
 Python never binds private, and drops what nothing reaches.
 
@@ -29,12 +28,14 @@ Python never binds private, and drops what nothing reaches.
 ppy emit linked-ir src/app.ppy     # the whole program, modules linked and optimized as one
 ```
 
-## Layout
+## Cache keys and layout
 
-`pyproject.toml` at the root names `src` as the source root; `app.ppy`
-calls `ppy.install()` before importing its sibling so the same file runs
-under plain `python` too. `ppy convert src/` and `ppy check src/` take the
-directory and work across it.
+A change to `geometry.ppy` invalidates `app.ppy`'s cache entry because the
+dependency digest is part of its key, and nothing else. `pyproject.toml` at
+the root names `src` as the source root; `app.ppy` calls `ppy.install()`
+before importing its sibling so the same file runs under plain `python`
+too. `ppy convert src/` and `ppy check src/` take the directory and work
+across it.
 
 ## Run it
 
@@ -59,11 +60,9 @@ ppy run   src/app.ppy
 
 <!-- outputs:end -->
 
-## Read on
-
-- [Interop](../24_interop/README.md) — the import hook on its own.
-- [The IR: linking and the program](../../docs/internals/ir.md) — how modules become one object.
-- [Configuration](../../docs/reference/config.md) — `source-roots` and the cache keys.
+Read on: [Interop](../24_interop/README.md) ·
+[The IR: linking and the program](../../docs/internals/ir.md) ·
+[Configuration](../../docs/reference/config.md)
 
 `src/app.ppy` and `src/geometry.ppy` are hand-written; there is no `.py`
 source and no conversion step.

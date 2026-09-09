@@ -1,15 +1,15 @@
-# Eight kernels and six judge problems, against C
+# Algorithms
 
-Two things live here. `algorithms.ppy` is eight compute-heavy kernels —
-sieve, Collatz, knapsack, edit distance, Floyd–Warshall, matmul,
-union-find, Fermat — measured against the same eight hand-written in C and
+Eight compute kernels measured against the same eight in C, and six judge
+problems timed the way a judge times them.
+
+`algorithms.ppy` is sieve, Collatz, knapsack, edit distance,
+Floyd–Warshall, matmul, union-find, and Fermat, against `algorithms.c`
 compiled with both gcc and clang. `15a`–`15f` are six competitive-programming
-problems, each its own folder, read from standard input the way a judge
-sends them and timed as a judge would: the whole process, startup included.
-PPY wins four of the eight kernels against both compilers and, once the
-binary carries no interpreter, four of the six problems.
+problems, each its own folder, read from standard input and timed as a whole
+process, startup included.
 
-## Against C, kernel by kernel
+## The eight kernels against C
 
 Same machine, same session, kernel wall time — mean ± standard deviation
 over 7 runs, each a fresh process. Every row prints the same answer in every
@@ -45,7 +45,7 @@ remaining guards live on data values no range can prove. gcc 13.3 and
 clang 22.1, both `-O3`, no `-march`. Writes go through borrowed buffers,
 so the caller sees them.
 
-## Six problems, timed as a judge times them
+## The six problems
 
 Each subfolder is one competitive-programming problem — the shapes a judge
 sets — read from standard input and answered on stdout, with its own input
@@ -71,7 +71,7 @@ is faster than both C references. `ppy run` is left out because it compiles
 before it runs — a flat two seconds or so on every row, which is the
 development path rather than the one to submit.
 
-## Two builds, different amounts of Python left in
+## `ppy build` and `--standalone`
 
 - **`ppy build`** is the hybrid: the kernels are native, but the glue around
   them — `main`, the buffers, `print` of a Python `int` — is the optimized
@@ -133,53 +133,53 @@ clang -O3 algorithms.c -o algorithms_clang -lm && ./algorithms_clang
 **`python  algorithms.ppy`**
 
 ```text
-sieve 2e6              194.6 ms   -> 148933
-collatz 3e5           1225.1 ms   -> 442
-knapsack 400x2e4       476.1 ms   -> 199600
-edit 2000x2000         524.3 ms   -> 1846
-floyd 220              492.4 ms   -> 558837
-matmul 220             505.5 ms   -> 18883
-union-find 5e5         215.2 ms   -> 250000
-fermat 6e4              26.1 ms   -> 6114
+sieve 2e6              167.7 ms   -> 148933
+collatz 3e5           1089.0 ms   -> 442
+knapsack 400x2e4       411.8 ms   -> 199600
+edit 2000x2000         463.6 ms   -> 1846
+floyd 220              435.1 ms   -> 558837
+matmul 220             469.4 ms   -> 18883
+union-find 5e5         142.5 ms   -> 250000
+fermat 6e4              23.8 ms   -> 6114
 ```
 
 **`ppy run algorithms.ppy`**
 
 ```text
-sieve 2e6               12.2 ms   -> 148933
-collatz 3e5             47.4 ms   -> 442
-knapsack 400x2e4         5.7 ms   -> 199600
+sieve 2e6                8.3 ms   -> 148933
+collatz 3e5             39.9 ms   -> 442
+knapsack 400x2e4         4.8 ms   -> 199600
 edit 2000x2000           2.9 ms   -> 1846
-floyd 220                3.2 ms   -> 558837
-matmul 220               3.8 ms   -> 18883
-union-find 5e5           3.8 ms   -> 250000
-fermat 6e4               2.5 ms   -> 6114
+floyd 220                3.0 ms   -> 558837
+matmul 220               3.5 ms   -> 18883
+union-find 5e5           3.0 ms   -> 250000
+fermat 6e4               2.3 ms   -> 6114
 ```
 
 **`gcc   -O3 algorithms.c -o algorithms_c     -lm && ./algorithms_c`**
 
 ```text
-sieve 2e6               17.9 ms   -> 148933
-collatz 3e5             48.2 ms   -> 442
-knapsack 400x2e4         2.6 ms   -> 199600
-edit 2000x2000           3.7 ms   -> 1846
-floyd 220                6.2 ms   -> 558837
-matmul 220               2.2 ms   -> 18883
-union-find 5e5           3.8 ms   -> 250000
-fermat 6e4               2.5 ms   -> 6114
+sieve 2e6               14.6 ms   -> 148933
+collatz 3e5             40.9 ms   -> 442
+knapsack 400x2e4         2.4 ms   -> 199600
+edit 2000x2000           3.8 ms   -> 1846
+floyd 220                5.2 ms   -> 558837
+matmul 220               2.1 ms   -> 18883
+union-find 5e5           3.4 ms   -> 250000
+fermat 6e4               1.7 ms   -> 6114
 ```
 
 **`clang -O3 algorithms.c -o algorithms_clang -lm && ./algorithms_clang`**
 
 ```text
-sieve 2e6               20.7 ms   -> 148933
-collatz 3e5             35.7 ms   -> 442
-knapsack 400x2e4         2.4 ms   -> 199600
-edit 2000x2000           3.7 ms   -> 1846
-floyd 220                3.0 ms   -> 558837
-matmul 220               3.9 ms   -> 18883
-union-find 5e5           4.1 ms   -> 250000
-fermat 6e4               1.5 ms   -> 6114
+sieve 2e6               13.2 ms   -> 148933
+collatz 3e5             32.3 ms   -> 442
+knapsack 400x2e4         1.8 ms   -> 199600
+edit 2000x2000           3.3 ms   -> 1846
+floyd 220                2.8 ms   -> 558837
+matmul 220               3.4 ms   -> 18883
+union-find 5e5           3.5 ms   -> 250000
+fermat 6e4               1.4 ms   -> 6114
 ```
 
 <!-- outputs:end -->
@@ -187,11 +187,9 @@ fermat 6e4               1.5 ms   -> 6114
 Each subfolder's README has its own commands, with a small `input.txt` so
 they run as written; `bench.py` generates the judge-sized inputs.
 
-## Read on
-
-- [Input and native lowering](../../docs/guide/native-lowering.md) — `ppy.input`, `ppy.buffer`, and what lowers.
-- [Performance](../../docs/reference/performance.md) — these tables beside the README's collatz table.
-- [Buffers and JIT](../12_buffers_and_jit/README.md) — why a borrowed buffer is the fast spelling.
+Read on: [Input and native lowering](../../docs/guide/native-lowering.md) ·
+[Performance](../../docs/reference/performance.md) ·
+[Buffers and JIT](../12_buffers_and_jit/README.md)
 
 `algorithms.ppy` is hand-written; there is no `.py` source and no conversion
 step. `algorithms.c` is the same eight kernels hand-written in C, with the

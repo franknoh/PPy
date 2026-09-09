@@ -1,10 +1,9 @@
-# StableHLO from the compiler, no JAX required
+# XLA
 
 `@xla.jit` marks a function of floats, ints, and bools whose body is one
 block of arithmetic and math. The compiler lowers it to the IR and emits
 StableHLO itself — no trace, no JAX in the compiler — and the PJRT bridge
-compiles the module once and runs each call on a device. Where there is no
-device, the function runs as written, and the digits agree either way.
+compiles the module once and runs each call on a device.
 
 ## What XLA takes today
 
@@ -16,19 +15,20 @@ def f(x: float, y: float) -> float:
 ```
 
 Arithmetic, `math.sin`, and a conditional expression that lowers to a
-`select`: `f` is exactly what the StableHLO backend accepts, and
-`ppy emit stablehlo` prints the module. `branchy` is not, yet — an `if`
-statement is control flow, so the compiler reports `W2007` and the
-function runs as written. Correct, and honest about it.
+`select`: `f` is what the StableHLO backend accepts, and `ppy emit
+stablehlo` prints the module (`ppy inspect --stage stablehlo` the same).
+`branchy` is not, yet — an `if` statement is control flow — so the compiler
+reports `W2007` and the function runs as written.
 
-## The last bits
+## Devices and the last bits
 
-XLA computes `sin` with its own library, so the last bits of a result can
-differ from CPython's `math`; the printed digits are rounded so the three
-paths compare equal where they should. `xla.devices()` is what the bridge
-sees, and the line that prints it starts with `# `, the mark for output that
-may differ between machines. The bridge needs JAX installed to place
-arrays on a device; the compiler that wrote the StableHLO does not.
+Under plain CPython, and wherever no device is present, every function runs
+as written. XLA computes `sin` with its own library, so the last bits of a
+result can differ from CPython's `math`; the printed digits are rounded so
+the three paths compare equal where they should. `xla.devices()` is what the
+bridge sees, and the line that prints it starts with `# `, the mark for
+output that may differ between machines. The bridge needs JAX installed to
+place arrays on a device; the compiler that wrote the StableHLO does not.
 
 ## Run it
 
@@ -78,10 +78,8 @@ module @device_math {
 
 <!-- outputs:end -->
 
-## Read on
-
-- [XLA](../../docs/guide/xla.md) — `@xla.jit`, the bridge, and the limits.
-- [JAX export](../25_jax_export/README.md) — the other direction: JAX traces, PPY stages.
+Read on: [XLA](../../docs/guide/xla.md) ·
+[JAX export](../25_jax_export/README.md)
 
 `device_math.ppy` is hand-written; there is no `.py` source and no conversion
 step.

@@ -1,11 +1,9 @@
-# `parallel.range`: say the iterations may run at once
+# Parallel ranges
 
-`for i in parallel.range(n)` is a promise about the loop, not an
-instruction to the machine. Under CPython the iterations run in order,
-which is one of the orders allowed. Natively the body becomes a function
-over a chunk of the range, and `[tool.ppy.parallel] backend` decides how
-the chunks run — `threads`, `serial`, `simd`, or `openmp` for the C
-backend — and every choice prints the same numbers.
+`for i in parallel.range(n)` says the iterations may run at once. Under
+CPython they run in order, which is one of the orders allowed; natively the
+body becomes a function over a chunk of the range, and the build's parallel
+backend decides how the chunks run.
 
 ## Writes split freely; a float sum keeps its order
 
@@ -31,14 +29,16 @@ otherwise — `dot` prints twelve digits and they are the same on every
 path. `@ppy.fastmath` permits the reassociation, which is why `dot_relaxed`
 prints six.
 
-## What the body may not do
+## What the body may not do, and the backends
 
-Assign a variable that lives outside the loop, `break`, or `return`. A
+Assign a variable that lives outside the loop, `break`, or `return`; a
 function that does is refused with the reason (`E1650`). `@ppy.parallel` on
 a function asks the same of its outermost `range` loops without spelling
 `parallel.range`; a loop that does not pass the analysis stays serial and
-says why in an optimization remark — `fill` has two such loops, and
-`--report-opt` names what happened to each.
+says why in an optimization remark — `fill` has two, and `--report-opt`
+names what happened to each. `[tool.ppy.parallel] backend` chooses
+`threads`, `serial`, `simd`, or `openmp` (for `ppy emit c`), and every choice
+gives the same answer.
 
 ## Run it
 
@@ -74,6 +74,9 @@ ppy emit c ranges.ppy
 
 **`ppy build ranges.ppy --report-opt`**
 
+<details markdown="1">
+<summary>166 lines</summary>
+
 ```text
 optimization report: PPy (O2, ir road)
 module ranges
@@ -95,42 +98,163 @@ module ranges
     - `ranges.fill`: the loop over `j` is a parallel add reduction into `acc` (kept in order: `@ppy.fastmath` would let it split)
     - @ranges_count_odd__par4: core.cmp: folded 2 and 0
     - @ranges_count_odd__par4: core.guard: condition always holds
+    - simplify-cfg: ^for.guards1 merged into ^entry
+    - simplify-cfg: ^for.setup2 merged into ^entry
+    - simplify-cfg: ^for.latch5 merged into ^for.body4
+    - simplify-cfg: ^for.guards1 merged into ^entry
+    - simplify-cfg: ^for.setup2 merged into ^entry
+    - simplify-cfg: ^for.latch5 merged into ^for.body4
+    - simplify-cfg: ^for.guards1 merged into ^entry
+    - simplify-cfg: ^for.setup2 merged into ^entry
+    - simplify-cfg: ^for.latch5 merged into ^for.body4
+    - simplify-cfg: ^for.guards1 merged into ^entry
+    - simplify-cfg: ^for.setup2 merged into ^entry
+    - simplify-cfg: ^for.latch5 merged into ^endif9
+    - simplify-cfg: ^for.guards1 merged into ^entry
+    - simplify-cfg: ^for.setup2 merged into ^entry
+    - simplify-cfg: ^for.latch5 merged into ^for.body4
+    - simplify-cfg: ^for.guards1 merged into ^entry
+    - simplify-cfg: ^for.setup2 merged into ^entry
+    - simplify-cfg: ^for.latch5 merged into ^for.body4
+    - dce: unused core.const removed
+    - dce: unused core.const removed
+    - dce: unused core.const removed
+    - dce: unused core.const removed
+    - dce: unused core.const removed
+    - dce: unused core.const removed
+    - dce: unused core.select removed
+    - dce: unused core.cmp removed
+    - dce: unused core.select removed
+    - dce: unused core.cmp removed
+    - dce: unused core.select removed
+    - dce: unused core.cmp removed
+    - dce: unused core.select removed
+    - dce: unused core.cmp removed
+    - dce: unused core.select removed
+    - dce: unused core.cmp removed
+    - dce: unused core.select removed
+    - dce: unused core.cmp removed
+    - dce: unused core.const removed
+    - dce: unused core.const removed
+    - dce: unused core.const removed
+    - dce: unused core.sub removed
+    - dce: unused core.const removed
+    - dce: unused core.const removed
+    - dce: unused core.sub removed
+    - dce: unused core.const removed
+    - parallel loop over @ranges_squares__par1 lowered to 16 chunks
+    - parallel reduction over @ranges_dot__par2 lowered to one chunk
+    - parallel reduction over @ranges_dot_relaxed__par3 lowered to 16 chunks
+    - parallel reduction over @ranges_count_odd__par4 lowered to 16 chunks
+    - parallel loop over @ranges_fill__par5 lowered to 16 chunks
+    - parallel reduction over @ranges_fill__par6 lowered to one chunk
+    - @ranges_squares: core.add: identity element removed
+    - @ranges_squares: core.add: identity element removed
+    - @ranges_squares: core.add: identity element removed
+    - @ranges_squares: core.add: identity element removed
+    - @ranges_squares: core.add: identity element removed
+    - @ranges_squares: core.add: identity element removed
+    - @ranges_squares: core.add: identity element removed
+    - @ranges_squares: core.add: identity element removed
+    - @ranges_squares: core.add: identity element removed
+    - @ranges_squares: core.add: identity element removed
+    - @ranges_squares: core.add: identity element removed
+    - @ranges_squares: core.add: identity element removed
+    - @ranges_squares: core.add: identity element removed
+    - @ranges_squares: core.add: identity element removed
+    - @ranges_squares: core.add: identity element removed
+    - @ranges_squares: core.mul: identity element removed
+    - @ranges_squares: core.add: identity element removed
+    - @ranges_squares: core.mul: multiplied by zero
+    - @ranges_squares: core.add: identity element removed
+    - @ranges_squares: core.sub: folded 16 and 1
+    - @ranges_squares: core.sub: identity element removed
+    - @ranges_dot_relaxed: core.add: identity element removed
+    - @ranges_dot_relaxed: core.add: identity element removed
+    - @ranges_dot_relaxed: core.add: identity element removed
+    - @ranges_dot_relaxed: core.add: identity element removed
+    - @ranges_dot_relaxed: core.add: identity element removed
+    - @ranges_dot_relaxed: core.add: identity element removed
+    - @ranges_dot_relaxed: core.add: identity element removed
+    - @ranges_dot_relaxed: core.add: identity element removed
+    - @ranges_dot_relaxed: core.add: identity element removed
+    - @ranges_dot_relaxed: core.add: identity element removed
+    - @ranges_dot_relaxed: core.add: identity element removed
+    - @ranges_dot_relaxed: core.add: identity element removed
+    - @ranges_dot_relaxed: core.add: identity element removed
+    - @ranges_dot_relaxed: core.add: identity element removed
+    - @ranges_dot_relaxed: core.add: identity element removed
+    - @ranges_dot_relaxed: core.mul: identity element removed
+    - @ranges_dot_relaxed: core.add: identity element removed
+    - @ranges_dot_relaxed: core.mul: multiplied by zero
+    - @ranges_dot_relaxed: core.add: identity element removed
+    - @ranges_dot_relaxed: core.sub: folded 16 and 1
+    - @ranges_dot_relaxed: core.sub: identity element removed
+    - @ranges_count_odd: core.add: identity element removed
+    - @ranges_count_odd: core.add: identity element removed
+    - @ranges_count_odd: core.add: identity element removed
+    - @ranges_count_odd: core.add: identity element removed
+    - @ranges_count_odd: core.add: identity element removed
+    - @ranges_count_odd: core.add: identity element removed
+    - @ranges_count_odd: core.add: identity element removed
+    - @ranges_count_odd: core.add: identity element removed
+    - @ranges_count_odd: core.add: identity element removed
+    - @ranges_count_odd: core.add: identity element removed
+    - @ranges_count_odd: core.add: identity element removed
+    - @ranges_count_odd: core.add: identity element removed
+    - @ranges_count_odd: core.add: identity element removed
+    - @ranges_count_odd: core.add: identity element removed
+    - @ranges_count_odd: core.add: identity element removed
+    - @ranges_count_odd: core.mul: identity element removed
+    - @ranges_count_odd: core.add: identity element removed
+    - @ranges_count_odd: core.mul: multiplied by zero
+    - @ranges_count_odd: core.add: identity element removed
+    - @ranges_count_odd: core.sub: folded 16 and 1
+    - @ranges_count_odd: core.sub: identity element removed
+    - @ranges_fill: core.add: identity element removed
+    - @ranges_fill: core.add: identity element removed
+    - @ranges_fill: core.add: identity element removed
+    - @ranges_fill: core.add: identity element removed
+    - @ranges_fill: core.add: identity element removed
+    - @ranges_fill: core.add: identity element removed
+    - @ranges_fill: core.add: identity element removed
+    - @ranges_fill: core.add: identity element removed
+    - @ranges_fill: core.add: identity element removed
+    - @ranges_fill: core.add: identity element removed
+    - @ranges_fill: core.add: identity element removed
+    - @ranges_fill: core.add: identity element removed
+    - @ranges_fill: core.add: identity element removed
+    - @ranges_fill: core.add: identity element removed
+    - @ranges_fill: core.add: identity element removed
+    - @ranges_fill: core.mul: identity element removed
+    - @ranges_fill: core.add: identity element removed
+    - @ranges_fill: core.mul: multiplied by zero
+    - @ranges_fill: core.add: identity element removed
+    - @ranges_fill: core.sub: folded 16 and 1
+    - @ranges_fill: core.sub: identity element removed
+    - dce: unused core.const removed
+    - dce: unused core.const removed
+    - dce: unused core.const removed
+    - dce: unused core.const removed
+    - dce: unused core.const removed
+    - dce: unused core.const removed
+    - dce: unused core.const removed
+    - dce: unused core.const removed
+    - dce: unused core.const removed
+    - dce: unused core.const removed
+    - dce: unused core.const removed
+    - dce: unused core.const removed
 ```
 
-*166 lines in all — [full output](outputs/03-ppy-build-ranges-ppy-report-opt.txt).*
+</details>
 
 **`ppy emit c ranges.ppy`**
 
-```text
-/* ranges: generated by ppy, C11 */
-/* link with: -lpthread */
-#include <math.h>
-#include <pthread.h>
-#include <stdbool.h>
-#include <stdint.h>
-#include <stdlib.h>
-
-#if defined(__x86_64__) || defined(__i386__)
-#define PPY_PAUSE() __builtin_ia32_pause()
-#elif defined(__aarch64__)
-#define PPY_PAUSE() __asm__ __volatile__("yield")
-#else
-#define PPY_PAUSE() ((void)0)
-#endif
-
-#if !defined(__GNUC__) && !defined(__clang__)
-#error "the atomic operations in this unit need the __atomic builtins of GCC or Clang"
-#endif
-
-```
-
-*3134 lines in all — [full output](outputs/04-ppy-emit-c-ranges-ppy.txt).*
+*3134 lines: [outputs/04-ppy-emit-c-ranges-ppy.txt](outputs/04-ppy-emit-c-ranges-ppy.txt)*
 
 <!-- outputs:end -->
 
-## Read on
-
-- [Parallel loops](../../docs/guide/parallel.md) — the rules and the backends.
-- [Parallel fused kernels](../07_parallel/README.md) — `@ppy.parallel` on a NumPy expression.
+Read on: [Parallel loops](../../docs/guide/parallel.md) ·
+[Parallel fused kernels](../07_parallel/README.md)
 
 `ranges.ppy` is hand-written; there is no `.py` source and no conversion step.

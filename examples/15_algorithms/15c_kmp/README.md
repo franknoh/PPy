@@ -1,9 +1,7 @@
-# 15c — Substring search over four million characters
+# 15c — Substring search
 
 Input: the text, then the pattern. Output: how many times the pattern
-occurs. Four million characters at the judge size, held in four megabytes:
-`Buffer[ppy.i8]` is one byte per element, and `ppy.read_token` fills it
-without ever building a Python string.
+occurs. Four million characters at the judge size.
 
 ## Text as bytes
 
@@ -13,22 +11,30 @@ size = ppy.read_token(haystack)
 ```
 
 A Python `str` has no native representation, so text that has to be fast
-comes in as bytes. `Buffer[ppy.i8]` stores one byte and reads back an
-`int`; the width is storage, not type, and a value that does not fit falls
-back rather than wrapping. The KMP failure table and the scan are two
-native loops over that memory.
+comes in as bytes. `ppy.read_token` fills a `Buffer[ppy.i8]` without
+building a Python string, one byte per element, so four million characters
+cost four megabytes rather than the thirty-two a 64-bit element would. The
+width is storage, not type: reading a byte hands out an `int`, and a value
+that does not fit falls back rather than wrapping. The failure table and the
+scan are two native loops over that memory.
 
-This is the one problem here whose `.ppy` is hand-written: the character
-buffer it wants has no plain-Python spelling that `ppy convert` could
-promote to it. It is also the one without a `--standalone` row: its text
-arrives as a token, and `ppy.read_token` has no standalone lowering yet.
+## Two exceptions in this folder
+
+This is the one problem whose `.ppy` is hand-written — the character buffer
+it wants has no plain-Python spelling that `ppy convert` could promote to
+it — and the one without a `--standalone` row: its text arrives as a token,
+and `ppy.read_token` has no standalone lowering yet. C is ahead by about the
+width of an interpreter start.
 
 ## Numbers
 
 Wall time of the whole process, measured from outside the way a judge does —
 input, interpreter startup and all. Mean ± standard deviation over 5 runs;
-`examples/15_algorithms/bench.py` reproduces it and
-`scripts/refresh.py` says when these have drifted.
+`bench.py` reproduces it and `scripts/refresh.py` says when these have
+drifted. `ppy run` compiles before it runs, which is most of its time; it is
+the development path, not the one to submit. `ppy build` still starts an
+embedded CPython and imports the runtime, about 35 ms, before the program
+begins.
 
 | path | wall |
 |---|---:|
@@ -37,11 +43,6 @@ input, interpreter startup and all. Mean ± standard deviation over 5 runs;
 | `ppy build` | 52.4 ± 2.0 ms |
 | C (`gcc -O3`, `scanf`) | 9.4 ± 0.3 ms |
 | C (`clang -O3`, `scanf`) | **9.0 ± 0.2 ms** |
-
-`ppy run` compiles before it runs; it is the development path, not the one
-to submit. `ppy build` still starts an embedded CPython and imports the
-runtime — ~35 ms of the 52, which is why C is ahead by the width of an
-interpreter start and not by the width of the scan.
 
 ## Run it
 

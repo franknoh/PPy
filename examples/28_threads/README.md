@@ -1,10 +1,9 @@
-# One native function, two threads, 1.95×
+# Threads
 
-`busy` is a 200-million-iteration loop. Under plain CPython two threads
-running it take as long as one, because the GIL serializes them. Under
-`ppy run` the generated boundary releases the GIL for the whole native
-call, and two threads finish in half the time. Same file, same
-`threading.Thread`; the scaling line at the bottom is the difference.
+A native function releases the GIL, so compute in it scales across threads.
+`busy` is a 200-million-iteration loop; under plain CPython two threads take
+as long as one, under `ppy run` they finish in half the time. Same file,
+same `threading.Thread`.
 
 ## Nothing to hold the GIL for
 
@@ -19,13 +18,14 @@ def busy(rounds: int) -> int:
 ```
 
 Once its arguments are unpacked, `busy` touches no Python object, so the
-wrapper wraps the call in `Py_BEGIN_ALLOW_THREADS`. A function with an
-effect that can reach the interpreter keeps the GIL, and one that performs
-I/O is not lowered at all. Borrowed buffers get the same treatment as
-NumPy gives them: the boundary pins the memory for the whole call.
+generated wrapper wraps the call in `Py_BEGIN_ALLOW_THREADS`. A function
+with an effect that can reach the interpreter keeps the GIL, and one that
+performs I/O is not lowered at all. Borrowed buffers get the same treatment
+NumPy gives them: the boundary pins the memory for the whole call. The
+scaling line at the bottom of the output is the measurement, 1.95× here.
 
 This is Python threads calling native code. The other direction — threads
-and shared memory *inside* native code — is
+and shared memory inside native code — is
 [`ppy.concurrent` and `ppy.atomic`](../34_atomics_and_threads/README.md).
 
 ## Run it
@@ -41,24 +41,22 @@ ppy run threads.ppy
 **`python  threads.ppy`**
 
 ```text
-1 thread    3304.6 ms
-2 threads   6419.7 ms
-scaling       1.03x
+1 thread    3013.2 ms
+2 threads   6009.0 ms
+scaling       1.00x
 ```
 
 **`ppy run threads.ppy`**
 
 ```text
-1 thread     124.8 ms
-2 threads    132.3 ms
-scaling       1.89x
+1 thread     119.4 ms
+2 threads    120.5 ms
+scaling       1.98x
 ```
 
 <!-- outputs:end -->
 
-## Read on
-
-- [Atomics and threads](../../docs/guide/concurrency.md) — the native side.
-- [Architecture: the boundary](../../docs/internals/architecture.md) — what the generated wrapper does per call.
+Read on: [Atomics and threads](../../docs/guide/concurrency.md) ·
+[Architecture: the boundary](../../docs/internals/architecture.md)
 
 `threads.ppy` is hand-written; there is no `.py` source and no conversion step.

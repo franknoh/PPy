@@ -12,6 +12,12 @@ Work toward the next release, on `dev`; alphas of it are tagged `v0.3.0aN`.
   small `input.txt` so their commands run as written, and the toolbox README
   runs the inspect, emit, report, sanitizer, and profile commands it is
   about.
+- The lowering cache dropped a coroutine's future kind from its signature,
+  so the second `ppy run` of a program whose entry coroutine was served from
+  the cache bound it through the plain boundary and handed `aio.run` a bare
+  handle instead of a future (`TypeError` from asyncio). The cache carries
+  the kind now, its schema moved to 7 so no stale entry is served, and a test
+  holds the round trip. Found by recording the examples' outputs twice.
 
 ## 0.2.0 — 2026-09-08
 
