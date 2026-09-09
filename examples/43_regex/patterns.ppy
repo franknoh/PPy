@@ -1,0 +1,95 @@
+"""Regular expressions over a byte buffer, compiled to native matchers."""
+
+import array
+import re
+import time
+
+import ppy
+from ppy import Buffer
+
+WORD = re.compile(rb"[A-Za-z]+")
+PAIR = re.compile(rb"(?P<key>\w+)\s*=\s*(\d+)")
+HEX = re.compile(rb"0x[0-9a-f]+", re.IGNORECASE)
+
+
+def count_words(text: Buffer[ppy.u8]) -> int:
+    n = 0
+    pos = 0
+    while True:
+        m = WORD.search(text, pos)
+        if m is None:
+            return n
+        n += 1
+        pos = m.end()
+
+
+def longest_word(text: Buffer[ppy.u8]) -> int:
+    best = 0
+    pos = 0
+    while pos < len(text):
+        m = WORD.search(text, pos)
+        if not m:
+            break
+        start, end = m.span()
+        best = max(best, end - start)
+        pos = end
+    return best
+
+
+def sum_values(text: Buffer[ppy.u8]) -> int:
+    total = 0
+    pos = 0
+    while True:
+        m = PAIR.search(text, pos)
+        if m is None:
+            return total
+        value = 0
+        for i in range(m.start(2), m.end(2)):
+            value = value * 10 + (text[i] - 48)
+        total += value
+        pos = m.end()
+
+
+def count_hex(text: Buffer[ppy.u8]) -> int:
+    n = 0
+    pos = 0
+    while True:
+        m = HEX.search(text, pos)
+        if m is None:
+            return n
+        n += 1
+        pos = m.end()
+
+
+def is_identifier(text: Buffer[ppy.u8]) -> bool:
+    return re.fullmatch(rb"[A-Za-z_]\w*", text) is not None
+
+
+def make_text(lines: int) -> Buffer[ppy.u8]:
+    """`lines` lines of `name = value` pairs, words, and hex numbers, the same every run."""
+    words = [b"alpha", b"beta", b"gamma", b"delta", b"epsilon", b"zeta", b"eta", b"theta"]
+    parts = []
+    state = 12345
+    for i in range(lines):
+        state = (state * 1103515245 + 12345) % (1 << 31)
+        word = words[state % len(words)]
+        parts.append(word + b" = " + str(state % 1000).encode() + b"  " + word.upper())
+        if i % 7 == 0:
+            parts.append(b"0x" + format(state, "x").encode())
+        parts.append(b"\n")
+    return memoryview(array.array("B", b"".join(parts)))
+
+
+def main() -> None:
+    text = make_text(50_000)
+    print(len(text), "bytes")
+    started = time.perf_counter()
+    print(count_words(text), longest_word(text), sum_values(text), count_hex(text))
+    elapsed = time.perf_counter() - started
+    snake = array.array("B", b"snake_case9")
+    lives = array.array("B", b"9lives")
+    print(is_identifier(snake), is_identifier(lives))
+    print(f"# four passes: {elapsed * 1000:.1f} ms")
+
+
+main()
