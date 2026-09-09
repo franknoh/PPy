@@ -4416,8 +4416,9 @@ other path by the benchmark beside them.</p>
 <a id="__codelineno-10-11" name="__codelineno-10-11" href="#__codelineno-10-11"></a>ppy<span class="w"> </span>emit<span class="w"> </span>ptx<span class="w"> </span>foo.ppy<span class="w">                 </span><span class="c1"># ... as PTX (PPY_CUDA_ARCH names the architecture, sm_70 by default)</span>
 <a id="__codelineno-10-12" name="__codelineno-10-12" href="#__codelineno-10-12"></a>ppy<span class="w"> </span>emit<span class="w"> </span>c<span class="w"> </span>--header-only<span class="w"> </span>foo.ppy<span class="w">     </span><span class="c1"># every function static inline in a header</span>
 <a id="__codelineno-10-13" name="__codelineno-10-13" href="#__codelineno-10-13"></a>ppy<span class="w"> </span>emit<span class="w"> </span>c<span class="w"> </span>--standalone<span class="w"> </span>prog.ppy<span class="w">     </span><span class="c1"># the whole program from main(), shims and all</span>
-<a id="__codelineno-10-14" name="__codelineno-10-14" href="#__codelineno-10-14"></a>ppy<span class="w"> </span>emit<span class="w"> </span>header<span class="w"> </span>foo.ppy<span class="w">              </span><span class="c1"># the C declarations of the exports</span>
-<a id="__codelineno-10-15" name="__codelineno-10-15" href="#__codelineno-10-15"></a>ppy<span class="w"> </span>emit<span class="w"> </span>stablehlo<span class="w"> </span>foo.ppy<span class="w">           </span><span class="c1"># the @ppy.xla.jit functions as StableHLO for XLA</span>
+<a id="__codelineno-10-14" name="__codelineno-10-14" href="#__codelineno-10-14"></a>ppy<span class="w"> </span>emit<span class="w"> </span>c<span class="w"> </span>--format<span class="w"> </span>foo.ppy<span class="w">          </span><span class="c1"># ... laid out by clang-format (the project's .clang-format, or LLVM style)</span>
+<a id="__codelineno-10-15" name="__codelineno-10-15" href="#__codelineno-10-15"></a>ppy<span class="w"> </span>emit<span class="w"> </span>header<span class="w"> </span>foo.ppy<span class="w">              </span><span class="c1"># the C declarations of the exports</span>
+<a id="__codelineno-10-16" name="__codelineno-10-16" href="#__codelineno-10-16"></a>ppy<span class="w"> </span>emit<span class="w"> </span>stablehlo<span class="w"> </span>foo.ppy<span class="w">           </span><span class="c1"># the @ppy.xla.jit functions as StableHLO for XLA</span>
 </code></pre></div>
 <p>One rule for every kind: a single file with no <code>-o</code> prints to standard
 output, <code>-o FILE</code> writes that file, and a directory target writes one file
@@ -4438,7 +4439,13 @@ standard input) is refused there with <code>E1804</code> and its name.
 <code>--standalone</code> takes a program the way <code>ppy build --standalone</code> does --
 <code>main</code> and everything it reaches, all of it native -- and ends the unit in
 a C <code>main</code>, so the text is a whole program. <code>header</code> is the declarations
-of a module's exports, the same text <code>ppy build</code> writes beside a library.</p>
+of a module's exports, the same text <code>ppy build</code> writes beside a library.
+The C is written to be read: loops are <code>while</code>, branches are <code>if</code>/<code>else</code>,
+a local keeps its Python name, and a value read once is written where it
+is read. <code>--format</code> (for <code>c</code>, <code>cpp</code>, <code>cuda</code>, <code>hip</code>, and <code>header</code>) runs the
+text through <code>clang-format</code>, with the project's <code>.clang-format</code> where it
+has one and LLVM style at four spaces and a hundred columns otherwise; a
+missing <code>clang-format</code> is <code>E1802</code>.</p>
 <p><code>.ppyir</code> is the IR's on-disk form -- public from 0.2.0 at schema 1 -- and
 <code>ppy build foo.ppyir</code> builds one without the Python that produced it: the file
 carries its schema and dialect versions, every function's ABI, and its

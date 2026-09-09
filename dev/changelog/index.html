@@ -3704,6 +3704,22 @@
 <h1 id="changelog">Changelog<a class="headerlink" href="#changelog" title="Permanent link">&para;</a></h1>
 <h2 id="030-unreleased">0.3.0 — unreleased<a class="headerlink" href="#030-unreleased" title="Permanent link">&para;</a></h2>
 <p>Work toward the next release, on <code>dev</code>; alphas of it are tagged <code>v0.3.0aN</code>.</p>
+<ul>
+<li>The C backend writes structured code. Loops are <code>while</code>, branches are
+  <code>if</code>/<code>else</code> with <code>break</code>, <code>continue</code>, and <code>return</code>, rebuilt from the IR's
+  dominator tree and loops; a stack slot that is only loaded and stored is a
+  variable named after it, a parameter keeps its Python name and is the
+  variable its slot was, and a value read once is written where it is read
+  with the parentheses C's precedence needs and no others. Python's floor
+  division by a positive constant is <code>(a % b + b) % b</code>, a failed guard is
+  <code>if (b == 0) return 1;</code>, a checked addition into a variable writes the
+  variable itself. A graph the reconstruction cannot express falls back, for
+  that function alone, to the labels-and-<code>goto</code> writer, so every unit is
+  still correct; the tests hold both writers to the LLVM road's answers.
+  CUDA and HIP get the same treatment, with C++'s <code>int64_t(x)</code> casts.
+  <code>ppy emit --format</code> runs <code>c</code>, <code>cpp</code>, <code>cuda</code>, <code>hip</code>, and <code>header</code> output
+  through clang-format, with the project's <code>.clang-format</code> where it has one.</li>
+</ul>
 <h2 id="021-unreleased">0.2.1 — unreleased<a class="headerlink" href="#021-unreleased" title="Permanent link">&para;</a></h2>
 <ul>
 <li>The lowering cache dropped a coroutine's future kind from its signature,
