@@ -1,16 +1,25 @@
-# Tuples
+# Tuples as scalar atoms
 
-Fixed tuples flatten into scalar atoms.
+A `tuple[float, float]` is two doubles. Passed to a native function it is
+two arguments; returned, it is two result slots. `midpoint` allocates
+nothing, `divmod_pair` returns a quotient and a remainder without a heap
+object between them, and the boundary boxes the pair back into a Python
+tuple only on the way out.
 
-## Provenance
+## Fixed length, scalar elements
 
-Hand-written. `tuples.ppy` is written directly; there is no `.py`
-source and no conversion step involved.
+```python
+@ppy.pure
+@ppy.opt(3)
+def divmod_pair(a: int, b: int) -> tuple[int, int]:
+    return (a // b, a % b)
+```
 
-## What it shows
-
-- A tuple of known length and scalar elements is passed and returned unboxed.
-- A homogeneous or oversized tuple stays boxed.
+The rule is exact: a tuple of known length whose elements are scalars
+flattens. A homogeneous `tuple[int, ...]` has no known length and stays
+boxed; so does a tuple wider than the ABI allows. `divmod_pair(-17, 5)` is
+`(-4, 3)` — floor division and a divisor-signed remainder, the same on all
+three paths.
 
 ## Run it
 
@@ -48,3 +57,10 @@ ppy run tuples.ppy
 ```
 
 <!-- outputs:end -->
+
+## Read on
+
+- [Native data](../08_native_data/README.md) — tuples beside lists, arrays, and value classes.
+- [Numerics](../11_numerics/README.md) — why `-17 // 5` is `-4`.
+
+`tuples.ppy` is hand-written; there is no `.py` source and no conversion step.

@@ -87,15 +87,34 @@ def _resolve(folder: str, target: str) -> str:
     parts = normalized.split("/")
     if parts == ["examples", "README.md"]:
         return f"index.md{suffix}"
+    if parts[0] == "docs" and normalized.endswith(".md"):
+        return "../" + "/".join(parts[1:]) + suffix
     sibling = len(parts) >= 2 and parts[0] == "examples" and parts[1] in FOLDERS
     if sibling and (len(parts) == 2 or (len(parts) == 3 and parts[2] == "README.md")):
         return f"{parts[1]}.md{suffix}"
     return f"{REPO}/{normalized}{suffix}"
 
 
+_FULL_OUTPUT = re.compile(
+    r"^\*(\d+) lines in all — \[full output\]\(outputs/([^)]+)\)\.\*$", re.MULTILINE
+)
+
+
+def _unfold(folder: str, text: str) -> str:
+    """A clipped output's whole text, folded into the page where the README links to it."""
+
+    def block(match: re.Match[str]) -> str:
+        whole = (EXAMPLES / folder / "outputs" / match.group(2)).read_text(encoding="utf-8")
+        body = "\n".join("    " + line for line in whole.rstrip("\n").splitlines())
+        return f'??? note "All {match.group(1)} lines"\n\n    ```text\n{body}\n    ```'
+
+    return _FULL_OUTPUT.sub(block, text)
+
+
 def _readme(folder: str) -> tuple[str, str, str]:
     """The README's title, its first paragraph, and its body with links resolved."""
     text = (EXAMPLES / folder / "README.md").read_text(encoding="utf-8")
+    text = _unfold(folder, text)
     text = _LINK.sub(lambda m: f"]({_resolve(folder, m.group(1))})", text)
     lines = text.splitlines()
     title = lines[0].lstrip("# ").strip()
@@ -106,7 +125,9 @@ def _readme(folder: str) -> tuple[str, str, str]:
             summary.append(line.strip())
         elif summary:
             break
-    return title, " ".join(summary), "\n".join(body).strip("\n")
+    paragraph = " ".join(summary)
+    first = re.match(r"(.+?[.!?])(?:\s|$)", paragraph)
+    return title, first.group(1) if first else paragraph, "\n".join(body).strip("\n")
 
 
 def _sources(folder: Path) -> list[Path]:

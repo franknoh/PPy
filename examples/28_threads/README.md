@@ -1,26 +1,32 @@
-# Threads
+# One native function, two threads, 1.95×
 
-A native region releases the GIL, so compute in it scales across threads.
+`busy` is a 200-million-iteration loop. Under plain CPython two threads
+running it take as long as one, because the GIL serializes them. Under
+`ppy run` the generated boundary releases the GIL for the whole native
+call, and two threads finish in half the time. Same file, same
+`threading.Thread`; the scaling line at the bottom is the difference.
 
-## Provenance
+## Nothing to hold the GIL for
 
-Hand-written. `threads.ppy` is written directly; there is no `.py` source and
-no conversion step involved.
+```python
+@ppy.pure
+@ppy.opt(3)
+def busy(rounds: int) -> int:
+    total: int = 0
+    for i in range(rounds):
+        total += i % 7
+    return total
+```
 
-## What it shows
+Once its arguments are unpacked, `busy` touches no Python object, so the
+wrapper wraps the call in `Py_BEGIN_ALLOW_THREADS`. A function with an
+effect that can reach the interpreter keeps the GIL, and one that performs
+I/O is not lowered at all. Borrowed buffers get the same treatment as
+NumPy gives them: the boundary pins the memory for the whole call.
 
-- `busy` touches no Python object once its arguments are unpacked, so the
-  generated boundary wraps the call in `Py_BEGIN_ALLOW_THREADS`.
-- Under plain CPython the same file is bound by the GIL and two threads take
-  twice as long as one.
-- A function with an effect that can reach the interpreter keeps the GIL, and
-  one that performs I/O is not lowered natively at all.
-- `ppy.concurrent` and `ppy.atomic` ([34_atomics_and_threads](../34_atomics_and_threads/))
-  are threads and shared memory inside native code; this example is the other
-  direction, Python threads calling one native function.
-
-Borrowed buffers are covered too: the boundary pins the memory for the whole
-call, which is the guarantee NumPy relies on when it does the same thing.
+This is Python threads calling native code. The other direction — threads
+and shared memory *inside* native code — is
+[`ppy.concurrent` and `ppy.atomic`](../34_atomics_and_threads/README.md).
 
 ## Run it
 
@@ -35,17 +41,24 @@ ppy run threads.ppy
 **`python  threads.ppy`**
 
 ```text
-1 thread    3029.9 ms
-2 threads   6173.7 ms
-scaling       0.98x
+1 thread    3304.6 ms
+2 threads   6419.7 ms
+scaling       1.03x
 ```
 
 **`ppy run threads.ppy`**
 
 ```text
-1 thread     121.0 ms
-2 threads    119.7 ms
-scaling       2.02x
+1 thread     124.8 ms
+2 threads    132.3 ms
+scaling       1.89x
 ```
 
 <!-- outputs:end -->
+
+## Read on
+
+- [Atomics and threads](../../docs/guide/concurrency.md) — the native side.
+- [Architecture: the boundary](../../docs/internals/architecture.md) — what the generated wrapper does per call.
+
+`threads.ppy` is hand-written; there is no `.py` source and no conversion step.

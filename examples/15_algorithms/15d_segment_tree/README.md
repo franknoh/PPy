@@ -1,21 +1,23 @@
-# 15d — Range sums
+# 15d — Range sums, twice as fast as C
 
-Input: `N M K`, then N numbers, then M+K commands — `1 b c` assigns,
-`2 b c` sums over [b, c). Output: the checksum of the answers.
+Input: `N M K`, then N numbers, then M+K commands — `1 b c` assigns, `2 b c`
+sums over [b, c). Output: the checksum of the answers. A segment tree over
+262,144 values taking 400,000 commands: the standalone binary answers in
+24 ms where gcc takes 51 and clang 52, because reading 400,000 command
+lines through `ppy.input` costs half of what `scanf` charges for them.
 
-## Provenance
+## Writes in the callee still count as native
 
-Generated, not hand-written. `segment_tree.ppy` is exactly what
-`ppy convert segment_tree.py --promote-buffers` writes, and
-`examples/verify_conversions.py` checks that on every run. `segment_tree.c` is the same solution hand-written in C, reading the
-same input with `scanf`.
+```python
+def run_commands(tree: Buffer[int], commands: Buffer[int], size: int, rounds: int) -> int:
+```
 
-## What it shows
-
-- A function whose writes all happen in a callee still lowers: `run_commands`
-  never assigns into the tree itself, it calls `update`.
-- `range(size - 1, 0, -1)` — a descending loop with a literal step.
-- `query` is `@ppy.pure` while `update` is not, and both are native.
+`run_commands` never assigns into the tree itself; it calls `update`, and
+the write lands in the caller's memory either way. A function whose writes
+all happen inside a callee it handed a buffer to lowers like any other.
+`query` is `@ppy.pure` while `update` is not, and both are native.
+`range(size - 1, 0, -1)` — the descending build of the tree with a literal
+step — lowers as written.
 
 ## Numbers
 
@@ -33,13 +35,15 @@ input, interpreter startup and all. Mean ± standard deviation over 5 runs;
 | C (`gcc -O3`, `scanf`) | 50.7 ± 1.2 ms |
 | C (`clang -O3`, `scanf`) | 51.8 ± 1.1 ms |
 
-`ppy run` compiles before it runs, which is most of its two seconds; it is
-the development path, not the one to submit. `ppy build` produces a binary
-that still starts an embedded CPython and imports the runtime: ~35 ms before
-a line of the program runs, against C's ~1 ms. `--standalone` has no interpreter in it at all, which is where that
-row comes from; the [folder README](../README.md) says what the subset costs.
+`ppy run` compiles before it runs; it is the development path, not the one
+to submit. `ppy build` still starts an embedded CPython and imports the
+runtime, ~35 ms, before the program begins. `--standalone` has no
+interpreter in it; the [folder README](../README.md) says what the subset
+costs.
 
 ## Run it
+
+`input.txt` is eight values and four commands; the checksum is 28.
 
 ```bash
 python  segment_tree.ppy < input.txt
@@ -83,3 +87,9 @@ clang -O3 segment_tree.c -o segment_tree_clang && ./segment_tree_clang < input.t
 ```
 
 <!-- outputs:end -->
+
+Generated, not hand-written: `segment_tree.ppy` is exactly what
+`ppy convert segment_tree.py --promote-buffers` writes, and
+`examples/verify_conversions.py` checks that on every run. `segment_tree.c`
+is the same solution hand-written in C, reading the same input with
+`scanf`.

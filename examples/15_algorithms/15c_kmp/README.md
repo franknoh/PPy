@@ -1,21 +1,27 @@
-# 15c — Substring search
+# 15c — Substring search over four million characters
 
-Input: the text, then the pattern. Output: how many times it occurs.
-Four million characters here.
+Input: the text, then the pattern. Output: how many times the pattern
+occurs. Four million characters at the judge size, held in four megabytes:
+`Buffer[ppy.i8]` is one byte per element, and `ppy.read_token` fills it
+without ever building a Python string.
 
-## Provenance
+## Text as bytes
 
-Hand-written. `kmp.ppy` is written directly; there is no `.py` source
-and no conversion step. `kmp.c` is the same solution hand-written in C, reading the
-same input with `scanf`.
+```python
+haystack = array.array("b", bytes(4000064))
+size = ppy.read_token(haystack)
+```
 
-## What it shows
+A Python `str` has no native representation, so text that has to be fast
+comes in as bytes. `Buffer[ppy.i8]` stores one byte and reads back an
+`int`; the width is storage, not type, and a value that does not fit falls
+back rather than wrapping. The KMP failure table and the scan are two
+native loops over that memory.
 
-- `ppy.read_token` fills the buffer without building a Python string.
-- `Buffer[ppy.i8]` is one byte per element, so four million characters cost
-  four megabytes rather than the thirty-two a 64-bit element would.
-- This is the one problem here whose `.ppy` is hand-written: the character
-  buffer it wants has no plain-Python spelling that converts to it.
+This is the one problem here whose `.ppy` is hand-written: the character
+buffer it wants has no plain-Python spelling that `ppy convert` could
+promote to it. It is also the one without a `--standalone` row: its text
+arrives as a token, and `ppy.read_token` has no standalone lowering yet.
 
 ## Numbers
 
@@ -32,14 +38,14 @@ input, interpreter startup and all. Mean ± standard deviation over 5 runs;
 | C (`gcc -O3`, `scanf`) | 9.4 ± 0.3 ms |
 | C (`clang -O3`, `scanf`) | **9.0 ± 0.2 ms** |
 
-`ppy run` compiles before it runs, which is most of its two seconds; it is
-the development path, not the one to submit. `ppy build` produces a binary
-that still starts an embedded CPython and imports the runtime: ~35 ms before
-a line of the program runs, against C's ~1 ms. This is the one problem here
-with no `--standalone` row: its text arrives as a token, and a standalone
-build has no reader for one yet.
+`ppy run` compiles before it runs; it is the development path, not the one
+to submit. `ppy build` still starts an embedded CPython and imports the
+runtime — ~35 ms of the 52, which is why C is ahead by the width of an
+interpreter start and not by the width of the scan.
 
 ## Run it
+
+`input.txt` searches `abracadabracadabra` for `abra`; the answer is 3.
 
 ```bash
 python  kmp.ppy < input.txt
@@ -55,31 +61,35 @@ clang -O3 kmp.c -o kmp_clang && ./kmp_clang < input.txt
 **`python  kmp.ppy < input.txt`**
 
 ```text
-1
+3
 ```
 
 **`ppy run kmp.ppy < input.txt`**
 
 ```text
-1
+3
 ```
 
 **`ppy build kmp.ppy -o dist && ./dist/kmp < input.txt`**
 
 ```text
-1
+3
 ```
 
 **`gcc   -O3 kmp.c -o kmp_c     && ./kmp_c     < input.txt`**
 
 ```text
-1
+3
 ```
 
 **`clang -O3 kmp.c -o kmp_clang && ./kmp_clang < input.txt`**
 
 ```text
-1
+3
 ```
 
 <!-- outputs:end -->
+
+`kmp.ppy` is hand-written; there is no `.py` source and no conversion step.
+`kmp.c` is the same solution hand-written in C, reading the same input
+with `scanf`.

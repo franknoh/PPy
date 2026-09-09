@@ -2,9 +2,11 @@
 
 Every README has a `## Run it` block. This runs each of its commands in the
 example's folder and keeps the output under `## What it prints`, so the
-README shows the command and its answer side by side. Timings differ from
-machine to machine and are shown as one run; answers do not, and a run that
-changes one is a change to the example.
+README shows the command and its answer side by side. A long output is shown
+to its first lines and kept whole in the folder's `outputs/`, which the
+documentation site unfolds in place. Timings differ from machine to machine
+and are shown as one run; answers do not, and a run that changes one is a
+change to the example.
 
     python examples/record_outputs.py             # every example
     python examples/record_outputs.py 15_ 40_     # folders matching a token
@@ -24,8 +26,9 @@ ROOT = Path(__file__).parent
 START = "<!-- outputs:start -->"
 END = "<!-- outputs:end -->"
 HEADING = "## What it prints"
-RUN_IT = re.compile(r"^## Run it\n\n```bash\n(.*?)```", re.DOTALL | re.MULTILINE)
-MAX_LINES = 40
+RUN_IT = re.compile(r"^## Run it\n.*?```bash\n(.*?)```", re.DOTALL | re.MULTILINE)
+MAX_LINES = 20
+OUTPUTS = "outputs"
 TIMEOUT = 600
 
 #: Tools an example may name that are not part of this repository's
@@ -90,19 +93,34 @@ def run(command: str, folder: Path) -> tuple[str, str]:
     return out, "ok"
 
 
-def _clip(text: str) -> str:
+def _slug(index: int, command: str) -> str:
+    words = re.sub(r"[^a-z0-9]+", "-", command.lower()).strip("-")
+    return f"{index:02d}-{words[:40].rstrip('-')}.txt"
+
+
+def _clip(folder: Path, index: int, command: str, text: str) -> list[str]:
+    """The lines a README shows; a long output is kept whole under `outputs/`."""
     lines = text.splitlines()
     if len(lines) <= MAX_LINES:
-        return text
-    kept = lines[:MAX_LINES]
-    return "\n".join(kept) + f"\n… {len(lines) - MAX_LINES} more lines"
+        return ["```text", text, "```"]
+    name = _slug(index, command)
+    (folder / OUTPUTS).mkdir(exist_ok=True)
+    (folder / OUTPUTS / name).write_text(text + "\n", encoding="utf-8")
+    return [
+        "```text",
+        "\n".join(lines[:MAX_LINES]),
+        "```",
+        "",
+        f"*{len(lines)} lines in all — [full output]({OUTPUTS}/{name}).*",
+    ]
 
 
 def section(folder: Path, listed: list[str]) -> tuple[str, list[str]]:
     """The `## What it prints` section for one README, and what failed."""
     parts = [START, HEADING, ""]
     failed = []
-    for command in listed:
+    shutil.rmtree(folder / OUTPUTS, ignore_errors=True)
+    for index, command in enumerate(listed, 1):
         output, verdict = run(command, folder)
         if verdict == "failed":
             failed.append(command)
@@ -111,9 +129,7 @@ def section(folder: Path, listed: list[str]) -> tuple[str, list[str]]:
         if verdict == "skipped":
             parts.append(f"*{output}*")
         elif output:
-            parts.append("```text")
-            parts.append(_clip(output))
-            parts.append("```")
+            parts.extend(_clip(folder, index, command, output))
         else:
             parts.append("*(prints nothing; exits 0)*")
         parts.append("")
