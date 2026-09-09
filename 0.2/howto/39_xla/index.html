@@ -27,7 +27,7 @@
     
     
       
-        <title>StableHLO from the compiler, no JAX required - PPY</title>
+        <title>XLA - PPY</title>
       
     
     
@@ -82,7 +82,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#stablehlo-from-the-compiler-no-jax-required" class="md-skip">
+        <a href="#xla" class="md-skip">
           Skip to content
         </a>
       
@@ -122,7 +122,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              StableHLO from the compiler, no JAX required
+              XLA
             
           </span>
         </div>
@@ -1224,7 +1224,7 @@
   <span class="md-ellipsis">
     
   
-    Three annotations, one native loop
+    Basics
   
 
     
@@ -1252,7 +1252,7 @@
   <span class="md-ellipsis">
     
   
-    A machine word until it is not
+    Arbitrary precision
   
 
     
@@ -1280,7 +1280,7 @@
   <span class="md-ellipsis">
     
   
-    What @ppy.pure refuses
+    Effects and contracts
   
 
     
@@ -1308,7 +1308,7 @@
   <span class="md-ellipsis">
     
   
-    Classes the checker can see through
+    Classes
   
 
     
@@ -1336,7 +1336,7 @@
   <span class="md-ellipsis">
     
   
-    What crosses the boundary as machine values
+    Native data
   
 
     
@@ -1364,7 +1364,7 @@
   <span class="md-ellipsis">
     
   
-    Every way a type gets narrower
+    Narrowing
   
 
     
@@ -1392,7 +1392,7 @@
   <span class="md-ellipsis">
     
   
-    Where PPY refuses to differ from CPython
+    Numerics
   
 
     
@@ -1420,7 +1420,7 @@
   <span class="md-ellipsis">
     
   
-    A dataclass with no boxed form
+    Value classes
   
 
     
@@ -1448,7 +1448,7 @@
   <span class="md-ellipsis">
     
   
-    Tuples as scalar atoms
+    Tuples
   
 
     
@@ -1476,7 +1476,7 @@
   <span class="md-ellipsis">
     
   
-    The escape hatch, and its price
+    Dynamic boundaries
   
 
     
@@ -1504,7 +1504,7 @@
   <span class="md-ellipsis">
     
   
-    Containers, inferred and owned
+    Containers
   
 
     
@@ -1532,7 +1532,7 @@
   <span class="md-ellipsis">
     
   
-    Exceptions are part of the contract
+    Exceptions
   
 
     
@@ -1560,7 +1560,7 @@
   <span class="md-ellipsis">
     
   
-    Strings stay on CPython, and say so
+    Strings
   
 
     
@@ -1675,7 +1675,7 @@
   <span class="md-ellipsis">
     
   
-    Borrow the memory, keep the order, specialize the rest
+    Buffers and JIT
   
 
     
@@ -1703,7 +1703,7 @@
   <span class="md-ellipsis">
     
   
-    Eight kernels and six judge problems, against C
+    Algorithms
   
 
     
@@ -1731,7 +1731,7 @@
   <span class="md-ellipsis">
     
   
-    One native function, two threads, 1.95×
+    Threads
   
 
     
@@ -1759,7 +1759,7 @@
   <span class="md-ellipsis">
     
   
-    Typed pointers, stack memory, a C function, a C symbol
+    Native memory
   
 
     
@@ -1787,7 +1787,7 @@
   <span class="md-ellipsis">
     
   
-    Four lanes at a time, and the machine as a fact
+    Lanes and the machine
   
 
     
@@ -1815,7 +1815,7 @@
   <span class="md-ellipsis">
     
   
-    Four threads, one counter, one answer
+    Atomics and threads
   
 
     
@@ -1843,7 +1843,7 @@
   <span class="md-ellipsis">
     
   
-    parallel.range: say the iterations may run at once
+    Parallel ranges
   
 
     
@@ -1871,7 +1871,7 @@
   <span class="md-ellipsis">
     
   
-    A derivative that agrees to the last bit
+    Derivatives
   
 
     
@@ -1899,7 +1899,7 @@
   <span class="md-ellipsis">
     
   
-    An echo server and its client, as coroutines that compile
+    Coroutines
   
 
     
@@ -1927,7 +1927,7 @@
   <span class="md-ellipsis">
     
   
-    Generics, inferred at the call and monomorphized in native code
+    Generics
   
 
     
@@ -1955,7 +1955,7 @@
   <span class="md-ellipsis">
     
   
-    Every way of looking inside a build, on one program
+    The toolbox
   
 
     
@@ -2054,7 +2054,7 @@
   <span class="md-ellipsis">
     
   
-    A CUDA kernel in Python, run three ways
+    GPU kernels
   
 
     
@@ -2091,7 +2091,7 @@
   <span class="md-ellipsis">
     
   
-    StableHLO from the compiler, no JAX required
+    XLA
   
 
     
@@ -2109,7 +2109,7 @@
   <span class="md-ellipsis">
     
   
-    StableHLO from the compiler, no JAX required
+    XLA
   
 
     
@@ -2146,10 +2146,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#the-last-bits" class="md-nav__link">
+  <a href="#devices-and-the-last-bits" class="md-nav__link">
     <span class="md-ellipsis">
       
-        The last bits
+        Devices and the last bits
       
     </span>
   </a>
@@ -2172,17 +2172,6 @@
     <span class="md-ellipsis">
       
         What it prints
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#read-on" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Read on
       
     </span>
   </a>
@@ -2310,7 +2299,7 @@
   <span class="md-ellipsis">
     
   
-    One NumPy expression, one loop
+    NumPy fusion
   
 
     
@@ -2338,7 +2327,7 @@
   <span class="md-ellipsis">
     
   
-    Pydantic models, typed and still validated
+    Pydantic
   
 
     
@@ -2366,7 +2355,7 @@
   <span class="md-ellipsis">
     
   
-    The same fused kernel, on every core
+    Parallel fused kernels
   
 
     
@@ -2394,7 +2383,7 @@
   <span class="md-ellipsis">
     
   
-    A PyTorch layer as one C++ call
+    PyTorch ATen regions
   
 
     
@@ -2422,7 +2411,7 @@
   <span class="md-ellipsis">
     
   
-    A torch training script, converted, and where the time went
+    Training a torch MLP
   
 
     
@@ -2450,7 +2439,7 @@
   <span class="md-ellipsis">
     
   
-    The same trainer with JAX, and why the step does not get faster
+    Training a JAX MLP
   
 
     
@@ -2478,7 +2467,7 @@
   <span class="md-ellipsis">
     
   
-    Export a @jax.jit function at build time
+    JAX export
   
 
     
@@ -2506,7 +2495,7 @@
   <span class="md-ellipsis">
     
   
-    A FastAPI service that checks strict, as written
+    Serving over Uvicorn
   
 
     
@@ -2534,7 +2523,7 @@
   <span class="md-ellipsis">
     
   
-    A Flax training loop, strict-checked as written
+    Flax
   
 
     
@@ -2562,7 +2551,7 @@
   <span class="md-ellipsis">
     
   
-    Native kernels on every rank, with import ppy as the integration
+    A trainer under torchrun and accelerate launch
   
 
     
@@ -2590,7 +2579,7 @@
   <span class="md-ellipsis">
     
   
-    A pandas expression as one kernel, nulls included
+    Columnar expressions
   
 
     
@@ -2693,7 +2682,7 @@
   <span class="md-ellipsis">
     
   
-    Untyped Python in, strict PPY out
+    Inventory
   
 
     
@@ -2721,7 +2710,7 @@
   <span class="md-ellipsis">
     
   
-    How far inference reaches without a single annotation
+    Inference
   
 
     
@@ -2749,7 +2738,7 @@
   <span class="md-ellipsis">
     
   
-    Import a .ppy module from plain Python
+    Interop
   
 
     
@@ -2777,7 +2766,7 @@
   <span class="md-ellipsis">
     
   
-    A project is one call graph, and one program
+    A multi-module project
   
 
     
@@ -2805,7 +2794,7 @@
   <span class="md-ellipsis">
     
   
-    Five dynamic idioms, rewritten and proven equivalent
+    Migration
   
 
     
@@ -3595,10 +3584,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#the-last-bits" class="md-nav__link">
+  <a href="#devices-and-the-last-bits" class="md-nav__link">
     <span class="md-ellipsis">
       
-        The last bits
+        Devices and the last bits
       
     </span>
   </a>
@@ -3621,17 +3610,6 @@
     <span class="md-ellipsis">
       
         What it prints
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#read-on" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Read on
       
     </span>
   </a>
@@ -3669,12 +3647,11 @@
   
 
 
-<h1 id="stablehlo-from-the-compiler-no-jax-required">StableHLO from the compiler, no JAX required<a class="headerlink" href="#stablehlo-from-the-compiler-no-jax-required" title="Permanent link">&para;</a></h1>
+<h1 id="xla">XLA<a class="headerlink" href="#xla" title="Permanent link">&para;</a></h1>
 <p><code>@xla.jit</code> marks a function of floats, ints, and bools whose body is one
 block of arithmetic and math. The compiler lowers it to the IR and emits
 StableHLO itself — no trace, no JAX in the compiler — and the PJRT bridge
-compiles the module once and runs each call on a device. Where there is no
-device, the function runs as written, and the digits agree either way.</p>
+compiles the module once and runs each call on a device.</p>
 <h2 id="what-xla-takes-today">What XLA takes today<a class="headerlink" href="#what-xla-takes-today" title="Permanent link">&para;</a></h2>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nd">@xla</span><span class="o">.</span><span class="n">jit</span>
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="k">def</span><span class="w"> </span><span class="nf">f</span><span class="p">(</span><span class="n">x</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="n">y</span><span class="p">:</span> <span class="nb">float</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">float</span><span class="p">:</span>
@@ -3682,17 +3659,18 @@ device, the function runs as written, and the digits agree either way.</p>
 <a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>    <span class="k">return</span> <span class="p">(</span><span class="n">product</span> <span class="o">+</span> <span class="p">(</span><span class="n">x</span> <span class="k">if</span> <span class="n">product</span> <span class="o">&gt;</span> <span class="mf">0.0</span> <span class="k">else</span> <span class="o">-</span><span class="n">x</span><span class="p">))</span> <span class="o">/</span> <span class="mf">2.0</span>
 </code></pre></div>
 <p>Arithmetic, <code>math.sin</code>, and a conditional expression that lowers to a
-<code>select</code>: <code>f</code> is exactly what the StableHLO backend accepts, and
-<code>ppy emit stablehlo</code> prints the module. <code>branchy</code> is not, yet — an <code>if</code>
-statement is control flow, so the compiler reports <code>W2007</code> and the
-function runs as written. Correct, and honest about it.</p>
-<h2 id="the-last-bits">The last bits<a class="headerlink" href="#the-last-bits" title="Permanent link">&para;</a></h2>
-<p>XLA computes <code>sin</code> with its own library, so the last bits of a result can
-differ from CPython's <code>math</code>; the printed digits are rounded so the three
-paths compare equal where they should. <code>xla.devices()</code> is what the bridge
-sees, and the line that prints it starts with <code>#</code>, the mark for output that
-may differ between machines. The bridge needs JAX installed to place
-arrays on a device; the compiler that wrote the StableHLO does not.</p>
+<code>select</code>: <code>f</code> is what the StableHLO backend accepts, and <code>ppy emit
+stablehlo</code> prints the module (<code>ppy inspect --stage stablehlo</code> the same).
+<code>branchy</code> is not, yet — an <code>if</code> statement is control flow — so the compiler
+reports <code>W2007</code> and the function runs as written.</p>
+<h2 id="devices-and-the-last-bits">Devices and the last bits<a class="headerlink" href="#devices-and-the-last-bits" title="Permanent link">&para;</a></h2>
+<p>Under plain CPython, and wherever no device is present, every function runs
+as written. XLA computes <code>sin</code> with its own library, so the last bits of a
+result can differ from CPython's <code>math</code>; the printed digits are rounded so
+the three paths compare equal where they should. <code>xla.devices()</code> is what the
+bridge sees, and the line that prints it starts with <code>#</code>, the mark for
+output that may differ between machines. The bridge needs JAX installed to
+place arrays on a device; the compiler that wrote the StableHLO does not.</p>
 <h2 id="run-it">Run it<a class="headerlink" href="#run-it" title="Permanent link">&para;</a></h2>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>python<span class="w">  </span>device_math.ppy
 <a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>ppy<span class="w"> </span>run<span class="w"> </span>device_math.ppy
@@ -3728,11 +3706,8 @@ arrays on a device; the compiler that wrote the StableHLO does not.</p>
 </code></pre></div>
 <!-- outputs:end -->
 
-<h2 id="read-on">Read on<a class="headerlink" href="#read-on" title="Permanent link">&para;</a></h2>
-<ul>
-<li><a href="../../guide/xla/">XLA</a> — <code>@xla.jit</code>, the bridge, and the limits.</li>
-<li><a href="../25_jax_export/">JAX export</a> — the other direction: JAX traces, PPY stages.</li>
-</ul>
+<p>Read on: <a href="../../guide/xla/">XLA</a> ·
+<a href="../25_jax_export/">JAX export</a></p>
 <p><code>device_math.ppy</code> is hand-written; there is no <code>.py</code> source and no conversion
 step.</p>
 <h2 id="39_xladevice_mathppy"><code>39_xla/device_math.ppy</code><a class="headerlink" href="#39_xladevice_mathppy" title="Permanent link">&para;</a></h2>
@@ -3800,7 +3775,7 @@ step.</p>
       <nav class="md-footer__inner md-grid" aria-label="Footer" >
         
           
-          <a href="../38_cuda/" class="md-footer__link md-footer__link--prev" aria-label="Previous: A CUDA kernel in Python, run three ways">
+          <a href="../38_cuda/" class="md-footer__link md-footer__link--prev" aria-label="Previous: GPU kernels">
             <div class="md-footer__button md-icon">
               
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
@@ -3810,20 +3785,20 @@ step.</p>
                 Previous
               </span>
               <div class="md-ellipsis">
-                A CUDA kernel in Python, run three ways
+                GPU kernels
               </div>
             </div>
           </a>
         
         
           
-          <a href="../05_numpy/" class="md-footer__link md-footer__link--next" aria-label="Next: One NumPy expression, one loop">
+          <a href="../05_numpy/" class="md-footer__link md-footer__link--next" aria-label="Next: NumPy fusion">
             <div class="md-footer__title">
               <span class="md-footer__direction">
                 Next
               </span>
               <div class="md-ellipsis">
-                One NumPy expression, one loop
+                NumPy fusion
               </div>
             </div>
             <div class="md-footer__button md-icon">

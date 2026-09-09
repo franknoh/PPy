@@ -27,7 +27,7 @@
     
     
       
-        <title>One NumPy expression, one loop - PPY</title>
+        <title>NumPy fusion - PPY</title>
       
     
     
@@ -82,7 +82,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#one-numpy-expression-one-loop" class="md-skip">
+        <a href="#numpy-fusion" class="md-skip">
           Skip to content
         </a>
       
@@ -122,7 +122,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              One NumPy expression, one loop
+              NumPy fusion
             
           </span>
         </div>
@@ -1224,7 +1224,7 @@
   <span class="md-ellipsis">
     
   
-    Three annotations, one native loop
+    Basics
   
 
     
@@ -1252,7 +1252,7 @@
   <span class="md-ellipsis">
     
   
-    A machine word until it is not
+    Arbitrary precision
   
 
     
@@ -1280,7 +1280,7 @@
   <span class="md-ellipsis">
     
   
-    What @ppy.pure refuses
+    Effects and contracts
   
 
     
@@ -1308,7 +1308,7 @@
   <span class="md-ellipsis">
     
   
-    Classes the checker can see through
+    Classes
   
 
     
@@ -1336,7 +1336,7 @@
   <span class="md-ellipsis">
     
   
-    What crosses the boundary as machine values
+    Native data
   
 
     
@@ -1364,7 +1364,7 @@
   <span class="md-ellipsis">
     
   
-    Every way a type gets narrower
+    Narrowing
   
 
     
@@ -1392,7 +1392,7 @@
   <span class="md-ellipsis">
     
   
-    Where PPY refuses to differ from CPython
+    Numerics
   
 
     
@@ -1420,7 +1420,7 @@
   <span class="md-ellipsis">
     
   
-    A dataclass with no boxed form
+    Value classes
   
 
     
@@ -1448,7 +1448,7 @@
   <span class="md-ellipsis">
     
   
-    Tuples as scalar atoms
+    Tuples
   
 
     
@@ -1476,7 +1476,7 @@
   <span class="md-ellipsis">
     
   
-    The escape hatch, and its price
+    Dynamic boundaries
   
 
     
@@ -1504,7 +1504,7 @@
   <span class="md-ellipsis">
     
   
-    Containers, inferred and owned
+    Containers
   
 
     
@@ -1532,7 +1532,7 @@
   <span class="md-ellipsis">
     
   
-    Exceptions are part of the contract
+    Exceptions
   
 
     
@@ -1560,7 +1560,7 @@
   <span class="md-ellipsis">
     
   
-    Strings stay on CPython, and say so
+    Strings
   
 
     
@@ -1675,7 +1675,7 @@
   <span class="md-ellipsis">
     
   
-    Borrow the memory, keep the order, specialize the rest
+    Buffers and JIT
   
 
     
@@ -1703,7 +1703,7 @@
   <span class="md-ellipsis">
     
   
-    Eight kernels and six judge problems, against C
+    Algorithms
   
 
     
@@ -1731,7 +1731,7 @@
   <span class="md-ellipsis">
     
   
-    One native function, two threads, 1.95×
+    Threads
   
 
     
@@ -1759,7 +1759,7 @@
   <span class="md-ellipsis">
     
   
-    Typed pointers, stack memory, a C function, a C symbol
+    Native memory
   
 
     
@@ -1787,7 +1787,7 @@
   <span class="md-ellipsis">
     
   
-    Four lanes at a time, and the machine as a fact
+    Lanes and the machine
   
 
     
@@ -1815,7 +1815,7 @@
   <span class="md-ellipsis">
     
   
-    Four threads, one counter, one answer
+    Atomics and threads
   
 
     
@@ -1843,7 +1843,7 @@
   <span class="md-ellipsis">
     
   
-    parallel.range: say the iterations may run at once
+    Parallel ranges
   
 
     
@@ -1871,7 +1871,7 @@
   <span class="md-ellipsis">
     
   
-    A derivative that agrees to the last bit
+    Derivatives
   
 
     
@@ -1899,7 +1899,7 @@
   <span class="md-ellipsis">
     
   
-    An echo server and its client, as coroutines that compile
+    Coroutines
   
 
     
@@ -1927,7 +1927,7 @@
   <span class="md-ellipsis">
     
   
-    Generics, inferred at the call and monomorphized in native code
+    Generics
   
 
     
@@ -1955,7 +1955,7 @@
   <span class="md-ellipsis">
     
   
-    Every way of looking inside a build, on one program
+    The toolbox
   
 
     
@@ -2052,7 +2052,7 @@
   <span class="md-ellipsis">
     
   
-    A CUDA kernel in Python, run three ways
+    GPU kernels
   
 
     
@@ -2080,7 +2080,7 @@
   <span class="md-ellipsis">
     
   
-    StableHLO from the compiler, no JAX required
+    XLA
   
 
     
@@ -2206,7 +2206,7 @@
   <span class="md-ellipsis">
     
   
-    One NumPy expression, one loop
+    NumPy fusion
   
 
     
@@ -2224,7 +2224,7 @@
   <span class="md-ellipsis">
     
   
-    One NumPy expression, one loop
+    NumPy fusion
   
 
     
@@ -2250,10 +2250,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#elementwise-fuses-a-reduction-fuses-at-the-root" class="md-nav__link">
+  <a href="#how-the-expression-is-fused" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Elementwise fuses; a reduction fuses at the root
+        How the expression is fused
       
     </span>
   </a>
@@ -2261,10 +2261,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#guarded-not-assumed" class="md-nav__link">
+  <a href="#what-the-guard-checks" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Guarded, not assumed
+        What the guard checks
       
     </span>
   </a>
@@ -2287,17 +2287,6 @@
     <span class="md-ellipsis">
       
         What it prints
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#read-on" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Read on
       
     </span>
   </a>
@@ -2338,7 +2327,7 @@
   <span class="md-ellipsis">
     
   
-    Pydantic models, typed and still validated
+    Pydantic
   
 
     
@@ -2366,7 +2355,7 @@
   <span class="md-ellipsis">
     
   
-    The same fused kernel, on every core
+    Parallel fused kernels
   
 
     
@@ -2394,7 +2383,7 @@
   <span class="md-ellipsis">
     
   
-    A PyTorch layer as one C++ call
+    PyTorch ATen regions
   
 
     
@@ -2422,7 +2411,7 @@
   <span class="md-ellipsis">
     
   
-    A torch training script, converted, and where the time went
+    Training a torch MLP
   
 
     
@@ -2450,7 +2439,7 @@
   <span class="md-ellipsis">
     
   
-    The same trainer with JAX, and why the step does not get faster
+    Training a JAX MLP
   
 
     
@@ -2478,7 +2467,7 @@
   <span class="md-ellipsis">
     
   
-    Export a @jax.jit function at build time
+    JAX export
   
 
     
@@ -2506,7 +2495,7 @@
   <span class="md-ellipsis">
     
   
-    A FastAPI service that checks strict, as written
+    Serving over Uvicorn
   
 
     
@@ -2534,7 +2523,7 @@
   <span class="md-ellipsis">
     
   
-    A Flax training loop, strict-checked as written
+    Flax
   
 
     
@@ -2562,7 +2551,7 @@
   <span class="md-ellipsis">
     
   
-    Native kernels on every rank, with import ppy as the integration
+    A trainer under torchrun and accelerate launch
   
 
     
@@ -2590,7 +2579,7 @@
   <span class="md-ellipsis">
     
   
-    A pandas expression as one kernel, nulls included
+    Columnar expressions
   
 
     
@@ -2693,7 +2682,7 @@
   <span class="md-ellipsis">
     
   
-    Untyped Python in, strict PPY out
+    Inventory
   
 
     
@@ -2721,7 +2710,7 @@
   <span class="md-ellipsis">
     
   
-    How far inference reaches without a single annotation
+    Inference
   
 
     
@@ -2749,7 +2738,7 @@
   <span class="md-ellipsis">
     
   
-    Import a .ppy module from plain Python
+    Interop
   
 
     
@@ -2777,7 +2766,7 @@
   <span class="md-ellipsis">
     
   
-    A project is one call graph, and one program
+    A multi-module project
   
 
     
@@ -2805,7 +2794,7 @@
   <span class="md-ellipsis">
     
   
-    Five dynamic idioms, rewritten and proven equivalent
+    Migration
   
 
     
@@ -3584,10 +3573,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#elementwise-fuses-a-reduction-fuses-at-the-root" class="md-nav__link">
+  <a href="#how-the-expression-is-fused" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Elementwise fuses; a reduction fuses at the root
+        How the expression is fused
       
     </span>
   </a>
@@ -3595,10 +3584,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#guarded-not-assumed" class="md-nav__link">
+  <a href="#what-the-guard-checks" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Guarded, not assumed
+        What the guard checks
       
     </span>
   </a>
@@ -3621,17 +3610,6 @@
     <span class="md-ellipsis">
       
         What it prints
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#read-on" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Read on
       
     </span>
   </a>
@@ -3669,34 +3647,37 @@
   
 
 
-<h1 id="one-numpy-expression-one-loop">One NumPy expression, one loop<a class="headerlink" href="#one-numpy-expression-one-loop" title="Permanent link">&para;</a></h1>
-<p><code>np.sin(a) * 2.0 + np.cos(b)</code> is three NumPy calls and two temporary arrays
-of a million doubles each. Under <code>ppy run</code> it is one loop: the expression
-tree lowers to the IR's tensor dialect, <code>tensor-fusion</code> folds the chain into
-a single <code>tensor.fused</code> region, and <code>lower-tensor</code> writes one strided loop
-with no temporaries, compiled through LLVM. The answer is NumPy's, to the
-last bit.</p>
-<h2 id="elementwise-fuses-a-reduction-fuses-at-the-root">Elementwise fuses; a reduction fuses at the root<a class="headerlink" href="#elementwise-fuses-a-reduction-fuses-at-the-root" title="Permanent link">&para;</a></h2>
+<h1 id="numpy-fusion">NumPy fusion<a class="headerlink" href="#numpy-fusion" title="Permanent link">&para;</a></h1>
+<p>An elementwise NumPy expression becomes one loop with no temporaries.
+<code>np.sin(a) * 2.0 + np.cos(b)</code> is three NumPy calls and two intermediate
+arrays; under <code>ppy run</code> it is a single loop compiled through LLVM, and the
+answer is NumPy's to the last bit.</p>
+<h2 id="how-the-expression-is-fused">How the expression is fused<a class="headerlink" href="#how-the-expression-is-fused" title="Permanent link">&para;</a></h2>
+<p>The expression tree lowers to the IR's tensor dialect — <code>numpy.sin</code> is
+<code>tensor.unary {op = sin}</code>, <code>*</code> and <code>+</code> are <code>tensor.mul</code> and <code>tensor.add</code> —
+and the <code>tensor-fusion</code> pass folds the chain into one <code>tensor.fused</code>
+region: a computation of one output element from one element of each
+input. <code>lower-tensor</code> writes it as one strided loop.</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nd">@ppy</span><span class="o">.</span><span class="n">pure</span>
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="nd">@ppy</span><span class="o">.</span><span class="n">opt</span><span class="p">(</span><span class="mi">3</span><span class="p">)</span>
 <a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="k">def</span><span class="w"> </span><span class="nf">normalize</span><span class="p">(</span><span class="n">x</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
 <a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>    <span class="n">scale</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">x</span> <span class="o">*</span> <span class="n">x</span><span class="p">))</span>
 <a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>    <span class="k">return</span> <span class="n">x</span> <span class="o">/</span> <span class="n">scale</span>
 </code></pre></div>
-<p><code>x * x</code> feeds <code>np.sum</code>, so the multiply fuses into the reduction: one pass
-over <code>x</code>, one accumulator, no squared array in between. <code>x / scale</code> is a
-second loop, because it needs the reduction's result. A reduction can sit
-only at the root of a fused tree — nested inside an elementwise expression
-it would not be elementwise — and the fusion pass knows the difference.</p>
-<h2 id="guarded-not-assumed">Guarded, not assumed<a class="headerlink" href="#guarded-not-assumed" title="Permanent link">&para;</a></h2>
+<p>A reduction fuses only at the root of a tree. In <code>normalize</code>, <code>x * x</code> feeds
+<code>np.sum</code>, so the multiply fuses into the reduction — one pass over <code>x</code>, one
+accumulator, no squared array — and <code>x / scale</code> is a second loop because it
+needs the reduction's result. Nested inside an elementwise expression a
+reduction would not be elementwise, and the pass knows the difference.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>ppy<span class="w"> </span>inspect<span class="w"> </span>numpy_fusion.ppy<span class="w"> </span>--stage<span class="w"> </span>tensor<span class="w">     </span><span class="c1"># the fused region before it becomes loops</span>
+</code></pre></div>
+<h2 id="what-the-guard-checks">What the guard checks<a class="headerlink" href="#what-the-guard-checks" title="Permanent link">&para;</a></h2>
 <p>The kernel takes exactly what it was compiled for: <code>float64</code>, C-contiguous,
 one shape across the operands. The generated boundary checks that on every
 call. Anything else — a <code>float32</code> array, a transposed view, a broadcast —
 runs NumPy itself. Reduction order is preserved bit for bit unless the
-function is <code>@ppy.fastmath</code>, so <code>np.sum</code> here gives NumPy's number, not a
-number close to it.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>ppy<span class="w"> </span>inspect<span class="w"> </span>numpy_fusion.ppy<span class="w"> </span>--stage<span class="w"> </span>tensor<span class="w">     </span><span class="c1"># the fused region, before it becomes loops</span>
-</code></pre></div>
+function is <code>@ppy.fastmath</code>, so <code>np.sum</code> here gives NumPy's number, not one
+close to it.</p>
 <h2 id="run-it">Run it<a class="headerlink" href="#run-it" title="Permanent link">&para;</a></h2>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>python<span class="w">  </span>numpy_fusion.ppy
 <a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>ppy<span class="w">     </span>numpy_fusion.ppy
@@ -3715,12 +3696,9 @@ number close to it.</p>
 </code></pre></div>
 <!-- outputs:end -->
 
-<h2 id="read-on">Read on<a class="headerlink" href="#read-on" title="Permanent link">&para;</a></h2>
-<ul>
-<li><a href="../../internals/plugins/">Plugins: NumPy</a> — what the plugin types, fuses, and leaves to NumPy.</li>
-<li><a href="../07_parallel/">Parallel fused kernels</a> — the same loop split across threads.</li>
-<li><a href="../../internals/ir/">The IR: the tensor dialect</a> — <code>tensor.fused</code>, <code>lower-tensor</code>, and the shapes.</li>
-</ul>
+<p>Read on: <a href="../../internals/plugins/">Plugins: NumPy</a> ·
+<a href="../07_parallel/">Parallel fused kernels</a> ·
+<a href="../../internals/ir/">The IR: the tensor dialect</a></p>
 <p><code>numpy_fusion.ppy</code> is hand-written; there is no <code>.py</code> source and no conversion
 step.</p>
 <h2 id="05_numpynumpy_fusionppy"><code>05_numpy/numpy_fusion.ppy</code><a class="headerlink" href="#05_numpynumpy_fusionppy" title="Permanent link">&para;</a></h2>
@@ -3788,7 +3766,7 @@ step.</p>
       <nav class="md-footer__inner md-grid" aria-label="Footer" >
         
           
-          <a href="../39_xla/" class="md-footer__link md-footer__link--prev" aria-label="Previous: StableHLO from the compiler, no JAX required">
+          <a href="../39_xla/" class="md-footer__link md-footer__link--prev" aria-label="Previous: XLA">
             <div class="md-footer__button md-icon">
               
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
@@ -3798,20 +3776,20 @@ step.</p>
                 Previous
               </span>
               <div class="md-ellipsis">
-                StableHLO from the compiler, no JAX required
+                XLA
               </div>
             </div>
           </a>
         
         
           
-          <a href="../06_pydantic/" class="md-footer__link md-footer__link--next" aria-label="Next: Pydantic models, typed and still validated">
+          <a href="../06_pydantic/" class="md-footer__link md-footer__link--next" aria-label="Next: Pydantic">
             <div class="md-footer__title">
               <span class="md-footer__direction">
                 Next
               </span>
               <div class="md-ellipsis">
-                Pydantic models, typed and still validated
+                Pydantic
               </div>
             </div>
             <div class="md-footer__button md-icon">

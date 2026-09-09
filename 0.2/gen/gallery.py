@@ -95,26 +95,36 @@ def _resolve(folder: str, target: str) -> str:
     return f"{REPO}/{normalized}{suffix}"
 
 
-_FULL_OUTPUT = re.compile(
-    r"^\*(\d+) lines in all — \[full output\]\(outputs/([^)]+)\)\.\*$", re.MULTILINE
+_FILED_OUTPUT = re.compile(
+    r"^\*(\d+) lines: \[outputs/([^\]]+)\]\(outputs/[^)]+\)\*$", re.MULTILINE
+)
+_FOLDED_OUTPUT = re.compile(
+    r'^<details markdown="1">\n<summary>(\d+) lines</summary>\n\n'
+    r"```text\n(.*?)\n```\n\n</details>$",
+    re.MULTILINE | re.DOTALL,
 )
 
 
-def _unfold(folder: str, text: str) -> str:
-    """A clipped output's whole text, folded into the page where the README links to it."""
+def _admonition(count: str, whole: str) -> str:
+    body = "\n".join("    " + line for line in whole.rstrip("\n").splitlines())
+    return f'??? note "{count} lines"\n\n    ```text\n{body}\n    ```'
 
-    def block(match: re.Match[str]) -> str:
+
+def _embed(folder: str, text: str) -> str:
+    """A folded or filed output, as the site's own collapsible block."""
+    text = _FOLDED_OUTPUT.sub(lambda m: _admonition(m.group(1), m.group(2)), text)
+
+    def filed(match: re.Match[str]) -> str:
         whole = (EXAMPLES / folder / "outputs" / match.group(2)).read_text(encoding="utf-8")
-        body = "\n".join("    " + line for line in whole.rstrip("\n").splitlines())
-        return f'??? note "All {match.group(1)} lines"\n\n    ```text\n{body}\n    ```'
+        return _admonition(match.group(1), whole)
 
-    return _FULL_OUTPUT.sub(block, text)
+    return _FILED_OUTPUT.sub(filed, text)
 
 
 def _readme(folder: str) -> tuple[str, str, str]:
     """The README's title, its first paragraph, and its body with links resolved."""
     text = (EXAMPLES / folder / "README.md").read_text(encoding="utf-8")
-    text = _unfold(folder, text)
+    text = _embed(folder, text)
     text = _LINK.sub(lambda m: f"]({_resolve(folder, m.group(1))})", text)
     lines = text.splitlines()
     title = lines[0].lstrip("# ").strip()
