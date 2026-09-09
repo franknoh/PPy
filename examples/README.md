@@ -55,6 +55,7 @@ rather than believed.
 | `40_generics` | type parameters, bounds, and Protocols, monomorphized in native code |
 | `41_columnar` | pandas Series expressions fused as one kernel over the columnar dialect |
 | `42_toolbox` | `ppy emit`, `ppy inspect --stage`, `--report-opt`, `--sanitize`, `--profile`, and `--pgo` on one program |
+| `43_regex` | regular expressions over byte buffers, compiled to native matchers |
 
 A folder of related problems keeps them in numbered subfolders, and every
 runner reaches them: `15_algorithms/15a_nqueens` and its five siblings are

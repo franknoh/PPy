@@ -297,7 +297,7 @@ def test_the_default_pipeline_is_deterministic_and_verified():
     first = build()
     ctx = PassContext(verify_after_each=True)
     report = default_pipeline(1, ctx).run(first)
-    assert report.names()[:3] == ["lower-async", "canonicalize", "simplify-cfg"]
+    assert report.names()[:4] == ["lower-async", "lower-regex", "canonicalize", "simplify-cfg"]
     second = build()
     default_pipeline(1).run(second)
     assert encode(first) == encode(second)

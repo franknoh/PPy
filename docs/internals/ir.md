@@ -94,6 +94,35 @@ backend lowers it to the intrinsic of that name, a C backend to libm, a GPU
 backend to its device library. A math function of a constant folds, and
 `floor(floor(x))` is `floor(x)`.
 
+## The regex dialect
+
+`regex.search %buf, %pos, %endpos {pattern = "...", flags = 0}` is what
+`PATTERN.search(buf, pos, endpos)` means for a pattern compiled from a bytes
+literal at module level; `regex.match` and `regex.fullmatch` are the anchored
+forms. The operation takes a `buffer<u8>` and yields whether there was a
+match, then the span of every group -- start and end of group 0, of group
+1, and so on -- with -1 for a group that took no part. The pattern is read
+by CPython's own parser, so its syntax and its meaning are `re`'s.
+
+The `lower-regex` pass, which runs right after `lower-async`, compiles each
+distinct pattern into one private function of core operations and turns the
+operation into a call. The matcher backtracks the way CPython's does, on an
+explicit stack rather than by recursion: an entry records where to resume,
+the position, and every loop's count, so popping one puts the matcher back
+exactly. Alternatives are tried in order, a greedy repeat gives back one
+iteration at a time, a lazy one takes one more, a group keeps the position
+of its last iteration, and an iteration that took nothing is the last one
+tried. A repeat of one byte class scans the run instead of pushing an entry
+per byte. The stack holds 4096 entries; a match that would need more fails
+a `regex.stack.ok` guard, which sends the calling function to its fallback,
+where `re` answers. Every backend runs the matcher as it runs any other
+function; no backend needs a regex library.
+
+Backreferences, lookaround, atomic groups and possessive repeats, and locale
+categories are refused when the pattern is analysed, and a function that uses
+one stays on Python with the reason. [Regular expressions](../guide/regex.md)
+is the surface.
+
 ## The simd dialect
 
 `vector<T, N>` is `N` scalars operated on at once, and the core dialect's
@@ -480,7 +509,7 @@ over `fill`s is a `fill`, `x * fill 1` is `x`), `tensor-fusion` (a chain
 of elementwise tensor operations whose intermediates have one reader, and
 a `reduce` at its root, become one `tensor.fused` -- a region computing
 one element from one element of each input -- so `lower-tensor` makes one
-loop of them with no temporaries), `lower-tensor`, and `lower-parallel`;
+loop of them with no temporaries), `lower-tensor`, `lower-regex`, and `lower-parallel`;
 `transforms.default_pipeline(level)` orders them and marks the
 stages -- `after-ir-generation`, `after-canonicalization`,
 `before-optimization`, `after-optimization`, `before-backend` -- where a
