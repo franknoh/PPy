@@ -3686,12 +3686,12 @@ prints.</p>
 </code></pre></div>
 <p><code>native.ptr[T]</code> and <code>native.const_ptr[T]</code> are typed pointers; <code>load</code>,
 <code>store</code>, and <code>offset</code> read, write, and move. A store through a <code>const_ptr</code>
-is <code>E1631</code>. <code>native.cast[U](https://github.com/franknoh/PPy/blob/main/examples/32_native_memory/p)</code> reads the same memory as another element
-type — <code>bytes_of(native.cast[ppy.u8](https://github.com/franknoh/PPy/blob/main/examples/32_native_memory/memory), 8)</code> sums the first eight
+is <code>E1631</code>. <code>native.cast[U](p)</code> reads the same memory as another element
+type — <code>bytes_of(native.cast[ppy.u8](memory), 8)</code> sums the first eight
 bytes of the four doubles <code>fill</code> wrote. <code>sizeof</code> and <code>alignof</code> are
 constants the checker knows.</p>
 <h2 id="memory-the-function-owns">Memory the function owns<a class="headerlink" href="#memory-the-function-owns" title="Permanent link">&para;</a></h2>
-<p><code>native.stack_alloc[int](https://github.com/franknoh/PPy/blob/main/examples/32_native_memory/8)</code> is eight zeroed words on the function's own
+<p><code>native.stack_alloc[int](8)</code> is eight zeroed words on the function's own
 stack. Native code needs a constant count, and the pointer cannot be
 returned or stored where it outlives the call: the IR's verifier refuses a
 <code>core.ret</code> or a <code>core.store</code> of a stack pointer, the same way it refuses a
