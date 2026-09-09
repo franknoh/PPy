@@ -27,7 +27,7 @@
     
     
       
-        <title>Threads - PPY</title>
+        <title>One native function, two threads, 1.95× - PPY</title>
       
     
     
@@ -55,6 +55,8 @@
     
       <link rel="stylesheet" href="../../assets/_mkdocstrings.css">
     
+      <link rel="stylesheet" href="../../stylesheets/extra.css">
+    
     <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
     
       
@@ -80,7 +82,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#threads" class="md-skip">
+        <a href="#one-native-function-two-threads-195" class="md-skip">
           Skip to content
         </a>
       
@@ -120,7 +122,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Threads
+              One native function, two threads, 1.95×
             
           </span>
         </div>
@@ -1222,7 +1224,7 @@
   <span class="md-ellipsis">
     
   
-    Basics
+    Three annotations, one native loop
   
 
     
@@ -1250,7 +1252,7 @@
   <span class="md-ellipsis">
     
   
-    Arbitrary precision
+    A machine word until it is not
   
 
     
@@ -1278,7 +1280,7 @@
   <span class="md-ellipsis">
     
   
-    Effects and contracts
+    What @ppy.pure refuses
   
 
     
@@ -1306,7 +1308,7 @@
   <span class="md-ellipsis">
     
   
-    Classes
+    Classes the checker can see through
   
 
     
@@ -1334,7 +1336,7 @@
   <span class="md-ellipsis">
     
   
-    Native data
+    What crosses the boundary as machine values
   
 
     
@@ -1362,7 +1364,7 @@
   <span class="md-ellipsis">
     
   
-    Narrowing
+    Every way a type gets narrower
   
 
     
@@ -1390,7 +1392,7 @@
   <span class="md-ellipsis">
     
   
-    Numerics
+    Where PPY refuses to differ from CPython
   
 
     
@@ -1418,7 +1420,7 @@
   <span class="md-ellipsis">
     
   
-    Value classes
+    A dataclass with no boxed form
   
 
     
@@ -1446,7 +1448,7 @@
   <span class="md-ellipsis">
     
   
-    Tuples
+    Tuples as scalar atoms
   
 
     
@@ -1474,7 +1476,7 @@
   <span class="md-ellipsis">
     
   
-    Dynamic boundaries
+    The escape hatch, and its price
   
 
     
@@ -1502,7 +1504,7 @@
   <span class="md-ellipsis">
     
   
-    Containers
+    Containers, inferred and owned
   
 
     
@@ -1530,7 +1532,7 @@
   <span class="md-ellipsis">
     
   
-    Exceptions
+    Exceptions are part of the contract
   
 
     
@@ -1558,7 +1560,7 @@
   <span class="md-ellipsis">
     
   
-    Strings
+    Strings stay on CPython, and say so
   
 
     
@@ -1675,7 +1677,7 @@
   <span class="md-ellipsis">
     
   
-    Buffers and JIT
+    Borrow the memory, keep the order, specialize the rest
   
 
     
@@ -1703,7 +1705,7 @@
   <span class="md-ellipsis">
     
   
-    Algorithms
+    Eight kernels and six judge problems, against C
   
 
     
@@ -1740,7 +1742,7 @@
   <span class="md-ellipsis">
     
   
-    Threads
+    One native function, two threads, 1.95×
   
 
     
@@ -1758,7 +1760,7 @@
   <span class="md-ellipsis">
     
   
-    Threads
+    One native function, two threads, 1.95×
   
 
     
@@ -1784,21 +1786,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#provenance" class="md-nav__link">
+  <a href="#nothing-to-hold-the-gil-for" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Provenance
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#what-it-shows" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        What it shows
+        Nothing to hold the GIL for
       
     </span>
   </a>
@@ -1821,6 +1812,17 @@
     <span class="md-ellipsis">
       
         What it prints
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#read-on" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Read on
       
     </span>
   </a>
@@ -1861,7 +1863,7 @@
   <span class="md-ellipsis">
     
   
-    Native memory
+    Typed pointers, stack memory, a C function, a C symbol
   
 
     
@@ -1889,7 +1891,7 @@
   <span class="md-ellipsis">
     
   
-    Lanes and the machine
+    Four lanes at a time, and the machine as a fact
   
 
     
@@ -1917,7 +1919,7 @@
   <span class="md-ellipsis">
     
   
-    Atomics and threads
+    Four threads, one counter, one answer
   
 
     
@@ -1945,7 +1947,7 @@
   <span class="md-ellipsis">
     
   
-    Parallel ranges
+    parallel.range: say the iterations may run at once
   
 
     
@@ -1973,7 +1975,7 @@
   <span class="md-ellipsis">
     
   
-    Derivatives
+    A derivative that agrees to the last bit
   
 
     
@@ -2001,7 +2003,7 @@
   <span class="md-ellipsis">
     
   
-    Coroutines
+    An echo server and its client, as coroutines that compile
   
 
     
@@ -2029,7 +2031,7 @@
   <span class="md-ellipsis">
     
   
-    Generics
+    Generics, inferred at the call and monomorphized in native code
   
 
     
@@ -2057,7 +2059,7 @@
   <span class="md-ellipsis">
     
   
-    The toolbox
+    Every way of looking inside a build, on one program
   
 
     
@@ -2154,7 +2156,7 @@
   <span class="md-ellipsis">
     
   
-    GPU kernels
+    A CUDA kernel in Python, run three ways
   
 
     
@@ -2182,7 +2184,7 @@
   <span class="md-ellipsis">
     
   
-    XLA
+    StableHLO from the compiler, no JAX required
   
 
     
@@ -2297,7 +2299,7 @@
   <span class="md-ellipsis">
     
   
-    NumPy fusion
+    One NumPy expression, one loop
   
 
     
@@ -2325,7 +2327,7 @@
   <span class="md-ellipsis">
     
   
-    Pydantic
+    Pydantic models, typed and still validated
   
 
     
@@ -2353,7 +2355,7 @@
   <span class="md-ellipsis">
     
   
-    Parallelism
+    The same fused kernel, on every core
   
 
     
@@ -2381,7 +2383,7 @@
   <span class="md-ellipsis">
     
   
-    PyTorch ATen regions
+    A PyTorch layer as one C++ call
   
 
     
@@ -2409,7 +2411,7 @@
   <span class="md-ellipsis">
     
   
-    Training a torch MLP
+    A torch training script, converted, and where the time went
   
 
     
@@ -2437,7 +2439,7 @@
   <span class="md-ellipsis">
     
   
-    Training a JAX MLP
+    The same trainer with JAX, and why the step does not get faster
   
 
     
@@ -2465,7 +2467,7 @@
   <span class="md-ellipsis">
     
   
-    JAX export
+    Export a @jax.jit function at build time
   
 
     
@@ -2493,7 +2495,7 @@
   <span class="md-ellipsis">
     
   
-    Serving over Uvicorn
+    A FastAPI service that checks strict, as written
   
 
     
@@ -2521,7 +2523,7 @@
   <span class="md-ellipsis">
     
   
-    Flax
+    A Flax training loop, strict-checked as written
   
 
     
@@ -2549,7 +2551,7 @@
   <span class="md-ellipsis">
     
   
-    A trainer under torchrun and accelerate launch
+    Native kernels on every rank, with import ppy as the integration
   
 
     
@@ -2577,7 +2579,7 @@
   <span class="md-ellipsis">
     
   
-    Columnar expressions
+    A pandas expression as one kernel, nulls included
   
 
     
@@ -2680,7 +2682,7 @@
   <span class="md-ellipsis">
     
   
-    Inventory
+    Untyped Python in, strict PPY out
   
 
     
@@ -2708,7 +2710,7 @@
   <span class="md-ellipsis">
     
   
-    Inference
+    How far inference reaches without a single annotation
   
 
     
@@ -2736,7 +2738,7 @@
   <span class="md-ellipsis">
     
   
-    Interop
+    Import a .ppy module from plain Python
   
 
     
@@ -2764,7 +2766,7 @@
   <span class="md-ellipsis">
     
   
-    Project layout
+    A project is one call graph, and one program
   
 
     
@@ -2792,7 +2794,7 @@
   <span class="md-ellipsis">
     
   
-    Migration
+    Five dynamic idioms, rewritten and proven equivalent
   
 
     
@@ -3571,21 +3573,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#provenance" class="md-nav__link">
+  <a href="#nothing-to-hold-the-gil-for" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Provenance
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#what-it-shows" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        What it shows
+        Nothing to hold the GIL for
       
     </span>
   </a>
@@ -3608,6 +3599,17 @@
     <span class="md-ellipsis">
       
         What it prints
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#read-on" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Read on
       
     </span>
   </a>
@@ -3645,81 +3647,91 @@
   
 
 
-<h1 id="threads">Threads<a class="headerlink" href="#threads" title="Permanent link">&para;</a></h1>
-<p>A native region releases the GIL, so compute in it scales across threads.</p>
-<h2 id="provenance">Provenance<a class="headerlink" href="#provenance" title="Permanent link">&para;</a></h2>
-<p>Hand-written. <code>threads.ppy</code> is written directly; there is no <code>.py</code> source and
-no conversion step involved.</p>
-<h2 id="what-it-shows">What it shows<a class="headerlink" href="#what-it-shows" title="Permanent link">&para;</a></h2>
-<ul>
-<li><code>busy</code> touches no Python object once its arguments are unpacked, so the
-  generated boundary wraps the call in <code>Py_BEGIN_ALLOW_THREADS</code>.</li>
-<li>Under plain CPython the same file is bound by the GIL and two threads take
-  twice as long as one.</li>
-<li>A function with an effect that can reach the interpreter keeps the GIL, and
-  one that performs I/O is not lowered natively at all.</li>
-<li><code>ppy.concurrent</code> and <code>ppy.atomic</code> (<a href="../34_atomics_and_threads/">34_atomics_and_threads</a>)
-  are threads and shared memory inside native code; this example is the other
-  direction, Python threads calling one native function.</li>
-</ul>
-<p>Borrowed buffers are covered too: the boundary pins the memory for the whole
-call, which is the guarantee NumPy relies on when it does the same thing.</p>
+<h1 id="one-native-function-two-threads-195">One native function, two threads, 1.95×<a class="headerlink" href="#one-native-function-two-threads-195" title="Permanent link">&para;</a></h1>
+<p><code>busy</code> is a 200-million-iteration loop. Under plain CPython two threads
+running it take as long as one, because the GIL serializes them. Under
+<code>ppy run</code> the generated boundary releases the GIL for the whole native
+call, and two threads finish in half the time. Same file, same
+<code>threading.Thread</code>; the scaling line at the bottom is the difference.</p>
+<h2 id="nothing-to-hold-the-gil-for">Nothing to hold the GIL for<a class="headerlink" href="#nothing-to-hold-the-gil-for" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nd">@ppy</span><span class="o">.</span><span class="n">pure</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="nd">@ppy</span><span class="o">.</span><span class="n">opt</span><span class="p">(</span><span class="mi">3</span><span class="p">)</span>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="k">def</span><span class="w"> </span><span class="nf">busy</span><span class="p">(</span><span class="n">rounds</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>    <span class="n">total</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">0</span>
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">rounds</span><span class="p">):</span>
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>        <span class="n">total</span> <span class="o">+=</span> <span class="n">i</span> <span class="o">%</span> <span class="mi">7</span>
+<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>    <span class="k">return</span> <span class="n">total</span>
+</code></pre></div>
+<p>Once its arguments are unpacked, <code>busy</code> touches no Python object, so the
+wrapper wraps the call in <code>Py_BEGIN_ALLOW_THREADS</code>. A function with an
+effect that can reach the interpreter keeps the GIL, and one that performs
+I/O is not lowered at all. Borrowed buffers get the same treatment as
+NumPy gives them: the boundary pins the memory for the whole call.</p>
+<p>This is Python threads calling native code. The other direction — threads
+and shared memory <em>inside</em> native code — is
+<a href="../34_atomics_and_threads/"><code>ppy.concurrent</code> and <code>ppy.atomic</code></a>.</p>
 <h2 id="run-it">Run it<a class="headerlink" href="#run-it" title="Permanent link">&para;</a></h2>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>python<span class="w">  </span>threads.ppy
-<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>ppy<span class="w"> </span>run<span class="w"> </span>threads.ppy
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>python<span class="w">  </span>threads.ppy
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>ppy<span class="w"> </span>run<span class="w"> </span>threads.ppy
 </code></pre></div>
 <!-- outputs:start -->
 <h2 id="what-it-prints">What it prints<a class="headerlink" href="#what-it-prints" title="Permanent link">&para;</a></h2>
 <p><strong><code>python  threads.ppy</code></strong></p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>1 thread    3029.9 ms
-<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>2 threads   6173.7 ms
-<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>scaling       0.98x
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>1 thread    3304.6 ms
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>2 threads   6419.7 ms
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>scaling       1.03x
 </code></pre></div>
 <p><strong><code>ppy run threads.ppy</code></strong></p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>1 thread     121.0 ms
-<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>2 threads    119.7 ms
-<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>scaling       2.02x
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>1 thread     124.8 ms
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>2 threads    132.3 ms
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>scaling       1.89x
 </code></pre></div>
 <!-- outputs:end -->
 
+<h2 id="read-on">Read on<a class="headerlink" href="#read-on" title="Permanent link">&para;</a></h2>
+<ul>
+<li><a href="../../guide/concurrency/">Atomics and threads</a> — the native side.</li>
+<li><a href="../../internals/architecture/">Architecture: the boundary</a> — what the generated wrapper does per call.</li>
+</ul>
+<p><code>threads.ppy</code> is hand-written; there is no <code>.py</code> source and no conversion step.</p>
 <h2 id="28_threadsthreadsppy"><code>28_threads/threads.ppy</code><a class="headerlink" href="#28_threadsthreadsppy" title="Permanent link">&para;</a></h2>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">threading</span>
-<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="kn">import</span><span class="w"> </span><span class="nn">time</span>
-<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>
-<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="kn">import</span><span class="w"> </span><span class="nn">ppy</span>
-<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>
-<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>
-<a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="nd">@ppy</span><span class="o">.</span><span class="n">pure</span>
-<a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a><span class="nd">@ppy</span><span class="o">.</span><span class="n">opt</span><span class="p">(</span><span class="mi">3</span><span class="p">)</span>
-<a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a><span class="k">def</span><span class="w"> </span><span class="nf">busy</span><span class="p">(</span><span class="n">rounds</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
-<a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a>    <span class="n">total</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">0</span>
-<a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a>    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">rounds</span><span class="p">):</span>
-<a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a>        <span class="n">total</span> <span class="o">+=</span> <span class="n">i</span> <span class="o">%</span> <span class="mi">7</span>
-<a id="__codelineno-3-13" name="__codelineno-3-13" href="#__codelineno-3-13"></a>    <span class="k">return</span> <span class="n">total</span>
-<a id="__codelineno-3-14" name="__codelineno-3-14" href="#__codelineno-3-14"></a>
-<a id="__codelineno-3-15" name="__codelineno-3-15" href="#__codelineno-3-15"></a>
-<a id="__codelineno-3-16" name="__codelineno-3-16" href="#__codelineno-3-16"></a><span class="k">def</span><span class="w"> </span><span class="nf">timed</span><span class="p">(</span><span class="n">rounds</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">workers</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">float</span><span class="p">:</span>
-<a id="__codelineno-3-17" name="__codelineno-3-17" href="#__codelineno-3-17"></a>    <span class="n">threads</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">threading</span><span class="o">.</span><span class="n">Thread</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
-<a id="__codelineno-3-18" name="__codelineno-3-18" href="#__codelineno-3-18"></a>    <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">workers</span><span class="p">):</span>
-<a id="__codelineno-3-19" name="__codelineno-3-19" href="#__codelineno-3-19"></a>        <span class="n">threads</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">threading</span><span class="o">.</span><span class="n">Thread</span><span class="p">(</span><span class="n">target</span><span class="o">=</span><span class="n">busy</span><span class="p">,</span> <span class="n">args</span><span class="o">=</span><span class="p">(</span><span class="n">rounds</span><span class="p">,)))</span>
-<a id="__codelineno-3-20" name="__codelineno-3-20" href="#__codelineno-3-20"></a>    <span class="n">started</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">perf_counter</span><span class="p">()</span>
-<a id="__codelineno-3-21" name="__codelineno-3-21" href="#__codelineno-3-21"></a>    <span class="k">for</span> <span class="n">thread</span> <span class="ow">in</span> <span class="n">threads</span><span class="p">:</span>
-<a id="__codelineno-3-22" name="__codelineno-3-22" href="#__codelineno-3-22"></a>        <span class="n">thread</span><span class="o">.</span><span class="n">start</span><span class="p">()</span>
-<a id="__codelineno-3-23" name="__codelineno-3-23" href="#__codelineno-3-23"></a>    <span class="k">for</span> <span class="n">thread</span> <span class="ow">in</span> <span class="n">threads</span><span class="p">:</span>
-<a id="__codelineno-3-24" name="__codelineno-3-24" href="#__codelineno-3-24"></a>        <span class="n">thread</span><span class="o">.</span><span class="n">join</span><span class="p">()</span>
-<a id="__codelineno-3-25" name="__codelineno-3-25" href="#__codelineno-3-25"></a>    <span class="k">return</span> <span class="p">(</span><span class="n">time</span><span class="o">.</span><span class="n">perf_counter</span><span class="p">()</span> <span class="o">-</span> <span class="n">started</span><span class="p">)</span> <span class="o">*</span> <span class="mf">1000.0</span>
-<a id="__codelineno-3-26" name="__codelineno-3-26" href="#__codelineno-3-26"></a>
-<a id="__codelineno-3-27" name="__codelineno-3-27" href="#__codelineno-3-27"></a>
-<a id="__codelineno-3-28" name="__codelineno-3-28" href="#__codelineno-3-28"></a><span class="k">def</span><span class="w"> </span><span class="nf">main</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<a id="__codelineno-3-29" name="__codelineno-3-29" href="#__codelineno-3-29"></a>    <span class="n">rounds</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">200000000</span>
-<a id="__codelineno-3-30" name="__codelineno-3-30" href="#__codelineno-3-30"></a>    <span class="n">one</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="n">timed</span><span class="p">(</span><span class="n">rounds</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
-<a id="__codelineno-3-31" name="__codelineno-3-31" href="#__codelineno-3-31"></a>    <span class="n">two</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="n">timed</span><span class="p">(</span><span class="n">rounds</span><span class="p">,</span> <span class="mi">2</span><span class="p">)</span>
-<a id="__codelineno-3-32" name="__codelineno-3-32" href="#__codelineno-3-32"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"1 thread  </span><span class="si">{</span><span class="n">one</span><span class="si">:</span><span class="s2">8.1f</span><span class="si">}</span><span class="s2"> ms"</span><span class="p">)</span>
-<a id="__codelineno-3-33" name="__codelineno-3-33" href="#__codelineno-3-33"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"2 threads </span><span class="si">{</span><span class="n">two</span><span class="si">:</span><span class="s2">8.1f</span><span class="si">}</span><span class="s2"> ms"</span><span class="p">)</span>
-<a id="__codelineno-3-34" name="__codelineno-3-34" href="#__codelineno-3-34"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"scaling   </span><span class="si">{</span><span class="mf">2.0</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">one</span><span class="w"> </span><span class="o">/</span><span class="w"> </span><span class="n">two</span><span class="si">:</span><span class="s2">8.2f</span><span class="si">}</span><span class="s2">x"</span><span class="p">)</span>
-<a id="__codelineno-3-35" name="__codelineno-3-35" href="#__codelineno-3-35"></a>
-<a id="__codelineno-3-36" name="__codelineno-3-36" href="#__codelineno-3-36"></a>
-<a id="__codelineno-3-37" name="__codelineno-3-37" href="#__codelineno-3-37"></a><span class="n">main</span><span class="p">()</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">threading</span>
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="kn">import</span><span class="w"> </span><span class="nn">time</span>
+<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>
+<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="kn">import</span><span class="w"> </span><span class="nn">ppy</span>
+<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>
+<a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a>
+<a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="nd">@ppy</span><span class="o">.</span><span class="n">pure</span>
+<a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a><span class="nd">@ppy</span><span class="o">.</span><span class="n">opt</span><span class="p">(</span><span class="mi">3</span><span class="p">)</span>
+<a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a><span class="k">def</span><span class="w"> </span><span class="nf">busy</span><span class="p">(</span><span class="n">rounds</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+<a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a>    <span class="n">total</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">0</span>
+<a id="__codelineno-4-11" name="__codelineno-4-11" href="#__codelineno-4-11"></a>    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">rounds</span><span class="p">):</span>
+<a id="__codelineno-4-12" name="__codelineno-4-12" href="#__codelineno-4-12"></a>        <span class="n">total</span> <span class="o">+=</span> <span class="n">i</span> <span class="o">%</span> <span class="mi">7</span>
+<a id="__codelineno-4-13" name="__codelineno-4-13" href="#__codelineno-4-13"></a>    <span class="k">return</span> <span class="n">total</span>
+<a id="__codelineno-4-14" name="__codelineno-4-14" href="#__codelineno-4-14"></a>
+<a id="__codelineno-4-15" name="__codelineno-4-15" href="#__codelineno-4-15"></a>
+<a id="__codelineno-4-16" name="__codelineno-4-16" href="#__codelineno-4-16"></a><span class="k">def</span><span class="w"> </span><span class="nf">timed</span><span class="p">(</span><span class="n">rounds</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">workers</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">float</span><span class="p">:</span>
+<a id="__codelineno-4-17" name="__codelineno-4-17" href="#__codelineno-4-17"></a>    <span class="n">threads</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">threading</span><span class="o">.</span><span class="n">Thread</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+<a id="__codelineno-4-18" name="__codelineno-4-18" href="#__codelineno-4-18"></a>    <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">workers</span><span class="p">):</span>
+<a id="__codelineno-4-19" name="__codelineno-4-19" href="#__codelineno-4-19"></a>        <span class="n">threads</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">threading</span><span class="o">.</span><span class="n">Thread</span><span class="p">(</span><span class="n">target</span><span class="o">=</span><span class="n">busy</span><span class="p">,</span> <span class="n">args</span><span class="o">=</span><span class="p">(</span><span class="n">rounds</span><span class="p">,)))</span>
+<a id="__codelineno-4-20" name="__codelineno-4-20" href="#__codelineno-4-20"></a>    <span class="n">started</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">perf_counter</span><span class="p">()</span>
+<a id="__codelineno-4-21" name="__codelineno-4-21" href="#__codelineno-4-21"></a>    <span class="k">for</span> <span class="n">thread</span> <span class="ow">in</span> <span class="n">threads</span><span class="p">:</span>
+<a id="__codelineno-4-22" name="__codelineno-4-22" href="#__codelineno-4-22"></a>        <span class="n">thread</span><span class="o">.</span><span class="n">start</span><span class="p">()</span>
+<a id="__codelineno-4-23" name="__codelineno-4-23" href="#__codelineno-4-23"></a>    <span class="k">for</span> <span class="n">thread</span> <span class="ow">in</span> <span class="n">threads</span><span class="p">:</span>
+<a id="__codelineno-4-24" name="__codelineno-4-24" href="#__codelineno-4-24"></a>        <span class="n">thread</span><span class="o">.</span><span class="n">join</span><span class="p">()</span>
+<a id="__codelineno-4-25" name="__codelineno-4-25" href="#__codelineno-4-25"></a>    <span class="k">return</span> <span class="p">(</span><span class="n">time</span><span class="o">.</span><span class="n">perf_counter</span><span class="p">()</span> <span class="o">-</span> <span class="n">started</span><span class="p">)</span> <span class="o">*</span> <span class="mf">1000.0</span>
+<a id="__codelineno-4-26" name="__codelineno-4-26" href="#__codelineno-4-26"></a>
+<a id="__codelineno-4-27" name="__codelineno-4-27" href="#__codelineno-4-27"></a>
+<a id="__codelineno-4-28" name="__codelineno-4-28" href="#__codelineno-4-28"></a><span class="k">def</span><span class="w"> </span><span class="nf">main</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-4-29" name="__codelineno-4-29" href="#__codelineno-4-29"></a>    <span class="n">rounds</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">200000000</span>
+<a id="__codelineno-4-30" name="__codelineno-4-30" href="#__codelineno-4-30"></a>    <span class="n">one</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="n">timed</span><span class="p">(</span><span class="n">rounds</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+<a id="__codelineno-4-31" name="__codelineno-4-31" href="#__codelineno-4-31"></a>    <span class="n">two</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="n">timed</span><span class="p">(</span><span class="n">rounds</span><span class="p">,</span> <span class="mi">2</span><span class="p">)</span>
+<a id="__codelineno-4-32" name="__codelineno-4-32" href="#__codelineno-4-32"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"1 thread  </span><span class="si">{</span><span class="n">one</span><span class="si">:</span><span class="s2">8.1f</span><span class="si">}</span><span class="s2"> ms"</span><span class="p">)</span>
+<a id="__codelineno-4-33" name="__codelineno-4-33" href="#__codelineno-4-33"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"2 threads </span><span class="si">{</span><span class="n">two</span><span class="si">:</span><span class="s2">8.1f</span><span class="si">}</span><span class="s2"> ms"</span><span class="p">)</span>
+<a id="__codelineno-4-34" name="__codelineno-4-34" href="#__codelineno-4-34"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"scaling   </span><span class="si">{</span><span class="mf">2.0</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">one</span><span class="w"> </span><span class="o">/</span><span class="w"> </span><span class="n">two</span><span class="si">:</span><span class="s2">8.2f</span><span class="si">}</span><span class="s2">x"</span><span class="p">)</span>
+<a id="__codelineno-4-35" name="__codelineno-4-35" href="#__codelineno-4-35"></a>
+<a id="__codelineno-4-36" name="__codelineno-4-36" href="#__codelineno-4-36"></a>
+<a id="__codelineno-4-37" name="__codelineno-4-37" href="#__codelineno-4-37"></a><span class="n">main</span><span class="p">()</span>
 </code></pre></div>
 <p>The folder in the repository: <a href="https://github.com/franknoh/PPy/blob/main/examples/28_threads"><code>examples/28_threads</code></a>.</p>
 
@@ -3759,7 +3771,7 @@ call, which is the guarantee NumPy relies on when it does the same thing.</p>
       <nav class="md-footer__inner md-grid" aria-label="Footer" >
         
           
-          <a href="../15_algorithms/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Algorithms">
+          <a href="../15_algorithms/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Eight kernels and six judge problems, against C">
             <div class="md-footer__button md-icon">
               
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
@@ -3769,20 +3781,20 @@ call, which is the guarantee NumPy relies on when it does the same thing.</p>
                 Previous
               </span>
               <div class="md-ellipsis">
-                Algorithms
+                Eight kernels and six judge problems, against C
               </div>
             </div>
           </a>
         
         
           
-          <a href="../32_native_memory/" class="md-footer__link md-footer__link--next" aria-label="Next: Native memory">
+          <a href="../32_native_memory/" class="md-footer__link md-footer__link--next" aria-label="Next: Typed pointers, stack memory, a C function, a C symbol">
             <div class="md-footer__title">
               <span class="md-footer__direction">
                 Next
               </span>
               <div class="md-ellipsis">
-                Native memory
+                Typed pointers, stack memory, a C function, a C symbol
               </div>
             </div>
             <div class="md-footer__button md-icon">

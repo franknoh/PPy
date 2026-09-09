@@ -55,6 +55,8 @@
     
       <link rel="stylesheet" href="../assets/_mkdocstrings.css">
     
+      <link rel="stylesheet" href="../stylesheets/extra.css">
+    
     <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
     
       
@@ -1222,7 +1224,7 @@
   <span class="md-ellipsis">
     
   
-    Basics
+    Three annotations, one native loop
   
 
     
@@ -1250,7 +1252,7 @@
   <span class="md-ellipsis">
     
   
-    Arbitrary precision
+    A machine word until it is not
   
 
     
@@ -1278,7 +1280,7 @@
   <span class="md-ellipsis">
     
   
-    Effects and contracts
+    What @ppy.pure refuses
   
 
     
@@ -1306,7 +1308,7 @@
   <span class="md-ellipsis">
     
   
-    Classes
+    Classes the checker can see through
   
 
     
@@ -1334,7 +1336,7 @@
   <span class="md-ellipsis">
     
   
-    Native data
+    What crosses the boundary as machine values
   
 
     
@@ -1362,7 +1364,7 @@
   <span class="md-ellipsis">
     
   
-    Narrowing
+    Every way a type gets narrower
   
 
     
@@ -1390,7 +1392,7 @@
   <span class="md-ellipsis">
     
   
-    Numerics
+    Where PPY refuses to differ from CPython
   
 
     
@@ -1418,7 +1420,7 @@
   <span class="md-ellipsis">
     
   
-    Value classes
+    A dataclass with no boxed form
   
 
     
@@ -1446,7 +1448,7 @@
   <span class="md-ellipsis">
     
   
-    Tuples
+    Tuples as scalar atoms
   
 
     
@@ -1474,7 +1476,7 @@
   <span class="md-ellipsis">
     
   
-    Dynamic boundaries
+    The escape hatch, and its price
   
 
     
@@ -1502,7 +1504,7 @@
   <span class="md-ellipsis">
     
   
-    Containers
+    Containers, inferred and owned
   
 
     
@@ -1530,7 +1532,7 @@
   <span class="md-ellipsis">
     
   
-    Exceptions
+    Exceptions are part of the contract
   
 
     
@@ -1558,7 +1560,7 @@
   <span class="md-ellipsis">
     
   
-    Strings
+    Strings stay on CPython, and say so
   
 
     
@@ -1673,7 +1675,7 @@
   <span class="md-ellipsis">
     
   
-    Buffers and JIT
+    Borrow the memory, keep the order, specialize the rest
   
 
     
@@ -1701,7 +1703,7 @@
   <span class="md-ellipsis">
     
   
-    Algorithms
+    Eight kernels and six judge problems, against C
   
 
     
@@ -1729,7 +1731,7 @@
   <span class="md-ellipsis">
     
   
-    Threads
+    One native function, two threads, 1.95×
   
 
     
@@ -1757,7 +1759,7 @@
   <span class="md-ellipsis">
     
   
-    Native memory
+    Typed pointers, stack memory, a C function, a C symbol
   
 
     
@@ -1785,7 +1787,7 @@
   <span class="md-ellipsis">
     
   
-    Lanes and the machine
+    Four lanes at a time, and the machine as a fact
   
 
     
@@ -1813,7 +1815,7 @@
   <span class="md-ellipsis">
     
   
-    Atomics and threads
+    Four threads, one counter, one answer
   
 
     
@@ -1841,7 +1843,7 @@
   <span class="md-ellipsis">
     
   
-    Parallel ranges
+    parallel.range: say the iterations may run at once
   
 
     
@@ -1869,7 +1871,7 @@
   <span class="md-ellipsis">
     
   
-    Derivatives
+    A derivative that agrees to the last bit
   
 
     
@@ -1897,7 +1899,7 @@
   <span class="md-ellipsis">
     
   
-    Coroutines
+    An echo server and its client, as coroutines that compile
   
 
     
@@ -1925,7 +1927,7 @@
   <span class="md-ellipsis">
     
   
-    Generics
+    Generics, inferred at the call and monomorphized in native code
   
 
     
@@ -1953,7 +1955,7 @@
   <span class="md-ellipsis">
     
   
-    The toolbox
+    Every way of looking inside a build, on one program
   
 
     
@@ -2050,7 +2052,7 @@
   <span class="md-ellipsis">
     
   
-    GPU kernels
+    A CUDA kernel in Python, run three ways
   
 
     
@@ -2078,7 +2080,7 @@
   <span class="md-ellipsis">
     
   
-    XLA
+    StableHLO from the compiler, no JAX required
   
 
     
@@ -2193,7 +2195,7 @@
   <span class="md-ellipsis">
     
   
-    NumPy fusion
+    One NumPy expression, one loop
   
 
     
@@ -2221,7 +2223,7 @@
   <span class="md-ellipsis">
     
   
-    Pydantic
+    Pydantic models, typed and still validated
   
 
     
@@ -2249,7 +2251,7 @@
   <span class="md-ellipsis">
     
   
-    Parallelism
+    The same fused kernel, on every core
   
 
     
@@ -2277,7 +2279,7 @@
   <span class="md-ellipsis">
     
   
-    PyTorch ATen regions
+    A PyTorch layer as one C++ call
   
 
     
@@ -2305,7 +2307,7 @@
   <span class="md-ellipsis">
     
   
-    Training a torch MLP
+    A torch training script, converted, and where the time went
   
 
     
@@ -2333,7 +2335,7 @@
   <span class="md-ellipsis">
     
   
-    Training a JAX MLP
+    The same trainer with JAX, and why the step does not get faster
   
 
     
@@ -2361,7 +2363,7 @@
   <span class="md-ellipsis">
     
   
-    JAX export
+    Export a @jax.jit function at build time
   
 
     
@@ -2389,7 +2391,7 @@
   <span class="md-ellipsis">
     
   
-    Serving over Uvicorn
+    A FastAPI service that checks strict, as written
   
 
     
@@ -2417,7 +2419,7 @@
   <span class="md-ellipsis">
     
   
-    Flax
+    A Flax training loop, strict-checked as written
   
 
     
@@ -2445,7 +2447,7 @@
   <span class="md-ellipsis">
     
   
-    A trainer under torchrun and accelerate launch
+    Native kernels on every rank, with import ppy as the integration
   
 
     
@@ -2473,7 +2475,7 @@
   <span class="md-ellipsis">
     
   
-    Columnar expressions
+    A pandas expression as one kernel, nulls included
   
 
     
@@ -2576,7 +2578,7 @@
   <span class="md-ellipsis">
     
   
-    Inventory
+    Untyped Python in, strict PPY out
   
 
     
@@ -2604,7 +2606,7 @@
   <span class="md-ellipsis">
     
   
-    Inference
+    How far inference reaches without a single annotation
   
 
     
@@ -2632,7 +2634,7 @@
   <span class="md-ellipsis">
     
   
-    Interop
+    Import a .ppy module from plain Python
   
 
     
@@ -2660,7 +2662,7 @@
   <span class="md-ellipsis">
     
   
-    Project layout
+    A project is one call graph, and one program
   
 
     
@@ -2688,7 +2690,7 @@
   <span class="md-ellipsis">
     
   
-    Migration
+    Five dynamic idioms, rewritten and proven equivalent
   
 
     
@@ -3548,69 +3550,69 @@ folder holds both <code>&lt;name&gt;.py</code> and <code>&lt;name&gt;.ppy</code>
 <div class="grid cards">
 <ul>
 <li>
-<p><strong><a href="01_basics/">Basics</a></strong></p>
+<p><strong><a href="01_basics/">Three annotations, one native loop</a></strong></p>
 <hr />
-<p>Fixed-width integer markers, purity contracts, and per-function optimization levels.</p>
+<p><code>basics.ppy</code> is a Python file.</p>
 </li>
 <li>
-<p><strong><a href="02_arbitrary_precision/">Arbitrary precision</a></strong></p>
+<p><strong><a href="02_arbitrary_precision/">A machine word until it is not</a></strong></p>
 <hr />
-<p>Integers stay Python integers.</p>
+<p>Native code multiplies 64-bit integers.</p>
 </li>
 <li>
-<p><strong><a href="03_effects_and_contracts/">Effects and contracts</a></strong></p>
+<p><strong><a href="03_effects_and_contracts/">What <code>@ppy.pure</code> refuses</a></strong></p>
 <hr />
-<p>What <code>@ppy.pure</code> refuses, and why.</p>
+<p>Every function in a <code>.ppy</code> file carries an inferred effect set — I/O, global writes, randomness, time, mutation of arguments, each tracked on its own.</p>
 </li>
 <li>
-<p><strong><a href="04_classes/">Classes</a></strong></p>
+<p><strong><a href="04_classes/">Classes the checker can see through</a></strong></p>
 <hr />
-<p>Ordinary classes, with fields the checker knows.</p>
+<p>A class in PPY is an ordinary Python class with one requirement: its fields are known statically.</p>
 </li>
 <li>
-<p><strong><a href="08_native_data/">Native data</a></strong></p>
+<p><strong><a href="08_native_data/">What crosses the boundary as machine values</a></strong></p>
 <hr />
-<p>Which Python values have a native representation.</p>
+<p>A native function receives machine words, not Python objects.</p>
 </li>
 <li>
-<p><strong><a href="10_narrowing/">Narrowing</a></strong></p>
+<p><strong><a href="10_narrowing/">Every way a type gets narrower</a></strong></p>
 <hr />
-<p>Every form the checker understands.</p>
+<p>Flow typing is what lets a strict checker accept ordinary Python.</p>
 </li>
 <li>
-<p><strong><a href="11_numerics/">Numerics</a></strong></p>
+<p><strong><a href="11_numerics/">Where PPY refuses to differ from CPython</a></strong></p>
 <hr />
-<p>Where PPY refuses to differ from CPython.</p>
+<p>Integer semantics are the place a Python compiler is most tempted to cheat.</p>
 </li>
 <li>
-<p><strong><a href="13_value_classes/">Value classes</a></strong></p>
+<p><strong><a href="13_value_classes/">A dataclass with no boxed form</a></strong></p>
 <hr />
-<p>An all-scalar dataclass has no boxed representation.</p>
+<p><code>Vec3</code> is three floats.</p>
 </li>
 <li>
-<p><strong><a href="14_tuples/">Tuples</a></strong></p>
+<p><strong><a href="14_tuples/">Tuples as scalar atoms</a></strong></p>
 <hr />
-<p>Fixed tuples flatten into scalar atoms.</p>
+<p>A <code>tuple[float, float]</code> is two doubles.</p>
 </li>
 <li>
-<p><strong><a href="16_dynamic/">Dynamic boundaries</a></strong></p>
+<p><strong><a href="16_dynamic/">The escape hatch, and its price</a></strong></p>
 <hr />
-<p>The escape hatch, and what it costs.</p>
+<p>Strict PPY rejects <code>getattr</code> with a computed name, attributes it cannot resolve, and values it cannot type.</p>
 </li>
 <li>
-<p><strong><a href="17_containers/">Containers</a></strong></p>
+<p><strong><a href="17_containers/">Containers, inferred and owned</a></strong></p>
 <hr />
-<p>Element types, aliasing, and local mutation.</p>
+<p><code>out = []</code> has no element type until something goes into it.</p>
 </li>
 <li>
-<p><strong><a href="18_errors/">Exceptions</a></strong></p>
+<p><strong><a href="18_errors/">Exceptions are part of the contract</a></strong></p>
 <hr />
-<p>Exception behavior is part of the contract.</p>
+<p><code>divide(1, 0)</code> raises <code>ZeroDivisionError</code>.</p>
 </li>
 <li>
-<p><strong><a href="19_strings/">Strings</a></strong></p>
+<p><strong><a href="19_strings/">Strings stay on CPython, and say so</a></strong></p>
 <hr />
-<p>String work stays on CPython, and says so.</p>
+<p>PPY does not pretend to lower <code>str.split</code>.</p>
 </li>
 </ul>
 </div>
@@ -3618,59 +3620,59 @@ folder holds both <code>&lt;name&gt;.py</code> and <code>&lt;name&gt;.ppy</code>
 <div class="grid cards">
 <ul>
 <li>
-<p><strong><a href="12_buffers_and_jit/">Buffers and JIT</a></strong></p>
+<p><strong><a href="12_buffers_and_jit/">Borrow the memory, keep the order, specialize the rest</a></strong></p>
 <hr />
-<p>Borrowed memory, reassociation, and specialization.</p>
+<p>Three decisions that decide how fast a numeric function runs, each made once in a signature or a decorator.</p>
 </li>
 <li>
-<p><strong><a href="15_algorithms/">Algorithms</a></strong></p>
+<p><strong><a href="15_algorithms/">Eight kernels and six judge problems, against C</a></strong></p>
 <hr />
-<p>Two things: <code>algorithms.ppy</code>, eight compute-heavy kernels measured against the same eight in C, and six judge problems in <code>15a</code>–<code>15f</code>, each its own folder, read from standard input the way a judge sends them.</p>
+<p>Two things live here.</p>
 </li>
 <li>
-<p><strong><a href="28_threads/">Threads</a></strong></p>
+<p><strong><a href="28_threads/">One native function, two threads, 1.95×</a></strong></p>
 <hr />
-<p>A native region releases the GIL, so compute in it scales across threads.</p>
+<p><code>busy</code> is a 200-million-iteration loop.</p>
 </li>
 <li>
-<p><strong><a href="32_native_memory/">Native memory</a></strong></p>
+<p><strong><a href="32_native_memory/">Typed pointers, stack memory, a C function, a C symbol</a></strong></p>
 <hr />
-<p>Typed pointers, memory a function owns, a C function bound from <code>libm</code>, and a function exported as a C symbol -- with a reference implementation under plain CPython, so the three paths agree.</p>
+<p><code>ppy.native</code> is the directive it always was and, since 0.2.0, the namespace of typed native memory.</p>
 </li>
 <li>
-<p><strong><a href="33_simd_and_cpu/">Lanes and the machine</a></strong></p>
+<p><strong><a href="33_simd_and_cpu/">Four lanes at a time, and the machine as a fact</a></strong></p>
 <hr />
-<p><code>ppy.simd</code> is a few scalars operated on at once; <code>ppy.cpu</code> is the machine as a facade with no instruction named. Both have a reference implementation under CPython and a lowering to a dialect of the IR.</p>
+<p><code>ppy.simd</code> is a few scalars operated on at once; <code>ppy.cpu</code> is the machine as a facade with no instruction named.</p>
 </li>
 <li>
-<p><strong><a href="34_atomics_and_threads/">Atomics and threads</a></strong></p>
+<p><strong><a href="34_atomics_and_threads/">Four threads, one counter, one answer</a></strong></p>
 <hr />
-<p>Shared memory one operation at a time, and threads with what keeps them apart: <code>ppy.atomic</code> and <code>ppy.concurrent</code>, over memory the program owns.</p>
+<p>Four workers each add 500 to a shared counter with <code>atomic.fetch_add</code> and 500 × 2 to a shared total behind a mutex.</p>
 </li>
 <li>
-<p><strong><a href="35_parallel_range/">Parallel ranges</a></strong></p>
+<p><strong><a href="35_parallel_range/"><code>parallel.range</code>: say the iterations may run at once</a></strong></p>
 <hr />
-<p><code>for i in parallel.range(n)</code> says the iterations may run at once. Under CPython they run in order, which is one of the orders allowed; natively the body becomes a function over a chunk of the range, and the build's parallel backend decides how the chunks run.</p>
+<p><code>for i in parallel.range(n)</code> is a promise about the loop, not an instruction to the machine.</p>
 </li>
 <li>
-<p><strong><a href="36_autodiff/">Derivatives</a></strong></p>
+<p><strong><a href="36_autodiff/">A derivative that agrees to the last bit</a></strong></p>
 <hr />
-<p><code>ppy.grad(f)</code> is the gradient of <code>f</code> with respect to its first parameter, <code>ppy.value_and_grad(f, argnums=1)</code> the value and the gradient with respect to another, and both follow one rule table on every path.</p>
+<p><code>ppy.grad(f)</code> is the gradient of <code>f</code> with respect to its first parameter; <code>ppy.value_and_grad(f, argnums=1)</code> is the value and the gradient with respect to another.</p>
 </li>
 <li>
-<p><strong><a href="37_aio/">Coroutines</a></strong></p>
+<p><strong><a href="37_aio/">An echo server and its client, as coroutines that compile</a></strong></p>
 <hr />
-<p>An echo server and its client in one program: <code>ppy.aio</code> is asyncio under CPython and a native runtime -- one loop per process over epoll, timers, and non-blocking sockets -- where the compiler lowers the coroutines.</p>
+<p><code>echo.ppy</code> listens on a port, spawns a server task, connects a client, writes <code>hi!</code>, reads it back, and folds the bytes into one number.</p>
 </li>
 <li>
-<p><strong><a href="40_generics/">Generics</a></strong></p>
+<p><strong><a href="40_generics/">Generics, inferred at the call and monomorphized in native code</a></strong></p>
 <hr />
-<p>Type parameters the way Python 3.12 spells them, inferred at each call and checked against their bounds; native code monomorphizes, one instance per tuple of type arguments.</p>
+<p><code>largest(1, 2)</code> is an <code>int</code>.</p>
 </li>
 <li>
-<p><strong><a href="42_toolbox/">The toolbox</a></strong></p>
+<p><strong><a href="42_toolbox/">Every way of looking inside a build, on one program</a></strong></p>
 <hr />
-<p>One small program, and every way 0.2.0 has of looking inside its build: the IR at each stage, the source backends, the optimization report, the sanitizers, and profile-guided optimization.</p>
+<p><code>toolbox.ppy</code> is deliberately ordinary — a loop with a branch, an indexed read, a function nobody calls — so that the tools have something to say.</p>
 </li>
 </ul>
 </div>
@@ -3678,14 +3680,14 @@ folder holds both <code>&lt;name&gt;.py</code> and <code>&lt;name&gt;.ppy</code>
 <div class="grid cards">
 <ul>
 <li>
-<p><strong><a href="38_cuda/">GPU kernels</a></strong></p>
+<p><strong><a href="38_cuda/">A CUDA kernel in Python, run three ways</a></strong></p>
 <hr />
-<p>A saxpy and a block reduction with shared memory and a warp shuffle, written once in <code>ppy.cuda</code>: the reference launch under CPython, PTX through the CUDA driver under <code>ppy run</code> where a device is present, and CUDA or HIP source from <code>ppy emit</code>.</p>
+<p><code>saxpy.ppy</code> holds two kernels — a saxpy and a block reduction with shared memory and a warp shuffle — written once in <code>ppy.cuda</code>.</p>
 </li>
 <li>
-<p><strong><a href="39_xla/">XLA</a></strong></p>
+<p><strong><a href="39_xla/">StableHLO from the compiler, no JAX required</a></strong></p>
 <hr />
-<p><code>@xla.jit</code> marks a function of floats, ints, and bools whose body is one block of arithmetic and math for XLA: the compiler emits StableHLO, the build stages it, and the PJRT bridge compiles and runs it on a device.</p>
+<p><code>@xla.jit</code> marks a function of floats, ints, and bools whose body is one block of arithmetic and math.</p>
 </li>
 </ul>
 </div>
@@ -3693,59 +3695,59 @@ folder holds both <code>&lt;name&gt;.py</code> and <code>&lt;name&gt;.ppy</code>
 <div class="grid cards">
 <ul>
 <li>
-<p><strong><a href="05_numpy/">NumPy fusion</a></strong></p>
+<p><strong><a href="05_numpy/">One NumPy expression, one loop</a></strong></p>
 <hr />
-<p>Elementwise NumPy expressions become one kernel.</p>
+<p><code>np.sin(a) * 2.0 + np.cos(b)</code> is three NumPy calls and two temporary arrays of a million doubles each.</p>
 </li>
 <li>
-<p><strong><a href="06_pydantic/">Pydantic</a></strong></p>
+<p><strong><a href="06_pydantic/">Pydantic models, typed and still validated</a></strong></p>
 <hr />
-<p>Models keep their runtime validation.</p>
+<p>A pydantic model is two shapes: what its constructor accepts and what comes out validated.</p>
 </li>
 <li>
-<p><strong><a href="07_parallel/">Parallelism</a></strong></p>
+<p><strong><a href="07_parallel/">The same fused kernel, on every core</a></strong></p>
 <hr />
-<p>Splitting a fused kernel across threads.</p>
+<p><code>@ppy.parallel</code> on a fused NumPy expression splits its loop across the worker pool.</p>
 </li>
 <li>
-<p><strong><a href="09_torch/">PyTorch ATen regions</a></strong></p>
+<p><strong><a href="09_torch/">A PyTorch layer as one C++ call</a></strong></p>
 <hr />
-<p>A function of curated tensor ops becomes one C++ function.</p>
+<p><code>layer</code> is three tensor operations: a matmul, an add, a ReLU.</p>
 </li>
 <li>
-<p><strong><a href="21_training_torch/">Training a torch MLP</a></strong></p>
+<p><strong><a href="21_training_torch/">A torch training script, converted, and where the time went</a></strong></p>
 <hr />
-<p>Untyped PyTorch training code, converted with no hand editing afterwards.</p>
+<p><code>train.py</code> is an ordinary PyTorch script: standardize 20,000 rows of features in a Python loop, then run 100 steps of a two-layer MLP.</p>
 </li>
 <li>
-<p><strong><a href="22_training_jax/">Training a JAX MLP</a></strong></p>
+<p><strong><a href="22_training_jax/">The same trainer with JAX, and why the step does not get faster</a></strong></p>
 <hr />
-<p>The same shape as <code>21_training_torch</code>, with JAX.</p>
+<p>Same shape as the <a href="21_training_torch/">torch trainer</a>: a standardization loop over 20,000 rows, then 100 steps of a two-layer MLP, converted by <code>ppy convert</code> with no hand editing.</p>
 </li>
 <li>
-<p><strong><a href="25_jax_export/">JAX export</a></strong></p>
+<p><strong><a href="25_jax_export/">Export a <code>@jax.jit</code> function at build time</a></strong></p>
 <hr />
-<p>Build-time export of a staged function to StableHLO.</p>
+<p>JAX traces a jitted function on its first call, every time the process starts.</p>
 </li>
 <li>
-<p><strong><a href="27_uvicorn/">Serving over Uvicorn</a></strong></p>
+<p><strong><a href="27_uvicorn/">A FastAPI service that checks strict, as written</a></strong></p>
 <hr />
-<p>One folder, one serving story: Uvicorn is the server, and what runs on it ranges from a raw ASGI callable to a FastAPI application — FastAPI is an ASGI framework, so both go through the same <code>uvicorn.run</code> and the same plugin.</p>
+<p>One folder, one serving story.</p>
 </li>
 <li>
-<p><strong><a href="29_flax/">Flax</a></strong></p>
+<p><strong><a href="29_flax/">A Flax training loop, strict-checked as written</a></strong></p>
 <hr />
-<p>An MLP regression trained with Flax (linen) and optax, converted from ordinary Python and checked under <code>strict = true</code> — the jax plugin covers the Flax and optax surface, so nothing extra is installed or configured.</p>
+<p><code>train.py</code> trains an MLP regression with Flax (linen) and optax: a <code>nn.Module</code> subclass, <code>@nn.compact</code>, <code>optax.adam</code>, a <code>@partial(jax.jit)</code> training step.</p>
 </li>
 <li>
-<p><strong><a href="31_torchrun/">A trainer under <code>torchrun</code> and <code>accelerate launch</code></a></strong></p>
+<p><strong><a href="31_torchrun/">Native kernels on every rank, with <code>import ppy</code> as the integration</a></strong></p>
 <hr />
-<p>The same program, the same kernels, native on every rank -- with <code>import ppy</code> as the whole integration.</p>
+<p><code>train.py</code> is a plain PyTorch trainer.</p>
 </li>
 <li>
-<p><strong><a href="41_columnar/">Columnar expressions</a></strong></p>
+<p><strong><a href="41_columnar/">A pandas expression as one kernel, nulls included</a></strong></p>
 <hr />
-<p>Expressions over pandas Series converge onto the columnar dialect of the IR and fuse into one kernel over the columns' memory, nulls included.</p>
+<p><code>s * t + s.fillna(0.0)</code> is four pandas operations and three intermediate Series.</p>
 </li>
 </ul>
 </div>
@@ -3753,29 +3755,29 @@ folder holds both <code>&lt;name&gt;.py</code> and <code>&lt;name&gt;.ppy</code>
 <div class="grid cards">
 <ul>
 <li>
-<p><strong><a href="20_inventory/">Inventory</a></strong></p>
+<p><strong><a href="20_inventory/">Untyped Python in, strict PPY out</a></strong></p>
 <hr />
-<p>Untyped Python that converts cleanly, with no hand editing afterwards.</p>
+<p><code>inventory.py</code> has no annotations.</p>
 </li>
 <li>
-<p><strong><a href="23_inference/">Inference</a></strong></p>
+<p><strong><a href="23_inference/">How far inference reaches without a single annotation</a></strong></p>
 <hr />
-<p>Three untyped modules, converted with no hand editing afterwards. Each <code>.ppy</code> here is exactly what <code>ppy convert</code> writes.</p>
+<p>Three modules with no type annotations at all, and the three <code>.ppy</code> files <code>ppy convert</code> wrote from them.</p>
 </li>
 <li>
-<p><strong><a href="24_interop/">Interop</a></strong></p>
+<p><strong><a href="24_interop/">Import a <code>.ppy</code> module from plain Python</a></strong></p>
 <hr />
-<p>A plain <code>.py</code> file importing a <code>.ppy</code> module, with no compiler and no build step.</p>
+<p>Two lines make a <code>.ppy</code> file importable from any Python program: <code>import ppy</code>, then <code>import geometry</code>.</p>
 </li>
 <li>
-<p><strong><a href="26_project/">Project layout</a></strong></p>
+<p><strong><a href="26_project/">A project is one call graph, and one program</a></strong></p>
 <hr />
-<p>A multi-module project, analyzed as one call graph rather than file by file.</p>
+<p><code>src/app.ppy</code> calls <code>geometry.perimeter</code> from <code>src/geometry.ppy</code>.</p>
 </li>
 <li>
-<p><strong><a href="30_migrate/">Migration</a></strong></p>
+<p><strong><a href="30_migrate/">Five dynamic idioms, rewritten and proven equivalent</a></strong></p>
 <hr />
-<p>A little legacy telemetry script, dynamic in all the usual harmless ways — <code>importlib.import_module</code>, <code>globals()</code> writes, <code>setattr</code>/<code>getattr</code> on constant names — run through <code>ppy migrate</code> instead of <code>ppy convert</code>.</p>
+<p><code>legacy.py</code> is a small telemetry script that is dynamic in all the usual harmless ways: <code>importlib.import_module("math")</code>, <code>globals()["SCALE"] = 4</code>, <code>setattr(first, "flagged", True)</code>, <code>getattr(first, "flagged")</code>.</p>
 </li>
 </ul>
 </div>
@@ -3833,13 +3835,13 @@ folder holds both <code>&lt;name&gt;.py</code> and <code>&lt;name&gt;.ppy</code>
         
         
           
-          <a href="01_basics/" class="md-footer__link md-footer__link--next" aria-label="Next: Basics">
+          <a href="01_basics/" class="md-footer__link md-footer__link--next" aria-label="Next: Three annotations, one native loop">
             <div class="md-footer__title">
               <span class="md-footer__direction">
                 Next
               </span>
               <div class="md-ellipsis">
-                Basics
+                Three annotations, one native loop
               </div>
             </div>
             <div class="md-footer__button md-icon">

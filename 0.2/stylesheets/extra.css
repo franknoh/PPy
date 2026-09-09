@@ -1,0 +1,4 @@
+/* A long listing scrolls inside its own pane rather than pushing the page down. */
+.md-typeset pre > code {
+  max-height: 40rem;
+}

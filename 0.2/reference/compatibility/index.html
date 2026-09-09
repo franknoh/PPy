@@ -55,6 +55,8 @@
     
       <link rel="stylesheet" href="../../assets/_mkdocstrings.css">
     
+      <link rel="stylesheet" href="../../stylesheets/extra.css">
+    
     <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
     
       
@@ -1214,7 +1216,7 @@
   <span class="md-ellipsis">
     
   
-    Basics
+    Three annotations, one native loop
   
 
     
@@ -1242,7 +1244,7 @@
   <span class="md-ellipsis">
     
   
-    Arbitrary precision
+    A machine word until it is not
   
 
     
@@ -1270,7 +1272,7 @@
   <span class="md-ellipsis">
     
   
-    Effects and contracts
+    What @ppy.pure refuses
   
 
     
@@ -1298,7 +1300,7 @@
   <span class="md-ellipsis">
     
   
-    Classes
+    Classes the checker can see through
   
 
     
@@ -1326,7 +1328,7 @@
   <span class="md-ellipsis">
     
   
-    Native data
+    What crosses the boundary as machine values
   
 
     
@@ -1354,7 +1356,7 @@
   <span class="md-ellipsis">
     
   
-    Narrowing
+    Every way a type gets narrower
   
 
     
@@ -1382,7 +1384,7 @@
   <span class="md-ellipsis">
     
   
-    Numerics
+    Where PPY refuses to differ from CPython
   
 
     
@@ -1410,7 +1412,7 @@
   <span class="md-ellipsis">
     
   
-    Value classes
+    A dataclass with no boxed form
   
 
     
@@ -1438,7 +1440,7 @@
   <span class="md-ellipsis">
     
   
-    Tuples
+    Tuples as scalar atoms
   
 
     
@@ -1466,7 +1468,7 @@
   <span class="md-ellipsis">
     
   
-    Dynamic boundaries
+    The escape hatch, and its price
   
 
     
@@ -1494,7 +1496,7 @@
   <span class="md-ellipsis">
     
   
-    Containers
+    Containers, inferred and owned
   
 
     
@@ -1522,7 +1524,7 @@
   <span class="md-ellipsis">
     
   
-    Exceptions
+    Exceptions are part of the contract
   
 
     
@@ -1550,7 +1552,7 @@
   <span class="md-ellipsis">
     
   
-    Strings
+    Strings stay on CPython, and say so
   
 
     
@@ -1662,7 +1664,7 @@
   <span class="md-ellipsis">
     
   
-    Buffers and JIT
+    Borrow the memory, keep the order, specialize the rest
   
 
     
@@ -1690,7 +1692,7 @@
   <span class="md-ellipsis">
     
   
-    Algorithms
+    Eight kernels and six judge problems, against C
   
 
     
@@ -1718,7 +1720,7 @@
   <span class="md-ellipsis">
     
   
-    Threads
+    One native function, two threads, 1.95×
   
 
     
@@ -1746,7 +1748,7 @@
   <span class="md-ellipsis">
     
   
-    Native memory
+    Typed pointers, stack memory, a C function, a C symbol
   
 
     
@@ -1774,7 +1776,7 @@
   <span class="md-ellipsis">
     
   
-    Lanes and the machine
+    Four lanes at a time, and the machine as a fact
   
 
     
@@ -1802,7 +1804,7 @@
   <span class="md-ellipsis">
     
   
-    Atomics and threads
+    Four threads, one counter, one answer
   
 
     
@@ -1830,7 +1832,7 @@
   <span class="md-ellipsis">
     
   
-    Parallel ranges
+    parallel.range: say the iterations may run at once
   
 
     
@@ -1858,7 +1860,7 @@
   <span class="md-ellipsis">
     
   
-    Derivatives
+    A derivative that agrees to the last bit
   
 
     
@@ -1886,7 +1888,7 @@
   <span class="md-ellipsis">
     
   
-    Coroutines
+    An echo server and its client, as coroutines that compile
   
 
     
@@ -1914,7 +1916,7 @@
   <span class="md-ellipsis">
     
   
-    Generics
+    Generics, inferred at the call and monomorphized in native code
   
 
     
@@ -1942,7 +1944,7 @@
   <span class="md-ellipsis">
     
   
-    The toolbox
+    Every way of looking inside a build, on one program
   
 
     
@@ -2036,7 +2038,7 @@
   <span class="md-ellipsis">
     
   
-    GPU kernels
+    A CUDA kernel in Python, run three ways
   
 
     
@@ -2064,7 +2066,7 @@
   <span class="md-ellipsis">
     
   
-    XLA
+    StableHLO from the compiler, no JAX required
   
 
     
@@ -2176,7 +2178,7 @@
   <span class="md-ellipsis">
     
   
-    NumPy fusion
+    One NumPy expression, one loop
   
 
     
@@ -2204,7 +2206,7 @@
   <span class="md-ellipsis">
     
   
-    Pydantic
+    Pydantic models, typed and still validated
   
 
     
@@ -2232,7 +2234,7 @@
   <span class="md-ellipsis">
     
   
-    Parallelism
+    The same fused kernel, on every core
   
 
     
@@ -2260,7 +2262,7 @@
   <span class="md-ellipsis">
     
   
-    PyTorch ATen regions
+    A PyTorch layer as one C++ call
   
 
     
@@ -2288,7 +2290,7 @@
   <span class="md-ellipsis">
     
   
-    Training a torch MLP
+    A torch training script, converted, and where the time went
   
 
     
@@ -2316,7 +2318,7 @@
   <span class="md-ellipsis">
     
   
-    Training a JAX MLP
+    The same trainer with JAX, and why the step does not get faster
   
 
     
@@ -2344,7 +2346,7 @@
   <span class="md-ellipsis">
     
   
-    JAX export
+    Export a @jax.jit function at build time
   
 
     
@@ -2372,7 +2374,7 @@
   <span class="md-ellipsis">
     
   
-    Serving over Uvicorn
+    A FastAPI service that checks strict, as written
   
 
     
@@ -2400,7 +2402,7 @@
   <span class="md-ellipsis">
     
   
-    Flax
+    A Flax training loop, strict-checked as written
   
 
     
@@ -2428,7 +2430,7 @@
   <span class="md-ellipsis">
     
   
-    A trainer under torchrun and accelerate launch
+    Native kernels on every rank, with import ppy as the integration
   
 
     
@@ -2456,7 +2458,7 @@
   <span class="md-ellipsis">
     
   
-    Columnar expressions
+    A pandas expression as one kernel, nulls included
   
 
     
@@ -2556,7 +2558,7 @@
   <span class="md-ellipsis">
     
   
-    Inventory
+    Untyped Python in, strict PPY out
   
 
     
@@ -2584,7 +2586,7 @@
   <span class="md-ellipsis">
     
   
-    Inference
+    How far inference reaches without a single annotation
   
 
     
@@ -2612,7 +2614,7 @@
   <span class="md-ellipsis">
     
   
-    Interop
+    Import a .ppy module from plain Python
   
 
     
@@ -2640,7 +2642,7 @@
   <span class="md-ellipsis">
     
   
-    Project layout
+    A project is one call graph, and one program
   
 
     
@@ -2668,7 +2670,7 @@
   <span class="md-ellipsis">
     
   
-    Migration
+    Five dynamic idioms, rewritten and proven equivalent
   
 
     

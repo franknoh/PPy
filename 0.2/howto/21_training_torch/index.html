@@ -27,7 +27,7 @@
     
     
       
-        <title>Training a torch MLP - PPY</title>
+        <title>A torch training script, converted, and where the time went - PPY</title>
       
     
     
@@ -55,6 +55,8 @@
     
       <link rel="stylesheet" href="../../assets/_mkdocstrings.css">
     
+      <link rel="stylesheet" href="../../stylesheets/extra.css">
+    
     <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
     
       
@@ -80,7 +82,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#training-a-torch-mlp" class="md-skip">
+        <a href="#a-torch-training-script-converted-and-where-the-time-went" class="md-skip">
           Skip to content
         </a>
       
@@ -120,7 +122,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Training a torch MLP
+              A torch training script, converted, and where the time went
             
           </span>
         </div>
@@ -1222,7 +1224,7 @@
   <span class="md-ellipsis">
     
   
-    Basics
+    Three annotations, one native loop
   
 
     
@@ -1250,7 +1252,7 @@
   <span class="md-ellipsis">
     
   
-    Arbitrary precision
+    A machine word until it is not
   
 
     
@@ -1278,7 +1280,7 @@
   <span class="md-ellipsis">
     
   
-    Effects and contracts
+    What @ppy.pure refuses
   
 
     
@@ -1306,7 +1308,7 @@
   <span class="md-ellipsis">
     
   
-    Classes
+    Classes the checker can see through
   
 
     
@@ -1334,7 +1336,7 @@
   <span class="md-ellipsis">
     
   
-    Native data
+    What crosses the boundary as machine values
   
 
     
@@ -1362,7 +1364,7 @@
   <span class="md-ellipsis">
     
   
-    Narrowing
+    Every way a type gets narrower
   
 
     
@@ -1390,7 +1392,7 @@
   <span class="md-ellipsis">
     
   
-    Numerics
+    Where PPY refuses to differ from CPython
   
 
     
@@ -1418,7 +1420,7 @@
   <span class="md-ellipsis">
     
   
-    Value classes
+    A dataclass with no boxed form
   
 
     
@@ -1446,7 +1448,7 @@
   <span class="md-ellipsis">
     
   
-    Tuples
+    Tuples as scalar atoms
   
 
     
@@ -1474,7 +1476,7 @@
   <span class="md-ellipsis">
     
   
-    Dynamic boundaries
+    The escape hatch, and its price
   
 
     
@@ -1502,7 +1504,7 @@
   <span class="md-ellipsis">
     
   
-    Containers
+    Containers, inferred and owned
   
 
     
@@ -1530,7 +1532,7 @@
   <span class="md-ellipsis">
     
   
-    Exceptions
+    Exceptions are part of the contract
   
 
     
@@ -1558,7 +1560,7 @@
   <span class="md-ellipsis">
     
   
-    Strings
+    Strings stay on CPython, and say so
   
 
     
@@ -1673,7 +1675,7 @@
   <span class="md-ellipsis">
     
   
-    Buffers and JIT
+    Borrow the memory, keep the order, specialize the rest
   
 
     
@@ -1701,7 +1703,7 @@
   <span class="md-ellipsis">
     
   
-    Algorithms
+    Eight kernels and six judge problems, against C
   
 
     
@@ -1729,7 +1731,7 @@
   <span class="md-ellipsis">
     
   
-    Threads
+    One native function, two threads, 1.95×
   
 
     
@@ -1757,7 +1759,7 @@
   <span class="md-ellipsis">
     
   
-    Native memory
+    Typed pointers, stack memory, a C function, a C symbol
   
 
     
@@ -1785,7 +1787,7 @@
   <span class="md-ellipsis">
     
   
-    Lanes and the machine
+    Four lanes at a time, and the machine as a fact
   
 
     
@@ -1813,7 +1815,7 @@
   <span class="md-ellipsis">
     
   
-    Atomics and threads
+    Four threads, one counter, one answer
   
 
     
@@ -1841,7 +1843,7 @@
   <span class="md-ellipsis">
     
   
-    Parallel ranges
+    parallel.range: say the iterations may run at once
   
 
     
@@ -1869,7 +1871,7 @@
   <span class="md-ellipsis">
     
   
-    Derivatives
+    A derivative that agrees to the last bit
   
 
     
@@ -1897,7 +1899,7 @@
   <span class="md-ellipsis">
     
   
-    Coroutines
+    An echo server and its client, as coroutines that compile
   
 
     
@@ -1925,7 +1927,7 @@
   <span class="md-ellipsis">
     
   
-    Generics
+    Generics, inferred at the call and monomorphized in native code
   
 
     
@@ -1953,7 +1955,7 @@
   <span class="md-ellipsis">
     
   
-    The toolbox
+    Every way of looking inside a build, on one program
   
 
     
@@ -2050,7 +2052,7 @@
   <span class="md-ellipsis">
     
   
-    GPU kernels
+    A CUDA kernel in Python, run three ways
   
 
     
@@ -2078,7 +2080,7 @@
   <span class="md-ellipsis">
     
   
-    XLA
+    StableHLO from the compiler, no JAX required
   
 
     
@@ -2195,7 +2197,7 @@
   <span class="md-ellipsis">
     
   
-    NumPy fusion
+    One NumPy expression, one loop
   
 
     
@@ -2223,7 +2225,7 @@
   <span class="md-ellipsis">
     
   
-    Pydantic
+    Pydantic models, typed and still validated
   
 
     
@@ -2251,7 +2253,7 @@
   <span class="md-ellipsis">
     
   
-    Parallelism
+    The same fused kernel, on every core
   
 
     
@@ -2279,7 +2281,7 @@
   <span class="md-ellipsis">
     
   
-    PyTorch ATen regions
+    A PyTorch layer as one C++ call
   
 
     
@@ -2316,7 +2318,7 @@
   <span class="md-ellipsis">
     
   
-    Training a torch MLP
+    A torch training script, converted, and where the time went
   
 
     
@@ -2334,7 +2336,7 @@
   <span class="md-ellipsis">
     
   
-    Training a torch MLP
+    A torch training script, converted, and where the time went
   
 
     
@@ -2360,10 +2362,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#provenance" class="md-nav__link">
+  <a href="#the-loop-is-where-the-speedup-is" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Provenance
+        The loop is where the speedup is
       
     </span>
   </a>
@@ -2371,21 +2373,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#measured" class="md-nav__link">
+  <a href="#the-training-step-is-one-region-and-that-is-all-it-can-be" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Measured
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#where-the-speedup-comes-from" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Where the speedup comes from
+        The training step is one region, and that is all it can be
       
     </span>
   </a>
@@ -2426,6 +2417,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#read-on" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Read on
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#21_training_torchtrainppy" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2459,7 +2461,7 @@
   <span class="md-ellipsis">
     
   
-    Training a JAX MLP
+    The same trainer with JAX, and why the step does not get faster
   
 
     
@@ -2487,7 +2489,7 @@
   <span class="md-ellipsis">
     
   
-    JAX export
+    Export a @jax.jit function at build time
   
 
     
@@ -2515,7 +2517,7 @@
   <span class="md-ellipsis">
     
   
-    Serving over Uvicorn
+    A FastAPI service that checks strict, as written
   
 
     
@@ -2543,7 +2545,7 @@
   <span class="md-ellipsis">
     
   
-    Flax
+    A Flax training loop, strict-checked as written
   
 
     
@@ -2571,7 +2573,7 @@
   <span class="md-ellipsis">
     
   
-    A trainer under torchrun and accelerate launch
+    Native kernels on every rank, with import ppy as the integration
   
 
     
@@ -2599,7 +2601,7 @@
   <span class="md-ellipsis">
     
   
-    Columnar expressions
+    A pandas expression as one kernel, nulls included
   
 
     
@@ -2702,7 +2704,7 @@
   <span class="md-ellipsis">
     
   
-    Inventory
+    Untyped Python in, strict PPY out
   
 
     
@@ -2730,7 +2732,7 @@
   <span class="md-ellipsis">
     
   
-    Inference
+    How far inference reaches without a single annotation
   
 
     
@@ -2758,7 +2760,7 @@
   <span class="md-ellipsis">
     
   
-    Interop
+    Import a .ppy module from plain Python
   
 
     
@@ -2786,7 +2788,7 @@
   <span class="md-ellipsis">
     
   
-    Project layout
+    A project is one call graph, and one program
   
 
     
@@ -2814,7 +2816,7 @@
   <span class="md-ellipsis">
     
   
-    Migration
+    Five dynamic idioms, rewritten and proven equivalent
   
 
     
@@ -3593,10 +3595,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#provenance" class="md-nav__link">
+  <a href="#the-loop-is-where-the-speedup-is" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Provenance
+        The loop is where the speedup is
       
     </span>
   </a>
@@ -3604,21 +3606,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#measured" class="md-nav__link">
+  <a href="#the-training-step-is-one-region-and-that-is-all-it-can-be" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Measured
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#where-the-speedup-comes-from" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Where the speedup comes from
+        The training step is one region, and that is all it can be
       
     </span>
   </a>
@@ -3659,6 +3650,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#read-on" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Read on
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#21_training_torchtrainppy" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3689,212 +3691,198 @@
   
 
 
-<h1 id="training-a-torch-mlp">Training a torch MLP<a class="headerlink" href="#training-a-torch-mlp" title="Permanent link">&para;</a></h1>
-<p>Untyped PyTorch training code, converted with no hand editing afterwards.</p>
-<p><code>train.ppy</code> is exactly what <code>ppy convert train.py --promote-buffers</code> writes.</p>
-<h2 id="provenance">Provenance<a class="headerlink" href="#provenance" title="Permanent link">&para;</a></h2>
-<p>Generated, not hand-written. Each of these is exactly what the converter
-writes, and <code>verify_conversions.py</code> regenerates it to prove it:</p>
-<ul>
-<li><code>train.ppy</code> &larr; <code>ppy convert train.py --promote-buffers</code></li>
-</ul>
-<h2 id="measured">Measured<a class="headerlink" href="#measured" title="Permanent link">&para;</a></h2>
-<table>
-<thead>
-<tr>
-<th></th>
-<th style="text-align: right;">plain</th>
-<th style="text-align: right;">ppy run</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>preprocessing</td>
-<td style="text-align: right;">53.9 ms</td>
-<td style="text-align: right;"><strong>0.8 ms</strong></td>
-</tr>
-<tr>
-<td>100 training steps</td>
-<td style="text-align: right;">208.3 ms</td>
-<td style="text-align: right;">163.4 ms</td>
-</tr>
-</tbody>
-</table>
-<p><code>checksum</code> and the loss trajectory are identical on both paths.</p>
-<h2 id="where-the-speedup-comes-from">Where the speedup comes from<a class="headerlink" href="#where-the-speedup-comes-from" title="Permanent link">&para;</a></h2>
-<p>The large factor is the preprocessing, which is ordinary arithmetic rather than
-tensor work. <code>standardize</code> reads and writes by index only, so the converter
-declares its parameters <code>Buffer[float]</code> and rewrites the values feeding them
-into <code>array.array</code>. The loop then lowers to a native loop writing into memory
-the caller owns.</p>
-<p><code>forward_loss</code> is a single function of curated tensor operations, so it compiles
-into one C++ ATen region. Every <code>at::</code> call still goes through the dispatcher,
-so <code>.backward()</code> sees the same graph. That is worth roughly 20% on small CPU
-tensors and nothing on an accelerator, where kernel launch latency dominates.</p>
+<h1 id="a-torch-training-script-converted-and-where-the-time-went">A torch training script, converted, and where the time went<a class="headerlink" href="#a-torch-training-script-converted-and-where-the-time-went" title="Permanent link">&para;</a></h1>
+<p><code>train.py</code> is an ordinary PyTorch script: standardize 20,000 rows of
+features in a Python loop, then run 100 steps of a two-layer MLP.
+<code>train.ppy</code> is what <code>ppy convert</code> wrote from it. The preprocessing loop
+became native and went from about 54 ms to under 1 ms; the training loop
+became one ATen region and got about 20% faster on the CPU. The checksum
+and the loss trajectory are identical on every path, which is the part that
+matters.</p>
+<h2 id="the-loop-is-where-the-speedup-is">The loop is where the speedup is<a class="headerlink" href="#the-loop-is-where-the-speedup-is" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="k">def</span><span class="w"> </span><span class="nf">standardize</span><span class="p">(</span><span class="n">raw</span><span class="p">:</span> <span class="n">Buffer</span><span class="p">[</span><span class="nb">float</span><span class="p">],</span> <span class="n">out</span><span class="p">:</span> <span class="n">Buffer</span><span class="p">[</span><span class="nb">float</span><span class="p">],</span> <span class="n">rows</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">cols</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">float</span><span class="p">:</span>
+</code></pre></div>
+<p><code>standardize</code> reads and writes by index only, so <code>--promote-buffers</code>
+declared its parameters <code>Buffer[float]</code> and rewrote the values feeding them
+into <code>array.array</code>. The loop lowers to native code writing into memory the
+caller owns, and the 20,000×16 standardization that dominated the script's
+Python time disappears from the profile.</p>
+<h2 id="the-training-step-is-one-region-and-that-is-all-it-can-be">The training step is one region, and that is all it can be<a class="headerlink" href="#the-training-step-is-one-region-and-that-is-all-it-can-be" title="Permanent link">&para;</a></h2>
+<p><code>forward_loss</code> is a single function of curated tensor operations —
+<code>matmul</code>, <code>add</code>, <code>relu</code>, <code>sub</code>, <code>mul</code>, <code>mean</code> — so the torch plugin compiles
+it into one C++ ATen region. Every <code>at::</code> call still goes through the
+dispatcher, <code>.backward()</code> sees the same graph, and the loss trajectory is
+bit-identical. On small CPU tensors that removes one Python round trip per
+operator, roughly 20%; on an accelerator it removes nothing measurable,
+because kernel launch latency dominates. This README does not claim
+otherwise.</p>
 <h2 id="what-the-input-had-to-get-right">What the input had to get right<a class="headerlink" href="#what-the-input-had-to-get-right" title="Permanent link">&para;</a></h2>
 <ul>
 <li><code>standardize</code> indexes rather than slices. A slice copies, so a sliced
   parameter cannot be borrowed, and the converter says so:
-  <code>remark[R3003]: \</code>raw` is sliced, which copies`.</li>
+  <code>remark[R3003]: raw is sliced, which copies</code>.</li>
 <li><code>descend</code> narrows <code>parameter.grad</code> before using it. It is <code>Tensor | None</code>
-  until a backward pass fills it, and the unnarrowed version is a latent crash
-  that <code>ppy check</code> reports.</li>
-<li><code>forward_loss</code> is one function. Split across two, every operator pays a Python
-  round trip and no region forms.</li>
+  until a backward pass fills it, and the unnarrowed version is a latent
+  crash that <code>ppy check</code> reports.</li>
+<li><code>forward_loss</code> is one function. Split across two, every operator pays a
+  Python round trip and no region forms.</li>
 </ul>
 <h2 id="run-it">Run it<a class="headerlink" href="#run-it" title="Permanent link">&para;</a></h2>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>python<span class="w">    </span>train.py
-<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>ppy<span class="w"> </span>check<span class="w"> </span>train.ppy
-<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>ppy<span class="w"> </span>build<span class="w"> </span>train.ppy
-<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>ppy<span class="w"> </span>run<span class="w">   </span>train.ppy
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>python<span class="w">  </span>train.ppy
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>ppy<span class="w"> </span>run<span class="w"> </span>train.ppy
 </code></pre></div>
 <!-- outputs:start -->
 <h2 id="what-it-prints">What it prints<a class="headerlink" href="#what-it-prints" title="Permanent link">&para;</a></h2>
-<p><strong><code>python    train.py</code></strong></p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a># device: cpu
-<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a># native prep: False
-<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a># aten region: False
-<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>prep      60.3 ms   checksum=-21282.454900
-<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>train    333.3 ms   loss 1.0250 -&gt; 1.0019
-</code></pre></div>
-<p><strong><code>ppy check train.ppy</code></strong></p>
-<p><em>(prints nothing; exits 0)</em></p>
-<p><strong><code>ppy build train.ppy</code></strong></p>
-<p><em>(prints nothing; exits 0)</em></p>
-<p><strong><code>ppy run   train.ppy</code></strong></p>
+<p><strong><code>python  train.ppy</code></strong></p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a># device: cpu
 <a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a># native prep: False
-<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a># aten region: True
-<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>prep       0.9 ms   checksum=-21282.454900
-<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>train    324.8 ms   loss 1.0250 -&gt; 1.0019
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a># aten region: False
+<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>prep      68.5 ms   checksum=-21282.454900
+<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>train   3632.8 ms   loss 1.0250 -&gt; 1.0019
+</code></pre></div>
+<p><strong><code>ppy run train.ppy</code></strong></p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a># device: cpu
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a># native prep: False
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a># aten region: True
+<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>prep       1.2 ms   checksum=-21282.454900
+<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>train   3441.9 ms   loss 1.0250 -&gt; 1.0019
 </code></pre></div>
 <!-- outputs:end -->
 
+<h2 id="read-on">Read on<a class="headerlink" href="#read-on" title="Permanent link">&para;</a></h2>
+<ul>
+<li><a href="../09_torch/">PyTorch regions</a> — the region on its own, with the guard.</li>
+<li><a href="../22_training_jax/">Training with JAX</a> — the same script where XLA already owns the step.</li>
+<li><a href="../../internals/plugins/">Plugins: PyTorch</a> — the curated ops and what fuses.</li>
+</ul>
+<p>Generated, not hand-written: <code>train.ppy</code> is exactly what
+<code>ppy convert train.py --promote-buffers</code> writes, and
+<code>examples/verify_conversions.py</code> checks that on every run.</p>
 <h2 id="21_training_torchtrainppy"><code>21_training_torch/train.ppy</code><a class="headerlink" href="#21_training_torchtrainppy" title="Permanent link">&para;</a></h2>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">array</span>
-<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="kn">import</span><span class="w"> </span><span class="nn">math</span>
-<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="kn">import</span><span class="w"> </span><span class="nn">time</span>
-<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="kn">from</span><span class="w"> </span><span class="nn">collections.abc</span><span class="w"> </span><span class="kn">import</span> <span class="n">Sequence</span>
-<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Literal</span>
-<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>
-<a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="kn">import</span><span class="w"> </span><span class="nn">ppy</span>
-<a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a><span class="kn">import</span><span class="w"> </span><span class="nn">torch</span>
-<a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ppy</span><span class="w"> </span><span class="kn">import</span> <span class="n">Buffer</span>
-<a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a>
-<a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a>
-<a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a><span class="k">def</span><span class="w"> </span><span class="nf">standardize</span><span class="p">(</span><span class="n">raw</span><span class="p">:</span> <span class="n">Buffer</span><span class="p">[</span><span class="nb">float</span><span class="p">],</span> <span class="n">out</span><span class="p">:</span> <span class="n">Buffer</span><span class="p">[</span><span class="nb">float</span><span class="p">],</span> <span class="n">rows</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">cols</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">float</span><span class="p">:</span>
-<a id="__codelineno-3-13" name="__codelineno-3-13" href="#__codelineno-3-13"></a>    <span class="n">total</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.0</span>
-<a id="__codelineno-3-14" name="__codelineno-3-14" href="#__codelineno-3-14"></a>    <span class="k">for</span> <span class="n">row</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">rows</span><span class="p">):</span>
-<a id="__codelineno-3-15" name="__codelineno-3-15" href="#__codelineno-3-15"></a>        <span class="n">base</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="n">row</span> <span class="o">*</span> <span class="n">cols</span>
-<a id="__codelineno-3-16" name="__codelineno-3-16" href="#__codelineno-3-16"></a>        <span class="n">target</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="n">row</span> <span class="o">*</span> <span class="n">cols</span> <span class="o">*</span> <span class="mi">2</span>
-<a id="__codelineno-3-17" name="__codelineno-3-17" href="#__codelineno-3-17"></a>
-<a id="__codelineno-3-18" name="__codelineno-3-18" href="#__codelineno-3-18"></a>        <span class="n">sum_</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.0</span>
-<a id="__codelineno-3-19" name="__codelineno-3-19" href="#__codelineno-3-19"></a>        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">cols</span><span class="p">):</span>
-<a id="__codelineno-3-20" name="__codelineno-3-20" href="#__codelineno-3-20"></a>            <span class="n">sum_</span> <span class="o">+=</span> <span class="n">raw</span><span class="p">[</span><span class="n">base</span> <span class="o">+</span> <span class="n">i</span><span class="p">]</span>
-<a id="__codelineno-3-21" name="__codelineno-3-21" href="#__codelineno-3-21"></a>        <span class="n">mean</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="n">sum_</span> <span class="o">/</span> <span class="n">cols</span>
-<a id="__codelineno-3-22" name="__codelineno-3-22" href="#__codelineno-3-22"></a>
-<a id="__codelineno-3-23" name="__codelineno-3-23" href="#__codelineno-3-23"></a>        <span class="n">spread</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.0</span>
-<a id="__codelineno-3-24" name="__codelineno-3-24" href="#__codelineno-3-24"></a>        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">cols</span><span class="p">):</span>
-<a id="__codelineno-3-25" name="__codelineno-3-25" href="#__codelineno-3-25"></a>            <span class="n">spread</span> <span class="o">+=</span> <span class="p">(</span><span class="n">raw</span><span class="p">[</span><span class="n">base</span> <span class="o">+</span> <span class="n">i</span><span class="p">]</span> <span class="o">-</span> <span class="n">mean</span><span class="p">)</span> <span class="o">*</span> <span class="p">(</span><span class="n">raw</span><span class="p">[</span><span class="n">base</span> <span class="o">+</span> <span class="n">i</span><span class="p">]</span> <span class="o">-</span> <span class="n">mean</span><span class="p">)</span>
-<a id="__codelineno-3-26" name="__codelineno-3-26" href="#__codelineno-3-26"></a>        <span class="n">deviation</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="n">math</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="n">spread</span> <span class="o">/</span> <span class="n">cols</span><span class="p">)</span> <span class="o">+</span> <span class="mf">1e-8</span>
-<a id="__codelineno-3-27" name="__codelineno-3-27" href="#__codelineno-3-27"></a>
-<a id="__codelineno-3-28" name="__codelineno-3-28" href="#__codelineno-3-28"></a>        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">cols</span><span class="p">):</span>
-<a id="__codelineno-3-29" name="__codelineno-3-29" href="#__codelineno-3-29"></a>            <span class="n">value</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="p">(</span><span class="n">raw</span><span class="p">[</span><span class="n">base</span> <span class="o">+</span> <span class="n">i</span><span class="p">]</span> <span class="o">-</span> <span class="n">mean</span><span class="p">)</span> <span class="o">/</span> <span class="n">deviation</span>
-<a id="__codelineno-3-30" name="__codelineno-3-30" href="#__codelineno-3-30"></a>            <span class="n">out</span><span class="p">[</span><span class="n">target</span> <span class="o">+</span> <span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">value</span>
-<a id="__codelineno-3-31" name="__codelineno-3-31" href="#__codelineno-3-31"></a>            <span class="n">total</span> <span class="o">+=</span> <span class="n">value</span>
-<a id="__codelineno-3-32" name="__codelineno-3-32" href="#__codelineno-3-32"></a>        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">cols</span><span class="p">):</span>
-<a id="__codelineno-3-33" name="__codelineno-3-33" href="#__codelineno-3-33"></a>            <span class="n">interaction</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="n">out</span><span class="p">[</span><span class="n">target</span> <span class="o">+</span> <span class="n">i</span><span class="p">]</span> <span class="o">*</span> <span class="n">out</span><span class="p">[</span><span class="n">target</span> <span class="o">+</span> <span class="p">(</span><span class="n">i</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span> <span class="o">%</span> <span class="n">cols</span><span class="p">]</span>
-<a id="__codelineno-3-34" name="__codelineno-3-34" href="#__codelineno-3-34"></a>            <span class="n">out</span><span class="p">[</span><span class="n">target</span> <span class="o">+</span> <span class="n">cols</span> <span class="o">+</span> <span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">interaction</span>
-<a id="__codelineno-3-35" name="__codelineno-3-35" href="#__codelineno-3-35"></a>            <span class="n">total</span> <span class="o">+=</span> <span class="n">interaction</span>
-<a id="__codelineno-3-36" name="__codelineno-3-36" href="#__codelineno-3-36"></a>    <span class="k">return</span> <span class="n">total</span>
-<a id="__codelineno-3-37" name="__codelineno-3-37" href="#__codelineno-3-37"></a>
-<a id="__codelineno-3-38" name="__codelineno-3-38" href="#__codelineno-3-38"></a>
-<a id="__codelineno-3-39" name="__codelineno-3-39" href="#__codelineno-3-39"></a><span class="nd">@ppy</span><span class="o">.</span><span class="n">pure</span>
-<a id="__codelineno-3-40" name="__codelineno-3-40" href="#__codelineno-3-40"></a><span class="k">def</span><span class="w"> </span><span class="nf">forward_loss</span><span class="p">(</span>
-<a id="__codelineno-3-41" name="__codelineno-3-41" href="#__codelineno-3-41"></a>    <span class="n">x</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span>
-<a id="__codelineno-3-42" name="__codelineno-3-42" href="#__codelineno-3-42"></a>    <span class="n">y</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span>
-<a id="__codelineno-3-43" name="__codelineno-3-43" href="#__codelineno-3-43"></a>    <span class="n">w1</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span>
-<a id="__codelineno-3-44" name="__codelineno-3-44" href="#__codelineno-3-44"></a>    <span class="n">b1</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span>
-<a id="__codelineno-3-45" name="__codelineno-3-45" href="#__codelineno-3-45"></a>    <span class="n">w2</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span>
-<a id="__codelineno-3-46" name="__codelineno-3-46" href="#__codelineno-3-46"></a>    <span class="n">b2</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span>
-<a id="__codelineno-3-47" name="__codelineno-3-47" href="#__codelineno-3-47"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">:</span>
-<a id="__codelineno-3-48" name="__codelineno-3-48" href="#__codelineno-3-48"></a>    <span class="n">hidden</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">relu</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">matmul</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">w1</span><span class="p">),</span> <span class="n">b1</span><span class="p">))</span>
-<a id="__codelineno-3-49" name="__codelineno-3-49" href="#__codelineno-3-49"></a>    <span class="n">predicted</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">matmul</span><span class="p">(</span><span class="n">hidden</span><span class="p">,</span> <span class="n">w2</span><span class="p">),</span> <span class="n">b2</span><span class="p">)</span>
-<a id="__codelineno-3-50" name="__codelineno-3-50" href="#__codelineno-3-50"></a>    <span class="n">residual</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">sub</span><span class="p">(</span><span class="n">predicted</span><span class="p">,</span> <span class="n">y</span><span class="p">)</span>
-<a id="__codelineno-3-51" name="__codelineno-3-51" href="#__codelineno-3-51"></a>    <span class="k">return</span> <span class="n">torch</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">mul</span><span class="p">(</span><span class="n">residual</span><span class="p">,</span> <span class="n">residual</span><span class="p">))</span>
-<a id="__codelineno-3-52" name="__codelineno-3-52" href="#__codelineno-3-52"></a>
-<a id="__codelineno-3-53" name="__codelineno-3-53" href="#__codelineno-3-53"></a>
-<a id="__codelineno-3-54" name="__codelineno-3-54" href="#__codelineno-3-54"></a><span class="k">def</span><span class="w"> </span><span class="nf">descend</span><span class="p">(</span><span class="n">params</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">],</span> <span class="n">rate</span><span class="p">:</span> <span class="nb">float</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<a id="__codelineno-3-55" name="__codelineno-3-55" href="#__codelineno-3-55"></a>    <span class="k">with</span> <span class="n">torch</span><span class="o">.</span><span class="n">no_grad</span><span class="p">():</span>
-<a id="__codelineno-3-56" name="__codelineno-3-56" href="#__codelineno-3-56"></a>        <span class="k">for</span> <span class="n">parameter</span> <span class="ow">in</span> <span class="n">params</span><span class="p">:</span>
-<a id="__codelineno-3-57" name="__codelineno-3-57" href="#__codelineno-3-57"></a>            <span class="n">gradient</span> <span class="o">=</span> <span class="n">parameter</span><span class="o">.</span><span class="n">grad</span>
-<a id="__codelineno-3-58" name="__codelineno-3-58" href="#__codelineno-3-58"></a>            <span class="k">if</span> <span class="n">gradient</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-<a id="__codelineno-3-59" name="__codelineno-3-59" href="#__codelineno-3-59"></a>                <span class="k">continue</span>
-<a id="__codelineno-3-60" name="__codelineno-3-60" href="#__codelineno-3-60"></a>            <span class="n">parameter</span> <span class="o">-=</span> <span class="n">rate</span> <span class="o">*</span> <span class="n">gradient</span>
-<a id="__codelineno-3-61" name="__codelineno-3-61" href="#__codelineno-3-61"></a>            <span class="n">parameter</span><span class="o">.</span><span class="n">grad</span> <span class="o">=</span> <span class="kc">None</span>
-<a id="__codelineno-3-62" name="__codelineno-3-62" href="#__codelineno-3-62"></a>
-<a id="__codelineno-3-63" name="__codelineno-3-63" href="#__codelineno-3-63"></a>
-<a id="__codelineno-3-64" name="__codelineno-3-64" href="#__codelineno-3-64"></a><span class="k">def</span><span class="w"> </span><span class="nf">train_step</span><span class="p">(</span>
-<a id="__codelineno-3-65" name="__codelineno-3-65" href="#__codelineno-3-65"></a>    <span class="n">x</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span>
-<a id="__codelineno-3-66" name="__codelineno-3-66" href="#__codelineno-3-66"></a>    <span class="n">y</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span>
-<a id="__codelineno-3-67" name="__codelineno-3-67" href="#__codelineno-3-67"></a>    <span class="n">params</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">],</span>
-<a id="__codelineno-3-68" name="__codelineno-3-68" href="#__codelineno-3-68"></a>    <span class="n">rate</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
-<a id="__codelineno-3-69" name="__codelineno-3-69" href="#__codelineno-3-69"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">float</span><span class="p">:</span>
-<a id="__codelineno-3-70" name="__codelineno-3-70" href="#__codelineno-3-70"></a>    <span class="n">loss</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span> <span class="o">=</span> <span class="n">forward_loss</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">,</span> <span class="n">params</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">params</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">params</span><span class="p">[</span><span class="mi">2</span><span class="p">],</span> <span class="n">params</span><span class="p">[</span><span class="mi">3</span><span class="p">])</span>
-<a id="__codelineno-3-71" name="__codelineno-3-71" href="#__codelineno-3-71"></a>    <span class="n">loss</span><span class="o">.</span><span class="n">backward</span><span class="p">()</span>
-<a id="__codelineno-3-72" name="__codelineno-3-72" href="#__codelineno-3-72"></a>    <span class="n">descend</span><span class="p">(</span><span class="n">params</span><span class="p">,</span> <span class="n">rate</span><span class="p">)</span>
-<a id="__codelineno-3-73" name="__codelineno-3-73" href="#__codelineno-3-73"></a>    <span class="k">return</span> <span class="n">loss</span><span class="o">.</span><span class="n">item</span><span class="p">()</span>
-<a id="__codelineno-3-74" name="__codelineno-3-74" href="#__codelineno-3-74"></a>
-<a id="__codelineno-3-75" name="__codelineno-3-75" href="#__codelineno-3-75"></a>
-<a id="__codelineno-3-76" name="__codelineno-3-76" href="#__codelineno-3-76"></a><span class="nd">@ppy</span><span class="o">.</span><span class="n">pure</span>
-<a id="__codelineno-3-77" name="__codelineno-3-77" href="#__codelineno-3-77"></a><span class="k">def</span><span class="w"> </span><span class="nf">preferred_device</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="n">Literal</span><span class="p">[</span><span class="s1">'cuda'</span><span class="p">,</span> <span class="s1">'cpu'</span><span class="p">]:</span>
-<a id="__codelineno-3-78" name="__codelineno-3-78" href="#__codelineno-3-78"></a>    <span class="k">if</span> <span class="n">torch</span><span class="o">.</span><span class="n">cuda</span><span class="o">.</span><span class="n">is_available</span><span class="p">():</span>
-<a id="__codelineno-3-79" name="__codelineno-3-79" href="#__codelineno-3-79"></a>        <span class="k">return</span> <span class="s2">"cuda"</span>
-<a id="__codelineno-3-80" name="__codelineno-3-80" href="#__codelineno-3-80"></a>    <span class="k">return</span> <span class="s2">"cpu"</span>
-<a id="__codelineno-3-81" name="__codelineno-3-81" href="#__codelineno-3-81"></a>
-<a id="__codelineno-3-82" name="__codelineno-3-82" href="#__codelineno-3-82"></a>
-<a id="__codelineno-3-83" name="__codelineno-3-83" href="#__codelineno-3-83"></a><span class="k">def</span><span class="w"> </span><span class="nf">main</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<a id="__codelineno-3-84" name="__codelineno-3-84" href="#__codelineno-3-84"></a>    <span class="n">rows</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">20000</span>
-<a id="__codelineno-3-85" name="__codelineno-3-85" href="#__codelineno-3-85"></a>    <span class="n">cols</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">16</span>
-<a id="__codelineno-3-86" name="__codelineno-3-86" href="#__codelineno-3-86"></a>    <span class="n">device</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="n">preferred_device</span><span class="p">()</span>
-<a id="__codelineno-3-87" name="__codelineno-3-87" href="#__codelineno-3-87"></a>
-<a id="__codelineno-3-88" name="__codelineno-3-88" href="#__codelineno-3-88"></a>    <span class="n">torch</span><span class="o">.</span><span class="n">manual_seed</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
-<a id="__codelineno-3-89" name="__codelineno-3-89" href="#__codelineno-3-89"></a>    <span class="n">raw</span> <span class="o">=</span> <span class="n">array</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="s2">"d"</span><span class="p">,</span> <span class="n">torch</span><span class="o">.</span><span class="n">randn</span><span class="p">(</span><span class="n">rows</span> <span class="o">*</span> <span class="n">cols</span><span class="p">)</span><span class="o">.</span><span class="n">tolist</span><span class="p">())</span>
-<a id="__codelineno-3-90" name="__codelineno-3-90" href="#__codelineno-3-90"></a>    <span class="n">features</span> <span class="o">=</span> <span class="n">array</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="s2">"d"</span><span class="p">,</span> <span class="p">[</span><span class="mf">0.0</span><span class="p">]</span> <span class="o">*</span> <span class="p">(</span><span class="n">rows</span> <span class="o">*</span> <span class="n">cols</span> <span class="o">*</span> <span class="mi">2</span><span class="p">))</span>
-<a id="__codelineno-3-91" name="__codelineno-3-91" href="#__codelineno-3-91"></a>
-<a id="__codelineno-3-92" name="__codelineno-3-92" href="#__codelineno-3-92"></a>    <span class="n">started</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">perf_counter</span><span class="p">()</span>
-<a id="__codelineno-3-93" name="__codelineno-3-93" href="#__codelineno-3-93"></a>    <span class="n">checksum</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="n">standardize</span><span class="p">(</span><span class="n">raw</span><span class="p">,</span> <span class="n">features</span><span class="p">,</span> <span class="n">rows</span><span class="p">,</span> <span class="n">cols</span><span class="p">)</span>
-<a id="__codelineno-3-94" name="__codelineno-3-94" href="#__codelineno-3-94"></a>    <span class="n">prep_ms</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="p">(</span><span class="n">time</span><span class="o">.</span><span class="n">perf_counter</span><span class="p">()</span> <span class="o">-</span> <span class="n">started</span><span class="p">)</span> <span class="o">*</span> <span class="mf">1000.0</span>
-<a id="__codelineno-3-95" name="__codelineno-3-95" href="#__codelineno-3-95"></a>
-<a id="__codelineno-3-96" name="__codelineno-3-96" href="#__codelineno-3-96"></a>    <span class="n">x</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">tensor</span><span class="p">(</span><span class="n">features</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">torch</span><span class="o">.</span><span class="n">float32</span><span class="p">)</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="n">rows</span><span class="p">,</span> <span class="n">cols</span> <span class="o">*</span> <span class="mi">2</span><span class="p">)</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">device</span><span class="p">)</span>
-<a id="__codelineno-3-97" name="__codelineno-3-97" href="#__codelineno-3-97"></a>    <span class="n">y</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">randn</span><span class="p">(</span><span class="n">rows</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">device</span><span class="p">)</span>
-<a id="__codelineno-3-98" name="__codelineno-3-98" href="#__codelineno-3-98"></a>    <span class="n">params</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">]</span> <span class="o">=</span> <span class="p">[</span>
-<a id="__codelineno-3-99" name="__codelineno-3-99" href="#__codelineno-3-99"></a>        <span class="n">torch</span><span class="o">.</span><span class="n">randn</span><span class="p">(</span><span class="n">cols</span> <span class="o">*</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">32</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="n">device</span><span class="p">,</span> <span class="n">requires_grad</span><span class="o">=</span><span class="kc">True</span><span class="p">),</span>
-<a id="__codelineno-3-100" name="__codelineno-3-100" href="#__codelineno-3-100"></a>        <span class="n">torch</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="mi">32</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="n">device</span><span class="p">,</span> <span class="n">requires_grad</span><span class="o">=</span><span class="kc">True</span><span class="p">),</span>
-<a id="__codelineno-3-101" name="__codelineno-3-101" href="#__codelineno-3-101"></a>        <span class="n">torch</span><span class="o">.</span><span class="n">randn</span><span class="p">(</span><span class="mi">32</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="n">device</span><span class="p">,</span> <span class="n">requires_grad</span><span class="o">=</span><span class="kc">True</span><span class="p">),</span>
-<a id="__codelineno-3-102" name="__codelineno-3-102" href="#__codelineno-3-102"></a>        <span class="n">torch</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="n">device</span><span class="p">,</span> <span class="n">requires_grad</span><span class="o">=</span><span class="kc">True</span><span class="p">),</span>
-<a id="__codelineno-3-103" name="__codelineno-3-103" href="#__codelineno-3-103"></a>    <span class="p">]</span>
-<a id="__codelineno-3-104" name="__codelineno-3-104" href="#__codelineno-3-104"></a>    <span class="k">with</span> <span class="n">torch</span><span class="o">.</span><span class="n">no_grad</span><span class="p">():</span>
-<a id="__codelineno-3-105" name="__codelineno-3-105" href="#__codelineno-3-105"></a>        <span class="n">params</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">*=</span> <span class="mf">0.1</span>
-<a id="__codelineno-3-106" name="__codelineno-3-106" href="#__codelineno-3-106"></a>        <span class="n">params</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span> <span class="o">*=</span> <span class="mf">0.1</span>
-<a id="__codelineno-3-107" name="__codelineno-3-107" href="#__codelineno-3-107"></a>
-<a id="__codelineno-3-108" name="__codelineno-3-108" href="#__codelineno-3-108"></a>    <span class="n">started</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">perf_counter</span><span class="p">()</span>
-<a id="__codelineno-3-109" name="__codelineno-3-109" href="#__codelineno-3-109"></a>    <span class="n">first</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.0</span>
-<a id="__codelineno-3-110" name="__codelineno-3-110" href="#__codelineno-3-110"></a>    <span class="n">last</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.0</span>
-<a id="__codelineno-3-111" name="__codelineno-3-111" href="#__codelineno-3-111"></a>    <span class="k">for</span> <span class="n">index</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">100</span><span class="p">):</span>
-<a id="__codelineno-3-112" name="__codelineno-3-112" href="#__codelineno-3-112"></a>        <span class="n">last</span> <span class="o">=</span> <span class="n">train_step</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">,</span> <span class="n">params</span><span class="p">,</span> <span class="mf">0.02</span><span class="p">)</span>
-<a id="__codelineno-3-113" name="__codelineno-3-113" href="#__codelineno-3-113"></a>        <span class="k">if</span> <span class="ow">not</span> <span class="n">index</span><span class="p">:</span>
-<a id="__codelineno-3-114" name="__codelineno-3-114" href="#__codelineno-3-114"></a>            <span class="n">first</span> <span class="o">=</span> <span class="n">last</span>
-<a id="__codelineno-3-115" name="__codelineno-3-115" href="#__codelineno-3-115"></a>    <span class="n">train_ms</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="p">(</span><span class="n">time</span><span class="o">.</span><span class="n">perf_counter</span><span class="p">()</span> <span class="o">-</span> <span class="n">started</span><span class="p">)</span> <span class="o">*</span> <span class="mf">1000.0</span>
-<a id="__codelineno-3-116" name="__codelineno-3-116" href="#__codelineno-3-116"></a>
-<a id="__codelineno-3-117" name="__codelineno-3-117" href="#__codelineno-3-117"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"# device: </span><span class="si">{</span><span class="n">device</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
-<a id="__codelineno-3-118" name="__codelineno-3-118" href="#__codelineno-3-118"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"# native prep: </span><span class="si">{</span><span class="nb">getattr</span><span class="p">(</span><span class="n">standardize</span><span class="p">,</span><span class="w"> </span><span class="s1">'__ppy_native__'</span><span class="p">,</span><span class="w"> </span><span class="kc">None</span><span class="p">)</span><span class="w"> </span><span class="ow">is</span><span class="w"> </span><span class="ow">not</span><span class="w"> </span><span class="kc">None</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
-<a id="__codelineno-3-119" name="__codelineno-3-119" href="#__codelineno-3-119"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"# aten region: </span><span class="si">{</span><span class="nb">getattr</span><span class="p">(</span><span class="n">forward_loss</span><span class="p">,</span><span class="w"> </span><span class="s1">'__ppy_region__'</span><span class="p">,</span><span class="w"> </span><span class="kc">False</span><span class="p">)</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
-<a id="__codelineno-3-120" name="__codelineno-3-120" href="#__codelineno-3-120"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"prep  </span><span class="si">{</span><span class="n">prep_ms</span><span class="si">:</span><span class="s2">8.1f</span><span class="si">}</span><span class="s2"> ms   checksum=</span><span class="si">{</span><span class="n">checksum</span><span class="si">:</span><span class="s2">.6f</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
-<a id="__codelineno-3-121" name="__codelineno-3-121" href="#__codelineno-3-121"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"train </span><span class="si">{</span><span class="n">train_ms</span><span class="si">:</span><span class="s2">8.1f</span><span class="si">}</span><span class="s2"> ms   loss </span><span class="si">{</span><span class="n">first</span><span class="si">:</span><span class="s2">.4f</span><span class="si">}</span><span class="s2"> -&gt; </span><span class="si">{</span><span class="n">last</span><span class="si">:</span><span class="s2">.4f</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
-<a id="__codelineno-3-122" name="__codelineno-3-122" href="#__codelineno-3-122"></a>
-<a id="__codelineno-3-123" name="__codelineno-3-123" href="#__codelineno-3-123"></a>
-<a id="__codelineno-3-124" name="__codelineno-3-124" href="#__codelineno-3-124"></a><span class="n">main</span><span class="p">()</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">array</span>
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="kn">import</span><span class="w"> </span><span class="nn">math</span>
+<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="kn">import</span><span class="w"> </span><span class="nn">time</span>
+<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="kn">from</span><span class="w"> </span><span class="nn">collections.abc</span><span class="w"> </span><span class="kn">import</span> <span class="n">Sequence</span>
+<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Literal</span>
+<a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a>
+<a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="kn">import</span><span class="w"> </span><span class="nn">ppy</span>
+<a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a><span class="kn">import</span><span class="w"> </span><span class="nn">torch</span>
+<a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ppy</span><span class="w"> </span><span class="kn">import</span> <span class="n">Buffer</span>
+<a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a>
+<a id="__codelineno-4-11" name="__codelineno-4-11" href="#__codelineno-4-11"></a>
+<a id="__codelineno-4-12" name="__codelineno-4-12" href="#__codelineno-4-12"></a><span class="k">def</span><span class="w"> </span><span class="nf">standardize</span><span class="p">(</span><span class="n">raw</span><span class="p">:</span> <span class="n">Buffer</span><span class="p">[</span><span class="nb">float</span><span class="p">],</span> <span class="n">out</span><span class="p">:</span> <span class="n">Buffer</span><span class="p">[</span><span class="nb">float</span><span class="p">],</span> <span class="n">rows</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">cols</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">float</span><span class="p">:</span>
+<a id="__codelineno-4-13" name="__codelineno-4-13" href="#__codelineno-4-13"></a>    <span class="n">total</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.0</span>
+<a id="__codelineno-4-14" name="__codelineno-4-14" href="#__codelineno-4-14"></a>    <span class="k">for</span> <span class="n">row</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">rows</span><span class="p">):</span>
+<a id="__codelineno-4-15" name="__codelineno-4-15" href="#__codelineno-4-15"></a>        <span class="n">base</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="n">row</span> <span class="o">*</span> <span class="n">cols</span>
+<a id="__codelineno-4-16" name="__codelineno-4-16" href="#__codelineno-4-16"></a>        <span class="n">target</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="n">row</span> <span class="o">*</span> <span class="n">cols</span> <span class="o">*</span> <span class="mi">2</span>
+<a id="__codelineno-4-17" name="__codelineno-4-17" href="#__codelineno-4-17"></a>
+<a id="__codelineno-4-18" name="__codelineno-4-18" href="#__codelineno-4-18"></a>        <span class="n">sum_</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.0</span>
+<a id="__codelineno-4-19" name="__codelineno-4-19" href="#__codelineno-4-19"></a>        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">cols</span><span class="p">):</span>
+<a id="__codelineno-4-20" name="__codelineno-4-20" href="#__codelineno-4-20"></a>            <span class="n">sum_</span> <span class="o">+=</span> <span class="n">raw</span><span class="p">[</span><span class="n">base</span> <span class="o">+</span> <span class="n">i</span><span class="p">]</span>
+<a id="__codelineno-4-21" name="__codelineno-4-21" href="#__codelineno-4-21"></a>        <span class="n">mean</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="n">sum_</span> <span class="o">/</span> <span class="n">cols</span>
+<a id="__codelineno-4-22" name="__codelineno-4-22" href="#__codelineno-4-22"></a>
+<a id="__codelineno-4-23" name="__codelineno-4-23" href="#__codelineno-4-23"></a>        <span class="n">spread</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.0</span>
+<a id="__codelineno-4-24" name="__codelineno-4-24" href="#__codelineno-4-24"></a>        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">cols</span><span class="p">):</span>
+<a id="__codelineno-4-25" name="__codelineno-4-25" href="#__codelineno-4-25"></a>            <span class="n">spread</span> <span class="o">+=</span> <span class="p">(</span><span class="n">raw</span><span class="p">[</span><span class="n">base</span> <span class="o">+</span> <span class="n">i</span><span class="p">]</span> <span class="o">-</span> <span class="n">mean</span><span class="p">)</span> <span class="o">*</span> <span class="p">(</span><span class="n">raw</span><span class="p">[</span><span class="n">base</span> <span class="o">+</span> <span class="n">i</span><span class="p">]</span> <span class="o">-</span> <span class="n">mean</span><span class="p">)</span>
+<a id="__codelineno-4-26" name="__codelineno-4-26" href="#__codelineno-4-26"></a>        <span class="n">deviation</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="n">math</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="n">spread</span> <span class="o">/</span> <span class="n">cols</span><span class="p">)</span> <span class="o">+</span> <span class="mf">1e-8</span>
+<a id="__codelineno-4-27" name="__codelineno-4-27" href="#__codelineno-4-27"></a>
+<a id="__codelineno-4-28" name="__codelineno-4-28" href="#__codelineno-4-28"></a>        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">cols</span><span class="p">):</span>
+<a id="__codelineno-4-29" name="__codelineno-4-29" href="#__codelineno-4-29"></a>            <span class="n">value</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="p">(</span><span class="n">raw</span><span class="p">[</span><span class="n">base</span> <span class="o">+</span> <span class="n">i</span><span class="p">]</span> <span class="o">-</span> <span class="n">mean</span><span class="p">)</span> <span class="o">/</span> <span class="n">deviation</span>
+<a id="__codelineno-4-30" name="__codelineno-4-30" href="#__codelineno-4-30"></a>            <span class="n">out</span><span class="p">[</span><span class="n">target</span> <span class="o">+</span> <span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">value</span>
+<a id="__codelineno-4-31" name="__codelineno-4-31" href="#__codelineno-4-31"></a>            <span class="n">total</span> <span class="o">+=</span> <span class="n">value</span>
+<a id="__codelineno-4-32" name="__codelineno-4-32" href="#__codelineno-4-32"></a>        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">cols</span><span class="p">):</span>
+<a id="__codelineno-4-33" name="__codelineno-4-33" href="#__codelineno-4-33"></a>            <span class="n">interaction</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="n">out</span><span class="p">[</span><span class="n">target</span> <span class="o">+</span> <span class="n">i</span><span class="p">]</span> <span class="o">*</span> <span class="n">out</span><span class="p">[</span><span class="n">target</span> <span class="o">+</span> <span class="p">(</span><span class="n">i</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span> <span class="o">%</span> <span class="n">cols</span><span class="p">]</span>
+<a id="__codelineno-4-34" name="__codelineno-4-34" href="#__codelineno-4-34"></a>            <span class="n">out</span><span class="p">[</span><span class="n">target</span> <span class="o">+</span> <span class="n">cols</span> <span class="o">+</span> <span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">interaction</span>
+<a id="__codelineno-4-35" name="__codelineno-4-35" href="#__codelineno-4-35"></a>            <span class="n">total</span> <span class="o">+=</span> <span class="n">interaction</span>
+<a id="__codelineno-4-36" name="__codelineno-4-36" href="#__codelineno-4-36"></a>    <span class="k">return</span> <span class="n">total</span>
+<a id="__codelineno-4-37" name="__codelineno-4-37" href="#__codelineno-4-37"></a>
+<a id="__codelineno-4-38" name="__codelineno-4-38" href="#__codelineno-4-38"></a>
+<a id="__codelineno-4-39" name="__codelineno-4-39" href="#__codelineno-4-39"></a><span class="nd">@ppy</span><span class="o">.</span><span class="n">pure</span>
+<a id="__codelineno-4-40" name="__codelineno-4-40" href="#__codelineno-4-40"></a><span class="k">def</span><span class="w"> </span><span class="nf">forward_loss</span><span class="p">(</span>
+<a id="__codelineno-4-41" name="__codelineno-4-41" href="#__codelineno-4-41"></a>    <span class="n">x</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span>
+<a id="__codelineno-4-42" name="__codelineno-4-42" href="#__codelineno-4-42"></a>    <span class="n">y</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span>
+<a id="__codelineno-4-43" name="__codelineno-4-43" href="#__codelineno-4-43"></a>    <span class="n">w1</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span>
+<a id="__codelineno-4-44" name="__codelineno-4-44" href="#__codelineno-4-44"></a>    <span class="n">b1</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span>
+<a id="__codelineno-4-45" name="__codelineno-4-45" href="#__codelineno-4-45"></a>    <span class="n">w2</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span>
+<a id="__codelineno-4-46" name="__codelineno-4-46" href="#__codelineno-4-46"></a>    <span class="n">b2</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span>
+<a id="__codelineno-4-47" name="__codelineno-4-47" href="#__codelineno-4-47"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">:</span>
+<a id="__codelineno-4-48" name="__codelineno-4-48" href="#__codelineno-4-48"></a>    <span class="n">hidden</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">relu</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">matmul</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">w1</span><span class="p">),</span> <span class="n">b1</span><span class="p">))</span>
+<a id="__codelineno-4-49" name="__codelineno-4-49" href="#__codelineno-4-49"></a>    <span class="n">predicted</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">matmul</span><span class="p">(</span><span class="n">hidden</span><span class="p">,</span> <span class="n">w2</span><span class="p">),</span> <span class="n">b2</span><span class="p">)</span>
+<a id="__codelineno-4-50" name="__codelineno-4-50" href="#__codelineno-4-50"></a>    <span class="n">residual</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">sub</span><span class="p">(</span><span class="n">predicted</span><span class="p">,</span> <span class="n">y</span><span class="p">)</span>
+<a id="__codelineno-4-51" name="__codelineno-4-51" href="#__codelineno-4-51"></a>    <span class="k">return</span> <span class="n">torch</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">mul</span><span class="p">(</span><span class="n">residual</span><span class="p">,</span> <span class="n">residual</span><span class="p">))</span>
+<a id="__codelineno-4-52" name="__codelineno-4-52" href="#__codelineno-4-52"></a>
+<a id="__codelineno-4-53" name="__codelineno-4-53" href="#__codelineno-4-53"></a>
+<a id="__codelineno-4-54" name="__codelineno-4-54" href="#__codelineno-4-54"></a><span class="k">def</span><span class="w"> </span><span class="nf">descend</span><span class="p">(</span><span class="n">params</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">],</span> <span class="n">rate</span><span class="p">:</span> <span class="nb">float</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-4-55" name="__codelineno-4-55" href="#__codelineno-4-55"></a>    <span class="k">with</span> <span class="n">torch</span><span class="o">.</span><span class="n">no_grad</span><span class="p">():</span>
+<a id="__codelineno-4-56" name="__codelineno-4-56" href="#__codelineno-4-56"></a>        <span class="k">for</span> <span class="n">parameter</span> <span class="ow">in</span> <span class="n">params</span><span class="p">:</span>
+<a id="__codelineno-4-57" name="__codelineno-4-57" href="#__codelineno-4-57"></a>            <span class="n">gradient</span> <span class="o">=</span> <span class="n">parameter</span><span class="o">.</span><span class="n">grad</span>
+<a id="__codelineno-4-58" name="__codelineno-4-58" href="#__codelineno-4-58"></a>            <span class="k">if</span> <span class="n">gradient</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-4-59" name="__codelineno-4-59" href="#__codelineno-4-59"></a>                <span class="k">continue</span>
+<a id="__codelineno-4-60" name="__codelineno-4-60" href="#__codelineno-4-60"></a>            <span class="n">parameter</span> <span class="o">-=</span> <span class="n">rate</span> <span class="o">*</span> <span class="n">gradient</span>
+<a id="__codelineno-4-61" name="__codelineno-4-61" href="#__codelineno-4-61"></a>            <span class="n">parameter</span><span class="o">.</span><span class="n">grad</span> <span class="o">=</span> <span class="kc">None</span>
+<a id="__codelineno-4-62" name="__codelineno-4-62" href="#__codelineno-4-62"></a>
+<a id="__codelineno-4-63" name="__codelineno-4-63" href="#__codelineno-4-63"></a>
+<a id="__codelineno-4-64" name="__codelineno-4-64" href="#__codelineno-4-64"></a><span class="k">def</span><span class="w"> </span><span class="nf">train_step</span><span class="p">(</span>
+<a id="__codelineno-4-65" name="__codelineno-4-65" href="#__codelineno-4-65"></a>    <span class="n">x</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span>
+<a id="__codelineno-4-66" name="__codelineno-4-66" href="#__codelineno-4-66"></a>    <span class="n">y</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span>
+<a id="__codelineno-4-67" name="__codelineno-4-67" href="#__codelineno-4-67"></a>    <span class="n">params</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">],</span>
+<a id="__codelineno-4-68" name="__codelineno-4-68" href="#__codelineno-4-68"></a>    <span class="n">rate</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
+<a id="__codelineno-4-69" name="__codelineno-4-69" href="#__codelineno-4-69"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">float</span><span class="p">:</span>
+<a id="__codelineno-4-70" name="__codelineno-4-70" href="#__codelineno-4-70"></a>    <span class="n">loss</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span> <span class="o">=</span> <span class="n">forward_loss</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">,</span> <span class="n">params</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">params</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">params</span><span class="p">[</span><span class="mi">2</span><span class="p">],</span> <span class="n">params</span><span class="p">[</span><span class="mi">3</span><span class="p">])</span>
+<a id="__codelineno-4-71" name="__codelineno-4-71" href="#__codelineno-4-71"></a>    <span class="n">loss</span><span class="o">.</span><span class="n">backward</span><span class="p">()</span>
+<a id="__codelineno-4-72" name="__codelineno-4-72" href="#__codelineno-4-72"></a>    <span class="n">descend</span><span class="p">(</span><span class="n">params</span><span class="p">,</span> <span class="n">rate</span><span class="p">)</span>
+<a id="__codelineno-4-73" name="__codelineno-4-73" href="#__codelineno-4-73"></a>    <span class="k">return</span> <span class="n">loss</span><span class="o">.</span><span class="n">item</span><span class="p">()</span>
+<a id="__codelineno-4-74" name="__codelineno-4-74" href="#__codelineno-4-74"></a>
+<a id="__codelineno-4-75" name="__codelineno-4-75" href="#__codelineno-4-75"></a>
+<a id="__codelineno-4-76" name="__codelineno-4-76" href="#__codelineno-4-76"></a><span class="nd">@ppy</span><span class="o">.</span><span class="n">pure</span>
+<a id="__codelineno-4-77" name="__codelineno-4-77" href="#__codelineno-4-77"></a><span class="k">def</span><span class="w"> </span><span class="nf">preferred_device</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="n">Literal</span><span class="p">[</span><span class="s1">'cuda'</span><span class="p">,</span> <span class="s1">'cpu'</span><span class="p">]:</span>
+<a id="__codelineno-4-78" name="__codelineno-4-78" href="#__codelineno-4-78"></a>    <span class="k">if</span> <span class="n">torch</span><span class="o">.</span><span class="n">cuda</span><span class="o">.</span><span class="n">is_available</span><span class="p">():</span>
+<a id="__codelineno-4-79" name="__codelineno-4-79" href="#__codelineno-4-79"></a>        <span class="k">return</span> <span class="s2">"cuda"</span>
+<a id="__codelineno-4-80" name="__codelineno-4-80" href="#__codelineno-4-80"></a>    <span class="k">return</span> <span class="s2">"cpu"</span>
+<a id="__codelineno-4-81" name="__codelineno-4-81" href="#__codelineno-4-81"></a>
+<a id="__codelineno-4-82" name="__codelineno-4-82" href="#__codelineno-4-82"></a>
+<a id="__codelineno-4-83" name="__codelineno-4-83" href="#__codelineno-4-83"></a><span class="k">def</span><span class="w"> </span><span class="nf">main</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-4-84" name="__codelineno-4-84" href="#__codelineno-4-84"></a>    <span class="n">rows</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">20000</span>
+<a id="__codelineno-4-85" name="__codelineno-4-85" href="#__codelineno-4-85"></a>    <span class="n">cols</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">16</span>
+<a id="__codelineno-4-86" name="__codelineno-4-86" href="#__codelineno-4-86"></a>    <span class="n">device</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="n">preferred_device</span><span class="p">()</span>
+<a id="__codelineno-4-87" name="__codelineno-4-87" href="#__codelineno-4-87"></a>
+<a id="__codelineno-4-88" name="__codelineno-4-88" href="#__codelineno-4-88"></a>    <span class="n">torch</span><span class="o">.</span><span class="n">manual_seed</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
+<a id="__codelineno-4-89" name="__codelineno-4-89" href="#__codelineno-4-89"></a>    <span class="n">raw</span> <span class="o">=</span> <span class="n">array</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="s2">"d"</span><span class="p">,</span> <span class="n">torch</span><span class="o">.</span><span class="n">randn</span><span class="p">(</span><span class="n">rows</span> <span class="o">*</span> <span class="n">cols</span><span class="p">)</span><span class="o">.</span><span class="n">tolist</span><span class="p">())</span>
+<a id="__codelineno-4-90" name="__codelineno-4-90" href="#__codelineno-4-90"></a>    <span class="n">features</span> <span class="o">=</span> <span class="n">array</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="s2">"d"</span><span class="p">,</span> <span class="p">[</span><span class="mf">0.0</span><span class="p">]</span> <span class="o">*</span> <span class="p">(</span><span class="n">rows</span> <span class="o">*</span> <span class="n">cols</span> <span class="o">*</span> <span class="mi">2</span><span class="p">))</span>
+<a id="__codelineno-4-91" name="__codelineno-4-91" href="#__codelineno-4-91"></a>
+<a id="__codelineno-4-92" name="__codelineno-4-92" href="#__codelineno-4-92"></a>    <span class="n">started</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">perf_counter</span><span class="p">()</span>
+<a id="__codelineno-4-93" name="__codelineno-4-93" href="#__codelineno-4-93"></a>    <span class="n">checksum</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="n">standardize</span><span class="p">(</span><span class="n">raw</span><span class="p">,</span> <span class="n">features</span><span class="p">,</span> <span class="n">rows</span><span class="p">,</span> <span class="n">cols</span><span class="p">)</span>
+<a id="__codelineno-4-94" name="__codelineno-4-94" href="#__codelineno-4-94"></a>    <span class="n">prep_ms</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="p">(</span><span class="n">time</span><span class="o">.</span><span class="n">perf_counter</span><span class="p">()</span> <span class="o">-</span> <span class="n">started</span><span class="p">)</span> <span class="o">*</span> <span class="mf">1000.0</span>
+<a id="__codelineno-4-95" name="__codelineno-4-95" href="#__codelineno-4-95"></a>
+<a id="__codelineno-4-96" name="__codelineno-4-96" href="#__codelineno-4-96"></a>    <span class="n">x</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">tensor</span><span class="p">(</span><span class="n">features</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">torch</span><span class="o">.</span><span class="n">float32</span><span class="p">)</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="n">rows</span><span class="p">,</span> <span class="n">cols</span> <span class="o">*</span> <span class="mi">2</span><span class="p">)</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">device</span><span class="p">)</span>
+<a id="__codelineno-4-97" name="__codelineno-4-97" href="#__codelineno-4-97"></a>    <span class="n">y</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">randn</span><span class="p">(</span><span class="n">rows</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">device</span><span class="p">)</span>
+<a id="__codelineno-4-98" name="__codelineno-4-98" href="#__codelineno-4-98"></a>    <span class="n">params</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">]</span> <span class="o">=</span> <span class="p">[</span>
+<a id="__codelineno-4-99" name="__codelineno-4-99" href="#__codelineno-4-99"></a>        <span class="n">torch</span><span class="o">.</span><span class="n">randn</span><span class="p">(</span><span class="n">cols</span> <span class="o">*</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">32</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="n">device</span><span class="p">,</span> <span class="n">requires_grad</span><span class="o">=</span><span class="kc">True</span><span class="p">),</span>
+<a id="__codelineno-4-100" name="__codelineno-4-100" href="#__codelineno-4-100"></a>        <span class="n">torch</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="mi">32</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="n">device</span><span class="p">,</span> <span class="n">requires_grad</span><span class="o">=</span><span class="kc">True</span><span class="p">),</span>
+<a id="__codelineno-4-101" name="__codelineno-4-101" href="#__codelineno-4-101"></a>        <span class="n">torch</span><span class="o">.</span><span class="n">randn</span><span class="p">(</span><span class="mi">32</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="n">device</span><span class="p">,</span> <span class="n">requires_grad</span><span class="o">=</span><span class="kc">True</span><span class="p">),</span>
+<a id="__codelineno-4-102" name="__codelineno-4-102" href="#__codelineno-4-102"></a>        <span class="n">torch</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="n">device</span><span class="p">,</span> <span class="n">requires_grad</span><span class="o">=</span><span class="kc">True</span><span class="p">),</span>
+<a id="__codelineno-4-103" name="__codelineno-4-103" href="#__codelineno-4-103"></a>    <span class="p">]</span>
+<a id="__codelineno-4-104" name="__codelineno-4-104" href="#__codelineno-4-104"></a>    <span class="k">with</span> <span class="n">torch</span><span class="o">.</span><span class="n">no_grad</span><span class="p">():</span>
+<a id="__codelineno-4-105" name="__codelineno-4-105" href="#__codelineno-4-105"></a>        <span class="n">params</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">*=</span> <span class="mf">0.1</span>
+<a id="__codelineno-4-106" name="__codelineno-4-106" href="#__codelineno-4-106"></a>        <span class="n">params</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span> <span class="o">*=</span> <span class="mf">0.1</span>
+<a id="__codelineno-4-107" name="__codelineno-4-107" href="#__codelineno-4-107"></a>
+<a id="__codelineno-4-108" name="__codelineno-4-108" href="#__codelineno-4-108"></a>    <span class="n">started</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">perf_counter</span><span class="p">()</span>
+<a id="__codelineno-4-109" name="__codelineno-4-109" href="#__codelineno-4-109"></a>    <span class="n">first</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.0</span>
+<a id="__codelineno-4-110" name="__codelineno-4-110" href="#__codelineno-4-110"></a>    <span class="n">last</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.0</span>
+<a id="__codelineno-4-111" name="__codelineno-4-111" href="#__codelineno-4-111"></a>    <span class="k">for</span> <span class="n">index</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">100</span><span class="p">):</span>
+<a id="__codelineno-4-112" name="__codelineno-4-112" href="#__codelineno-4-112"></a>        <span class="n">last</span> <span class="o">=</span> <span class="n">train_step</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">,</span> <span class="n">params</span><span class="p">,</span> <span class="mf">0.02</span><span class="p">)</span>
+<a id="__codelineno-4-113" name="__codelineno-4-113" href="#__codelineno-4-113"></a>        <span class="k">if</span> <span class="ow">not</span> <span class="n">index</span><span class="p">:</span>
+<a id="__codelineno-4-114" name="__codelineno-4-114" href="#__codelineno-4-114"></a>            <span class="n">first</span> <span class="o">=</span> <span class="n">last</span>
+<a id="__codelineno-4-115" name="__codelineno-4-115" href="#__codelineno-4-115"></a>    <span class="n">train_ms</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="p">(</span><span class="n">time</span><span class="o">.</span><span class="n">perf_counter</span><span class="p">()</span> <span class="o">-</span> <span class="n">started</span><span class="p">)</span> <span class="o">*</span> <span class="mf">1000.0</span>
+<a id="__codelineno-4-116" name="__codelineno-4-116" href="#__codelineno-4-116"></a>
+<a id="__codelineno-4-117" name="__codelineno-4-117" href="#__codelineno-4-117"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"# device: </span><span class="si">{</span><span class="n">device</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+<a id="__codelineno-4-118" name="__codelineno-4-118" href="#__codelineno-4-118"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"# native prep: </span><span class="si">{</span><span class="nb">getattr</span><span class="p">(</span><span class="n">standardize</span><span class="p">,</span><span class="w"> </span><span class="s1">'__ppy_native__'</span><span class="p">,</span><span class="w"> </span><span class="kc">None</span><span class="p">)</span><span class="w"> </span><span class="ow">is</span><span class="w"> </span><span class="ow">not</span><span class="w"> </span><span class="kc">None</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+<a id="__codelineno-4-119" name="__codelineno-4-119" href="#__codelineno-4-119"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"# aten region: </span><span class="si">{</span><span class="nb">getattr</span><span class="p">(</span><span class="n">forward_loss</span><span class="p">,</span><span class="w"> </span><span class="s1">'__ppy_region__'</span><span class="p">,</span><span class="w"> </span><span class="kc">False</span><span class="p">)</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+<a id="__codelineno-4-120" name="__codelineno-4-120" href="#__codelineno-4-120"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"prep  </span><span class="si">{</span><span class="n">prep_ms</span><span class="si">:</span><span class="s2">8.1f</span><span class="si">}</span><span class="s2"> ms   checksum=</span><span class="si">{</span><span class="n">checksum</span><span class="si">:</span><span class="s2">.6f</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+<a id="__codelineno-4-121" name="__codelineno-4-121" href="#__codelineno-4-121"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"train </span><span class="si">{</span><span class="n">train_ms</span><span class="si">:</span><span class="s2">8.1f</span><span class="si">}</span><span class="s2"> ms   loss </span><span class="si">{</span><span class="n">first</span><span class="si">:</span><span class="s2">.4f</span><span class="si">}</span><span class="s2"> -&gt; </span><span class="si">{</span><span class="n">last</span><span class="si">:</span><span class="s2">.4f</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+<a id="__codelineno-4-122" name="__codelineno-4-122" href="#__codelineno-4-122"></a>
+<a id="__codelineno-4-123" name="__codelineno-4-123" href="#__codelineno-4-123"></a>
+<a id="__codelineno-4-124" name="__codelineno-4-124" href="#__codelineno-4-124"></a><span class="n">main</span><span class="p">()</span>
 </code></pre></div>
 <p>The folder in the repository: <a href="https://github.com/franknoh/PPy/blob/main/examples/21_training_torch"><code>examples/21_training_torch</code></a>.</p>
 
@@ -3934,7 +3922,7 @@ tensors and nothing on an accelerator, where kernel launch latency dominates.</p
       <nav class="md-footer__inner md-grid" aria-label="Footer" >
         
           
-          <a href="../09_torch/" class="md-footer__link md-footer__link--prev" aria-label="Previous: PyTorch ATen regions">
+          <a href="../09_torch/" class="md-footer__link md-footer__link--prev" aria-label="Previous: A PyTorch layer as one C++ call">
             <div class="md-footer__button md-icon">
               
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
@@ -3944,20 +3932,20 @@ tensors and nothing on an accelerator, where kernel launch latency dominates.</p
                 Previous
               </span>
               <div class="md-ellipsis">
-                PyTorch ATen regions
+                A PyTorch layer as one C++ call
               </div>
             </div>
           </a>
         
         
           
-          <a href="../22_training_jax/" class="md-footer__link md-footer__link--next" aria-label="Next: Training a JAX MLP">
+          <a href="../22_training_jax/" class="md-footer__link md-footer__link--next" aria-label="Next: The same trainer with JAX, and why the step does not get faster">
             <div class="md-footer__title">
               <span class="md-footer__direction">
                 Next
               </span>
               <div class="md-ellipsis">
-                Training a JAX MLP
+                The same trainer with JAX, and why the step does not get faster
               </div>
             </div>
             <div class="md-footer__button md-icon">

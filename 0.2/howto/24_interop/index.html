@@ -27,7 +27,7 @@
     
     
       
-        <title>Interop - PPY</title>
+        <title>Import a .ppy module from plain Python - PPY</title>
       
     
     
@@ -55,6 +55,8 @@
     
       <link rel="stylesheet" href="../../assets/_mkdocstrings.css">
     
+      <link rel="stylesheet" href="../../stylesheets/extra.css">
+    
     <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
     
       
@@ -80,7 +82,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#interop" class="md-skip">
+        <a href="#import-a-ppy-module-from-plain-python" class="md-skip">
           Skip to content
         </a>
       
@@ -120,7 +122,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Interop
+              Import a .ppy module from plain Python
             
           </span>
         </div>
@@ -1222,7 +1224,7 @@
   <span class="md-ellipsis">
     
   
-    Basics
+    Three annotations, one native loop
   
 
     
@@ -1250,7 +1252,7 @@
   <span class="md-ellipsis">
     
   
-    Arbitrary precision
+    A machine word until it is not
   
 
     
@@ -1278,7 +1280,7 @@
   <span class="md-ellipsis">
     
   
-    Effects and contracts
+    What @ppy.pure refuses
   
 
     
@@ -1306,7 +1308,7 @@
   <span class="md-ellipsis">
     
   
-    Classes
+    Classes the checker can see through
   
 
     
@@ -1334,7 +1336,7 @@
   <span class="md-ellipsis">
     
   
-    Native data
+    What crosses the boundary as machine values
   
 
     
@@ -1362,7 +1364,7 @@
   <span class="md-ellipsis">
     
   
-    Narrowing
+    Every way a type gets narrower
   
 
     
@@ -1390,7 +1392,7 @@
   <span class="md-ellipsis">
     
   
-    Numerics
+    Where PPY refuses to differ from CPython
   
 
     
@@ -1418,7 +1420,7 @@
   <span class="md-ellipsis">
     
   
-    Value classes
+    A dataclass with no boxed form
   
 
     
@@ -1446,7 +1448,7 @@
   <span class="md-ellipsis">
     
   
-    Tuples
+    Tuples as scalar atoms
   
 
     
@@ -1474,7 +1476,7 @@
   <span class="md-ellipsis">
     
   
-    Dynamic boundaries
+    The escape hatch, and its price
   
 
     
@@ -1502,7 +1504,7 @@
   <span class="md-ellipsis">
     
   
-    Containers
+    Containers, inferred and owned
   
 
     
@@ -1530,7 +1532,7 @@
   <span class="md-ellipsis">
     
   
-    Exceptions
+    Exceptions are part of the contract
   
 
     
@@ -1558,7 +1560,7 @@
   <span class="md-ellipsis">
     
   
-    Strings
+    Strings stay on CPython, and say so
   
 
     
@@ -1673,7 +1675,7 @@
   <span class="md-ellipsis">
     
   
-    Buffers and JIT
+    Borrow the memory, keep the order, specialize the rest
   
 
     
@@ -1701,7 +1703,7 @@
   <span class="md-ellipsis">
     
   
-    Algorithms
+    Eight kernels and six judge problems, against C
   
 
     
@@ -1729,7 +1731,7 @@
   <span class="md-ellipsis">
     
   
-    Threads
+    One native function, two threads, 1.95×
   
 
     
@@ -1757,7 +1759,7 @@
   <span class="md-ellipsis">
     
   
-    Native memory
+    Typed pointers, stack memory, a C function, a C symbol
   
 
     
@@ -1785,7 +1787,7 @@
   <span class="md-ellipsis">
     
   
-    Lanes and the machine
+    Four lanes at a time, and the machine as a fact
   
 
     
@@ -1813,7 +1815,7 @@
   <span class="md-ellipsis">
     
   
-    Atomics and threads
+    Four threads, one counter, one answer
   
 
     
@@ -1841,7 +1843,7 @@
   <span class="md-ellipsis">
     
   
-    Parallel ranges
+    parallel.range: say the iterations may run at once
   
 
     
@@ -1869,7 +1871,7 @@
   <span class="md-ellipsis">
     
   
-    Derivatives
+    A derivative that agrees to the last bit
   
 
     
@@ -1897,7 +1899,7 @@
   <span class="md-ellipsis">
     
   
-    Coroutines
+    An echo server and its client, as coroutines that compile
   
 
     
@@ -1925,7 +1927,7 @@
   <span class="md-ellipsis">
     
   
-    Generics
+    Generics, inferred at the call and monomorphized in native code
   
 
     
@@ -1953,7 +1955,7 @@
   <span class="md-ellipsis">
     
   
-    The toolbox
+    Every way of looking inside a build, on one program
   
 
     
@@ -2050,7 +2052,7 @@
   <span class="md-ellipsis">
     
   
-    GPU kernels
+    A CUDA kernel in Python, run three ways
   
 
     
@@ -2078,7 +2080,7 @@
   <span class="md-ellipsis">
     
   
-    XLA
+    StableHLO from the compiler, no JAX required
   
 
     
@@ -2193,7 +2195,7 @@
   <span class="md-ellipsis">
     
   
-    NumPy fusion
+    One NumPy expression, one loop
   
 
     
@@ -2221,7 +2223,7 @@
   <span class="md-ellipsis">
     
   
-    Pydantic
+    Pydantic models, typed and still validated
   
 
     
@@ -2249,7 +2251,7 @@
   <span class="md-ellipsis">
     
   
-    Parallelism
+    The same fused kernel, on every core
   
 
     
@@ -2277,7 +2279,7 @@
   <span class="md-ellipsis">
     
   
-    PyTorch ATen regions
+    A PyTorch layer as one C++ call
   
 
     
@@ -2305,7 +2307,7 @@
   <span class="md-ellipsis">
     
   
-    Training a torch MLP
+    A torch training script, converted, and where the time went
   
 
     
@@ -2333,7 +2335,7 @@
   <span class="md-ellipsis">
     
   
-    Training a JAX MLP
+    The same trainer with JAX, and why the step does not get faster
   
 
     
@@ -2361,7 +2363,7 @@
   <span class="md-ellipsis">
     
   
-    JAX export
+    Export a @jax.jit function at build time
   
 
     
@@ -2389,7 +2391,7 @@
   <span class="md-ellipsis">
     
   
-    Serving over Uvicorn
+    A FastAPI service that checks strict, as written
   
 
     
@@ -2417,7 +2419,7 @@
   <span class="md-ellipsis">
     
   
-    Flax
+    A Flax training loop, strict-checked as written
   
 
     
@@ -2445,7 +2447,7 @@
   <span class="md-ellipsis">
     
   
-    A trainer under torchrun and accelerate launch
+    Native kernels on every rank, with import ppy as the integration
   
 
     
@@ -2473,7 +2475,7 @@
   <span class="md-ellipsis">
     
   
-    Columnar expressions
+    A pandas expression as one kernel, nulls included
   
 
     
@@ -2578,7 +2580,7 @@
   <span class="md-ellipsis">
     
   
-    Inventory
+    Untyped Python in, strict PPY out
   
 
     
@@ -2606,7 +2608,7 @@
   <span class="md-ellipsis">
     
   
-    Inference
+    How far inference reaches without a single annotation
   
 
     
@@ -2643,7 +2645,7 @@
   <span class="md-ellipsis">
     
   
-    Interop
+    Import a .ppy module from plain Python
   
 
     
@@ -2661,7 +2663,7 @@
   <span class="md-ellipsis">
     
   
-    Interop
+    Import a .ppy module from plain Python
   
 
     
@@ -2687,10 +2689,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#provenance" class="md-nav__link">
+  <a href="#the-hook-is-explicit" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Provenance
+        The hook is explicit
       
     </span>
   </a>
@@ -2698,10 +2700,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#what-it-shows" class="md-nav__link">
+  <a href="#native-when-it-can-be-source-when-it-cannot" class="md-nav__link">
     <span class="md-ellipsis">
       
-        What it shows
+        Native when it can be, source when it cannot
       
     </span>
   </a>
@@ -2724,6 +2726,17 @@
     <span class="md-ellipsis">
       
         What it prints
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#read-on" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Read on
       
     </span>
   </a>
@@ -2764,7 +2777,7 @@
   <span class="md-ellipsis">
     
   
-    Project layout
+    A project is one call graph, and one program
   
 
     
@@ -2792,7 +2805,7 @@
   <span class="md-ellipsis">
     
   
-    Migration
+    Five dynamic idioms, rewritten and proven equivalent
   
 
     
@@ -3571,10 +3584,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#provenance" class="md-nav__link">
+  <a href="#the-hook-is-explicit" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Provenance
+        The hook is explicit
       
     </span>
   </a>
@@ -3582,10 +3595,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#what-it-shows" class="md-nav__link">
+  <a href="#native-when-it-can-be-source-when-it-cannot" class="md-nav__link">
     <span class="md-ellipsis">
       
-        What it shows
+        Native when it can be, source when it cannot
       
     </span>
   </a>
@@ -3608,6 +3621,17 @@
     <span class="md-ellipsis">
       
         What it prints
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#read-on" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Read on
       
     </span>
   </a>
@@ -3645,26 +3669,39 @@
   
 
 
-<h1 id="interop">Interop<a class="headerlink" href="#interop" title="Permanent link">&para;</a></h1>
-<p>A plain <code>.py</code> file importing a <code>.ppy</code> module, with no compiler and no build step.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">ppy</span>        <span class="c1"># installs the sys.meta_path finder</span>
-<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="kn">import</span><span class="w"> </span><span class="nn">geometry</span>   <span class="c1"># loads geometry.ppy as ordinary Python source</span>
+<h1 id="import-a-ppy-module-from-plain-python">Import a <code>.ppy</code> module from plain Python<a class="headerlink" href="#import-a-ppy-module-from-plain-python" title="Permanent link">&para;</a></h1>
+<p>Two lines make a <code>.ppy</code> file importable from any Python program: <code>import
+ppy</code>, then <code>import geometry</code>. The first installs a <code>sys.meta_path</code> finder;
+the second loads <code>geometry.ppy</code>. With no compiler installed it loads as
+source. With the compiler installed, the same import serves the module
+from its native build — no bootstrap, no launcher, no <code>ppy run</code>.</p>
+<h2 id="the-hook-is-explicit">The hook is explicit<a class="headerlink" href="#the-hook-is-explicit" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">ppy</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="kn">import</span><span class="w"> </span><span class="nn">geometry</span>
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="nb">print</span><span class="p">(</span><span class="s2">"area     :"</span><span class="p">,</span> <span class="n">geometry</span><span class="o">.</span><span class="n">area</span><span class="p">(</span><span class="mf">3.0</span><span class="p">,</span> <span class="mf">4.0</span><span class="p">))</span>
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="nb">print</span><span class="p">(</span><span class="s2">"hook     :"</span><span class="p">,</span> <span class="n">ppy</span><span class="o">.</span><span class="n">is_installed</span><span class="p">())</span>
 </code></pre></div>
-<h2 id="provenance">Provenance<a class="headerlink" href="#provenance" title="Permanent link">&para;</a></h2>
-<p>Hand-written. <code>geometry.ppy</code> is written directly; there is no <code>.py</code>
-source and no conversion step involved.</p>
-<h2 id="what-it-shows">What it shows<a class="headerlink" href="#what-it-shows" title="Permanent link">&para;</a></h2>
-<ul>
-<li>Importing <code>ppy</code> installs the hook; without it the module is invisible and the
-  import raises <code>ModuleNotFoundError</code>. The hook is never implicit.</li>
-<li>If <code>foo.py</code> and <code>foo.ppy</code> both exist, the <code>.ppy</code> wins and a
-  <code>PPyAmbiguousModuleWarning</code> is raised.</li>
-<li><code>ppy convert</code> always inserts <code>import ppy</code>, so a converted entry point can
-  import its siblings.</li>
-<li>With the compiler installed the import is native: <code>geometry.ppy</code> is built
-  once into <code>.ppy-cache</code> and its functions are bound; <code>PPY_IMPORT=python</code>
-  keeps it source. Without the compiler, source it is.</li>
-</ul>
+<p>Without <code>import ppy</code> the module is invisible and the import raises
+<code>ModuleNotFoundError</code>; the hook is never implicit. If <code>geometry.py</code> and
+<code>geometry.ppy</code> both exist, the <code>.ppy</code> wins and a <code>PPyAmbiguousModuleWarning</code>
+says so — <code>ppy check</code> rejects the ambiguity outright (<code>E1003</code>), which is
+why <code>ppy convert --in-place</code> removes the <code>.py</code> it replaces. <code>ppy convert</code>
+always inserts <code>import ppy</code> ahead of first-party imports, so a converted
+entry point can import its siblings.</p>
+<h2 id="native-when-it-can-be-source-when-it-cannot">Native when it can be, source when it cannot<a class="headerlink" href="#native-when-it-can-be-source-when-it-cannot" title="Permanent link">&para;</a></h2>
+<p>The first process to import <code>geometry.ppy</code> with the compiler installed
+builds it into the project's <code>.ppy-cache</code> — the artifact <code>ppy run</code> would
+build — and binds its functions through the prebuilt binder. Every later
+process finds the build and pays nothing. A module that does not check
+clean, or needs the in-process JIT, loads as Python source with one line on
+stderr saying why. <code>PPY_IMPORT=python</code> turns the native path off for a
+process; <code>[tool.ppy] native-import = false</code> turns it off for a project.</p>
+<p>This is also how a program under someone else's launcher gets native
+kernels: <code>torchrun</code>, <code>accelerate launch</code>, or a scheduler starts ordinary
+interpreters, and each one's <code>import ppy</code> finds the same build
+(<a href="../31_torchrun/">torchrun</a>).</p>
 <h2 id="run-it">Run it<a class="headerlink" href="#run-it" title="Permanent link">&para;</a></h2>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>python<span class="w"> </span>consumer.py
 </code></pre></div>
@@ -3678,6 +3715,13 @@ source and no conversion step involved.</p>
 </code></pre></div>
 <!-- outputs:end -->
 
+<h2 id="read-on">Read on<a class="headerlink" href="#read-on" title="Permanent link">&para;</a></h2>
+<ul>
+<li><a href="../../internals/migrating/">Migrating a real project</a> — kernels as <code>.ppy</code>, orchestration as <code>.py</code>.</li>
+<li><a href="../26_project/">A multi-module project</a> — modules analyzed as one call graph and built as one program.</li>
+</ul>
+<p><code>geometry.ppy</code> is hand-written; there is no <code>.py</code> source and no conversion
+step.</p>
 <h2 id="24_interopgeometryppy"><code>24_interop/geometry.ppy</code><a class="headerlink" href="#24_interopgeometryppy" title="Permanent link">&para;</a></h2>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">ppy</span>
 <a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>
@@ -3729,7 +3773,7 @@ source and no conversion step involved.</p>
       <nav class="md-footer__inner md-grid" aria-label="Footer" >
         
           
-          <a href="../23_inference/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Inference">
+          <a href="../23_inference/" class="md-footer__link md-footer__link--prev" aria-label="Previous: How far inference reaches without a single annotation">
             <div class="md-footer__button md-icon">
               
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
@@ -3739,20 +3783,20 @@ source and no conversion step involved.</p>
                 Previous
               </span>
               <div class="md-ellipsis">
-                Inference
+                How far inference reaches without a single annotation
               </div>
             </div>
           </a>
         
         
           
-          <a href="../26_project/" class="md-footer__link md-footer__link--next" aria-label="Next: Project layout">
+          <a href="../26_project/" class="md-footer__link md-footer__link--next" aria-label="Next: A project is one call graph, and one program">
             <div class="md-footer__title">
               <span class="md-footer__direction">
                 Next
               </span>
               <div class="md-ellipsis">
-                Project layout
+                A project is one call graph, and one program
               </div>
             </div>
             <div class="md-footer__button md-icon">

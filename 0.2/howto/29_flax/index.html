@@ -27,7 +27,7 @@
     
     
       
-        <title>Flax - PPY</title>
+        <title>A Flax training loop, strict-checked as written - PPY</title>
       
     
     
@@ -55,6 +55,8 @@
     
       <link rel="stylesheet" href="../../assets/_mkdocstrings.css">
     
+      <link rel="stylesheet" href="../../stylesheets/extra.css">
+    
     <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
     
       
@@ -80,7 +82,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#flax" class="md-skip">
+        <a href="#a-flax-training-loop-strict-checked-as-written" class="md-skip">
           Skip to content
         </a>
       
@@ -120,7 +122,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Flax
+              A Flax training loop, strict-checked as written
             
           </span>
         </div>
@@ -1222,7 +1224,7 @@
   <span class="md-ellipsis">
     
   
-    Basics
+    Three annotations, one native loop
   
 
     
@@ -1250,7 +1252,7 @@
   <span class="md-ellipsis">
     
   
-    Arbitrary precision
+    A machine word until it is not
   
 
     
@@ -1278,7 +1280,7 @@
   <span class="md-ellipsis">
     
   
-    Effects and contracts
+    What @ppy.pure refuses
   
 
     
@@ -1306,7 +1308,7 @@
   <span class="md-ellipsis">
     
   
-    Classes
+    Classes the checker can see through
   
 
     
@@ -1334,7 +1336,7 @@
   <span class="md-ellipsis">
     
   
-    Native data
+    What crosses the boundary as machine values
   
 
     
@@ -1362,7 +1364,7 @@
   <span class="md-ellipsis">
     
   
-    Narrowing
+    Every way a type gets narrower
   
 
     
@@ -1390,7 +1392,7 @@
   <span class="md-ellipsis">
     
   
-    Numerics
+    Where PPY refuses to differ from CPython
   
 
     
@@ -1418,7 +1420,7 @@
   <span class="md-ellipsis">
     
   
-    Value classes
+    A dataclass with no boxed form
   
 
     
@@ -1446,7 +1448,7 @@
   <span class="md-ellipsis">
     
   
-    Tuples
+    Tuples as scalar atoms
   
 
     
@@ -1474,7 +1476,7 @@
   <span class="md-ellipsis">
     
   
-    Dynamic boundaries
+    The escape hatch, and its price
   
 
     
@@ -1502,7 +1504,7 @@
   <span class="md-ellipsis">
     
   
-    Containers
+    Containers, inferred and owned
   
 
     
@@ -1530,7 +1532,7 @@
   <span class="md-ellipsis">
     
   
-    Exceptions
+    Exceptions are part of the contract
   
 
     
@@ -1558,7 +1560,7 @@
   <span class="md-ellipsis">
     
   
-    Strings
+    Strings stay on CPython, and say so
   
 
     
@@ -1673,7 +1675,7 @@
   <span class="md-ellipsis">
     
   
-    Buffers and JIT
+    Borrow the memory, keep the order, specialize the rest
   
 
     
@@ -1701,7 +1703,7 @@
   <span class="md-ellipsis">
     
   
-    Algorithms
+    Eight kernels and six judge problems, against C
   
 
     
@@ -1729,7 +1731,7 @@
   <span class="md-ellipsis">
     
   
-    Threads
+    One native function, two threads, 1.95×
   
 
     
@@ -1757,7 +1759,7 @@
   <span class="md-ellipsis">
     
   
-    Native memory
+    Typed pointers, stack memory, a C function, a C symbol
   
 
     
@@ -1785,7 +1787,7 @@
   <span class="md-ellipsis">
     
   
-    Lanes and the machine
+    Four lanes at a time, and the machine as a fact
   
 
     
@@ -1813,7 +1815,7 @@
   <span class="md-ellipsis">
     
   
-    Atomics and threads
+    Four threads, one counter, one answer
   
 
     
@@ -1841,7 +1843,7 @@
   <span class="md-ellipsis">
     
   
-    Parallel ranges
+    parallel.range: say the iterations may run at once
   
 
     
@@ -1869,7 +1871,7 @@
   <span class="md-ellipsis">
     
   
-    Derivatives
+    A derivative that agrees to the last bit
   
 
     
@@ -1897,7 +1899,7 @@
   <span class="md-ellipsis">
     
   
-    Coroutines
+    An echo server and its client, as coroutines that compile
   
 
     
@@ -1925,7 +1927,7 @@
   <span class="md-ellipsis">
     
   
-    Generics
+    Generics, inferred at the call and monomorphized in native code
   
 
     
@@ -1953,7 +1955,7 @@
   <span class="md-ellipsis">
     
   
-    The toolbox
+    Every way of looking inside a build, on one program
   
 
     
@@ -2050,7 +2052,7 @@
   <span class="md-ellipsis">
     
   
-    GPU kernels
+    A CUDA kernel in Python, run three ways
   
 
     
@@ -2078,7 +2080,7 @@
   <span class="md-ellipsis">
     
   
-    XLA
+    StableHLO from the compiler, no JAX required
   
 
     
@@ -2195,7 +2197,7 @@
   <span class="md-ellipsis">
     
   
-    NumPy fusion
+    One NumPy expression, one loop
   
 
     
@@ -2223,7 +2225,7 @@
   <span class="md-ellipsis">
     
   
-    Pydantic
+    Pydantic models, typed and still validated
   
 
     
@@ -2251,7 +2253,7 @@
   <span class="md-ellipsis">
     
   
-    Parallelism
+    The same fused kernel, on every core
   
 
     
@@ -2279,7 +2281,7 @@
   <span class="md-ellipsis">
     
   
-    PyTorch ATen regions
+    A PyTorch layer as one C++ call
   
 
     
@@ -2307,7 +2309,7 @@
   <span class="md-ellipsis">
     
   
-    Training a torch MLP
+    A torch training script, converted, and where the time went
   
 
     
@@ -2335,7 +2337,7 @@
   <span class="md-ellipsis">
     
   
-    Training a JAX MLP
+    The same trainer with JAX, and why the step does not get faster
   
 
     
@@ -2363,7 +2365,7 @@
   <span class="md-ellipsis">
     
   
-    JAX export
+    Export a @jax.jit function at build time
   
 
     
@@ -2391,7 +2393,7 @@
   <span class="md-ellipsis">
     
   
-    Serving over Uvicorn
+    A FastAPI service that checks strict, as written
   
 
     
@@ -2428,7 +2430,7 @@
   <span class="md-ellipsis">
     
   
-    Flax
+    A Flax training loop, strict-checked as written
   
 
     
@@ -2446,7 +2448,7 @@
   <span class="md-ellipsis">
     
   
-    Flax
+    A Flax training loop, strict-checked as written
   
 
     
@@ -2472,10 +2474,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#provenance" class="md-nav__link">
+  <a href="#what-the-conversion-typed-and-what-it-left-alone" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Provenance
+        What the conversion typed, and what it left alone
       
     </span>
   </a>
@@ -2483,10 +2485,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#what-it-shows" class="md-nav__link">
+  <a href="#a-base-class-only-the-plugin-knows" class="md-nav__link">
     <span class="md-ellipsis">
       
-        What it shows
+        A base class only the plugin knows
       
     </span>
   </a>
@@ -2509,6 +2511,17 @@
     <span class="md-ellipsis">
       
         What it prints
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#read-on" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Read on
       
     </span>
   </a>
@@ -2549,7 +2562,7 @@
   <span class="md-ellipsis">
     
   
-    A trainer under torchrun and accelerate launch
+    Native kernels on every rank, with import ppy as the integration
   
 
     
@@ -2577,7 +2590,7 @@
   <span class="md-ellipsis">
     
   
-    Columnar expressions
+    A pandas expression as one kernel, nulls included
   
 
     
@@ -2680,7 +2693,7 @@
   <span class="md-ellipsis">
     
   
-    Inventory
+    Untyped Python in, strict PPY out
   
 
     
@@ -2708,7 +2721,7 @@
   <span class="md-ellipsis">
     
   
-    Inference
+    How far inference reaches without a single annotation
   
 
     
@@ -2736,7 +2749,7 @@
   <span class="md-ellipsis">
     
   
-    Interop
+    Import a .ppy module from plain Python
   
 
     
@@ -2764,7 +2777,7 @@
   <span class="md-ellipsis">
     
   
-    Project layout
+    A project is one call graph, and one program
   
 
     
@@ -2792,7 +2805,7 @@
   <span class="md-ellipsis">
     
   
-    Migration
+    Five dynamic idioms, rewritten and proven equivalent
   
 
     
@@ -3571,10 +3584,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#provenance" class="md-nav__link">
+  <a href="#what-the-conversion-typed-and-what-it-left-alone" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Provenance
+        What the conversion typed, and what it left alone
       
     </span>
   </a>
@@ -3582,10 +3595,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#what-it-shows" class="md-nav__link">
+  <a href="#a-base-class-only-the-plugin-knows" class="md-nav__link">
     <span class="md-ellipsis">
       
-        What it shows
+        A base class only the plugin knows
       
     </span>
   </a>
@@ -3608,6 +3621,17 @@
     <span class="md-ellipsis">
       
         What it prints
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#read-on" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Read on
       
     </span>
   </a>
@@ -3645,43 +3669,39 @@
   
 
 
-<h1 id="flax">Flax<a class="headerlink" href="#flax" title="Permanent link">&para;</a></h1>
-<p>An MLP regression trained with Flax (linen) and optax, converted from
-ordinary Python and checked under <code>strict = true</code> — the jax plugin covers the
-Flax and optax surface, so nothing extra is installed or configured.</p>
-<h2 id="provenance">Provenance<a class="headerlink" href="#provenance" title="Permanent link">&para;</a></h2>
-<p>Generated, not hand-written. <code>train.ppy</code> is exactly what
-<code>ppy convert train.py</code> writes; <code>verify_conversions.py</code> regenerates it to
-prove that.</p>
-<h2 id="what-it-shows">What it shows<a class="headerlink" href="#what-it-shows" title="Permanent link">&para;</a></h2>
-<ul>
-<li>The untyped helpers gain types from their call sites — <code>target_curve</code> gets
-  <code>jax.Array</code> because that is what flows into it — and <code>@ppy.pure</code> where the
-  checker proved it.</li>
-<li><code>class Mlp(nn.Module)</code> inherits <code>init</code>/<code>apply</code> from a base only the plugin
-  knows; the checker resolves them through the class's external MRO.</li>
-<li>Layer constructors (<code>nn.Dense</code>), activations (<code>nn.relu</code>), optimizers
-  (<code>optax.adam</code>), and <code>tx.update</code>'s <code>(updates, state)</code> pair all have
-  signatures under strict mode; parameter pytrees are an explicit <code>Any</code>
-  boundary, not an inferred one.</li>
-<li><code>@nn.compact</code> and <code>@partial(jax.jit, ...)</code> decorated functions keep their
-  author-written signatures.</li>
-<li>All three paths train to the same loss on the same device, matching the
-  original <code>.py</code>.</li>
-</ul>
+<h1 id="a-flax-training-loop-strict-checked-as-written">A Flax training loop, strict-checked as written<a class="headerlink" href="#a-flax-training-loop-strict-checked-as-written" title="Permanent link">&para;</a></h1>
+<p><code>train.py</code> trains an MLP regression with Flax (linen) and optax: a
+<code>nn.Module</code> subclass, <code>@nn.compact</code>, <code>optax.adam</code>, a <code>@partial(jax.jit)</code>
+training step. <code>train.ppy</code> is what <code>ppy convert</code> wrote from it, and it
+checks under <code>strict = true</code> with nothing extra installed or configured.
+The jax plugin models the Flax and optax surface, so strict mode has a
+signature for every call.</p>
+<h2 id="what-the-conversion-typed-and-what-it-left-alone">What the conversion typed, and what it left alone<a class="headerlink" href="#what-the-conversion-typed-and-what-it-left-alone" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nd">@ppy</span><span class="o">.</span><span class="n">pure</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="k">def</span><span class="w"> </span><span class="nf">target_curve</span><span class="p">(</span><span class="n">x</span><span class="p">:</span> <span class="n">jax</span><span class="o">.</span><span class="n">Array</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">jax</span><span class="o">.</span><span class="n">Array</span><span class="p">:</span>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>    <span class="k">return</span> <span class="mf">3.0</span> <span class="o">*</span> <span class="n">x</span> <span class="o">*</span> <span class="n">x</span> <span class="o">-</span> <span class="mf">2.0</span> <span class="o">*</span> <span class="n">x</span> <span class="o">+</span> <span class="mf">0.5</span>
+</code></pre></div>
+<p>The untyped helpers got their types from their call sites — <code>target_curve</code>
+receives a <code>jax.Array</code> because that is what flows into it — and
+<code>@ppy.pure</code> where the checker proved it. <code>train_step</code>, decorated with
+<code>@partial(jax.jit, static_argnums=(0, 1))</code>, and <code>__call__</code>, decorated with
+<code>@nn.compact</code>, keep their author-written signatures: a <code>partial</code> of a
+vouched decorator counts as that decorator, and the policy leaves a
+transformed function's annotations as they are.</p>
+<h2 id="a-base-class-only-the-plugin-knows">A base class only the plugin knows<a class="headerlink" href="#a-base-class-only-the-plugin-knows" title="Permanent link">&para;</a></h2>
+<p><code>class Mlp(nn.Module)</code> inherits <code>init</code> and <code>apply</code> from a base that is not
+in the project. The checker resolves them through the class's external MRO,
+which the plugin supplies, so <code>model.init(key, xs)</code> and <code>model.apply(p, xs)</code>
+type-check. Parameter pytrees are an explicit <code>Any</code> boundary, declared as
+such in the source, not an inferred one. All three paths train to the same
+loss on the same device, matching the original <code>.py</code>.</p>
 <h2 id="run-it">Run it<a class="headerlink" href="#run-it" title="Permanent link">&para;</a></h2>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>python<span class="w"> </span>train.ppy<span class="w">    </span><span class="c1"># plain CPython</span>
-<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>ppy<span class="w"> </span>train.ppy<span class="w">       </span><span class="c1"># optimized backend</span>
-<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>ppy<span class="w"> </span>run<span class="w"> </span>train.ppy<span class="w">   </span><span class="c1"># native-eligible helpers through LLVM</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>python<span class="w">  </span>train.ppy
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>ppy<span class="w"> </span>run<span class="w"> </span>train.ppy
 </code></pre></div>
 <!-- outputs:start -->
 <h2 id="what-it-prints">What it prints<a class="headerlink" href="#what-it-prints" title="Permanent link">&para;</a></h2>
-<p><strong><code>python train.ppy</code></strong></p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>device=cpu
-<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>loss 3.0810 -&gt; 0.0105
-<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>learned
-</code></pre></div>
-<p><strong><code>ppy train.ppy</code></strong></p>
+<p><strong><code>python  train.ppy</code></strong></p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>device=cpu
 <a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>loss 3.0810 -&gt; 0.0105
 <a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>learned
@@ -3693,6 +3713,14 @@ prove that.</p>
 </code></pre></div>
 <!-- outputs:end -->
 
+<h2 id="read-on">Read on<a class="headerlink" href="#read-on" title="Permanent link">&para;</a></h2>
+<ul>
+<li><a href="../22_training_jax/">Training with JAX</a> — the same shape without Flax.</li>
+<li><a href="../../internals/plugins/">Plugins: JAX</a> — the Flax and optax surface.</li>
+</ul>
+<p>Generated, not hand-written: <code>train.ppy</code> is exactly what <code>ppy convert
+train.py</code> writes, and <code>examples/verify_conversions.py</code> checks that on every
+run.</p>
 <h2 id="29_flaxtrainppy"><code>29_flax/train.ppy</code><a class="headerlink" href="#29_flaxtrainppy" title="Permanent link">&para;</a></h2>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">functools</span><span class="w"> </span><span class="kn">import</span> <span class="n">partial</span>
 <a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Any</span>
@@ -3805,7 +3833,7 @@ prove that.</p>
       <nav class="md-footer__inner md-grid" aria-label="Footer" >
         
           
-          <a href="../27_uvicorn/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Serving over Uvicorn">
+          <a href="../27_uvicorn/" class="md-footer__link md-footer__link--prev" aria-label="Previous: A FastAPI service that checks strict, as written">
             <div class="md-footer__button md-icon">
               
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
@@ -3815,20 +3843,20 @@ prove that.</p>
                 Previous
               </span>
               <div class="md-ellipsis">
-                Serving over Uvicorn
+                A FastAPI service that checks strict, as written
               </div>
             </div>
           </a>
         
         
           
-          <a href="../31_torchrun/" class="md-footer__link md-footer__link--next" aria-label="Next: A trainer under torchrun and accelerate launch">
+          <a href="../31_torchrun/" class="md-footer__link md-footer__link--next" aria-label="Next: Native kernels on every rank, with import ppy as the integration">
             <div class="md-footer__title">
               <span class="md-footer__direction">
                 Next
               </span>
               <div class="md-ellipsis">
-                A trainer under torchrun and accelerate launch
+                Native kernels on every rank, with import ppy as the integration
               </div>
             </div>
             <div class="md-footer__button md-icon">
