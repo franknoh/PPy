@@ -1,0 +1,83 @@
+"""saxpy over sixteen million doubles and a per-block max: PPy kernels launched over host arrays."""
+
+import time
+
+from ppy import cuda, native
+
+N = 1 << 24
+
+
+@cuda.device
+def fma(a: float, x: float, y: float) -> float:
+    return a * x + y
+
+
+@cuda.kernel
+def saxpy(n: int, a: float, x: native.const_ptr[float], y: native.ptr[float]) -> None:
+    i = cuda.global_id()
+    if i < n:
+        slot = native.offset(y, i)
+        native.store(slot, fma(a, native.load(native.offset(x, i)), native.load(slot)))
+
+
+@cuda.kernel
+def block_max(x: native.const_ptr[float], out: native.ptr[float]) -> None:
+    parked = cuda.shared[float, 64]()
+    tid = cuda.thread_id()
+    native.store(native.offset(parked, tid), native.load(native.offset(x, cuda.global_id())))
+    cuda.syncthreads()
+    mine = native.load(native.offset(parked, tid))
+    other = cuda.shfl_xor(mine, 1)
+    mine = other if other > mine else mine
+    native.store(native.offset(parked, tid), mine)
+    cuda.syncthreads()
+    if tid == 0:
+        best = native.load(parked)
+        for k in range(1, cuda.block_dim()):
+            candidate = native.load(native.offset(parked, k))
+            best = candidate if candidate > best else best
+        native.store(native.offset(out, cuda.block_id()), best)
+
+
+def run_saxpy(n: int, a: float, x: native.const_ptr[float], y: native.ptr[float]) -> None:
+    cuda.launch(saxpy, (n + 255) // 256, 256, n, a, x, y)
+
+
+def run_block_max(blocks: int, x: native.const_ptr[float], out: native.ptr[float]) -> None:
+    cuda.launch(block_max, blocks, 64, x, out)
+
+
+def main() -> None:
+    x = native.stack_alloc[float](N)
+    y = native.stack_alloc[float](N)
+    values = native.stack_alloc[float](N)
+    out = native.stack_alloc[float](N // 64)
+    for i in range(N):
+        native.store(native.offset(x, i), float(i))
+        native.store(native.offset(y, i), 1.0)
+        native.store(native.offset(values, i), float((i * 37) % 101))
+    run_saxpy(N, 2.0, x, y)
+    run_block_max(N // 64, values, out)
+    total = 0.0
+    for i in range(N):
+        total += native.load(native.offset(y, i))
+    best = 0.0
+    for i in range(N // 64):
+        candidate = native.load(native.offset(out, i))
+        best = candidate if candidate > best else best
+    print(total, best)
+    print(f"# kernels compiled for a device here: {cuda.compiled(saxpy)}")
+    best_saxpy = 1e9
+    best_block = 1e9
+    for _ in range(5):
+        started = time.perf_counter()
+        run_saxpy(N, 2.0, x, y)
+        best_saxpy = min(best_saxpy, (time.perf_counter() - started) * 1000.0)
+        started = time.perf_counter()
+        run_block_max(N // 64, values, out)
+        best_block = min(best_block, (time.perf_counter() - started) * 1000.0)
+    print(f"# saxpy: {best_saxpy:.3f} ms")
+    print(f"# block_max: {best_block:.3f} ms")
+
+
+main()

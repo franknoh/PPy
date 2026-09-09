@@ -4,6 +4,15 @@
 
 Work toward the next release, on `dev`; alphas of it are tagged `v0.3.0aN`.
 
+- Three examples compare PPY with the tools that do the same job, code and
+  numbers side by side: the parallel ranges against Numba, Taichi, Mojo, and
+  NumPy; the CUDA kernels against CuPy and Numba; the eight algorithm kernels
+  against Numba, Mojo, and Codon. Each counterpart is in the example's
+  `compare/` folder, written the way its tool wants it, and
+  `examples/compare.py` holds them all to one answer and tabulates the
+  timings. The CUDA table says plainly what PPY lacks: an array that lives
+  on the device between launches.
+
 - `ppy.input[T]()` takes no argument, and `ppy.input[Buffer[T]](n)` takes
   only how many values to read: reading and printing are two things, so a
   prompt is a `print` before the read rather than an argument that meant a
