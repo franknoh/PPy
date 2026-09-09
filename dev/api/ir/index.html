@@ -620,6 +620,8 @@
       
         
       
+        
+      
     
     
     
@@ -1025,6 +1027,34 @@
     
   
     Input and native lowering
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guide/regex/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Regular expressions
   
 
     
@@ -1605,6 +1635,8 @@
       
         
       
+        
+      
     
     
     
@@ -1945,6 +1977,34 @@
     
   
     The toolbox
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../howto/43_regex/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Regular expressions
   
 
     
@@ -4157,6 +4217,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#ppy_compiler.ir.transforms.LowerRegex" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;LowerRegex
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#ppy_compiler.ir.transforms.LoweringError" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -6142,6 +6213,17 @@
     <span class="md-ellipsis">
       
         <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;LowerParallel
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ppy_compiler.ir.transforms.LowerRegex" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;LowerRegex
       
     </span>
   </a>
@@ -9417,6 +9499,54 @@ error with its line.</p>
 
 
         <p>Rewrite every <code>parallel.*</code> operation for the selected backend.</p>
+
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-class">
+
+
+
+<h3 id="ppy_compiler.ir.transforms.LowerRegex" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>            <code>LowerRegex</code>
+
+
+<a href="#ppy_compiler.ir.transforms.LowerRegex" class="headerlink" title="Permanent link">&para;</a></h3>
+
+
+    <div class="doc doc-contents ">
+            <p class="doc doc-class-bases">
+              Bases: <code><a class="autorefs autorefs-internal" title="            Pass (ppy_compiler.ir.passes.Pass)" href="#ppy_compiler.ir.passes.Pass">Pass</a></code></p>
+
+
+
+        <p>Rewrite every <code>regex.*</code> operation as a call to its pattern's matcher.</p>
 
 
 

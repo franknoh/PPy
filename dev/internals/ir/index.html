@@ -620,6 +620,8 @@
       
         
       
+        
+      
     
     
     
@@ -1025,6 +1027,34 @@
     
   
     Input and native lowering
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guide/regex/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Regular expressions
   
 
     
@@ -1605,6 +1635,8 @@
       
         
       
+        
+      
     
     
     
@@ -1945,6 +1977,34 @@
     
   
     The toolbox
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../howto/43_regex/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Regular expressions
   
 
     
@@ -3337,6 +3397,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#the-regex-dialect" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The regex dialect
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#the-simd-dialect" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3820,6 +3891,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#the-regex-dialect" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The regex dialect
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#the-simd-dialect" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4203,6 +4285,31 @@ The frontend writes <code>math.sqrt %x : f64</code> for <code>math.sqrt(x)</code
 backend lowers it to the intrinsic of that name, a C backend to libm, a GPU
 backend to its device library. A math function of a constant folds, and
 <code>floor(floor(x))</code> is <code>floor(x)</code>.</p>
+<h2 id="the-regex-dialect">The regex dialect<a class="headerlink" href="#the-regex-dialect" title="Permanent link">&para;</a></h2>
+<p><code>regex.search %buf, %pos, %endpos {pattern = "...", flags = 0}</code> is what
+<code>PATTERN.search(buf, pos, endpos)</code> means for a pattern compiled from a bytes
+literal at module level; <code>regex.match</code> and <code>regex.fullmatch</code> are the anchored
+forms. The operation takes a <code>buffer&lt;u8&gt;</code> and yields whether there was a
+match, then the span of every group -- start and end of group 0, of group
+1, and so on -- with -1 for a group that took no part. The pattern is read
+by CPython's own parser, so its syntax and its meaning are <code>re</code>'s.</p>
+<p>The <code>lower-regex</code> pass, which runs right after <code>lower-async</code>, compiles each
+distinct pattern into one private function of core operations and turns the
+operation into a call. The matcher backtracks the way CPython's does, on an
+explicit stack rather than by recursion: an entry records where to resume,
+the position, and every loop's count, so popping one puts the matcher back
+exactly. Alternatives are tried in order, a greedy repeat gives back one
+iteration at a time, a lazy one takes one more, a group keeps the position
+of its last iteration, and an iteration that took nothing is the last one
+tried. A repeat of one byte class scans the run instead of pushing an entry
+per byte. The stack holds 4096 entries; a match that would need more fails
+a <code>regex.stack.ok</code> guard, which sends the calling function to its fallback,
+where <code>re</code> answers. Every backend runs the matcher as it runs any other
+function; no backend needs a regex library.</p>
+<p>Backreferences, lookaround, atomic groups and possessive repeats, and locale
+categories are refused when the pattern is analysed, and a function that uses
+one stays on Python with the reason. <a href="../../guide/regex/">Regular expressions</a>
+is the surface.</p>
 <h2 id="the-simd-dialect">The simd dialect<a class="headerlink" href="#the-simd-dialect" title="Permanent link">&para;</a></h2>
 <p><code>vector&lt;T, N&gt;</code> is <code>N</code> scalars operated on at once, and the core dialect's
 arithmetic, comparisons, <code>select</code>, and <code>cast</code> already take vectors (a
@@ -4541,7 +4648,7 @@ over <code>fill</code>s is a <code>fill</code>, <code>x * fill 1</code> is <code
 of elementwise tensor operations whose intermediates have one reader, and
 a <code>reduce</code> at its root, become one <code>tensor.fused</code> -- a region computing
 one element from one element of each input -- so <code>lower-tensor</code> makes one
-loop of them with no temporaries), <code>lower-tensor</code>, and <code>lower-parallel</code>;
+loop of them with no temporaries), <code>lower-tensor</code>, <code>lower-regex</code>, and <code>lower-parallel</code>;
 <code>transforms.default_pipeline(level)</code> orders them and marks the
 stages -- <code>after-ir-generation</code>, <code>after-canonicalization</code>,
 <code>before-optimization</code>, <code>after-optimization</code>, <code>before-backend</code> -- where a

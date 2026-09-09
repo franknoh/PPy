@@ -618,6 +618,8 @@
       
         
       
+        
+      
     
     
     
@@ -1023,6 +1025,34 @@
     
   
     Input and native lowering
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../guide/regex/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Regular expressions
   
 
     
@@ -1603,6 +1633,8 @@
       
         
       
+        
+      
     
     
     
@@ -1943,6 +1975,34 @@
     
   
     The toolbox
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../howto/43_regex/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Regular expressions
   
 
     
@@ -3705,6 +3765,26 @@
 <h2 id="030-unreleased">0.3.0 — unreleased<a class="headerlink" href="#030-unreleased" title="Permanent link">&para;</a></h2>
 <p>Work toward the next release, on <code>dev</code>; alphas of it are tagged <code>v0.3.0aN</code>.</p>
 <ul>
+<li>Regular expressions run natively. A pattern compiled from a bytes literal
+  at module level -- <code>WORD = re.compile(rb"[A-Za-z]+")</code> -- or written into
+  <code>re.search(rb"...", buf)</code> becomes a <code>regex.search</code>, <code>regex.match</code>, or
+  <code>regex.fullmatch</code> operation over a <code>Buffer[ppy.u8]</code>, and the new
+  <code>lower-regex</code> pass compiles each pattern into a matcher function of core
+  operations, so the LLVM and C backends run it as they run anything else.
+  The matcher backtracks the way CPython's does and answers exactly what
+  <code>re</code> answers -- ordered alternation, greedy and lazy repeats, the group's
+  last iteration, <code>$</code> before a trailing newline, <code>\b</code> at ASCII word edges,
+  <code>pos</code> and <code>endpos</code> -- on random inputs across both backends. A match is a
+  local whose <code>start</code>, <code>end</code>, and <code>span</code> are native; <code>m is None</code> and <code>if m:</code>
+  narrow it; <code>group()</code> stays on Python. Backreferences, lookaround, atomic
+  groups, possessive repeats, and locale categories are refused with the
+  reason, and a match that would need more than the matcher's stack falls
+  back to <code>re</code>. The checker types <code>re.compile</code>, <code>re.Pattern</code>, <code>re.Match</code>,
+  and the flags. A <code>while True:</code> loop that only leaves by returning lowers
+  too, which is how a search loop is written.</li>
+<li>The project scan skips a virtual environment by any name -- a directory
+  holding <code>pyvenv.cfg</code> -- not only <code>.venv</code> and <code>venv</code>; a second environment
+  kept beside the first no longer costs a scan of every package in it.</li>
 <li><code>ppy.input[T]()</code> takes no argument, and <code>ppy.input[Buffer[T]](https://github.com/franknoh/PPy/blob/main/n)</code> takes
   only how many values to read: reading and printing are two things, so a
   prompt is a <code>print</code> before the read rather than an argument that meant a
