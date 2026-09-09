@@ -311,6 +311,7 @@ ppy emit nvvm-ir foo.ppy             # the kernels as LLVM IR for NVPTX
 ppy emit ptx foo.ppy                 # ... as PTX (PPY_CUDA_ARCH names the architecture, sm_70 by default)
 ppy emit c --header-only foo.ppy     # every function static inline in a header
 ppy emit c --standalone prog.ppy     # the whole program from main(), shims and all
+ppy emit c --format foo.ppy          # ... laid out by clang-format (the project's .clang-format, or LLVM style)
 ppy emit header foo.ppy              # the C declarations of the exports
 ppy emit stablehlo foo.ppy           # the @ppy.xla.jit functions as StableHLO for XLA
 ```
@@ -336,6 +337,12 @@ standard input) is refused there with `E1804` and its name.
 `main` and everything it reaches, all of it native -- and ends the unit in
 a C `main`, so the text is a whole program. `header` is the declarations
 of a module's exports, the same text `ppy build` writes beside a library.
+The C is written to be read: loops are `while`, branches are `if`/`else`,
+a local keeps its Python name, and a value read once is written where it
+is read. `--format` (for `c`, `cpp`, `cuda`, `hip`, and `header`) runs the
+text through `clang-format`, with the project's `.clang-format` where it
+has one and LLVM style at four spaces and a hundred columns otherwise; a
+missing `clang-format` is `E1802`.
 
 `.ppyir` is the IR's on-disk form -- public from 0.2.0 at schema 1 -- and
 `ppy build foo.ppyir` builds one without the Python that produced it: the file

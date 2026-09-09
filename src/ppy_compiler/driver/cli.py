@@ -238,6 +238,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="for `c` and `cpp`: the whole program from `main`, runtime shims and all",
     )
     emit.add_argument(
+        "--format",
+        action="store_true",
+        help="for `c`, `cpp`, `cuda`, `hip`, and `header`: run the text through clang-format, "
+        "with the project's `.clang-format` where it has one",
+    )
+    emit.add_argument(
         "-o",
         "--output",
         type=Path,

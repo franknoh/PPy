@@ -140,7 +140,7 @@ def test_a_coroutine_lowers_to_a_starter_and_a_resume_function(tmp_path: Path):
     assert "func @aio_prog_program" not in text, "`aio.run` keeps its caller in Python"
     c = _ppy(tmp_path, "emit", "c", "aio_prog.ppy")
     assert c.returncode == 0, c.stderr
-    assert "static void ppy_aio_prog_main_resume(int64_t *a0)" in c.stdout
+    assert "static void ppy_aio_prog_main_resume(int64_t *frame)" in c.stdout
     assert "ppy_aio_spawn(" in c.stdout and "ppy_aio_await(" in c.stdout
     assert "/* compile with: the async runtime, ppy_runtime/aio/ppy_aio.c */" in c.stdout
     assert "-lppy_aio" not in c.stdout

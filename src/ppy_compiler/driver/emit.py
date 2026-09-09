@@ -47,6 +47,8 @@ _SUFFIXES = {
     "linked-ir": ".ppyir",
 }
 _HEADER_ONLY_SUFFIXES = {"c": ".h", "cpp": ".hpp"}
+#: The kinds `--format` runs through clang-format.
+_FORMATTED = frozenset({"c", "cpp", "cuda", "hip", "header"})
 
 
 def run_emit(options: argparse.Namespace, reporter: Reporter) -> int:
@@ -73,6 +75,16 @@ def run_emit(options: argparse.Namespace, reporter: Reporter) -> int:
             Diagnostic("E1002", Severity.ERROR, "emitting a directory needs `-o DIR` to write into")
         )
         return 2
+    formatting = bool(getattr(options, "format", False))
+    if formatting and options.kind not in _FORMATTED:
+        reporter.emit(
+            Diagnostic(
+                "E1002",
+                Severity.ERROR,
+                "`--format` applies to `emit c`, `cpp`, `cuda`, `hip`, and `header`",
+            )
+        )
+        return 2
     project = open_project(target)
     bundle = analyze_paths(project, collect_sources(target), backend="llvm")
     errors = reporter.report(bundle.diagnostics)
@@ -93,6 +105,14 @@ def run_emit(options: argparse.Namespace, reporter: Reporter) -> int:
         reporter.emit(Diagnostic("E1002", Severity.ERROR, "nothing to emit: no module lowered"))
         return 1
     suffix = _HEADER_ONLY_SUFFIXES[options.kind] if header_only else _SUFFIXES[options.kind]
+    if formatting:
+        from ..backend.c.format import ClangFormatError, clang_format
+
+        try:
+            texts = {name: clang_format(text, suffix, project.root) for name, text in texts.items()}
+        except ClangFormatError as error:
+            reporter.emit(Diagnostic("E1802", Severity.ERROR, str(error), help=error.help))
+            return 2
     if target.is_file():
         text = "\n".join(texts.values())
         if output is None:
