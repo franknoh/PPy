@@ -334,10 +334,7 @@ class _Reading:
             read_ints(values)
             return values
         if argument is not None:
-            if not isinstance(argument, str):
-                raise TypeError("the argument to a scalar read is a prompt")
-            sys.stdout.write(argument)
-            sys.stdout.flush()
+            raise TypeError("`ppy.input[T]()` takes no argument; print a prompt first, then read")
         return _read_one(spec)
 
 
@@ -359,13 +356,14 @@ class _TypedInput:
     ```python
     n = ppy.input[int]()                   # one integer
     a, b = ppy.input[tuple[int, int]]()    # two fields, line breaks irrelevant
-    word = ppy.input[str]("name? ")        # a token, after printing the prompt
+    word = ppy.input[str]()                # a token
     values = ppy.input[Buffer[int]](n)     # n integers, straight into a buffer
     ```
 
     Whitespace and newlines are the same thing to it, as they are to `scanf`.
     Reading goes into memory rather than through a Python object per field,
-    so the buffer form is what takes a million numbers quickly.
+    so the buffer form is what takes a million numbers quickly. A read takes
+    no argument but a buffer's count; a prompt is a `print` before it.
     """
 
     __slots__ = ()
