@@ -3471,6 +3471,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#021-unreleased" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        0.2.1 — unreleased
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#020-2026-09-08" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3588,6 +3599,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#021-unreleased" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        0.2.1 — unreleased
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#020-2026-09-08" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3682,21 +3704,20 @@
 <h1 id="changelog">Changelog<a class="headerlink" href="#changelog" title="Permanent link">&para;</a></h1>
 <h2 id="030-unreleased">0.3.0 — unreleased<a class="headerlink" href="#030-unreleased" title="Permanent link">&para;</a></h2>
 <p>Work toward the next release, on <code>dev</code>; alphas of it are tagged <code>v0.3.0aN</code>.</p>
+<h2 id="021-unreleased">0.2.1 — unreleased<a class="headerlink" href="#021-unreleased" title="Permanent link">&para;</a></h2>
 <ul>
-<li>Every example README is rewritten to say what the program does and why it
-  is fast in the first paragraph, show the lines of code that matter, and
-  end with the commands and what each one prints. A long output is shown to
-  its first twenty lines and kept whole under the folder's <code>outputs/</code>, which
-  the documentation site unfolds in place; the six judge problems gained a
-  small <code>input.txt</code> so their commands run as written, and the toolbox README
-  runs the inspect, emit, report, sanitizer, and profile commands it is
-  about.</li>
 <li>The lowering cache dropped a coroutine's future kind from its signature,
   so the second <code>ppy run</code> of a program whose entry coroutine was served from
   the cache bound it through the plain boundary and handed <code>aio.run</code> a bare
   handle instead of a future (<code>TypeError</code> from asyncio). The cache carries
   the kind now, its schema moved to 7 so no stale entry is served, and a test
   holds the round trip. Found by recording the examples' outputs twice.</li>
+<li>Every example README is rewritten in a plain voice with its detail kept,
+  and ends with the commands and what each one prints. A short output is
+  inline, a longer one is folded into a <code>&lt;details&gt;</code> block, a very long one is
+  a file under the folder's <code>outputs/</code> that the documentation site embeds;
+  each exists once. The six judge problems gained a small <code>input.txt</code> so
+  their commands run as written.</li>
 </ul>
 <h2 id="020-2026-09-08">0.2.0 — 2026-09-08<a class="headerlink" href="#020-2026-09-08" title="Permanent link">&para;</a></h2>
 <p>The release that turns the compiler into a platform: a typed, multi-dialect
