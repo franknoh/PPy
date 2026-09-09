@@ -27,7 +27,7 @@
     
     
       
-        <title>Export a @jax.jit function at build time - PPY</title>
+        <title>JAX export - PPY</title>
       
     
     
@@ -82,7 +82,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#export-a-jaxjit-function-at-build-time" class="md-skip">
+        <a href="#jax-export" class="md-skip">
           Skip to content
         </a>
       
@@ -122,7 +122,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Export a @jax.jit function at build time
+              JAX export
             
           </span>
         </div>
@@ -1224,7 +1224,7 @@
   <span class="md-ellipsis">
     
   
-    Three annotations, one native loop
+    Basics
   
 
     
@@ -1252,7 +1252,7 @@
   <span class="md-ellipsis">
     
   
-    A machine word until it is not
+    Arbitrary precision
   
 
     
@@ -1280,7 +1280,7 @@
   <span class="md-ellipsis">
     
   
-    What @ppy.pure refuses
+    Effects and contracts
   
 
     
@@ -1308,7 +1308,7 @@
   <span class="md-ellipsis">
     
   
-    Classes the checker can see through
+    Classes
   
 
     
@@ -1336,7 +1336,7 @@
   <span class="md-ellipsis">
     
   
-    What crosses the boundary as machine values
+    Native data
   
 
     
@@ -1364,7 +1364,7 @@
   <span class="md-ellipsis">
     
   
-    Every way a type gets narrower
+    Narrowing
   
 
     
@@ -1392,7 +1392,7 @@
   <span class="md-ellipsis">
     
   
-    Where PPY refuses to differ from CPython
+    Numerics
   
 
     
@@ -1420,7 +1420,7 @@
   <span class="md-ellipsis">
     
   
-    A dataclass with no boxed form
+    Value classes
   
 
     
@@ -1448,7 +1448,7 @@
   <span class="md-ellipsis">
     
   
-    Tuples as scalar atoms
+    Tuples
   
 
     
@@ -1476,7 +1476,7 @@
   <span class="md-ellipsis">
     
   
-    The escape hatch, and its price
+    Dynamic boundaries
   
 
     
@@ -1504,7 +1504,7 @@
   <span class="md-ellipsis">
     
   
-    Containers, inferred and owned
+    Containers
   
 
     
@@ -1532,7 +1532,7 @@
   <span class="md-ellipsis">
     
   
-    Exceptions are part of the contract
+    Exceptions
   
 
     
@@ -1560,7 +1560,7 @@
   <span class="md-ellipsis">
     
   
-    Strings stay on CPython, and say so
+    Strings
   
 
     
@@ -1675,7 +1675,7 @@
   <span class="md-ellipsis">
     
   
-    Borrow the memory, keep the order, specialize the rest
+    Buffers and JIT
   
 
     
@@ -1703,7 +1703,7 @@
   <span class="md-ellipsis">
     
   
-    Eight kernels and six judge problems, against C
+    Algorithms
   
 
     
@@ -1731,7 +1731,7 @@
   <span class="md-ellipsis">
     
   
-    One native function, two threads, 1.95×
+    Threads
   
 
     
@@ -1759,7 +1759,7 @@
   <span class="md-ellipsis">
     
   
-    Typed pointers, stack memory, a C function, a C symbol
+    Native memory
   
 
     
@@ -1787,7 +1787,7 @@
   <span class="md-ellipsis">
     
   
-    Four lanes at a time, and the machine as a fact
+    Lanes and the machine
   
 
     
@@ -1815,7 +1815,7 @@
   <span class="md-ellipsis">
     
   
-    Four threads, one counter, one answer
+    Atomics and threads
   
 
     
@@ -1843,7 +1843,7 @@
   <span class="md-ellipsis">
     
   
-    parallel.range: say the iterations may run at once
+    Parallel ranges
   
 
     
@@ -1871,7 +1871,7 @@
   <span class="md-ellipsis">
     
   
-    A derivative that agrees to the last bit
+    Derivatives
   
 
     
@@ -1899,7 +1899,7 @@
   <span class="md-ellipsis">
     
   
-    An echo server and its client, as coroutines that compile
+    Coroutines
   
 
     
@@ -1927,7 +1927,7 @@
   <span class="md-ellipsis">
     
   
-    Generics, inferred at the call and monomorphized in native code
+    Generics
   
 
     
@@ -1955,7 +1955,7 @@
   <span class="md-ellipsis">
     
   
-    Every way of looking inside a build, on one program
+    The toolbox
   
 
     
@@ -2052,7 +2052,7 @@
   <span class="md-ellipsis">
     
   
-    A CUDA kernel in Python, run three ways
+    GPU kernels
   
 
     
@@ -2080,7 +2080,7 @@
   <span class="md-ellipsis">
     
   
-    StableHLO from the compiler, no JAX required
+    XLA
   
 
     
@@ -2197,7 +2197,7 @@
   <span class="md-ellipsis">
     
   
-    One NumPy expression, one loop
+    NumPy fusion
   
 
     
@@ -2225,7 +2225,7 @@
   <span class="md-ellipsis">
     
   
-    Pydantic models, typed and still validated
+    Pydantic
   
 
     
@@ -2253,7 +2253,7 @@
   <span class="md-ellipsis">
     
   
-    The same fused kernel, on every core
+    Parallel fused kernels
   
 
     
@@ -2281,7 +2281,7 @@
   <span class="md-ellipsis">
     
   
-    A PyTorch layer as one C++ call
+    PyTorch ATen regions
   
 
     
@@ -2309,7 +2309,7 @@
   <span class="md-ellipsis">
     
   
-    A torch training script, converted, and where the time went
+    Training a torch MLP
   
 
     
@@ -2337,7 +2337,7 @@
   <span class="md-ellipsis">
     
   
-    The same trainer with JAX, and why the step does not get faster
+    Training a JAX MLP
   
 
     
@@ -2374,7 +2374,7 @@
   <span class="md-ellipsis">
     
   
-    Export a @jax.jit function at build time
+    JAX export
   
 
     
@@ -2392,7 +2392,7 @@
   <span class="md-ellipsis">
     
   
-    Export a @jax.jit function at build time
+    JAX export
   
 
     
@@ -2462,17 +2462,6 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#read-on" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Read on
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
   <a href="#25_jax_exportmodelppy" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2506,7 +2495,7 @@
   <span class="md-ellipsis">
     
   
-    A FastAPI service that checks strict, as written
+    Serving over Uvicorn
   
 
     
@@ -2534,7 +2523,7 @@
   <span class="md-ellipsis">
     
   
-    A Flax training loop, strict-checked as written
+    Flax
   
 
     
@@ -2562,7 +2551,7 @@
   <span class="md-ellipsis">
     
   
-    Native kernels on every rank, with import ppy as the integration
+    A trainer under torchrun and accelerate launch
   
 
     
@@ -2590,7 +2579,7 @@
   <span class="md-ellipsis">
     
   
-    A pandas expression as one kernel, nulls included
+    Columnar expressions
   
 
     
@@ -2693,7 +2682,7 @@
   <span class="md-ellipsis">
     
   
-    Untyped Python in, strict PPY out
+    Inventory
   
 
     
@@ -2721,7 +2710,7 @@
   <span class="md-ellipsis">
     
   
-    How far inference reaches without a single annotation
+    Inference
   
 
     
@@ -2749,7 +2738,7 @@
   <span class="md-ellipsis">
     
   
-    Import a .ppy module from plain Python
+    Interop
   
 
     
@@ -2777,7 +2766,7 @@
   <span class="md-ellipsis">
     
   
-    A project is one call graph, and one program
+    A multi-module project
   
 
     
@@ -2805,7 +2794,7 @@
   <span class="md-ellipsis">
     
   
-    Five dynamic idioms, rewritten and proven equivalent
+    Migration
   
 
     
@@ -3628,17 +3617,6 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#read-on" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Read on
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
   <a href="#25_jax_exportmodelppy" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3669,12 +3647,11 @@
   
 
 
-<h1 id="export-a-jaxjit-function-at-build-time">Export a <code>@jax.jit</code> function at build time<a class="headerlink" href="#export-a-jaxjit-function-at-build-time" title="Permanent link">&para;</a></h1>
-<p>JAX traces a jitted function on its first call, every time the process
-starts. When the function's inputs are fully described — <code>ppy.Shape</code> and
-<code>ppy.DType</code> on the annotation — <code>ppy build</code> can trace it once, at build
-time, and stage the StableHLO in the artifact. The shape may be symbolic,
-so one export serves every batch size.</p>
+<h1 id="jax-export">JAX export<a class="headerlink" href="#jax-export" title="Permanent link">&para;</a></h1>
+<p>Build-time export of a <code>@jax.jit</code> function to StableHLO. JAX traces a
+jitted function on its first call, every time the process starts; when the
+function's inputs are fully described, <code>ppy build</code> can trace it once and
+stage the result in the artifact.</p>
 <h2 id="describe-the-input-and-the-trace-can-move">Describe the input, and the trace can move<a class="headerlink" href="#describe-the-input-and-the-trace-can-move" title="Permanent link">&para;</a></h2>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="n">Batch</span> <span class="o">=</span> <span class="n">Annotated</span><span class="p">[</span><span class="n">jax</span><span class="o">.</span><span class="n">Array</span><span class="p">,</span> <span class="n">ppy</span><span class="o">.</span><span class="n">Shape</span><span class="p">(</span><span class="s2">"B"</span><span class="p">,</span> <span class="mi">4</span><span class="p">),</span> <span class="n">ppy</span><span class="o">.</span><span class="n">DType</span><span class="p">(</span><span class="s2">"float32"</span><span class="p">)]</span>
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>
@@ -3683,11 +3660,13 @@ so one export serves every batch size.</p>
 <a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="k">def</span><span class="w"> </span><span class="nf">score</span><span class="p">(</span><span class="n">x</span><span class="p">:</span> <span class="n">Batch</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">jax</span><span class="o">.</span><span class="n">Array</span><span class="p">:</span>
 <a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>    <span class="k">return</span> <span class="n">jnp</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">jnp</span><span class="o">.</span><span class="n">tanh</span><span class="p">(</span><span class="n">normalize</span><span class="p">(</span><span class="n">x</span><span class="p">)),</span> <span class="n">axis</span><span class="o">=-</span><span class="mi">1</span><span class="p">)</span>
 </code></pre></div>
-<p><code>"B"</code> is a symbolic dimension; <code>jax.export</code> serializes the function for
-any <code>B</code> and the runtime executes it through PJRT. A call whose input does
-not match the description falls back to the ordinary jitted call, so the
-program answers the same either way. A function that is differentiated is
-not exported, and the build says why: a serialized export carries no VJP.</p>
+<p><code>ppy.Shape</code> and <code>ppy.DType</code> on the annotation are what make the function
+exportable. <code>"B"</code> is a symbolic dimension: <code>jax.export</code> serializes the
+function for any <code>B</code>, so one artifact serves every batch size, and the
+runtime executes it through PJRT. A call whose input does not match the
+description falls back to the ordinary jitted call. A function that is
+differentiated is not exported, and the build says why: a serialized export
+carries no VJP.</p>
 <h2 id="off-until-the-project-opts-in">Off until the project opts in<a class="headerlink" href="#off-until-the-project-opts-in" title="Permanent link">&para;</a></h2>
 <p>Export imports and runs project code at build time. It happens only when
 the project sets both <code>[tool.ppy] build-execution = "allow"</code> and
@@ -3713,11 +3692,8 @@ through PJRT, with no trace and no JAX in the compiler.</p>
 </code></pre></div>
 <!-- outputs:end -->
 
-<h2 id="read-on">Read on<a class="headerlink" href="#read-on" title="Permanent link">&para;</a></h2>
-<ul>
-<li><a href="../../internals/plugins/">Plugins: JAX</a> — export, the policy gate, and the Flax surface.</li>
-<li><a href="../../guide/xla/">XLA</a> — the compiler writing StableHLO on its own.</li>
-</ul>
+<p>Read on: <a href="../../internals/plugins/">Plugins: JAX</a> ·
+<a href="../../guide/xla/">XLA</a></p>
 <p><code>model.ppy</code> is hand-written; there is no <code>.py</code> source and no conversion step.</p>
 <h2 id="25_jax_exportmodelppy"><code>25_jax_export/model.ppy</code><a class="headerlink" href="#25_jax_exportmodelppy" title="Permanent link">&para;</a></h2>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Annotated</span>
@@ -3787,7 +3763,7 @@ through PJRT, with no trace and no JAX in the compiler.</p>
       <nav class="md-footer__inner md-grid" aria-label="Footer" >
         
           
-          <a href="../22_training_jax/" class="md-footer__link md-footer__link--prev" aria-label="Previous: The same trainer with JAX, and why the step does not get faster">
+          <a href="../22_training_jax/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Training a JAX MLP">
             <div class="md-footer__button md-icon">
               
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
@@ -3797,20 +3773,20 @@ through PJRT, with no trace and no JAX in the compiler.</p>
                 Previous
               </span>
               <div class="md-ellipsis">
-                The same trainer with JAX, and why the step does not get faster
+                Training a JAX MLP
               </div>
             </div>
           </a>
         
         
           
-          <a href="../27_uvicorn/" class="md-footer__link md-footer__link--next" aria-label="Next: A FastAPI service that checks strict, as written">
+          <a href="../27_uvicorn/" class="md-footer__link md-footer__link--next" aria-label="Next: Serving over Uvicorn">
             <div class="md-footer__title">
               <span class="md-footer__direction">
                 Next
               </span>
               <div class="md-ellipsis">
-                A FastAPI service that checks strict, as written
+                Serving over Uvicorn
               </div>
             </div>
             <div class="md-footer__button md-icon">

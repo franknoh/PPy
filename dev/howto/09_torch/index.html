@@ -27,7 +27,7 @@
     
     
       
-        <title>A PyTorch layer as one C++ call - PPY</title>
+        <title>PyTorch ATen regions - PPY</title>
       
     
     
@@ -82,7 +82,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#a-pytorch-layer-as-one-c-call" class="md-skip">
+        <a href="#pytorch-aten-regions" class="md-skip">
           Skip to content
         </a>
       
@@ -122,7 +122,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              A PyTorch layer as one C++ call
+              PyTorch ATen regions
             
           </span>
         </div>
@@ -1224,7 +1224,7 @@
   <span class="md-ellipsis">
     
   
-    Three annotations, one native loop
+    Basics
   
 
     
@@ -1252,7 +1252,7 @@
   <span class="md-ellipsis">
     
   
-    A machine word until it is not
+    Arbitrary precision
   
 
     
@@ -1280,7 +1280,7 @@
   <span class="md-ellipsis">
     
   
-    What @ppy.pure refuses
+    Effects and contracts
   
 
     
@@ -1308,7 +1308,7 @@
   <span class="md-ellipsis">
     
   
-    Classes the checker can see through
+    Classes
   
 
     
@@ -1336,7 +1336,7 @@
   <span class="md-ellipsis">
     
   
-    What crosses the boundary as machine values
+    Native data
   
 
     
@@ -1364,7 +1364,7 @@
   <span class="md-ellipsis">
     
   
-    Every way a type gets narrower
+    Narrowing
   
 
     
@@ -1392,7 +1392,7 @@
   <span class="md-ellipsis">
     
   
-    Where PPY refuses to differ from CPython
+    Numerics
   
 
     
@@ -1420,7 +1420,7 @@
   <span class="md-ellipsis">
     
   
-    A dataclass with no boxed form
+    Value classes
   
 
     
@@ -1448,7 +1448,7 @@
   <span class="md-ellipsis">
     
   
-    Tuples as scalar atoms
+    Tuples
   
 
     
@@ -1476,7 +1476,7 @@
   <span class="md-ellipsis">
     
   
-    The escape hatch, and its price
+    Dynamic boundaries
   
 
     
@@ -1504,7 +1504,7 @@
   <span class="md-ellipsis">
     
   
-    Containers, inferred and owned
+    Containers
   
 
     
@@ -1532,7 +1532,7 @@
   <span class="md-ellipsis">
     
   
-    Exceptions are part of the contract
+    Exceptions
   
 
     
@@ -1560,7 +1560,7 @@
   <span class="md-ellipsis">
     
   
-    Strings stay on CPython, and say so
+    Strings
   
 
     
@@ -1675,7 +1675,7 @@
   <span class="md-ellipsis">
     
   
-    Borrow the memory, keep the order, specialize the rest
+    Buffers and JIT
   
 
     
@@ -1703,7 +1703,7 @@
   <span class="md-ellipsis">
     
   
-    Eight kernels and six judge problems, against C
+    Algorithms
   
 
     
@@ -1731,7 +1731,7 @@
   <span class="md-ellipsis">
     
   
-    One native function, two threads, 1.95×
+    Threads
   
 
     
@@ -1759,7 +1759,7 @@
   <span class="md-ellipsis">
     
   
-    Typed pointers, stack memory, a C function, a C symbol
+    Native memory
   
 
     
@@ -1787,7 +1787,7 @@
   <span class="md-ellipsis">
     
   
-    Four lanes at a time, and the machine as a fact
+    Lanes and the machine
   
 
     
@@ -1815,7 +1815,7 @@
   <span class="md-ellipsis">
     
   
-    Four threads, one counter, one answer
+    Atomics and threads
   
 
     
@@ -1843,7 +1843,7 @@
   <span class="md-ellipsis">
     
   
-    parallel.range: say the iterations may run at once
+    Parallel ranges
   
 
     
@@ -1871,7 +1871,7 @@
   <span class="md-ellipsis">
     
   
-    A derivative that agrees to the last bit
+    Derivatives
   
 
     
@@ -1899,7 +1899,7 @@
   <span class="md-ellipsis">
     
   
-    An echo server and its client, as coroutines that compile
+    Coroutines
   
 
     
@@ -1927,7 +1927,7 @@
   <span class="md-ellipsis">
     
   
-    Generics, inferred at the call and monomorphized in native code
+    Generics
   
 
     
@@ -1955,7 +1955,7 @@
   <span class="md-ellipsis">
     
   
-    Every way of looking inside a build, on one program
+    The toolbox
   
 
     
@@ -2052,7 +2052,7 @@
   <span class="md-ellipsis">
     
   
-    A CUDA kernel in Python, run three ways
+    GPU kernels
   
 
     
@@ -2080,7 +2080,7 @@
   <span class="md-ellipsis">
     
   
-    StableHLO from the compiler, no JAX required
+    XLA
   
 
     
@@ -2197,7 +2197,7 @@
   <span class="md-ellipsis">
     
   
-    One NumPy expression, one loop
+    NumPy fusion
   
 
     
@@ -2225,7 +2225,7 @@
   <span class="md-ellipsis">
     
   
-    Pydantic models, typed and still validated
+    Pydantic
   
 
     
@@ -2253,7 +2253,7 @@
   <span class="md-ellipsis">
     
   
-    The same fused kernel, on every core
+    Parallel fused kernels
   
 
     
@@ -2290,7 +2290,7 @@
   <span class="md-ellipsis">
     
   
-    A PyTorch layer as one C++ call
+    PyTorch ATen regions
   
 
     
@@ -2308,7 +2308,7 @@
   <span class="md-ellipsis">
     
   
-    A PyTorch layer as one C++ call
+    PyTorch ATen regions
   
 
     
@@ -2334,10 +2334,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#through-the-dispatcher-on-purpose" class="md-nav__link">
+  <a href="#through-the-dispatcher" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Through the dispatcher, on purpose
+        Through the dispatcher
       
     </span>
   </a>
@@ -2345,10 +2345,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#what-the-guard-refuses" class="md-nav__link">
+  <a href="#what-the-guard-refuses-and-what-the-region-costs" class="md-nav__link">
     <span class="md-ellipsis">
       
-        What the guard refuses
+        What the guard refuses, and what the region costs
       
     </span>
   </a>
@@ -2371,17 +2371,6 @@
     <span class="md-ellipsis">
       
         What it prints
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#read-on" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Read on
       
     </span>
   </a>
@@ -2422,7 +2411,7 @@
   <span class="md-ellipsis">
     
   
-    A torch training script, converted, and where the time went
+    Training a torch MLP
   
 
     
@@ -2450,7 +2439,7 @@
   <span class="md-ellipsis">
     
   
-    The same trainer with JAX, and why the step does not get faster
+    Training a JAX MLP
   
 
     
@@ -2478,7 +2467,7 @@
   <span class="md-ellipsis">
     
   
-    Export a @jax.jit function at build time
+    JAX export
   
 
     
@@ -2506,7 +2495,7 @@
   <span class="md-ellipsis">
     
   
-    A FastAPI service that checks strict, as written
+    Serving over Uvicorn
   
 
     
@@ -2534,7 +2523,7 @@
   <span class="md-ellipsis">
     
   
-    A Flax training loop, strict-checked as written
+    Flax
   
 
     
@@ -2562,7 +2551,7 @@
   <span class="md-ellipsis">
     
   
-    Native kernels on every rank, with import ppy as the integration
+    A trainer under torchrun and accelerate launch
   
 
     
@@ -2590,7 +2579,7 @@
   <span class="md-ellipsis">
     
   
-    A pandas expression as one kernel, nulls included
+    Columnar expressions
   
 
     
@@ -2693,7 +2682,7 @@
   <span class="md-ellipsis">
     
   
-    Untyped Python in, strict PPY out
+    Inventory
   
 
     
@@ -2721,7 +2710,7 @@
   <span class="md-ellipsis">
     
   
-    How far inference reaches without a single annotation
+    Inference
   
 
     
@@ -2749,7 +2738,7 @@
   <span class="md-ellipsis">
     
   
-    Import a .ppy module from plain Python
+    Interop
   
 
     
@@ -2777,7 +2766,7 @@
   <span class="md-ellipsis">
     
   
-    A project is one call graph, and one program
+    A multi-module project
   
 
     
@@ -2805,7 +2794,7 @@
   <span class="md-ellipsis">
     
   
-    Five dynamic idioms, rewritten and proven equivalent
+    Migration
   
 
     
@@ -3584,10 +3573,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#through-the-dispatcher-on-purpose" class="md-nav__link">
+  <a href="#through-the-dispatcher" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Through the dispatcher, on purpose
+        Through the dispatcher
       
     </span>
   </a>
@@ -3595,10 +3584,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#what-the-guard-refuses" class="md-nav__link">
+  <a href="#what-the-guard-refuses-and-what-the-region-costs" class="md-nav__link">
     <span class="md-ellipsis">
       
-        What the guard refuses
+        What the guard refuses, and what the region costs
       
     </span>
   </a>
@@ -3621,17 +3610,6 @@
     <span class="md-ellipsis">
       
         What it prints
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#read-on" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Read on
       
     </span>
   </a>
@@ -3669,30 +3647,29 @@
   
 
 
-<h1 id="a-pytorch-layer-as-one-c-call">A PyTorch layer as one C++ call<a class="headerlink" href="#a-pytorch-layer-as-one-c-call" title="Permanent link">&para;</a></h1>
-<p><code>layer</code> is three tensor operations: a matmul, an add, a ReLU. Under PyTorch
-that is three trips from Python into ATen and back. Under PPY it is one:
-the function's body is entirely curated tensor ops, so the plugin compiles
-it into a single C++ region that calls ATen directly. On an 8×32 input on
-the CPU that is about 15% per call here. Autograd does not notice.</p>
-<h2 id="through-the-dispatcher-on-purpose">Through the dispatcher, on purpose<a class="headerlink" href="#through-the-dispatcher-on-purpose" title="Permanent link">&para;</a></h2>
+<h1 id="pytorch-aten-regions">PyTorch ATen regions<a class="headerlink" href="#pytorch-aten-regions" title="Permanent link">&para;</a></h1>
+<p>A function whose body is entirely curated tensor operations compiles into
+one C++ region that calls ATen directly: one Python round trip per call
+instead of one per operator. <code>layer</code> is a matmul, an add, and a ReLU; on an
+8×32 CPU input the region is worth about 15% per call here, and autograd is
+unchanged.</p>
+<h2 id="through-the-dispatcher">Through the dispatcher<a class="headerlink" href="#through-the-dispatcher" title="Permanent link">&para;</a></h2>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nd">@ppy</span><span class="o">.</span><span class="n">opt</span><span class="p">(</span><span class="mi">3</span><span class="p">)</span>
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="k">def</span><span class="w"> </span><span class="nf">layer</span><span class="p">(</span><span class="n">x</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span> <span class="n">weight</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span> <span class="n">bias</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">:</span>
 <a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>    <span class="k">return</span> <span class="n">torch</span><span class="o">.</span><span class="n">relu</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">matmul</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">weight</span><span class="p">),</span> <span class="n">bias</span><span class="p">))</span>
 </code></pre></div>
 <p>The region does not reimplement <code>matmul</code>. Every <code>at::</code> call inside it goes
 through PyTorch's dispatcher, so device selection, dtype promotion, and
-autograd behave exactly as before — <code>residual(tracked, tracked).sum().backward()</code>
+autograd behave as before — <code>residual(tracked, tracked).sum().backward()</code>
 fills <code>tracked.grad</code> on every path, and the program prints so. What the
-region removes is the Python interpreter between operators: one round trip
-per call instead of one per operator.</p>
-<h2 id="what-the-guard-refuses">What the guard refuses<a class="headerlink" href="#what-the-guard-refuses" title="Permanent link">&para;</a></h2>
+region removes is the Python interpreter between operators.</p>
+<h2 id="what-the-guard-refuses-and-what-the-region-costs">What the guard refuses, and what the region costs<a class="headerlink" href="#what-the-guard-refuses-and-what-the-region-costs" title="Permanent link">&para;</a></h2>
 <p>A tensor subclass, a <code>__torch_function__</code> override, or a device the region
 was not built for fails the guard, and the Python body runs. Building the
 region needs a C++ compiler and <code>ninja</code>; <code>toolchain_ready()</code> says what is
 missing. On an accelerator the region changes nothing measurable — kernel
-launch latency dominates the Python overhead it removes — so the numbers
-worth having are CPU numbers, and this program prints those.</p>
+launch latency dominates the Python overhead it removes — so the program
+measures on the CPU, and on <code>cuda</code> too when one is present.</p>
 <p>A built artifact carries its regions: <code>ppy build</code> copies the extension
 beside the manifest, and the launcher loads it with no compiler in the
 process (<a href="../31_torchrun/">torchrun</a>).</p>
@@ -3706,28 +3683,25 @@ process (<a href="../31_torchrun/">torchrun</a>).</p>
 <p><strong><code>python  torch_region.ppy</code></strong></p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>torch 2.14.0+cpu | cuda False
 <a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a># region active: False
-<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>layer on cpu              2.350 us/call   sample=596.816528
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>layer on cpu              1.973 us/call   sample=596.816528
 <a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>autograd survives the region: True
 </code></pre></div>
 <p><strong><code>ppy     torch_region.ppy</code></strong></p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>torch 2.14.0+cpu | cuda False
 <a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a># region active: True
-<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>layer on cpu              2.298 us/call   sample=596.816528
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>layer on cpu              1.716 us/call   sample=596.816528
 <a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>autograd survives the region: True
 </code></pre></div>
 <p><strong><code>ppy run torch_region.ppy</code></strong></p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>torch 2.14.0+cpu | cuda False
 <a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a># region active: True
-<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>layer on cpu              2.367 us/call   sample=596.816528
+<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>layer on cpu              1.866 us/call   sample=596.816528
 <a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>autograd survives the region: True
 </code></pre></div>
 <!-- outputs:end -->
 
-<h2 id="read-on">Read on<a class="headerlink" href="#read-on" title="Permanent link">&para;</a></h2>
-<ul>
-<li><a href="../../internals/plugins/">Plugins: PyTorch</a> — the 55 curated ops, the guard, and what fuses.</li>
-<li><a href="../21_training_torch/">Training with torch</a> — a whole training step, measured honestly.</li>
-</ul>
+<p>Read on: <a href="../../internals/plugins/">Plugins: PyTorch</a> ·
+<a href="../21_training_torch/">Training with torch</a></p>
 <p><code>torch_region.ppy</code> is hand-written; there is no <code>.py</code> source and no conversion
 step.</p>
 <h2 id="09_torchtorch_regionppy"><code>09_torch/torch_region.ppy</code><a class="headerlink" href="#09_torchtorch_regionppy" title="Permanent link">&para;</a></h2>
@@ -3822,7 +3796,7 @@ step.</p>
       <nav class="md-footer__inner md-grid" aria-label="Footer" >
         
           
-          <a href="../07_parallel/" class="md-footer__link md-footer__link--prev" aria-label="Previous: The same fused kernel, on every core">
+          <a href="../07_parallel/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Parallel fused kernels">
             <div class="md-footer__button md-icon">
               
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
@@ -3832,20 +3806,20 @@ step.</p>
                 Previous
               </span>
               <div class="md-ellipsis">
-                The same fused kernel, on every core
+                Parallel fused kernels
               </div>
             </div>
           </a>
         
         
           
-          <a href="../21_training_torch/" class="md-footer__link md-footer__link--next" aria-label="Next: A torch training script, converted, and where the time went">
+          <a href="../21_training_torch/" class="md-footer__link md-footer__link--next" aria-label="Next: Training a torch MLP">
             <div class="md-footer__title">
               <span class="md-footer__direction">
                 Next
               </span>
               <div class="md-ellipsis">
-                A torch training script, converted, and where the time went
+                Training a torch MLP
               </div>
             </div>
             <div class="md-footer__button md-icon">

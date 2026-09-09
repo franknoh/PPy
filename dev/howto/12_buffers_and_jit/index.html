@@ -27,7 +27,7 @@
     
     
       
-        <title>Borrow the memory, keep the order, specialize the rest - PPY</title>
+        <title>Buffers and JIT - PPY</title>
       
     
     
@@ -82,7 +82,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#borrow-the-memory-keep-the-order-specialize-the-rest" class="md-skip">
+        <a href="#buffers-and-jit" class="md-skip">
           Skip to content
         </a>
       
@@ -122,7 +122,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Borrow the memory, keep the order, specialize the rest
+              Buffers and JIT
             
           </span>
         </div>
@@ -1224,7 +1224,7 @@
   <span class="md-ellipsis">
     
   
-    Three annotations, one native loop
+    Basics
   
 
     
@@ -1252,7 +1252,7 @@
   <span class="md-ellipsis">
     
   
-    A machine word until it is not
+    Arbitrary precision
   
 
     
@@ -1280,7 +1280,7 @@
   <span class="md-ellipsis">
     
   
-    What @ppy.pure refuses
+    Effects and contracts
   
 
     
@@ -1308,7 +1308,7 @@
   <span class="md-ellipsis">
     
   
-    Classes the checker can see through
+    Classes
   
 
     
@@ -1336,7 +1336,7 @@
   <span class="md-ellipsis">
     
   
-    What crosses the boundary as machine values
+    Native data
   
 
     
@@ -1364,7 +1364,7 @@
   <span class="md-ellipsis">
     
   
-    Every way a type gets narrower
+    Narrowing
   
 
     
@@ -1392,7 +1392,7 @@
   <span class="md-ellipsis">
     
   
-    Where PPY refuses to differ from CPython
+    Numerics
   
 
     
@@ -1420,7 +1420,7 @@
   <span class="md-ellipsis">
     
   
-    A dataclass with no boxed form
+    Value classes
   
 
     
@@ -1448,7 +1448,7 @@
   <span class="md-ellipsis">
     
   
-    Tuples as scalar atoms
+    Tuples
   
 
     
@@ -1476,7 +1476,7 @@
   <span class="md-ellipsis">
     
   
-    The escape hatch, and its price
+    Dynamic boundaries
   
 
     
@@ -1504,7 +1504,7 @@
   <span class="md-ellipsis">
     
   
-    Containers, inferred and owned
+    Containers
   
 
     
@@ -1532,7 +1532,7 @@
   <span class="md-ellipsis">
     
   
-    Exceptions are part of the contract
+    Exceptions
   
 
     
@@ -1560,7 +1560,7 @@
   <span class="md-ellipsis">
     
   
-    Strings stay on CPython, and say so
+    Strings
   
 
     
@@ -1686,7 +1686,7 @@
   <span class="md-ellipsis">
     
   
-    Borrow the memory, keep the order, specialize the rest
+    Buffers and JIT
   
 
     
@@ -1704,7 +1704,7 @@
   <span class="md-ellipsis">
     
   
-    Borrow the memory, keep the order, specialize the rest
+    Buffers and JIT
   
 
     
@@ -1730,10 +1730,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#buffert-is-zero-copy-in-both-directions" class="md-nav__link">
+  <a href="#buffert-is-borrowed-a-list-is-copied" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Buffer[T] is zero-copy in both directions
+        Buffer[T] is borrowed, a list is copied
       
     </span>
   </a>
@@ -1741,10 +1741,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#reassociation-is-opt-in-and-it-shows" class="md-nav__link">
+  <a href="#reassociation-is-opt-in" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Reassociation is opt-in, and it shows
+        Reassociation is opt-in
       
     </span>
   </a>
@@ -1752,10 +1752,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#ppyjit-learns-the-arguments" class="md-nav__link">
+  <a href="#ppyjit-specializes-on-the-values-it-sees" class="md-nav__link">
     <span class="md-ellipsis">
       
-        @ppy.jit learns the arguments
+        @ppy.jit specializes on the values it sees
       
     </span>
   </a>
@@ -1778,17 +1778,6 @@
     <span class="md-ellipsis">
       
         What it prints
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#read-on" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Read on
       
     </span>
   </a>
@@ -1829,7 +1818,7 @@
   <span class="md-ellipsis">
     
   
-    Eight kernels and six judge problems, against C
+    Algorithms
   
 
     
@@ -1857,7 +1846,7 @@
   <span class="md-ellipsis">
     
   
-    One native function, two threads, 1.95×
+    Threads
   
 
     
@@ -1885,7 +1874,7 @@
   <span class="md-ellipsis">
     
   
-    Typed pointers, stack memory, a C function, a C symbol
+    Native memory
   
 
     
@@ -1913,7 +1902,7 @@
   <span class="md-ellipsis">
     
   
-    Four lanes at a time, and the machine as a fact
+    Lanes and the machine
   
 
     
@@ -1941,7 +1930,7 @@
   <span class="md-ellipsis">
     
   
-    Four threads, one counter, one answer
+    Atomics and threads
   
 
     
@@ -1969,7 +1958,7 @@
   <span class="md-ellipsis">
     
   
-    parallel.range: say the iterations may run at once
+    Parallel ranges
   
 
     
@@ -1997,7 +1986,7 @@
   <span class="md-ellipsis">
     
   
-    A derivative that agrees to the last bit
+    Derivatives
   
 
     
@@ -2025,7 +2014,7 @@
   <span class="md-ellipsis">
     
   
-    An echo server and its client, as coroutines that compile
+    Coroutines
   
 
     
@@ -2053,7 +2042,7 @@
   <span class="md-ellipsis">
     
   
-    Generics, inferred at the call and monomorphized in native code
+    Generics
   
 
     
@@ -2081,7 +2070,7 @@
   <span class="md-ellipsis">
     
   
-    Every way of looking inside a build, on one program
+    The toolbox
   
 
     
@@ -2178,7 +2167,7 @@
   <span class="md-ellipsis">
     
   
-    A CUDA kernel in Python, run three ways
+    GPU kernels
   
 
     
@@ -2206,7 +2195,7 @@
   <span class="md-ellipsis">
     
   
-    StableHLO from the compiler, no JAX required
+    XLA
   
 
     
@@ -2321,7 +2310,7 @@
   <span class="md-ellipsis">
     
   
-    One NumPy expression, one loop
+    NumPy fusion
   
 
     
@@ -2349,7 +2338,7 @@
   <span class="md-ellipsis">
     
   
-    Pydantic models, typed and still validated
+    Pydantic
   
 
     
@@ -2377,7 +2366,7 @@
   <span class="md-ellipsis">
     
   
-    The same fused kernel, on every core
+    Parallel fused kernels
   
 
     
@@ -2405,7 +2394,7 @@
   <span class="md-ellipsis">
     
   
-    A PyTorch layer as one C++ call
+    PyTorch ATen regions
   
 
     
@@ -2433,7 +2422,7 @@
   <span class="md-ellipsis">
     
   
-    A torch training script, converted, and where the time went
+    Training a torch MLP
   
 
     
@@ -2461,7 +2450,7 @@
   <span class="md-ellipsis">
     
   
-    The same trainer with JAX, and why the step does not get faster
+    Training a JAX MLP
   
 
     
@@ -2489,7 +2478,7 @@
   <span class="md-ellipsis">
     
   
-    Export a @jax.jit function at build time
+    JAX export
   
 
     
@@ -2517,7 +2506,7 @@
   <span class="md-ellipsis">
     
   
-    A FastAPI service that checks strict, as written
+    Serving over Uvicorn
   
 
     
@@ -2545,7 +2534,7 @@
   <span class="md-ellipsis">
     
   
-    A Flax training loop, strict-checked as written
+    Flax
   
 
     
@@ -2573,7 +2562,7 @@
   <span class="md-ellipsis">
     
   
-    Native kernels on every rank, with import ppy as the integration
+    A trainer under torchrun and accelerate launch
   
 
     
@@ -2601,7 +2590,7 @@
   <span class="md-ellipsis">
     
   
-    A pandas expression as one kernel, nulls included
+    Columnar expressions
   
 
     
@@ -2704,7 +2693,7 @@
   <span class="md-ellipsis">
     
   
-    Untyped Python in, strict PPY out
+    Inventory
   
 
     
@@ -2732,7 +2721,7 @@
   <span class="md-ellipsis">
     
   
-    How far inference reaches without a single annotation
+    Inference
   
 
     
@@ -2760,7 +2749,7 @@
   <span class="md-ellipsis">
     
   
-    Import a .ppy module from plain Python
+    Interop
   
 
     
@@ -2788,7 +2777,7 @@
   <span class="md-ellipsis">
     
   
-    A project is one call graph, and one program
+    A multi-module project
   
 
     
@@ -2816,7 +2805,7 @@
   <span class="md-ellipsis">
     
   
-    Five dynamic idioms, rewritten and proven equivalent
+    Migration
   
 
     
@@ -3595,10 +3584,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#buffert-is-zero-copy-in-both-directions" class="md-nav__link">
+  <a href="#buffert-is-borrowed-a-list-is-copied" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Buffer[T] is zero-copy in both directions
+        Buffer[T] is borrowed, a list is copied
       
     </span>
   </a>
@@ -3606,10 +3595,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#reassociation-is-opt-in-and-it-shows" class="md-nav__link">
+  <a href="#reassociation-is-opt-in" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Reassociation is opt-in, and it shows
+        Reassociation is opt-in
       
     </span>
   </a>
@@ -3617,10 +3606,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#ppyjit-learns-the-arguments" class="md-nav__link">
+  <a href="#ppyjit-specializes-on-the-values-it-sees" class="md-nav__link">
     <span class="md-ellipsis">
       
-        @ppy.jit learns the arguments
+        @ppy.jit specializes on the values it sees
       
     </span>
   </a>
@@ -3643,17 +3632,6 @@
     <span class="md-ellipsis">
       
         What it prints
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#read-on" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Read on
       
     </span>
   </a>
@@ -3691,14 +3669,11 @@
   
 
 
-<h1 id="borrow-the-memory-keep-the-order-specialize-the-rest">Borrow the memory, keep the order, specialize the rest<a class="headerlink" href="#borrow-the-memory-keep-the-order-specialize-the-rest" title="Permanent link">&para;</a></h1>
-<p>Three decisions that decide how fast a numeric function runs, each made
-once in a signature or a decorator. <code>Buffer[float]</code> lends native code the
-caller's memory instead of copying a list — about 10× on 8,192 elements.
-<code>@ppy.fastmath</code> lets a sum reassociate, which lets it vectorize.
-<code>@ppy.jit</code> specializes on the argument values it actually sees, with the
-guard compiled into C.</p>
-<h2 id="buffert-is-zero-copy-in-both-directions"><code>Buffer[T]</code> is zero-copy in both directions<a class="headerlink" href="#buffert-is-zero-copy-in-both-directions" title="Permanent link">&para;</a></h2>
+<h1 id="buffers-and-jit">Buffers and JIT<a class="headerlink" href="#buffers-and-jit" title="Permanent link">&para;</a></h1>
+<p>Borrowed memory, reassociation, and specialization: three decisions that set
+how fast a numeric function runs, each made once in a signature or a
+decorator.</p>
+<h2 id="buffert-is-borrowed-a-list-is-copied"><code>Buffer[T]</code> is borrowed, a list is copied<a class="headerlink" href="#buffert-is-borrowed-a-list-is-copied" title="Permanent link">&para;</a></h2>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nd">@ppy</span><span class="o">.</span><span class="n">pure</span>
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="nd">@ppy</span><span class="o">.</span><span class="n">opt</span><span class="p">(</span><span class="mi">3</span><span class="p">)</span>
 <a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="k">def</span><span class="w"> </span><span class="nf">total_view</span><span class="p">(</span><span class="n">values</span><span class="p">:</span> <span class="n">Buffer</span><span class="p">[</span><span class="nb">float</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="nb">float</span><span class="p">:</span>
@@ -3710,16 +3685,17 @@ guard compiled into C.</p>
 <p><code>total_list</code> takes a <code>list[float]</code> and is copied into a buffer on every
 call; <code>total_view</code> takes a <code>Buffer[float]</code> — a <code>memoryview</code> over an
 <code>array.array</code> — and reads the caller's memory in place. Same loop, same
-sum, one of them paying for 8,192 boxed floats per call. A buffer is
-borrowed unless the signature says otherwise, so the callee may not keep
-it (<code>E1612</code>) or write through it without <code>Mut[...]</code> (<code>E1613</code>).</p>
-<h2 id="reassociation-is-opt-in-and-it-shows">Reassociation is opt-in, and it shows<a class="headerlink" href="#reassociation-is-opt-in-and-it-shows" title="Permanent link">&para;</a></h2>
+sum, about 10× apart on 8,192 elements, because one of them pays for 8,192
+boxed floats per call. A buffer is borrowed unless the signature says
+otherwise, so the callee may not keep it (<code>E1612</code>) or write through it
+without <code>Mut[...]</code> (<code>E1613</code>).</p>
+<h2 id="reassociation-is-opt-in">Reassociation is opt-in<a class="headerlink" href="#reassociation-is-opt-in" title="Permanent link">&para;</a></h2>
 <p><code>dot_strict</code> and <code>dot_relaxed</code> are the same dot product. The strict one
 keeps CPython's accumulation order and matches it bit for bit; the
 <code>@ppy.fastmath</code> one lets LLVM vectorize the reduction and differs in the
-last bits — the program prints the gap. You choose per function, and the
+last bits — the program prints the gap. The choice is per function, and the
 default is the exact one.</p>
-<h2 id="ppyjit-learns-the-arguments"><code>@ppy.jit</code> learns the arguments<a class="headerlink" href="#ppyjit-learns-the-arguments" title="Permanent link">&para;</a></h2>
+<h2 id="ppyjit-specializes-on-the-values-it-sees"><code>@ppy.jit</code> specializes on the values it sees<a class="headerlink" href="#ppyjit-specializes-on-the-values-it-sees" title="Permanent link">&para;</a></h2>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="nd">@ppy</span><span class="o">.</span><span class="n">jit</span><span class="p">(</span><span class="n">threshold</span><span class="o">=</span><span class="mi">4</span><span class="p">,</span> <span class="n">max_specializations</span><span class="o">=</span><span class="mi">4</span><span class="p">)</span>
 <a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="nd">@ppy</span><span class="o">.</span><span class="n">pure</span>
 <a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="nd">@ppy</span><span class="o">.</span><span class="n">opt</span><span class="p">(</span><span class="mi">3</span><span class="p">)</span>
@@ -3738,36 +3714,33 @@ another specialization, up to four.</p>
 <!-- outputs:start -->
 <h2 id="what-it-prints">What it prints<a class="headerlink" href="#what-it-prints" title="Permanent link">&para;</a></h2>
 <p><strong><code>python  buffers_and_jit.ppy</code></strong></p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>list[float] copied        118.966 us   
-<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>Buffer[float] borrowed    168.604 us   0.71x, same sum: True
-<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>dot, strict order         272.590 us   
-<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>dot, @ppy.fastmath        273.668 us   1.00x, differs by 0.00e+00
-<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>digest, generic           275.525 us   
-<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>digest, @ppy.jit          289.774 us   0.95x, same: True
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>list[float] copied         97.306 us   
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>Buffer[float] borrowed    153.282 us   0.63x, same sum: True
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>dot, strict order         244.091 us   
+<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>dot, @ppy.fastmath        238.020 us   1.03x, differs by 0.00e+00
+<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>digest, generic           239.351 us   
+<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>digest, @ppy.jit          237.332 us   1.01x, same: True
 </code></pre></div>
 <p><strong><code>ppy     buffers_and_jit.ppy</code></strong></p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>list[float] copied        109.531 us   
-<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>Buffer[float] borrowed    173.688 us   0.63x, same sum: True
-<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>dot, strict order         272.337 us   
-<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>dot, @ppy.fastmath        277.740 us   0.98x, differs by 0.00e+00
-<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>digest, generic           290.856 us   
-<a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a>digest, @ppy.jit          289.047 us   1.01x, same: True
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>list[float] copied         92.352 us   
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>Buffer[float] borrowed    146.138 us   0.63x, same sum: True
+<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>dot, strict order         238.365 us   
+<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>dot, @ppy.fastmath        236.017 us   1.01x, differs by 0.00e+00
+<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>digest, generic           246.093 us   
+<a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a>digest, @ppy.jit          245.886 us   1.00x, same: True
 </code></pre></div>
 <p><strong><code>ppy run buffers_and_jit.ppy</code></strong></p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>list[float] copied         13.007 us   
-<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>Buffer[float] borrowed      4.525 us   2.87x, same sum: True
-<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>dot, strict order           4.354 us   
-<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a>dot, @ppy.fastmath          1.294 us   3.36x, differs by 4.07e-10
-<a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a>digest, generic            12.622 us   
-<a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a>digest, @ppy.jit            8.050 us   1.57x, same: True
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>list[float] copied         10.684 us   
+<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>Buffer[float] borrowed      3.485 us   3.07x, same sum: True
+<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>dot, strict order           3.541 us   
+<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a>dot, @ppy.fastmath          1.186 us   2.99x, differs by 4.07e-10
+<a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a>digest, generic            10.894 us   
+<a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a>digest, @ppy.jit            7.474 us   1.46x, same: True
 </code></pre></div>
 <!-- outputs:end -->
 
-<h2 id="read-on">Read on<a class="headerlink" href="#read-on" title="Permanent link">&para;</a></h2>
-<ul>
-<li><a href="../../guide/directives/">Directives and markers</a> — <code>Buffer[T]</code>, <code>Owned</code>/<code>Borrowed</code>/<code>Mut</code>, <code>@ppy.jit</code>, <code>@ppy.fastmath</code>.</li>
-<li><a href="../15_algorithms/">Algorithms</a> — buffers in eight kernels measured against C.</li>
-</ul>
+<p>Read on: <a href="../../guide/directives/">Directives and markers</a> ·
+<a href="../15_algorithms/">Algorithms</a></p>
 <p><code>buffers_and_jit.ppy</code> is hand-written; there is no <code>.py</code> source and no
 conversion step.</p>
 <h2 id="12_buffers_and_jitbuffers_and_jitppy"><code>12_buffers_and_jit/buffers_and_jit.ppy</code><a class="headerlink" href="#12_buffers_and_jitbuffers_and_jitppy" title="Permanent link">&para;</a></h2>
@@ -3939,7 +3912,7 @@ conversion step.</p>
       <nav class="md-footer__inner md-grid" aria-label="Footer" >
         
           
-          <a href="../19_strings/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Strings stay on CPython, and say so">
+          <a href="../19_strings/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Strings">
             <div class="md-footer__button md-icon">
               
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
@@ -3949,20 +3922,20 @@ conversion step.</p>
                 Previous
               </span>
               <div class="md-ellipsis">
-                Strings stay on CPython, and say so
+                Strings
               </div>
             </div>
           </a>
         
         
           
-          <a href="../15_algorithms/" class="md-footer__link md-footer__link--next" aria-label="Next: Eight kernels and six judge problems, against C">
+          <a href="../15_algorithms/" class="md-footer__link md-footer__link--next" aria-label="Next: Algorithms">
             <div class="md-footer__title">
               <span class="md-footer__direction">
                 Next
               </span>
               <div class="md-ellipsis">
-                Eight kernels and six judge problems, against C
+                Algorithms
               </div>
             </div>
             <div class="md-footer__button md-icon">
