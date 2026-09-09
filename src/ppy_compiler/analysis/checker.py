@@ -4278,18 +4278,31 @@ class _Checker:
 
         The subscript is read as a type, the way an annotation is, so
         `ppy.input[tuple[int, int]]()` types as that tuple and
-        `ppy.input[Buffer[int]](n)` as that buffer. The call takes a prompt
-        for a scalar, or how many values to read for a buffer.
+        `ppy.input[Buffer[int]](n)` as that buffer. A buffer read takes how
+        many values to read; any other read takes nothing -- a prompt is a
+        `print` before it.
         """
         func = node.func
         assert isinstance(func, ast.Subscript)
         if self.project.resolver(self.symbols).canonical(func.value) != "ppy.input":
             return None
-        if len(node.args) > 1 or node.keywords:
-            self._error("E1305", "`ppy.input[T]` takes a prompt or a count, and nothing else", node)
         resolved = self.annotations.resolve(func.slice)
+        buffer = getattr(T.strip_literal(resolved.type), "name", None) == "Buffer"
+        if node.keywords or (len(node.args) != 1 if buffer else node.args):
+            wanted = (
+                "`ppy.input[Buffer[T]]` takes how many values to read, and nothing else"
+                if buffer
+                else "`ppy.input[T]()` takes no argument; print a prompt first, then read"
+            )
+            self._error("E1305", wanted, node)
         for argument in node.args:
-            self._expr(argument, env)
+            count = self._expr(argument, env)
+            if buffer and T.strip_literal(count.type) not in (T.INT, T.UNKNOWN):
+                self._error(
+                    "E1301",
+                    f"a buffer is read with how many values it holds, not `{count.type}`",
+                    argument,
+                )
         self._effects = self._effects | EffectSet.of(
             Effect.IO, Effect.ALLOC, raises=("EOFError", "TypeError", "ValueError")
         )

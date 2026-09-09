@@ -2235,8 +2235,10 @@ def test_convert_reads_input_by_type(workspace: Path):
     assert "count: int = ppy.input[int]()" in converted
     assert "a, b = ppy.input[tuple[int, int]]()" in converted
     assert "name: str = ppy.input[str]()" in converted
-    # The prompt is carried across rather than dropped.
-    assert 'ratio: float = ppy.input[float]("ratio? ")' in converted
+    # The prompt is printed before the statement that reads, not dropped.
+    assert 'print("ratio? ", end="", flush=True)\n' in converted
+    assert "ratio: float = ppy.input[float]()" in converted
+    assert converted.index('print("ratio? "') < converted.index("ratio: float = ppy.input")
 
 
 def test_a_module_that_also_reads_stdin_keeps_its_input(workspace: Path):

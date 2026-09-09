@@ -4,6 +4,17 @@
 
 Work toward the next release, on `dev`; alphas of it are tagged `v0.3.0aN`.
 
+- `ppy.input[T]()` takes no argument, and `ppy.input[Buffer[T]](n)` takes
+  only how many values to read: reading and printing are two things, so a
+  prompt is a `print` before the read rather than an argument that meant a
+  prompt for one type and a count for another. The checker says so (`E1305`
+  for an argument to a scalar read or a missing count, `E1301` for a count
+  that is not an `int`), and the converter writes `input("p")`'s prompt as
+  `print("p", end="", flush=True)` before the statement that reads -- or,
+  inside a loop's test or a comprehension, as the one-expression
+  `print(...) or ppy.input[T]()` so it still prints each time. A fill loop
+  whose reads carry a prompt stays a loop rather than becoming one bulk read.
+
 ## 0.2.1 — unreleased
 
 - The lowering cache dropped a coroutine's future kind from its signature,

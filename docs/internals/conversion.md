@@ -169,9 +169,11 @@ yourself, mark it `@ppy.reflective`, or run `ppy migrate`.
   with `input` and never touches `sys.stdin` (two readers of one file
   descriptor would not agree on where it is): `int(input())` becomes
   `ppy.input[int]()`, `a, b = map(int, input().split())` becomes
-  `ppy.input[tuple[int, int]]()`, a bare `input()` becomes `ppy.input[str]()`
-  carrying its prompt, and a loop that fills a buffer one value at a time
-  becomes one bulk `ppy.read_ints` over the same slots;
+  `ppy.input[tuple[int, int]]()`, a bare `input()` becomes `ppy.input[str]()`,
+  a prompt becomes a `print(..., end="", flush=True)` before the statement
+  that reads (or, inside a loop's test or a comprehension, the one-expression
+  `print(...) or ppy.input[T]()`), and a loop that fills a buffer one value
+  at a time becomes one bulk `ppy.read_ints` over the same slots;
 - with `--promote-buffers`, declares read-only numeric list parameters as
   `Buffer[T]` and rewrites the values feeding them into `array.array`
   (remarked as `R3002`, or `R3003` with the reason it could not);
