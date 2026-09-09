@@ -1,27 +1,28 @@
-# 15a — N-Queens, and the cost of an interpreter
+# 15a — N-Queens
 
-Input: `N`. Output: how many ways N queens fit on an N×N board. There is
-almost no input to read, so this is the one problem where the wall clock is
-startup plus compute — which makes it the cleanest look at what an
-embedded interpreter costs, and what disappears when `--standalone` leaves
-it out.
+Input: `N`. Output: how many ways N queens fit on an N×N board.
 
-## A bitmask solver, lowered whole
+## A bitmask solver
 
 ```python
 def solve(full: int, columns: int, diagonal: int, antidiagonal: int) -> int:
 ```
 
 Recursion lowers natively, and so do the operators a bitmask solution is
-made of: `~`, unary `-`, the shifts, and the masks. The whole solver is one
-native call tree with no Python frame in it.
+made of: `~`, unary `-`, the shifts, and the masks. There is almost no input
+to read, so the wall clock is startup plus compute, which makes this the
+clearest look at what an embedded interpreter costs and what disappears
+when `--standalone` leaves it out.
 
 ## Numbers
 
 Wall time of the whole process, measured from outside the way a judge does —
 input, interpreter startup and all. Mean ± standard deviation over 5 runs;
-`examples/15_algorithms/bench.py` reproduces it and
-`scripts/refresh.py` says when these have drifted.
+`bench.py` reproduces it and `scripts/refresh.py` says when these have
+drifted. `ppy run` compiles before it runs, which is most of its time; it is
+the development path, not the one to submit. `ppy build` still starts an
+embedded CPython and imports the runtime, about 35 ms, before the program
+begins.
 
 | path | wall |
 |---|---:|
@@ -31,12 +32,6 @@ input, interpreter startup and all. Mean ± standard deviation over 5 runs;
 | `ppy build --standalone` | 5.6 ± 0.4 ms |
 | C (`gcc -O3`, `scanf`) | **4.8 ± 0.2 ms** |
 | C (`clang -O3`, `scanf`) | 5.4 ± 0.2 ms |
-
-`ppy run` compiles before it runs, which is most of its time; it is the
-development path, not the one to submit. `ppy build` produces a binary that
-still starts an embedded CPython and imports the runtime: ~35 ms before a
-line of the program runs, against C's ~1 ms. `--standalone` has no
-interpreter in it at all, which is where that row comes from.
 
 ## Without CPython at all
 

@@ -1,10 +1,9 @@
-# Classes the checker can see through
+# Classes
 
-A class in PPY is an ordinary Python class with one requirement: its fields
-are known statically. `__init__` declares them, annotations confirm them,
-and from then on every attribute access is resolved on a type the checker
-knows. A misspelled method is a compile-time error (`E1202`), not a
-`AttributeError` at 3 a.m.
+Ordinary classes whose fields are known statically: `__init__` declares
+them, annotations confirm them, and every attribute access is resolved on a
+type the checker knows. A misspelled method is a compile-time error
+(`E1202`).
 
 ## Fields from annotations, or from `__init__`
 
@@ -23,11 +22,11 @@ class Circle(Shape):
 `Shape.name` is declared in the class body and assigned in `__init__`;
 `Circle.radius` the same. Inheritance and `super()` work as in Python, and
 `area` is dispatched on the static type where it can be. `Box` is a
-`@dataclass` of two floats, which is the one kind of class native code can
-take apart: an all-scalar dataclass flattens into scalar arguments at the
+`@dataclass` of two floats, the one kind of class native code can take
+apart: an all-scalar dataclass flattens into scalar arguments at the
 boundary ([value classes](../13_value_classes/README.md)).
 
-## Unions, narrowed
+## Narrowing a union
 
 ```python
 @ppy.pure
@@ -41,10 +40,15 @@ def describe(value: int | str | None) -> str:
 
 After `is None` fails, `value` is `int | str`; after `isinstance(value, str)`
 fails, it is `int`. Each branch is typed with what is left, so `len(value)`
-and `str(value)` both check. Class construction itself has to be
-declarative — a class body that runs statements, or a base whose
-`__init_subclass__` does real work, is `E1507` — because the checker judges
-a class from what it can read, not from what running it would do.
+and `str(value)` both check.
+
+## Declarative construction
+
+A class body that runs statements, a body value constructing a project
+descriptor whose `__set_name__` runs at creation, or a base whose
+`__init_subclass__` does real work is `E1507`. The checker judges a class
+from what it can read, not from what running it would do, and the safe
+class hoister in `ppy convert` uses the same facts.
 
 ## Run it
 
@@ -80,9 +84,7 @@ none text of 5 number 7
 
 <!-- outputs:end -->
 
-## Read on
-
-- [Narrowing](../10_narrowing/README.md) — every narrowing form the checker understands.
-- [The subset](../../docs/guide/subset.md) — what makes a class declarative.
+Read on: [Narrowing](../10_narrowing/README.md) ·
+[The subset](../../docs/guide/subset.md)
 
 `classes.ppy` is hand-written; there is no `.py` source and no conversion step.

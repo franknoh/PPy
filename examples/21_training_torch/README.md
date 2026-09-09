@@ -1,14 +1,13 @@
-# A torch training script, converted, and where the time went
+# Training a torch MLP
 
-`train.py` is an ordinary PyTorch script: standardize 20,000 rows of
-features in a Python loop, then run 100 steps of a two-layer MLP.
-`train.ppy` is what `ppy convert` wrote from it. The preprocessing loop
-became native and went from about 54 ms to under 1 ms; the training loop
-became one ATen region and got about 20% faster on the CPU. The checksum
-and the loss trajectory are identical on every path, which is the part that
-matters.
+An ordinary PyTorch training script — standardize 20,000 rows of features
+in a Python loop, then run 100 steps of a two-layer MLP — converted by
+`ppy convert` with no hand editing. The preprocessing loop went from about
+54 ms to under 1 ms; the training step became one ATen region and got about
+20% faster on the CPU. The checksum and the loss trajectory are identical on
+every path.
 
-## The loop is where the speedup is
+## Where the speedup is
 
 ```python
 def standardize(raw: Buffer[float], out: Buffer[float], rows: int, cols: int) -> float:
@@ -20,7 +19,7 @@ into `array.array`. The loop lowers to native code writing into memory the
 caller owns, and the 20,000×16 standardization that dominated the script's
 Python time disappears from the profile.
 
-## The training step is one region, and that is all it can be
+## Where it is not
 
 `forward_loss` is a single function of curated tensor operations —
 `matmul`, `add`, `relu`, `sub`, `mul`, `mean` — so the torch plugin compiles
@@ -28,8 +27,7 @@ it into one C++ ATen region. Every `at::` call still goes through the
 dispatcher, `.backward()` sees the same graph, and the loss trajectory is
 bit-identical. On small CPU tensors that removes one Python round trip per
 operator, roughly 20%; on an accelerator it removes nothing measurable,
-because kernel launch latency dominates. This README does not claim
-otherwise.
+because kernel launch latency dominates.
 
 ## What the input had to get right
 
@@ -58,8 +56,8 @@ ppy run train.ppy
 # device: cpu
 # native prep: False
 # aten region: False
-prep      68.5 ms   checksum=-21282.454900
-train   3632.8 ms   loss 1.0250 -> 1.0019
+prep      65.0 ms   checksum=-21282.454900
+train    159.7 ms   loss 1.0250 -> 1.0019
 ```
 
 **`ppy run train.ppy`**
@@ -68,17 +66,15 @@ train   3632.8 ms   loss 1.0250 -> 1.0019
 # device: cpu
 # native prep: False
 # aten region: True
-prep       1.2 ms   checksum=-21282.454900
-train   3441.9 ms   loss 1.0250 -> 1.0019
+prep       0.9 ms   checksum=-21282.454900
+train    187.7 ms   loss 1.0250 -> 1.0019
 ```
 
 <!-- outputs:end -->
 
-## Read on
-
-- [PyTorch regions](../09_torch/README.md) — the region on its own, with the guard.
-- [Training with JAX](../22_training_jax/README.md) — the same script where XLA already owns the step.
-- [Plugins: PyTorch](../../docs/internals/plugins.md) — the curated ops and what fuses.
+Read on: [PyTorch regions](../09_torch/README.md) ·
+[Training with JAX](../22_training_jax/README.md) ·
+[Plugins: PyTorch](../../docs/internals/plugins.md)
 
 Generated, not hand-written: `train.ppy` is exactly what
 `ppy convert train.py --promote-buffers` writes, and

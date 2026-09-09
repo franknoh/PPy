@@ -1,12 +1,9 @@
-# 15d — Range sums, twice as fast as C
+# 15d — Range sums
 
 Input: `N M K`, then N numbers, then M+K commands — `1 b c` assigns, `2 b c`
-sums over [b, c). Output: the checksum of the answers. A segment tree over
-262,144 values taking 400,000 commands: the standalone binary answers in
-24 ms where gcc takes 51 and clang 52, because reading 400,000 command
-lines through `ppy.input` costs half of what `scanf` charges for them.
+sums over [b, c). Output: the checksum of the answers.
 
-## Writes in the callee still count as native
+## Writes in the callee still count
 
 ```python
 def run_commands(tree: Buffer[int], commands: Buffer[int], size: int, rounds: int) -> int:
@@ -16,15 +13,25 @@ def run_commands(tree: Buffer[int], commands: Buffer[int], size: int, rounds: in
 the write lands in the caller's memory either way. A function whose writes
 all happen inside a callee it handed a buffer to lowers like any other.
 `query` is `@ppy.pure` while `update` is not, and both are native.
-`range(size - 1, 0, -1)` — the descending build of the tree with a literal
-step — lowers as written.
+`range(size - 1, 0, -1)`, the descending build of the tree with a literal
+step, lowers as written.
+
+## Where the standalone margin comes from
+
+The standalone binary answers 400,000 commands in half the time of either C
+compiler, because reading them through `ppy.input` costs half of what
+`scanf` charges; the [folder README](../README.md) says what the subset
+costs.
 
 ## Numbers
 
 Wall time of the whole process, measured from outside the way a judge does —
 input, interpreter startup and all. Mean ± standard deviation over 5 runs;
-`examples/15_algorithms/bench.py` reproduces it and
-`scripts/refresh.py` says when these have drifted.
+`bench.py` reproduces it and `scripts/refresh.py` says when these have
+drifted. `ppy run` compiles before it runs, which is most of its time; it is
+the development path, not the one to submit. `ppy build` still starts an
+embedded CPython and imports the runtime, about 35 ms, before the program
+begins.
 
 | path | wall |
 |---|---:|
@@ -34,12 +41,6 @@ input, interpreter startup and all. Mean ± standard deviation over 5 runs;
 | `ppy build --standalone` | **23.9 ± 0.8 ms** |
 | C (`gcc -O3`, `scanf`) | 50.7 ± 1.2 ms |
 | C (`clang -O3`, `scanf`) | 51.8 ± 1.1 ms |
-
-`ppy run` compiles before it runs; it is the development path, not the one
-to submit. `ppy build` still starts an embedded CPython and imports the
-runtime, ~35 ms, before the program begins. `--standalone` has no
-interpreter in it; the [folder README](../README.md) says what the subset
-costs.
 
 ## Run it
 
