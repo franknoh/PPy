@@ -1,11 +1,7 @@
-# A pandas expression as one kernel, nulls included
+# Columnar expressions
 
-`s * t + s.fillna(0.0)` is four pandas operations and three intermediate
-Series. The pandas plugin recognizes the expression tree, converges it onto
-the columnar dialect of the IR, and `lower-tensor` writes one loop over the
-columns' memory — with the nulls carried as a validity mask, not a NaN
-convention, so the answer is what pandas computes. The same kernel serves
-a NumPy-backed Series and an Arrow-backed one.
+Expressions over pandas Series converge onto the columnar dialect of the IR
+and fuse into one kernel over the columns' memory, nulls included.
 
 ## Two expression trees, two fused loops
 
@@ -22,11 +18,13 @@ def above(s: pd.Series, t: pd.Series) -> pd.Series:
 
 Arithmetic, comparison, `fillna`, `isna`/`notna`, and the boolean operators
 are the surface pandas and PyArrow share, and the plugin names them as the
-same `columnar` operations PyArrow's compute lowers to. A NaN in a
-`float64` Series stays the value it is, behind a bitmap of ones; an
-Arrow-backed Series (`pd.ArrowDtype`) is read in place with its nulls
-through the Arrow C Data Interface. The answer is a Series over the callers'
-index with the same backing.
+same `columnar` operations PyArrow's compute lowers to. Each tree becomes
+one loop, with the nulls carried as a validity mask rather than a NaN
+convention, so the answer is what pandas computes. A NaN in a `float64`
+Series stays the value it is, behind a bitmap of ones; an Arrow-backed
+Series (`pd.ArrowDtype`) is read in place with its nulls through the Arrow C
+Data Interface. The answer is a Series over the callers' index with the
+same backing.
 
 ## What stays with pandas
 
@@ -71,9 +69,7 @@ ppy inspect frames.ppy --stage columnar
 
 <!-- outputs:end -->
 
-## Read on
-
-- [Plugins: pandas and PyArrow](../../docs/internals/plugins.md) — what is modeled and what is not.
-- [The IR: the columnar and arrow dialects](../../docs/internals/ir.md) — the operations and their lowering.
+Read on: [Plugins: pandas and PyArrow](../../docs/internals/plugins.md) ·
+[The IR: the columnar and arrow dialects](../../docs/internals/ir.md)
 
 `frames.ppy` is hand-written; there is no `.py` source and no conversion step.

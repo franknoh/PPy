@@ -1,10 +1,7 @@
-# 15b — Shortest paths over 1.2 million edges
+# 15b — Shortest path
 
 Input: `V E`, the source `K`, then E lines of `u v w`. Output: the sum of
-the reachable distances. The judge-sized input is 200k nodes and 1.2M
-edges, and the standalone binary answers it in 105 ms against gcc's 147 and
-clang's 142 — a Dijkstra whose heap, adjacency, and read are all native,
-and whose input arrives through `ppy.input` faster than `scanf` parses it.
+the reachable distances. 200k nodes and 1.2M edges at the judge size.
 
 ## Buffers handed between native functions
 
@@ -13,18 +10,27 @@ def sift_down(keys: Buffer[int], nodes: Buffer[int], size: int, start: int) -> i
 ```
 
 `dijkstra` passes its heap to `sift_up` and `sift_down`, and the callee
-writes through the caller's memory — a buffer handed on to another native
-function stays a native buffer, with no copy and no boundary between them.
-`while True:` with a `break` is how a sift loop is actually written, and it
-lowers as written. The adjacency is built natively too, so the only Python
-on the path is the entry point.
+writes through the caller's memory: a buffer handed on to another native
+function stays native, with no copy and no boundary between them. `while
+True:` with a `break` — how a sift loop is actually written — lowers as
+written, and the adjacency is built natively too, so only the read is
+Python's.
+
+## Where the standalone margin comes from
+
+The standalone binary reads 1.2 million edges through `ppy.input` faster
+than `scanf` parses them, and that is its margin over both C compilers; the
+[folder README](../README.md) says what the subset costs.
 
 ## Numbers
 
 Wall time of the whole process, measured from outside the way a judge does —
 input, interpreter startup and all. Mean ± standard deviation over 5 runs;
-`examples/15_algorithms/bench.py` reproduces it and
-`scripts/refresh.py` says when these have drifted.
+`bench.py` reproduces it and `scripts/refresh.py` says when these have
+drifted. `ppy run` compiles before it runs, which is most of its time; it is
+the development path, not the one to submit. `ppy build` still starts an
+embedded CPython and imports the runtime, about 35 ms, before the program
+begins.
 
 | path | wall |
 |---|---:|
@@ -34,12 +40,6 @@ input, interpreter startup and all. Mean ± standard deviation over 5 runs;
 | `ppy build --standalone` | **104.8 ± 4.3 ms** |
 | C (`gcc -O3`, `scanf`) | 147.3 ± 2.2 ms |
 | C (`clang -O3`, `scanf`) | 141.6 ± 4.6 ms |
-
-`ppy run` compiles before it runs; it is the development path, not the one
-to submit. `ppy build` still starts an embedded CPython and imports the
-runtime, ~35 ms, before the program begins. `--standalone` has no
-interpreter in it, and reads 1.2 million edges into memory faster than
-`scanf` does; the [folder README](../README.md) says what the subset costs.
 
 ## Run it
 

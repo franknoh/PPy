@@ -1,10 +1,9 @@
-# Exceptions are part of the contract
+# Exceptions
 
-`divide(1, 0)` raises `ZeroDivisionError`. `at([10, 20, 30], 9)` raises
-`IndexError`. They do so at the same point, with the same type, on plain
-CPython, on the Python backend, and on the native path — because a native
-function that reaches a division by zero or an index out of range does not
-guess. It fails its guard and lets the Python body raise.
+Exception behavior is part of the contract: `divide(1, 0)` raises
+`ZeroDivisionError` and `at([10, 20, 30], 9)` raises `IndexError` at the
+same point, with the same type, on plain CPython, on the Python backend, and
+on the native path.
 
 ## A guard where Python would raise
 
@@ -24,9 +23,9 @@ Python body, which raises exactly what Python raises. `safe_divide` checks
 ## The optimizer keeps the order
 
 Optimization passes do not move or drop an operation that can raise unless
-they can prove it cannot. An `IndexError` on the third element still
-happens after the print of the second, because raising is an effect
-(`may_raise`) the passes read like any other.
+they can prove it cannot. Raising is an effect (`may_raise`) the passes read
+like any other, so an `IndexError` on the third element still happens after
+the print of the second.
 
 ## Run it
 
@@ -71,9 +70,7 @@ caught IndexError
 
 <!-- outputs:end -->
 
-## Read on
-
-- [Effects and purity](../../docs/guide/effects.md) — the three paths and why a failed guard falls back.
-- [Numerics](../11_numerics/README.md) — the arithmetic edges the guards protect.
+Read on: [Effects and purity](../../docs/guide/effects.md) ·
+[Numerics](../11_numerics/README.md)
 
 `errors.ppy` is hand-written; there is no `.py` source and no conversion step.

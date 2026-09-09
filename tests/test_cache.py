@@ -511,7 +511,18 @@ def test_a_cached_lowering_round_trips():
                         releases_gil=True,
                     )
                 },
-            )()
+            )(),
+            # A coroutine: the boundary must still know it hands back a future
+            # after a cache hit, or the caller gets the bare handle.
+            "m.co": type(
+                "L",
+                (),
+                {
+                    "signature": NativeSignature(
+                        "m.co", "ppy_m_co", (NativeParam("n", "int"),), ("i64",), future="int"
+                    )
+                },
+            )(),
         }
         rejected: ClassVar[dict] = {"m.g": "has effects"}
         fused: ClassVar[dict] = {}
@@ -527,6 +538,8 @@ def test_a_cached_lowering_round_trips():
     assert signature.releases_gil
     assert signature.parameters[0].kind == "view"
     assert signature.parameters[0].element == "float"
+    assert restored.signatures["m.co"].future == "int"
+    assert restored.signatures["m.f"].future == ""
     assert restored.rejected == {"m.g": "has effects"}
     assert restored.libraries == ("m",) and restored.exports == {"ppy_f": "m.f"}
     assert decode('{"version": 0}') is None

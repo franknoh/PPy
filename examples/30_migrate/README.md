@@ -1,11 +1,8 @@
-# Five dynamic idioms, rewritten and proven equivalent
+# Migration
 
-`legacy.py` is a small telemetry script that is dynamic in all the usual
-harmless ways: `importlib.import_module("math")`, `globals()["SCALE"] = 4`,
-`setattr(first, "flagged", True)`, `getattr(first, "flagged")`. `ppy
-convert` would refuse it. `ppy migrate` rewrites each site to the static
-form it always meant, proves the rewrite equivalent first, and then
-staticizes as usual — and the result checks strict with nothing left over.
+A small legacy telemetry script, dynamic in the usual harmless ways —
+`importlib.import_module`, a `globals()` write, `setattr`/`getattr` on
+constant names — run through `ppy migrate` instead of `ppy convert`.
 
 ## Before and after
 
@@ -25,11 +22,14 @@ first.flagged = True
 print(first.flagged, scaled, spread(scaled))
 ```
 
-The `import importlib` that fed the first line is removed as freight with no
-cargo. Then the ordinary conversion runs over the rewritten code: fourteen
-annotations, `Final` on the constant, `Sequence` where a parameter is only
-read, `@ppy.pure` on `spread`. This migration ends where `ppy convert`
-starts.
+`ppy convert` would refuse the original. `ppy migrate` rewrites each site
+to the static form it always meant, proving the rewrite equivalent before
+making it, and removes the `import importlib` that fed the first line once
+nothing uses it. Then the ordinary conversion runs over the rewritten code:
+fourteen annotations, `Final` on the constant, `Sequence` where a parameter
+is only read, `@ppy.pure` on `spread`. The result passes `ppy check` under
+`strict = true` with nothing left over — this migration ends where `ppy
+convert` starts.
 
 ## What a migration reports
 
@@ -53,6 +53,9 @@ ppy run legacy.ppy
 
 **`ppy migrate legacy.py --diff`**
 
+<details markdown="1">
+<summary>52 lines</summary>
+
 ```text
 --- ./legacy.py
 +++ ./legacy.ppy
@@ -74,9 +77,41 @@ ppy run legacy.ppy
  class Reading:
 -    def __init__(self, value):
 -        self.value = value
+-        self.flagged = False
++    def __init__(self, value: float) -> None:
++        self.value: float = value
++        self.flagged: bool = False
+ 
+ 
+-def normalize(readings):
+-    out = []
++def normalize(readings: Sequence[Reading]) -> list[float]:
++    out: list[float] = []
+     for reading in readings:
+         out.append(reading.value * SCALE)
+     return out
+ 
+ 
+-def spread(values):
++@ppy.pure
++def spread(values: Sequence[float]) -> int:
+     return math.ceil(max(values) - min(values))
+ 
+ 
+-samples = [Reading(0.5), Reading(1.25), Reading(2.0)]
+-first = samples[0]
+-setattr(first, "flagged", True)
++samples: list[Reading] = [Reading(0.5), Reading(1.25), Reading(2.0)]
++first: Reading = samples[0]
++first.flagged = True
+ 
+-scaled = normalize(samples)
+-print(getattr(first, "flagged"), scaled, spread(scaled))
++scaled: list[float] = normalize(samples)
++print(first.flagged, scaled, spread(scaled))
 ```
 
-*52 lines in all — [full output](outputs/01-ppy-migrate-legacy-py-diff.txt).*
+</details>
 
 **`python  legacy.ppy`**
 
@@ -92,10 +127,8 @@ True [2.0, 5.0, 8.0] 6
 
 <!-- outputs:end -->
 
-## Read on
-
-- [CLI: `ppy migrate`](../../docs/cli.md) — the passes and the report's categories.
-- [Dynamic boundaries](../16_dynamic/README.md) — what stays dynamic on purpose.
+Read on: [CLI: `ppy migrate`](../../docs/cli.md) ·
+[Dynamic boundaries](../16_dynamic/README.md)
 
 Generated, not hand-written: `legacy.ppy` is exactly what `ppy migrate
 legacy.py` writes, and `examples/verify_conversions.py` checks that on every

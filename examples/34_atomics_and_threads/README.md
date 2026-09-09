@@ -1,12 +1,11 @@
-# Four threads, one counter, one answer
+# Atomics and threads
 
-Four workers each add 500 to a shared counter with `atomic.fetch_add` and
-500 × 2 to a shared total behind a mutex. The program prints `2000 4000` on
-plain CPython, on the Python backend, and natively — because `ppy.atomic`
-and `ppy.concurrent` are the same operations on every path, over memory the
-program owns.
+`ppy.atomic` and `ppy.concurrent`: shared memory one operation at a time,
+and threads with what keeps them apart, over memory the program owns. Four
+workers each add 500 to a shared counter and 500 × 2 to a shared total
+behind a mutex, and the program prints `2000 4000` on every path.
 
-## Atomics with C11's orders, and C11's rules
+## Atomics with C11's orders
 
 ```python
 def worker(counter: native.ptr[int], mutex: native.ptr[int], total: native.ptr[int], rounds: int) -> None:
@@ -22,8 +21,8 @@ def worker(counter: native.ptr[int], mutex: native.ptr[int], total: native.ptr[i
 `seq_cst` — and the checker holds what C11 holds: a load is never
 `release`, a store never `acquire`, a relaxed fence orders nothing
 (`E1641`). Natively each lowers to the instruction of that order; under
-CPython the operations serialize under one lock, which is a valid
-implementation of every order.
+CPython the operations serialize under one lock, which implements every
+order.
 
 ## Threads and what keeps them apart
 
@@ -33,9 +32,9 @@ memory the program owns: a mutex is one `int` slot, a condition one more
 counting notifications, and `wait`/`notify` spin under the CPU's pause hint
 over the same atomics on every path. `signal` shows the pattern — a waiter
 blocks on a condition until the main thread sets a flag and notifies. A
-thread that fails a guard fails its joiner, and the function falls back as
-a whole. Native code links pthreads; a target without them is refused with
-the reason.
+thread that fails a guard fails its joiner, and the function falls back as a
+whole. Native code links pthreads; a target without them is refused with the
+reason.
 
 ## Run it
 
@@ -65,11 +64,9 @@ ppy run counters.ppy
 
 <!-- outputs:end -->
 
-## Read on
-
-- [Atomics and threads](../../docs/guide/concurrency.md) — the two namespaces in full.
-- [Threads](../28_threads/README.md) — the other direction: Python threads calling native code.
-- [Parallel range](../35_parallel_range/README.md) — when you want the split done for you.
+Read on: [Atomics and threads](../../docs/guide/concurrency.md) ·
+[Threads](../28_threads/README.md) ·
+[Parallel range](../35_parallel_range/README.md)
 
 `counters.ppy` is hand-written; there is no `.py` source and no conversion
 step.

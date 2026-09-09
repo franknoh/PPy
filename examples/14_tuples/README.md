@@ -1,12 +1,9 @@
-# Tuples as scalar atoms
+# Tuples
 
-A `tuple[float, float]` is two doubles. Passed to a native function it is
-two arguments; returned, it is two result slots. `midpoint` allocates
-nothing, `divmod_pair` returns a quotient and a remainder without a heap
-object between them, and the boundary boxes the pair back into a Python
-tuple only on the way out.
-
-## Fixed length, scalar elements
+A tuple of known length and scalar elements is passed and returned unboxed.
+`tuple[float, float]` is two doubles in the ABI; passed to a native function
+it is two arguments, returned it is two result slots, and the boundary boxes
+the pair back into a Python tuple only on the way out.
 
 ```python
 @ppy.pure
@@ -15,11 +12,12 @@ def divmod_pair(a: int, b: int) -> tuple[int, int]:
     return (a // b, a % b)
 ```
 
-The rule is exact: a tuple of known length whose elements are scalars
-flattens. A homogeneous `tuple[int, ...]` has no known length and stays
-boxed; so does a tuple wider than the ABI allows. `divmod_pair(-17, 5)` is
-`(-4, 3)` — floor division and a divisor-signed remainder, the same on all
-three paths.
+`midpoint` allocates nothing on the native path; `divmod_pair` returns a
+quotient and a remainder without a heap object between them. The rule is
+exact: a homogeneous `tuple[int, ...]` has no known length and stays boxed,
+and so does a tuple wider than the ABI allows. `divmod_pair(-17, 5)` is
+`(-4, 3)` — floor division and a divisor-signed remainder — on all three
+paths.
 
 ## Run it
 
@@ -58,9 +56,7 @@ ppy run tuples.ppy
 
 <!-- outputs:end -->
 
-## Read on
-
-- [Native data](../08_native_data/README.md) — tuples beside lists, arrays, and value classes.
-- [Numerics](../11_numerics/README.md) — why `-17 // 5` is `-4`.
+Read on: [Native data](../08_native_data/README.md) ·
+[Numerics](../11_numerics/README.md)
 
 `tuples.ppy` is hand-written; there is no `.py` source and no conversion step.

@@ -1,11 +1,11 @@
-# The same fused kernel, on every core
+# Parallel fused kernels
 
-`@ppy.parallel` on a fused NumPy expression splits its loop across the
-worker pool. The output is bit-identical to the serial kernel and to NumPy,
-because an elementwise loop has no order to lose. A reduction does, and the
-compiler will not split one that reassociates unless you say so.
+`@ppy.parallel` splits a fused NumPy loop across the worker pool. The
+output is bit-identical to the serial kernel and to NumPy, because an
+elementwise loop has no order to lose; a reduction does, and the compiler
+will not split one that reassociates unless the function says so.
 
-## Mark it splittable; the compiler still proves it
+## The decorator asks, the analysis answers
 
 ```python
 @ppy.pure
@@ -15,11 +15,12 @@ def parallel(a: np.ndarray, b: np.ndarray) -> np.ndarray:
     return (a * b + a) * (b - a) + a * 0.5 - b * 0.25
 ```
 
-The decorator asks; the analysis answers. Eight million elements, five
-operations, one fused loop chunked across `[tool.ppy.parallel] threads`
-workers and joined. `serial` is the same expression without the decorator,
-and the program checks `np.array_equal` across serial, parallel, and NumPy —
-it prints `bit-identical: True` on every path.
+Eight million elements, five operations, one fused loop chunked across
+`[tool.ppy.parallel] threads` workers and joined. `serial` is the same
+expression without the decorator, and the program checks `np.array_equal`
+across serial, parallel, and NumPy — it prints `bit-identical: True` on
+every path. A loop the analysis cannot prove splittable stays serial and
+says why in an optimization remark.
 
 ## A sum keeps its order unless you let it go
 
@@ -39,11 +40,10 @@ Splitting a floating-point sum changes where the rounding happens, so
 `strict_total` is left in NumPy's order and equals NumPy's number exactly.
 `@ppy.fastmath` permits the reassociation: `relaxed_total` vectorizes and
 splits, and lands within 1e-3 of the strict answer on eight million squares.
-The choice is the function's, per function, and the checker never makes it
-for you.
+The choice is made per function, and the default is the exact one.
 
-`parallel.range` is the 0.2.0 spelling for a loop the program itself
-declares splittable — pointers, buffers, and reductions included
+`parallel.range` is the spelling for a loop the program itself declares
+splittable — pointers, buffers, and reductions included
 ([parallel range](../35_parallel_range/README.md)). `@ppy.parallel` stays the
 switch for fused NumPy loops like these.
 
@@ -61,9 +61,9 @@ ppy run parallel.ppy
 **`python  parallel.ppy`**
 
 ```text
-fused serial        104.9 ms   sample=-0.249979000059
-fused parallel      116.6 ms   sample=-0.249979000059
-numpy               122.1 ms   sample=-0.249979000059
+fused serial         87.2 ms   sample=-0.249979000059
+fused parallel       99.3 ms   sample=-0.249979000059
+numpy               100.8 ms   sample=-0.249979000059
 bit-identical: True
 strict == numpy: True
 relaxed close   : True
@@ -72,9 +72,9 @@ relaxed close   : True
 **`ppy     parallel.ppy`**
 
 ```text
-fused serial        108.6 ms   sample=-0.249979000059
-fused parallel      109.2 ms   sample=-0.249979000059
-numpy               105.1 ms   sample=-0.249979000059
+fused serial         84.3 ms   sample=-0.249979000059
+fused parallel       87.1 ms   sample=-0.249979000059
+numpy                89.4 ms   sample=-0.249979000059
 bit-identical: True
 strict == numpy: True
 relaxed close   : True
@@ -83,9 +83,9 @@ relaxed close   : True
 **`ppy run parallel.ppy`**
 
 ```text
-fused serial         23.2 ms   sample=-0.249979000059
-fused parallel       15.4 ms   sample=-0.249979000059
-numpy                29.3 ms   sample=-0.249979000059
+fused serial         20.3 ms   sample=-0.249979000059
+fused parallel       13.6 ms   sample=-0.249979000059
+numpy                21.6 ms   sample=-0.249979000059
 bit-identical: True
 strict == numpy: True
 relaxed close   : True
@@ -93,9 +93,7 @@ relaxed close   : True
 
 <!-- outputs:end -->
 
-## Read on
-
-- [Parallel loops](../../docs/guide/parallel.md) — `parallel.range`, reductions, and the backends.
-- [NumPy fusion](../05_numpy/README.md) — the loop this one splits.
+Read on: [Parallel loops](../../docs/guide/parallel.md) ·
+[NumPy fusion](../05_numpy/README.md)
 
 `parallel.ppy` is hand-written; there is no `.py` source and no conversion step.

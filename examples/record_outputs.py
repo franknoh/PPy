@@ -2,11 +2,12 @@
 
 Every README has a `## Run it` block. This runs each of its commands in the
 example's folder and keeps the output under `## What it prints`, so the
-README shows the command and its answer side by side. A long output is shown
-to its first lines and kept whole in the folder's `outputs/`, which the
-documentation site unfolds in place. Timings differ from machine to machine
-and are shown as one run; answers do not, and a run that changes one is a
-change to the example.
+README shows the command and its answer side by side. A short output is
+shown as it is; a longer one is folded into a `<details>` block the reader
+opens; a very long one is kept as a file under the folder's `outputs/`,
+linked from the README and embedded by the documentation site. Each output
+exists once. Timings differ from machine to machine and are shown as one
+run; answers do not, and a run that changes one is a change to the example.
 
     python examples/record_outputs.py             # every example
     python examples/record_outputs.py 15_ 40_     # folders matching a token
@@ -27,7 +28,8 @@ START = "<!-- outputs:start -->"
 END = "<!-- outputs:end -->"
 HEADING = "## What it prints"
 RUN_IT = re.compile(r"^## Run it\n.*?```bash\n(.*?)```", re.DOTALL | re.MULTILINE)
-MAX_LINES = 20
+INLINE_LINES = 20
+FOLDED_LINES = 300
 OUTPUTS = "outputs"
 TIMEOUT = 600
 
@@ -98,21 +100,26 @@ def _slug(index: int, command: str) -> str:
     return f"{index:02d}-{words[:40].rstrip('-')}.txt"
 
 
-def _clip(folder: Path, index: int, command: str, text: str) -> list[str]:
-    """The lines a README shows; a long output is kept whole under `outputs/`."""
+def _render(folder: Path, index: int, command: str, text: str) -> list[str]:
+    """One output, once: inline, folded, or as a file the README links to."""
     lines = text.splitlines()
-    if len(lines) <= MAX_LINES:
+    if len(lines) <= INLINE_LINES:
         return ["```text", text, "```"]
+    if len(lines) <= FOLDED_LINES:
+        return [
+            '<details markdown="1">',
+            f"<summary>{len(lines)} lines</summary>",
+            "",
+            "```text",
+            text,
+            "```",
+            "",
+            "</details>",
+        ]
     name = _slug(index, command)
     (folder / OUTPUTS).mkdir(exist_ok=True)
     (folder / OUTPUTS / name).write_text(text + "\n", encoding="utf-8")
-    return [
-        "```text",
-        "\n".join(lines[:MAX_LINES]),
-        "```",
-        "",
-        f"*{len(lines)} lines in all — [full output]({OUTPUTS}/{name}).*",
-    ]
+    return [f"*{len(lines)} lines: [{OUTPUTS}/{name}]({OUTPUTS}/{name})*"]
 
 
 def section(folder: Path, listed: list[str]) -> tuple[str, list[str]]:
@@ -129,7 +136,7 @@ def section(folder: Path, listed: list[str]) -> tuple[str, list[str]]:
         if verdict == "skipped":
             parts.append(f"*{output}*")
         elif output:
-            parts.extend(_clip(folder, index, command, output))
+            parts.extend(_render(folder, index, command, output))
         else:
             parts.append("*(prints nothing; exits 0)*")
         parts.append("")

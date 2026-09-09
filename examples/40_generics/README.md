@@ -1,11 +1,8 @@
-# Generics, inferred at the call and monomorphized in native code
+# Generics
 
-`largest(1, 2)` is an `int`. `largest(1.5, 2.5)` is a `float`. One
-definition, Python 3.12's `def largest[T: int | float]` syntax, and the
-call site decides `T`, checks it against the bound, and gets the declared
-return type with `T` substituted. Native code goes further: every tuple of
-type arguments a native caller uses becomes its own compiled instance, and
-the call goes straight to it.
+Type parameters the way Python 3.12 spells them, inferred at each call and
+checked against their bounds; native code monomorphizes, one instance per
+tuple of type arguments.
 
 ## Bounds lend what they promise
 
@@ -18,11 +15,12 @@ def label[T: Named](thing: T) -> str:
     return "at " + thing.name()
 ```
 
-An unbounded `T` has no operators at all — nothing says it does. A bound
-of `int | float` lends comparison and arithmetic; a bound that is a
-`Protocol` lends its methods, so `label` may call `name()`, and `Point`,
-whose members cover `Named`'s, is an instance of it without declaring so.
-A type argument that does not satisfy its bound is `E1721`.
+`largest(1, 2)` is an `int` and `largest(1.5, 2.5)` a `float`: the call
+infers `T`, checks it against `int | float` (`E1721` otherwise), and has the
+declared return type with `T` substituted. An unbounded `T` has no
+operators at all. A bound that is a `Protocol` lends its methods, so `label`
+may call `name()`, and `Point`, whose members cover `Named`'s, is an
+instance of it without declaring so.
 
 ## One instance per tuple of type arguments
 
@@ -37,12 +35,12 @@ def sweep(n: int) -> float:
 `sweep` is native and calls `clamp` with floats and `largest` with ints.
 Each generic is lowered once per tuple of type arguments under a name that
 spells them — `ppy emit ir` shows the instances, marked `ppy.generic` — and
-the calls inside `sweep` are direct native calls to those instances. The
-generics keep their Python bodies for every other caller.
-`[tool.ppy.generics]` bounds the process (`max-specializations` per
-generic, `max-depth` of a type argument), and a generic that calls itself
-with its own parameter wrapped in a type is refused outright (`E1723`)
-because its specializations would never end.
+the calls inside `sweep` go straight to those instances. The generics keep
+their Python bodies for every other caller. `[tool.ppy.generics]` bounds the
+process (`max-specializations` per generic, `max-depth` of a type
+argument), and a generic that calls itself with its own parameter wrapped in
+a type is refused outright (`E1723`) because its specializations would never
+end.
 
 ## Run it
 
@@ -71,6 +69,9 @@ ppy emit ir generic.ppy
 
 **`ppy emit ir generic.ppy`**
 
+<details markdown="1">
+<summary>97 lines</summary>
+
 ```text
 ppyir 1
 module @generic
@@ -92,15 +93,90 @@ func @generic_sweep(%n: i64) -> f64 attrs {effects = ["may_raise"], ppy.abi = "p
     core.store %2, %i_addr loc("examples/40_generics/generic.ppy":35:4)
     core.br ^for.head3
 ^for.head3:
+    %5 = core.load %i_addr : i64 loc("examples/40_generics/generic.ppy":35:4)
+    %6 = core.cmp.lt %5, %1 : bool
+    core.cond_br %6, ^for.body4, ^for.end6
+^for.body4:
+    %7 = core.load %total_addr : f64 loc("examples/40_generics/generic.ppy":36:8)
+    %8 = core.load %i_addr : i64
+    %9 = core.const 0.25 : f64
+    %10 = core.cast %8 : f64
+    %11 = core.mul %10, %9 : f64
+    %12 = core.const 1.0 : f64
+    %13 = core.const 10.0 : f64
+    %14 = core.call %11, %12, %13 {callee = @generic_clamp__float} : f64
+    %15 = core.load %i_addr : i64
+    %16 = core.call %15, %4 {callee = @generic_largest__int} : i64
+    %17 = core.cast %16 : f64
+    %18 = core.add %14, %17 : f64
+    %19 = core.add %7, %18 : f64
+    core.store %19, %total_addr
+    %20 = core.load %i_addr : i64
+    %21 = core.add %20, %3 {overflow = "python"} : i64
+    core.store %21, %i_addr
+    core.br ^for.head3
+^for.end6:
+    %22 = core.load %total_addr : f64 loc("examples/40_generics/generic.ppy":37:4)
+    core.ret %22
+}
+
+func @generic_clamp__float(%x: f64, %lo: f64, %hi: f64) -> f64 attrs {effects = [], ppy.abi = "ppy", ppy.generic = "generic.clamp", ppy.qualname = "generic.clamp__float", ppy.releases_gil = true, ppy.symbol = "ppy_generic_clamp__float", ppy.type_arguments = ["float"]} loc("examples/40_generics/generic.ppy":29:0) {
+^entry:
+    %x_addr = core.alloca : ptr<f64, stack> loc("examples/40_generics/generic.ppy":29:0)
+    core.store %x, %x_addr
+    %lo_addr = core.alloca : ptr<f64, stack>
+    core.store %lo, %lo_addr
+    %hi_addr = core.alloca : ptr<f64, stack>
+    core.store %hi, %hi_addr
+    %0 = core.load %x_addr : f64 loc("examples/40_generics/generic.ppy":30:4)
+    %1 = core.load %hi_addr : f64
+    %2 = core.cmp.lt %0, %1 : bool
+    %3 = core.load %lo_addr : f64
+    %4 = core.load %x_addr : f64
+    %5 = core.call %3, %4 {callee = @generic_largest__float} : f64
+    %6 = core.load %hi_addr : f64
+    %7 = core.select %2, %5, %6 : f64
+    core.ret %7
+}
+
+func @generic_largest__float(%a: f64, %b: f64) -> f64 attrs {effects = [], ppy.abi = "ppy", ppy.generic = "generic.largest", ppy.qualname = "generic.largest__float", ppy.releases_gil = true, ppy.symbol = "ppy_generic_largest__float", ppy.type_arguments = ["float"]} loc("examples/40_generics/generic.ppy":17:0) {
+^entry:
+    %a_addr = core.alloca : ptr<f64, stack> loc("examples/40_generics/generic.ppy":17:0)
+    core.store %a, %a_addr
+    %b_addr = core.alloca : ptr<f64, stack>
+    core.store %b, %b_addr
+    %0 = core.load %a_addr : f64 loc("examples/40_generics/generic.ppy":18:4)
+    %1 = core.load %b_addr : f64
+    %2 = core.cmp.gt %0, %1 : bool
+    %3 = core.load %a_addr : f64
+    %4 = core.load %b_addr : f64
+    %5 = core.select %2, %3, %4 : f64
+    core.ret %5
+}
+
+func @generic_largest__int(%a: i64, %b: i64) -> i64 attrs {effects = [], ppy.abi = "ppy", ppy.generic = "generic.largest", ppy.qualname = "generic.largest__int", ppy.releases_gil = true, ppy.symbol = "ppy_generic_largest__int", ppy.type_arguments = ["int"]} loc("examples/40_generics/generic.ppy":17:0) {
+^entry:
+    %a_addr = core.alloca : ptr<i64, stack> loc("examples/40_generics/generic.ppy":17:0)
+    core.store %a, %a_addr
+    %b_addr = core.alloca : ptr<i64, stack>
+    core.store %b, %b_addr
+    %0 = core.load %a_addr : i64 loc("examples/40_generics/generic.ppy":18:4)
+    %a_entry = core.load %a_addr : i64
+    %1 = core.load %b_addr : i64
+    %b_entry = core.load %b_addr : i64
+    %2 = core.cmp.gt %0, %1 : bool
+    %3 = core.load %a_addr : i64
+    %4 = core.load %b_addr : i64
+    %5 = core.select %2, %3, %4 : i64
+    core.ret %5
+}
 ```
 
-*97 lines in all — [full output](outputs/03-ppy-emit-ir-generic-ppy.txt).*
+</details>
 
 <!-- outputs:end -->
 
-## Read on
-
-- [Generics](../../docs/guide/generics.md) — bounds, monomorphization, static dispatch.
-- [Value classes](../13_value_classes/README.md) — operators on a value class, dispatched statically.
+Read on: [Generics](../../docs/guide/generics.md) ·
+[Value classes](../13_value_classes/README.md)
 
 `generic.ppy` is hand-written; there is no `.py` source and no conversion step.

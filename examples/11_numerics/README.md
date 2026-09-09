@@ -1,12 +1,9 @@
-# Where PPY refuses to differ from CPython
+# Numerics
 
-Integer semantics are the place a Python compiler is most tempted to cheat.
-PPY does not: `20!` fits a word and computes natively, `30!` does not and
-comes back through the guard as the 33-digit number Python prints, and
-`-7 // 2` is `-4` with a remainder of `1` on every path. Four functions,
-each one edge case.
+Where PPY refuses to differ from CPython: overflow, floor division, and the
+sign of the remainder.
 
-## Overflow is a fallback, not a wrap
+## Overflow falls back
 
 ```python
 @ppy.pure
@@ -21,8 +18,9 @@ def may_overflow(n: int) -> int:
 Each `result *= i` is an overflow-checking multiply. `may_overflow(20)` runs
 twenty of them natively. `may_overflow(30)` sets the flag on the
 twenty-first, the function returns to its Python body, and CPython finishes
-with arbitrary precision. Under `ppy run` the guards are on by default;
-`ppy build` produces a wrap-semantics artifact, and `--safe` puts them back.
+with arbitrary precision — the 33-digit number Python prints. Under `ppy
+run` the guards are on by default; `ppy build` produces a wrap-semantics
+artifact, and `--safe` puts them back.
 
 ## Floor, not truncation
 
@@ -34,11 +32,11 @@ def floor_semantics(a: int, b: int) -> int:
 ```
 
 C rounds toward zero; Python rounds toward negative infinity and gives the
-remainder the divisor's sign. The IR marks the operation `rounding = "floor"`,
-and the LLVM backend emits the sign-corrected sequence — or a single
-arithmetic shift when the divisor is a power of two, which is one reason
-the collatz kernel outruns its C twin. `modulo_semantics(7, -2)` is `-1`,
-as Python says.
+remainder the divisor's sign. The IR marks the operation `rounding =
+"floor"`, and the LLVM backend emits the sign-corrected sequence — or a
+single arithmetic shift when the divisor is a power of two, which is one
+reason the collatz kernel keeps up with its C twin. `floor_semantics(-7, 2)`
+is `-4` and `modulo_semantics(7, -2)` is `-1` on every path.
 
 ## Run it
 
@@ -83,9 +81,7 @@ ppy run numerics.ppy
 
 <!-- outputs:end -->
 
-## Read on
-
-- [Arbitrary precision](../02_arbitrary_precision/README.md) — the same guard, from the other side.
-- [The IR](../../docs/internals/ir.md) — `overflow` and `rounding` on the core dialect's operations.
+Read on: [Arbitrary precision](../02_arbitrary_precision/README.md) ·
+[The IR](../../docs/internals/ir.md)
 
 `numerics.ppy` is hand-written; there is no `.py` source and no conversion step.

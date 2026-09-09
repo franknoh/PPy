@@ -1,11 +1,9 @@
-# Native kernels on every rank, with `import ppy` as the integration
+# A trainer under `torchrun` and `accelerate launch`
 
-`train.py` is a plain PyTorch trainer. It does not know whether it was
-started by `python`, `torchrun`, or `accelerate launch`; it reads `RANK`
-and `WORLD_SIZE` from the environment like any trainer and imports two
-`.ppy` modules. Each rank's `import ppy` finds the kernels' native build in
-the project cache, and preprocessing that took 110 ms per rank in Python
-takes 1.6 ms. No bootstrap, no launcher of its own, no `ppy run`.
+A plain PyTorch trainer whose kernels are `.ppy` modules. `import ppy` is
+the whole integration: each rank finds the kernels' native build in the
+project cache, and preprocessing that took 110 ms per rank in Python takes
+1.6 ms. No bootstrap, no launcher of its own, no `ppy run`.
 
 ```python
 import ppy  # first: the import hook, serving .ppy modules from their native build
@@ -15,16 +13,23 @@ import features  # features.ppy: the preprocessing loops, native
 import model  # model.ppy: the model as one ATen region, native
 ```
 
-## Where the time goes on the Python side of a trainer
+## The program does not know how it was started
+
+`train.py` reads the environment every launcher agrees on (`RANK`,
+`WORLD_SIZE`, `LOCAL_RANK`) and runs the same under `python`, `torchrun`,
+and `accelerate launch`. The launcher starts ordinary interpreters, and each
+one's `import ppy` finds the kernels' native build.
+
+## The two kernels
 
 `features.ppy` holds the per-batch arithmetic — standardizing rows,
 appending interactions, bucketing the result — as loops over borrowed
-buffers. Those loops are what a trainer spends its Python time on, and
-they lower to native code writing into memory the caller owns.
-`model.ppy` imports torch: its `forward_loss` is one function of curated
-tensor operations, compiled into an ATen region that ships beside the
-manifest and loads without the compiler in the process. `.backward()` sees
-the same graph.
+buffers. That is where the time goes on the Python side of a trainer, and
+where the native path wins. `model.ppy` imports torch: its `forward_loss`
+is one function of curated tensor operations, compiled into an ATen region
+that ships beside the manifest and loads without the compiler in the
+process. `.backward()` sees the same graph, because every `at::` call still
+goes through the dispatcher.
 
 ## Warm the cache before the launch
 
@@ -46,12 +51,12 @@ CPU, 2 ranks, each on 20,000 rows × 16 columns; 100 steps of a 32-unit MLP.
 
 Checksums, bucket counts, and loss trajectories are identical on both paths
 and under every launcher. The preprocessing is the point. The region removes
-four Python round trips per step, which [21_training_torch](../21_training_torch/README.md)
-measures at about 20% in isolation; here the step is dominated by the
-tensor work and the run-to-run noise of a two-rank CPU launch is wider than
-the gain. On an accelerator the region changes nothing measurable.
-`PPY_IMPORT=python` runs the same files as plain Python; `PPY_QUIET=1`
-silences the per-rank notes.
+four Python round trips per step, which
+[21_training_torch](../21_training_torch/README.md) measures at about 20%
+in isolation; here the step is dominated by the tensor work and the
+run-to-run noise of a two-rank CPU launch is wider than the gain. On an
+accelerator the region changes nothing measurable. `PPY_IMPORT=python` runs
+the same files as plain Python; `PPY_QUIET=1` silences the per-rank notes.
 
 ## Run it
 
@@ -77,19 +82,19 @@ python model.ppy    && ppy run model.ppy
 
 ```text
 # rank 0/1 device=cpu native=True region=True loader=GeneratedLoader
-rank 0: prep       1.6 ms   checksum=-21015.470416 outside=4103
-rank 0: train    811.9 ms   loss 1.0412 -> 1.0107
+rank 0: prep       1.5 ms   checksum=-21015.470416 outside=4103
+rank 0: train    757.3 ms   loss 1.0412 -> 1.0107
 ```
 
 **`torchrun --standalone --nproc_per_node=2 train.py`**
 
 ```text
 # rank 0/2 device=cpu native=True region=True loader=GeneratedLoader
-rank 0: prep       2.2 ms   checksum=-21015.470416 outside=4103
-rank 0: train    748.5 ms   loss 1.0412 -> 1.0123
+rank 0: prep       1.6 ms   checksum=-21015.470416 outside=4103
+rank 0: train    601.0 ms   loss 1.0412 -> 1.0123
 # rank 1/2 device=cpu native=True region=True loader=GeneratedLoader
-rank 1: prep       1.9 ms   checksum=-20883.104755 outside=4005
-rank 1: train    749.1 ms   loss 1.0486 -> 1.0239
+rank 1: prep       1.5 ms   checksum=-20883.104755 outside=4005
+rank 1: train    598.8 ms   loss 1.0486 -> 1.0239
 ```
 
 **`accelerate launch --multi_gpu --num_processes 2 train.py`**
@@ -100,8 +105,8 @@ rank 1: train    749.1 ms   loss 1.0486 -> 1.0239
 
 ```text
 # rank 0/1 device=cpu native=False region=False loader=PPySourceLoader
-rank 0: prep     125.3 ms   checksum=-21015.470416 outside=4103
-rank 0: train   4182.5 ms   loss 1.0412 -> 1.0107
+rank 0: prep     113.1 ms   checksum=-21015.470416 outside=4103
+rank 0: train    261.8 ms   loss 1.0412 -> 1.0107
 ```
 
 **`ppy check .`**
@@ -130,11 +135,9 @@ loss=4.584410
 makes it launch several processes, and the script runs them on the CPU when
 there is no CUDA device.
 
-## Read on
-
-- [Interop](../24_interop/README.md) — the import hook on its own.
-- [CLI: `ppy build --warm`](../../docs/cli.md) — what a warm build keys on.
-- [Migrating a real project](../../docs/internals/migrating.md) — kernels as `.ppy`, orchestration as `.py`.
+Read on: [Interop](../24_interop/README.md) ·
+[CLI: `ppy build --warm`](../../docs/cli.md) ·
+[Migrating a real project](../../docs/internals/migrating.md)
 
 `features.ppy`, `model.ppy`, and `train.py` are hand-written; there is no
 conversion step.
