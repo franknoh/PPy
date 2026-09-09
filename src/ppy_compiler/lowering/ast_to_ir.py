@@ -3001,6 +3001,8 @@ def _body_names(body: list[ast.stmt]) -> tuple[set[str], dict[str, type], set[st
 
 
 def _plain_stores(body: list[ast.stmt]) -> set[str]:
+    """The names a body binds outright. `out[i] = v` binds nothing: it writes
+    through `out`, which is what a parallel body may do to a buffer."""
     found: set[str] = set()
     for statement in body:
         for inner in ast.walk(statement):
@@ -3008,7 +3010,7 @@ def _plain_stores(body: list[ast.stmt]) -> set[str]:
                 targets = inner.targets if isinstance(inner, ast.Assign) else [inner.target]
                 for target in targets:
                     for name in ast.walk(target):
-                        if isinstance(name, ast.Name):
+                        if isinstance(name, ast.Name) and isinstance(name.ctx, ast.Store):
                             found.add(name.id)
     return found
 

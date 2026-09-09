@@ -214,7 +214,7 @@ def test_the_checker_and_the_frontend_refuse_what_cannot_run_at_once(write, code
     good = write(
         "escapes.ppy",
         """
-        from ppy import native, parallel
+        from ppy import Buffer, native, parallel
 
 
         def f(out: native.ptr[int], n: int) -> int:
@@ -232,6 +232,12 @@ def test_the_checker_and_the_frontend_refuse_what_cannot_run_at_once(write, code
                     break
                 total += xs[i]
             return total
+
+
+        def h(out: Buffer[int]) -> int:
+            for i in parallel.range(len(out)):
+                out[i] = i * i
+            return out[len(out) - 1]
         """,
     )
     bundle = analyze(good, backend="llvm")
@@ -245,3 +251,9 @@ def test_the_checker_and_the_frontend_refuse_what_cannot_run_at_once(write, code
     lowered = lower_module_to_ir(analysis, candidates, _value_class_layouts(bundle))
     assert "assigns `last`, which lives outside the loop" in lowered.rejected["escapes.f"]
     assert "cannot `break`" in lowered.rejected["escapes.g"]
+    # `out[i] = ...` writes through the buffer; it binds nothing outside the loop.
+    assert "escapes.h" not in lowered.rejected
+    body = next(f for n, f in lowered.module.functions.items() if n.startswith("escapes_h__par"))
+    assert any(
+        op.name == "core.buffer_store" for block in body.body.blocks for op in block.operations
+    )
