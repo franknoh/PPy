@@ -3765,6 +3765,10 @@
 <h2 id="030-unreleased">0.3.0 — unreleased<a class="headerlink" href="#030-unreleased" title="Permanent link">&para;</a></h2>
 <p>Work toward the next release, on <code>dev</code>; alphas of it are tagged <code>v0.3.0aN</code>.</p>
 <ul>
+<li>A parallel body that writes a buffer element, <code>out[i] = i * i</code> under
+  <code>parallel.range</code>, lowers: the store writes through <code>out</code> and binds nothing
+  outside the loop, which is what the guide promised and what the check
+  mistook for an assignment of <code>out</code>.</li>
 <li>Regular expressions run natively. A pattern compiled from a bytes literal
   at module level -- <code>WORD = re.compile(rb"[A-Za-z]+")</code> -- or written into
   <code>re.search(rb"...", buf)</code> becomes a <code>regex.search</code>, <code>regex.match</code>, or
