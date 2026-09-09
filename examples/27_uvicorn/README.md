@@ -1,10 +1,10 @@
-# A FastAPI service that checks strict, as written
+# Serving over Uvicorn
 
-One folder, one serving story. `service.ppy` is a raw ASGI callable;
-`api.ppy` is a FastAPI application, converted from `api.py` with no hand
+One folder, one serving story: `service.ppy` is a raw ASGI callable,
+`api.ppy` a FastAPI application converted from `api.py` with no hand
 editing. Both run on Uvicorn through the same plugin, and the whole folder
-checks under `strict = true` with nothing installed beyond the framework —
-route handlers included, exactly as their author wrote them.
+checks under `strict = true` — route handlers included, as their author
+wrote them.
 
 ## The helpers gain types; the routes keep theirs
 
@@ -22,9 +22,8 @@ def create_item(item: Item):
 `describe` and `total_cost` got their types from the call sites and
 `@ppy.pure` from the checker; `describe` reads pydantic fields through the
 pydantic plugin. `create_item` was left alone: `@app.get` is a decorator
-nobody can vouch for, and FastAPI reads `__annotations__` at import to
-build its validation, so the conversion policy refuses to touch the
-signature. That is the annotation-materialization rule doing its job.
+nobody can vouch for, and FastAPI reads `__annotations__` at import to build
+its validation, so the conversion policy refuses to touch the signature.
 
 ## What the plugin models
 
@@ -72,10 +71,8 @@ ppy run api.ppy
 
 <!-- outputs:end -->
 
-## Read on
-
-- [Pydantic](../06_pydantic/README.md) — the models a service exchanges.
-- [Plugins: Uvicorn and FastAPI](../../docs/internals/plugins.md) — the surface in full.
+Read on: [Pydantic](../06_pydantic/README.md) ·
+[Plugins: Uvicorn and FastAPI](../../docs/internals/plugins.md)
 
 `service.ppy` is hand-written. `api.ppy` is Generated, not hand-written:
 exactly what `ppy convert api.py` writes, and `examples/verify_conversions.py`

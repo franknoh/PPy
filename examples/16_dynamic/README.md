@@ -1,11 +1,11 @@
-# The escape hatch, and its price
+# Dynamic boundaries
 
-Strict PPY rejects `getattr` with a computed name, attributes it cannot
-resolve, and values it cannot type. `ppy.dynamic` is where you say that a
-piece of code is Python in the old sense — and the checker holds the line
-at its edge. Nothing dynamic leaks out untyped.
+The escape hatch, and what it costs. Strict PPY rejects `getattr` with a
+computed name, attributes it cannot resolve, and values it cannot type;
+`ppy.dynamic` is where a piece of code is declared Python in the old sense,
+and the checker holds the line at its edge.
 
-## A boundary, three spellings
+## Three spellings
 
 ```python
 def reflective(name: str) -> str:
@@ -27,16 +27,17 @@ block. As a decorator, it makes a whole function dynamic: `obj.__class__` on
 an `object` is fine inside. As an annotation, `ppy.Dynamic` marks a value
 that arrives untyped — `Any` at run time, but spelled as a decision rather
 than an inference failure. `int(payload)` is the conversion that turns it
-into something typed; `ppy.check[int]` is the checked form.
+into something typed; `ppy.check[int]` is the checked form. Nothing dynamic
+leaks out untyped.
 
 ## What a boundary costs
 
 A boundary is an optimization barrier. Native code stops at it, and
-`static_only` — the plain function in the file — is the one that lowers.
-A project that wants no boundaries at all sets
-`[tool.ppy] dynamic-boundaries = "deny"` and gets `E1505` at the first one.
-Migration is the other direction: `ppy migrate` converts a dynamic file
-faithfully and marks each site, and `ppy check` then asks for the boundary.
+`static_only` — the plain function in the file — is the one that lowers. A
+project that wants no boundaries sets `[tool.ppy] dynamic-boundaries =
+"deny"` and gets `E1505` at the first one. Migration goes the other way:
+`ppy migrate` converts a dynamic file faithfully and marks each site, and
+`ppy check` then asks for the boundary.
 
 ## Run it
 
@@ -78,10 +79,8 @@ int str list
 
 <!-- outputs:end -->
 
-## Read on
-
-- [The subset](../../docs/guide/subset.md) — unknown, `Any`, and `Dynamic`.
-- [Effects and contracts](../03_effects_and_contracts/README.md) — `eval` behind a boundary, checked on the way out.
-- [Migrating a legacy script](../30_migrate/README.md) — a file full of dynamic features, rewritten.
+Read on: [The subset](../../docs/guide/subset.md) ·
+[Effects and contracts](../03_effects_and_contracts/README.md) ·
+[Migration](../30_migrate/README.md)
 
 `dynamic.ppy` is hand-written; there is no `.py` source and no conversion step.

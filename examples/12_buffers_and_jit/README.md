@@ -1,13 +1,10 @@
-# Borrow the memory, keep the order, specialize the rest
+# Buffers and JIT
 
-Three decisions that decide how fast a numeric function runs, each made
-once in a signature or a decorator. `Buffer[float]` lends native code the
-caller's memory instead of copying a list — about 10× on 8,192 elements.
-`@ppy.fastmath` lets a sum reassociate, which lets it vectorize.
-`@ppy.jit` specializes on the argument values it actually sees, with the
-guard compiled into C.
+Borrowed memory, reassociation, and specialization: three decisions that set
+how fast a numeric function runs, each made once in a signature or a
+decorator.
 
-## `Buffer[T]` is zero-copy in both directions
+## `Buffer[T]` is borrowed, a list is copied
 
 ```python
 @ppy.pure
@@ -22,19 +19,20 @@ def total_view(values: Buffer[float]) -> float:
 `total_list` takes a `list[float]` and is copied into a buffer on every
 call; `total_view` takes a `Buffer[float]` — a `memoryview` over an
 `array.array` — and reads the caller's memory in place. Same loop, same
-sum, one of them paying for 8,192 boxed floats per call. A buffer is
-borrowed unless the signature says otherwise, so the callee may not keep
-it (`E1612`) or write through it without `Mut[...]` (`E1613`).
+sum, about 10× apart on 8,192 elements, because one of them pays for 8,192
+boxed floats per call. A buffer is borrowed unless the signature says
+otherwise, so the callee may not keep it (`E1612`) or write through it
+without `Mut[...]` (`E1613`).
 
-## Reassociation is opt-in, and it shows
+## Reassociation is opt-in
 
 `dot_strict` and `dot_relaxed` are the same dot product. The strict one
 keeps CPython's accumulation order and matches it bit for bit; the
 `@ppy.fastmath` one lets LLVM vectorize the reduction and differs in the
-last bits — the program prints the gap. You choose per function, and the
+last bits — the program prints the gap. The choice is per function, and the
 default is the exact one.
 
-## `@ppy.jit` learns the arguments
+## `@ppy.jit` specializes on the values it sees
 
 ```python
 @ppy.jit(threshold=4, max_specializations=4)
@@ -63,42 +61,40 @@ ppy run buffers_and_jit.ppy
 **`python  buffers_and_jit.ppy`**
 
 ```text
-list[float] copied        118.966 us   
-Buffer[float] borrowed    168.604 us   0.71x, same sum: True
-dot, strict order         272.590 us   
-dot, @ppy.fastmath        273.668 us   1.00x, differs by 0.00e+00
-digest, generic           275.525 us   
-digest, @ppy.jit          289.774 us   0.95x, same: True
+list[float] copied         97.306 us   
+Buffer[float] borrowed    153.282 us   0.63x, same sum: True
+dot, strict order         244.091 us   
+dot, @ppy.fastmath        238.020 us   1.03x, differs by 0.00e+00
+digest, generic           239.351 us   
+digest, @ppy.jit          237.332 us   1.01x, same: True
 ```
 
 **`ppy     buffers_and_jit.ppy`**
 
 ```text
-list[float] copied        109.531 us   
-Buffer[float] borrowed    173.688 us   0.63x, same sum: True
-dot, strict order         272.337 us   
-dot, @ppy.fastmath        277.740 us   0.98x, differs by 0.00e+00
-digest, generic           290.856 us   
-digest, @ppy.jit          289.047 us   1.01x, same: True
+list[float] copied         92.352 us   
+Buffer[float] borrowed    146.138 us   0.63x, same sum: True
+dot, strict order         238.365 us   
+dot, @ppy.fastmath        236.017 us   1.01x, differs by 0.00e+00
+digest, generic           246.093 us   
+digest, @ppy.jit          245.886 us   1.00x, same: True
 ```
 
 **`ppy run buffers_and_jit.ppy`**
 
 ```text
-list[float] copied         13.007 us   
-Buffer[float] borrowed      4.525 us   2.87x, same sum: True
-dot, strict order           4.354 us   
-dot, @ppy.fastmath          1.294 us   3.36x, differs by 4.07e-10
-digest, generic            12.622 us   
-digest, @ppy.jit            8.050 us   1.57x, same: True
+list[float] copied         10.684 us   
+Buffer[float] borrowed      3.485 us   3.07x, same sum: True
+dot, strict order           3.541 us   
+dot, @ppy.fastmath          1.186 us   2.99x, differs by 4.07e-10
+digest, generic            10.894 us   
+digest, @ppy.jit            7.474 us   1.46x, same: True
 ```
 
 <!-- outputs:end -->
 
-## Read on
-
-- [Directives and markers](../../docs/guide/directives.md) — `Buffer[T]`, `Owned`/`Borrowed`/`Mut`, `@ppy.jit`, `@ppy.fastmath`.
-- [Algorithms](../15_algorithms/README.md) — buffers in eight kernels measured against C.
+Read on: [Directives and markers](../../docs/guide/directives.md) ·
+[Algorithms](../15_algorithms/README.md)
 
 `buffers_and_jit.ppy` is hand-written; there is no `.py` source and no
 conversion step.

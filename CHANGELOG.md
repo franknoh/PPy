@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.2.1 — unreleased
+
+- The lowering cache dropped a coroutine's future kind from its signature,
+  so the second `ppy run` of a program whose entry coroutine was served from
+  the cache bound it through the plain boundary and handed `aio.run` a bare
+  handle instead of a future (`TypeError` from asyncio). The cache carries
+  the kind now, its schema moved to 7 so no stale entry is served, and a test
+  holds the round trip. Found by recording the examples' outputs twice.
+- Every example README is rewritten in a plain voice with its detail kept,
+  and ends with the commands and what each one prints. A short output is
+  inline, a longer one is folded into a `<details>` block, a very long one is
+  a file under the folder's `outputs/` that the documentation site embeds;
+  each exists once. The six judge problems gained a small `input.txt` so
+  their commands run as written.
+
 ## 0.2.0 — 2026-09-08
 
 The release that turns the compiler into a platform: a typed, multi-dialect
