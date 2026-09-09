@@ -785,6 +785,30 @@ def test_missing_narrowing_is_reported(write, codes):
     assert "E1303" in codes(path)
 
 
+def test_a_typed_read_takes_a_count_for_a_buffer_and_nothing_otherwise(write, codes):
+    path = write(
+        "reads.ppy",
+        """
+        import ppy
+        from ppy import Buffer
+
+        def fine(n: int) -> int:
+            values = ppy.input[Buffer[int]](n)
+            return ppy.input[int]() + len(values)
+
+        def prompted() -> int:
+            return ppy.input[int]("n? ")
+
+        def uncounted() -> int:
+            return len(ppy.input[Buffer[int]]())
+
+        def miscounted() -> int:
+            return len(ppy.input[Buffer[int]]("3"))
+        """,
+    )
+    assert codes(path) == ["E1305", "E1305", "E1301"]
+
+
 def test_call_arity_and_argument_types_are_checked(write, codes):
     path = write(
         "arity.ppy",

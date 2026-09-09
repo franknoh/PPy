@@ -151,16 +151,22 @@ def test_input_needs_the_type_it_is_reading():
         ppy.input(int)
 
 
-def test_a_prompt_is_printed_before_the_read():
+def test_a_read_takes_no_prompt_and_a_buffer_read_takes_its_count():
+    """A prompt is a `print` before the read; the read itself reads."""
     output = _piped(
         "7\n",
         """
         import ppy
-        value = ppy.input[int]("n? ")
+        print("n? ", end="")
+        value = ppy.input[int]()
         print("|", value)
         """,
     )
     assert output == "n? | 7"
+    with pytest.raises(TypeError, match="takes no argument"):
+        ppy.input[int]("n? ")
+    with pytest.raises(TypeError, match="how many"):
+        ppy.input[ppy.Buffer[int]]()
 
 
 def test_a_buffer_is_zeroed_and_typed_by_its_element():

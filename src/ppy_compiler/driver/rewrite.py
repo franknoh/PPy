@@ -155,10 +155,22 @@ def _is_input_call(node: cst.BaseExpression) -> cst.Call | None:
     return None
 
 
-def _typed_read(spec: str, arguments: list[cst.Arg]) -> cst.BaseExpression:
-    """`ppy.input[spec](...)`, carrying the prompt the original had."""
-    prompt = "".join(cst.Module(body=()).code_for_node(a.value) for a in arguments)
-    return _expression(f"ppy.input[{spec}]({prompt})")
+def _wrapped_read(node: cst.Call) -> cst.Call | None:
+    """The `input(...)` inside `int(input(...))`, `float(...)`, or `str(...)`."""
+    if isinstance(node.func, cst.Name) and node.func.value in _READ_AS and len(node.args) == 1:
+        return _is_input_call(node.args[0].value)
+    return None
+
+
+def _prompt(arguments: list[cst.Arg]) -> str | None:
+    """The prompt `input(...)` was given, as source; None for none."""
+    if not arguments:
+        return None
+    return cst.Module(body=()).code_for_node(arguments[0].value)
+
+
+def _printed(prompt: str) -> str:
+    return f'print({prompt}, end="", flush=True)'
 
 
 class _TypedReads(cst.CSTTransformer):
@@ -167,17 +179,71 @@ class _TypedReads(cst.CSTTransformer):
     `int(input())` is what a submission writes and what it means is `read an
     integer`; saying so lets the value be read without a Python object per
     field. The originals are matched, not the rewritten children, so the
-    inner `input()` of `int(input())` is not rewritten twice.
+    inner `input()` of `int(input())` is not rewritten twice. A prompt is a
+    `print` before the statement that reads; where the read is not in a
+    plain statement -- a loop's test, a comprehension -- it is the
+    one-expression `print(...) or ppy.input[T]()`, which prints each time.
     """
 
+    def __init__(self) -> None:
+        super().__init__()
+        #: Prompts to print before the statement being rewritten.
+        self.prompts: list[str] = []
+        #: Whether a read here can hoist its prompt to a statement before.
+        self.hoisting: list[bool] = []
+        #: The `input()` inside an `int(input())`: the wrapper rewrites both.
+        self.claimed: set[int] = set()
+
+    def _read(self, spec: str, arguments: list[cst.Arg]) -> cst.BaseExpression:
+        prompt = _prompt(arguments)
+        if prompt is None:
+            return _expression(f"ppy.input[{spec}]()")
+        if self.hoisting and self.hoisting[-1]:
+            self.prompts.append(prompt)
+            return _expression(f"ppy.input[{spec}]()")
+        return _expression(f"({_printed(prompt)} or ppy.input[{spec}]())")
+
+    def visit_SimpleStatementLine(self, node: cst.SimpleStatementLine) -> bool:
+        self.hoisting.append(True)
+        return True
+
+    def leave_SimpleStatementLine(
+        self, original: cst.SimpleStatementLine, updated: cst.SimpleStatementLine
+    ) -> cst.BaseStatement | cst.FlattenSentinel[cst.BaseStatement]:
+        self.hoisting.pop()
+        if not self.prompts:
+            return updated
+        printed = [cst.parse_statement(_printed(prompt)) for prompt in self.prompts]
+        self.prompts = []
+        return cst.FlattenSentinel([*printed, updated])
+
+    def _nested(self, _node: cst.CSTNode) -> bool:
+        # A lambda or a comprehension runs later, or many times: no hoisting out of it.
+        self.hoisting.append(False)
+        return True
+
+    def _unnested(self, _original: cst.CSTNode, updated: cst.CSTNode) -> cst.CSTNode:
+        self.hoisting.pop()
+        return updated
+
+    visit_Lambda = visit_ListComp = visit_SetComp = visit_DictComp = visit_GeneratorExp = _nested
+    leave_Lambda = leave_ListComp = leave_SetComp = leave_DictComp = leave_GeneratorExp = _unnested
+
+    def visit_Call(self, node: cst.Call) -> bool:
+        inner = _wrapped_read(node)
+        if inner is not None:
+            self.claimed.add(id(inner))
+        return True
+
     def leave_Call(self, original: cst.Call, updated: cst.Call) -> cst.BaseExpression:
-        wrapper = isinstance(original.func, cst.Name) and original.func.value in _READ_AS
-        if wrapper and len(original.args) == 1:
-            inner = _is_input_call(original.args[0].value)
-            if inner is not None:
-                return _typed_read(_READ_AS[original.func.value], list(inner.args))
+        if id(original) in self.claimed:
+            return updated
+        inner = _wrapped_read(original)
+        if inner is not None:
+            assert isinstance(original.func, cst.Name)
+            return self._read(_READ_AS[original.func.value], list(inner.args))
         if _is_input_call(original) is not None:
-            return _typed_read("str", list(original.args))
+            return self._read("str", list(original.args))
         return updated
 
     def leave_For(self, original: cst.For, updated: cst.For) -> cst.BaseStatement:
@@ -234,7 +300,9 @@ def _filling_loop(node: cst.For) -> cst.BaseStatement | None:
         return None
     if read.func.value != "int" or len(read.args) != 1:
         return None
-    if _is_input_call(read.args[0].value) is None:
+    inner = _is_input_call(read.args[0].value)
+    if inner is None or inner.args:
+        # A prompt per element is a loop that prints; one bulk read would drop it.
         return None
 
     code = cst.Module(body=())

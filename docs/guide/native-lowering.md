@@ -11,7 +11,7 @@ from ppy import Buffer
 
 n = ppy.input[int]()  # one integer
 a, b = ppy.input[tuple[int, int]]()  # two fields, line breaks irrelevant
-word = ppy.input[str]("name? ")  # a token, after printing the prompt
+word = ppy.input[str]()  # a token
 values = ppy.input[Buffer[int]](n)  # n integers, straight into a buffer
 ```
 
@@ -19,9 +19,10 @@ Whitespace and newlines are the same thing to it, as they are to `scanf`.
 Reading goes into memory rather than through a Python object per field, so
 the buffer form is what takes a million numbers quickly — faster than
 `sys.stdin.read().split()` and faster than C's `scanf`, measured in
-[Algorithms](../howto/15_algorithms.md). The call takes a prompt for a
-scalar, printed before reading the way the builtin `input` does, or how
-many values to read for a buffer. `ppy.read_ints` and `ppy.read_token` are
+[Algorithms](../howto/15_algorithms.md). A buffer read takes how many
+values to read; every other read takes nothing (`E1305` otherwise). A
+prompt is a `print` before the read, the way any other output is written,
+so reading and printing stay two things. `ppy.read_ints` and `ppy.read_token` are
 the lower-level forms that fill a buffer you already have, and
 `ppy.buffer[T](n)` makes one: `n` elements of `T`, all zero. It is
 `array.array` under CPython and a native allocation in a standalone binary,
