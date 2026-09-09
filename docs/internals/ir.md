@@ -509,10 +509,20 @@ power-of-two divisor), and block arguments to phis.
 `backend/c/emit` reads the same IR and writes C11 or C++17: the same
 ABI, `python` overflow through checking helpers (the compiler's
 `__builtin_*_overflow` where it has them, plain C otherwise), `floor`
-rounding as the sign-corrected sequence, blocks as labels and block
-arguments as parallel assignments before a `goto`. `ppy emit c` and
-`ppy emit cpp` print it; `tests/test_c_backend.py` compiles it and calls
-it on the LLVM road's inputs.
+rounding as the sign-corrected sequence or, by a positive constant, as
+`(a % b + b) % b`. Control flow is rebuilt from the graph: the dominator
+tree and the loops give `while`, `if`/`else`, `break`, `continue`, and
+`return`, a block argument is a variable assigned on each edge into its
+block, and a stack slot that is only loaded and stored is a variable named
+after it. A value read once, in its own block, is written where it is read,
+with the parentheses C's precedence needs and no others; a parameter keeps
+its Python name. A graph the reconstruction cannot express -- a loop with
+two exits, a block reached from two places that dominate neither -- falls
+back, for that function alone, to blocks as labels and branches as
+`goto`s, so the text is always correct and usually plain. `ppy emit c` and
+`ppy emit cpp` print it (`--format` runs it through clang-format);
+`tests/test_c_backend.py` compiles it and calls it on the LLVM road's
+inputs, and holds the labels writer to the same answers.
 
 This is the LLVM backend's one road. 0.2.0 began with the direct
 AST-to-LLVM lowering beside it and a differential run comparing the two on

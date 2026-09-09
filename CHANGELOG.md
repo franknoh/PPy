@@ -4,6 +4,21 @@
 
 Work toward the next release, on `dev`; alphas of it are tagged `v0.3.0aN`.
 
+- The C backend writes structured code. Loops are `while`, branches are
+  `if`/`else` with `break`, `continue`, and `return`, rebuilt from the IR's
+  dominator tree and loops; a stack slot that is only loaded and stored is a
+  variable named after it, a parameter keeps its Python name and is the
+  variable its slot was, and a value read once is written where it is read
+  with the parentheses C's precedence needs and no others. Python's floor
+  division by a positive constant is `(a % b + b) % b`, a failed guard is
+  `if (b == 0) return 1;`, a checked addition into a variable writes the
+  variable itself. A graph the reconstruction cannot express falls back, for
+  that function alone, to the labels-and-`goto` writer, so every unit is
+  still correct; the tests hold both writers to the LLVM road's answers.
+  CUDA and HIP get the same treatment, with C++'s `int64_t(x)` casts.
+  `ppy emit --format` runs `c`, `cpp`, `cuda`, `hip`, and `header` output
+  through clang-format, with the project's `.clang-format` where it has one.
+
 ## 0.2.1 — unreleased
 
 - The lowering cache dropped a coroutine's future kind from its signature,

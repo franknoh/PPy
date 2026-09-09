@@ -428,8 +428,7 @@ def emit_concurrency(fe, op: Operation) -> None:  # type: ignore[no-untyped-def]
         return
     if name == "join":
         handle = fe.value(op.operands[0])
-        slot = fe.fresh("joined")
-        fe.declarations.append(f"    void *{slot};")
+        slot = fe.local("void *", "joined")
         fe.fail_unless(f"pthread_join((pthread_t){handle}, &{slot}) == 0", "join.ok")
         fe.define(op.result, owner.cast(f"(intptr_t){slot}", "int64_t"))
         return
@@ -486,17 +485,14 @@ def _spawn(fe, op: Operation) -> None:  # type: ignore[no-untyped-def]
             "    return (void *)(intptr_t)status;\n"
             "}\n"
         )
-    raw = fe.fresh("ctx")
-    fe.declarations.append(f"    {context} *{raw};")
-    fe.body.append(f"    {raw} = ({context} *)malloc(sizeof({context}));")
+    raw = fe.local(f"{context} *", "ctx", f"({context} *)malloc(sizeof({context}))")
     fe.fail_unless(f"{raw} != NULL", "spawn.alloc")
     position = 0
     for operand in op.operands:
         for atom in fe.flatten(operand):
             fe.body.append(f"    {raw}->a{position} = {atom};")
             position += 1
-    handle = fe.fresh("thread")
-    fe.declarations.append(f"    pthread_t {handle};")
+    handle = fe.local("pthread_t", "thread")
     fe.fail_unless(f"pthread_create(&{handle}, NULL, {trampoline}, {raw}) == 0", "spawn.ok")
     fe.define(op.result, owner.cast(handle, "int64_t"))
 
@@ -549,18 +545,21 @@ def emit_parallel(fe, op: Operation) -> None:  # type: ignore[no-untyped-def]
         result = fe.define(op.results[0], init)
         fe.fail_unless(f"{symbol}({prefix}{begin}, {end}, {result}, &{result}) == 0", "reduce.ok")
         return
-    failed = fe.fresh("failed")
-    fe.declarations.append(f"    int64_t {failed} = 0;")
+    failed = fe.local("int64_t", "failed", "0")
+    # The team's locals, named clear of the function's own.
+    nt, me, n, size, b, e = (fe.fresh(hint) for hint in ("nt", "me", "n", "size", "b", "e"))
+    split = (
+        f"        int64_t {nt} = omp_get_num_threads(), {me} = omp_get_thread_num();\n"
+        f"        int64_t {n} = {end} - {begin};\n"
+        f"        int64_t {size} = {n} > 0 ? ({n} + {nt} - 1) / {nt} : 0;\n"
+        f"        int64_t {b} = {begin} + {me} * {size};\n"
+        f"        int64_t {e} = {b} + {size} < {end} ? {b} + {size} : {end};\n"
+    )
     if kind == "for":
+        result = fe.fresh("result")
         fe.body.append(
-            "    #pragma omp parallel\n    {\n"
-            f"        int64_t nt = omp_get_num_threads(), me = omp_get_thread_num();\n"
-            f"        int64_t n = {end} - {begin};\n"
-            "        int64_t size = n > 0 ? (n + nt - 1) / nt : 0;\n"
-            f"        int64_t b = {begin} + me * size;\n"
-            f"        int64_t e = b + size < {end} ? b + size : {end};\n"
-            "        int64_t out = 0;\n"
-            f"        if (b < e && {symbol}({prefix}b, e, &out) != 0) {{\n"
+            "    #pragma omp parallel\n    {\n" + split + f"        int64_t {result} = 0;\n"
+            f"        if ({b} < {e} && {symbol}({prefix}{b}, {e}, &{result}) != 0) {{\n"
             f"            __atomic_store_n(&{failed}, 1, __ATOMIC_RELAXED);\n"
             "        }\n    }"
         )
@@ -569,20 +568,17 @@ def emit_parallel(fe, op: Operation) -> None:  # type: ignore[no-untyped-def]
     if kind == "map":
         out = fe.value(op.operands[-1])
         element = owner.c_type(callee.results[0])
+        i, value = fe.fresh("i"), fe.fresh("value")
         fe.body.append(
             "    #pragma omp parallel\n    {\n"
-            f"        int64_t nt = omp_get_num_threads(), me = omp_get_thread_num();\n"
-            f"        int64_t n = {end} - {begin};\n"
-            "        int64_t size = n > 0 ? (n + nt - 1) / nt : 0;\n"
-            f"        int64_t b = {begin} + me * size;\n"
-            f"        int64_t e = b + size < {end} ? b + size : {end};\n"
-            "        for (int64_t i = b; i < e; i++) {\n"
-            f"            {element} value;\n"
-            f"            if ({symbol}({prefix}i, &value) != 0) {{\n"
+            + split
+            + f"        for (int64_t {i} = {b}; {i} < {e}; {i}++) {{\n"
+            f"            {element} {value};\n"
+            f"            if ({symbol}({prefix}{i}, &{value}) != 0) {{\n"
             f"                __atomic_store_n(&{failed}, 1, __ATOMIC_RELAXED);\n"
             "                break;\n"
             "            }\n"
-            f"            {out}[i] = value;\n"
+            f"            {out}[{i}] = {value};\n"
             "        }\n    }"
         )
         fe.fail_unless(f"{failed} == 0", "parallel.ok")
@@ -592,32 +588,24 @@ def emit_parallel(fe, op: Operation) -> None:  # type: ignore[no-untyped-def]
     element = owner.c_type(t)
     kind_name = str(op.attributes["op"])
     start = parallel_identity(kind_name, t, init)
-    partials = fe.fresh("partials")
-    count = fe.fresh("count")
-    fe.declarations.append(f"    {element} *{partials} = NULL;")
-    fe.declarations.append(f"    int64_t {count} = 0;")
-    fe.body.append(f"    {count} = omp_get_max_threads();")
-    fe.body.append(f"    {partials} = ({element} *)malloc(sizeof({element}) * (size_t){count});")
+    count = fe.local("int64_t", "count", "omp_get_max_threads()")
+    partials = fe.local(
+        f"{element} *", "partials", f"({element} *)malloc(sizeof({element}) * (size_t){count})"
+    )
     fe.fail_unless(f"{partials} != NULL", "reduce.alloc")
+    part = fe.fresh("part")
     fe.body.append(
-        "    #pragma omp parallel\n    {\n"
-        f"        int64_t nt = omp_get_num_threads(), me = omp_get_thread_num();\n"
-        f"        int64_t n = {end} - {begin};\n"
-        "        int64_t size = n > 0 ? (n + nt - 1) / nt : 0;\n"
-        f"        int64_t b = {begin} + me * size;\n"
-        f"        int64_t e = b + size < {end} ? b + size : {end};\n"
-        f"        {element} part = {start};\n"
-        f"        if (b < e && {symbol}({prefix}b, e, {start}, &part) != 0) {{\n"
+        "    #pragma omp parallel\n    {\n" + split + f"        {element} {part} = {start};\n"
+        f"        if ({b} < {e} && {symbol}({prefix}{b}, {e}, {start}, &{part}) != 0) {{\n"
         f"            __atomic_store_n(&{failed}, 1, __ATOMIC_RELAXED);\n"
         "        }\n"
-        f"        {partials}[me] = part;\n    }}"
+        f"        {partials}[{me}] = {part};\n    }}"
     )
     accumulator = fe.define(op.results[0], init if kind_name in {"min", "max"} else start)
     loop = fe.fresh("j")
-    fe.declarations.append(f"    int64_t {loop};")
     combine = _combine_c(kind_name, t, accumulator, f"{partials}[{loop}]", owner)
     fe.body.append(
-        f"    for ({loop} = 0; {loop} < {count}; {loop}++) {{\n"
+        f"    for (int64_t {loop} = 0; {loop} < {count}; {loop}++) {{\n"
         f"        {accumulator} = {combine};\n    }}"
     )
     if kind_name in {"add", "mul"}:

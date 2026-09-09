@@ -91,19 +91,19 @@ static inline int ppy_ovf_add_i64(int64_t a, int64_t b, int64_t *out) {
 #endif
 }
 
-int32_t ppy_ranges_squares(int64_t *a0, int64_t a1, int64_t *out0);
-int32_t ppy_ranges_dot(double *a0, int64_t a1, double *a2, int64_t a3, double *out0);
-int32_t ppy_ranges_dot_relaxed(double *a0, int64_t a1, double *a2, int64_t a3, double *out0);
-int32_t ppy_ranges_count_odd(int64_t *a0, int64_t a1, int64_t a2, int64_t *out0);
-int32_t ppy_ranges_fill(double *a0, int64_t a1, double a2, double *out0);
-int32_t ranges_squares__par1(int64_t *a0, int64_t a1, int64_t a2, int64_t *out0);
-int32_t ranges_dot__par2(double *a0, int64_t a1, double *a2, int64_t a3, int64_t a4, int64_t a5, double a6, double *out0);
-int32_t ranges_dot_relaxed__par3(double *a0, int64_t a1, double *a2, int64_t a3, int64_t a4, int64_t a5, double a6, double *out0);
-int32_t ranges_count_odd__par4(int64_t a0, int64_t *a1, int64_t a2, int64_t a3, int64_t a4, int64_t a5, int64_t *out0);
-int32_t ranges_fill__par5(double a0, double *a1, int64_t a2, int64_t a3, int64_t *out0);
-int32_t ranges_fill__par6(double *a0, int64_t a1, int64_t a2, double a3, double *out0);
-int32_t ranges_dot_relaxed__par3__task(double *a0, int64_t a1, double *a2, int64_t a3, int64_t a4, int64_t a5, double a6, double *a7, int64_t *out0);
-int32_t ranges_count_odd__par4__task(int64_t a0, int64_t *a1, int64_t a2, int64_t a3, int64_t a4, int64_t a5, int64_t *a6, int64_t *out0);
+int32_t ppy_ranges_squares(int64_t *out, int64_t n, int64_t *out_2);
+int32_t ppy_ranges_dot(double *a, int64_t a_len, double *b, int64_t b_len, double *out);
+int32_t ppy_ranges_dot_relaxed(double *a, int64_t a_len, double *b, int64_t b_len, double *out);
+int32_t ppy_ranges_count_odd(int64_t *xs, int64_t xs_len, int64_t scale, int64_t *out);
+int32_t ppy_ranges_fill(double *out, int64_t n, double base, double *out_2);
+int32_t ranges_squares__par1(int64_t *out, int64_t __ppy_begin_, int64_t __ppy_end_, int64_t *out_2);
+int32_t ranges_dot__par2(double *a, int64_t a_len, double *b, int64_t b_len, int64_t __ppy_begin_, int64_t __ppy_end_, double total, double *out);
+int32_t ranges_dot_relaxed__par3(double *a, int64_t a_len, double *b, int64_t b_len, int64_t __ppy_begin_, int64_t __ppy_end_, double total, double *out);
+int32_t ranges_count_odd__par4(int64_t scale, int64_t *xs, int64_t xs_len, int64_t __ppy_begin_, int64_t __ppy_end_, int64_t hits, int64_t *out);
+int32_t ranges_fill__par5(double base, double *out, int64_t __ppy_begin_, int64_t __ppy_end_, int64_t *out_2);
+int32_t ranges_fill__par6(double *out, int64_t __ppy_begin_, int64_t __ppy_end_, double acc, double *out_2);
+int32_t ranges_dot_relaxed__par3__task(double *a, int64_t a_len, double *b, int64_t b_len, int64_t begin, int64_t end, double start, double *out, int64_t *out_2);
+int32_t ranges_count_odd__par4__task(int64_t scale, int64_t *xs, int64_t xs_len, int64_t begin, int64_t end, int64_t start, int64_t *out, int64_t *out_2);
 
 static void *ppy_thread_ranges_squares__par1(void *raw) {
     ppy_ctx_ranges_squares__par1 *c = (ppy_ctx_ranges_squares__par1 *)raw;
@@ -137,2998 +137,1131 @@ static void *ppy_thread_ranges_fill__par5(void *raw) {
     return (void *)(intptr_t)status;
 }
 
-int32_t ppy_ranges_squares(int64_t *a0, int64_t a1, int64_t *out0) {
-    int64_t *v1_out_addr[1];
-    int64_t v2_n_addr[1];
-    int64_t v3_v;
-    int64_t v4_n_entry;
-    int64_t v5_v;
-    int64_t *v6_v;
-    int64_t v7_v;
-    bool v8_v;
-    int64_t *v9_v;
-    int64_t v10_v;
-    int64_t v11_v;
-    int64_t v12_v;
-    int64_t *v13_v;
-    int64_t v14_v;
-    int64_t v15_res;
-    int64_t v16_v;
-    int64_t v17_v;
-    int64_t v18_v;
-    int64_t v19_v;
-    int64_t v20_v;
-    bool v21_v;
-    int64_t v22_v;
-    ppy_ctx_ranges_squares__par1 *v23_ctx;
-    pthread_t v24_thread;
-    int64_t v25_v;
-    int64_t v26_v;
-    bool v27_v;
-    int64_t v28_v;
-    ppy_ctx_ranges_squares__par1 *v29_ctx;
-    pthread_t v30_thread;
-    int64_t v31_v;
-    int64_t v32_v;
-    int64_t v33_v;
-    int64_t v34_v;
-    bool v35_v;
-    int64_t v36_v;
-    ppy_ctx_ranges_squares__par1 *v37_ctx;
-    pthread_t v38_thread;
-    int64_t v39_v;
-    int64_t v40_v;
-    int64_t v41_v;
-    int64_t v42_v;
-    bool v43_v;
-    int64_t v44_v;
-    ppy_ctx_ranges_squares__par1 *v45_ctx;
-    pthread_t v46_thread;
-    int64_t v47_v;
-    int64_t v48_v;
-    int64_t v49_v;
-    int64_t v50_v;
-    bool v51_v;
-    int64_t v52_v;
-    ppy_ctx_ranges_squares__par1 *v53_ctx;
-    pthread_t v54_thread;
-    int64_t v55_v;
-    int64_t v56_v;
-    int64_t v57_v;
-    int64_t v58_v;
-    bool v59_v;
-    int64_t v60_v;
-    ppy_ctx_ranges_squares__par1 *v61_ctx;
-    pthread_t v62_thread;
-    int64_t v63_v;
-    int64_t v64_v;
-    int64_t v65_v;
-    int64_t v66_v;
-    bool v67_v;
-    int64_t v68_v;
-    ppy_ctx_ranges_squares__par1 *v69_ctx;
-    pthread_t v70_thread;
-    int64_t v71_v;
-    int64_t v72_v;
-    int64_t v73_v;
-    int64_t v74_v;
-    bool v75_v;
-    int64_t v76_v;
-    ppy_ctx_ranges_squares__par1 *v77_ctx;
-    pthread_t v78_thread;
-    int64_t v79_v;
-    int64_t v80_v;
-    int64_t v81_v;
-    int64_t v82_v;
-    bool v83_v;
-    int64_t v84_v;
-    ppy_ctx_ranges_squares__par1 *v85_ctx;
-    pthread_t v86_thread;
-    int64_t v87_v;
-    int64_t v88_v;
-    int64_t v89_v;
-    int64_t v90_v;
-    bool v91_v;
-    int64_t v92_v;
-    ppy_ctx_ranges_squares__par1 *v93_ctx;
-    pthread_t v94_thread;
-    int64_t v95_v;
-    int64_t v96_v;
-    int64_t v97_v;
-    int64_t v98_v;
-    bool v99_v;
-    int64_t v100_v;
-    ppy_ctx_ranges_squares__par1 *v101_ctx;
-    pthread_t v102_thread;
-    int64_t v103_v;
-    int64_t v104_v;
-    int64_t v105_v;
-    int64_t v106_v;
-    bool v107_v;
-    int64_t v108_v;
-    ppy_ctx_ranges_squares__par1 *v109_ctx;
-    pthread_t v110_thread;
-    int64_t v111_v;
-    int64_t v112_v;
-    int64_t v113_v;
-    int64_t v114_v;
-    bool v115_v;
-    int64_t v116_v;
-    ppy_ctx_ranges_squares__par1 *v117_ctx;
-    pthread_t v118_thread;
-    int64_t v119_v;
-    int64_t v120_v;
-    int64_t v121_v;
-    int64_t v122_v;
-    bool v123_v;
-    int64_t v124_v;
-    ppy_ctx_ranges_squares__par1 *v125_ctx;
-    pthread_t v126_thread;
-    int64_t v127_v;
-    int64_t v128_v;
-    int64_t v129_v;
-    int64_t v130_v;
-    bool v131_v;
-    int64_t v132_v;
-    ppy_ctx_ranges_squares__par1 *v133_ctx;
-    pthread_t v134_thread;
-    int64_t v135_v;
-    int64_t v136_v;
-    int64_t v137_v;
-    bool v138_v;
-    int64_t v139_v;
-    int64_t v140_res;
-    int64_t v141_v;
-    int64_t v142_v;
-    bool v143_v;
-    void *v144_joined;
-    int64_t v145_v;
-    int64_t v146_v;
-    bool v147_v;
-    bool v148_v;
-    void *v149_joined;
-    int64_t v150_v;
-    int64_t v151_v;
-    bool v152_v;
-    bool v153_v;
-    void *v154_joined;
-    int64_t v155_v;
-    int64_t v156_v;
-    bool v157_v;
-    bool v158_v;
-    void *v159_joined;
-    int64_t v160_v;
-    int64_t v161_v;
-    bool v162_v;
-    bool v163_v;
-    void *v164_joined;
-    int64_t v165_v;
-    int64_t v166_v;
-    bool v167_v;
-    bool v168_v;
-    void *v169_joined;
-    int64_t v170_v;
-    int64_t v171_v;
-    bool v172_v;
-    bool v173_v;
-    void *v174_joined;
-    int64_t v175_v;
-    int64_t v176_v;
-    bool v177_v;
-    bool v178_v;
-    void *v179_joined;
-    int64_t v180_v;
-    int64_t v181_v;
-    bool v182_v;
-    bool v183_v;
-    void *v184_joined;
-    int64_t v185_v;
-    int64_t v186_v;
-    bool v187_v;
-    bool v188_v;
-    void *v189_joined;
-    int64_t v190_v;
-    int64_t v191_v;
-    bool v192_v;
-    bool v193_v;
-    void *v194_joined;
-    int64_t v195_v;
-    int64_t v196_v;
-    bool v197_v;
-    bool v198_v;
-    void *v199_joined;
-    int64_t v200_v;
-    int64_t v201_v;
-    bool v202_v;
-    bool v203_v;
-    void *v204_joined;
-    int64_t v205_v;
-    int64_t v206_v;
-    bool v207_v;
-    bool v208_v;
-    void *v209_joined;
-    int64_t v210_v;
-    int64_t v211_v;
-    bool v212_v;
-    bool v213_v;
-    void *v214_joined;
-    int64_t v215_v;
-    int64_t v216_v;
-    bool v217_v;
-    bool v218_v;
-    bool v219_v;
-    bool v220_v;
-    *v1_out_addr = a0;
-    *v2_n_addr = a1;
-    v3_v = *v2_n_addr;
-    v4_n_entry = *v2_n_addr;
-    (void)v4_n_entry;
-    v5_v = INT64_C(0);
-    v6_v = *v1_out_addr;
-    v7_v = INT64_C(4096);
-    v8_v = v3_v < v7_v;
-    if (v8_v) {
-        goto L2_par_serial2;
+int32_t ppy_ranges_squares(int64_t *out, int64_t n, int64_t *out_2) {
+    if (n < 4096) {
+        int64_t res;
+        if (ranges_squares__par1(out, 0, n, &res) != 0) return 1; /* call.ok */
     } else {
-        goto L3_par_spawn3;
+        int64_t t1 = (int64_t)((uint64_t)n + 15u) / 16;
+        ppy_ctx_ranges_squares__par1 *ctx = (ppy_ctx_ranges_squares__par1 *)malloc(sizeof(ppy_ctx_ranges_squares__par1));
+        if (ctx == NULL) return 1; /* spawn.alloc */
+        ctx->a0 = out;
+        ctx->a1 = 0;
+        ctx->a2 = t1 < n ? t1 : n;
+        pthread_t thread;
+        if (pthread_create(&thread, NULL, ppy_thread_ranges_squares__par1, ctx) != 0) return 1; /* spawn.ok */
+        int64_t t2 = (int64_t)thread;
+        int64_t t3 = (int64_t)((uint64_t)t1 + (uint64_t)t1);
+        ppy_ctx_ranges_squares__par1 *ctx_2 = (ppy_ctx_ranges_squares__par1 *)malloc(sizeof(ppy_ctx_ranges_squares__par1));
+        if (ctx_2 == NULL) return 1; /* spawn.alloc */
+        ctx_2->a0 = out;
+        ctx_2->a1 = t1;
+        ctx_2->a2 = t3 < n ? t3 : n;
+        pthread_t thread_2;
+        if (pthread_create(&thread_2, NULL, ppy_thread_ranges_squares__par1, ctx_2) != 0) return 1; /* spawn.ok */
+        int64_t t4 = (int64_t)thread_2;
+        int64_t t5 = (int64_t)(2u * (uint64_t)t1);
+        int64_t t6 = (int64_t)((uint64_t)t5 + (uint64_t)t1);
+        ppy_ctx_ranges_squares__par1 *ctx_3 = (ppy_ctx_ranges_squares__par1 *)malloc(sizeof(ppy_ctx_ranges_squares__par1));
+        if (ctx_3 == NULL) return 1; /* spawn.alloc */
+        ctx_3->a0 = out;
+        ctx_3->a1 = t5;
+        ctx_3->a2 = t6 < n ? t6 : n;
+        pthread_t thread_3;
+        if (pthread_create(&thread_3, NULL, ppy_thread_ranges_squares__par1, ctx_3) != 0) return 1; /* spawn.ok */
+        int64_t t7 = (int64_t)thread_3;
+        int64_t t8 = (int64_t)(3u * (uint64_t)t1);
+        int64_t t9 = (int64_t)((uint64_t)t8 + (uint64_t)t1);
+        ppy_ctx_ranges_squares__par1 *ctx_4 = (ppy_ctx_ranges_squares__par1 *)malloc(sizeof(ppy_ctx_ranges_squares__par1));
+        if (ctx_4 == NULL) return 1; /* spawn.alloc */
+        ctx_4->a0 = out;
+        ctx_4->a1 = t8;
+        ctx_4->a2 = t9 < n ? t9 : n;
+        pthread_t thread_4;
+        if (pthread_create(&thread_4, NULL, ppy_thread_ranges_squares__par1, ctx_4) != 0) return 1; /* spawn.ok */
+        int64_t t10 = (int64_t)thread_4;
+        int64_t t11 = (int64_t)(4u * (uint64_t)t1);
+        int64_t t12 = (int64_t)((uint64_t)t11 + (uint64_t)t1);
+        ppy_ctx_ranges_squares__par1 *ctx_5 = (ppy_ctx_ranges_squares__par1 *)malloc(sizeof(ppy_ctx_ranges_squares__par1));
+        if (ctx_5 == NULL) return 1; /* spawn.alloc */
+        ctx_5->a0 = out;
+        ctx_5->a1 = t11;
+        ctx_5->a2 = t12 < n ? t12 : n;
+        pthread_t thread_5;
+        if (pthread_create(&thread_5, NULL, ppy_thread_ranges_squares__par1, ctx_5) != 0) return 1; /* spawn.ok */
+        int64_t t13 = (int64_t)thread_5;
+        int64_t t14 = (int64_t)(5u * (uint64_t)t1);
+        int64_t t15 = (int64_t)((uint64_t)t14 + (uint64_t)t1);
+        ppy_ctx_ranges_squares__par1 *ctx_6 = (ppy_ctx_ranges_squares__par1 *)malloc(sizeof(ppy_ctx_ranges_squares__par1));
+        if (ctx_6 == NULL) return 1; /* spawn.alloc */
+        ctx_6->a0 = out;
+        ctx_6->a1 = t14;
+        ctx_6->a2 = t15 < n ? t15 : n;
+        pthread_t thread_6;
+        if (pthread_create(&thread_6, NULL, ppy_thread_ranges_squares__par1, ctx_6) != 0) return 1; /* spawn.ok */
+        int64_t t16 = (int64_t)thread_6;
+        int64_t t17 = (int64_t)(6u * (uint64_t)t1);
+        int64_t t18 = (int64_t)((uint64_t)t17 + (uint64_t)t1);
+        ppy_ctx_ranges_squares__par1 *ctx_7 = (ppy_ctx_ranges_squares__par1 *)malloc(sizeof(ppy_ctx_ranges_squares__par1));
+        if (ctx_7 == NULL) return 1; /* spawn.alloc */
+        ctx_7->a0 = out;
+        ctx_7->a1 = t17;
+        ctx_7->a2 = t18 < n ? t18 : n;
+        pthread_t thread_7;
+        if (pthread_create(&thread_7, NULL, ppy_thread_ranges_squares__par1, ctx_7) != 0) return 1; /* spawn.ok */
+        int64_t t19 = (int64_t)thread_7;
+        int64_t t20 = (int64_t)(7u * (uint64_t)t1);
+        int64_t t21 = (int64_t)((uint64_t)t20 + (uint64_t)t1);
+        ppy_ctx_ranges_squares__par1 *ctx_8 = (ppy_ctx_ranges_squares__par1 *)malloc(sizeof(ppy_ctx_ranges_squares__par1));
+        if (ctx_8 == NULL) return 1; /* spawn.alloc */
+        ctx_8->a0 = out;
+        ctx_8->a1 = t20;
+        ctx_8->a2 = t21 < n ? t21 : n;
+        pthread_t thread_8;
+        if (pthread_create(&thread_8, NULL, ppy_thread_ranges_squares__par1, ctx_8) != 0) return 1; /* spawn.ok */
+        int64_t t22 = (int64_t)thread_8;
+        int64_t t23 = (int64_t)(8u * (uint64_t)t1);
+        int64_t t24 = (int64_t)((uint64_t)t23 + (uint64_t)t1);
+        ppy_ctx_ranges_squares__par1 *ctx_9 = (ppy_ctx_ranges_squares__par1 *)malloc(sizeof(ppy_ctx_ranges_squares__par1));
+        if (ctx_9 == NULL) return 1; /* spawn.alloc */
+        ctx_9->a0 = out;
+        ctx_9->a1 = t23;
+        ctx_9->a2 = t24 < n ? t24 : n;
+        pthread_t thread_9;
+        if (pthread_create(&thread_9, NULL, ppy_thread_ranges_squares__par1, ctx_9) != 0) return 1; /* spawn.ok */
+        int64_t t25 = (int64_t)thread_9;
+        int64_t t26 = (int64_t)(9u * (uint64_t)t1);
+        int64_t t27 = (int64_t)((uint64_t)t26 + (uint64_t)t1);
+        ppy_ctx_ranges_squares__par1 *ctx_10 = (ppy_ctx_ranges_squares__par1 *)malloc(sizeof(ppy_ctx_ranges_squares__par1));
+        if (ctx_10 == NULL) return 1; /* spawn.alloc */
+        ctx_10->a0 = out;
+        ctx_10->a1 = t26;
+        ctx_10->a2 = t27 < n ? t27 : n;
+        pthread_t thread_10;
+        if (pthread_create(&thread_10, NULL, ppy_thread_ranges_squares__par1, ctx_10) != 0) return 1; /* spawn.ok */
+        int64_t t28 = (int64_t)thread_10;
+        int64_t t29 = (int64_t)(10u * (uint64_t)t1);
+        int64_t t30 = (int64_t)((uint64_t)t29 + (uint64_t)t1);
+        ppy_ctx_ranges_squares__par1 *ctx_11 = (ppy_ctx_ranges_squares__par1 *)malloc(sizeof(ppy_ctx_ranges_squares__par1));
+        if (ctx_11 == NULL) return 1; /* spawn.alloc */
+        ctx_11->a0 = out;
+        ctx_11->a1 = t29;
+        ctx_11->a2 = t30 < n ? t30 : n;
+        pthread_t thread_11;
+        if (pthread_create(&thread_11, NULL, ppy_thread_ranges_squares__par1, ctx_11) != 0) return 1; /* spawn.ok */
+        int64_t t31 = (int64_t)thread_11;
+        int64_t t32 = (int64_t)(11u * (uint64_t)t1);
+        int64_t t33 = (int64_t)((uint64_t)t32 + (uint64_t)t1);
+        ppy_ctx_ranges_squares__par1 *ctx_12 = (ppy_ctx_ranges_squares__par1 *)malloc(sizeof(ppy_ctx_ranges_squares__par1));
+        if (ctx_12 == NULL) return 1; /* spawn.alloc */
+        ctx_12->a0 = out;
+        ctx_12->a1 = t32;
+        ctx_12->a2 = t33 < n ? t33 : n;
+        pthread_t thread_12;
+        if (pthread_create(&thread_12, NULL, ppy_thread_ranges_squares__par1, ctx_12) != 0) return 1; /* spawn.ok */
+        int64_t t34 = (int64_t)thread_12;
+        int64_t t35 = (int64_t)(12u * (uint64_t)t1);
+        int64_t t36 = (int64_t)((uint64_t)t35 + (uint64_t)t1);
+        ppy_ctx_ranges_squares__par1 *ctx_13 = (ppy_ctx_ranges_squares__par1 *)malloc(sizeof(ppy_ctx_ranges_squares__par1));
+        if (ctx_13 == NULL) return 1; /* spawn.alloc */
+        ctx_13->a0 = out;
+        ctx_13->a1 = t35;
+        ctx_13->a2 = t36 < n ? t36 : n;
+        pthread_t thread_13;
+        if (pthread_create(&thread_13, NULL, ppy_thread_ranges_squares__par1, ctx_13) != 0) return 1; /* spawn.ok */
+        int64_t t37 = (int64_t)thread_13;
+        int64_t t38 = (int64_t)(13u * (uint64_t)t1);
+        int64_t t39 = (int64_t)((uint64_t)t38 + (uint64_t)t1);
+        ppy_ctx_ranges_squares__par1 *ctx_14 = (ppy_ctx_ranges_squares__par1 *)malloc(sizeof(ppy_ctx_ranges_squares__par1));
+        if (ctx_14 == NULL) return 1; /* spawn.alloc */
+        ctx_14->a0 = out;
+        ctx_14->a1 = t38;
+        ctx_14->a2 = t39 < n ? t39 : n;
+        pthread_t thread_14;
+        if (pthread_create(&thread_14, NULL, ppy_thread_ranges_squares__par1, ctx_14) != 0) return 1; /* spawn.ok */
+        int64_t t40 = (int64_t)thread_14;
+        int64_t t41 = (int64_t)(14u * (uint64_t)t1);
+        int64_t t42 = (int64_t)((uint64_t)t41 + (uint64_t)t1);
+        ppy_ctx_ranges_squares__par1 *ctx_15 = (ppy_ctx_ranges_squares__par1 *)malloc(sizeof(ppy_ctx_ranges_squares__par1));
+        if (ctx_15 == NULL) return 1; /* spawn.alloc */
+        ctx_15->a0 = out;
+        ctx_15->a1 = t41;
+        ctx_15->a2 = t42 < n ? t42 : n;
+        pthread_t thread_15;
+        if (pthread_create(&thread_15, NULL, ppy_thread_ranges_squares__par1, ctx_15) != 0) return 1; /* spawn.ok */
+        int64_t t43 = (int64_t)thread_15;
+        int64_t t44 = (int64_t)(15u * (uint64_t)t1);
+        int64_t res_2;
+        int64_t t45 = (int64_t)ranges_squares__par1(out, t44 < n ? t44 : n, n, &res_2);
+        void *joined;
+        if (pthread_join((pthread_t)t2, &joined) != 0) return 1; /* join.ok */
+        int64_t t46 = (int64_t)(intptr_t)joined;
+        void *joined_2;
+        if (pthread_join((pthread_t)t4, &joined_2) != 0) return 1; /* join.ok */
+        int64_t t47 = (int64_t)(intptr_t)joined_2;
+        void *joined_3;
+        if (pthread_join((pthread_t)t7, &joined_3) != 0) return 1; /* join.ok */
+        int64_t t48 = (int64_t)(intptr_t)joined_3;
+        void *joined_4;
+        if (pthread_join((pthread_t)t10, &joined_4) != 0) return 1; /* join.ok */
+        int64_t t49 = (int64_t)(intptr_t)joined_4;
+        void *joined_5;
+        if (pthread_join((pthread_t)t13, &joined_5) != 0) return 1; /* join.ok */
+        int64_t t50 = (int64_t)(intptr_t)joined_5;
+        void *joined_6;
+        if (pthread_join((pthread_t)t16, &joined_6) != 0) return 1; /* join.ok */
+        int64_t t51 = (int64_t)(intptr_t)joined_6;
+        void *joined_7;
+        if (pthread_join((pthread_t)t19, &joined_7) != 0) return 1; /* join.ok */
+        int64_t t52 = (int64_t)(intptr_t)joined_7;
+        void *joined_8;
+        if (pthread_join((pthread_t)t22, &joined_8) != 0) return 1; /* join.ok */
+        int64_t t53 = (int64_t)(intptr_t)joined_8;
+        void *joined_9;
+        if (pthread_join((pthread_t)t25, &joined_9) != 0) return 1; /* join.ok */
+        int64_t t54 = (int64_t)(intptr_t)joined_9;
+        void *joined_10;
+        if (pthread_join((pthread_t)t28, &joined_10) != 0) return 1; /* join.ok */
+        int64_t t55 = (int64_t)(intptr_t)joined_10;
+        void *joined_11;
+        if (pthread_join((pthread_t)t31, &joined_11) != 0) return 1; /* join.ok */
+        int64_t t56 = (int64_t)(intptr_t)joined_11;
+        void *joined_12;
+        if (pthread_join((pthread_t)t34, &joined_12) != 0) return 1; /* join.ok */
+        int64_t t57 = (int64_t)(intptr_t)joined_12;
+        void *joined_13;
+        if (pthread_join((pthread_t)t37, &joined_13) != 0) return 1; /* join.ok */
+        int64_t t58 = (int64_t)(intptr_t)joined_13;
+        void *joined_14;
+        if (pthread_join((pthread_t)t40, &joined_14) != 0) return 1; /* join.ok */
+        int64_t t59 = (int64_t)(intptr_t)joined_14;
+        void *joined_15;
+        if (pthread_join((pthread_t)t43, &joined_15) != 0) return 1; /* join.ok */
+        int64_t t60 = (int64_t)(intptr_t)joined_15;
+        if (!(((((((((((((((((t45 != 0) | (t46 != 0)) | (t47 != 0)) | (t48 != 0)) | (t49 != 0)) | (t50 != 0)) | (t51 != 0)) | (t52 != 0)) | (t53 != 0)) | (t54 != 0)) | (t55 != 0)) | (t56 != 0)) | (t57 != 0)) | (t58 != 0)) | (t59 != 0)) | (t60 != 0)) ^ true)) return 1; /* contract.ok */
     }
-L1_par_join1:;
-    v9_v = *v1_out_addr;
-    v10_v = *v2_n_addr;
-    v11_v = INT64_C(1);
-    v12_v = 0;
-    if (!(!ppy_ovf_sub_i64(v10_v, v11_v, &v12_v))) goto fallback; /* arith.ok */
-    v13_v = v9_v + v12_v;
-    v14_v = *v13_v;
-    *out0 = v14_v;
+    int64_t t61;
+    if (ppy_ovf_sub_i64(n, 1, &t61)) return 1; /* arith.ok */
+    *out_2 = out[t61];
     return 0;
-L2_par_serial2:;
-    if (!(ranges_squares__par1(v6_v, v5_v, v3_v, &v15_res) == 0)) goto fallback; /* call.ok */
-    goto L1_par_join1;
-L3_par_spawn3:;
-    v16_v = INT64_C(16);
-    v17_v = INT64_C(15);
-    v18_v = ((int64_t)(((uint64_t)(v3_v)) + ((uint64_t)(v17_v))));
-    v19_v = v18_v / v16_v;
-    v20_v = INT64_C(0);
-    v21_v = v19_v < v3_v;
-    v22_v = v21_v ? v19_v : v3_v;
-    v23_ctx = (ppy_ctx_ranges_squares__par1 *)malloc(sizeof(ppy_ctx_ranges_squares__par1));
-    if (!(v23_ctx != NULL)) goto fallback; /* spawn.alloc */
-    v23_ctx->a0 = v6_v;
-    v23_ctx->a1 = v20_v;
-    v23_ctx->a2 = v22_v;
-    if (!(pthread_create(&v24_thread, NULL, ppy_thread_ranges_squares__par1, v23_ctx) == 0)) goto fallback; /* spawn.ok */
-    v25_v = ((int64_t)(v24_thread));
-    v26_v = ((int64_t)(((uint64_t)(v19_v)) + ((uint64_t)(v19_v))));
-    v27_v = v26_v < v3_v;
-    v28_v = v27_v ? v26_v : v3_v;
-    v29_ctx = (ppy_ctx_ranges_squares__par1 *)malloc(sizeof(ppy_ctx_ranges_squares__par1));
-    if (!(v29_ctx != NULL)) goto fallback; /* spawn.alloc */
-    v29_ctx->a0 = v6_v;
-    v29_ctx->a1 = v19_v;
-    v29_ctx->a2 = v28_v;
-    if (!(pthread_create(&v30_thread, NULL, ppy_thread_ranges_squares__par1, v29_ctx) == 0)) goto fallback; /* spawn.ok */
-    v31_v = ((int64_t)(v30_thread));
-    v32_v = INT64_C(2);
-    v33_v = ((int64_t)(((uint64_t)(v32_v)) * ((uint64_t)(v19_v))));
-    v34_v = ((int64_t)(((uint64_t)(v33_v)) + ((uint64_t)(v19_v))));
-    v35_v = v34_v < v3_v;
-    v36_v = v35_v ? v34_v : v3_v;
-    v37_ctx = (ppy_ctx_ranges_squares__par1 *)malloc(sizeof(ppy_ctx_ranges_squares__par1));
-    if (!(v37_ctx != NULL)) goto fallback; /* spawn.alloc */
-    v37_ctx->a0 = v6_v;
-    v37_ctx->a1 = v33_v;
-    v37_ctx->a2 = v36_v;
-    if (!(pthread_create(&v38_thread, NULL, ppy_thread_ranges_squares__par1, v37_ctx) == 0)) goto fallback; /* spawn.ok */
-    v39_v = ((int64_t)(v38_thread));
-    v40_v = INT64_C(3);
-    v41_v = ((int64_t)(((uint64_t)(v40_v)) * ((uint64_t)(v19_v))));
-    v42_v = ((int64_t)(((uint64_t)(v41_v)) + ((uint64_t)(v19_v))));
-    v43_v = v42_v < v3_v;
-    v44_v = v43_v ? v42_v : v3_v;
-    v45_ctx = (ppy_ctx_ranges_squares__par1 *)malloc(sizeof(ppy_ctx_ranges_squares__par1));
-    if (!(v45_ctx != NULL)) goto fallback; /* spawn.alloc */
-    v45_ctx->a0 = v6_v;
-    v45_ctx->a1 = v41_v;
-    v45_ctx->a2 = v44_v;
-    if (!(pthread_create(&v46_thread, NULL, ppy_thread_ranges_squares__par1, v45_ctx) == 0)) goto fallback; /* spawn.ok */
-    v47_v = ((int64_t)(v46_thread));
-    v48_v = INT64_C(4);
-    v49_v = ((int64_t)(((uint64_t)(v48_v)) * ((uint64_t)(v19_v))));
-    v50_v = ((int64_t)(((uint64_t)(v49_v)) + ((uint64_t)(v19_v))));
-    v51_v = v50_v < v3_v;
-    v52_v = v51_v ? v50_v : v3_v;
-    v53_ctx = (ppy_ctx_ranges_squares__par1 *)malloc(sizeof(ppy_ctx_ranges_squares__par1));
-    if (!(v53_ctx != NULL)) goto fallback; /* spawn.alloc */
-    v53_ctx->a0 = v6_v;
-    v53_ctx->a1 = v49_v;
-    v53_ctx->a2 = v52_v;
-    if (!(pthread_create(&v54_thread, NULL, ppy_thread_ranges_squares__par1, v53_ctx) == 0)) goto fallback; /* spawn.ok */
-    v55_v = ((int64_t)(v54_thread));
-    v56_v = INT64_C(5);
-    v57_v = ((int64_t)(((uint64_t)(v56_v)) * ((uint64_t)(v19_v))));
-    v58_v = ((int64_t)(((uint64_t)(v57_v)) + ((uint64_t)(v19_v))));
-    v59_v = v58_v < v3_v;
-    v60_v = v59_v ? v58_v : v3_v;
-    v61_ctx = (ppy_ctx_ranges_squares__par1 *)malloc(sizeof(ppy_ctx_ranges_squares__par1));
-    if (!(v61_ctx != NULL)) goto fallback; /* spawn.alloc */
-    v61_ctx->a0 = v6_v;
-    v61_ctx->a1 = v57_v;
-    v61_ctx->a2 = v60_v;
-    if (!(pthread_create(&v62_thread, NULL, ppy_thread_ranges_squares__par1, v61_ctx) == 0)) goto fallback; /* spawn.ok */
-    v63_v = ((int64_t)(v62_thread));
-    v64_v = INT64_C(6);
-    v65_v = ((int64_t)(((uint64_t)(v64_v)) * ((uint64_t)(v19_v))));
-    v66_v = ((int64_t)(((uint64_t)(v65_v)) + ((uint64_t)(v19_v))));
-    v67_v = v66_v < v3_v;
-    v68_v = v67_v ? v66_v : v3_v;
-    v69_ctx = (ppy_ctx_ranges_squares__par1 *)malloc(sizeof(ppy_ctx_ranges_squares__par1));
-    if (!(v69_ctx != NULL)) goto fallback; /* spawn.alloc */
-    v69_ctx->a0 = v6_v;
-    v69_ctx->a1 = v65_v;
-    v69_ctx->a2 = v68_v;
-    if (!(pthread_create(&v70_thread, NULL, ppy_thread_ranges_squares__par1, v69_ctx) == 0)) goto fallback; /* spawn.ok */
-    v71_v = ((int64_t)(v70_thread));
-    v72_v = INT64_C(7);
-    v73_v = ((int64_t)(((uint64_t)(v72_v)) * ((uint64_t)(v19_v))));
-    v74_v = ((int64_t)(((uint64_t)(v73_v)) + ((uint64_t)(v19_v))));
-    v75_v = v74_v < v3_v;
-    v76_v = v75_v ? v74_v : v3_v;
-    v77_ctx = (ppy_ctx_ranges_squares__par1 *)malloc(sizeof(ppy_ctx_ranges_squares__par1));
-    if (!(v77_ctx != NULL)) goto fallback; /* spawn.alloc */
-    v77_ctx->a0 = v6_v;
-    v77_ctx->a1 = v73_v;
-    v77_ctx->a2 = v76_v;
-    if (!(pthread_create(&v78_thread, NULL, ppy_thread_ranges_squares__par1, v77_ctx) == 0)) goto fallback; /* spawn.ok */
-    v79_v = ((int64_t)(v78_thread));
-    v80_v = INT64_C(8);
-    v81_v = ((int64_t)(((uint64_t)(v80_v)) * ((uint64_t)(v19_v))));
-    v82_v = ((int64_t)(((uint64_t)(v81_v)) + ((uint64_t)(v19_v))));
-    v83_v = v82_v < v3_v;
-    v84_v = v83_v ? v82_v : v3_v;
-    v85_ctx = (ppy_ctx_ranges_squares__par1 *)malloc(sizeof(ppy_ctx_ranges_squares__par1));
-    if (!(v85_ctx != NULL)) goto fallback; /* spawn.alloc */
-    v85_ctx->a0 = v6_v;
-    v85_ctx->a1 = v81_v;
-    v85_ctx->a2 = v84_v;
-    if (!(pthread_create(&v86_thread, NULL, ppy_thread_ranges_squares__par1, v85_ctx) == 0)) goto fallback; /* spawn.ok */
-    v87_v = ((int64_t)(v86_thread));
-    v88_v = INT64_C(9);
-    v89_v = ((int64_t)(((uint64_t)(v88_v)) * ((uint64_t)(v19_v))));
-    v90_v = ((int64_t)(((uint64_t)(v89_v)) + ((uint64_t)(v19_v))));
-    v91_v = v90_v < v3_v;
-    v92_v = v91_v ? v90_v : v3_v;
-    v93_ctx = (ppy_ctx_ranges_squares__par1 *)malloc(sizeof(ppy_ctx_ranges_squares__par1));
-    if (!(v93_ctx != NULL)) goto fallback; /* spawn.alloc */
-    v93_ctx->a0 = v6_v;
-    v93_ctx->a1 = v89_v;
-    v93_ctx->a2 = v92_v;
-    if (!(pthread_create(&v94_thread, NULL, ppy_thread_ranges_squares__par1, v93_ctx) == 0)) goto fallback; /* spawn.ok */
-    v95_v = ((int64_t)(v94_thread));
-    v96_v = INT64_C(10);
-    v97_v = ((int64_t)(((uint64_t)(v96_v)) * ((uint64_t)(v19_v))));
-    v98_v = ((int64_t)(((uint64_t)(v97_v)) + ((uint64_t)(v19_v))));
-    v99_v = v98_v < v3_v;
-    v100_v = v99_v ? v98_v : v3_v;
-    v101_ctx = (ppy_ctx_ranges_squares__par1 *)malloc(sizeof(ppy_ctx_ranges_squares__par1));
-    if (!(v101_ctx != NULL)) goto fallback; /* spawn.alloc */
-    v101_ctx->a0 = v6_v;
-    v101_ctx->a1 = v97_v;
-    v101_ctx->a2 = v100_v;
-    if (!(pthread_create(&v102_thread, NULL, ppy_thread_ranges_squares__par1, v101_ctx) == 0)) goto fallback; /* spawn.ok */
-    v103_v = ((int64_t)(v102_thread));
-    v104_v = INT64_C(11);
-    v105_v = ((int64_t)(((uint64_t)(v104_v)) * ((uint64_t)(v19_v))));
-    v106_v = ((int64_t)(((uint64_t)(v105_v)) + ((uint64_t)(v19_v))));
-    v107_v = v106_v < v3_v;
-    v108_v = v107_v ? v106_v : v3_v;
-    v109_ctx = (ppy_ctx_ranges_squares__par1 *)malloc(sizeof(ppy_ctx_ranges_squares__par1));
-    if (!(v109_ctx != NULL)) goto fallback; /* spawn.alloc */
-    v109_ctx->a0 = v6_v;
-    v109_ctx->a1 = v105_v;
-    v109_ctx->a2 = v108_v;
-    if (!(pthread_create(&v110_thread, NULL, ppy_thread_ranges_squares__par1, v109_ctx) == 0)) goto fallback; /* spawn.ok */
-    v111_v = ((int64_t)(v110_thread));
-    v112_v = INT64_C(12);
-    v113_v = ((int64_t)(((uint64_t)(v112_v)) * ((uint64_t)(v19_v))));
-    v114_v = ((int64_t)(((uint64_t)(v113_v)) + ((uint64_t)(v19_v))));
-    v115_v = v114_v < v3_v;
-    v116_v = v115_v ? v114_v : v3_v;
-    v117_ctx = (ppy_ctx_ranges_squares__par1 *)malloc(sizeof(ppy_ctx_ranges_squares__par1));
-    if (!(v117_ctx != NULL)) goto fallback; /* spawn.alloc */
-    v117_ctx->a0 = v6_v;
-    v117_ctx->a1 = v113_v;
-    v117_ctx->a2 = v116_v;
-    if (!(pthread_create(&v118_thread, NULL, ppy_thread_ranges_squares__par1, v117_ctx) == 0)) goto fallback; /* spawn.ok */
-    v119_v = ((int64_t)(v118_thread));
-    v120_v = INT64_C(13);
-    v121_v = ((int64_t)(((uint64_t)(v120_v)) * ((uint64_t)(v19_v))));
-    v122_v = ((int64_t)(((uint64_t)(v121_v)) + ((uint64_t)(v19_v))));
-    v123_v = v122_v < v3_v;
-    v124_v = v123_v ? v122_v : v3_v;
-    v125_ctx = (ppy_ctx_ranges_squares__par1 *)malloc(sizeof(ppy_ctx_ranges_squares__par1));
-    if (!(v125_ctx != NULL)) goto fallback; /* spawn.alloc */
-    v125_ctx->a0 = v6_v;
-    v125_ctx->a1 = v121_v;
-    v125_ctx->a2 = v124_v;
-    if (!(pthread_create(&v126_thread, NULL, ppy_thread_ranges_squares__par1, v125_ctx) == 0)) goto fallback; /* spawn.ok */
-    v127_v = ((int64_t)(v126_thread));
-    v128_v = INT64_C(14);
-    v129_v = ((int64_t)(((uint64_t)(v128_v)) * ((uint64_t)(v19_v))));
-    v130_v = ((int64_t)(((uint64_t)(v129_v)) + ((uint64_t)(v19_v))));
-    v131_v = v130_v < v3_v;
-    v132_v = v131_v ? v130_v : v3_v;
-    v133_ctx = (ppy_ctx_ranges_squares__par1 *)malloc(sizeof(ppy_ctx_ranges_squares__par1));
-    if (!(v133_ctx != NULL)) goto fallback; /* spawn.alloc */
-    v133_ctx->a0 = v6_v;
-    v133_ctx->a1 = v129_v;
-    v133_ctx->a2 = v132_v;
-    if (!(pthread_create(&v134_thread, NULL, ppy_thread_ranges_squares__par1, v133_ctx) == 0)) goto fallback; /* spawn.ok */
-    v135_v = ((int64_t)(v134_thread));
-    v136_v = INT64_C(15);
-    v137_v = ((int64_t)(((uint64_t)(v136_v)) * ((uint64_t)(v19_v))));
-    v138_v = v137_v < v3_v;
-    v139_v = v138_v ? v137_v : v3_v;
-    v141_v = ((int64_t)(ranges_squares__par1(v6_v, v139_v, v3_v, &v140_res)));
-    v142_v = INT64_C(0);
-    v143_v = v141_v != v142_v;
-    if (!(pthread_join((pthread_t)v25_v, &v144_joined) == 0)) goto fallback; /* join.ok */
-    v145_v = ((int64_t)((intptr_t)v144_joined));
-    v146_v = INT64_C(0);
-    v147_v = v145_v != v146_v;
-    v148_v = v143_v | v147_v;
-    if (!(pthread_join((pthread_t)v31_v, &v149_joined) == 0)) goto fallback; /* join.ok */
-    v150_v = ((int64_t)((intptr_t)v149_joined));
-    v151_v = INT64_C(0);
-    v152_v = v150_v != v151_v;
-    v153_v = v148_v | v152_v;
-    if (!(pthread_join((pthread_t)v39_v, &v154_joined) == 0)) goto fallback; /* join.ok */
-    v155_v = ((int64_t)((intptr_t)v154_joined));
-    v156_v = INT64_C(0);
-    v157_v = v155_v != v156_v;
-    v158_v = v153_v | v157_v;
-    if (!(pthread_join((pthread_t)v47_v, &v159_joined) == 0)) goto fallback; /* join.ok */
-    v160_v = ((int64_t)((intptr_t)v159_joined));
-    v161_v = INT64_C(0);
-    v162_v = v160_v != v161_v;
-    v163_v = v158_v | v162_v;
-    if (!(pthread_join((pthread_t)v55_v, &v164_joined) == 0)) goto fallback; /* join.ok */
-    v165_v = ((int64_t)((intptr_t)v164_joined));
-    v166_v = INT64_C(0);
-    v167_v = v165_v != v166_v;
-    v168_v = v163_v | v167_v;
-    if (!(pthread_join((pthread_t)v63_v, &v169_joined) == 0)) goto fallback; /* join.ok */
-    v170_v = ((int64_t)((intptr_t)v169_joined));
-    v171_v = INT64_C(0);
-    v172_v = v170_v != v171_v;
-    v173_v = v168_v | v172_v;
-    if (!(pthread_join((pthread_t)v71_v, &v174_joined) == 0)) goto fallback; /* join.ok */
-    v175_v = ((int64_t)((intptr_t)v174_joined));
-    v176_v = INT64_C(0);
-    v177_v = v175_v != v176_v;
-    v178_v = v173_v | v177_v;
-    if (!(pthread_join((pthread_t)v79_v, &v179_joined) == 0)) goto fallback; /* join.ok */
-    v180_v = ((int64_t)((intptr_t)v179_joined));
-    v181_v = INT64_C(0);
-    v182_v = v180_v != v181_v;
-    v183_v = v178_v | v182_v;
-    if (!(pthread_join((pthread_t)v87_v, &v184_joined) == 0)) goto fallback; /* join.ok */
-    v185_v = ((int64_t)((intptr_t)v184_joined));
-    v186_v = INT64_C(0);
-    v187_v = v185_v != v186_v;
-    v188_v = v183_v | v187_v;
-    if (!(pthread_join((pthread_t)v95_v, &v189_joined) == 0)) goto fallback; /* join.ok */
-    v190_v = ((int64_t)((intptr_t)v189_joined));
-    v191_v = INT64_C(0);
-    v192_v = v190_v != v191_v;
-    v193_v = v188_v | v192_v;
-    if (!(pthread_join((pthread_t)v103_v, &v194_joined) == 0)) goto fallback; /* join.ok */
-    v195_v = ((int64_t)((intptr_t)v194_joined));
-    v196_v = INT64_C(0);
-    v197_v = v195_v != v196_v;
-    v198_v = v193_v | v197_v;
-    if (!(pthread_join((pthread_t)v111_v, &v199_joined) == 0)) goto fallback; /* join.ok */
-    v200_v = ((int64_t)((intptr_t)v199_joined));
-    v201_v = INT64_C(0);
-    v202_v = v200_v != v201_v;
-    v203_v = v198_v | v202_v;
-    if (!(pthread_join((pthread_t)v119_v, &v204_joined) == 0)) goto fallback; /* join.ok */
-    v205_v = ((int64_t)((intptr_t)v204_joined));
-    v206_v = INT64_C(0);
-    v207_v = v205_v != v206_v;
-    v208_v = v203_v | v207_v;
-    if (!(pthread_join((pthread_t)v127_v, &v209_joined) == 0)) goto fallback; /* join.ok */
-    v210_v = ((int64_t)((intptr_t)v209_joined));
-    v211_v = INT64_C(0);
-    v212_v = v210_v != v211_v;
-    v213_v = v208_v | v212_v;
-    if (!(pthread_join((pthread_t)v135_v, &v214_joined) == 0)) goto fallback; /* join.ok */
-    v215_v = ((int64_t)((intptr_t)v214_joined));
-    v216_v = INT64_C(0);
-    v217_v = v215_v != v216_v;
-    v218_v = v213_v | v217_v;
-    v219_v = true;
-    v220_v = v218_v ^ v219_v;
-    if (!(v220_v)) goto fallback; /* contract.ok */
-    goto L1_par_join1;
-fallback:
-    return 1;
 }
 
-
-int32_t ppy_ranges_dot(double *a0, int64_t a1, double *a2, int64_t a3, double *out0) {
-    double v1_v;
-    double v2_total_addr[1];
-    int64_t v3_v;
-    int64_t v4_v;
-    int64_t v5_v;
-    double v6_v;
-    double v7_res;
-    double v8_v;
-    double v9_v;
-    v1_v = 0.0;
-    *v2_total_addr = v1_v;
-    v3_v = a1;
-    v4_v = ((int64_t)(v3_v));
-    v5_v = INT64_C(0);
-    v6_v = *v2_total_addr;
-    if (!(ranges_dot__par2(a0, a1, a2, a3, v5_v, v4_v, v6_v, &v7_res) == 0)) goto fallback; /* call.ok */
-    v8_v = v7_res;
-    *v2_total_addr = v8_v;
-    v9_v = *v2_total_addr;
-    *out0 = v9_v;
+int32_t ppy_ranges_dot(double *a, int64_t a_len, double *b, int64_t b_len, double *out) {
+    double total = 0.0;
+    if (ranges_dot__par2(a, a_len, b, b_len, 0, a_len, total, &total) != 0) return 1; /* call.ok */
+    *out = total;
     return 0;
-fallback:
-    return 1;
 }
 
+int32_t ppy_ranges_dot_relaxed(double *a, int64_t a_len, double *b, int64_t b_len, double *out) {
+    double reduced;
+    double partial[1];
+    double partial_2[1];
+    double partial_3[1];
+    double partial_4[1];
+    double partial_5[1];
+    double partial_6[1];
+    double partial_7[1];
+    double partial_8[1];
+    double partial_9[1];
+    double partial_10[1];
+    double partial_11[1];
+    double partial_12[1];
+    double partial_13[1];
+    double partial_14[1];
+    double partial_15[1];
 
-int32_t ppy_ranges_dot_relaxed(double *a0, int64_t a1, double *a2, int64_t a3, double *out0) {
-    double v1_reduced;
-    double v2_v;
-    double v3_total_addr[1];
-    int64_t v4_v;
-    int64_t v5_v;
-    int64_t v6_v;
-    double v7_v;
-    int64_t v8_v;
-    bool v9_v;
-    double v10_v;
-    double v11_res;
-    double v12_v;
-    double v13_pass;
-    int64_t v14_v;
-    int64_t v15_v;
-    int64_t v16_v;
-    int64_t v17_v;
-    int64_t v18_v;
-    bool v19_v;
-    int64_t v20_v;
-    double v21_partial[1];
-    double v22_v;
-    ppy_ctx_ranges_dot_relaxed__par3__task *v23_ctx;
-    pthread_t v24_thread;
-    int64_t v25_v;
-    int64_t v26_v;
-    bool v27_v;
-    int64_t v28_v;
-    double v29_partial[1];
-    double v30_v;
-    ppy_ctx_ranges_dot_relaxed__par3__task *v31_ctx;
-    pthread_t v32_thread;
-    int64_t v33_v;
-    int64_t v34_v;
-    int64_t v35_v;
-    int64_t v36_v;
-    bool v37_v;
-    int64_t v38_v;
-    double v39_partial[1];
-    double v40_v;
-    ppy_ctx_ranges_dot_relaxed__par3__task *v41_ctx;
-    pthread_t v42_thread;
-    int64_t v43_v;
-    int64_t v44_v;
-    int64_t v45_v;
-    int64_t v46_v;
-    bool v47_v;
-    int64_t v48_v;
-    double v49_partial[1];
-    double v50_v;
-    ppy_ctx_ranges_dot_relaxed__par3__task *v51_ctx;
-    pthread_t v52_thread;
-    int64_t v53_v;
-    int64_t v54_v;
-    int64_t v55_v;
-    int64_t v56_v;
-    bool v57_v;
-    int64_t v58_v;
-    double v59_partial[1];
-    double v60_v;
-    ppy_ctx_ranges_dot_relaxed__par3__task *v61_ctx;
-    pthread_t v62_thread;
-    int64_t v63_v;
-    int64_t v64_v;
-    int64_t v65_v;
-    int64_t v66_v;
-    bool v67_v;
-    int64_t v68_v;
-    double v69_partial[1];
-    double v70_v;
-    ppy_ctx_ranges_dot_relaxed__par3__task *v71_ctx;
-    pthread_t v72_thread;
-    int64_t v73_v;
-    int64_t v74_v;
-    int64_t v75_v;
-    int64_t v76_v;
-    bool v77_v;
-    int64_t v78_v;
-    double v79_partial[1];
-    double v80_v;
-    ppy_ctx_ranges_dot_relaxed__par3__task *v81_ctx;
-    pthread_t v82_thread;
-    int64_t v83_v;
-    int64_t v84_v;
-    int64_t v85_v;
-    int64_t v86_v;
-    bool v87_v;
-    int64_t v88_v;
-    double v89_partial[1];
-    double v90_v;
-    ppy_ctx_ranges_dot_relaxed__par3__task *v91_ctx;
-    pthread_t v92_thread;
-    int64_t v93_v;
-    int64_t v94_v;
-    int64_t v95_v;
-    int64_t v96_v;
-    bool v97_v;
-    int64_t v98_v;
-    double v99_partial[1];
-    double v100_v;
-    ppy_ctx_ranges_dot_relaxed__par3__task *v101_ctx;
-    pthread_t v102_thread;
-    int64_t v103_v;
-    int64_t v104_v;
-    int64_t v105_v;
-    int64_t v106_v;
-    bool v107_v;
-    int64_t v108_v;
-    double v109_partial[1];
-    double v110_v;
-    ppy_ctx_ranges_dot_relaxed__par3__task *v111_ctx;
-    pthread_t v112_thread;
-    int64_t v113_v;
-    int64_t v114_v;
-    int64_t v115_v;
-    int64_t v116_v;
-    bool v117_v;
-    int64_t v118_v;
-    double v119_partial[1];
-    double v120_v;
-    ppy_ctx_ranges_dot_relaxed__par3__task *v121_ctx;
-    pthread_t v122_thread;
-    int64_t v123_v;
-    int64_t v124_v;
-    int64_t v125_v;
-    int64_t v126_v;
-    bool v127_v;
-    int64_t v128_v;
-    double v129_partial[1];
-    double v130_v;
-    ppy_ctx_ranges_dot_relaxed__par3__task *v131_ctx;
-    pthread_t v132_thread;
-    int64_t v133_v;
-    int64_t v134_v;
-    int64_t v135_v;
-    int64_t v136_v;
-    bool v137_v;
-    int64_t v138_v;
-    double v139_partial[1];
-    double v140_v;
-    ppy_ctx_ranges_dot_relaxed__par3__task *v141_ctx;
-    pthread_t v142_thread;
-    int64_t v143_v;
-    int64_t v144_v;
-    int64_t v145_v;
-    int64_t v146_v;
-    bool v147_v;
-    int64_t v148_v;
-    double v149_partial[1];
-    double v150_v;
-    ppy_ctx_ranges_dot_relaxed__par3__task *v151_ctx;
-    pthread_t v152_thread;
-    int64_t v153_v;
-    int64_t v154_v;
-    int64_t v155_v;
-    int64_t v156_v;
-    bool v157_v;
-    int64_t v158_v;
-    double v159_partial[1];
-    double v160_v;
-    ppy_ctx_ranges_dot_relaxed__par3__task *v161_ctx;
-    pthread_t v162_thread;
-    int64_t v163_v;
-    int64_t v164_v;
-    int64_t v165_v;
-    bool v166_v;
-    int64_t v167_v;
-    double v168_v;
-    double v169_res;
-    int64_t v170_v;
-    double v171_v;
-    int64_t v172_v;
-    bool v173_v;
-    void *v174_joined;
-    int64_t v175_v;
-    int64_t v176_v;
-    bool v177_v;
-    bool v178_v;
-    void *v179_joined;
-    int64_t v180_v;
-    int64_t v181_v;
-    bool v182_v;
-    bool v183_v;
-    void *v184_joined;
-    int64_t v185_v;
-    int64_t v186_v;
-    bool v187_v;
-    bool v188_v;
-    void *v189_joined;
-    int64_t v190_v;
-    int64_t v191_v;
-    bool v192_v;
-    bool v193_v;
-    void *v194_joined;
-    int64_t v195_v;
-    int64_t v196_v;
-    bool v197_v;
-    bool v198_v;
-    void *v199_joined;
-    int64_t v200_v;
-    int64_t v201_v;
-    bool v202_v;
-    bool v203_v;
-    void *v204_joined;
-    int64_t v205_v;
-    int64_t v206_v;
-    bool v207_v;
-    bool v208_v;
-    void *v209_joined;
-    int64_t v210_v;
-    int64_t v211_v;
-    bool v212_v;
-    bool v213_v;
-    void *v214_joined;
-    int64_t v215_v;
-    int64_t v216_v;
-    bool v217_v;
-    bool v218_v;
-    void *v219_joined;
-    int64_t v220_v;
-    int64_t v221_v;
-    bool v222_v;
-    bool v223_v;
-    void *v224_joined;
-    int64_t v225_v;
-    int64_t v226_v;
-    bool v227_v;
-    bool v228_v;
-    void *v229_joined;
-    int64_t v230_v;
-    int64_t v231_v;
-    bool v232_v;
-    bool v233_v;
-    void *v234_joined;
-    int64_t v235_v;
-    int64_t v236_v;
-    bool v237_v;
-    bool v238_v;
-    void *v239_joined;
-    int64_t v240_v;
-    int64_t v241_v;
-    bool v242_v;
-    bool v243_v;
-    void *v244_joined;
-    int64_t v245_v;
-    int64_t v246_v;
-    bool v247_v;
-    bool v248_v;
-    bool v249_v;
-    bool v250_v;
-    double v251_v;
-    double v252_v;
-    double v253_v;
-    double v254_v;
-    double v255_v;
-    double v256_v;
-    double v257_v;
-    double v258_v;
-    double v259_v;
-    double v260_v;
-    double v261_v;
-    double v262_v;
-    double v263_v;
-    double v264_v;
-    double v265_v;
-    double v266_v;
-    double v267_v;
-    double v268_v;
-    double v269_v;
-    double v270_v;
-    double v271_v;
-    double v272_v;
-    double v273_v;
-    double v274_v;
-    double v275_v;
-    double v276_v;
-    double v277_v;
-    double v278_v;
-    double v279_v;
-    double v280_v;
-    double v281_v;
-    double v282_pass;
-    v2_v = 0.0;
-    *v3_total_addr = v2_v;
-    v4_v = a1;
-    v5_v = ((int64_t)(v4_v));
-    v6_v = INT64_C(0);
-    v7_v = *v3_total_addr;
-    v8_v = INT64_C(4096);
-    v9_v = v5_v < v8_v;
-    if (v9_v) {
-        goto L2_par_serial2;
+    double total = 0.0;
+    double t1 = total;
+    if (a_len < 4096) {
+        double t2;
+        if (ranges_dot_relaxed__par3(a, a_len, b, b_len, 0, a_len, t1, &t2) != 0) return 1; /* call.ok */
+        reduced = t2;
     } else {
-        goto L3_par_spawn3;
+        int64_t t3 = (int64_t)((uint64_t)a_len + 15u) / 16;
+        ppy_ctx_ranges_dot_relaxed__par3__task *ctx = (ppy_ctx_ranges_dot_relaxed__par3__task *)malloc(sizeof(ppy_ctx_ranges_dot_relaxed__par3__task));
+        if (ctx == NULL) return 1; /* spawn.alloc */
+        ctx->a0 = a;
+        ctx->a1 = a_len;
+        ctx->a2 = b;
+        ctx->a3 = b_len;
+        ctx->a4 = 0;
+        ctx->a5 = t3 < a_len ? t3 : a_len;
+        ctx->a6 = 0.0;
+        ctx->a7 = partial;
+        pthread_t thread;
+        if (pthread_create(&thread, NULL, ppy_thread_ranges_dot_relaxed__par3__task, ctx) != 0) return 1; /* spawn.ok */
+        int64_t t4 = (int64_t)thread;
+        int64_t t5 = (int64_t)((uint64_t)t3 + (uint64_t)t3);
+        ppy_ctx_ranges_dot_relaxed__par3__task *ctx_2 = (ppy_ctx_ranges_dot_relaxed__par3__task *)malloc(sizeof(ppy_ctx_ranges_dot_relaxed__par3__task));
+        if (ctx_2 == NULL) return 1; /* spawn.alloc */
+        ctx_2->a0 = a;
+        ctx_2->a1 = a_len;
+        ctx_2->a2 = b;
+        ctx_2->a3 = b_len;
+        ctx_2->a4 = t3;
+        ctx_2->a5 = t5 < a_len ? t5 : a_len;
+        ctx_2->a6 = 0.0;
+        ctx_2->a7 = partial_2;
+        pthread_t thread_2;
+        if (pthread_create(&thread_2, NULL, ppy_thread_ranges_dot_relaxed__par3__task, ctx_2) != 0) return 1; /* spawn.ok */
+        int64_t t6 = (int64_t)thread_2;
+        int64_t t7 = (int64_t)(2u * (uint64_t)t3);
+        int64_t t8 = (int64_t)((uint64_t)t7 + (uint64_t)t3);
+        ppy_ctx_ranges_dot_relaxed__par3__task *ctx_3 = (ppy_ctx_ranges_dot_relaxed__par3__task *)malloc(sizeof(ppy_ctx_ranges_dot_relaxed__par3__task));
+        if (ctx_3 == NULL) return 1; /* spawn.alloc */
+        ctx_3->a0 = a;
+        ctx_3->a1 = a_len;
+        ctx_3->a2 = b;
+        ctx_3->a3 = b_len;
+        ctx_3->a4 = t7;
+        ctx_3->a5 = t8 < a_len ? t8 : a_len;
+        ctx_3->a6 = 0.0;
+        ctx_3->a7 = partial_3;
+        pthread_t thread_3;
+        if (pthread_create(&thread_3, NULL, ppy_thread_ranges_dot_relaxed__par3__task, ctx_3) != 0) return 1; /* spawn.ok */
+        int64_t t9 = (int64_t)thread_3;
+        int64_t t10 = (int64_t)(3u * (uint64_t)t3);
+        int64_t t11 = (int64_t)((uint64_t)t10 + (uint64_t)t3);
+        ppy_ctx_ranges_dot_relaxed__par3__task *ctx_4 = (ppy_ctx_ranges_dot_relaxed__par3__task *)malloc(sizeof(ppy_ctx_ranges_dot_relaxed__par3__task));
+        if (ctx_4 == NULL) return 1; /* spawn.alloc */
+        ctx_4->a0 = a;
+        ctx_4->a1 = a_len;
+        ctx_4->a2 = b;
+        ctx_4->a3 = b_len;
+        ctx_4->a4 = t10;
+        ctx_4->a5 = t11 < a_len ? t11 : a_len;
+        ctx_4->a6 = 0.0;
+        ctx_4->a7 = partial_4;
+        pthread_t thread_4;
+        if (pthread_create(&thread_4, NULL, ppy_thread_ranges_dot_relaxed__par3__task, ctx_4) != 0) return 1; /* spawn.ok */
+        int64_t t12 = (int64_t)thread_4;
+        int64_t t13 = (int64_t)(4u * (uint64_t)t3);
+        int64_t t14 = (int64_t)((uint64_t)t13 + (uint64_t)t3);
+        ppy_ctx_ranges_dot_relaxed__par3__task *ctx_5 = (ppy_ctx_ranges_dot_relaxed__par3__task *)malloc(sizeof(ppy_ctx_ranges_dot_relaxed__par3__task));
+        if (ctx_5 == NULL) return 1; /* spawn.alloc */
+        ctx_5->a0 = a;
+        ctx_5->a1 = a_len;
+        ctx_5->a2 = b;
+        ctx_5->a3 = b_len;
+        ctx_5->a4 = t13;
+        ctx_5->a5 = t14 < a_len ? t14 : a_len;
+        ctx_5->a6 = 0.0;
+        ctx_5->a7 = partial_5;
+        pthread_t thread_5;
+        if (pthread_create(&thread_5, NULL, ppy_thread_ranges_dot_relaxed__par3__task, ctx_5) != 0) return 1; /* spawn.ok */
+        int64_t t15 = (int64_t)thread_5;
+        int64_t t16 = (int64_t)(5u * (uint64_t)t3);
+        int64_t t17 = (int64_t)((uint64_t)t16 + (uint64_t)t3);
+        ppy_ctx_ranges_dot_relaxed__par3__task *ctx_6 = (ppy_ctx_ranges_dot_relaxed__par3__task *)malloc(sizeof(ppy_ctx_ranges_dot_relaxed__par3__task));
+        if (ctx_6 == NULL) return 1; /* spawn.alloc */
+        ctx_6->a0 = a;
+        ctx_6->a1 = a_len;
+        ctx_6->a2 = b;
+        ctx_6->a3 = b_len;
+        ctx_6->a4 = t16;
+        ctx_6->a5 = t17 < a_len ? t17 : a_len;
+        ctx_6->a6 = 0.0;
+        ctx_6->a7 = partial_6;
+        pthread_t thread_6;
+        if (pthread_create(&thread_6, NULL, ppy_thread_ranges_dot_relaxed__par3__task, ctx_6) != 0) return 1; /* spawn.ok */
+        int64_t t18 = (int64_t)thread_6;
+        int64_t t19 = (int64_t)(6u * (uint64_t)t3);
+        int64_t t20 = (int64_t)((uint64_t)t19 + (uint64_t)t3);
+        ppy_ctx_ranges_dot_relaxed__par3__task *ctx_7 = (ppy_ctx_ranges_dot_relaxed__par3__task *)malloc(sizeof(ppy_ctx_ranges_dot_relaxed__par3__task));
+        if (ctx_7 == NULL) return 1; /* spawn.alloc */
+        ctx_7->a0 = a;
+        ctx_7->a1 = a_len;
+        ctx_7->a2 = b;
+        ctx_7->a3 = b_len;
+        ctx_7->a4 = t19;
+        ctx_7->a5 = t20 < a_len ? t20 : a_len;
+        ctx_7->a6 = 0.0;
+        ctx_7->a7 = partial_7;
+        pthread_t thread_7;
+        if (pthread_create(&thread_7, NULL, ppy_thread_ranges_dot_relaxed__par3__task, ctx_7) != 0) return 1; /* spawn.ok */
+        int64_t t21 = (int64_t)thread_7;
+        int64_t t22 = (int64_t)(7u * (uint64_t)t3);
+        int64_t t23 = (int64_t)((uint64_t)t22 + (uint64_t)t3);
+        ppy_ctx_ranges_dot_relaxed__par3__task *ctx_8 = (ppy_ctx_ranges_dot_relaxed__par3__task *)malloc(sizeof(ppy_ctx_ranges_dot_relaxed__par3__task));
+        if (ctx_8 == NULL) return 1; /* spawn.alloc */
+        ctx_8->a0 = a;
+        ctx_8->a1 = a_len;
+        ctx_8->a2 = b;
+        ctx_8->a3 = b_len;
+        ctx_8->a4 = t22;
+        ctx_8->a5 = t23 < a_len ? t23 : a_len;
+        ctx_8->a6 = 0.0;
+        ctx_8->a7 = partial_8;
+        pthread_t thread_8;
+        if (pthread_create(&thread_8, NULL, ppy_thread_ranges_dot_relaxed__par3__task, ctx_8) != 0) return 1; /* spawn.ok */
+        int64_t t24 = (int64_t)thread_8;
+        int64_t t25 = (int64_t)(8u * (uint64_t)t3);
+        int64_t t26 = (int64_t)((uint64_t)t25 + (uint64_t)t3);
+        ppy_ctx_ranges_dot_relaxed__par3__task *ctx_9 = (ppy_ctx_ranges_dot_relaxed__par3__task *)malloc(sizeof(ppy_ctx_ranges_dot_relaxed__par3__task));
+        if (ctx_9 == NULL) return 1; /* spawn.alloc */
+        ctx_9->a0 = a;
+        ctx_9->a1 = a_len;
+        ctx_9->a2 = b;
+        ctx_9->a3 = b_len;
+        ctx_9->a4 = t25;
+        ctx_9->a5 = t26 < a_len ? t26 : a_len;
+        ctx_9->a6 = 0.0;
+        ctx_9->a7 = partial_9;
+        pthread_t thread_9;
+        if (pthread_create(&thread_9, NULL, ppy_thread_ranges_dot_relaxed__par3__task, ctx_9) != 0) return 1; /* spawn.ok */
+        int64_t t27 = (int64_t)thread_9;
+        int64_t t28 = (int64_t)(9u * (uint64_t)t3);
+        int64_t t29 = (int64_t)((uint64_t)t28 + (uint64_t)t3);
+        ppy_ctx_ranges_dot_relaxed__par3__task *ctx_10 = (ppy_ctx_ranges_dot_relaxed__par3__task *)malloc(sizeof(ppy_ctx_ranges_dot_relaxed__par3__task));
+        if (ctx_10 == NULL) return 1; /* spawn.alloc */
+        ctx_10->a0 = a;
+        ctx_10->a1 = a_len;
+        ctx_10->a2 = b;
+        ctx_10->a3 = b_len;
+        ctx_10->a4 = t28;
+        ctx_10->a5 = t29 < a_len ? t29 : a_len;
+        ctx_10->a6 = 0.0;
+        ctx_10->a7 = partial_10;
+        pthread_t thread_10;
+        if (pthread_create(&thread_10, NULL, ppy_thread_ranges_dot_relaxed__par3__task, ctx_10) != 0) return 1; /* spawn.ok */
+        int64_t t30 = (int64_t)thread_10;
+        int64_t t31 = (int64_t)(10u * (uint64_t)t3);
+        int64_t t32 = (int64_t)((uint64_t)t31 + (uint64_t)t3);
+        ppy_ctx_ranges_dot_relaxed__par3__task *ctx_11 = (ppy_ctx_ranges_dot_relaxed__par3__task *)malloc(sizeof(ppy_ctx_ranges_dot_relaxed__par3__task));
+        if (ctx_11 == NULL) return 1; /* spawn.alloc */
+        ctx_11->a0 = a;
+        ctx_11->a1 = a_len;
+        ctx_11->a2 = b;
+        ctx_11->a3 = b_len;
+        ctx_11->a4 = t31;
+        ctx_11->a5 = t32 < a_len ? t32 : a_len;
+        ctx_11->a6 = 0.0;
+        ctx_11->a7 = partial_11;
+        pthread_t thread_11;
+        if (pthread_create(&thread_11, NULL, ppy_thread_ranges_dot_relaxed__par3__task, ctx_11) != 0) return 1; /* spawn.ok */
+        int64_t t33 = (int64_t)thread_11;
+        int64_t t34 = (int64_t)(11u * (uint64_t)t3);
+        int64_t t35 = (int64_t)((uint64_t)t34 + (uint64_t)t3);
+        ppy_ctx_ranges_dot_relaxed__par3__task *ctx_12 = (ppy_ctx_ranges_dot_relaxed__par3__task *)malloc(sizeof(ppy_ctx_ranges_dot_relaxed__par3__task));
+        if (ctx_12 == NULL) return 1; /* spawn.alloc */
+        ctx_12->a0 = a;
+        ctx_12->a1 = a_len;
+        ctx_12->a2 = b;
+        ctx_12->a3 = b_len;
+        ctx_12->a4 = t34;
+        ctx_12->a5 = t35 < a_len ? t35 : a_len;
+        ctx_12->a6 = 0.0;
+        ctx_12->a7 = partial_12;
+        pthread_t thread_12;
+        if (pthread_create(&thread_12, NULL, ppy_thread_ranges_dot_relaxed__par3__task, ctx_12) != 0) return 1; /* spawn.ok */
+        int64_t t36 = (int64_t)thread_12;
+        int64_t t37 = (int64_t)(12u * (uint64_t)t3);
+        int64_t t38 = (int64_t)((uint64_t)t37 + (uint64_t)t3);
+        ppy_ctx_ranges_dot_relaxed__par3__task *ctx_13 = (ppy_ctx_ranges_dot_relaxed__par3__task *)malloc(sizeof(ppy_ctx_ranges_dot_relaxed__par3__task));
+        if (ctx_13 == NULL) return 1; /* spawn.alloc */
+        ctx_13->a0 = a;
+        ctx_13->a1 = a_len;
+        ctx_13->a2 = b;
+        ctx_13->a3 = b_len;
+        ctx_13->a4 = t37;
+        ctx_13->a5 = t38 < a_len ? t38 : a_len;
+        ctx_13->a6 = 0.0;
+        ctx_13->a7 = partial_13;
+        pthread_t thread_13;
+        if (pthread_create(&thread_13, NULL, ppy_thread_ranges_dot_relaxed__par3__task, ctx_13) != 0) return 1; /* spawn.ok */
+        int64_t t39 = (int64_t)thread_13;
+        int64_t t40 = (int64_t)(13u * (uint64_t)t3);
+        int64_t t41 = (int64_t)((uint64_t)t40 + (uint64_t)t3);
+        ppy_ctx_ranges_dot_relaxed__par3__task *ctx_14 = (ppy_ctx_ranges_dot_relaxed__par3__task *)malloc(sizeof(ppy_ctx_ranges_dot_relaxed__par3__task));
+        if (ctx_14 == NULL) return 1; /* spawn.alloc */
+        ctx_14->a0 = a;
+        ctx_14->a1 = a_len;
+        ctx_14->a2 = b;
+        ctx_14->a3 = b_len;
+        ctx_14->a4 = t40;
+        ctx_14->a5 = t41 < a_len ? t41 : a_len;
+        ctx_14->a6 = 0.0;
+        ctx_14->a7 = partial_14;
+        pthread_t thread_14;
+        if (pthread_create(&thread_14, NULL, ppy_thread_ranges_dot_relaxed__par3__task, ctx_14) != 0) return 1; /* spawn.ok */
+        int64_t t42 = (int64_t)thread_14;
+        int64_t t43 = (int64_t)(14u * (uint64_t)t3);
+        int64_t t44 = (int64_t)((uint64_t)t43 + (uint64_t)t3);
+        ppy_ctx_ranges_dot_relaxed__par3__task *ctx_15 = (ppy_ctx_ranges_dot_relaxed__par3__task *)malloc(sizeof(ppy_ctx_ranges_dot_relaxed__par3__task));
+        if (ctx_15 == NULL) return 1; /* spawn.alloc */
+        ctx_15->a0 = a;
+        ctx_15->a1 = a_len;
+        ctx_15->a2 = b;
+        ctx_15->a3 = b_len;
+        ctx_15->a4 = t43;
+        ctx_15->a5 = t44 < a_len ? t44 : a_len;
+        ctx_15->a6 = 0.0;
+        ctx_15->a7 = partial_15;
+        pthread_t thread_15;
+        if (pthread_create(&thread_15, NULL, ppy_thread_ranges_dot_relaxed__par3__task, ctx_15) != 0) return 1; /* spawn.ok */
+        int64_t t45 = (int64_t)thread_15;
+        int64_t t46 = (int64_t)(15u * (uint64_t)t3);
+        double t47;
+        int64_t t48 = (int64_t)ranges_dot_relaxed__par3(a, a_len, b, b_len, t46 < a_len ? t46 : a_len, a_len, 0.0, &t47);
+        void *joined;
+        if (pthread_join((pthread_t)t4, &joined) != 0) return 1; /* join.ok */
+        int64_t t49 = (int64_t)(intptr_t)joined;
+        void *joined_2;
+        if (pthread_join((pthread_t)t6, &joined_2) != 0) return 1; /* join.ok */
+        int64_t t50 = (int64_t)(intptr_t)joined_2;
+        void *joined_3;
+        if (pthread_join((pthread_t)t9, &joined_3) != 0) return 1; /* join.ok */
+        int64_t t51 = (int64_t)(intptr_t)joined_3;
+        void *joined_4;
+        if (pthread_join((pthread_t)t12, &joined_4) != 0) return 1; /* join.ok */
+        int64_t t52 = (int64_t)(intptr_t)joined_4;
+        void *joined_5;
+        if (pthread_join((pthread_t)t15, &joined_5) != 0) return 1; /* join.ok */
+        int64_t t53 = (int64_t)(intptr_t)joined_5;
+        void *joined_6;
+        if (pthread_join((pthread_t)t18, &joined_6) != 0) return 1; /* join.ok */
+        int64_t t54 = (int64_t)(intptr_t)joined_6;
+        void *joined_7;
+        if (pthread_join((pthread_t)t21, &joined_7) != 0) return 1; /* join.ok */
+        int64_t t55 = (int64_t)(intptr_t)joined_7;
+        void *joined_8;
+        if (pthread_join((pthread_t)t24, &joined_8) != 0) return 1; /* join.ok */
+        int64_t t56 = (int64_t)(intptr_t)joined_8;
+        void *joined_9;
+        if (pthread_join((pthread_t)t27, &joined_9) != 0) return 1; /* join.ok */
+        int64_t t57 = (int64_t)(intptr_t)joined_9;
+        void *joined_10;
+        if (pthread_join((pthread_t)t30, &joined_10) != 0) return 1; /* join.ok */
+        int64_t t58 = (int64_t)(intptr_t)joined_10;
+        void *joined_11;
+        if (pthread_join((pthread_t)t33, &joined_11) != 0) return 1; /* join.ok */
+        int64_t t59 = (int64_t)(intptr_t)joined_11;
+        void *joined_12;
+        if (pthread_join((pthread_t)t36, &joined_12) != 0) return 1; /* join.ok */
+        int64_t t60 = (int64_t)(intptr_t)joined_12;
+        void *joined_13;
+        if (pthread_join((pthread_t)t39, &joined_13) != 0) return 1; /* join.ok */
+        int64_t t61 = (int64_t)(intptr_t)joined_13;
+        void *joined_14;
+        if (pthread_join((pthread_t)t42, &joined_14) != 0) return 1; /* join.ok */
+        int64_t t62 = (int64_t)(intptr_t)joined_14;
+        void *joined_15;
+        if (pthread_join((pthread_t)t45, &joined_15) != 0) return 1; /* join.ok */
+        int64_t t63 = (int64_t)(intptr_t)joined_15;
+        if (!(((((((((((((((((t48 != 0) | (t49 != 0)) | (t50 != 0)) | (t51 != 0)) | (t52 != 0)) | (t53 != 0)) | (t54 != 0)) | (t55 != 0)) | (t56 != 0)) | (t57 != 0)) | (t58 != 0)) | (t59 != 0)) | (t60 != 0)) | (t61 != 0)) | (t62 != 0)) | (t63 != 0)) ^ true)) return 1; /* contract.ok */
+        reduced = t1 + (t47 + *partial + *partial_2 + *partial_3 + *partial_4 + *partial_5 + *partial_6 + *partial_7 + *partial_8 + *partial_9 + *partial_10 + *partial_11 + *partial_12 + *partial_13 + *partial_14 + *partial_15);
     }
-L1_par_join1:;
-    *v3_total_addr = v1_reduced;
-    v10_v = *v3_total_addr;
-    *out0 = v10_v;
+    total = reduced;
+    *out = total;
     return 0;
-L2_par_serial2:;
-    if (!(ranges_dot_relaxed__par3(a0, a1, a2, a3, v6_v, v5_v, v7_v, &v11_res) == 0)) goto fallback; /* call.ok */
-    v12_v = v11_res;
-    v13_pass = v12_v;
-    v1_reduced = v13_pass;
-    goto L1_par_join1;
-L3_par_spawn3:;
-    v14_v = INT64_C(16);
-    v15_v = INT64_C(15);
-    v16_v = ((int64_t)(((uint64_t)(v5_v)) + ((uint64_t)(v15_v))));
-    v17_v = v16_v / v14_v;
-    v18_v = INT64_C(0);
-    v19_v = v17_v < v5_v;
-    v20_v = v19_v ? v17_v : v5_v;
-    v22_v = 0.0;
-    v23_ctx = (ppy_ctx_ranges_dot_relaxed__par3__task *)malloc(sizeof(ppy_ctx_ranges_dot_relaxed__par3__task));
-    if (!(v23_ctx != NULL)) goto fallback; /* spawn.alloc */
-    v23_ctx->a0 = a0;
-    v23_ctx->a1 = a1;
-    v23_ctx->a2 = a2;
-    v23_ctx->a3 = a3;
-    v23_ctx->a4 = v18_v;
-    v23_ctx->a5 = v20_v;
-    v23_ctx->a6 = v22_v;
-    v23_ctx->a7 = v21_partial;
-    if (!(pthread_create(&v24_thread, NULL, ppy_thread_ranges_dot_relaxed__par3__task, v23_ctx) == 0)) goto fallback; /* spawn.ok */
-    v25_v = ((int64_t)(v24_thread));
-    v26_v = ((int64_t)(((uint64_t)(v17_v)) + ((uint64_t)(v17_v))));
-    v27_v = v26_v < v5_v;
-    v28_v = v27_v ? v26_v : v5_v;
-    v30_v = 0.0;
-    v31_ctx = (ppy_ctx_ranges_dot_relaxed__par3__task *)malloc(sizeof(ppy_ctx_ranges_dot_relaxed__par3__task));
-    if (!(v31_ctx != NULL)) goto fallback; /* spawn.alloc */
-    v31_ctx->a0 = a0;
-    v31_ctx->a1 = a1;
-    v31_ctx->a2 = a2;
-    v31_ctx->a3 = a3;
-    v31_ctx->a4 = v17_v;
-    v31_ctx->a5 = v28_v;
-    v31_ctx->a6 = v30_v;
-    v31_ctx->a7 = v29_partial;
-    if (!(pthread_create(&v32_thread, NULL, ppy_thread_ranges_dot_relaxed__par3__task, v31_ctx) == 0)) goto fallback; /* spawn.ok */
-    v33_v = ((int64_t)(v32_thread));
-    v34_v = INT64_C(2);
-    v35_v = ((int64_t)(((uint64_t)(v34_v)) * ((uint64_t)(v17_v))));
-    v36_v = ((int64_t)(((uint64_t)(v35_v)) + ((uint64_t)(v17_v))));
-    v37_v = v36_v < v5_v;
-    v38_v = v37_v ? v36_v : v5_v;
-    v40_v = 0.0;
-    v41_ctx = (ppy_ctx_ranges_dot_relaxed__par3__task *)malloc(sizeof(ppy_ctx_ranges_dot_relaxed__par3__task));
-    if (!(v41_ctx != NULL)) goto fallback; /* spawn.alloc */
-    v41_ctx->a0 = a0;
-    v41_ctx->a1 = a1;
-    v41_ctx->a2 = a2;
-    v41_ctx->a3 = a3;
-    v41_ctx->a4 = v35_v;
-    v41_ctx->a5 = v38_v;
-    v41_ctx->a6 = v40_v;
-    v41_ctx->a7 = v39_partial;
-    if (!(pthread_create(&v42_thread, NULL, ppy_thread_ranges_dot_relaxed__par3__task, v41_ctx) == 0)) goto fallback; /* spawn.ok */
-    v43_v = ((int64_t)(v42_thread));
-    v44_v = INT64_C(3);
-    v45_v = ((int64_t)(((uint64_t)(v44_v)) * ((uint64_t)(v17_v))));
-    v46_v = ((int64_t)(((uint64_t)(v45_v)) + ((uint64_t)(v17_v))));
-    v47_v = v46_v < v5_v;
-    v48_v = v47_v ? v46_v : v5_v;
-    v50_v = 0.0;
-    v51_ctx = (ppy_ctx_ranges_dot_relaxed__par3__task *)malloc(sizeof(ppy_ctx_ranges_dot_relaxed__par3__task));
-    if (!(v51_ctx != NULL)) goto fallback; /* spawn.alloc */
-    v51_ctx->a0 = a0;
-    v51_ctx->a1 = a1;
-    v51_ctx->a2 = a2;
-    v51_ctx->a3 = a3;
-    v51_ctx->a4 = v45_v;
-    v51_ctx->a5 = v48_v;
-    v51_ctx->a6 = v50_v;
-    v51_ctx->a7 = v49_partial;
-    if (!(pthread_create(&v52_thread, NULL, ppy_thread_ranges_dot_relaxed__par3__task, v51_ctx) == 0)) goto fallback; /* spawn.ok */
-    v53_v = ((int64_t)(v52_thread));
-    v54_v = INT64_C(4);
-    v55_v = ((int64_t)(((uint64_t)(v54_v)) * ((uint64_t)(v17_v))));
-    v56_v = ((int64_t)(((uint64_t)(v55_v)) + ((uint64_t)(v17_v))));
-    v57_v = v56_v < v5_v;
-    v58_v = v57_v ? v56_v : v5_v;
-    v60_v = 0.0;
-    v61_ctx = (ppy_ctx_ranges_dot_relaxed__par3__task *)malloc(sizeof(ppy_ctx_ranges_dot_relaxed__par3__task));
-    if (!(v61_ctx != NULL)) goto fallback; /* spawn.alloc */
-    v61_ctx->a0 = a0;
-    v61_ctx->a1 = a1;
-    v61_ctx->a2 = a2;
-    v61_ctx->a3 = a3;
-    v61_ctx->a4 = v55_v;
-    v61_ctx->a5 = v58_v;
-    v61_ctx->a6 = v60_v;
-    v61_ctx->a7 = v59_partial;
-    if (!(pthread_create(&v62_thread, NULL, ppy_thread_ranges_dot_relaxed__par3__task, v61_ctx) == 0)) goto fallback; /* spawn.ok */
-    v63_v = ((int64_t)(v62_thread));
-    v64_v = INT64_C(5);
-    v65_v = ((int64_t)(((uint64_t)(v64_v)) * ((uint64_t)(v17_v))));
-    v66_v = ((int64_t)(((uint64_t)(v65_v)) + ((uint64_t)(v17_v))));
-    v67_v = v66_v < v5_v;
-    v68_v = v67_v ? v66_v : v5_v;
-    v70_v = 0.0;
-    v71_ctx = (ppy_ctx_ranges_dot_relaxed__par3__task *)malloc(sizeof(ppy_ctx_ranges_dot_relaxed__par3__task));
-    if (!(v71_ctx != NULL)) goto fallback; /* spawn.alloc */
-    v71_ctx->a0 = a0;
-    v71_ctx->a1 = a1;
-    v71_ctx->a2 = a2;
-    v71_ctx->a3 = a3;
-    v71_ctx->a4 = v65_v;
-    v71_ctx->a5 = v68_v;
-    v71_ctx->a6 = v70_v;
-    v71_ctx->a7 = v69_partial;
-    if (!(pthread_create(&v72_thread, NULL, ppy_thread_ranges_dot_relaxed__par3__task, v71_ctx) == 0)) goto fallback; /* spawn.ok */
-    v73_v = ((int64_t)(v72_thread));
-    v74_v = INT64_C(6);
-    v75_v = ((int64_t)(((uint64_t)(v74_v)) * ((uint64_t)(v17_v))));
-    v76_v = ((int64_t)(((uint64_t)(v75_v)) + ((uint64_t)(v17_v))));
-    v77_v = v76_v < v5_v;
-    v78_v = v77_v ? v76_v : v5_v;
-    v80_v = 0.0;
-    v81_ctx = (ppy_ctx_ranges_dot_relaxed__par3__task *)malloc(sizeof(ppy_ctx_ranges_dot_relaxed__par3__task));
-    if (!(v81_ctx != NULL)) goto fallback; /* spawn.alloc */
-    v81_ctx->a0 = a0;
-    v81_ctx->a1 = a1;
-    v81_ctx->a2 = a2;
-    v81_ctx->a3 = a3;
-    v81_ctx->a4 = v75_v;
-    v81_ctx->a5 = v78_v;
-    v81_ctx->a6 = v80_v;
-    v81_ctx->a7 = v79_partial;
-    if (!(pthread_create(&v82_thread, NULL, ppy_thread_ranges_dot_relaxed__par3__task, v81_ctx) == 0)) goto fallback; /* spawn.ok */
-    v83_v = ((int64_t)(v82_thread));
-    v84_v = INT64_C(7);
-    v85_v = ((int64_t)(((uint64_t)(v84_v)) * ((uint64_t)(v17_v))));
-    v86_v = ((int64_t)(((uint64_t)(v85_v)) + ((uint64_t)(v17_v))));
-    v87_v = v86_v < v5_v;
-    v88_v = v87_v ? v86_v : v5_v;
-    v90_v = 0.0;
-    v91_ctx = (ppy_ctx_ranges_dot_relaxed__par3__task *)malloc(sizeof(ppy_ctx_ranges_dot_relaxed__par3__task));
-    if (!(v91_ctx != NULL)) goto fallback; /* spawn.alloc */
-    v91_ctx->a0 = a0;
-    v91_ctx->a1 = a1;
-    v91_ctx->a2 = a2;
-    v91_ctx->a3 = a3;
-    v91_ctx->a4 = v85_v;
-    v91_ctx->a5 = v88_v;
-    v91_ctx->a6 = v90_v;
-    v91_ctx->a7 = v89_partial;
-    if (!(pthread_create(&v92_thread, NULL, ppy_thread_ranges_dot_relaxed__par3__task, v91_ctx) == 0)) goto fallback; /* spawn.ok */
-    v93_v = ((int64_t)(v92_thread));
-    v94_v = INT64_C(8);
-    v95_v = ((int64_t)(((uint64_t)(v94_v)) * ((uint64_t)(v17_v))));
-    v96_v = ((int64_t)(((uint64_t)(v95_v)) + ((uint64_t)(v17_v))));
-    v97_v = v96_v < v5_v;
-    v98_v = v97_v ? v96_v : v5_v;
-    v100_v = 0.0;
-    v101_ctx = (ppy_ctx_ranges_dot_relaxed__par3__task *)malloc(sizeof(ppy_ctx_ranges_dot_relaxed__par3__task));
-    if (!(v101_ctx != NULL)) goto fallback; /* spawn.alloc */
-    v101_ctx->a0 = a0;
-    v101_ctx->a1 = a1;
-    v101_ctx->a2 = a2;
-    v101_ctx->a3 = a3;
-    v101_ctx->a4 = v95_v;
-    v101_ctx->a5 = v98_v;
-    v101_ctx->a6 = v100_v;
-    v101_ctx->a7 = v99_partial;
-    if (!(pthread_create(&v102_thread, NULL, ppy_thread_ranges_dot_relaxed__par3__task, v101_ctx) == 0)) goto fallback; /* spawn.ok */
-    v103_v = ((int64_t)(v102_thread));
-    v104_v = INT64_C(9);
-    v105_v = ((int64_t)(((uint64_t)(v104_v)) * ((uint64_t)(v17_v))));
-    v106_v = ((int64_t)(((uint64_t)(v105_v)) + ((uint64_t)(v17_v))));
-    v107_v = v106_v < v5_v;
-    v108_v = v107_v ? v106_v : v5_v;
-    v110_v = 0.0;
-    v111_ctx = (ppy_ctx_ranges_dot_relaxed__par3__task *)malloc(sizeof(ppy_ctx_ranges_dot_relaxed__par3__task));
-    if (!(v111_ctx != NULL)) goto fallback; /* spawn.alloc */
-    v111_ctx->a0 = a0;
-    v111_ctx->a1 = a1;
-    v111_ctx->a2 = a2;
-    v111_ctx->a3 = a3;
-    v111_ctx->a4 = v105_v;
-    v111_ctx->a5 = v108_v;
-    v111_ctx->a6 = v110_v;
-    v111_ctx->a7 = v109_partial;
-    if (!(pthread_create(&v112_thread, NULL, ppy_thread_ranges_dot_relaxed__par3__task, v111_ctx) == 0)) goto fallback; /* spawn.ok */
-    v113_v = ((int64_t)(v112_thread));
-    v114_v = INT64_C(10);
-    v115_v = ((int64_t)(((uint64_t)(v114_v)) * ((uint64_t)(v17_v))));
-    v116_v = ((int64_t)(((uint64_t)(v115_v)) + ((uint64_t)(v17_v))));
-    v117_v = v116_v < v5_v;
-    v118_v = v117_v ? v116_v : v5_v;
-    v120_v = 0.0;
-    v121_ctx = (ppy_ctx_ranges_dot_relaxed__par3__task *)malloc(sizeof(ppy_ctx_ranges_dot_relaxed__par3__task));
-    if (!(v121_ctx != NULL)) goto fallback; /* spawn.alloc */
-    v121_ctx->a0 = a0;
-    v121_ctx->a1 = a1;
-    v121_ctx->a2 = a2;
-    v121_ctx->a3 = a3;
-    v121_ctx->a4 = v115_v;
-    v121_ctx->a5 = v118_v;
-    v121_ctx->a6 = v120_v;
-    v121_ctx->a7 = v119_partial;
-    if (!(pthread_create(&v122_thread, NULL, ppy_thread_ranges_dot_relaxed__par3__task, v121_ctx) == 0)) goto fallback; /* spawn.ok */
-    v123_v = ((int64_t)(v122_thread));
-    v124_v = INT64_C(11);
-    v125_v = ((int64_t)(((uint64_t)(v124_v)) * ((uint64_t)(v17_v))));
-    v126_v = ((int64_t)(((uint64_t)(v125_v)) + ((uint64_t)(v17_v))));
-    v127_v = v126_v < v5_v;
-    v128_v = v127_v ? v126_v : v5_v;
-    v130_v = 0.0;
-    v131_ctx = (ppy_ctx_ranges_dot_relaxed__par3__task *)malloc(sizeof(ppy_ctx_ranges_dot_relaxed__par3__task));
-    if (!(v131_ctx != NULL)) goto fallback; /* spawn.alloc */
-    v131_ctx->a0 = a0;
-    v131_ctx->a1 = a1;
-    v131_ctx->a2 = a2;
-    v131_ctx->a3 = a3;
-    v131_ctx->a4 = v125_v;
-    v131_ctx->a5 = v128_v;
-    v131_ctx->a6 = v130_v;
-    v131_ctx->a7 = v129_partial;
-    if (!(pthread_create(&v132_thread, NULL, ppy_thread_ranges_dot_relaxed__par3__task, v131_ctx) == 0)) goto fallback; /* spawn.ok */
-    v133_v = ((int64_t)(v132_thread));
-    v134_v = INT64_C(12);
-    v135_v = ((int64_t)(((uint64_t)(v134_v)) * ((uint64_t)(v17_v))));
-    v136_v = ((int64_t)(((uint64_t)(v135_v)) + ((uint64_t)(v17_v))));
-    v137_v = v136_v < v5_v;
-    v138_v = v137_v ? v136_v : v5_v;
-    v140_v = 0.0;
-    v141_ctx = (ppy_ctx_ranges_dot_relaxed__par3__task *)malloc(sizeof(ppy_ctx_ranges_dot_relaxed__par3__task));
-    if (!(v141_ctx != NULL)) goto fallback; /* spawn.alloc */
-    v141_ctx->a0 = a0;
-    v141_ctx->a1 = a1;
-    v141_ctx->a2 = a2;
-    v141_ctx->a3 = a3;
-    v141_ctx->a4 = v135_v;
-    v141_ctx->a5 = v138_v;
-    v141_ctx->a6 = v140_v;
-    v141_ctx->a7 = v139_partial;
-    if (!(pthread_create(&v142_thread, NULL, ppy_thread_ranges_dot_relaxed__par3__task, v141_ctx) == 0)) goto fallback; /* spawn.ok */
-    v143_v = ((int64_t)(v142_thread));
-    v144_v = INT64_C(13);
-    v145_v = ((int64_t)(((uint64_t)(v144_v)) * ((uint64_t)(v17_v))));
-    v146_v = ((int64_t)(((uint64_t)(v145_v)) + ((uint64_t)(v17_v))));
-    v147_v = v146_v < v5_v;
-    v148_v = v147_v ? v146_v : v5_v;
-    v150_v = 0.0;
-    v151_ctx = (ppy_ctx_ranges_dot_relaxed__par3__task *)malloc(sizeof(ppy_ctx_ranges_dot_relaxed__par3__task));
-    if (!(v151_ctx != NULL)) goto fallback; /* spawn.alloc */
-    v151_ctx->a0 = a0;
-    v151_ctx->a1 = a1;
-    v151_ctx->a2 = a2;
-    v151_ctx->a3 = a3;
-    v151_ctx->a4 = v145_v;
-    v151_ctx->a5 = v148_v;
-    v151_ctx->a6 = v150_v;
-    v151_ctx->a7 = v149_partial;
-    if (!(pthread_create(&v152_thread, NULL, ppy_thread_ranges_dot_relaxed__par3__task, v151_ctx) == 0)) goto fallback; /* spawn.ok */
-    v153_v = ((int64_t)(v152_thread));
-    v154_v = INT64_C(14);
-    v155_v = ((int64_t)(((uint64_t)(v154_v)) * ((uint64_t)(v17_v))));
-    v156_v = ((int64_t)(((uint64_t)(v155_v)) + ((uint64_t)(v17_v))));
-    v157_v = v156_v < v5_v;
-    v158_v = v157_v ? v156_v : v5_v;
-    v160_v = 0.0;
-    v161_ctx = (ppy_ctx_ranges_dot_relaxed__par3__task *)malloc(sizeof(ppy_ctx_ranges_dot_relaxed__par3__task));
-    if (!(v161_ctx != NULL)) goto fallback; /* spawn.alloc */
-    v161_ctx->a0 = a0;
-    v161_ctx->a1 = a1;
-    v161_ctx->a2 = a2;
-    v161_ctx->a3 = a3;
-    v161_ctx->a4 = v155_v;
-    v161_ctx->a5 = v158_v;
-    v161_ctx->a6 = v160_v;
-    v161_ctx->a7 = v159_partial;
-    if (!(pthread_create(&v162_thread, NULL, ppy_thread_ranges_dot_relaxed__par3__task, v161_ctx) == 0)) goto fallback; /* spawn.ok */
-    v163_v = ((int64_t)(v162_thread));
-    v164_v = INT64_C(15);
-    v165_v = ((int64_t)(((uint64_t)(v164_v)) * ((uint64_t)(v17_v))));
-    v166_v = v165_v < v5_v;
-    v167_v = v166_v ? v165_v : v5_v;
-    v168_v = 0.0;
-    v170_v = ((int64_t)(ranges_dot_relaxed__par3(a0, a1, a2, a3, v167_v, v5_v, v168_v, &v169_res)));
-    v171_v = v169_res;
-    v172_v = INT64_C(0);
-    v173_v = v170_v != v172_v;
-    if (!(pthread_join((pthread_t)v25_v, &v174_joined) == 0)) goto fallback; /* join.ok */
-    v175_v = ((int64_t)((intptr_t)v174_joined));
-    v176_v = INT64_C(0);
-    v177_v = v175_v != v176_v;
-    v178_v = v173_v | v177_v;
-    if (!(pthread_join((pthread_t)v33_v, &v179_joined) == 0)) goto fallback; /* join.ok */
-    v180_v = ((int64_t)((intptr_t)v179_joined));
-    v181_v = INT64_C(0);
-    v182_v = v180_v != v181_v;
-    v183_v = v178_v | v182_v;
-    if (!(pthread_join((pthread_t)v43_v, &v184_joined) == 0)) goto fallback; /* join.ok */
-    v185_v = ((int64_t)((intptr_t)v184_joined));
-    v186_v = INT64_C(0);
-    v187_v = v185_v != v186_v;
-    v188_v = v183_v | v187_v;
-    if (!(pthread_join((pthread_t)v53_v, &v189_joined) == 0)) goto fallback; /* join.ok */
-    v190_v = ((int64_t)((intptr_t)v189_joined));
-    v191_v = INT64_C(0);
-    v192_v = v190_v != v191_v;
-    v193_v = v188_v | v192_v;
-    if (!(pthread_join((pthread_t)v63_v, &v194_joined) == 0)) goto fallback; /* join.ok */
-    v195_v = ((int64_t)((intptr_t)v194_joined));
-    v196_v = INT64_C(0);
-    v197_v = v195_v != v196_v;
-    v198_v = v193_v | v197_v;
-    if (!(pthread_join((pthread_t)v73_v, &v199_joined) == 0)) goto fallback; /* join.ok */
-    v200_v = ((int64_t)((intptr_t)v199_joined));
-    v201_v = INT64_C(0);
-    v202_v = v200_v != v201_v;
-    v203_v = v198_v | v202_v;
-    if (!(pthread_join((pthread_t)v83_v, &v204_joined) == 0)) goto fallback; /* join.ok */
-    v205_v = ((int64_t)((intptr_t)v204_joined));
-    v206_v = INT64_C(0);
-    v207_v = v205_v != v206_v;
-    v208_v = v203_v | v207_v;
-    if (!(pthread_join((pthread_t)v93_v, &v209_joined) == 0)) goto fallback; /* join.ok */
-    v210_v = ((int64_t)((intptr_t)v209_joined));
-    v211_v = INT64_C(0);
-    v212_v = v210_v != v211_v;
-    v213_v = v208_v | v212_v;
-    if (!(pthread_join((pthread_t)v103_v, &v214_joined) == 0)) goto fallback; /* join.ok */
-    v215_v = ((int64_t)((intptr_t)v214_joined));
-    v216_v = INT64_C(0);
-    v217_v = v215_v != v216_v;
-    v218_v = v213_v | v217_v;
-    if (!(pthread_join((pthread_t)v113_v, &v219_joined) == 0)) goto fallback; /* join.ok */
-    v220_v = ((int64_t)((intptr_t)v219_joined));
-    v221_v = INT64_C(0);
-    v222_v = v220_v != v221_v;
-    v223_v = v218_v | v222_v;
-    if (!(pthread_join((pthread_t)v123_v, &v224_joined) == 0)) goto fallback; /* join.ok */
-    v225_v = ((int64_t)((intptr_t)v224_joined));
-    v226_v = INT64_C(0);
-    v227_v = v225_v != v226_v;
-    v228_v = v223_v | v227_v;
-    if (!(pthread_join((pthread_t)v133_v, &v229_joined) == 0)) goto fallback; /* join.ok */
-    v230_v = ((int64_t)((intptr_t)v229_joined));
-    v231_v = INT64_C(0);
-    v232_v = v230_v != v231_v;
-    v233_v = v228_v | v232_v;
-    if (!(pthread_join((pthread_t)v143_v, &v234_joined) == 0)) goto fallback; /* join.ok */
-    v235_v = ((int64_t)((intptr_t)v234_joined));
-    v236_v = INT64_C(0);
-    v237_v = v235_v != v236_v;
-    v238_v = v233_v | v237_v;
-    if (!(pthread_join((pthread_t)v153_v, &v239_joined) == 0)) goto fallback; /* join.ok */
-    v240_v = ((int64_t)((intptr_t)v239_joined));
-    v241_v = INT64_C(0);
-    v242_v = v240_v != v241_v;
-    v243_v = v238_v | v242_v;
-    if (!(pthread_join((pthread_t)v163_v, &v244_joined) == 0)) goto fallback; /* join.ok */
-    v245_v = ((int64_t)((intptr_t)v244_joined));
-    v246_v = INT64_C(0);
-    v247_v = v245_v != v246_v;
-    v248_v = v243_v | v247_v;
-    v249_v = true;
-    v250_v = v248_v ^ v249_v;
-    if (!(v250_v)) goto fallback; /* contract.ok */
-    v251_v = *v21_partial;
-    v252_v = v171_v + v251_v;
-    v253_v = *v29_partial;
-    v254_v = v252_v + v253_v;
-    v255_v = *v39_partial;
-    v256_v = v254_v + v255_v;
-    v257_v = *v49_partial;
-    v258_v = v256_v + v257_v;
-    v259_v = *v59_partial;
-    v260_v = v258_v + v259_v;
-    v261_v = *v69_partial;
-    v262_v = v260_v + v261_v;
-    v263_v = *v79_partial;
-    v264_v = v262_v + v263_v;
-    v265_v = *v89_partial;
-    v266_v = v264_v + v265_v;
-    v267_v = *v99_partial;
-    v268_v = v266_v + v267_v;
-    v269_v = *v109_partial;
-    v270_v = v268_v + v269_v;
-    v271_v = *v119_partial;
-    v272_v = v270_v + v271_v;
-    v273_v = *v129_partial;
-    v274_v = v272_v + v273_v;
-    v275_v = *v139_partial;
-    v276_v = v274_v + v275_v;
-    v277_v = *v149_partial;
-    v278_v = v276_v + v277_v;
-    v279_v = *v159_partial;
-    v280_v = v278_v + v279_v;
-    v281_v = v7_v + v280_v;
-    v282_pass = v281_v;
-    v1_reduced = v282_pass;
-    goto L1_par_join1;
-fallback:
-    return 1;
 }
 
+int32_t ppy_ranges_count_odd(int64_t *xs, int64_t xs_len, int64_t scale, int64_t *out) {
+    int64_t reduced;
+    int64_t partial[1];
+    int64_t partial_2[1];
+    int64_t partial_3[1];
+    int64_t partial_4[1];
+    int64_t partial_5[1];
+    int64_t partial_6[1];
+    int64_t partial_7[1];
+    int64_t partial_8[1];
+    int64_t partial_9[1];
+    int64_t partial_10[1];
+    int64_t partial_11[1];
+    int64_t partial_12[1];
+    int64_t partial_13[1];
+    int64_t partial_14[1];
+    int64_t partial_15[1];
 
-int32_t ppy_ranges_count_odd(int64_t *a0, int64_t a1, int64_t a2, int64_t *out0) {
-    int64_t v1_reduced;
-    int64_t v2_scale_addr[1];
-    int64_t v3_v;
-    int64_t v4_hits_addr[1];
-    int64_t v5_v;
-    int64_t v6_v;
-    int64_t v7_v;
-    int64_t v8_v;
-    int64_t v9_v;
-    int64_t v10_v;
-    bool v11_v;
-    int64_t v12_v;
-    int64_t v13_res;
-    int64_t v14_v;
-    int64_t v15_pass;
-    int64_t v16_v;
-    int64_t v17_v;
-    int64_t v18_v;
-    int64_t v19_v;
-    int64_t v20_v;
-    bool v21_v;
-    int64_t v22_v;
-    int64_t v23_partial[1];
-    int64_t v24_v;
-    ppy_ctx_ranges_count_odd__par4__task *v25_ctx;
-    pthread_t v26_thread;
-    int64_t v27_v;
-    int64_t v28_v;
-    bool v29_v;
-    int64_t v30_v;
-    int64_t v31_partial[1];
-    int64_t v32_v;
-    ppy_ctx_ranges_count_odd__par4__task *v33_ctx;
-    pthread_t v34_thread;
-    int64_t v35_v;
-    int64_t v36_v;
-    int64_t v37_v;
-    int64_t v38_v;
-    bool v39_v;
-    int64_t v40_v;
-    int64_t v41_partial[1];
-    int64_t v42_v;
-    ppy_ctx_ranges_count_odd__par4__task *v43_ctx;
-    pthread_t v44_thread;
-    int64_t v45_v;
-    int64_t v46_v;
-    int64_t v47_v;
-    int64_t v48_v;
-    bool v49_v;
-    int64_t v50_v;
-    int64_t v51_partial[1];
-    int64_t v52_v;
-    ppy_ctx_ranges_count_odd__par4__task *v53_ctx;
-    pthread_t v54_thread;
-    int64_t v55_v;
-    int64_t v56_v;
-    int64_t v57_v;
-    int64_t v58_v;
-    bool v59_v;
-    int64_t v60_v;
-    int64_t v61_partial[1];
-    int64_t v62_v;
-    ppy_ctx_ranges_count_odd__par4__task *v63_ctx;
-    pthread_t v64_thread;
-    int64_t v65_v;
-    int64_t v66_v;
-    int64_t v67_v;
-    int64_t v68_v;
-    bool v69_v;
-    int64_t v70_v;
-    int64_t v71_partial[1];
-    int64_t v72_v;
-    ppy_ctx_ranges_count_odd__par4__task *v73_ctx;
-    pthread_t v74_thread;
-    int64_t v75_v;
-    int64_t v76_v;
-    int64_t v77_v;
-    int64_t v78_v;
-    bool v79_v;
-    int64_t v80_v;
-    int64_t v81_partial[1];
-    int64_t v82_v;
-    ppy_ctx_ranges_count_odd__par4__task *v83_ctx;
-    pthread_t v84_thread;
-    int64_t v85_v;
-    int64_t v86_v;
-    int64_t v87_v;
-    int64_t v88_v;
-    bool v89_v;
-    int64_t v90_v;
-    int64_t v91_partial[1];
-    int64_t v92_v;
-    ppy_ctx_ranges_count_odd__par4__task *v93_ctx;
-    pthread_t v94_thread;
-    int64_t v95_v;
-    int64_t v96_v;
-    int64_t v97_v;
-    int64_t v98_v;
-    bool v99_v;
-    int64_t v100_v;
-    int64_t v101_partial[1];
-    int64_t v102_v;
-    ppy_ctx_ranges_count_odd__par4__task *v103_ctx;
-    pthread_t v104_thread;
-    int64_t v105_v;
-    int64_t v106_v;
-    int64_t v107_v;
-    int64_t v108_v;
-    bool v109_v;
-    int64_t v110_v;
-    int64_t v111_partial[1];
-    int64_t v112_v;
-    ppy_ctx_ranges_count_odd__par4__task *v113_ctx;
-    pthread_t v114_thread;
-    int64_t v115_v;
-    int64_t v116_v;
-    int64_t v117_v;
-    int64_t v118_v;
-    bool v119_v;
-    int64_t v120_v;
-    int64_t v121_partial[1];
-    int64_t v122_v;
-    ppy_ctx_ranges_count_odd__par4__task *v123_ctx;
-    pthread_t v124_thread;
-    int64_t v125_v;
-    int64_t v126_v;
-    int64_t v127_v;
-    int64_t v128_v;
-    bool v129_v;
-    int64_t v130_v;
-    int64_t v131_partial[1];
-    int64_t v132_v;
-    ppy_ctx_ranges_count_odd__par4__task *v133_ctx;
-    pthread_t v134_thread;
-    int64_t v135_v;
-    int64_t v136_v;
-    int64_t v137_v;
-    int64_t v138_v;
-    bool v139_v;
-    int64_t v140_v;
-    int64_t v141_partial[1];
-    int64_t v142_v;
-    ppy_ctx_ranges_count_odd__par4__task *v143_ctx;
-    pthread_t v144_thread;
-    int64_t v145_v;
-    int64_t v146_v;
-    int64_t v147_v;
-    int64_t v148_v;
-    bool v149_v;
-    int64_t v150_v;
-    int64_t v151_partial[1];
-    int64_t v152_v;
-    ppy_ctx_ranges_count_odd__par4__task *v153_ctx;
-    pthread_t v154_thread;
-    int64_t v155_v;
-    int64_t v156_v;
-    int64_t v157_v;
-    int64_t v158_v;
-    bool v159_v;
-    int64_t v160_v;
-    int64_t v161_partial[1];
-    int64_t v162_v;
-    ppy_ctx_ranges_count_odd__par4__task *v163_ctx;
-    pthread_t v164_thread;
-    int64_t v165_v;
-    int64_t v166_v;
-    int64_t v167_v;
-    bool v168_v;
-    int64_t v169_v;
-    int64_t v170_v;
-    int64_t v171_res;
-    int64_t v172_v;
-    int64_t v173_v;
-    int64_t v174_v;
-    bool v175_v;
-    void *v176_joined;
-    int64_t v177_v;
-    int64_t v178_v;
-    bool v179_v;
-    bool v180_v;
-    void *v181_joined;
-    int64_t v182_v;
-    int64_t v183_v;
-    bool v184_v;
-    bool v185_v;
-    void *v186_joined;
-    int64_t v187_v;
-    int64_t v188_v;
-    bool v189_v;
-    bool v190_v;
-    void *v191_joined;
-    int64_t v192_v;
-    int64_t v193_v;
-    bool v194_v;
-    bool v195_v;
-    void *v196_joined;
-    int64_t v197_v;
-    int64_t v198_v;
-    bool v199_v;
-    bool v200_v;
-    void *v201_joined;
-    int64_t v202_v;
-    int64_t v203_v;
-    bool v204_v;
-    bool v205_v;
-    void *v206_joined;
-    int64_t v207_v;
-    int64_t v208_v;
-    bool v209_v;
-    bool v210_v;
-    void *v211_joined;
-    int64_t v212_v;
-    int64_t v213_v;
-    bool v214_v;
-    bool v215_v;
-    void *v216_joined;
-    int64_t v217_v;
-    int64_t v218_v;
-    bool v219_v;
-    bool v220_v;
-    void *v221_joined;
-    int64_t v222_v;
-    int64_t v223_v;
-    bool v224_v;
-    bool v225_v;
-    void *v226_joined;
-    int64_t v227_v;
-    int64_t v228_v;
-    bool v229_v;
-    bool v230_v;
-    void *v231_joined;
-    int64_t v232_v;
-    int64_t v233_v;
-    bool v234_v;
-    bool v235_v;
-    void *v236_joined;
-    int64_t v237_v;
-    int64_t v238_v;
-    bool v239_v;
-    bool v240_v;
-    void *v241_joined;
-    int64_t v242_v;
-    int64_t v243_v;
-    bool v244_v;
-    bool v245_v;
-    void *v246_joined;
-    int64_t v247_v;
-    int64_t v248_v;
-    bool v249_v;
-    bool v250_v;
-    bool v251_v;
-    bool v252_v;
-    int64_t v253_v;
-    int64_t v254_v;
-    int64_t v255_v;
-    int64_t v256_v;
-    int64_t v257_v;
-    int64_t v258_v;
-    int64_t v259_v;
-    int64_t v260_v;
-    int64_t v261_v;
-    int64_t v262_v;
-    int64_t v263_v;
-    int64_t v264_v;
-    int64_t v265_v;
-    int64_t v266_v;
-    int64_t v267_v;
-    int64_t v268_v;
-    int64_t v269_v;
-    int64_t v270_v;
-    int64_t v271_v;
-    int64_t v272_v;
-    int64_t v273_v;
-    int64_t v274_v;
-    int64_t v275_v;
-    int64_t v276_v;
-    int64_t v277_v;
-    int64_t v278_v;
-    int64_t v279_v;
-    int64_t v280_v;
-    int64_t v281_v;
-    int64_t v282_v;
-    int64_t v283_v;
-    int64_t v284_pass;
-    *v2_scale_addr = a2;
-    v3_v = INT64_C(0);
-    *v4_hits_addr = v3_v;
-    v5_v = INT64_C(0);
-    v6_v = a1;
-    v7_v = ((int64_t)(v6_v));
-    v8_v = *v2_scale_addr;
-    v9_v = *v4_hits_addr;
-    v10_v = INT64_C(4096);
-    v11_v = v7_v < v10_v;
-    if (v11_v) {
-        goto L2_par_serial2;
+    int64_t hits = 0;
+    int64_t t1 = hits;
+    if (xs_len < 4096) {
+        int64_t t2;
+        if (ranges_count_odd__par4(scale, xs, xs_len, 0, xs_len, t1, &t2) != 0) return 1; /* call.ok */
+        reduced = t2;
     } else {
-        goto L3_par_spawn3;
+        int64_t t3 = (int64_t)((uint64_t)xs_len + 15u) / 16;
+        ppy_ctx_ranges_count_odd__par4__task *ctx = (ppy_ctx_ranges_count_odd__par4__task *)malloc(sizeof(ppy_ctx_ranges_count_odd__par4__task));
+        if (ctx == NULL) return 1; /* spawn.alloc */
+        ctx->a0 = scale;
+        ctx->a1 = xs;
+        ctx->a2 = xs_len;
+        ctx->a3 = 0;
+        ctx->a4 = t3 < xs_len ? t3 : xs_len;
+        ctx->a5 = 0;
+        ctx->a6 = partial;
+        pthread_t thread;
+        if (pthread_create(&thread, NULL, ppy_thread_ranges_count_odd__par4__task, ctx) != 0) return 1; /* spawn.ok */
+        int64_t t4 = (int64_t)thread;
+        int64_t t5 = (int64_t)((uint64_t)t3 + (uint64_t)t3);
+        ppy_ctx_ranges_count_odd__par4__task *ctx_2 = (ppy_ctx_ranges_count_odd__par4__task *)malloc(sizeof(ppy_ctx_ranges_count_odd__par4__task));
+        if (ctx_2 == NULL) return 1; /* spawn.alloc */
+        ctx_2->a0 = scale;
+        ctx_2->a1 = xs;
+        ctx_2->a2 = xs_len;
+        ctx_2->a3 = t3;
+        ctx_2->a4 = t5 < xs_len ? t5 : xs_len;
+        ctx_2->a5 = 0;
+        ctx_2->a6 = partial_2;
+        pthread_t thread_2;
+        if (pthread_create(&thread_2, NULL, ppy_thread_ranges_count_odd__par4__task, ctx_2) != 0) return 1; /* spawn.ok */
+        int64_t t6 = (int64_t)thread_2;
+        int64_t t7 = (int64_t)(2u * (uint64_t)t3);
+        int64_t t8 = (int64_t)((uint64_t)t7 + (uint64_t)t3);
+        ppy_ctx_ranges_count_odd__par4__task *ctx_3 = (ppy_ctx_ranges_count_odd__par4__task *)malloc(sizeof(ppy_ctx_ranges_count_odd__par4__task));
+        if (ctx_3 == NULL) return 1; /* spawn.alloc */
+        ctx_3->a0 = scale;
+        ctx_3->a1 = xs;
+        ctx_3->a2 = xs_len;
+        ctx_3->a3 = t7;
+        ctx_3->a4 = t8 < xs_len ? t8 : xs_len;
+        ctx_3->a5 = 0;
+        ctx_3->a6 = partial_3;
+        pthread_t thread_3;
+        if (pthread_create(&thread_3, NULL, ppy_thread_ranges_count_odd__par4__task, ctx_3) != 0) return 1; /* spawn.ok */
+        int64_t t9 = (int64_t)thread_3;
+        int64_t t10 = (int64_t)(3u * (uint64_t)t3);
+        int64_t t11 = (int64_t)((uint64_t)t10 + (uint64_t)t3);
+        ppy_ctx_ranges_count_odd__par4__task *ctx_4 = (ppy_ctx_ranges_count_odd__par4__task *)malloc(sizeof(ppy_ctx_ranges_count_odd__par4__task));
+        if (ctx_4 == NULL) return 1; /* spawn.alloc */
+        ctx_4->a0 = scale;
+        ctx_4->a1 = xs;
+        ctx_4->a2 = xs_len;
+        ctx_4->a3 = t10;
+        ctx_4->a4 = t11 < xs_len ? t11 : xs_len;
+        ctx_4->a5 = 0;
+        ctx_4->a6 = partial_4;
+        pthread_t thread_4;
+        if (pthread_create(&thread_4, NULL, ppy_thread_ranges_count_odd__par4__task, ctx_4) != 0) return 1; /* spawn.ok */
+        int64_t t12 = (int64_t)thread_4;
+        int64_t t13 = (int64_t)(4u * (uint64_t)t3);
+        int64_t t14 = (int64_t)((uint64_t)t13 + (uint64_t)t3);
+        ppy_ctx_ranges_count_odd__par4__task *ctx_5 = (ppy_ctx_ranges_count_odd__par4__task *)malloc(sizeof(ppy_ctx_ranges_count_odd__par4__task));
+        if (ctx_5 == NULL) return 1; /* spawn.alloc */
+        ctx_5->a0 = scale;
+        ctx_5->a1 = xs;
+        ctx_5->a2 = xs_len;
+        ctx_5->a3 = t13;
+        ctx_5->a4 = t14 < xs_len ? t14 : xs_len;
+        ctx_5->a5 = 0;
+        ctx_5->a6 = partial_5;
+        pthread_t thread_5;
+        if (pthread_create(&thread_5, NULL, ppy_thread_ranges_count_odd__par4__task, ctx_5) != 0) return 1; /* spawn.ok */
+        int64_t t15 = (int64_t)thread_5;
+        int64_t t16 = (int64_t)(5u * (uint64_t)t3);
+        int64_t t17 = (int64_t)((uint64_t)t16 + (uint64_t)t3);
+        ppy_ctx_ranges_count_odd__par4__task *ctx_6 = (ppy_ctx_ranges_count_odd__par4__task *)malloc(sizeof(ppy_ctx_ranges_count_odd__par4__task));
+        if (ctx_6 == NULL) return 1; /* spawn.alloc */
+        ctx_6->a0 = scale;
+        ctx_6->a1 = xs;
+        ctx_6->a2 = xs_len;
+        ctx_6->a3 = t16;
+        ctx_6->a4 = t17 < xs_len ? t17 : xs_len;
+        ctx_6->a5 = 0;
+        ctx_6->a6 = partial_6;
+        pthread_t thread_6;
+        if (pthread_create(&thread_6, NULL, ppy_thread_ranges_count_odd__par4__task, ctx_6) != 0) return 1; /* spawn.ok */
+        int64_t t18 = (int64_t)thread_6;
+        int64_t t19 = (int64_t)(6u * (uint64_t)t3);
+        int64_t t20 = (int64_t)((uint64_t)t19 + (uint64_t)t3);
+        ppy_ctx_ranges_count_odd__par4__task *ctx_7 = (ppy_ctx_ranges_count_odd__par4__task *)malloc(sizeof(ppy_ctx_ranges_count_odd__par4__task));
+        if (ctx_7 == NULL) return 1; /* spawn.alloc */
+        ctx_7->a0 = scale;
+        ctx_7->a1 = xs;
+        ctx_7->a2 = xs_len;
+        ctx_7->a3 = t19;
+        ctx_7->a4 = t20 < xs_len ? t20 : xs_len;
+        ctx_7->a5 = 0;
+        ctx_7->a6 = partial_7;
+        pthread_t thread_7;
+        if (pthread_create(&thread_7, NULL, ppy_thread_ranges_count_odd__par4__task, ctx_7) != 0) return 1; /* spawn.ok */
+        int64_t t21 = (int64_t)thread_7;
+        int64_t t22 = (int64_t)(7u * (uint64_t)t3);
+        int64_t t23 = (int64_t)((uint64_t)t22 + (uint64_t)t3);
+        ppy_ctx_ranges_count_odd__par4__task *ctx_8 = (ppy_ctx_ranges_count_odd__par4__task *)malloc(sizeof(ppy_ctx_ranges_count_odd__par4__task));
+        if (ctx_8 == NULL) return 1; /* spawn.alloc */
+        ctx_8->a0 = scale;
+        ctx_8->a1 = xs;
+        ctx_8->a2 = xs_len;
+        ctx_8->a3 = t22;
+        ctx_8->a4 = t23 < xs_len ? t23 : xs_len;
+        ctx_8->a5 = 0;
+        ctx_8->a6 = partial_8;
+        pthread_t thread_8;
+        if (pthread_create(&thread_8, NULL, ppy_thread_ranges_count_odd__par4__task, ctx_8) != 0) return 1; /* spawn.ok */
+        int64_t t24 = (int64_t)thread_8;
+        int64_t t25 = (int64_t)(8u * (uint64_t)t3);
+        int64_t t26 = (int64_t)((uint64_t)t25 + (uint64_t)t3);
+        ppy_ctx_ranges_count_odd__par4__task *ctx_9 = (ppy_ctx_ranges_count_odd__par4__task *)malloc(sizeof(ppy_ctx_ranges_count_odd__par4__task));
+        if (ctx_9 == NULL) return 1; /* spawn.alloc */
+        ctx_9->a0 = scale;
+        ctx_9->a1 = xs;
+        ctx_9->a2 = xs_len;
+        ctx_9->a3 = t25;
+        ctx_9->a4 = t26 < xs_len ? t26 : xs_len;
+        ctx_9->a5 = 0;
+        ctx_9->a6 = partial_9;
+        pthread_t thread_9;
+        if (pthread_create(&thread_9, NULL, ppy_thread_ranges_count_odd__par4__task, ctx_9) != 0) return 1; /* spawn.ok */
+        int64_t t27 = (int64_t)thread_9;
+        int64_t t28 = (int64_t)(9u * (uint64_t)t3);
+        int64_t t29 = (int64_t)((uint64_t)t28 + (uint64_t)t3);
+        ppy_ctx_ranges_count_odd__par4__task *ctx_10 = (ppy_ctx_ranges_count_odd__par4__task *)malloc(sizeof(ppy_ctx_ranges_count_odd__par4__task));
+        if (ctx_10 == NULL) return 1; /* spawn.alloc */
+        ctx_10->a0 = scale;
+        ctx_10->a1 = xs;
+        ctx_10->a2 = xs_len;
+        ctx_10->a3 = t28;
+        ctx_10->a4 = t29 < xs_len ? t29 : xs_len;
+        ctx_10->a5 = 0;
+        ctx_10->a6 = partial_10;
+        pthread_t thread_10;
+        if (pthread_create(&thread_10, NULL, ppy_thread_ranges_count_odd__par4__task, ctx_10) != 0) return 1; /* spawn.ok */
+        int64_t t30 = (int64_t)thread_10;
+        int64_t t31 = (int64_t)(10u * (uint64_t)t3);
+        int64_t t32 = (int64_t)((uint64_t)t31 + (uint64_t)t3);
+        ppy_ctx_ranges_count_odd__par4__task *ctx_11 = (ppy_ctx_ranges_count_odd__par4__task *)malloc(sizeof(ppy_ctx_ranges_count_odd__par4__task));
+        if (ctx_11 == NULL) return 1; /* spawn.alloc */
+        ctx_11->a0 = scale;
+        ctx_11->a1 = xs;
+        ctx_11->a2 = xs_len;
+        ctx_11->a3 = t31;
+        ctx_11->a4 = t32 < xs_len ? t32 : xs_len;
+        ctx_11->a5 = 0;
+        ctx_11->a6 = partial_11;
+        pthread_t thread_11;
+        if (pthread_create(&thread_11, NULL, ppy_thread_ranges_count_odd__par4__task, ctx_11) != 0) return 1; /* spawn.ok */
+        int64_t t33 = (int64_t)thread_11;
+        int64_t t34 = (int64_t)(11u * (uint64_t)t3);
+        int64_t t35 = (int64_t)((uint64_t)t34 + (uint64_t)t3);
+        ppy_ctx_ranges_count_odd__par4__task *ctx_12 = (ppy_ctx_ranges_count_odd__par4__task *)malloc(sizeof(ppy_ctx_ranges_count_odd__par4__task));
+        if (ctx_12 == NULL) return 1; /* spawn.alloc */
+        ctx_12->a0 = scale;
+        ctx_12->a1 = xs;
+        ctx_12->a2 = xs_len;
+        ctx_12->a3 = t34;
+        ctx_12->a4 = t35 < xs_len ? t35 : xs_len;
+        ctx_12->a5 = 0;
+        ctx_12->a6 = partial_12;
+        pthread_t thread_12;
+        if (pthread_create(&thread_12, NULL, ppy_thread_ranges_count_odd__par4__task, ctx_12) != 0) return 1; /* spawn.ok */
+        int64_t t36 = (int64_t)thread_12;
+        int64_t t37 = (int64_t)(12u * (uint64_t)t3);
+        int64_t t38 = (int64_t)((uint64_t)t37 + (uint64_t)t3);
+        ppy_ctx_ranges_count_odd__par4__task *ctx_13 = (ppy_ctx_ranges_count_odd__par4__task *)malloc(sizeof(ppy_ctx_ranges_count_odd__par4__task));
+        if (ctx_13 == NULL) return 1; /* spawn.alloc */
+        ctx_13->a0 = scale;
+        ctx_13->a1 = xs;
+        ctx_13->a2 = xs_len;
+        ctx_13->a3 = t37;
+        ctx_13->a4 = t38 < xs_len ? t38 : xs_len;
+        ctx_13->a5 = 0;
+        ctx_13->a6 = partial_13;
+        pthread_t thread_13;
+        if (pthread_create(&thread_13, NULL, ppy_thread_ranges_count_odd__par4__task, ctx_13) != 0) return 1; /* spawn.ok */
+        int64_t t39 = (int64_t)thread_13;
+        int64_t t40 = (int64_t)(13u * (uint64_t)t3);
+        int64_t t41 = (int64_t)((uint64_t)t40 + (uint64_t)t3);
+        ppy_ctx_ranges_count_odd__par4__task *ctx_14 = (ppy_ctx_ranges_count_odd__par4__task *)malloc(sizeof(ppy_ctx_ranges_count_odd__par4__task));
+        if (ctx_14 == NULL) return 1; /* spawn.alloc */
+        ctx_14->a0 = scale;
+        ctx_14->a1 = xs;
+        ctx_14->a2 = xs_len;
+        ctx_14->a3 = t40;
+        ctx_14->a4 = t41 < xs_len ? t41 : xs_len;
+        ctx_14->a5 = 0;
+        ctx_14->a6 = partial_14;
+        pthread_t thread_14;
+        if (pthread_create(&thread_14, NULL, ppy_thread_ranges_count_odd__par4__task, ctx_14) != 0) return 1; /* spawn.ok */
+        int64_t t42 = (int64_t)thread_14;
+        int64_t t43 = (int64_t)(14u * (uint64_t)t3);
+        int64_t t44 = (int64_t)((uint64_t)t43 + (uint64_t)t3);
+        ppy_ctx_ranges_count_odd__par4__task *ctx_15 = (ppy_ctx_ranges_count_odd__par4__task *)malloc(sizeof(ppy_ctx_ranges_count_odd__par4__task));
+        if (ctx_15 == NULL) return 1; /* spawn.alloc */
+        ctx_15->a0 = scale;
+        ctx_15->a1 = xs;
+        ctx_15->a2 = xs_len;
+        ctx_15->a3 = t43;
+        ctx_15->a4 = t44 < xs_len ? t44 : xs_len;
+        ctx_15->a5 = 0;
+        ctx_15->a6 = partial_15;
+        pthread_t thread_15;
+        if (pthread_create(&thread_15, NULL, ppy_thread_ranges_count_odd__par4__task, ctx_15) != 0) return 1; /* spawn.ok */
+        int64_t t45 = (int64_t)thread_15;
+        int64_t t46 = (int64_t)(15u * (uint64_t)t3);
+        int64_t t47;
+        int64_t t48 = (int64_t)ranges_count_odd__par4(scale, xs, xs_len, t46 < xs_len ? t46 : xs_len, xs_len, 0, &t47);
+        void *joined;
+        if (pthread_join((pthread_t)t4, &joined) != 0) return 1; /* join.ok */
+        int64_t t49 = (int64_t)(intptr_t)joined;
+        void *joined_2;
+        if (pthread_join((pthread_t)t6, &joined_2) != 0) return 1; /* join.ok */
+        int64_t t50 = (int64_t)(intptr_t)joined_2;
+        void *joined_3;
+        if (pthread_join((pthread_t)t9, &joined_3) != 0) return 1; /* join.ok */
+        int64_t t51 = (int64_t)(intptr_t)joined_3;
+        void *joined_4;
+        if (pthread_join((pthread_t)t12, &joined_4) != 0) return 1; /* join.ok */
+        int64_t t52 = (int64_t)(intptr_t)joined_4;
+        void *joined_5;
+        if (pthread_join((pthread_t)t15, &joined_5) != 0) return 1; /* join.ok */
+        int64_t t53 = (int64_t)(intptr_t)joined_5;
+        void *joined_6;
+        if (pthread_join((pthread_t)t18, &joined_6) != 0) return 1; /* join.ok */
+        int64_t t54 = (int64_t)(intptr_t)joined_6;
+        void *joined_7;
+        if (pthread_join((pthread_t)t21, &joined_7) != 0) return 1; /* join.ok */
+        int64_t t55 = (int64_t)(intptr_t)joined_7;
+        void *joined_8;
+        if (pthread_join((pthread_t)t24, &joined_8) != 0) return 1; /* join.ok */
+        int64_t t56 = (int64_t)(intptr_t)joined_8;
+        void *joined_9;
+        if (pthread_join((pthread_t)t27, &joined_9) != 0) return 1; /* join.ok */
+        int64_t t57 = (int64_t)(intptr_t)joined_9;
+        void *joined_10;
+        if (pthread_join((pthread_t)t30, &joined_10) != 0) return 1; /* join.ok */
+        int64_t t58 = (int64_t)(intptr_t)joined_10;
+        void *joined_11;
+        if (pthread_join((pthread_t)t33, &joined_11) != 0) return 1; /* join.ok */
+        int64_t t59 = (int64_t)(intptr_t)joined_11;
+        void *joined_12;
+        if (pthread_join((pthread_t)t36, &joined_12) != 0) return 1; /* join.ok */
+        int64_t t60 = (int64_t)(intptr_t)joined_12;
+        void *joined_13;
+        if (pthread_join((pthread_t)t39, &joined_13) != 0) return 1; /* join.ok */
+        int64_t t61 = (int64_t)(intptr_t)joined_13;
+        void *joined_14;
+        if (pthread_join((pthread_t)t42, &joined_14) != 0) return 1; /* join.ok */
+        int64_t t62 = (int64_t)(intptr_t)joined_14;
+        void *joined_15;
+        if (pthread_join((pthread_t)t45, &joined_15) != 0) return 1; /* join.ok */
+        int64_t t63 = (int64_t)(intptr_t)joined_15;
+        if (!(((((((((((((((((t48 != 0) | (t49 != 0)) | (t50 != 0)) | (t51 != 0)) | (t52 != 0)) | (t53 != 0)) | (t54 != 0)) | (t55 != 0)) | (t56 != 0)) | (t57 != 0)) | (t58 != 0)) | (t59 != 0)) | (t60 != 0)) | (t61 != 0)) | (t62 != 0)) | (t63 != 0)) ^ true)) return 1; /* contract.ok */
+        reduced = (int64_t)((uint64_t)t1 + ((uint64_t)t47 + (uint64_t)*partial + (uint64_t)*partial_2 + (uint64_t)*partial_3 + (uint64_t)*partial_4 + (uint64_t)*partial_5 + (uint64_t)*partial_6 + (uint64_t)*partial_7 + (uint64_t)*partial_8 + (uint64_t)*partial_9 + (uint64_t)*partial_10 + (uint64_t)*partial_11 + (uint64_t)*partial_12 + (uint64_t)*partial_13 + (uint64_t)*partial_14 + (uint64_t)*partial_15));
     }
-L1_par_join1:;
-    *v4_hits_addr = v1_reduced;
-    v12_v = *v4_hits_addr;
-    *out0 = v12_v;
+    hits = reduced;
+    *out = hits;
     return 0;
-L2_par_serial2:;
-    if (!(ranges_count_odd__par4(v8_v, a0, a1, v5_v, v7_v, v9_v, &v13_res) == 0)) goto fallback; /* call.ok */
-    v14_v = v13_res;
-    v15_pass = v14_v;
-    v1_reduced = v15_pass;
-    goto L1_par_join1;
-L3_par_spawn3:;
-    v16_v = INT64_C(16);
-    v17_v = INT64_C(15);
-    v18_v = ((int64_t)(((uint64_t)(v7_v)) + ((uint64_t)(v17_v))));
-    v19_v = v18_v / v16_v;
-    v20_v = INT64_C(0);
-    v21_v = v19_v < v7_v;
-    v22_v = v21_v ? v19_v : v7_v;
-    v24_v = INT64_C(0);
-    v25_ctx = (ppy_ctx_ranges_count_odd__par4__task *)malloc(sizeof(ppy_ctx_ranges_count_odd__par4__task));
-    if (!(v25_ctx != NULL)) goto fallback; /* spawn.alloc */
-    v25_ctx->a0 = v8_v;
-    v25_ctx->a1 = a0;
-    v25_ctx->a2 = a1;
-    v25_ctx->a3 = v20_v;
-    v25_ctx->a4 = v22_v;
-    v25_ctx->a5 = v24_v;
-    v25_ctx->a6 = v23_partial;
-    if (!(pthread_create(&v26_thread, NULL, ppy_thread_ranges_count_odd__par4__task, v25_ctx) == 0)) goto fallback; /* spawn.ok */
-    v27_v = ((int64_t)(v26_thread));
-    v28_v = ((int64_t)(((uint64_t)(v19_v)) + ((uint64_t)(v19_v))));
-    v29_v = v28_v < v7_v;
-    v30_v = v29_v ? v28_v : v7_v;
-    v32_v = INT64_C(0);
-    v33_ctx = (ppy_ctx_ranges_count_odd__par4__task *)malloc(sizeof(ppy_ctx_ranges_count_odd__par4__task));
-    if (!(v33_ctx != NULL)) goto fallback; /* spawn.alloc */
-    v33_ctx->a0 = v8_v;
-    v33_ctx->a1 = a0;
-    v33_ctx->a2 = a1;
-    v33_ctx->a3 = v19_v;
-    v33_ctx->a4 = v30_v;
-    v33_ctx->a5 = v32_v;
-    v33_ctx->a6 = v31_partial;
-    if (!(pthread_create(&v34_thread, NULL, ppy_thread_ranges_count_odd__par4__task, v33_ctx) == 0)) goto fallback; /* spawn.ok */
-    v35_v = ((int64_t)(v34_thread));
-    v36_v = INT64_C(2);
-    v37_v = ((int64_t)(((uint64_t)(v36_v)) * ((uint64_t)(v19_v))));
-    v38_v = ((int64_t)(((uint64_t)(v37_v)) + ((uint64_t)(v19_v))));
-    v39_v = v38_v < v7_v;
-    v40_v = v39_v ? v38_v : v7_v;
-    v42_v = INT64_C(0);
-    v43_ctx = (ppy_ctx_ranges_count_odd__par4__task *)malloc(sizeof(ppy_ctx_ranges_count_odd__par4__task));
-    if (!(v43_ctx != NULL)) goto fallback; /* spawn.alloc */
-    v43_ctx->a0 = v8_v;
-    v43_ctx->a1 = a0;
-    v43_ctx->a2 = a1;
-    v43_ctx->a3 = v37_v;
-    v43_ctx->a4 = v40_v;
-    v43_ctx->a5 = v42_v;
-    v43_ctx->a6 = v41_partial;
-    if (!(pthread_create(&v44_thread, NULL, ppy_thread_ranges_count_odd__par4__task, v43_ctx) == 0)) goto fallback; /* spawn.ok */
-    v45_v = ((int64_t)(v44_thread));
-    v46_v = INT64_C(3);
-    v47_v = ((int64_t)(((uint64_t)(v46_v)) * ((uint64_t)(v19_v))));
-    v48_v = ((int64_t)(((uint64_t)(v47_v)) + ((uint64_t)(v19_v))));
-    v49_v = v48_v < v7_v;
-    v50_v = v49_v ? v48_v : v7_v;
-    v52_v = INT64_C(0);
-    v53_ctx = (ppy_ctx_ranges_count_odd__par4__task *)malloc(sizeof(ppy_ctx_ranges_count_odd__par4__task));
-    if (!(v53_ctx != NULL)) goto fallback; /* spawn.alloc */
-    v53_ctx->a0 = v8_v;
-    v53_ctx->a1 = a0;
-    v53_ctx->a2 = a1;
-    v53_ctx->a3 = v47_v;
-    v53_ctx->a4 = v50_v;
-    v53_ctx->a5 = v52_v;
-    v53_ctx->a6 = v51_partial;
-    if (!(pthread_create(&v54_thread, NULL, ppy_thread_ranges_count_odd__par4__task, v53_ctx) == 0)) goto fallback; /* spawn.ok */
-    v55_v = ((int64_t)(v54_thread));
-    v56_v = INT64_C(4);
-    v57_v = ((int64_t)(((uint64_t)(v56_v)) * ((uint64_t)(v19_v))));
-    v58_v = ((int64_t)(((uint64_t)(v57_v)) + ((uint64_t)(v19_v))));
-    v59_v = v58_v < v7_v;
-    v60_v = v59_v ? v58_v : v7_v;
-    v62_v = INT64_C(0);
-    v63_ctx = (ppy_ctx_ranges_count_odd__par4__task *)malloc(sizeof(ppy_ctx_ranges_count_odd__par4__task));
-    if (!(v63_ctx != NULL)) goto fallback; /* spawn.alloc */
-    v63_ctx->a0 = v8_v;
-    v63_ctx->a1 = a0;
-    v63_ctx->a2 = a1;
-    v63_ctx->a3 = v57_v;
-    v63_ctx->a4 = v60_v;
-    v63_ctx->a5 = v62_v;
-    v63_ctx->a6 = v61_partial;
-    if (!(pthread_create(&v64_thread, NULL, ppy_thread_ranges_count_odd__par4__task, v63_ctx) == 0)) goto fallback; /* spawn.ok */
-    v65_v = ((int64_t)(v64_thread));
-    v66_v = INT64_C(5);
-    v67_v = ((int64_t)(((uint64_t)(v66_v)) * ((uint64_t)(v19_v))));
-    v68_v = ((int64_t)(((uint64_t)(v67_v)) + ((uint64_t)(v19_v))));
-    v69_v = v68_v < v7_v;
-    v70_v = v69_v ? v68_v : v7_v;
-    v72_v = INT64_C(0);
-    v73_ctx = (ppy_ctx_ranges_count_odd__par4__task *)malloc(sizeof(ppy_ctx_ranges_count_odd__par4__task));
-    if (!(v73_ctx != NULL)) goto fallback; /* spawn.alloc */
-    v73_ctx->a0 = v8_v;
-    v73_ctx->a1 = a0;
-    v73_ctx->a2 = a1;
-    v73_ctx->a3 = v67_v;
-    v73_ctx->a4 = v70_v;
-    v73_ctx->a5 = v72_v;
-    v73_ctx->a6 = v71_partial;
-    if (!(pthread_create(&v74_thread, NULL, ppy_thread_ranges_count_odd__par4__task, v73_ctx) == 0)) goto fallback; /* spawn.ok */
-    v75_v = ((int64_t)(v74_thread));
-    v76_v = INT64_C(6);
-    v77_v = ((int64_t)(((uint64_t)(v76_v)) * ((uint64_t)(v19_v))));
-    v78_v = ((int64_t)(((uint64_t)(v77_v)) + ((uint64_t)(v19_v))));
-    v79_v = v78_v < v7_v;
-    v80_v = v79_v ? v78_v : v7_v;
-    v82_v = INT64_C(0);
-    v83_ctx = (ppy_ctx_ranges_count_odd__par4__task *)malloc(sizeof(ppy_ctx_ranges_count_odd__par4__task));
-    if (!(v83_ctx != NULL)) goto fallback; /* spawn.alloc */
-    v83_ctx->a0 = v8_v;
-    v83_ctx->a1 = a0;
-    v83_ctx->a2 = a1;
-    v83_ctx->a3 = v77_v;
-    v83_ctx->a4 = v80_v;
-    v83_ctx->a5 = v82_v;
-    v83_ctx->a6 = v81_partial;
-    if (!(pthread_create(&v84_thread, NULL, ppy_thread_ranges_count_odd__par4__task, v83_ctx) == 0)) goto fallback; /* spawn.ok */
-    v85_v = ((int64_t)(v84_thread));
-    v86_v = INT64_C(7);
-    v87_v = ((int64_t)(((uint64_t)(v86_v)) * ((uint64_t)(v19_v))));
-    v88_v = ((int64_t)(((uint64_t)(v87_v)) + ((uint64_t)(v19_v))));
-    v89_v = v88_v < v7_v;
-    v90_v = v89_v ? v88_v : v7_v;
-    v92_v = INT64_C(0);
-    v93_ctx = (ppy_ctx_ranges_count_odd__par4__task *)malloc(sizeof(ppy_ctx_ranges_count_odd__par4__task));
-    if (!(v93_ctx != NULL)) goto fallback; /* spawn.alloc */
-    v93_ctx->a0 = v8_v;
-    v93_ctx->a1 = a0;
-    v93_ctx->a2 = a1;
-    v93_ctx->a3 = v87_v;
-    v93_ctx->a4 = v90_v;
-    v93_ctx->a5 = v92_v;
-    v93_ctx->a6 = v91_partial;
-    if (!(pthread_create(&v94_thread, NULL, ppy_thread_ranges_count_odd__par4__task, v93_ctx) == 0)) goto fallback; /* spawn.ok */
-    v95_v = ((int64_t)(v94_thread));
-    v96_v = INT64_C(8);
-    v97_v = ((int64_t)(((uint64_t)(v96_v)) * ((uint64_t)(v19_v))));
-    v98_v = ((int64_t)(((uint64_t)(v97_v)) + ((uint64_t)(v19_v))));
-    v99_v = v98_v < v7_v;
-    v100_v = v99_v ? v98_v : v7_v;
-    v102_v = INT64_C(0);
-    v103_ctx = (ppy_ctx_ranges_count_odd__par4__task *)malloc(sizeof(ppy_ctx_ranges_count_odd__par4__task));
-    if (!(v103_ctx != NULL)) goto fallback; /* spawn.alloc */
-    v103_ctx->a0 = v8_v;
-    v103_ctx->a1 = a0;
-    v103_ctx->a2 = a1;
-    v103_ctx->a3 = v97_v;
-    v103_ctx->a4 = v100_v;
-    v103_ctx->a5 = v102_v;
-    v103_ctx->a6 = v101_partial;
-    if (!(pthread_create(&v104_thread, NULL, ppy_thread_ranges_count_odd__par4__task, v103_ctx) == 0)) goto fallback; /* spawn.ok */
-    v105_v = ((int64_t)(v104_thread));
-    v106_v = INT64_C(9);
-    v107_v = ((int64_t)(((uint64_t)(v106_v)) * ((uint64_t)(v19_v))));
-    v108_v = ((int64_t)(((uint64_t)(v107_v)) + ((uint64_t)(v19_v))));
-    v109_v = v108_v < v7_v;
-    v110_v = v109_v ? v108_v : v7_v;
-    v112_v = INT64_C(0);
-    v113_ctx = (ppy_ctx_ranges_count_odd__par4__task *)malloc(sizeof(ppy_ctx_ranges_count_odd__par4__task));
-    if (!(v113_ctx != NULL)) goto fallback; /* spawn.alloc */
-    v113_ctx->a0 = v8_v;
-    v113_ctx->a1 = a0;
-    v113_ctx->a2 = a1;
-    v113_ctx->a3 = v107_v;
-    v113_ctx->a4 = v110_v;
-    v113_ctx->a5 = v112_v;
-    v113_ctx->a6 = v111_partial;
-    if (!(pthread_create(&v114_thread, NULL, ppy_thread_ranges_count_odd__par4__task, v113_ctx) == 0)) goto fallback; /* spawn.ok */
-    v115_v = ((int64_t)(v114_thread));
-    v116_v = INT64_C(10);
-    v117_v = ((int64_t)(((uint64_t)(v116_v)) * ((uint64_t)(v19_v))));
-    v118_v = ((int64_t)(((uint64_t)(v117_v)) + ((uint64_t)(v19_v))));
-    v119_v = v118_v < v7_v;
-    v120_v = v119_v ? v118_v : v7_v;
-    v122_v = INT64_C(0);
-    v123_ctx = (ppy_ctx_ranges_count_odd__par4__task *)malloc(sizeof(ppy_ctx_ranges_count_odd__par4__task));
-    if (!(v123_ctx != NULL)) goto fallback; /* spawn.alloc */
-    v123_ctx->a0 = v8_v;
-    v123_ctx->a1 = a0;
-    v123_ctx->a2 = a1;
-    v123_ctx->a3 = v117_v;
-    v123_ctx->a4 = v120_v;
-    v123_ctx->a5 = v122_v;
-    v123_ctx->a6 = v121_partial;
-    if (!(pthread_create(&v124_thread, NULL, ppy_thread_ranges_count_odd__par4__task, v123_ctx) == 0)) goto fallback; /* spawn.ok */
-    v125_v = ((int64_t)(v124_thread));
-    v126_v = INT64_C(11);
-    v127_v = ((int64_t)(((uint64_t)(v126_v)) * ((uint64_t)(v19_v))));
-    v128_v = ((int64_t)(((uint64_t)(v127_v)) + ((uint64_t)(v19_v))));
-    v129_v = v128_v < v7_v;
-    v130_v = v129_v ? v128_v : v7_v;
-    v132_v = INT64_C(0);
-    v133_ctx = (ppy_ctx_ranges_count_odd__par4__task *)malloc(sizeof(ppy_ctx_ranges_count_odd__par4__task));
-    if (!(v133_ctx != NULL)) goto fallback; /* spawn.alloc */
-    v133_ctx->a0 = v8_v;
-    v133_ctx->a1 = a0;
-    v133_ctx->a2 = a1;
-    v133_ctx->a3 = v127_v;
-    v133_ctx->a4 = v130_v;
-    v133_ctx->a5 = v132_v;
-    v133_ctx->a6 = v131_partial;
-    if (!(pthread_create(&v134_thread, NULL, ppy_thread_ranges_count_odd__par4__task, v133_ctx) == 0)) goto fallback; /* spawn.ok */
-    v135_v = ((int64_t)(v134_thread));
-    v136_v = INT64_C(12);
-    v137_v = ((int64_t)(((uint64_t)(v136_v)) * ((uint64_t)(v19_v))));
-    v138_v = ((int64_t)(((uint64_t)(v137_v)) + ((uint64_t)(v19_v))));
-    v139_v = v138_v < v7_v;
-    v140_v = v139_v ? v138_v : v7_v;
-    v142_v = INT64_C(0);
-    v143_ctx = (ppy_ctx_ranges_count_odd__par4__task *)malloc(sizeof(ppy_ctx_ranges_count_odd__par4__task));
-    if (!(v143_ctx != NULL)) goto fallback; /* spawn.alloc */
-    v143_ctx->a0 = v8_v;
-    v143_ctx->a1 = a0;
-    v143_ctx->a2 = a1;
-    v143_ctx->a3 = v137_v;
-    v143_ctx->a4 = v140_v;
-    v143_ctx->a5 = v142_v;
-    v143_ctx->a6 = v141_partial;
-    if (!(pthread_create(&v144_thread, NULL, ppy_thread_ranges_count_odd__par4__task, v143_ctx) == 0)) goto fallback; /* spawn.ok */
-    v145_v = ((int64_t)(v144_thread));
-    v146_v = INT64_C(13);
-    v147_v = ((int64_t)(((uint64_t)(v146_v)) * ((uint64_t)(v19_v))));
-    v148_v = ((int64_t)(((uint64_t)(v147_v)) + ((uint64_t)(v19_v))));
-    v149_v = v148_v < v7_v;
-    v150_v = v149_v ? v148_v : v7_v;
-    v152_v = INT64_C(0);
-    v153_ctx = (ppy_ctx_ranges_count_odd__par4__task *)malloc(sizeof(ppy_ctx_ranges_count_odd__par4__task));
-    if (!(v153_ctx != NULL)) goto fallback; /* spawn.alloc */
-    v153_ctx->a0 = v8_v;
-    v153_ctx->a1 = a0;
-    v153_ctx->a2 = a1;
-    v153_ctx->a3 = v147_v;
-    v153_ctx->a4 = v150_v;
-    v153_ctx->a5 = v152_v;
-    v153_ctx->a6 = v151_partial;
-    if (!(pthread_create(&v154_thread, NULL, ppy_thread_ranges_count_odd__par4__task, v153_ctx) == 0)) goto fallback; /* spawn.ok */
-    v155_v = ((int64_t)(v154_thread));
-    v156_v = INT64_C(14);
-    v157_v = ((int64_t)(((uint64_t)(v156_v)) * ((uint64_t)(v19_v))));
-    v158_v = ((int64_t)(((uint64_t)(v157_v)) + ((uint64_t)(v19_v))));
-    v159_v = v158_v < v7_v;
-    v160_v = v159_v ? v158_v : v7_v;
-    v162_v = INT64_C(0);
-    v163_ctx = (ppy_ctx_ranges_count_odd__par4__task *)malloc(sizeof(ppy_ctx_ranges_count_odd__par4__task));
-    if (!(v163_ctx != NULL)) goto fallback; /* spawn.alloc */
-    v163_ctx->a0 = v8_v;
-    v163_ctx->a1 = a0;
-    v163_ctx->a2 = a1;
-    v163_ctx->a3 = v157_v;
-    v163_ctx->a4 = v160_v;
-    v163_ctx->a5 = v162_v;
-    v163_ctx->a6 = v161_partial;
-    if (!(pthread_create(&v164_thread, NULL, ppy_thread_ranges_count_odd__par4__task, v163_ctx) == 0)) goto fallback; /* spawn.ok */
-    v165_v = ((int64_t)(v164_thread));
-    v166_v = INT64_C(15);
-    v167_v = ((int64_t)(((uint64_t)(v166_v)) * ((uint64_t)(v19_v))));
-    v168_v = v167_v < v7_v;
-    v169_v = v168_v ? v167_v : v7_v;
-    v170_v = INT64_C(0);
-    v172_v = ((int64_t)(ranges_count_odd__par4(v8_v, a0, a1, v169_v, v7_v, v170_v, &v171_res)));
-    v173_v = v171_res;
-    v174_v = INT64_C(0);
-    v175_v = v172_v != v174_v;
-    if (!(pthread_join((pthread_t)v27_v, &v176_joined) == 0)) goto fallback; /* join.ok */
-    v177_v = ((int64_t)((intptr_t)v176_joined));
-    v178_v = INT64_C(0);
-    v179_v = v177_v != v178_v;
-    v180_v = v175_v | v179_v;
-    if (!(pthread_join((pthread_t)v35_v, &v181_joined) == 0)) goto fallback; /* join.ok */
-    v182_v = ((int64_t)((intptr_t)v181_joined));
-    v183_v = INT64_C(0);
-    v184_v = v182_v != v183_v;
-    v185_v = v180_v | v184_v;
-    if (!(pthread_join((pthread_t)v45_v, &v186_joined) == 0)) goto fallback; /* join.ok */
-    v187_v = ((int64_t)((intptr_t)v186_joined));
-    v188_v = INT64_C(0);
-    v189_v = v187_v != v188_v;
-    v190_v = v185_v | v189_v;
-    if (!(pthread_join((pthread_t)v55_v, &v191_joined) == 0)) goto fallback; /* join.ok */
-    v192_v = ((int64_t)((intptr_t)v191_joined));
-    v193_v = INT64_C(0);
-    v194_v = v192_v != v193_v;
-    v195_v = v190_v | v194_v;
-    if (!(pthread_join((pthread_t)v65_v, &v196_joined) == 0)) goto fallback; /* join.ok */
-    v197_v = ((int64_t)((intptr_t)v196_joined));
-    v198_v = INT64_C(0);
-    v199_v = v197_v != v198_v;
-    v200_v = v195_v | v199_v;
-    if (!(pthread_join((pthread_t)v75_v, &v201_joined) == 0)) goto fallback; /* join.ok */
-    v202_v = ((int64_t)((intptr_t)v201_joined));
-    v203_v = INT64_C(0);
-    v204_v = v202_v != v203_v;
-    v205_v = v200_v | v204_v;
-    if (!(pthread_join((pthread_t)v85_v, &v206_joined) == 0)) goto fallback; /* join.ok */
-    v207_v = ((int64_t)((intptr_t)v206_joined));
-    v208_v = INT64_C(0);
-    v209_v = v207_v != v208_v;
-    v210_v = v205_v | v209_v;
-    if (!(pthread_join((pthread_t)v95_v, &v211_joined) == 0)) goto fallback; /* join.ok */
-    v212_v = ((int64_t)((intptr_t)v211_joined));
-    v213_v = INT64_C(0);
-    v214_v = v212_v != v213_v;
-    v215_v = v210_v | v214_v;
-    if (!(pthread_join((pthread_t)v105_v, &v216_joined) == 0)) goto fallback; /* join.ok */
-    v217_v = ((int64_t)((intptr_t)v216_joined));
-    v218_v = INT64_C(0);
-    v219_v = v217_v != v218_v;
-    v220_v = v215_v | v219_v;
-    if (!(pthread_join((pthread_t)v115_v, &v221_joined) == 0)) goto fallback; /* join.ok */
-    v222_v = ((int64_t)((intptr_t)v221_joined));
-    v223_v = INT64_C(0);
-    v224_v = v222_v != v223_v;
-    v225_v = v220_v | v224_v;
-    if (!(pthread_join((pthread_t)v125_v, &v226_joined) == 0)) goto fallback; /* join.ok */
-    v227_v = ((int64_t)((intptr_t)v226_joined));
-    v228_v = INT64_C(0);
-    v229_v = v227_v != v228_v;
-    v230_v = v225_v | v229_v;
-    if (!(pthread_join((pthread_t)v135_v, &v231_joined) == 0)) goto fallback; /* join.ok */
-    v232_v = ((int64_t)((intptr_t)v231_joined));
-    v233_v = INT64_C(0);
-    v234_v = v232_v != v233_v;
-    v235_v = v230_v | v234_v;
-    if (!(pthread_join((pthread_t)v145_v, &v236_joined) == 0)) goto fallback; /* join.ok */
-    v237_v = ((int64_t)((intptr_t)v236_joined));
-    v238_v = INT64_C(0);
-    v239_v = v237_v != v238_v;
-    v240_v = v235_v | v239_v;
-    if (!(pthread_join((pthread_t)v155_v, &v241_joined) == 0)) goto fallback; /* join.ok */
-    v242_v = ((int64_t)((intptr_t)v241_joined));
-    v243_v = INT64_C(0);
-    v244_v = v242_v != v243_v;
-    v245_v = v240_v | v244_v;
-    if (!(pthread_join((pthread_t)v165_v, &v246_joined) == 0)) goto fallback; /* join.ok */
-    v247_v = ((int64_t)((intptr_t)v246_joined));
-    v248_v = INT64_C(0);
-    v249_v = v247_v != v248_v;
-    v250_v = v245_v | v249_v;
-    v251_v = true;
-    v252_v = v250_v ^ v251_v;
-    if (!(v252_v)) goto fallback; /* contract.ok */
-    v253_v = *v23_partial;
-    v254_v = ((int64_t)(((uint64_t)(v173_v)) + ((uint64_t)(v253_v))));
-    v255_v = *v31_partial;
-    v256_v = ((int64_t)(((uint64_t)(v254_v)) + ((uint64_t)(v255_v))));
-    v257_v = *v41_partial;
-    v258_v = ((int64_t)(((uint64_t)(v256_v)) + ((uint64_t)(v257_v))));
-    v259_v = *v51_partial;
-    v260_v = ((int64_t)(((uint64_t)(v258_v)) + ((uint64_t)(v259_v))));
-    v261_v = *v61_partial;
-    v262_v = ((int64_t)(((uint64_t)(v260_v)) + ((uint64_t)(v261_v))));
-    v263_v = *v71_partial;
-    v264_v = ((int64_t)(((uint64_t)(v262_v)) + ((uint64_t)(v263_v))));
-    v265_v = *v81_partial;
-    v266_v = ((int64_t)(((uint64_t)(v264_v)) + ((uint64_t)(v265_v))));
-    v267_v = *v91_partial;
-    v268_v = ((int64_t)(((uint64_t)(v266_v)) + ((uint64_t)(v267_v))));
-    v269_v = *v101_partial;
-    v270_v = ((int64_t)(((uint64_t)(v268_v)) + ((uint64_t)(v269_v))));
-    v271_v = *v111_partial;
-    v272_v = ((int64_t)(((uint64_t)(v270_v)) + ((uint64_t)(v271_v))));
-    v273_v = *v121_partial;
-    v274_v = ((int64_t)(((uint64_t)(v272_v)) + ((uint64_t)(v273_v))));
-    v275_v = *v131_partial;
-    v276_v = ((int64_t)(((uint64_t)(v274_v)) + ((uint64_t)(v275_v))));
-    v277_v = *v141_partial;
-    v278_v = ((int64_t)(((uint64_t)(v276_v)) + ((uint64_t)(v277_v))));
-    v279_v = *v151_partial;
-    v280_v = ((int64_t)(((uint64_t)(v278_v)) + ((uint64_t)(v279_v))));
-    v281_v = *v161_partial;
-    v282_v = ((int64_t)(((uint64_t)(v280_v)) + ((uint64_t)(v281_v))));
-    v283_v = ((int64_t)(((uint64_t)(v9_v)) + ((uint64_t)(v282_v))));
-    v284_pass = v283_v;
-    v1_reduced = v284_pass;
-    goto L1_par_join1;
-fallback:
-    return 1;
 }
 
-
-int32_t ppy_ranges_fill(double *a0, int64_t a1, double a2, double *out0) {
-    double *v1_out_addr[1];
-    int64_t v2_n_addr[1];
-    double v3_base_addr[1];
-    int64_t v4_v;
-    int64_t v5_n_entry;
-    int64_t v6_v;
-    double v7_v;
-    double *v8_v;
-    int64_t v9_v;
-    bool v10_v;
-    double v11_v;
-    double v12_acc_addr[1];
-    int64_t v13_v;
-    int64_t v14_v;
-    double *v15_v;
-    double v16_v;
-    double v17_res;
-    double v18_v;
-    double v19_v;
-    int64_t v20_res;
-    int64_t v21_v;
-    int64_t v22_v;
-    int64_t v23_v;
-    int64_t v24_v;
-    int64_t v25_v;
-    bool v26_v;
-    int64_t v27_v;
-    ppy_ctx_ranges_fill__par5 *v28_ctx;
-    pthread_t v29_thread;
-    int64_t v30_v;
-    int64_t v31_v;
-    bool v32_v;
-    int64_t v33_v;
-    ppy_ctx_ranges_fill__par5 *v34_ctx;
-    pthread_t v35_thread;
-    int64_t v36_v;
-    int64_t v37_v;
-    int64_t v38_v;
-    int64_t v39_v;
-    bool v40_v;
-    int64_t v41_v;
-    ppy_ctx_ranges_fill__par5 *v42_ctx;
-    pthread_t v43_thread;
-    int64_t v44_v;
-    int64_t v45_v;
-    int64_t v46_v;
-    int64_t v47_v;
-    bool v48_v;
-    int64_t v49_v;
-    ppy_ctx_ranges_fill__par5 *v50_ctx;
-    pthread_t v51_thread;
-    int64_t v52_v;
-    int64_t v53_v;
-    int64_t v54_v;
-    int64_t v55_v;
-    bool v56_v;
-    int64_t v57_v;
-    ppy_ctx_ranges_fill__par5 *v58_ctx;
-    pthread_t v59_thread;
-    int64_t v60_v;
-    int64_t v61_v;
-    int64_t v62_v;
-    int64_t v63_v;
-    bool v64_v;
-    int64_t v65_v;
-    ppy_ctx_ranges_fill__par5 *v66_ctx;
-    pthread_t v67_thread;
-    int64_t v68_v;
-    int64_t v69_v;
-    int64_t v70_v;
-    int64_t v71_v;
-    bool v72_v;
-    int64_t v73_v;
-    ppy_ctx_ranges_fill__par5 *v74_ctx;
-    pthread_t v75_thread;
-    int64_t v76_v;
-    int64_t v77_v;
-    int64_t v78_v;
-    int64_t v79_v;
-    bool v80_v;
-    int64_t v81_v;
-    ppy_ctx_ranges_fill__par5 *v82_ctx;
-    pthread_t v83_thread;
-    int64_t v84_v;
-    int64_t v85_v;
-    int64_t v86_v;
-    int64_t v87_v;
-    bool v88_v;
-    int64_t v89_v;
-    ppy_ctx_ranges_fill__par5 *v90_ctx;
-    pthread_t v91_thread;
-    int64_t v92_v;
-    int64_t v93_v;
-    int64_t v94_v;
-    int64_t v95_v;
-    bool v96_v;
-    int64_t v97_v;
-    ppy_ctx_ranges_fill__par5 *v98_ctx;
-    pthread_t v99_thread;
-    int64_t v100_v;
-    int64_t v101_v;
-    int64_t v102_v;
-    int64_t v103_v;
-    bool v104_v;
-    int64_t v105_v;
-    ppy_ctx_ranges_fill__par5 *v106_ctx;
-    pthread_t v107_thread;
-    int64_t v108_v;
-    int64_t v109_v;
-    int64_t v110_v;
-    int64_t v111_v;
-    bool v112_v;
-    int64_t v113_v;
-    ppy_ctx_ranges_fill__par5 *v114_ctx;
-    pthread_t v115_thread;
-    int64_t v116_v;
-    int64_t v117_v;
-    int64_t v118_v;
-    int64_t v119_v;
-    bool v120_v;
-    int64_t v121_v;
-    ppy_ctx_ranges_fill__par5 *v122_ctx;
-    pthread_t v123_thread;
-    int64_t v124_v;
-    int64_t v125_v;
-    int64_t v126_v;
-    int64_t v127_v;
-    bool v128_v;
-    int64_t v129_v;
-    ppy_ctx_ranges_fill__par5 *v130_ctx;
-    pthread_t v131_thread;
-    int64_t v132_v;
-    int64_t v133_v;
-    int64_t v134_v;
-    int64_t v135_v;
-    bool v136_v;
-    int64_t v137_v;
-    ppy_ctx_ranges_fill__par5 *v138_ctx;
-    pthread_t v139_thread;
-    int64_t v140_v;
-    int64_t v141_v;
-    int64_t v142_v;
-    bool v143_v;
-    int64_t v144_v;
-    int64_t v145_res;
-    int64_t v146_v;
-    int64_t v147_v;
-    bool v148_v;
-    void *v149_joined;
-    int64_t v150_v;
-    int64_t v151_v;
-    bool v152_v;
-    bool v153_v;
-    void *v154_joined;
-    int64_t v155_v;
-    int64_t v156_v;
-    bool v157_v;
-    bool v158_v;
-    void *v159_joined;
-    int64_t v160_v;
-    int64_t v161_v;
-    bool v162_v;
-    bool v163_v;
-    void *v164_joined;
-    int64_t v165_v;
-    int64_t v166_v;
-    bool v167_v;
-    bool v168_v;
-    void *v169_joined;
-    int64_t v170_v;
-    int64_t v171_v;
-    bool v172_v;
-    bool v173_v;
-    void *v174_joined;
-    int64_t v175_v;
-    int64_t v176_v;
-    bool v177_v;
-    bool v178_v;
-    void *v179_joined;
-    int64_t v180_v;
-    int64_t v181_v;
-    bool v182_v;
-    bool v183_v;
-    void *v184_joined;
-    int64_t v185_v;
-    int64_t v186_v;
-    bool v187_v;
-    bool v188_v;
-    void *v189_joined;
-    int64_t v190_v;
-    int64_t v191_v;
-    bool v192_v;
-    bool v193_v;
-    void *v194_joined;
-    int64_t v195_v;
-    int64_t v196_v;
-    bool v197_v;
-    bool v198_v;
-    void *v199_joined;
-    int64_t v200_v;
-    int64_t v201_v;
-    bool v202_v;
-    bool v203_v;
-    void *v204_joined;
-    int64_t v205_v;
-    int64_t v206_v;
-    bool v207_v;
-    bool v208_v;
-    void *v209_joined;
-    int64_t v210_v;
-    int64_t v211_v;
-    bool v212_v;
-    bool v213_v;
-    void *v214_joined;
-    int64_t v215_v;
-    int64_t v216_v;
-    bool v217_v;
-    bool v218_v;
-    void *v219_joined;
-    int64_t v220_v;
-    int64_t v221_v;
-    bool v222_v;
-    bool v223_v;
-    bool v224_v;
-    bool v225_v;
-    *v1_out_addr = a0;
-    *v2_n_addr = a1;
-    *v3_base_addr = a2;
-    v4_v = *v2_n_addr;
-    v5_n_entry = *v2_n_addr;
-    (void)v5_n_entry;
-    v6_v = INT64_C(0);
-    v7_v = *v3_base_addr;
-    v8_v = *v1_out_addr;
-    v9_v = INT64_C(4096);
-    v10_v = v4_v < v9_v;
-    if (v10_v) {
-        goto L2_par_serial2;
+int32_t ppy_ranges_fill(double *out, int64_t n, double base, double *out_2) {
+    if (n < 4096) {
+        int64_t res;
+        if (ranges_fill__par5(base, out, 0, n, &res) != 0) return 1; /* call.ok */
     } else {
-        goto L3_par_spawn3;
+        int64_t t1 = (int64_t)((uint64_t)n + 15u) / 16;
+        ppy_ctx_ranges_fill__par5 *ctx = (ppy_ctx_ranges_fill__par5 *)malloc(sizeof(ppy_ctx_ranges_fill__par5));
+        if (ctx == NULL) return 1; /* spawn.alloc */
+        ctx->a0 = base;
+        ctx->a1 = out;
+        ctx->a2 = 0;
+        ctx->a3 = t1 < n ? t1 : n;
+        pthread_t thread;
+        if (pthread_create(&thread, NULL, ppy_thread_ranges_fill__par5, ctx) != 0) return 1; /* spawn.ok */
+        int64_t t2 = (int64_t)thread;
+        int64_t t3 = (int64_t)((uint64_t)t1 + (uint64_t)t1);
+        ppy_ctx_ranges_fill__par5 *ctx_2 = (ppy_ctx_ranges_fill__par5 *)malloc(sizeof(ppy_ctx_ranges_fill__par5));
+        if (ctx_2 == NULL) return 1; /* spawn.alloc */
+        ctx_2->a0 = base;
+        ctx_2->a1 = out;
+        ctx_2->a2 = t1;
+        ctx_2->a3 = t3 < n ? t3 : n;
+        pthread_t thread_2;
+        if (pthread_create(&thread_2, NULL, ppy_thread_ranges_fill__par5, ctx_2) != 0) return 1; /* spawn.ok */
+        int64_t t4 = (int64_t)thread_2;
+        int64_t t5 = (int64_t)(2u * (uint64_t)t1);
+        int64_t t6 = (int64_t)((uint64_t)t5 + (uint64_t)t1);
+        ppy_ctx_ranges_fill__par5 *ctx_3 = (ppy_ctx_ranges_fill__par5 *)malloc(sizeof(ppy_ctx_ranges_fill__par5));
+        if (ctx_3 == NULL) return 1; /* spawn.alloc */
+        ctx_3->a0 = base;
+        ctx_3->a1 = out;
+        ctx_3->a2 = t5;
+        ctx_3->a3 = t6 < n ? t6 : n;
+        pthread_t thread_3;
+        if (pthread_create(&thread_3, NULL, ppy_thread_ranges_fill__par5, ctx_3) != 0) return 1; /* spawn.ok */
+        int64_t t7 = (int64_t)thread_3;
+        int64_t t8 = (int64_t)(3u * (uint64_t)t1);
+        int64_t t9 = (int64_t)((uint64_t)t8 + (uint64_t)t1);
+        ppy_ctx_ranges_fill__par5 *ctx_4 = (ppy_ctx_ranges_fill__par5 *)malloc(sizeof(ppy_ctx_ranges_fill__par5));
+        if (ctx_4 == NULL) return 1; /* spawn.alloc */
+        ctx_4->a0 = base;
+        ctx_4->a1 = out;
+        ctx_4->a2 = t8;
+        ctx_4->a3 = t9 < n ? t9 : n;
+        pthread_t thread_4;
+        if (pthread_create(&thread_4, NULL, ppy_thread_ranges_fill__par5, ctx_4) != 0) return 1; /* spawn.ok */
+        int64_t t10 = (int64_t)thread_4;
+        int64_t t11 = (int64_t)(4u * (uint64_t)t1);
+        int64_t t12 = (int64_t)((uint64_t)t11 + (uint64_t)t1);
+        ppy_ctx_ranges_fill__par5 *ctx_5 = (ppy_ctx_ranges_fill__par5 *)malloc(sizeof(ppy_ctx_ranges_fill__par5));
+        if (ctx_5 == NULL) return 1; /* spawn.alloc */
+        ctx_5->a0 = base;
+        ctx_5->a1 = out;
+        ctx_5->a2 = t11;
+        ctx_5->a3 = t12 < n ? t12 : n;
+        pthread_t thread_5;
+        if (pthread_create(&thread_5, NULL, ppy_thread_ranges_fill__par5, ctx_5) != 0) return 1; /* spawn.ok */
+        int64_t t13 = (int64_t)thread_5;
+        int64_t t14 = (int64_t)(5u * (uint64_t)t1);
+        int64_t t15 = (int64_t)((uint64_t)t14 + (uint64_t)t1);
+        ppy_ctx_ranges_fill__par5 *ctx_6 = (ppy_ctx_ranges_fill__par5 *)malloc(sizeof(ppy_ctx_ranges_fill__par5));
+        if (ctx_6 == NULL) return 1; /* spawn.alloc */
+        ctx_6->a0 = base;
+        ctx_6->a1 = out;
+        ctx_6->a2 = t14;
+        ctx_6->a3 = t15 < n ? t15 : n;
+        pthread_t thread_6;
+        if (pthread_create(&thread_6, NULL, ppy_thread_ranges_fill__par5, ctx_6) != 0) return 1; /* spawn.ok */
+        int64_t t16 = (int64_t)thread_6;
+        int64_t t17 = (int64_t)(6u * (uint64_t)t1);
+        int64_t t18 = (int64_t)((uint64_t)t17 + (uint64_t)t1);
+        ppy_ctx_ranges_fill__par5 *ctx_7 = (ppy_ctx_ranges_fill__par5 *)malloc(sizeof(ppy_ctx_ranges_fill__par5));
+        if (ctx_7 == NULL) return 1; /* spawn.alloc */
+        ctx_7->a0 = base;
+        ctx_7->a1 = out;
+        ctx_7->a2 = t17;
+        ctx_7->a3 = t18 < n ? t18 : n;
+        pthread_t thread_7;
+        if (pthread_create(&thread_7, NULL, ppy_thread_ranges_fill__par5, ctx_7) != 0) return 1; /* spawn.ok */
+        int64_t t19 = (int64_t)thread_7;
+        int64_t t20 = (int64_t)(7u * (uint64_t)t1);
+        int64_t t21 = (int64_t)((uint64_t)t20 + (uint64_t)t1);
+        ppy_ctx_ranges_fill__par5 *ctx_8 = (ppy_ctx_ranges_fill__par5 *)malloc(sizeof(ppy_ctx_ranges_fill__par5));
+        if (ctx_8 == NULL) return 1; /* spawn.alloc */
+        ctx_8->a0 = base;
+        ctx_8->a1 = out;
+        ctx_8->a2 = t20;
+        ctx_8->a3 = t21 < n ? t21 : n;
+        pthread_t thread_8;
+        if (pthread_create(&thread_8, NULL, ppy_thread_ranges_fill__par5, ctx_8) != 0) return 1; /* spawn.ok */
+        int64_t t22 = (int64_t)thread_8;
+        int64_t t23 = (int64_t)(8u * (uint64_t)t1);
+        int64_t t24 = (int64_t)((uint64_t)t23 + (uint64_t)t1);
+        ppy_ctx_ranges_fill__par5 *ctx_9 = (ppy_ctx_ranges_fill__par5 *)malloc(sizeof(ppy_ctx_ranges_fill__par5));
+        if (ctx_9 == NULL) return 1; /* spawn.alloc */
+        ctx_9->a0 = base;
+        ctx_9->a1 = out;
+        ctx_9->a2 = t23;
+        ctx_9->a3 = t24 < n ? t24 : n;
+        pthread_t thread_9;
+        if (pthread_create(&thread_9, NULL, ppy_thread_ranges_fill__par5, ctx_9) != 0) return 1; /* spawn.ok */
+        int64_t t25 = (int64_t)thread_9;
+        int64_t t26 = (int64_t)(9u * (uint64_t)t1);
+        int64_t t27 = (int64_t)((uint64_t)t26 + (uint64_t)t1);
+        ppy_ctx_ranges_fill__par5 *ctx_10 = (ppy_ctx_ranges_fill__par5 *)malloc(sizeof(ppy_ctx_ranges_fill__par5));
+        if (ctx_10 == NULL) return 1; /* spawn.alloc */
+        ctx_10->a0 = base;
+        ctx_10->a1 = out;
+        ctx_10->a2 = t26;
+        ctx_10->a3 = t27 < n ? t27 : n;
+        pthread_t thread_10;
+        if (pthread_create(&thread_10, NULL, ppy_thread_ranges_fill__par5, ctx_10) != 0) return 1; /* spawn.ok */
+        int64_t t28 = (int64_t)thread_10;
+        int64_t t29 = (int64_t)(10u * (uint64_t)t1);
+        int64_t t30 = (int64_t)((uint64_t)t29 + (uint64_t)t1);
+        ppy_ctx_ranges_fill__par5 *ctx_11 = (ppy_ctx_ranges_fill__par5 *)malloc(sizeof(ppy_ctx_ranges_fill__par5));
+        if (ctx_11 == NULL) return 1; /* spawn.alloc */
+        ctx_11->a0 = base;
+        ctx_11->a1 = out;
+        ctx_11->a2 = t29;
+        ctx_11->a3 = t30 < n ? t30 : n;
+        pthread_t thread_11;
+        if (pthread_create(&thread_11, NULL, ppy_thread_ranges_fill__par5, ctx_11) != 0) return 1; /* spawn.ok */
+        int64_t t31 = (int64_t)thread_11;
+        int64_t t32 = (int64_t)(11u * (uint64_t)t1);
+        int64_t t33 = (int64_t)((uint64_t)t32 + (uint64_t)t1);
+        ppy_ctx_ranges_fill__par5 *ctx_12 = (ppy_ctx_ranges_fill__par5 *)malloc(sizeof(ppy_ctx_ranges_fill__par5));
+        if (ctx_12 == NULL) return 1; /* spawn.alloc */
+        ctx_12->a0 = base;
+        ctx_12->a1 = out;
+        ctx_12->a2 = t32;
+        ctx_12->a3 = t33 < n ? t33 : n;
+        pthread_t thread_12;
+        if (pthread_create(&thread_12, NULL, ppy_thread_ranges_fill__par5, ctx_12) != 0) return 1; /* spawn.ok */
+        int64_t t34 = (int64_t)thread_12;
+        int64_t t35 = (int64_t)(12u * (uint64_t)t1);
+        int64_t t36 = (int64_t)((uint64_t)t35 + (uint64_t)t1);
+        ppy_ctx_ranges_fill__par5 *ctx_13 = (ppy_ctx_ranges_fill__par5 *)malloc(sizeof(ppy_ctx_ranges_fill__par5));
+        if (ctx_13 == NULL) return 1; /* spawn.alloc */
+        ctx_13->a0 = base;
+        ctx_13->a1 = out;
+        ctx_13->a2 = t35;
+        ctx_13->a3 = t36 < n ? t36 : n;
+        pthread_t thread_13;
+        if (pthread_create(&thread_13, NULL, ppy_thread_ranges_fill__par5, ctx_13) != 0) return 1; /* spawn.ok */
+        int64_t t37 = (int64_t)thread_13;
+        int64_t t38 = (int64_t)(13u * (uint64_t)t1);
+        int64_t t39 = (int64_t)((uint64_t)t38 + (uint64_t)t1);
+        ppy_ctx_ranges_fill__par5 *ctx_14 = (ppy_ctx_ranges_fill__par5 *)malloc(sizeof(ppy_ctx_ranges_fill__par5));
+        if (ctx_14 == NULL) return 1; /* spawn.alloc */
+        ctx_14->a0 = base;
+        ctx_14->a1 = out;
+        ctx_14->a2 = t38;
+        ctx_14->a3 = t39 < n ? t39 : n;
+        pthread_t thread_14;
+        if (pthread_create(&thread_14, NULL, ppy_thread_ranges_fill__par5, ctx_14) != 0) return 1; /* spawn.ok */
+        int64_t t40 = (int64_t)thread_14;
+        int64_t t41 = (int64_t)(14u * (uint64_t)t1);
+        int64_t t42 = (int64_t)((uint64_t)t41 + (uint64_t)t1);
+        ppy_ctx_ranges_fill__par5 *ctx_15 = (ppy_ctx_ranges_fill__par5 *)malloc(sizeof(ppy_ctx_ranges_fill__par5));
+        if (ctx_15 == NULL) return 1; /* spawn.alloc */
+        ctx_15->a0 = base;
+        ctx_15->a1 = out;
+        ctx_15->a2 = t41;
+        ctx_15->a3 = t42 < n ? t42 : n;
+        pthread_t thread_15;
+        if (pthread_create(&thread_15, NULL, ppy_thread_ranges_fill__par5, ctx_15) != 0) return 1; /* spawn.ok */
+        int64_t t43 = (int64_t)thread_15;
+        int64_t t44 = (int64_t)(15u * (uint64_t)t1);
+        int64_t res_2;
+        int64_t t45 = (int64_t)ranges_fill__par5(base, out, t44 < n ? t44 : n, n, &res_2);
+        void *joined;
+        if (pthread_join((pthread_t)t2, &joined) != 0) return 1; /* join.ok */
+        int64_t t46 = (int64_t)(intptr_t)joined;
+        void *joined_2;
+        if (pthread_join((pthread_t)t4, &joined_2) != 0) return 1; /* join.ok */
+        int64_t t47 = (int64_t)(intptr_t)joined_2;
+        void *joined_3;
+        if (pthread_join((pthread_t)t7, &joined_3) != 0) return 1; /* join.ok */
+        int64_t t48 = (int64_t)(intptr_t)joined_3;
+        void *joined_4;
+        if (pthread_join((pthread_t)t10, &joined_4) != 0) return 1; /* join.ok */
+        int64_t t49 = (int64_t)(intptr_t)joined_4;
+        void *joined_5;
+        if (pthread_join((pthread_t)t13, &joined_5) != 0) return 1; /* join.ok */
+        int64_t t50 = (int64_t)(intptr_t)joined_5;
+        void *joined_6;
+        if (pthread_join((pthread_t)t16, &joined_6) != 0) return 1; /* join.ok */
+        int64_t t51 = (int64_t)(intptr_t)joined_6;
+        void *joined_7;
+        if (pthread_join((pthread_t)t19, &joined_7) != 0) return 1; /* join.ok */
+        int64_t t52 = (int64_t)(intptr_t)joined_7;
+        void *joined_8;
+        if (pthread_join((pthread_t)t22, &joined_8) != 0) return 1; /* join.ok */
+        int64_t t53 = (int64_t)(intptr_t)joined_8;
+        void *joined_9;
+        if (pthread_join((pthread_t)t25, &joined_9) != 0) return 1; /* join.ok */
+        int64_t t54 = (int64_t)(intptr_t)joined_9;
+        void *joined_10;
+        if (pthread_join((pthread_t)t28, &joined_10) != 0) return 1; /* join.ok */
+        int64_t t55 = (int64_t)(intptr_t)joined_10;
+        void *joined_11;
+        if (pthread_join((pthread_t)t31, &joined_11) != 0) return 1; /* join.ok */
+        int64_t t56 = (int64_t)(intptr_t)joined_11;
+        void *joined_12;
+        if (pthread_join((pthread_t)t34, &joined_12) != 0) return 1; /* join.ok */
+        int64_t t57 = (int64_t)(intptr_t)joined_12;
+        void *joined_13;
+        if (pthread_join((pthread_t)t37, &joined_13) != 0) return 1; /* join.ok */
+        int64_t t58 = (int64_t)(intptr_t)joined_13;
+        void *joined_14;
+        if (pthread_join((pthread_t)t40, &joined_14) != 0) return 1; /* join.ok */
+        int64_t t59 = (int64_t)(intptr_t)joined_14;
+        void *joined_15;
+        if (pthread_join((pthread_t)t43, &joined_15) != 0) return 1; /* join.ok */
+        int64_t t60 = (int64_t)(intptr_t)joined_15;
+        if (!(((((((((((((((((t45 != 0) | (t46 != 0)) | (t47 != 0)) | (t48 != 0)) | (t49 != 0)) | (t50 != 0)) | (t51 != 0)) | (t52 != 0)) | (t53 != 0)) | (t54 != 0)) | (t55 != 0)) | (t56 != 0)) | (t57 != 0)) | (t58 != 0)) | (t59 != 0)) | (t60 != 0)) ^ true)) return 1; /* contract.ok */
     }
-L1_par_join1:;
-    v11_v = 0.0;
-    *v12_acc_addr = v11_v;
-    v13_v = *v2_n_addr;
-    v14_v = INT64_C(0);
-    v15_v = *v1_out_addr;
-    v16_v = *v12_acc_addr;
-    if (!(ranges_fill__par6(v15_v, v14_v, v13_v, v16_v, &v17_res) == 0)) goto fallback; /* call.ok */
-    v18_v = v17_res;
-    *v12_acc_addr = v18_v;
-    v19_v = *v12_acc_addr;
-    *out0 = v19_v;
+    double acc = 0.0;
+    if (ranges_fill__par6(out, 0, n, acc, &acc) != 0) return 1; /* call.ok */
+    *out_2 = acc;
     return 0;
-L2_par_serial2:;
-    if (!(ranges_fill__par5(v7_v, v8_v, v6_v, v4_v, &v20_res) == 0)) goto fallback; /* call.ok */
-    goto L1_par_join1;
-L3_par_spawn3:;
-    v21_v = INT64_C(16);
-    v22_v = INT64_C(15);
-    v23_v = ((int64_t)(((uint64_t)(v4_v)) + ((uint64_t)(v22_v))));
-    v24_v = v23_v / v21_v;
-    v25_v = INT64_C(0);
-    v26_v = v24_v < v4_v;
-    v27_v = v26_v ? v24_v : v4_v;
-    v28_ctx = (ppy_ctx_ranges_fill__par5 *)malloc(sizeof(ppy_ctx_ranges_fill__par5));
-    if (!(v28_ctx != NULL)) goto fallback; /* spawn.alloc */
-    v28_ctx->a0 = v7_v;
-    v28_ctx->a1 = v8_v;
-    v28_ctx->a2 = v25_v;
-    v28_ctx->a3 = v27_v;
-    if (!(pthread_create(&v29_thread, NULL, ppy_thread_ranges_fill__par5, v28_ctx) == 0)) goto fallback; /* spawn.ok */
-    v30_v = ((int64_t)(v29_thread));
-    v31_v = ((int64_t)(((uint64_t)(v24_v)) + ((uint64_t)(v24_v))));
-    v32_v = v31_v < v4_v;
-    v33_v = v32_v ? v31_v : v4_v;
-    v34_ctx = (ppy_ctx_ranges_fill__par5 *)malloc(sizeof(ppy_ctx_ranges_fill__par5));
-    if (!(v34_ctx != NULL)) goto fallback; /* spawn.alloc */
-    v34_ctx->a0 = v7_v;
-    v34_ctx->a1 = v8_v;
-    v34_ctx->a2 = v24_v;
-    v34_ctx->a3 = v33_v;
-    if (!(pthread_create(&v35_thread, NULL, ppy_thread_ranges_fill__par5, v34_ctx) == 0)) goto fallback; /* spawn.ok */
-    v36_v = ((int64_t)(v35_thread));
-    v37_v = INT64_C(2);
-    v38_v = ((int64_t)(((uint64_t)(v37_v)) * ((uint64_t)(v24_v))));
-    v39_v = ((int64_t)(((uint64_t)(v38_v)) + ((uint64_t)(v24_v))));
-    v40_v = v39_v < v4_v;
-    v41_v = v40_v ? v39_v : v4_v;
-    v42_ctx = (ppy_ctx_ranges_fill__par5 *)malloc(sizeof(ppy_ctx_ranges_fill__par5));
-    if (!(v42_ctx != NULL)) goto fallback; /* spawn.alloc */
-    v42_ctx->a0 = v7_v;
-    v42_ctx->a1 = v8_v;
-    v42_ctx->a2 = v38_v;
-    v42_ctx->a3 = v41_v;
-    if (!(pthread_create(&v43_thread, NULL, ppy_thread_ranges_fill__par5, v42_ctx) == 0)) goto fallback; /* spawn.ok */
-    v44_v = ((int64_t)(v43_thread));
-    v45_v = INT64_C(3);
-    v46_v = ((int64_t)(((uint64_t)(v45_v)) * ((uint64_t)(v24_v))));
-    v47_v = ((int64_t)(((uint64_t)(v46_v)) + ((uint64_t)(v24_v))));
-    v48_v = v47_v < v4_v;
-    v49_v = v48_v ? v47_v : v4_v;
-    v50_ctx = (ppy_ctx_ranges_fill__par5 *)malloc(sizeof(ppy_ctx_ranges_fill__par5));
-    if (!(v50_ctx != NULL)) goto fallback; /* spawn.alloc */
-    v50_ctx->a0 = v7_v;
-    v50_ctx->a1 = v8_v;
-    v50_ctx->a2 = v46_v;
-    v50_ctx->a3 = v49_v;
-    if (!(pthread_create(&v51_thread, NULL, ppy_thread_ranges_fill__par5, v50_ctx) == 0)) goto fallback; /* spawn.ok */
-    v52_v = ((int64_t)(v51_thread));
-    v53_v = INT64_C(4);
-    v54_v = ((int64_t)(((uint64_t)(v53_v)) * ((uint64_t)(v24_v))));
-    v55_v = ((int64_t)(((uint64_t)(v54_v)) + ((uint64_t)(v24_v))));
-    v56_v = v55_v < v4_v;
-    v57_v = v56_v ? v55_v : v4_v;
-    v58_ctx = (ppy_ctx_ranges_fill__par5 *)malloc(sizeof(ppy_ctx_ranges_fill__par5));
-    if (!(v58_ctx != NULL)) goto fallback; /* spawn.alloc */
-    v58_ctx->a0 = v7_v;
-    v58_ctx->a1 = v8_v;
-    v58_ctx->a2 = v54_v;
-    v58_ctx->a3 = v57_v;
-    if (!(pthread_create(&v59_thread, NULL, ppy_thread_ranges_fill__par5, v58_ctx) == 0)) goto fallback; /* spawn.ok */
-    v60_v = ((int64_t)(v59_thread));
-    v61_v = INT64_C(5);
-    v62_v = ((int64_t)(((uint64_t)(v61_v)) * ((uint64_t)(v24_v))));
-    v63_v = ((int64_t)(((uint64_t)(v62_v)) + ((uint64_t)(v24_v))));
-    v64_v = v63_v < v4_v;
-    v65_v = v64_v ? v63_v : v4_v;
-    v66_ctx = (ppy_ctx_ranges_fill__par5 *)malloc(sizeof(ppy_ctx_ranges_fill__par5));
-    if (!(v66_ctx != NULL)) goto fallback; /* spawn.alloc */
-    v66_ctx->a0 = v7_v;
-    v66_ctx->a1 = v8_v;
-    v66_ctx->a2 = v62_v;
-    v66_ctx->a3 = v65_v;
-    if (!(pthread_create(&v67_thread, NULL, ppy_thread_ranges_fill__par5, v66_ctx) == 0)) goto fallback; /* spawn.ok */
-    v68_v = ((int64_t)(v67_thread));
-    v69_v = INT64_C(6);
-    v70_v = ((int64_t)(((uint64_t)(v69_v)) * ((uint64_t)(v24_v))));
-    v71_v = ((int64_t)(((uint64_t)(v70_v)) + ((uint64_t)(v24_v))));
-    v72_v = v71_v < v4_v;
-    v73_v = v72_v ? v71_v : v4_v;
-    v74_ctx = (ppy_ctx_ranges_fill__par5 *)malloc(sizeof(ppy_ctx_ranges_fill__par5));
-    if (!(v74_ctx != NULL)) goto fallback; /* spawn.alloc */
-    v74_ctx->a0 = v7_v;
-    v74_ctx->a1 = v8_v;
-    v74_ctx->a2 = v70_v;
-    v74_ctx->a3 = v73_v;
-    if (!(pthread_create(&v75_thread, NULL, ppy_thread_ranges_fill__par5, v74_ctx) == 0)) goto fallback; /* spawn.ok */
-    v76_v = ((int64_t)(v75_thread));
-    v77_v = INT64_C(7);
-    v78_v = ((int64_t)(((uint64_t)(v77_v)) * ((uint64_t)(v24_v))));
-    v79_v = ((int64_t)(((uint64_t)(v78_v)) + ((uint64_t)(v24_v))));
-    v80_v = v79_v < v4_v;
-    v81_v = v80_v ? v79_v : v4_v;
-    v82_ctx = (ppy_ctx_ranges_fill__par5 *)malloc(sizeof(ppy_ctx_ranges_fill__par5));
-    if (!(v82_ctx != NULL)) goto fallback; /* spawn.alloc */
-    v82_ctx->a0 = v7_v;
-    v82_ctx->a1 = v8_v;
-    v82_ctx->a2 = v78_v;
-    v82_ctx->a3 = v81_v;
-    if (!(pthread_create(&v83_thread, NULL, ppy_thread_ranges_fill__par5, v82_ctx) == 0)) goto fallback; /* spawn.ok */
-    v84_v = ((int64_t)(v83_thread));
-    v85_v = INT64_C(8);
-    v86_v = ((int64_t)(((uint64_t)(v85_v)) * ((uint64_t)(v24_v))));
-    v87_v = ((int64_t)(((uint64_t)(v86_v)) + ((uint64_t)(v24_v))));
-    v88_v = v87_v < v4_v;
-    v89_v = v88_v ? v87_v : v4_v;
-    v90_ctx = (ppy_ctx_ranges_fill__par5 *)malloc(sizeof(ppy_ctx_ranges_fill__par5));
-    if (!(v90_ctx != NULL)) goto fallback; /* spawn.alloc */
-    v90_ctx->a0 = v7_v;
-    v90_ctx->a1 = v8_v;
-    v90_ctx->a2 = v86_v;
-    v90_ctx->a3 = v89_v;
-    if (!(pthread_create(&v91_thread, NULL, ppy_thread_ranges_fill__par5, v90_ctx) == 0)) goto fallback; /* spawn.ok */
-    v92_v = ((int64_t)(v91_thread));
-    v93_v = INT64_C(9);
-    v94_v = ((int64_t)(((uint64_t)(v93_v)) * ((uint64_t)(v24_v))));
-    v95_v = ((int64_t)(((uint64_t)(v94_v)) + ((uint64_t)(v24_v))));
-    v96_v = v95_v < v4_v;
-    v97_v = v96_v ? v95_v : v4_v;
-    v98_ctx = (ppy_ctx_ranges_fill__par5 *)malloc(sizeof(ppy_ctx_ranges_fill__par5));
-    if (!(v98_ctx != NULL)) goto fallback; /* spawn.alloc */
-    v98_ctx->a0 = v7_v;
-    v98_ctx->a1 = v8_v;
-    v98_ctx->a2 = v94_v;
-    v98_ctx->a3 = v97_v;
-    if (!(pthread_create(&v99_thread, NULL, ppy_thread_ranges_fill__par5, v98_ctx) == 0)) goto fallback; /* spawn.ok */
-    v100_v = ((int64_t)(v99_thread));
-    v101_v = INT64_C(10);
-    v102_v = ((int64_t)(((uint64_t)(v101_v)) * ((uint64_t)(v24_v))));
-    v103_v = ((int64_t)(((uint64_t)(v102_v)) + ((uint64_t)(v24_v))));
-    v104_v = v103_v < v4_v;
-    v105_v = v104_v ? v103_v : v4_v;
-    v106_ctx = (ppy_ctx_ranges_fill__par5 *)malloc(sizeof(ppy_ctx_ranges_fill__par5));
-    if (!(v106_ctx != NULL)) goto fallback; /* spawn.alloc */
-    v106_ctx->a0 = v7_v;
-    v106_ctx->a1 = v8_v;
-    v106_ctx->a2 = v102_v;
-    v106_ctx->a3 = v105_v;
-    if (!(pthread_create(&v107_thread, NULL, ppy_thread_ranges_fill__par5, v106_ctx) == 0)) goto fallback; /* spawn.ok */
-    v108_v = ((int64_t)(v107_thread));
-    v109_v = INT64_C(11);
-    v110_v = ((int64_t)(((uint64_t)(v109_v)) * ((uint64_t)(v24_v))));
-    v111_v = ((int64_t)(((uint64_t)(v110_v)) + ((uint64_t)(v24_v))));
-    v112_v = v111_v < v4_v;
-    v113_v = v112_v ? v111_v : v4_v;
-    v114_ctx = (ppy_ctx_ranges_fill__par5 *)malloc(sizeof(ppy_ctx_ranges_fill__par5));
-    if (!(v114_ctx != NULL)) goto fallback; /* spawn.alloc */
-    v114_ctx->a0 = v7_v;
-    v114_ctx->a1 = v8_v;
-    v114_ctx->a2 = v110_v;
-    v114_ctx->a3 = v113_v;
-    if (!(pthread_create(&v115_thread, NULL, ppy_thread_ranges_fill__par5, v114_ctx) == 0)) goto fallback; /* spawn.ok */
-    v116_v = ((int64_t)(v115_thread));
-    v117_v = INT64_C(12);
-    v118_v = ((int64_t)(((uint64_t)(v117_v)) * ((uint64_t)(v24_v))));
-    v119_v = ((int64_t)(((uint64_t)(v118_v)) + ((uint64_t)(v24_v))));
-    v120_v = v119_v < v4_v;
-    v121_v = v120_v ? v119_v : v4_v;
-    v122_ctx = (ppy_ctx_ranges_fill__par5 *)malloc(sizeof(ppy_ctx_ranges_fill__par5));
-    if (!(v122_ctx != NULL)) goto fallback; /* spawn.alloc */
-    v122_ctx->a0 = v7_v;
-    v122_ctx->a1 = v8_v;
-    v122_ctx->a2 = v118_v;
-    v122_ctx->a3 = v121_v;
-    if (!(pthread_create(&v123_thread, NULL, ppy_thread_ranges_fill__par5, v122_ctx) == 0)) goto fallback; /* spawn.ok */
-    v124_v = ((int64_t)(v123_thread));
-    v125_v = INT64_C(13);
-    v126_v = ((int64_t)(((uint64_t)(v125_v)) * ((uint64_t)(v24_v))));
-    v127_v = ((int64_t)(((uint64_t)(v126_v)) + ((uint64_t)(v24_v))));
-    v128_v = v127_v < v4_v;
-    v129_v = v128_v ? v127_v : v4_v;
-    v130_ctx = (ppy_ctx_ranges_fill__par5 *)malloc(sizeof(ppy_ctx_ranges_fill__par5));
-    if (!(v130_ctx != NULL)) goto fallback; /* spawn.alloc */
-    v130_ctx->a0 = v7_v;
-    v130_ctx->a1 = v8_v;
-    v130_ctx->a2 = v126_v;
-    v130_ctx->a3 = v129_v;
-    if (!(pthread_create(&v131_thread, NULL, ppy_thread_ranges_fill__par5, v130_ctx) == 0)) goto fallback; /* spawn.ok */
-    v132_v = ((int64_t)(v131_thread));
-    v133_v = INT64_C(14);
-    v134_v = ((int64_t)(((uint64_t)(v133_v)) * ((uint64_t)(v24_v))));
-    v135_v = ((int64_t)(((uint64_t)(v134_v)) + ((uint64_t)(v24_v))));
-    v136_v = v135_v < v4_v;
-    v137_v = v136_v ? v135_v : v4_v;
-    v138_ctx = (ppy_ctx_ranges_fill__par5 *)malloc(sizeof(ppy_ctx_ranges_fill__par5));
-    if (!(v138_ctx != NULL)) goto fallback; /* spawn.alloc */
-    v138_ctx->a0 = v7_v;
-    v138_ctx->a1 = v8_v;
-    v138_ctx->a2 = v134_v;
-    v138_ctx->a3 = v137_v;
-    if (!(pthread_create(&v139_thread, NULL, ppy_thread_ranges_fill__par5, v138_ctx) == 0)) goto fallback; /* spawn.ok */
-    v140_v = ((int64_t)(v139_thread));
-    v141_v = INT64_C(15);
-    v142_v = ((int64_t)(((uint64_t)(v141_v)) * ((uint64_t)(v24_v))));
-    v143_v = v142_v < v4_v;
-    v144_v = v143_v ? v142_v : v4_v;
-    v146_v = ((int64_t)(ranges_fill__par5(v7_v, v8_v, v144_v, v4_v, &v145_res)));
-    v147_v = INT64_C(0);
-    v148_v = v146_v != v147_v;
-    if (!(pthread_join((pthread_t)v30_v, &v149_joined) == 0)) goto fallback; /* join.ok */
-    v150_v = ((int64_t)((intptr_t)v149_joined));
-    v151_v = INT64_C(0);
-    v152_v = v150_v != v151_v;
-    v153_v = v148_v | v152_v;
-    if (!(pthread_join((pthread_t)v36_v, &v154_joined) == 0)) goto fallback; /* join.ok */
-    v155_v = ((int64_t)((intptr_t)v154_joined));
-    v156_v = INT64_C(0);
-    v157_v = v155_v != v156_v;
-    v158_v = v153_v | v157_v;
-    if (!(pthread_join((pthread_t)v44_v, &v159_joined) == 0)) goto fallback; /* join.ok */
-    v160_v = ((int64_t)((intptr_t)v159_joined));
-    v161_v = INT64_C(0);
-    v162_v = v160_v != v161_v;
-    v163_v = v158_v | v162_v;
-    if (!(pthread_join((pthread_t)v52_v, &v164_joined) == 0)) goto fallback; /* join.ok */
-    v165_v = ((int64_t)((intptr_t)v164_joined));
-    v166_v = INT64_C(0);
-    v167_v = v165_v != v166_v;
-    v168_v = v163_v | v167_v;
-    if (!(pthread_join((pthread_t)v60_v, &v169_joined) == 0)) goto fallback; /* join.ok */
-    v170_v = ((int64_t)((intptr_t)v169_joined));
-    v171_v = INT64_C(0);
-    v172_v = v170_v != v171_v;
-    v173_v = v168_v | v172_v;
-    if (!(pthread_join((pthread_t)v68_v, &v174_joined) == 0)) goto fallback; /* join.ok */
-    v175_v = ((int64_t)((intptr_t)v174_joined));
-    v176_v = INT64_C(0);
-    v177_v = v175_v != v176_v;
-    v178_v = v173_v | v177_v;
-    if (!(pthread_join((pthread_t)v76_v, &v179_joined) == 0)) goto fallback; /* join.ok */
-    v180_v = ((int64_t)((intptr_t)v179_joined));
-    v181_v = INT64_C(0);
-    v182_v = v180_v != v181_v;
-    v183_v = v178_v | v182_v;
-    if (!(pthread_join((pthread_t)v84_v, &v184_joined) == 0)) goto fallback; /* join.ok */
-    v185_v = ((int64_t)((intptr_t)v184_joined));
-    v186_v = INT64_C(0);
-    v187_v = v185_v != v186_v;
-    v188_v = v183_v | v187_v;
-    if (!(pthread_join((pthread_t)v92_v, &v189_joined) == 0)) goto fallback; /* join.ok */
-    v190_v = ((int64_t)((intptr_t)v189_joined));
-    v191_v = INT64_C(0);
-    v192_v = v190_v != v191_v;
-    v193_v = v188_v | v192_v;
-    if (!(pthread_join((pthread_t)v100_v, &v194_joined) == 0)) goto fallback; /* join.ok */
-    v195_v = ((int64_t)((intptr_t)v194_joined));
-    v196_v = INT64_C(0);
-    v197_v = v195_v != v196_v;
-    v198_v = v193_v | v197_v;
-    if (!(pthread_join((pthread_t)v108_v, &v199_joined) == 0)) goto fallback; /* join.ok */
-    v200_v = ((int64_t)((intptr_t)v199_joined));
-    v201_v = INT64_C(0);
-    v202_v = v200_v != v201_v;
-    v203_v = v198_v | v202_v;
-    if (!(pthread_join((pthread_t)v116_v, &v204_joined) == 0)) goto fallback; /* join.ok */
-    v205_v = ((int64_t)((intptr_t)v204_joined));
-    v206_v = INT64_C(0);
-    v207_v = v205_v != v206_v;
-    v208_v = v203_v | v207_v;
-    if (!(pthread_join((pthread_t)v124_v, &v209_joined) == 0)) goto fallback; /* join.ok */
-    v210_v = ((int64_t)((intptr_t)v209_joined));
-    v211_v = INT64_C(0);
-    v212_v = v210_v != v211_v;
-    v213_v = v208_v | v212_v;
-    if (!(pthread_join((pthread_t)v132_v, &v214_joined) == 0)) goto fallback; /* join.ok */
-    v215_v = ((int64_t)((intptr_t)v214_joined));
-    v216_v = INT64_C(0);
-    v217_v = v215_v != v216_v;
-    v218_v = v213_v | v217_v;
-    if (!(pthread_join((pthread_t)v140_v, &v219_joined) == 0)) goto fallback; /* join.ok */
-    v220_v = ((int64_t)((intptr_t)v219_joined));
-    v221_v = INT64_C(0);
-    v222_v = v220_v != v221_v;
-    v223_v = v218_v | v222_v;
-    v224_v = true;
-    v225_v = v223_v ^ v224_v;
-    if (!(v225_v)) goto fallback; /* contract.ok */
-    goto L1_par_join1;
-fallback:
-    return 1;
 }
 
-
-int32_t ranges_squares__par1(int64_t *a0, int64_t a1, int64_t a2, int64_t *out0) {
-    int64_t *v1_out_addr[1];
-    int64_t v2___ppy_begin_addr[1];
-    int64_t v3___ppy_end_addr[1];
-    int64_t v4_v;
-    int64_t v5_v;
-    int64_t v6_v;
-    int64_t v7_i_addr[1];
-    int64_t v8_v;
-    int64_t v9_v;
-    int64_t v10_v;
-    bool v11_v;
-    int64_t v12_v;
-    bool v13_v;
-    bool v14_v;
-    int64_t v15_v;
-    bool v16_v;
-    bool v17_v;
-    int64_t v18_v;
-    bool v19_v;
-    bool v20_v;
-    bool v21_v;
-    bool v22_v;
-    int64_t v23_v;
-    bool v24_v;
-    int64_t *v25_v;
-    int64_t v26_v;
-    int64_t *v27_v;
-    int64_t v28_v;
-    int64_t v29_v;
-    int64_t v30_v;
-    int64_t v31_v;
-    int64_t v32_v;
-    *v1_out_addr = a0;
-    *v2___ppy_begin_addr = a1;
-    *v3___ppy_end_addr = a2;
-    v4_v = *v2___ppy_begin_addr;
-    v5_v = *v3___ppy_end_addr;
-    v6_v = INT64_C(1);
-    v8_v = INT64_C(1);
-    v9_v = ((int64_t)(((uint64_t)(v5_v)) - ((uint64_t)(v8_v))));
-    v10_v = 0;
-    (void)v10_v;
-    v11_v = ppy_ovf_mul_i64(v4_v, v4_v, &v10_v) != 0;
-    v12_v = 0;
-    (void)v12_v;
-    v13_v = ppy_ovf_mul_i64(v4_v, v9_v, &v12_v) != 0;
-    v14_v = v11_v | v13_v;
-    v15_v = 0;
-    (void)v15_v;
-    v16_v = ppy_ovf_mul_i64(v9_v, v4_v, &v15_v) != 0;
-    v17_v = v14_v | v16_v;
-    v18_v = 0;
-    (void)v18_v;
-    v19_v = ppy_ovf_mul_i64(v9_v, v9_v, &v18_v) != 0;
-    v20_v = v17_v | v19_v;
-    v21_v = true;
-    v22_v = v20_v ^ v21_v;
-    if (!(v22_v)) goto fallback; /* overflow.ok */
-    *v7_i_addr = v4_v;
-    goto L1_for_head3;
-L1_for_head3:;
-    v23_v = *v7_i_addr;
-    v24_v = v23_v < v5_v;
-    if (v24_v) {
-        goto L2_for_body4;
-    } else {
-        goto L3_for_end6;
+int32_t ranges_squares__par1(int64_t *out, int64_t __ppy_begin_, int64_t __ppy_end_, int64_t *out_2) {
+    int64_t t1 = (int64_t)((uint64_t)__ppy_end_ - 1u);
+    int64_t t2;
+    bool t3 = ppy_ovf_mul_i64(__ppy_begin_, __ppy_begin_, &t2) != 0;
+    int64_t t4;
+    bool t5 = ppy_ovf_mul_i64(__ppy_begin_, t1, &t4) != 0;
+    int64_t t6;
+    bool t7 = ppy_ovf_mul_i64(t1, __ppy_begin_, &t6) != 0;
+    int64_t t8;
+    bool t9 = ppy_ovf_mul_i64(t1, t1, &t8) != 0;
+    if (!((((t3 | t5) | t7) | t9) ^ true)) return 1; /* overflow.ok */
+    int64_t i = __ppy_begin_;
+    while (i < __ppy_end_) {
+        out[i] = i * i;
+        if (ppy_ovf_add_i64(i, 1, &i)) return 1; /* arith.ok */
     }
-L2_for_body4:;
-    v25_v = *v1_out_addr;
-    v26_v = *v7_i_addr;
-    v27_v = v25_v + v26_v;
-    v28_v = *v7_i_addr;
-    v29_v = *v7_i_addr;
-    v30_v = ((int64_t)(((uint64_t)(v28_v)) * ((uint64_t)(v29_v))));
-    *v27_v = v30_v;
-    v31_v = *v7_i_addr;
-    v32_v = 0;
-    if (!(!ppy_ovf_add_i64(v31_v, v6_v, &v32_v))) goto fallback; /* arith.ok */
-    *v7_i_addr = v32_v;
-    goto L1_for_head3;
-L3_for_end6:;
-    *out0 = 0;
+    *out_2 = 0;
     return 0;
-fallback:
-    return 1;
 }
 
-
-int32_t ranges_dot__par2(double *a0, int64_t a1, double *a2, int64_t a3, int64_t a4, int64_t a5, double a6, double *out0) {
-    int64_t v1___ppy_begin_addr[1];
-    int64_t v2___ppy_end_addr[1];
-    double v3_total_addr[1];
-    int64_t v4_v;
-    int64_t v5_v;
-    int64_t v6_v;
-    int64_t v7_i_addr[1];
-    int64_t v8_v;
-    int64_t v9_v;
-    int64_t v10_v;
-    int64_t v11_v;
-    int64_t v12_v;
-    bool v13_v;
-    bool v14_v;
-    bool v15_v;
-    int64_t v16_v;
-    int64_t v17_v;
-    int64_t v18_v;
-    bool v19_v;
-    bool v20_v;
-    bool v21_v;
-    int64_t v22_v;
-    bool v23_v;
-    double v24_v;
-    int64_t v25_v;
-    double v26_v;
-    int64_t v27_v;
-    double v28_v;
-    double v29_v;
-    double v30_v;
-    int64_t v31_v;
-    int64_t v32_v;
-    double v33_v;
-    *v1___ppy_begin_addr = a4;
-    *v2___ppy_end_addr = a5;
-    *v3_total_addr = a6;
-    v4_v = *v1___ppy_begin_addr;
-    v5_v = *v2___ppy_end_addr;
-    v6_v = INT64_C(1);
-    v8_v = INT64_C(1);
-    v9_v = ((int64_t)(((uint64_t)(v5_v)) - ((uint64_t)(v8_v))));
-    v10_v = INT64_C(0);
-    v11_v = a1;
-    v12_v = ((int64_t)(v11_v));
-    v13_v = v4_v >= v10_v;
-    v14_v = v9_v < v12_v;
-    v15_v = v13_v & v14_v;
-    if (!(v15_v)) goto fallback; /* bounds.ok */
-    v16_v = INT64_C(0);
-    v17_v = a3;
-    v18_v = ((int64_t)(v17_v));
-    v19_v = v4_v >= v16_v;
-    v20_v = v9_v < v18_v;
-    v21_v = v19_v & v20_v;
-    if (!(v21_v)) goto fallback; /* bounds.ok */
-    *v7_i_addr = v4_v;
-    goto L1_for_head3;
-L1_for_head3:;
-    v22_v = *v7_i_addr;
-    v23_v = v22_v < v5_v;
-    if (v23_v) {
-        goto L2_for_body4;
-    } else {
-        goto L3_for_end6;
+int32_t ranges_dot__par2(double *a, int64_t a_len, double *b, int64_t b_len, int64_t __ppy_begin_, int64_t __ppy_end_, double total, double *out) {
+    int64_t t1 = (int64_t)((uint64_t)__ppy_end_ - 1u);
+    if (__ppy_begin_ < 0 || t1 >= a_len) return 1; /* bounds.ok */
+    if (__ppy_begin_ < 0 || t1 >= b_len) return 1; /* bounds.ok */
+    int64_t i = __ppy_begin_;
+    while (i < __ppy_end_) {
+        total += a[i] * b[i];
+        if (ppy_ovf_add_i64(i, 1, &i)) return 1; /* arith.ok */
     }
-L2_for_body4:;
-    v24_v = *v3_total_addr;
-    v25_v = *v7_i_addr;
-    v26_v = a0[v25_v];
-    v27_v = *v7_i_addr;
-    v28_v = a2[v27_v];
-    v29_v = v26_v * v28_v;
-    v30_v = v24_v + v29_v;
-    *v3_total_addr = v30_v;
-    v31_v = *v7_i_addr;
-    v32_v = 0;
-    if (!(!ppy_ovf_add_i64(v31_v, v6_v, &v32_v))) goto fallback; /* arith.ok */
-    *v7_i_addr = v32_v;
-    goto L1_for_head3;
-L3_for_end6:;
-    v33_v = *v3_total_addr;
-    *out0 = v33_v;
+    *out = total;
     return 0;
-fallback:
-    return 1;
 }
 
-
-int32_t ranges_dot_relaxed__par3(double *a0, int64_t a1, double *a2, int64_t a3, int64_t a4, int64_t a5, double a6, double *out0) {
-    int64_t v1___ppy_begin_addr[1];
-    int64_t v2___ppy_end_addr[1];
-    double v3_total_addr[1];
-    int64_t v4_v;
-    int64_t v5_v;
-    int64_t v6_v;
-    int64_t v7_i_addr[1];
-    int64_t v8_v;
-    int64_t v9_v;
-    int64_t v10_v;
-    int64_t v11_v;
-    int64_t v12_v;
-    bool v13_v;
-    bool v14_v;
-    bool v15_v;
-    int64_t v16_v;
-    int64_t v17_v;
-    int64_t v18_v;
-    bool v19_v;
-    bool v20_v;
-    bool v21_v;
-    int64_t v22_v;
-    bool v23_v;
-    double v24_v;
-    int64_t v25_v;
-    double v26_v;
-    int64_t v27_v;
-    double v28_v;
-    double v29_v;
-    double v30_v;
-    int64_t v31_v;
-    int64_t v32_v;
-    double v33_v;
-    *v1___ppy_begin_addr = a4;
-    *v2___ppy_end_addr = a5;
-    *v3_total_addr = a6;
-    v4_v = *v1___ppy_begin_addr;
-    v5_v = *v2___ppy_end_addr;
-    v6_v = INT64_C(1);
-    v8_v = INT64_C(1);
-    v9_v = ((int64_t)(((uint64_t)(v5_v)) - ((uint64_t)(v8_v))));
-    v10_v = INT64_C(0);
-    v11_v = a1;
-    v12_v = ((int64_t)(v11_v));
-    v13_v = v4_v >= v10_v;
-    v14_v = v9_v < v12_v;
-    v15_v = v13_v & v14_v;
-    if (!(v15_v)) goto fallback; /* bounds.ok */
-    v16_v = INT64_C(0);
-    v17_v = a3;
-    v18_v = ((int64_t)(v17_v));
-    v19_v = v4_v >= v16_v;
-    v20_v = v9_v < v18_v;
-    v21_v = v19_v & v20_v;
-    if (!(v21_v)) goto fallback; /* bounds.ok */
-    *v7_i_addr = v4_v;
-    goto L1_for_head3;
-L1_for_head3:;
-    v22_v = *v7_i_addr;
-    v23_v = v22_v < v5_v;
-    if (v23_v) {
-        goto L2_for_body4;
-    } else {
-        goto L3_for_end6;
+int32_t ranges_dot_relaxed__par3(double *a, int64_t a_len, double *b, int64_t b_len, int64_t __ppy_begin_, int64_t __ppy_end_, double total, double *out) {
+    int64_t t1 = (int64_t)((uint64_t)__ppy_end_ - 1u);
+    if (__ppy_begin_ < 0 || t1 >= a_len) return 1; /* bounds.ok */
+    if (__ppy_begin_ < 0 || t1 >= b_len) return 1; /* bounds.ok */
+    int64_t i = __ppy_begin_;
+    while (i < __ppy_end_) {
+        total += a[i] * b[i];
+        if (ppy_ovf_add_i64(i, 1, &i)) return 1; /* arith.ok */
     }
-L2_for_body4:;
-    v24_v = *v3_total_addr;
-    v25_v = *v7_i_addr;
-    v26_v = a0[v25_v];
-    v27_v = *v7_i_addr;
-    v28_v = a2[v27_v];
-    v29_v = v26_v * v28_v;
-    v30_v = v24_v + v29_v;
-    *v3_total_addr = v30_v;
-    v31_v = *v7_i_addr;
-    v32_v = 0;
-    if (!(!ppy_ovf_add_i64(v31_v, v6_v, &v32_v))) goto fallback; /* arith.ok */
-    *v7_i_addr = v32_v;
-    goto L1_for_head3;
-L3_for_end6:;
-    v33_v = *v3_total_addr;
-    *out0 = v33_v;
+    *out = total;
     return 0;
-fallback:
-    return 1;
 }
 
-
-int32_t ranges_count_odd__par4(int64_t a0, int64_t *a1, int64_t a2, int64_t a3, int64_t a4, int64_t a5, int64_t *out0) {
-    int64_t v1_scale_addr[1];
-    int64_t v2___ppy_begin_addr[1];
-    int64_t v3___ppy_end_addr[1];
-    int64_t v4_hits_addr[1];
-    int64_t v5_v;
-    int64_t v6_v;
-    int64_t v7_v;
-    int64_t v8_i_addr[1];
-    int64_t v9_v;
-    int64_t v10_v;
-    int64_t v11_v;
-    int64_t v12_v;
-    int64_t v13_v;
-    int64_t v14_v;
-    int64_t v15_v;
-    bool v16_v;
-    bool v17_v;
-    bool v18_v;
-    int64_t v19_v;
-    bool v20_v;
-    int64_t v21_v;
-    int64_t v22_v;
-    int64_t v23_r;
-    int64_t v24_v;
-    bool v25_v;
-    int64_t v26_v;
-    int64_t v27_v;
-    int64_t v28_v;
-    int64_t v29_v;
-    int64_t v30_v;
-    int64_t v31_v;
-    *v1_scale_addr = a0;
-    *v2___ppy_begin_addr = a3;
-    *v3___ppy_end_addr = a4;
-    *v4_hits_addr = a5;
-    v5_v = *v2___ppy_begin_addr;
-    v6_v = *v3___ppy_end_addr;
-    v7_v = INT64_C(1);
-    v9_v = INT64_C(2);
-    v10_v = INT64_C(1);
-    v11_v = INT64_C(1);
-    v12_v = ((int64_t)(((uint64_t)(v6_v)) - ((uint64_t)(v11_v))));
-    v13_v = INT64_C(0);
-    v14_v = a2;
-    v15_v = ((int64_t)(v14_v));
-    v16_v = v5_v >= v13_v;
-    v17_v = v12_v < v15_v;
-    v18_v = v16_v & v17_v;
-    if (!(v18_v)) goto fallback; /* bounds.ok */
-    *v8_i_addr = v5_v;
-    goto L1_for_head3;
-L1_for_head3:;
-    v19_v = *v8_i_addr;
-    v20_v = v19_v < v6_v;
-    if (v20_v) {
-        goto L2_for_body4;
-    } else {
-        goto L3_for_end6;
+int32_t ranges_count_odd__par4(int64_t scale, int64_t *xs, int64_t xs_len, int64_t __ppy_begin_, int64_t __ppy_end_, int64_t hits, int64_t *out) {
+    if (__ppy_begin_ < 0 || (int64_t)((uint64_t)__ppy_end_ - 1u) >= xs_len) return 1; /* bounds.ok */
+    int64_t i = __ppy_begin_;
+    while (i < __ppy_end_) {
+        int64_t r = xs[i] % 2;
+        if (((r != 0 && (xs[i] < 0) != (2 < 0)) ? r + 2 : r) == 1) {
+            if (ppy_ovf_add_i64(hits, scale, &hits)) return 1; /* arith.ok */
+        }
+        if (ppy_ovf_add_i64(i, 1, &i)) return 1; /* arith.ok */
     }
-L2_for_body4:;
-    v21_v = *v8_i_addr;
-    v22_v = a1[v21_v];
-    if (!(!(v22_v == INT64_MIN && v9_v == -1))) goto fallback; /* div.ok */
-    v23_r = v22_v % v9_v;
-    v24_v = (v23_r != 0 && ((v22_v < 0) != (v9_v < 0))) ? v23_r + v9_v : v23_r;
-    v25_v = v24_v == v10_v;
-    if (v25_v) {
-        goto L4_then7;
-    } else {
-        goto L5_else8;
-    }
-L3_for_end6:;
-    v26_v = *v4_hits_addr;
-    *out0 = v26_v;
+    *out = hits;
     return 0;
-L4_then7:;
-    v27_v = *v4_hits_addr;
-    v28_v = *v1_scale_addr;
-    v29_v = 0;
-    if (!(!ppy_ovf_add_i64(v27_v, v28_v, &v29_v))) goto fallback; /* arith.ok */
-    *v4_hits_addr = v29_v;
-    goto L6_endif9;
-L5_else8:;
-    goto L6_endif9;
-L6_endif9:;
-    v30_v = *v8_i_addr;
-    v31_v = 0;
-    if (!(!ppy_ovf_add_i64(v30_v, v7_v, &v31_v))) goto fallback; /* arith.ok */
-    *v8_i_addr = v31_v;
-    goto L1_for_head3;
-fallback:
-    return 1;
 }
 
-
-int32_t ranges_fill__par5(double a0, double *a1, int64_t a2, int64_t a3, int64_t *out0) {
-    double v1_base_addr[1];
-    double *v2_out_addr[1];
-    int64_t v3___ppy_begin_addr[1];
-    int64_t v4___ppy_end_addr[1];
-    int64_t v5_v;
-    int64_t v6_v;
-    int64_t v7_v;
-    int64_t v8_i_addr[1];
-    int64_t v9_v;
-    bool v10_v;
-    double *v11_v;
-    int64_t v12_v;
-    double *v13_v;
-    double v14_v;
-    int64_t v15_v;
-    double v16_v;
-    double v17_v;
-    int64_t v18_v;
-    int64_t v19_v;
-    *v1_base_addr = a0;
-    *v2_out_addr = a1;
-    *v3___ppy_begin_addr = a2;
-    *v4___ppy_end_addr = a3;
-    v5_v = *v3___ppy_begin_addr;
-    v6_v = *v4___ppy_end_addr;
-    v7_v = INT64_C(1);
-    *v8_i_addr = v5_v;
-    goto L1_for_head3;
-L1_for_head3:;
-    v9_v = *v8_i_addr;
-    v10_v = v9_v < v6_v;
-    if (v10_v) {
-        goto L2_for_body4;
-    } else {
-        goto L3_for_end6;
+int32_t ranges_fill__par5(double base, double *out, int64_t __ppy_begin_, int64_t __ppy_end_, int64_t *out_2) {
+    int64_t i = __ppy_begin_;
+    while (i < __ppy_end_) {
+        out[i] = base + (double)i;
+        if (ppy_ovf_add_i64(i, 1, &i)) return 1; /* arith.ok */
     }
-L2_for_body4:;
-    v11_v = *v2_out_addr;
-    v12_v = *v8_i_addr;
-    v13_v = v11_v + v12_v;
-    v14_v = *v1_base_addr;
-    v15_v = *v8_i_addr;
-    v16_v = ((double)(v15_v));
-    v17_v = v14_v + v16_v;
-    *v13_v = v17_v;
-    v18_v = *v8_i_addr;
-    v19_v = 0;
-    if (!(!ppy_ovf_add_i64(v18_v, v7_v, &v19_v))) goto fallback; /* arith.ok */
-    *v8_i_addr = v19_v;
-    goto L1_for_head3;
-L3_for_end6:;
-    *out0 = 0;
+    *out_2 = 0;
     return 0;
-fallback:
-    return 1;
 }
 
-
-int32_t ranges_fill__par6(double *a0, int64_t a1, int64_t a2, double a3, double *out0) {
-    double *v1_out_addr[1];
-    int64_t v2___ppy_begin_addr[1];
-    int64_t v3___ppy_end_addr[1];
-    double v4_acc_addr[1];
-    int64_t v5_v;
-    int64_t v6_v;
-    int64_t v7_v;
-    int64_t v8_j_addr[1];
-    int64_t v9_v;
-    bool v10_v;
-    double v11_v;
-    double *v12_v;
-    int64_t v13_v;
-    double *v14_v;
-    double v15_v;
-    double v16_v;
-    int64_t v17_v;
-    int64_t v18_v;
-    double v19_v;
-    *v1_out_addr = a0;
-    *v2___ppy_begin_addr = a1;
-    *v3___ppy_end_addr = a2;
-    *v4_acc_addr = a3;
-    v5_v = *v2___ppy_begin_addr;
-    v6_v = *v3___ppy_end_addr;
-    v7_v = INT64_C(1);
-    *v8_j_addr = v5_v;
-    goto L1_for_head3;
-L1_for_head3:;
-    v9_v = *v8_j_addr;
-    v10_v = v9_v < v6_v;
-    if (v10_v) {
-        goto L2_for_body4;
-    } else {
-        goto L3_for_end6;
+int32_t ranges_fill__par6(double *out, int64_t __ppy_begin_, int64_t __ppy_end_, double acc, double *out_2) {
+    int64_t j = __ppy_begin_;
+    while (j < __ppy_end_) {
+        acc += out[j];
+        if (ppy_ovf_add_i64(j, 1, &j)) return 1; /* arith.ok */
     }
-L2_for_body4:;
-    v11_v = *v4_acc_addr;
-    v12_v = *v1_out_addr;
-    v13_v = *v8_j_addr;
-    v14_v = v12_v + v13_v;
-    v15_v = *v14_v;
-    v16_v = v11_v + v15_v;
-    *v4_acc_addr = v16_v;
-    v17_v = *v8_j_addr;
-    v18_v = 0;
-    if (!(!ppy_ovf_add_i64(v17_v, v7_v, &v18_v))) goto fallback; /* arith.ok */
-    *v8_j_addr = v18_v;
-    goto L1_for_head3;
-L3_for_end6:;
-    v19_v = *v4_acc_addr;
-    *out0 = v19_v;
+    *out_2 = acc;
     return 0;
-fallback:
-    return 1;
 }
 
-
-int32_t ranges_dot_relaxed__par3__task(double *a0, int64_t a1, double *a2, int64_t a3, int64_t a4, int64_t a5, double a6, double *a7, int64_t *out0) {
-    double v1_res;
-    double v2_v;
-    if (!(ranges_dot_relaxed__par3(a0, a1, a2, a3, a4, a5, a6, &v1_res) == 0)) goto fallback; /* call.ok */
-    v2_v = v1_res;
-    *a7 = v2_v;
-    *out0 = 0;
+int32_t ranges_dot_relaxed__par3__task(double *a, int64_t a_len, double *b, int64_t b_len, int64_t begin, int64_t end, double start, double *out, int64_t *out_2) {
+    double t1;
+    if (ranges_dot_relaxed__par3(a, a_len, b, b_len, begin, end, start, &t1) != 0) return 1; /* call.ok */
+    *out = t1;
+    *out_2 = 0;
     return 0;
-fallback:
-    return 1;
 }
 
-
-int32_t ranges_count_odd__par4__task(int64_t a0, int64_t *a1, int64_t a2, int64_t a3, int64_t a4, int64_t a5, int64_t *a6, int64_t *out0) {
-    int64_t v1_res;
-    int64_t v2_v;
-    if (!(ranges_count_odd__par4(a0, a1, a2, a3, a4, a5, &v1_res) == 0)) goto fallback; /* call.ok */
-    v2_v = v1_res;
-    *a6 = v2_v;
-    *out0 = 0;
+int32_t ranges_count_odd__par4__task(int64_t scale, int64_t *xs, int64_t xs_len, int64_t begin, int64_t end, int64_t start, int64_t *out, int64_t *out_2) {
+    int64_t t1;
+    if (ranges_count_odd__par4(scale, xs, xs_len, begin, end, start, &t1) != 0) return 1; /* call.ok */
+    *out = t1;
+    *out_2 = 0;
     return 0;
-fallback:
-    return 1;
 }
