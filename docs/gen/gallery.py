@@ -50,6 +50,7 @@ GROUPS = [
             "37_aio",
             "40_generics",
             "42_toolbox",
+            "43_regex",
         ],
     ),
     ("Accelerators", ["38_cuda", "39_xla"]),

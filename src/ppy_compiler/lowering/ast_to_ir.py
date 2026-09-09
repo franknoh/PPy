@@ -23,7 +23,7 @@ from ppy_runtime.aio import available as aio_available
 
 from ..analysis import types as T
 from ..analysis.checker import FunctionAnalysis, ModuleAnalysis
-from ..analysis.symbols import FunctionInfo, derivative_spec
+from ..analysis.symbols import FunctionInfo, derivative_spec, fold_flags
 from ..backend.llvm.lowering import (
     _ALLOCATIONS,
     _MATH_INTRINSICS,
@@ -73,6 +73,7 @@ from ..ir.dialects import cpu as cpu_dialect
 from ..ir.dialects import gpu as gpu_dialect
 from ..ir.dialects import math as math_dialect
 from ..ir.dialects import parallel as parallel_dialect
+from ..ir.dialects import regex as regex_dialect
 from ..ir.dialects import simd as simd_dialect
 from ..ir.transforms.autodiff import AutodiffError, differentiate
 from .abi import signature_from_ir
@@ -655,7 +656,11 @@ class _FunctionLowering:
         self.tuples: dict[str, Value] = {}
         #: Value-class parameters: name -> the struct value.
         self.objects: dict[str, Value] = {}
+        #: Match locals: name -> (found slot, the spans' slots, the pattern).
+        self.matches: dict[str, tuple[Value, Value, regex_dialect.Compiled]] = {}
         self._loops: list[tuple[Block, Block]] = []
+        #: Blocks after a `while True:` that nothing reaches.
+        self._dead: set[int] = set()
         self._labels = 0
         #: An outlined parallel body lowers its chunk loop serially.
         self.outlining = False
@@ -861,6 +866,9 @@ class _FunctionLowering:
         core.ret(self.b, self._coerce(self._expr(node.value), _kind(expected)))
 
     def _return_default(self) -> None:
+        if self.b.block is not None and id(self.b.block) in self._dead:
+            core.unreachable(self.b)
+            return
         if self.info.ret == T.NONE and not self.function.results:
             self._check_thread_failures()
             core.ret(self.b)
@@ -876,6 +884,12 @@ class _FunctionLowering:
             and isinstance(target, ast.Name)
             and self._standalone_buffer(target.id, node.value)
         ):
+            return
+        spec = self._regex_spec(node.value)
+        if spec is not None:
+            if not isinstance(target, ast.Name):
+                raise Unsupported("a match is bound to a name")
+            self._assign_match(target.id, spec)
             return
         values = self._tuple_expr(node.value)
         if values is not None:
@@ -931,6 +945,14 @@ class _FunctionLowering:
 
     def _tuple_expr(self, node: ast.expr) -> list[Value] | None:
         if isinstance(node, ast.Call):
+            func = node.func
+            if (
+                isinstance(func, ast.Attribute)
+                and isinstance(func.value, ast.Name)
+                and func.value.id in self.matches
+                and func.attr == "span"
+            ):
+                return self._match_span(func.value.id, node)
             derivative = self._derivative_spec(node.func)
             if derivative is not None:
                 values = self._derivative_call(derivative, node)
@@ -975,6 +997,7 @@ class _FunctionLowering:
             raise Unsupported("this subscript assignment has no native lowering")
         if not isinstance(target, ast.Name):
             raise Unsupported("assignment to a non-local has no native lowering")
+        self.matches.pop(target.id, None)
         slot = self.slots.get(target.id)
         if slot is None:
             slot = self._alloca(value.type, target.id)
@@ -1012,9 +1035,21 @@ class _FunctionLowering:
         header = self._block("while.head")
         body = self._block("while.body")
         done = self._block("while.end")
+        # `while True:` without a `break` leaves only by returning: nothing
+        # runs after it, so nothing after it needs a value to return.
+        forever = (
+            isinstance(node.test, ast.Constant)
+            and node.test.value is True
+            and not _breaks(node.body)
+        )
         core.br(self.b, Successor(header))
         self.b.at_end(header)
-        core.cond_br(self.b, self._truth(self._expr(node.test)), Successor(body), Successor(done))
+        if forever:
+            core.br(self.b, Successor(body))
+        else:
+            core.cond_br(
+                self.b, self._truth(self._expr(node.test)), Successor(body), Successor(done)
+            )
         self.b.at_end(body)
         self._loops.append((header, done))
         self._body(node.body)
@@ -1022,6 +1057,11 @@ class _FunctionLowering:
         if self._open():
             core.br(self.b, Successor(header))
         self.b.at_end(done)
+        if forever:
+            core.unreachable(self.b)
+            dead = self._block("while.dead")
+            self._dead.add(id(dead))
+            self.b.at_end(dead)
 
     def _for(self, node: ast.For) -> None:
         if node.orelse or not isinstance(node.target, ast.Name):
@@ -1361,6 +1401,9 @@ class _FunctionLowering:
         return None
 
     def _load(self, name: str) -> Value:
+        if name in self.matches:
+            # The match as a truth value: whether there was one.
+            return core.load(self.b, self.matches[name][0])
         if name in self.objects:
             raise Unsupported(f"`{name}` is a value class, which has no single scalar value")
         if name in self.tuples:
@@ -1426,6 +1469,9 @@ class _FunctionLowering:
     def _compare(self, node: ast.Compare) -> Value:
         if len(node.ops) != 1:
             raise Unsupported("chained comparison has no native lowering")
+        identity = self._match_identity(node)
+        if identity is not None:
+            return identity
         folded = self._feature_membership(node)
         if folded is not None:
             return folded
@@ -1452,6 +1498,15 @@ class _FunctionLowering:
 
     def _call(self, node: ast.Call) -> Value:
         target = ast.unparse(node.func)
+        if (
+            isinstance(node.func, ast.Attribute)
+            and isinstance(node.func.value, ast.Name)
+            and node.func.value.id in self.matches
+        ):
+            return self._match_method(node.func.value.id, node)
+        spec = self._regex_spec(node)
+        if spec is not None:
+            return self._regex_op(spec).results[0]
         namespace = _dialect_namespace(target)
         if namespace is not None:
             return self._dialect_call(namespace, node)
@@ -2405,6 +2460,151 @@ class _FunctionLowering:
             raise Unsupported(f"`{qualname}` returns nothing a caller can use")
         return core.call(self.b, function.name, tuple(arguments), function.results).results[0]
 
+    # -- regular expressions -------------------------------------------------------
+
+    def _regex_spec(
+        self, node: ast.expr
+    ) -> tuple[str, regex_dialect.Compiled, list[ast.expr]] | None:
+        """`P.search(buf, ...)` for a pattern compiled at module level, or
+        `re.search(rb"...", buf, ...)`: the mode, the pattern, and what follows."""
+        if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Attribute):
+            return None
+        owner, mode = node.func.value, node.func.attr
+        if mode not in regex_dialect.MODES or not isinstance(owner, ast.Name):
+            return None
+        symbols = self.frontend.analysis.symbols
+        found = symbols.pattern_globals.get(owner.id)
+        if found is not None:
+            pattern, flags = found
+            arguments = list(node.args)
+        else:
+            binding = symbols.imports.get(owner.id)
+            if binding is None or binding.canonical != "re":
+                return None
+            first = node.args[0] if node.args else None
+            if not isinstance(first, ast.Constant) or not isinstance(first.value, bytes):
+                raise Unsupported(f"a native `re.{mode}` takes a bytes literal as its pattern")
+            pattern, flags = first.value, 0
+            arguments = list(node.args[1:])
+            if len(arguments) > 1:
+                folded = fold_flags(symbols, arguments[1])
+                if folded is None:
+                    raise Unsupported("`re` flags are spelled with `re.` names")
+                flags, arguments = folded, arguments[:1]
+        if node.keywords:
+            raise Unsupported("a pattern's `pos` and `endpos` are positional in native code")
+        try:
+            compiled = regex_dialect.analyse(pattern, flags)
+        except regex_dialect.Unsupported as error:
+            raise Unsupported(f"pattern {pattern!r}: {error}") from error
+        return mode, compiled, arguments
+
+    def _regex_op(self, spec: tuple[str, regex_dialect.Compiled, list[ast.expr]]) -> Operation:
+        mode, compiled, arguments = spec
+        first = arguments[0] if arguments else None
+        if not isinstance(first, ast.Name) or first.id not in self.buffers:
+            raise Unsupported("a pattern matches over a `Buffer[ppy.u8]` local or parameter")
+        buffer = self.buffers[first.id]
+        if buffer.type != BufferType(U8):
+            raise Unsupported("a pattern matches over `Buffer[ppy.u8]`, one byte per element")
+        if len(arguments) > 3:
+            raise Unsupported("a pattern's match takes the buffer, `pos`, and `endpos`")
+        if len(arguments) > 1:
+            pos = self._coerce(self._expr(arguments[1]), "int")
+        else:
+            pos = self._int_constant(0)
+        if len(arguments) > 2:
+            endpos = self._coerce(self._expr(arguments[2]), "int")
+        else:
+            endpos = core.cast(self.b, core.buffer_len(self.b, buffer), I64)
+        self.frontend.module.require("regex", 1)
+        return regex_dialect.create(self.b, mode, buffer, pos, endpos, compiled)
+
+    def _assign_match(
+        self, name: str, spec: tuple[str, regex_dialect.Compiled, list[ast.expr]]
+    ) -> None:
+        op = self._regex_op(spec)
+        compiled = spec[1]
+        known = self.matches.get(name)
+        if known is None or known[2].spans != compiled.spans:
+            found = self._alloca(BOOL, f"{name}.found")
+            spans = core.alloca(
+                self._entry_builder(), I64, count=compiled.spans, name=f"{name}.spans"
+            )
+            known = (found, spans, compiled)
+        self.matches[name] = known
+        self.slots.pop(name, None)
+        self.tuples.pop(name, None)
+        core.store(self.b, op.results[0], known[0])
+        for index, value in enumerate(op.results[1:]):
+            core.store(self.b, value, core.ptr_offset(self.b, known[1], self._int_constant(index)))
+
+    def _match_identity(self, node: ast.Compare) -> Value | None:
+        """`m is None` / `m is not None` for a match local."""
+        op = node.ops[0]
+        if not isinstance(op, (ast.Is, ast.IsNot)):
+            return None
+        left, right = node.left, node.comparators[0]
+        if (isinstance(right, ast.Name) and right.id in self.matches) or self._regex_spec(right):
+            left, right = right, left
+        if isinstance(left, ast.Name) and left.id in self.matches:
+            found = core.load(self.b, self.matches[left.id][0])
+        else:
+            spec = self._regex_spec(left)
+            if spec is None:
+                return None
+            # `P.search(buf) is not None`: whether there was a match, and nothing kept.
+            found = self._regex_op(spec).results[0]
+        if not (isinstance(right, ast.Constant) and right.value is None):
+            raise Unsupported("a match is compared with `None` only")
+        if isinstance(op, ast.IsNot):
+            return found
+        return core.cmp(self.b, "eq", found, core.const(self.b, False, BOOL))
+
+    def _group_index(self, compiled: regex_dialect.Compiled, arguments: list[ast.expr]) -> int:
+        if len(arguments) > 1:
+            raise Unsupported("one group at a time has a native lowering")
+        if not arguments:
+            return 0
+        argument = arguments[0]
+        if isinstance(argument, ast.Constant):
+            value = argument.value
+            if (
+                isinstance(value, int)
+                and not isinstance(value, bool)
+                and 0 <= value <= compiled.groups
+            ):
+                return value
+            if isinstance(value, str) and value in compiled.names:
+                return compiled.names[value]
+        raise Unsupported("a group is named by a constant index or name the pattern has")
+
+    def _match_method(self, name: str, node: ast.Call) -> Value:
+        assert isinstance(node.func, ast.Attribute)
+        _found, spans, compiled = self.matches[name]
+        attr = node.func.attr
+        if attr == "span":
+            raise Unsupported("`span()` is a pair: unpack it, as `a, b = m.span()`")
+        if attr == "group":
+            raise Unsupported(
+                "`group()` hands back bytes, which has no native form; "
+                "read the buffer between `start()` and `end()` instead"
+            )
+        if attr not in {"start", "end"} or node.keywords:
+            raise Unsupported(f"`Match.{attr}` has no native lowering")
+        slot = 2 * self._group_index(compiled, node.args) + (attr == "end")
+        return core.load(self.b, core.ptr_offset(self.b, spans, self._int_constant(slot)))
+
+    def _match_span(self, name: str, node: ast.Call) -> list[Value]:
+        _found, spans, compiled = self.matches[name]
+        if node.keywords:
+            raise Unsupported("`span()` takes its group positionally")
+        first = 2 * self._group_index(compiled, node.args)
+        return [
+            core.load(self.b, core.ptr_offset(self.b, spans, self._int_constant(first))),
+            core.load(self.b, core.ptr_offset(self.b, spans, self._int_constant(first + 1))),
+        ]
+
     def _math_call(self, name: str, node: ast.Call) -> Value:
         if name not in _MATH_INTRINSICS:
             raise Unsupported(f"`math.{name}` has no native lowering")
@@ -2852,6 +3052,23 @@ def _rebinds(body: list[ast.stmt], name: str) -> bool:
                 and child.id == name
                 and isinstance(child.ctx, (ast.Store, ast.Del))
             ):
+                return True
+    return False
+
+
+def _breaks(body: list[ast.stmt]) -> bool:
+    """Whether a `break` in `body` belongs to the loop `body` is in."""
+    for statement in body:
+        if isinstance(statement, ast.Break):
+            return True
+        if isinstance(statement, (ast.For, ast.While, ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        for field_name in ("body", "orelse", "finalbody"):
+            inner = getattr(statement, field_name, None)
+            if isinstance(inner, list) and _breaks(inner):
+                return True
+        for handler in getattr(statement, "handlers", ()):
+            if _breaks(handler.body):
                 return True
     return False
 

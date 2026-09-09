@@ -4612,7 +4612,7 @@ class _Checker:
         """A mutable module-level binding, which reading is an effect."""
         if name in self._function_locals or name in self.symbols.constant_globals:
             return False
-        if name in self.symbols.derivatives:
+        if name in self.symbols.derivatives or name in self.symbols.pattern_globals:
             return False
         return (
             name in self.symbols.globals
