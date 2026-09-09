@@ -4,6 +4,10 @@
 
 Work toward the next release, on `dev`; alphas of it are tagged `v0.3.0aN`.
 
+- A parallel body that writes a buffer element, `out[i] = i * i` under
+  `parallel.range`, lowers: the store writes through `out` and binds nothing
+  outside the loop, which is what the guide promised and what the check
+  mistook for an assignment of `out`.
 - Regular expressions run natively. A pattern compiled from a bytes literal
   at module level -- `WORD = re.compile(rb"[A-Za-z]+")` -- or written into
   `re.search(rb"...", buf)` becomes a `regex.search`, `regex.match`, or
