@@ -4,6 +4,11 @@
 
 Work toward the next release, on `dev`; alphas of it are tagged `v0.3.0aN`.
 
+- A parallel body that writes a buffer element, `out[i] = i * i` under
+  `parallel.range`, lowers: the store writes through `out` and binds nothing
+  outside the loop, which is what the guide promised and what the check
+  mistook for an assignment of `out`.
+
 - `ppy.input[T]()` takes no argument, and `ppy.input[Buffer[T]](n)` takes
   only how many values to read: reading and printing are two things, so a
   prompt is a `print` before the read rather than an argument that meant a
