@@ -4,20 +4,20 @@
 
 Work toward the next release, on `dev`; alphas of it are tagged `v0.3.0aN`.
 
-- Every example README is rewritten to say what the program does and why it
-  is fast in the first paragraph, show the lines of code that matter, and
-  end with the commands and what each one prints. A long output is shown to
-  its first twenty lines and kept whole under the folder's `outputs/`, which
-  the documentation site unfolds in place; the six judge problems gained a
-  small `input.txt` so their commands run as written, and the toolbox README
-  runs the inspect, emit, report, sanitizer, and profile commands it is
-  about.
+## 0.2.1 — unreleased
+
 - The lowering cache dropped a coroutine's future kind from its signature,
   so the second `ppy run` of a program whose entry coroutine was served from
   the cache bound it through the plain boundary and handed `aio.run` a bare
   handle instead of a future (`TypeError` from asyncio). The cache carries
   the kind now, its schema moved to 7 so no stale entry is served, and a test
   holds the round trip. Found by recording the examples' outputs twice.
+- Every example README is rewritten in a plain voice with its detail kept,
+  and ends with the commands and what each one prints. A short output is
+  inline, a longer one is folded into a `<details>` block, a very long one is
+  a file under the folder's `outputs/` that the documentation site embeds;
+  each exists once. The six judge problems gained a small `input.txt` so
+  their commands run as written.
 
 ## 0.2.0 — 2026-09-08
 
