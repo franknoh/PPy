@@ -3829,9 +3829,11 @@ yourself, mark it <code>@ppy.reflective</code>, or run <code>ppy migrate</code>.
   with <code>input</code> and never touches <code>sys.stdin</code> (two readers of one file
   descriptor would not agree on where it is): <code>int(input())</code> becomes
   <code>ppy.input[int]()</code>, <code>a, b = map(int, input().split())</code> becomes
-  <code>ppy.input[tuple[int, int]]()</code>, a bare <code>input()</code> becomes <code>ppy.input[str]()</code>
-  carrying its prompt, and a loop that fills a buffer one value at a time
-  becomes one bulk <code>ppy.read_ints</code> over the same slots;</li>
+  <code>ppy.input[tuple[int, int]]()</code>, a bare <code>input()</code> becomes <code>ppy.input[str]()</code>,
+  a prompt becomes a <code>print(..., end="", flush=True)</code> before the statement
+  that reads (or, inside a loop's test or a comprehension, the one-expression
+  <code>print(...) or ppy.input[T]()</code>), and a loop that fills a buffer one value
+  at a time becomes one bulk <code>ppy.read_ints</code> over the same slots;</li>
 <li>with <code>--promote-buffers</code>, declares read-only numeric list parameters as
   <code>Buffer[T]</code> and rewrites the values feeding them into <code>array.array</code>
   (remarked as <code>R3002</code>, or <code>R3003</code> with the reason it could not);</li>

@@ -3705,6 +3705,16 @@
 <h2 id="030-unreleased">0.3.0 — unreleased<a class="headerlink" href="#030-unreleased" title="Permanent link">&para;</a></h2>
 <p>Work toward the next release, on <code>dev</code>; alphas of it are tagged <code>v0.3.0aN</code>.</p>
 <ul>
+<li><code>ppy.input[T]()</code> takes no argument, and <code>ppy.input[Buffer[T]](https://github.com/franknoh/PPy/blob/main/n)</code> takes
+  only how many values to read: reading and printing are two things, so a
+  prompt is a <code>print</code> before the read rather than an argument that meant a
+  prompt for one type and a count for another. The checker says so (<code>E1305</code>
+  for an argument to a scalar read or a missing count, <code>E1301</code> for a count
+  that is not an <code>int</code>), and the converter writes <code>input("p")</code>'s prompt as
+  <code>print("p", end="", flush=True)</code> before the statement that reads -- or,
+  inside a loop's test or a comprehension, as the one-expression
+  <code>print(...) or ppy.input[T]()</code> so it still prints each time. A fill loop
+  whose reads carry a prompt stays a loop rather than becoming one bulk read.</li>
 <li>The C backend writes structured code. Loops are <code>while</code>, branches are
   <code>if</code>/<code>else</code> with <code>break</code>, <code>continue</code>, and <code>return</code>, rebuilt from the IR's
   dominator tree and loops; a stack slot that is only loaded and stored is a
