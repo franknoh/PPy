@@ -857,6 +857,15 @@ class _FunctionEmitter:
         self.succ_block: dict[int, object] = {}
         self.loop_stack: list[_Loop] = []
         self.emitted: set[int] = set()
+        #: Pure operations nothing reads, transitively: never written.
+        self.dead: set[int] = set()
+        for block in reversed(self.blocks):
+            for op in reversed(block.operations):
+                if op.results and _pure(op) and all(self._dead_use(v) for v in op.results):
+                    self.dead.add(id(op))
+
+    def _dead_use(self, v: Value) -> bool:
+        return all(isinstance(u, Operation) and id(u) in self.dead for u, _i in v.uses)
 
     # -- names ----------------------------------------------------------------------
 
@@ -1464,7 +1473,8 @@ class _FunctionEmitter:
         if terminator is None:
             raise _Unstructured(f"^{block.name} has no terminator")
         for op in block.operations[:-1]:
-            self.op(op)
+            if id(op) not in self.dead:
+                self.op(op)
         if terminator.name == "core.br":
             self._jump(block, terminator.successors[0], follow)
         elif terminator.name == "core.cond_br":
@@ -1670,8 +1680,8 @@ class _FunctionEmitter:
             if match is None:
                 kept.append(declaration)
                 continue
-            spelled = match.group(1) if match.group(1).endswith("*") else match.group(1).rstrip()
-            name = match.group(2)
+            declared, name = str(match.group(1)), str(match.group(2))
+            spelled = declared if declared.endswith("*") else declared.rstrip()
             pattern = re.compile(rf"\b{re.escape(name)}\b")
             mentions = [i for i, line in enumerate(body) if pattern.search(line)]
             if not mentions:
@@ -1707,7 +1717,8 @@ class _FunctionEmitter:
             if index:
                 self.body.append(f"{self.labels[id(block)]}:;")
             for op in block.operations:
-                self.op(op)
+                if id(op) not in self.dead:
+                    self.op(op)
         if any("goto fallback;" in line for line in self.body):
             self.body.append("fallback:")
             if self.resume:

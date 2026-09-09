@@ -105,6 +105,7 @@ nav:
       - Generics: guide/generics.md
       - Effects and the three paths: guide/effects.md
       - Input and native lowering: guide/native-lowering.md
+      - Regular expressions: guide/regex.md
   - Examples:
       - howto/index.md
       - Basics:
@@ -133,6 +134,7 @@ nav:
           - howto/37_aio.md
           - howto/40_generics.md
           - howto/42_toolbox.md
+          - howto/43_regex.md
       - Accelerators:
           - howto/38_cuda.md
           - howto/39_xla.md

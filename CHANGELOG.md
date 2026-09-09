@@ -4,6 +4,26 @@
 
 Work toward the next release, on `dev`; alphas of it are tagged `v0.3.0aN`.
 
+- Regular expressions run natively. A pattern compiled from a bytes literal
+  at module level -- `WORD = re.compile(rb"[A-Za-z]+")` -- or written into
+  `re.search(rb"...", buf)` becomes a `regex.search`, `regex.match`, or
+  `regex.fullmatch` operation over a `Buffer[ppy.u8]`, and the new
+  `lower-regex` pass compiles each pattern into a matcher function of core
+  operations, so the LLVM and C backends run it as they run anything else.
+  The matcher backtracks the way CPython's does and answers exactly what
+  `re` answers -- ordered alternation, greedy and lazy repeats, the group's
+  last iteration, `$` before a trailing newline, `\b` at ASCII word edges,
+  `pos` and `endpos` -- on random inputs across both backends. A match is a
+  local whose `start`, `end`, and `span` are native; `m is None` and `if m:`
+  narrow it; `group()` stays on Python. Backreferences, lookaround, atomic
+  groups, possessive repeats, and locale categories are refused with the
+  reason, and a match that would need more than the matcher's stack falls
+  back to `re`. The checker types `re.compile`, `re.Pattern`, `re.Match`,
+  and the flags. A `while True:` loop that only leaves by returning lowers
+  too, which is how a search loop is written.
+- The project scan skips a virtual environment by any name -- a directory
+  holding `pyvenv.cfg` -- not only `.venv` and `venv`; a second environment
+  kept beside the first no longer costs a scan of every package in it.
 - `ppy.input[T]()` takes no argument, and `ppy.input[Buffer[T]](n)` takes
   only how many values to read: reading and printing are two things, so a
   prompt is a `print` before the read rather than an argument that meant a

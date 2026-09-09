@@ -49,7 +49,7 @@ and Nuitka is on the [performance page](reference/performance.md).
     ---
 
     The subset, directives, native memory, SIMD, threads, parallel loops,
-    derivatives, coroutines, GPU kernels, XLA, generics.
+    derivatives, coroutines, GPU kernels, XLA, generics, regular expressions.
 
 -   **[Examples](howto/index.md)**
 

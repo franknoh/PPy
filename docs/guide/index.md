@@ -94,4 +94,10 @@ program using any of them runs the same on every path.
 
     `ppy.input[T]()`, `ppy.buffer`, and when a function gets a boundary.
 
+-   **[Regular expressions](regex.md)**
+
+    ---
+
+    A pattern compiled from a bytes literal, matched natively over a byte buffer.
+
 </div>

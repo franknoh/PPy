@@ -148,6 +148,15 @@ def _save(store: CacheStore, key: str, records: dict[str, tuple[int, int, FileFa
         store.put(key, pickle.dumps(records, protocol=pickle.HIGHEST_PROTOCOL), kind="scan")
 
 
+def _is_venv(path: str) -> bool:
+    """A virtual environment by any name: a directory that holds `pyvenv.cfg`.
+
+    A project can keep more than one, `.venv313` beside `.venv`, and a scan
+    that walks into one reads every package installed there.
+    """
+    return os.path.isfile(os.path.join(path, "pyvenv.cfg"))
+
+
 def _sources(root: Path):  # type: ignore[no-untyped-def]
     pending = [root]
     while pending:
@@ -155,7 +164,7 @@ def _sources(root: Path):  # type: ignore[no-untyped-def]
         with contextlib.suppress(OSError), os.scandir(directory) as entries:
             for entry in entries:
                 if entry.is_dir(follow_symlinks=False):
-                    if entry.name not in _SKIP:
+                    if entry.name not in _SKIP and not _is_venv(entry.path):
                         pending.append(Path(entry.path))
                 elif entry.name.endswith(_SUFFIXES):
                     yield Path(entry.path)
