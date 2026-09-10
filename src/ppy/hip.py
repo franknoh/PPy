@@ -42,6 +42,7 @@ __all__ = [
     "block_id",
     "compiled",
     "device",
+    "device_alloc",
     "global_id",
     "grid_dim",
     "kernel",
@@ -60,6 +61,7 @@ __all__ = [
 
 kernel = _flexible("hip.kernel")
 device = _flexible("hip.device")
+device_alloc = _gpu.device_alloc("hip")
 
 
 def launch(function: Callable[..., Any], grid: Any, block: Any, /, *arguments: Any) -> None:

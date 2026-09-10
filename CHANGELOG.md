@@ -4,6 +4,22 @@
 
 Work toward the next release, on `dev`; alphas of it are tagged `v0.3.0aN`.
 
+- `cuda.device_alloc[T](n)`: memory that lives on the device between
+  launches. It is a `native.ptr[T]` like `stack_alloc`'s -- the same loops
+  fill and read it, `native.offset` keeps its kind -- and the host sees it
+  through a mirror that whichever side wrote last keeps current: a launch
+  passes the device address and copies nothing, a host read after a launch
+  brings the array back once, a host write before a launch sends it once.
+  Without a device there is only the mirror. `hip.device_alloc` is the same
+  surface; the checker types both (`E1644` for a misuse) and a function that
+  allocates stays in Python, as one that launches does. The CUDA example
+  makes its saxpy arrays this way, and its comparison with CuPy and Numba
+  gained the device-resident rows.
+- `ppy explain` reports a body that lowered as `llvm backend: native`, whatever
+  the effects suggested: a parallel loop's `Thread` effect was reported as
+  boxing the function while the function ran natively. Thread and sync
+  effects no longer count against lowering in the contract report either.
+
 - Three examples compare PPY with the tools that do the same job, code and
   numbers side by side: the parallel ranges against Numba, Taichi, Mojo, and
   NumPy; the CUDA kernels against CuPy and Numba; the eight algorithm kernels

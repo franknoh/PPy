@@ -11,6 +11,7 @@ source backends write them as CUDA or HIP.
 from __future__ import annotations
 
 import array
+import ctypes
 import threading
 from collections.abc import Callable
 from typing import Any
@@ -19,8 +20,10 @@ from ._native_api import Pointer, _layout
 
 __all__ = [
     "WIDTHS",
+    "DevicePointer",
     "block_dim",
     "block_id",
+    "device_alloc",
     "dispatch",
     "extent",
     "global_id",
@@ -302,6 +305,170 @@ class _Memory:
 
 shared = _Memory(shared=True)
 local = _Memory(shared=False)
+
+
+# -- memory that lives on the device ------------------------------------------------
+
+
+def _driver_for(api: str):  # type: ignore[no-untyped-def]
+    """The device an allocation can live on: the CUDA driver, or none."""
+    if api != "cuda":
+        return None
+    from ppy_runtime.cuda import driver
+
+    return driver()
+
+
+class _DeviceMemory:
+    """One allocation on the device, with a mirror on the host.
+
+    Whichever side was written last holds the truth, and the other is brought
+    up to date when it is read: a launch writes the device, host code writes
+    the mirror, and a read across costs one copy. Without a device there is
+    only the mirror, and every path reads and writes it directly.
+    """
+
+    __slots__ = ("device", "device_stale", "driver", "element", "host", "host_stale", "width")
+
+    element: Any
+    width: int
+    host: Any
+    driver: Any
+    device: Any
+    host_stale: bool
+    device_stale: bool
+
+    def __init__(self, element: Any, count: int, api: str) -> None:
+        code, width = _layout(element)
+        self.element = element
+        self.width = width
+        self.host = array.array(code, bytes(width * count))
+        self.driver = _driver_for(api)
+        self.device = None
+        #: The device holds newer bytes than the mirror.
+        self.host_stale = False
+        #: The mirror holds newer bytes than the device: nothing is uploaded yet.
+        self.device_stale = True
+        driver = self.driver
+        if driver is not None:
+            with driver.lock:
+                driver.current()
+                self.device = driver.alloc(self.nbytes)
+
+    @property
+    def nbytes(self) -> int:
+        return len(self.host) * self.width
+
+    def mirror(self) -> Any:
+        """The host array, brought up to date with the device."""
+        driver = self.driver
+        if self.host_stale and self.device is not None and driver is not None:
+            with driver.lock:
+                driver.current()
+                buffer = (ctypes.c_char * self.nbytes).from_buffer(self.host)
+                driver.download(buffer, self.device, self.nbytes)
+            self.host_stale = False
+        return self.host
+
+    def device_address(self) -> int | None:
+        """The device address, brought up to date with the mirror; None without a device."""
+        driver = self.driver
+        if self.device is None or driver is None:
+            return None
+        if self.device_stale:
+            with driver.lock:
+                driver.current()
+                buffer = (ctypes.c_char * self.nbytes).from_buffer_copy(self.host)
+                driver.upload(self.device, buffer, self.nbytes)
+            self.device_stale = False
+        return int(self.device.value)
+
+    def host_written(self) -> None:
+        if self.device is not None:
+            self.device_stale = True
+
+    def device_written(self) -> None:
+        self.host_stale = True
+
+    def __del__(self) -> None:
+        device, driver = getattr(self, "device", None), getattr(self, "driver", None)
+        if device is None or driver is None:
+            return
+        try:
+            with driver.lock:
+                driver.current()
+                driver.free(device)
+        except Exception:  # noqa: BLE001 - the process may be on its way out
+            pass
+
+
+class DevicePointer(Pointer[Any]):
+    """A `native.ptr[T]` into memory that lives on the device.
+
+    Reads and writes on the host go through the mirror, which the device
+    memory keeps current, and `native.offset` keeps the pointer of this kind,
+    so the same loops that fill a `stack_alloc` fill this. A launch takes the
+    device address and copies nothing.
+    """
+
+    __slots__ = ("home",)
+
+    home: _DeviceMemory
+
+    def __init__(self, home: _DeviceMemory, index: int, mutable: bool = True) -> None:
+        self.home = home
+        super().__init__(None, index, home.element, mutable=mutable)
+
+    @property
+    def memory(self) -> Any:  # type: ignore[override]
+        return self.home.mirror()
+
+    @memory.setter
+    def memory(self, _value: Any) -> None:
+        """The base initializer writes a memory; this pointer's is the mirror, whatever is given."""
+
+    def offset(self, count: int) -> DevicePointer:
+        return DevicePointer(self.home, self.index + count, self.mutable)
+
+    def touch(self) -> None:
+        self.home.host_written()
+
+    def address(self) -> int:
+        # Handed to C, the mirror may be written: the device learns so before its next launch.
+        found = super().address()
+        self.home.host_written()
+        return found
+
+    def __repr__(self) -> str:
+        element = self.home.element
+        name = getattr(element, "__name__", repr(element))
+        return f"native.ptr[{name}]@{self.index} on the device"
+
+
+class _DeviceAlloc:
+    """`device_alloc[T](n)`: `n` zeroed elements of `T` that live on the device."""
+
+    __slots__ = ("_api",)
+
+    def __init__(self, api: str) -> None:
+        self._api = api
+
+    def __getitem__(self, element: Any) -> Callable[[int], DevicePointer]:
+        _layout(element)
+
+        def allocate(count: int) -> DevicePointer:
+            if not isinstance(count, int) or isinstance(count, bool) or count < 0:
+                raise ValueError("a device allocation is made with how many elements it holds")
+            return DevicePointer(_DeviceMemory(element, count, self._api), 0)
+
+        return allocate
+
+    def __repr__(self) -> str:
+        return f"{self._api}.device_alloc"
+
+
+def device_alloc(api: str) -> _DeviceAlloc:
+    return _DeviceAlloc(api)
 
 
 def _shuffle(value: Any, source_of: Callable[[int, int], int], what: str) -> Any:

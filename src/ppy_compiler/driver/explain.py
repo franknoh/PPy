@@ -119,7 +119,7 @@ def _print_function(
     print(f"python backend: {_python_backend(analysis)}")
     lowered = _lowering_outcome(bundle, info)
     print(f"llvm backend: {lowered or _llvm_backend(report)}")
-    if report is not None and report.native_ok and lowered is None:
+    if report is not None and report.native_ok and lowered in (None, "native"):
         print(f"python boundary: {_boundary(info)}")
     print(f"jit: {_jit_detail(info, report)}")
     print(f"parallel: {'accepted' if report and report.parallel_ok else 'rejected'}")
@@ -194,11 +194,13 @@ def _python_backend(analysis: FunctionAnalysis) -> str:
 
 
 def _lowering_outcome(bundle: AnalysisBundle, info: FunctionInfo) -> str | None:
-    """Why the body did not lower, when the contract said it could.
+    """What the backend made of the body: native, or why it did not lower.
 
     Eligibility is decided from types and effects; the body can still contain
     an expression with no native form, and reporting `native` for a function
-    that will fall back at every call is worse than saying nothing.
+    that will fall back at every call is worse than saying nothing. The
+    converse holds too: a body that lowered is native, whatever the effects
+    suggested.
     """
     try:
         from ..backend.llvm import _collect
@@ -211,8 +213,11 @@ def _lowering_outcome(bundle: AnalysisBundle, info: FunctionInfo) -> str | None:
         # must degrade to "no native answer", not take the command down.
         return None
     module = modules.get(info.module)
-    if module is None or info.qualname in module.functions:
+    if module is None:
         return None
+    if info.qualname in module.functions:
+        # The body lowered: that is the answer, whatever the contract feared.
+        return "native"
     reason = module.rejected.get(info.qualname)
     return f"boxed: {reason}" if reason else None
 

@@ -3925,6 +3925,28 @@ class _Checker:
                 self._error("E1644", f"`{spelled}()` takes no arguments", node)
             self._effects = self._effects.add(Effect.SYNC)
             return Binding(T.NONE)
+        if operation == "device_alloc":
+            if subscript is None or isinstance(subscript, ast.Tuple):
+                self._error("E1644", f"`{spelled}[T](n)` takes the element type", node)
+                return Binding(T.UNKNOWN)
+            resolved = self.annotations.resolve(subscript)
+            element = narrow_element(resolved) or resolved.type
+            if not _holdable_element(element):
+                self._error(
+                    "E1644",
+                    f"`{spelled}` holds `int`, `float`, `bool`, `ppy.i8`, or `ppy.u8`, "
+                    f"not `{element}`",
+                    node,
+                )
+                return Binding(T.UNKNOWN)
+            if len(args) != 1:
+                self._error("E1644", f"`{spelled}[T](n)` takes how many elements to make", node)
+            elif T.strip_literal(args[0].type) not in (T.INT, T.UNKNOWN):
+                self._mismatch(
+                    "E1301", "a device allocation's count expects", node.args[0], args[0].type
+                )
+            self._effects = self._effects.add(Effect.ALLOC)
+            return Binding(T.Instance("ppy.native.ptr", (element,), ("ppy.native.ptr", "object")))
         if operation in {"shared", "local"}:
             element = self._gpu_element(subscript, spelled, node)
             if args:

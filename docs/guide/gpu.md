@@ -53,7 +53,18 @@ launch means what the reference launch means. `cuda.compiled(kernel)`
 says whether that is so here. Where the driver, a device, or the NVPTX
 backend is missing, the reference launch runs and `W2008` says why.
 `PPY_CUDA_ARCH` names the architecture the PTX is written for (`sm_70`
-unless set; a driver compiles PTX forward). A built artifact carries its
+unless set; a driver compiles PTX forward).
+
+`cuda.device_alloc[T](n)` is `n` zeroed elements of `T` that live on the
+device between launches: a `native.ptr[T]` like `stack_alloc`'s, so the same
+loops fill and read it and `native.offset` keeps its kind. The host reads and
+writes through a mirror, and whichever side wrote last holds the truth: a
+launch takes the device address and copies nothing, a host read after a
+launch brings the array back once, a host write before a launch sends it
+once. Without a device -- and under `hip`, which has no launch runtime yet
+-- there is only the mirror, and every path reads and writes it directly, so
+the program means the same thing everywhere. A function that allocates
+device memory stays in Python, as one that launches does. A built artifact carries its
 kernels: `ppy build` writes each staged payload beside the manifest, and
 the launcher binds it without the compiler -- as it does an `@xla.jit`
 function's StableHLO.

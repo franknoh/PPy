@@ -98,6 +98,13 @@ class Pointer[T]:
         buffer = (ctypes.c_char * (len(self.memory) * width)).from_buffer(self.memory)
         return ctypes.addressof(buffer) + self.index * width
 
+    def offset(self, count: int) -> Pointer[T]:
+        """The pointer `count` elements on, into the same memory."""
+        return Pointer(self.memory, self.index + count, self.element, mutable=self.mutable)
+
+    def touch(self) -> None:
+        """A store went through this pointer: memory that lives elsewhere too takes note."""
+
 
 class _PointerType:
     """`native.ptr[T]` as an annotation: `Annotated[Pointer, element]`."""
@@ -189,12 +196,13 @@ def _store(pointer: Pointer[Any], value: Any) -> None:
     if not pointer.mutable:
         raise TypeError("native.store cannot write through a const_ptr")
     pointer.memory[pointer.index] = int(value) if pointer.element is bool else value  # type: ignore[call-overload]
+    pointer.touch()
 
 
 def _offset(pointer: Pointer[Any], count: int) -> Pointer[Any]:
     if not isinstance(pointer, Pointer):
         raise TypeError("native.offset moves a native.ptr")
-    return Pointer(pointer.memory, pointer.index + count, pointer.element, mutable=pointer.mutable)
+    return pointer.offset(count)
 
 
 class _Extern:

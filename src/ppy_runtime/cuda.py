@@ -5,8 +5,10 @@ The build stages a kernel as PTX with the kinds of its parameters; a
 Scalars are passed by value; a `native` pointer's whole array goes to the
 device before the launch and comes back after it when the pointer is
 mutable, so a launch means exactly what the reference launch means, only on
-the device. A machine without the driver, or without a device, has no
-kernel to bind: the reference runs instead, and the binding says why.
+the device. Memory made by `cuda.device_alloc` already lives there: its
+address is passed and nothing is copied. A machine without the driver, or
+without a device, has no kernel to bind: the reference runs instead, and
+the binding says why.
 """
 
 from __future__ import annotations
@@ -39,7 +41,7 @@ class Driver:
 
     def __init__(self, library: Any) -> None:
         self.lib = library
-        self.lock = threading.Lock()
+        self.lock = threading.RLock()
         self._declare()
         self.check(library.cuInit(0), "cuInit")
         count = ctypes.c_int(0)
@@ -196,6 +198,7 @@ class Kernel:
             handle = self._loaded(d)
             holders: list[Any] = []
             copies: list[tuple[ctypes.c_uint64, Any, int, bool]] = []
+            written: list[Any] = []
             try:
                 for value, described in zip(arguments, self.params, strict=True):
                     kind = described["kind"]
@@ -205,6 +208,15 @@ class Kernel:
                         holders.append(ctypes.c_double(float(value)))
                     elif kind == "bool":
                         holders.append(ctypes.c_int8(1 if value else 0))
+                    elif kind in {"ptr", "const_ptr"} and getattr(value, "home", None) is not None:
+                        # Memory that lives on the device: its address, no copy.
+                        home = value.home
+                        base = home.device_address()
+                        if base is None:
+                            raise CudaError("device memory was made without a device")
+                        holders.append(ctypes.c_uint64(base + value.index * home.width))
+                        if kind == "ptr" and bool(getattr(value, "mutable", True)):
+                            written.append(home)
                     elif kind in {"ptr", "const_ptr"}:
                         memory = value.memory
                         nbytes = len(memory) * memory.itemsize
@@ -221,6 +233,8 @@ class Kernel:
                     *(ctypes.addressof(h) for h in holders)
                 )
                 d.launch(handle, grid, block, parameters)
+                for home in written:
+                    home.device_written()
                 for pointer, memory, nbytes, writable in copies:
                     if writable:
                         d.download((ctypes.c_char * nbytes).from_buffer(memory), pointer, nbytes)
