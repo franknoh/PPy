@@ -1,4 +1,5 @@
-"""saxpy over sixteen million doubles and a per-block max: PPY kernels over device memory, and over host arrays."""
+"""saxpy over sixteen million doubles and a per-block max: PPY kernels over device memory
+and over host arrays."""
 
 import time
 
@@ -78,7 +79,7 @@ def main() -> None:
         best_block = min(best_block, (time.perf_counter() - started) * 1000.0)
     print(f"# saxpy: {best_saxpy:.3f} ms")
     print(f"# block_max: {best_block:.3f} ms")
-    # The same launches over host arrays: every launch copies the arrays in and the mutable ones back.
+    # The same launches over host arrays: every launch copies the arrays in, the mutable ones back.
     hx = native.stack_alloc[float](N)
     hy = native.stack_alloc[float](N)
     hv = native.stack_alloc[float](N)
