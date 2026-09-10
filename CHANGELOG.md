@@ -64,9 +64,12 @@ Work toward the next release, on `dev`; alphas of it are tagged `v0.3.0aN`.
   brings the array back once, a host write before a launch sends it once.
   Without a device there is only the mirror. `hip.device_alloc` is the same
   surface; the checker types both (`E1644` for a misuse) and a function that
-  allocates stays in Python, as one that launches does. The CUDA example
-  makes its saxpy arrays this way, and its comparison with CuPy and Numba
-  gained the device-resident rows.
+  allocates stays in Python under `ppy run`, as one that launches does,
+  while `ppy emit cuda` and `ppy emit hip` write it into the host function
+  as a `gpu.device_alloc` -- a managed allocation the host reads and writes,
+  freed when the function returns. The CUDA example makes its saxpy arrays
+  this way, and its comparison with CuPy and Numba gained the
+  device-resident rows.
 - `ppy explain` reports a body that lowered as `llvm backend: native`, whatever
   the effects suggested: a parallel loop's `Thread` effect was reported as
   boxing the function while the function ran natively. Thread and sync
