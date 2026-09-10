@@ -47,8 +47,8 @@ COMPILE_BOUND = frozenset({"ppy run"})
 ROWS = [
     ("plain CPython", "plain"),
     ("`ppy run`", "ppy run"),
-    ("`ppy build`", "ppy build"),
-    ("`ppy build --standalone`", "standalone"),
+    ("`ppy build --unsafe`", "ppy build"),
+    ("`ppy build --standalone --unsafe`", "standalone"),
     ("C (`gcc -O3`, `scanf`)", "C gcc"),
     ("C (`clang -O3`, `scanf`)", "C clang"),
 ]
@@ -62,7 +62,8 @@ TABLE = re.compile(r"\| path \| wall \|\n\|---\|---:\|\n(?:\|.*\n)+")
 
 #: The overview table in the folder README, which shows every problem at once.
 OVERVIEW = re.compile(
-    r"\| \| problem \| plain \| `ppy build` \| `--standalone` \| C \(`gcc`\) \| C \(`clang`\) \|\n"
+    r"\| \| problem \| plain \| `ppy build --unsafe` \| `--standalone --unsafe` "
+    r"\| C \(`gcc`\) \| C \(`clang`\) \|\n"
     r"\|---\|---\|---:\|---:\|---:\|---:\|---:\|\n(?:\|.*\n)+"
 )
 
@@ -266,7 +267,10 @@ def _overview(problems: dict) -> str:
     numbers have to keep making rather than one written down once.
     """
     header = [
-        "| | problem | plain | `ppy build` | `--standalone` | C (`gcc`) | C (`clang`) |",
+        (
+            "| | problem | plain | `ppy build --unsafe` | `--standalone --unsafe` "
+            "| C (`gcc`) | C (`clang`) |"
+        ),
         "|---|---|---:|---:|---:|---:|---:|",
     ]
     rows = []

@@ -188,7 +188,7 @@ def test_a_program_carries_the_runtime_shims_it_calls(write, analyze, tmp_path):
     path = write("reader.ppy", READER)
     lowered = _ir_module(analyze, path, standalone=True)
     text = emit_module(lowered.module, Language.C)
-    assert "static int64_t ppy_rt_read_int(void)" in text
+    assert "static int64_t ppy_rt_input_int(void)" in text
     assert "static void ppy_rt_print_i64(int64_t value)" in text
     assert "ppy_rt_print_str" not in text, "only the shims the unit calls"
     source = tmp_path / "reader.c"
@@ -205,7 +205,7 @@ def test_a_program_carries_the_runtime_shims_it_calls(write, analyze, tmp_path):
     assert built.returncode == 0, built.stderr
     ran = subprocess.run([str(binary)], input="21\n", capture_output=True, text=True, check=False)
     assert ran.stdout == "42\n"
-    with pytest.raises(HeaderOnlyError, match="ppy_rt_read_int"):
+    with pytest.raises(HeaderOnlyError, match="ppy_rt_input_int"):
         emit_module(lowered.module, Language.C, header_only=True)
 
 
@@ -297,7 +297,7 @@ def test_emit_c_cpp_and_header_follow_the_emit_rules(tmp_path: Path):
     )
     program = _ppy(tmp_path, "emit", "c", "--standalone", "reader.ppy")
     assert program.returncode == 0, program.stderr
-    assert "static int64_t ppy_rt_read_int(void)" in program.stdout
+    assert "static int64_t ppy_rt_input_int(void)" in program.stdout
     assert program.stdout.rstrip().endswith(
         'int main(void) {\n    int64_t out = 0;\n    int32_t status = ppy_reader_main(&out);\n    if (status != 0) {\n        fputs("ppy: a native guard failed and there is no Python to fall back to\\n", stderr);\n        return 70;\n    }\n    return 0;\n}'
     )
@@ -323,7 +323,7 @@ def test_emit_c_cpp_and_header_follow_the_emit_rules(tmp_path: Path):
         assert ran.stdout == "7\n"
     refused = _ppy(tmp_path, "emit", "c", "--standalone", "--header-only", "reader.ppy")
     assert refused.returncode == 2
-    assert "E1804" in refused.stderr and "ppy_rt_read_int" in refused.stderr
+    assert "E1804" in refused.stderr and "ppy_rt_input_int" in refused.stderr
     not_a_program = _ppy(tmp_path, "emit", "c", "--standalone", "kernels.ppy")
     assert not_a_program.returncode == 1 and "E1803" in not_a_program.stderr
     misplaced = _ppy(tmp_path, "emit", "ir", "--header-only", "kernels.ppy")

@@ -52,7 +52,7 @@ print(longest(ppy.input[int]()))
 uv run python    collatz.ppy           # 1  plain CPython, no compiler   1068.8 ±  5.5 ms
 uv run ppy       collatz.ppy           # 2  optimized Python backend     1074.3 ± 10.3 ms
 uv run ppy run   collatz.ppy           # 3  LLVM, built on the first run   41.7 ±  1.8 ms  (+ ~640 ms, once)
-uv run ppy build collatz.ppy -o dist   # 4  LLVM, built once (~640 ms)...
+uv run ppy build --unsafe collatz.ppy -o dist   # 4  LLVM, built once (~640 ms)...
 ./dist/collatz                         #    ...then the native binary      30.8 ±  0.4 ms
                                        #    ...--host-cpu, not portable    28.8 ±  0.5 ms
 
@@ -63,18 +63,19 @@ clang -O3 collatz.c && ./a.out         #                                   32.8 
 Kernel wall time on one machine, ten fresh processes each, mean ± standard
 deviation. Ways 3 and 4 are one compiler: the binary is `ppy run` in a
 compiled coat, and the first `ppy run` is the build into the cache. They
-differ in one default. `ppy run` keeps **Python's integers** — overflow is
-guarded and falls back to arbitrary precision — and lands on gcc; `ppy build`
-is a wrap-semantics artifact like every native compiler and lands on clang.
-`run --unsafe` and `build --safe` flip either; bounds checks stay in both.
+mean the same program: both keep **Python's integers** — overflow is
+guarded and falls back to arbitrary precision — and land on gcc. `--unsafe`,
+on either, drops the guards for 64-bit wrap semantics like C's, which lands
+on clang; bounds checks stay in both. The wrap-semantics rows below were
+measured with it.
 
 The same kernel through the neighbours, same machine and methodology:
 
 | compiler | kernel | integer semantics |
 |---|---:|---|
-| **PPY** `ppy build --host-cpu` | **28.8 ± 0.5 ms** | 64-bit, wraps on overflow (this machine's instruction set) |
+| **PPY** `ppy build --unsafe --host-cpu` | **28.8 ± 0.5 ms** | 64-bit, wraps on overflow (this machine's instruction set) |
 | C (`clang -O3 -march=native`) | 30.8 ± 0.7 ms | 64-bit, wraps on overflow |
-| **PPY** `ppy build` | **30.8 ± 0.4 ms** | 64-bit, wraps on overflow (`--safe` to keep Python ints) |
+| **PPY** `ppy build --unsafe` | **30.8 ± 0.4 ms** | 64-bit, wraps on overflow |
 | Numba `@njit` | 32.5 ± 0.9 ms | 64-bit, wraps on overflow |
 | C (`clang -O3`) | 32.8 ± 0.5 ms | 64-bit, wraps on overflow |
 | **PPY** `ppy run` | **41.7 ± 1.8 ms** | **Python ints: guarded, falls back to arbitrary precision** |

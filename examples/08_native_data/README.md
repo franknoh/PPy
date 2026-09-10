@@ -81,7 +81,7 @@ ppy run native_data.ppy
 
 Read on: [Tuples](../14_tuples/README.md) ·
 [Value classes](../13_value_classes/README.md) ·
-[Input and native lowering](../../docs/guide/native-lowering.md)
+[Native lowering](../../docs/guide/native-lowering.md)
 
 `native_data.ppy` is hand-written; there is no `.py` source and no conversion
 step.

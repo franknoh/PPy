@@ -15,7 +15,7 @@ Same machine, same session, kernel wall time — mean ± standard deviation
 over 7 runs, each a fresh process. Every row prints the same answer in every
 column:
 
-| kernel | plain | `ppy run` | `ppy build` | C (`gcc -O3`) | C (`clang -O3`) |
+| kernel | plain | `ppy run` | `ppy build --unsafe` | C (`gcc -O3`) | C (`clang -O3`) |
 |---|---:|---:|---:|---:|---:|
 | sieve 2e6 | 173.1 ± 2.9 | 9.2 ± 0.5 | **8.8 ± 0.4** | 13.9 ± 0.6 | 13.8 ± 0.3 |
 | collatz 3e5 | 1111.0 ± 13.1 | 39.9 ± 0.8 | **30.3 ± 0.4** | 41.4 ± 0.5 | 32.2 ± 0.3 |
@@ -29,7 +29,7 @@ column:
 The native path is 9× to 160× faster than plain CPython on these eight, and
 all three paths print identical answers. Bold is the fastest cell in the
 row. `ppy run` keeps Python-integer semantics — overflow is guarded and
-falls back to arbitrary precision — and `ppy build` is the wrap-semantics
+falls back to arbitrary precision — and `ppy build --unsafe` is the wrap-semantics
 artifact, which is where collatz picks up its remaining 10 ms and knapsack
 its 1.4 ms; the other kernels are already guard-free in the loop and do not
 move. `--host-cpu` is within the noise on all eight.
@@ -54,7 +54,7 @@ Kernel wall time inside the program, mean ± standard deviation over 7 runs,
 each a fresh process, in milliseconds; every column prints every answer the
 same. Bold is the fastest cell in the row.
 
-| kernel | `ppy run` | `ppy build` | Numba `@njit` | Mojo | Codon |
+| kernel | `ppy run` | `ppy build --unsafe` | Numba `@njit` | Mojo | Codon |
 |---|---:|---:|---:|---:|---:|
 | sieve 2e6 | 9.1 ± 0.5 | 8.8 ± 0.3 | **7.5 ± 0.2** | 12.2 ± 1.1 | 8.1 ± 0.4 |
 | collatz 3e5 | 40.2 ± 0.8 | **30.5 ± 0.4** | 31.7 ± 0.3 | 67.7 ± 0.7 | 32.8 ± 1.2 |
@@ -68,7 +68,7 @@ same. Bold is the fastest cell in the row.
 `ppy run` keeps Python's integers -- overflow is guarded and falls back to
 arbitrary precision -- and the other four columns wrap at 64 bits, which is
 where collatz picks up its 10 ms. Numba is the fastest column on six of the
-eight against `ppy build`, by ten to thirty percent; the Numba port is the
+eight against `ppy build --unsafe`, by ten to thirty percent; the Numba port is the
 PPY source with `@njit` in place of the annotations and NumPy arrays in
 place of `array.array`, timed after one warm call so its compile is not in
 the number. Codon takes the same source with `List[int]` annotations and
@@ -89,14 +89,14 @@ inside the programs is instrumented: the times below are wall time of the
 whole process, measured from outside, input and interpreter startup
 included. The C reference reads the same input with `scanf`.
 
-| | problem | plain | `ppy build` | `--standalone` | C (`gcc`) | C (`clang`) |
+| | problem | plain | `ppy build --unsafe` | `--standalone --unsafe` | C (`gcc`) | C (`clang`) |
 |---|---|---:|---:|---:|---:|---:|
-| [15a](15a_nqueens/) | N-Queens | 135.5 ms | 41.2 ms | 5.6 ms | 4.8 ms | 5.4 ms |
-| [15b](15b_dijkstra/) | shortest path | 1511.0 ms | 251.9 ms | **104.8 ms** | 147.3 ms | 141.6 ms |
-| [15c](15c_kmp/) | substring search | 283.0 ms | 52.4 ms | — | 9.4 ms | 9.0 ms |
-| [15d](15d_segment_tree/) | range sums | 482.8 ms | 113.0 ms | **23.9 ms** | 50.7 ms | 51.8 ms |
-| [15e](15e_lis/) | longest increasing subsequence | 507.0 ms | 102.9 ms | **35.9 ms** | 59.0 ms | 55.5 ms |
-| [15f](15f_input/) | counting inversions | 630.0 ms | 94.6 ms | **37.6 ms** | 46.0 ms | 45.4 ms |
+| [15a](15a_nqueens/) | N-Queens | 135.2 ms | 40.1 ms | 5.4 ms | 4.6 ms | 5.1 ms |
+| [15b](15b_dijkstra/) | shortest path | 3079.7 ms | 2170.5 ms | **110.1 ms** | 140.0 ms | 133.1 ms |
+| [15c](15c_kmp/) | substring search | 292.3 ms | 51.9 ms | — | 8.9 ms | 8.6 ms |
+| [15d](15d_segment_tree/) | range sums | 999.5 ms | 738.6 ms | **28.7 ms** | 51.3 ms | 49.2 ms |
+| [15e](15e_lis/) | longest increasing subsequence | 505.3 ms | 90.5 ms | **38.2 ms** | 56.1 ms | 53.9 ms |
+| [15f](15f_input/) | counting inversions | 577.4 ms | 88.1 ms | **37.3 ms** | 44.1 ms | 44.9 ms |
 
 Every cell is the mean of five runs, recorded in
 [`measurements.json`](measurements.json) with the machine it was measured
@@ -106,20 +106,24 @@ is faster than both C references. `ppy run` is left out because it compiles
 before it runs — a flat two seconds or so on every row, which is the
 development path rather than the one to submit.
 
-## `ppy build` and `--standalone`
+## `ppy build --unsafe` and `--standalone --unsafe`
 
-- **`ppy build`** is the hybrid: the kernels are native, but the glue around
+- **`ppy build --unsafe`** is the hybrid: the kernels are native, but the glue around
   them — `main`, the buffers, `print` of a Python `int` — is the optimized
   Python the build wrote, so the binary embeds an interpreter and imports
   the runtime before the program begins. That is ~35 ms, and on the smaller
-  problems it is most of what separates the column from C.
+  problems it is most of what separates the column from C. Where `main`
+  reads its input line by line -- 1.2 million edge lines in 15b, 400
+  thousand command lines in 15d -- each `ppy.input[...]()` is a call into
+  the runtime from the interpreter, about a microsecond apiece, and those
+  reads are most of the plain and `ppy build --unsafe` columns there.
 - **`--standalone`** is a binary with no CPython in it at all. `ldd` shows
-  libc and nothing else, `ppy.input[int]()` lowers to the same buffered scan
+  libc and nothing else, `ppy.scan[int]()` lowers to the same buffered scan
   of standard input that `scanf` does, and the whole N-Queens executable is
   17.0 KB against the C one's 16.1 KB.
 
 Four of the five standalone rows beat both C references for one reason:
-`ppy.input` reads into memory faster than `scanf` parses. N-Queens, which
+`ppy.scan` reads into memory faster than `scanf` parses. N-Queens, which
 reads a single integer and then computes, stays behind — there is nothing
 there for a faster reader to win back. The column covers five of the six: a
 standalone build needs everything `main` reaches to be native, and
@@ -138,20 +142,23 @@ character buffer it wants has no plain-Python spelling that converts to it.
 ## Reading input
 
 ```python
-n = ppy.input[int]()
-a, b = ppy.input[tuple[int, int]]()
-values = ppy.input[Buffer[int]](n)
+n = ppy.input[int]()                 # one line, as int(input()) reads it
+a, b = ppy.input[tuple[int, int]]()  # one line, exactly two fields
+row = ppy.input[Buffer[int]]()       # one line of integers, into a buffer
+values = ppy.scan[Buffer[int]](n)    # n integer tokens, whatever lines they are on
 ```
 
-`ppy.input[T]()` reads the next value the way `T` says to and types the
-result the same way. It goes straight into memory rather than building a
-Python object per field — 12.6 ms for 500k integers against 49.8 ms for
+`ppy.input[T]()` reads one line the way the builtin `input()` does and
+types the result from `T`; `ppy.scan[T]()` reads tokens across lines. Both
+buffer reads go straight into memory rather than building a Python object
+per field — 12.6 ms for 500k integers against 49.8 ms for
 `sys.stdin.read().split()` and 20.6 ms for C's `scanf`. The conversion
-writes it for you: `int(input())` becomes `ppy.input[int]()`,
-`a, b = map(int, input().split())` becomes the tuple read, and a loop that
-fills a buffer one value at a time becomes one bulk `ppy.read_ints`. A
-module that also touches `sys.stdin` keeps the `input` it has, since the
-typed reader owns the file descriptor.
+writes the line reads for you: `int(input())` becomes `ppy.input[int]()`,
+`a, b = map(int, input().split())` the tuple read,
+`array.array("q", map(int, input().split()))` the buffer line read, and
+each reads the line the original read. A module that also touches
+`sys.stdin` keeps the `input` it has, since the typed reader owns the file
+descriptor.
 
 ## Run it
 
@@ -222,7 +229,8 @@ fermat 6e4               1.4 ms   -> 6114
 Each subfolder's README has its own commands, with a small `input.txt` so
 they run as written; `bench.py` generates the judge-sized inputs.
 
-Read on: [Input and native lowering](../../docs/guide/native-lowering.md) ·
+Read on: [Reading input](../../docs/guide/input.md) ·
+[Native lowering](../../docs/guide/native-lowering.md) ·
 [Performance](../../docs/reference/performance.md) ·
 [Buffers and JIT](../12_buffers_and_jit/README.md)
 

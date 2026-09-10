@@ -166,10 +166,11 @@ def build_parser() -> argparse.ArgumentParser:
         "reachable graph from `main` must be entirely native",
     )
     build.add_argument(
-        "--safe",
+        "--unsafe",
         action="store_true",
-        help="keep the Python-integer overflow guards; without it a build "
-        "uses 64-bit wrap semantics for data arithmetic",
+        help="drop the overflow guards on data arithmetic: 64-bit wrap "
+        "semantics, like C -- bounds checks stay; a build keeps Python's "
+        "integers otherwise, as `run` does",
     )
     build.add_argument(
         "--prover",

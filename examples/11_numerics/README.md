@@ -19,8 +19,8 @@ Each `result *= i` is an overflow-checking multiply. `may_overflow(20)` runs
 twenty of them natively. `may_overflow(30)` sets the flag on the
 twenty-first, the function returns to its Python body, and CPython finishes
 with arbitrary precision — the 33-digit number Python prints. Under `ppy
-run` the guards are on by default; `ppy build` produces a wrap-semantics
-artifact, and `--safe` puts them back.
+run` and `ppy build` the guards are on by default; `--unsafe` on either
+produces a wrap-semantics artifact.
 
 ## Floor, not truncation
 

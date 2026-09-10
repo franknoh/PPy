@@ -49,7 +49,7 @@ print(longest(ppy.input[int]()))
 
 `@ppy.pure` is a contract that the function has no observable effects, and
 the checker verifies it. `@ppy.opt(3)` is this function's optimization
-level. `ppy.input[int]()` reads one integer from standard input, straight
+level. `ppy.input[int]()` reads one line of standard input as an integer, straight
 into memory rather than through a Python object per field.
 
 ## 3. Run it three ways
@@ -86,10 +86,10 @@ uv run ppy build collatz.ppy -o dist
 `ppy build` writes the objects, `libppy_<project>.so`, a manifest, and a
 launcher executable. The launcher starts an embedded interpreter, imports
 `ppy_runtime`, and runs; it keeps working with the compiler uninstalled.
-`run` and `build` differ in one default: `run` keeps Python-integer
-semantics (overflow is guarded and falls back to arbitrary precision), while
-`build` produces a wrap-semantics artifact like every native compiler. `run
---unsafe` and `build --safe` flip either one.
+`run` and `build` mean the same program: both keep Python-integer
+semantics -- overflow is guarded and falls back to arbitrary precision --
+and `--unsafe`, on either, drops the guards for 64-bit wrap semantics like
+C's.
 
 ```bash
 uv run ppy build --standalone collatz.ppy -o native   # an executable with no CPython inside
@@ -112,5 +112,5 @@ uv run ppy migrate legacy.py     # the permissive form: dynamic features go behi
 ## Next
 
 - [Guide](guide/index.md): from the subset and the directives to native memory, SIMD, threads, parallel loops, derivatives, coroutines, GPU kernels, XLA, and generics.
-- [Examples](howto/index.md): 42 folders, one page each.
+- [Examples](howto/index.md): @@EXAMPLE_FOLDERS@@ folders, one page each.
 - [CLI](cli.md): every command and option — `ppy emit`, `inspect --stage`, `--report-opt`, `--sanitize`, `--profile`/`--pgo`.

@@ -88,11 +88,17 @@ program using any of them runs the same on every path.
 
     The effect vocabulary, purity, and why three ways of running agree.
 
--   **[Input and native lowering](native-lowering.md)**
+-   **[Reading input](input.md)**
 
     ---
 
-    `ppy.input[T]()`, `ppy.buffer`, and when a function gets a boundary.
+    `ppy.input` reads lines, `ppy.scan` reads tokens, `ppy.read_*` fill a buffer.
+
+-   **[Native lowering](native-lowering.md)**
+
+    ---
+
+    When a function gets a boundary, and what its parameters may be.
 
 -   **[Regular expressions](regex.md)**
 

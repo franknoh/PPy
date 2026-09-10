@@ -134,8 +134,11 @@ def read_fields():
         return array.array("q", generated())
     fields = array.array("q", [count, edges, int(input())])
     triples = array.array("q", [0] * (edges * 3))
-    for i in range(edges * 3):
-        triples[i] = int(input())
+    for e in range(edges):
+        u, v, w = map(int, input().split())
+        triples[e * 3] = u
+        triples[e * 3 + 1] = v
+        triples[e * 3 + 2] = w
     fields.extend(triples)
     return fields
 

@@ -16,7 +16,8 @@ happens when the two sides of a boundary disagree.
 |---|---|---|
 | the language subset — statements, expressions, the type system | settling | new constructs are added; accepted code is not un-accepted without a note |
 | `ppy.pure`, `ppy.opt`, `ppy.native`, `ppy.jit`, `ppy.dynamic`, `ppy.check` | settling | the directives a program is written around |
-| `ppy.input`, `ppy.buffer`, `ppy.read_ints`, `ppy.read_token` | experimental | added in 0.1; the spelling may still change |
+| `ppy.input`, `ppy.scan`, `ppy.buffer`, `ppy.read_ints`, `ppy.read_token` | experimental | `input` reads lines and `scan` tokens since 0.3; the spelling may still change |
+| `ppy.check`, `ppy.assume` | experimental | `check` validates all the way down since 0.3; `assume` is the unchecked crossing |
 | `ppy.native` memory and `ppy.ffi`; `ppy.simd`, `ppy.cpu`, `ppy.atomic`, `ppy.concurrent`, `ppy.parallel.range`; `ppy.grad` | settling | added in 0.2; each has a reference implementation under CPython, and a lowering that agrees with it |
 | `ppy.aio`, `ppy.cuda`, `ppy.hip`, `ppy.xla` | experimental | added in 0.2; the runtimes behind them (epoll, the CUDA driver, PJRT) are the newest code in the tree |
 | the canonical IR (`ppy_compiler.ir`) and `.ppyir` | settling | the text carries a schema and dialect versions a reader refuses rather than guesses at; public from 0.2.0 at schema 1 |

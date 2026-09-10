@@ -74,10 +74,14 @@ def read_fields():
     except EOFError:
         return array.array("q", generated())
     fields = array.array("q", [size, rounds, queries])
-    rest = array.array("q", [0] * (size + rounds * 6))
-    for i in range(size + rounds * 6):
-        rest[i] = int(input())
-    fields.extend(rest)
+    fields.extend(array.array("q", map(int, input().split())))
+    commands = array.array("q", [0] * (rounds * 6))
+    for step in range(rounds * 2):
+        kind, first, second = map(int, input().split())
+        commands[step * 3] = kind
+        commands[step * 3 + 1] = first
+        commands[step * 3 + 2] = second
+    fields.extend(commands)
     return fields
 
 

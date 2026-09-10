@@ -40,9 +40,9 @@ def read_values():
         count = int(input())
     except EOFError:
         return array.array("q", [(i * 7919) % 1000003 for i in range(500000)])
-    values = array.array("q", [0] * count)
-    for i in range(count):
-        values[i] = int(input())
+    values = array.array("q", map(int, input().split()))
+    if len(values) != count:
+        raise ValueError(f"expected {count} values, got {len(values)}")
     return values
 
 

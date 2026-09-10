@@ -110,7 +110,7 @@ def standalone_ir(bundle, reporter, entry: Path, opt_level: int | None = None): 
     lowered = lower_module_to_ir(
         analysis,
         functions,
-        safeguards=config.llvm.safeguards or "off",
+        safeguards=config.llvm.safeguards or "hoisted",
         standalone=True,
         prover=prover_for(config),
         root=bundle.project.root,
@@ -161,7 +161,7 @@ def build_standalone(  # type: ignore[no-untyped-def]
     result: LoweringResult = lower_module_via_ir(
         analysis,
         functions,
-        safeguards=config.llvm.safeguards or "off",
+        safeguards=config.llvm.safeguards or "hoisted",
         standalone=True,
         opt_level=opt_level if opt_level is not None else config.opt_level,
         prover=prover_for(config),

@@ -110,10 +110,12 @@ def test_check_validates_and_returns_the_value():
 
 
 def test_check_refuses_targets_it_cannot_validate():
+    from collections.abc import Callable
     from typing import Literal
 
-    with pytest.raises(TypeError):
-        ppy.check[Literal[3]](3)
+    assert ppy.check[Literal[3]](3) == 3
+    with pytest.raises(TypeError, match="cannot validate"):
+        ppy.check[Callable[[int], int]](3)
 
 
 def test_class_decoration_keeps_class_identity():

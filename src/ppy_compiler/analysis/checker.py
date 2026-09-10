@@ -408,6 +408,17 @@ def _read_element(element: T.Type) -> T.Type:
     return T.INT if _scalar_name_of(element) in {"i8", "u8"} else element
 
 
+def _line_readable(t: T.Type) -> bool:
+    """What `ppy.input[T]` reads a line as: a scalar, a tuple of scalars, or a list of one."""
+    if t in (T.INT, T.FLOAT, T.STR, T.UNKNOWN):
+        return True
+    if isinstance(t, T.Tuple_) and not t.homogeneous and t.items:
+        return all(T.strip_literal(item) in (T.INT, T.FLOAT, T.STR) for item in t.items)
+    if isinstance(t, T.Instance) and t.name == "list" and len(t.args) == 1:
+        return T.strip_literal(t.args[0]) in (T.INT, T.FLOAT, T.STR)
+    return False
+
+
 def _holdable_element(t: T.Type) -> bool:
     base = T.strip_literal(t)
     return isinstance(base, T.Instance) and base.name in _HOLDABLE
@@ -438,11 +449,11 @@ def _is_fresh_allocation(node: ast.expr) -> bool:
         return True
     if isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
         return node.func.id in {"list", "dict", "set", "bytearray"}
-    # `ppy.buffer[int](n)` and `ppy.input[Buffer[int]](n)` make the memory
+    # `ppy.buffer[int](n)` and `ppy.scan[Buffer[int]](n)` make the memory
     # they hand back, so nothing else can already be holding it.
     if isinstance(node, ast.Call) and isinstance(node.func, ast.Subscript):
         spelled = ast.unparse(node.func.value)
-        return spelled in {"ppy.buffer", "ppy.input"}
+        return spelled in {"ppy.buffer", "ppy.scan", "ppy.input"}
     return False
 
 
@@ -4296,30 +4307,59 @@ class _Checker:
         return Binding(T.instance("Buffer", element.type))
 
     def _typed_input(self, node: ast.Call, env: Env) -> Binding | None:
-        """`ppy.input[T](...)`: read the next value, typed by what was asked for.
+        """`ppy.input[T]()` and `ppy.scan[T](...)`: a read typed by what was asked for.
 
         The subscript is read as a type, the way an annotation is, so
         `ppy.input[tuple[int, int]]()` types as that tuple and
-        `ppy.input[Buffer[int]](n)` as that buffer. A buffer read takes how
-        many values to read; any other read takes nothing -- a prompt is a
-        `print` before it.
+        `ppy.scan[Buffer[int]](n)` as that buffer. `input` reads one line the
+        way the builtin does and knows `int`, `float`, `str`, tuples and
+        lists of them, and `Buffer[int]` for a line of integers, which the
+        line counts; `scan` reads tokens, whatever line they are on, and
+        fills a buffer given how many values to read. Neither takes anything
+        else -- a prompt is a `print` before the read.
         """
         func = node.func
         assert isinstance(func, ast.Subscript)
-        if self.project.resolver(self.symbols).canonical(func.value) != "ppy.input":
+        canonical = self.project.resolver(self.symbols).canonical(func.value)
+        if canonical not in {"ppy.input", "ppy.scan"}:
             return None
+        what = canonical.rpartition(".")[2]
         resolved = self.annotations.resolve(func.slice)
-        buffer = getattr(T.strip_literal(resolved.type), "name", None) == "Buffer"
-        if node.keywords or (len(node.args) != 1 if buffer else node.args):
-            wanted = (
-                "`ppy.input[Buffer[T]]` takes how many values to read, and nothing else"
-                if buffer
-                else "`ppy.input[T]()` takes no argument; print a prompt first, then read"
-            )
+        base = T.strip_literal(resolved.type)
+        buffer = getattr(base, "name", None) == "Buffer"
+        counted = buffer and what == "scan"
+        if what == "input":
+            if buffer:
+                element = T.INT
+                if isinstance(base, T.Instance) and base.args:
+                    element = T.strip_literal(base.args[0])
+                if element not in (T.INT, T.UNKNOWN):
+                    self._error(
+                        "E1305",
+                        f"a line of integers reads into `Buffer[int]`, not `{resolved.type}`",
+                        node,
+                    )
+            elif not _line_readable(base):
+                self._error(
+                    "E1305",
+                    f"`ppy.input[T]` reads a line as `int`, `float`, `str`, a tuple or a "
+                    f"list of them, or `Buffer[int]`, not `{resolved.type}`",
+                    node,
+                )
+        if node.keywords or (len(node.args) != 1 if counted else node.args):
+            if counted:
+                wanted = "`ppy.scan[Buffer[T]]` takes how many values to read, and nothing else"
+            elif buffer:
+                wanted = (
+                    "`ppy.input[Buffer[int]]()` reads the whole line and takes no count; "
+                    "`ppy.scan[Buffer[int]](n)` reads n tokens"
+                )
+            else:
+                wanted = f"`ppy.{what}[T]()` takes no argument; print a prompt first, then read"
             self._error("E1305", wanted, node)
         for argument in node.args:
             count = self._expr(argument, env)
-            if buffer and T.strip_literal(count.type) not in (T.INT, T.UNKNOWN):
+            if counted and T.strip_literal(count.type) not in (T.INT, T.UNKNOWN):
                 self._error(
                     "E1301",
                     f"a buffer is read with how many values it holds, not `{count.type}`",
@@ -4331,24 +4371,29 @@ class _Checker:
         return Binding(resolved.type, resolved.facts)
 
     def _checked_conversion(self, node: ast.Call, env: Env) -> Binding | None:
-        """`ppy.check[T](value)`: the sanctioned crossing out of dynamic code.
+        """`ppy.check[T](value)` and `ppy.assume[T](value)`: crossings out of dynamic code.
 
-        The runtime validates the value against `T` (raising `TypeError`) and
-        hands it back; the checker takes that word and types the result `T`.
-        This is the inverse of `typing.cast`, which asserts and checks
-        nothing -- the name is different because the behavior is.
+        `check` validates the value against `T` at runtime, all the way down
+        (raising `TypeError`), and hands it back; the checker takes that
+        word and types the result `T`. `assume` validates nothing: the
+        result is typed `T` on the programmer's word alone, which is the
+        escape hatch, and reads as one. Both are the inverse of
+        `typing.cast` in spelling because they differ from it in behavior.
         """
         func = node.func
         assert isinstance(func, ast.Subscript)
-        if self.project.resolver(self.symbols).canonical(func.value) != "ppy.check":
+        canonical = self.project.resolver(self.symbols).canonical(func.value)
+        if canonical not in {"ppy.check", "ppy.assume"}:
             return None
+        what = canonical.rpartition(".")[2]
         resolved = self.annotations.resolve(func.slice)
         if len(node.args) != 1 or node.keywords:
-            self._error("E1305", "`ppy.check[T]` takes exactly one positional value", node)
+            self._error("E1305", f"`ppy.{what}[T]` takes exactly one positional value", node)
         for argument in node.args:
             self._expr(argument, env)
             self._mark_escape(argument, env)
-        self._effects = self._effects | EffectSet.of(raises=("TypeError",))
+        if what == "check":
+            self._effects = self._effects | EffectSet.of(raises=("TypeError",))
         return Binding(resolved.type, resolved.facts)
 
     def _check_forbidden_call(self, node: ast.Call, env: Env) -> bool:
@@ -4455,7 +4500,8 @@ class _Checker:
                 f"{message}; a dynamic value is crossing into typed code",
                 node,
                 help="validate it explicitly: `ppy.check[T](value)` checks at "
-                "runtime and hands back a typed value",
+                "runtime and hands back a typed value; `ppy.assume[T](value)` takes "
+                "your word for it, unchecked",
             )
             return
         self._error(code, message, node)

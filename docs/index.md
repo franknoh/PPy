@@ -55,7 +55,7 @@ and Nuitka is on the [performance page](reference/performance.md).
 
     ---
 
-    42 folders, 52 programs — the code, the commands, and what they print,
+    @@EXAMPLE_FOLDERS@@ folders, @@EXAMPLE_PROGRAMS@@ programs — the code, the commands, and what they print,
     the same on all three paths.
 
 -   **[CLI](cli.md)**

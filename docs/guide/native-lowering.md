@@ -1,41 +1,4 @@
-# Reading input and native lowering
-
-## Reading input
-
-`ppy.input[T]()` reads the next value the way `T` says to read it, and the
-checker types the result from the same `T`:
-
-```python
-import ppy
-from ppy import Buffer
-
-n = ppy.input[int]()  # one integer
-a, b = ppy.input[tuple[int, int]]()  # two fields, line breaks irrelevant
-word = ppy.input[str]()  # a token
-values = ppy.input[Buffer[int]](n)  # n integers, straight into a buffer
-```
-
-Whitespace and newlines are the same thing to it, as they are to `scanf`.
-Reading goes into memory rather than through a Python object per field, so
-the buffer form is what takes a million numbers quickly — faster than
-`sys.stdin.read().split()` and faster than C's `scanf`, measured in
-[Algorithms](../howto/15_algorithms.md). A buffer read takes how many
-values to read; every other read takes nothing (`E1305` otherwise). A
-prompt is a `print` before the read, the way any other output is written,
-so reading and printing stay two things. `ppy.read_ints` and `ppy.read_token` are
-the lower-level forms that fill a buffer you already have, and
-`ppy.buffer[T](n)` makes one: `n` elements of `T`, all zero. It is
-`array.array` under CPython and a native allocation in a standalone binary,
-which is what lets the same source build both ways.
-
-All of them carry the IO effect, so a function that reads is never mistaken
-for a pure one, and all of them work on every path including plain CPython:
-the small C reader is compiled once and cached, with a pure-Python fallback
-where no compiler exists. The reader owns file descriptor 0 and buffers it
-itself, so a program that uses it must not also read `input()` or
-`sys.stdin`. Reading past the end raises `EOFError`.
-
-## Native lowering
+# Native lowering
 
 Eligibility and profitability are different questions, and the compiler asks
 both: `can_lower_native` decides whether correct native code exists, and
@@ -71,6 +34,8 @@ would otherwise name a symbol nothing defines. The generated wrapper
 releases the GIL around the native call, so `@ppy.native` functions scale
 across threads. `ppy explain FILE.ppy:name` reports the decision and, when
 the answer is no, the first blocking construct.
+
+Reading input is its own guide: [Reading input](input.md).
 
 Examples: [Algorithms](../howto/15_algorithms.md),
 [Buffers and JIT](../howto/12_buffers_and_jit.md).

@@ -267,7 +267,7 @@ def test_build_defaults_to_wrap_semantics_and_safe_restores_python_integers(tmp_
     )
 
     def built(*extra: str) -> str:
-        out = tmp_path / ("safe" if extra else "fast")
+        out = tmp_path / ("fast" if extra else "safe")
         result = subprocess.run(
             [sys.executable, "-m", "ppy_compiler", "build", *extra, "spin.ppy", "-o", str(out)],
             cwd=tmp_path,
@@ -285,8 +285,8 @@ def test_build_defaults_to_wrap_semantics_and_safe_restores_python_integers(tmp_
         assert ran.returncode == 0, ran.stderr
         return ran.stdout
 
-    assert built().strip() == "8606135309836935036"
-    assert built("--safe") == plain.stdout
+    assert built() == plain.stdout, "a build keeps Python's integers, as `ppy run` does"
+    assert built("--unsafe").strip() == "8606135309836935036", "`--unsafe` wraps, asked for"
 
 
 @requires_toolchain
@@ -541,7 +541,7 @@ def test_standalone_allocates_and_fills_its_own_buffers(tmp_path: Path):
 
             def main() -> None:
                 count: int = ppy.input[int]()
-                values: Buffer[int] = ppy.input[Buffer[int]](count)
+                values: Buffer[int] = ppy.scan[Buffer[int]](count)
                 room: Buffer[int] = ppy.buffer[int](count)
                 doubled(values, room)
                 print(total(room))
@@ -1040,9 +1040,9 @@ def test_build_warm_prepares_what_import_ppy_serves(tmp_path: Path):
     assert "kernel.ppy: already built" in again.stderr
     assert "warm: 0 built, 1 already built" in again.stderr
 
-    refused = _ppy(tmp_path, "build", "--warm", "--safe", "kernel.ppy")
+    refused = _ppy(tmp_path, "build", "--warm", "--unsafe", "kernel.ppy")
     assert refused.returncode == 2
-    assert "--safe" in refused.stderr
+    assert "--unsafe" in refused.stderr
 
     (tmp_path / "broken.ppy").write_text(
         "def wrong(n: int) -> int:\n    return n + missing\n", encoding="utf-8"

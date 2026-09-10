@@ -57,6 +57,7 @@ from ._markers import (
     Shape,
     Vector,
     VectorSpec,
+    assume,
     check,
     f16,
     f32,
@@ -100,8 +101,10 @@ __all__ = [
     "__version__",
     "add_import_root",
     "aio",
+    "assume",
     "atomic",
     "attach",
+    "buffer",
     "check",
     "concurrent",
     "cpu",
@@ -137,6 +140,7 @@ __all__ = [
     "read_token",
     "reader_available",
     "reflective",
+    "scan",
     "simd",
     "specialize",
     "u8",
@@ -149,16 +153,18 @@ __all__ = [
 ]
 
 if TYPE_CHECKING:  # the names below are real; PEP 562 just defers the import
+    from ._alloc import buffer
     from ._io import (  # pylint: disable=redefined-builtin
         input,
         read_ints,
         read_token,
         reader_available,
+        scan,
     )
 
 #: Reading input pulls in `ctypes` and the compiled reader, which a program
 #: that never reads should not pay for; PEP 562 defers it to first use.
-_READERS = frozenset({"input", "read_ints", "read_token", "reader_available"})
+_READERS = frozenset({"input", "read_ints", "read_token", "reader_available", "scan"})
 
 
 def __getattr__(name: str) -> object:

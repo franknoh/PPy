@@ -59,16 +59,15 @@ def resolved_safeguards(options: argparse.Namespace, configured: str | None, com
     One implementation, used both to build the artifact and to name it: the
     key and the compiler must agree on what `--unsafe` meant.
     """
+    del command  # `run` and `build` mean the same thing: Python's integers unless told `--unsafe`
     explicit = getattr(options, "safeguards", None)
     if explicit:
         return str(explicit)
     if getattr(options, "unsafe", False):
         return "off"
-    if getattr(options, "safe", False):
-        return "hoisted"
     if configured:
         return configured
-    return "off" if command == "build" else "hoisted"
+    return "hoisted"
 
 
 def run_directory(config: Config, key: str) -> Path:

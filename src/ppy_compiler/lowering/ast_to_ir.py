@@ -913,7 +913,7 @@ class _FunctionLowering:
         ).results[0]
         data = core.cast(self.b, raw, PtrType(element_type)) if element_type != I8 else raw
         if reads:
-            core.call_extern(self.b, "ppy_rt_read_ints", (data, count), (I64,))
+            core.call_extern(self.b, "ppy_rt_fill_ints", (data, count), (I64,))
         buffer = self.b.create(
             "core.call_intrinsic",
             (data, count),
@@ -1515,7 +1515,14 @@ class _FunctionLowering:
         if self.frontend.standalone and target == "print":
             return self._standalone_print(node)
         if self.frontend.standalone and target == "ppy.input[int]" and not node.args:
-            return core.call_extern(self.b, "ppy_rt_read_int", (), (I64,)).results[0]
+            return core.call_extern(self.b, "ppy_rt_input_int", (), (I64,)).results[0]
+        if self.frontend.standalone and target == "ppy.scan[int]" and not node.args:
+            return core.call_extern(self.b, "ppy_rt_scan_int", (), (I64,)).results[0]
+        if self.frontend.standalone and target.startswith("ppy.input[Buffer"):
+            raise Unsupported(
+                "`ppy.input[Buffer[int]]()` has no standalone lowering yet; "
+                "`ppy.scan[Buffer[int]](n)` reads n tokens"
+            )
         derivative = self._derivative_spec(node.func)
         if derivative is not None:
             values = self._derivative_call(derivative, node)

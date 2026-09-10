@@ -131,10 +131,11 @@ def _resolve_target(options: argparse.Namespace, project, reporter: Reporter):  
 def _resolve_safeguards(options: argparse.Namespace, project, command: str) -> None:  # type: ignore[no-untyped-def]
     """Settle the guard mode before any cache key reads it.
 
-    Priority: an explicit `--safeguards`, then the `--unsafe`/`--safe`
-    flags, then the project's `[tool.ppy.llvm] safeguards`, then the
-    command's own default -- `run` keeps Python-integer semantics, `build`
-    produces a wrap-semantics artifact like every native compiler.
+    Priority: an explicit `--safeguards`, then `--unsafe`, then the
+    project's `[tool.ppy.llvm] safeguards`, then the default, which is the
+    same for `run` and `build`: Python-integer semantics, guarded. A build
+    is `ppy run` in a compiled coat and means the same program; `--unsafe`
+    is the one spelling of 64-bit wrap semantics, for either.
     """
     from .warm import resolved_safeguards
 
@@ -475,7 +476,7 @@ def _warm(options: argparse.Namespace, reporter: Reporter, target: Path) -> int:
             ("--target", getattr(options, "triple", None) is not None),
             ("--python-extension", getattr(options, "python_extension", False)),
             ("--library", getattr(options, "library", False)),
-            ("--safe", getattr(options, "safe", False)),
+            ("--unsafe", getattr(options, "unsafe", False)),
             ("--host-cpu", getattr(options, "host_cpu", False)),
             ("--prover", getattr(options, "prover", None) is not None),
             ("-o", getattr(options, "output", None) is not None),

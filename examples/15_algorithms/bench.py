@@ -129,6 +129,11 @@ def available() -> dict[str, str]:
     return missing
 
 
+def _variant_file(standalone: str) -> str:
+    """The name the standalone variant is staged under, beside the converted program."""
+    return f"{standalone}_standalone.ppy"
+
+
 def _commands(stem: str, standalone: str | None) -> list[tuple[str, list[str]]]:
     rows = [
         ("plain", [sys.executable, f"{stem}.ppy"]),
@@ -136,7 +141,7 @@ def _commands(stem: str, standalone: str | None) -> list[tuple[str, list[str]]]:
         ("ppy build", [f"./dist/{stem}"]),
     ]
     if standalone is not None:
-        rows.append(("standalone", [f"./native/{standalone}"]))
+        rows.append(("standalone", [f"./native/{_variant_file(standalone).removesuffix('.ppy')}"]))
     rows.extend((label, [f"./{stem}_{compiler}"]) for label, compiler in REFERENCES.items())
     return rows
 
@@ -213,7 +218,7 @@ def _staged(
         )
     if "ppy build" not in skipped:
         subprocess.run(
-            [*PPY, "build", f"{stem}.ppy", "-o", "dist"],
+            [*PPY, "build", "--unsafe", f"{stem}.ppy", "-o", "dist"],
             cwd=work,
             capture_output=True,
             text=True,
@@ -221,9 +226,11 @@ def _staged(
             env=where,
         )
     if standalone is not None:
-        shutil.copy2(HERE / "standalone" / f"{standalone}.ppy", work / f"{standalone}.ppy")
+        # Under its own name: the variant shares its stem with the converted
+        # program, and staging it over that file would time the wrong one.
+        shutil.copy2(HERE / "standalone" / f"{standalone}.ppy", work / _variant_file(standalone))
         subprocess.run(
-            [*PPY, "build", "--standalone", f"{standalone}.ppy", "-o", "native"],
+            [*PPY, "build", "--standalone", "--unsafe", _variant_file(standalone), "-o", "native"],
             cwd=work,
             capture_output=True,
             text=True,
@@ -253,7 +260,10 @@ def environment() -> dict:
         "rounds": ROUNDS,
         "timing": "wall time of the whole process, measured from outside",
         "staged": "program and runtime copied to a native filesystem first",
-        "semantics": "ppy build defaults to wrap semantics; ppy run keeps Python integers",
+        "semantics": (
+            "ppy build --unsafe and --standalone --unsafe: wrap semantics, asked for; "
+            "ppy run keeps Python integers"
+        ),
         "missing": available(),
     }
 

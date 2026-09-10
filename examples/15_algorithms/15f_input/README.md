@@ -8,19 +8,32 @@ and `prefix` are both native.
 
 ```python
 count: int = ppy.input[int]()
-ppy.read_ints(memoryview(values)[:count])
+values: Buffer[int] = ppy.input[Buffer[int]]()
 ```
 
-The original source read one value per `input()` call. `ppy convert`
-rewrote the loop into a single bulk `ppy.read_ints` over the same slots:
-the same buffer, filled by a small C scanner that owns file descriptor 0 and
-never builds a Python object per field. Under plain CPython the same call
-runs through the same scanner, compiled once into the user cache, so the
-three paths read the same way and print the same count.
+The original source reads the count with `int(input())` and the values
+with `array.array("q", map(int, input().split()))`: one line each. The
+conversion writes both as line reads that mean the same -- the whole line,
+`ValueError` for a field that is not an integer -- and the second one fills
+the buffer from a small C scanner that owns file descriptor 0 and never
+builds a Python object per field. Under plain CPython the same scanner is
+compiled once into the user cache, so the three paths read the same way and
+print the same count.
+
+The standalone variant, [`standalone/inversions.ppy`](../standalone/inversions.ppy),
+is hand-written for the subset and reads the block as tokens:
+
+```python
+values: Buffer[int] = ppy.scan[Buffer[int]](count)
+```
+
+`ppy.scan` does not care where the line breaks fall, which is what a
+standalone binary can lower today; it accepts input the Python would
+reject, so it is written down as its own program rather than converted.
 
 ## What input costs
 
-500k integers through `ppy.input` take 12.6 ms, through
+500k integers through a `ppy` buffer read take 12.6 ms, through
 `sys.stdin.read().split()` 49.8 ms, through C's `scanf` 20.6 ms. The 8 ms
 the standalone binary holds over both C compilers is the reader; the [folder
 README](../README.md) says what the subset costs.
@@ -37,12 +50,12 @@ begins.
 
 | path | wall |
 |---|---:|
-| plain CPython | 630.0 ± 11.7 ms |
-| `ppy run` | 175.0 ± 162.7 ms |
-| `ppy build` | 94.6 ± 2.3 ms |
-| `ppy build --standalone` | **37.6 ± 0.6 ms** |
-| C (`gcc -O3`, `scanf`) | 46.0 ± 1.1 ms |
-| C (`clang -O3`, `scanf`) | 45.4 ± 0.8 ms |
+| plain CPython | 577.4 ± 5.6 ms |
+| `ppy run` | 171.8 ± 147.9 ms |
+| `ppy build --unsafe` | 88.1 ± 3.6 ms |
+| `ppy build --standalone --unsafe` | **37.3 ± 1.9 ms** |
+| C (`gcc -O3`, `scanf`) | 44.1 ± 1.0 ms |
+| C (`clang -O3`, `scanf`) | 44.9 ± 0.7 ms |
 
 ## Run it
 
