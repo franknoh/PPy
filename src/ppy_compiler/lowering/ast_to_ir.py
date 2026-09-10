@@ -1995,10 +1995,18 @@ class _FunctionLowering:
                 f"`{api}.compiled` asks the runtime; the function asking stays in Python"
             )
         if operation == "device_alloc":
-            raise Unsupported(
-                f"`{api}.device_alloc` allocates through the launch runtime; "
-                "the function allocating stays in Python"
-            )
+            if not self.frontend.launches:
+                raise Unsupported(
+                    f"`{api}.device_alloc` allocates through the launch runtime; "
+                    "the function allocating stays in Python"
+                )
+            kind = _annotation_kind(subscript) if subscript is not None else None
+            if kind is None or len(node.args) != 1:
+                raise Unsupported(
+                    f"`{api}.device_alloc[T](n)` takes a scalar element type and a count"
+                )
+            count = self._coerce(self._expr(node.args[0]), "int")
+            return gpu_dialect.device_alloc(b, _scalar_type(kind), count)
         if operation == "syncthreads":
             gpu_dialect.barrier(b)
             return core.const(b, 0, I64)

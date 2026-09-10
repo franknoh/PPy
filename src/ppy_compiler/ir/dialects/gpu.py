@@ -72,6 +72,7 @@ HOST_ONLY = {
     "core.buffer_data": "a buffer is a host object; a kernel is handed a pointer and a length",
     "core.buffer_len": "a buffer is a host object; a kernel is handed a pointer and a length",
     "core.buffer_load": "a buffer is a host object; a kernel is handed a pointer and a length",
+    "gpu.device_alloc": "device memory is made by the host and handed to a launch",
     "core.buffer_store": "a buffer is a host object; a kernel is handed a pointer and a length",
 }
 #: The operations that say where a thread is; each is `.x`, `.y`, or `.z`.
@@ -125,6 +126,17 @@ def _verify_shuffle(op: Operation, checker: Checker) -> None:
         checker.error(op, f"a lane is an integer, not {lane.type}")
     if op.results[0].type != value.type:
         checker.error(op, f"subgroup_shuffle gives {value.type}, not {op.results[0].type}")
+
+
+def _verify_device_alloc(op: Operation, checker: Checker) -> None:
+    result = op.results[0].type
+    if not isinstance(result, PtrType) or result.address_space != "generic" or not result.mutable:
+        checker.error(op, f"{op.name} yields a mutable ptr<T, generic>, not {result}")
+        return
+    if not is_scalar(result.pointee):
+        checker.error(op, f"{op.name} holds scalars, not {result.pointee}")
+    if not is_integer(op.operands[0].type):
+        checker.error(op, f"a count is an integer, not {op.operands[0].type}")
 
 
 def _verify_launch(op: Operation, checker: Checker) -> None:
@@ -205,6 +217,14 @@ class GpuDialect(Dialect):
             )
         add(
             OpSpec(
+                "gpu.device_alloc",
+                verify=_verify_device_alloc,
+                operands=1,
+                results=1,
+            )
+        )
+        add(
+            OpSpec(
                 "gpu.subgroup_shuffle",
                 variant_attribute="mode",
                 variants=SHUFFLE_MODES,
@@ -252,7 +272,7 @@ class GpuDialect(Dialect):
         checker.block = None
 
     def _in_host(self, op: Operation, checker: Checker) -> None:
-        if op.dialect == "gpu" and op.local_name != "launch":
+        if op.dialect == "gpu" and op.local_name not in {"launch", "device_alloc"}:
             checker.error(op, f"{op.name} runs on a device; this is a host function")
         elif op.name == "core.call":
             target = self._callee(op, checker)
@@ -338,6 +358,13 @@ def private_alloc(b: Builder, t: IRType, count: int, name: str | None = None) ->
     """`count` elements of `t` private to this thread."""
     return b.create(
         "gpu.private_alloc", (), (PtrType(t, "private"),), {"count": count}, result_names=(name,)
+    ).result
+
+
+def device_alloc(b: Builder, t: IRType, count: Value, name: str | None = None) -> Value:
+    """`count` elements of `t` in device memory the host may also read and write."""
+    return b.create(
+        "gpu.device_alloc", (count,), (PtrType(t, "generic", True),), result_names=(name,)
     ).result
 
 

@@ -3,8 +3,9 @@
 A thread's position is `threadIdx.x` and its kin, a block barrier
 `__syncthreads()`, shared memory a `__shared__` array declared in the
 kernel, private memory a local array, a subgroup shuffle `__shfl_sync` on
-CUDA and `__shfl` on HIP, and a launch the triple chevron followed by a
-device synchronization whose status is the host function's. One IR is
+CUDA and `__shfl` on HIP, a launch the triple chevron followed by a
+device synchronization whose status is the host function's, and device
+memory a managed allocation freed with the host function. One IR is
 written both ways; nothing here is vendor-specific beyond the spelling.
 """
 
@@ -39,6 +40,25 @@ _SYNCHRONIZE = {
     "cuda": ("cudaDeviceSynchronize", "cudaSuccess", "__syncwarp()"),
     "hip": ("hipDeviceSynchronize", "hipSuccess", "__builtin_amdgcn_wave_barrier()"),
 }
+#: Device memory a host function makes: managed, so the host reads and writes
+#: it as the reference does, and freed with the function, however it leaves.
+_DEVICE_MEMORY = """template <typename T> struct ppy_device_memory {{
+    T *data = nullptr;
+    bool allocate(int64_t count) {{
+        size_t bytes = count > 0 ? (size_t)count * sizeof(T) : 1;
+        return {malloc}((void **)&data, bytes) == {success};
+    }}
+    ~ppy_device_memory() {{
+        if (data != nullptr) {{
+            {free}(data);
+        }}
+    }}
+}};
+"""
+_MEMORY_CALLS = {
+    "cuda": ("cudaMallocManaged", "cudaSuccess", "cudaFree"),
+    "hip": ("hipMallocManaged", "hipSuccess", "hipFree"),
+}
 
 
 def emit_gpu(fe, op: Operation) -> None:  # type: ignore[no-untyped-def]
@@ -68,6 +88,17 @@ def emit_gpu(fe, op: Operation) -> None:  # type: ignore[no-untyped-def]
             fe.define(op.result, "(bool)" + spelled.format(v=f"(int){value}", lane=lane))
         else:
             fe.define(op.result, spelled.format(v=value, lane=lane))
+    elif name == "device_alloc":
+        pointer = op.result.type
+        assert isinstance(pointer, PtrType)
+        malloc, success, free = _MEMORY_CALLS[api]
+        owner.unit.prelude.setdefault(
+            "device_memory", _DEVICE_MEMORY.format(malloc=malloc, success=success, free=free)
+        )
+        slot = fe.fresh(op.result.name or "device")
+        fe.declarations.append(f"    ppy_device_memory<{owner.c_type(pointer.pointee)}> {slot};")
+        fe.fail_unless(f"{slot}.allocate({fe.bare(op.operands[0])})", "device_alloc.ok")
+        fe.scalars[id(op.result)] = f"{slot}.data"
     elif name == "launch":
         _launch(fe, op, api)
     else:

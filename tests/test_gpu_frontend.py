@@ -58,6 +58,19 @@ PROGRAM = """
         cuda.launch(saxpy, (n + 255) // 256, 256, n, a, x, y)
 
 
+    def scaled(n: int, a: float) -> float:
+        x = cuda.device_alloc[float](n)
+        y = cuda.device_alloc[float](n)
+        for i in range(n):
+            native.store(native.offset(x, i), float(i))
+            native.store(native.offset(y, i), 1.0)
+        cuda.launch(saxpy, (n + 255) // 256, 256, n, a, x, y)
+        total = 0.0
+        for i in range(n):
+            total += native.load(native.offset(y, i))
+        return total
+
+
     def main() -> None:
         n = 300
         x = native.stack_alloc[float](n)
@@ -76,6 +89,7 @@ PROGRAM = """
         out = native.stack_alloc[float](2)
         cuda.launch(block_max, 2, 64, values, out)
         print(native.load(out), native.load(native.offset(out, 1)))
+        print(scaled(300, 2.0))
     """
 
 
@@ -217,6 +231,7 @@ def test_the_ir_carries_the_kinds_and_the_source_backends_write_them(tmp_path: P
     assert 'gpu.kind = "kernel"' in text and "gpu.thread_id.x : index" in text
     assert "gpu.shared_alloc {count = 64} : ptr<f64, shared>" in text and "gpu.barrier" in text
     assert "gpu.subgroup_shuffle.xor" in text and "gpu.launch %" in text
+    assert "= gpu.device_alloc %" in text and ": ptr<f64>" in text
     assert "core.guard" not in text.split("func @gpu_prog_saxpy")[1].split("func @gpu_prog_run")[0]
     assert not verify(decode(text))
     cuda_text = _ppy(tmp_path, "emit", "cuda", "gpu_prog.ppy")
@@ -237,6 +252,10 @@ def test_the_ir_carries_the_kinds_and_the_source_backends_write_them(tmp_path: P
         and "cudaDeviceSynchronize() != cudaSuccess) return 1;" in source
     )
     assert "goto" not in source
+    assert "ppy_device_memory<double> device;" in source and "cudaMallocManaged(" in source
+    assert "if (!device.allocate(n)) return 1; /* device_alloc.ok */" in source
+    assert "double *x = device.data;" in source and "cudaFree(data);" in source
+    assert "ppy_gpu_prog_saxpy<<<" in source.split("ppy_gpu_prog_scaled(")[-1]
     assert _ppy(tmp_path, "emit", "cuda", "gpu_prog.ppy").stdout == source, "deterministic"
     hip_text = _ppy(tmp_path, "emit", "hip", "gpu_prog.ppy")
     assert hip_text.returncode == 0, hip_text.stderr
@@ -245,6 +264,7 @@ def test_the_ir_carries_the_kinds_and_the_source_backends_write_them(tmp_path: P
         "__shfl_xor(" in hip_text.stdout
         and "hipDeviceSynchronize() != hipSuccess) return 1;" in hip_text.stdout
     )
+    assert "hipMallocManaged(" in hip_text.stdout and "hipFree(" in hip_text.stdout
     plain_c = _ppy(tmp_path, "emit", "c", "gpu_prog.ppy")
     assert "__global__" not in plain_c.stdout and "saxpy" not in plain_c.stdout, (
         "C leaves device code"
@@ -279,7 +299,7 @@ def test_the_program_runs_the_same_under_ppy_run(tmp_path: Path):
     native_run = _ppy(tmp_path, "run", entry.name)
     assert plain.returncode == 0, plain.stderr
     assert native_run.returncode == 0, native_run.stderr
-    assert native_run.stdout == plain.stdout == "90000.0\n100.0 98.0\n"
+    assert native_run.stdout == plain.stdout == "90000.0\n100.0 98.0\n90000.0\n"
 
 
 def _ppy(cwd: Path, *args: str) -> subprocess.CompletedProcess:
