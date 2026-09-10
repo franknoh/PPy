@@ -4484,14 +4484,18 @@ from <code>gpu.thread_id.x</code>, <code>block_id.y</code>, <code>block_dim.z</c
 <code>subgroup_barrier</code>, trades a scalar across the subgroup with
 <code>subgroup_shuffle.idx|up|down|xor %v, %lane</code>, and takes <code>shared_alloc
 {count = N} : ptr&lt;T, shared&gt;</code> or <code>private_alloc {count = N} : ptr&lt;T,
-private&gt;</code>; atomics are the atomic dialect's over those pointers. The
+private&gt;</code>; atomics are the atomic dialect's over those pointers. A host
+function takes <code>device_alloc %n : ptr&lt;T, generic&gt;</code>, memory on the device
+that the host reads and writes too, and hands it to a launch. The
 verifier holds the kinds: a device operation in a host function; a host one
 in device code -- a guard, a buffer, an intrinsic, a call to a host
 function, any other dialect; a kernel that returns or takes stack memory;
 a launch of anything but a kernel, or with anything but its parameters.
 <code>ppy.cuda</code> and <code>ppy.hip</code> lower to it (<a href="../../guide/gpu/">GPU kernels</a>); <code>ppy emit cuda</code>
 and <code>ppy emit hip</code> write device code and the host's launches as CUDA or
-HIP C++ (the C backend with the spellings in <code>backend/c/gpu.py</code>); the C,
+HIP C++ (the C backend with the spellings in <code>backend/c/gpu.py</code>; device
+memory is a managed allocation, <code>cudaMallocManaged</code>, freed with the host
+function however it leaves); the C,
 C++, and LLVM backends leave device code to them. <code>backend/nvvm</code> writes
 the same device code as LLVM IR for NVPTX (<code>ppy emit nvvm-ir</code>) -- a kernel
 a <code>ptx_kernel</code>, positions the <code>llvm.nvvm.read.ptx.sreg.*</code> registers,
