@@ -35,6 +35,7 @@ import os
 import re
 import struct as _struct
 import sys
+from typing import Any
 from typing import get_args as _get_args
 from typing import get_origin as _get_origin
 
@@ -149,6 +150,17 @@ class _Compiled:
         "_token",
         "_wide",
     )
+    _bad: Any
+    _chunk: Any
+    _fixed: Any
+    _ints: Any
+    _library: Any
+    _line: Any
+    _line_ints: Any
+    _more: Any
+    _more_ref: Any
+    _token: Any
+    _wide: Any
 
     def __init__(self, library) -> None:  # type: ignore[no-untyped-def]
         i8, i64 = ctypes.c_int8, ctypes.c_int64
@@ -283,6 +295,9 @@ class _Fallback:
     """The same contract without a C compiler: correct, and slower."""
 
     __slots__ = ("_buffer", "_eof", "_position")
+    _buffer: bytes
+    _eof: bool
+    _position: int
 
     def __init__(self) -> None:
         self._buffer = b""
@@ -493,6 +508,11 @@ class _IntFields:
     """`ppy.input[tuple[int, ...]]()` with every field an integer: read in C, into one slot."""
 
     __slots__ = ("_address", "_count", "_slot", "_unpack", "_view")
+    _address: Any
+    _count: int
+    _slot: _array.array
+    _unpack: Any
+    _view: memoryview
 
     def __init__(self, count: int) -> None:
         self._count = count
@@ -513,6 +533,7 @@ class _Fields:
     """`ppy.input[tuple[...]]()` with mixed fields: the line split, each field converted."""
 
     __slots__ = ("_converters",)
+    _converters: tuple
 
     def __init__(self, converters: tuple) -> None:
         self._converters = converters
@@ -536,6 +557,9 @@ class _LineRead:
     """One `ppy.input[T]`, planned once and called any number of times."""
 
     __slots__ = ("_buffer", "_run", "_spec")
+    _buffer: bool
+    _run: Any
+    _spec: Any
 
     def __init__(self, spec) -> None:  # type: ignore[no-untyped-def]
         self._spec = spec
@@ -594,6 +618,7 @@ class _TokenRead:
     """One `ppy.scan[T]`, waiting to be called."""
 
     __slots__ = ("_spec",)
+    _spec: Any
 
     def __init__(self, spec) -> None:  # type: ignore[no-untyped-def]
         self._spec = spec

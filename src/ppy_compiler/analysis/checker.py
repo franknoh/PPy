@@ -4330,7 +4330,9 @@ class _Checker:
         counted = buffer and what == "scan"
         if what == "input":
             if buffer:
-                element = T.strip_literal(base.args[0]) if getattr(base, "args", ()) else T.INT
+                element = T.INT
+                if isinstance(base, T.Instance) and base.args:
+                    element = T.strip_literal(base.args[0])
                 if element not in (T.INT, T.UNKNOWN):
                     self._error(
                         "E1305",

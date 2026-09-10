@@ -69,12 +69,14 @@ SHIMS: dict[str, Shim] = {
     "ppy_rt_alloc": Shim(
         "int64_t *", ("int64_t count", "int64_t width"), _ALLOC, ("stdio.h", "stdlib.h")
     ),
-    # The scanner, the same text `ppy._io` compiles for a program under CPython.
-    **{
+}
+# The scanner, the same text `ppy._io` compiles for a program under CPython.
+SHIMS.update(
+    {
         name: Shim(result, parameters, body, headers, needs=needs, stateful=name in STATEFUL)
         for name, (result, parameters, body, headers, needs) in FUNCTIONS.items()
-    },
-}
+    }
+)
 
 _COMMENTS = {
     "ppy_rt_next": (
