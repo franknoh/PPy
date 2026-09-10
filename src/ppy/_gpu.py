@@ -330,21 +330,30 @@ class _DeviceMemory:
 
     __slots__ = ("device", "device_stale", "driver", "element", "host", "host_stale", "width")
 
+    element: Any
+    width: int
+    host: Any
+    driver: Any
+    device: Any
+    host_stale: bool
+    device_stale: bool
+
     def __init__(self, element: Any, count: int, api: str) -> None:
         code, width = _layout(element)
         self.element = element
         self.width = width
         self.host = array.array(code, bytes(width * count))
         self.driver = _driver_for(api)
-        self.device: Any = None
+        self.device = None
         #: The device holds newer bytes than the mirror.
         self.host_stale = False
         #: The mirror holds newer bytes than the device: nothing is uploaded yet.
         self.device_stale = True
-        if self.driver is not None:
-            with self.driver.lock:
-                self.driver.current()
-                self.device = self.driver.alloc(self.nbytes)
+        driver = self.driver
+        if driver is not None:
+            with driver.lock:
+                driver.current()
+                self.device = driver.alloc(self.nbytes)
 
     @property
     def nbytes(self) -> int:
@@ -352,23 +361,25 @@ class _DeviceMemory:
 
     def mirror(self) -> Any:
         """The host array, brought up to date with the device."""
-        if self.host_stale and self.device is not None:
-            with self.driver.lock:
-                self.driver.current()
+        driver = self.driver
+        if self.host_stale and self.device is not None and driver is not None:
+            with driver.lock:
+                driver.current()
                 buffer = (ctypes.c_char * self.nbytes).from_buffer(self.host)
-                self.driver.download(buffer, self.device, self.nbytes)
+                driver.download(buffer, self.device, self.nbytes)
             self.host_stale = False
         return self.host
 
     def device_address(self) -> int | None:
         """The device address, brought up to date with the mirror; None without a device."""
-        if self.device is None:
+        driver = self.driver
+        if self.device is None or driver is None:
             return None
         if self.device_stale:
-            with self.driver.lock:
-                self.driver.current()
+            with driver.lock:
+                driver.current()
                 buffer = (ctypes.c_char * self.nbytes).from_buffer_copy(self.host)
-                self.driver.upload(self.device, buffer, self.nbytes)
+                driver.upload(self.device, buffer, self.nbytes)
             self.device_stale = False
         return int(self.device.value)
 
@@ -402,15 +413,19 @@ class DevicePointer(Pointer[Any]):
 
     __slots__ = ("home",)
 
+    home: _DeviceMemory
+
     def __init__(self, home: _DeviceMemory, index: int, mutable: bool = True) -> None:
         self.home = home
-        self.index = index
-        self.element = home.element
-        self.mutable = mutable
+        super().__init__(None, index, home.element, mutable=mutable)
 
     @property
     def memory(self) -> Any:  # type: ignore[override]
         return self.home.mirror()
+
+    @memory.setter
+    def memory(self, _value: Any) -> None:
+        """The base initializer writes a memory; this pointer's is the mirror, whatever is given."""
 
     def offset(self, count: int) -> DevicePointer:
         return DevicePointer(self.home, self.index + count, self.mutable)
@@ -425,7 +440,8 @@ class DevicePointer(Pointer[Any]):
         return found
 
     def __repr__(self) -> str:
-        name = getattr(self.element, "__name__", repr(self.element))
+        element = self.home.element
+        name = getattr(element, "__name__", repr(element))
         return f"native.ptr[{name}]@{self.index} on the device"
 
 
