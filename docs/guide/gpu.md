@@ -63,8 +63,11 @@ launch takes the device address and copies nothing, a host read after a
 launch brings the array back once, a host write before a launch sends it
 once. Without a device -- and under `hip`, which has no launch runtime yet
 -- there is only the mirror, and every path reads and writes it directly, so
-the program means the same thing everywhere. A function that allocates
-device memory stays in Python, as one that launches does. A built artifact carries its
+the program means the same thing everywhere. Under `ppy run` a function
+that allocates device memory stays in Python, as one that launches does;
+`ppy emit cuda` and `ppy emit hip` write it into the host function as a
+managed allocation (`cudaMallocManaged`), which the host reads and writes
+as the mirror is, freed when the function returns. A built artifact carries its
 kernels: `ppy build` writes each staged payload beside the manifest, and
 the launcher binds it without the compiler -- as it does an `@xla.jit`
 function's StableHLO.

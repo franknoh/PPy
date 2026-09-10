@@ -213,8 +213,8 @@ def test_ppy_run_launches_its_kernels_on_the_device(tmp_path: Path):
     on_device = _ppy(tmp_path, "run", entry.name)
     assert plain.returncode == 0, plain.stderr
     assert on_device.returncode == 0, on_device.stderr
-    assert plain.stdout == "False False\n90000.0\n100.0 98.0\n"
-    assert on_device.stdout == "True True\n90000.0\n100.0 98.0\n"
+    assert plain.stdout == "False False\n90000.0\n100.0 98.0\n90000.0\n"
+    assert on_device.stdout == "True True\n90000.0\n100.0 98.0\n90000.0\n"
 
 
 @requires_device
@@ -232,4 +232,4 @@ def test_a_built_artifact_carries_its_kernels(tmp_path: Path):
     assert (tmp_path / "dist" / manifest["staged"]["gpu_run"]["saxpy"]).is_file()
     ran = _ppy(tmp_path, "run", "--prebuilt", "dist/ppy-bindings.json", "gpu_run.ppy")
     assert ran.returncode == 0, ran.stderr
-    assert ran.stdout == "True\n90000.0\n100.0 98.0\n"
+    assert ran.stdout == "True\n90000.0\n100.0 98.0\n90000.0\n"
