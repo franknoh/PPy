@@ -3765,14 +3765,33 @@
 <h2 id="030-unreleased">0.3.0 — unreleased<a class="headerlink" href="#030-unreleased" title="Permanent link">&para;</a></h2>
 <p>Work toward the next release, on <code>dev</code>; alphas of it are tagged <code>v0.3.0aN</code>.</p>
 <ul>
-<li>Three examples compare PPY with the tools that do the same job, code and
+<li><code>cuda.device_alloc[T](https://github.com/franknoh/PPy/blob/main/n)</code>: memory that lives on the device between
+  launches. It is a <code>native.ptr[T]</code> like <code>stack_alloc</code>'s -- the same loops
+  fill and read it, <code>native.offset</code> keeps its kind -- and the host sees it
+  through a mirror that whichever side wrote last keeps current: a launch
+  passes the device address and copies nothing, a host read after a launch
+  brings the array back once, a host write before a launch sends it once.
+  Without a device there is only the mirror. <code>hip.device_alloc</code> is the same
+  surface; the checker types both (<code>E1644</code> for a misuse) and a function that
+  allocates stays in Python, as one that launches does. The CUDA example
+  makes its saxpy arrays this way, and its comparison with CuPy and Numba
+  gained the device-resident rows.</li>
+<li>
+<p><code>ppy explain</code> reports a body that lowered as <code>llvm backend: native</code>, whatever
+  the effects suggested: a parallel loop's <code>Thread</code> effect was reported as
+  boxing the function while the function ran natively. Thread and sync
+  effects no longer count against lowering in the contract report either.</p>
+</li>
+<li>
+<p>Three examples compare PPY with the tools that do the same job, code and
   numbers side by side: the parallel ranges against Numba, Taichi, Mojo, and
   NumPy; the CUDA kernels against CuPy and Numba; the eight algorithm kernels
   against Numba, Mojo, and Codon. Each counterpart is in the example's
   <code>compare/</code> folder, written the way its tool wants it, and
   <code>examples/compare.py</code> holds them all to one answer and tabulates the
   timings. The CUDA table says plainly what PPY lacks: an array that lives
-  on the device between launches.</li>
+  on the device between launches.</p>
+</li>
 <li>A parallel body that writes a buffer element, <code>out[i] = i * i</code> under
   <code>parallel.range</code>, lowers: the store writes through <code>out</code> and binds nothing
   outside the loop, which is what the guide promised and what the check

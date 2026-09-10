@@ -3494,6 +3494,28 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#ppy._native_api.Pointer.offset" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;offset
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ppy._native_api.Pointer.touch" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;touch
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -5414,6 +5436,28 @@
     <span class="md-ellipsis">
       
         <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;address
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ppy._native_api.Pointer.offset" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;offset
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ppy._native_api.Pointer.touch" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;touch
       
     </span>
   </a>
@@ -7704,6 +7748,42 @@ the same memory.</p>
 
 </div>
 
+<div class="doc doc-object doc-function">
+
+
+<h3 id="ppy._native_api.Pointer.offset" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <code class="highlight language-python"><span class="n">offset</span><span class="p">(</span><span class="n">count</span><span class="p">)</span></code>
+
+<a href="#ppy._native_api.Pointer.offset" class="headerlink" title="Permanent link">&para;</a></h3>
+
+
+    <div class="doc doc-contents ">
+
+        <p>The pointer <code>count</code> elements on, into the same memory.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="ppy._native_api.Pointer.touch" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <code class="highlight language-python"><span class="n">touch</span><span class="p">()</span></code>
+
+<a href="#ppy._native_api.Pointer.touch" class="headerlink" title="Permanent link">&para;</a></h3>
+
+
+    <div class="doc doc-contents ">
+
+        <p>A store went through this pointer: memory that lives elsewhere too takes note.</p>
+
+
+    </div>
+
+</div>
+
 
 
   </div>
@@ -8883,7 +8963,9 @@ and runs once per thread of a launch; <code>@device</code> one a kernel calls. I
 say where a thread is, <code>syncthreads()</code> and <code>syncwarp()</code> wait for the block
 and the warp, <code>shared[T, N]()</code> and <code>local[T, N]()</code> are memory of the block
 and of the thread, and the <code>shfl</code> family trades a scalar across the warp.
-<code>launch(kernel, grid, block, *args)</code> runs a kernel and waits. Under CPython
+<code>launch(kernel, grid, block, *args)</code> runs a kernel and waits, and
+<code>device_alloc[T](n)</code> is memory that lives on the device between launches, a
+<code>native.ptr[T]</code> the host reads and writes through a mirror. Under CPython
 the launch runs the grid here, on threads that know their position -- the
 reference, exact and slow (spec 72); the compiler lowers the same calls to
 the gpu dialect, and <code>ppy emit cuda</code> writes them as CUDA C++.</p>

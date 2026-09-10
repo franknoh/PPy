@@ -6175,8 +6175,10 @@ read once.</p>
 Scalars are passed by value; a <code>native</code> pointer's whole array goes to the
 device before the launch and comes back after it when the pointer is
 mutable, so a launch means exactly what the reference launch means, only on
-the device. A machine without the driver, or without a device, has no
-kernel to bind: the reference runs instead, and the binding says why.</p>
+the device. Memory made by <code>cuda.device_alloc</code> already lives there: its
+address is passed and nothing is copied. A machine without the driver, or
+without a device, has no kernel to bind: the reference runs instead, and
+the binding says why.</p>
 
 
 
