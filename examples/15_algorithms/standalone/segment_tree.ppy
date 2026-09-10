@@ -54,13 +54,13 @@ def load(tree: Buffer[int], leaves: Buffer[int], size: int) -> int:
 
 
 def main() -> None:
-    size: int = ppy.input[int]()
-    rounds: int = ppy.input[int]()
-    ignored: int = ppy.input[int]()
+    size: int = ppy.scan[int]()
+    rounds: int = ppy.scan[int]()
+    ignored: int = ppy.scan[int]()
     tree: Buffer[int] = ppy.buffer[int](2 * size)
-    leaves: Buffer[int] = ppy.input[Buffer[int]](size)
+    leaves: Buffer[int] = ppy.scan[Buffer[int]](size)
     load(tree, leaves, size)
-    commands: Buffer[int] = ppy.input[Buffer[int]](rounds * 6)
+    commands: Buffer[int] = ppy.scan[Buffer[int]](rounds * 6)
     build(tree, size)
     print(run_commands(tree, commands, size, rounds) + ignored * 0)
 

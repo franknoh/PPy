@@ -19,9 +19,10 @@ returns to its Python body with the original arguments and computes there.
 The three paths print the same output because the native path never answers
 with a wrapped number; it either has the right one or steps aside.
 
-`ppy build` changes the default: an artifact wraps at 64 bits like every
-native compiler's output, and `--safe` keeps the guards. That difference is
-the 10 ms between `ppy run` and `ppy build` on the README's collatz kernel.
+`ppy build` keeps the same guards, so an artifact answers as `ppy run`
+does. `--unsafe`, on either command, drops them: the code wraps at 64 bits
+like every native compiler's output, which is the 10 ms between `ppy run`
+and `ppy build --unsafe` on the README's collatz kernel.
 
 ## Floor division and the sign of the remainder
 

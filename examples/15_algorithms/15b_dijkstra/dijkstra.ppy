@@ -137,7 +137,11 @@ def read_fields() -> Buffer[int]:
         return array.array("q", generated())
     fields: Buffer[int] = array.array("q", [count, edges, ppy.input[int]()])
     triples: Buffer[int] = array.array("q", [0] * (edges * 3))
-    ppy.read_ints(memoryview(triples)[:edges * 3])
+    for e in range(edges):
+        u, v, w = ppy.input[tuple[int, int, int]]()
+        triples[e * 3] = u
+        triples[e * 3 + 1] = v
+        triples[e * 3 + 2] = w
     fields.extend(triples)
     return fields
 

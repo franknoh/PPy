@@ -23,7 +23,7 @@ def solve(full: int, columns: int, diagonal: int, antidiagonal: int) -> int:
 
 
 def main() -> None:
-    n: int = ppy.input[int]()
+    n: int = ppy.scan[int]()
     print(solve((1 << n) - 1, 0, 0, 0))
 
 

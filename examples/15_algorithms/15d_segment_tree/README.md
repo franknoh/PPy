@@ -31,16 +31,19 @@ input, interpreter startup and all. Mean ± standard deviation over 5 runs;
 drifted. `ppy run` compiles before it runs, which is most of its time; it is
 the development path, not the one to submit. `ppy build` still starts an
 embedded CPython and imports the runtime, about 35 ms, before the program
-begins.
+begins. Here `main` reads the 400 thousand command lines, one `ppy.input[tuple[int, int, int]]()` each, and that loop
+runs in the interpreter on every path but the standalone one, which scans
+the same input natively; the reads are most of the plain and `ppy build`
+rows.
 
 | path | wall |
 |---|---:|
-| plain CPython | 482.8 ± 7.7 ms |
-| `ppy run` | 220.4 ± 303.9 ms |
-| `ppy build` | 113.0 ± 6.0 ms |
-| `ppy build --standalone` | **23.9 ± 0.8 ms** |
-| C (`gcc -O3`, `scanf`) | 50.7 ± 1.2 ms |
-| C (`clang -O3`, `scanf`) | 51.8 ± 1.1 ms |
+| plain CPython | 999.5 ± 17.5 ms |
+| `ppy run` | 690.6 ± 182.1 ms |
+| `ppy build --unsafe` | 738.6 ± 15.1 ms |
+| `ppy build --standalone --unsafe` | **28.7 ± 0.4 ms** |
+| C (`gcc -O3`, `scanf`) | 51.3 ± 1.8 ms |
+| C (`clang -O3`, `scanf`) | 49.2 ± 0.4 ms |
 
 ## Run it
 

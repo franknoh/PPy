@@ -78,9 +78,14 @@ def read_fields() -> Buffer[int]:
     except EOFError:
         return array.array("q", generated())
     fields: Buffer[int] = array.array("q", [size, rounds, queries])
-    rest: Buffer[int] = array.array("q", [0] * (size + rounds * 6))
-    ppy.read_ints(memoryview(rest)[:size + rounds * 6])
-    fields.extend(rest)
+    fields.extend(ppy.input[Buffer[int]]())
+    commands: Buffer[int] = array.array("q", [0] * (rounds * 6))
+    for step in range(rounds * 2):
+        kind, first, second = ppy.input[tuple[int, int, int]]()
+        commands[step * 3] = kind
+        commands[step * 3 + 1] = first
+        commands[step * 3 + 2] = second
+    fields.extend(commands)
     return fields
 
 

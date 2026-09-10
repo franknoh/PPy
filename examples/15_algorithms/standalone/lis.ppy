@@ -23,8 +23,8 @@ def longest_increasing(values: Buffer[int], tails: Buffer[int]) -> int:
 
 
 def main() -> None:
-    count: int = ppy.input[int]()
-    values: Buffer[int] = ppy.input[Buffer[int]](count)
+    count: int = ppy.scan[int]()
+    values: Buffer[int] = ppy.scan[Buffer[int]](count)
     tails: Buffer[int] = ppy.buffer[int](count)
     print(longest_increasing(values, tails))
 

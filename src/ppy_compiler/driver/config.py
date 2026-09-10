@@ -63,7 +63,7 @@ class LlvmConfig:
     #: body; "inline" keeps the per-operation guards in the body; "off" drops
     #: the overflow guards on data arithmetic (64-bit wrap) while keeping
     #: every bounds check. None means "the command decides": `ppy run`
-    #: defaults to hoisted, `ppy build` to off.
+    #: and `ppy build` both default to hoisted; `--unsafe` is off.
     safeguards: str | None = None
     #: "z3" asks the solver to prove overflow guards away where the ranges
     #: and relations the analysis established allow it; None or "off" emits

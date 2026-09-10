@@ -4,6 +4,58 @@
 
 Work toward the next release, on `dev`; alphas of it are tagged `v0.3.0aN`.
 
+- `ppy.input[T]()` reads one line and means what the builtin `input()`
+  means: `ppy.input[str]()` is the line with its newline removed, spaces
+  kept, `""` for an empty line, `EOFError` at the end; `ppy.input[int]()`
+  and `[float]` parse the whole line as `int(input())` and `float(input())`
+  do, so `1 2` is `ValueError`; `ppy.input[tuple[int, int]]()` splits one
+  line and requires exactly its fields, never reaching into the next. The
+  scanner the old `ppy.input` was is `ppy.scan[T]()`: tokens wherever they
+  fall, `ppy.scan[Buffer[int]](n)` for n of them into a buffer. A converted
+  program therefore reads what it read as Python -- `ppy convert` no longer
+  turns a loop of `int(input())` into a bulk scan that would read across
+  lines. A line of fields is a line read too: `ppy.input[list[int]]()` is
+  `list(map(int, input().split()))`, and `ppy.input[Buffer[int]]()` reads a
+  line of integers straight into a buffer, as
+  `array.array("q", map(int, input().split()))` would, with no count to
+  give and no Python object per field; the converter writes both idioms so.
+  A tuple of `int` is read the same way, in C; a typed read is planned once
+  per type, so a read in a loop costs the read and nothing else. Integer
+  fields read in C are ASCII and 64-bit, the one place the typed read is
+  narrower than `int()`.
+  `ppy.read_ints` and `ppy.read_token` stay the buffer-oriented forms;
+  `read_token` cuts a token at the buffer's capacity and says so.
+- One scanner grammar, implemented once in C (`ppy_runtime.scanner`) for
+  the runtime's compiled reader and for a standalone binary's runtime alike,
+  and once more in the pure-Python fallback: whitespace is ASCII, an
+  integer token is `[+-]?[0-9]+` within 64 bits, and a token that is not an
+  integer where one is expected is `ValueError` naming it -- the compiled
+  reader no longer skips over `abc` to find the `3` after it while the
+  fallback raised. A high-level string read is never cut: `ppy.input[str]()`
+  and `ppy.scan[str]()` read a line or a token of any length, where the old
+  scalar read cut at 4096 bytes and dropped the rest.
+- `ppy.check[T](value)` validates all the way down: a `list[int]` element by
+  element, a `dict[str, float]` key and value, a tuple field by field, a
+  dataclass field by field, a union member by member. A `T` it cannot
+  validate soundly -- a callable, an iterator, a protocol -- is refused
+  rather than checked in part. `ppy.assume[T](value)` is the unchecked
+  crossing, typed on the programmer's word alone; the checker types both and
+  gives only `check` the `TypeError` it may raise.
+- `ppy run` and `ppy build` mean the same program: both keep Python's
+  integer semantics by default, and `--unsafe` on either is the one spelling
+  of 64-bit wrap semantics. `build --safe` is gone, having become the
+  default. A standalone build keeps the guards too, and a guard that fails
+  ends the process with a message rather than wrapping in silence; the
+  benchmarks that want wrap semantics build with `--unsafe` and say so.
+- `examples/compare.py` holds every counterpart to one answer before it
+  prints a timing: a tool that fails, answers differently from itself
+  between runs, answers differently from the reference, or prints no timing
+  for a kernel is an error and the exit status is 1.
+- The guide splits into "Reading input" and "Native lowering"; the example
+  count on the landing pages is generated from the tree; the native-memory
+  guide names every pointer element width the runtime supports; `ppy.buffer`,
+  `ppy.scan`, and `ppy.assume` are declared in the package's public surface.
+
 - `cuda.device_alloc[T](n)`: memory that lives on the device between
   launches. It is a `native.ptr[T]` like `stack_alloc`'s -- the same loops
   fill and read it, `native.offset` keeps its kind -- and the host sees it
@@ -52,7 +104,7 @@ Work toward the next release, on `dev`; alphas of it are tagged `v0.3.0aN`.
 - The project scan skips a virtual environment by any name -- a directory
   holding `pyvenv.cfg` -- not only `.venv` and `venv`; a second environment
   kept beside the first no longer costs a scan of every package in it.
-- `ppy.input[T]()` takes no argument, and `ppy.input[Buffer[T]](n)` takes
+- `ppy.input[T]()` takes no argument, and `ppy.scan[Buffer[int]](n)` takes
   only how many values to read: reading and printing are two things, so a
   prompt is a `print` before the read rather than an argument that meant a
   prompt for one type and a count for another. The checker says so (`E1305`
@@ -60,8 +112,7 @@ Work toward the next release, on `dev`; alphas of it are tagged `v0.3.0aN`.
   that is not an `int`), and the converter writes `input("p")`'s prompt as
   `print("p", end="", flush=True)` before the statement that reads -- or,
   inside a loop's test or a comprehension, as the one-expression
-  `print(...) or ppy.input[T]()` so it still prints each time. A fill loop
-  whose reads carry a prompt stays a loop rather than becoming one bulk read.
+  `print(...) or ppy.input[T]()` so it still prints each time.
 - The C backend writes structured code. Loops are `while`, branches are
   `if`/`else` with `break`, `continue`, and `return`, rebuilt from the IR's
   dominator tree and loops; a stack slot that is only loaded and stored is a

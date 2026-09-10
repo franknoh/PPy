@@ -793,20 +793,35 @@ def test_a_typed_read_takes_a_count_for_a_buffer_and_nothing_otherwise(write, co
         from ppy import Buffer
 
         def fine(n: int) -> int:
-            values = ppy.input[Buffer[int]](n)
-            return ppy.input[int]() + len(values)
+            values = ppy.scan[Buffer[int]](n)
+            a, b = ppy.input[tuple[int, int]]()
+            line = ppy.input[Buffer[int]]()
+            listed = ppy.input[list[int]]()
+            return ppy.input[int]() + ppy.scan[int]() + len(values) + a + b + len(line) + len(listed)
 
         def prompted() -> int:
             return ppy.input[int]("n? ")
 
+        def scanned_with_a_prompt() -> int:
+            return ppy.scan[int]("n? ")
+
         def uncounted() -> int:
-            return len(ppy.input[Buffer[int]]())
+            return len(ppy.scan[Buffer[int]]())
 
         def miscounted() -> int:
-            return len(ppy.input[Buffer[int]]("3"))
+            return len(ppy.scan[Buffer[int]]("3"))
+
+        def not_a_line(n: int) -> int:
+            return len(ppy.input[Buffer[int]](n))
+
+        def not_a_line_type() -> int:
+            return len(ppy.input[dict[int, int]]())
+
+        def not_a_line_of_integers() -> int:
+            return len(ppy.input[Buffer[float]]())
         """,
     )
-    assert codes(path) == ["E1305", "E1305", "E1301"]
+    assert codes(path) == ["E1305", "E1305", "E1305", "E1301", "E1305", "E1305", "E1305"]
 
 
 def test_call_arity_and_argument_types_are_checked(write, codes):

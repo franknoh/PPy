@@ -25,7 +25,7 @@ jit = true
 lto = "thin"
 cpython-api = "version-specific"
 host-cpu = false                  # build for this machine, not the baseline
-# safeguards = "hoisted"          # unset: the command decides (see below)
+# safeguards = "hoisted"          # unset: hoisted; --unsafe is "off" for one run
 # prover = "off"                 # "z3" proves overflow guards away; needs ppy-lang[solver]
 
 [tool.ppy.parallel]
@@ -57,7 +57,7 @@ enabled = true                    # any other keys are plugin options
 | `python` | `>=3.12,<3.15` | the CPython versions the project promises to run on. |
 | `strict` | `true` | implicit `Any` and unsound constructs are errors; `--no-strict` downgrades the ones with a sound fallback. |
 | `opt-level` | `2` | project default, overridden per run by `-O` and per function by `@ppy.opt(n)`. |
-| `llvm.safeguards` | per command | `hoisted` proves the extreme cases once in a guard block ahead of the loop; `inline` keeps every per-operation guard in the body; `off` drops the overflow guards on data arithmetic — 64-bit wrap semantics — while keeping every bounds check. Unset, the command decides: `ppy run` uses `hoisted` (Python integers, bit for bit), `ppy build` uses `off` (a wrap-semantics artifact, like every native compiler); `run --unsafe` and `build --safe` flip them per invocation. |
+| `llvm.safeguards` | per command | `hoisted` proves the extreme cases once in a guard block ahead of the loop; `inline` keeps every per-operation guard in the body; `off` drops the overflow guards on data arithmetic — 64-bit wrap semantics — while keeping every bounds check. Unset, both `ppy run` and `ppy build` use `hoisted` (Python integers, bit for bit); `--unsafe` on either is `off` for that invocation. |
 | `llvm.prover` | `off` | `z3` proves overflow guards away where the ranges the analysis established allow it: a chain of `+`, `-`, `*` over values with declared ranges and `range()` bounds that provably fits a 64-bit word is emitted without its guard, and the function checks its parameters' declared ranges once on entry so that a call outside them takes the fallback. Needs `ppy-lang[solver]`; without the solver the setting is an error. Never runs in `ppy check`. |
 | `plugins.<name>.enabled` | builtin: `true`; external: unset | a builtin plugin (`numpy`, `torch`, `jax`, `uvicorn`, `pydantic`, `scipy`, `pandas`, `pyarrow`) runs unless disabled; an installed external plugin runs only when its section exists and does not disable it. |
 | `generics.max-specializations` | `64` | how many distinct type-argument tuples one generic may be called with before `E1722`. |

@@ -48,6 +48,9 @@ extra:
     provider: mike
     default: latest
 
+hooks:
+  - docs/gen/counts.py
+
 plugins:
   - search
   - gen-files:
@@ -104,7 +107,8 @@ nav:
       - XLA: guide/xla.md
       - Generics: guide/generics.md
       - Effects and the three paths: guide/effects.md
-      - Input and native lowering: guide/native-lowering.md
+      - Reading input: guide/input.md
+      - Native lowering: guide/native-lowering.md
       - Regular expressions: guide/regex.md
   - Examples:
       - howto/index.md

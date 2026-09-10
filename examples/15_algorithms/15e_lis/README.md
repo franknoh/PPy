@@ -15,11 +15,14 @@ the whole kernel is one native loop nest over a borrowed buffer.
 
 ## The read
 
-The read loop in the source — one `int(input())` per value — converted into
-a single bulk `ppy.read_ints` over the same slots, which is where the
-standalone row gets its margin: a million integers go into memory without a
-Python object each. The [folder README](../README.md) says what the subset
-costs.
+The source reads its million values from one line with
+`array.array("q", map(int, input().split()))`, and the conversion writes
+that as `ppy.input[Buffer[int]]()`: the same line, the same `ValueError`
+for a field that is not an integer, and no Python object per value on the
+way into the buffer. The standalone variant in
+[`standalone/lis.ppy`](../standalone/lis.ppy) reads the block with
+`ppy.scan[Buffer[int]](count)` instead, which is what a standalone binary
+lowers today. The [folder README](../README.md) says what the subset costs.
 
 ## Numbers
 
@@ -33,12 +36,12 @@ begins.
 
 | path | wall |
 |---|---:|
-| plain CPython | 507.0 ± 10.7 ms |
-| `ppy run` | 166.0 ± 151.2 ms |
-| `ppy build` | 102.9 ± 4.2 ms |
-| `ppy build --standalone` | **35.9 ± 0.8 ms** |
-| C (`gcc -O3`, `scanf`) | 59.0 ± 2.8 ms |
-| C (`clang -O3`, `scanf`) | 55.5 ± 1.7 ms |
+| plain CPython | 505.3 ± 9.2 ms |
+| `ppy run` | 166.6 ± 137.5 ms |
+| `ppy build --unsafe` | 90.5 ± 1.6 ms |
+| `ppy build --standalone --unsafe` | **38.2 ± 0.3 ms** |
+| C (`gcc -O3`, `scanf`) | 56.1 ± 0.6 ms |
+| C (`clang -O3`, `scanf`) | 53.9 ± 0.9 ms |
 
 ## Run it
 

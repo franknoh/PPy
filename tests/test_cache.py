@@ -306,8 +306,8 @@ def test_an_object_file_is_reused_rather_than_regenerated(tmp_path: Path):
     path = tmp_path / "hot.ppy"
     project = open_project(path)
     # The probe must speak the same cache-key dialect as `ppy build`, whose
-    # default guard mode is the wrap-semantics `off`.
-    project.config.llvm.safeguards = "off"
+    # default guard mode is `hoisted`, as `ppy run`'s is.
+    project.config.llvm.safeguards = "hoisted"
     bundle = analyze_paths(project, [path], backend="llvm")
     store = bundle.project.store
     assert store.read(_program_object_key(bundle, ["hot"], 3)) is not None
@@ -391,8 +391,8 @@ def test_a_rebuild_with_no_change_recompiles_nothing(tmp_path: Path):
     sources = list(collect_sources(tmp_path / "src", ppy_only=True))
     project = open_project(tmp_path / "src")
     # The probe must speak the same cache-key dialect as `ppy build`, whose
-    # default guard mode is the wrap-semantics `off`.
-    project.config.llvm.safeguards = "off"
+    # default guard mode is `hoisted`, as `ppy run`'s is.
+    project.config.llvm.safeguards = "hoisted"
     bundle = analyze_paths(project, sources, backend="llvm")
     assert _cached_lowering(bundle, "hot", 3) is not None, "lowering was not cached"
     program = _program_object_key(bundle, ["hot"], 3)
@@ -421,8 +421,8 @@ def test_only_the_changed_module_is_recompiled(tmp_path: Path):
         sources = list(collect_sources(tmp_path / "src", ppy_only=True))
         project = open_project(tmp_path / "src")
         # The probe must speak the same cache-key dialect as `ppy build`,
-        # whose default guard mode is the wrap-semantics `off`.
-        project.config.llvm.safeguards = "off"
+        # whose default guard mode is `hoisted`, as `ppy run`'s is.
+        project.config.llvm.safeguards = "hoisted"
         bundle = analyze_paths(project, sources, backend="llvm")
         return {
             name: _object_key(module_cache_key(bundle, name, target="llvm", opt_level=3))

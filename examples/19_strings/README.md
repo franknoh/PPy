@@ -69,7 +69,8 @@ True False
 
 <!-- outputs:end -->
 
-Read on: [Input and native lowering](../../docs/guide/native-lowering.md) ·
+Read on: [Reading input](../../docs/guide/input.md) ·
+[Native lowering](../../docs/guide/native-lowering.md) ·
 [Algorithms: substring search](../15_algorithms/15c_kmp/README.md)
 
 `strings.ppy` is hand-written; there is no `.py` source and no conversion step.

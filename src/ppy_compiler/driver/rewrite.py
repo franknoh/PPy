@@ -176,13 +176,21 @@ def _printed(prompt: str) -> str:
 class _TypedReads(cst.CSTTransformer):
     """Rewrite the `input()` idioms into `ppy.input[T]`.
 
-    `int(input())` is what a submission writes and what it means is `read an
-    integer`; saying so lets the value be read without a Python object per
-    field. The originals are matched, not the rewritten children, so the
-    inner `input()` of `int(input())` is not rewritten twice. A prompt is a
+    `int(input())` is what a submission writes and what it means is `read
+    one line as an integer`; `ppy.input[int]()` says so and means exactly
+    that -- the line, the whole line, `ValueError` for anything else -- so
+    the converted program reads what it read before. A line of fields is a
+    line read too: `list(map(int, input().split()))` is `ppy.input[list[int]]()`,
+    `[int(x) for x in input().split()]` the same, and
+    `array.array("q", map(int, input().split()))` is `ppy.input[Buffer[int]]()`,
+    which reads the line into the buffer without a Python object per field.
+    The originals are matched, not the rewritten children, so the inner
+    `input()` of `int(input())` is not rewritten twice. A prompt is a
     `print` before the statement that reads; where the read is not in a
     plain statement -- a loop's test, a comprehension -- it is the
     one-expression `print(...) or ppy.input[T]()`, which prints each time.
+    Nothing here turns a line read into a token scan: `ppy.scan` reads
+    across lines, which is not what `input()` did.
     """
 
     def __init__(self) -> None:
@@ -226,14 +234,23 @@ class _TypedReads(cst.CSTTransformer):
         self.hoisting.pop()
         return updated
 
-    visit_Lambda = visit_ListComp = visit_SetComp = visit_DictComp = visit_GeneratorExp = _nested
-    leave_Lambda = leave_ListComp = leave_SetComp = leave_DictComp = leave_GeneratorExp = _unnested
+    visit_Lambda = visit_SetComp = visit_DictComp = visit_GeneratorExp = _nested
+    leave_Lambda = leave_SetComp = leave_DictComp = leave_GeneratorExp = _unnested
 
     def visit_Call(self, node: cst.Call) -> bool:
         inner = _wrapped_read(node)
+        if inner is None:
+            listed = _listed_read(node)
+            inner = listed[1] if listed is not None else None
         if inner is not None:
             self.claimed.add(id(inner))
         return True
+
+    def visit_ListComp(self, node: cst.ListComp) -> bool:
+        read = _split_line(node.for_in.iter)
+        if read is not None and _comprehended(node) is not None:
+            self.claimed.add(id(read))
+        return self._nested(node)
 
     def leave_Call(self, original: cst.Call, updated: cst.Call) -> cst.BaseExpression:
         if id(original) in self.claimed:
@@ -244,11 +261,20 @@ class _TypedReads(cst.CSTTransformer):
             return self._read(_READ_AS[original.func.value], list(inner.args))
         if _is_input_call(original) is not None:
             return self._read("str", list(original.args))
+        listed = _listed_read(original)
+        if listed is not None:
+            spec, read = listed
+            return self._read(spec, list(read.args))
         return updated
 
-    def leave_For(self, original: cst.For, updated: cst.For) -> cst.BaseStatement:
-        bulk = _filling_loop(original)
-        return bulk if bulk is not None else updated
+    def leave_ListComp(self, original: cst.ListComp, updated: cst.ListComp) -> cst.BaseExpression:
+        """`[int(x) for x in input().split()]` reads a list of that element."""
+        self.hoisting.pop()
+        element = _comprehended(original)
+        read = _split_line(original.for_in.iter)
+        if element is None or read is None:
+            return updated
+        return self._read(f"list[{element}]", list(read.args))
 
     def leave_Assign(self, original: cst.Assign, updated: cst.Assign) -> cst.Assign:
         """`a, b = map(int, input().split())` reads a tuple of that width."""
@@ -263,57 +289,36 @@ class _TypedReads(cst.CSTTransformer):
         return updated.with_changes(value=spec)
 
 
-def _filling_loop(node: cst.For) -> cst.BaseStatement | None:
-    """`for i in range(n): xs[i] = int(input())` is one bulk read.
-
-    Filling a buffer one value at a time pays the boundary per element; the
-    same values land in the same slots in one call. The slice keeps it exact:
-    the loop wrote `n` entries, so the read fills `n` entries.
-    """
-    index = node.target
-    if not isinstance(index, cst.Name) or node.orelse is not None:
+def _comprehended(node: cst.ListComp) -> str | None:
+    """`[T(x) for x in ...]` with nothing else in it: what `T` reads, or None."""
+    comprehension = node.for_in
+    element = node.elt
+    if (
+        comprehension.ifs
+        or comprehension.inner_for_in is not None
+        or not isinstance(comprehension.target, cst.Name)
+        or not isinstance(element, cst.Call)
+        or not isinstance(element.func, cst.Name)
+        or element.func.value not in _READ_AS
+        or len(element.args) != 1
+        or not isinstance(element.args[0].value, cst.Name)
+        or element.args[0].value.value != comprehension.target.value
+    ):
         return None
-    iterated = node.iter
-    if not isinstance(iterated, cst.Call) or not isinstance(iterated.func, cst.Name):
-        return None
-    if iterated.func.value != "range" or len(iterated.args) != 1:
-        return None
-    body = node.body
-    if not isinstance(body, cst.IndentedBlock) or len(body.body) != 1:
-        return None
-    line = body.body[0]
-    if not isinstance(line, cst.SimpleStatementLine) or len(line.body) != 1:
-        return None
-    assign = line.body[0]
-    if not isinstance(assign, cst.Assign) or len(assign.targets) != 1:
-        return None
-    written = assign.targets[0].target
-    if not isinstance(written, cst.Subscript) or len(written.slice) != 1:
-        return None
-    subscript = written.slice[0].slice
-    if not isinstance(subscript, cst.Index) or not isinstance(subscript.value, cst.Name):
-        return None
-    if subscript.value.value != index.value:
-        return None
-    read = assign.value
-    if not isinstance(read, cst.Call) or not isinstance(read.func, cst.Name):
-        return None
-    if read.func.value != "int" or len(read.args) != 1:
-        return None
-    inner = _is_input_call(read.args[0].value)
-    if inner is None or inner.args:
-        # A prompt per element is a loop that prints; one bulk read would drop it.
-        return None
-
-    code = cst.Module(body=())
-    buffer = code.code_for_node(written.value)
-    bound = code.code_for_node(iterated.args[0].value)
-    filled = buffer if bound == f"len({buffer})" else f"memoryview({buffer})[:{bound}]"
-    return cst.parse_statement(f"ppy.read_ints({filled})")
+    return _READ_AS[element.func.value]
 
 
-def _mapped_read(value: cst.BaseExpression, width: int) -> cst.BaseExpression | None:
-    """`map(T, input().split())` over a fixed number of targets."""
+def _split_line(value: cst.BaseExpression) -> cst.Call | None:
+    """The `input(...)` of `input(...).split()`, or None."""
+    if not isinstance(value, cst.Call) or not isinstance(value.func, cst.Attribute):
+        return None
+    if value.func.attr.value != "split" or value.args:
+        return None
+    return _is_input_call(value.func.value)
+
+
+def _mapped_fields(value: cst.BaseExpression) -> tuple[str, cst.Call] | None:
+    """`map(T, input().split())`: the element `T` reads, and the `input(...)`."""
     if not isinstance(value, cst.Call) or not isinstance(value.func, cst.Name):
         return None
     if value.func.value != "map" or len(value.args) != 2:
@@ -321,15 +326,48 @@ def _mapped_read(value: cst.BaseExpression, width: int) -> cst.BaseExpression | 
     caster = value.args[0].value
     if not isinstance(caster, cst.Name) or caster.value not in _READ_AS:
         return None
-    split = value.args[1].value
-    if not isinstance(split, cst.Call) or not isinstance(split.func, cst.Attribute):
+    read = _split_line(value.args[1].value)
+    if read is None:
         return None
-    if split.func.attr.value != "split" or split.args:
+    return _READ_AS[caster.value], read
+
+
+def _mapped_read(value: cst.BaseExpression, width: int) -> cst.BaseExpression | None:
+    """`map(T, input().split())` over a fixed number of targets."""
+    mapped = _mapped_fields(value)
+    if mapped is None:
         return None
-    if _is_input_call(split.func.value) is None:
-        return None
-    element = _READ_AS[caster.value]
+    element, _read = mapped
     return _expression(f"ppy.input[tuple[{', '.join([element] * width)}]]()")
+
+
+def _listed_read(node: cst.Call) -> tuple[str, cst.Call] | None:
+    """`list(map(T, input().split()))` and `array.array("q", map(int, input().split()))`.
+
+    The first is a list of what the line holds; the second is the line read
+    straight into a buffer of 64-bit integers, which is what `"q"` is.
+    """
+    if isinstance(node.func, cst.Name) and node.func.value == "list" and len(node.args) == 1:
+        mapped = _mapped_fields(node.args[0].value)
+        if mapped is None:
+            return None
+        element, read = mapped
+        return f"list[{element}]", read
+    is_array = (
+        isinstance(node.func, cst.Attribute)
+        and isinstance(node.func.value, cst.Name)
+        and node.func.value.value == "array"
+        and node.func.attr.value == "array"
+    ) or (isinstance(node.func, cst.Name) and node.func.value == "array")
+    if not is_array or len(node.args) != 2:
+        return None
+    typecode = node.args[0].value
+    if not isinstance(typecode, cst.SimpleString) or typecode.evaluated_value != "q":
+        return None
+    mapped = _mapped_fields(node.args[1].value)
+    if mapped is None or mapped[0] != "int":
+        return None
+    return "Buffer[int]", mapped[1]
 
 
 def convert_source(source: str, plan: ConversionPlan) -> str:

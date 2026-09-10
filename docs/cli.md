@@ -25,9 +25,9 @@ ppy run FILE.ppy [-- ARGS...]    # compile through LLVM, then run
 ```
 
 Everything after `--` reaches the program as `sys.argv[1:]`. `ppy run`
-keeps Python-integer semantics by default; `--unsafe` drops the overflow
-guards on data arithmetic (64-bit wrap, bounds checks stay), and
-`--safeguards {hoisted,inline,off}` names the guard mode outright.
+keeps Python-integer semantics by default, as `ppy build` does; `--unsafe`
+drops the overflow guards on data arithmetic (64-bit wrap, bounds checks
+stay), and `--safeguards {hoisted,inline,off}` names the guard mode outright.
 `--prover {off,z3}` asks the solver to prove overflow guards away where the
 analysis allows it, overriding `[tool.ppy.llvm] prover`; see [Where a solver fits](internals/solver.md).
 
@@ -163,7 +163,7 @@ and which stayed boxed, with the reason.
 ## `ppy build` — compile without running
 
 ```bash
-ppy build TARGET [--safe] [--host-cpu] [--standalone]
+ppy build TARGET [--unsafe] [--host-cpu] [--standalone]
                  [--target TRIPLE] [--python-extension] [--library]
                  [--backend {llvm,python}] [-o DIR]
                  [--sanitize KINDS] [--pgo FILE]
@@ -174,11 +174,12 @@ ppy build foo.ppyir                  # from the IR alone; see `ppy emit`
 
 `--backend llvm` (default) writes objects, `libppy_<project>.so`,
 `ppy-bindings.json`, a launcher, and -- when a function is
-`@ppy.native.export`ed -- a C header declaring the public symbols. A build is a wrap-semantics artifact by
-default — data arithmetic overflows at 64 bits like every native compiler's
-output, while bounds checks stay; `--safe` keeps Python's integers
-bit-for-bit instead, and the launcher always runs with exactly the mode it
-was built with. It is a native executable that embeds the
+`@ppy.native.export`ed -- a C header declaring the public symbols. A build
+keeps Python's integers bit-for-bit, exactly as `ppy run` does: overflow is
+guarded and falls back to arbitrary precision. `--unsafe` is the same flag
+it is on `run` -- data arithmetic wraps at 64 bits like every native
+compiler's output, while bounds checks stay -- and the launcher always runs
+with exactly the mode it was built with. It is a native executable that embeds the
 interpreter and is `ppy run` in a compiled coat: it enters the same CLI, the
 same pipeline, and the same guarded bindings, and only takes its machine code
 from the library built next to it instead of a JIT (`ppy run --prebuilt
@@ -251,7 +252,7 @@ ppy build --warm train/reward.ppy
 Builds ahead of time exactly what `ppy run FILE` and `import ppy` build on
 their first use -- the artifact in the project cache, under the key an
 import of that module will look for -- and stops. It takes no flags that
-would change the artifact (`--safe`, `--host-cpu`, `--prover`, `-o`, and
+would change the artifact (`--unsafe`, `--host-cpu`, `--prover`, `-o`, and
 the rest are refused): an import takes none either, so the project
 configuration is the only thing that names the build, and what a flag built
 nothing would find. Its place is the step before a launch that starts many
@@ -279,14 +280,17 @@ lower, plus `print` of integers, booleans, and string literals through C
 shims (floats wait until native formatting can reproduce Python's
 shortest-round-trip repr exactly), plus the memory the program makes for
 itself — `ppy.buffer[int](n)` is a zeroed native allocation here and
-`ppy.input[Buffer[int]](n)` is that allocation with the input read straight
+`ppy.scan[Buffer[int]](n)` is that allocation with the input read straight
 into it, because there is no `array.array` to build. Anything else is `E1803` with the path
 that reaches it, never a workaround. There is no Python to fall back to, so
-in `--safe` mode a failed guard aborts with a message instead of retrying
-in Python; `ppy.input[int]()` reads through the C support rather than the
-runtime's reader, and answers 0 at end of input because there is no
-exception to raise; the default wrap-semantics build has almost no guards left to
-fail.
+a failed guard ends the process with a message on standard error instead of
+retrying in Python -- a standalone build keeps the guards, like every
+build, and never claims Python's integers it cannot provide; `--unsafe`
+asks for wrap semantics outright, with almost no guards left to fail.
+`ppy.input[int]()` and `ppy.scan[int]()` are the scanner itself, the same
+C the runtime's reader compiles, and where Python would raise -- the end
+of the input, a token that is not an integer -- the binary says so on
+standard error and stops.
 
 Five of the six problems in `examples/15_algorithms` build this way once
 their buffers come from `ppy.buffer` rather than `array.array`, and four of

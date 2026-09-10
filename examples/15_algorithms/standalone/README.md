@@ -40,7 +40,7 @@ against the problem sources instead of being held to that comparison.
 15c (KMP) is the one that is missing, and not for its memory — it already
 holds its four million characters in a `Buffer[ppy.i8]`, one byte each. Its
 text arrives as a token, and `ppy.read_token` has no standalone lowering
-yet; `ppy.read_ints` does, which is why the other five are here.
+yet; `ppy.scan[Buffer[int]]` does, which is why the other five are here.
 
 ## Build one
 

@@ -21,7 +21,7 @@ def scratch() -> int:
 
 | | |
 |---|---|
-| `native.ptr[T]`, `native.const_ptr[T]` | a typed pointer; `T` is `int`, `float`, `bool`, `ppy.i8`, or `ppy.u8`. A `const_ptr` refuses `store` (`E1631`). |
+| `native.ptr[T]`, `native.const_ptr[T]` | a typed pointer; `T` is `int`, `float`, `bool`, or any fixed-width marker -- `ppy.i8`, `u8`, `i16`, `u16`, `i32`, `u32`, `i64`, `u64`, `f32`, `f64` -- each stored at its own width. A `const_ptr` refuses `store` (`E1631`). |
 | `native.load(p)`, `native.store(p, v)`, `native.offset(p, n)` | read, write, move. Reading a byte hands out an `int`, as a buffer does. |
 | `native.cast[U](p)` | the same memory read as `U`. |
 | `native.sizeof[T]()`, `native.alignof[T]()` | constants the checker knows. |

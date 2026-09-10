@@ -2234,12 +2234,18 @@ def test_convert_reads_input_by_type(workspace: Path):
     source.write_text(
         textwrap.dedent(
             """
+            import array
+
+
             def main():
                 count = int(input())
                 a, b = map(int, input().split())
                 name = input()
                 ratio = float(input("ratio? "))
-                print(count, a + b, name, ratio)
+                values = list(map(int, input().split()))
+                words = [str(w) for w in input("words? ").split()]
+                data = array.array("q", map(int, input("data? ").split()))
+                print(count, a + b, name, ratio, values, words, sum(data))
 
 
             main()
@@ -2257,6 +2263,67 @@ def test_convert_reads_input_by_type(workspace: Path):
     assert 'print("ratio? ", end="", flush=True)\n' in converted
     assert "ratio: float = ppy.input[float]()" in converted
     assert converted.index('print("ratio? "') < converted.index("ratio: float = ppy.input")
+    # A line of fields is a line read too, into a list or straight into a buffer.
+    assert "values: list[int] = ppy.input[list[int]]()" in converted
+    assert "words: list[str] = ppy.input[list[str]]()" in converted
+    assert "data: Buffer[int] = ppy.input[Buffer[int]]()" in converted
+    assert converted.count('print("words? "') == 1 and converted.count('print("data? "') == 1
+
+
+def test_a_converted_reader_reads_what_the_python_read(workspace: Path):
+    """The conversion preserves `input()` semantics: same answers, same errors."""
+    source = workspace / "same.py"
+    source.write_text(
+        textwrap.dedent(
+            """
+            import array
+
+
+            def main():
+                count = int(input())
+                a, b = map(int, input().split())
+                name = input()
+                ratio = float(input("ratio? "))
+                values = array.array("q", map(int, input().split()))
+                print(count, a + b, repr(name), ratio, list(values))
+
+
+            main()
+            """
+        ).lstrip("\n"),
+        encoding="utf-8",
+    )
+    assert _ppy(["convert", "same.py"], workspace).returncode == 0
+    for text in (
+        "3\n1 2\n a name \n2.5\n 7 8 9 \n",
+        "3\n1 2\n a name \n2.5\n\n",
+        "3\n1 2\n a name \n2.5\n7 x\n",
+        "3\n1 2\n a name \n2.5\n99999999999999999999\n",
+        "3\n1 2 3\nx\n1\n",
+        "3 4\n1 2\nx\n1\n",
+        "3\n",
+    ):
+        python = subprocess.run(
+            [sys.executable, "same.py"],
+            cwd=workspace,
+            input=text,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        ours = subprocess.run(
+            [sys.executable, "-m", "ppy_compiler", "run", "same.ppy"],
+            cwd=workspace,
+            input=text,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert ours.stdout == python.stdout, (text, ours.stderr)
+        assert (ours.returncode == 0) == (python.returncode == 0), (text, ours.stderr)
+        if python.returncode != 0:
+            kind = python.stderr.strip().splitlines()[-1].split(":")[0]
+            assert kind in ours.stderr, (kind, ours.stderr)
 
 
 def test_a_module_that_also_reads_stdin_keeps_its_input(workspace: Path):

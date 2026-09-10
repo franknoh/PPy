@@ -12,6 +12,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from ppy_runtime.scanner import FUNCTIONS, INTERNAL, STATEFUL
+
 __all__ = ["SHIMS", "Shim", "definition", "program_main", "support_source"]
 
 
@@ -34,20 +36,6 @@ class Shim:
         return f"{storage}{result}{name}({', '.join(self.parameters) or 'void'})"
 
 
-_NEXT = """{
-    static char room[1 << 16];
-    static long filled = 0;
-    static long position = 0;
-    if (position == filled) {
-        filled = (long)fread(room, 1, sizeof room, stdin);
-        if (filled <= 0) {
-            return -1;
-        }
-        position = 0;
-    }
-    return (unsigned char)room[position++];
-}"""
-
 _ALLOC = """{
     if (count < 0) {
         /* CPython raises ValueError here; a standalone binary has no
@@ -61,52 +49,6 @@ _ALLOC = """{
         exit(1);
     }
     return (int64_t *)room;
-}"""
-
-_READ_INTS = """{
-    int64_t count = 0;
-    while (count < capacity) {
-        int c = ppy_rt_next();
-        while (c != -1 && (c < '0' || c > '9') && c != '-') {
-            c = ppy_rt_next();
-        }
-        if (c == -1) {
-            break;
-        }
-        int negative = 0;
-        if (c == '-') {
-            negative = 1;
-            c = ppy_rt_next();
-        }
-        int64_t value = 0;
-        while (c >= '0' && c <= '9') {
-            value = value * 10 + (c - '0');
-            c = ppy_rt_next();
-        }
-        data[count++] = negative ? -value : value;
-    }
-    return count;
-}"""
-
-_READ_INT = """{
-    int c = ppy_rt_next();
-    while (c != -1 && (c < '0' || c > '9') && c != '-') {
-        c = ppy_rt_next();
-    }
-    if (c == -1) {
-        return 0;
-    }
-    int negative = 0;
-    if (c == '-') {
-        negative = 1;
-        c = ppy_rt_next();
-    }
-    int64_t value = 0;
-    while (c >= '0' && c <= '9') {
-        value = value * 10 + (c - '0');
-        c = ppy_rt_next();
-    }
-    return negative ? -value : value;
 }"""
 
 SHIMS: dict[str, Shim] = {
@@ -124,28 +66,25 @@ SHIMS: dict[str, Shim] = {
     ),
     "ppy_rt_print_sep": Shim("void", (), "{ fputc(' ', stdout); }", ("stdio.h",)),
     "ppy_rt_print_nl": Shim("void", (), "{ fputc('\\n', stdout); }", ("stdio.h",)),
-    "ppy_rt_next": Shim("int", (), _NEXT, ("stdio.h",), stateful=True),
     "ppy_rt_alloc": Shim(
         "int64_t *", ("int64_t count", "int64_t width"), _ALLOC, ("stdio.h", "stdlib.h")
     ),
-    "ppy_rt_read_ints": Shim(
-        "int64_t",
-        ("int64_t *data", "int64_t capacity"),
-        _READ_INTS,
-        ("stdio.h",),
-        needs=("ppy_rt_next",),
-        stateful=True,
-    ),
-    "ppy_rt_read_int": Shim(
-        "int64_t", (), _READ_INT, ("stdio.h",), needs=("ppy_rt_next",), stateful=True
-    ),
+    # The scanner, the same text `ppy._io` compiles for a program under CPython.
+    **{
+        name: Shim(result, parameters, body, headers, needs=needs, stateful=name in STATEFUL)
+        for name, (result, parameters, body, headers, needs) in FUNCTIONS.items()
+    },
 }
 
 _COMMENTS = {
     "ppy_rt_next": (
-        "/* `ppy.input[int]()` with no interpreter under it: the same buffered scan\n"
-        " * the runtime reader does, reading standard input directly. At end of input\n"
-        " * it answers 0, because a standalone binary has no exception to raise. */\n"
+        "/* The buffered byte source behind `ppy.input` and `ppy.scan` with no\n"
+        " * interpreter under them: the same scanner the runtime reader compiles,\n"
+        " * reading standard input directly. */\n"
+    ),
+    "ppy_rt_fail": (
+        "/* Where Python would raise, a standalone binary says what happened and\n"
+        " * stops: there is no exception to raise and no caller to catch it. */\n"
     ),
     "ppy_rt_alloc": (
         "/* A buffer a standalone program makes for itself. There is no interpreter\n"
@@ -157,7 +96,7 @@ _COMMENTS = {
 def definition(name: str, storage: str = "") -> str:
     """The C definition of one shim, with the storage class asked for."""
     shim = SHIMS[name]
-    internal = "static " if name == "ppy_rt_next" and not storage else storage
+    internal = "static " if name in INTERNAL and not storage else storage
     return f"{_COMMENTS.get(name, '')}{shim.prototype(name, internal)} {shim.source}\n"
 
 
