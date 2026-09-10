@@ -203,7 +203,7 @@ def test_device_memory_is_a_pointer_the_host_reads_and_writes_through(monkeypatc
     with pytest.raises(ValueError, match="how many"):
         cuda.device_alloc[int](-1)
     with pytest.raises(TypeError):
-        cuda.device_alloc[str]
+        cuda.device_alloc[str](1)
 
 
 @requires_llvm
