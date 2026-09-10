@@ -175,9 +175,35 @@ def test_the_checker_types_the_vocabulary_and_names_a_misuse(write, codes):
         def host(p: native.ptr[float], n: int) -> None:
             cuda.launch(bad, (1, 2, 3, 4), 8, p)
             cuda.launch(bad, n, 8, p, n)
+            q = cuda.device_alloc[float]()
+            r = cuda.device_alloc[str](n)
+            t = cuda.device_alloc[float, 4](n)
         """,
     )
-    assert codes(misused, backend="llvm") == ["E1644"] * 7
+    assert codes(misused, backend="llvm") == ["E1644"] * 10
+
+
+def test_device_memory_is_a_pointer_the_host_reads_and_writes_through(monkeypatch):
+    """Without a device, `device_alloc` is its mirror; every path sees one memory."""
+    from ppy_runtime import cuda as runtime
+
+    monkeypatch.setenv("PPY_NO_CUDA", "1")
+    monkeypatch.setattr(runtime, "_driver", None)
+    program = _program()
+    x = cuda.device_alloc[float](300)
+    y = hip.device_alloc[float](300)
+    assert isinstance(x, native.Pointer) and "on the device" in repr(x)
+    for i in range(300):
+        native.store(native.offset(x, i), float(i))
+        native.store(native.offset(y, i), 1.0)
+    assert isinstance(native.offset(y, 7), type(y)), "an offset keeps the kind"
+    program["run"](300, 2.0, x, y)
+    cuda.launch(program["saxpy"], 2, 256, 300, 2.0, x, y)
+    assert [native.load(native.offset(y, i)) for i in (0, 1, 299)] == [1.0, 5.0, 1197.0]
+    with pytest.raises(ValueError, match="how many"):
+        cuda.device_alloc[int](-1)
+    with pytest.raises(TypeError):
+        cuda.device_alloc[str]
 
 
 @requires_llvm

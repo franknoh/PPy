@@ -22,7 +22,10 @@ a kernel calls. `thread_id`, `block_id`, `block_dim`, and `global_id` say
 where a thread is. `cuda.launch(kernel, grid, block, *args)` runs the kernel
 over `grid` blocks of `block` threads and waits; a `native` pointer's whole
 array goes to the device and, when the pointer is mutable, comes back, so a
-launch means what the reference launch means.
+launch means what the reference launch means. `x` and `y` are made with
+`cuda.device_alloc[float](n)` instead: memory that lives on the device
+between launches, filled and read through the same `native.store` and
+`native.load`, so the launch passes an address and copies nothing.
 
 ## Shared memory, a barrier, a shuffle
 

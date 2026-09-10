@@ -403,6 +403,24 @@ def test_explain_reports_which_boundary_a_function_crosses(workspace: Path):
     assert "selects the specialization" in jitted.stdout
     assert "specializes on x" in jitted.stdout
 
+    (workspace / "par.ppy").write_text(
+        textwrap.dedent(
+            """
+            from ppy import Buffer, parallel
+
+
+            def squares(out: Buffer[int]) -> int:
+                for i in parallel.range(len(out)):
+                    out[i] = i * i
+                return out[len(out) - 1]
+            """
+        ).lstrip("\n"),
+        encoding="utf-8",
+    )
+    split = _ppy(["explain", "par.ppy:4"], workspace)
+    assert "llvm backend: native" in split.stdout, split.stdout
+    assert "parallel: accepted" in split.stdout
+
 
 def test_convert_propagates_types_through_a_call_chain(workspace: Path):
     (workspace / "chain.py").write_text(
