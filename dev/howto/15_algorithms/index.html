@@ -622,6 +622,8 @@
       
         
       
+        
+      
     
     
     
@@ -1019,6 +1021,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../../guide/input/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reading input
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../guide/native-lowering/" class="md-nav__link">
         
   
@@ -1026,7 +1056,7 @@
   <span class="md-ellipsis">
     
   
-    Input and native lowering
+    Native lowering
   
 
     
@@ -1823,10 +1853,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#ppy-build-and-standalone" class="md-nav__link">
+  <a href="#ppy-build-unsafe-and-standalone-unsafe" class="md-nav__link">
     <span class="md-ellipsis">
       
-        ppy build and --standalone
+        ppy build --unsafe and --standalone --unsafe
       
     </span>
   </a>
@@ -3710,10 +3740,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#ppy-build-and-standalone" class="md-nav__link">
+  <a href="#ppy-build-unsafe-and-standalone-unsafe" class="md-nav__link">
     <span class="md-ellipsis">
       
-        ppy build and --standalone
+        ppy build --unsafe and --standalone --unsafe
       
     </span>
   </a>
@@ -3813,7 +3843,7 @@ column:</p>
 <th>kernel</th>
 <th style="text-align: right;">plain</th>
 <th style="text-align: right;"><code>ppy run</code></th>
-<th style="text-align: right;"><code>ppy build</code></th>
+<th style="text-align: right;"><code>ppy build --unsafe</code></th>
 <th style="text-align: right;">C (<code>gcc -O3</code>)</th>
 <th style="text-align: right;">C (<code>clang -O3</code>)</th>
 </tr>
@@ -3888,7 +3918,7 @@ column:</p>
 <p>The native path is 9× to 160× faster than plain CPython on these eight, and
 all three paths print identical answers. Bold is the fastest cell in the
 row. <code>ppy run</code> keeps Python-integer semantics — overflow is guarded and
-falls back to arbitrary precision — and <code>ppy build</code> is the wrap-semantics
+falls back to arbitrary precision — and <code>ppy build --unsafe</code> is the wrap-semantics
 artifact, which is where collatz picks up its remaining 10 ms and knapsack
 its 1.4 ms; the other kernels are already guard-free in the loop and do not
 move. <code>--host-cpu</code> is within the noise on all eight.</p>
@@ -3914,7 +3944,7 @@ same. Bold is the fastest cell in the row.</p>
 <tr>
 <th>kernel</th>
 <th style="text-align: right;"><code>ppy run</code></th>
-<th style="text-align: right;"><code>ppy build</code></th>
+<th style="text-align: right;"><code>ppy build --unsafe</code></th>
 <th style="text-align: right;">Numba <code>@njit</code></th>
 <th style="text-align: right;">Mojo</th>
 <th style="text-align: right;">Codon</th>
@@ -3990,7 +4020,7 @@ same. Bold is the fastest cell in the row.</p>
 <p><code>ppy run</code> keeps Python's integers -- overflow is guarded and falls back to
 arbitrary precision -- and the other four columns wrap at 64 bits, which is
 where collatz picks up its 10 ms. Numba is the fastest column on six of the
-eight against <code>ppy build</code>, by ten to thirty percent; the Numba port is the
+eight against <code>ppy build --unsafe</code>, by ten to thirty percent; the Numba port is the
 PPY source with <code>@njit</code> in place of the annotations and NumPy arrays in
 place of <code>array.array</code>, timed after one warm call so its compile is not in
 the number. Codon takes the same source with <code>List[int]</code> annotations and
@@ -4014,8 +4044,8 @@ included. The C reference reads the same input with <code>scanf</code>.</p>
 <th></th>
 <th>problem</th>
 <th style="text-align: right;">plain</th>
-<th style="text-align: right;"><code>ppy build</code></th>
-<th style="text-align: right;"><code>--standalone</code></th>
+<th style="text-align: right;"><code>ppy build --unsafe</code></th>
+<th style="text-align: right;"><code>--standalone --unsafe</code></th>
 <th style="text-align: right;">C (<code>gcc</code>)</th>
 <th style="text-align: right;">C (<code>clang</code>)</th>
 </tr>
@@ -4024,56 +4054,56 @@ included. The C reference reads the same input with <code>scanf</code>.</p>
 <tr>
 <td><a href="https://github.com/franknoh/PPy/blob/main/examples/15_algorithms/15a_nqueens">15a</a></td>
 <td>N-Queens</td>
-<td style="text-align: right;">135.5 ms</td>
-<td style="text-align: right;">41.2 ms</td>
-<td style="text-align: right;">5.6 ms</td>
-<td style="text-align: right;">4.8 ms</td>
+<td style="text-align: right;">135.2 ms</td>
+<td style="text-align: right;">40.1 ms</td>
 <td style="text-align: right;">5.4 ms</td>
+<td style="text-align: right;">4.6 ms</td>
+<td style="text-align: right;">5.1 ms</td>
 </tr>
 <tr>
 <td><a href="https://github.com/franknoh/PPy/blob/main/examples/15_algorithms/15b_dijkstra">15b</a></td>
 <td>shortest path</td>
-<td style="text-align: right;">1511.0 ms</td>
-<td style="text-align: right;">251.9 ms</td>
-<td style="text-align: right;"><strong>104.8 ms</strong></td>
-<td style="text-align: right;">147.3 ms</td>
-<td style="text-align: right;">141.6 ms</td>
+<td style="text-align: right;">3079.7 ms</td>
+<td style="text-align: right;">2170.5 ms</td>
+<td style="text-align: right;"><strong>110.1 ms</strong></td>
+<td style="text-align: right;">140.0 ms</td>
+<td style="text-align: right;">133.1 ms</td>
 </tr>
 <tr>
 <td><a href="https://github.com/franknoh/PPy/blob/main/examples/15_algorithms/15c_kmp">15c</a></td>
 <td>substring search</td>
-<td style="text-align: right;">283.0 ms</td>
-<td style="text-align: right;">52.4 ms</td>
+<td style="text-align: right;">292.3 ms</td>
+<td style="text-align: right;">51.9 ms</td>
 <td style="text-align: right;">—</td>
-<td style="text-align: right;">9.4 ms</td>
-<td style="text-align: right;">9.0 ms</td>
+<td style="text-align: right;">8.9 ms</td>
+<td style="text-align: right;">8.6 ms</td>
 </tr>
 <tr>
 <td><a href="https://github.com/franknoh/PPy/blob/main/examples/15_algorithms/15d_segment_tree">15d</a></td>
 <td>range sums</td>
-<td style="text-align: right;">482.8 ms</td>
-<td style="text-align: right;">113.0 ms</td>
-<td style="text-align: right;"><strong>23.9 ms</strong></td>
-<td style="text-align: right;">50.7 ms</td>
-<td style="text-align: right;">51.8 ms</td>
+<td style="text-align: right;">999.5 ms</td>
+<td style="text-align: right;">738.6 ms</td>
+<td style="text-align: right;"><strong>28.7 ms</strong></td>
+<td style="text-align: right;">51.3 ms</td>
+<td style="text-align: right;">49.2 ms</td>
 </tr>
 <tr>
 <td><a href="https://github.com/franknoh/PPy/blob/main/examples/15_algorithms/15e_lis">15e</a></td>
 <td>longest increasing subsequence</td>
-<td style="text-align: right;">507.0 ms</td>
-<td style="text-align: right;">102.9 ms</td>
-<td style="text-align: right;"><strong>35.9 ms</strong></td>
-<td style="text-align: right;">59.0 ms</td>
-<td style="text-align: right;">55.5 ms</td>
+<td style="text-align: right;">505.3 ms</td>
+<td style="text-align: right;">90.5 ms</td>
+<td style="text-align: right;"><strong>38.2 ms</strong></td>
+<td style="text-align: right;">56.1 ms</td>
+<td style="text-align: right;">53.9 ms</td>
 </tr>
 <tr>
 <td><a href="https://github.com/franknoh/PPy/blob/main/examples/15_algorithms/15f_input">15f</a></td>
 <td>counting inversions</td>
-<td style="text-align: right;">630.0 ms</td>
-<td style="text-align: right;">94.6 ms</td>
-<td style="text-align: right;"><strong>37.6 ms</strong></td>
-<td style="text-align: right;">46.0 ms</td>
-<td style="text-align: right;">45.4 ms</td>
+<td style="text-align: right;">577.4 ms</td>
+<td style="text-align: right;">88.1 ms</td>
+<td style="text-align: right;"><strong>37.3 ms</strong></td>
+<td style="text-align: right;">44.1 ms</td>
+<td style="text-align: right;">44.9 ms</td>
 </tr>
 </tbody>
 </table>
@@ -4084,20 +4114,24 @@ has drifted, and both fail if the paths stop agreeing on the answer. Bold
 is faster than both C references. <code>ppy run</code> is left out because it compiles
 before it runs — a flat two seconds or so on every row, which is the
 development path rather than the one to submit.</p>
-<h2 id="ppy-build-and-standalone"><code>ppy build</code> and <code>--standalone</code><a class="headerlink" href="#ppy-build-and-standalone" title="Permanent link">&para;</a></h2>
+<h2 id="ppy-build-unsafe-and-standalone-unsafe"><code>ppy build --unsafe</code> and <code>--standalone --unsafe</code><a class="headerlink" href="#ppy-build-unsafe-and-standalone-unsafe" title="Permanent link">&para;</a></h2>
 <ul>
-<li><strong><code>ppy build</code></strong> is the hybrid: the kernels are native, but the glue around
+<li><strong><code>ppy build --unsafe</code></strong> is the hybrid: the kernels are native, but the glue around
   them — <code>main</code>, the buffers, <code>print</code> of a Python <code>int</code> — is the optimized
   Python the build wrote, so the binary embeds an interpreter and imports
   the runtime before the program begins. That is ~35 ms, and on the smaller
-  problems it is most of what separates the column from C.</li>
+  problems it is most of what separates the column from C. Where <code>main</code>
+  reads its input line by line -- 1.2 million edge lines in 15b, 400
+  thousand command lines in 15d -- each <code>ppy.input[...]()</code> is a call into
+  the runtime from the interpreter, about a microsecond apiece, and those
+  reads are most of the plain and <code>ppy build --unsafe</code> columns there.</li>
 <li><strong><code>--standalone</code></strong> is a binary with no CPython in it at all. <code>ldd</code> shows
-  libc and nothing else, <code>ppy.input[int]()</code> lowers to the same buffered scan
+  libc and nothing else, <code>ppy.scan[int]()</code> lowers to the same buffered scan
   of standard input that <code>scanf</code> does, and the whole N-Queens executable is
   17.0 KB against the C one's 16.1 KB.</li>
 </ul>
 <p>Four of the five standalone rows beat both C references for one reason:
-<code>ppy.input</code> reads into memory faster than <code>scanf</code> parses. N-Queens, which
+<code>ppy.scan</code> reads into memory faster than <code>scanf</code> parses. N-Queens, which
 reads a single integer and then computes, stays behind — there is nothing
 there for a faster reader to win back. The column covers five of the six: a
 standalone build needs everything <code>main</code> reaches to be native, and
@@ -4112,19 +4146,22 @@ beside it, and <code>examples/verify_conversions.py</code> checks that the commi
 file is exactly that. <a href="https://github.com/franknoh/PPy/blob/main/examples/15_algorithms/15c_kmp">15c</a> is hand-written, because the
 character buffer it wants has no plain-Python spelling that converts to it.</p>
 <h2 id="reading-input">Reading input<a class="headerlink" href="#reading-input" title="Permanent link">&para;</a></h2>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="n">n</span> <span class="o">=</span> <span class="n">ppy</span><span class="o">.</span><span class="n">input</span><span class="p">[</span><span class="nb">int</span><span class="p">]()</span>
-<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="n">a</span><span class="p">,</span> <span class="n">b</span> <span class="o">=</span> <span class="n">ppy</span><span class="o">.</span><span class="n">input</span><span class="p">[</span><span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">]]()</span>
-<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="n">values</span> <span class="o">=</span> <span class="n">ppy</span><span class="o">.</span><span class="n">input</span><span class="p">[</span><span class="n">Buffer</span><span class="p">[</span><span class="nb">int</span><span class="p">]](</span><span class="n">n</span><span class="p">)</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="n">n</span> <span class="o">=</span> <span class="n">ppy</span><span class="o">.</span><span class="n">input</span><span class="p">[</span><span class="nb">int</span><span class="p">]()</span>                 <span class="c1"># one line, as int(input()) reads it</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="n">a</span><span class="p">,</span> <span class="n">b</span> <span class="o">=</span> <span class="n">ppy</span><span class="o">.</span><span class="n">input</span><span class="p">[</span><span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">]]()</span>  <span class="c1"># one line, exactly two fields</span>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="n">row</span> <span class="o">=</span> <span class="n">ppy</span><span class="o">.</span><span class="n">input</span><span class="p">[</span><span class="n">Buffer</span><span class="p">[</span><span class="nb">int</span><span class="p">]]()</span>       <span class="c1"># one line of integers, into a buffer</span>
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="n">values</span> <span class="o">=</span> <span class="n">ppy</span><span class="o">.</span><span class="n">scan</span><span class="p">[</span><span class="n">Buffer</span><span class="p">[</span><span class="nb">int</span><span class="p">]](</span><span class="n">n</span><span class="p">)</span>    <span class="c1"># n integer tokens, whatever lines they are on</span>
 </code></pre></div>
-<p><code>ppy.input[T]()</code> reads the next value the way <code>T</code> says to and types the
-result the same way. It goes straight into memory rather than building a
-Python object per field — 12.6 ms for 500k integers against 49.8 ms for
+<p><code>ppy.input[T]()</code> reads one line the way the builtin <code>input()</code> does and
+types the result from <code>T</code>; <code>ppy.scan[T]()</code> reads tokens across lines. Both
+buffer reads go straight into memory rather than building a Python object
+per field — 12.6 ms for 500k integers against 49.8 ms for
 <code>sys.stdin.read().split()</code> and 20.6 ms for C's <code>scanf</code>. The conversion
-writes it for you: <code>int(input())</code> becomes <code>ppy.input[int]()</code>,
-<code>a, b = map(int, input().split())</code> becomes the tuple read, and a loop that
-fills a buffer one value at a time becomes one bulk <code>ppy.read_ints</code>. A
-module that also touches <code>sys.stdin</code> keeps the <code>input</code> it has, since the
-typed reader owns the file descriptor.</p>
+writes the line reads for you: <code>int(input())</code> becomes <code>ppy.input[int]()</code>,
+<code>a, b = map(int, input().split())</code> the tuple read,
+<code>array.array("q", map(int, input().split()))</code> the buffer line read, and
+each reads the line the original read. A module that also touches
+<code>sys.stdin</code> keeps the <code>input</code> it has, since the typed reader owns the file
+descriptor.</p>
 <h2 id="run-it">Run it<a class="headerlink" href="#run-it" title="Permanent link">&para;</a></h2>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>python<span class="w">  </span>algorithms.ppy
 <a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>ppy<span class="w"> </span>run<span class="w"> </span>algorithms.ppy
@@ -4177,7 +4214,8 @@ typed reader owns the file descriptor.</p>
 
 <p>Each subfolder's README has its own commands, with a small <code>input.txt</code> so
 they run as written; <code>bench.py</code> generates the judge-sized inputs.</p>
-<p>Read on: <a href="../../guide/native-lowering/">Input and native lowering</a> ·
+<p>Read on: <a href="../../guide/input/">Reading input</a> ·
+<a href="../../guide/native-lowering/">Native lowering</a> ·
 <a href="../../reference/performance/">Performance</a> ·
 <a href="../12_buffers_and_jit/">Buffers and JIT</a></p>
 <p><code>algorithms.ppy</code> is hand-written; there is no <code>.py</code> source and no conversion

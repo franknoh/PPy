@@ -624,6 +624,8 @@
       
         
       
+        
+      
     
     
     
@@ -1024,6 +1026,34 @@
   
   
     <li class="md-nav__item">
+      <a href="input/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reading input
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="native-lowering/" class="md-nav__link">
         
   
@@ -1031,7 +1061,7 @@
   <span class="md-ellipsis">
     
   
-    Input and native lowering
+    Native lowering
   
 
     
@@ -3601,9 +3631,14 @@ condition, barrier.</p>
 <p>The effect vocabulary, purity, and why three ways of running agree.</p>
 </li>
 <li>
-<p><strong><a href="native-lowering/">Input and native lowering</a></strong></p>
+<p><strong><a href="input/">Reading input</a></strong></p>
 <hr />
-<p><code>ppy.input[T]()</code>, <code>ppy.buffer</code>, and when a function gets a boundary.</p>
+<p><code>ppy.input</code> reads lines, <code>ppy.scan</code> reads tokens, <code>ppy.read_*</code> fill a buffer.</p>
+</li>
+<li>
+<p><strong><a href="native-lowering/">Native lowering</a></strong></p>
+<hr />
+<p>When a function gets a boundary, and what its parameters may be.</p>
 </li>
 <li>
 <p><strong><a href="regex/">Regular expressions</a></strong></p>

@@ -622,6 +622,8 @@
       
         
       
+        
+      
     
     
     
@@ -1019,6 +1021,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../../guide/input/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reading input
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../guide/native-lowering/" class="md-nav__link">
         
   
@@ -1026,7 +1056,7 @@
   <span class="md-ellipsis">
     
   
-    Input and native lowering
+    Native lowering
   
 
     
@@ -7295,13 +7325,28 @@ it may not return it, store it where it outlives the call, or mutate it.</p>
 <a id="ppy._io"></a>
     <div class="doc doc-contents first">
 
-        <p>Typed input for programs that read a lot of it (spec 28).</p>
-<p><code>input()</code> and <code>sys.stdin.read().split()</code> build a Python object for every
-field, which is most of what a competitive-programming submission spends its
-time on. <code>read_ints</code> fills a buffer straight from file descriptor 0 through a
-small C reader, so the numbers never become objects on the way in.</p>
-<p>The reader is compiled once and cached; without a C compiler the pure-Python
-fallback below is used instead, and the only difference is speed.</p>
+        <p>Typed input: lines the way <code>input()</code> reads them, tokens the way a scanner does (spec 28).</p>
+<p>Two readers over one standard input, with one grammar between them:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="n">line</span> <span class="o">=</span> <span class="n">ppy</span><span class="o">.</span><span class="n">input</span><span class="p">[</span><span class="nb">str</span><span class="p">]()</span>              <span class="c1"># one line, the newline removed, as input() gives it</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="n">n</span> <span class="o">=</span> <span class="n">ppy</span><span class="o">.</span><span class="n">input</span><span class="p">[</span><span class="nb">int</span><span class="p">]()</span>                 <span class="c1"># one line, read as int(input()) reads it</span>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="n">a</span><span class="p">,</span> <span class="n">b</span> <span class="o">=</span> <span class="n">ppy</span><span class="o">.</span><span class="n">input</span><span class="p">[</span><span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">]]()</span>  <span class="c1"># one line split into exactly two fields</span>
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="n">word</span> <span class="o">=</span> <span class="n">ppy</span><span class="o">.</span><span class="n">scan</span><span class="p">[</span><span class="nb">str</span><span class="p">]()</span>               <span class="c1"># one whitespace-delimited token, lines irrelevant</span>
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="n">k</span> <span class="o">=</span> <span class="n">ppy</span><span class="o">.</span><span class="n">scan</span><span class="p">[</span><span class="nb">int</span><span class="p">]()</span>                  <span class="c1"># one integer token</span>
+<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="n">values</span> <span class="o">=</span> <span class="n">ppy</span><span class="o">.</span><span class="n">scan</span><span class="p">[</span><span class="n">Buffer</span><span class="p">[</span><span class="nb">int</span><span class="p">]](</span><span class="n">n</span><span class="p">)</span>    <span class="c1"># n integer tokens, straight into a buffer</span>
+</code></pre></div>
+<p><code>ppy.input</code> is line-oriented and means what the builtin <code>input()</code> means, so
+a converted program reads what it read before. <code>ppy.scan</code> is the scanner:
+whitespace and newlines are the same thing to it, as they are to <code>scanf</code>,
+and reading goes into memory rather than through a Python object per
+field, which is what takes a million numbers quickly. <code>ppy.read_ints</code> and
+<code>ppy.read_token</code> are the scanner's low-level forms over a buffer the caller
+already has.</p>
+<p>The scanner is C compiled once and cached (<code>ppy_runtime.scanner</code>, the same
+text a standalone binary links); without a C compiler the pure-Python
+fallback below reads exactly the same grammar, and the only difference is
+speed. Both own file descriptor 0 and buffer it, so a program that reads
+through them must not also read <code>input()</code> or <code>sys.stdin</code>.</p>
 
 
 
@@ -7334,7 +7379,7 @@ fallback below is used instead, and the only difference is speed.</p>
 
     <div class="doc doc-contents ">
 
-        <p>Whether the compiled reader is in use rather than the Python fallback.</p>
+        <p>Whether the compiled scanner is in use rather than the Python fallback.</p>
 
 
     </div>
@@ -7352,10 +7397,13 @@ fallback below is used instead, and the only difference is speed.</p>
 
     <div class="doc doc-contents ">
 
-        <p>Fill <code>buffer</code> with whitespace-separated integers from standard input.</p>
+        <p>Fill <code>buffer</code> with integer tokens from standard input.</p>
 <p>Returns how many were read, which is fewer than <code>len(buffer)</code> only when
-the input ran out. The buffer must be a writable contiguous buffer of
-64-bit integers -- <code>array.array("q", ...)</code> is the usual one.</p>
+the input ran out. A token that is not an integer -- anything but an
+optional sign and digits, or a value outside 64 bits -- raises
+<code>ValueError</code> naming it, with the tokens before it already stored. The
+buffer must be a writable contiguous buffer of 64-bit integers;
+<code>array.array("q", ...)</code> is the usual one.</p>
 <p>This reads file descriptor 0 directly, so a program that calls it must
 not also read <code>input()</code> or <code>sys.stdin</code>.</p>
 
@@ -7378,8 +7426,10 @@ not also read <code>input()</code> or <code>sys.stdin</code>.</p>
         <p>Read one whitespace-delimited token into <code>buffer</code>, one byte per slot.</p>
 <p>The buffer may hold bytes (<code>array.array("b", ...)</code>) or 64-bit integers
 (<code>array.array("q", ...)</code>); the wider one is what a native kernel indexes,
-since <code>Buffer[int]</code> is 64-bit. Returns how many slots were written, capped
-at <code>len(buffer)</code> -- the rest of an over-long token is consumed and dropped.</p>
+since <code>Buffer[int]</code> is 64-bit. Returns how many slots were written. The
+buffer's length is the capacity the caller chose: a longer token is cut
+there, and the rest of it is consumed and dropped. <code>ppy.scan[str]()</code> is
+the form with no such limit.</p>
 
 
     </div>

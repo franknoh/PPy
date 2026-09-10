@@ -622,6 +622,8 @@
       
         
       
+        
+      
     
     
     
@@ -1019,6 +1021,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../../guide/input/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reading input
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../guide/native-lowering/" class="md-nav__link">
         
   
@@ -1026,7 +1056,7 @@
   <span class="md-ellipsis">
     
   
-    Input and native lowering
+    Native lowering
   
 
     
@@ -3939,12 +3969,12 @@ machines.</p>
 <h2 id="reading-input">Reading input<a class="headerlink" href="#reading-input" title="Permanent link">&para;</a></h2>
 <p><code>ppy/_io.py</code> is a runtime-only reader: a small C scanner over file
 descriptor 0, compiled on first use into the user cache and bound through
-ctypes, exposed as <code>ppy.input[T]()</code> and the lower-level <code>ppy.read_ints</code> /
+ctypes, exposed as <code>ppy.input[T]()</code> for lines, <code>ppy.scan[T]()</code> for tokens, and the lower-level <code>ppy.read_ints</code> /
 <code>ppy.read_token</code>; <code>ppy.buffer[T](n)</code> beside it is the allocation both a
 CPython run and a standalone binary understand. It lives in the <code>ppy</code> package rather than the compiler
 because it is useful on every path, plain CPython included, and it degrades
 to a pure-Python implementation where no C compiler exists. The checker
-types <code>ppy.input[T]()</code> from its subscript, the way it types <code>ppy.check[T]</code>.</p>
+types <code>ppy.input[T]()</code> and <code>ppy.scan[T]()</code> from their subscript, the way it types <code>ppy.check[T]</code> and <code>ppy.assume[T]</code>.</p>
 <h2 id="the-boundary">The boundary<a class="headerlink" href="#the-boundary" title="Permanent link">&para;</a></h2>
 <p>Python callers cross into native code through a generated <code>METH_FASTCALL</code>
 wrapper that parses, guards, calls, and boxes in C — and holds the Python

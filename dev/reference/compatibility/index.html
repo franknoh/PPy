@@ -622,6 +622,8 @@
       
         
       
+        
+      
     
     
     
@@ -1019,6 +1021,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../../guide/input/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reading input
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../guide/native-lowering/" class="md-nav__link">
         
   
@@ -1026,7 +1056,7 @@
   <span class="md-ellipsis">
     
   
-    Input and native lowering
+    Native lowering
   
 
     
@@ -3759,9 +3789,14 @@ happens when the two sides of a boundary disagree.</p>
 <td>the directives a program is written around</td>
 </tr>
 <tr>
-<td><code>ppy.input</code>, <code>ppy.buffer</code>, <code>ppy.read_ints</code>, <code>ppy.read_token</code></td>
+<td><code>ppy.input</code>, <code>ppy.scan</code>, <code>ppy.buffer</code>, <code>ppy.read_ints</code>, <code>ppy.read_token</code></td>
 <td>experimental</td>
-<td>added in 0.1; the spelling may still change</td>
+<td><code>input</code> reads lines and <code>scan</code> tokens since 0.3; the spelling may still change</td>
+</tr>
+<tr>
+<td><code>ppy.check</code>, <code>ppy.assume</code></td>
+<td>experimental</td>
+<td><code>check</code> validates all the way down since 0.3; <code>assume</code> is the unchecked crossing</td>
 </tr>
 <tr>
 <td><code>ppy.native</code> memory and <code>ppy.ffi</code>; <code>ppy.simd</code>, <code>ppy.cpu</code>, <code>ppy.atomic</code>, <code>ppy.concurrent</code>, <code>ppy.parallel.range</code>; <code>ppy.grad</code></td>

@@ -13,7 +13,7 @@
         <link rel="canonical" href="https://ppy.franknoh.dev/dev/guide/native-lowering/">
       
       
-        <link rel="prev" href="../effects/">
+        <link rel="prev" href="../input/">
       
       
         <link rel="next" href="../regex/">
@@ -27,7 +27,7 @@
     
     
       
-        <title>Input and native lowering - PPY</title>
+        <title>Native lowering - PPY</title>
       
     
     
@@ -82,7 +82,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#reading-input-and-native-lowering" class="md-skip">
+        <a href="#native-lowering" class="md-skip">
           Skip to content
         </a>
       
@@ -122,7 +122,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Input and native lowering
+              Native lowering
             
           </span>
         </div>
@@ -624,6 +624,8 @@
       
         
       
+        
+      
     
     
     
@@ -1021,6 +1023,34 @@
                 
   
   
+  
+  
+    <li class="md-nav__item">
+      <a href="../input/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reading input
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
     
   
   
@@ -1033,24 +1063,6 @@
         
       
       
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Input and native lowering
-  
-
-    
-  </span>
-  
-  
-
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
       <a href="./" class="md-nav__link md-nav__link--active">
         
   
@@ -1058,7 +1070,7 @@
   <span class="md-ellipsis">
     
   
-    Input and native lowering
+    Native lowering
   
 
     
@@ -1067,47 +1079,6 @@
   
 
       </a>
-      
-        
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-    
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#reading-input" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Reading input
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#native-lowering" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Native lowering
-      
-    </span>
-  </a>
-  
-</li>
-      
-    </ul>
-  
-</nav>
       
     </li>
   
@@ -3576,36 +3547,6 @@
     
   
   
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#reading-input" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Reading input
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#native-lowering" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Native lowering
-      
-    </span>
-  </a>
-  
-</li>
-      
-    </ul>
-  
 </nav>
                   </div>
                 </div>
@@ -3624,37 +3565,7 @@
   
 
 
-<h1 id="reading-input-and-native-lowering">Reading input and native lowering<a class="headerlink" href="#reading-input-and-native-lowering" title="Permanent link">&para;</a></h1>
-<h2 id="reading-input">Reading input<a class="headerlink" href="#reading-input" title="Permanent link">&para;</a></h2>
-<p><code>ppy.input[T]()</code> reads the next value the way <code>T</code> says to read it, and the
-checker types the result from the same <code>T</code>:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">ppy</span>
-<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ppy</span><span class="w"> </span><span class="kn">import</span> <span class="n">Buffer</span>
-<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>
-<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="n">n</span> <span class="o">=</span> <span class="n">ppy</span><span class="o">.</span><span class="n">input</span><span class="p">[</span><span class="nb">int</span><span class="p">]()</span>  <span class="c1"># one integer</span>
-<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="n">a</span><span class="p">,</span> <span class="n">b</span> <span class="o">=</span> <span class="n">ppy</span><span class="o">.</span><span class="n">input</span><span class="p">[</span><span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">]]()</span>  <span class="c1"># two fields, line breaks irrelevant</span>
-<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="n">word</span> <span class="o">=</span> <span class="n">ppy</span><span class="o">.</span><span class="n">input</span><span class="p">[</span><span class="nb">str</span><span class="p">]()</span>  <span class="c1"># a token</span>
-<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="n">values</span> <span class="o">=</span> <span class="n">ppy</span><span class="o">.</span><span class="n">input</span><span class="p">[</span><span class="n">Buffer</span><span class="p">[</span><span class="nb">int</span><span class="p">]](</span><span class="n">n</span><span class="p">)</span>  <span class="c1"># n integers, straight into a buffer</span>
-</code></pre></div>
-<p>Whitespace and newlines are the same thing to it, as they are to <code>scanf</code>.
-Reading goes into memory rather than through a Python object per field, so
-the buffer form is what takes a million numbers quickly — faster than
-<code>sys.stdin.read().split()</code> and faster than C's <code>scanf</code>, measured in
-<a href="../../howto/15_algorithms/">Algorithms</a>. A buffer read takes how many
-values to read; every other read takes nothing (<code>E1305</code> otherwise). A
-prompt is a <code>print</code> before the read, the way any other output is written,
-so reading and printing stay two things. <code>ppy.read_ints</code> and <code>ppy.read_token</code> are
-the lower-level forms that fill a buffer you already have, and
-<code>ppy.buffer[T](n)</code> makes one: <code>n</code> elements of <code>T</code>, all zero. It is
-<code>array.array</code> under CPython and a native allocation in a standalone binary,
-which is what lets the same source build both ways.</p>
-<p>All of them carry the IO effect, so a function that reads is never mistaken
-for a pure one, and all of them work on every path including plain CPython:
-the small C reader is compiled once and cached, with a pure-Python fallback
-where no compiler exists. The reader owns file descriptor 0 and buffers it
-itself, so a program that uses it must not also read <code>input()</code> or
-<code>sys.stdin</code>. Reading past the end raises <code>EOFError</code>.</p>
-<h2 id="native-lowering">Native lowering<a class="headerlink" href="#native-lowering" title="Permanent link">&para;</a></h2>
+<h1 id="native-lowering">Native lowering<a class="headerlink" href="#native-lowering" title="Permanent link">&para;</a></h1>
 <p>Eligibility and profitability are different questions, and the compiler asks
 both: <code>can_lower_native</code> decides whether correct native code exists, and
 <code>should_lower_native</code> whether crossing the Python/native boundary pays for
@@ -3687,6 +3598,7 @@ would otherwise name a symbol nothing defines. The generated wrapper
 releases the GIL around the native call, so <code>@ppy.native</code> functions scale
 across threads. <code>ppy explain FILE.ppy:name</code> reports the decision and, when
 the answer is no, the first blocking construct.</p>
+<p>Reading input is its own guide: <a href="../input/">Reading input</a>.</p>
 <p>Examples: <a href="../../howto/15_algorithms/">Algorithms</a>,
 <a href="../../howto/12_buffers_and_jit/">Buffers and JIT</a>.</p>
 
@@ -3726,7 +3638,7 @@ the answer is no, the first blocking construct.</p>
       <nav class="md-footer__inner md-grid" aria-label="Footer" >
         
           
-          <a href="../effects/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Effects and the three paths">
+          <a href="../input/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Reading input">
             <div class="md-footer__button md-icon">
               
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
@@ -3736,7 +3648,7 @@ the answer is no, the first blocking construct.</p>
                 Previous
               </span>
               <div class="md-ellipsis">
-                Effects and the three paths
+                Reading input
               </div>
             </div>
           </a>

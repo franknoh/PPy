@@ -620,6 +620,8 @@
       
         
       
+        
+      
     
     
     
@@ -1017,6 +1019,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../guide/input/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reading input
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../guide/native-lowering/" class="md-nav__link">
         
   
@@ -1024,7 +1054,7 @@
   <span class="md-ellipsis">
     
   
-    Input and native lowering
+    Native lowering
   
 
     
@@ -3765,7 +3795,61 @@
 <h2 id="030-unreleased">0.3.0 — unreleased<a class="headerlink" href="#030-unreleased" title="Permanent link">&para;</a></h2>
 <p>Work toward the next release, on <code>dev</code>; alphas of it are tagged <code>v0.3.0aN</code>.</p>
 <ul>
-<li><code>cuda.device_alloc[T](https://github.com/franknoh/PPy/blob/main/n)</code>: memory that lives on the device between
+<li><code>ppy.input[T]()</code> reads one line and means what the builtin <code>input()</code>
+  means: <code>ppy.input[str]()</code> is the line with its newline removed, spaces
+  kept, <code>""</code> for an empty line, <code>EOFError</code> at the end; <code>ppy.input[int]()</code>
+  and <code>[float]</code> parse the whole line as <code>int(input())</code> and <code>float(input())</code>
+  do, so <code>1 2</code> is <code>ValueError</code>; <code>ppy.input[tuple[int, int]]()</code> splits one
+  line and requires exactly its fields, never reaching into the next. The
+  scanner the old <code>ppy.input</code> was is <code>ppy.scan[T]()</code>: tokens wherever they
+  fall, <code>ppy.scan[Buffer[int]](https://github.com/franknoh/PPy/blob/main/n)</code> for n of them into a buffer. A converted
+  program therefore reads what it read as Python -- <code>ppy convert</code> no longer
+  turns a loop of <code>int(input())</code> into a bulk scan that would read across
+  lines. A line of fields is a line read too: <code>ppy.input[list[int]]()</code> is
+  <code>list(map(int, input().split()))</code>, and <code>ppy.input[Buffer[int]]()</code> reads a
+  line of integers straight into a buffer, as
+  <code>array.array("q", map(int, input().split()))</code> would, with no count to
+  give and no Python object per field; the converter writes both idioms so.
+  A tuple of <code>int</code> is read the same way, in C; a typed read is planned once
+  per type, so a read in a loop costs the read and nothing else. Integer
+  fields read in C are ASCII and 64-bit, the one place the typed read is
+  narrower than <code>int()</code>.
+  <code>ppy.read_ints</code> and <code>ppy.read_token</code> stay the buffer-oriented forms;
+  <code>read_token</code> cuts a token at the buffer's capacity and says so.</li>
+<li>One scanner grammar, implemented once in C (<code>ppy_runtime.scanner</code>) for
+  the runtime's compiled reader and for a standalone binary's runtime alike,
+  and once more in the pure-Python fallback: whitespace is ASCII, an
+  integer token is <code>[+-]?[0-9]+</code> within 64 bits, and a token that is not an
+  integer where one is expected is <code>ValueError</code> naming it -- the compiled
+  reader no longer skips over <code>abc</code> to find the <code>3</code> after it while the
+  fallback raised. A high-level string read is never cut: <code>ppy.input[str]()</code>
+  and <code>ppy.scan[str]()</code> read a line or a token of any length, where the old
+  scalar read cut at 4096 bytes and dropped the rest.</li>
+<li><code>ppy.check[T](https://github.com/franknoh/PPy/blob/main/value)</code> validates all the way down: a <code>list[int]</code> element by
+  element, a <code>dict[str, float]</code> key and value, a tuple field by field, a
+  dataclass field by field, a union member by member. A <code>T</code> it cannot
+  validate soundly -- a callable, an iterator, a protocol -- is refused
+  rather than checked in part. <code>ppy.assume[T](https://github.com/franknoh/PPy/blob/main/value)</code> is the unchecked
+  crossing, typed on the programmer's word alone; the checker types both and
+  gives only <code>check</code> the <code>TypeError</code> it may raise.</li>
+<li><code>ppy run</code> and <code>ppy build</code> mean the same program: both keep Python's
+  integer semantics by default, and <code>--unsafe</code> on either is the one spelling
+  of 64-bit wrap semantics. <code>build --safe</code> is gone, having become the
+  default. A standalone build keeps the guards too, and a guard that fails
+  ends the process with a message rather than wrapping in silence; the
+  benchmarks that want wrap semantics build with <code>--unsafe</code> and say so.</li>
+<li><code>examples/compare.py</code> holds every counterpart to one answer before it
+  prints a timing: a tool that fails, answers differently from itself
+  between runs, answers differently from the reference, or prints no timing
+  for a kernel is an error and the exit status is 1.</li>
+<li>
+<p>The guide splits into "Reading input" and "Native lowering"; the example
+  count on the landing pages is generated from the tree; the native-memory
+  guide names every pointer element width the runtime supports; <code>ppy.buffer</code>,
+  <code>ppy.scan</code>, and <code>ppy.assume</code> are declared in the package's public surface.</p>
+</li>
+<li>
+<p><code>cuda.device_alloc[T](https://github.com/franknoh/PPy/blob/main/n)</code>: memory that lives on the device between
   launches. It is a <code>native.ptr[T]</code> like <code>stack_alloc</code>'s -- the same loops
   fill and read it, <code>native.offset</code> keeps its kind -- and the host sees it
   through a mirror that whichever side wrote last keeps current: a launch
@@ -3778,7 +3862,8 @@
   as a <code>gpu.device_alloc</code> -- a managed allocation the host reads and writes,
   freed when the function returns. The CUDA example makes its saxpy arrays
   this way, and its comparison with CuPy and Numba gained the
-  device-resident rows.</li>
+  device-resident rows.</p>
+</li>
 <li>
 <p><code>ppy explain</code> reports a body that lowered as <code>llvm backend: native</code>, whatever
   the effects suggested: a parallel loop's <code>Thread</code> effect was reported as
@@ -3819,7 +3904,7 @@
 <li>The project scan skips a virtual environment by any name -- a directory
   holding <code>pyvenv.cfg</code> -- not only <code>.venv</code> and <code>venv</code>; a second environment
   kept beside the first no longer costs a scan of every package in it.</li>
-<li><code>ppy.input[T]()</code> takes no argument, and <code>ppy.input[Buffer[T]](https://github.com/franknoh/PPy/blob/main/n)</code> takes
+<li><code>ppy.input[T]()</code> takes no argument, and <code>ppy.scan[Buffer[int]](https://github.com/franknoh/PPy/blob/main/n)</code> takes
   only how many values to read: reading and printing are two things, so a
   prompt is a <code>print</code> before the read rather than an argument that meant a
   prompt for one type and a count for another. The checker says so (<code>E1305</code>
@@ -3827,8 +3912,7 @@
   that is not an <code>int</code>), and the converter writes <code>input("p")</code>'s prompt as
   <code>print("p", end="", flush=True)</code> before the statement that reads -- or,
   inside a loop's test or a comprehension, as the one-expression
-  <code>print(...) or ppy.input[T]()</code> so it still prints each time. A fill loop
-  whose reads carry a prompt stays a loop rather than becoming one bulk read.</li>
+  <code>print(...) or ppy.input[T]()</code> so it still prints each time.</li>
 <li>The C backend writes structured code. Loops are <code>while</code>, branches are
   <code>if</code>/<code>else</code> with <code>break</code>, <code>continue</code>, and <code>return</code>, rebuilt from the IR's
   dominator tree and loops; a stack slot that is only loaded and stored is a

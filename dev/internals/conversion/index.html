@@ -622,6 +622,8 @@
       
         
       
+        
+      
     
     
     
@@ -1019,6 +1021,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../../guide/input/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reading input
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../guide/native-lowering/" class="md-nav__link">
         
   
@@ -1026,7 +1056,7 @@
   <span class="md-ellipsis">
     
   
-    Input and native lowering
+    Native lowering
   
 
     
@@ -3885,15 +3915,18 @@ yourself, mark it <code>@ppy.reflective</code>, or run <code>ppy migrate</code>.
   types are still inferred — they are just not materialized;</li>
 <li>orders imports into PEP 8 groups with <code>import ppy</code> ahead of first-party
   imports — the loader must install before the first <code>.ppy</code> import;</li>
-<li>rewrites the <code>input</code> idioms into the typed reader, where the module reads
-  with <code>input</code> and never touches <code>sys.stdin</code> (two readers of one file
+<li>rewrites the <code>input</code> idioms into the typed line reader, where the module
+  reads with <code>input</code> and never touches <code>sys.stdin</code> (two readers of one file
   descriptor would not agree on where it is): <code>int(input())</code> becomes
   <code>ppy.input[int]()</code>, <code>a, b = map(int, input().split())</code> becomes
   <code>ppy.input[tuple[int, int]]()</code>, a bare <code>input()</code> becomes <code>ppy.input[str]()</code>,
-  a prompt becomes a <code>print(..., end="", flush=True)</code> before the statement
+  and a prompt becomes a <code>print(..., end="", flush=True)</code> before the statement
   that reads (or, inside a loop's test or a comprehension, the one-expression
-  <code>print(...) or ppy.input[T]()</code>), and a loop that fills a buffer one value
-  at a time becomes one bulk <code>ppy.read_ints</code> over the same slots;</li>
+  <code>print(...) or ppy.input[T]()</code>). Every rewrite reads the line the original
+  read: <code>ppy.input</code> is line-oriented, so <code>int(input())</code> on <code>1 2</code> fails
+  before and after, and a loop of <code>int(input())</code> stays a loop rather than
+  becoming a token scan, which would read across lines the original never
+  crossed;</li>
 <li>with <code>--promote-buffers</code>, declares read-only numeric list parameters as
   <code>Buffer[T]</code> and rewrites the values feeding them into <code>array.array</code>
   (remarked as <code>R3002</code>, or <code>R3003</code> with the reason it could not);</li>

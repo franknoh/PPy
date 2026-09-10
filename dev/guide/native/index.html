@@ -624,6 +624,8 @@
       
         
       
+        
+      
     
     
     
@@ -1034,6 +1036,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../input/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reading input
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../native-lowering/" class="md-nav__link">
         
   
@@ -1041,7 +1071,7 @@
   <span class="md-ellipsis">
     
   
-    Input and native lowering
+    Native lowering
   
 
     
@@ -3562,7 +3592,7 @@
 <tbody>
 <tr>
 <td><code>native.ptr[T]</code>, <code>native.const_ptr[T]</code></td>
-<td>a typed pointer; <code>T</code> is <code>int</code>, <code>float</code>, <code>bool</code>, <code>ppy.i8</code>, or <code>ppy.u8</code>. A <code>const_ptr</code> refuses <code>store</code> (<code>E1631</code>).</td>
+<td>a typed pointer; <code>T</code> is <code>int</code>, <code>float</code>, <code>bool</code>, or any fixed-width marker -- <code>ppy.i8</code>, <code>u8</code>, <code>i16</code>, <code>u16</code>, <code>i32</code>, <code>u32</code>, <code>i64</code>, <code>u64</code>, <code>f32</code>, <code>f64</code> -- each stored at its own width. A <code>const_ptr</code> refuses <code>store</code> (<code>E1631</code>).</td>
 </tr>
 <tr>
 <td><code>native.load(p)</code>, <code>native.store(p, v)</code>, <code>native.offset(p, n)</code></td>

@@ -622,6 +622,8 @@
       
         
       
+        
+      
     
     
     
@@ -1019,6 +1021,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../../guide/input/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reading input
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../guide/native-lowering/" class="md-nav__link">
         
   
@@ -1026,7 +1056,7 @@
   <span class="md-ellipsis">
     
   
-    Input and native lowering
+    Native lowering
   
 
     
@@ -3722,9 +3752,10 @@ form. A set flag means the true value no longer fits, so the function
 returns to its Python body with the original arguments and computes there.
 The three paths print the same output because the native path never answers
 with a wrapped number; it either has the right one or steps aside.</p>
-<p><code>ppy build</code> changes the default: an artifact wraps at 64 bits like every
-native compiler's output, and <code>--safe</code> keeps the guards. That difference is
-the 10 ms between <code>ppy run</code> and <code>ppy build</code> on the README's collatz kernel.</p>
+<p><code>ppy build</code> keeps the same guards, so an artifact answers as <code>ppy run</code>
+does. <code>--unsafe</code>, on either command, drops them: the code wraps at 64 bits
+like every native compiler's output, which is the 10 ms between <code>ppy run</code>
+and <code>ppy build --unsafe</code> on the README's collatz kernel.</p>
 <h2 id="floor-division-and-the-sign-of-the-remainder">Floor division and the sign of the remainder<a class="headerlink" href="#floor-division-and-the-sign-of-the-remainder" title="Permanent link">&para;</a></h2>
 <p><code>floor_and_mod(-7, 2)</code> is <code>-4 + 1</code>, and <code>floor_and_mod(7, -2)</code> is
 <code>-4 + -1</code>: <code>//</code> rounds toward negative infinity and <code>%</code> takes the sign of

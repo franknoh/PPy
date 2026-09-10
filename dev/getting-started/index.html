@@ -746,6 +746,8 @@
       
         
       
+        
+      
     
     
     
@@ -1143,6 +1145,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../guide/input/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reading input
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../guide/native-lowering/" class="md-nav__link">
         
   
@@ -1150,7 +1180,7 @@
   <span class="md-ellipsis">
     
   
-    Input and native lowering
+    Native lowering
   
 
     
@@ -3768,7 +3798,7 @@ under plain CPython.</p>
 </code></pre></div>
 <p><code>@ppy.pure</code> is a contract that the function has no observable effects, and
 the checker verifies it. <code>@ppy.opt(3)</code> is this function's optimization
-level. <code>ppy.input[int]()</code> reads one integer from standard input, straight
+level. <code>ppy.input[int]()</code> reads one line of standard input as an integer, straight
 into memory rather than through a Python object per field.</p>
 <h2 id="3-run-it-three-ways">3. Run it three ways<a class="headerlink" href="#3-run-it-three-ways" title="Permanent link">&para;</a></h2>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="nb">echo</span><span class="w"> </span><span class="m">300000</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>uv<span class="w"> </span>run<span class="w"> </span>python<span class="w">  </span>collatz.ppy<span class="w">   </span><span class="c1"># 1. plain CPython</span>
@@ -3793,10 +3823,10 @@ cannot vouch for (<code>E1204</code>). Every code is in
 <p><code>ppy build</code> writes the objects, <code>libppy_&lt;project&gt;.so</code>, a manifest, and a
 launcher executable. The launcher starts an embedded interpreter, imports
 <code>ppy_runtime</code>, and runs; it keeps working with the compiler uninstalled.
-<code>run</code> and <code>build</code> differ in one default: <code>run</code> keeps Python-integer
-semantics (overflow is guarded and falls back to arbitrary precision), while
-<code>build</code> produces a wrap-semantics artifact like every native compiler. <code>run
---unsafe</code> and <code>build --safe</code> flip either one.</p>
+<code>run</code> and <code>build</code> mean the same program: both keep Python-integer
+semantics -- overflow is guarded and falls back to arbitrary precision --
+and <code>--unsafe</code>, on either, drops the guards for 64-bit wrap semantics like
+C's.</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>uv<span class="w"> </span>run<span class="w"> </span>ppy<span class="w"> </span>build<span class="w"> </span>--standalone<span class="w"> </span>collatz.ppy<span class="w"> </span>-o<span class="w"> </span>native<span class="w">   </span><span class="c1"># an executable with no CPython inside</span>
 </code></pre></div>
 <h2 id="6-in-a-real-program">6. In a real program<a class="headerlink" href="#6-in-a-real-program" title="Permanent link">&para;</a></h2>
@@ -3812,7 +3842,7 @@ project</a>).</p>
 <h2 id="next">Next<a class="headerlink" href="#next" title="Permanent link">&para;</a></h2>
 <ul>
 <li><a href="../guide/">Guide</a>: from the subset and the directives to native memory, SIMD, threads, parallel loops, derivatives, coroutines, GPU kernels, XLA, and generics.</li>
-<li><a href="../howto/">Examples</a>: 42 folders, one page each.</li>
+<li><a href="../howto/">Examples</a>: 43 folders, one page each.</li>
 <li><a href="../cli/">CLI</a>: every command and option — <code>ppy emit</code>, <code>inspect --stage</code>, <code>--report-opt</code>, <code>--sanitize</code>, <code>--profile</code>/<code>--pgo</code>.</li>
 </ul>
 

@@ -10,13 +10,13 @@
       
       
       
-        <link rel="canonical" href="https://ppy.franknoh.dev/dev/guide/gpu/">
+        <link rel="canonical" href="https://ppy.franknoh.dev/dev/guide/input/">
       
       
-        <link rel="prev" href="../aio/">
+        <link rel="prev" href="../effects/">
       
       
-        <link rel="next" href="../xla/">
+        <link rel="next" href="../native-lowering/">
       
       
         
@@ -27,7 +27,7 @@
     
     
       
-        <title>GPU kernels - PPY</title>
+        <title>Reading input - PPY</title>
       
     
     
@@ -82,7 +82,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#gpu-kernels-ppycuda-and-ppyhip" class="md-skip">
+        <a href="#reading-input" class="md-skip">
           Skip to content
         </a>
       
@@ -122,7 +122,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              GPU kernels
+              Reading input
             
           </span>
         </div>
@@ -911,19 +911,10 @@
                 
   
   
-    
   
   
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
-      
-      
-        
-      
-      
-      <a href="./" class="md-nav__link md-nav__link--active">
+    <li class="md-nav__item">
+      <a href="../gpu/" class="md-nav__link">
         
   
   
@@ -939,7 +930,6 @@
   
 
       </a>
-      
     </li>
   
 
@@ -1033,10 +1023,37 @@
                 
   
   
+    
   
   
-    <li class="md-nav__item">
-      <a href="../input/" class="md-nav__link">
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reading input
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
         
   
   
@@ -1052,6 +1069,70 @@
   
 
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#ppyinput-lines" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ppy.input: lines
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#ppyscan-tokens" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ppy.scan: tokens
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#ppyread_ints-and-ppyread_token-buffers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ppy.read_ints and ppy.read_token: buffers
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#one-grammar-two-implementations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        One grammar, two implementations
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
     </li>
   
 
@@ -3547,6 +3628,58 @@
     
   
   
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#ppyinput-lines" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ppy.input: lines
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#ppyscan-tokens" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ppy.scan: tokens
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#ppyread_ints-and-ppyread_token-buffers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ppy.read_ints and ppy.read_token: buffers
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#one-grammar-two-implementations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        One grammar, two implementations
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
 </nav>
                   </div>
                 </div>
@@ -3565,74 +3698,112 @@
   
 
 
-<h1 id="gpu-kernels-ppycuda-and-ppyhip">GPU kernels: <code>ppy.cuda</code> and <code>ppy.hip</code><a class="headerlink" href="#gpu-kernels-ppycuda-and-ppyhip" title="Permanent link">&para;</a></h1>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ppy</span><span class="w"> </span><span class="kn">import</span> <span class="n">cuda</span><span class="p">,</span> <span class="n">native</span>
-<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>
+<h1 id="reading-input">Reading input<a class="headerlink" href="#reading-input" title="Permanent link">&para;</a></h1>
+<p>Three ways to read standard input, one grammar underneath, and a rule for
+telling them apart: <code>ppy.input</code> reads lines, <code>ppy.scan</code> reads tokens, and
+<code>ppy.read_*</code> fill a buffer you already have.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">ppy</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ppy</span><span class="w"> </span><span class="kn">import</span> <span class="n">Buffer</span>
 <a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>
-<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="nd">@cuda</span><span class="o">.</span><span class="n">kernel</span>
-<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="k">def</span><span class="w"> </span><span class="nf">saxpy</span><span class="p">(</span><span class="n">n</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">a</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="n">x</span><span class="p">:</span> <span class="n">native</span><span class="o">.</span><span class="n">const_ptr</span><span class="p">[</span><span class="nb">float</span><span class="p">],</span> <span class="n">y</span><span class="p">:</span> <span class="n">native</span><span class="o">.</span><span class="n">ptr</span><span class="p">[</span><span class="nb">float</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>    <span class="n">i</span> <span class="o">=</span> <span class="n">cuda</span><span class="o">.</span><span class="n">global_id</span><span class="p">()</span>
-<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>    <span class="k">if</span> <span class="n">i</span> <span class="o">&lt;</span> <span class="n">n</span><span class="p">:</span>
-<a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>        <span class="n">slot</span> <span class="o">=</span> <span class="n">native</span><span class="o">.</span><span class="n">offset</span><span class="p">(</span><span class="n">y</span><span class="p">,</span> <span class="n">i</span><span class="p">)</span>
-<a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>        <span class="n">native</span><span class="o">.</span><span class="n">store</span><span class="p">(</span><span class="n">slot</span><span class="p">,</span> <span class="n">a</span> <span class="o">*</span> <span class="n">native</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">native</span><span class="o">.</span><span class="n">offset</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">i</span><span class="p">))</span> <span class="o">+</span> <span class="n">native</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">slot</span><span class="p">))</span>
-<a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>
-<a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>
-<a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a><span class="k">def</span><span class="w"> </span><span class="nf">run</span><span class="p">(</span><span class="n">n</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">a</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="n">x</span><span class="p">:</span> <span class="n">native</span><span class="o">.</span><span class="n">const_ptr</span><span class="p">[</span><span class="nb">float</span><span class="p">],</span> <span class="n">y</span><span class="p">:</span> <span class="n">native</span><span class="o">.</span><span class="n">ptr</span><span class="p">[</span><span class="nb">float</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a>    <span class="n">cuda</span><span class="o">.</span><span class="n">launch</span><span class="p">(</span><span class="n">saxpy</span><span class="p">,</span> <span class="p">(</span><span class="n">n</span> <span class="o">+</span> <span class="mi">255</span><span class="p">)</span> <span class="o">//</span> <span class="mi">256</span><span class="p">,</span> <span class="mi">256</span><span class="p">,</span> <span class="n">n</span><span class="p">,</span> <span class="n">a</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">)</span>
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="n">line</span> <span class="o">=</span> <span class="n">ppy</span><span class="o">.</span><span class="n">input</span><span class="p">[</span><span class="nb">str</span><span class="p">]()</span>  <span class="c1"># one line, the newline removed</span>
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="n">n</span> <span class="o">=</span> <span class="n">ppy</span><span class="o">.</span><span class="n">input</span><span class="p">[</span><span class="nb">int</span><span class="p">]()</span>  <span class="c1"># one line, read as int(input()) reads it</span>
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="n">a</span><span class="p">,</span> <span class="n">b</span> <span class="o">=</span> <span class="n">ppy</span><span class="o">.</span><span class="n">input</span><span class="p">[</span><span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">]]()</span>  <span class="c1"># one line, exactly two fields</span>
+<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="n">names</span> <span class="o">=</span> <span class="n">ppy</span><span class="o">.</span><span class="n">input</span><span class="p">[</span><span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]]()</span>  <span class="c1"># one line, split into its fields</span>
+<a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="n">row</span> <span class="o">=</span> <span class="n">ppy</span><span class="o">.</span><span class="n">input</span><span class="p">[</span><span class="n">Buffer</span><span class="p">[</span><span class="nb">int</span><span class="p">]]()</span>  <span class="c1"># one line of integers, straight into a buffer</span>
+<a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>
+<a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a><span class="n">word</span> <span class="o">=</span> <span class="n">ppy</span><span class="o">.</span><span class="n">scan</span><span class="p">[</span><span class="nb">str</span><span class="p">]()</span>  <span class="c1"># one whitespace-delimited token, lines irrelevant</span>
+<a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a><span class="n">k</span> <span class="o">=</span> <span class="n">ppy</span><span class="o">.</span><span class="n">scan</span><span class="p">[</span><span class="nb">int</span><span class="p">]()</span>  <span class="c1"># one integer token</span>
+<a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a><span class="n">values</span> <span class="o">=</span> <span class="n">ppy</span><span class="o">.</span><span class="n">scan</span><span class="p">[</span><span class="n">Buffer</span><span class="p">[</span><span class="nb">int</span><span class="p">]](</span><span class="n">n</span><span class="p">)</span>  <span class="c1"># n integer tokens, straight into a buffer</span>
 </code></pre></div>
-<p><code>@cuda.kernel</code> marks a kernel: a function of scalars and pointers that
-returns nothing and runs once per thread of a launch; <code>@cuda.device</code> marks
-a function a kernel calls. Inside, <code>cuda.thread_id()</code>, <code>block_id()</code>,
-<code>block_dim()</code>, <code>grid_dim()</code>, and <code>global_id()</code> (the block's index times its
-size, plus the thread's) say where a thread is, each along <code>"x"</code> unless
-told <code>"y"</code> or <code>"z"</code>; <code>syncthreads()</code> waits for the block and <code>syncwarp()</code>
-for the warp; <code>shared[T, N]()</code> is <code>N</code> elements of <code>T</code> the block shares and
-<code>local[T, N]()</code> this thread's own, both <code>native.ptr[T]</code>; <code>shfl(v, lane)</code>,
-<code>shfl_up(v, d)</code>, <code>shfl_down(v, d)</code>, and <code>shfl_xor(v, m)</code> trade a scalar
-across the warp, whose size <code>warp_size()</code> gives. <code>cuda.launch(kernel,
-grid, block, *args)</code> runs the kernel over <code>grid</code> blocks of <code>block</code> threads
--- each an <code>int</code> or a tuple of up to three -- and waits. <code>ppy.hip</code> is the
-same vocabulary spelled <code>hip</code>, with a 64-lane wavefront; a kernel marked
-by either is one kernel, and <code>ppy emit cuda</code> and <code>ppy emit hip</code> write it
-either way. <code>E1644</code> names a misuse.</p>
-<p>Under CPython a launch runs the grid one block at a time and a block's
-threads together, each a Python thread that knows its position, so
-barriers and shuffles are real: the reference, exact and slow. The
-compiler lowers a kernel to the gpu dialect of the IR
-(<a href="../../internals/ir/">The IR</a>) -- inside device code <code>int</code> arithmetic
-wraps and nothing guards, as on the device -- and refuses what has no
-device form: a list or a buffer parameter, a returned value, a call to a
-host function. The CPU backends leave device code alone, and a function
-that launches stays in Python until the launch runtime; <code>ppy emit cuda</code>
-and <code>ppy emit hip</code> write the kernels, the device functions, and the host
-functions with their launches as one CUDA or HIP C++ unit.</p>
-<p>Under <code>ppy run</code>, a kernel is compiled to PTX -- the gpu dialect as LLVM IR
-for NVPTX, libdevice for the math library, <code>ppy emit nvvm-ir</code> and <code>ppy
-emit ptx</code> show the two -- and <code>cuda.launch</code> runs it through the CUDA
-driver where one is present: scalars by value, a <code>native</code> pointer's whole
-array copied to the device and, when the pointer is mutable, back, so a
-launch means what the reference launch means. <code>cuda.compiled(kernel)</code>
-says whether that is so here. Where the driver, a device, or the NVPTX
-backend is missing, the reference launch runs and <code>W2008</code> says why.
-<code>PPY_CUDA_ARCH</code> names the architecture the PTX is written for (<code>sm_70</code>
-unless set; a driver compiles PTX forward).</p>
-<p><code>cuda.device_alloc[T](n)</code> is <code>n</code> zeroed elements of <code>T</code> that live on the
-device between launches: a <code>native.ptr[T]</code> like <code>stack_alloc</code>'s, so the same
-loops fill and read it and <code>native.offset</code> keeps its kind. The host reads and
-writes through a mirror, and whichever side wrote last holds the truth: a
-launch takes the device address and copies nothing, a host read after a
-launch brings the array back once, a host write before a launch sends it
-once. Without a device -- and under <code>hip</code>, which has no launch runtime yet
--- there is only the mirror, and every path reads and writes it directly, so
-the program means the same thing everywhere. Under <code>ppy run</code> a function
-that allocates device memory stays in Python, as one that launches does;
-<code>ppy emit cuda</code> and <code>ppy emit hip</code> write it into the host function as a
-managed allocation (<code>cudaMallocManaged</code>), which the host reads and writes
-as the mirror is, freed when the function returns. A built artifact carries its
-kernels: <code>ppy build</code> writes each staged payload beside the manifest, and
-the launcher binds it without the compiler -- as it does an <code>@xla.jit</code>
-function's StableHLO.</p>
-<p>Examples: <a href="../../howto/38_cuda/">CUDA</a>.</p>
+<h2 id="ppyinput-lines"><code>ppy.input</code>: lines<a class="headerlink" href="#ppyinput-lines" title="Permanent link">&para;</a></h2>
+<p><code>ppy.input[T]()</code> reads one line and means what the builtin <code>input()</code>
+means, which is what lets <code>ppy convert</code> turn <code>int(input())</code> into
+<code>ppy.input[int]()</code> without changing what the program reads:</p>
+<ul>
+<li><code>ppy.input[str]()</code> is the line without its trailing newline. Spaces and
+  tabs inside it are kept, an empty line is <code>""</code>, the last line of the input
+  needs no newline, and reading past the end raises <code>EOFError</code>.</li>
+<li><code>ppy.input[int]()</code> and <code>ppy.input[float]()</code> read one line and parse the
+  whole line, as <code>int(input())</code> and <code>float(input())</code> do: <code>"  42  "</code> is <code>42</code>,
+  <code>"1_000"</code> is <code>1000</code>, and <code>"1 2"</code> is <code>ValueError</code>, never <code>1</code> with the <code>2</code>
+  quietly kept for later.</li>
+<li><code>ppy.input[tuple[int, int]]()</code> reads one line, splits it as
+  <code>input().split()</code> would, and requires exactly the fields the tuple names;
+  a short line is <code>ValueError</code>, and a field is never taken from the next
+  line. The fields are <code>int</code>, <code>float</code>, or <code>str</code>. A tuple of <code>int</code> alone is
+  read in C, the way a buffer line is, below.</li>
+<li><code>ppy.input[list[int]]()</code> reads one line and converts each of its fields,
+  as <code>list(map(int, input().split()))</code> does: however many there are, <code>[]</code>
+  for an empty line. <code>list[float]</code> and <code>list[str]</code> likewise.</li>
+<li><code>ppy.input[Buffer[int]]()</code> reads one line of integers into a new buffer,
+  as <code>array.array("q", map(int, input().split()))</code> does, and takes no count:
+  the line decides. The fields are read in C without a Python object each --
+  a sign, digits, single underscores between them, the ASCII forms <code>int()</code>
+  accepts -- and a field that is not one is <code>ValueError</code>, one outside 64
+  bits <code>OverflowError</code>, as the array would raise; either way the line was
+  read whole first, as <code>input()</code> had read it. That is the one place the
+  typed read is narrower than <code>input()</code>: non-ASCII digits and integers
+  past 64 bits, which <code>int()</code> takes, are refused by a buffer line read and
+  by a tuple of <code>int</code>. A block of integers spread over several lines is
+  <code>ppy.scan[Buffer[int]](n)</code>.</li>
+</ul>
+<p>A read takes no argument. A prompt is a <code>print</code> before it, the way any
+other output is written, so reading and printing stay two things.</p>
+<h2 id="ppyscan-tokens"><code>ppy.scan</code>: tokens<a class="headerlink" href="#ppyscan-tokens" title="Permanent link">&para;</a></h2>
+<p><code>ppy.scan[T]()</code> reads the next whitespace-delimited token wherever it is.
+Newlines are whitespace to it, as they are to <code>scanf</code>, so a million numbers
+spread over any number of lines read the same way:</p>
+<ul>
+<li><code>ppy.scan[str]()</code> is the next token, however long.</li>
+<li><code>ppy.scan[int]()</code> is the next token as an integer, and the token must be
+  one: an optional sign and digits, within 64 bits. <code>abc</code> where an integer
+  is expected is <code>ValueError</code> naming it -- it is never skipped -- and the
+  end of the input is <code>EOFError</code>.</li>
+<li><code>ppy.scan[float]()</code> is the next token as a float; <code>ppy.scan[tuple[int,
+  int]]()</code> two tokens, wherever they fall.</li>
+<li><code>ppy.scan[Buffer[int]](n)</code> reads <code>n</code> integer tokens straight into a new
+  buffer, fewer where the input ends. Reading goes into memory rather than
+  through a Python object per field, which is what takes a million numbers
+  quickly -- faster than <code>sys.stdin.read().split()</code> and faster than C's
+  <code>scanf</code>, measured in <a href="../../howto/15_algorithms/">Algorithms</a>.</li>
+</ul>
+<p>A token read stops before the whitespace that ends it, so a line read that
+follows starts there: after <code>ppy.scan[int]()</code> reads the <code>5</code> of <code>5\nabc</code>,
+<code>ppy.input[str]()</code> returns <code>""</code>, the rest of that line, and the next
+returns <code>abc</code>.</p>
+<h2 id="ppyread_ints-and-ppyread_token-buffers"><code>ppy.read_ints</code> and <code>ppy.read_token</code>: buffers<a class="headerlink" href="#ppyread_ints-and-ppyread_token-buffers" title="Permanent link">&para;</a></h2>
+<p>The scanner's low-level forms fill a buffer the caller made:
+<code>ppy.read_ints(buffer)</code> fills a writable buffer of 64-bit integers with
+integer tokens and returns how many it read, which is fewer than
+<code>len(buffer)</code> only where the input ended; <code>ppy.read_token(buffer)</code> reads one
+token into a buffer of bytes or of 64-bit integers, one byte per slot, and
+returns how many slots it wrote. The buffer's length is the capacity the
+caller chose: <code>read_token</code> cuts a longer token there and consumes the rest,
+which is what a fixed buffer means, and <code>ppy.scan[str]()</code> is the form with
+no such limit. <code>ppy.buffer[T](n)</code> makes a buffer of <code>n</code> zeroed elements of
+<code>T</code> -- <code>array.array</code> under CPython and a native allocation in a standalone
+binary, which is what lets the same source build both ways.</p>
+<h2 id="one-grammar-two-implementations">One grammar, two implementations<a class="headerlink" href="#one-grammar-two-implementations" title="Permanent link">&para;</a></h2>
+<p>Whitespace is ASCII -- space, tab, newline, carriage return, form feed,
+vertical tab -- and an integer token is <code>[+-]?[0-9]+</code> within a signed 64-bit
+word. The scanner is a few C functions
+(<code>ppy_runtime.scanner</code>) compiled once and cached, and the same text is what
+a standalone binary links in as its runtime, so <code>ppy.scan</code> means the same
+thing under CPython and with no interpreter at all. Without a C compiler a
+pure-Python fallback reads exactly the same grammar; a differential test
+holds the two to the same answers on malformed and boundary input, and the
+only difference is speed.</p>
+<p>All of these carry the IO effect, so a function that reads is never
+mistaken for a pure one, and all of them work on every path. The reader
+owns file descriptor 0 and buffers it itself, so a program that uses it must
+not also read <code>input()</code> or <code>sys.stdin</code>; <code>ppy convert</code> rewrites a module's
+<code>input</code> idioms only where the module never touches <code>sys.stdin</code>.</p>
+<p>In native code, <code>ppy.input[int]()</code> and <code>ppy.scan[int]()</code> are calls into the
+runtime; in a standalone binary they are the scanner itself, and where
+Python would raise, the binary says what happened on standard error and
+stops. <code>ppy.input[Buffer[int]]()</code> has no standalone lowering yet. <code>E1305</code>
+names a misuse -- an argument to a scalar read, a <code>scan</code> of a buffer
+without its count, a count given to the line read of one.</p>
 
 
 
@@ -3670,7 +3841,7 @@ function's StableHLO.</p>
       <nav class="md-footer__inner md-grid" aria-label="Footer" >
         
           
-          <a href="../aio/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Coroutines">
+          <a href="../effects/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Effects and the three paths">
             <div class="md-footer__button md-icon">
               
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
@@ -3680,20 +3851,20 @@ function's StableHLO.</p>
                 Previous
               </span>
               <div class="md-ellipsis">
-                Coroutines
+                Effects and the three paths
               </div>
             </div>
           </a>
         
         
           
-          <a href="../xla/" class="md-footer__link md-footer__link--next" aria-label="Next: XLA">
+          <a href="../native-lowering/" class="md-footer__link md-footer__link--next" aria-label="Next: Native lowering">
             <div class="md-footer__title">
               <span class="md-footer__direction">
                 Next
               </span>
               <div class="md-ellipsis">
-                XLA
+                Native lowering
               </div>
             </div>
             <div class="md-footer__button md-icon">

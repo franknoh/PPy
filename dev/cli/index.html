@@ -622,6 +622,8 @@
       
         
       
+        
+      
     
     
     
@@ -1019,6 +1021,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../guide/input/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reading input
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../guide/native-lowering/" class="md-nav__link">
         
   
@@ -1026,7 +1056,7 @@
   <span class="md-ellipsis">
     
   
-    Input and native lowering
+    Native lowering
   
 
     
@@ -4178,9 +4208,9 @@ a contract on that function.</p>
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>ppy<span class="w"> </span>run<span class="w"> </span>FILE.ppy<span class="w"> </span><span class="o">[</span>--<span class="w"> </span>ARGS...<span class="o">]</span><span class="w">    </span><span class="c1"># compile through LLVM, then run</span>
 </code></pre></div>
 <p>Everything after <code>--</code> reaches the program as <code>sys.argv[1:]</code>. <code>ppy run</code>
-keeps Python-integer semantics by default; <code>--unsafe</code> drops the overflow
-guards on data arithmetic (64-bit wrap, bounds checks stay), and
-<code>--safeguards {hoisted,inline,off}</code> names the guard mode outright.
+keeps Python-integer semantics by default, as <code>ppy build</code> does; <code>--unsafe</code>
+drops the overflow guards on data arithmetic (64-bit wrap, bounds checks
+stay), and <code>--safeguards {hoisted,inline,off}</code> names the guard mode outright.
 <code>--prover {off,z3}</code> asks the solver to prove overflow guards away where the
 analysis allows it, overriding <code>[tool.ppy.llvm] prover</code>; see <a href="../internals/solver/">Where a solver fits</a>.</p>
 <p>The first <code>ppy run</code> of a program is a build into the cache followed by the
@@ -4348,7 +4378,7 @@ migrated before.</p>
 non-zero on any error. <code>--remarks</code> also prints which functions lowered natively
 and which stayed boxed, with the reason.</p>
 <h2 id="ppy-build-compile-without-running"><code>ppy build</code> — compile without running<a class="headerlink" href="#ppy-build-compile-without-running" title="Permanent link">&para;</a></h2>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>ppy<span class="w"> </span>build<span class="w"> </span>TARGET<span class="w"> </span><span class="o">[</span>--safe<span class="o">]</span><span class="w"> </span><span class="o">[</span>--host-cpu<span class="o">]</span><span class="w"> </span><span class="o">[</span>--standalone<span class="o">]</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>ppy<span class="w"> </span>build<span class="w"> </span>TARGET<span class="w"> </span><span class="o">[</span>--unsafe<span class="o">]</span><span class="w"> </span><span class="o">[</span>--host-cpu<span class="o">]</span><span class="w"> </span><span class="o">[</span>--standalone<span class="o">]</span>
 <a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="w">                 </span><span class="o">[</span>--target<span class="w"> </span>TRIPLE<span class="o">]</span><span class="w"> </span><span class="o">[</span>--python-extension<span class="o">]</span><span class="w"> </span><span class="o">[</span>--library<span class="o">]</span>
 <a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="w">                 </span><span class="o">[</span>--backend<span class="w"> </span><span class="o">{</span>llvm,python<span class="o">}]</span><span class="w"> </span><span class="o">[</span>-o<span class="w"> </span>DIR<span class="o">]</span>
 <a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="w">                 </span><span class="o">[</span>--sanitize<span class="w"> </span>KINDS<span class="o">]</span><span class="w"> </span><span class="o">[</span>--pgo<span class="w"> </span>FILE<span class="o">]</span>
@@ -4358,11 +4388,12 @@ and which stayed boxed, with the reason.</p>
 </code></pre></div>
 <p><code>--backend llvm</code> (default) writes objects, <code>libppy_&lt;project&gt;.so</code>,
 <code>ppy-bindings.json</code>, a launcher, and -- when a function is
-<code>@ppy.native.export</code>ed -- a C header declaring the public symbols. A build is a wrap-semantics artifact by
-default — data arithmetic overflows at 64 bits like every native compiler's
-output, while bounds checks stay; <code>--safe</code> keeps Python's integers
-bit-for-bit instead, and the launcher always runs with exactly the mode it
-was built with. It is a native executable that embeds the
+<code>@ppy.native.export</code>ed -- a C header declaring the public symbols. A build
+keeps Python's integers bit-for-bit, exactly as <code>ppy run</code> does: overflow is
+guarded and falls back to arbitrary precision. <code>--unsafe</code> is the same flag
+it is on <code>run</code> -- data arithmetic wraps at 64 bits like every native
+compiler's output, while bounds checks stay -- and the launcher always runs
+with exactly the mode it was built with. It is a native executable that embeds the
 interpreter and is <code>ppy run</code> in a compiled coat: it enters the same CLI, the
 same pipeline, and the same guarded bindings, and only takes its machine code
 from the library built next to it instead of a JIT (<code>ppy run --prebuilt
@@ -4424,7 +4455,7 @@ nothing to package and says so (<code>E1805</code>).</p>
 <p>Builds ahead of time exactly what <code>ppy run FILE</code> and <code>import ppy</code> build on
 their first use -- the artifact in the project cache, under the key an
 import of that module will look for -- and stops. It takes no flags that
-would change the artifact (<code>--safe</code>, <code>--host-cpu</code>, <code>--prover</code>, <code>-o</code>, and
+would change the artifact (<code>--unsafe</code>, <code>--host-cpu</code>, <code>--prover</code>, <code>-o</code>, and
 the rest are refused): an import takes none either, so the project
 configuration is the only thing that names the build, and what a flag built
 nothing would find. Its place is the step before a launch that starts many
@@ -4448,14 +4479,17 @@ lower, plus <code>print</code> of integers, booleans, and string literals throug
 shims (floats wait until native formatting can reproduce Python's
 shortest-round-trip repr exactly), plus the memory the program makes for
 itself — <code>ppy.buffer[int](n)</code> is a zeroed native allocation here and
-<code>ppy.input[Buffer[int]](n)</code> is that allocation with the input read straight
+<code>ppy.scan[Buffer[int]](n)</code> is that allocation with the input read straight
 into it, because there is no <code>array.array</code> to build. Anything else is <code>E1803</code> with the path
 that reaches it, never a workaround. There is no Python to fall back to, so
-in <code>--safe</code> mode a failed guard aborts with a message instead of retrying
-in Python; <code>ppy.input[int]()</code> reads through the C support rather than the
-runtime's reader, and answers 0 at end of input because there is no
-exception to raise; the default wrap-semantics build has almost no guards left to
-fail.</p>
+a failed guard ends the process with a message on standard error instead of
+retrying in Python -- a standalone build keeps the guards, like every
+build, and never claims Python's integers it cannot provide; <code>--unsafe</code>
+asks for wrap semantics outright, with almost no guards left to fail.
+<code>ppy.input[int]()</code> and <code>ppy.scan[int]()</code> are the scanner itself, the same
+C the runtime's reader compiles, and where Python would raise -- the end
+of the input, a token that is not an integer -- the binary says so on
+standard error and stops.</p>
 <p>Five of the six problems in <code>examples/15_algorithms</code> build this way once
 their buffers come from <code>ppy.buffer</code> rather than <code>array.array</code>, and four of
 those beat their C reference. Substring search is the one that cannot: its

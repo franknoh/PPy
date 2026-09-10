@@ -622,6 +622,8 @@
       
         
       
+        
+      
     
     
     
@@ -1019,6 +1021,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../../guide/input/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reading input
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../guide/native-lowering/" class="md-nav__link">
         
   
@@ -1026,7 +1056,7 @@
   <span class="md-ellipsis">
     
   
-    Input and native lowering
+    Native lowering
   
 
     
@@ -3559,7 +3589,7 @@ walking up to the nearest <code>pyproject.toml</code>, <code>ppy.toml</code>, or
 <a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a><span class="n">lto</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">"thin"</span>
 <a id="__codelineno-0-19" name="__codelineno-0-19" href="#__codelineno-0-19"></a><span class="n">cpython-api</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">"version-specific"</span>
 <a id="__codelineno-0-20" name="__codelineno-0-20" href="#__codelineno-0-20"></a><span class="n">host-cpu</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">false</span><span class="w">                  </span><span class="c1"># build for this machine, not the baseline</span>
-<a id="__codelineno-0-21" name="__codelineno-0-21" href="#__codelineno-0-21"></a><span class="c1"># safeguards = "hoisted"          # unset: the command decides (see below)</span>
+<a id="__codelineno-0-21" name="__codelineno-0-21" href="#__codelineno-0-21"></a><span class="c1"># safeguards = "hoisted"          # unset: hoisted; --unsafe is "off" for one run</span>
 <a id="__codelineno-0-22" name="__codelineno-0-22" href="#__codelineno-0-22"></a><span class="c1"># prover = "off"                 # "z3" proves overflow guards away; needs ppy-lang[solver]</span>
 <a id="__codelineno-0-23" name="__codelineno-0-23" href="#__codelineno-0-23"></a>
 <a id="__codelineno-0-24" name="__codelineno-0-24" href="#__codelineno-0-24"></a><span class="k">[tool.ppy.parallel]</span>
@@ -3612,7 +3642,7 @@ walking up to the nearest <code>pyproject.toml</code>, <code>ppy.toml</code>, or
 <tr>
 <td><code>llvm.safeguards</code></td>
 <td>per command</td>
-<td><code>hoisted</code> proves the extreme cases once in a guard block ahead of the loop; <code>inline</code> keeps every per-operation guard in the body; <code>off</code> drops the overflow guards on data arithmetic — 64-bit wrap semantics — while keeping every bounds check. Unset, the command decides: <code>ppy run</code> uses <code>hoisted</code> (Python integers, bit for bit), <code>ppy build</code> uses <code>off</code> (a wrap-semantics artifact, like every native compiler); <code>run --unsafe</code> and <code>build --safe</code> flip them per invocation.</td>
+<td><code>hoisted</code> proves the extreme cases once in a guard block ahead of the loop; <code>inline</code> keeps every per-operation guard in the body; <code>off</code> drops the overflow guards on data arithmetic — 64-bit wrap semantics — while keeping every bounds check. Unset, both <code>ppy run</code> and <code>ppy build</code> use <code>hoisted</code> (Python integers, bit for bit); <code>--unsafe</code> on either is <code>off</code> for that invocation.</td>
 </tr>
 <tr>
 <td><code>llvm.prover</code></td>

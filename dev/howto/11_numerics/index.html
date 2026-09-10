@@ -622,6 +622,8 @@
       
         
       
+        
+      
     
     
     
@@ -1019,6 +1021,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../../guide/input/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reading input
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../guide/native-lowering/" class="md-nav__link">
         
   
@@ -1026,7 +1056,7 @@
   <span class="md-ellipsis">
     
   
-    Input and native lowering
+    Native lowering
   
 
     
@@ -3723,8 +3753,8 @@ sign of the remainder.</p>
 twenty of them natively. <code>may_overflow(30)</code> sets the flag on the
 twenty-first, the function returns to its Python body, and CPython finishes
 with arbitrary precision — the 33-digit number Python prints. Under <code>ppy
-run</code> the guards are on by default; <code>ppy build</code> produces a wrap-semantics
-artifact, and <code>--safe</code> puts them back.</p>
+run</code> and <code>ppy build</code> the guards are on by default; <code>--unsafe</code> on either
+produces a wrap-semantics artifact.</p>
 <h2 id="floor-not-truncation">Floor, not truncation<a class="headerlink" href="#floor-not-truncation" title="Permanent link">&para;</a></h2>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="nd">@ppy</span><span class="o">.</span><span class="n">pure</span>
 <a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="nd">@ppy</span><span class="o">.</span><span class="n">opt</span><span class="p">(</span><span class="mi">3</span><span class="p">)</span>
