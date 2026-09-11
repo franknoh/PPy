@@ -6,13 +6,17 @@ name: ci
 on:
   push:
     branches: [main, dev]
-    paths-ignore: &docs_only
+    paths-ignore:
       - "docs/**"
       - "**/*.md"
       - "mkdocs.yml"
       - "examples/**/measurements.json"
   pull_request:
-    paths-ignore: *docs_only
+    paths-ignore:
+      - "docs/**"
+      - "**/*.md"
+      - "mkdocs.yml"
+      - "examples/**/measurements.json"
 
 jobs:
   checks:

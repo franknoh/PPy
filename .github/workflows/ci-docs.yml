@@ -7,13 +7,17 @@ name: ci
 on:
   push:
     branches: [main, dev]
-    paths: &docs_only
+    paths:
       - "docs/**"
       - "**/*.md"
       - "mkdocs.yml"
       - "examples/**/measurements.json"
   pull_request:
-    paths: *docs_only
+    paths:
+      - "docs/**"
+      - "**/*.md"
+      - "mkdocs.yml"
+      - "examples/**/measurements.json"
 
 jobs:
   checks:
