@@ -532,7 +532,7 @@ def main() -> int:
     parser.add_argument(
         "--setup-only",
         action="store_true",
-        help="build the environment, then leave the Pod running (implies --keep) for a hand-driven look",
+        help="build the environment, then leave the Pod running (implies --keep) for a look",
     )
     parser.add_argument("--gpu-id", default="", help="a GPU type to ask for instead of the stock")
     parser.add_argument("--data-center", default="", help="a datacenter id to ask in (EU-RO-1)")

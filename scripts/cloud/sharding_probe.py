@@ -25,9 +25,6 @@ def main() -> int:
     if len(devices) < 2:
         print("requires >= 2 devices")
         return 2
-    mesh = Mesh(devices, ("batch",))
-    by_batch = NamedSharding(mesh, PartitionSpec("batch"))
-    everywhere = NamedSharding(mesh, PartitionSpec())
     rng = np.random.default_rng(0)
     rows, cols, hidden = 4096, 32, 32
     x_np = rng.standard_normal((rows, cols)).astype(np.float32)
@@ -59,21 +56,18 @@ def main() -> int:
         w1, b1, w2, b2 = (jax.device_put(a, rep) for a in (w1_np, b1_np, w2_np, b2_np))
         print(f"[{label}] x sharding {x.sharding} shape {x.shape}")
         print(f"[{label}] sum(x) {float(jnp.sum(x)):.4f} numpy {float(x_np.sum()):.4f}")
-        print(
-            f"[{label}] mean(x*x) {float(jnp.mean(x * x)):.6f} numpy {float((x_np * x_np).mean()):.6f}"
-        )
+        squares = float(jnp.mean(x * x))
+        print(f"[{label}] mean(x*x) {squares:.6f} numpy {float((x_np * x_np).mean()):.6f}")
         loss = forward_loss(x, y, w1, b1, w2, b2)
         print(f"[{label}] loss {float(loss):.6f} (sharding {loss.sharding}) numpy {expected:.6f}")
         value, grads = grad(x, y, w1, b1, w2, b2)
-        print(
-            f"[{label}] value_and_grad loss {float(value):.6f}; |grad w2| {float(jnp.linalg.norm(grads[2])):.6f}"
-        )
+        norm = float(jnp.linalg.norm(grads[2]))
+        print(f"[{label}] value_and_grad loss {float(value):.6f}; |grad w2| {norm:.6f}")
         hidden_ = jnp.maximum(jnp.dot(x, w1) + b1, 0.0)
         print(f"[{label}] hidden sharding {hidden_.sharding}; sum {float(jnp.sum(hidden_)):.4f}")
         residual = jnp.dot(hidden_, w2) + b2 - y
-        print(
-            f"[{label}] residual sum sq {float(jnp.sum(residual * residual)):.4f} / rows {rows} = {float(jnp.sum(residual * residual)) / rows:.6f}"
-        )
+        total = float(jnp.sum(residual * residual))
+        print(f"[{label}] residual sum sq {total:.4f} / rows {rows} = {total / rows:.6f}")
     return 0
 
 
