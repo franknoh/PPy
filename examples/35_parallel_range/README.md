@@ -97,11 +97,11 @@ to keep one: `dot` is BLAS, `count_odd` builds two temporaries to count.
 <!-- compare:start -->
 | | PPY `ppy run` | Numba `prange` | Taichi | Mojo | NumPy |
 |---|---:|---:|---:|---:|---:|
-| squares | 1.35 ± 0.08 | 3.13 ± 3.41 | **1.13 ± 0.02** | 1.35 ± 0.12 | 13.24 ± 0.56 |
-| dot, in order | **6.61 ± 0.41** | — | — | 15.40 ± 0.21 | — |
-| dot, reassociated | 1.71 ± 0.05 | 2.90 ± 2.94 | **1.48 ± 0.02** | 1.91 ± 0.21 | 4.36 ± 2.06 |
-| count_odd | 1.08 ± 0.07 | **0.72 ± 0.18** | 1.27 ± 0.09 | 1.79 ± 0.13 | 27.22 ± 1.13 |
-| fill, serial | 6.36 ± 0.10 | 7.71 ± 0.14 | **4.11 ± 0.16** | 20.19 ± 0.23 | 15.07 ± 0.26 |
+| squares | 1.34 ± 0.03 | **0.93 ± 0.06** | 1.16 ± 0.04 | 1.05 ± 0.05 | 13.82 ± 0.52 |
+| dot, in order | **6.39 ± 0.40** | — | — | 14.93 ± 1.30 | — |
+| dot, reassociated | 1.80 ± 0.13 | 1.34 ± 0.04 | 1.50 ± 0.04 | 1.52 ± 0.10 | **1.33 ± 0.05** |
+| count_odd | 0.99 ± 0.04 | **0.70 ± 0.04** | 1.23 ± 0.06 | 1.37 ± 0.19 | 27.64 ± 1.35 |
+| fill, serial | 6.17 ± 0.11 | 7.51 ± 0.04 | **4.02 ± 0.38** | 19.57 ± 1.09 | 15.43 ± 0.28 |
 <!-- compare:end -->
 
 On the elementwise kernels the four compiled tools are within a few tenths
