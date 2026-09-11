@@ -52,46 +52,74 @@ switch for fused NumPy loops like these.
 The fused expression and the sum of squares over eight million doubles, in
 [`compare/`](compare/): [`fused_bench.ppy`](compare/fused_bench.ppy),
 [`fused_numpy.py`](compare/fused_numpy.py), [`fused_numexpr.py`](compare/fused_numexpr.py),
-[`fused_numba.py`](compare/fused_numba.py), and [`fused_jax.py`](compare/fused_jax.py).
-Each prints two elements of the result to twelve digits and the sum to
-three, then the best of five calls; [`examples/compare.py`](../compare.py)
-runs each five times and reports the mean and standard deviation across
-processes, in milliseconds. All five print the same answers: the elementwise
-result is bit-identical everywhere, and the sums agree to the digits shown.
+[`fused_numba.py`](compare/fused_numba.py), [`fused_jax.py`](compare/fused_jax.py).
+Milliseconds, best of five calls, over five processes.
 
+**PPY** -- the NumPy expression in a function, `@ppy.parallel` to split it;
+the serial row is the same expression fused into one loop with no
+decorator, and `strict_total` is NumPy's sum in NumPy's order:
+
+```python
+@ppy.pure
+@ppy.parallel
+@ppy.opt(3)
+def parallel(a: np.ndarray, b: np.ndarray) -> np.ndarray:
+    return (a * b + a) * (b - a) + a * 0.5 - b * 0.25
+```
+
+**NumPy** is the expression as written -- five operations, four 64 MB
+temporaries, one thread. **numexpr** is the expression as a string,
+compiled to its own virtual machine and evaluated in chunks across threads:
+
+```python
+ne.evaluate("(x * y + x) * (y - x) + x * 0.5 - y * 0.25", local_dict={"x": x, "y": y})
+```
+
+**Numba** is an explicit loop under `@njit(parallel=True)` writing into
+`np.empty_like`:
+
+```python
+@njit(parallel=True)
+def fused(a, b):
+    out = np.empty_like(a)
+    for i in prange(a.shape[0]):
+        out[i] = (a[i] * b[i] + a[i]) * (b[i] - a[i]) + a[i] * 0.5 - b[i] * 0.25
+    return out
+```
+
+**JAX** is the expression under `jax.jit` on the CPU, fused by XLA and run
+on its thread pool, with `jax_enable_x64`:
+
+```python
+@jax.jit
+def fused(a, b):
+    return (a * b + a) * (b - a) + a * 0.5 - b * 0.25
+```
+
+<!-- compare:start -->
 | | PPY | NumPy | numexpr | Numba `prange` | JAX `jit` |
 |---|---:|---:|---:|---:|---:|
-| fused, serial | 20.33 ± 0.33 | — | — | — | — |
-| fused | 12.54 ± 0.42 | 56.68 ± 1.49 | 6.52 ± 0.43 | **4.89 ± 1.64** | 6.07 ± 0.68 |
-| sum of squares | 18.45 ± 0.39 | 12.63 ± 0.49 | 6.59 ± 0.15 | 4.13 ± 0.03 | **0.72 ± 0.06** |
-| sum of squares, relaxed | 7.03 ± 0.21 | — | — | — | — |
+| fused, serial | 11.58 ± 0.44 | — | — | — | — |
+| fused | 4.21 ± 0.09 | 56.33 ± 0.99 | 6.67 ± 0.15 | **3.75 ± 0.86** | 6.23 ± 0.66 |
+| sum of squares | 13.21 ± 0.36 | 12.17 ± 0.23 | 6.73 ± 0.17 | 4.13 ± 0.03 | **0.73 ± 0.06** |
+| sum of squares, relaxed | 4.48 ± 0.32 | — | — | — | — |
+<!-- compare:end -->
 
-What each port asked for:
+Fusing the expression is what removes NumPy's four temporaries: the serial
+fused loop reads the two inputs once and writes the output once, and
+splitting that loop across the cores is a memory-bandwidth problem that
+PPY, Numba, JAX, and numexpr solve the same way, within a couple of
+milliseconds of each other. The fused kernel also checks its own result in
+the same loop -- one add-reduction of non-finite elements the vectorizer
+keeps in a register, one guard after -- which is how it keeps NumPy's
+floating-point reporting without a second pass over 64 MB. The ordered sum
+is NumPy's order and NumPy's time; the relaxed one vectorizes on one
+thread, and JAX's reduction, reassociated across its pool, is the row that
+shows what the same permission buys with threads.
 
-- **PPY** is the source above: the NumPy expression in a function, `@ppy.parallel`
-  to split it, `@ppy.fastmath` to let the sum reassociate. The serial row is
-  the same expression fused into one loop with no decorator; `strict_total`
-  is NumPy's sum in NumPy's order.
-- **NumPy** is the expression as written: five operations, four temporaries
-  of 64 MB each, one thread.
-- **numexpr** is the expression as a string, compiled to its virtual machine
-  and evaluated in chunks across threads; `sum(x * x)` likewise.
-- **Numba** is an explicit loop under `@njit(parallel=True)` with `prange`,
-  writing into `np.empty_like`; the sum is a serial `@njit` loop, and it
-  agrees with the others only to the digits printed.
-- **JAX** is the expression under `jax.jit` on the CPU, fused by XLA and
-  run on its thread pool, with `jax_enable_x64` so the answers match.
-
-The serial fused loop is well ahead of NumPy's four temporaries, and the
-parallel one is the slowest of the four threaded kernels here: Numba, JAX,
-and numexpr split the same work across the same cores in half the time.
-The ordered sum is NumPy's own order and pays for it; the relaxed one
-vectorizes, and JAX's reduction, which reassociates by default, is the row
-to compare it with.
-
-Intel Core Ultra 9 386H (16 threads), threads backend; NumPy 2.5.3, numexpr 2.14.2, Numba 0.67.0 on
-CPython 3.12.13, JAX 0.11.1 on CPython 3.13.13, PPY on CPython 3.13.13,
-from a checkout on a native filesystem.
+Intel Core Ultra 9 386H (16 threads), threads backend; NumPy 2.5.3, numexpr
+2.14.2, Numba 0.67.0 on CPython 3.12.13, JAX 0.11.1 on CPython 3.13.13,
+PPY on CPython 3.13.13, from a checkout on a native filesystem.
 
 ## Run it
 

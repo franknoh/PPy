@@ -3,9 +3,13 @@
 import time
 
 import numpy as np
-import taichi as ti
+import contextlib
+import sys
 
-ti.init(arch=ti.cpu, default_ip=ti.i64, default_fp=ti.f64)
+with contextlib.redirect_stdout(sys.stderr):  # the banners are not answers
+    import taichi as ti
+
+    ti.init(arch=ti.cpu, default_ip=ti.i64, default_fp=ti.f64)
 
 N = 8_000_000
 a_f = ti.field(ti.f64, shape=N)
@@ -67,9 +71,9 @@ def main():
     a_f.from_numpy(0.001 * i)
     b_f.from_numpy(1.0 / (1 + i))
     ints.from_numpy((np.arange(N, dtype=np.int64) % 3).astype(np.int64))
-    print(squares(), f"{dot():.6f}", f"{dot():.3f}", count_odd(3), fill(0.5))
+    print(squares(), round(dot(), 6), round(dot(), 3), count_odd(3), fill(0.5))
     timed("squares", squares)
-    timed("dot", dot)
+    timed("dot_relaxed", dot)
     timed("count_odd", lambda: count_odd(3))
     timed("fill", lambda: fill(0.5))
 

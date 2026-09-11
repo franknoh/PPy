@@ -208,6 +208,31 @@ project on a mounted Windows drive bakes that path into `sys.path`, and
 every import-bound number roughly quadruples; the numbers in the tree were
 taken from a worktree under `/tmp`, one session, nothing else running.
 
+The comparison tables -- an example against Numba, CuPy, Triton, Taichi,
+Mojo, Codon, JAX, PyTorch, Rust, C -- come from `scripts/compare_docs.py`.
+Its manifest names every `compare/` program and the command that runs it;
+the script builds what needs building, runs each program through
+`examples/compare.py`, which prints no table until every program prints the
+same answers, and writes the table between the `<!-- compare:start -->` and
+`<!-- compare:end -->` markers of the README, with the run recorded in
+`compare/measurements.json`. Without `--write` it reports drift beyond the
+tolerance; a comparison whose toolchain is missing is skipped and said so,
+never written from a partial run. Where the toolchains live is read from
+`PPY_COMPARE_PYTHON`, `PPY_JAX_PYTHON`, `PPY_CODON`, `PPY_MOJO`, `PPY_NVCC`,
+and `PPY_CARGO`.
+
+Both scripts run on every push to `dev` that touches code, in
+`.github/workflows/bench.yml`, on a self-hosted runner labelled `ppy-bench`
+-- the machine the numbers were taken on, with its GPU and the neighbours'
+toolchains -- and the workflow commits what moved back to `dev`. A hosted
+runner has none of that, which is why `benchmark.yml` only reports on a
+schedule. The runner lives in `~/actions-runner` on that machine and stops
+with it; `~/actions-runner/start.sh` brings it back. A change that touches
+only prose -- the docs, a README, the changelog, a recorded measurement --
+skips the test matrix: `ci.yml` sorts the changed files first, a skipped
+required check satisfies the branch protection, and the strict site build
+runs in its place.
+
 ## Releasing
 
 The distribution is **`ppy-lang`**; the packages it installs are `ppy`,

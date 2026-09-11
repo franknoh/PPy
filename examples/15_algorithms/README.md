@@ -49,36 +49,79 @@ so the caller sees them.
 
 The same eight kernels ported to three tools that compile Python-shaped
 code, in [`compare/`](compare/): [`algorithms_numba.py`](compare/algorithms_numba.py),
-[`algorithms.mojo`](compare/algorithms.mojo), and [`algorithms_codon.py`](compare/algorithms_codon.py).
-Kernel wall time inside the program, mean ± standard deviation over 7 runs,
-each a fresh process, in milliseconds; every column prints every answer the
-same. Bold is the fastest cell in the row.
+[`algorithms.mojo`](compare/algorithms.mojo), [`algorithms_codon.py`](compare/algorithms_codon.py).
+Kernel wall time inside the program, milliseconds, mean and spread over
+seven fresh processes; Numba is timed after one warm call so its compile is
+not in the number. Collatz, as each of them spells it:
 
-| kernel | `ppy run` | `ppy build --unsafe` | Numba `@njit` | Mojo | Codon |
+**PPY** -- annotated Python, and `ppy run` keeps Python's integers: the
+multiply is overflow-checked and falls back to arbitrary precision.
+
+```python
+def collatz_longest(limit: int) -> int:
+    best: int = 0
+    for start in range(1, limit):
+        n: int = start
+        steps: int = 0
+        while n != 1:
+            n = n // 2 if n % 2 == 0 else 3 * n + 1
+            steps += 1
+        best = max(best, steps)
+    return best
+```
+
+**Numba** is the same function with `@njit` in place of the annotations and
+a NumPy array in place of `array.array`; **Codon** is the same source with
+`List[int]` annotations, run with `codon run -release`. Both wrap at 64 bits
+without a word.
+
+```python
+@njit
+def collatz_longest(limit):
+    best = 0
+    for start in range(1, limit):
+        n = start
+        ...
+```
+
+**Mojo** is typed by hand -- `Int` for every index, `Int64` for every
+element, `var` on every local -- and is the plain `List` version without
+`UnsafePointer`:
+
+```mojo
+def collatz_longest(limit: Int) -> Int64:
+    var best: Int64 = 0
+    for start in range(1, limit):
+        var n = Int64(start)
+        var steps: Int64 = 0
+        while n != 1:
+            n = n // 2 if n % 2 == 0 else 3 * n + 1
+            steps += 1
+        best = max(best, steps)
+    return best
+```
+
+<!-- compare:start -->
+| | `ppy run` | `ppy build --unsafe` | Numba `@njit` | Mojo | Codon |
 |---|---:|---:|---:|---:|---:|
-| sieve 2e6 | 9.1 ± 0.5 | 8.8 ± 0.3 | **7.5 ± 0.2** | 12.2 ± 1.1 | 8.1 ± 0.4 |
-| collatz 3e5 | 40.2 ± 0.8 | **30.5 ± 0.4** | 31.7 ± 0.3 | 67.7 ± 0.7 | 32.8 ± 1.2 |
-| knapsack 400x2e4 | 4.9 ± 0.1 | 3.5 ± 0.1 | 4.3 ± 0.1 | **2.1 ± 0.0** | 5.7 ± 0.2 |
-| edit 2000x2000 | 2.9 ± 0.1 | 2.7 ± 0.1 | **1.8 ± 0.2** | 8.0 ± 0.2 | 2.4 ± 0.1 |
-| floyd 220 | 3.1 ± 0.1 | 3.0 ± 0.0 | 2.5 ± 0.1 | 3.0 ± 0.2 | **1.3 ± 0.3** |
-| matmul 220 | 3.6 ± 0.1 | 3.5 ± 0.1 | **3.4 ± 0.3** | 7.7 ± 0.1 | 3.8 ± 0.1 |
-| union-find 5e5 | 3.1 ± 0.1 | 3.1 ± 0.1 | **2.5 ± 0.1** | 6.7 ± 0.6 | 3.9 ± 0.3 |
-| fermat 6e4 | 2.3 ± 0.1 | 2.5 ± 0.1 | 1.7 ± 0.1 | 2.1 ± 0.0 | **1.6 ± 0.1** |
+| sieve 2e6 | 8.60 ± 0.28 | 9.02 ± 0.36 | **7.50 ± 0.12** | 12.52 ± 0.96 | 7.92 ± 0.25 |
+| collatz 3e5 | 40.14 ± 0.61 | **30.70 ± 0.55** | 32.08 ± 0.43 | 69.19 ± 1.68 | 32.60 ± 0.28 |
+| knapsack 400x2e4 | 5.16 ± 0.11 | 3.74 ± 0.32 | 4.50 ± 0.17 | **2.25 ± 0.23** | 5.64 ± 0.05 |
+| edit 2000x2000 | 2.94 ± 0.05 | 2.82 ± 0.04 | **1.78 ± 0.08** | 8.06 ± 0.23 | 2.46 ± 0.09 |
+| floyd 220 | 3.18 ± 0.08 | 3.02 ± 0.04 | 2.46 ± 0.13 | 3.01 ± 0.06 | **1.26 ± 0.36** |
+| matmul 220 | 3.90 ± 0.57 | 3.62 ± 0.04 | **3.44 ± 0.11** | 7.85 ± 0.21 | 3.80 ± 0.00 |
+| union-find 5e5 | 3.06 ± 0.15 | 3.22 ± 0.27 | **2.40 ± 0.00** | 6.95 ± 0.43 | 3.86 ± 0.22 |
+| fermat 6e4 | 2.28 ± 0.04 | 2.54 ± 0.05 | 1.70 ± 0.00 | 2.12 ± 0.03 | **1.50 ± 0.00** |
+<!-- compare:end -->
 
-`ppy run` keeps Python's integers -- overflow is guarded and falls back to
-arbitrary precision -- and the other four columns wrap at 64 bits, which is
-where collatz picks up its 10 ms. Numba is the fastest column on six of the
-eight against `ppy build --unsafe`, by ten to thirty percent; the Numba port is the
-PPY source with `@njit` in place of the annotations and NumPy arrays in
-place of `array.array`, timed after one warm call so its compile is not in
-the number. Codon takes the same source with `List[int]` annotations and
-runs it with `codon run -release` (the `build` link needed a `libz` this
-machine lacks). The Mojo port is typed by hand -- `List[Int64]`, `mut`
-parameters, an `Int` for every index and an `Int64` for every element --
-and is the plain `List` version without `UnsafePointer`; it is the slowest
-on five of the eight and the fastest on knapsack. Numba 0.67.0 on CPython
-3.12.13, Mojo 1.0.0 (`-O3`), Codon 0.19.6, PPY on CPython 3.13.13; Intel
-Core Ultra 9 386H; [`examples/compare.py`](../compare.py) produced the table.
+`ppy build --unsafe` is the wrap-semantics column and the one to read
+against the other three; `ppy run` carries the overflow guards, which is
+where collatz pays its 10 ms. Numba leads on six of the eight by ten to
+thirty percent -- the same LLVM, a `for` over a NumPy array, and no guard
+of any kind. Mojo's plain `List` loop is the slowest on five kernels and
+the fastest on knapsack, where its bounds-free table indexing shows.
+Numba 0.67.0 on CPython 3.12.13, Mojo 1.0.0 (`-O3`), Codon 0.19.6, PPY on
+CPython 3.13.13; Intel Core Ultra 9 386H.
 
 ## The six problems
 

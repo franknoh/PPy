@@ -67,9 +67,9 @@ def main():
     ints = (np.arange(N, dtype=np.int64) % 3).astype(np.int64)
     room = np.empty(N, dtype=np.int64)
     floats = np.empty(N, dtype=np.float64)
-    print(squares(room), f"{dot(a, b):.6f}", f"{dot_relaxed(a, b):.3f}", count_odd(ints, 3), fill(floats, 0.5))
+    print(squares(room), round(dot(a, b), 6), round(dot_relaxed(a, b), 3), count_odd(ints, 3), fill(floats, 0.5))
     timed("squares", lambda: squares(room))
-    timed("dot", lambda: dot(a, b))
+    # A `prange` sum reassociates on its own, so there is no ordered dot here to time.
     timed("dot_relaxed", lambda: dot_relaxed(a, b))
     timed("count_odd", lambda: count_odd(ints, 3))
     timed("fill", lambda: fill(floats, 0.5))

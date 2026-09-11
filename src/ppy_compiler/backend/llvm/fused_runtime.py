@@ -71,6 +71,9 @@ class _Storage:
     def finite(self, result: Any, arrays: tuple[Any, ...]) -> bool:
         return True
 
+    def finite_slice(self, result: Any, arrays: tuple[Any, ...], start: int, stop: int) -> bool:
+        return self.finite(result, arrays)
+
 
 class _NumPy(_Storage):
     name = "numpy"
@@ -105,13 +108,24 @@ class _NumPy(_Storage):
 
     def finite(self, result: Any, arrays: tuple[Any, ...]) -> bool:
         """Confirm the kernel raised no floating-point condition NumPy would
-        report. Divide-by-zero, overflow, and invalid operations all surface
-        as a non-finite value. If the inputs were finite and the output is
-        too, none occurred; otherwise the Python path re-runs and reports
-        exactly what NumPy would."""
-        if not self.numpy.isfinite(result).all():
-            return False
-        return all(self.numpy.isfinite(a).all() for a in arrays)
+        report. Divide-by-zero, overflow, and invalid operations each leave a
+        non-finite value where they happened, and it propagates to the
+        result, so the result finite means none occurred; otherwise the
+        Python path re-runs and reports exactly what NumPy would. The inputs
+        need no pass of their own: a non-finite input that NumPy would warn
+        about (`inf * 0`, `inf - inf`) is a non-finite result, and one it
+        would not warn about is not the kernel's to report."""
+        del arrays
+        return bool(self.numpy.isfinite(result).all())
+
+    def finite_slice(self, result: Any, arrays: tuple[Any, ...], start: int, stop: int) -> bool:
+        """The same confirmation over one chunk, `[start, stop)` of the result
+        flattened: the worker that just wrote the chunk checks it while it is
+        still in its cache, so the pass costs a fraction of a serial one."""
+        del arrays
+        if result is None:
+            return True
+        return bool(self.numpy.isfinite(result.reshape(-1)[start:stop]).all())
 
 
 class _Torch(_Storage):
@@ -276,9 +290,11 @@ def bind_fused(
                         lambda start, stop: reduce_chunk(pointers, widened, start, stop), length
                     )
                     result = _combine(loop.reduction, [float(p) for p in partials])
+                    finite = not strict or storage.finite(result, arrays)
                 else:
                     result = reduce_chunk(pointers, widened, 0, length)
-                if strict and not storage.finite(result, arrays):
+                    finite = not strict or storage.finite(result, arrays)
+                if strict and not finite:
                     binding.fallbacks += 1
                     return fallback(*args)
                 binding.calls += 1
@@ -287,17 +303,23 @@ def bind_fused(
 
             out = storage.empty(shape)
             out_pointer = storage.pointer(out, pointer)
+            # A guarded kernel refuses a non-finite result itself, by its status;
+            # any other is checked here, a chunk at a time where the loop split.
+            check = strict and not loop.guarded
             if parallelized:
-                workers.map_chunks(  # type: ignore[union-attr]
-                    lambda start, stop: map_chunk(out_pointer, pointers, widened, start, stop),
-                    length,
-                )
+
+                def map_and_check(start: int, stop: int) -> bool:
+                    map_chunk(out_pointer, pointers, widened, start, stop)
+                    return not check or storage.finite_slice(out, arrays, start, stop)
+
+                finite = all(workers.map_chunks(map_and_check, length))  # type: ignore[union-attr]
             else:
                 map_chunk(out_pointer, pointers, widened, 0, length)
+                finite = not check or storage.finite(out, arrays)
         except _Failed:
             binding.fallbacks += 1
             return fallback(*args)
-        if strict and not storage.finite(out, arrays):
+        if strict and not finite:
             binding.fallbacks += 1
             return fallback(*args)
         binding.calls += 1

@@ -88,7 +88,7 @@ def main():
         ints.append(Int64(i % 3))
     var room = List[Int64](length=N, fill=0)
     var floats = List[Float64](length=N, fill=0.0)
-    print(squares(room), dot(a, b), dot_relaxed(a, b), count_odd(ints, 3), fill(floats, 0.5))
+    print(squares(room), round(dot(a, b), 6), round(dot_relaxed(a, b), 3), count_odd(ints, 3), fill(floats, 0.5))
     var labels = List[String]()
     labels.append("squares")
     labels.append("dot")
