@@ -72,6 +72,11 @@ else
 fi
 # The environment as installed: what is in the venv after the plugin, in the lock's terms.
 step versions bash -c "$PY -c 'import sys, jax, jaxlib; print(sys.version); print(\"jax\", jax.__version__, \"jaxlib\", jaxlib.__version__)'; uv pip list -p $PY | grep -Ei 'jax|nvidia|rocm|torch|numpy|ppy'"
+# `setup` stops here: a Pod left running for a hand-driven investigation.
+if [ "$MODE" = setup ]; then
+    log "environment ready; stopping as asked"
+    exit 0
+fi
 # The acceptance check: a CPU-only JAX fails here, and the matrix stops being green.
 across accelerator "$PY" scripts/cloud/accelerator_check.py --require gpu --min-devices "$MIN" --out "$RESULTS/accelerator.json"
 # PPy's own device paths, the reason each took, and the tests around them.

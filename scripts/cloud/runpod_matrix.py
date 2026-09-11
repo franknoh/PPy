@@ -408,7 +408,13 @@ def _steps(results: Path) -> dict[str, int]:
 
 
 def validate(
-    name: str, sha: str, out: Path, keep: bool, gpu_id: str = "", datacenter: str = ""
+    name: str,
+    sha: str,
+    out: Path,
+    keep: bool,
+    gpu_id: str = "",
+    datacenter: str = "",
+    setup_only: bool = False,
 ) -> dict:
     environment = ENVIRONMENTS[name]
     summary: dict = {"environment": name, "commit": sha, "verdict": "NOT RUN", "steps": {}}
@@ -452,8 +458,9 @@ def validate(
         summary["pod"] = pod.id
         pod.wait_ready()
         pod.copy_to(HERE / "remote_test.sh", "/workspace/remote_test.sh")
+        mode = "setup" if setup_only else environment["mode"]
         status = pod.run(
-            f"bash /workspace/remote_test.sh {sha} {environment['mode']} {environment['count']}",
+            f"bash /workspace/remote_test.sh {sha} {mode} {environment['count']}",
             out / "remote.log",
             timeout=3 * 3600,
         )
@@ -522,6 +529,11 @@ def main() -> int:
     parser.add_argument(
         "--keep", action="store_true", help="leave the Pods running (for debugging)"
     )
+    parser.add_argument(
+        "--setup-only",
+        action="store_true",
+        help="build the environment, then leave the Pod running (implies --keep) for a hand-driven look",
+    )
     parser.add_argument("--gpu-id", default="", help="a GPU type to ask for instead of the stock")
     parser.add_argument("--data-center", default="", help="a datacenter id to ask in (EU-RO-1)")
     options = parser.parse_args()
@@ -544,7 +556,15 @@ def main() -> int:
     for name in chosen:
         print(f"\n### {name}")
         summaries.append(
-            validate(name, sha, out / name, options.keep, options.gpu_id, options.data_center)
+            validate(
+                name,
+                sha,
+                out / name,
+                options.keep or options.setup_only,
+                options.gpu_id,
+                options.data_center,
+                setup_only=options.setup_only,
+            )
         )
         (out / "summary.json").write_text(json.dumps(summaries, indent=1), encoding="utf-8")
     print("\nSUMMARY")

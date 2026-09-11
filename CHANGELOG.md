@@ -62,6 +62,11 @@ Work toward the next release, on `dev`; alphas of it are tagged `v0.3.0aN`.
   -- the GPU where a CUDA or ROCm plugin is installed -- where it used to
   compile for `cpu` unless `PPY_XLA_PLATFORM` said otherwise, so an
   `@xla.jit` function on a GPU machine ran on a `cpu:0` it never asked for.
+  It compiles for one device of that platform (the first; `PPY_XLA_DEVICE`
+  names another): compiled for every device, its executables expected one
+  argument shard per device, and a machine with two GPUs refused the single
+  buffers the bridge places -- found on a two-GPU RunPod machine, held by a
+  test over two virtual CPU devices.
 - `ppy.check[T](value)` validates all the way down: a `list[int]` element by
   element, a `dict[str, float]` key and value, a tuple field by field, a
   dataclass field by field, a union member by member. A `T` it cannot

@@ -163,7 +163,10 @@ def main() -> None:
     print(
         f"single device: loss {reference[0]:.4f} -> {reference[-1]:.4f}, max |dparam| {drift:.2e}"
     )
-    print("PASS" if first > last and drift < 1e-3 and agrees else "FAIL")
+    passed: bool = first > last and drift < 1e-3 and agrees
+    print("PASS" if passed else "FAIL")
+    if not passed:
+        sys.exit(1)
 
 
 main()
