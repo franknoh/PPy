@@ -188,6 +188,58 @@ def _module() -> IRModule:
     columnar.store(b, columnar.column_of(b, joined, "w"), jw)
     core.ret(b, columnar.length(b, joined))
 
+    # mapping: (a * b) + fill_null(a, 1.0) again, as one map -- under Arrow's
+    # bits and under NumPy's NaNs -- and a bool answer each way
+    b, (a, av, c, n, out, outv) = function(
+        "mapping",
+        [("a", F64S), ("av", BITS), ("b", F64S), ("n", I64), ("out", F64S), ("outv", BITS)],
+    )
+    ca = columnar.from_parts(b, a, av, n, F64, "a")
+    cb = columnar.from_parts(b, c, None, n, F64, "b")
+    columnar.map_(b, out, outv, (ca, cb), (), expression="(add (mul a0 a1) (fill_null a0 c1.0))")
+    core.ret(b, n)
+    b, (a, c, n, out, outv) = function(
+        "mapping_nan", [("a", F64S), ("b", F64S), ("n", I64), ("out", F64S), ("outv", BITS)]
+    )
+    ca = columnar.from_parts(b, a, None, n, F64, "a")
+    cb = columnar.from_parts(b, c, None, n, F64, "b")
+    columnar.map_(
+        b,
+        out,
+        outv,
+        (ca, cb),
+        (),
+        expression="(add (mul a0 a1) (fill_null a0 c1.0))",
+        model="nan",
+    )
+    core.ret(b, n)
+    b, (a, av, c, n, out, outv) = function(
+        "masking",
+        [("a", F64S), ("av", BITS), ("b", F64S), ("n", I64), ("out", BITS), ("outv", BITS)],
+    )
+    ca = columnar.from_parts(b, a, av, n, F64, "a")
+    cb = columnar.from_parts(b, c, None, n, F64, "b")
+    columnar.map_(
+        b, out, outv, (ca, cb), (), expression="(and (not_equal a0 a1) (is_valid a0))", gives="bool"
+    )
+    core.ret(b, n)
+    b, (a, c, n, out, outv) = function(
+        "masking_nan", [("a", F64S), ("b", F64S), ("n", I64), ("out", BITS), ("outv", BITS)]
+    )
+    ca = columnar.from_parts(b, a, None, n, F64, "a")
+    cb = columnar.from_parts(b, c, None, n, F64, "b")
+    columnar.map_(
+        b,
+        out,
+        outv,
+        (ca, cb),
+        (),
+        expression="(and (not_equal a0 a1) (is_valid a0))",
+        model="nan",
+        gives="bool",
+    )
+    core.ret(b, n)
+
     # from_arrow: an ArrowArray struct read in place, negated, written out
     b, (p, out, outv) = function("from_arrow", [("p", PtrType(U8)), ("out", F64S), ("outv", BITS)])
     imported = arrow.import_(b, p, F64)
@@ -308,6 +360,32 @@ def _check(address) -> None:  # type: ignore[no-untyped-def]
     assert status == STATUS_OK and length == n
     np.testing.assert_array_equal(_unpack(outv, n), valid)
     np.testing.assert_allclose(out[valid], (a * c + a)[valid])
+
+    mapped = np.zeros(n)
+    mappedv = np.zeros(2, dtype=np.uint8)
+    status, _ = _call(address, "mapping", a, _pack(valid), c, n, mapped, mappedv)
+    assert status == STATUS_OK
+    np.testing.assert_array_equal(_unpack(mappedv, n), valid)
+    np.testing.assert_allclose(mapped[valid], (a * c + a)[valid])
+    nans = np.where(valid, a, np.nan)
+    status, _ = _call(address, "mapping_nan", nans, c, n, mapped, mappedv)
+    assert status == STATUS_OK
+    np.testing.assert_array_equal(np.isnan(mapped), ~valid, "a NaN in is a NaN out")
+    np.testing.assert_allclose(mapped[valid], (a * c + a)[valid])
+    unequal = np.array(a)
+    unequal[[2, 5]] = c[[2, 5]]
+    mask = np.zeros(2, dtype=np.uint8)
+    status, _ = _call(address, "masking", unequal, _pack(valid), c, n, mask, mappedv)
+    assert status == STATUS_OK
+    np.testing.assert_array_equal(_unpack(mappedv, n), valid, "a comparison over a null is null")
+    np.testing.assert_array_equal(_unpack(mask, n)[valid], (unequal != c)[valid])
+    bytes_ = np.zeros(n, dtype=np.uint8)
+    status, _ = _call(
+        address, "masking_nan", np.where(valid, unequal, np.nan), c, n, bytes_, mappedv
+    )
+    assert status == STATUS_OK
+    expected_mask = np.where(valid, unequal != c, True) & valid
+    np.testing.assert_array_equal(bytes_.astype(bool), expected_mask, "NaN != x, but is not valid")
 
     kept = np.zeros(n)
     status, count = _call(address, "compare_filter", a, _pack(valid), c, n, kept)

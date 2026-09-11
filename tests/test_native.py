@@ -566,6 +566,33 @@ def test_fused_expression_is_replaced_with_its_kernel_call(write, analyze):
     assert "lambda a, b: np.sin(a) * 2.0 + np.cos(b)" in code
 
 
+def test_a_fused_expression_inside_a_wider_call_is_replaced_and_the_call_kept(write, analyze):
+    """`(expr).sum()` starts where `expr` does; the plan is keyed by the whole span."""
+    from ppy_compiler.driver.pipeline import build_python
+
+    path = write(
+        "chained.ppy",
+        """
+        import numpy as np
+
+        import ppy
+
+
+        @ppy.pure
+        def total(a: np.ndarray) -> float:
+            return float((np.sin(a) * 2.0).sum())
+        """,
+    )
+    bundle = analyze(path, backend="llvm")
+    natives = _collect(bundle)
+    assert len(natives["chained"].fused) == 1, "the sum is not fusible without fastmath"
+    output = build_python(
+        bundle, target="llvm", fusion={n: m.fusion_plan for n, m in natives.items()}
+    )
+    code = output.generated["chained"].code
+    assert "float(_ppy_fused_0(a).sum())" in code, code
+
+
 def test_the_python_backend_leaves_fusion_alone(write, analyze):
     from ppy_compiler.driver.pipeline import build_python
 

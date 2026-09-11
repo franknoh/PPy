@@ -46,14 +46,7 @@ ppy run model.ppy
 <!-- outputs:start -->
 ## What it prints
 
-**`python  model.ppy`**
-
-```text
-cpu
-[0.0, 0.0, 0.0]
-```
-
-**`ppy run model.ppy`**
+**`python  model.ppy`**, **`ppy run model.ppy`**
 
 ```text
 cpu

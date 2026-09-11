@@ -7,7 +7,9 @@ mask allows. `columnar.table<a, column<i64>, b, column<f64, nullable>>` is a
 table of named columns. The operations are the ones pandas and PyArrow
 share (spec 51): arithmetic, comparison, and boolean logic over columns,
 with a null where any input is null; `cast`, `is_null`, `is_valid`,
-`fill_null`, `select`, `fill` (one scalar, `n` rows); `filter`, `take`,
+`fill_null`, `select`, `fill` (one scalar, `n` rows); `map`, a whole
+elementwise expression over columns evaluated row by row into memory, under
+Arrow's null model or NumPy's (a NaN is the null); `filter`, `take`,
 `sort_indices`, `concat`;
 `aggregate` to a one-row column; and over tables `make`, `column_of`,
 `project`, `filter`, `take`, `concat`, `group_by`, and an inner `join`.
@@ -17,12 +19,23 @@ values buffer and a bit-packed validity bitmap.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 from ..dialect import Dialect, DialectRegistry, OpSpec
 from ..model import Builder, Operation, Value
-from ..types import BOOL, I64, U8, BoolType, BufferType, DialectType, FloatType, IntType, IRType
+from ..types import (
+    BOOL,
+    F64,
+    I64,
+    U8,
+    BoolType,
+    BufferType,
+    DialectType,
+    FloatType,
+    IntType,
+    IRType,
+)
 
 if TYPE_CHECKING:
     from ..verify import Checker
@@ -32,12 +45,16 @@ __all__ = [
     "ARITHMETIC",
     "BOOLEAN",
     "COMPARISON",
+    "MAP_MODELS",
     "ColumnInfo",
     "ColumnarDialect",
+    "Node",
     "TableInfo",
     "column_type",
     "describe",
     "describe_table",
+    "map_",
+    "parse_expression",
     "table_type",
     "values_element",
 ]
@@ -324,6 +341,163 @@ def _verify_select(op: Operation, checker: Checker) -> None:
     _result(op, checker, column_type(a.dtype, mask.nullable or a.nullable or c.nullable))
 
 
+#: The null models a `map` evaluates under: Arrow's validity bits, or NumPy's NaN.
+MAP_MODELS = ("bits", "nan")
+#: What a map's expression may hold, with what each operation reads and gives.
+_MAP_OPERATIONS: dict[str, tuple[tuple[str, ...], str]] = {
+    **dict.fromkeys(ARITHMETIC, (("f64", "f64"), "f64")),
+    **dict.fromkeys(COMPARISON, (("f64", "f64"), "bool")),
+    **dict.fromkeys(BOOLEAN, (("bool", "bool"), "bool")),
+    "negate": (("f64",), "f64"),
+    "abs": (("f64",), "f64"),
+    "invert": (("bool",), "bool"),
+    "is_null": (("any",), "bool"),
+    "is_valid": (("any",), "bool"),
+    "fill_null": (("f64", "f64"), "f64"),
+    "select": (("bool", "f64", "f64"), "f64"),
+}
+
+
+@dataclass(slots=True)
+class Node:
+    """One node of a map's expression: an operation over children, or a leaf."""
+
+    op: str
+    operands: list[Node] = field(default_factory=list)
+    array: int = -1
+    scalar: int = -1
+    constant: float = 0.0
+
+
+def parse_expression(text: str) -> Node:
+    """Parse the small prefix program a `map` carries: `(add (mul a0 a1) (fill_null a0 s0))`.
+
+    The leaves are `a<i>` (a column), `s<i>` (a scalar operand), and
+    `c<value>` (a constant); unary and binary names never collide, so
+    arity tells the operations apart.
+    """
+    tokens = text.replace("(", " ( ").replace(")", " ) ").split()
+    position = 0
+
+    def parse() -> Node:
+        nonlocal position
+        if position >= len(tokens):
+            raise ValueError(f"the expression {text!r} ends early")
+        token = tokens[position]
+        position += 1
+        if token == "(":
+            if position >= len(tokens):
+                raise ValueError(f"the expression {text!r} ends early")
+            operation = tokens[position]
+            position += 1
+            operands = []
+            while position < len(tokens) and tokens[position] != ")":
+                operands.append(parse())
+            if position >= len(tokens):
+                raise ValueError(f"the expression {text!r} has an unclosed parenthesis")
+            position += 1
+            return Node(operation, operands)
+        if token == ")":
+            raise ValueError(f"the expression {text!r} closes a parenthesis it never opened")
+        try:
+            if token.startswith("a"):
+                return Node("array", array=int(token[1:]))
+            if token.startswith("s"):
+                return Node("scalar", scalar=int(token[1:]))
+            if token.startswith("c"):
+                return Node("constant", constant=float(token[1:]))
+        except ValueError:
+            pass
+        raise ValueError(
+            f"the expression {text!r} has a leaf {token!r} that is not a<i>, s<i>, c<v>"
+        )
+
+    node = parse()
+    if position != len(tokens):
+        raise ValueError(f"the expression {text!r} goes on after its root")
+    return node
+
+
+def _map_parts(op: Operation) -> tuple[list[ColumnInfo], int] | str:
+    """A map's (column infos, scalar count), or what is wrong with its operands."""
+    if len(op.operands) < 3:
+        return "columnar.map takes an output buffer, a validity buffer, and at least one column"
+    out, outv = op.operands[0].type, op.operands[1].type
+    gives = op.attributes.get("gives")
+    element = U8 if gives == "bool" else F64
+    if not isinstance(out, BufferType) or out.element != element:
+        return f"columnar.map writes a buffer<{element}>, not {out}"
+    if not _is_bitmap(outv):
+        return f"columnar.map writes a validity buffer<u8>, not {outv}"
+    columns: list[ColumnInfo] = []
+    scalars = 0
+    for operand in op.operands[2:]:
+        info = describe(operand.type)
+        if info is not None:
+            if scalars:
+                return "columnar.map takes its columns before its scalars"
+            if not isinstance(info.dtype, (FloatType, BoolType)):
+                return f"columnar.map reads columns of f64 or bool, not {info.dtype}"
+            columns.append(info)
+        elif operand.type == F64:
+            scalars += 1
+        else:
+            return f"columnar.map takes columns and f64 scalars, not {operand.type}"
+    if not columns:
+        return "columnar.map takes at least one column"
+    return columns, scalars
+
+
+def _map_kind(node: Node, columns: list[ColumnInfo], scalars: int) -> str:
+    """What `node` computes, `f64` or `bool`; a ValueError names a misuse."""
+    if node.op == "array":
+        if not 0 <= node.array < len(columns):
+            raise ValueError(f"a{node.array} names a column the map does not take")
+        return "bool" if isinstance(columns[node.array].dtype, BoolType) else "f64"
+    if node.op == "scalar":
+        if not 0 <= node.scalar < scalars:
+            raise ValueError(f"s{node.scalar} names a scalar the map does not take")
+        return "f64"
+    if node.op == "constant":
+        return "f64"
+    described = _MAP_OPERATIONS.get(node.op)
+    if described is None:
+        raise ValueError(f"{node.op!r} is not an operation a map evaluates")
+    reads, gives = described
+    if len(node.operands) != len(reads):
+        raise ValueError(f"{node.op} takes {len(reads)} operand(s), not {len(node.operands)}")
+    for child, wanted in zip(node.operands, reads, strict=True):
+        found = _map_kind(child, columns, scalars)
+        if wanted not in ("any", found):
+            raise ValueError(f"{node.op} reads {wanted}, and was given {found}")
+    return gives
+
+
+def _verify_map(op: Operation, checker: Checker) -> None:
+    parts = _map_parts(op)
+    if isinstance(parts, str):
+        checker.error(op, parts)
+        return
+    columns, scalars = parts
+    model = op.attributes.get("model")
+    if model not in MAP_MODELS:
+        checker.error(
+            op, f"columnar.map evaluates under one of {', '.join(MAP_MODELS)}, not {model!r}"
+        )
+        return
+    gives = op.attributes.get("gives")
+    if gives not in ("f64", "bool"):
+        checker.error(op, f"columnar.map gives f64 or bool, not {gives!r}")
+        return
+    try:
+        found = _map_kind(parse_expression(str(op.attributes["expression"])), columns, scalars)
+    except ValueError as error:
+        checker.error(op, f"columnar.map: {error}")
+        return
+    if found != gives:
+        checker.error(op, f"columnar.map computes {found}, and is written as giving {gives}")
+
+
 def _verify_filter(op: Operation, checker: Checker) -> None:
     mask = _column(op, checker, op.operands[1], "the mask")
     if mask is None:
@@ -561,6 +735,14 @@ class ColumnarDialect(Dialect):
             OpSpec("columnar.fill_null", pure=True, verify=_verify_fill_null, operands=2, results=1)
         )
         add(OpSpec("columnar.cast", pure=True, verify=_verify_cast, operands=1, results=1))
+        add(
+            OpSpec(
+                "columnar.map",
+                verify=_verify_map,
+                results=0,
+                required_attributes=("expression", "model", "gives"),
+            )
+        )
         add(OpSpec("columnar.select", pure=True, verify=_verify_select, operands=3, results=1))
         add(OpSpec("columnar.filter", pure=True, verify=_verify_filter, operands=2, results=1))
         add(OpSpec("columnar.take", pure=True, verify=_verify_take, operands=2, results=1))
@@ -707,6 +889,34 @@ def fill_null(b: Builder, a: Value, scalar: Value, name: str | None = None) -> V
     info = describe(a.type)
     assert info is not None
     return _typed(b, "fill_null", (a, scalar), column_type(info.dtype), hint=name)
+
+
+def map_(
+    b: Builder,
+    out: Value,
+    outv: Value,
+    columns: tuple[Value, ...],
+    scalars: tuple[Value, ...],
+    *,
+    expression: str,
+    model: str = "bits",
+    gives: str = "f64",
+) -> Operation:
+    """Evaluate `expression` over `columns` and `scalars` row by row into `out`.
+
+    One loop, nothing materialized between the operations. Under the
+    `bits` model a column's nulls are its validity bits, and the answer's
+    validity goes to `outv`; under the `nan` model an `f64` null is a NaN,
+    a `bool` column is one byte per row, `outv` is not written, and a
+    `bool` answer is written one byte per row -- NumPy's layout, pandas'
+    convention for NumPy-backed Series.
+    """
+    return b.create(
+        "columnar.map",
+        (out, outv, *columns, *scalars),
+        (),
+        {"expression": expression, "model": model, "gives": gives},
+    )
 
 
 def cast(b: Builder, a: Value, dtype: IRType, name: str | None = None) -> Value:

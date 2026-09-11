@@ -47,27 +47,7 @@ ppy run native_data.ppy
 <!-- outputs:start -->
 ## What it prints
 
-**`python  native_data.ppy`**
-
-```text
-32.0
-15
-1000000000000000000000000000001
-14.0 (2.0, 3.0)
-383
-```
-
-**`ppy     native_data.ppy`**
-
-```text
-32.0
-15
-1000000000000000000000000000001
-14.0 (2.0, 3.0)
-383
-```
-
-**`ppy run native_data.ppy`**
+**`python  native_data.ppy`**, **`ppy     native_data.ppy`**, **`ppy run native_data.ppy`**
 
 ```text
 32.0

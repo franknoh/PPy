@@ -22,10 +22,12 @@ differently from the reference, or prints no timing for a kernel the
 reference timed, is an error: the table is not printed and the exit status
 is 1. A tool that consistently prints its own wrong answer is still wrong.
 
-The tables in the READMEs of `07_parallel`, `12_buffers_and_jit`,
-`15_algorithms`, `35_parallel_range`, `36_autodiff`, `38_cuda`, `43_regex`,
-and `44_tile` came from this, run from a checkout on a native filesystem with
-nothing else running; the site collects them on one page.
+The tables in the READMEs of `05_numpy`, `07_parallel`, `09_torch`,
+`12_buffers_and_jit`, `13_value_classes`, `14_tuples`, `15_algorithms`,
+`21_training_torch`, `35_parallel_range`, `36_autodiff`, `37_aio`,
+`38_cuda`, `40_generics`, `41_columnar`, `43_regex`, and `44_tile` came from
+this, through `scripts/compare_docs.py`, run from a checkout on a native
+filesystem with nothing else running; the site collects them on one page.
 """
 
 from __future__ import annotations

@@ -128,17 +128,7 @@ ppy emit c ranges.ppy
 <!-- outputs:start -->
 ## What it prints
 
-**`python  ranges.ppy`**
-
-```text
-9999800001
-99.987909853872
-99.987910
-99999
-500000.0
-```
-
-**`ppy run ranges.ppy`**
+**`python  ranges.ppy`**, **`ppy run ranges.ppy`**
 
 ```text
 9999800001
@@ -326,7 +316,7 @@ module ranges
 
 **`ppy emit c ranges.ppy`**
 
-*1267 lines: [outputs/04-ppy-emit-c-ranges-ppy.txt](outputs/04-ppy-emit-c-ranges-ppy.txt)*
+*1267 lines: [outputs/03-ppy-emit-c-ranges-ppy.txt](outputs/03-ppy-emit-c-ranges-ppy.txt)*
 
 <!-- outputs:end -->
 

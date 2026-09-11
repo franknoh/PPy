@@ -1,0 +1,29 @@
+{
+ "environment": {
+  "commit": "476188b",
+  "processor": "x86_64",
+  "platform": "Linux-6.6.114.1-microsoft-standard-WSL2-x86_64-with-glibc2.39",
+  "python": "3.14.5",
+  "runs": 5
+ },
+ "timings": {
+  "ppy": {
+   "20000 round trips": {
+    "mean": 105.964,
+    "stdev": 7.43178847922894
+   }
+  },
+  "asyncio": {
+   "20000 round trips": {
+    "mean": 665.1320000000001,
+    "stdev": 7.503643781523739
+   }
+  },
+  "uvloop": {
+   "20000 round trips": {
+    "mean": 151.874,
+    "stdev": 4.439986486465918
+   }
+  }
+ }
+}

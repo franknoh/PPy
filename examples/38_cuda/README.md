@@ -177,7 +177,7 @@ ppy inspect saxpy.ppy --stage gpu
 #include <cstdint>
 #include <cstdlib>
 
-static inline int ppy_ovf_add_i64(int64_t a, int64_t b, int64_t *out) {
+static inline __host__ __device__ int ppy_ovf_add_i64(int64_t a, int64_t b, int64_t *out) {
 #if defined(__GNUC__) || defined(__clang__)
     return __builtin_add_overflow(a, b, out);
 #else
@@ -266,7 +266,7 @@ int32_t ppy_saxpy_run(int64_t n, double a, const double *x, double *y, int64_t *
 #include <cstdint>
 #include <cstdlib>
 
-static inline int ppy_ovf_add_i64(int64_t a, int64_t b, int64_t *out) {
+static inline __host__ __device__ int ppy_ovf_add_i64(int64_t a, int64_t b, int64_t *out) {
 #if defined(__GNUC__) || defined(__clang__)
     return __builtin_add_overflow(a, b, out);
 #else

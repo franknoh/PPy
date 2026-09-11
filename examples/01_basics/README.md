@@ -2,8 +2,8 @@
 
 Fixed-width integer markers, a purity contract, and a per-function
 optimization level. Run with `python` the file is ordinary Python; run with
-`ppy run` the same three functions compile through LLVM, print the same
-three numbers, and the checker has verified two contracts on the way.
+`ppy run` the same three functions compile through LLVM, and the checker
+has verified two contracts on the way.
 
 ## Fixed-width markers
 
@@ -41,19 +41,7 @@ ppy run basics.ppy
 <!-- outputs:start -->
 ## What it prints
 
-**`python  basics.ppy`**
-
-```text
-49 285 111
-```
-
-**`ppy     basics.ppy`**
-
-```text
-49 285 111
-```
-
-**`ppy run basics.ppy`**
+**`python  basics.ppy`**, **`ppy     basics.ppy`**, **`ppy run basics.ppy`**
 
 ```text
 49 285 111

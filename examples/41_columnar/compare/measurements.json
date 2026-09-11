@@ -1,0 +1,41 @@
+{
+ "environment": {
+  "commit": "476188b",
+  "processor": "x86_64",
+  "platform": "Linux-6.6.114.1-microsoft-standard-WSL2-x86_64-with-glibc2.39",
+  "python": "3.14.5",
+  "runs": 5
+ },
+ "timings": {
+  "ppy": {
+   "blend": {
+    "mean": 22.468,
+    "stdev": 1.627918916899733
+   },
+   "above": {
+    "mean": 4.65,
+    "stdev": 0.3654449342924321
+   }
+  },
+  "pandas": {
+   "blend": {
+    "mean": 31.087999999999997,
+    "stdev": 1.1122814392050235
+   },
+   "above": {
+    "mean": 6.776,
+    "stdev": 0.18689569283426544
+   }
+  },
+  "polars": {
+   "blend": {
+    "mean": 13.238,
+    "stdev": 0.42352095579793936
+   },
+   "above": {
+    "mean": 4.91,
+    "stdev": 0.19467922333931778
+   }
+  }
+ }
+}

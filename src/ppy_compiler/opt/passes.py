@@ -749,14 +749,23 @@ class FuseLibraryCalls(Pass):
     name = "fuse"
     min_level = 2
 
-    def __init__(self, context: PassContext, plan: dict[tuple[int, int], object]) -> None:
+    def __init__(self, context: PassContext, plan: dict[tuple[int, int, int, int], object]) -> None:
         super().__init__(context)
         self.plan = plan
         self.bound: dict[str, tuple[object, ast.expr]] = {}
 
     def visit(self, node: ast.AST) -> ast.AST:
-        if isinstance(node, ast.expr):
-            loop = self.plan.get((getattr(node, "lineno", -1), getattr(node, "col_offset", -1)))
+        # Keyed by the whole span: `s.isna().sum()` starts where `s.isna()`
+        # does, and only the inner one is the fused expression.
+        if isinstance(node, ast.expr) and hasattr(node, "lineno"):
+            loop = self.plan.get(
+                (
+                    node.lineno,
+                    node.col_offset,
+                    getattr(node, "end_lineno", None) or node.lineno,
+                    getattr(node, "end_col_offset", None) or node.col_offset,
+                )
+            )
             if loop is not None:
                 return self._replace(node, loop)
         return super().visit(node)

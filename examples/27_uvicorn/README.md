@@ -33,8 +33,7 @@ all have signatures under strict mode, so `client.get("/").json()`
 type-checks. `uvicorn.run(app)` with a statically resolvable application
 skips the per-worker re-import by module string, and the reloader is told
 to watch `.ppy` alongside `.py`. `TestClient` exercises the app in-process,
-which is why the output is deterministic and all three paths return
-byte-identical responses.
+which is why the output is deterministic.
 
 ## Run it
 
@@ -53,15 +52,7 @@ ppy run api.ppy
 {"hello": "/", "count": 3} 200 404
 ```
 
-**`ppy api.ppy`**
-
-```text
-{'service': 'inventory'}
-{'item_id': 7, 'q': 'fast'}
-{'label': 'bolt x12', 'cost': 6.0}
-```
-
-**`ppy run api.ppy`**
+**`ppy api.ppy`**, **`ppy run api.ppy`**
 
 ```text
 {'service': 'inventory'}

@@ -1,0 +1,51 @@
+{
+ "environment": {
+  "commit": "476188b",
+  "processor": "x86_64",
+  "platform": "Linux-6.6.114.1-microsoft-standard-WSL2-x86_64-with-glibc2.39",
+  "python": "3.14.5",
+  "runs": 5
+ },
+ "timings": {
+  "ppy": {
+   "standardize, 20000 rows": {
+    "mean": 0.886,
+    "stdev": 0.01341640786499875
+   },
+   "forward pass, per call": {
+    "mean": 0.11223999999999999,
+    "stdev": 0.0020995237555217136
+   }
+  },
+  "python": {
+   "standardize, 20000 rows": {
+    "mean": 66.556,
+    "stdev": 1.4172967226378588
+   },
+   "forward pass, per call": {
+    "mean": 0.11438,
+    "stdev": 0.004330935233872701
+   }
+  },
+  "eager": {
+   "standardize, 20000 rows": {
+    "mean": 0.802,
+    "stdev": 0.12872451204024818
+   },
+   "forward pass, per call": {
+    "mean": 0.11273999999999999,
+    "stdev": 0.0023049945770001294
+   }
+  },
+  "compile": {
+   "standardize, 20000 rows": {
+    "mean": 0.834,
+    "stdev": 0.2443972176601035
+   },
+   "forward pass, per call": {
+    "mean": 0.10834,
+    "stdev": 0.0019629060089571275
+   }
+  }
+ }
+}

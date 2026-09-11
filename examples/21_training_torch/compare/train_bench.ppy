@@ -1,0 +1,115 @@
+"""The trainer of `train.ppy`, timed: the standardization loop, and one forward pass of the
+step's operators. The PPY side; the same file under `python` is the CPython column."""
+
+import array
+import math
+import time
+from collections.abc import Sequence
+
+import ppy
+import torch
+from ppy import Buffer
+
+
+def standardize(raw: Buffer[float], out: Buffer[float], rows: int, cols: int) -> float:
+    total: float = 0.0
+    for row in range(rows):
+        base: int = row * cols
+        target: int = row * cols * 2
+
+        sum_: float = 0.0
+        for i in range(cols):
+            sum_ += raw[base + i]
+        mean: float = sum_ / cols
+
+        spread: float = 0.0
+        for i in range(cols):
+            spread += (raw[base + i] - mean) * (raw[base + i] - mean)
+        deviation: float = math.sqrt(spread / cols) + 1e-8
+
+        for i in range(cols):
+            value: float = (raw[base + i] - mean) / deviation
+            out[target + i] = value
+            total += value
+        for i in range(cols):
+            interaction: float = out[target + i] * out[target + (i + 1) % cols]
+            out[target + cols + i] = interaction
+            total += interaction
+    return total
+
+
+@ppy.pure
+def forward_loss(
+    x: torch.Tensor,
+    y: torch.Tensor,
+    w1: torch.Tensor,
+    b1: torch.Tensor,
+    w2: torch.Tensor,
+    b2: torch.Tensor,
+) -> torch.Tensor:
+    hidden: torch.Tensor = torch.relu(torch.add(torch.matmul(x, w1), b1))
+    predicted: torch.Tensor = torch.add(torch.matmul(hidden, w2), b2)
+    residual: torch.Tensor = torch.sub(predicted, y)
+    return torch.mean(torch.mul(residual, residual))
+
+
+def descend(params: Sequence[torch.Tensor], rate: float) -> None:
+    with torch.no_grad():
+        for parameter in params:
+            gradient = parameter.grad
+            if gradient is None:
+                continue
+            parameter -= rate * gradient
+            parameter.grad = None
+
+
+def train_step(
+    x: torch.Tensor,
+    y: torch.Tensor,
+    params: Sequence[torch.Tensor],
+    rate: float,
+) -> float:
+    loss: torch.Tensor = forward_loss(x, y, params[0], params[1], params[2], params[3])
+    loss.backward()
+    descend(params, rate)
+    return loss.item()
+
+
+def main() -> None:
+    rows: int = 20000
+    cols: int = 16
+    torch.manual_seed(0)
+    torch.set_num_threads(8)
+    raw = array.array("d", torch.randn(rows * cols).tolist())
+    features = array.array("d", [0.0] * (rows * cols * 2))
+    standardize(raw, features, 10, cols)
+    best_prep = 1e9
+    for _ in range(5):
+        started: float = time.perf_counter()
+        checksum: float = standardize(raw, features, rows, cols)
+        best_prep = min(best_prep, (time.perf_counter() - started) * 1000.0)
+    x: torch.Tensor = torch.tensor(features, dtype=torch.float32).reshape(rows, cols * 2)
+    y: torch.Tensor = torch.randn(rows, 1)
+    torch.manual_seed(1)
+    params: list[torch.Tensor] = [
+        torch.randn(cols * 2, 32, requires_grad=True),
+        torch.zeros(32, requires_grad=True),
+        torch.randn(32, 1, requires_grad=True),
+        torch.zeros(1, requires_grad=True),
+    ]
+    with torch.no_grad():
+        params[0] *= 0.1
+        params[2] *= 0.1
+    last: float = train_step(x, y, params, 0.02)
+    best_forward = 1e9
+    with torch.no_grad():
+        for _ in range(200):
+            started = time.perf_counter()
+            loss: float = forward_loss(x, y, params[0], params[1], params[2], params[3]).item()
+            best_forward = min(best_forward, (time.perf_counter() - started) * 1000.0)
+    print(f"# standardize, 20000 rows: {best_prep:.2f} ms")
+    print(f"# forward pass, per call: {best_forward:.4f} ms")
+    print(f"{checksum:.4f} {last:.4f} {loss:.4f}")
+
+
+main()

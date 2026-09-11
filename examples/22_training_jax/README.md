@@ -14,8 +14,7 @@ def standardize(raw: Buffer[float], out: Buffer[float], rows: int, cols: int) ->
 
 The converter declared both parameters `Buffer[float]` because the body
 indexes them and never slices, and the values feeding them became
-`array.array`. The loop lowers natively; `checksum` is identical on every
-path.
+`array.array`. The loop lowers natively.
 
 ## `@jax.jit` is already the fast path
 
@@ -59,8 +58,8 @@ ppy run train.ppy
 ```text
 # device: cpu
 # native prep: False
-prep      66.5 ms   checksum=-21433.891867
-train     91.2 ms   loss 1.0663 -> 1.0109
+prep      70.4 ms   checksum=-21433.891867
+train    107.6 ms   loss 1.0663 -> 1.0109
 ```
 
 **`ppy run train.ppy`**
@@ -68,8 +67,8 @@ train     91.2 ms   loss 1.0663 -> 1.0109
 ```text
 # device: cpu
 # native prep: False
-prep       0.9 ms   checksum=-21433.891867
-train     93.7 ms   loss 1.0663 -> 1.0109
+prep       1.1 ms   checksum=-21433.891867
+train    103.6 ms   loss 1.0663 -> 1.0109
 ```
 
 <!-- outputs:end -->

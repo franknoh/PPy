@@ -60,31 +60,7 @@ clang -O3 segment_tree.c -o segment_tree_clang && ./segment_tree_clang < input.t
 <!-- outputs:start -->
 ## What it prints
 
-**`python  segment_tree.ppy < input.txt`**
-
-```text
-28
-```
-
-**`ppy run segment_tree.ppy < input.txt`**
-
-```text
-28
-```
-
-**`ppy build segment_tree.ppy -o dist && ./dist/segment_tree < input.txt`**
-
-```text
-28
-```
-
-**`gcc   -O3 segment_tree.c -o segment_tree_c     && ./segment_tree_c     < input.txt`**
-
-```text
-28
-```
-
-**`clang -O3 segment_tree.c -o segment_tree_clang && ./segment_tree_clang < input.txt`**
+**`python  segment_tree.ppy < input.txt`**, **`ppy run segment_tree.ppy < input.txt`**, **`ppy build segment_tree.ppy -o dist && ./dist/segment_tree < input.txt`**, **`gcc   -O3 segment_tree.c -o segment_tree_c     && ./segment_tree_c     < input.txt`**, **`clang -O3 segment_tree.c -o segment_tree_clang && ./segment_tree_clang < input.txt`**
 
 ```text
 28

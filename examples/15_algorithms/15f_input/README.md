@@ -72,31 +72,7 @@ clang -O3 inversions.c -o inversions_clang && ./inversions_clang < input.txt
 <!-- outputs:start -->
 ## What it prints
 
-**`python  inversions.ppy < input.txt`**
-
-```text
-14
-```
-
-**`ppy run inversions.ppy < input.txt`**
-
-```text
-14
-```
-
-**`ppy build inversions.ppy -o dist && ./dist/inversions < input.txt`**
-
-```text
-14
-```
-
-**`gcc   -O3 inversions.c -o inversions_c     && ./inversions_c     < input.txt`**
-
-```text
-14
-```
-
-**`clang -O3 inversions.c -o inversions_clang && ./inversions_clang < input.txt`**
+**`python  inversions.ppy < input.txt`**, **`ppy run inversions.ppy < input.txt`**, **`ppy build inversions.ppy -o dist && ./dist/inversions < input.txt`**, **`gcc   -O3 inversions.c -o inversions_c     && ./inversions_c     < input.txt`**, **`clang -O3 inversions.c -o inversions_clang && ./inversions_clang < input.txt`**
 
 ```text
 14

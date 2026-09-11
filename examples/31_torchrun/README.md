@@ -49,8 +49,7 @@ CPU, 2 ranks, each on 20,000 rows × 16 columns; 100 steps of a 32-unit MLP.
 | preprocessing (`standardize` + `bucketize`) | 109.9 ms | **1.6 ms** |
 | 100 training steps (`forward_loss` region) | 399 ms | 250–600 ms |
 
-Checksums, bucket counts, and loss trajectories are identical on both paths
-and under every launcher. The preprocessing is the point. The region removes
+The preprocessing is the point. The region removes
 four Python round trips per step, which
 [21_training_torch](../21_training_torch/README.md) measures at about 20%
 in isolation; here the step is dominated by the tensor work and the
@@ -74,7 +73,7 @@ python model.ppy    && ppy run model.ppy
 <!-- outputs:start -->
 ## What it prints
 
-**`ppy build --warm .`**
+**`ppy build --warm .`**, **`ppy check .`**
 
 *(prints nothing; exits 0)*
 
@@ -82,19 +81,19 @@ python model.ppy    && ppy run model.ppy
 
 ```text
 # rank 0/1 device=cpu native=True region=True loader=GeneratedLoader
-rank 0: prep       1.5 ms   checksum=-21015.470416 outside=4103
-rank 0: train    757.3 ms   loss 1.0412 -> 1.0107
+rank 0: prep       1.9 ms   checksum=-21015.470416 outside=4103
+rank 0: train  16513.7 ms   loss 1.0412 -> 1.0107
 ```
 
 **`torchrun --standalone --nproc_per_node=2 train.py`**
 
 ```text
 # rank 0/2 device=cpu native=True region=True loader=GeneratedLoader
-rank 0: prep       1.6 ms   checksum=-21015.470416 outside=4103
-rank 0: train    601.0 ms   loss 1.0412 -> 1.0123
+rank 0: prep       1.9 ms   checksum=-21015.470416 outside=4103
+rank 0: train    783.5 ms   loss 1.0412 -> 1.0123
 # rank 1/2 device=cpu native=True region=True loader=GeneratedLoader
-rank 1: prep       1.5 ms   checksum=-20883.104755 outside=4005
-rank 1: train    598.8 ms   loss 1.0486 -> 1.0239
+rank 1: prep       1.9 ms   checksum=-20883.104755 outside=4005
+rank 1: train    781.9 ms   loss 1.0486 -> 1.0239
 ```
 
 **`accelerate launch --multi_gpu --num_processes 2 train.py`**
@@ -105,13 +104,9 @@ rank 1: train    598.8 ms   loss 1.0486 -> 1.0239
 
 ```text
 # rank 0/1 device=cpu native=False region=False loader=PPySourceLoader
-rank 0: prep     113.1 ms   checksum=-21015.470416 outside=4103
-rank 0: train    261.8 ms   loss 1.0412 -> 1.0107
+rank 0: prep     125.0 ms   checksum=-21015.470416 outside=4103
+rank 0: train  12706.6 ms   loss 1.0412 -> 1.0107
 ```
-
-**`ppy check .`**
-
-*(prints nothing; exits 0)*
 
 **`python features.ppy && ppy run features.ppy`**
 

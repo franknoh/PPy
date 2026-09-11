@@ -113,13 +113,7 @@ ppy run legacy.ppy
 
 </details>
 
-**`python  legacy.ppy`**
-
-```text
-True [2.0, 5.0, 8.0] 6
-```
-
-**`ppy run legacy.ppy`**
+**`python  legacy.ppy`**, **`ppy run legacy.ppy`**
 
 ```text
 True [2.0, 5.0, 8.0] 6

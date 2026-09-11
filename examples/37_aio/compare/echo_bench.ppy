@@ -1,0 +1,51 @@
+"""Twenty thousand eight-byte round trips over one loopback connection: the PPY side, the
+coroutines lowered to the native loop where the runtime is present."""
+
+import time
+
+import ppy
+from ppy import aio, native
+
+ROUNDS = 20000
+
+
+async def serve(listening: int, rounds: int) -> int:
+    client = await aio.accept(listening)
+    room = native.stack_alloc[ppy.u8](8)
+    total = 0
+    for _ in range(rounds):
+        got = await aio.read(client, room, 8)
+        total += await aio.write(client, room, got)
+    aio.close(client)
+    return total
+
+
+async def ask(port: int, rounds: int) -> int:
+    fd = await aio.connect("127.0.0.1", port)
+    message = native.stack_alloc[ppy.u8](8)
+    for i in range(8):
+        native.store(native.offset(message, i), 97 + i)
+    back = native.stack_alloc[ppy.u8](8)
+    total = 0
+    for _ in range(rounds):
+        await aio.write(fd, message, 8)
+        total += await aio.read(fd, back, 8)
+    aio.close(fd)
+    return total
+
+
+async def main() -> int:
+    listening = aio.listen("127.0.0.1", 0)
+    port = aio.port(listening)
+    served = aio.spawn(serve(listening, ROUNDS))
+    got = await ask(port, ROUNDS)
+    sent = await served
+    aio.close(listening)
+    return got + sent
+
+
+started = time.perf_counter()
+answer = aio.run(main())
+took = (time.perf_counter() - started) * 1000.0
+print(f"# {ROUNDS} round trips: {took:.2f} ms")
+print(answer)

@@ -98,7 +98,7 @@ class Optimizer:
         project: ProjectAnalysis,
         *,
         level: int = 2,
-        fusion: dict[tuple[int, int], object] | None = None,
+        fusion: dict[tuple[int, int, int, int], object] | None = None,
         adjustments: dict[tuple[int, int], object] | None = None,
     ) -> None:
         self.symbols = symbols

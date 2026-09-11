@@ -3,7 +3,7 @@
 `ppy.atomic` and `ppy.concurrent`: shared memory one operation at a time,
 and threads with what keeps them apart, over memory the program owns. Four
 workers each add 500 to a shared counter and 500 × 2 to a shared total
-behind a mutex, and the program prints `2000 4000` on every path.
+behind a mutex.
 
 ## Atomics with C11's orders
 
@@ -46,15 +46,7 @@ ppy run counters.ppy
 <!-- outputs:start -->
 ## What it prints
 
-**`python  counters.ppy`**
-
-```text
-2000 4000
-2000 True 7 1
-40
-```
-
-**`ppy run counters.ppy`**
+**`python  counters.ppy`**, **`ppy run counters.ppy`**
 
 ```text
 2000 4000

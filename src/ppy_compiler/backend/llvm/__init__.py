@@ -16,7 +16,15 @@ from ...diagnostics import Diagnostic, Severity, Span
 from ...plugins.torch_region import find_regions
 from ...target import TargetInfo, configured_target
 from ..binder import LibraryBinder
-from .fusion import FusedLoop, find_candidates, find_module_candidates, kernel_module
+from .fusion import (
+    COLUMNAR_STORAGES,
+    FusedLoop,
+    SourceSpan,
+    find_candidates,
+    find_module_candidates,
+    kernel_module,
+    span,
+)
 from .jit import JitEngine, LlvmUnavailable, available, llvm_status
 from .link import (
     BuildArtifacts,
@@ -58,7 +66,7 @@ class NativeModule:
     rejected: dict[str, str] = field(default_factory=dict)
     sources: dict[str, tuple] = field(default_factory=dict)
     fused: dict[str, FusedLoop] = field(default_factory=dict)
-    fusion_plan: dict[tuple[int, int], FusedLoop] = field(default_factory=dict)
+    fusion_plan: dict[SourceSpan, FusedLoop] = field(default_factory=dict)
     fusion_notes: list[tuple[int, str]] = field(default_factory=list)
     #: Per function, the arithmetic whose overflow guard a proof left out.
     proved: dict[str, tuple[str, ...]] = field(default_factory=dict)
@@ -307,7 +315,7 @@ def _module_from_cache(name: str, reused, candidates) -> NativeModule:  # type: 
 def _fuse(symbols, analysis):  # type: ignore[no-untyped-def]
     """Collect the fusible library expressions in one module (spec 19.4)."""
     loops: dict[str, FusedLoop] = {}
-    plan: dict[tuple[int, int], FusedLoop] = {}
+    plan: dict[SourceSpan, FusedLoop] = {}
     notes: list[tuple[int, str]] = []
     functions = list(symbols.functions.values())
     for cls in symbols.classes.values():
@@ -325,7 +333,7 @@ def _fuse(symbols, analysis):  # type: ignore[no-untyped-def]
 
     for candidate in candidates:
         loops[candidate.loop.symbol] = candidate.loop
-        plan[(candidate.node.lineno, candidate.node.col_offset)] = candidate.loop
+        plan[span(candidate.node)] = candidate.loop
         library = _LIBRARIES.get(candidate.loop.storage, candidate.loop.storage)
         fused = ", ".join(candidate.operations)
         notes.append(
@@ -1003,7 +1011,10 @@ def compile_and_run(  # type: ignore[no-untyped-def]
         for symbol, loop in native.fused.items():
             address = engine.address(symbol)
             if address:
-                binder.add_fused(name, loop, address)
+                nan_address = (
+                    engine.address(loop.nan_symbol) if loop.storage in COLUMNAR_STORAGES else 0
+                )
+                binder.add_fused(name, loop, address, nan_address)
         _report(native, reporter, bundle)
 
     regions = compile_torch_regions(bundle, notify=reporter.note)
@@ -1096,8 +1107,8 @@ class _Binder(LibraryBinder):
             engine,
         )
 
-    def add_fused(self, module: str, loop, address: int) -> None:  # type: ignore[no-untyped-def]
-        self._fused.setdefault(module, {})[loop.symbol] = (loop, address)
+    def add_fused(self, module: str, loop, address: int, nan_address: int = 0) -> None:  # type: ignore[no-untyped-def]
+        self._fused.setdefault(module, {})[loop.symbol] = (loop, address, nan_address)
 
     def names(self, module: str) -> frozenset[str]:
         return frozenset(self._entries.get(module, {}))
@@ -1108,8 +1119,15 @@ class _Binder(LibraryBinder):
         entry = self._fused.get(module, {}).get(symbol)
         if entry is None:
             return fallback
-        loop, address = entry
-        binding = bind_fused(loop, address, fallback, parallel=loop.parallel, threads=self.threads)
+        loop, address, nan_address = entry
+        binding = bind_fused(
+            loop,
+            address,
+            fallback,
+            parallel=loop.parallel,
+            threads=self.threads,
+            nan_address=nan_address,
+        )
         self.fused_bindings.append(binding)
         return binding.wrapper
 

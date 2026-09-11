@@ -41,17 +41,17 @@ ppy run threads.ppy
 **`python  threads.ppy`**
 
 ```text
-1 thread    3013.2 ms
-2 threads   6009.0 ms
-scaling       1.00x
+1 thread    3364.0 ms
+2 threads   6794.2 ms
+scaling       0.99x
 ```
 
 **`ppy run threads.ppy`**
 
 ```text
-1 thread     119.4 ms
-2 threads    120.5 ms
-scaling       1.98x
+1 thread     130.3 ms
+2 threads    129.6 ms
+scaling       2.01x
 ```
 
 <!-- outputs:end -->

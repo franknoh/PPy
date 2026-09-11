@@ -11,13 +11,13 @@ from __future__ import annotations
 
 import json
 
-from .fusion import FusedLoop
+from .fusion import FusedLoop, SourceSpan
 from .lowering import NativeParam, NativeSignature
 
 __all__ = ["SCHEMA_VERSION", "CachedLowering", "decode", "encode"]
 
 #: Bumped when the shape below changes, so an old entry is simply a miss.
-SCHEMA_VERSION = 7
+SCHEMA_VERSION = 8
 
 
 class CachedLowering:
@@ -43,7 +43,7 @@ class CachedLowering:
         signatures: dict[str, NativeSignature],
         rejected: dict[str, str],
         fused: dict[str, FusedLoop],
-        plan: dict[tuple[int, int], FusedLoop],
+        plan: dict[SourceSpan, FusedLoop],
         notes: list[tuple[int, str]],
         libraries: tuple[str, ...] = (),
         exports: dict[str, str] | None = None,

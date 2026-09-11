@@ -136,34 +136,34 @@ ppy run buffers_and_jit.ppy
 **`python  buffers_and_jit.ppy`**
 
 ```text
-list[float] copied         97.306 us   
-Buffer[float] borrowed    153.282 us   0.63x, same sum: True
-dot, strict order         244.091 us   
-dot, @ppy.fastmath        238.020 us   1.03x, differs by 0.00e+00
-digest, generic           239.351 us   
-digest, @ppy.jit          237.332 us   1.01x, same: True
+list[float] copied        104.387 us   
+Buffer[float] borrowed    158.837 us   0.66x, same sum: True
+dot, strict order         277.649 us   
+dot, @ppy.fastmath        257.140 us   1.08x, differs by 0.00e+00
+digest, generic           263.962 us   
+digest, @ppy.jit          260.730 us   1.01x, same: True
 ```
 
 **`ppy     buffers_and_jit.ppy`**
 
 ```text
-list[float] copied         92.352 us   
-Buffer[float] borrowed    146.138 us   0.63x, same sum: True
-dot, strict order         238.365 us   
-dot, @ppy.fastmath        236.017 us   1.01x, differs by 0.00e+00
-digest, generic           246.093 us   
-digest, @ppy.jit          245.886 us   1.00x, same: True
+list[float] copied        102.127 us   
+Buffer[float] borrowed    162.701 us   0.63x, same sum: True
+dot, strict order         261.217 us   
+dot, @ppy.fastmath        259.543 us   1.01x, differs by 0.00e+00
+digest, generic           270.856 us   
+digest, @ppy.jit          268.401 us   1.01x, same: True
 ```
 
 **`ppy run buffers_and_jit.ppy`**
 
 ```text
-list[float] copied         10.684 us   
-Buffer[float] borrowed      3.485 us   3.07x, same sum: True
-dot, strict order           3.541 us   
-dot, @ppy.fastmath          1.186 us   2.99x, differs by 4.07e-10
-digest, generic            10.894 us   
-digest, @ppy.jit            7.474 us   1.46x, same: True
+list[float] copied         11.790 us   
+Buffer[float] borrowed      3.726 us   3.16x, same sum: True
+dot, strict order           4.196 us   
+dot, @ppy.fastmath          0.849 us   4.94x, differs by 4.07e-10
+digest, generic            11.656 us   
+digest, @ppy.jit            8.874 us   1.31x, same: True
 ```
 
 <!-- outputs:end -->

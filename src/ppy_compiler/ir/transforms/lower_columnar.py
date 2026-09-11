@@ -7,7 +7,9 @@ written out as an Arrow array. Each operation becomes core loops: a null
 in reads a null out, `filter` counts then copies, `take` checks its
 positions, `sort_indices` is a stable merge sort with nulls last,
 `aggregate` folds the valid rows, `group_by` sorts by the key and folds each
-run, `join` is a sort-merge of two key columns. The `_FunctionLowering` of
+run, `join` is a sort-merge of two key columns, `map` evaluates a whole
+expression per row in one loop with nothing materialized between the
+operations. The `_FunctionLowering` of
 `lower-tensor` mixes this in, so one pass makes memory of every dialect
 that needs it.
 """
@@ -20,7 +22,7 @@ from dataclasses import dataclass
 from ..dialects import arrow, columnar, core
 from ..dialects import tensor as tensors
 from ..model import Builder, Operation, Successor, Value
-from ..types import BOOL, I32, I64, U8, BoolType, BufferType, FloatType, IRType, PtrType
+from ..types import BOOL, F64, I32, I64, U8, BoolType, BufferType, FloatType, IRType, PtrType
 
 __all__ = ["ColumnarLowering"]
 
@@ -312,9 +314,16 @@ class ColumnarLowering:
 
         return handler
 
+    def _compare(self, b: Builder, name: str, x: Value, y: Value) -> Value:
+        """`name` of two values, IEEE's way: `not_equal` is the negation of `equal`,
+        so a NaN differs from everything, as pandas and Arrow have it."""
+        if name == "not_equal":
+            return self._bitwise(b, "xor", core.cmp(b, "eq", x, y), core.const(b, True, BOOL))
+        return core.cmp(b, _PREDICATES[name], x, y)
+
     def _comparison(self, name: str):  # type: ignore[no-untyped-def]
         def handler(op: Operation) -> None:
-            self._elementwise2(op, lambda b, x, y: core.cmp(b, _PREDICATES[name], x, y))
+            self._elementwise2(op, lambda b, x, y: self._compare(b, name, x, y))
 
         return handler
 
@@ -407,6 +416,108 @@ class ColumnarLowering:
         valid = self._bitwise(inner, "and", vm, core.select(inner, m, vx, vy))
         self._put(inner, result, i, value, valid)
         self.columns[id(op.result)] = result
+
+    # -- map: one loop over an expression tree ------------------------------------------------
+
+    def op_columnar_map(self, op: Operation) -> None:
+        """One loop; each row reads its inputs once and writes the answer straight out.
+
+        Every node gives a (value, valid) pair. Under the `bits` model an
+        input's validity is its bitmap and the answer's goes to the validity
+        buffer, bit by bit. Under the `nan` model an `f64` input is valid
+        where it is not NaN, a `bool` input is a byte per row, and the
+        answer is stored as computed: an arithmetic or `select` over a null
+        is already NaN, a comparison is IEEE's (`NaN != x` is true, as
+        pandas has it), and `is_null`/`fill_null` test the value itself.
+        """
+        expression = columnar.parse_expression(str(op.attributes["expression"]))
+        model = str(op.attributes["model"])
+        bool_answer = str(op.attributes["gives"]) == "bool"
+        out, outv = op.operands[0], op.operands[1]
+        columns: list[_Column] = []
+        scalars: list[Value] = []
+        for operand in op.operands[2:]:
+            if columnar.describe(operand.type) is not None:
+                columns.append(self.column(operand))
+            else:
+                scalars.append(operand)
+        b = Builder().before(op)
+        rows = columns[0].length
+        for other in columns[1:]:
+            rows = self._same_length(b, columns[0], other)
+        bits_out = model == "bits" and bool_answer
+        wanted = self._bytes_for(b, rows) if bits_out else rows
+        enough = core.cmp(b, "ge", self.length(b, out), wanted)  # type: ignore[attr-defined]
+        core.guard(b, enough, "bounds", "the values buffer holds fewer rows than the column")
+        if model == "bits":
+            wide = core.cmp(b, "ge", self.length(b, outv), self._bytes_for(b, rows))  # type: ignore[attr-defined]
+            core.guard(b, wide, "bounds", "the validity bitmap holds fewer bits than the column")
+        inner, i, _next = self.range_loop(op, self._i64(b, 0), rows)  # type: ignore[attr-defined]
+        true = core.const(inner, True, BOOL)
+
+        def leaf(index: int) -> tuple[Value, Value]:
+            column = columns[index]
+            if model == "bits":
+                return self._get(inner, column, i)
+            if isinstance(column.info.dtype, BoolType):
+                byte = core.buffer_load(inner, column.values, i)
+                return core.cmp(inner, "ne", byte, self._u8(inner, 0)), true
+            value = core.buffer_load(inner, column.values, i)
+            return value, core.cmp(inner, "eq", value, value)
+
+        def evaluate(node: columnar.Node) -> tuple[Value, Value]:
+            if node.op == "array":
+                return leaf(node.array)
+            if node.op == "scalar":
+                return scalars[node.scalar], true
+            if node.op == "constant":
+                return core.const(inner, node.constant, F64), true
+            if node.op == "fill_null":
+                x, vx = evaluate(node.operands[0])
+                filler, _ = evaluate(node.operands[1])
+                return core.select(inner, vx, x, filler), true
+            pairs = [evaluate(child) for child in node.operands]
+            if node.op in columnar.ARITHMETIC:
+                (x, vx), (y, vy) = pairs
+                value = tensors.scalar_binary(inner, node.op, x, y, self.module)  # type: ignore[arg-type]
+                return value, self._bitwise(inner, "and", vx, vy)
+            if node.op in columnar.COMPARISON:
+                (x, vx), (y, vy) = pairs
+                return self._compare(inner, node.op, x, y), self._bitwise(inner, "and", vx, vy)
+            if node.op in columnar.BOOLEAN:
+                (x, vx), (y, vy) = pairs
+                return self._bitwise(inner, node.op, x, y), self._bitwise(inner, "and", vx, vy)
+            if node.op in {"negate", "abs"}:
+                ((x, vx),) = pairs
+                return tensors.scalar_unary(
+                    inner, "neg" if node.op == "negate" else "abs", x, self.module
+                ), vx  # type: ignore[arg-type]
+            if node.op == "invert":
+                ((x, vx),) = pairs
+                return self._bitwise(inner, "xor", x, true), vx
+            if node.op == "is_null":
+                ((_x, vx),) = pairs
+                return self._bitwise(inner, "xor", vx, true), true
+            if node.op == "is_valid":
+                ((_x, vx),) = pairs
+                return vx, true
+            if node.op == "select":
+                (m, vm), (x, vx), (y, vy) = pairs
+                value = core.select(inner, m, x, y)
+                return value, self._bitwise(inner, "and", vm, core.select(inner, m, vx, vy))
+            raise self._error(f"columnar.map cannot evaluate {node.op!r}")
+
+        value, valid = evaluate(expression)
+        if model == "bits":
+            target = _Column(
+                columnar.ColumnInfo(BOOL if bool_answer else F64, True), out, outv, rows
+            )
+            self._put(inner, target, i, value, valid)
+        elif bool_answer:
+            byte = core.select(inner, value, self._u8(inner, 1), self._u8(inner, 0))
+            core.buffer_store(inner, byte, out, i)
+        else:
+            core.buffer_store(inner, value, out, i)
 
     # -- filter, take, concat -----------------------------------------------------------------
 

@@ -55,9 +55,9 @@ and Nuitka is on the [performance page](reference/performance.md).
 
     ---
 
-    @@EXAMPLE_FOLDERS@@ folders, @@EXAMPLE_PROGRAMS@@ programs — the code, the commands, and what they print,
-    the same on all three paths; eight of them measured against Numba, Cython, NumPy, JAX,
-    PyTorch, CuPy, Triton, Taichi, Mojo, Codon, Rust, and C, collected on one [comparisons page](howto/comparisons.md).
+    @@EXAMPLE_FOLDERS@@ folders, @@EXAMPLE_PROGRAMS@@ programs — the code, the commands, and what they print;
+    sixteen of them measured against Numba, Cython, NumPy, numexpr, JAX,
+    PyTorch, CuPy, Triton, Taichi, Mojo, Codon, Rust, C, pandas, polars, asyncio, and uvloop, collected on one [comparisons page](howto/comparisons.md).
 
 -   **[CLI](cli.md)**
 

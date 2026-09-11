@@ -124,15 +124,19 @@ against another, and a module that imports none of them pays for none of them.
   aggregations, grouped aggregation, `merge`/`join`, and `concat` are named
   as `columnar` operations -- the same ones PyArrow's compute names.
 - An expression tree of Series arithmetic, comparison, `fillna`,
-  `isna`/`notna` fuses into the same columnar kernel PyArrow's compute
-  does. At run time an Arrow-backed Series (`pd.ArrowDtype`) is its Arrow
-  array, read in place with its nulls; a NumPy-backed `float64` Series is
-  its values behind a bitmap of ones, so a NaN stays the value it is; and
-  the answer is a Series over the callers' index, with the same backing.
-  Series whose indexes are not one index, a mix of backings, a nullable
-  extension dtype, or a bool answer over NumPy storage run pandas: the
-  index alignment, the copy-or-view rule, and the dtype are pandas' own
-  semantics and are not approximated (spec 59).
+  `isna`/`notna`, and the boolean operators fuses into one loop -- a
+  `columnar.map` -- the same kernel PyArrow's compute gets, with nothing
+  materialized between the operations. At run time an Arrow-backed Series
+  (`pd.ArrowDtype`) is its Arrow array, read in place with its validity
+  bits; a NumPy-backed `float64`
+  Series goes to the kernel's twin under NumPy's null model, where a NaN
+  is the null `fillna` fills and `isna` finds, a bool mask is a byte per
+  row, and `!=` is IEEE's; the answer is a Series over the callers' index
+  with the same backing, written straight into the array it wraps. Series
+  whose indexes are not one index, a mix of backings, or a nullable
+  extension dtype run pandas: the index alignment, the copy-or-view rule,
+  and the dtype are pandas' own semantics and are not approximated (spec
+  59).
 - `ppy_runtime.arrow.exported(array)` lends a PyArrow array to native code
   as the Arrow C Data Interface's `ArrowArray` struct -- the buffers
   shared, no `PyObject` in the ABI -- and releases it, once, when the
