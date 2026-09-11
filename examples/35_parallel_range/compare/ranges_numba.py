@@ -2,10 +2,14 @@
 
 import time
 
+import numba
 import numpy as np
 from numba import njit, prange
 
 N = 8_000_000
+# Pinned to the performance cores, as the PyTorch counterparts are: the
+# default pool over every core makes the small rows unstable on a hybrid CPU.
+numba.set_num_threads(min(8, numba.config.NUMBA_NUM_THREADS))
 
 
 @njit(parallel=True)

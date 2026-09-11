@@ -1,8 +1,15 @@
 """The four kernels as NumPy array expressions: no loop to write, a temporary per step."""
 
+import os
 import time
 
-import numpy as np
+# BLAS threads pinned to the performance cores: on a hybrid CPU the default
+# pool lands `dot` on the efficiency cores now and then, which doubles a
+# three-millisecond row and makes the run unstable.
+os.environ.setdefault("OPENBLAS_NUM_THREADS", "8")
+os.environ.setdefault("OMP_NUM_THREADS", "8")
+
+import numpy as np  # noqa: E402
 
 N = 8_000_000
 
