@@ -36,7 +36,9 @@ jobs:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
-      - run: uv sync
+      # The PPY side of a comparison imports the library it fuses -- torch,
+      # pandas -- so the environment carries every plugin group.
+      - run: uv sync --group all
       # A comparison whose run was unstable, or whose tool was missing,
       # is reported and left as it was; the tables that did move are still
       # committed, and the job is still red at the end so the log is read.
