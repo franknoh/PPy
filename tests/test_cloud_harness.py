@@ -20,6 +20,9 @@ def _harness(monkeypatch):
     assert spec.loader is not None
     spec.loader.exec_module(module)
     monkeypatch.setattr(module.time, "sleep", lambda _seconds: None)
+    # A Pod names the key pair it will hand over at construction; the machine
+    # running these tests (CI) need not have one.
+    monkeypatch.setattr(module, "_ssh_key", lambda: ("ssh-ed25519 AAAA test", Path("/nowhere/key")))
     return module
 
 
@@ -152,7 +155,6 @@ def test_a_vendor_image_is_started_under_sshd_for_the_injected_key(harness, tmp_
     installs one, admits `PUBLIC_KEY`, and keeps the container alive under it."""
     fake = _FakeRunpod({"pod": {"id": "pod-2"}})
     monkeypatch.setattr(harness, "_runpod", fake)
-    monkeypatch.setattr(harness, "_ssh_key", lambda: ("ssh-ed25519 AAAA test", tmp_path / "key"))
     pod = harness.Pod(
         "ppy-test-rocm-abcd1234",
         harness.ENVIRONMENTS["rocm"],
