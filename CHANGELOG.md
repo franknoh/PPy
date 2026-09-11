@@ -75,6 +75,17 @@ Work toward the next release, on `dev`; alphas of it are tagged `v0.3.0aN`.
   boxing the function while the function ran natively. Thread and sync
   effects no longer count against lowering in the contract report either.
 
+- Four more examples measure themselves against their neighbours, with
+  the counterpart programs in each `compare/` folder and the site showing
+  them side by side on the example's page and on one comparisons page:
+  regular expressions against CPython's `re` and Rust's `regex`, the buffer
+  kernels against Numba, Cython, NumPy, and C, the fused NumPy kernel
+  against NumPy, numexpr, Numba, and JAX, and Newton's method on a
+  `ppy.grad` derivative against JAX and PyTorch; the numerics example shows
+  what Numba, Codon, Mojo, C, and Rust print where Python keeps the integer.
+  The CUDA example's table gains Triton, Taichi's CUDA backend, and CUDA C
+  beside CuPy and Numba. `examples/compare.py` prints microseconds to four
+  places where a kernel is that small.
 - Three examples compare PPY with the tools that do the same job, code and
   numbers side by side: the parallel ranges against Numba, Taichi, Mojo, and
   NumPy; the CUDA kernels against CuPy and Numba; the eight algorithm kernels

@@ -112,6 +112,7 @@ nav:
       - Regular expressions: guide/regex.md
   - Examples:
       - howto/index.md
+      - Comparisons: howto/comparisons.md
       - Basics:
           - howto/01_basics.md
           - howto/02_arbitrary_precision.md

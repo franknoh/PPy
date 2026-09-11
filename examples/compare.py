@@ -22,9 +22,10 @@ differently from the reference, or prints no timing for a kernel the
 reference timed, is an error: the table is not printed and the exit status
 is 1. A tool that consistently prints its own wrong answer is still wrong.
 
-The tables in the READMEs of `15_algorithms`, `35_parallel_range`, and
-`38_cuda` came from this, run from a checkout on a native filesystem with
-nothing else running.
+The tables in the READMEs of `07_parallel`, `12_buffers_and_jit`,
+`15_algorithms`, `35_parallel_range`, `36_autodiff`, `38_cuda`, and
+`43_regex` came from this, run from a checkout on a native filesystem with
+nothing else running; the site collects them on one page.
 """
 
 from __future__ import annotations
@@ -123,6 +124,11 @@ def table(names: list[str], outcomes: dict[str, list[Outcome]]) -> str:
                 if label not in labels:
                     labels.append(label)
     lines = ["| kernel | " + " | ".join(names) + " |", "|---|" + "---:|" * len(names)]
+    # Milliseconds to two places, or four where a kernel is a few microseconds.
+    smallest = min(
+        (t for name in names for o in outcomes[name] for t in o.timings.values()), default=1.0
+    )
+    places = 2 if smallest >= 0.1 else 4
     for label in labels:
         cells = []
         for name in names:
@@ -132,7 +138,7 @@ def table(names: list[str], outcomes: dict[str, list[Outcome]]) -> str:
                 continue
             mean = statistics.mean(values)
             spread = statistics.stdev(values) if len(values) > 1 else 0.0
-            cells.append(f"{mean:.2f} ± {spread:.2f}")
+            cells.append(f"{mean:.{places}f} ± {spread:.{places}f}")
         lines.append(f"| {label} | " + " | ".join(cells) + " |")
     return "\n".join(lines)
 
