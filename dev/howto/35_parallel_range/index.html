@@ -2236,6 +2236,8 @@
       
         
       
+        
+      
     
     
     
@@ -2299,6 +2301,34 @@
     
   
     GPU kernels
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../44_tile/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tile kernels
   
 
     
@@ -3902,43 +3932,43 @@ to keep one: <code>dot</code> is BLAS, <code>count_odd</code> builds two tempora
 <tbody>
 <tr>
 <td>squares</td>
-<td style="text-align: right;">1.31 ± 0.06</td>
-<td style="text-align: right;"><strong>0.68 ± 0.02</strong></td>
-<td style="text-align: right;">1.11 ± 0.06</td>
-<td style="text-align: right;">0.97 ± 0.05</td>
-<td style="text-align: right;">12.81 ± 0.12</td>
+<td style="text-align: right;">1.35 ± 0.08</td>
+<td style="text-align: right;">3.13 ± 3.41</td>
+<td style="text-align: right;"><strong>1.13 ± 0.02</strong></td>
+<td style="text-align: right;">1.35 ± 0.12</td>
+<td style="text-align: right;">13.24 ± 0.56</td>
 </tr>
 <tr>
 <td>dot, in order</td>
-<td style="text-align: right;"><strong>5.71 ± 0.13</strong></td>
+<td style="text-align: right;"><strong>6.61 ± 0.41</strong></td>
 <td style="text-align: right;">—</td>
 <td style="text-align: right;">—</td>
-<td style="text-align: right;">12.48 ± 1.35</td>
+<td style="text-align: right;">15.40 ± 0.21</td>
 <td style="text-align: right;">—</td>
 </tr>
 <tr>
 <td>dot, reassociated</td>
-<td style="text-align: right;">1.79 ± 0.15</td>
-<td style="text-align: right;"><strong>1.07 ± 0.05</strong></td>
-<td style="text-align: right;">1.47 ± 0.05</td>
-<td style="text-align: right;">1.49 ± 0.08</td>
-<td style="text-align: right;">1.63 ± 1.26</td>
+<td style="text-align: right;">1.71 ± 0.05</td>
+<td style="text-align: right;">2.90 ± 2.94</td>
+<td style="text-align: right;"><strong>1.48 ± 0.02</strong></td>
+<td style="text-align: right;">1.91 ± 0.21</td>
+<td style="text-align: right;">4.36 ± 2.06</td>
 </tr>
 <tr>
 <td>count_odd</td>
-<td style="text-align: right;">0.96 ± 0.05</td>
-<td style="text-align: right;"><strong>0.51 ± 0.12</strong></td>
-<td style="text-align: right;">1.22 ± 0.02</td>
-<td style="text-align: right;">1.33 ± 0.30</td>
-<td style="text-align: right;">27.58 ± 0.68</td>
+<td style="text-align: right;">1.08 ± 0.07</td>
+<td style="text-align: right;"><strong>0.72 ± 0.18</strong></td>
+<td style="text-align: right;">1.27 ± 0.09</td>
+<td style="text-align: right;">1.79 ± 0.13</td>
+<td style="text-align: right;">27.22 ± 1.13</td>
 </tr>
 <tr>
 <td>fill, serial</td>
-<td style="text-align: right;">6.10 ± 0.15</td>
-<td style="text-align: right;">7.48 ± 0.13</td>
-<td style="text-align: right;"><strong>4.40 ± 0.18</strong></td>
-<td style="text-align: right;">17.81 ± 1.23</td>
-<td style="text-align: right;">14.75 ± 0.26</td>
+<td style="text-align: right;">6.36 ± 0.10</td>
+<td style="text-align: right;">7.71 ± 0.14</td>
+<td style="text-align: right;"><strong>4.11 ± 0.16</strong></td>
+<td style="text-align: right;">20.19 ± 0.23</td>
+<td style="text-align: right;">15.07 ± 0.26</td>
 </tr>
 </tbody>
 </table>

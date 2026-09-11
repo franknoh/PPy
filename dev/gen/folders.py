@@ -38,7 +38,7 @@ GROUPS = [
             "43_regex",
         ],
     ),
-    ("Accelerators", ["38_cuda", "39_xla"]),
+    ("Accelerators", ["38_cuda", "44_tile", "39_xla"]),
     (
         "Libraries",
         [

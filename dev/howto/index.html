@@ -2110,6 +2110,8 @@
       
         
       
+        
+      
     
     
     
@@ -2173,6 +2175,34 @@
     
   
     GPU kernels
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="44_tile/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tile kernels
   
 
     
@@ -3808,6 +3838,11 @@ folder holds both <code>&lt;name&gt;.py</code> and <code>&lt;name&gt;.ppy</code>
 <p><strong><a href="38_cuda/">GPU kernels</a></strong></p>
 <hr />
 <p>A saxpy and a block reduction with shared memory and a warp shuffle, written once in <code>ppy.cuda</code>: the reference launch under CPython, PTX through the CUDA driver under <code>ppy run</code> where a device is present, and CUDA or HIP source from <code>ppy emit</code>.</p>
+</li>
+<li>
+<p><strong><a href="44_tile/">Tile kernels</a></strong></p>
+<hr />
+<p>A kernel that works on tiles rather than threads: <code>tile.arange(256)</code> is the lane index, <code>tile.load</code> gathers a tile, arithmetic is lane by lane, <code>tile.sum</code> and its kind reduce a tile to one number, and <code>tile.store</code> scatters one back.</p>
 </li>
 <li>
 <p><strong><a href="39_xla/">XLA</a></strong></p>

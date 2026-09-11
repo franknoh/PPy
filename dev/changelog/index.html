@@ -2097,6 +2097,8 @@
       
         
       
+        
+      
     
     
     
@@ -2157,6 +2159,34 @@
     
   
     GPU kernels
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../howto/44_tile/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tile kernels
   
 
     
@@ -3901,15 +3931,27 @@
   effects no longer count against lowering in the contract report either.</p>
 </li>
 <li>
-<p>The comparison tables are measured and written by <code>scripts/compare_docs.py</code>
+<p><code>ppy.tile</code>: kernels over tiles. <code>@tile.kernel</code> runs once per program of a
+  launch; <code>tile.arange(BLOCK)</code> is the lane index, <code>tile.load</code> and <code>tile.store</code>
+  gather and scatter through a <code>native.ptr</code> with a mask, arithmetic and
+  comparisons are lane by lane with a scalar broadcast, <code>tile.where</code> chooses
+  per lane, and <code>tile.sum</code>, <code>tile.max</code>, <code>tile.min</code> reduce a tile to one
+  number. The compiler lowers a program to a block of threads that each
+  hold a slice of every tile as a vector, gathers and scatters lane by
+  lane, and reduces across the block with a shuffle tree and shared memory;
+  the CUDA source backend writes the same kernels, and the reference launch
+  runs the programs in order under CPython. The new <code>44_tile</code> example is
+  compared with Triton and Taichi, the tools that program tiles, and the
+  CUDA example keeps to thread-level kernels: CuPy, Numba, Mojo, CUDA C.</p>
+</li>
+<li>The comparison tables are measured and written by <code>scripts/compare_docs.py</code>
   from a manifest of every counterpart program, between markers in each
   README, with the run recorded beside the programs; <code>bench.yml</code> runs it and
   <code>scripts/refresh.py</code> on a self-hosted runner for every push to <code>dev</code> that
   touches code and commits what moved, and a change that touches only prose
   skips the test matrix for the strict docs build. The comparison
   sections themselves now show each tool's kernel side by side and say what
-  the numbers mean, rather than that they agree.</p>
-</li>
+  the numbers mean, rather than that they agree.</li>
 <li>Three hot paths in the runtime, found by the comparisons. A CUDA launch
   over host arrays uploaded each array from a copy of it, and the copy cost
   more than the transfer -- 90 ms against 12 for 128 MB -- so the driver

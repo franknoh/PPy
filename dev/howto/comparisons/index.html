@@ -1377,6 +1377,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#tile-kernels-compared-with-triton-and-taichi" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tile kernels: Compared with Triton and Taichi
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#parallel-fused-kernels-compared-with-numpy-numexpr-numba-and-jax" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2289,6 +2300,8 @@
       
         
       
+        
+      
     
     
     
@@ -2352,6 +2365,34 @@
     
   
     GPU kernels
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../44_tile/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tile kernels
   
 
     
@@ -3889,6 +3930,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#tile-kernels-compared-with-triton-and-taichi" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tile kernels: Compared with Triton and Taichi
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#parallel-fused-kernels-compared-with-numpy-numexpr-numba-and-jax" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4060,35 +4112,35 @@ around it, timed inside the process: the floor.</p>
 <tbody>
 <tr>
 <td>total</td>
-<td style="text-align: right;">0.0036 ± 0.0000</td>
-<td style="text-align: right;">0.0036 ± 0.0001</td>
+<td style="text-align: right;">0.0037 ± 0.0000</td>
 <td style="text-align: right;">0.0037 ± 0.0001</td>
-<td style="text-align: right;"><strong>0.0024 ± 0.0003</strong></td>
-<td style="text-align: right;">0.0036 ± 0.0001</td>
+<td style="text-align: right;">0.0037 ± 0.0000</td>
+<td style="text-align: right;"><strong>0.0021 ± 0.0001</strong></td>
+<td style="text-align: right;">0.0037 ± 0.0001</td>
 </tr>
 <tr>
 <td>dot</td>
-<td style="text-align: right;">0.0036 ± 0.0001</td>
-<td style="text-align: right;">0.0036 ± 0.0001</td>
+<td style="text-align: right;">0.0037 ± 0.0000</td>
+<td style="text-align: right;">0.0038 ± 0.0001</td>
 <td style="text-align: right;">0.0037 ± 0.0001</td>
 <td style="text-align: right;"><strong>0.0013 ± 0.0001</strong></td>
-<td style="text-align: right;">0.0036 ± 0.0001</td>
+<td style="text-align: right;">0.0036 ± 0.0000</td>
 </tr>
 <tr>
 <td>dot_relaxed</td>
 <td style="text-align: right;"><strong>0.0010 ± 0.0000</strong></td>
 <td style="text-align: right;">0.0011 ± 0.0000</td>
-<td style="text-align: right;">0.0037 ± 0.0001</td>
-<td style="text-align: right;">0.0013 ± 0.0001</td>
-<td style="text-align: right;">0.0035 ± 0.0001</td>
+<td style="text-align: right;">0.0037 ± 0.0000</td>
+<td style="text-align: right;">0.0013 ± 0.0000</td>
+<td style="text-align: right;">0.0036 ± 0.0000</td>
 </tr>
 <tr>
 <td>digest</td>
 <td style="text-align: right;">0.0075 ± 0.0001</td>
-<td style="text-align: right;">0.0114 ± 0.0001</td>
-<td style="text-align: right;">0.0080 ± 0.0001</td>
-<td style="text-align: right;">0.0205 ± 0.0001</td>
-<td style="text-align: right;"><strong>0.0046 ± 0.0000</strong></td>
+<td style="text-align: right;">0.0116 ± 0.0001</td>
+<td style="text-align: right;">0.0081 ± 0.0000</td>
+<td style="text-align: right;">0.0209 ± 0.0006</td>
+<td style="text-align: right;"><strong>0.0047 ± 0.0000</strong></td>
 </tr>
 </tbody>
 </table>
@@ -4264,67 +4316,67 @@ element, <code>var</code> on every local -- and is the plain <code>List</code> v
 <tbody>
 <tr>
 <td>sieve 2e6</td>
-<td style="text-align: right;">8.60 ± 0.28</td>
-<td style="text-align: right;">9.02 ± 0.36</td>
-<td style="text-align: right;"><strong>7.50 ± 0.12</strong></td>
-<td style="text-align: right;">12.52 ± 0.96</td>
-<td style="text-align: right;">7.92 ± 0.25</td>
+<td style="text-align: right;">8.52 ± 0.33</td>
+<td style="text-align: right;">9.02 ± 0.66</td>
+<td style="text-align: right;"><strong>7.56 ± 0.17</strong></td>
+<td style="text-align: right;">11.84 ± 0.32</td>
+<td style="text-align: right;">7.96 ± 0.34</td>
 </tr>
 <tr>
 <td>collatz 3e5</td>
-<td style="text-align: right;">40.14 ± 0.61</td>
-<td style="text-align: right;"><strong>30.70 ± 0.55</strong></td>
-<td style="text-align: right;">32.08 ± 0.43</td>
-<td style="text-align: right;">69.19 ± 1.68</td>
-<td style="text-align: right;">32.60 ± 0.28</td>
+<td style="text-align: right;">41.00 ± 0.93</td>
+<td style="text-align: right;"><strong>31.68 ± 0.94</strong></td>
+<td style="text-align: right;">32.64 ± 0.64</td>
+<td style="text-align: right;">69.37 ± 1.33</td>
+<td style="text-align: right;">32.30 ± 0.38</td>
 </tr>
 <tr>
 <td>knapsack 400x2e4</td>
-<td style="text-align: right;">5.16 ± 0.11</td>
-<td style="text-align: right;">3.74 ± 0.32</td>
-<td style="text-align: right;">4.50 ± 0.17</td>
-<td style="text-align: right;"><strong>2.25 ± 0.23</strong></td>
-<td style="text-align: right;">5.64 ± 0.05</td>
+<td style="text-align: right;">5.04 ± 0.05</td>
+<td style="text-align: right;">3.62 ± 0.08</td>
+<td style="text-align: right;">4.52 ± 0.08</td>
+<td style="text-align: right;"><strong>2.40 ± 0.41</strong></td>
+<td style="text-align: right;">5.62 ± 0.08</td>
 </tr>
 <tr>
 <td>edit 2000x2000</td>
 <td style="text-align: right;">2.94 ± 0.05</td>
-<td style="text-align: right;">2.82 ± 0.04</td>
+<td style="text-align: right;">2.80 ± 0.00</td>
 <td style="text-align: right;"><strong>1.78 ± 0.08</strong></td>
-<td style="text-align: right;">8.06 ± 0.23</td>
-<td style="text-align: right;">2.46 ± 0.09</td>
+<td style="text-align: right;">8.40 ± 0.20</td>
+<td style="text-align: right;">2.52 ± 0.13</td>
 </tr>
 <tr>
 <td>floyd 220</td>
-<td style="text-align: right;">3.18 ± 0.08</td>
-<td style="text-align: right;">3.02 ± 0.04</td>
-<td style="text-align: right;">2.46 ± 0.13</td>
+<td style="text-align: right;">3.24 ± 0.15</td>
+<td style="text-align: right;">3.06 ± 0.05</td>
+<td style="text-align: right;">2.40 ± 0.00</td>
 <td style="text-align: right;">3.01 ± 0.06</td>
-<td style="text-align: right;"><strong>1.26 ± 0.36</strong></td>
+<td style="text-align: right;"><strong>1.10 ± 0.00</strong></td>
 </tr>
 <tr>
 <td>matmul 220</td>
-<td style="text-align: right;">3.90 ± 0.57</td>
-<td style="text-align: right;">3.62 ± 0.04</td>
-<td style="text-align: right;"><strong>3.44 ± 0.11</strong></td>
-<td style="text-align: right;">7.85 ± 0.21</td>
-<td style="text-align: right;">3.80 ± 0.00</td>
+<td style="text-align: right;">3.68 ± 0.11</td>
+<td style="text-align: right;">3.64 ± 0.05</td>
+<td style="text-align: right;"><strong>3.34 ± 0.05</strong></td>
+<td style="text-align: right;">8.01 ± 0.21</td>
+<td style="text-align: right;">3.82 ± 0.04</td>
 </tr>
 <tr>
 <td>union-find 5e5</td>
-<td style="text-align: right;">3.06 ± 0.15</td>
-<td style="text-align: right;">3.22 ± 0.27</td>
-<td style="text-align: right;"><strong>2.40 ± 0.00</strong></td>
-<td style="text-align: right;">6.95 ± 0.43</td>
-<td style="text-align: right;">3.86 ± 0.22</td>
+<td style="text-align: right;">3.22 ± 0.28</td>
+<td style="text-align: right;">3.20 ± 0.32</td>
+<td style="text-align: right;"><strong>2.56 ± 0.09</strong></td>
+<td style="text-align: right;">7.28 ± 0.19</td>
+<td style="text-align: right;">3.72 ± 0.41</td>
 </tr>
 <tr>
 <td>fermat 6e4</td>
-<td style="text-align: right;">2.28 ± 0.04</td>
-<td style="text-align: right;">2.54 ± 0.05</td>
-<td style="text-align: right;">1.70 ± 0.00</td>
-<td style="text-align: right;">2.12 ± 0.03</td>
-<td style="text-align: right;"><strong>1.50 ± 0.00</strong></td>
+<td style="text-align: right;">2.52 ± 0.29</td>
+<td style="text-align: right;">2.58 ± 0.13</td>
+<td style="text-align: right;">1.68 ± 0.04</td>
+<td style="text-align: right;">2.25 ± 0.15</td>
+<td style="text-align: right;"><strong>1.48 ± 0.04</strong></td>
 </tr>
 </tbody>
 </table>
@@ -4361,56 +4413,56 @@ included. The C reference reads the same input with <code>scanf</code>.</p>
 <tr>
 <td><a href="https://github.com/franknoh/PPy/blob/main/examples/15_algorithms/15a_nqueens">15a</a></td>
 <td>N-Queens</td>
-<td style="text-align: right;">135.2 ms</td>
-<td style="text-align: right;">40.1 ms</td>
+<td style="text-align: right;">141.9 ms</td>
+<td style="text-align: right;">44.5 ms</td>
+<td style="text-align: right;">5.7 ms</td>
+<td style="text-align: right;">4.9 ms</td>
 <td style="text-align: right;">5.4 ms</td>
-<td style="text-align: right;">4.6 ms</td>
-<td style="text-align: right;">5.1 ms</td>
 </tr>
 <tr>
 <td><a href="https://github.com/franknoh/PPy/blob/main/examples/15_algorithms/15b_dijkstra">15b</a></td>
 <td>shortest path</td>
-<td style="text-align: right;">3079.7 ms</td>
-<td style="text-align: right;">2170.5 ms</td>
-<td style="text-align: right;"><strong>110.1 ms</strong></td>
-<td style="text-align: right;">140.0 ms</td>
-<td style="text-align: right;">133.1 ms</td>
+<td style="text-align: right;">3112.1 ms</td>
+<td style="text-align: right;">2247.0 ms</td>
+<td style="text-align: right;"><strong>121.1 ms</strong></td>
+<td style="text-align: right;">146.4 ms</td>
+<td style="text-align: right;">144.5 ms</td>
 </tr>
 <tr>
 <td><a href="https://github.com/franknoh/PPy/blob/main/examples/15_algorithms/15c_kmp">15c</a></td>
 <td>substring search</td>
-<td style="text-align: right;">292.3 ms</td>
-<td style="text-align: right;">51.9 ms</td>
+<td style="text-align: right;">304.2 ms</td>
+<td style="text-align: right;">58.6 ms</td>
 <td style="text-align: right;">—</td>
-<td style="text-align: right;">8.9 ms</td>
-<td style="text-align: right;">8.6 ms</td>
+<td style="text-align: right;">9.8 ms</td>
+<td style="text-align: right;">9.6 ms</td>
 </tr>
 <tr>
 <td><a href="https://github.com/franknoh/PPy/blob/main/examples/15_algorithms/15d_segment_tree">15d</a></td>
 <td>range sums</td>
-<td style="text-align: right;">999.5 ms</td>
-<td style="text-align: right;">738.6 ms</td>
-<td style="text-align: right;"><strong>28.7 ms</strong></td>
+<td style="text-align: right;">1035.4 ms</td>
+<td style="text-align: right;">773.3 ms</td>
+<td style="text-align: right;"><strong>30.9 ms</strong></td>
+<td style="text-align: right;">52.2 ms</td>
 <td style="text-align: right;">51.3 ms</td>
-<td style="text-align: right;">49.2 ms</td>
 </tr>
 <tr>
 <td><a href="https://github.com/franknoh/PPy/blob/main/examples/15_algorithms/15e_lis">15e</a></td>
 <td>longest increasing subsequence</td>
-<td style="text-align: right;">505.3 ms</td>
-<td style="text-align: right;">90.5 ms</td>
-<td style="text-align: right;"><strong>38.2 ms</strong></td>
-<td style="text-align: right;">56.1 ms</td>
-<td style="text-align: right;">53.9 ms</td>
+<td style="text-align: right;">536.1 ms</td>
+<td style="text-align: right;">95.8 ms</td>
+<td style="text-align: right;"><strong>41.6 ms</strong></td>
+<td style="text-align: right;">59.7 ms</td>
+<td style="text-align: right;">56.8 ms</td>
 </tr>
 <tr>
 <td><a href="https://github.com/franknoh/PPy/blob/main/examples/15_algorithms/15f_input">15f</a></td>
 <td>counting inversions</td>
-<td style="text-align: right;">577.4 ms</td>
-<td style="text-align: right;">88.1 ms</td>
-<td style="text-align: right;"><strong>37.3 ms</strong></td>
-<td style="text-align: right;">44.1 ms</td>
-<td style="text-align: right;">44.9 ms</td>
+<td style="text-align: right;">660.2 ms</td>
+<td style="text-align: right;">91.5 ms</td>
+<td style="text-align: right;"><strong>41.4 ms</strong></td>
+<td style="text-align: right;">46.4 ms</td>
+<td style="text-align: right;">45.7 ms</td>
 </tr>
 </tbody>
 </table>
@@ -4527,43 +4579,43 @@ to keep one: <code>dot</code> is BLAS, <code>count_odd</code> builds two tempora
 <tbody>
 <tr>
 <td>squares</td>
-<td style="text-align: right;">1.31 ± 0.06</td>
-<td style="text-align: right;"><strong>0.68 ± 0.02</strong></td>
-<td style="text-align: right;">1.11 ± 0.06</td>
-<td style="text-align: right;">0.97 ± 0.05</td>
-<td style="text-align: right;">12.81 ± 0.12</td>
+<td style="text-align: right;">1.35 ± 0.08</td>
+<td style="text-align: right;">3.13 ± 3.41</td>
+<td style="text-align: right;"><strong>1.13 ± 0.02</strong></td>
+<td style="text-align: right;">1.35 ± 0.12</td>
+<td style="text-align: right;">13.24 ± 0.56</td>
 </tr>
 <tr>
 <td>dot, in order</td>
-<td style="text-align: right;"><strong>5.71 ± 0.13</strong></td>
+<td style="text-align: right;"><strong>6.61 ± 0.41</strong></td>
 <td style="text-align: right;">—</td>
 <td style="text-align: right;">—</td>
-<td style="text-align: right;">12.48 ± 1.35</td>
+<td style="text-align: right;">15.40 ± 0.21</td>
 <td style="text-align: right;">—</td>
 </tr>
 <tr>
 <td>dot, reassociated</td>
-<td style="text-align: right;">1.79 ± 0.15</td>
-<td style="text-align: right;"><strong>1.07 ± 0.05</strong></td>
-<td style="text-align: right;">1.47 ± 0.05</td>
-<td style="text-align: right;">1.49 ± 0.08</td>
-<td style="text-align: right;">1.63 ± 1.26</td>
+<td style="text-align: right;">1.71 ± 0.05</td>
+<td style="text-align: right;">2.90 ± 2.94</td>
+<td style="text-align: right;"><strong>1.48 ± 0.02</strong></td>
+<td style="text-align: right;">1.91 ± 0.21</td>
+<td style="text-align: right;">4.36 ± 2.06</td>
 </tr>
 <tr>
 <td>count_odd</td>
-<td style="text-align: right;">0.96 ± 0.05</td>
-<td style="text-align: right;"><strong>0.51 ± 0.12</strong></td>
-<td style="text-align: right;">1.22 ± 0.02</td>
-<td style="text-align: right;">1.33 ± 0.30</td>
-<td style="text-align: right;">27.58 ± 0.68</td>
+<td style="text-align: right;">1.08 ± 0.07</td>
+<td style="text-align: right;"><strong>0.72 ± 0.18</strong></td>
+<td style="text-align: right;">1.27 ± 0.09</td>
+<td style="text-align: right;">1.79 ± 0.13</td>
+<td style="text-align: right;">27.22 ± 1.13</td>
 </tr>
 <tr>
 <td>fill, serial</td>
-<td style="text-align: right;">6.10 ± 0.15</td>
-<td style="text-align: right;">7.48 ± 0.13</td>
-<td style="text-align: right;"><strong>4.40 ± 0.18</strong></td>
-<td style="text-align: right;">17.81 ± 1.23</td>
-<td style="text-align: right;">14.75 ± 0.26</td>
+<td style="text-align: right;">6.36 ± 0.10</td>
+<td style="text-align: right;">7.71 ± 0.14</td>
+<td style="text-align: right;"><strong>4.11 ± 0.16</strong></td>
+<td style="text-align: right;">20.19 ± 0.23</td>
+<td style="text-align: right;">15.07 ± 0.26</td>
 </tr>
 </tbody>
 </table>
@@ -4617,7 +4669,9 @@ traces, <code>jax_enable_x64</code> so the digits match:</p>
 <a id="__codelineno-11-8" name="__codelineno-11-8" href="#__codelineno-11-8"></a><span class="n">newton_all</span> <span class="o">=</span> <span class="n">jax</span><span class="o">.</span><span class="n">jit</span><span class="p">(</span><span class="n">jax</span><span class="o">.</span><span class="n">vmap</span><span class="p">(</span><span class="n">newton</span><span class="p">))</span>
 </code></pre></div>
 <p><strong>PyTorch</strong> -- <code>torch.func.grad</code> and <code>vmap</code>; the six steps stay a Python
-loop over a 100,000-element tensor in float64:</p>
+loop over a 100,000-element tensor in float64, with the thread count pinned
+to the performance cores', since its default of one per logical core spins
+on this hybrid CPU and the batch takes hundreds of milliseconds some runs:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="n">dg</span> <span class="o">=</span> <span class="n">grad</span><span class="p">(</span><span class="n">g</span><span class="p">)</span>
 <a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a>
 <a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a>
@@ -4642,9 +4696,9 @@ loop over a 100,000-element tensor in float64:</p>
 <tbody>
 <tr>
 <td>newton, 100k starts</td>
-<td style="text-align: right;">12.16 ± 0.11</td>
-<td style="text-align: right;"><strong>1.49 ± 0.26</strong></td>
-<td style="text-align: right;">8.81 ± 1.76</td>
+<td style="text-align: right;">12.50 ± 0.17</td>
+<td style="text-align: right;"><strong>1.78 ± 0.43</strong></td>
+<td style="text-align: right;">6.33 ± 1.03</td>
 </tr>
 </tbody>
 </table>
@@ -4707,27 +4761,27 @@ captured bytes, <code>cargo build --release</code>:</p>
 <tbody>
 <tr>
 <td>count_words</td>
-<td style="text-align: right;"><strong>6.41 ± 0.03</strong></td>
-<td style="text-align: right;">104.44 ± 0.64</td>
-<td style="text-align: right;">17.95 ± 0.13</td>
+<td style="text-align: right;"><strong>6.57 ± 0.05</strong></td>
+<td style="text-align: right;">107.07 ± 1.27</td>
+<td style="text-align: right;">18.23 ± 0.13</td>
 </tr>
 <tr>
 <td>longest_word</td>
-<td style="text-align: right;"><strong>6.38 ± 0.02</strong></td>
-<td style="text-align: right;">126.79 ± 0.31</td>
-<td style="text-align: right;">37.35 ± 2.81</td>
+<td style="text-align: right;"><strong>6.53 ± 0.05</strong></td>
+<td style="text-align: right;">133.05 ± 8.69</td>
+<td style="text-align: right;">36.85 ± 2.99</td>
 </tr>
 <tr>
 <td>sum_values</td>
-<td style="text-align: right;"><strong>55.63 ± 0.34</strong></td>
-<td style="text-align: right;">194.38 ± 0.98</td>
-<td style="text-align: right;">65.00 ± 0.82</td>
+<td style="text-align: right;"><strong>56.70 ± 0.33</strong></td>
+<td style="text-align: right;">198.20 ± 1.86</td>
+<td style="text-align: right;">65.62 ± 0.79</td>
 </tr>
 <tr>
 <td>count_hex</td>
-<td style="text-align: right;">6.44 ± 0.03</td>
-<td style="text-align: right;">10.00 ± 0.07</td>
-<td style="text-align: right;"><strong>2.30 ± 0.05</strong></td>
+<td style="text-align: right;">6.59 ± 0.03</td>
+<td style="text-align: right;">10.22 ± 0.10</td>
+<td style="text-align: right;"><strong>2.33 ± 0.10</strong></td>
 </tr>
 </tbody>
 </table>
@@ -4813,35 +4867,35 @@ double crosses as its bits; arguments must be fixed-width (<code>Int64</code>, n
 <tbody>
 <tr>
 <td>saxpy, arrays on the device</td>
-<td style="text-align: right;">0.67 ± 0.02</td>
-<td style="text-align: right;">0.68 ± 0.01</td>
-<td style="text-align: right;">0.71 ± 0.02</td>
-<td style="text-align: right;">0.52 ± 0.02</td>
+<td style="text-align: right;">0.77 ± 0.08</td>
+<td style="text-align: right;">0.78 ± 0.08</td>
+<td style="text-align: right;">0.72 ± 0.06</td>
+<td style="text-align: right;">0.55 ± 0.05</td>
 <td style="text-align: right;"><strong>0.50 ± 0.00</strong></td>
 </tr>
 <tr>
 <td>block max, arrays on the device</td>
-<td style="text-align: right;">1.99 ± 0.02</td>
-<td style="text-align: right;">1.97 ± 0.02</td>
-<td style="text-align: right;">2.00 ± 0.02</td>
-<td style="text-align: right;">1.97 ± 0.02</td>
+<td style="text-align: right;">2.03 ± 0.05</td>
+<td style="text-align: right;">1.98 ± 0.02</td>
+<td style="text-align: right;">2.02 ± 0.03</td>
+<td style="text-align: right;">1.98 ± 0.02</td>
 <td style="text-align: right;"><strong>1.88 ± 0.00</strong></td>
 </tr>
 <tr>
 <td>saxpy, arrays copied in and out per launch</td>
-<td style="text-align: right;">37.66 ± 0.85</td>
-<td style="text-align: right;">45.32 ± 0.25</td>
-<td style="text-align: right;">36.01 ± 0.34</td>
-<td style="text-align: right;"><strong>25.12 ± 0.75</strong></td>
-<td style="text-align: right;">29.28 ± 0.40</td>
+<td style="text-align: right;">39.19 ± 1.60</td>
+<td style="text-align: right;">48.92 ± 2.05</td>
+<td style="text-align: right;">36.79 ± 1.50</td>
+<td style="text-align: right;"><strong>28.43 ± 1.45</strong></td>
+<td style="text-align: right;">30.46 ± 0.74</td>
 </tr>
 <tr>
 <td>block max, array copied in per launch</td>
-<td style="text-align: right;">14.93 ± 0.65</td>
-<td style="text-align: right;">11.95 ± 0.07</td>
-<td style="text-align: right;">13.59 ± 0.36</td>
-<td style="text-align: right;"><strong>10.14 ± 0.21</strong></td>
-<td style="text-align: right;">10.57 ± 0.15</td>
+<td style="text-align: right;">15.66 ± 0.43</td>
+<td style="text-align: right;">12.33 ± 0.34</td>
+<td style="text-align: right;">14.11 ± 0.42</td>
+<td style="text-align: right;"><strong>11.21 ± 0.33</strong></td>
+<td style="text-align: right;">11.26 ± 0.20</td>
 </tr>
 </tbody>
 </table>
@@ -4858,6 +4912,95 @@ the device by allocating it there, with <code>cuda.device_alloc</code>.</p>
 <p>NVIDIA GeForce RTX 5080 Laptop GPU, driver 610.71, CUDA 13.3; CuPy 14.2.0,
 Numba 0.67.0 on CPython 3.12.13; Mojo 1.0.0 with MAX 26.5; nvcc 13.3; PPY
 on CPython 3.13.13.</p>
+<h2 id="tile-kernels-compared-with-triton-and-taichi">Tile kernels: Compared with Triton and Taichi<a class="headerlink" href="#tile-kernels-compared-with-triton-and-taichi" title="Permanent link">&para;</a></h2>
+<p>From <a href="../44_tile/">Tile kernels</a>.
+The same two kernels over sixteen million doubles, as programs over tiles
+in the three tools that have them, in <a href="https://github.com/franknoh/PPy/blob/main/examples/44_tile/compare"><code>compare/</code></a>:
+<a href="https://github.com/franknoh/PPy/blob/main/examples/44_tile/compare/tiles_bench.ppy"><code>tiles_bench.ppy</code></a>, <a href="https://github.com/franknoh/PPy/blob/main/examples/44_tile/compare/tiles_triton.py"><code>tiles_triton.py</code></a>,
+<a href="https://github.com/franknoh/PPy/blob/main/examples/44_tile/compare/tiles_taichi.py"><code>tiles_taichi.py</code></a>. Milliseconds, best of warm
+launches with the device synchronized, over five processes. The
+thread-level ports of the same kernels -- CuPy, Numba, Mojo, CUDA C -- are
+the <a href="../38_cuda/">CUDA example</a>'s comparison. The block max, as
+each spells it:</p>
+<p><strong>PPY</strong> -- a program loads its tile and reduces it; the same file runs on
+CPython:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a><span class="nd">@tile</span><span class="o">.</span><span class="n">kernel</span>
+<a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a><span class="k">def</span><span class="w"> </span><span class="nf">block_max</span><span class="p">(</span><span class="n">x</span><span class="p">:</span> <span class="n">native</span><span class="o">.</span><span class="n">const_ptr</span><span class="p">[</span><span class="nb">float</span><span class="p">],</span> <span class="n">out</span><span class="p">:</span> <span class="n">native</span><span class="o">.</span><span class="n">ptr</span><span class="p">[</span><span class="nb">float</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-19-3" name="__codelineno-19-3" href="#__codelineno-19-3"></a>    <span class="n">pid</span> <span class="o">=</span> <span class="n">tile</span><span class="o">.</span><span class="n">program_id</span><span class="p">()</span>
+<a id="__codelineno-19-4" name="__codelineno-19-4" href="#__codelineno-19-4"></a>    <span class="n">values</span> <span class="o">=</span> <span class="n">tile</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">pid</span> <span class="o">*</span> <span class="mi">64</span> <span class="o">+</span> <span class="n">tile</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="mi">64</span><span class="p">))</span>
+<a id="__codelineno-19-5" name="__codelineno-19-5" href="#__codelineno-19-5"></a>    <span class="n">tile</span><span class="o">.</span><span class="n">store</span><span class="p">(</span><span class="n">out</span><span class="p">,</span> <span class="n">pid</span><span class="p">,</span> <span class="n">tile</span><span class="o">.</span><span class="n">max</span><span class="p">(</span><span class="n">values</span><span class="p">))</span>
+</code></pre></div>
+<p><strong>Triton</strong> -- the same shape, <code>tl.program_id</code>, <code>tl.arange</code>, <code>tl.load</code>,
+<code>tl.max</code>; it is launched over CuPy memory through a six-line <code>data_ptr()</code>
+wrapper, and its compiler tiles the work across a warp group:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a><span class="nd">@triton</span><span class="o">.</span><span class="n">jit</span>
+<a id="__codelineno-20-2" name="__codelineno-20-2" href="#__codelineno-20-2"></a><span class="k">def</span><span class="w"> </span><span class="nf">block_max</span><span class="p">(</span><span class="n">x_ptr</span><span class="p">,</span> <span class="n">out_ptr</span><span class="p">,</span> <span class="n">BLOCK</span><span class="p">:</span> <span class="n">tl</span><span class="o">.</span><span class="n">constexpr</span><span class="p">):</span>
+<a id="__codelineno-20-3" name="__codelineno-20-3" href="#__codelineno-20-3"></a>    <span class="n">offsets</span> <span class="o">=</span> <span class="n">tl</span><span class="o">.</span><span class="n">program_id</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span> <span class="o">*</span> <span class="n">BLOCK</span> <span class="o">+</span> <span class="n">tl</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">BLOCK</span><span class="p">)</span>
+<a id="__codelineno-20-4" name="__codelineno-20-4" href="#__codelineno-20-4"></a>    <span class="n">tl</span><span class="o">.</span><span class="n">store</span><span class="p">(</span><span class="n">out_ptr</span> <span class="o">+</span> <span class="n">tl</span><span class="o">.</span><span class="n">program_id</span><span class="p">(</span><span class="mi">0</span><span class="p">),</span> <span class="n">tl</span><span class="o">.</span><span class="n">max</span><span class="p">(</span><span class="n">tl</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">x_ptr</span> <span class="o">+</span> <span class="n">offsets</span><span class="p">),</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">))</span>
+</code></pre></div>
+<p><strong>Taichi</strong> -- no program either: arrays are <code>ti.field</code>s, the outer loop of a
+kernel is parallel over the blocks and the max of each is an inner serial
+loop; <code>ti.init(arch=ti.cuda, default_fp=ti.f64)</code> makes the answers match,
+and on WSL the driver goes on the library path by hand:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a><span class="nd">@ti</span><span class="o">.</span><span class="n">kernel</span>
+<a id="__codelineno-21-2" name="__codelineno-21-2" href="#__codelineno-21-2"></a><span class="k">def</span><span class="w"> </span><span class="nf">block_max</span><span class="p">():</span>
+<a id="__codelineno-21-3" name="__codelineno-21-3" href="#__codelineno-21-3"></a>    <span class="k">for</span> <span class="n">b</span> <span class="ow">in</span> <span class="n">out</span><span class="p">:</span>
+<a id="__codelineno-21-4" name="__codelineno-21-4" href="#__codelineno-21-4"></a>        <span class="n">best</span> <span class="o">=</span> <span class="n">values</span><span class="p">[</span><span class="n">b</span> <span class="o">*</span> <span class="mi">64</span><span class="p">]</span>
+<a id="__codelineno-21-5" name="__codelineno-21-5" href="#__codelineno-21-5"></a>        <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">64</span><span class="p">):</span>
+<a id="__codelineno-21-6" name="__codelineno-21-6" href="#__codelineno-21-6"></a>            <span class="n">candidate</span> <span class="o">=</span> <span class="n">values</span><span class="p">[</span><span class="n">b</span> <span class="o">*</span> <span class="mi">64</span> <span class="o">+</span> <span class="n">k</span><span class="p">]</span>
+<a id="__codelineno-21-7" name="__codelineno-21-7" href="#__codelineno-21-7"></a>            <span class="n">best</span> <span class="o">=</span> <span class="n">candidate</span> <span class="k">if</span> <span class="n">candidate</span> <span class="o">&gt;</span> <span class="n">best</span> <span class="k">else</span> <span class="n">best</span>
+<a id="__codelineno-21-8" name="__codelineno-21-8" href="#__codelineno-21-8"></a>        <span class="n">out</span><span class="p">[</span><span class="n">b</span><span class="p">]</span> <span class="o">=</span> <span class="n">best</span>
+</code></pre></div>
+<!-- compare:start -->
+<table>
+<thead>
+<tr>
+<th></th>
+<th style="text-align: right;">PPY <code>tile.launch</code></th>
+<th style="text-align: right;">Triton</th>
+<th style="text-align: right;">Taichi</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>saxpy, arrays on the device</td>
+<td style="text-align: right;"><strong>0.64 ± 0.03</strong></td>
+<td style="text-align: right;">0.68 ± 0.03</td>
+<td style="text-align: right;">0.64 ± 0.07</td>
+</tr>
+<tr>
+<td>block max, arrays on the device</td>
+<td style="text-align: right;">0.41 ± 0.03</td>
+<td style="text-align: right;">0.78 ± 0.01</td>
+<td style="text-align: right;"><strong>0.25 ± 0.01</strong></td>
+</tr>
+<tr>
+<td>saxpy, arrays copied in and out per launch</td>
+<td style="text-align: right;"><strong>37.34 ± 0.26</strong></td>
+<td style="text-align: right;">46.32 ± 0.47</td>
+<td style="text-align: right;">145.89 ± 8.52</td>
+</tr>
+<tr>
+<td>block max, array copied in per launch</td>
+<td style="text-align: right;">13.41 ± 0.26</td>
+<td style="text-align: right;"><strong>10.79 ± 0.12</strong></td>
+<td style="text-align: right;">26.64 ± 0.49</td>
+</tr>
+</tbody>
+</table>
+<!-- compare:end -->
+
+<p>On saxpy the three are the memory bandwidth of the device. On the block
+max they are three lowerings of one idea: PPY gives the 64-lane tile a
+block of 64 threads and reduces it with a shuffle tree, Triton gives it a
+warp group and its own reduction, and Taichi one thread per block that
+loops over the 64 -- no exchange at all, which is why it is the fastest
+here and why it would not be on a wider tile. The copying rows are the
+other memory model, an array sent in and brought back on every launch;
+PPY's driver reads the host array in place, Triton goes through CuPy's
+<code>asarray</code>, and Taichi's <code>from_numpy</code> copies twice.</p>
+<p>NVIDIA GeForce RTX 5080 Laptop GPU, driver 610.71, CUDA 13.3; Triton 3.8.0,
+Taichi 1.7.4 on CPython 3.12.13; PPY on CPython 3.13.13.</p>
 <h2 id="parallel-fused-kernels-compared-with-numpy-numexpr-numba-and-jax">Parallel fused kernels: Compared with NumPy, numexpr, Numba, and JAX<a class="headerlink" href="#parallel-fused-kernels-compared-with-numpy-numexpr-numba-and-jax" title="Permanent link">&para;</a></h2>
 <p>From <a href="../07_parallel/">Parallel fused kernels</a>.
 The fused expression and the sum of squares over eight million doubles, in
@@ -4868,31 +5011,31 @@ Milliseconds, best of five calls, over five processes.</p>
 <p><strong>PPY</strong> -- the NumPy expression in a function, <code>@ppy.parallel</code> to split it;
 the serial row is the same expression fused into one loop with no
 decorator, and <code>strict_total</code> is NumPy's sum in NumPy's order:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a><span class="nd">@ppy</span><span class="o">.</span><span class="n">pure</span>
-<a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a><span class="nd">@ppy</span><span class="o">.</span><span class="n">parallel</span>
-<a id="__codelineno-19-3" name="__codelineno-19-3" href="#__codelineno-19-3"></a><span class="nd">@ppy</span><span class="o">.</span><span class="n">opt</span><span class="p">(</span><span class="mi">3</span><span class="p">)</span>
-<a id="__codelineno-19-4" name="__codelineno-19-4" href="#__codelineno-19-4"></a><span class="k">def</span><span class="w"> </span><span class="nf">parallel</span><span class="p">(</span><span class="n">a</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">b</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
-<a id="__codelineno-19-5" name="__codelineno-19-5" href="#__codelineno-19-5"></a>    <span class="k">return</span> <span class="p">(</span><span class="n">a</span> <span class="o">*</span> <span class="n">b</span> <span class="o">+</span> <span class="n">a</span><span class="p">)</span> <span class="o">*</span> <span class="p">(</span><span class="n">b</span> <span class="o">-</span> <span class="n">a</span><span class="p">)</span> <span class="o">+</span> <span class="n">a</span> <span class="o">*</span> <span class="mf">0.5</span> <span class="o">-</span> <span class="n">b</span> <span class="o">*</span> <span class="mf">0.25</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a><span class="nd">@ppy</span><span class="o">.</span><span class="n">pure</span>
+<a id="__codelineno-22-2" name="__codelineno-22-2" href="#__codelineno-22-2"></a><span class="nd">@ppy</span><span class="o">.</span><span class="n">parallel</span>
+<a id="__codelineno-22-3" name="__codelineno-22-3" href="#__codelineno-22-3"></a><span class="nd">@ppy</span><span class="o">.</span><span class="n">opt</span><span class="p">(</span><span class="mi">3</span><span class="p">)</span>
+<a id="__codelineno-22-4" name="__codelineno-22-4" href="#__codelineno-22-4"></a><span class="k">def</span><span class="w"> </span><span class="nf">parallel</span><span class="p">(</span><span class="n">a</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">b</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
+<a id="__codelineno-22-5" name="__codelineno-22-5" href="#__codelineno-22-5"></a>    <span class="k">return</span> <span class="p">(</span><span class="n">a</span> <span class="o">*</span> <span class="n">b</span> <span class="o">+</span> <span class="n">a</span><span class="p">)</span> <span class="o">*</span> <span class="p">(</span><span class="n">b</span> <span class="o">-</span> <span class="n">a</span><span class="p">)</span> <span class="o">+</span> <span class="n">a</span> <span class="o">*</span> <span class="mf">0.5</span> <span class="o">-</span> <span class="n">b</span> <span class="o">*</span> <span class="mf">0.25</span>
 </code></pre></div>
 <p><strong>NumPy</strong> is the expression as written -- five operations, four 64 MB
 temporaries, one thread. <strong>numexpr</strong> is the expression as a string,
 compiled to its own virtual machine and evaluated in chunks across threads:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a><span class="n">ne</span><span class="o">.</span><span class="n">evaluate</span><span class="p">(</span><span class="s2">"(x * y + x) * (y - x) + x * 0.5 - y * 0.25"</span><span class="p">,</span> <span class="n">local_dict</span><span class="o">=</span><span class="p">{</span><span class="s2">"x"</span><span class="p">:</span> <span class="n">x</span><span class="p">,</span> <span class="s2">"y"</span><span class="p">:</span> <span class="n">y</span><span class="p">})</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a><span class="n">ne</span><span class="o">.</span><span class="n">evaluate</span><span class="p">(</span><span class="s2">"(x * y + x) * (y - x) + x * 0.5 - y * 0.25"</span><span class="p">,</span> <span class="n">local_dict</span><span class="o">=</span><span class="p">{</span><span class="s2">"x"</span><span class="p">:</span> <span class="n">x</span><span class="p">,</span> <span class="s2">"y"</span><span class="p">:</span> <span class="n">y</span><span class="p">})</span>
 </code></pre></div>
 <p><strong>Numba</strong> is an explicit loop under <code>@njit(parallel=True)</code> writing into
 <code>np.empty_like</code>:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a><span class="nd">@njit</span><span class="p">(</span><span class="n">parallel</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
-<a id="__codelineno-21-2" name="__codelineno-21-2" href="#__codelineno-21-2"></a><span class="k">def</span><span class="w"> </span><span class="nf">fused</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">):</span>
-<a id="__codelineno-21-3" name="__codelineno-21-3" href="#__codelineno-21-3"></a>    <span class="n">out</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">empty_like</span><span class="p">(</span><span class="n">a</span><span class="p">)</span>
-<a id="__codelineno-21-4" name="__codelineno-21-4" href="#__codelineno-21-4"></a>    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">prange</span><span class="p">(</span><span class="n">a</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]):</span>
-<a id="__codelineno-21-5" name="__codelineno-21-5" href="#__codelineno-21-5"></a>        <span class="n">out</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="n">a</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">*</span> <span class="n">b</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">+</span> <span class="n">a</span><span class="p">[</span><span class="n">i</span><span class="p">])</span> <span class="o">*</span> <span class="p">(</span><span class="n">b</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">-</span> <span class="n">a</span><span class="p">[</span><span class="n">i</span><span class="p">])</span> <span class="o">+</span> <span class="n">a</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">*</span> <span class="mf">0.5</span> <span class="o">-</span> <span class="n">b</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">*</span> <span class="mf">0.25</span>
-<a id="__codelineno-21-6" name="__codelineno-21-6" href="#__codelineno-21-6"></a>    <span class="k">return</span> <span class="n">out</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a><span class="nd">@njit</span><span class="p">(</span><span class="n">parallel</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<a id="__codelineno-24-2" name="__codelineno-24-2" href="#__codelineno-24-2"></a><span class="k">def</span><span class="w"> </span><span class="nf">fused</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">):</span>
+<a id="__codelineno-24-3" name="__codelineno-24-3" href="#__codelineno-24-3"></a>    <span class="n">out</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">empty_like</span><span class="p">(</span><span class="n">a</span><span class="p">)</span>
+<a id="__codelineno-24-4" name="__codelineno-24-4" href="#__codelineno-24-4"></a>    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">prange</span><span class="p">(</span><span class="n">a</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]):</span>
+<a id="__codelineno-24-5" name="__codelineno-24-5" href="#__codelineno-24-5"></a>        <span class="n">out</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="n">a</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">*</span> <span class="n">b</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">+</span> <span class="n">a</span><span class="p">[</span><span class="n">i</span><span class="p">])</span> <span class="o">*</span> <span class="p">(</span><span class="n">b</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">-</span> <span class="n">a</span><span class="p">[</span><span class="n">i</span><span class="p">])</span> <span class="o">+</span> <span class="n">a</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">*</span> <span class="mf">0.5</span> <span class="o">-</span> <span class="n">b</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">*</span> <span class="mf">0.25</span>
+<a id="__codelineno-24-6" name="__codelineno-24-6" href="#__codelineno-24-6"></a>    <span class="k">return</span> <span class="n">out</span>
 </code></pre></div>
 <p><strong>JAX</strong> is the expression under <code>jax.jit</code> on the CPU, fused by XLA and run
 on its thread pool, with <code>jax_enable_x64</code>:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a><span class="nd">@jax</span><span class="o">.</span><span class="n">jit</span>
-<a id="__codelineno-22-2" name="__codelineno-22-2" href="#__codelineno-22-2"></a><span class="k">def</span><span class="w"> </span><span class="nf">fused</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">):</span>
-<a id="__codelineno-22-3" name="__codelineno-22-3" href="#__codelineno-22-3"></a>    <span class="k">return</span> <span class="p">(</span><span class="n">a</span> <span class="o">*</span> <span class="n">b</span> <span class="o">+</span> <span class="n">a</span><span class="p">)</span> <span class="o">*</span> <span class="p">(</span><span class="n">b</span> <span class="o">-</span> <span class="n">a</span><span class="p">)</span> <span class="o">+</span> <span class="n">a</span> <span class="o">*</span> <span class="mf">0.5</span> <span class="o">-</span> <span class="n">b</span> <span class="o">*</span> <span class="mf">0.25</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-25-1" name="__codelineno-25-1" href="#__codelineno-25-1"></a><span class="nd">@jax</span><span class="o">.</span><span class="n">jit</span>
+<a id="__codelineno-25-2" name="__codelineno-25-2" href="#__codelineno-25-2"></a><span class="k">def</span><span class="w"> </span><span class="nf">fused</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">):</span>
+<a id="__codelineno-25-3" name="__codelineno-25-3" href="#__codelineno-25-3"></a>    <span class="k">return</span> <span class="p">(</span><span class="n">a</span> <span class="o">*</span> <span class="n">b</span> <span class="o">+</span> <span class="n">a</span><span class="p">)</span> <span class="o">*</span> <span class="p">(</span><span class="n">b</span> <span class="o">-</span> <span class="n">a</span><span class="p">)</span> <span class="o">+</span> <span class="n">a</span> <span class="o">*</span> <span class="mf">0.5</span> <span class="o">-</span> <span class="n">b</span> <span class="o">*</span> <span class="mf">0.25</span>
 </code></pre></div>
 <!-- compare:start -->
 <table>
@@ -4909,7 +5052,7 @@ on its thread pool, with <code>jax_enable_x64</code>:</p>
 <tbody>
 <tr>
 <td>fused, serial</td>
-<td style="text-align: right;">11.58 ± 0.44</td>
+<td style="text-align: right;">11.84 ± 0.39</td>
 <td style="text-align: right;">—</td>
 <td style="text-align: right;">—</td>
 <td style="text-align: right;">—</td>
@@ -4917,23 +5060,23 @@ on its thread pool, with <code>jax_enable_x64</code>:</p>
 </tr>
 <tr>
 <td>fused</td>
-<td style="text-align: right;">4.21 ± 0.09</td>
-<td style="text-align: right;">56.33 ± 0.99</td>
-<td style="text-align: right;">6.67 ± 0.15</td>
-<td style="text-align: right;"><strong>3.75 ± 0.86</strong></td>
-<td style="text-align: right;">6.23 ± 0.66</td>
+<td style="text-align: right;"><strong>4.36 ± 0.23</strong></td>
+<td style="text-align: right;">57.12 ± 0.96</td>
+<td style="text-align: right;">6.94 ± 0.36</td>
+<td style="text-align: right;">6.97 ± 0.31</td>
+<td style="text-align: right;">8.33 ± 0.51</td>
 </tr>
 <tr>
 <td>sum of squares</td>
-<td style="text-align: right;">13.21 ± 0.36</td>
-<td style="text-align: right;">12.17 ± 0.23</td>
-<td style="text-align: right;">6.73 ± 0.17</td>
-<td style="text-align: right;">4.13 ± 0.03</td>
-<td style="text-align: right;"><strong>0.73 ± 0.06</strong></td>
+<td style="text-align: right;">13.35 ± 0.54</td>
+<td style="text-align: right;">11.98 ± 0.54</td>
+<td style="text-align: right;">6.80 ± 0.11</td>
+<td style="text-align: right;">4.23 ± 0.09</td>
+<td style="text-align: right;"><strong>0.70 ± 0.02</strong></td>
 </tr>
 <tr>
 <td>sum of squares, relaxed</td>
-<td style="text-align: right;">4.48 ± 0.32</td>
+<td style="text-align: right;">4.51 ± 0.22</td>
 <td style="text-align: right;">—</td>
 <td style="text-align: right;">—</td>
 <td style="text-align: right;">—</td>
