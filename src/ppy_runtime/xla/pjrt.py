@@ -78,6 +78,15 @@ class Client:
         self._jax = jax
         self._xla = xla_client
         self._backend = jex.backend.get_backend(self.platform)
+        # One device: a module compiled for every device of the platform expects
+        # an argument shard per device, and a machine with two GPUs then refuses
+        # the single buffers the bridge places. The first device is the one JAX
+        # calls the default; `PPY_XLA_DEVICE` names another by its index.
+        devices = self._backend.devices()
+        index = int(os.environ.get("PPY_XLA_DEVICE", "0"))
+        if not 0 <= index < len(devices):
+            raise ValueError(f"PPY_XLA_DEVICE={index}: the platform has {len(devices)} device(s)")
+        self._device = devices[index]
         self._executables: dict[str, Any] = {}
 
     @property
@@ -85,12 +94,16 @@ class Client:
         return f"{self._xla._version}:{self._backend.platform_version}"
 
     def devices(self) -> list[str]:
+        """Every device of the platform; the bridge runs on `device()`."""
         return [str(device) for device in self._backend.devices()]
+
+    def device(self) -> str:
+        return str(self._device)
 
     def key(self, stablehlo: str) -> str:
         """What identifies a compiled module: its text, the bindings, the platform, the device."""
         digest = hashlib.sha256()
-        for part in (stablehlo, self.version, self.platform, ",".join(self.devices())):
+        for part in (stablehlo, self.version, self.platform, self.device()):
             digest.update(part.encode("utf-8"))
             digest.update(b"\0")
         return digest.hexdigest()
@@ -101,7 +114,7 @@ class Client:
         found = self._executables.get(key)
         if found is not None:
             return found
-        devices = self._xla.DeviceList(tuple(self._backend.devices()))
+        devices = self._xla.DeviceList((self._device,))
         cached = cache_directory() / f"{key}.pjrt"
         executable = None
         if cached.exists():
@@ -125,7 +138,7 @@ class Client:
         """Run `executable` over host arrays; the results come back as NumPy arrays."""
         import numpy
 
-        buffers = [self._jax.device_put(numpy.asarray(a)) for a in arguments]
+        buffers = [self._jax.device_put(numpy.asarray(a), self._device) for a in arguments]
         return [numpy.asarray(result) for result in executable.execute(buffers)]
 
 

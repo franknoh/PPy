@@ -37,13 +37,13 @@ across() {
     local name=$1
     shift
     log "== $name"
-    ( timeout 900 "$@" ) > "$RESULTS/$name.log" 2>&1
+    ( NCCL_DEBUG=WARN timeout 900 "$@" ) > "$RESULTS/$name.log" 2>&1
     local status=$?
     echo "$name $status" >> "$RESULTS/steps.txt"
     log "$name exit $status"
-    if [ "$status" -eq 124 ]; then
-        log "== $name timed out; again with NCCL_P2P_DISABLE=1"
-        ( NCCL_P2P_DISABLE=1 timeout 900 "$@" ) > "$RESULTS/${name}_p2p_off.log" 2>&1
+    if [ "$status" -ne 0 ]; then
+        log "== $name failed ($status); again with NCCL_P2P_DISABLE=1"
+        ( NCCL_DEBUG=WARN NCCL_P2P_DISABLE=1 timeout 900 "$@" ) > "$RESULTS/${name}_p2p_off.log" 2>&1
         status=$?
         echo "${name}_p2p_off $status" >> "$RESULTS/steps.txt"
         log "${name}_p2p_off exit $status"
@@ -82,13 +82,16 @@ step gpu_tests "$PY" -m pytest tests/test_gpu_frontend.py tests/test_ir_gpu.py t
 step limits_tests "$PY" -m pytest tests/test_native_limits.py tests/test_multi_device_jax.py -q
 if [ "$MIN" -ge 2 ]; then
     across multigpu_train bash -c "cd examples/45_multi_gpu_jax && $PPY run train.ppy && $PY train.ppy"
+    # One process per device, all started at once; an empty loop is a failure,
+    # not a pass, so the count of transcripts is checked against the devices.
     across multiprocess bash -c "
         status=0
-        for i in \$(seq 0 \$((MIN - 1))); do
+        for i in \$(seq 0 $((MIN - 1))); do
             $PY scripts/cloud/multiprocess_smoke.py \$i $MIN > $RESULTS/multiprocess_\$i.log 2>&1 &
         done
         for job in \$(jobs -p); do wait \$job || status=1; done
         cat $RESULTS/multiprocess_*.log
+        [ \$(grep -l ': PASS' $RESULTS/multiprocess_*.log | wc -l) -eq $MIN ] || status=1
         exit \$status"
 fi
 # Benchmarks: validation on this machine, never the canonical tables.

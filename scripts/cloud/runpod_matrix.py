@@ -61,9 +61,10 @@ ENVIRONMENTS = {
         "count": 2,
         "mode": "multigpu",
         "prefer": [
-            "NVIDIA GeForce RTX 4090",
-            "NVIDIA RTX A6000",
             "NVIDIA A40",
+            "NVIDIA GeForce RTX 4090",
+            "NVIDIA L40S",
+            "NVIDIA RTX A6000",
             "NVIDIA L40S",
             "NVIDIA L40",
             "NVIDIA RTX 6000 Ada Generation",
