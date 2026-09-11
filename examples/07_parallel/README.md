@@ -99,10 +99,10 @@ def fused(a, b):
 <!-- compare:start -->
 | | PPY | NumPy | numexpr | Numba `prange` | JAX `jit` |
 |---|---:|---:|---:|---:|---:|
-| fused, serial | 11.58 ± 0.44 | — | — | — | — |
-| fused | 4.21 ± 0.09 | 56.33 ± 0.99 | 6.67 ± 0.15 | **3.75 ± 0.86** | 6.23 ± 0.66 |
-| sum of squares | 13.21 ± 0.36 | 12.17 ± 0.23 | 6.73 ± 0.17 | 4.13 ± 0.03 | **0.73 ± 0.06** |
-| sum of squares, relaxed | 4.48 ± 0.32 | — | — | — | — |
+| fused, serial | 11.84 ± 0.39 | — | — | — | — |
+| fused | **4.36 ± 0.23** | 57.12 ± 0.96 | 6.94 ± 0.36 | 6.97 ± 0.31 | 8.33 ± 0.51 |
+| sum of squares | 13.35 ± 0.54 | 11.98 ± 0.54 | 6.80 ± 0.11 | 4.23 ± 0.09 | **0.70 ± 0.02** |
+| sum of squares, relaxed | 4.51 ± 0.22 | — | — | — | — |
 <!-- compare:end -->
 
 Fusing the expression is what removes NumPy's four temporaries: the serial

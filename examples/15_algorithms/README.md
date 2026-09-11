@@ -104,14 +104,14 @@ def collatz_longest(limit: Int) -> Int64:
 <!-- compare:start -->
 | | `ppy run` | `ppy build --unsafe` | Numba `@njit` | Mojo | Codon |
 |---|---:|---:|---:|---:|---:|
-| sieve 2e6 | 8.60 ± 0.28 | 9.02 ± 0.36 | **7.50 ± 0.12** | 12.52 ± 0.96 | 7.92 ± 0.25 |
-| collatz 3e5 | 40.14 ± 0.61 | **30.70 ± 0.55** | 32.08 ± 0.43 | 69.19 ± 1.68 | 32.60 ± 0.28 |
-| knapsack 400x2e4 | 5.16 ± 0.11 | 3.74 ± 0.32 | 4.50 ± 0.17 | **2.25 ± 0.23** | 5.64 ± 0.05 |
-| edit 2000x2000 | 2.94 ± 0.05 | 2.82 ± 0.04 | **1.78 ± 0.08** | 8.06 ± 0.23 | 2.46 ± 0.09 |
-| floyd 220 | 3.18 ± 0.08 | 3.02 ± 0.04 | 2.46 ± 0.13 | 3.01 ± 0.06 | **1.26 ± 0.36** |
-| matmul 220 | 3.90 ± 0.57 | 3.62 ± 0.04 | **3.44 ± 0.11** | 7.85 ± 0.21 | 3.80 ± 0.00 |
-| union-find 5e5 | 3.06 ± 0.15 | 3.22 ± 0.27 | **2.40 ± 0.00** | 6.95 ± 0.43 | 3.86 ± 0.22 |
-| fermat 6e4 | 2.28 ± 0.04 | 2.54 ± 0.05 | 1.70 ± 0.00 | 2.12 ± 0.03 | **1.50 ± 0.00** |
+| sieve 2e6 | 8.52 ± 0.33 | 9.02 ± 0.66 | **7.56 ± 0.17** | 11.84 ± 0.32 | 7.96 ± 0.34 |
+| collatz 3e5 | 41.00 ± 0.93 | **31.68 ± 0.94** | 32.64 ± 0.64 | 69.37 ± 1.33 | 32.30 ± 0.38 |
+| knapsack 400x2e4 | 5.04 ± 0.05 | 3.62 ± 0.08 | 4.52 ± 0.08 | **2.40 ± 0.41** | 5.62 ± 0.08 |
+| edit 2000x2000 | 2.94 ± 0.05 | 2.80 ± 0.00 | **1.78 ± 0.08** | 8.40 ± 0.20 | 2.52 ± 0.13 |
+| floyd 220 | 3.24 ± 0.15 | 3.06 ± 0.05 | 2.40 ± 0.00 | 3.01 ± 0.06 | **1.10 ± 0.00** |
+| matmul 220 | 3.68 ± 0.11 | 3.64 ± 0.05 | **3.34 ± 0.05** | 8.01 ± 0.21 | 3.82 ± 0.04 |
+| union-find 5e5 | 3.22 ± 0.28 | 3.20 ± 0.32 | **2.56 ± 0.09** | 7.28 ± 0.19 | 3.72 ± 0.41 |
+| fermat 6e4 | 2.52 ± 0.29 | 2.58 ± 0.13 | 1.68 ± 0.04 | 2.25 ± 0.15 | **1.48 ± 0.04** |
 <!-- compare:end -->
 
 `ppy build --unsafe` is the wrap-semantics column and the one to read
@@ -134,12 +134,12 @@ included. The C reference reads the same input with `scanf`.
 
 | | problem | plain | `ppy build --unsafe` | `--standalone --unsafe` | C (`gcc`) | C (`clang`) |
 |---|---|---:|---:|---:|---:|---:|
-| [15a](15a_nqueens/) | N-Queens | 135.2 ms | 40.1 ms | 5.4 ms | 4.6 ms | 5.1 ms |
-| [15b](15b_dijkstra/) | shortest path | 3079.7 ms | 2170.5 ms | **110.1 ms** | 140.0 ms | 133.1 ms |
-| [15c](15c_kmp/) | substring search | 292.3 ms | 51.9 ms | — | 8.9 ms | 8.6 ms |
-| [15d](15d_segment_tree/) | range sums | 999.5 ms | 738.6 ms | **28.7 ms** | 51.3 ms | 49.2 ms |
-| [15e](15e_lis/) | longest increasing subsequence | 505.3 ms | 90.5 ms | **38.2 ms** | 56.1 ms | 53.9 ms |
-| [15f](15f_input/) | counting inversions | 577.4 ms | 88.1 ms | **37.3 ms** | 44.1 ms | 44.9 ms |
+| [15a](15a_nqueens/) | N-Queens | 141.9 ms | 44.5 ms | 5.7 ms | 4.9 ms | 5.4 ms |
+| [15b](15b_dijkstra/) | shortest path | 3112.1 ms | 2247.0 ms | **121.1 ms** | 146.4 ms | 144.5 ms |
+| [15c](15c_kmp/) | substring search | 304.2 ms | 58.6 ms | — | 9.8 ms | 9.6 ms |
+| [15d](15d_segment_tree/) | range sums | 1035.4 ms | 773.3 ms | **30.9 ms** | 52.2 ms | 51.3 ms |
+| [15e](15e_lis/) | longest increasing subsequence | 536.1 ms | 95.8 ms | **41.6 ms** | 59.7 ms | 56.8 ms |
+| [15f](15f_input/) | counting inversions | 660.2 ms | 91.5 ms | **41.4 ms** | 46.4 ms | 45.7 ms |
 
 Every cell is the mean of five runs, recorded in
 [`measurements.json`](measurements.json) with the machine it was measured

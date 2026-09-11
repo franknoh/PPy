@@ -1,6 +1,6 @@
 {
  "environment": {
-  "commit": "99f1f85",
+  "commit": "8d3e5fa",
   "processor": "x86_64",
   "platform": "Linux-6.6.114.1-microsoft-standard-WSL2-x86_64-with-glibc2.39",
   "python": "3.14.5",
@@ -9,56 +9,56 @@
  "timings": {
   "ppy": {
    "count_words": {
-    "mean": 6.41,
-    "stdev": 0.02738612787525829
+    "mean": 6.574,
+    "stdev": 0.0541294744108974
    },
    "longest_word": {
-    "mean": 6.376,
-    "stdev": 0.015165750888102777
+    "mean": 6.53,
+    "stdev": 0.0524404424085076
    },
    "sum_values": {
-    "mean": 55.628,
-    "stdev": 0.3419356664637378
+    "mean": 56.696,
+    "stdev": 0.3260061349116004
    },
    "count_hex": {
-    "mean": 6.444,
-    "stdev": 0.031304951684997154
+    "mean": 6.592,
+    "stdev": 0.025884358211089618
    }
   },
   "re": {
    "count_words": {
-    "mean": 104.436,
-    "stdev": 0.6418956301455833
+    "mean": 107.074,
+    "stdev": 1.2707792884683002
    },
    "longest_word": {
-    "mean": 126.79,
-    "stdev": 0.3083828789021839
+    "mean": 133.048,
+    "stdev": 8.69460292365327
    },
    "sum_values": {
-    "mean": 194.38,
-    "stdev": 0.9840985722985232
+    "mean": 198.202,
+    "stdev": 1.858714609616012
    },
    "count_hex": {
-    "mean": 10.004,
-    "stdev": 0.06877499545619757
+    "mean": 10.22,
+    "stdev": 0.09974968671629984
    }
   },
   "rust": {
    "count_words": {
-    "mean": 17.95,
-    "stdev": 0.1292284798332016
+    "mean": 18.226,
+    "stdev": 0.13296616110875664
    },
    "longest_word": {
-    "mean": 37.35,
-    "stdev": 2.8137785982553765
+    "mean": 36.852,
+    "stdev": 2.9913157640075396
    },
    "sum_values": {
-    "mean": 65.004,
-    "stdev": 0.8172086636838872
+    "mean": 65.616,
+    "stdev": 0.7858307705861368
    },
    "count_hex": {
-    "mean": 2.298,
-    "stdev": 0.05495452665613619
+    "mean": 2.33,
+    "stdev": 0.09591663046625441
    }
   }
  }

@@ -116,10 +116,10 @@ def block_max(x: UnsafePointer[Float64, MutAnyOrigin], result: UnsafePointer[Flo
 <!-- compare:start -->
 | | PPY `cuda.launch` | CuPy | Numba CUDA | Mojo | CUDA C |
 |---|---:|---:|---:|---:|---:|
-| saxpy, arrays on the device | 0.67 ± 0.02 | 0.68 ± 0.01 | 0.71 ± 0.02 | 0.52 ± 0.02 | **0.50 ± 0.00** |
-| block max, arrays on the device | 1.99 ± 0.02 | 1.97 ± 0.02 | 2.00 ± 0.02 | 1.97 ± 0.02 | **1.88 ± 0.00** |
-| saxpy, arrays copied in and out per launch | 37.66 ± 0.85 | 45.32 ± 0.25 | 36.01 ± 0.34 | **25.12 ± 0.75** | 29.28 ± 0.40 |
-| block max, array copied in per launch | 14.93 ± 0.65 | 11.95 ± 0.07 | 13.59 ± 0.36 | **10.14 ± 0.21** | 10.57 ± 0.15 |
+| saxpy, arrays on the device | 0.77 ± 0.08 | 0.78 ± 0.08 | 0.72 ± 0.06 | 0.55 ± 0.05 | **0.50 ± 0.00** |
+| block max, arrays on the device | 2.03 ± 0.05 | 1.98 ± 0.02 | 2.02 ± 0.03 | 1.98 ± 0.02 | **1.88 ± 0.00** |
+| saxpy, arrays copied in and out per launch | 39.19 ± 1.60 | 48.92 ± 2.05 | 36.79 ± 1.50 | **28.43 ± 1.45** | 30.46 ± 0.74 |
+| block max, array copied in per launch | 15.66 ± 0.43 | 12.33 ± 0.34 | 14.11 ± 0.42 | **11.21 ± 0.33** | 11.26 ± 0.20 |
 <!-- compare:end -->
 
 With the arrays on the device, a launch is the kernel: the five run the
