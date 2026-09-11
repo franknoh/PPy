@@ -26,12 +26,12 @@ begins.
 
 | path | wall |
 |---|---:|
-| plain CPython | 151.7 ± 10.2 ms |
-| `ppy run` | 136.5 ± 160.0 ms |
-| `ppy build --unsafe` | 45.8 ± 1.7 ms |
-| `ppy build --standalone --unsafe` | 5.9 ± 0.1 ms |
-| C (`gcc -O3`, `scanf`) | **4.9 ± 0.1 ms** |
-| C (`clang -O3`, `scanf`) | 5.6 ± 0.2 ms |
+| plain CPython | 154.3 ± 18.4 ms |
+| `ppy run` | 129.1 ± 148.4 ms |
+| `ppy build --unsafe` | 46.7 ± 2.5 ms |
+| `ppy build --standalone --unsafe` | 5.8 ± 0.1 ms |
+| C (`gcc -O3`, `scanf`) | **5.1 ± 0.2 ms** |
+| C (`clang -O3`, `scanf`) | 5.4 ± 0.1 ms |
 
 ## Without CPython at all
 
