@@ -163,6 +163,7 @@ _FENCES = {
     ".mojo": "mojo",
     ".rs": "rust",
     ".c": "c",
+    ".cu": "cuda",
 }
 _TOOLS = {
     ".ppy": "PPY",
@@ -171,6 +172,7 @@ _TOOLS = {
     ".mojo": "Mojo",
     ".rs": "Rust",
     ".c": "C",
+    ".cu": "CUDA C",
 }
 
 

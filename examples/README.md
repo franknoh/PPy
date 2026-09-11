@@ -12,8 +12,8 @@ difference, so a hand edit to a file that claims to be generated is caught
 rather than believed.
 
 Seven folders carry a `compare/` directory: the same work written for other
-tools -- Numba, Cython, NumPy, numexpr, JAX, PyTorch, Taichi, Mojo, Codon,
-Rust, C -- each the way its tool wants it, and a section of the README that
+tools -- Numba, Cython, NumPy, numexpr, JAX, PyTorch, CuPy, Triton, Taichi,
+Mojo, Codon, Rust, C, CUDA C -- each the way its tool wants it, and a section of the README that
 puts the timings side by side and says what each port asked for.
 `compare.py` is the harness: it runs every program several times, refuses to
 print a table until every one of them prints the same answers, and reports
@@ -58,7 +58,7 @@ the mean and spread. The site collects those sections on one page.
 | `35_parallel_range` | `parallel.range` loops, reductions that keep their order, and the parallel backends |
 | `36_autodiff` | `ppy.grad` and `value_and_grad`, the same rule table on every path; against JAX, PyTorch |
 | `37_aio` | an echo server and its client as `ppy.aio` coroutines, native runtime or asyncio |
-| `38_cuda` | a saxpy and a block reduction in `ppy.cuda`: reference launch, PTX, CUDA and HIP source |
+| `38_cuda` | a saxpy and a block reduction in `ppy.cuda`: reference launch, PTX, CUDA and HIP source; against CuPy, Numba, Triton, Taichi, Mojo, CUDA C |
 | `39_xla` | `@xla.jit` functions as StableHLO, run through PJRT where a device is present |
 | `40_generics` | type parameters, bounds, and Protocols, monomorphized in native code |
 | `41_columnar` | pandas Series expressions fused as one kernel over the columnar dialect |

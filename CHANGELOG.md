@@ -83,8 +83,9 @@ Work toward the next release, on `dev`; alphas of it are tagged `v0.3.0aN`.
   against NumPy, numexpr, Numba, and JAX, and Newton's method on a
   `ppy.grad` derivative against JAX and PyTorch; the numerics example shows
   what Numba, Codon, Mojo, C, and Rust print where Python keeps the integer.
-  `examples/compare.py` prints microseconds to four places where a kernel
-  is that small.
+  The CUDA example's table gains Triton, Taichi's CUDA backend, and CUDA C
+  beside CuPy and Numba. `examples/compare.py` prints microseconds to four
+  places where a kernel is that small.
 - Three examples compare PPY with the tools that do the same job, code and
   numbers side by side: the parallel ranges against Numba, Taichi, Mojo, and
   NumPy; the CUDA kernels against CuPy and Numba; the eight algorithm kernels
