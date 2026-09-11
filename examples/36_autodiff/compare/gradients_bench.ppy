@@ -1,0 +1,65 @@
+"""The derivatives of `gradients.ppy`, and Newton's method from 100,000 starts: the PPY side."""
+
+import math
+import time
+
+import ppy
+
+
+def f(x: float, y: float) -> float:
+    return math.sin(x) * y + x * x
+
+
+def g(x: float) -> float:
+    return math.exp(-x * x) * math.cos(3.0 * x)
+
+
+df = ppy.grad(f)
+both = ppy.value_and_grad(f, argnums=1)
+dg = ppy.grad(g)
+
+
+def slope(x: float, y: float) -> float:
+    return df(x, y)
+
+
+def pair(x: float, y: float) -> float:
+    v, grad_y = both(x, y)
+    return v * 2.0 + grad_y
+
+
+def newton(x: float) -> float:
+    for _ in range(6):
+        x = x - g(x) / dg(x)
+    return x
+
+
+def newton_all(count: int) -> float:
+    """The mean root over `count` starting points near 0.4, one Newton solve each."""
+    total = 0.0
+    for i in range(count):
+        total += newton(0.4 + i * 1e-6)
+    return total / count
+
+
+def worst_residual(count: int) -> float:
+    worst = 0.0
+    for i in range(count):
+        worst = max(worst, abs(g(newton(0.4 + i * 1e-6))))
+    return worst
+
+
+def main() -> None:
+    print(f"{slope(0.7, 2.0):.9f} {pair(0.7, 2.0):.9f}")
+    newton_all(1000)
+    best = 1e9
+    mean = 0.0
+    for _ in range(5):
+        started = time.perf_counter()
+        mean = newton_all(100_000)
+        best = min(best, (time.perf_counter() - started) * 1000.0)
+    print(f"# newton, 100k starts: {best:.2f} ms")
+    print(f"{mean:.9f} {worst_residual(100_000):.0e}")
+
+
+main()

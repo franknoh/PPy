@@ -51,6 +51,49 @@ The text is 50,000 generated lines of `name = value` pairs, words, and hex
 numbers; the line starting with `# ` is a timing and differs between machines
 and between the two runs below.
 
+## Compared with CPython's `re` and Rust's `regex`
+
+The same four passes over 400,000 generated lines -- 7.9 MB -- each written
+the way its tool is written, in [`compare/`](compare/):
+[`patterns_bench.ppy`](compare/patterns_bench.ppy) (this example's functions),
+[`patterns_re.py`](compare/patterns_re.py), and [`patterns.rs`](compare/patterns.rs)
+with its [`Cargo.toml`](compare/Cargo.toml). Each prints the best of five
+passes; [`examples/compare.py`](../compare.py) runs each program five times
+and reports the mean and standard deviation across processes, in
+milliseconds. All three print the same four answers.
+
+| | PPY `ppy run` | CPython `re` | Rust `regex` |
+|---|---:|---:|---:|
+| count_words | **6.54 ± 0.04** | 106.91 ± 2.51 | 18.49 ± 0.08 |
+| longest_word | **6.47 ± 0.04** | 129.53 ± 2.90 | 37.11 ± 2.49 |
+| sum_values | **56.22 ± 0.39** | 199.87 ± 3.33 | 66.22 ± 0.90 |
+| count_hex | 6.55 ± 0.10 | 10.39 ± 0.26 | **2.34 ± 0.09** |
+
+What each port asked for:
+
+- **PPY** is the source above: `re.compile` of a bytes pattern, `search`
+  from a position, `m.end()`, over a `Buffer[ppy.u8]`. The same file runs on
+  CPython, where the buffer is an `array.array("B")` and `re` does the work.
+- **CPython's `re`** is the idiomatic spelling -- `finditer` in a generator
+  expression, `int(m.group(2))` -- over `bytes`. Its matcher is a bytecode
+  interpreter, and each match builds a match object.
+- **Rust's `regex`** is `find_iter(...).count()` and `captures_iter` over
+  `&[u8]`, compiled with `cargo build --release`. The crate compiles a
+  pattern to a lazy DFA where it can, which is what makes `count_hex` fast;
+  `sum_values` needs capture groups, which is a slower engine, and the
+  number is parsed from the captured bytes.
+
+PPY's matcher is compiled from the pattern into a function of core
+operations, a backtracker with the run of a byte class scanned rather than
+stepped, and a match is a local rather than an object; that is the whole
+difference, and it is the difference of a compiled matcher against an
+interpreted one. Against Rust the pattern is what decides: a byte-class
+repeat is a scan in both, and a capture group is a backtrack in PPY where
+`regex` runs its slower engine.
+
+Intel Core Ultra 9 386H (16 threads); rustc 1.95.0 with regex 1.x, CPython 3.12.13 for `re`, PPY on
+CPython 3.13.13, from a checkout on a native filesystem.
+
 ## Run it
 
 ```bash

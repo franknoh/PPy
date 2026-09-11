@@ -11,6 +11,14 @@ says so. `verify_conversions.py` regenerates every one of them and fails on any
 difference, so a hand edit to a file that claims to be generated is caught
 rather than believed.
 
+Seven folders carry a `compare/` directory: the same work written for other
+tools -- Numba, Cython, NumPy, numexpr, JAX, PyTorch, Taichi, Mojo, Codon,
+Rust, C -- each the way its tool wants it, and a section of the README that
+puts the timings side by side and says what each port asked for.
+`compare.py` is the harness: it runs every program several times, refuses to
+print a table until every one of them prints the same answers, and reports
+the mean and spread. The site collects those sections on one page.
+
 | | |
 |---|---|
 | `01_basics` | fixed-width markers, purity, per-function opt levels |
@@ -19,12 +27,12 @@ rather than believed.
 | `04_classes` | classes with statically known fields |
 | `05_numpy` | elementwise NumPy fused into one kernel |
 | `06_pydantic` | models keep their runtime validation |
-| `07_parallel` | splitting a fused kernel, bit-identically |
+| `07_parallel` | splitting a fused kernel, bit-identically; against NumPy, numexpr, Numba, JAX |
 | `08_native_data` | which values have a native representation |
 | `09_torch` | a function of tensor ops as one C++ ATen region |
 | `10_narrowing` | every narrowing form the checker understands |
-| `11_numerics` | floor division, remainder sign, overflow |
-| `12_buffers_and_jit` | borrowed buffers, `@ppy.fastmath`, specialization |
+| `11_numerics` | floor division, remainder sign, overflow; what Numba, Codon, Mojo, C, Rust print instead |
+| `12_buffers_and_jit` | borrowed buffers, `@ppy.fastmath`, specialization; against Numba, Cython, NumPy, C |
 | `13_value_classes` | an all-scalar dataclass with no boxed form |
 | `14_tuples` | fixed tuples as scalar ABI atoms |
 | `15_algorithms` | eight compute kernels against C, and six judge problems in `15a`–`15f` read from stdin |
@@ -48,14 +56,14 @@ rather than believed.
 | `33_simd_and_cpu` | vector lanes with `ppy.simd`, and the machine as a facade with `ppy.cpu` |
 | `34_atomics_and_threads` | `ppy.atomic` and `ppy.concurrent`: counters, a mutex, a condition, four workers |
 | `35_parallel_range` | `parallel.range` loops, reductions that keep their order, and the parallel backends |
-| `36_autodiff` | `ppy.grad` and `value_and_grad`, the same rule table on every path |
+| `36_autodiff` | `ppy.grad` and `value_and_grad`, the same rule table on every path; against JAX, PyTorch |
 | `37_aio` | an echo server and its client as `ppy.aio` coroutines, native runtime or asyncio |
 | `38_cuda` | a saxpy and a block reduction in `ppy.cuda`: reference launch, PTX, CUDA and HIP source |
 | `39_xla` | `@xla.jit` functions as StableHLO, run through PJRT where a device is present |
 | `40_generics` | type parameters, bounds, and Protocols, monomorphized in native code |
 | `41_columnar` | pandas Series expressions fused as one kernel over the columnar dialect |
 | `42_toolbox` | `ppy emit`, `ppy inspect --stage`, `--report-opt`, `--sanitize`, `--profile`, and `--pgo` on one program |
-| `43_regex` | regular expressions over byte buffers, compiled to native matchers |
+| `43_regex` | regular expressions over byte buffers, compiled to native matchers; against CPython's `re`, Rust's `regex` |
 
 A folder of related problems keeps them in numbered subfolders, and every
 runner reaches them: `15_algorithms/15a_nqueens` and its five siblings are
