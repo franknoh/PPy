@@ -468,7 +468,15 @@ def validate(
             required += ["cuda_example", "tile_example"]
         if environment["count"] >= 2:
             required += ["multigpu_train", "multiprocess"]
-        failed = [step for step in required if summary["steps"].get(step, 1) != 0]
+        steps = summary["steps"]
+        # A step that hung on NCCL's peer-to-peer transport and passed with it
+        # disabled counts as passed, and the report names the transport.
+        failed = [
+            step
+            for step in required
+            if steps.get(step, 1) != 0 and steps.get(f"{step}_p2p_off", 1) != 0
+        ]
+        summary["p2p_disabled"] = [s for s in steps if s.endswith("_p2p_off")]
         summary["failed"] = failed
         summary["verdict"] = "PASS" if not failed else "FAIL"
     except (Failed, subprocess.TimeoutExpired) as error:

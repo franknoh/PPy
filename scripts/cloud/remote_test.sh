@@ -28,6 +28,27 @@ step() {
     echo "$name $status" >> "$RESULTS/steps.txt"
     log "$name exit $status"
 }
+# across NAME COMMAND...: a step whose collectives cross devices, given fifteen minutes.
+# A collective that never returns is the transport, not the program: on a host
+# whose container cannot do PCIe peer-to-peer, NCCL spins forever. The step is
+# then run again with NCCL_P2P_DISABLE=1, as its own record, so the report says
+# which transport the result came from and the hang is not mistaken for a pass.
+across() {
+    local name=$1
+    shift
+    log "== $name"
+    ( timeout 900 "$@" ) > "$RESULTS/$name.log" 2>&1
+    local status=$?
+    echo "$name $status" >> "$RESULTS/steps.txt"
+    log "$name exit $status"
+    if [ "$status" -eq 124 ]; then
+        log "== $name timed out; again with NCCL_P2P_DISABLE=1"
+        ( NCCL_P2P_DISABLE=1 timeout 900 "$@" ) > "$RESULTS/${name}_p2p_off.log" 2>&1
+        status=$?
+        echo "${name}_p2p_off $status" >> "$RESULTS/steps.txt"
+        log "${name}_p2p_off exit $status"
+    fi
+}
 
 # The vendor image already carries git, curl, and a C compiler; apt only fills a
 # gap, and a mirror that hangs (it happens) is given ten minutes, not the run.
@@ -52,7 +73,7 @@ fi
 # The environment as installed: what is in the venv after the plugin, in the lock's terms.
 step versions bash -c "$PY -c 'import sys, jax, jaxlib; print(sys.version); print(\"jax\", jax.__version__, \"jaxlib\", jaxlib.__version__)'; uv pip list -p $PY | grep -Ei 'jax|nvidia|rocm|torch|numpy|ppy'"
 # The acceptance check: a CPU-only JAX fails here, and the matrix stops being green.
-step accelerator "$PY" scripts/cloud/accelerator_check.py --require gpu --min-devices "$MIN" --out "$RESULTS/accelerator.json"
+across accelerator "$PY" scripts/cloud/accelerator_check.py --require gpu --min-devices "$MIN" --out "$RESULTS/accelerator.json"
 # PPy's own device paths, the reason each took, and the tests around them.
 step xla_example bash -c "cd examples/39_xla && $PPY run device_math.ppy && $PPY explain device_math.ppy:6"
 step cuda_example bash -c "cd examples/38_cuda && $PPY run saxpy.ppy && $PPY explain saxpy.ppy:9 && $PPY explain saxpy.ppy:36"
@@ -60,8 +81,8 @@ step tile_example bash -c "cd examples/44_tile && $PPY run tiles.ppy"
 step gpu_tests "$PY" -m pytest tests/test_gpu_frontend.py tests/test_ir_gpu.py tests/test_tile.py tests/test_xla.py -q
 step limits_tests "$PY" -m pytest tests/test_native_limits.py tests/test_multi_device_jax.py -q
 if [ "$MIN" -ge 2 ]; then
-    step multigpu_train bash -c "cd examples/45_multi_gpu_jax && $PPY run train.ppy && $PY train.ppy"
-    step multiprocess bash -c "
+    across multigpu_train bash -c "cd examples/45_multi_gpu_jax && $PPY run train.ppy && $PY train.ppy"
+    across multiprocess bash -c "
         status=0
         for i in \$(seq 0 \$((MIN - 1))); do
             $PY scripts/cloud/multiprocess_smoke.py \$i $MIN > $RESULTS/multiprocess_\$i.log 2>&1 &
