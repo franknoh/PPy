@@ -209,6 +209,22 @@ MANIFEST: dict[str, Comparison] = {
         },
         needs=("CV", "MOJO", "NVCC"),
     ),
+    "44_tile": Comparison(
+        "44_tile",
+        [
+            ("ppy", "{PPY} run compare/tiles_bench.ppy"),
+            ("triton", "{CV} compare/tiles_triton.py"),
+            ("taichi", "{CV} compare/tiles_taichi.py"),
+        ],
+        {"ppy": "PPY `tile.launch`", "triton": "Triton", "taichi": "Taichi"},
+        rows={
+            "saxpy": "saxpy, arrays on the device",
+            "block_max": "block max, arrays on the device",
+            "saxpy with copies": "saxpy, arrays copied in and out per launch",
+            "block_max with copies": "block max, array copied in per launch",
+        },
+        needs=("CV",),
+    ),
     "43_regex": Comparison(
         "43_regex",
         [
@@ -278,6 +294,18 @@ def measure(comparison: Comparison) -> tuple[dict[str, dict[str, dict[str, float
     finally:
         os.chdir(previous)
     problems = compare.check(names, outcomes, comparison.reference or names[0])
+    if problems:
+        return {}, problems
+    # A kernel whose spread is half its mean was not measured, it was
+    # disturbed -- a busy machine, a runtime that spins -- and is no table.
+    for name in names:
+        for label in {label for outcome in outcomes[name] for label in outcome.timings}:
+            values = [o.timings[label] for o in outcomes[name] if label in o.timings]
+            if len(values) > 1 and statistics.stdev(values) > 0.5 * statistics.mean(values):
+                problems.append(
+                    f"{name} / {label}: unstable, {statistics.mean(values):.2f} ms "
+                    f"± {statistics.stdev(values):.2f} over {len(values)} runs"
+                )
     if problems:
         return {}, problems
     measured: dict[str, dict[str, dict[str, float]]] = {}
@@ -374,17 +402,23 @@ def main() -> int:
         record = EXAMPLES / comparison.folder / "compare" / "measurements.json"
         stored = json.loads(record.read_text(encoding="utf-8")) if record.is_file() else {}
         drifted = _drift(stored.get("timings", {}), measured)
-        moved = _place(
-            EXAMPLES / comparison.folder / "README.md", render(comparison, measured), options.write
-        )
-        if options.write:
+        readme = EXAMPLES / comparison.folder / "README.md"
+        # A run within the tolerance of the record is noise, not news: the
+        # table and the record stay as they are, so a push does not rewrite
+        # every number in the tree by a few percent.
+        rewrite = options.write and (not stored or bool(drifted))
+        moved = _place(readme, render(comparison, measured), rewrite)
+        if rewrite:
             record.write_text(
                 json.dumps({"environment": _environment(), "timings": measured}, indent=1) + "\n",
                 encoding="utf-8",
             )
-        verdict = "written" if options.write else ("drifted" if drifted or moved else "ok")
+        if options.write:
+            verdict = "written" if rewrite else "within tolerance, kept"
+        else:
+            verdict = "drifted" if drifted or moved else "ok"
         print(f"[{'OK' if verdict != 'drifted' else 'DRIFT'}] {name}: {verdict}")
-        for line in [*drifted, *([moved] if moved else [])]:
+        for line in [*drifted, *([moved] if moved and not options.write else [])]:
             print(f"       {line}")
         if verdict == "drifted":
             status = 1

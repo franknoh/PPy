@@ -373,6 +373,11 @@ class Frontend:
                 function.attributes["gpu.kind"] = "kernel"
             elif info.directive(f"{api}.device") is not None:
                 function.attributes["gpu.kind"] = "device"
+        if info.directive("tile.kernel") is not None:
+            block = _tile_block(info.node)
+            function.attributes["gpu.kind"] = "kernel"
+            function.attributes["tile.block"] = block
+            function.attributes["tile.threads"] = min(block, _TILE_THREADS)
         if info.is_async:
             aio_dialect.mark_async(function)
             self.module.require("async", 1)
@@ -628,6 +633,11 @@ class _FunctionLowering:
         if self.device:
             self.overflow = "wrap"
             self.prover = None
+        #: A tile kernel: how many threads share a program, and lanes per thread.
+        block = function.attributes.get("tile.block")
+        threads = int(function.attributes["tile.threads"]) if block else 0  # type: ignore[call-overload]
+        self.tile_threads = threads or None
+        self.tile_lanes = int(block) // threads if block else 0  # type: ignore[call-overload]
         if gpu_dialect.kind_of(function) == "kernel":
             if function.results:
                 raise Unsupported(
@@ -1481,6 +1491,7 @@ class _FunctionLowering:
         left = self._expr(node.left)
         right = self._expr(node.comparators[0])
         if isinstance(left.type, VectorType) or isinstance(right.type, VectorType):
+            left, right = self._broadcast(left, right)
             if left.type != right.type:
                 raise Unsupported("a vector comparison takes two vectors of one type")
             return core.cmp(self.b, predicate, left, right)
@@ -1861,6 +1872,8 @@ class _FunctionLowering:
             return self._aio_op(operation, node)
         if namespace in {"cuda", "hip"}:
             return self._gpu_op(namespace, operation, node, subscript)
+        if namespace == "tile":
+            return self._tile_op(operation, node)
         if namespace == "simd":
             if node.keywords:
                 raise Unsupported("`ppy.simd` takes no keyword arguments")
@@ -1952,6 +1965,52 @@ class _FunctionLowering:
         )
         core.guard(self.b, in_range, "bounds", "lane index out of range")
 
+    def _broadcast(self, left: Value, right: Value) -> tuple[Value, Value]:
+        """A scalar beside a vector becomes that vector's splat, in the lane's kind;
+        an int vector beside a float vector becomes a float vector."""
+        if isinstance(left.type, VectorType) and isinstance(right.type, VectorType):
+            if left.type.element == I64 and right.type.element == F64:
+                left = self._vector_as_float(left)
+            elif left.type.element == F64 and right.type.element == I64:
+                right = self._vector_as_float(right)
+            return left, right
+        if isinstance(left.type, VectorType):
+            vector, scalar = left, right
+        else:
+            vector, scalar = right, left
+        if isinstance(scalar.type, VectorType):
+            return left, right
+        kind = _kind(vector.type.element)
+        if kind == "int" and scalar.type == F64:
+            vector = self._vector_as_float(vector)
+            kind = "float"
+        self.frontend.module.require("simd", 1)
+        splat = simd_dialect.splat(self.b, self._coerce(scalar, kind), vector.type.count)
+        return (vector, splat) if vector is left else (splat, vector)
+
+    def _vector_as_int(self, vector: Value) -> Value:
+        """A bool vector as ints, one where a lane holds."""
+        assert isinstance(vector.type, VectorType)
+        self.frontend.module.require("simd", 1)
+        result = simd_dialect.splat(self.b, self._int_constant(0), vector.type.count)
+        for k in range(vector.type.count):
+            lane = simd_dialect.extract(self.b, vector, self._int_constant(k))
+            counted = core.select(self.b, lane, self._int_constant(1), self._int_constant(0))
+            result = simd_dialect.insert(self.b, result, counted, self._int_constant(k))
+        return result
+
+    def _vector_as_float(self, vector: Value) -> Value:
+        """An int vector as floats, lane by lane."""
+        assert isinstance(vector.type, VectorType)
+        self.frontend.module.require("simd", 1)
+        result = simd_dialect.splat(self.b, core.const(self.b, 0.0, F64), vector.type.count)
+        for k in range(vector.type.count):
+            lane = simd_dialect.extract(self.b, vector, self._int_constant(k))
+            result = simd_dialect.insert(
+                self.b, result, core.cast(self.b, lane, F64), self._int_constant(k)
+            )
+        return result
+
     def _vector_binary(self, left: Value, right: Value, op: type[ast.operator]) -> Value:
         if left.type != right.type or not isinstance(left.type, VectorType):
             raise Unsupported("a vector operator takes two vectors of one type")
@@ -1966,6 +2025,22 @@ class _FunctionLowering:
             if element == F64:
                 raise Unsupported("a bitwise operator takes vectors of integers or bools")
             return core.bitwise(self.b, _BITWISE[op], left, right)
+        if op in {ast.FloorDiv, ast.Mod}:
+            if element != I64:
+                raise Unsupported("`//` and `%` take vectors of integers")
+            # Lane by lane, with the scalar rounding the source means; a zero
+            # lane is the caller's, as it is in every device kernel.
+            result = simd_dialect.splat(self.b, self._int_constant(0), left.type.count)
+            for k in range(left.type.count):
+                index = self._int_constant(k)
+                dividend = simd_dialect.extract(self.b, left, index)
+                divisor = simd_dialect.extract(self.b, right, index)
+                if op is ast.FloorDiv:
+                    lane = core.div(self.b, dividend, divisor, overflow="wrap", rounding="floor")
+                else:
+                    lane = core.mod(self.b, dividend, divisor, overflow="wrap", rounding="floor")
+                result = simd_dialect.insert(self.b, result, lane, index)
+            return result
         raise Unsupported("this operator has no vector lowering")
 
     # -- the cuda and hip namespaces: the gpu dialect ----------------------
@@ -2036,6 +2111,212 @@ class _FunctionLowering:
         if operation == "launch":
             return self._gpu_launch(api, node)
         raise Unsupported(f"`{api}.{operation}` has no native lowering")
+
+    # -- the tile namespace: a program's tiles, as each thread's slice ------------
+
+    def _tile_tid(self) -> Value:
+        return core.cast(self.b, gpu_dialect.thread_id(self.b, "x"), I64)
+
+    def _tile_when(self, condition: Value, emit) -> None:  # type: ignore[no-untyped-def]
+        """Run `emit` only where `condition` holds: a branch around it."""
+        then = self._block("tile.then")
+        after = self._block("tile.after")
+        core.cond_br(self.b, condition, Successor(then), Successor(after))
+        self.b.at_end(then)
+        emit()
+        core.br(self.b, Successor(after))
+        self.b.at_end(after)
+
+    def _tile_op(self, operation: str, node: ast.Call) -> Value:
+        """`ppy.tile.*` inside a kernel: every tile is a vector of this thread's lanes,
+        strided across the block, so a lane `k` of thread `t` is element
+        `t + k * threads` of the program's tile (spec 74)."""
+        if node.keywords:
+            raise Unsupported(f"`ppy.tile.{operation}` takes no keyword arguments")
+        if operation == "launch":
+            return self._tile_launch(node)
+        if operation == "compiled":
+            raise Unsupported(
+                "`tile.compiled` asks the runtime; the function asking stays in Python"
+            )
+        if self.tile_threads is None:
+            raise Unsupported(f"`ppy.tile.{operation}` runs inside a `@tile.kernel`")
+        self.frontend.module.require("gpu", 1)
+        self.frontend.module.require("simd", 1)
+        b = self.b
+        lanes, threads = self.tile_lanes, self.tile_threads
+        args = node.args
+        if operation == "program_id":
+            return core.cast(b, gpu_dialect.block_id(b, "x"), I64)
+        if operation == "num_programs":
+            return core.cast(b, gpu_dialect.grid_dim(b, "x"), I64)
+        if operation == "arange":
+            indices = simd_dialect.splat(b, self._tile_tid(), lanes)
+            if lanes == 1:
+                return indices
+            steps = simd_dialect.splat(b, self._int_constant(0), lanes)
+            for k in range(1, lanes):
+                steps = simd_dialect.insert(
+                    b, steps, self._int_constant(k * threads), self._int_constant(k)
+                )
+            return core.add(b, indices, steps, overflow="wrap")
+        if operation == "load":
+            return self._tile_load(args)
+        if operation == "store":
+            self._tile_store(args)
+            return core.const(b, 0, I64)
+        if operation == "where":
+            mask = self._vector(args[0])
+            first, second = self._broadcast(self._expr(args[1]), self._expr(args[2]))
+            if not isinstance(first.type, VectorType):
+                first = simd_dialect.splat(b, first, lanes)
+            if not isinstance(second.type, VectorType):
+                second = simd_dialect.splat(b, second, lanes)
+            return core.select(b, mask, first, second)
+        if operation in {"sum", "max", "min"}:
+            vector = self._vector(args[0])
+            if vector.type.element == BOOL:  # type: ignore[union-attr]
+                vector = self._vector_as_int(vector)
+            kind = "add" if operation == "sum" else operation
+            partial = simd_dialect.reduce(b, kind, vector)
+            total = self._tile_reduce_block(partial, kind)
+            return self._coerce(total, _read_as(_kind(total.type)))
+        raise Unsupported(f"`ppy.tile.{operation}` has no native lowering")
+
+    def _tile_load(self, args: list[ast.expr]) -> Value:
+        b = self.b
+        pointer = self._pointer(args[0])
+        assert isinstance(pointer.type, PtrType)
+        kind = _kind(pointer.type.pointee)
+        offsets = self._expr(args[1])
+        if not isinstance(offsets.type, VectorType):
+            slot = core.ptr_offset(b, pointer, self._coerce(offsets, "int"))
+            return self._coerce(core.load(b, slot), _read_as(kind))
+        lanes = offsets.type.count
+        mask = self._vector(args[2]) if len(args) > 2 else None
+        other = (
+            self._coerce(self._expr(args[3]), kind)
+            if len(args) > 3
+            else core.const(b, 0.0 if kind == "float" else 0, pointer.type.pointee)
+        )
+        result = simd_dialect.splat(b, other, lanes)
+        for k in range(lanes):
+            index = self._int_constant(k)
+            offset = simd_dialect.extract(b, offsets, index)
+            if mask is not None:
+                # A masked lane reads element 0 and keeps `other`: no address is
+                # formed past the array, and no branch breaks the vector.
+                allowed = simd_dialect.extract(b, mask, index)
+                offset = core.select(b, allowed, offset, self._int_constant(0))
+            loaded = core.load(b, core.ptr_offset(b, pointer, offset))
+            if mask is not None:
+                loaded = core.select(b, allowed, loaded, other)
+            result = simd_dialect.insert(b, result, loaded, index)
+        return result
+
+    def _tile_store(self, args: list[ast.expr]) -> None:
+        b = self.b
+        pointer = self._pointer(args[0])
+        assert isinstance(pointer.type, PtrType)
+        if not pointer.type.mutable:
+            raise Unsupported("a store through a const pointer")
+        kind = _kind(pointer.type.pointee)
+        offsets = self._expr(args[1])
+        value = self._expr(args[2])
+        if not isinstance(offsets.type, VectorType):
+            # One element for the program: thread 0 writes it.
+            slot = core.ptr_offset(b, pointer, self._coerce(offsets, "int"))
+            scalar = self._coerce(value, kind)
+            first = core.cmp(b, "eq", self._tile_tid(), self._int_constant(0))
+            self._tile_when(first, lambda: core.store(self.b, scalar, slot))
+            return
+        lanes = offsets.type.count
+        if not isinstance(value.type, VectorType):
+            value = simd_dialect.splat(b, self._coerce(value, kind), lanes)
+        mask = self._vector(args[3]) if len(args) > 3 else None
+        for k in range(lanes):
+            index = self._int_constant(k)
+            slot = core.ptr_offset(b, pointer, simd_dialect.extract(b, offsets, index))
+            lane = simd_dialect.extract(self.b, value, index)
+            if mask is None:
+                core.store(self.b, lane, slot)
+            else:
+                allowed = simd_dialect.extract(self.b, mask, index)
+                self._tile_when(
+                    allowed, lambda lane=lane, slot=slot: core.store(self.b, lane, slot)
+                )
+
+    def _tile_reduce_block(self, value: Value, kind: str) -> Value:
+        """One thread's partial to the program's total: a shuffle tree across the
+        warp, then the warps' results through shared memory, every thread ending
+        with the same number."""
+        b = self.b
+        threads = self.tile_threads or 32
+
+        def combine(left: Value, right: Value) -> Value:
+            if kind == "add":
+                if left.type == F64:
+                    return core.add(self.b, left, right)
+                return core.add(self.b, left, right, overflow="wrap")
+            predicate = "gt" if kind == "max" else "lt"
+            return core.select(self.b, core.cmp(self.b, predicate, left, right), left, right)
+
+        for distance in (16, 8, 4, 2, 1):
+            other = gpu_dialect.subgroup_shuffle(b, value, self._int_constant(distance), "xor")
+            value = combine(value, other)
+        if threads <= 32:
+            return value
+        warps = threads // 32
+        parked = gpu_dialect.shared_alloc(b, value.type, warps)
+        tid = self._tile_tid()
+        warp = core.div(b, tid, self._int_constant(32), overflow="wrap", rounding="floor")
+        lane = core.mod(b, tid, self._int_constant(32), overflow="wrap", rounding="floor")
+        gpu_dialect.barrier(b)
+        first = core.cmp(b, "eq", lane, self._int_constant(0))
+        self._tile_when(
+            first, lambda: core.store(self.b, value, core.ptr_offset(self.b, parked, warp))
+        )
+        gpu_dialect.barrier(self.b)
+        total = core.load(self.b, parked)
+        for w in range(1, warps):
+            total = combine(
+                total, core.load(self.b, core.ptr_offset(self.b, parked, self._int_constant(w)))
+            )
+        return total
+
+    def _tile_launch(self, node: ast.Call) -> Value:
+        if not self.frontend.launches:
+            raise Unsupported(
+                "a kernel launch runs through the launch runtime, which the CPU backends do not "
+                "have yet; the function launching stays in Python"
+            )
+        if len(node.args) < 2 or not isinstance(node.args[0], ast.Name):
+            raise Unsupported(
+                "`tile.launch(kernel, programs, *args)` takes a kernel of this module by name"
+            )
+        name = node.args[0].id
+        found = next(
+            (
+                (function, signature)
+                for qualname, (function, signature) in self.frontend.declared.items()
+                if qualname.rpartition(".")[2] == name and "ppy.generic" not in function.attributes
+            ),
+            None,
+        )
+        if found is None:
+            raise Unsupported(f"`{name}` has no native lowering to launch")
+        function, signature = found
+        threads = function.attributes.get("tile.threads")
+        if threads is None:
+            raise Unsupported(f"`{name}` is not a tile kernel; mark it `@tile.kernel`")
+        programs = self._coerce(self._expr(node.args[1]), "int")
+        one = self._int_constant(1)
+        grid = (programs, one, one)
+        block = (self._int_constant(int(threads)), one, one)  # type: ignore[call-overload]
+        arguments = self._call_arguments(signature, node.args[2:], name)
+        self.frontend.module.require("gpu", 1)
+        gpu_dialect.launch(self.b, function.name, grid, block, tuple(arguments))
+        return core.const(self.b, 0, I64)
 
     def _gpu_axis(self, node: ast.Call, api: str, operation: str) -> str:
         if not node.args:
@@ -2660,6 +2941,7 @@ class _FunctionLowering:
 
     def _binary(self, left: Value, right: Value, op: type[ast.operator]) -> Value:
         if isinstance(left.type, VectorType) or isinstance(right.type, VectorType):
+            left, right = self._broadcast(left, right)
             return self._vector_binary(left, right, op)
         if op is ast.Div:
             left, right = self._coerce(left, "float"), self._coerce(right, "float")
@@ -2980,7 +3262,7 @@ class _FunctionLowering:
 
 
 _SPELLING = {"add": "+", "sub": "-", "mul": "*"}
-_NAMESPACES = ("simd", "atomic", "cpu", "concurrent", "cuda", "hip", "aio")
+_NAMESPACES = ("simd", "atomic", "cpu", "concurrent", "cuda", "hip", "aio", "tile")
 _SHUFFLES = {"shfl": "idx", "shfl_up": "up", "shfl_down": "down", "shfl_xor": "xor"}
 _ANNOTATION_KINDS = {
     "int": "int",
@@ -3033,6 +3315,29 @@ def _plain_stores(body: list[ast.stmt]) -> set[str]:
                         if isinstance(name, ast.Name) and isinstance(name.ctx, ast.Store):
                             found.add(name.id)
     return found
+
+
+#: How many threads share one program's tiles: a block of up to this many.
+_TILE_THREADS = 256
+
+
+def _tile_block(node: ast.AST) -> int:
+    """The `BLOCK` a tile kernel names in `tile.arange(BLOCK)`: one per kernel."""
+    blocks: set[int] = set()
+    for call in ast.walk(node):
+        if not isinstance(call, ast.Call):
+            continue
+        target = ast.unparse(call.func)
+        if target in {"tile.arange", "ppy.tile.arange"} and call.args:
+            value = call.args[0]
+            if isinstance(value, ast.Constant) and isinstance(value.value, int):
+                blocks.add(int(value.value))
+    if len(blocks) != 1:
+        raise Unsupported("a tile kernel names one block size in `tile.arange(BLOCK)`")
+    block = next(iter(blocks))
+    if block < 32 or block & (block - 1):
+        raise Unsupported("a tile kernel's block is a power of two, 32 or more")
+    return block
 
 
 def _dialect_namespace(target: str) -> str | None:

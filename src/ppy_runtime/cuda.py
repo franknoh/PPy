@@ -170,11 +170,20 @@ def available() -> bool:
 class Kernel:
     """One compiled kernel: its PTX, its symbol, and the kinds of its parameters."""
 
-    def __init__(self, function: str, symbol: str, ptx: str, params: list[dict[str, Any]]) -> None:
+    def __init__(
+        self,
+        function: str,
+        symbol: str,
+        ptx: str,
+        params: list[dict[str, Any]],
+        threads: int = 0,
+    ) -> None:
         self.function = function
         self.symbol = symbol
         self.ptx = ptx
         self.params = params
+        #: A tile kernel's block: the threads that share one program's tiles.
+        self.threads = threads
         self._handle: ctypes.c_void_p | None = None
 
     def _loaded(self, d: Driver) -> ctypes.c_void_p:
@@ -273,7 +282,11 @@ def kernel_binding(function: str, payload: bytes, fallback: Any):  # type: ignor
     if described.get("kind") != KIND:
         raise ValueError("not a ppy.cuda payload")
     kernel = Kernel(
-        described["function"], described["symbol"], described["ptx"], described["params"]
+        described["function"],
+        described["symbol"],
+        described["ptx"],
+        described["params"],
+        int(described.get("threads", 0)),
     )
 
     def wrapper(*args: Any, **kwargs: Any) -> Any:

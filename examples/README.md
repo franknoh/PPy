@@ -11,7 +11,7 @@ says so. `verify_conversions.py` regenerates every one of them and fails on any
 difference, so a hand edit to a file that claims to be generated is caught
 rather than believed.
 
-Seven folders carry a `compare/` directory: the same work written for other
+Eight folders carry a `compare/` directory: the same work written for other
 tools -- Numba, Cython, NumPy, numexpr, JAX, PyTorch, CuPy, Taichi, Mojo,
 Codon, Rust, C, CUDA C -- each the way its tool wants it, and a section of the README that
 puts the timings side by side and says what each port asked for.
@@ -64,6 +64,7 @@ the mean and spread. The site collects those sections on one page.
 | `41_columnar` | pandas Series expressions fused as one kernel over the columnar dialect |
 | `42_toolbox` | `ppy emit`, `ppy inspect --stage`, `--report-opt`, `--sanitize`, `--profile`, and `--pgo` on one program |
 | `43_regex` | regular expressions over byte buffers, compiled to native matchers; against CPython's `re`, Rust's `regex` |
+| `44_tile` | kernels over tiles in `ppy.tile`: no thread, no shared memory, no shuffle to write; against Triton, Taichi |
 
 A folder of related problems keeps them in numbered subfolders, and every
 runner reaches them: `15_algorithms/15a_nqueens` and its five siblings are

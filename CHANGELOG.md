@@ -75,6 +75,18 @@ Work toward the next release, on `dev`; alphas of it are tagged `v0.3.0aN`.
   boxing the function while the function ran natively. Thread and sync
   effects no longer count against lowering in the contract report either.
 
+- `ppy.tile`: kernels over tiles. `@tile.kernel` runs once per program of a
+  launch; `tile.arange(BLOCK)` is the lane index, `tile.load` and `tile.store`
+  gather and scatter through a `native.ptr` with a mask, arithmetic and
+  comparisons are lane by lane with a scalar broadcast, `tile.where` chooses
+  per lane, and `tile.sum`, `tile.max`, `tile.min` reduce a tile to one
+  number. The compiler lowers a program to a block of threads that each
+  hold a slice of every tile as a vector, gathers and scatters lane by
+  lane, and reduces across the block with a shuffle tree and shared memory;
+  the CUDA source backend writes the same kernels, and the reference launch
+  runs the programs in order under CPython. The new `44_tile` example is
+  compared with Triton and Taichi, the tools that program tiles, and the
+  CUDA example keeps to thread-level kernels: CuPy, Numba, Mojo, CUDA C.
 - The comparison tables are measured and written by `scripts/compare_docs.py`
   from a manifest of every counterpart program, between markers in each
   README, with the run recorded beside the programs; `bench.yml` runs it and

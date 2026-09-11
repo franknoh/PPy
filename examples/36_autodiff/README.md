@@ -83,7 +83,9 @@ newton_all = jax.jit(jax.vmap(newton))
 ```
 
 **PyTorch** -- `torch.func.grad` and `vmap`; the six steps stay a Python
-loop over a 100,000-element tensor in float64:
+loop over a 100,000-element tensor in float64, with the thread count pinned
+to the performance cores', since its default of one per logical core spins
+on this hybrid CPU and the batch takes hundreds of milliseconds some runs:
 
 ```python
 dg = grad(g)
@@ -101,7 +103,7 @@ newton_all = vmap(newton)
 <!-- compare:start -->
 | | PPY | JAX `vmap` + `jit` | PyTorch `torch.func` |
 |---|---:|---:|---:|
-| newton, 100k starts | 12.61 ± 0.07 | **2.08 ± 0.06** | 459.27 ± 419.53 |
+| newton, 100k starts | 12.50 ± 0.17 | **1.78 ± 0.43** | 6.33 ± 1.03 |
 <!-- compare:end -->
 
 The derivative is the same nine digits in all three -- reverse mode over

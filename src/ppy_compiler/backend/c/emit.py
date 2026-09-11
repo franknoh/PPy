@@ -690,7 +690,14 @@ class _ModuleEmitter:
             lines.append(_UNREACHABLE)
         lines.extend(self.unit.prelude.values())
         lines.extend(self.unit.aggregates.values())
-        lines.extend(self.unit.helpers.values())
+        # A device kernel may call a vector helper: in a CUDA or HIP unit every
+        # helper is compiled for both sides.
+        lines.extend(
+            helper.replace("static inline ", "static inline __host__ __device__ ", 1)
+            if self.gpu
+            else helper
+            for helper in self.unit.helpers.values()
+        )
         if self.unit.shims:
             lines.extend(
                 definition(name, "static inline " if self.header_only else "static ")

@@ -63,7 +63,7 @@ ADDRESS_SPACES = frozenset({"global", "shared", "private", "constant"})
 #: Where a kernel's pointer parameters may point.
 PARAMETER_SPACES = frozenset({"global", "constant", "generic"})
 #: The dialects device code is written in; every other is the host's.
-DEVICE_DIALECTS = frozenset({"core", "math", "atomic", "gpu"})
+DEVICE_DIALECTS = frozenset({"core", "math", "atomic", "gpu", "simd"})
 #: Core operations with no device form, and why.
 HOST_ONLY = {
     "core.guard": "a guard falls back to Python, and a device has none",
@@ -288,7 +288,9 @@ class GpuDialect(Dialect):
             checker.error(op, "a kernel is launched from the host, not from device code")
         elif op.dialect not in DEVICE_DIALECTS:
             checker.error(
-                op, f"{op.name} is a host operation; a {kind} function is core, math, atomic, gpu"
+                op,
+                f"{op.name} is a host operation; a {kind} function is "
+                "core, math, atomic, gpu, simd",
             )
         elif op.name in HOST_ONLY:
             checker.error(op, f"{op.name} has no device form: {HOST_ONLY[op.name]}")

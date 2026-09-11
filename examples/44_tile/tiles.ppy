@@ -1,0 +1,59 @@
+from ppy import native, tile
+
+
+@tile.kernel
+def saxpy(n: int, a: float, x: native.const_ptr[float], y: native.ptr[float]) -> None:
+    offsets = tile.program_id() * 256 + tile.arange(256)
+    mask = offsets < n
+    xs = tile.load(x, offsets, mask)
+    ys = tile.load(y, offsets, mask)
+    tile.store(y, offsets, a * xs + ys, mask)
+
+
+@tile.kernel
+def block_max(x: native.const_ptr[float], out: native.ptr[float]) -> None:
+    pid = tile.program_id()
+    values = tile.load(x, pid * 64 + tile.arange(64))
+    tile.store(out, pid, tile.max(values))
+
+
+@tile.kernel
+def row_stats(n: int, x: native.const_ptr[float], out: native.ptr[float]) -> None:
+    pid = tile.program_id()
+    offsets = pid * 1024 + tile.arange(1024)
+    mask = offsets < n
+    xs = tile.load(x, offsets, mask)
+    total = tile.sum(xs)
+    count = tile.sum(mask)
+    mean = total / count
+    spread = tile.sum(tile.where(mask, (xs - mean) * (xs - mean), 0.0))
+    tile.store(out, pid * 2, mean)
+    tile.store(out, pid * 2 + 1, spread / count)
+
+
+def run(n: int, a: float, x: native.const_ptr[float], y: native.ptr[float]) -> None:
+    tile.launch(saxpy, (n + 255) // 256, n, a, x, y)
+
+
+def main() -> None:
+    n = 1000
+    x = native.stack_alloc[float](n)
+    y = native.stack_alloc[float](n)
+    for i in range(n):
+        native.store(native.offset(x, i), float(i))
+        native.store(native.offset(y, i), 1.0)
+    run(n, 2.0, x, y)
+    print(native.load(native.offset(y, 0)), native.load(native.offset(y, 999)))
+    values = native.stack_alloc[float](256)
+    out = native.stack_alloc[float](4)
+    for i in range(256):
+        native.store(native.offset(values, i), float((i * 37) % 101))
+    tile.launch(block_max, 4, values, out)
+    print([native.load(native.offset(out, i)) for i in range(4)])
+    stats = native.stack_alloc[float](2)
+    tile.launch(row_stats, 1, 256, values, stats)
+    print(f"{native.load(stats):.4f} {native.load(native.offset(stats, 1)):.4f}")
+    print(f"# kernels compiled for a device here: {tile.compiled(saxpy)}")
+
+
+main()

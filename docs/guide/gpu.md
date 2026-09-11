@@ -73,3 +73,47 @@ the launcher binds it without the compiler -- as it does an `@xla.jit`
 function's StableHLO.
 
 Examples: [CUDA](../howto/38_cuda.md).
+
+## Tile kernels
+
+`ppy.tile` is the other way to write a kernel: a program owns a tile of
+`BLOCK` lanes rather than a thread owning one element, and the block's
+threads, shared memory, and shuffles are the compiler's to write.
+
+```python
+from ppy import native, tile
+
+
+@tile.kernel
+def block_max(x: native.const_ptr[float], out: native.ptr[float]) -> None:
+    pid = tile.program_id()
+    values = tile.load(x, pid * 64 + tile.arange(64))
+    tile.store(out, pid, tile.max(values))
+
+
+def run(blocks: int, x: native.const_ptr[float], out: native.ptr[float]) -> None:
+    tile.launch(block_max, blocks, x, out)
+```
+
+`tile.arange(BLOCK)` names the kernel's block size -- one per kernel, a power
+of two of at least 32 -- and is the lane index; `tile.program_id()` and
+`tile.num_programs()` say where a program is. `tile.load(p, offsets, mask,
+other)` gathers a tile of `int`, `float`, or `bool` elements through a
+pointer, reading nothing where `mask` is false and giving `other` there;
+`tile.store(p, offsets, value, mask)` scatters one, and with a single
+offset and a scalar writes one element. Arithmetic (`+ - * / // %`), the
+comparisons, and `& | ^ ~` are lane by lane, a scalar beside a tile is
+broadcast, `tile.where(mask, a, b)` chooses per lane, and `tile.sum`,
+`tile.max`, `tile.min` reduce a tile to a scalar. `tile.launch(kernel,
+programs, *args)` runs it and waits, on the device where the build staged
+the kernel and through the reference launch otherwise.
+
+Natively a program is a block of up to 256 threads; a tile is a vector of
+`BLOCK / threads` lanes per thread, strided across the block so a load is
+coalesced, a gather or scatter is that many lane loads or stores, and a
+reduction is each thread's lanes, then a shuffle tree across the warp, then
+the warps through shared memory, every thread ending with the same number.
+`ppy emit cuda` and `ppy emit ptx` write a tile kernel like any other; the
+`tile.compiled` check says whether a launch runs on the device here. The
+[tile example](../howto/44_tile.md) measures the two kernels against Triton
+and Taichi.

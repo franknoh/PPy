@@ -1,4 +1,4 @@
-"""saxpy over sixteen million doubles and a per-block max: Triton kernels over CuPy memory."""
+"""saxpy over sixteen million doubles and a per-block max: Triton programs over CuPy memory."""
 
 import time
 
