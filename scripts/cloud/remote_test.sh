@@ -29,7 +29,9 @@ step() {
     log "$name exit $status"
 }
 
-step apt bash -c 'apt-get update -qq && apt-get install -y -qq git build-essential curl ninja-build pkg-config'
+# The vendor image already carries git, curl, and a C compiler; apt only fills a
+# gap, and a mirror that hangs (it happens) is given ten minutes, not the run.
+step apt bash -c 'for tool in git curl cc c++ make; do command -v $tool >/dev/null || missing=1; done; [ -z "${missing:-}" ] && echo "toolchain present" || (timeout 600 apt-get update -qq && timeout 600 apt-get install -y -qq git build-essential curl pkg-config)'
 step uv bash -c 'command -v uv || curl -LsSf https://astral.sh/uv/install.sh | sh'
 step clone bash -c "rm -rf $REPO && git clone -q https://github.com/franknoh/PPy $REPO && cd $REPO && git checkout -q $SHA && git rev-parse HEAD"
 cd "$REPO" || exit 1
@@ -74,7 +76,9 @@ step bench_torch bash -c "cd examples/09_torch && $PY ../compare.py 3 'ppy=$PPY 
 if [ "$MODE" != rocm ]; then
     step cupy bash -c "uv pip install -p $PY cupy-cuda12x triton"
     step bench_cuda bash -c "cd examples/38_cuda && $PY ../compare.py 3 'ppy=$PPY run compare/saxpy_bench.ppy' 'cupy=$PY compare/saxpy_cupy.py'"
-    step bench_tile bash -c "cd examples/44_tile && $PY ../compare.py 3 'ppy=$PPY run compare/tiles_bench.ppy' 'triton=$PY compare/tiles_triton.py'"
+    step bench_tile bash -c "cd examples/44_tile && $PY ../compare.py 3 'ppy=$PPY run compare/tiles_bench.ppy'"
+    # Triton's wheel needs a driver its backend can see; where it cannot, the row is its own.
+    step bench_tile_triton bash -c "cd examples/44_tile && $PY ../compare.py 3 'ppy=$PPY run compare/tiles_bench.ppy' 'triton=$PY compare/tiles_triton.py'"
 fi
 log "done; steps:"
 cat "$RESULTS/steps.txt"

@@ -28,7 +28,6 @@ from __future__ import annotations
 import argparse
 import datetime as dt
 import json
-import shlex
 import subprocess
 import sys
 import time
@@ -103,9 +102,9 @@ def _runpod(*arguments: str, timeout: int = 120) -> object:
         timeout=timeout,
     )
     if done.returncode != 0:
-        raise Failed(
-            f"runpodctl {' '.join(arguments)}: {(done.stderr or done.stdout).strip()[:400]}"
-        )
+        # The CLI echoes its usage after an API error; the error is the first line.
+        said = (done.stderr or done.stdout).strip().splitlines()
+        raise Failed(f"runpodctl {arguments[0]} {arguments[1]}: {said[0][:300] if said else '?'}")
     text = done.stdout.strip()
     if not text:
         return None
@@ -137,20 +136,21 @@ def _in_stock(vendor: str) -> dict[str, dict]:
     }
 
 
-def _choose(environment: dict) -> str | None:
+def _candidates(environment: dict) -> list[str]:
+    """The GPU types to ask for, in order: the preferred ones in stock, then the rest in stock."""
     stock = _in_stock(environment["vendor"])
-    for wanted in environment["prefer"]:
-        if wanted in stock:
-            return wanted
-    return next(iter(stock), None)
+    preferred = [wanted for wanted in environment["prefer"] if wanted in stock]
+    return preferred + [gpu for gpu in stock if gpu not in preferred]
 
 
-def _ssh_key() -> str:
-    for candidate in ("id_ed25519.pub", "id_rsa.pub"):
-        path = Path.home() / ".ssh" / candidate
-        if path.is_file():
-            return path.read_text(encoding="utf-8").strip()
-    raise Failed("no ~/.ssh/id_ed25519.pub or id_rsa.pub to give the Pod")
+def _ssh_key() -> tuple[str, Path]:
+    """The public key the Pod is given through `PUBLIC_KEY`, and its private half."""
+    for candidate in ("id_ed25519", "id_rsa"):
+        private = Path.home() / ".ssh" / candidate
+        public = private.with_suffix(".pub")
+        if private.is_file() and public.is_file():
+            return public.read_text(encoding="utf-8").strip(), private
+    raise Failed("no ~/.ssh/id_ed25519 or id_rsa key pair to give the Pod")
 
 
 def _find(data: object, *names: str) -> object:
@@ -174,13 +174,20 @@ def _find(data: object, *names: str) -> object:
 class Pod:
     """One Pod this run made; nothing else is ever deleted through this class."""
 
-    def __init__(self, name: str, environment: dict, gpu: str, log: Path) -> None:
+    def __init__(
+        self, name: str, environment: dict, gpu: str, log: Path, datacenter: str = ""
+    ) -> None:
         self.name = name
         self.environment = environment
         self.gpu = gpu
+        self.datacenter = datacenter
         self.log = log
         self.id: str | None = None
         self.ssh: tuple[str, int, str] | None = None
+        #: The private keys to offer: the one whose public half went in through
+        #: `PUBLIC_KEY` (accepted as soon as sshd is up), then the one `runpodctl
+        #: doctor` registered (injected by the platform, a minute later).
+        self.identities: list[str] = [str(_ssh_key()[1])]
 
     def create(self) -> None:
         ends = (dt.datetime.now(dt.UTC) + dt.timedelta(hours=4)).strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -200,9 +207,10 @@ class Pod:
             "--ports",
             "22/tcp",
             "--env",
-            json.dumps({"PUBLIC_KEY": _ssh_key()}),
+            json.dumps({"PUBLIC_KEY": _ssh_key()[0]}),
             "--terminate-after",
             ends,
+            *(["--data-center-ids", self.datacenter] if self.datacenter else []),
             timeout=300,
         )
         self.id = str(_find(created, "id", "podId") or "")
@@ -242,19 +250,17 @@ class Pod:
         raise Failed(f"{self.name} did not become reachable in {minutes} minutes")
 
     def _ssh_target(self, info: object, details: object) -> tuple[str, int, str] | None:
-        """(host, port, user) from `runpodctl ssh info`, else from the Pod's port map."""
-        text = json.dumps(info) if info is not None else ""
-        for command in (_find(info, "command", "sshCommand"), text):
-            if isinstance(command, str) and "ssh " in command:
-                words = shlex.split(command)
-                host = next((w for w in words if "@" in w), None)
-                if host is not None:
-                    port = 22
-                    if "-p" in words:
-                        port = int(words[words.index("-p") + 1])
-                    user, _, host = host.partition("@")
-                    return host, port, user
-        ip = _find(details, "publicIp")
+        """(host, port, user) from `runpodctl ssh info` -- `ip`, `port`, and the key file it
+        registered with the account -- else from the Pod's public address."""
+        if isinstance(info, dict) and info.get("ip") and info.get("port"):
+            key = info.get("ssh_key") or {}
+            registered = (
+                str(key.get("path", "")) if isinstance(key, dict) and key.get("exists") else ""
+            )
+            if registered and registered not in self.identities:
+                self.identities.append(registered)
+            return str(info["ip"]), int(info["port"]), "root"
+        ip = _find(details, "publicIp", "ip")
         ports = _find(details, "ports", "portMappings")
         if isinstance(ip, str) and ip:
             port = 22
@@ -272,6 +278,7 @@ class Pod:
         host, port, user = self.ssh
         return [
             "ssh",
+            *self._identity_options(),
             "-o",
             "StrictHostKeyChecking=no",
             "-o",
@@ -296,21 +303,35 @@ class Pod:
         if "ppy-ready" in done.stdout:
             self._note(f"ssh to {self.ssh[2]}@{self.ssh[0]}:{self.ssh[1]} answers")
             return True
-        self._note(f"ssh not yet: {(done.stderr or done.stdout).strip()[:160]}")
+        said = (done.stderr or done.stdout).strip().splitlines()
+        self._note(f"ssh not yet: {said[-1][:160] if said else 'no answer'}")
         return False
+
+    def _identity_options(self) -> list[str]:
+        """Only these keys, never a password prompt: a harness has no one to type one."""
+        options = ["-o", "BatchMode=yes", "-o", "IdentitiesOnly=yes", "-o", "LogLevel=ERROR"]
+        for identity in self.identities:
+            options += ["-i", identity]
+        return options
+
+    def _scp_command(self, port: int) -> list[str]:
+        return [
+            "scp",
+            *self._identity_options(),
+            "-o",
+            "StrictHostKeyChecking=no",
+            "-o",
+            "UserKnownHostsFile=/dev/null",
+            "-P",
+            str(port),
+            "-r",
+        ]
 
     def copy_to(self, source: Path, target: str) -> None:
         host, port, user = self.ssh or ("", 22, "")
         done = subprocess.run(
             [
-                "scp",
-                "-o",
-                "StrictHostKeyChecking=no",
-                "-o",
-                "UserKnownHostsFile=/dev/null",
-                "-P",
-                str(port),
-                "-r",
+                *self._scp_command(port),
                 str(source),
                 f"{user}@{host}:{target}",
             ],
@@ -327,14 +348,7 @@ class Pod:
         target.mkdir(parents=True, exist_ok=True)
         done = subprocess.run(
             [
-                "scp",
-                "-o",
-                "StrictHostKeyChecking=no",
-                "-o",
-                "UserKnownHostsFile=/dev/null",
-                "-P",
-                str(port),
-                "-r",
+                *self._scp_command(port),
                 f"{user}@{host}:{source}",
                 str(target),
             ],
@@ -392,24 +406,48 @@ def _steps(results: Path) -> dict[str, int]:
     return found
 
 
-def validate(name: str, sha: str, out: Path, keep: bool) -> dict:
+def validate(
+    name: str, sha: str, out: Path, keep: bool, gpu_id: str = "", datacenter: str = ""
+) -> dict:
     environment = ENVIRONMENTS[name]
     summary: dict = {"environment": name, "commit": sha, "verdict": "NOT RUN", "steps": {}}
     out.mkdir(parents=True, exist_ok=True)
     log = out / "harness.log"
-    gpu = _choose(environment)
-    if gpu is None:
+    # `--gpu-id` names a type the stock list does not carry (an MI300X a datacenter
+    # lists without a stock status); otherwise every type in stock is asked for in
+    # turn, since stock moves between the listing and the request. The API's own
+    # refusal is the reason when none can be had.
+    candidates = [gpu_id] if gpu_id else _candidates(environment)
+    if not candidates:
         summary["reason"] = (
-            f"NOT RUN: no {environment['vendor']} GPU of these kinds in stock: "
-            f"{environment['prefer']}"
+            f"NOT RUN: no {environment['vendor']} GPU in stock at all "
+            f"(wanted {environment['prefer']})"
         )
         print(summary["reason"])
         return summary
-    pod = Pod(f"ppy-test-{name}-{uuid.uuid4().hex[:8]}", environment, gpu, log)
-    summary["gpu"] = gpu
+    pod: Pod | None = None
+    refusals: list[str] = []
+    for gpu in candidates:
+        attempt = Pod(f"ppy-test-{name}-{uuid.uuid4().hex[:8]}", environment, gpu, log, datacenter)
+        try:
+            attempt.create()
+        except Failed as error:
+            if "no longer any instances" in str(error) or "not available" in str(error):
+                refusals.append(f"{gpu} x{environment['count']}: {error}")
+                attempt._note(refusals[-1])
+                continue
+            summary["verdict"] = "FAIL"
+            summary["reason"] = str(error)
+            return summary
+        pod = attempt
+        break
+    if pod is None:
+        summary["reason"] = "NOT RUN: " + "; ".join(refusals)
+        print(summary["reason"])
+        return summary
+    summary["gpu"] = pod.gpu
     summary["gpu_count"] = environment["count"]
     try:
-        pod.create()
         summary["pod"] = pod.id
         pod.wait_ready()
         pod.copy_to(HERE / "remote_test.sh", "/workspace/remote_test.sh")
@@ -475,6 +513,8 @@ def main() -> int:
     parser.add_argument(
         "--keep", action="store_true", help="leave the Pods running (for debugging)"
     )
+    parser.add_argument("--gpu-id", default="", help="a GPU type to ask for instead of the stock")
+    parser.add_argument("--data-center", default="", help="a datacenter id to ask in (EU-RO-1)")
     options = parser.parse_args()
     chosen = [
         name for name in ENVIRONMENTS if options.all or getattr(options, name.replace("-", "_"))
@@ -494,7 +534,9 @@ def main() -> int:
     summaries = []
     for name in chosen:
         print(f"\n### {name}")
-        summaries.append(validate(name, sha, out / name, options.keep))
+        summaries.append(
+            validate(name, sha, out / name, options.keep, options.gpu_id, options.data_center)
+        )
         (out / "summary.json").write_text(json.dumps(summaries, indent=1), encoding="utf-8")
     print("\nSUMMARY")
     for summary in summaries:

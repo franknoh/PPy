@@ -95,6 +95,9 @@ def compute(min_devices: int) -> dict:
     import numpy as np
 
     results: dict = {}
+    # Full float32 precision: on Ampere and later a float32 matmul is TF32 by default,
+    # which is a different answer from NumPy's, not a wrong device.
+    jax.config.update("jax_default_matmul_precision", "highest")
     rng = np.random.default_rng(7)
     a = rng.standard_normal((1024, 512)).astype(np.float32)
     b = rng.standard_normal((512, 256)).astype(np.float32)
@@ -113,14 +116,13 @@ def compute(min_devices: int) -> dict:
     results["jit_ms_per_call"] = (time.perf_counter() - started) * 100.0
     reference = a @ b
     results["matmul_max_abs_error"] = float(np.max(np.abs(np.asarray(product) - reference)))
+    results["matmul_rel_error"] = results["matmul_max_abs_error"] / float(np.max(np.abs(reference)))
     results["reduction_rel_error"] = float(
         abs(float(total) - float(np.sum(reference * reference)))
         / float(np.sum(reference * reference))
     )
     results["ran_on"] = sorted({str(d) for d in product.devices()})
-    results["jit_ok"] = (
-        results["matmul_max_abs_error"] < 1e-2 and results["reduction_rel_error"] < 1e-4
-    )
+    results["jit_ok"] = results["matmul_rel_error"] < 1e-4 and results["reduction_rel_error"] < 1e-4
     devices = jax.devices()
     if len(devices) >= min_devices >= 2:
         from jax.sharding import Mesh, NamedSharding, PartitionSpec
