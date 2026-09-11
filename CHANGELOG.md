@@ -75,6 +75,28 @@ Work toward the next release, on `dev`; alphas of it are tagged `v0.3.0aN`.
   boxing the function while the function ran natively. Thread and sync
   effects no longer count against lowering in the contract report either.
 
+- The comparison tables are measured and written by `scripts/compare_docs.py`
+  from a manifest of every counterpart program, between markers in each
+  README, with the run recorded beside the programs; `bench.yml` runs it and
+  `scripts/refresh.py` on a self-hosted runner for every push to `dev` that
+  touches code and commits what moved, and a change that touches only prose
+  runs the strict docs build instead of the test matrix. The comparison
+  sections themselves now show each tool's kernel side by side and say what
+  the numbers mean, rather than that they agree.
+- Three hot paths in the runtime, found by the comparisons. A CUDA launch
+  over host arrays uploaded each array from a copy of it, and the copy cost
+  more than the transfer -- 90 ms against 12 for 128 MB -- so the driver
+  now reads the array itself; the copying rows of the CUDA example fall from
+  172 ms to 38 ms, beside CuPy. A fused NumPy kernel confirmed its result
+  finite by rereading the output and every input after the loop; the map
+  kernel now counts non-finite elements in the loop itself, one add
+  reduction the vectorizer keeps in a register, and guards on it once, and
+  a reduction checks only its number -- the inputs never needed a pass,
+  since any condition NumPy would report leaves a non-finite result. The
+  fused kernel of the parallel example runs in 4 ms where it took 12.5, its
+  serial form in 12 where it took 20, and an ordered `np.sum(x * x)` costs
+  what NumPy's does. The chunk a worker wrote is also what it checks, where
+  a check is still made.
 - Four more examples measure themselves against their neighbours, with
   the counterpart programs in each `compare/` folder and the site showing
   them side by side on the example's page and on one comparisons page:
@@ -83,8 +105,10 @@ Work toward the next release, on `dev`; alphas of it are tagged `v0.3.0aN`.
   against NumPy, numexpr, Numba, and JAX, and Newton's method on a
   `ppy.grad` derivative against JAX and PyTorch; the numerics example shows
   what Numba, Codon, Mojo, C, and Rust print where Python keeps the integer.
-  The CUDA example's table gains Triton, Taichi's CUDA backend, and CUDA C
-  beside CuPy and Numba. `examples/compare.py` prints microseconds to four
+  The CUDA example's table gains Mojo 1.0 GPU kernels and a CUDA C
+  reference beside CuPy and Numba -- thread-level kernels against
+  thread-level kernels; Triton and Taichi, which program tiles, are the
+  counterparts of PPY's tile kernels instead. `examples/compare.py` prints microseconds to four
   places where a kernel is that small.
 - Three examples compare PPY with the tools that do the same job, code and
   numbers side by side: the parallel ranges against Numba, Taichi, Mojo, and

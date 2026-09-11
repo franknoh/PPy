@@ -48,67 +48,92 @@ machine. `PPY_CUDA_ARCH` picks the architecture the PTX is written for
 stages each PTX beside the manifest and the launcher binds it without the
 compiler.
 
-## Compared with CuPy, Numba, Triton, Taichi, Mojo, and CUDA C
+## Compared with CuPy, Numba, Mojo, and CUDA C
 
-The same two kernels over sixteen million doubles, each written the way its
-tool wants it, in [`compare/`](compare/): [`saxpy_bench.ppy`](compare/saxpy_bench.ppy),
-[`saxpy_cupy.py`](compare/saxpy_cupy.py), [`saxpy_numba.py`](compare/saxpy_numba.py),
-[`saxpy_triton.py`](compare/saxpy_triton.py), [`saxpy_taichi.py`](compare/saxpy_taichi.py),
-[`saxpy.mojo`](compare/saxpy.mojo), and [`saxpy.cu`](compare/saxpy.cu). Each times
-the best of warm launches with the device synchronized, over five processes;
-milliseconds. [`examples/compare.py`](../compare.py) held all seven to the
-same two answers first.
+The same two kernels over sixteen million doubles, written as thread-level
+kernels the way each tool spells them, in [`compare/`](compare/):
+[`saxpy_bench.ppy`](compare/saxpy_bench.ppy), [`saxpy_cupy.py`](compare/saxpy_cupy.py),
+[`saxpy_numba.py`](compare/saxpy_numba.py), [`saxpy.mojo`](compare/saxpy.mojo),
+[`saxpy.cu`](compare/saxpy.cu). Milliseconds, best of warm launches with the
+device synchronized, over five processes. Tile-level tools -- Triton, Taichi
+-- program a block as one vector and never write the shared-memory
+exchange, which is a different kernel; they are compared with PPY's tile
+kernels, not with these. The block max, as each tool spells it:
 
-| | PPY `cuda.launch` | CuPy | Numba CUDA | Triton | Taichi | Mojo | CUDA C |
-|---|---:|---:|---:|---:|---:|---:|---:|
-| saxpy, arrays on the device | 0.66 ± 0.03 | 0.67 ± 0.02 | 0.69 ± 0.02 | 0.70 ± 0.03 | 0.69 ± 0.08 | 0.52 ± 0.02 | **0.51 ± 0.00** |
-| block max, arrays on the device | 2.01 ± 0.02 | 1.96 ± 0.01 | 2.00 ± 0.02 | 0.79 ± 0.02 | **0.25 ± 0.01** | 1.96 ± 0.02 | 1.88 ± 0.00 |
-| saxpy, arrays copied in and out per launch | 172.53 ± 1.62 | 47.46 ± 1.54 | 35.58 ± 0.28 | 46.27 ± 0.56 | 146.83 ± 9.47 | **27.25 ± 0.41** | 29.95 ± 0.34 |
-| block max, array copied in per launch | 83.04 ± 0.45 | 12.39 ± 0.54 | 13.41 ± 0.10 | 10.86 ± 0.07 | 26.15 ± 0.31 | **10.79 ± 0.20** | 10.83 ± 0.18 |
+**PPY** -- a Python function with `cuda.global_id()`, shared memory, a
+barrier, a shuffle; the same file runs on CPython through the reference
+launch:
 
-What each port asked for:
+```python
+@cuda.kernel
+def block_max(x: native.const_ptr[float], out: native.ptr[float]) -> None:
+    parked = cuda.shared[float, 64]()
+    tid = cuda.thread_id()
+    native.store(native.offset(parked, tid), native.load(native.offset(x, cuda.global_id())))
+    cuda.syncthreads()
+    mine = native.load(native.offset(parked, tid))
+    other = cuda.shfl_xor(mine, 1)
+    ...
+```
 
-- **PPY** is the source above: a Python function with `cuda.global_id()`,
-  shared memory, a barrier, a shuffle, launched with `cuda.launch`; the same
-  file runs on CPython through the reference launch.
-- **CuPy** is one line for saxpy, an `ElementwiseKernel`; its block max is
-  CUDA C in a string handed to `RawKernel`.
-- **Numba CUDA** reads like PPY: `@cuda.jit`, `cuda.grid(1)`,
-  `cuda.shared.array`, `cuda.syncthreads()`, `cuda.shfl_xor_sync`.
-- **Triton** has no thread to name: a program owns a block of 64 as one
-  vector, and the block max is `tl.max` over it, with no shared memory and
-  no shuffle to write. Its launcher wants a `data_ptr()` and a `dtype`, which
-  a six-line wrapper gives it over CuPy memory.
-- **Taichi** has no thread, block, or shared memory either: the outer loop of
-  a kernel is parallel over the blocks and the max of each block is an inner
-  serial loop over a `ti.field`. `ti.init(arch=ti.cuda, default_fp=ti.f64)`
-  is what makes the answers match, and on WSL the driver has to be put on
-  the library path by hand.
-- **Mojo** writes the kernel as a `def` with `global_idx`, `thread_idx`, a
-  `stack_allocation` in `AddressSpace.SHARED`, `barrier()` from MAX's
-  `max.gpu.sync`, and `shuffle_xor` -- which has no `Float64` form, so the
-  double crosses as its bits. Kernel arguments must be fixed-width
-  (`Int64`, not `Int`), a parameter may not be called `out`, and the launch is
-  `DeviceContext.enqueue_function` with `grid_dim` and `block_dim`.
-- **CUDA C** is the kernel the others are approximating, timed with CUDA
-  events around the launch alone, so its rows carry no host-side overhead.
+**Numba CUDA** reads the same way -- `@cuda.jit`, `cuda.grid(1)`,
+`cuda.shared.array`, `cuda.syncthreads()`, `cuda.shfl_xor_sync`:
 
-With the arrays on the device, a launch is the kernel: PPY, CuPy, Numba,
-Mojo, and CUDA C run the same block max the same way, and on saxpy the
-Python-hosted ports sit about 0.15 ms above Mojo and CUDA C, which is what
-a launch through the interpreter costs. Triton and Taichi are faster on it because
-they were written without the shared-memory exchange -- one vector
-reduction per block is a different kernel, and the fair statement is that
-their programming models do not ask for the exchange at all. The copying
-rows are the other memory model, a `native.stack_alloc` array sent in and
-brought back on every launch; there PPY's copies are four to six times
-slower than CuPy's, Numba's, Triton's, and Mojo's for the same traffic, and
-Taichi's `from_numpy` is slower still. A program keeps its data on the
-device by allocating it there.
+```python
+@cuda.jit
+def block_max(x, out):
+    parked = cuda.shared.array(64, dtype=np.float64)
+    tid = cuda.threadIdx.x
+    parked[tid] = x[cuda.grid(1)]
+    cuda.syncthreads()
+    mine = parked[tid]
+    other = cuda.shfl_xor_sync(0xFFFFFFFF, mine, 1)
+    ...
+```
+
+**CuPy** writes saxpy in one line, an `ElementwiseKernel`, and the block max
+as CUDA C in a string handed to `RawKernel`. **CUDA C** is the kernel the
+others approximate, timed with events around the launch alone.
+
+**Mojo** writes the kernel as a `def` with `global_idx`, `thread_idx`, a
+`stack_allocation` in `AddressSpace.SHARED`, `barrier()` from MAX's
+`max.gpu.sync`, and `shuffle_xor`, which has no `Float64` form, so the
+double crosses as its bits; arguments must be fixed-width (`Int64`, not
+`Int`), `out` is a reserved parameter name, and the launch is
+`DeviceContext.enqueue_function` with `grid_dim` and `block_dim`:
+
+```mojo
+def block_max(x: UnsafePointer[Float64, MutAnyOrigin], result: UnsafePointer[Float64, MutAnyOrigin]):
+    var parked = stack_allocation[64, Float64, address_space = AddressSpace.SHARED]()
+    var tid = Int(thread_idx.x)
+    parked[tid] = x[Int(global_idx.x)]
+    barrier()
+    var mine = parked[tid]
+    var other = bitcast[DType.float64, 1](shuffle_xor(mine.to_bits[DType.uint64](), 1))
+    ...
+```
+
+<!-- compare:start -->
+| | PPY `cuda.launch` | CuPy | Numba CUDA | Mojo | CUDA C |
+|---|---:|---:|---:|---:|---:|
+| saxpy, arrays on the device | 0.67 ± 0.02 | 0.68 ± 0.01 | 0.71 ± 0.02 | 0.52 ± 0.02 | **0.50 ± 0.00** |
+| block max, arrays on the device | 1.99 ± 0.02 | 1.97 ± 0.02 | 2.00 ± 0.02 | 1.97 ± 0.02 | **1.88 ± 0.00** |
+| saxpy, arrays copied in and out per launch | 37.66 ± 0.85 | 45.32 ± 0.25 | 36.01 ± 0.34 | **25.12 ± 0.75** | 29.28 ± 0.40 |
+| block max, array copied in per launch | 14.93 ± 0.65 | 11.95 ± 0.07 | 13.59 ± 0.36 | **10.14 ± 0.21** | 10.57 ± 0.15 |
+<!-- compare:end -->
+
+With the arrays on the device, a launch is the kernel: the five run the
+same block max in the same time, and on saxpy the Python-hosted ones sit a
+tenth of a millisecond above Mojo and CUDA C, the cost of a launch through
+the interpreter. The copying rows are the other memory model, a
+`native.stack_alloc` array sent in and brought back on every launch; there
+the driver reads the host array in place, and the traffic costs what it
+costs every tool. A program that launches more than once keeps its data on
+the device by allocating it there, with `cuda.device_alloc`.
 
 NVIDIA GeForce RTX 5080 Laptop GPU, driver 610.71, CUDA 13.3; CuPy 14.2.0,
-Numba 0.67.0, Triton 3.8.0, Taichi 1.7.4 on CPython 3.12.13; Mojo 1.0.0
-with MAX 26.5; nvcc 13.3; PPY on CPython 3.13.13.
+Numba 0.67.0 on CPython 3.12.13; Mojo 1.0.0 with MAX 26.5; nvcc 13.3; PPY
+on CPython 3.13.13.
 
 ## Run it
 

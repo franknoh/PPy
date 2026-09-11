@@ -132,6 +132,17 @@ class FusedLoop:
     def returns_scalar(self) -> bool:
         return bool(self.reduction)
 
+    @property
+    def guarded(self) -> bool:
+        """Whether the kernel itself refuses a non-finite result with its status.
+
+        A NumPy map kernel checks every element as it writes it -- an
+        or-reduction in the same loop, one guard after it -- so the runtime
+        needs no pass of its own over the output. A reduction gives one
+        number, checked where it lands; a torch kernel may keep its NaNs.
+        """
+        return self.storage == "numpy" and not self.returns_scalar
+
 
 @dataclass(slots=True)
 class FusionCandidate:
@@ -479,6 +490,10 @@ def _build(module: IRModule, loop: FusedLoop) -> None:
         params,
         [F64] if loop.returns_scalar else [],  # type: ignore[arg-type]
     )
+    if loop.guarded:
+        # `lower-tensor` folds a finiteness check into the map's loop and
+        # guards on it after: a non-finite element is the status, not a pass.
+        function.attributes["ppy.finite_guard"] = True
     entry = function.add_entry_block()
     b = Builder(entry)
     arguments = list(entry.arguments)

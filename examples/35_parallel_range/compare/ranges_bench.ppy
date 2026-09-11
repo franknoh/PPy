@@ -54,8 +54,8 @@ def main() -> None:
     ints = memoryview(array.array("q", (i % 3 for i in range(N))))
     room = memoryview(array.array("q", bytes(8 * N)))
     floats = memoryview(array.array("d", bytes(8 * N)))
-    ordered = f"{dot(a, b):.6f}"
-    relaxed = f"{dot_relaxed(a, b):.3f}"
+    ordered = round(dot(a, b), 6)
+    relaxed = round(dot_relaxed(a, b), 3)
     print(squares(room), ordered, relaxed, count_odd(ints, 3), fill(floats, 0.5))
     best = [1e9, 1e9, 1e9, 1e9, 1e9]
     for _ in range(5):

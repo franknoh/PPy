@@ -331,7 +331,10 @@ def test_a_fused_kernel_is_one_loop_with_no_temporaries():
     assert any("tensor ops fused" in r for r in ctx.remarks)
     text = encode(module)
     kernel = text[text.index("func @k(") : text.index("func @t(")]
-    assert "malloc" not in kernel and "core.alloca" not in kernel
+    # No temporary array: the one stack word is the count of non-finite results,
+    # the guard the kernel carries so nobody rereads its output to check it.
+    assert "malloc" not in kernel and "core.alloca : ptr<f64" not in kernel
+    assert kernel.count("core.alloca") == 1 and "core.guard" in kernel
     assert kernel.count("\n^t.head") == 1
     reduction = text[text.index("func @t(") :]
     assert "malloc" not in reduction, "a rank-0 result lives on the stack"

@@ -1,9 +1,18 @@
 name: ci
 
+# A change that touches only prose -- the docs, a README, the changelog --
+# runs none of this; `ci-docs.yml` answers for the same check names then,
+# so a docs-only pull request still satisfies the branch protection.
 on:
   push:
     branches: [main, dev]
+    paths-ignore: &docs_only
+      - "docs/**"
+      - "**/*.md"
+      - "mkdocs.yml"
+      - "examples/**/measurements.json"
   pull_request:
+    paths-ignore: *docs_only
 
 jobs:
   checks:

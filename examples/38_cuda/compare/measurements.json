@@ -1,0 +1,101 @@
+{
+ "environment": {
+  "commit": "99f1f85",
+  "processor": "x86_64",
+  "platform": "Linux-6.6.114.1-microsoft-standard-WSL2-x86_64-with-glibc2.39",
+  "python": "3.14.5",
+  "runs": 5
+ },
+ "timings": {
+  "ppy": {
+   "saxpy": {
+    "mean": 0.6672,
+    "stdev": 0.019979989989987467
+   },
+   "block_max": {
+    "mean": 1.9891999999999999,
+    "stdev": 0.021323695739716313
+   },
+   "saxpy with copies": {
+    "mean": 37.663000000000004,
+    "stdev": 0.8527786934486582
+   },
+   "block_max with copies": {
+    "mean": 14.9308,
+    "stdev": 0.6503831178620796
+   }
+  },
+  "cupy": {
+   "saxpy": {
+    "mean": 0.6772,
+    "stdev": 0.011819475453673877
+   },
+   "block_max": {
+    "mean": 1.9688,
+    "stdev": 0.023295922389980614
+   },
+   "saxpy with copies": {
+    "mean": 45.3214,
+    "stdev": 0.25211068997565217
+   },
+   "block_max with copies": {
+    "mean": 11.9482,
+    "stdev": 0.06794998160411823
+   }
+  },
+  "numba": {
+   "saxpy": {
+    "mean": 0.7111999999999999,
+    "stdev": 0.022286767374386104
+   },
+   "block_max": {
+    "mean": 1.9975999999999998,
+    "stdev": 0.020305171754998692
+   },
+   "saxpy with copies": {
+    "mean": 36.0134,
+    "stdev": 0.3426387310273041
+   },
+   "block_max with copies": {
+    "mean": 13.586,
+    "stdev": 0.35831620114083546
+   }
+  },
+  "mojo": {
+   "saxpy": {
+    "mean": 0.515661,
+    "stdev": 0.020212018652277175
+   },
+   "block_max": {
+    "mean": 1.9674764,
+    "stdev": 0.020168936667558843
+   },
+   "saxpy with copies": {
+    "mean": 25.11864,
+    "stdev": 0.7522967431881519
+   },
+   "block_max with copies": {
+    "mean": 10.1414352,
+    "stdev": 0.2079788054086282
+   }
+  },
+  "cudac": {
+   "saxpy": {
+    "mean": 0.503,
+    "stdev": 0.001581138830084191
+   },
+   "block_max": {
+    "mean": 1.8821999999999999,
+    "stdev": 0.0013038404810404968
+   },
+   "saxpy with copies": {
+    "mean": 29.2758,
+    "stdev": 0.39743326483826175
+   },
+   "block_max with copies": {
+    "mean": 10.5748,
+    "stdev": 0.15118763176926878
+   }
+  }
+ }
+}

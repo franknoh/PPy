@@ -49,50 +49,78 @@ another specialization, up to four.
 
 ## Compared with Numba, Cython, NumPy, and C
 
-The three kernels over 8,192 elements, each call timed as the mean of 2,000
-calls and the best of five such rounds, in [`compare/`](compare/):
-[`kernels_bench.ppy`](compare/kernels_bench.ppy),
-[`kernels_numba.py`](compare/kernels_numba.py),
-[`kernels_cython.pyx`](compare/kernels_cython.pyx),
-[`kernels_numpy.py`](compare/kernels_numpy.py), and [`kernels.c`](compare/kernels.c).
-Milliseconds per call, mean and standard deviation over five processes;
-[`examples/compare.py`](../compare.py) held every program to the same four
-answers first. At this size a call is a few microseconds, so the table is as
-much about the call boundary as about the loop.
+The three kernels over 8,192 elements -- a sum, a dot product in order and
+reassociated, a modular digest -- each call timed as the mean of 2,000
+calls, best of five rounds, milliseconds per call over five processes. The
+programs are in [`compare/`](compare/): [`kernels_bench.ppy`](compare/kernels_bench.ppy),
+[`kernels_numba.py`](compare/kernels_numba.py), [`kernels_cython.pyx`](compare/kernels_cython.pyx),
+[`kernels_numpy.py`](compare/kernels_numpy.py), [`kernels.c`](compare/kernels.c).
+At this size a call is a few microseconds, so the table is as much about the
+call boundary as about the loop.
 
+**PPY** -- the loop as written, a `Buffer[float]` borrowed from an
+`array.array`, `@ppy.fastmath` where reassociation is allowed:
+
+```python
+@ppy.pure
+@ppy.opt(3)
+def dot(a: Buffer[float], b: Buffer[float]) -> float:
+    result: float = 0.0
+    for i in range(len(a)):
+        result += a[i] * b[i]
+    return result
+```
+
+**Numba** -- the same loop under `@njit`, no annotations, NumPy arrays,
+`fastmath=True` for the relaxed dot; its dispatcher types the arguments on
+every call:
+
+```python
+@njit
+def dot(a, b):
+    result = 0.0
+    for i in range(len(a)):
+        result += a[i] * b[i]
+    return result
+```
+
+**Cython** -- typed memoryviews and `cdef` locals in a `.pyx`, built into an
+extension by `cythonize -i`; `boundscheck=False` is what makes it a C loop,
+and there is no relaxed dot to write:
+
+```cython
+cpdef double dot(double[::1] a, double[::1] b):
+    cdef double result = 0.0
+    cdef Py_ssize_t i
+    for i in range(a.shape[0]):
+        result += a[i] * b[i]
+    return result
+```
+
+**NumPy** -- no loop: `np.dot` is BLAS, `np.sum` pairwise, and
+`(counts % m).sum()` builds a temporary. **C** is the loop with no Python
+around it, timed inside the process: the floor.
+
+<!-- compare:start -->
 | | PPY `ppy run` | Numba `@njit` | Cython | NumPy | C (the loop alone) |
 |---|---:|---:|---:|---:|---:|
-| total | 0.0036 ± 0.0000 | 0.0037 ± 0.0001 | 0.0036 ± 0.0001 | **0.0024 ± 0.0003** | 0.0035 ± 0.0001 |
-| dot | 0.0036 ± 0.0000 | 0.0037 ± 0.0001 | 0.0037 ± 0.0001 | **0.0013 ± 0.0000** | 0.0035 ± 0.0000 |
-| dot_relaxed | **0.0010 ± 0.0000** | 0.0011 ± 0.0000 | 0.0036 ± 0.0000 | 0.0013 ± 0.0000 | 0.0035 ± 0.0000 |
-| digest | 0.0074 ± 0.0000 | 0.0114 ± 0.0001 | 0.0080 ± 0.0002 | 0.0204 ± 0.0002 | **0.0045 ± 0.0000** |
+| total | 0.0036 ± 0.0000 | 0.0036 ± 0.0001 | 0.0037 ± 0.0001 | **0.0024 ± 0.0003** | 0.0036 ± 0.0001 |
+| dot | 0.0036 ± 0.0001 | 0.0036 ± 0.0001 | 0.0037 ± 0.0001 | **0.0013 ± 0.0001** | 0.0036 ± 0.0001 |
+| dot_relaxed | **0.0010 ± 0.0000** | 0.0011 ± 0.0000 | 0.0037 ± 0.0001 | 0.0013 ± 0.0001 | 0.0035 ± 0.0001 |
+| digest | 0.0075 ± 0.0001 | 0.0114 ± 0.0001 | 0.0080 ± 0.0001 | 0.0205 ± 0.0001 | **0.0046 ± 0.0000** |
+<!-- compare:end -->
 
-What each port asked for:
+The ordered sums sit on the C loop in PPY, Numba, and Cython alike, a
+microsecond of call above it; the reassociated dot is where
+`@ppy.fastmath` and Numba's `fastmath=True` let the vectorizer in and
+Cython, with no such switch, stays scalar. NumPy's `dot` is BLAS and the
+fastest row, its `digest` pays for an 8,192-element temporary and is the
+slowest. The C `digest` is the loop's floor; what stands between it and
+the others is the price of a call through the interpreter.
 
-- **PPY** is the source above: `Buffer[float]` parameters borrowed from an
-  `array.array`, `@ppy.fastmath` for the relaxed dot, `@ppy.jit` for the
-  digest specialized to its modulus. The same file runs on CPython.
-- **Numba** is `@njit` with no annotations, over NumPy arrays;
-  `fastmath=True` is its relaxed dot. It is called through its own
-  dispatcher, which types the arguments on every call.
-- **Cython** is a `.pyx` with `cdef` locals and typed memoryviews, built by
-  `cythonize -i` into an extension module; `boundscheck=False` and
-  `wraparound=False` are what make it a C loop. It has no relaxed dot: the
-  ordered one is repeated in that row.
-- **NumPy** has no loop: `np.sum`, `np.dot` (BLAS), and `(counts % m).sum()`
-  with an 8,192-element temporary. `np.dot` is the relaxed row too.
-- **C** is the loop with no Python around it, timed inside the process:
-  the floor, not a port. `-O3` vectorizes the relaxed sum on its own.
-
-The ordered sums land on the C loop in PPY, Numba, and Cython alike, a
-microsecond or so of call above it; NumPy's `dot` is BLAS and the fastest
-row, and its `digest` builds a temporary and is the slowest. The relaxed
-dot is where `@ppy.fastmath` and Numba's `fastmath=True` vectorize and
-Cython has no such switch. The C `digest` is the loop's floor, and the
-distance to it is what a call through the interpreter costs.
-
-Intel Core Ultra 9 386H (16 threads); Numba 0.67.0, Cython 3.3.0, NumPy 2.5.3 on CPython 3.12.13,
-gcc 13.3, PPY on CPython 3.13.13, from a checkout on a native filesystem.
+Intel Core Ultra 9 386H; Numba 0.67.0, Cython 3.3.0, NumPy 2.5.3 on
+CPython 3.12.13, gcc 13.3, PPY on CPython 3.13.13, from a checkout on a
+native filesystem.
 
 ## Run it
 

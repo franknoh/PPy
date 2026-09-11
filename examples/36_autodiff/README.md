@@ -41,39 +41,79 @@ effect no derivative follows — I/O, a write, a thread — `E1662`.
 ## Compared with JAX and PyTorch
 
 Newton's method on `g` from 100,000 starting points near 0.4, six steps
-each, in [`compare/`](compare/): [`gradients_bench.ppy`](compare/gradients_bench.ppy),
-[`gradients_jax.py`](compare/gradients_jax.py), and
-[`gradients_torch.py`](compare/gradients_torch.py). Each prints the two
-derivatives of the example to nine digits, then the mean root and the worst
-residual, and the best of five runs; [`examples/compare.py`](../compare.py)
-runs each five times and reports the mean and standard deviation across
-processes, in milliseconds. All three print the same answers.
+each, with the derivative from each framework's own autodiff. The programs
+are in [`compare/`](compare/): [`gradients_bench.ppy`](compare/gradients_bench.ppy),
+[`gradients_jax.py`](compare/gradients_jax.py), [`gradients_torch.py`](compare/gradients_torch.py).
+Milliseconds for the whole batch, best of five, over five processes.
 
+**PPY** -- `ppy.grad(g)` is a function; `newton` calls it in a loop, and a
+loop over the starting points calls `newton`. Everything is scalar and
+native; nothing is batched:
+
+```python
+dg = ppy.grad(g)
+
+
+def newton(x: float) -> float:
+    for _ in range(6):
+        x = x - g(x) / dg(x)
+    return x
+
+
+def newton_all(count: int) -> float:
+    total = 0.0
+    for i in range(count):
+        total += newton(0.4 + i * 1e-6)
+    return total / count
+```
+
+**JAX** -- `jax.grad` over `jnp` functions, and to run 100,000 solves it
+wants them batched: `vmap` under `jit`, the loop as `lax.fori_loop` so it
+traces, `jax_enable_x64` so the digits match:
+
+```python
+def newton(x):
+    def step(_, x):
+        return x - g(x) / dg(x)
+
+    return jax.lax.fori_loop(0, 6, step, x)
+
+
+newton_all = jax.jit(jax.vmap(newton))
+```
+
+**PyTorch** -- `torch.func.grad` and `vmap`; the six steps stay a Python
+loop over a 100,000-element tensor in float64:
+
+```python
+dg = grad(g)
+
+
+def newton(x):
+    for _ in range(6):
+        x = x - g(x) / dg(x)
+    return x
+
+
+newton_all = vmap(newton)
+```
+
+<!-- compare:start -->
 | | PPY | JAX `vmap` + `jit` | PyTorch `torch.func` |
 |---|---:|---:|---:|
-| newton, 100k starts | 12.25 ± 0.13 | **1.58 ± 0.45** | 7.17 ± 1.57 |
+| newton, 100k starts | 12.16 ± 0.11 | **1.49 ± 0.26** | 8.81 ± 1.76 |
+<!-- compare:end -->
 
-What each port asked for:
+The derivative is the same nine digits in all three -- reverse mode over
+the same rule table. What differs is the shape of the program: JAX and
+PyTorch are fast here because the problem batches and XLA and ATen
+vectorize across the batch; a scalar `newton` in a Python loop would cost
+them tens of microseconds per call. PPY's scalar loop pays nothing per
+call and is not vectorized across the batch. Which one is faster depends
+on whether your problem comes as 100,000 independent solves or as one.
 
-- **PPY** is the source above: `ppy.grad(g)` is a function, `newton` calls it
-  in a loop, and `newton_all` calls `newton` in a loop over the starting
-  points. Every call is native and scalar; nothing is batched.
-- **JAX** is `jax.grad` over `jnp` functions; to run 100,000 solves it wants
-  them batched -- `jax.vmap(newton)` under `jax.jit`, with the loop as
-  `lax.fori_loop` so it traces -- and then XLA vectorizes the whole batch.
-  `jax_enable_x64` is what makes the digits match.
-- **PyTorch** is `torch.func.grad` and `vmap`, the functional API; the Newton
-  loop stays a Python loop of six batched steps over a 100,000-element
-  tensor, in float64 by `set_default_dtype`.
-
-The derivative is the same in all three -- reverse mode, the same nine
-digits. What differs is the shape of the program: JAX and PyTorch are fast
-here because the problem batches, and a scalar `newton` in a Python loop
-would cost them tens of microseconds a call; PPY's scalar loop is native and
-pays nothing per call, and it is not vectorized across the batch.
-
-Intel Core Ultra 9 386H (16 threads); JAX 0.11.1 and PyTorch 2.14.0 (CPU) on CPython 3.13.13, PPY on
-CPython 3.13.13, from a checkout on a native filesystem.
+Intel Core Ultra 9 386H; JAX 0.11.1 and PyTorch 2.14.0 (CPU) on CPython
+3.13.13, PPY on CPython 3.13.13, from a checkout on a native filesystem.
 
 ## Run it
 
