@@ -92,7 +92,7 @@ Work toward the next release, on `dev`; alphas of it are tagged `v0.3.0aN`.
   README, with the run recorded beside the programs; `bench.yml` runs it and
   `scripts/refresh.py` on a self-hosted runner for every push to `dev` that
   touches code and commits what moved, and a change that touches only prose
-  runs the strict docs build instead of the test matrix. The comparison
+  skips the test matrix for the strict docs build. The comparison
   sections themselves now show each tool's kernel side by side and say what
   the numbers mean, rather than that they agree.
 - Three hot paths in the runtime, found by the comparisons. A CUDA launch

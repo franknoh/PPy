@@ -228,8 +228,10 @@ toolchains -- and the workflow commits what moved back to `dev`. A hosted
 runner has none of that, which is why `benchmark.yml` only reports on a
 schedule. The runner lives in `~/actions-runner` on that machine and stops
 with it; `~/actions-runner/start.sh` brings it back. A change that touches
-only prose runs none of the test matrix: `ci-docs.yml` answers for the same
-check names and builds the site strictly instead.
+only prose -- the docs, a README, the changelog, a recorded measurement --
+skips the test matrix: `ci.yml` sorts the changed files first, a skipped
+required check satisfies the branch protection, and the strict site build
+runs in its place.
 
 ## Releasing
 

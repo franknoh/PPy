@@ -99,10 +99,10 @@ fn sum_values(pair: &Regex, text: &[u8]) -> u64 {
 <!-- compare:start -->
 | | PPY `ppy run` | CPython `re` | Rust `regex` |
 |---|---:|---:|---:|
-| count_words | **6.41 ± 0.03** | 104.44 ± 0.64 | 17.95 ± 0.13 |
-| longest_word | **6.38 ± 0.02** | 126.79 ± 0.31 | 37.35 ± 2.81 |
-| sum_values | **55.63 ± 0.34** | 194.38 ± 0.98 | 65.00 ± 0.82 |
-| count_hex | 6.44 ± 0.03 | 10.00 ± 0.07 | **2.30 ± 0.05** |
+| count_words | **6.57 ± 0.05** | 107.07 ± 1.27 | 18.23 ± 0.13 |
+| longest_word | **6.53 ± 0.05** | 133.05 ± 8.69 | 36.85 ± 2.99 |
+| sum_values | **56.70 ± 0.33** | 198.20 ± 1.86 | 65.62 ± 0.79 |
+| count_hex | 6.59 ± 0.03 | 10.22 ± 0.10 | **2.33 ± 0.10** |
 <!-- compare:end -->
 
 PPY compiles each pattern into a function of core operations -- a
