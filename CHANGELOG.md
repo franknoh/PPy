@@ -279,10 +279,13 @@ Work toward the next release, on `dev`; alphas of it are tagged `v0.3.0aN`.
   (`cleanup_ok`, and the exit status with it), `--keep` excepted; an AMD
   type the stock list lacks is asked for in every datacenter whose
   inventory names it, and NOT RUN is recorded only when every request was
-  refused; the ROCm environment is AMD's own JAX image with PPy installed
-  beside its JAX, which is checked to be the same version after the
-  install; and `ppy emit hip` is a step of a ROCm run. Unit tests with a
-  fake `runpodctl` hold the judgement.
+  refused; the ROCm environment is AMD's own JAX image, started under an
+  `sshd` for the injected key since the image runs none, with PPy
+  installed beside its JAX under version constraints and every `jax*`
+  distribution checked to be the one that was there; and `ppy emit hip`
+  is a step of a ROCm run, the source compiled by the image's `hipcc`.
+  An MI300X run passed on every step. Unit tests with a fake `runpodctl`
+  hold the judgement.
 - The docs' landing page carries no count of folders or programs as
   digits: the "by the numbers" row uses the markers, and the guard test
   sees through Markdown emphasis. `examples/45_multi_gpu_jax` times its

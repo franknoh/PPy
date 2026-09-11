@@ -145,3 +145,25 @@ def test_every_refusal_is_not_run_not_pass(harness, tmp_path, monkeypatch):
     )
     assert summary["refused"] == [refusal]
     assert "cleanup_ok" not in summary, "no Pod was made, none is to delete"
+
+
+def test_a_vendor_image_is_started_under_sshd_for_the_injected_key(harness, tmp_path, monkeypatch):
+    """AMD's image has no `sshd`: the create request carries a start command that
+    installs one, admits `PUBLIC_KEY`, and keeps the container alive under it."""
+    fake = _FakeRunpod({"pod": {"id": "pod-2"}})
+    monkeypatch.setattr(harness, "_runpod", fake)
+    monkeypatch.setattr(harness, "_ssh_key", lambda: ("ssh-ed25519 AAAA test", tmp_path / "key"))
+    pod = harness.Pod(
+        "ppy-test-rocm-abcd1234",
+        harness.ENVIRONMENTS["rocm"],
+        "AMD Instinct MI300X OAM",
+        tmp_path / "log",
+    )
+    pod.create()
+    create = next(call for call in fake.calls if call[:2] == ("pod", "create"))
+    start = create[create.index("--docker-args") + 1]
+    assert start.startswith("bash -c ") and start.endswith('sshd -D"')
+    assert "$PUBLIC_KEY" in start and "PermitRootLogin yes" in start
+    assert "'" not in start and start.count('"') == 2, "one quoted command, nothing nested"
+    cuda_env = harness.ENVIRONMENTS["cuda"]
+    assert "start" not in cuda_env, "RunPod's own images start sshd themselves"

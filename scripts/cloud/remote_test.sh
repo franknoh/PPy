@@ -58,17 +58,34 @@ step clone bash -c "rm -rf $REPO && git clone -q https://github.com/franknoh/PPy
 cd "$REPO" || exit 1
 if [ "$MODE" = rocm ]; then
     # AMD's image carries a JAX built for ROCm with its PJRT plugin; PPy goes in
-    # beside that interpreter and its groups resolve against the JAX already
-    # there, so no CPU wheel replaces it. The JAX is then checked to be the
-    # JAX that was there: a different version after the sync is a failure.
+    # beside that interpreter with the image's `jax` and `jaxlib` as constraints,
+    # so nothing in PPy's groups pulls the CPU wheel over them. The stack is then checked to be the stack that was there: any
+    # change to jax, jaxlib, or the ROCm plugin after the sync is a failure.
+    # The image's JAX lives in its `/opt/venv`; an SSH login may start without
+    # that on `PATH`, so it is named outright when it is there.
+    [ -d /opt/venv/bin ] && export PATH="/opt/venv/bin:$PATH"
     PY=$(command -v python3.12 || command -v python3)
-    BEFORE=$("$PY" -c 'import jax, jaxlib; print(jax.__version__, jaxlib.__version__)')
-    log "the image's JAX: $BEFORE at $PY"
-    step sync bash -c "uv pip install -p $PY -e '.' --group all && uv pip install -p $PY pytest"
-    step jax_plugin bash -c "AFTER=\$($PY -c 'import jax, jaxlib; print(jax.__version__, jaxlib.__version__)'); echo \"before: $BEFORE\"; echo \"after: \$AFTER\"; [ \"\$AFTER\" = \"$BEFORE\" ]"
+    cat > "$RESULTS/jax_stack.py" <<'PYEOF'
+import importlib.metadata as m
+
+print(" ".join(sorted(f"{d.metadata['Name']}=={d.version}" for d in m.distributions() if d.metadata["Name"].lower().startswith("jax"))))
+PYEOF
+    BEFORE=$("$PY" "$RESULTS/jax_stack.py")
+    log "the image's JAX stack: $BEFORE at $PY"
+    "$PY" -c 'import jax, jaxlib; print(f"jax=={jax.__version__}\njaxlib=={jaxlib.__version__}")' > "$RESULTS/constraints.txt"
+    # The pip ROCm SDK keeps the device library away from `ROCM_PATH`; clang
+    # reads `HIP_DEVICE_LIB_PATH`, so `hipcc` can build for the card.
+    LIBS=$(find /opt/venv/lib /opt/rocm -type d -path '*amdgcn/bitcode' 2>/dev/null | head -1)
+    if [ -n "$LIBS" ]; then export HIP_DEVICE_LIB_PATH="$LIBS"; log "HIP device library: $LIBS"; fi
+    # Every group but `jax`, whose flax wants a newer jax than the image's:
+    # flatbuffers from that group by name, flax not at all (nothing here needs it).
+    step sync bash -c "uv pip install -p $PY -c $RESULTS/constraints.txt -e '.' --group dev --group torch --group uvicorn --group scipy --group pandas --group pyarrow 'flatbuffers>=24.0' pytest"
+    step jax_plugin bash -c "AFTER=\$($PY $RESULTS/jax_stack.py); echo \"before: $BEFORE\"; echo \"after: \$AFTER\"; [ \"\$AFTER\" = \"$BEFORE\" ]"
     PPY=$($PY -c 'import shutil; print(shutil.which("ppy") or "")')
     [ -n "$PPY" ] || PPY="$PY -m ppy_compiler"
-    step vendor bash -c 'rocminfo | grep -E "Marketing Name|gfx" ; rocm-smi --showproductname --showdriverversion; cat /opt/rocm/.info/version 2>/dev/null'
+    # ROCm 10 in AMD's image is the pip SDK under the venv, not `/opt/rocm`:
+    # whichever of the tools is there reports; the accelerator step is the test.
+    step vendor bash -c 'ls /dev/kfd /dev/dri 2>&1; (rocminfo | grep -E "Marketing Name|gfx") 2>&1; rocm-smi --showproductname --showdriverversion 2>&1; cat /opt/rocm/.info/version 2>/dev/null; rocm-sdk version 2>&1; echo "ROCM_PATH=$ROCM_PATH"; true'
 else
     step sync bash -c 'uv python install -q 3.13 && uv sync -q -p 3.13 --group all'
     PY=$REPO/.venv/bin/python
@@ -91,7 +108,7 @@ across accelerator "$PY" scripts/cloud/accelerator_check.py --require gpu --min-
 step xla_example bash -c "cd examples/39_xla && $PPY run device_math.ppy && $PPY explain device_math.ppy:6"
 if [ "$MODE" = rocm ]; then
     # `ppy.hip` is source only: the HIP C++ is written and looked at, never launched.
-    step hip_emit bash -c "cd examples/38_cuda && $PPY emit hip saxpy.ppy > $RESULTS/saxpy.hip.cpp && grep -q '__global__' $RESULTS/saxpy.hip.cpp && grep -q 'hipLaunchKernelGGL\|<<<' $RESULTS/saxpy.hip.cpp && wc -l $RESULTS/saxpy.hip.cpp && (command -v hipcc >/dev/null && hipcc -fsyntax-only -x hip $RESULTS/saxpy.hip.cpp && echo 'hipcc: syntax ok' || echo 'hipcc: not installed, source not compiled')"
+    step hip_emit bash -c "cd examples/38_cuda && $PPY emit hip saxpy.ppy > $RESULTS/saxpy.hip.cpp && grep -q '__global__' $RESULTS/saxpy.hip.cpp && grep -q 'hipLaunchKernelGGL\|<<<' $RESULTS/saxpy.hip.cpp && wc -l $RESULTS/saxpy.hip.cpp && if command -v hipcc >/dev/null; then hipcc -c -x hip $RESULTS/saxpy.hip.cpp -o $RESULTS/saxpy.hip.o && echo 'hipcc: compiled for the device' || echo 'hipcc: present but failed to compile the source'; else echo 'hipcc: not installed, source not compiled'; fi"
     step cuda_example bash -c "cd examples/38_cuda && $PPY run saxpy.ppy"
     step tile_example bash -c "cd examples/44_tile && $PPY run tiles.ppy"
 else

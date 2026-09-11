@@ -44,6 +44,25 @@ HERE = Path(__file__).resolve().parent
 #: names another tag of `rocm/jax` (or `rocm/jax-community`) for a try.
 ROCM_IMAGE = os.environ.get("PPY_ROCM_IMAGE", "rocm/jax:rocm10.0-jax0.11.0-py3.12")
 
+#: AMD's image is a plain Docker image: its command is a shell and nothing in it
+#: listens on port 22, where RunPod's own images start `sshd` for the key in
+#: `PUBLIC_KEY`. This start command does what theirs does -- installs the
+#: server, admits the key, and keeps the container alive under `sshd` -- and
+#: writes the container's environment (the `/opt/venv` on `PATH`, the ROCm
+#: paths) where an SSH session reads it back, since a login starts without it.
+#: No quotes inside: RunPod hands the string to the container's entrypoint whole.
+ROCM_START = (
+    "bash -c "
+    '"apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq openssh-server'
+    " && mkdir -p /run/sshd /root/.ssh && echo $PUBLIC_KEY > /root/.ssh/authorized_keys"
+    " && chmod 700 /root/.ssh && chmod 600 /root/.ssh/authorized_keys"
+    " && echo PermitRootLogin yes >> /etc/ssh/sshd_config"
+    " && echo PermitUserEnvironment yes >> /etc/ssh/sshd_config"
+    " && env | grep -e ^PATH= -e ^ROCM -e ^HIP -e ^HSA -e ^LD_LIBRARY_PATH= -e ^VIRTUAL_ENV="
+    " > /etc/environment && cp /etc/environment /root/.ssh/environment"
+    ' && exec /usr/sbin/sshd -D"'
+)
+
 #: Environments: the vendor image, how many GPUs, the GPU types to try in order of
 #: preference (cheap and common first), and what the remote script is told.
 ENVIRONMENTS = {
@@ -81,6 +100,7 @@ ENVIRONMENTS = {
     },
     "rocm": {
         "image": ROCM_IMAGE,
+        "start": ROCM_START,
         "count": 1,
         "mode": "rocm",
         "prefer": ["AMD Instinct MI300X OAM", "AMD Instinct MI250X", "AMD Instinct MI250"],
@@ -88,6 +108,7 @@ ENVIRONMENTS = {
     },
     "rocm-multigpu": {
         "image": ROCM_IMAGE,
+        "start": ROCM_START,
         "count": 2,
         "mode": "rocm",
         "prefer": ["AMD Instinct MI300X OAM", "AMD Instinct MI250X"],
@@ -229,6 +250,7 @@ class Pod:
 
     def create(self) -> None:
         ends = (dt.datetime.now(dt.UTC) + dt.timedelta(hours=4)).strftime("%Y-%m-%dT%H:%M:%SZ")
+        start = self.environment.get("start", "")
         created = _runpod(
             "pod",
             "create",
@@ -249,6 +271,7 @@ class Pod:
             "--terminate-after",
             ends,
             *(["--data-center-ids", self.datacenter] if self.datacenter else []),
+            *(["--docker-args", start] if start else []),
             timeout=300,
         )
         self.id = str(_find(created, "id", "podId") or "")
