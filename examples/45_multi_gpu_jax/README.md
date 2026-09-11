@@ -23,7 +23,10 @@ the all-reduce that sums each device's gradient contribution. The program
 runs the same hundred steps on one device afterwards and holds the two
 runs to one answer: the loss must fall, the two final losses must agree,
 and the largest difference between any two corresponding parameters is
-printed.
+printed. The timed loop dispatches its hundred steps without a host
+synchronization between them -- the first and the last loss stay on the
+device until `block_until_ready()` ends the timing -- so `train` measures
+the steps, not a wait for the device after each one.
 
 ## What counts as an accelerator
 

@@ -35,11 +35,35 @@ def test_the_examples_index_spells_the_compared_count_the_tree_has():
     assert sorted(rows) == sorted(FOLDERS), "one row per gallery folder"
 
 
+#: Markdown emphasis and code spans, which a count may be dressed in: `**42** example folders`.
+_DECORATION = re.compile(r"[*_`]+")
+#: A count of folders or programs written as digits: the markers' business, not prose's.
+_SPELLED = re.compile(r"\b\d[\d,]* (example |comparison |compared )?(folders|programs)\b")
+
+
 def test_no_page_spells_a_count_the_markers_carry():
-    """A digit count of folders or programs belongs to a marker, not to prose."""
-    pattern = re.compile(r"\b(\d{2}) (example )?(folders|programs)\b")
+    """A digit count of folders or programs belongs to a marker, not to prose, however
+    the Markdown dresses it."""
     for page in (ROOT / "docs").rglob("*.md"):
         for line in page.read_text(encoding="utf-8").splitlines():
-            if "@@" in line:
-                continue
-            assert not pattern.search(line), f"{page.relative_to(ROOT)}: {line.strip()}"
+            bare = _DECORATION.sub("", line)
+            found = _SPELLED.search(bare)
+            assert found is None or "@@" in line, f"{page.relative_to(ROOT)}: {line.strip()}"
+
+
+def test_the_guard_sees_through_markdown_emphasis():
+    for dressed in (
+        "**42** example folders",
+        "_52_ programs",
+        "`45` folders",
+        "42 example folders",
+    ):
+        assert _SPELLED.search(_DECORATION.sub("", dressed)), dressed
+    assert not _SPELLED.search("@@EXAMPLE_FOLDERS@@ example folders")
+
+
+def test_the_markers_fill_inside_emphasis():
+    filled = counts.on_page_markdown(
+        "**@@EXAMPLE_FOLDERS@@** folders, `@@EXAMPLE_PROGRAMS@@` programs"
+    )
+    assert filled == f"**{counts._folders()}** folders, `{counts._programs()}` programs"

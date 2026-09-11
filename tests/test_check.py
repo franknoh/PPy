@@ -210,6 +210,75 @@ def test_a_contract_no_single_value_can_witness_is_refused_not_stripped(target):
     assert ppy.assume[target]([1, 2]) == [1, 2], "the unchecked crossing still takes it"
 
 
+@pytest.mark.parametrize(
+    ("target", "value"),
+    [
+        (Literal[1], True),
+        (Literal[True], 1),
+        (Literal[0], False),
+        (Literal[False], 0),
+        (Literal[1, "a"], True),
+        (Literal[1.0], 1),
+    ],
+)
+def test_a_literal_is_its_value_and_its_type(target, value):
+    """`True == 1` in Python; `Literal[1]` is not `True` for all that."""
+    with pytest.raises(TypeError, match="expected one of"):
+        ppy.check[target](value)
+
+
+@pytest.mark.parametrize(
+    ("target", "value"),
+    [(Literal[1], 1), (Literal[True], True), (Literal[False], False), (Literal[1, True], True)],
+)
+def test_a_literal_of_the_same_type_passes(target, value):
+    assert ppy.check[target](value) is value
+
+
+@pytest.mark.parametrize("target", [ppy.i8, ppy.u8, ppy.i64, ppy.u64])
+@pytest.mark.parametrize("value", [True, False])
+def test_a_fixed_width_integer_is_not_a_bool(target, value):
+    with pytest.raises(TypeError, match=r"expected [iu](8|64), got bool"):
+        ppy.check[target](value)
+
+
+@pytest.mark.parametrize(
+    "target",
+    [
+        int | Callable[..., int],
+        Callable[..., int] | int,
+        Optional[Callable[[], None]],  # noqa: UP045
+        list[int | Callable[..., int]],
+        tuple[int, Callable[..., int]],
+        dict[str, Callable[..., int]],
+        ppy.Vector[int | Callable[..., int]],
+    ],
+)
+def test_a_union_with_an_arm_no_value_can_be_checked_against_is_refused_whichever_arm(target):
+    """Support does not depend on the order of the arms, nor on the value: `int | Callable`
+    is refused for `3` (which the first arm would take) as it is for `"x"`."""
+    for value in (3, "x", None, [3], (3, len), {"k": 3}):
+        with pytest.raises(TypeError, match=r"ppy\.check cannot validate"):
+            ppy.check[target](value)
+
+
+@pytest.mark.parametrize(
+    ("target", "value"),
+    [
+        (int | str, 3),
+        (str | int, 3),
+        (int | str, "x"),
+        (ppy.i8 | None, -5),
+        (None | ppy.i8, None),
+        (list[ppy.u8] | tuple[ppy.i8, ...], (-1, 1)),
+        (Annotated[list[ppy.i8], ppy.Length(2)], [1, -1]),
+        (dict[str, Annotated[int, ppy.Range(0, 5)]], {"a": 5}),
+    ],
+)
+def test_a_checkable_union_matches_by_any_arm_in_any_order(target, value):
+    assert ppy.check[target](value) == value
+
+
 def test_metadata_that_is_not_ppys_is_not_a_contract():
     assert ppy.check[Annotated[int, "meta", 3]](5) == 5
 

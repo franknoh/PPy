@@ -122,14 +122,20 @@ def train(devices: ppy.Dynamic, x_host: ppy.Dynamic, y_host: ppy.Dynamic) -> ppy
         b1 = jax.device_put(jnp.zeros((HIDDEN,)), everywhere)
         w2 = jax.device_put(jax.random.normal(k2, (HIDDEN, 1)) * 0.1, everywhere)
         b2 = jax.device_put(jnp.zeros((1,)), everywhere)
-        losses = []
+        # The steps are dispatched without a host synchronization between them:
+        # a `float(loss)` each step would wait for the device every time and
+        # the time would measure that wait. The first and the last loss stay on
+        # the device until the timing has ended.
+        first = None
+        loss = None
         started = time.perf_counter()
         for _ in range(STEPS):
             loss, w1, b1, w2, b2 = train_step(x, y, w1, b1, w2, b2, RATE)
-            losses.append(float(loss))
+            if first is None:
+                first = loss
         w1.block_until_ready()
         elapsed = (time.perf_counter() - started) * 1000.0
-        return losses, (w1, b1, w2, b2), elapsed
+        return (float(first), float(loss)), (w1, b1, w2, b2), elapsed
 
 
 def main() -> None:
@@ -154,7 +160,7 @@ def main() -> None:
             # Fetched to the host: the two live on different meshes.
             drift = max(drift, float(np.max(np.abs(np.asarray(mine) - np.asarray(theirs)))))
         kinds = sorted({device.platform for device in devices})
-        first, last = losses[0], losses[-1]
+        first, last = losses
         agrees = abs(last - reference[-1]) <= 1e-3 * max(1.0, abs(reference[-1]))
     print(f"# devices: {len(devices)} x {'/'.join(kinds)}")
     print(f"# native prep: {getattr(standardize, '__ppy_native__', None) is not None}")

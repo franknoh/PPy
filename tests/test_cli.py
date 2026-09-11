@@ -2334,6 +2334,98 @@ def test_a_converted_reader_reads_what_the_python_read(workspace: Path):
             assert kind in ours.stderr.strip().splitlines()[-1], (kind, ours.stderr)
 
 
+def test_a_starred_target_reads_a_list_not_a_fixed_tuple(workspace: Path):
+    """`a, *rest = map(int, input().split())` takes however many fields the line holds."""
+    source = workspace / "starred.py"
+    source.write_text(
+        textwrap.dedent(
+            """
+            def main():
+                a, *b = map(int, input().split())
+                *c, d = map(int, input().split())
+                e, *f, g = map(int, input().split())
+                [h, *i] = map(int, input().split())
+                x, *y = map(float, input().split())
+                p, *q = map(str, input().split())
+                (m, n), *o = map(int, input().split())
+                print(a, b, c, d, e, f, g, h, i, x, y, p, q)
+
+
+            main()
+            """
+        ).lstrip("\n"),
+        encoding="utf-8",
+    )
+    assert _ppy(["convert", "starred.py"], workspace).returncode == 0
+    converted = (workspace / "starred.ppy").read_text(encoding="utf-8")
+    assert "a, *b = ppy.input[list[int]]()" in converted
+    assert "*c, d = ppy.input[list[int]]()" in converted
+    assert "e, *f, g = ppy.input[list[int]]()" in converted
+    assert "[h, *i] = ppy.input[list[int]]()" in converted
+    assert "x, *y = ppy.input[list[float]]()" in converted
+    assert "p, *q = ppy.input[list[str]]()" in converted
+    # A nested target is not a shape the rewrite knows: the line keeps its `map`, and
+    # the `input()` inside it is the one-line read it always becomes.
+    assert "(m, n), *o = map(int, ppy.input[str]().split())" in converted
+    assert "ppy.input[tuple" not in converted
+
+
+def test_a_starred_read_unpacks_as_the_python_did(workspace: Path):
+    """Exactly the least, more than the least, too few, an empty line, a wide integer,
+    non-ASCII digits: the same answers and the same errors as the Python."""
+    source = workspace / "arity.py"
+    source.write_text(
+        textwrap.dedent(
+            """
+            def main():
+                a, *b = map(int, input().split())
+                *c, d = map(int, input().split())
+                e, *f, g = map(int, input().split())
+                [h, *i] = map(int, input().split())
+                print(a, b, c, d, e, f, g, h, i)
+
+
+            main()
+            """
+        ).lstrip("\n"),
+        encoding="utf-8",
+    )
+    assert _ppy(["convert", "arity.py"], workspace).returncode == 0
+    for text in (
+        "1\n2\n3 4\n5\n",
+        "1 2 3\n4 5 6\n7 8 9 10\n11 12\n",
+        "\n1\n2 3\n4\n",
+        "1\n\n2 3\n4\n",
+        "1\n2\n3\n4\n",
+        "1\n2\n3 4\n\n",
+        "9223372036854775808 1\n-9223372036854775809\n99999999999999999999 2 3\n4 5\n",
+        "\uff11\uff12 3\n\uff14\n5 \uff16 7\n8\n",
+        "1 x\n2\n3 4\n5\n",
+        "1\n2\n3 4\n",
+    ):
+        python = subprocess.run(
+            [sys.executable, "arity.py"],
+            cwd=workspace,
+            input=text,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        ours = subprocess.run(
+            [sys.executable, "-m", "ppy_compiler", "run", "arity.ppy"],
+            cwd=workspace,
+            input=text,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert ours.stdout == python.stdout, (text, ours.stderr)
+        assert (ours.returncode == 0) == (python.returncode == 0), (text, ours.stderr)
+        if python.returncode != 0:
+            kind = python.stderr.strip().splitlines()[-1].split(":")[0]
+            assert kind in ours.stderr.strip().splitlines()[-1], (kind, ours.stderr)
+
+
 def test_a_module_that_also_reads_stdin_keeps_its_input(workspace: Path):
     """Two readers of one file descriptor would not agree on where it is."""
     source = workspace / "mixed.py"

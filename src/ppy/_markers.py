@@ -298,17 +298,104 @@ class _Validation:
     `ppy.assume[T]` is the unchecked crossing.
     """
 
-    __slots__ = ("target",)
+    __slots__ = ("_accepted", "target")
 
     def __init__(self, target: Any) -> None:
         self.target = target
+        self._accepted = False
 
     def __call__(self, value: Any) -> Any:
+        if not self._accepted:
+            # The whole of `T` is judged before any of the value is looked at, so
+            # an arm no value can be checked against is refused whichever arm it
+            # is -- `int | Callable` and `Callable | int` alike -- rather than
+            # reached only when the value fails the arms before it.
+            self._accept(self.target)
+            self._accepted = True
         self._validate(self.target, value, "value")
         return value
 
     def __repr__(self) -> str:
         return f"ppy.check[{self.target!r}]"
+
+    def _accept(self, target: Any) -> None:
+        """Refuse `target` outright where any part of it has no sound runtime check."""
+        import dataclasses
+        import types
+        import typing
+
+        if target is Any or target is object or target is None or target is type(None):
+            return
+        origin = typing.get_origin(target)
+        arguments = typing.get_args(target)
+        if origin is typing.Annotated:
+            self._accept(arguments[0])
+            self._accept_metadata(target, arguments[1:])
+            return
+        if origin is typing.Union or isinstance(target, types.UnionType):
+            for member in arguments:
+                self._accept(member)
+            return
+        if origin is typing.Literal:
+            return
+        if origin is None:
+            if not isinstance(target, type):
+                raise TypeError(f"ppy.check cannot validate against {target!r}")
+            if dataclasses.is_dataclass(target):
+                try:
+                    hints = typing.get_type_hints(target, include_extras=True)
+                except Exception as error:  # pylint: disable=broad-exception-caught
+                    raise TypeError(
+                        f"ppy.check cannot validate against {target!r}: {error}"
+                    ) from error
+                for field in dataclasses.fields(target):
+                    self._accept(hints.get(field.name, field.type))
+            return
+        if origin in (list, set, frozenset, collections_deque()):
+            if len(arguments) > 1:
+                raise TypeError(f"ppy.check cannot validate against {origin.__name__}{arguments!r}")
+            for argument in arguments:
+                self._accept(argument)
+            return
+        if origin is tuple:
+            for argument in arguments:
+                if argument is not Ellipsis and argument != ():
+                    self._accept(argument)
+            return
+        if origin is dict:
+            if arguments and len(arguments) != 2:
+                raise TypeError(f"ppy.check cannot validate against dict{arguments!r}")
+            for argument in arguments:
+                self._accept(argument)
+            return
+        if isinstance(origin, type) and not arguments:
+            return
+        raise TypeError(f"ppy.check cannot validate against {target!r}")
+
+    def _accept_metadata(self, target: Any, metadata: tuple) -> None:
+        for item in metadata:
+            if isinstance(item, _UNCHECKABLE):
+                raise TypeError(
+                    f"ppy.check cannot validate against {target!r}: {type(item).__name__} is a "
+                    "contract between a caller and a callee, not a property of one value; "
+                    "`ppy.assume[T](value)` is the unchecked crossing"
+                )
+            if isinstance(item, ArraySpec) and (
+                not isinstance(item.length, int) or isinstance(item.length, bool)
+            ):
+                raise TypeError(
+                    f"ppy.check cannot validate against Array[..., {item.length!r}]: "
+                    "the length is not a number"
+                )
+            if isinstance(item, BufferSpec) and _buffer_key(item.element) not in _BUFFER_FORMATS:
+                raise TypeError(
+                    f"ppy.check cannot validate against Buffer[{_describe(item.element)}]: "
+                    "the element has no buffer format"
+                )
+            if isinstance(item, _Meta) and not isinstance(item, _CHECKED_META):
+                raise TypeError(
+                    f"ppy.check cannot validate against {target!r}: {item!r} has no runtime check"
+                )
 
     def _validate(self, target: Any, value: Any, where: str) -> None:
         import dataclasses
@@ -331,13 +418,13 @@ class _Validation:
                 try:
                     self._validate(member, value, where)
                     return
-                except TypeError as error:
-                    if str(error).startswith("ppy.check cannot validate"):
-                        raise
+                except TypeError:
                     continue
             raise TypeError(f"{where}: expected {target!r}, got {type(value).__name__}")
         if origin is typing.Literal:
-            if value not in arguments:
+            # A literal is its value and its type: `Literal[1]` is not `True`, and
+            # `Literal[True]` is not `1`, though the two compare equal.
+            if not any(type(value) is type(option) and value == option for option in arguments):
                 raise TypeError(f"{where}: expected one of {arguments!r}, got {value!r}")
             return
         if origin is None:
@@ -433,7 +520,8 @@ class _Validation:
                 self._contiguous(value, where)
 
     def _int_width(self, width: IntWidth, value: Any, where: str) -> None:
-        if not isinstance(value, int):
+        # A fixed-width integer is an `int`, and a `bool` is not one of those.
+        if not isinstance(value, int) or isinstance(value, bool):
             raise TypeError(f"{where}: expected {width.name}, got {type(value).__name__}")
         if not width.low <= value <= width.high:
             raise TypeError(

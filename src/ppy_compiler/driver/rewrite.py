@@ -277,16 +277,45 @@ class _TypedReads(cst.CSTTransformer):
         return self._read(f"list[{element}]", list(read.args))
 
     def leave_Assign(self, original: cst.Assign, updated: cst.Assign) -> cst.Assign:
-        """`a, b = map(int, input().split())` reads a tuple of that width."""
+        """`a, b = map(int, input().split())` reads a tuple of that width.
+
+        A starred target -- `a, *rest = ...`, `*init, last = ...` -- takes
+        however many fields the line holds, so it reads a list, as
+        `list(map(int, input().split()))` would, and Python's own unpacking
+        keeps its arity rule and its errors. A target with anything else in
+        it (a nested tuple, an attribute) is left as it was written.
+        """
         if len(original.targets) != 1:
             return updated
         target = original.targets[0].target
         if not isinstance(target, (cst.Tuple, cst.List)):
             return updated
-        spec = _mapped_read(original.value, len(target.elements))
+        shape = _target_shape(target)
+        if shape is None:
+            return updated
+        if shape == "starred":
+            spec = _mapped_list_read(original.value)
+        else:
+            spec = _mapped_read(original.value, len(target.elements))
         if spec is None:
             return updated
         return updated.with_changes(value=spec)
+
+
+def _target_shape(target: cst.Tuple | cst.List) -> str | None:
+    """`fixed` for names only, `starred` where one is a `*name`; None for anything else."""
+    starred = 0
+    for element in target.elements:
+        value = element.value
+        if isinstance(element, cst.StarredElement):
+            starred += 1
+            if not isinstance(value, cst.Name):
+                return None
+        elif not isinstance(value, cst.Name):
+            return None
+    if starred > 1:
+        return None
+    return "starred" if starred else "fixed"
 
 
 def _comprehended(node: cst.ListComp) -> str | None:
@@ -339,6 +368,15 @@ def _mapped_read(value: cst.BaseExpression, width: int) -> cst.BaseExpression | 
         return None
     element, _read = mapped
     return _expression(f"ppy.input[tuple[{', '.join([element] * width)}]]()")
+
+
+def _mapped_list_read(value: cst.BaseExpression) -> cst.BaseExpression | None:
+    """`map(T, input().split())` unpacked into a starred target: the line as a list of `T`."""
+    mapped = _mapped_fields(value)
+    if mapped is None:
+        return None
+    element, _read = mapped
+    return _expression(f"ppy.input[list[{element}]]()")
 
 
 def _listed_read(node: cst.Call) -> tuple[str, cst.Call] | None:

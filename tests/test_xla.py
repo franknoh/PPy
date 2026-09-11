@@ -176,6 +176,61 @@ def test_the_bridge_compiles_for_one_device_of_a_machine_that_has_several(tmp_pa
     assert done.stdout.strip() == "ran on cpu:0 of 2", done.stdout
 
 
+def _fake_jax(monkeypatch, backend: str | Exception):
+    """A `jax` whose `default_backend()` answers `backend`, or raises it."""
+    import types
+
+    module = types.ModuleType("jax")
+
+    def default_backend():
+        if isinstance(backend, Exception):
+            raise backend
+        return backend
+
+    module.default_backend = default_backend  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, "jax", module)
+    from ppy_runtime.xla import pjrt
+
+    monkeypatch.setattr(pjrt, "available", lambda: True)
+    monkeypatch.delenv("PPY_XLA_PLATFORM", raising=False)
+    monkeypatch.delenv("JAX_PLATFORMS", raising=False)
+    return pjrt
+
+
+def test_the_bridge_follows_a_jax_that_came_up_on_the_cpu_with_nothing_else(monkeypatch):
+    pjrt = _fake_jax(monkeypatch, "cpu")
+    monkeypatch.setattr(pjrt, "accelerator_plugins", list)
+    assert pjrt.default_platform() == "cpu"
+    _fake_jax(monkeypatch, "gpu")
+    assert pjrt.default_platform() == "gpu"
+
+
+def test_a_jax_that_cannot_initialize_is_not_read_as_the_cpu(monkeypatch):
+    pjrt = _fake_jax(monkeypatch, RuntimeError("Unable to initialize backend 'cuda': ..."))
+    with pytest.raises(RuntimeError, match="Unable to initialize backend"):
+        pjrt.default_platform()
+
+
+def test_a_plugin_that_failed_to_initialize_is_not_a_machine_without_a_gpu(monkeypatch):
+    pjrt = _fake_jax(monkeypatch, "cpu")
+    monkeypatch.setattr(pjrt, "accelerator_plugins", lambda: ["jax-cuda12-plugin 0.11.1"])
+    with pytest.raises(RuntimeError, match=r"jax-cuda12-plugin 0\.11\.1"):
+        pjrt.default_platform()
+    monkeypatch.setenv("JAX_PLATFORMS", "cpu")
+    assert pjrt.default_platform() == "cpu", "the CPU asked for is the CPU"
+    monkeypatch.setenv("PPY_XLA_PLATFORM", "gpu")
+    assert pjrt.default_platform() == "gpu", "the bridge's own override wins"
+
+
+def test_without_jax_the_platform_is_the_cpu_and_nothing_is_imported(monkeypatch):
+    from ppy_runtime.xla import pjrt
+
+    monkeypatch.setattr(pjrt, "available", lambda: False)
+    monkeypatch.delenv("PPY_XLA_PLATFORM", raising=False)
+    monkeypatch.setitem(sys.modules, "jax", None)
+    assert pjrt.default_platform() == "cpu"
+
+
 @requires_xla
 def test_a_staged_scalar_payload_runs_through_the_bridge():
     import json
