@@ -1,6 +1,6 @@
 {
  "environment": {
-  "commit": "f33d0ee",
+  "commit": "7b7c7c7",
   "processor": "x86_64",
   "platform": "Linux-6.6.114.1-microsoft-standard-WSL2-x86_64-with-glibc2.39",
   "python": "3.14.5",
@@ -9,60 +9,60 @@
  "timings": {
   "ppy": {
    "fused, serial": {
-    "mean": 11.882,
-    "stdev": 0.30003333148168726
+    "mean": 13.616,
+    "stdev": 1.4151960994858626
    },
    "fused": {
-    "mean": 4.312,
-    "stdev": 0.12070625501605124
+    "mean": 4.8,
+    "stdev": 0.6801470429252781
    },
    "sum of squares": {
-    "mean": 13.276,
-    "stdev": 0.35472524578890613
+    "mean": 14.326,
+    "stdev": 1.1565379371209579
    },
    "sum of squares, relaxed": {
-    "mean": 4.532,
-    "stdev": 0.09679876032264044
+    "mean": 4.954,
+    "stdev": 0.47410969194902575
    }
   },
   "numpy": {
    "fused": {
-    "mean": 56.628,
-    "stdev": 1.315017110154847
+    "mean": 69.81400000000001,
+    "stdev": 0.4632278057284537
    },
    "sum of squares": {
-    "mean": 12.374,
-    "stdev": 0.25353500744473123
+    "mean": 15.068,
+    "stdev": 0.5143636845656974
    }
   },
   "numexpr": {
    "fused": {
-    "mean": 7.096,
-    "stdev": 0.26576305236055664
+    "mean": 7.326,
+    "stdev": 0.46768579195866106
    },
    "sum of squares": {
-    "mean": 6.836,
-    "stdev": 0.10876580344942988
+    "mean": 7.41,
+    "stdev": 0.2057911562725667
    }
   },
   "numba": {
    "fused": {
-    "mean": 3.76,
-    "stdev": 0.5111262075065217
+    "mean": 7.952,
+    "stdev": 2.0293151554157376
    },
    "sum of squares": {
-    "mean": 4.154,
-    "stdev": 0.11392980294900912
+    "mean": 4.4959999999999996,
+    "stdev": 0.22788154817799527
    }
   },
   "jax": {
    "fused": {
-    "mean": 6.832,
-    "stdev": 0.5651725400264949
+    "mean": 7.12,
+    "stdev": 0.7296574538781879
    },
    "sum of squares": {
-    "mean": 0.746,
-    "stdev": 0.043358966777357635
+    "mean": 0.754,
+    "stdev": 0.031304951684997084
    }
   }
  }
