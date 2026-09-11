@@ -2116,6 +2116,8 @@
       
         
       
+        
+      
     
     
     
@@ -2232,6 +2234,34 @@
     
   
     XLA
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../howto/45_multi_gpu_jax/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Multi-GPU JAX training
   
 
     
@@ -3304,6 +3334,8 @@
       
         
       
+        
+      
     
     
     
@@ -3526,6 +3558,34 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../internals/hardware-validation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Hardware validation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -3643,7 +3703,10 @@ shows the text -- and the build stages it; at run time the PJRT bridge
 compiles the module once, caching the executable by the module's digest,
 the bindings' version, and the device, and each call runs on the device.
 <code>xla.devices()</code>, <code>xla.default_device()</code>, and <code>xla.device_put(x)</code> ask the
-bridge; without one they answer nothing, <code>None</code>, and the value itself.
+bridge; without one they answer nothing, <code>None</code>, and the value itself. The
+bridge compiles for the platform JAX would pick -- the GPU where a CUDA or
+ROCm plugin is installed, the CPU otherwise -- and <code>PPY_XLA_PLATFORM</code>
+names one explicitly (<code>cpu</code>, <code>gpu</code>).
 Under plain CPython, and wherever there is no device, the function runs
 as written. A branch, a loop, a guard, or a buffer parameter is not yet
 what XLA takes: the function is reported (<code>W2007</code>) and stays where it is.

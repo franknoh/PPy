@@ -2197,6 +2197,8 @@
       
         
       
+        
+      
     
     
     
@@ -2313,6 +2315,34 @@
     
   
     XLA
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../howto/45_multi_gpu_jax/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Multi-GPU JAX training
   
 
     
@@ -3385,6 +3415,8 @@
       
         
       
+        
+      
     
     
     
@@ -3607,6 +3639,34 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../internals/hardware-validation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Hardware validation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -3797,20 +3857,27 @@ means, which is what lets <code>ppy convert</code> turn <code>int(input())</code
   for an empty line. <code>list[float]</code> and <code>list[str]</code> likewise.</li>
 <li><code>ppy.input[Buffer[int]]()</code> reads one line of integers into a new buffer,
   as <code>array.array("q", map(int, input().split()))</code> does, and takes no count:
-  the line decides. The fields are read in C without a Python object each --
-  a sign, digits, single underscores between them, the ASCII forms <code>int()</code>
-  accepts -- and a field that is not one is <code>ValueError</code>, one outside 64
-  bits <code>OverflowError</code>, as the array would raise; either way the line was
-  read whole first, as <code>input()</code> had read it. That is the one place the
-  typed read is narrower than <code>input()</code>: non-ASCII digits and integers
-  past 64 bits, which <code>int()</code> takes, are refused by a buffer line read and
-  by a tuple of <code>int</code>. A block of integers spread over several lines is
-  <code>ppy.scan[Buffer[int]](n)</code>.</li>
+  the line decides. The fields are parsed in C without a Python object each
+  -- a sign, digits, single underscores between them, the ASCII forms
+  <code>int()</code> accepts -- and a field outside what C reads is handed to <code>int()</code>
+  and the array themselves, so the read means exactly what the idiom means:
+  a field that is no integer is <code>int()</code>'s <code>ValueError</code>, one past 64 bits the
+  array's <code>OverflowError</code>, non-ASCII digits are read as <code>int()</code> reads them.
+  A tuple of <code>int</code> is parsed the same way, and there a field past 64 bits is
+  simply the integer, as <code>map(int, input().split())</code> gives it. A block of
+  integers spread over several lines is <code>ppy.scan[Buffer[int]](n)</code>.</li>
 </ul>
 <p>A read takes no argument. A prompt is a <code>print</code> before it, the way any
 other output is written, so reading and printing stay two things.</p>
 <h2 id="ppyscan-tokens"><code>ppy.scan</code>: tokens<a class="headerlink" href="#ppyscan-tokens" title="Permanent link">&para;</a></h2>
 <p><code>ppy.scan[T]()</code> reads the next whitespace-delimited token wherever it is.
+<code>ppy.scan[Buffer[int]](n)</code> reads exactly <code>n</code> integers into a new buffer: the
+input ending first is <code>EOFError</code>, a token that is not an integer
+<code>ValueError</code>, one outside 64 bits the scanner's <code>ValueError</code> for it, and a
+negative <code>n</code> is <code>ValueError</code> -- a value that was never read is not a zero.
+The tokens before the offending one were read, and the reader stands after
+it. <code>ppy.read_ints(buffer)</code> is the partial read: it fills what it can and
+says how many it got.
 Newlines are whitespace to it, as they are to <code>scanf</code>, so a million numbers
 spread over any number of lines read the same way:</p>
 <ul>

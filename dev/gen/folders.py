@@ -38,7 +38,7 @@ GROUPS = [
             "43_regex",
         ],
     ),
-    ("Accelerators", ["38_cuda", "44_tile", "39_xla"]),
+    ("Accelerators", ["38_cuda", "44_tile", "39_xla", "45_multi_gpu_jax"]),
     (
         "Libraries",
         [

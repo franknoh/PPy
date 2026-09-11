@@ -289,6 +289,10 @@
          <lastmod>2026-09-11</lastmod>
     </url>
     <url>
+         <loc>https://ppy.franknoh.dev/dev/howto/45_multi_gpu_jax/</loc>
+         <lastmod>2026-09-11</lastmod>
+    </url>
+    <url>
          <loc>https://ppy.franknoh.dev/dev/howto/comparisons/</loc>
          <lastmod>2026-09-11</lastmod>
     </url>
@@ -302,6 +306,10 @@
     </url>
     <url>
          <loc>https://ppy.franknoh.dev/dev/internals/conversion/</loc>
+         <lastmod>2026-09-11</lastmod>
+    </url>
+    <url>
+         <loc>https://ppy.franknoh.dev/dev/internals/hardware-validation/</loc>
          <lastmod>2026-09-11</lastmod>
     </url>
     <url>

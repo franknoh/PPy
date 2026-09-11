@@ -10,13 +10,13 @@
       
       
       
-        <link rel="canonical" href="https://ppy.franknoh.dev/dev/howto/34_atomics_and_threads/">
+        <link rel="canonical" href="https://ppy.franknoh.dev/dev/internals/hardware-validation/">
       
       
-        <link rel="prev" href="../33_simd_and_cpu/">
+        <link rel="prev" href="../solver/">
       
       
-        <link rel="next" href="../35_parallel_range/">
+        <link rel="next" href="../../contributing/">
       
       
         
@@ -27,7 +27,7 @@
     
     
       
-        <title>Atomics and threads - PPY</title>
+        <title>Hardware validation - PPY</title>
       
     
     
@@ -82,7 +82,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#atomics-and-threads" class="md-skip">
+        <a href="#hardware-validation" class="md-skip">
           Skip to content
         </a>
       
@@ -122,7 +122,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Atomics and threads
+              Hardware validation
             
           </span>
         </div>
@@ -306,13 +306,11 @@
   
   
   
-    
-  
   
     
     
-      <li class="md-tabs__item md-tabs__item--active">
-        <a href="../" class="md-tabs__link">
+      <li class="md-tabs__item">
+        <a href="../../howto/" class="md-tabs__link">
           
   
   
@@ -393,11 +391,13 @@
   
   
   
+    
+  
   
     
     
-      <li class="md-tabs__item">
-        <a href="../../internals/" class="md-tabs__link">
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="../" class="md-tabs__link">
           
   
   
@@ -1109,8 +1109,6 @@
       
   
   
-    
-  
   
   
     
@@ -1136,23 +1134,20 @@
     
     
       
-        
-        
-      
       
         
       
     
     
-    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" checked>
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
         
           
           <div class="md-nav__link md-nav__container">
-            <a href="../" class="md-nav__link ">
+            <a href="../../howto/" class="md-nav__link ">
               
   
   
@@ -1170,13 +1165,13 @@
             </a>
             
               
-              <label class="md-nav__link " for="__nav_5" id="__nav_5_label" tabindex="">
+              <label class="md-nav__link " for="__nav_5" id="__nav_5_label" tabindex="0">
                 <span class="md-nav__icon md-icon"></span>
               </label>
             
           </div>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="true">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_5">
             <span class="md-nav__icon md-icon"></span>
             
@@ -1196,7 +1191,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../comparisons/" class="md-nav__link">
+      <a href="../../howto/comparisons/" class="md-nav__link">
         
   
   
@@ -1258,20 +1253,17 @@
       
       
         
-          
-          
-        
       
     
     
-    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--nested">
       
         
         
         <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5_3" >
         
           
-          <label class="md-nav__link" for="__nav_5_3" id="__nav_5_3_label" tabindex="">
+          <label class="md-nav__link" for="__nav_5_3" id="__nav_5_3_label" tabindex="0">
             
   
   
@@ -1307,7 +1299,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../01_basics/" class="md-nav__link">
+      <a href="../../howto/01_basics/" class="md-nav__link">
         
   
   
@@ -1335,7 +1327,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../02_arbitrary_precision/" class="md-nav__link">
+      <a href="../../howto/02_arbitrary_precision/" class="md-nav__link">
         
   
   
@@ -1363,7 +1355,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../03_effects_and_contracts/" class="md-nav__link">
+      <a href="../../howto/03_effects_and_contracts/" class="md-nav__link">
         
   
   
@@ -1391,7 +1383,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../04_classes/" class="md-nav__link">
+      <a href="../../howto/04_classes/" class="md-nav__link">
         
   
   
@@ -1419,7 +1411,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../08_native_data/" class="md-nav__link">
+      <a href="../../howto/08_native_data/" class="md-nav__link">
         
   
   
@@ -1447,7 +1439,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../10_narrowing/" class="md-nav__link">
+      <a href="../../howto/10_narrowing/" class="md-nav__link">
         
   
   
@@ -1475,7 +1467,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../11_numerics/" class="md-nav__link">
+      <a href="../../howto/11_numerics/" class="md-nav__link">
         
   
   
@@ -1503,7 +1495,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../13_value_classes/" class="md-nav__link">
+      <a href="../../howto/13_value_classes/" class="md-nav__link">
         
   
   
@@ -1531,7 +1523,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../14_tuples/" class="md-nav__link">
+      <a href="../../howto/14_tuples/" class="md-nav__link">
         
   
   
@@ -1559,7 +1551,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../16_dynamic/" class="md-nav__link">
+      <a href="../../howto/16_dynamic/" class="md-nav__link">
         
   
   
@@ -1587,7 +1579,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../17_containers/" class="md-nav__link">
+      <a href="../../howto/17_containers/" class="md-nav__link">
         
   
   
@@ -1615,7 +1607,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../18_errors/" class="md-nav__link">
+      <a href="../../howto/18_errors/" class="md-nav__link">
         
   
   
@@ -1643,7 +1635,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../19_strings/" class="md-nav__link">
+      <a href="../../howto/19_strings/" class="md-nav__link">
         
   
   
@@ -1676,10 +1668,8 @@
                 
   
   
-    
   
   
-  
     
     
       
@@ -1712,21 +1702,18 @@
     
       
       
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5_4" >
         
           
-          
-        
-      
-    
-    
-    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
-      
-        
-        
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5_4" checked>
-        
-          
-          <label class="md-nav__link" for="__nav_5_4" id="__nav_5_4_label" tabindex="">
+          <label class="md-nav__link" for="__nav_5_4" id="__nav_5_4_label" tabindex="0">
             
   
   
@@ -1744,7 +1731,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_5_4_label" aria-expanded="true">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_5_4_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_5_4">
             <span class="md-nav__icon md-icon"></span>
             
@@ -1762,7 +1749,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../12_buffers_and_jit/" class="md-nav__link">
+      <a href="../../howto/12_buffers_and_jit/" class="md-nav__link">
         
   
   
@@ -1790,7 +1777,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../15_algorithms/" class="md-nav__link">
+      <a href="../../howto/15_algorithms/" class="md-nav__link">
         
   
   
@@ -1818,7 +1805,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../28_threads/" class="md-nav__link">
+      <a href="../../howto/28_threads/" class="md-nav__link">
         
   
   
@@ -1846,7 +1833,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../32_native_memory/" class="md-nav__link">
+      <a href="../../howto/32_native_memory/" class="md-nav__link">
         
   
   
@@ -1874,7 +1861,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../33_simd_and_cpu/" class="md-nav__link">
+      <a href="../../howto/33_simd_and_cpu/" class="md-nav__link">
         
   
   
@@ -1899,37 +1886,10 @@
                 
   
   
-    
   
   
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
-      
-      
-        
-      
-      
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Atomics and threads
-  
-
-    
-  </span>
-  
-  
-
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
-      <a href="./" class="md-nav__link md-nav__link--active">
+    <li class="md-nav__item">
+      <a href="../../howto/34_atomics_and_threads/" class="md-nav__link">
         
   
   
@@ -1945,81 +1905,6 @@
   
 
       </a>
-      
-        
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-    
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#atomics-with-c11s-orders" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Atomics with C11's orders
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#threads-and-what-keeps-them-apart" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Threads and what keeps them apart
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#run-it" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Run it
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#what-it-prints" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        What it prints
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#34_atomics_and_threadscountersppy" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        34_atomics_and_threads/counters.ppy
-      
-    </span>
-  </a>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-      
     </li>
   
 
@@ -2032,7 +1917,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../35_parallel_range/" class="md-nav__link">
+      <a href="../../howto/35_parallel_range/" class="md-nav__link">
         
   
   
@@ -2060,7 +1945,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../36_autodiff/" class="md-nav__link">
+      <a href="../../howto/36_autodiff/" class="md-nav__link">
         
   
   
@@ -2088,7 +1973,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../37_aio/" class="md-nav__link">
+      <a href="../../howto/37_aio/" class="md-nav__link">
         
   
   
@@ -2116,7 +2001,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../40_generics/" class="md-nav__link">
+      <a href="../../howto/40_generics/" class="md-nav__link">
         
   
   
@@ -2144,7 +2029,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../42_toolbox/" class="md-nav__link">
+      <a href="../../howto/42_toolbox/" class="md-nav__link">
         
   
   
@@ -2172,7 +2057,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../43_regex/" class="md-nav__link">
+      <a href="../../howto/43_regex/" class="md-nav__link">
         
   
   
@@ -2224,20 +2109,17 @@
       
       
         
-          
-          
-        
       
     
     
-    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--nested">
       
         
         
         <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5_5" >
         
           
-          <label class="md-nav__link" for="__nav_5_5" id="__nav_5_5_label" tabindex="">
+          <label class="md-nav__link" for="__nav_5_5" id="__nav_5_5_label" tabindex="0">
             
   
   
@@ -2273,7 +2155,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../38_cuda/" class="md-nav__link">
+      <a href="../../howto/38_cuda/" class="md-nav__link">
         
   
   
@@ -2301,7 +2183,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../44_tile/" class="md-nav__link">
+      <a href="../../howto/44_tile/" class="md-nav__link">
         
   
   
@@ -2329,7 +2211,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../39_xla/" class="md-nav__link">
+      <a href="../../howto/39_xla/" class="md-nav__link">
         
   
   
@@ -2357,7 +2239,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../45_multi_gpu_jax/" class="md-nav__link">
+      <a href="../../howto/45_multi_gpu_jax/" class="md-nav__link">
         
   
   
@@ -2423,20 +2305,17 @@
       
       
         
-          
-          
-        
       
     
     
-    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--nested">
       
         
         
         <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5_6" >
         
           
-          <label class="md-nav__link" for="__nav_5_6" id="__nav_5_6_label" tabindex="">
+          <label class="md-nav__link" for="__nav_5_6" id="__nav_5_6_label" tabindex="0">
             
   
   
@@ -2472,7 +2351,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../05_numpy/" class="md-nav__link">
+      <a href="../../howto/05_numpy/" class="md-nav__link">
         
   
   
@@ -2500,7 +2379,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../06_pydantic/" class="md-nav__link">
+      <a href="../../howto/06_pydantic/" class="md-nav__link">
         
   
   
@@ -2528,7 +2407,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../07_parallel/" class="md-nav__link">
+      <a href="../../howto/07_parallel/" class="md-nav__link">
         
   
   
@@ -2556,7 +2435,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../09_torch/" class="md-nav__link">
+      <a href="../../howto/09_torch/" class="md-nav__link">
         
   
   
@@ -2584,7 +2463,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../21_training_torch/" class="md-nav__link">
+      <a href="../../howto/21_training_torch/" class="md-nav__link">
         
   
   
@@ -2612,7 +2491,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../22_training_jax/" class="md-nav__link">
+      <a href="../../howto/22_training_jax/" class="md-nav__link">
         
   
   
@@ -2640,7 +2519,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../25_jax_export/" class="md-nav__link">
+      <a href="../../howto/25_jax_export/" class="md-nav__link">
         
   
   
@@ -2668,7 +2547,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../27_uvicorn/" class="md-nav__link">
+      <a href="../../howto/27_uvicorn/" class="md-nav__link">
         
   
   
@@ -2696,7 +2575,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../29_flax/" class="md-nav__link">
+      <a href="../../howto/29_flax/" class="md-nav__link">
         
   
   
@@ -2724,7 +2603,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../31_torchrun/" class="md-nav__link">
+      <a href="../../howto/31_torchrun/" class="md-nav__link">
         
   
   
@@ -2752,7 +2631,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../41_columnar/" class="md-nav__link">
+      <a href="../../howto/41_columnar/" class="md-nav__link">
         
   
   
@@ -2806,20 +2685,17 @@
       
       
         
-          
-          
-        
       
     
     
-    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--nested">
       
         
         
         <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5_7" >
         
           
-          <label class="md-nav__link" for="__nav_5_7" id="__nav_5_7_label" tabindex="">
+          <label class="md-nav__link" for="__nav_5_7" id="__nav_5_7_label" tabindex="0">
             
   
   
@@ -2855,7 +2731,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../20_inventory/" class="md-nav__link">
+      <a href="../../howto/20_inventory/" class="md-nav__link">
         
   
   
@@ -2883,7 +2759,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../23_inference/" class="md-nav__link">
+      <a href="../../howto/23_inference/" class="md-nav__link">
         
   
   
@@ -2911,7 +2787,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../24_interop/" class="md-nav__link">
+      <a href="../../howto/24_interop/" class="md-nav__link">
         
   
   
@@ -2939,7 +2815,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../26_project/" class="md-nav__link">
+      <a href="../../howto/26_project/" class="md-nav__link">
         
   
   
@@ -2967,7 +2843,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../30_migrate/" class="md-nav__link">
+      <a href="../../howto/30_migrate/" class="md-nav__link">
         
   
   
@@ -3422,6 +3298,8 @@
       
   
   
+    
+  
   
   
     
@@ -3449,20 +3327,23 @@
     
     
       
+        
+        
+      
       
         
       
     
     
-    <li class="md-nav__item md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9" checked>
         
           
           <div class="md-nav__link md-nav__container">
-            <a href="../../internals/" class="md-nav__link ">
+            <a href="../" class="md-nav__link ">
               
   
   
@@ -3480,13 +3361,13 @@
             </a>
             
               
-              <label class="md-nav__link " for="__nav_9" id="__nav_9_label" tabindex="0">
+              <label class="md-nav__link " for="__nav_9" id="__nav_9_label" tabindex="">
                 <span class="md-nav__icon md-icon"></span>
               </label>
             
           </div>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="false">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="true">
           <label class="md-nav__title" for="__nav_9">
             <span class="md-nav__icon md-icon"></span>
             
@@ -3506,7 +3387,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../internals/architecture/" class="md-nav__link">
+      <a href="../architecture/" class="md-nav__link">
         
   
   
@@ -3534,7 +3415,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../internals/ir/" class="md-nav__link">
+      <a href="../ir/" class="md-nav__link">
         
   
   
@@ -3562,7 +3443,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../internals/conversion/" class="md-nav__link">
+      <a href="../conversion/" class="md-nav__link">
         
   
   
@@ -3590,7 +3471,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../internals/migrating/" class="md-nav__link">
+      <a href="../migrating/" class="md-nav__link">
         
   
   
@@ -3618,7 +3499,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../internals/plugins/" class="md-nav__link">
+      <a href="../plugins/" class="md-nav__link">
         
   
   
@@ -3646,7 +3527,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../internals/solver/" class="md-nav__link">
+      <a href="../solver/" class="md-nav__link">
         
   
   
@@ -3671,10 +3552,37 @@
                 
   
   
+    
   
   
-    <li class="md-nav__item">
-      <a href="../../internals/hardware-validation/" class="md-nav__link">
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Hardware validation
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
         
   
   
@@ -3690,6 +3598,48 @@
   
 
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#what-a-run-checks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What a run checks
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#last-run" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Last run
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
     </li>
   
 
@@ -3783,10 +3733,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#atomics-with-c11s-orders" class="md-nav__link">
+  <a href="#what-a-run-checks" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Atomics with C11's orders
+        What a run checks
       
     </span>
   </a>
@@ -3794,43 +3744,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#threads-and-what-keeps-them-apart" class="md-nav__link">
+  <a href="#last-run" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Threads and what keeps them apart
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#run-it" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Run it
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#what-it-prints" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        What it prints
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#34_atomics_and_threadscountersppy" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        34_atomics_and_threads/counters.ppy
+        Last run
       
     </span>
   </a>
@@ -3857,121 +3774,190 @@
   
 
 
-<h1 id="atomics-and-threads">Atomics and threads<a class="headerlink" href="#atomics-and-threads" title="Permanent link">&para;</a></h1>
-<p><code>ppy.atomic</code> and <code>ppy.concurrent</code>: shared memory one operation at a time,
-and threads with what keeps them apart, over memory the program owns. Four
-workers each add 500 to a shared counter and 500 × 2 to a shared total
-behind a mutex.</p>
-<h2 id="atomics-with-c11s-orders">Atomics with C11's orders<a class="headerlink" href="#atomics-with-c11s-orders" title="Permanent link">&para;</a></h2>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="k">def</span><span class="w"> </span><span class="nf">worker</span><span class="p">(</span><span class="n">counter</span><span class="p">:</span> <span class="n">native</span><span class="o">.</span><span class="n">ptr</span><span class="p">[</span><span class="nb">int</span><span class="p">],</span> <span class="n">mutex</span><span class="p">:</span> <span class="n">native</span><span class="o">.</span><span class="n">ptr</span><span class="p">[</span><span class="nb">int</span><span class="p">],</span> <span class="n">total</span><span class="p">:</span> <span class="n">native</span><span class="o">.</span><span class="n">ptr</span><span class="p">[</span><span class="nb">int</span><span class="p">],</span> <span class="n">rounds</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>    <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">rounds</span><span class="p">):</span>
-<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>        <span class="n">atomic</span><span class="o">.</span><span class="n">fetch_add</span><span class="p">(</span><span class="n">counter</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="n">order</span><span class="o">=</span><span class="s2">"relaxed"</span><span class="p">)</span>
-<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>        <span class="n">concurrent</span><span class="o">.</span><span class="n">lock</span><span class="p">(</span><span class="n">mutex</span><span class="p">)</span>
-<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>        <span class="n">native</span><span class="o">.</span><span class="n">store</span><span class="p">(</span><span class="n">total</span><span class="p">,</span> <span class="n">native</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">total</span><span class="p">)</span> <span class="o">+</span> <span class="mi">2</span><span class="p">)</span>
-<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>        <span class="n">concurrent</span><span class="o">.</span><span class="n">unlock</span><span class="p">(</span><span class="n">mutex</span><span class="p">)</span>
+<h1 id="hardware-validation">Hardware validation<a class="headerlink" href="#hardware-validation" title="Permanent link">&para;</a></h1>
+<p>The hosted CI runs on CPUs. What the accelerator stack does on a real GPU
+-- whether JAX sees the card or quietly answers <code>CpuDevice(id=0)</code>, whether
+<code>ppy.cuda</code> launches, whether <code>ppy.xla</code> compiles for the GPU, whether a
+sharded trainer spans two physical cards -- is checked on rented machines
+by <code>scripts/cloud/runpod_matrix.py</code>, on demand, never on a push.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>python<span class="w"> </span>scripts/cloud/runpod_matrix.py<span class="w"> </span>--cuda<span class="w">        </span><span class="c1"># one NVIDIA GPU</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>python<span class="w"> </span>scripts/cloud/runpod_matrix.py<span class="w"> </span>--multigpu<span class="w">    </span><span class="c1"># two or more NVIDIA GPUs in one Pod</span>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>python<span class="w"> </span>scripts/cloud/runpod_matrix.py<span class="w"> </span>--rocm<span class="w">        </span><span class="c1"># one AMD Instinct GPU</span>
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>python<span class="w"> </span>scripts/cloud/runpod_matrix.py<span class="w"> </span>--all
 </code></pre></div>
-<p><code>load</code>, <code>store</code>, <code>exchange</code>, <code>compare_exchange</code>, the <code>fetch_*</code> family, and
-<code>fence</code> each take an <code>order</code> — <code>relaxed</code>, <code>acquire</code>, <code>release</code>, <code>acq_rel</code>,
-<code>seq_cst</code> — and the checker holds what C11 holds: a load is never
-<code>release</code>, a store never <code>acquire</code>, a relaxed fence orders nothing
-(<code>E1641</code>). Natively each lowers to the instruction of that order; under
-CPython the operations serialize under one lock, which implements every
-order.</p>
-<h2 id="threads-and-what-keeps-them-apart">Threads and what keeps them apart<a class="headerlink" href="#threads-and-what-keeps-them-apart" title="Permanent link">&para;</a></h2>
-<p><code>concurrent.spawn(f, *args)</code> runs a function of the module on a new thread
-and hands back a handle; <code>join</code> waits. The synchronization objects are
-memory the program owns: a mutex is one <code>int</code> slot, a condition one more
-counting notifications, and <code>wait</code>/<code>notify</code> spin under the CPU's pause hint
-over the same atomics on every path. <code>signal</code> shows the pattern — a waiter
-blocks on a condition until the main thread sets a flag and notifies. A
-thread that fails a guard fails its joiner, and the function falls back as a
-whole. Native code links pthreads; a target without them is refused with the
-reason.</p>
-<h2 id="run-it">Run it<a class="headerlink" href="#run-it" title="Permanent link">&para;</a></h2>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>python<span class="w">  </span>counters.ppy
-<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>ppy<span class="w"> </span>run<span class="w"> </span>counters.ppy
-</code></pre></div>
-<!-- outputs:start -->
-<h2 id="what-it-prints">What it prints<a class="headerlink" href="#what-it-prints" title="Permanent link">&para;</a></h2>
-<p><strong><code>python  counters.ppy</code></strong>, <strong><code>ppy run counters.ppy</code></strong></p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>2000 4000
-<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>2000 True 7 1
-<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>40
-</code></pre></div>
-<!-- outputs:end -->
-
-<p>Read on: <a href="../../guide/concurrency/">Atomics and threads</a> ·
-<a href="../28_threads/">Threads</a> ·
-<a href="../35_parallel_range/">Parallel range</a></p>
-<p><code>counters.ppy</code> is hand-written; there is no <code>.py</code> source and no conversion
-step.</p>
-<h2 id="34_atomics_and_threadscountersppy"><code>34_atomics_and_threads/counters.ppy</code><a class="headerlink" href="#34_atomics_and_threadscountersppy" title="Permanent link">&para;</a></h2>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ppy</span><span class="w"> </span><span class="kn">import</span> <span class="n">atomic</span><span class="p">,</span> <span class="n">concurrent</span><span class="p">,</span> <span class="n">native</span>
-<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>
-<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>
-<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="k">def</span><span class="w"> </span><span class="nf">worker</span><span class="p">(</span>
-<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>    <span class="n">counter</span><span class="p">:</span> <span class="n">native</span><span class="o">.</span><span class="n">ptr</span><span class="p">[</span><span class="nb">int</span><span class="p">],</span> <span class="n">mutex</span><span class="p">:</span> <span class="n">native</span><span class="o">.</span><span class="n">ptr</span><span class="p">[</span><span class="nb">int</span><span class="p">],</span> <span class="n">total</span><span class="p">:</span> <span class="n">native</span><span class="o">.</span><span class="n">ptr</span><span class="p">[</span><span class="nb">int</span><span class="p">],</span> <span class="n">rounds</span><span class="p">:</span> <span class="nb">int</span>
-<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a>    <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">rounds</span><span class="p">):</span>
-<a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a>        <span class="n">atomic</span><span class="o">.</span><span class="n">fetch_add</span><span class="p">(</span><span class="n">counter</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="n">order</span><span class="o">=</span><span class="s2">"relaxed"</span><span class="p">)</span>
-<a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a>        <span class="n">concurrent</span><span class="o">.</span><span class="n">lock</span><span class="p">(</span><span class="n">mutex</span><span class="p">)</span>
-<a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a>        <span class="n">native</span><span class="o">.</span><span class="n">store</span><span class="p">(</span><span class="n">total</span><span class="p">,</span> <span class="n">native</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">total</span><span class="p">)</span> <span class="o">+</span> <span class="mi">2</span><span class="p">)</span>
-<a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a>        <span class="n">concurrent</span><span class="o">.</span><span class="n">unlock</span><span class="p">(</span><span class="n">mutex</span><span class="p">)</span>
-<a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a>
-<a id="__codelineno-3-13" name="__codelineno-3-13" href="#__codelineno-3-13"></a>
-<a id="__codelineno-3-14" name="__codelineno-3-14" href="#__codelineno-3-14"></a><span class="k">def</span><span class="w"> </span><span class="nf">waiter</span><span class="p">(</span>
-<a id="__codelineno-3-15" name="__codelineno-3-15" href="#__codelineno-3-15"></a>    <span class="n">flag</span><span class="p">:</span> <span class="n">native</span><span class="o">.</span><span class="n">ptr</span><span class="p">[</span><span class="nb">int</span><span class="p">],</span> <span class="n">mutex</span><span class="p">:</span> <span class="n">native</span><span class="o">.</span><span class="n">ptr</span><span class="p">[</span><span class="nb">int</span><span class="p">],</span> <span class="n">condition</span><span class="p">:</span> <span class="n">native</span><span class="o">.</span><span class="n">ptr</span><span class="p">[</span><span class="nb">int</span><span class="p">],</span> <span class="n">out</span><span class="p">:</span> <span class="n">native</span><span class="o">.</span><span class="n">ptr</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span>
-<a id="__codelineno-3-16" name="__codelineno-3-16" href="#__codelineno-3-16"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<a id="__codelineno-3-17" name="__codelineno-3-17" href="#__codelineno-3-17"></a>    <span class="n">concurrent</span><span class="o">.</span><span class="n">lock</span><span class="p">(</span><span class="n">mutex</span><span class="p">)</span>
-<a id="__codelineno-3-18" name="__codelineno-3-18" href="#__codelineno-3-18"></a>    <span class="k">while</span> <span class="n">native</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">flag</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
-<a id="__codelineno-3-19" name="__codelineno-3-19" href="#__codelineno-3-19"></a>        <span class="n">concurrent</span><span class="o">.</span><span class="n">wait</span><span class="p">(</span><span class="n">condition</span><span class="p">,</span> <span class="n">mutex</span><span class="p">)</span>
-<a id="__codelineno-3-20" name="__codelineno-3-20" href="#__codelineno-3-20"></a>    <span class="n">native</span><span class="o">.</span><span class="n">store</span><span class="p">(</span><span class="n">out</span><span class="p">,</span> <span class="n">native</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">flag</span><span class="p">)</span> <span class="o">*</span> <span class="mi">10</span><span class="p">)</span>
-<a id="__codelineno-3-21" name="__codelineno-3-21" href="#__codelineno-3-21"></a>    <span class="n">concurrent</span><span class="o">.</span><span class="n">unlock</span><span class="p">(</span><span class="n">mutex</span><span class="p">)</span>
-<a id="__codelineno-3-22" name="__codelineno-3-22" href="#__codelineno-3-22"></a>
-<a id="__codelineno-3-23" name="__codelineno-3-23" href="#__codelineno-3-23"></a>
-<a id="__codelineno-3-24" name="__codelineno-3-24" href="#__codelineno-3-24"></a><span class="k">def</span><span class="w"> </span><span class="nf">run</span><span class="p">(</span>
-<a id="__codelineno-3-25" name="__codelineno-3-25" href="#__codelineno-3-25"></a>    <span class="n">counter</span><span class="p">:</span> <span class="n">native</span><span class="o">.</span><span class="n">ptr</span><span class="p">[</span><span class="nb">int</span><span class="p">],</span> <span class="n">mutex</span><span class="p">:</span> <span class="n">native</span><span class="o">.</span><span class="n">ptr</span><span class="p">[</span><span class="nb">int</span><span class="p">],</span> <span class="n">total</span><span class="p">:</span> <span class="n">native</span><span class="o">.</span><span class="n">ptr</span><span class="p">[</span><span class="nb">int</span><span class="p">],</span> <span class="n">rounds</span><span class="p">:</span> <span class="nb">int</span>
-<a id="__codelineno-3-26" name="__codelineno-3-26" href="#__codelineno-3-26"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
-<a id="__codelineno-3-27" name="__codelineno-3-27" href="#__codelineno-3-27"></a>    <span class="n">first</span> <span class="o">=</span> <span class="n">concurrent</span><span class="o">.</span><span class="n">spawn</span><span class="p">(</span><span class="n">worker</span><span class="p">,</span> <span class="n">counter</span><span class="p">,</span> <span class="n">mutex</span><span class="p">,</span> <span class="n">total</span><span class="p">,</span> <span class="n">rounds</span><span class="p">)</span>
-<a id="__codelineno-3-28" name="__codelineno-3-28" href="#__codelineno-3-28"></a>    <span class="n">second</span> <span class="o">=</span> <span class="n">concurrent</span><span class="o">.</span><span class="n">spawn</span><span class="p">(</span><span class="n">worker</span><span class="p">,</span> <span class="n">counter</span><span class="p">,</span> <span class="n">mutex</span><span class="p">,</span> <span class="n">total</span><span class="p">,</span> <span class="n">rounds</span><span class="p">)</span>
-<a id="__codelineno-3-29" name="__codelineno-3-29" href="#__codelineno-3-29"></a>    <span class="n">third</span> <span class="o">=</span> <span class="n">concurrent</span><span class="o">.</span><span class="n">spawn</span><span class="p">(</span><span class="n">worker</span><span class="p">,</span> <span class="n">counter</span><span class="p">,</span> <span class="n">mutex</span><span class="p">,</span> <span class="n">total</span><span class="p">,</span> <span class="n">rounds</span><span class="p">)</span>
-<a id="__codelineno-3-30" name="__codelineno-3-30" href="#__codelineno-3-30"></a>    <span class="n">fourth</span> <span class="o">=</span> <span class="n">concurrent</span><span class="o">.</span><span class="n">spawn</span><span class="p">(</span><span class="n">worker</span><span class="p">,</span> <span class="n">counter</span><span class="p">,</span> <span class="n">mutex</span><span class="p">,</span> <span class="n">total</span><span class="p">,</span> <span class="n">rounds</span><span class="p">)</span>
-<a id="__codelineno-3-31" name="__codelineno-3-31" href="#__codelineno-3-31"></a>    <span class="n">concurrent</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">first</span><span class="p">)</span>
-<a id="__codelineno-3-32" name="__codelineno-3-32" href="#__codelineno-3-32"></a>    <span class="n">concurrent</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">second</span><span class="p">)</span>
-<a id="__codelineno-3-33" name="__codelineno-3-33" href="#__codelineno-3-33"></a>    <span class="n">concurrent</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">third</span><span class="p">)</span>
-<a id="__codelineno-3-34" name="__codelineno-3-34" href="#__codelineno-3-34"></a>    <span class="n">concurrent</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">fourth</span><span class="p">)</span>
-<a id="__codelineno-3-35" name="__codelineno-3-35" href="#__codelineno-3-35"></a>    <span class="n">atomic</span><span class="o">.</span><span class="n">fence</span><span class="p">()</span>
-<a id="__codelineno-3-36" name="__codelineno-3-36" href="#__codelineno-3-36"></a>    <span class="k">return</span> <span class="n">atomic</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">counter</span><span class="p">)</span>
-<a id="__codelineno-3-37" name="__codelineno-3-37" href="#__codelineno-3-37"></a>
-<a id="__codelineno-3-38" name="__codelineno-3-38" href="#__codelineno-3-38"></a>
-<a id="__codelineno-3-39" name="__codelineno-3-39" href="#__codelineno-3-39"></a><span class="k">def</span><span class="w"> </span><span class="nf">signal</span><span class="p">(</span>
-<a id="__codelineno-3-40" name="__codelineno-3-40" href="#__codelineno-3-40"></a>    <span class="n">flag</span><span class="p">:</span> <span class="n">native</span><span class="o">.</span><span class="n">ptr</span><span class="p">[</span><span class="nb">int</span><span class="p">],</span> <span class="n">mutex</span><span class="p">:</span> <span class="n">native</span><span class="o">.</span><span class="n">ptr</span><span class="p">[</span><span class="nb">int</span><span class="p">],</span> <span class="n">condition</span><span class="p">:</span> <span class="n">native</span><span class="o">.</span><span class="n">ptr</span><span class="p">[</span><span class="nb">int</span><span class="p">],</span> <span class="n">out</span><span class="p">:</span> <span class="n">native</span><span class="o">.</span><span class="n">ptr</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span>
-<a id="__codelineno-3-41" name="__codelineno-3-41" href="#__codelineno-3-41"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
-<a id="__codelineno-3-42" name="__codelineno-3-42" href="#__codelineno-3-42"></a>    <span class="n">waiting</span> <span class="o">=</span> <span class="n">concurrent</span><span class="o">.</span><span class="n">spawn</span><span class="p">(</span><span class="n">waiter</span><span class="p">,</span> <span class="n">flag</span><span class="p">,</span> <span class="n">mutex</span><span class="p">,</span> <span class="n">condition</span><span class="p">,</span> <span class="n">out</span><span class="p">)</span>
-<a id="__codelineno-3-43" name="__codelineno-3-43" href="#__codelineno-3-43"></a>    <span class="n">concurrent</span><span class="o">.</span><span class="n">lock</span><span class="p">(</span><span class="n">mutex</span><span class="p">)</span>
-<a id="__codelineno-3-44" name="__codelineno-3-44" href="#__codelineno-3-44"></a>    <span class="n">native</span><span class="o">.</span><span class="n">store</span><span class="p">(</span><span class="n">flag</span><span class="p">,</span> <span class="mi">4</span><span class="p">)</span>
-<a id="__codelineno-3-45" name="__codelineno-3-45" href="#__codelineno-3-45"></a>    <span class="n">concurrent</span><span class="o">.</span><span class="n">notify</span><span class="p">(</span><span class="n">condition</span><span class="p">)</span>
-<a id="__codelineno-3-46" name="__codelineno-3-46" href="#__codelineno-3-46"></a>    <span class="n">concurrent</span><span class="o">.</span><span class="n">unlock</span><span class="p">(</span><span class="n">mutex</span><span class="p">)</span>
-<a id="__codelineno-3-47" name="__codelineno-3-47" href="#__codelineno-3-47"></a>    <span class="n">concurrent</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">waiting</span><span class="p">)</span>
-<a id="__codelineno-3-48" name="__codelineno-3-48" href="#__codelineno-3-48"></a>    <span class="k">return</span> <span class="n">native</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">out</span><span class="p">)</span>
-<a id="__codelineno-3-49" name="__codelineno-3-49" href="#__codelineno-3-49"></a>
-<a id="__codelineno-3-50" name="__codelineno-3-50" href="#__codelineno-3-50"></a>
-<a id="__codelineno-3-51" name="__codelineno-3-51" href="#__codelineno-3-51"></a><span class="k">def</span><span class="w"> </span><span class="nf">main</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<a id="__codelineno-3-52" name="__codelineno-3-52" href="#__codelineno-3-52"></a>    <span class="n">counter</span> <span class="o">=</span> <span class="n">native</span><span class="o">.</span><span class="n">stack_alloc</span><span class="p">[</span><span class="nb">int</span><span class="p">](</span><span class="mi">1</span><span class="p">)</span>
-<a id="__codelineno-3-53" name="__codelineno-3-53" href="#__codelineno-3-53"></a>    <span class="n">mutex</span> <span class="o">=</span> <span class="n">native</span><span class="o">.</span><span class="n">stack_alloc</span><span class="p">[</span><span class="nb">int</span><span class="p">](</span><span class="mi">1</span><span class="p">)</span>
-<a id="__codelineno-3-54" name="__codelineno-3-54" href="#__codelineno-3-54"></a>    <span class="n">total</span> <span class="o">=</span> <span class="n">native</span><span class="o">.</span><span class="n">stack_alloc</span><span class="p">[</span><span class="nb">int</span><span class="p">](</span><span class="mi">1</span><span class="p">)</span>
-<a id="__codelineno-3-55" name="__codelineno-3-55" href="#__codelineno-3-55"></a>    <span class="nb">print</span><span class="p">(</span><span class="n">run</span><span class="p">(</span><span class="n">counter</span><span class="p">,</span> <span class="n">mutex</span><span class="p">,</span> <span class="n">total</span><span class="p">,</span> <span class="mi">500</span><span class="p">),</span> <span class="n">native</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">total</span><span class="p">))</span>
-<a id="__codelineno-3-56" name="__codelineno-3-56" href="#__codelineno-3-56"></a>    <span class="n">old</span><span class="p">,</span> <span class="n">swapped</span> <span class="o">=</span> <span class="n">atomic</span><span class="o">.</span><span class="n">compare_exchange</span><span class="p">(</span><span class="n">counter</span><span class="p">,</span> <span class="mi">2000</span><span class="p">,</span> <span class="mi">7</span><span class="p">)</span>
-<a id="__codelineno-3-57" name="__codelineno-3-57" href="#__codelineno-3-57"></a>    <span class="nb">print</span><span class="p">(</span><span class="n">old</span><span class="p">,</span> <span class="n">swapped</span><span class="p">,</span> <span class="n">atomic</span><span class="o">.</span><span class="n">exchange</span><span class="p">(</span><span class="n">counter</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span> <span class="n">atomic</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">counter</span><span class="p">,</span> <span class="n">order</span><span class="o">=</span><span class="s2">"acquire"</span><span class="p">))</span>
-<a id="__codelineno-3-58" name="__codelineno-3-58" href="#__codelineno-3-58"></a>    <span class="n">flag</span> <span class="o">=</span> <span class="n">native</span><span class="o">.</span><span class="n">stack_alloc</span><span class="p">[</span><span class="nb">int</span><span class="p">](</span><span class="mi">1</span><span class="p">)</span>
-<a id="__codelineno-3-59" name="__codelineno-3-59" href="#__codelineno-3-59"></a>    <span class="n">condition</span> <span class="o">=</span> <span class="n">native</span><span class="o">.</span><span class="n">stack_alloc</span><span class="p">[</span><span class="nb">int</span><span class="p">](</span><span class="mi">1</span><span class="p">)</span>
-<a id="__codelineno-3-60" name="__codelineno-3-60" href="#__codelineno-3-60"></a>    <span class="n">out</span> <span class="o">=</span> <span class="n">native</span><span class="o">.</span><span class="n">stack_alloc</span><span class="p">[</span><span class="nb">int</span><span class="p">](</span><span class="mi">1</span><span class="p">)</span>
-<a id="__codelineno-3-61" name="__codelineno-3-61" href="#__codelineno-3-61"></a>    <span class="nb">print</span><span class="p">(</span><span class="n">signal</span><span class="p">(</span><span class="n">flag</span><span class="p">,</span> <span class="n">mutex</span><span class="p">,</span> <span class="n">condition</span><span class="p">,</span> <span class="n">out</span><span class="p">))</span>
-<a id="__codelineno-3-62" name="__codelineno-3-62" href="#__codelineno-3-62"></a>
-<a id="__codelineno-3-63" name="__codelineno-3-63" href="#__codelineno-3-63"></a>
-<a id="__codelineno-3-64" name="__codelineno-3-64" href="#__codelineno-3-64"></a><span class="n">main</span><span class="p">()</span>
-</code></pre></div>
-<p>The folder in the repository: <a href="https://github.com/franknoh/PPy/blob/main/examples/34_atomics_and_threads"><code>examples/34_atomics_and_threads</code></a>.</p>
+<p>The script needs an authenticated <code>runpodctl</code> (<code>runpodctl doctor</code>) and a
+public key in <code>~/.ssh</code>; it never reads or prints the API key. For each
+environment it asks what is in stock, prefers a common card (an RTX 4090,
+an A6000, an A40, an L40S) over an expensive one, makes a Pod named
+<code>ppy-test-&lt;env&gt;-&lt;id&gt;</code> from a vendor image with a four-hour termination
+set on it, waits for SSH, and runs <code>scripts/cloud/remote_test.sh</code> there
+against the exact commit named (<code>--sha</code>, the checkout's HEAD by default,
+which the Pod clones, so it must be pushed). Every step of the remote
+script is logged and its status recorded; nothing is skipped silently.
+The results come back under <code>cloud-results/&lt;stamp&gt;/&lt;env&gt;/</code>, which git
+ignores, and the Pod is deleted in a <code>finally</code> and confirmed gone. Only
+Pods the run created are touched.</p>
+<h2 id="what-a-run-checks">What a run checks<a class="headerlink" href="#what-a-run-checks" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>The environment as installed.</strong> The lock's JAX is synced, then the
+  accelerator plugin for that same version is installed (<code>jax[cuda12]</code>,
+  or AMD's ROCm plugin), and <code>scripts/cloud/accelerator_check.py</code> records
+  the interpreter, JAX, jaxlib, every plugin package, the driver and
+  toolkit the vendor tools report, <code>jax.default_backend()</code>, and every
+  device -- then fails, with the report written, if every device is a CPU.
+  An import that succeeded proves nothing; a CPU is not a pass for a GPU
+  test.</li>
+<li><strong>A computation on the device.</strong> A jitted matrix multiplication and a
+  reduction, synchronized with <code>block_until_ready()</code>, against a NumPy
+  reference; with two or more devices, an array sharded across them and
+  a reduction across the shards.</li>
+<li><strong>PPy's own paths.</strong> <code>examples/39_xla</code> under <code>ppy run</code> with the bridge
+  compiling for the GPU; <code>examples/38_cuda</code> and <code>examples/44_tile</code> under
+  <code>ppy run</code>, with <code>ppy explain</code> on the kernels so a launch that fell back
+  to the reference is seen as one; the GPU, tile, and XLA test files; and
+  the lowering-limit tests, so a function that stays in Python is the
+  one the docs say stays.</li>
+<li><strong>Multi-GPU.</strong> <code>examples/45_multi_gpu_jax</code> under <code>ppy run</code> and <code>python</code>
+  -- the batch sharded over a mesh of the cards, the gradient summed
+  across them, the loss falling, the result held to a single-device run
+  -- and <code>scripts/cloud/multiprocess_smoke.py</code>, one JAX process per card
+  with a coordinator on the loopback address, asserting
+  <code>jax.process_count()</code>, <code>jax.process_index()</code>, the device lists, and one
+  collective across the processes.</li>
+<li><strong>A few benchmarks</strong>, for a sanity check of accelerator performance:
+  the JAX and PyTorch comparisons, the CUDA and tile examples against
+  CuPy and Triton. These are validation numbers from a rented machine;
+  the tables in the READMEs come from the dedicated bench runner and are
+  never overwritten by them.</li>
+</ul>
+<h2 id="last-run">Last run<a class="headerlink" href="#last-run" title="Permanent link">&para;</a></h2>
+<p>The <code>semantics-0.3</code> branch, 2026-09-11: the single-GPU run at commit
+<code>9e7caee</code>, the two-GPU run at <code>e9d2db3</code> (the same code but for a lint
+fix in the probe), from <code>cloud-results/</code> of those runs; the numbers are
+those machines' and are not the READMEs' tables.</p>
+<table>
+<thead>
+<tr>
+<th>Environment</th>
+<th>Hardware</th>
+<th style="text-align: right;">Count</th>
+<th>JAX backend</th>
+<th>PPy backend</th>
+<th>JAX compute</th>
+<th>Training</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Local</td>
+<td>Intel Core Ultra 9 386H (CPU)</td>
+<td style="text-align: right;">1</td>
+<td>cpu</td>
+<td>LLVM</td>
+<td>PASS (two virtual CPU devices, <code>tests/test_multi_device_jax.py</code>)</td>
+<td>PASS on virtual devices, not a hardware pass</td>
+</tr>
+<tr>
+<td>CUDA single</td>
+<td>NVIDIA GeForce RTX 4090 (RunPod)</td>
+<td style="text-align: right;">1</td>
+<td>gpu (<code>cuda:0</code>)</td>
+<td>CUDA: kernels compiled for the device, <code>ppy.xla</code> on <code>cuda:0</code></td>
+<td>PASS</td>
+<td>N/A</td>
+</tr>
+<tr>
+<td>CUDA multi</td>
+<td>2 × NVIDIA GeForce RTX 4090 (RunPod)</td>
+<td style="text-align: right;">2</td>
+<td>gpu (<code>cuda:0</code>, <code>cuda:1</code>)</td>
+<td>CUDA</td>
+<td>PASS: sharded across both, reduced across both</td>
+<td>PASS under <code>ppy run</code> and <code>python</code>; one process per GPU PASS</td>
+</tr>
+<tr>
+<td>ROCm single</td>
+<td>AMD Instinct MI300X (RunPod, EU-RO-1)</td>
+<td style="text-align: right;">1</td>
+<td>--</td>
+<td>HIP is <code>ppy emit hip</code> only: there is no HIP launch runtime</td>
+<td>NOT RUN</td>
+<td>NOT RUN</td>
+</tr>
+<tr>
+<td>ROCm multi</td>
+<td>--</td>
+<td style="text-align: right;">--</td>
+<td>--</td>
+<td>--</td>
+<td>NOT RUN</td>
+<td>NOT RUN</td>
+</tr>
+</tbody>
+</table>
+<p><strong>CUDA single</strong>: Python 3.13.8; jax 0.11.1, jaxlib 0.11.1, jax-cuda12-plugin
+0.11.1, jax-cuda12-pjrt 0.11.1, nvidia-nccl-cu12 2.31.2 (CUDA 12.9 pip
+libraries); driver 570.195.03, CUDA 12.8 runtime in the image, no <code>nvcc</code>;
+<code>jax.default_backend()</code> = <code>gpu</code>, <code>jax.devices()</code> = <code>[cuda:0]</code>,
+<code>jax.local_devices()</code> = <code>[cuda:0]</code>. A jitted 1024×512×256 float32 matmul at
+full precision against NumPy: relative error 5.9e-7, reduction exact. PPy:
+<code>examples/38_cuda</code> and <code>examples/44_tile</code> under <code>ppy run</code> print <code>kernels
+compiled for a device here: True</code>, and <code>ppy explain</code> shows the host
+function boxed for its <code>GpuLaunch</code> effect, as the guide says it is;
+<code>examples/39_xla</code> prints <code># devices: ['cuda:0']</code>, the bridge having compiled
+for the GPU; 27 tests in <code>test_gpu_frontend</code>, <code>test_ir_gpu</code>, <code>test_tile</code>,
+<code>test_xla</code> pass, as do the lowering-limit tests. Benchmarks on that machine:
+PPy <code>cuda.launch</code> saxpy 0.40 ms against CuPy 0.44 ms, block max 1.03
+against 1.02, saxpy with copies 38 against 62; the JAX comparison ran
+JAX on the GPU (<code>blend</code> 0.7 ms) against PPy's fused loop on the Pod's CPU
+(205 ms), which measures the machines, not the compilers. The Triton
+counterpart's wheel found no driver in that image (<code>0 active drivers</code>), so
+its row is its own failure and the PPy tile row stands alone.</p>
+<p><strong>CUDA multi</strong>: the same stack (Python 3.13.8, jax 0.11.1 with the
+CUDA 12 plugin, NCCL 2.31.2) on driver 580.167.08 with a CUDA 13.0 image;
+<code>jax.devices()</code> = <code>[cuda:0, cuda:1]</code>, <code>jax.local_devices()</code> the same, both
+<code>NVIDIA GeForce RTX 4090</code>. The check sharded an array over both cards and
+reduced across them (relative error 8e-8). <code>examples/45_multi_gpu_jax</code>:
+the batch sharded over the two cards, a hundred steps, loss 1.0414 to
+1.0108 on two devices and the same on one, the largest parameter
+difference 6e-8, <code>PASS</code> under <code>ppy run</code> (the standardization native, 1.1
+ms) and under <code>python</code> (71 ms). <code>scripts/cloud/multiprocess_smoke.py</code>:
+two processes, one per card, <code>jax.process_count()</code> 2, each seeing one
+local and two global devices, the collective sum exact in both. 28 GPU,
+tile, and XLA tests pass. PPy <code>cuda.launch</code> saxpy 0.39 ms against CuPy
+0.43, saxpy with copies 34 against 51.</p>
+<p>Two other two-GPU hosts were tried first and are the reason the harness
+records what it does. On a two-A6000 host NCCL's peer-to-peer transport
+hung (both cards at 100%, the collective never returning) and completed
+with <code>NCCL_P2P_DISABLE=1</code>; on a two-A40 host every check passed but the
+sharded trainer's loss came out wrong and different on each run (0.52,
+then 0.64, against 1.04 on one device), a collective answering wrongly
+rather than hanging. The same program on the two-4090 host, and on two
+virtual CPU devices, agrees with the single-device run to 6e-8. Those are
+the hosts' NCCL, not PPy's or JAX's arithmetic: <code>sharding_probe.py</code>
+compares every stage with NumPy and found nothing on the host that works.
+A run is therefore judged on its own transcript, never on a step's exit
+status alone, and the trainer exits non-zero on <code>FAIL</code>.</p>
+<p><strong>ROCm</strong>: <code>runpodctl gpu list</code> carried no AMD type; <code>runpodctl datacenter
+list</code> named an MI300X in EU-RO-1 with no stock status, and asking for it
+outright answered <code>There are no longer any instances available with the
+requested specifications</code>. Nothing AMD ran. Independently of capacity,
+<code>ppy.hip</code> is source only -- <code>ppy emit hip</code> writes HIP C++, and the guide
+says the module has no launch runtime -- so an MI300X run would validate
+JAX on ROCm and the emitted source, not a PPy HIP launch.</p>
+<p>What the runs found in PPy: the PJRT bridge behind <code>ppy.xla</code> compiled
+for every device of the platform, so on the two-GPU hosts its executables
+expected one argument shard per device and refused the single buffers the
+bridge places (<code>Expected args to execute_sharded_on_local_devices to have
+2 shards, got: [1, 1]</code>); it compiles for one device now, and a test over
+two virtual CPU devices holds it there. And it defaulted to the <code>cpu</code>
+platform whatever the machine had; it follows JAX's default backend now,
+which is how <code>examples/39_xla</code> came to print <code>cuda:0</code>. What the harness
+learned about itself: a float32 matmul on an Ampere-class card is TF32
+unless full precision is asked for, so the check asks; a cross-device
+step gets fifteen minutes and a recorded retry without peer-to-peer; and
+the one-process-per-GPU step counts its transcripts, since a loop that
+ran nothing had once exited zero.</p>
 
 
 
@@ -4009,7 +3995,7 @@ step.</p>
       <nav class="md-footer__inner md-grid" aria-label="Footer" >
         
           
-          <a href="../33_simd_and_cpu/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Lanes and the machine">
+          <a href="../solver/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Where a solver fits">
             <div class="md-footer__button md-icon">
               
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
@@ -4019,20 +4005,20 @@ step.</p>
                 Previous
               </span>
               <div class="md-ellipsis">
-                Lanes and the machine
+                Where a solver fits
               </div>
             </div>
           </a>
         
         
           
-          <a href="../35_parallel_range/" class="md-footer__link md-footer__link--next" aria-label="Next: Parallel ranges">
+          <a href="../../contributing/" class="md-footer__link md-footer__link--next" aria-label="Next: Contributing">
             <div class="md-footer__title">
               <span class="md-footer__direction">
                 Next
               </span>
               <div class="md-ellipsis">
-                Parallel ranges
+                Contributing
               </div>
             </div>
             <div class="md-footer__button md-icon">

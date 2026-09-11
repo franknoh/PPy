@@ -2112,6 +2112,8 @@
       
         
       
+        
+      
     
     
     
@@ -2231,6 +2233,34 @@
     
   
     XLA
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="45_multi_gpu_jax/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Multi-GPU JAX training
   
 
     
@@ -3309,6 +3339,8 @@
       
         
       
+        
+      
     
     
     
@@ -3518,6 +3550,34 @@
     
   
     Where a solver fits
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../internals/hardware-validation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Hardware validation
   
 
     
@@ -3848,6 +3908,11 @@ folder holds both <code>&lt;name&gt;.py</code> and <code>&lt;name&gt;.ppy</code>
 <p><strong><a href="39_xla/">XLA</a></strong></p>
 <hr />
 <p><code>@xla.jit</code> marks a function of floats, ints, and bools whose body is one block of arithmetic and math.</p>
+</li>
+<li>
+<p><strong><a href="45_multi_gpu_jax/">Multi-GPU JAX training</a></strong></p>
+<hr />
+<p>A data-parallel MLP over a mesh of every accelerator in the machine: the batch sharded across the devices, the parameters replicated, the gradient summed across devices by the collective <code>jax.jit</code> inserts, and the input standardized natively by PPy first, as the <a href="22_training_jax/">single-device trainer</a> does.</p>
 </li>
 </ul>
 </div>

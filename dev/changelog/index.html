@@ -2099,6 +2099,8 @@
       
         
       
+        
+      
     
     
     
@@ -2215,6 +2217,34 @@
     
   
     XLA
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../howto/45_multi_gpu_jax/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Multi-GPU JAX training
   
 
     
@@ -3287,6 +3317,8 @@
       
         
       
+        
+      
     
     
     
@@ -3496,6 +3528,34 @@
     
   
     Where a solver fits
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../internals/hardware-validation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Hardware validation
   
 
     
@@ -3871,9 +3931,16 @@
   <code>array.array("q", map(int, input().split()))</code> would, with no count to
   give and no Python object per field; the converter writes both idioms so.
   A tuple of <code>int</code> is read the same way, in C; a typed read is planned once
-  per type, so a read in a loop costs the read and nothing else. Integer
-  fields read in C are ASCII and 64-bit, the one place the typed read is
-  narrower than <code>int()</code>.
+  per type, so a read in a loop costs the read and nothing else. The C
+  parser reads the ASCII forms <code>int()</code> reads within 64 bits and hands any
+  other field -- a wider integer, non-ASCII digits, no integer at all -- to
+  <code>int()</code> itself, so a typed line read means exactly what the idiom it
+  stands for means: <code>a, b = ppy.input[tuple[int, int]]()</code> reads
+  <code>9223372036854775808</code> as <code>map(int, input().split())</code> does, and a
+  converted program keeps Python's input semantics on every field. A
+  differential test runs the original and the converted program as
+  subprocesses on the same input and holds them to one output and one
+  exception.
   <code>ppy.read_ints</code> and <code>ppy.read_token</code> stay the buffer-oriented forms;
   <code>read_token</code> cuts a token at the buffer's capacity and says so.</li>
 <li>One scanner grammar, implemented once in C (<code>ppy_runtime.scanner</code>) for
@@ -3885,6 +3952,32 @@
   fallback raised. A high-level string read is never cut: <code>ppy.input[str]()</code>
   and <code>ppy.scan[str]()</code> read a line or a token of any length, where the old
   scalar read cut at 4096 bytes and dropped the rest.</li>
+<li><code>ppy.scan[Buffer[int]](https://github.com/franknoh/PPy/blob/main/n)</code> reads exactly <code>n</code> integers or raises: the
+  input ending first is <code>EOFError</code> with the tokens before it read, where it
+  used to hand back a buffer padded with zeros that were never in the
+  input; a negative <code>n</code> is <code>ValueError</code>. A standalone binary ends with the
+  same message. <code>ppy.read_ints(buffer)</code> stays the partial read.</li>
+<li><code>ppy.check[T](https://github.com/franknoh/PPy/blob/main/value)</code> checks every PPy refinement in an <code>Annotated</code>, not
+  only the type under it: <code>ppy.check[ppy.i8](https://github.com/franknoh/PPy/blob/main/300)</code> is refused, as are
+  <code>ppy.check[ppy.Array[int, 3]](https://github.com/franknoh/PPy/blob/main/(1, 2))</code>, a <code>Vector[T]</code> with a wrong
+  element, a <code>Buffer[T]</code> whose buffer holds another format or is not one
+  contiguous dimension, a value outside its <code>Range</code>, a <code>Length</code>, a <code>Shape</code>
+  (symbolic dimensions bound consistently), a <code>DType</code>, or a <code>Contiguous</code>
+  the value's own metadata contradicts; an <code>f32</code> wider than a float32 holds
+  is refused too. A contract no single value can bear witness to --
+  <code>Owned[T]</code>, <code>Borrowed[T]</code>, <code>Mut[T]</code>, <code>NoAlias</code>, a symbolic array length
+  -- is rejected outright rather than stripped, and <code>ppy.assume[T]</code> stays
+  the unchecked crossing. The guide said validation was shallow; it is not,
+  and the guide says what the code does.</li>
+<li>The PJRT bridge behind <code>ppy.xla</code> compiles for the platform JAX would pick
+  -- the GPU where a CUDA or ROCm plugin is installed -- where it used to
+  compile for <code>cpu</code> unless <code>PPY_XLA_PLATFORM</code> said otherwise, so an
+  <code>@xla.jit</code> function on a GPU machine ran on a <code>cpu:0</code> it never asked for.
+  It compiles for one device of that platform (the first; <code>PPY_XLA_DEVICE</code>
+  names another): compiled for every device, its executables expected one
+  argument shard per device, and a machine with two GPUs refused the single
+  buffers the bridge places -- found on a two-GPU RunPod machine, held by a
+  test over two virtual CPU devices.</li>
 <li><code>ppy.check[T](https://github.com/franknoh/PPy/blob/main/value)</code> validates all the way down: a <code>list[int]</code> element by
   element, a <code>dict[str, float]</code> key and value, a tuple field by field, a
   dataclass field by field, a union member by member. A <code>T</code> it cannot
@@ -4047,12 +4140,39 @@
   answer is written straight into the NumPy array its Series wraps. <code>!=</code>
   is IEEE's on every path: a NaN differs from everything, as pandas and
   Arrow have it.</li>
+<li><code>&amp;</code> and <code>|</code> on pandas Series lower to the columnar dialect's new
+  <code>and_kleene</code> and <code>or_kleene</code>, the three-valued logic pandas computes over
+  an Arrow-backed Series: <code>(s &gt; t) &amp; t.notna()</code> is false, not null, where
+  <code>t</code> is null. PyArrow's <code>and_</code>/<code>or_</code> keep the two-valued <code>and</code>/<code>or</code>, and
+  <code>pc.and_kleene</code>/<code>pc.or_kleene</code> name the Kleene forms. A fused answer no
+  null can reach -- <code>isna()</code>, <code>notna()</code>, logic over them -- comes back as
+  the NumPy bool Series pandas gives, whatever the inputs' backing; the
+  nullability of a fused tree is derived from the tree, not from its root
+  alone. An end-to-end test holds <code>ppy run</code> to what <code>python</code> prints for
+  finite values, NaNs, <code>fillna</code>, nested trees, and mixed arithmetic and
+  null handling on both backings.</li>
 <li>A fused library expression inside a wider call is replaced, and the call
   kept: the fusion plan is keyed by the expression's whole source span,
   where it was keyed by the start alone, so <code>s.isna().sum()</code> -- which
   begins where <code>s.isna()</code> does -- had the whole call rewritten to the
   kernel and the <code>.sum()</code> lost. It went unnoticed while the kernel fell
   back to pandas for that case, whose fallback was the whole expression.</li>
+<li><code>examples/45_multi_gpu_jax</code>: a data-parallel MLP over a mesh of every
+  accelerator in the machine, the batch sharded and the parameters
+  replicated, the gradient summed across devices, held to a single-device
+  run; fewer than two accelerators is reported, never worked around with a
+  CPU or a virtual device. <code>scripts/cloud/runpod_matrix.py</code> validates the
+  accelerator stack on rented hardware on demand -- one NVIDIA GPU, two or
+  more in one Pod, an AMD Instinct where one is in stock -- with
+  <code>accelerator_check.py</code> failing a GPU run whose JAX sees only a CPU, the
+  CUDA, tile, and XLA examples under <code>ppy run</code> with <code>ppy explain</code> beside
+  them, the multi-GPU trainer, a one-process-per-GPU distributed smoke
+  test, and a few benchmarks as validation numbers; every Pod it makes it
+  deletes. The docs' <code>internals/hardware-validation.md</code> records the last run.</li>
+<li>The docs' example counts come from the tree: <code>17</code>
+  joins the two existing markers, the architecture page's program count is
+  a marker, and a test holds <code>examples/README.md</code>'s own count to the same
+  functions, so no page spells a number the tree has moved past.</li>
 </ul>
 <h2 id="021-unreleased">0.2.1 — unreleased<a class="headerlink" href="#021-unreleased" title="Permanent link">&para;</a></h2>
 <ul>

@@ -2,8 +2,10 @@
 
 `@@EXAMPLE_FOLDERS@@` and `@@EXAMPLE_PROGRAMS@@` in a page are the number of
 example folders the gallery lists and the number of programs
-`examples/run_all.py` runs, counted the way those two count them, so no page
-carries a number the tree has moved past.
+`examples/run_all.py` runs, counted the way those two count them, and
+`@@COMPARED_FOLDERS@@` how many of the folders carry a `compare/` directory,
+so no page carries a number the tree has moved past. `examples/README.md`
+is not a page, so a test holds its own count to the same functions.
 """
 
 from __future__ import annotations
@@ -23,6 +25,14 @@ def _folders() -> int:
     return len(FOLDERS)
 
 
+def _compared() -> int:
+    """The folders the gallery lists that carry counterparts in `compare/`."""
+    sys.path.insert(0, str(ROOT / "docs" / "gen"))
+    from folders import FOLDERS  # pylint: disable=import-outside-toplevel
+
+    return sum((EXAMPLES / folder / "compare").is_dir() for folder in FOLDERS)
+
+
 def _programs() -> int:
     entries = (
         sorted(EXAMPLES.glob("[0-9]*/[a-z]*.ppy"))
@@ -32,7 +42,11 @@ def _programs() -> int:
     return len({entry for entry in entries if ".ppy-cache" not in entry.parts})
 
 
-_COUNTS = {"@@EXAMPLE_FOLDERS@@": _folders, "@@EXAMPLE_PROGRAMS@@": _programs}
+_COUNTS = {
+    "@@EXAMPLE_FOLDERS@@": _folders,
+    "@@EXAMPLE_PROGRAMS@@": _programs,
+    "@@COMPARED_FOLDERS@@": _compared,
+}
 
 
 def on_page_markdown(markdown: str, **_kwargs: object) -> str:

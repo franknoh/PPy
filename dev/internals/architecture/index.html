@@ -2101,6 +2101,8 @@
       
         
       
+        
+      
     
     
     
@@ -2217,6 +2219,34 @@
     
   
     XLA
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../howto/45_multi_gpu_jax/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Multi-GPU JAX training
   
 
     
@@ -3291,6 +3321,8 @@
       
         
       
+        
+      
     
     
     
@@ -3651,6 +3683,34 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../hardware-validation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Hardware validation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -3961,7 +4021,7 @@ what the checker already proved.</p>
 <p>Plain CPython, the Python backend, and the LLVM backend must produce the same
 answer; a guard that fails at runtime falls back to the Python body rather than
 ever answering differently. The invariant is enforced, not assumed:
-<code>examples/run_all.py</code> runs all 52 example programs on all three paths and
+<code>examples/run_all.py</code> runs all 55 example programs on all three paths and
 diffs the output, and the test suite does the same per feature.</p>
 <h2 id="cache-and-incremental-builds">Cache and incremental builds<a class="headerlink" href="#cache-and-incremental-builds" title="Permanent link">&para;</a></h2>
 <p>The store is content-addressed: a key is a blake2b digest over the source, the

@@ -10,13 +10,13 @@
       
       
       
-        <link rel="canonical" href="https://ppy.franknoh.dev/dev/howto/39_xla/">
+        <link rel="canonical" href="https://ppy.franknoh.dev/dev/howto/45_multi_gpu_jax/">
       
       
-        <link rel="prev" href="../44_tile/">
+        <link rel="prev" href="../39_xla/">
       
       
-        <link rel="next" href="../45_multi_gpu_jax/">
+        <link rel="next" href="../05_numpy/">
       
       
         
@@ -27,7 +27,7 @@
     
     
       
-        <title>XLA - PPY</title>
+        <title>Multi-GPU JAX training - PPY</title>
       
     
     
@@ -82,7 +82,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#xla" class="md-skip">
+        <a href="#multi-gpu-jax-training" class="md-skip">
           Skip to content
         </a>
       
@@ -122,7 +122,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              XLA
+              Multi-GPU JAX training
             
           </span>
         </div>
@@ -2224,6 +2224,34 @@
                 
   
   
+  
+  
+    <li class="md-nav__item">
+      <a href="../39_xla/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    XLA
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
     
   
   
@@ -2243,7 +2271,7 @@
   <span class="md-ellipsis">
     
   
-    XLA
+    Multi-GPU JAX training
   
 
     
@@ -2261,7 +2289,7 @@
   <span class="md-ellipsis">
     
   
-    XLA
+    Multi-GPU JAX training
   
 
     
@@ -2287,10 +2315,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#what-xla-takes-today" class="md-nav__link">
+  <a href="#the-sharding" class="md-nav__link">
     <span class="md-ellipsis">
       
-        What XLA takes today
+        The sharding
       
     </span>
   </a>
@@ -2298,10 +2326,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#devices-and-the-last-bits" class="md-nav__link">
+  <a href="#what-counts-as-an-accelerator" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Devices and the last bits
+        What counts as an accelerator
       
     </span>
   </a>
@@ -2331,10 +2359,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#39_xladevice_mathppy" class="md-nav__link">
+  <a href="#45_multi_gpu_jaxtrainppy" class="md-nav__link">
     <span class="md-ellipsis">
       
-        39_xla/device_math.ppy
+        45_multi_gpu_jax/train.ppy
       
     </span>
   </a>
@@ -2345,34 +2373,6 @@
   
 </nav>
       
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../45_multi_gpu_jax/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Multi-GPU JAX training
-  
-
-    
-  </span>
-  
-  
-
-      </a>
     </li>
   
 
@@ -3783,10 +3783,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#what-xla-takes-today" class="md-nav__link">
+  <a href="#the-sharding" class="md-nav__link">
     <span class="md-ellipsis">
       
-        What XLA takes today
+        The sharding
       
     </span>
   </a>
@@ -3794,10 +3794,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#devices-and-the-last-bits" class="md-nav__link">
+  <a href="#what-counts-as-an-accelerator" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Devices and the last bits
+        What counts as an accelerator
       
     </span>
   </a>
@@ -3827,10 +3827,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#39_xladevice_mathppy" class="md-nav__link">
+  <a href="#45_multi_gpu_jaxtrainppy" class="md-nav__link">
     <span class="md-ellipsis">
       
-        39_xla/device_math.ppy
+        45_multi_gpu_jax/train.ppy
       
     </span>
   </a>
@@ -3857,92 +3857,229 @@
   
 
 
-<h1 id="xla">XLA<a class="headerlink" href="#xla" title="Permanent link">&para;</a></h1>
-<p><code>@xla.jit</code> marks a function of floats, ints, and bools whose body is one
-block of arithmetic and math. The compiler lowers it to the IR and emits
-StableHLO itself — no trace, no JAX in the compiler — and the PJRT bridge
-compiles the module once and runs each call on a device.</p>
-<h2 id="what-xla-takes-today">What XLA takes today<a class="headerlink" href="#what-xla-takes-today" title="Permanent link">&para;</a></h2>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nd">@xla</span><span class="o">.</span><span class="n">jit</span>
-<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="k">def</span><span class="w"> </span><span class="nf">f</span><span class="p">(</span><span class="n">x</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="n">y</span><span class="p">:</span> <span class="nb">float</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">float</span><span class="p">:</span>
-<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>    <span class="n">product</span> <span class="o">=</span> <span class="n">math</span><span class="o">.</span><span class="n">sin</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="o">*</span> <span class="n">y</span>
-<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>    <span class="k">return</span> <span class="p">(</span><span class="n">product</span> <span class="o">+</span> <span class="p">(</span><span class="n">x</span> <span class="k">if</span> <span class="n">product</span> <span class="o">&gt;</span> <span class="mf">0.0</span> <span class="k">else</span> <span class="o">-</span><span class="n">x</span><span class="p">))</span> <span class="o">/</span> <span class="mf">2.0</span>
+<h1 id="multi-gpu-jax-training">Multi-GPU JAX training<a class="headerlink" href="#multi-gpu-jax-training" title="Permanent link">&para;</a></h1>
+<p>A data-parallel MLP over a mesh of every accelerator in the machine: the
+batch sharded across the devices, the parameters replicated, the gradient
+summed across devices by the collective <code>jax.jit</code> inserts, and the input
+standardized natively by PPy first, as the
+<a href="../22_training_jax/">single-device trainer</a> does.</p>
+<h2 id="the-sharding">The sharding<a class="headerlink" href="#the-sharding" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="n">mesh</span> <span class="o">=</span> <span class="n">Mesh</span><span class="p">(</span><span class="n">devices</span><span class="p">,</span> <span class="p">(</span><span class="s2">"batch"</span><span class="p">,))</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="n">by_batch</span> <span class="o">=</span> <span class="n">NamedSharding</span><span class="p">(</span><span class="n">mesh</span><span class="p">,</span> <span class="n">PartitionSpec</span><span class="p">(</span><span class="s2">"batch"</span><span class="p">))</span>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="n">everywhere</span> <span class="o">=</span> <span class="n">NamedSharding</span><span class="p">(</span><span class="n">mesh</span><span class="p">,</span> <span class="n">PartitionSpec</span><span class="p">())</span>
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="n">x</span> <span class="o">=</span> <span class="n">jax</span><span class="o">.</span><span class="n">device_put</span><span class="p">(</span><span class="n">x_host</span><span class="p">,</span> <span class="n">by_batch</span><span class="p">)</span>
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="n">w1</span> <span class="o">=</span> <span class="n">jax</span><span class="o">.</span><span class="n">device_put</span><span class="p">(</span><span class="n">jax</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">normal</span><span class="p">(</span><span class="n">k1</span><span class="p">,</span> <span class="p">(</span><span class="n">COLS</span> <span class="o">*</span> <span class="mi">2</span><span class="p">,</span> <span class="n">HIDDEN</span><span class="p">))</span> <span class="o">*</span> <span class="mf">0.1</span><span class="p">,</span> <span class="n">everywhere</span><span class="p">)</span>
 </code></pre></div>
-<p>Arithmetic, <code>math.sin</code>, and a conditional expression that lowers to a
-<code>select</code>: <code>f</code> is what the StableHLO backend accepts, and <code>ppy emit
-stablehlo</code> prints the module (<code>ppy inspect --stage stablehlo</code> the same).
-<code>branchy</code> is not, yet — an <code>if</code> statement is control flow — so the compiler
-reports <code>W2007</code> and the function runs as written.</p>
-<h2 id="devices-and-the-last-bits">Devices and the last bits<a class="headerlink" href="#devices-and-the-last-bits" title="Permanent link">&para;</a></h2>
-<p>Under plain CPython, and wherever no device is present, every function runs
-as written. XLA computes <code>sin</code> with its own library, so the last bits of a
-result can differ from CPython's <code>math</code>; the printed digits are rounded so
-the three paths compare equal where they should. <code>xla.devices()</code> is what the
-bridge sees, and the line that prints it starts with <code>#</code>, the mark for
-output that may differ between machines. The bridge needs JAX installed to
-place arrays on a device; the compiler that wrote the StableHLO does not.</p>
+<p><code>train_step</code> is the same <code>jax.value_and_grad</code> step as the single-device
+trainer; with <code>x</code> and <code>y</code> sharded over the batch axis and the parameters
+replicated, the mean loss is a reduction across devices, and XLA inserts
+the all-reduce that sums each device's gradient contribution. The program
+runs the same hundred steps on one device afterwards and holds the two
+runs to one answer: the loss must fall, the two final losses must agree,
+and the largest difference between any two corresponding parameters is
+printed.</p>
+<h2 id="what-counts-as-an-accelerator">What counts as an accelerator<a class="headerlink" href="#what-counts-as-an-accelerator" title="Permanent link">&para;</a></h2>
+<p>Fewer than two accelerators is reported, not worked around: the program
+prints <code>requires &gt;= 2 physical accelerator devices; found N</code> and exits.
+A CPU is not a GPU, and a virtual device
+(<code>XLA_FLAGS=--xla_force_host_platform_device_count=2</code>) is not a second
+card. <code>--allow-cpu-devices</code> lets a test that made virtual CPU devices on
+purpose exercise the sharding here (<code>tests/test_multi_device_jax.py</code>
+does); it is never a hardware pass. The real run is
+<a href="https://github.com/franknoh/PPy/blob/main/scripts/cloud/runpod_matrix.py"><code>scripts/cloud/runpod_matrix.py --multigpu</code></a>,
+which rents two GPUs, runs this program on them under <code>ppy run</code> and under
+<code>python</code>, and brings the transcript back; the
+<a href="../../internals/hardware-validation/">hardware validation</a> page
+records the last one.</p>
 <h2 id="run-it">Run it<a class="headerlink" href="#run-it" title="Permanent link">&para;</a></h2>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>python<span class="w">  </span>device_math.ppy
-<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>ppy<span class="w"> </span>run<span class="w"> </span>device_math.ppy
-<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>ppy<span class="w"> </span>emit<span class="w"> </span>stablehlo<span class="w"> </span>device_math.ppy
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>python<span class="w">  </span>train.ppy
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>ppy<span class="w"> </span>run<span class="w"> </span>train.ppy
 </code></pre></div>
 <!-- outputs:start -->
 <h2 id="what-it-prints">What it prints<a class="headerlink" href="#what-it-prints" title="Permanent link">&para;</a></h2>
-<p><strong><code>python  device_math.ppy</code></strong>, <strong><code>ppy run device_math.ppy</code></strong></p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>0.445520207 0.387753845 -4.485479898
-<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>2.0 1.5
-<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a># devices: ['cpu:0']
-</code></pre></div>
-<p><strong><code>ppy emit stablehlo device_math.ppy</code></strong></p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>module @device_math {
-<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>  func.func public @device_math_f(%x: tensor&lt;f64&gt;, %y: tensor&lt;f64&gt;) -&gt; (tensor&lt;f64&gt;) {
-<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>    %1 = stablehlo.sine %x : tensor&lt;f64&gt;
-<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>    %2 = stablehlo.multiply %1, %y : tensor&lt;f64&gt;
-<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>    %3 = stablehlo.constant dense&lt;0.00000000000000000e+00&gt; : tensor&lt;f64&gt;
-<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>    %4 = stablehlo.compare GT, %2, %3, FLOAT : (tensor&lt;f64&gt;, tensor&lt;f64&gt;) -&gt; tensor&lt;i1&gt;
-<a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a>    %5 = stablehlo.negate %x : tensor&lt;f64&gt;
-<a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a>    %6 = stablehlo.select %4, %x, %5 : tensor&lt;i1&gt;, tensor&lt;f64&gt;
-<a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a>    %7 = stablehlo.add %2, %6 : tensor&lt;f64&gt;
-<a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a>    %8 = stablehlo.constant dense&lt;2.00000000000000000e+00&gt; : tensor&lt;f64&gt;
-<a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a>    %9 = stablehlo.divide %7, %8 : tensor&lt;f64&gt;
-<a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a>    return %9 : tensor&lt;f64&gt;
-<a id="__codelineno-3-13" name="__codelineno-3-13" href="#__codelineno-3-13"></a>  }
-<a id="__codelineno-3-14" name="__codelineno-3-14" href="#__codelineno-3-14"></a>}
+<p><strong><code>python  train.ppy</code></strong>, <strong><code>ppy run train.ppy</code></strong></p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>requires &gt;= 2 physical accelerator devices; found 0
 </code></pre></div>
 <!-- outputs:end -->
 
-<p>Read on: <a href="../../guide/xla/">XLA</a> ·
-<a href="../25_jax_export/">JAX export</a></p>
-<p><code>device_math.ppy</code> is hand-written; there is no <code>.py</code> source and no conversion
-step.</p>
-<h2 id="39_xladevice_mathppy"><code>39_xla/device_math.ppy</code><a class="headerlink" href="#39_xladevice_mathppy" title="Permanent link">&para;</a></h2>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">math</span>
-<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>
-<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ppy</span><span class="w"> </span><span class="kn">import</span> <span class="n">xla</span>
-<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>
-<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>
-<a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="nd">@xla</span><span class="o">.</span><span class="n">jit</span>
-<a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="k">def</span><span class="w"> </span><span class="nf">f</span><span class="p">(</span><span class="n">x</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="n">y</span><span class="p">:</span> <span class="nb">float</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">float</span><span class="p">:</span>
-<a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a>    <span class="n">product</span> <span class="o">=</span> <span class="n">math</span><span class="o">.</span><span class="n">sin</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="o">*</span> <span class="n">y</span>
-<a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a>    <span class="k">return</span> <span class="p">(</span><span class="n">product</span> <span class="o">+</span> <span class="p">(</span><span class="n">x</span> <span class="k">if</span> <span class="n">product</span> <span class="o">&gt;</span> <span class="mf">0.0</span> <span class="k">else</span> <span class="o">-</span><span class="n">x</span><span class="p">))</span> <span class="o">/</span> <span class="mf">2.0</span>
-<a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a>
-<a id="__codelineno-4-11" name="__codelineno-4-11" href="#__codelineno-4-11"></a>
-<a id="__codelineno-4-12" name="__codelineno-4-12" href="#__codelineno-4-12"></a><span class="nd">@xla</span><span class="o">.</span><span class="n">jit</span>
-<a id="__codelineno-4-13" name="__codelineno-4-13" href="#__codelineno-4-13"></a><span class="k">def</span><span class="w"> </span><span class="nf">branchy</span><span class="p">(</span><span class="n">x</span><span class="p">:</span> <span class="nb">float</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">float</span><span class="p">:</span>
-<a id="__codelineno-4-14" name="__codelineno-4-14" href="#__codelineno-4-14"></a>    <span class="k">if</span> <span class="n">x</span> <span class="o">&gt;</span> <span class="mf">0.0</span><span class="p">:</span>
-<a id="__codelineno-4-15" name="__codelineno-4-15" href="#__codelineno-4-15"></a>        <span class="k">return</span> <span class="n">x</span>
-<a id="__codelineno-4-16" name="__codelineno-4-16" href="#__codelineno-4-16"></a>    <span class="k">return</span> <span class="o">-</span><span class="n">x</span>
-<a id="__codelineno-4-17" name="__codelineno-4-17" href="#__codelineno-4-17"></a>
-<a id="__codelineno-4-18" name="__codelineno-4-18" href="#__codelineno-4-18"></a>
-<a id="__codelineno-4-19" name="__codelineno-4-19" href="#__codelineno-4-19"></a><span class="k">def</span><span class="w"> </span><span class="nf">main</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<a id="__codelineno-4-20" name="__codelineno-4-20" href="#__codelineno-4-20"></a>    <span class="nb">print</span><span class="p">(</span><span class="nb">round</span><span class="p">(</span><span class="n">f</span><span class="p">(</span><span class="mf">0.3</span><span class="p">,</span> <span class="mf">2.0</span><span class="p">),</span> <span class="mi">9</span><span class="p">),</span> <span class="nb">round</span><span class="p">(</span><span class="n">f</span><span class="p">(</span><span class="o">-</span><span class="mf">1.25</span><span class="p">,</span> <span class="mf">0.5</span><span class="p">),</span> <span class="mi">9</span><span class="p">),</span> <span class="nb">round</span><span class="p">(</span><span class="n">f</span><span class="p">(</span><span class="mf">7.0</span><span class="p">,</span> <span class="o">-</span><span class="mf">3.0</span><span class="p">),</span> <span class="mi">9</span><span class="p">))</span>
-<a id="__codelineno-4-21" name="__codelineno-4-21" href="#__codelineno-4-21"></a>    <span class="nb">print</span><span class="p">(</span><span class="n">branchy</span><span class="p">(</span><span class="o">-</span><span class="mf">2.0</span><span class="p">),</span> <span class="n">branchy</span><span class="p">(</span><span class="mf">1.5</span><span class="p">))</span>
-<a id="__codelineno-4-22" name="__codelineno-4-22" href="#__codelineno-4-22"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"# devices: </span><span class="si">{</span><span class="n">xla</span><span class="o">.</span><span class="n">devices</span><span class="p">()</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
-<a id="__codelineno-4-23" name="__codelineno-4-23" href="#__codelineno-4-23"></a>
-<a id="__codelineno-4-24" name="__codelineno-4-24" href="#__codelineno-4-24"></a>
-<a id="__codelineno-4-25" name="__codelineno-4-25" href="#__codelineno-4-25"></a><span class="n">main</span><span class="p">()</span>
+<p>Read on: <a href="../22_training_jax/">Training a JAX MLP</a> ·
+<a href="../../internals/hardware-validation/">Hardware validation</a></p>
+<p><code>train.ppy</code> is hand-written; there is no <code>.py</code> source and no conversion step.</p>
+<h2 id="45_multi_gpu_jaxtrainppy"><code>45_multi_gpu_jax/train.ppy</code><a class="headerlink" href="#45_multi_gpu_jaxtrainppy" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="sd">"""A data-parallel MLP across every accelerator in the machine.</span>
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="sd">The batch is sharded over a mesh of the accelerators, the parameters are</span>
+<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="sd">replicated, and the gradient of the mean loss is summed across devices by</span>
+<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="sd">the collective `jax.jit` inserts; PPy standardizes the input natively</span>
+<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="sd">first, as the single-device trainer does. Fewer than two accelerators is</span>
+<a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="sd">reported, not worked around: a CPU is not a GPU, and a virtual device is</span>
+<a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a><span class="sd">not a second card. `--allow-cpu-devices` is for a test that made virtual</span>
+<a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a><span class="sd">CPU devices on purpose; it is never a hardware pass.</span>
+<a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a><span class="sd">"""</span>
+<a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a>
+<a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a><span class="kn">import</span><span class="w"> </span><span class="nn">array</span>
+<a id="__codelineno-3-13" name="__codelineno-3-13" href="#__codelineno-3-13"></a><span class="kn">import</span><span class="w"> </span><span class="nn">math</span>
+<a id="__codelineno-3-14" name="__codelineno-3-14" href="#__codelineno-3-14"></a><span class="kn">import</span><span class="w"> </span><span class="nn">sys</span>
+<a id="__codelineno-3-15" name="__codelineno-3-15" href="#__codelineno-3-15"></a><span class="kn">import</span><span class="w"> </span><span class="nn">time</span>
+<a id="__codelineno-3-16" name="__codelineno-3-16" href="#__codelineno-3-16"></a>
+<a id="__codelineno-3-17" name="__codelineno-3-17" href="#__codelineno-3-17"></a><span class="kn">import</span><span class="w"> </span><span class="nn">jax</span>
+<a id="__codelineno-3-18" name="__codelineno-3-18" href="#__codelineno-3-18"></a><span class="kn">import</span><span class="w"> </span><span class="nn">jax.numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">jnp</span>
+<a id="__codelineno-3-19" name="__codelineno-3-19" href="#__codelineno-3-19"></a><span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+<a id="__codelineno-3-20" name="__codelineno-3-20" href="#__codelineno-3-20"></a><span class="kn">from</span><span class="w"> </span><span class="nn">jax.sharding</span><span class="w"> </span><span class="kn">import</span> <span class="n">Mesh</span><span class="p">,</span> <span class="n">NamedSharding</span><span class="p">,</span> <span class="n">PartitionSpec</span>
+<a id="__codelineno-3-21" name="__codelineno-3-21" href="#__codelineno-3-21"></a>
+<a id="__codelineno-3-22" name="__codelineno-3-22" href="#__codelineno-3-22"></a><span class="kn">import</span><span class="w"> </span><span class="nn">ppy</span>
+<a id="__codelineno-3-23" name="__codelineno-3-23" href="#__codelineno-3-23"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ppy</span><span class="w"> </span><span class="kn">import</span> <span class="n">Buffer</span>
+<a id="__codelineno-3-24" name="__codelineno-3-24" href="#__codelineno-3-24"></a>
+<a id="__codelineno-3-25" name="__codelineno-3-25" href="#__codelineno-3-25"></a><span class="n">ROWS</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">20000</span>
+<a id="__codelineno-3-26" name="__codelineno-3-26" href="#__codelineno-3-26"></a><span class="n">COLS</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">16</span>
+<a id="__codelineno-3-27" name="__codelineno-3-27" href="#__codelineno-3-27"></a><span class="n">HIDDEN</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">32</span>
+<a id="__codelineno-3-28" name="__codelineno-3-28" href="#__codelineno-3-28"></a><span class="n">STEPS</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">100</span>
+<a id="__codelineno-3-29" name="__codelineno-3-29" href="#__codelineno-3-29"></a><span class="n">RATE</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.02</span>
+<a id="__codelineno-3-30" name="__codelineno-3-30" href="#__codelineno-3-30"></a>
+<a id="__codelineno-3-31" name="__codelineno-3-31" href="#__codelineno-3-31"></a>
+<a id="__codelineno-3-32" name="__codelineno-3-32" href="#__codelineno-3-32"></a><span class="k">def</span><span class="w"> </span><span class="nf">standardize</span><span class="p">(</span><span class="n">raw</span><span class="p">:</span> <span class="n">Buffer</span><span class="p">[</span><span class="nb">float</span><span class="p">],</span> <span class="n">out</span><span class="p">:</span> <span class="n">Buffer</span><span class="p">[</span><span class="nb">float</span><span class="p">],</span> <span class="n">rows</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">cols</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">float</span><span class="p">:</span>
+<a id="__codelineno-3-33" name="__codelineno-3-33" href="#__codelineno-3-33"></a>    <span class="n">total</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.0</span>
+<a id="__codelineno-3-34" name="__codelineno-3-34" href="#__codelineno-3-34"></a>    <span class="k">for</span> <span class="n">row</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">rows</span><span class="p">):</span>
+<a id="__codelineno-3-35" name="__codelineno-3-35" href="#__codelineno-3-35"></a>        <span class="n">base</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="n">row</span> <span class="o">*</span> <span class="n">cols</span>
+<a id="__codelineno-3-36" name="__codelineno-3-36" href="#__codelineno-3-36"></a>        <span class="n">target</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="n">row</span> <span class="o">*</span> <span class="n">cols</span> <span class="o">*</span> <span class="mi">2</span>
+<a id="__codelineno-3-37" name="__codelineno-3-37" href="#__codelineno-3-37"></a>
+<a id="__codelineno-3-38" name="__codelineno-3-38" href="#__codelineno-3-38"></a>        <span class="n">sum_</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.0</span>
+<a id="__codelineno-3-39" name="__codelineno-3-39" href="#__codelineno-3-39"></a>        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">cols</span><span class="p">):</span>
+<a id="__codelineno-3-40" name="__codelineno-3-40" href="#__codelineno-3-40"></a>            <span class="n">sum_</span> <span class="o">+=</span> <span class="n">raw</span><span class="p">[</span><span class="n">base</span> <span class="o">+</span> <span class="n">i</span><span class="p">]</span>
+<a id="__codelineno-3-41" name="__codelineno-3-41" href="#__codelineno-3-41"></a>        <span class="n">mean</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="n">sum_</span> <span class="o">/</span> <span class="n">cols</span>
+<a id="__codelineno-3-42" name="__codelineno-3-42" href="#__codelineno-3-42"></a>
+<a id="__codelineno-3-43" name="__codelineno-3-43" href="#__codelineno-3-43"></a>        <span class="n">spread</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.0</span>
+<a id="__codelineno-3-44" name="__codelineno-3-44" href="#__codelineno-3-44"></a>        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">cols</span><span class="p">):</span>
+<a id="__codelineno-3-45" name="__codelineno-3-45" href="#__codelineno-3-45"></a>            <span class="n">spread</span> <span class="o">+=</span> <span class="p">(</span><span class="n">raw</span><span class="p">[</span><span class="n">base</span> <span class="o">+</span> <span class="n">i</span><span class="p">]</span> <span class="o">-</span> <span class="n">mean</span><span class="p">)</span> <span class="o">*</span> <span class="p">(</span><span class="n">raw</span><span class="p">[</span><span class="n">base</span> <span class="o">+</span> <span class="n">i</span><span class="p">]</span> <span class="o">-</span> <span class="n">mean</span><span class="p">)</span>
+<a id="__codelineno-3-46" name="__codelineno-3-46" href="#__codelineno-3-46"></a>        <span class="n">deviation</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="n">math</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="n">spread</span> <span class="o">/</span> <span class="n">cols</span><span class="p">)</span> <span class="o">+</span> <span class="mf">1e-8</span>
+<a id="__codelineno-3-47" name="__codelineno-3-47" href="#__codelineno-3-47"></a>
+<a id="__codelineno-3-48" name="__codelineno-3-48" href="#__codelineno-3-48"></a>        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">cols</span><span class="p">):</span>
+<a id="__codelineno-3-49" name="__codelineno-3-49" href="#__codelineno-3-49"></a>            <span class="n">value</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="p">(</span><span class="n">raw</span><span class="p">[</span><span class="n">base</span> <span class="o">+</span> <span class="n">i</span><span class="p">]</span> <span class="o">-</span> <span class="n">mean</span><span class="p">)</span> <span class="o">/</span> <span class="n">deviation</span>
+<a id="__codelineno-3-50" name="__codelineno-3-50" href="#__codelineno-3-50"></a>            <span class="n">out</span><span class="p">[</span><span class="n">target</span> <span class="o">+</span> <span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">value</span>
+<a id="__codelineno-3-51" name="__codelineno-3-51" href="#__codelineno-3-51"></a>            <span class="n">total</span> <span class="o">+=</span> <span class="n">value</span>
+<a id="__codelineno-3-52" name="__codelineno-3-52" href="#__codelineno-3-52"></a>        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">cols</span><span class="p">):</span>
+<a id="__codelineno-3-53" name="__codelineno-3-53" href="#__codelineno-3-53"></a>            <span class="n">interaction</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="n">out</span><span class="p">[</span><span class="n">target</span> <span class="o">+</span> <span class="n">i</span><span class="p">]</span> <span class="o">*</span> <span class="n">out</span><span class="p">[</span><span class="n">target</span> <span class="o">+</span> <span class="p">(</span><span class="n">i</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span> <span class="o">%</span> <span class="n">cols</span><span class="p">]</span>
+<a id="__codelineno-3-54" name="__codelineno-3-54" href="#__codelineno-3-54"></a>            <span class="n">out</span><span class="p">[</span><span class="n">target</span> <span class="o">+</span> <span class="n">cols</span> <span class="o">+</span> <span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">interaction</span>
+<a id="__codelineno-3-55" name="__codelineno-3-55" href="#__codelineno-3-55"></a>            <span class="n">total</span> <span class="o">+=</span> <span class="n">interaction</span>
+<a id="__codelineno-3-56" name="__codelineno-3-56" href="#__codelineno-3-56"></a>    <span class="k">return</span> <span class="n">total</span>
+<a id="__codelineno-3-57" name="__codelineno-3-57" href="#__codelineno-3-57"></a>
+<a id="__codelineno-3-58" name="__codelineno-3-58" href="#__codelineno-3-58"></a>
+<a id="__codelineno-3-59" name="__codelineno-3-59" href="#__codelineno-3-59"></a><span class="nd">@jax</span><span class="o">.</span><span class="n">jit</span>
+<a id="__codelineno-3-60" name="__codelineno-3-60" href="#__codelineno-3-60"></a><span class="k">def</span><span class="w"> </span><span class="nf">forward_loss</span><span class="p">(</span>
+<a id="__codelineno-3-61" name="__codelineno-3-61" href="#__codelineno-3-61"></a>    <span class="n">x</span><span class="p">:</span> <span class="n">jax</span><span class="o">.</span><span class="n">Array</span><span class="p">,</span>
+<a id="__codelineno-3-62" name="__codelineno-3-62" href="#__codelineno-3-62"></a>    <span class="n">y</span><span class="p">:</span> <span class="n">jax</span><span class="o">.</span><span class="n">Array</span><span class="p">,</span>
+<a id="__codelineno-3-63" name="__codelineno-3-63" href="#__codelineno-3-63"></a>    <span class="n">w1</span><span class="p">:</span> <span class="n">jax</span><span class="o">.</span><span class="n">Array</span><span class="p">,</span>
+<a id="__codelineno-3-64" name="__codelineno-3-64" href="#__codelineno-3-64"></a>    <span class="n">b1</span><span class="p">:</span> <span class="n">jax</span><span class="o">.</span><span class="n">Array</span><span class="p">,</span>
+<a id="__codelineno-3-65" name="__codelineno-3-65" href="#__codelineno-3-65"></a>    <span class="n">w2</span><span class="p">:</span> <span class="n">jax</span><span class="o">.</span><span class="n">Array</span><span class="p">,</span>
+<a id="__codelineno-3-66" name="__codelineno-3-66" href="#__codelineno-3-66"></a>    <span class="n">b2</span><span class="p">:</span> <span class="n">jax</span><span class="o">.</span><span class="n">Array</span><span class="p">,</span>
+<a id="__codelineno-3-67" name="__codelineno-3-67" href="#__codelineno-3-67"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">jax</span><span class="o">.</span><span class="n">Array</span><span class="p">:</span>
+<a id="__codelineno-3-68" name="__codelineno-3-68" href="#__codelineno-3-68"></a>    <span class="n">hidden</span><span class="p">:</span> <span class="n">jax</span><span class="o">.</span><span class="n">Array</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">maximum</span><span class="p">(</span><span class="n">jnp</span><span class="o">.</span><span class="n">dot</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">w1</span><span class="p">)</span> <span class="o">+</span> <span class="n">b1</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">)</span>
+<a id="__codelineno-3-69" name="__codelineno-3-69" href="#__codelineno-3-69"></a>    <span class="n">predicted</span><span class="p">:</span> <span class="n">jax</span><span class="o">.</span><span class="n">Array</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">dot</span><span class="p">(</span><span class="n">hidden</span><span class="p">,</span> <span class="n">w2</span><span class="p">)</span> <span class="o">+</span> <span class="n">b2</span>
+<a id="__codelineno-3-70" name="__codelineno-3-70" href="#__codelineno-3-70"></a>    <span class="n">residual</span><span class="p">:</span> <span class="n">jax</span><span class="o">.</span><span class="n">Array</span> <span class="o">=</span> <span class="n">predicted</span> <span class="o">-</span> <span class="n">y</span>
+<a id="__codelineno-3-71" name="__codelineno-3-71" href="#__codelineno-3-71"></a>    <span class="k">return</span> <span class="n">jnp</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">residual</span> <span class="o">*</span> <span class="n">residual</span><span class="p">)</span>
+<a id="__codelineno-3-72" name="__codelineno-3-72" href="#__codelineno-3-72"></a>
+<a id="__codelineno-3-73" name="__codelineno-3-73" href="#__codelineno-3-73"></a>
+<a id="__codelineno-3-74" name="__codelineno-3-74" href="#__codelineno-3-74"></a><span class="n">loss_and_gradients</span> <span class="o">=</span> <span class="n">jax</span><span class="o">.</span><span class="n">value_and_grad</span><span class="p">(</span><span class="n">forward_loss</span><span class="p">,</span> <span class="n">argnums</span><span class="o">=</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="mi">4</span><span class="p">,</span> <span class="mi">5</span><span class="p">))</span>
+<a id="__codelineno-3-75" name="__codelineno-3-75" href="#__codelineno-3-75"></a>
+<a id="__codelineno-3-76" name="__codelineno-3-76" href="#__codelineno-3-76"></a>
+<a id="__codelineno-3-77" name="__codelineno-3-77" href="#__codelineno-3-77"></a><span class="nd">@jax</span><span class="o">.</span><span class="n">jit</span>
+<a id="__codelineno-3-78" name="__codelineno-3-78" href="#__codelineno-3-78"></a><span class="k">def</span><span class="w"> </span><span class="nf">train_step</span><span class="p">(</span>
+<a id="__codelineno-3-79" name="__codelineno-3-79" href="#__codelineno-3-79"></a>    <span class="n">x</span><span class="p">:</span> <span class="n">jax</span><span class="o">.</span><span class="n">Array</span><span class="p">,</span>
+<a id="__codelineno-3-80" name="__codelineno-3-80" href="#__codelineno-3-80"></a>    <span class="n">y</span><span class="p">:</span> <span class="n">jax</span><span class="o">.</span><span class="n">Array</span><span class="p">,</span>
+<a id="__codelineno-3-81" name="__codelineno-3-81" href="#__codelineno-3-81"></a>    <span class="n">w1</span><span class="p">:</span> <span class="n">jax</span><span class="o">.</span><span class="n">Array</span><span class="p">,</span>
+<a id="__codelineno-3-82" name="__codelineno-3-82" href="#__codelineno-3-82"></a>    <span class="n">b1</span><span class="p">:</span> <span class="n">jax</span><span class="o">.</span><span class="n">Array</span><span class="p">,</span>
+<a id="__codelineno-3-83" name="__codelineno-3-83" href="#__codelineno-3-83"></a>    <span class="n">w2</span><span class="p">:</span> <span class="n">jax</span><span class="o">.</span><span class="n">Array</span><span class="p">,</span>
+<a id="__codelineno-3-84" name="__codelineno-3-84" href="#__codelineno-3-84"></a>    <span class="n">b2</span><span class="p">:</span> <span class="n">jax</span><span class="o">.</span><span class="n">Array</span><span class="p">,</span>
+<a id="__codelineno-3-85" name="__codelineno-3-85" href="#__codelineno-3-85"></a>    <span class="n">rate</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
+<a id="__codelineno-3-86" name="__codelineno-3-86" href="#__codelineno-3-86"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">jax</span><span class="o">.</span><span class="n">Array</span><span class="p">,</span> <span class="n">jax</span><span class="o">.</span><span class="n">Array</span><span class="p">,</span> <span class="n">jax</span><span class="o">.</span><span class="n">Array</span><span class="p">,</span> <span class="n">jax</span><span class="o">.</span><span class="n">Array</span><span class="p">,</span> <span class="n">jax</span><span class="o">.</span><span class="n">Array</span><span class="p">]:</span>
+<a id="__codelineno-3-87" name="__codelineno-3-87" href="#__codelineno-3-87"></a>    <span class="n">loss</span><span class="p">,</span> <span class="n">grads</span> <span class="o">=</span> <span class="n">loss_and_gradients</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">,</span> <span class="n">w1</span><span class="p">,</span> <span class="n">b1</span><span class="p">,</span> <span class="n">w2</span><span class="p">,</span> <span class="n">b2</span><span class="p">)</span>
+<a id="__codelineno-3-88" name="__codelineno-3-88" href="#__codelineno-3-88"></a>    <span class="k">return</span> <span class="p">(</span>
+<a id="__codelineno-3-89" name="__codelineno-3-89" href="#__codelineno-3-89"></a>        <span class="n">loss</span><span class="p">,</span>
+<a id="__codelineno-3-90" name="__codelineno-3-90" href="#__codelineno-3-90"></a>        <span class="n">w1</span> <span class="o">-</span> <span class="n">rate</span> <span class="o">*</span> <span class="n">grads</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span>
+<a id="__codelineno-3-91" name="__codelineno-3-91" href="#__codelineno-3-91"></a>        <span class="n">b1</span> <span class="o">-</span> <span class="n">rate</span> <span class="o">*</span> <span class="n">grads</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span>
+<a id="__codelineno-3-92" name="__codelineno-3-92" href="#__codelineno-3-92"></a>        <span class="n">w2</span> <span class="o">-</span> <span class="n">rate</span> <span class="o">*</span> <span class="n">grads</span><span class="p">[</span><span class="mi">2</span><span class="p">],</span>
+<a id="__codelineno-3-93" name="__codelineno-3-93" href="#__codelineno-3-93"></a>        <span class="n">b2</span> <span class="o">-</span> <span class="n">rate</span> <span class="o">*</span> <span class="n">grads</span><span class="p">[</span><span class="mi">3</span><span class="p">],</span>
+<a id="__codelineno-3-94" name="__codelineno-3-94" href="#__codelineno-3-94"></a>    <span class="p">)</span>
+<a id="__codelineno-3-95" name="__codelineno-3-95" href="#__codelineno-3-95"></a>
+<a id="__codelineno-3-96" name="__codelineno-3-96" href="#__codelineno-3-96"></a>
+<a id="__codelineno-3-97" name="__codelineno-3-97" href="#__codelineno-3-97"></a><span class="nd">@ppy</span><span class="o">.</span><span class="n">dynamic</span>
+<a id="__codelineno-3-98" name="__codelineno-3-98" href="#__codelineno-3-98"></a><span class="k">def</span><span class="w"> </span><span class="nf">accelerators</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="n">ppy</span><span class="o">.</span><span class="n">Dynamic</span><span class="p">:</span>
+<a id="__codelineno-3-99" name="__codelineno-3-99" href="#__codelineno-3-99"></a><span class="w">    </span><span class="sd">"""The devices that are not the host, in the order JAX lists them."""</span>
+<a id="__codelineno-3-100" name="__codelineno-3-100" href="#__codelineno-3-100"></a>    <span class="k">with</span> <span class="n">ppy</span><span class="o">.</span><span class="n">dynamic</span><span class="p">:</span>
+<a id="__codelineno-3-101" name="__codelineno-3-101" href="#__codelineno-3-101"></a>        <span class="n">found</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">jax</span><span class="o">.</span><span class="n">devices</span><span class="p">())</span>
+<a id="__codelineno-3-102" name="__codelineno-3-102" href="#__codelineno-3-102"></a>        <span class="k">if</span> <span class="s2">"--allow-cpu-devices"</span> <span class="ow">in</span> <span class="n">sys</span><span class="o">.</span><span class="n">argv</span><span class="p">:</span>
+<a id="__codelineno-3-103" name="__codelineno-3-103" href="#__codelineno-3-103"></a>            <span class="k">return</span> <span class="n">found</span>
+<a id="__codelineno-3-104" name="__codelineno-3-104" href="#__codelineno-3-104"></a>        <span class="k">return</span> <span class="p">[</span><span class="n">device</span> <span class="k">for</span> <span class="n">device</span> <span class="ow">in</span> <span class="n">found</span> <span class="k">if</span> <span class="n">device</span><span class="o">.</span><span class="n">platform</span> <span class="o">!=</span> <span class="s2">"cpu"</span><span class="p">]</span>
+<a id="__codelineno-3-105" name="__codelineno-3-105" href="#__codelineno-3-105"></a>
+<a id="__codelineno-3-106" name="__codelineno-3-106" href="#__codelineno-3-106"></a>
+<a id="__codelineno-3-107" name="__codelineno-3-107" href="#__codelineno-3-107"></a><span class="nd">@ppy</span><span class="o">.</span><span class="n">dynamic</span>
+<a id="__codelineno-3-108" name="__codelineno-3-108" href="#__codelineno-3-108"></a><span class="k">def</span><span class="w"> </span><span class="nf">train</span><span class="p">(</span><span class="n">devices</span><span class="p">:</span> <span class="n">ppy</span><span class="o">.</span><span class="n">Dynamic</span><span class="p">,</span> <span class="n">x_host</span><span class="p">:</span> <span class="n">ppy</span><span class="o">.</span><span class="n">Dynamic</span><span class="p">,</span> <span class="n">y_host</span><span class="p">:</span> <span class="n">ppy</span><span class="o">.</span><span class="n">Dynamic</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">ppy</span><span class="o">.</span><span class="n">Dynamic</span><span class="p">:</span>
+<a id="__codelineno-3-109" name="__codelineno-3-109" href="#__codelineno-3-109"></a><span class="w">    </span><span class="sd">"""The trainer over a mesh of `devices`: the batch sharded, the parameters replicated.</span>
+<a id="__codelineno-3-110" name="__codelineno-3-110" href="#__codelineno-3-110"></a>
+<a id="__codelineno-3-111" name="__codelineno-3-111" href="#__codelineno-3-111"></a><span class="sd">    With one device the mesh is one device and the sharding is a no-op,</span>
+<a id="__codelineno-3-112" name="__codelineno-3-112" href="#__codelineno-3-112"></a><span class="sd">    which is the reference the multi-device run is held to.</span>
+<a id="__codelineno-3-113" name="__codelineno-3-113" href="#__codelineno-3-113"></a><span class="sd">    """</span>
+<a id="__codelineno-3-114" name="__codelineno-3-114" href="#__codelineno-3-114"></a>    <span class="k">with</span> <span class="n">ppy</span><span class="o">.</span><span class="n">dynamic</span><span class="p">:</span>
+<a id="__codelineno-3-115" name="__codelineno-3-115" href="#__codelineno-3-115"></a>        <span class="n">mesh</span> <span class="o">=</span> <span class="n">Mesh</span><span class="p">(</span><span class="n">devices</span><span class="p">,</span> <span class="p">(</span><span class="s2">"batch"</span><span class="p">,))</span>
+<a id="__codelineno-3-116" name="__codelineno-3-116" href="#__codelineno-3-116"></a>        <span class="n">by_batch</span> <span class="o">=</span> <span class="n">NamedSharding</span><span class="p">(</span><span class="n">mesh</span><span class="p">,</span> <span class="n">PartitionSpec</span><span class="p">(</span><span class="s2">"batch"</span><span class="p">))</span>
+<a id="__codelineno-3-117" name="__codelineno-3-117" href="#__codelineno-3-117"></a>        <span class="n">everywhere</span> <span class="o">=</span> <span class="n">NamedSharding</span><span class="p">(</span><span class="n">mesh</span><span class="p">,</span> <span class="n">PartitionSpec</span><span class="p">())</span>
+<a id="__codelineno-3-118" name="__codelineno-3-118" href="#__codelineno-3-118"></a>        <span class="n">x</span> <span class="o">=</span> <span class="n">jax</span><span class="o">.</span><span class="n">device_put</span><span class="p">(</span><span class="n">x_host</span><span class="p">,</span> <span class="n">by_batch</span><span class="p">)</span>
+<a id="__codelineno-3-119" name="__codelineno-3-119" href="#__codelineno-3-119"></a>        <span class="n">y</span> <span class="o">=</span> <span class="n">jax</span><span class="o">.</span><span class="n">device_put</span><span class="p">(</span><span class="n">y_host</span><span class="p">,</span> <span class="n">by_batch</span><span class="p">)</span>
+<a id="__codelineno-3-120" name="__codelineno-3-120" href="#__codelineno-3-120"></a>        <span class="n">k1</span><span class="p">,</span> <span class="n">k2</span> <span class="o">=</span> <span class="n">jax</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="n">jax</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">PRNGKey</span><span class="p">(</span><span class="mi">1</span><span class="p">))</span>
+<a id="__codelineno-3-121" name="__codelineno-3-121" href="#__codelineno-3-121"></a>        <span class="n">w1</span> <span class="o">=</span> <span class="n">jax</span><span class="o">.</span><span class="n">device_put</span><span class="p">(</span><span class="n">jax</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">normal</span><span class="p">(</span><span class="n">k1</span><span class="p">,</span> <span class="p">(</span><span class="n">COLS</span> <span class="o">*</span> <span class="mi">2</span><span class="p">,</span> <span class="n">HIDDEN</span><span class="p">))</span> <span class="o">*</span> <span class="mf">0.1</span><span class="p">,</span> <span class="n">everywhere</span><span class="p">)</span>
+<a id="__codelineno-3-122" name="__codelineno-3-122" href="#__codelineno-3-122"></a>        <span class="n">b1</span> <span class="o">=</span> <span class="n">jax</span><span class="o">.</span><span class="n">device_put</span><span class="p">(</span><span class="n">jnp</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">HIDDEN</span><span class="p">,)),</span> <span class="n">everywhere</span><span class="p">)</span>
+<a id="__codelineno-3-123" name="__codelineno-3-123" href="#__codelineno-3-123"></a>        <span class="n">w2</span> <span class="o">=</span> <span class="n">jax</span><span class="o">.</span><span class="n">device_put</span><span class="p">(</span><span class="n">jax</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">normal</span><span class="p">(</span><span class="n">k2</span><span class="p">,</span> <span class="p">(</span><span class="n">HIDDEN</span><span class="p">,</span> <span class="mi">1</span><span class="p">))</span> <span class="o">*</span> <span class="mf">0.1</span><span class="p">,</span> <span class="n">everywhere</span><span class="p">)</span>
+<a id="__codelineno-3-124" name="__codelineno-3-124" href="#__codelineno-3-124"></a>        <span class="n">b2</span> <span class="o">=</span> <span class="n">jax</span><span class="o">.</span><span class="n">device_put</span><span class="p">(</span><span class="n">jnp</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="mi">1</span><span class="p">,)),</span> <span class="n">everywhere</span><span class="p">)</span>
+<a id="__codelineno-3-125" name="__codelineno-3-125" href="#__codelineno-3-125"></a>        <span class="n">losses</span> <span class="o">=</span> <span class="p">[]</span>
+<a id="__codelineno-3-126" name="__codelineno-3-126" href="#__codelineno-3-126"></a>        <span class="n">started</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">perf_counter</span><span class="p">()</span>
+<a id="__codelineno-3-127" name="__codelineno-3-127" href="#__codelineno-3-127"></a>        <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">STEPS</span><span class="p">):</span>
+<a id="__codelineno-3-128" name="__codelineno-3-128" href="#__codelineno-3-128"></a>            <span class="n">loss</span><span class="p">,</span> <span class="n">w1</span><span class="p">,</span> <span class="n">b1</span><span class="p">,</span> <span class="n">w2</span><span class="p">,</span> <span class="n">b2</span> <span class="o">=</span> <span class="n">train_step</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">,</span> <span class="n">w1</span><span class="p">,</span> <span class="n">b1</span><span class="p">,</span> <span class="n">w2</span><span class="p">,</span> <span class="n">b2</span><span class="p">,</span> <span class="n">RATE</span><span class="p">)</span>
+<a id="__codelineno-3-129" name="__codelineno-3-129" href="#__codelineno-3-129"></a>            <span class="n">losses</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="nb">float</span><span class="p">(</span><span class="n">loss</span><span class="p">))</span>
+<a id="__codelineno-3-130" name="__codelineno-3-130" href="#__codelineno-3-130"></a>        <span class="n">w1</span><span class="o">.</span><span class="n">block_until_ready</span><span class="p">()</span>
+<a id="__codelineno-3-131" name="__codelineno-3-131" href="#__codelineno-3-131"></a>        <span class="n">elapsed</span> <span class="o">=</span> <span class="p">(</span><span class="n">time</span><span class="o">.</span><span class="n">perf_counter</span><span class="p">()</span> <span class="o">-</span> <span class="n">started</span><span class="p">)</span> <span class="o">*</span> <span class="mf">1000.0</span>
+<a id="__codelineno-3-132" name="__codelineno-3-132" href="#__codelineno-3-132"></a>        <span class="k">return</span> <span class="n">losses</span><span class="p">,</span> <span class="p">(</span><span class="n">w1</span><span class="p">,</span> <span class="n">b1</span><span class="p">,</span> <span class="n">w2</span><span class="p">,</span> <span class="n">b2</span><span class="p">),</span> <span class="n">elapsed</span>
+<a id="__codelineno-3-133" name="__codelineno-3-133" href="#__codelineno-3-133"></a>
+<a id="__codelineno-3-134" name="__codelineno-3-134" href="#__codelineno-3-134"></a>
+<a id="__codelineno-3-135" name="__codelineno-3-135" href="#__codelineno-3-135"></a><span class="k">def</span><span class="w"> </span><span class="nf">main</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-3-136" name="__codelineno-3-136" href="#__codelineno-3-136"></a>    <span class="n">devices</span> <span class="o">=</span> <span class="n">accelerators</span><span class="p">()</span>
+<a id="__codelineno-3-137" name="__codelineno-3-137" href="#__codelineno-3-137"></a>    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">devices</span><span class="p">)</span> <span class="o">&lt;</span> <span class="mi">2</span><span class="p">:</span>
+<a id="__codelineno-3-138" name="__codelineno-3-138" href="#__codelineno-3-138"></a>        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"requires &gt;= 2 physical accelerator devices; found </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">devices</span><span class="p">)</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+<a id="__codelineno-3-139" name="__codelineno-3-139" href="#__codelineno-3-139"></a>        <span class="k">return</span>
+<a id="__codelineno-3-140" name="__codelineno-3-140" href="#__codelineno-3-140"></a>    <span class="n">k1</span><span class="p">,</span> <span class="n">k2</span> <span class="o">=</span> <span class="n">jax</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="n">jax</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">PRNGKey</span><span class="p">(</span><span class="mi">0</span><span class="p">))</span>
+<a id="__codelineno-3-141" name="__codelineno-3-141" href="#__codelineno-3-141"></a>    <span class="n">raw</span> <span class="o">=</span> <span class="n">array</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="s2">"d"</span><span class="p">,</span> <span class="n">jax</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">normal</span><span class="p">(</span><span class="n">k1</span><span class="p">,</span> <span class="p">(</span><span class="n">ROWS</span> <span class="o">*</span> <span class="n">COLS</span><span class="p">,))</span><span class="o">.</span><span class="n">tolist</span><span class="p">())</span>
+<a id="__codelineno-3-142" name="__codelineno-3-142" href="#__codelineno-3-142"></a>    <span class="n">features</span> <span class="o">=</span> <span class="n">array</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="s2">"d"</span><span class="p">,</span> <span class="p">[</span><span class="mf">0.0</span><span class="p">]</span> <span class="o">*</span> <span class="p">(</span><span class="n">ROWS</span> <span class="o">*</span> <span class="n">COLS</span> <span class="o">*</span> <span class="mi">2</span><span class="p">))</span>
+<a id="__codelineno-3-143" name="__codelineno-3-143" href="#__codelineno-3-143"></a>    <span class="n">started</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">perf_counter</span><span class="p">()</span>
+<a id="__codelineno-3-144" name="__codelineno-3-144" href="#__codelineno-3-144"></a>    <span class="n">checksum</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="n">standardize</span><span class="p">(</span><span class="n">raw</span><span class="p">,</span> <span class="n">features</span><span class="p">,</span> <span class="n">ROWS</span><span class="p">,</span> <span class="n">COLS</span><span class="p">)</span>
+<a id="__codelineno-3-145" name="__codelineno-3-145" href="#__codelineno-3-145"></a>    <span class="n">prep_ms</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="p">(</span><span class="n">time</span><span class="o">.</span><span class="n">perf_counter</span><span class="p">()</span> <span class="o">-</span> <span class="n">started</span><span class="p">)</span> <span class="o">*</span> <span class="mf">1000.0</span>
+<a id="__codelineno-3-146" name="__codelineno-3-146" href="#__codelineno-3-146"></a>    <span class="n">x_host</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">features</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">jnp</span><span class="o">.</span><span class="n">float32</span><span class="p">)</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="n">ROWS</span><span class="p">,</span> <span class="n">COLS</span> <span class="o">*</span> <span class="mi">2</span><span class="p">)</span>
+<a id="__codelineno-3-147" name="__codelineno-3-147" href="#__codelineno-3-147"></a>    <span class="n">y_host</span> <span class="o">=</span> <span class="n">jax</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">normal</span><span class="p">(</span><span class="n">k2</span><span class="p">,</span> <span class="p">(</span><span class="n">ROWS</span><span class="p">,</span> <span class="mi">1</span><span class="p">))</span>
+<a id="__codelineno-3-148" name="__codelineno-3-148" href="#__codelineno-3-148"></a>
+<a id="__codelineno-3-149" name="__codelineno-3-149" href="#__codelineno-3-149"></a>    <span class="n">losses</span><span class="p">,</span> <span class="n">params</span><span class="p">,</span> <span class="n">train_ms</span> <span class="o">=</span> <span class="n">train</span><span class="p">(</span><span class="n">devices</span><span class="p">,</span> <span class="n">x_host</span><span class="p">,</span> <span class="n">y_host</span><span class="p">)</span>
+<a id="__codelineno-3-150" name="__codelineno-3-150" href="#__codelineno-3-150"></a>    <span class="n">reference</span><span class="p">,</span> <span class="n">single</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="n">train</span><span class="p">(</span><span class="n">devices</span><span class="p">[:</span><span class="mi">1</span><span class="p">],</span> <span class="n">x_host</span><span class="p">,</span> <span class="n">y_host</span><span class="p">)</span>
+<a id="__codelineno-3-151" name="__codelineno-3-151" href="#__codelineno-3-151"></a>    <span class="n">drift</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.0</span>
+<a id="__codelineno-3-152" name="__codelineno-3-152" href="#__codelineno-3-152"></a>    <span class="k">with</span> <span class="n">ppy</span><span class="o">.</span><span class="n">dynamic</span><span class="p">:</span>
+<a id="__codelineno-3-153" name="__codelineno-3-153" href="#__codelineno-3-153"></a>        <span class="k">for</span> <span class="n">mine</span><span class="p">,</span> <span class="n">theirs</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">params</span><span class="p">,</span> <span class="n">single</span><span class="p">,</span> <span class="n">strict</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
+<a id="__codelineno-3-154" name="__codelineno-3-154" href="#__codelineno-3-154"></a>            <span class="c1"># Fetched to the host: the two live on different meshes.</span>
+<a id="__codelineno-3-155" name="__codelineno-3-155" href="#__codelineno-3-155"></a>            <span class="n">drift</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span><span class="n">drift</span><span class="p">,</span> <span class="nb">float</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">max</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">mine</span><span class="p">)</span> <span class="o">-</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">theirs</span><span class="p">)))))</span>
+<a id="__codelineno-3-156" name="__codelineno-3-156" href="#__codelineno-3-156"></a>        <span class="n">kinds</span> <span class="o">=</span> <span class="nb">sorted</span><span class="p">({</span><span class="n">device</span><span class="o">.</span><span class="n">platform</span> <span class="k">for</span> <span class="n">device</span> <span class="ow">in</span> <span class="n">devices</span><span class="p">})</span>
+<a id="__codelineno-3-157" name="__codelineno-3-157" href="#__codelineno-3-157"></a>        <span class="n">first</span><span class="p">,</span> <span class="n">last</span> <span class="o">=</span> <span class="n">losses</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">losses</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+<a id="__codelineno-3-158" name="__codelineno-3-158" href="#__codelineno-3-158"></a>        <span class="n">agrees</span> <span class="o">=</span> <span class="nb">abs</span><span class="p">(</span><span class="n">last</span> <span class="o">-</span> <span class="n">reference</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">])</span> <span class="o">&lt;=</span> <span class="mf">1e-3</span> <span class="o">*</span> <span class="nb">max</span><span class="p">(</span><span class="mf">1.0</span><span class="p">,</span> <span class="nb">abs</span><span class="p">(</span><span class="n">reference</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]))</span>
+<a id="__codelineno-3-159" name="__codelineno-3-159" href="#__codelineno-3-159"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"# devices: </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">devices</span><span class="p">)</span><span class="si">}</span><span class="s2"> x </span><span class="si">{</span><span class="s1">'/'</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">kinds</span><span class="p">)</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+<a id="__codelineno-3-160" name="__codelineno-3-160" href="#__codelineno-3-160"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"# native prep: </span><span class="si">{</span><span class="nb">getattr</span><span class="p">(</span><span class="n">standardize</span><span class="p">,</span><span class="w"> </span><span class="s1">'__ppy_native__'</span><span class="p">,</span><span class="w"> </span><span class="kc">None</span><span class="p">)</span><span class="w"> </span><span class="ow">is</span><span class="w"> </span><span class="ow">not</span><span class="w"> </span><span class="kc">None</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+<a id="__codelineno-3-161" name="__codelineno-3-161" href="#__codelineno-3-161"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"prep  </span><span class="si">{</span><span class="n">prep_ms</span><span class="si">:</span><span class="s2">8.1f</span><span class="si">}</span><span class="s2"> ms   checksum=</span><span class="si">{</span><span class="n">checksum</span><span class="si">:</span><span class="s2">.6f</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+<a id="__codelineno-3-162" name="__codelineno-3-162" href="#__codelineno-3-162"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"train </span><span class="si">{</span><span class="n">train_ms</span><span class="si">:</span><span class="s2">8.1f</span><span class="si">}</span><span class="s2"> ms   loss </span><span class="si">{</span><span class="n">first</span><span class="si">:</span><span class="s2">.4f</span><span class="si">}</span><span class="s2"> -&gt; </span><span class="si">{</span><span class="n">last</span><span class="si">:</span><span class="s2">.4f</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+<a id="__codelineno-3-163" name="__codelineno-3-163" href="#__codelineno-3-163"></a>    <span class="nb">print</span><span class="p">(</span>
+<a id="__codelineno-3-164" name="__codelineno-3-164" href="#__codelineno-3-164"></a>        <span class="sa">f</span><span class="s2">"single device: loss </span><span class="si">{</span><span class="n">reference</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="si">:</span><span class="s2">.4f</span><span class="si">}</span><span class="s2"> -&gt; </span><span class="si">{</span><span class="n">reference</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span><span class="si">:</span><span class="s2">.4f</span><span class="si">}</span><span class="s2">, max |dparam| </span><span class="si">{</span><span class="n">drift</span><span class="si">:</span><span class="s2">.2e</span><span class="si">}</span><span class="s2">"</span>
+<a id="__codelineno-3-165" name="__codelineno-3-165" href="#__codelineno-3-165"></a>    <span class="p">)</span>
+<a id="__codelineno-3-166" name="__codelineno-3-166" href="#__codelineno-3-166"></a>    <span class="n">passed</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="n">first</span> <span class="o">&gt;</span> <span class="n">last</span> <span class="ow">and</span> <span class="n">drift</span> <span class="o">&lt;</span> <span class="mf">1e-3</span> <span class="ow">and</span> <span class="n">agrees</span>
+<a id="__codelineno-3-167" name="__codelineno-3-167" href="#__codelineno-3-167"></a>    <span class="nb">print</span><span class="p">(</span><span class="s2">"PASS"</span> <span class="k">if</span> <span class="n">passed</span> <span class="k">else</span> <span class="s2">"FAIL"</span><span class="p">)</span>
+<a id="__codelineno-3-168" name="__codelineno-3-168" href="#__codelineno-3-168"></a>    <span class="k">if</span> <span class="ow">not</span> <span class="n">passed</span><span class="p">:</span>
+<a id="__codelineno-3-169" name="__codelineno-3-169" href="#__codelineno-3-169"></a>        <span class="n">sys</span><span class="o">.</span><span class="n">exit</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+<a id="__codelineno-3-170" name="__codelineno-3-170" href="#__codelineno-3-170"></a>
+<a id="__codelineno-3-171" name="__codelineno-3-171" href="#__codelineno-3-171"></a>
+<a id="__codelineno-3-172" name="__codelineno-3-172" href="#__codelineno-3-172"></a><span class="n">main</span><span class="p">()</span>
 </code></pre></div>
-<p>The folder in the repository: <a href="https://github.com/franknoh/PPy/blob/main/examples/39_xla"><code>examples/39_xla</code></a>.</p>
+<p>The folder in the repository: <a href="https://github.com/franknoh/PPy/blob/main/examples/45_multi_gpu_jax"><code>examples/45_multi_gpu_jax</code></a>.</p>
 
 
 
@@ -3980,7 +4117,7 @@ step.</p>
       <nav class="md-footer__inner md-grid" aria-label="Footer" >
         
           
-          <a href="../44_tile/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Tile kernels">
+          <a href="../39_xla/" class="md-footer__link md-footer__link--prev" aria-label="Previous: XLA">
             <div class="md-footer__button md-icon">
               
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
@@ -3990,20 +4127,20 @@ step.</p>
                 Previous
               </span>
               <div class="md-ellipsis">
-                Tile kernels
+                XLA
               </div>
             </div>
           </a>
         
         
           
-          <a href="../45_multi_gpu_jax/" class="md-footer__link md-footer__link--next" aria-label="Next: Multi-GPU JAX training">
+          <a href="../05_numpy/" class="md-footer__link md-footer__link--next" aria-label="Next: NumPy fusion">
             <div class="md-footer__title">
               <span class="md-footer__direction">
                 Next
               </span>
               <div class="md-ellipsis">
-                Multi-GPU JAX training
+                NumPy fusion
               </div>
             </div>
             <div class="md-footer__button md-icon">

@@ -2175,6 +2175,8 @@
       
         
       
+        
+      
     
     
     
@@ -2291,6 +2293,34 @@
     
   
     XLA
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../howto/45_multi_gpu_jax/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Multi-GPU JAX training
   
 
     
@@ -3363,6 +3393,8 @@
       
         
       
+        
+      
     
     
     
@@ -3585,6 +3617,34 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../internals/hardware-validation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Hardware validation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -3772,11 +3832,21 @@ PPY program.</p>
 <li><strong><code>ppy.Dynamic</code></strong> is the policed boundary. Any value may become <code>Dynamic</code>;
   a <code>Dynamic</code> value fits only <code>Dynamic</code>, <code>Any</code>, or <code>object</code>. Crossing into
   typed code — a typed return, parameter, field, or declared variable — is
-  <code>E1508</code> until it passes through <code>ppy.check[T](value)</code>, which validates at
-  runtime (raising <code>TypeError</code>) and hands back a typed value. <code>ppy.check</code> is
-  the inverse of <code>typing.cast</code>: it checks and asserts nothing, where <code>cast</code>
-  asserts and checks nothing. Validation is shallow — <code>list[int]</code> is checked
-  to be a <code>list</code>, not walked — because the check runs on the boundary.</li>
+  <code>E1508</code> until it passes through <code>ppy.check[T](value)</code> or
+  <code>ppy.assume[T](value)</code>. <code>ppy.check[T](value)</code> validates every
+  runtime-checkable part of <code>T</code>, recursively -- a <code>list[int]</code> element by
+  element, a dataclass field by field, an <code>i8</code>'s range, an <code>Array[int, 3]</code>'s
+  length, a <code>Buffer[float]</code>'s format, a <code>Range</code>, <code>Length</code>, <code>Shape</code>, <code>DType</code>,
+  or <code>Contiguous</code> refinement against the value's own metadata -- raising
+  <code>TypeError</code> where the value falls short, and hands back a value typed as
+  <code>T</code>. A <code>T</code> PPy cannot validate soundly at runtime -- a callable, an
+  iterator, a protocol, or a contract between caller and callee such as
+  <code>Owned[T]</code>, <code>Borrowed[T]</code>, <code>Mut[T]</code>, or <code>NoAlias</code> that no single value can
+  bear witness to -- is rejected, never checked in part. <code>ppy.assume[T](value)</code>
+  performs no runtime validation: it is an explicit unchecked assertion the
+  programmer takes responsibility for, and it should look like one. Both
+  differ from <code>typing.cast</code> in behavior: <code>cast</code> asserts and checks nothing,
+  <code>check</code> checks and asserts nothing, <code>assume</code> asserts and says so.</li>
 </ul>
 <p>Examples: <a href="../../howto/16_dynamic/">Dynamic boundaries</a>,
 <a href="../../howto/10_narrowing/">Narrowing</a>, <a href="../../howto/04_classes/">Classes</a>.</p>

@@ -2101,6 +2101,8 @@
       
         
       
+        
+      
     
     
     
@@ -2217,6 +2219,34 @@
     
   
     XLA
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../howto/45_multi_gpu_jax/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Multi-GPU JAX training
   
 
     
@@ -3291,6 +3321,8 @@
       
         
       
+        
+      
     
     
     
@@ -3836,6 +3868,34 @@
     
   
     Where a solver fits
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../hardware-validation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Hardware validation
   
 
     
@@ -4540,7 +4600,11 @@ operations are the ones pandas and PyArrow share: <code>from_parts %values,
 %validity, %length</code> and <code>store</code> move a column to and from Arrow's layout
 (values one per row -- one bit for <code>bool</code> -- and a bit-packed validity
 bitmap); <code>add</code>, <code>sub</code>, <code>mul</code>, <code>div</code>, the six comparisons, <code>and</code>, <code>or</code>,
-<code>xor</code>, <code>negate</code>, <code>abs</code>, <code>invert</code> give a null where an input is null;
+<code>xor</code>, <code>negate</code>, <code>abs</code>, <code>invert</code> give a null where an input is null, and
+<code>and_kleene</code>, <code>or_kleene</code> are the three-valued forms, where a false on
+one side of <code>and</code> (a true on one side of <code>or</code>) decides whatever the other
+side holds -- what PyArrow's <code>and_kleene</code> computes and pandas' <code>&amp;</code> on an
+Arrow-backed Series means;
 <code>is_null</code>, <code>is_valid</code>, <code>fill_null</code>, <code>cast</code>, <code>select</code>, <code>fill %scalar, %n</code>
 (one value in every row); <code>map %out, %outv, %columns..., %scalars...
 {expression, model, gives}</code> evaluates a whole expression tree --
