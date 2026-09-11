@@ -6,6 +6,11 @@ import torch
 from torch.func import grad, vmap
 
 torch.set_default_dtype(torch.float64)
+# PyTorch's default is one thread per logical core; on a hybrid CPU that
+# count spins on the efficiency cores and the batch takes hundreds of
+# milliseconds some runs and seven others. The performance cores' count is
+# the number to give it, as a program would.
+torch.set_num_threads(min(8, torch.get_num_threads()))
 
 
 def f(x, y):

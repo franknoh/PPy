@@ -296,6 +296,18 @@ def measure(comparison: Comparison) -> tuple[dict[str, dict[str, dict[str, float
     problems = compare.check(names, outcomes, comparison.reference or names[0])
     if problems:
         return {}, problems
+    # A kernel whose spread is half its mean was not measured, it was
+    # disturbed -- a busy machine, a runtime that spins -- and is no table.
+    for name in names:
+        for label in {label for outcome in outcomes[name] for label in outcome.timings}:
+            values = [o.timings[label] for o in outcomes[name] if label in o.timings]
+            if len(values) > 1 and statistics.stdev(values) > 0.5 * statistics.mean(values):
+                problems.append(
+                    f"{name} / {label}: unstable, {statistics.mean(values):.2f} ms "
+                    f"± {statistics.stdev(values):.2f} over {len(values)} runs"
+                )
+    if problems:
+        return {}, problems
     measured: dict[str, dict[str, dict[str, float]]] = {}
     for name in names:
         measured[name] = {}
