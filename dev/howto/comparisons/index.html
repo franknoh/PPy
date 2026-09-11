@@ -1366,10 +1366,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#gpu-kernels-compared-with-cupy-numba-triton-taichi-mojo-and-cuda-c" class="md-nav__link">
+  <a href="#gpu-kernels-compared-with-cupy-numba-mojo-and-cuda-c" class="md-nav__link">
     <span class="md-ellipsis">
       
-        GPU kernels: Compared with CuPy, Numba, Triton, Taichi, Mojo, and CUDA C
+        GPU kernels: Compared with CuPy, Numba, Mojo, and CUDA C
       
     </span>
   </a>
@@ -3878,10 +3878,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#gpu-kernels-compared-with-cupy-numba-triton-taichi-mojo-and-cuda-c" class="md-nav__link">
+  <a href="#gpu-kernels-compared-with-cupy-numba-mojo-and-cuda-c" class="md-nav__link">
     <span class="md-ellipsis">
       
-        GPU kernels: Compared with CuPy, Numba, Triton, Taichi, Mojo, and CUDA C
+        GPU kernels: Compared with CuPy, Numba, Mojo, and CUDA C
       
     </span>
   </a>
@@ -4004,16 +4004,48 @@ buys the wrap-semantics row, and says so.</p>
 1.95.0.</p>
 <h2 id="buffers-and-jit-compared-with-numba-cython-numpy-and-c">Buffers and JIT: Compared with Numba, Cython, NumPy, and C<a class="headerlink" href="#buffers-and-jit-compared-with-numba-cython-numpy-and-c" title="Permanent link">&para;</a></h2>
 <p>From <a href="../12_buffers_and_jit/">Buffers and JIT</a>.
-The three kernels over 8,192 elements, each call timed as the mean of 2,000
-calls and the best of five such rounds, in <a href="https://github.com/franknoh/PPy/blob/main/examples/12_buffers_and_jit/compare"><code>compare/</code></a>:
-<a href="https://github.com/franknoh/PPy/blob/main/examples/12_buffers_and_jit/compare/kernels_bench.ppy"><code>kernels_bench.ppy</code></a>,
-<a href="https://github.com/franknoh/PPy/blob/main/examples/12_buffers_and_jit/compare/kernels_numba.py"><code>kernels_numba.py</code></a>,
-<a href="https://github.com/franknoh/PPy/blob/main/examples/12_buffers_and_jit/compare/kernels_cython.pyx"><code>kernels_cython.pyx</code></a>,
-<a href="https://github.com/franknoh/PPy/blob/main/examples/12_buffers_and_jit/compare/kernels_numpy.py"><code>kernels_numpy.py</code></a>, and <a href="https://github.com/franknoh/PPy/blob/main/examples/12_buffers_and_jit/compare/kernels.c"><code>kernels.c</code></a>.
-Milliseconds per call, mean and standard deviation over five processes;
-<a href="https://github.com/franknoh/PPy/blob/main/examples/compare.py"><code>examples/compare.py</code></a> held every program to the same four
-answers first. At this size a call is a few microseconds, so the table is as
-much about the call boundary as about the loop.</p>
+The three kernels over 8,192 elements -- a sum, a dot product in order and
+reassociated, a modular digest -- each call timed as the mean of 2,000
+calls, best of five rounds, milliseconds per call over five processes. The
+programs are in <a href="https://github.com/franknoh/PPy/blob/main/examples/12_buffers_and_jit/compare"><code>compare/</code></a>: <a href="https://github.com/franknoh/PPy/blob/main/examples/12_buffers_and_jit/compare/kernels_bench.ppy"><code>kernels_bench.ppy</code></a>,
+<a href="https://github.com/franknoh/PPy/blob/main/examples/12_buffers_and_jit/compare/kernels_numba.py"><code>kernels_numba.py</code></a>, <a href="https://github.com/franknoh/PPy/blob/main/examples/12_buffers_and_jit/compare/kernels_cython.pyx"><code>kernels_cython.pyx</code></a>,
+<a href="https://github.com/franknoh/PPy/blob/main/examples/12_buffers_and_jit/compare/kernels_numpy.py"><code>kernels_numpy.py</code></a>, <a href="https://github.com/franknoh/PPy/blob/main/examples/12_buffers_and_jit/compare/kernels.c"><code>kernels.c</code></a>.
+At this size a call is a few microseconds, so the table is as much about the
+call boundary as about the loop.</p>
+<p><strong>PPY</strong> -- the loop as written, a <code>Buffer[float]</code> borrowed from an
+<code>array.array</code>, <code>@ppy.fastmath</code> where reassociation is allowed:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nd">@ppy</span><span class="o">.</span><span class="n">pure</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="nd">@ppy</span><span class="o">.</span><span class="n">opt</span><span class="p">(</span><span class="mi">3</span><span class="p">)</span>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="k">def</span><span class="w"> </span><span class="nf">dot</span><span class="p">(</span><span class="n">a</span><span class="p">:</span> <span class="n">Buffer</span><span class="p">[</span><span class="nb">float</span><span class="p">],</span> <span class="n">b</span><span class="p">:</span> <span class="n">Buffer</span><span class="p">[</span><span class="nb">float</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="nb">float</span><span class="p">:</span>
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>    <span class="n">result</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.0</span>
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">a</span><span class="p">)):</span>
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>        <span class="n">result</span> <span class="o">+=</span> <span class="n">a</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">*</span> <span class="n">b</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
+<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>    <span class="k">return</span> <span class="n">result</span>
+</code></pre></div>
+<p><strong>Numba</strong> -- the same loop under <code>@njit</code>, no annotations, NumPy arrays,
+<code>fastmath=True</code> for the relaxed dot; its dispatcher types the arguments on
+every call:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="nd">@njit</span>
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="k">def</span><span class="w"> </span><span class="nf">dot</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">):</span>
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>    <span class="n">result</span> <span class="o">=</span> <span class="mf">0.0</span>
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">a</span><span class="p">)):</span>
+<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>        <span class="n">result</span> <span class="o">+=</span> <span class="n">a</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">*</span> <span class="n">b</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
+<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>    <span class="k">return</span> <span class="n">result</span>
+</code></pre></div>
+<p><strong>Cython</strong> -- typed memoryviews and <code>cdef</code> locals in a <code>.pyx</code>, built into an
+extension by <code>cythonize -i</code>; <code>boundscheck=False</code> is what makes it a C loop,
+and there is no relaxed dot to write:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="k">cpdef</span><span class="w"> </span><span class="kt">double</span> <span class="nf">dot</span><span class="p">(</span><span class="nb">double</span><span class="p">[::</span><span class="mf">1</span><span class="p">]</span> <span class="n">a</span><span class="p">,</span> <span class="nb">double</span><span class="p">[::</span><span class="mf">1</span><span class="p">]</span> <span class="n">b</span><span class="p">):</span>
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>    <span class="k">cdef</span><span class="w"> </span><span class="kt">double</span> <span class="nv">result</span><span class="w"> </span><span class="o">=</span> <span class="mf">0.0</span>
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>    <span class="k">cdef</span><span class="w"> </span><span class="kt">Py_ssize_t</span> <span class="nv">i</span>
+<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">a</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mf">0</span><span class="p">]):</span>
+<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>        <span class="n">result</span> <span class="o">+=</span> <span class="n">a</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">*</span> <span class="n">b</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
+<a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>    <span class="k">return</span> <span class="n">result</span>
+</code></pre></div>
+<p><strong>NumPy</strong> -- no loop: <code>np.dot</code> is BLAS, <code>np.sum</code> pairwise, and
+<code>(counts % m).sum()</code> builds a temporary. <strong>C</strong> is the loop with no Python
+around it, timed inside the process: the floor.</p>
+<!-- compare:start -->
 <table>
 <thead>
 <tr>
@@ -4029,62 +4061,49 @@ much about the call boundary as about the loop.</p>
 <tr>
 <td>total</td>
 <td style="text-align: right;">0.0036 ± 0.0000</td>
-<td style="text-align: right;">0.0037 ± 0.0001</td>
 <td style="text-align: right;">0.0036 ± 0.0001</td>
+<td style="text-align: right;">0.0037 ± 0.0001</td>
 <td style="text-align: right;"><strong>0.0024 ± 0.0003</strong></td>
-<td style="text-align: right;">0.0035 ± 0.0001</td>
+<td style="text-align: right;">0.0036 ± 0.0001</td>
 </tr>
 <tr>
 <td>dot</td>
-<td style="text-align: right;">0.0036 ± 0.0000</td>
+<td style="text-align: right;">0.0036 ± 0.0001</td>
+<td style="text-align: right;">0.0036 ± 0.0001</td>
 <td style="text-align: right;">0.0037 ± 0.0001</td>
-<td style="text-align: right;">0.0037 ± 0.0001</td>
-<td style="text-align: right;"><strong>0.0013 ± 0.0000</strong></td>
-<td style="text-align: right;">0.0035 ± 0.0000</td>
+<td style="text-align: right;"><strong>0.0013 ± 0.0001</strong></td>
+<td style="text-align: right;">0.0036 ± 0.0001</td>
 </tr>
 <tr>
 <td>dot_relaxed</td>
 <td style="text-align: right;"><strong>0.0010 ± 0.0000</strong></td>
 <td style="text-align: right;">0.0011 ± 0.0000</td>
-<td style="text-align: right;">0.0036 ± 0.0000</td>
-<td style="text-align: right;">0.0013 ± 0.0000</td>
-<td style="text-align: right;">0.0035 ± 0.0000</td>
+<td style="text-align: right;">0.0037 ± 0.0001</td>
+<td style="text-align: right;">0.0013 ± 0.0001</td>
+<td style="text-align: right;">0.0035 ± 0.0001</td>
 </tr>
 <tr>
 <td>digest</td>
-<td style="text-align: right;">0.0074 ± 0.0000</td>
+<td style="text-align: right;">0.0075 ± 0.0001</td>
 <td style="text-align: right;">0.0114 ± 0.0001</td>
-<td style="text-align: right;">0.0080 ± 0.0002</td>
-<td style="text-align: right;">0.0204 ± 0.0002</td>
-<td style="text-align: right;"><strong>0.0045 ± 0.0000</strong></td>
+<td style="text-align: right;">0.0080 ± 0.0001</td>
+<td style="text-align: right;">0.0205 ± 0.0001</td>
+<td style="text-align: right;"><strong>0.0046 ± 0.0000</strong></td>
 </tr>
 </tbody>
 </table>
-<p>What each port asked for:</p>
-<ul>
-<li><strong>PPY</strong> is the source above: <code>Buffer[float]</code> parameters borrowed from an
-  <code>array.array</code>, <code>@ppy.fastmath</code> for the relaxed dot, <code>@ppy.jit</code> for the
-  digest specialized to its modulus. The same file runs on CPython.</li>
-<li><strong>Numba</strong> is <code>@njit</code> with no annotations, over NumPy arrays;
-  <code>fastmath=True</code> is its relaxed dot. It is called through its own
-  dispatcher, which types the arguments on every call.</li>
-<li><strong>Cython</strong> is a <code>.pyx</code> with <code>cdef</code> locals and typed memoryviews, built by
-  <code>cythonize -i</code> into an extension module; <code>boundscheck=False</code> and
-  <code>wraparound=False</code> are what make it a C loop. It has no relaxed dot: the
-  ordered one is repeated in that row.</li>
-<li><strong>NumPy</strong> has no loop: <code>np.sum</code>, <code>np.dot</code> (BLAS), and <code>(counts % m).sum()</code>
-  with an 8,192-element temporary. <code>np.dot</code> is the relaxed row too.</li>
-<li><strong>C</strong> is the loop with no Python around it, timed inside the process:
-  the floor, not a port. <code>-O3</code> vectorizes the relaxed sum on its own.</li>
-</ul>
-<p>The ordered sums land on the C loop in PPY, Numba, and Cython alike, a
-microsecond or so of call above it; NumPy's <code>dot</code> is BLAS and the fastest
-row, and its <code>digest</code> builds a temporary and is the slowest. The relaxed
-dot is where <code>@ppy.fastmath</code> and Numba's <code>fastmath=True</code> vectorize and
-Cython has no such switch. The C <code>digest</code> is the loop's floor, and the
-distance to it is what a call through the interpreter costs.</p>
-<p>Intel Core Ultra 9 386H (16 threads); Numba 0.67.0, Cython 3.3.0, NumPy 2.5.3 on CPython 3.12.13,
-gcc 13.3, PPY on CPython 3.13.13, from a checkout on a native filesystem.</p>
+<!-- compare:end -->
+
+<p>The ordered sums sit on the C loop in PPY, Numba, and Cython alike, a
+microsecond of call above it; the reassociated dot is where
+<code>@ppy.fastmath</code> and Numba's <code>fastmath=True</code> let the vectorizer in and
+Cython, with no such switch, stays scalar. NumPy's <code>dot</code> is BLAS and the
+fastest row, its <code>digest</code> pays for an 8,192-element temporary and is the
+slowest. The C <code>digest</code> is the loop's floor; what stands between it and
+the others is the price of a call through the interpreter.</p>
+<p>Intel Core Ultra 9 386H; Numba 0.67.0, Cython 3.3.0, NumPy 2.5.3 on
+CPython 3.12.13, gcc 13.3, PPY on CPython 3.13.13, from a checkout on a
+native filesystem.</p>
 <h2 id="algorithms-the-eight-kernels-against-c">Algorithms: The eight kernels against C<a class="headerlink" href="#algorithms-the-eight-kernels-against-c" title="Permanent link">&para;</a></h2>
 <p>From <a href="../15_algorithms/">Algorithms</a>.
 Same machine, same session, kernel wall time — mean ± standard deviation
@@ -4188,14 +4207,53 @@ so the caller sees them.</p>
 <h2 id="the-eight-kernels-against-numba-mojo-and-codon">The eight kernels against Numba, Mojo, and Codon<a class="headerlink" href="#the-eight-kernels-against-numba-mojo-and-codon" title="Permanent link">&para;</a></h2>
 <p>The same eight kernels ported to three tools that compile Python-shaped
 code, in <a href="https://github.com/franknoh/PPy/blob/main/examples/15_algorithms/compare"><code>compare/</code></a>: <a href="https://github.com/franknoh/PPy/blob/main/examples/15_algorithms/compare/algorithms_numba.py"><code>algorithms_numba.py</code></a>,
-<a href="https://github.com/franknoh/PPy/blob/main/examples/15_algorithms/compare/algorithms.mojo"><code>algorithms.mojo</code></a>, and <a href="https://github.com/franknoh/PPy/blob/main/examples/15_algorithms/compare/algorithms_codon.py"><code>algorithms_codon.py</code></a>.
-Kernel wall time inside the program, mean ± standard deviation over 7 runs,
-each a fresh process, in milliseconds; every column prints every answer the
-same. Bold is the fastest cell in the row.</p>
+<a href="https://github.com/franknoh/PPy/blob/main/examples/15_algorithms/compare/algorithms.mojo"><code>algorithms.mojo</code></a>, <a href="https://github.com/franknoh/PPy/blob/main/examples/15_algorithms/compare/algorithms_codon.py"><code>algorithms_codon.py</code></a>.
+Kernel wall time inside the program, milliseconds, mean and spread over
+seven fresh processes; Numba is timed after one warm call so its compile is
+not in the number. Collatz, as each of them spells it:</p>
+<p><strong>PPY</strong> -- annotated Python, and <code>ppy run</code> keeps Python's integers: the
+multiply is overflow-checked and falls back to arbitrary precision.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="k">def</span><span class="w"> </span><span class="nf">collatz_longest</span><span class="p">(</span><span class="n">limit</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>    <span class="n">best</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">0</span>
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>    <span class="k">for</span> <span class="n">start</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">limit</span><span class="p">):</span>
+<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>        <span class="n">n</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="n">start</span>
+<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>        <span class="n">steps</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">0</span>
+<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>        <span class="k">while</span> <span class="n">n</span> <span class="o">!=</span> <span class="mi">1</span><span class="p">:</span>
+<a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a>            <span class="n">n</span> <span class="o">=</span> <span class="n">n</span> <span class="o">//</span> <span class="mi">2</span> <span class="k">if</span> <span class="n">n</span> <span class="o">%</span> <span class="mi">2</span> <span class="o">==</span> <span class="mi">0</span> <span class="k">else</span> <span class="mi">3</span> <span class="o">*</span> <span class="n">n</span> <span class="o">+</span> <span class="mi">1</span>
+<a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a>            <span class="n">steps</span> <span class="o">+=</span> <span class="mi">1</span>
+<a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a>        <span class="n">best</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span><span class="n">best</span><span class="p">,</span> <span class="n">steps</span><span class="p">)</span>
+<a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a>    <span class="k">return</span> <span class="n">best</span>
+</code></pre></div>
+<p><strong>Numba</strong> is the same function with <code>@njit</code> in place of the annotations and
+a NumPy array in place of <code>array.array</code>; <strong>Codon</strong> is the same source with
+<code>List[int]</code> annotations, run with <code>codon run -release</code>. Both wrap at 64 bits
+without a word.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="nd">@njit</span>
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="k">def</span><span class="w"> </span><span class="nf">collatz_longest</span><span class="p">(</span><span class="n">limit</span><span class="p">):</span>
+<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>    <span class="n">best</span> <span class="o">=</span> <span class="mi">0</span>
+<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>    <span class="k">for</span> <span class="n">start</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">limit</span><span class="p">):</span>
+<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>        <span class="n">n</span> <span class="o">=</span> <span class="n">start</span>
+<a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a>        <span class="o">...</span>
+</code></pre></div>
+<p><strong>Mojo</strong> is typed by hand -- <code>Int</code> for every index, <code>Int64</code> for every
+element, <code>var</code> on every local -- and is the plain <code>List</code> version without
+<code>UnsafePointer</code>:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="k">def</span><span class="w"> </span><span class="nf">collatz_longest</span><span class="p">(</span><span class="n">limit</span><span class="p">:</span><span class="w"> </span><span class="nb">Int</span><span class="p">)</span><span class="w"> </span><span class="o">-&gt;</span><span class="w"> </span><span class="nb">Int64</span><span class="p">:</span>
+<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="w">    </span><span class="k">var</span><span class="w"> </span><span class="nv">best</span><span class="p">:</span><span class="w"> </span><span class="nb">Int64</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span>
+<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="w">    </span><span class="k">for</span><span class="w"> </span><span class="n">start</span><span class="w"> </span><span class="ow">in</span><span class="w"> </span><span class="nb">range</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">limit</span><span class="p">):</span>
+<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="w">        </span><span class="k">var</span><span class="w"> </span><span class="nv">n</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">Int64</span><span class="p">(</span><span class="n">start</span><span class="p">)</span>
+<a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="w">        </span><span class="k">var</span><span class="w"> </span><span class="nv">steps</span><span class="p">:</span><span class="w"> </span><span class="nb">Int64</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span>
+<a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a><span class="w">        </span><span class="k">while</span><span class="w"> </span><span class="n">n</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="mi">1</span><span class="p">:</span>
+<a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a><span class="w">            </span><span class="n">n</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">n</span><span class="w"> </span><span class="o">//</span><span class="w"> </span><span class="mi">2</span><span class="w"> </span><span class="k">if</span><span class="w"> </span><span class="n">n</span><span class="w"> </span><span class="o">%</span><span class="w"> </span><span class="mi">2</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">0</span><span class="w"> </span><span class="k">else</span><span class="w"> </span><span class="mi">3</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">n</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span>
+<a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a><span class="w">            </span><span class="n">steps</span><span class="w"> </span><span class="o">+=</span><span class="w"> </span><span class="mi">1</span>
+<a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a><span class="w">        </span><span class="n">best</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">max</span><span class="p">(</span><span class="n">best</span><span class="p">,</span><span class="w"> </span><span class="n">steps</span><span class="p">)</span>
+<a id="__codelineno-5-10" name="__codelineno-5-10" href="#__codelineno-5-10"></a><span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="n">best</span>
+</code></pre></div>
+<!-- compare:start -->
 <table>
 <thead>
 <tr>
-<th>kernel</th>
+<th></th>
 <th style="text-align: right;"><code>ppy run</code></th>
 <th style="text-align: right;"><code>ppy build --unsafe</code></th>
 <th style="text-align: right;">Numba <code>@njit</code></th>
@@ -4206,84 +4264,80 @@ same. Bold is the fastest cell in the row.</p>
 <tbody>
 <tr>
 <td>sieve 2e6</td>
-<td style="text-align: right;">9.1 ± 0.5</td>
-<td style="text-align: right;">8.8 ± 0.3</td>
-<td style="text-align: right;"><strong>7.5 ± 0.2</strong></td>
-<td style="text-align: right;">12.2 ± 1.1</td>
-<td style="text-align: right;">8.1 ± 0.4</td>
+<td style="text-align: right;">8.60 ± 0.28</td>
+<td style="text-align: right;">9.02 ± 0.36</td>
+<td style="text-align: right;"><strong>7.50 ± 0.12</strong></td>
+<td style="text-align: right;">12.52 ± 0.96</td>
+<td style="text-align: right;">7.92 ± 0.25</td>
 </tr>
 <tr>
 <td>collatz 3e5</td>
-<td style="text-align: right;">40.2 ± 0.8</td>
-<td style="text-align: right;"><strong>30.5 ± 0.4</strong></td>
-<td style="text-align: right;">31.7 ± 0.3</td>
-<td style="text-align: right;">67.7 ± 0.7</td>
-<td style="text-align: right;">32.8 ± 1.2</td>
+<td style="text-align: right;">40.14 ± 0.61</td>
+<td style="text-align: right;"><strong>30.70 ± 0.55</strong></td>
+<td style="text-align: right;">32.08 ± 0.43</td>
+<td style="text-align: right;">69.19 ± 1.68</td>
+<td style="text-align: right;">32.60 ± 0.28</td>
 </tr>
 <tr>
 <td>knapsack 400x2e4</td>
-<td style="text-align: right;">4.9 ± 0.1</td>
-<td style="text-align: right;">3.5 ± 0.1</td>
-<td style="text-align: right;">4.3 ± 0.1</td>
-<td style="text-align: right;"><strong>2.1 ± 0.0</strong></td>
-<td style="text-align: right;">5.7 ± 0.2</td>
+<td style="text-align: right;">5.16 ± 0.11</td>
+<td style="text-align: right;">3.74 ± 0.32</td>
+<td style="text-align: right;">4.50 ± 0.17</td>
+<td style="text-align: right;"><strong>2.25 ± 0.23</strong></td>
+<td style="text-align: right;">5.64 ± 0.05</td>
 </tr>
 <tr>
 <td>edit 2000x2000</td>
-<td style="text-align: right;">2.9 ± 0.1</td>
-<td style="text-align: right;">2.7 ± 0.1</td>
-<td style="text-align: right;"><strong>1.8 ± 0.2</strong></td>
-<td style="text-align: right;">8.0 ± 0.2</td>
-<td style="text-align: right;">2.4 ± 0.1</td>
+<td style="text-align: right;">2.94 ± 0.05</td>
+<td style="text-align: right;">2.82 ± 0.04</td>
+<td style="text-align: right;"><strong>1.78 ± 0.08</strong></td>
+<td style="text-align: right;">8.06 ± 0.23</td>
+<td style="text-align: right;">2.46 ± 0.09</td>
 </tr>
 <tr>
 <td>floyd 220</td>
-<td style="text-align: right;">3.1 ± 0.1</td>
-<td style="text-align: right;">3.0 ± 0.0</td>
-<td style="text-align: right;">2.5 ± 0.1</td>
-<td style="text-align: right;">3.0 ± 0.2</td>
-<td style="text-align: right;"><strong>1.3 ± 0.3</strong></td>
+<td style="text-align: right;">3.18 ± 0.08</td>
+<td style="text-align: right;">3.02 ± 0.04</td>
+<td style="text-align: right;">2.46 ± 0.13</td>
+<td style="text-align: right;">3.01 ± 0.06</td>
+<td style="text-align: right;"><strong>1.26 ± 0.36</strong></td>
 </tr>
 <tr>
 <td>matmul 220</td>
-<td style="text-align: right;">3.6 ± 0.1</td>
-<td style="text-align: right;">3.5 ± 0.1</td>
-<td style="text-align: right;"><strong>3.4 ± 0.3</strong></td>
-<td style="text-align: right;">7.7 ± 0.1</td>
-<td style="text-align: right;">3.8 ± 0.1</td>
+<td style="text-align: right;">3.90 ± 0.57</td>
+<td style="text-align: right;">3.62 ± 0.04</td>
+<td style="text-align: right;"><strong>3.44 ± 0.11</strong></td>
+<td style="text-align: right;">7.85 ± 0.21</td>
+<td style="text-align: right;">3.80 ± 0.00</td>
 </tr>
 <tr>
 <td>union-find 5e5</td>
-<td style="text-align: right;">3.1 ± 0.1</td>
-<td style="text-align: right;">3.1 ± 0.1</td>
-<td style="text-align: right;"><strong>2.5 ± 0.1</strong></td>
-<td style="text-align: right;">6.7 ± 0.6</td>
-<td style="text-align: right;">3.9 ± 0.3</td>
+<td style="text-align: right;">3.06 ± 0.15</td>
+<td style="text-align: right;">3.22 ± 0.27</td>
+<td style="text-align: right;"><strong>2.40 ± 0.00</strong></td>
+<td style="text-align: right;">6.95 ± 0.43</td>
+<td style="text-align: right;">3.86 ± 0.22</td>
 </tr>
 <tr>
 <td>fermat 6e4</td>
-<td style="text-align: right;">2.3 ± 0.1</td>
-<td style="text-align: right;">2.5 ± 0.1</td>
-<td style="text-align: right;">1.7 ± 0.1</td>
-<td style="text-align: right;">2.1 ± 0.0</td>
-<td style="text-align: right;"><strong>1.6 ± 0.1</strong></td>
+<td style="text-align: right;">2.28 ± 0.04</td>
+<td style="text-align: right;">2.54 ± 0.05</td>
+<td style="text-align: right;">1.70 ± 0.00</td>
+<td style="text-align: right;">2.12 ± 0.03</td>
+<td style="text-align: right;"><strong>1.50 ± 0.00</strong></td>
 </tr>
 </tbody>
 </table>
-<p><code>ppy run</code> keeps Python's integers -- overflow is guarded and falls back to
-arbitrary precision -- and the other four columns wrap at 64 bits, which is
-where collatz picks up its 10 ms. Numba is the fastest column on six of the
-eight against <code>ppy build --unsafe</code>, by ten to thirty percent; the Numba port is the
-PPY source with <code>@njit</code> in place of the annotations and NumPy arrays in
-place of <code>array.array</code>, timed after one warm call so its compile is not in
-the number. Codon takes the same source with <code>List[int]</code> annotations and
-runs it with <code>codon run -release</code> (the <code>build</code> link needed a <code>libz</code> this
-machine lacks). The Mojo port is typed by hand -- <code>List[Int64]</code>, <code>mut</code>
-parameters, an <code>Int</code> for every index and an <code>Int64</code> for every element --
-and is the plain <code>List</code> version without <code>UnsafePointer</code>; it is the slowest
-on five of the eight and the fastest on knapsack. Numba 0.67.0 on CPython
-3.12.13, Mojo 1.0.0 (<code>-O3</code>), Codon 0.19.6, PPY on CPython 3.13.13; Intel
-Core Ultra 9 386H; <a href="https://github.com/franknoh/PPy/blob/main/examples/compare.py"><code>examples/compare.py</code></a> produced the table.</p>
+<!-- compare:end -->
+
+<p><code>ppy build --unsafe</code> is the wrap-semantics column and the one to read
+against the other three; <code>ppy run</code> carries the overflow guards, which is
+where collatz pays its 10 ms. Numba leads on six of the eight by ten to
+thirty percent -- the same LLVM, a <code>for</code> over a NumPy array, and no guard
+of any kind. Mojo's plain <code>List</code> loop is the slowest on five kernels and
+the fastest on knapsack, where its bounds-free table indexing shows.
+Numba 0.67.0 on CPython 3.12.13, Mojo 1.0.0 (<code>-O3</code>), Codon 0.19.6, PPY on
+CPython 3.13.13; Intel Core Ultra 9 386H.</p>
 <h2 id="the-six-problems">The six problems<a class="headerlink" href="#the-six-problems" title="Permanent link">&para;</a></h2>
 <p>Each subfolder is one competitive-programming problem — the shapes a judge
 sets — read from standard input and answered on stdout, with its own input
@@ -4399,10 +4453,10 @@ beside it, and <code>examples/verify_conversions.py</code> checks that the commi
 file is exactly that. <a href="https://github.com/franknoh/PPy/blob/main/examples/15_algorithms/15c_kmp">15c</a> is hand-written, because the
 character buffer it wants has no plain-Python spelling that converts to it.</p>
 <h2 id="reading-input">Reading input<a class="headerlink" href="#reading-input" title="Permanent link">&para;</a></h2>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="n">n</span> <span class="o">=</span> <span class="n">ppy</span><span class="o">.</span><span class="n">input</span><span class="p">[</span><span class="nb">int</span><span class="p">]()</span>                 <span class="c1"># one line, as int(input()) reads it</span>
-<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="n">a</span><span class="p">,</span> <span class="n">b</span> <span class="o">=</span> <span class="n">ppy</span><span class="o">.</span><span class="n">input</span><span class="p">[</span><span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">]]()</span>  <span class="c1"># one line, exactly two fields</span>
-<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="n">row</span> <span class="o">=</span> <span class="n">ppy</span><span class="o">.</span><span class="n">input</span><span class="p">[</span><span class="n">Buffer</span><span class="p">[</span><span class="nb">int</span><span class="p">]]()</span>       <span class="c1"># one line of integers, into a buffer</span>
-<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="n">values</span> <span class="o">=</span> <span class="n">ppy</span><span class="o">.</span><span class="n">scan</span><span class="p">[</span><span class="n">Buffer</span><span class="p">[</span><span class="nb">int</span><span class="p">]](</span><span class="n">n</span><span class="p">)</span>    <span class="c1"># n integer tokens, whatever lines they are on</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="n">n</span> <span class="o">=</span> <span class="n">ppy</span><span class="o">.</span><span class="n">input</span><span class="p">[</span><span class="nb">int</span><span class="p">]()</span>                 <span class="c1"># one line, as int(input()) reads it</span>
+<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="n">a</span><span class="p">,</span> <span class="n">b</span> <span class="o">=</span> <span class="n">ppy</span><span class="o">.</span><span class="n">input</span><span class="p">[</span><span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">]]()</span>  <span class="c1"># one line, exactly two fields</span>
+<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="n">row</span> <span class="o">=</span> <span class="n">ppy</span><span class="o">.</span><span class="n">input</span><span class="p">[</span><span class="n">Buffer</span><span class="p">[</span><span class="nb">int</span><span class="p">]]()</span>       <span class="c1"># one line of integers, into a buffer</span>
+<a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="n">values</span> <span class="o">=</span> <span class="n">ppy</span><span class="o">.</span><span class="n">scan</span><span class="p">[</span><span class="n">Buffer</span><span class="p">[</span><span class="nb">int</span><span class="p">]](</span><span class="n">n</span><span class="p">)</span>    <span class="c1"># n integer tokens, whatever lines they are on</span>
 </code></pre></div>
 <p><code>ppy.input[T]()</code> reads one line the way the builtin <code>input()</code> does and
 types the result from <code>T</code>; <code>ppy.scan[T]()</code> reads tokens across lines. Both
@@ -4421,16 +4475,48 @@ The same four kernels over eight million elements, each written the way its
 tool wants it, in <a href="https://github.com/franknoh/PPy/blob/main/examples/35_parallel_range/compare"><code>compare/</code></a>: <a href="https://github.com/franknoh/PPy/blob/main/examples/35_parallel_range/compare/ranges_bench.ppy"><code>ranges_bench.ppy</code></a>
 (this example's kernels, with a relaxed <code>dot</code> beside the ordered one),
 <a href="https://github.com/franknoh/PPy/blob/main/examples/35_parallel_range/compare/ranges_numba.py"><code>ranges_numba.py</code></a>, <a href="https://github.com/franknoh/PPy/blob/main/examples/35_parallel_range/compare/ranges_taichi.py"><code>ranges_taichi.py</code></a>,
-<a href="https://github.com/franknoh/PPy/blob/main/examples/35_parallel_range/compare/ranges.mojo"><code>ranges.mojo</code></a>, and <a href="https://github.com/franknoh/PPy/blob/main/examples/35_parallel_range/compare/ranges_numpy.py"><code>ranges_numpy.py</code></a>.
-Each program prints its answers, then the best of five warm calls per kernel;
-<a href="https://github.com/franknoh/PPy/blob/main/examples/compare.py"><code>examples/compare.py</code></a> runs each program five times and reports
-the mean and standard deviation across processes, in milliseconds. All five
-print the same answers. The ordered sums agree to the last digit; the
-reassociated ones differ from them in the thirteenth.</p>
+<a href="https://github.com/franknoh/PPy/blob/main/examples/35_parallel_range/compare/ranges.mojo"><code>ranges.mojo</code></a>, <a href="https://github.com/franknoh/PPy/blob/main/examples/35_parallel_range/compare/ranges_numpy.py"><code>ranges_numpy.py</code></a>.
+Milliseconds, best of five warm calls, over five processes.</p>
+<p><strong>PPY</strong> -- <code>parallel.range</code>, typed parameters, the same file on CPython;
+<code>dot</code> keeps a serial sum's order by design and <code>@ppy.fastmath</code> is the
+relaxed one:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="k">def</span><span class="w"> </span><span class="nf">dot</span><span class="p">(</span><span class="n">a</span><span class="p">:</span> <span class="n">Buffer</span><span class="p">[</span><span class="nb">float</span><span class="p">],</span> <span class="n">b</span><span class="p">:</span> <span class="n">Buffer</span><span class="p">[</span><span class="nb">float</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="nb">float</span><span class="p">:</span>
+<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>    <span class="n">total</span> <span class="o">=</span> <span class="mf">0.0</span>
+<a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a>    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">parallel</span><span class="o">.</span><span class="n">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">a</span><span class="p">)):</span>
+<a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a>        <span class="n">total</span> <span class="o">+=</span> <span class="n">a</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">*</span> <span class="n">b</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
+<a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a>    <span class="k">return</span> <span class="n">total</span>
+</code></pre></div>
+<p><strong>Numba</strong> -- <code>@njit(parallel=True)</code> and <code>prange</code>; a <code>prange</code> sum
+reassociates on its own, so there is no ordered <code>dot</code> to write, and
+integers wrap silently:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="nd">@njit</span><span class="p">(</span><span class="n">parallel</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="k">def</span><span class="w"> </span><span class="nf">dot</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">):</span>
+<a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a>    <span class="n">total</span> <span class="o">=</span> <span class="mf">0.0</span>
+<a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a>    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">prange</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">a</span><span class="p">)):</span>
+<a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a>        <span class="n">total</span> <span class="o">+=</span> <span class="n">a</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">*</span> <span class="n">b</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
+<a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a>    <span class="k">return</span> <span class="n">total</span>
+</code></pre></div>
+<p><strong>Taichi</strong> -- arrays are <code>ti.field</code>s declared at module level, the outermost
+loop of a kernel is parallel by itself, and the defaults overflow in 32 bits
+and accumulate in <code>f32</code> silently; <code>ti.init(default_ip=ti.i64, default_fp=ti.f64)</code>
+is what makes the answers match:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="nd">@ti</span><span class="o">.</span><span class="n">kernel</span>
+<a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="k">def</span><span class="w"> </span><span class="nf">dot</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="n">ti</span><span class="o">.</span><span class="n">f64</span><span class="p">:</span>
+<a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a>    <span class="n">total</span> <span class="o">=</span> <span class="mf">0.0</span>
+<a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a>    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">N</span><span class="p">):</span>
+<a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a>        <span class="n">total</span> <span class="o">+=</span> <span class="n">a_f</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">*</span> <span class="n">b_f</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
+<a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a>    <span class="k">return</span> <span class="n">total</span>
+</code></pre></div>
+<p><strong>Mojo</strong> -- a different language: <code>List[Float64]</code>, <code>mut</code> parameters,
+<code>Int64(i)</code> where an index meets an element, <code>parallelize</code> from
+<code>max.algorithm</code> taking a function of one index, so a reduction is partial
+sums per worker written by hand. <strong>NumPy</strong> has no loop to write and no way
+to keep one: <code>dot</code> is BLAS, <code>count_odd</code> builds two temporaries to count.</p>
+<!-- compare:start -->
 <table>
 <thead>
 <tr>
-<th>kernel</th>
+<th></th>
 <th style="text-align: right;">PPY <code>ppy run</code></th>
 <th style="text-align: right;">Numba <code>prange</code></th>
 <th style="text-align: right;">Taichi</th>
@@ -4441,85 +4527,109 @@ reassociated ones differ from them in the thirteenth.</p>
 <tbody>
 <tr>
 <td>squares</td>
-<td style="text-align: right;">1.31 ± 0.07</td>
-<td style="text-align: right;"><strong>0.84 ± 0.22</strong></td>
-<td style="text-align: right;">1.02 ± 0.03</td>
-<td style="text-align: right;">1.00 ± 0.06</td>
-<td style="text-align: right;">13.47 ± 0.51</td>
+<td style="text-align: right;">1.31 ± 0.06</td>
+<td style="text-align: right;"><strong>0.68 ± 0.02</strong></td>
+<td style="text-align: right;">1.11 ± 0.06</td>
+<td style="text-align: right;">0.97 ± 0.05</td>
+<td style="text-align: right;">12.81 ± 0.12</td>
 </tr>
 <tr>
 <td>dot, in order</td>
-<td style="text-align: right;"><strong>6.14 ± 0.26</strong></td>
+<td style="text-align: right;"><strong>5.71 ± 0.13</strong></td>
 <td style="text-align: right;">—</td>
 <td style="text-align: right;">—</td>
-<td style="text-align: right;">15.28 ± 0.29</td>
+<td style="text-align: right;">12.48 ± 1.35</td>
 <td style="text-align: right;">—</td>
 </tr>
 <tr>
 <td>dot, reassociated</td>
-<td style="text-align: right;">1.68 ± 0.11</td>
-<td style="text-align: right;">1.07 ± 0.15</td>
-<td style="text-align: right;">1.46 ± 0.03</td>
-<td style="text-align: right;">1.54 ± 0.08</td>
-<td style="text-align: right;"><strong>1.04 ± 0.05</strong></td>
+<td style="text-align: right;">1.79 ± 0.15</td>
+<td style="text-align: right;"><strong>1.07 ± 0.05</strong></td>
+<td style="text-align: right;">1.47 ± 0.05</td>
+<td style="text-align: right;">1.49 ± 0.08</td>
+<td style="text-align: right;">1.63 ± 1.26</td>
 </tr>
 <tr>
 <td>count_odd</td>
-<td style="text-align: right;">0.99 ± 0.07</td>
-<td style="text-align: right;"><strong>0.71 ± 0.59</strong></td>
-<td style="text-align: right;">1.21 ± 0.03</td>
-<td style="text-align: right;">1.44 ± 0.27</td>
-<td style="text-align: right;">28.10 ± 0.84</td>
+<td style="text-align: right;">0.96 ± 0.05</td>
+<td style="text-align: right;"><strong>0.51 ± 0.12</strong></td>
+<td style="text-align: right;">1.22 ± 0.02</td>
+<td style="text-align: right;">1.33 ± 0.30</td>
+<td style="text-align: right;">27.58 ± 0.68</td>
 </tr>
 <tr>
 <td>fill, serial</td>
-<td style="text-align: right;">6.15 ± 0.15</td>
-<td style="text-align: right;">7.54 ± 0.08</td>
-<td style="text-align: right;"><strong>4.20 ± 0.46</strong></td>
-<td style="text-align: right;">20.04 ± 0.21</td>
-<td style="text-align: right;">15.32 ± 0.81</td>
+<td style="text-align: right;">6.10 ± 0.15</td>
+<td style="text-align: right;">7.48 ± 0.13</td>
+<td style="text-align: right;"><strong>4.40 ± 0.18</strong></td>
+<td style="text-align: right;">17.81 ± 1.23</td>
+<td style="text-align: right;">14.75 ± 0.26</td>
 </tr>
 </tbody>
 </table>
-<p>What each port asked for:</p>
-<ul>
-<li><strong>PPY</strong> is the source above: typed parameters, <code>parallel.range</code>, and the
-  same file runs on CPython. <code>dot</code> keeps the order of a serial sum by
-  design, which is why it is the slow row; <code>@ppy.fastmath</code> is the relaxed one.</li>
-<li><strong>Numba</strong> is <code>@njit(parallel=True)</code> and <code>prange</code> over NumPy arrays, with no
-  annotations. A <code>prange</code> sum reassociates on its own -- the plain reduction
-  measures 1.46 ± 0.80 ms, <code>fastmath=True</code> the 1.07 in the table -- so there
-  is no ordered <code>dot</code> to write. Integers wrap at 64 bits silently.</li>
-<li><strong>Taichi</strong> wants the arrays as <code>ti.field</code>s declared with their shapes at
-  module level and the kernels written over them; the outermost loop of a
-  kernel is parallel on its own, and the ordered second loop of <code>fill</code> needs
-  <code>ti.loop_config(serialize=True)</code>. With the defaults, <code>squares</code> overflowed
-  in 32-bit and <code>dot</code> accumulated in <code>f32</code>, both silently:
-  <code>ti.init(default_ip=ti.i64, default_fp=ti.f64)</code> is what makes the answers
-  match.</li>
-<li><strong>Mojo</strong> is a different language -- Mojo 1.0's <code>def</code>, <code>var</code>, <code>mut</code>
-  parameters, <code>List[Int64]</code>, <code>Int64(i)</code> where the index meets the element --
-  compiled to a binary. <code>parallelize</code> now lives in <code>max.algorithm</code>, the MAX
-  package, and takes a function of one index, so a reduction is partial sums
-  per worker written by hand. This is the straightforward <code>List</code> port, without
-  <code>UnsafePointer</code> or SIMD types; its serial loops are the slowest here.</li>
-<li><strong>NumPy</strong> has no loop to write, and no way to keep one: each step is an
-  array expression with a temporary, <code>dot</code> is BLAS, and <code>count_odd</code> builds
-  two eight-million-element temporaries to count.</li>
-</ul>
+<!-- compare:end -->
+
+<p>On the elementwise kernels the four compiled tools are within a few tenths
+of a millisecond, which is the memory bandwidth of the machine, and NumPy's
+temporaries are ten times behind. The reductions are where the models
+differ: PPY's ordered <code>dot</code> is the only one that promises a serial sum's
+answer, and it is a serial sum; its relaxed <code>dot</code>, Numba's and Taichi's are
+the same vectorized tree. The serial <code>fill</code> is the row that measures a plain
+loop with no threads, and Mojo's plain <code>List</code> loop is the slow one there.</p>
 <p>Intel Core Ultra 9 386H (16 threads), threads backend; Numba 0.67.0, Taichi
 1.7.4, NumPy 2.5.3 on CPython 3.12.13, Mojo 1.0.0, PPY on CPython 3.13.13,
 from a checkout on a native filesystem.</p>
 <h2 id="derivatives-compared-with-jax-and-pytorch">Derivatives: Compared with JAX and PyTorch<a class="headerlink" href="#derivatives-compared-with-jax-and-pytorch" title="Permanent link">&para;</a></h2>
 <p>From <a href="../36_autodiff/">Derivatives</a>.
 Newton's method on <code>g</code> from 100,000 starting points near 0.4, six steps
-each, in <a href="https://github.com/franknoh/PPy/blob/main/examples/36_autodiff/compare"><code>compare/</code></a>: <a href="https://github.com/franknoh/PPy/blob/main/examples/36_autodiff/compare/gradients_bench.ppy"><code>gradients_bench.ppy</code></a>,
-<a href="https://github.com/franknoh/PPy/blob/main/examples/36_autodiff/compare/gradients_jax.py"><code>gradients_jax.py</code></a>, and
-<a href="https://github.com/franknoh/PPy/blob/main/examples/36_autodiff/compare/gradients_torch.py"><code>gradients_torch.py</code></a>. Each prints the two
-derivatives of the example to nine digits, then the mean root and the worst
-residual, and the best of five runs; <a href="https://github.com/franknoh/PPy/blob/main/examples/compare.py"><code>examples/compare.py</code></a>
-runs each five times and reports the mean and standard deviation across
-processes, in milliseconds. All three print the same answers.</p>
+each, with the derivative from each framework's own autodiff. The programs
+are in <a href="https://github.com/franknoh/PPy/blob/main/examples/36_autodiff/compare"><code>compare/</code></a>: <a href="https://github.com/franknoh/PPy/blob/main/examples/36_autodiff/compare/gradients_bench.ppy"><code>gradients_bench.ppy</code></a>,
+<a href="https://github.com/franknoh/PPy/blob/main/examples/36_autodiff/compare/gradients_jax.py"><code>gradients_jax.py</code></a>, <a href="https://github.com/franknoh/PPy/blob/main/examples/36_autodiff/compare/gradients_torch.py"><code>gradients_torch.py</code></a>.
+Milliseconds for the whole batch, best of five, over five processes.</p>
+<p><strong>PPY</strong> -- <code>ppy.grad(g)</code> is a function; <code>newton</code> calls it in a loop, and a
+loop over the starting points calls <code>newton</code>. Everything is scalar and
+native; nothing is batched:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="n">dg</span> <span class="o">=</span> <span class="n">ppy</span><span class="o">.</span><span class="n">grad</span><span class="p">(</span><span class="n">g</span><span class="p">)</span>
+<a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>
+<a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a>
+<a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="k">def</span><span class="w"> </span><span class="nf">newton</span><span class="p">(</span><span class="n">x</span><span class="p">:</span> <span class="nb">float</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">float</span><span class="p">:</span>
+<a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a>    <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">6</span><span class="p">):</span>
+<a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a>        <span class="n">x</span> <span class="o">=</span> <span class="n">x</span> <span class="o">-</span> <span class="n">g</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="o">/</span> <span class="n">dg</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+<a id="__codelineno-10-7" name="__codelineno-10-7" href="#__codelineno-10-7"></a>    <span class="k">return</span> <span class="n">x</span>
+<a id="__codelineno-10-8" name="__codelineno-10-8" href="#__codelineno-10-8"></a>
+<a id="__codelineno-10-9" name="__codelineno-10-9" href="#__codelineno-10-9"></a>
+<a id="__codelineno-10-10" name="__codelineno-10-10" href="#__codelineno-10-10"></a><span class="k">def</span><span class="w"> </span><span class="nf">newton_all</span><span class="p">(</span><span class="n">count</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">float</span><span class="p">:</span>
+<a id="__codelineno-10-11" name="__codelineno-10-11" href="#__codelineno-10-11"></a>    <span class="n">total</span> <span class="o">=</span> <span class="mf">0.0</span>
+<a id="__codelineno-10-12" name="__codelineno-10-12" href="#__codelineno-10-12"></a>    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">count</span><span class="p">):</span>
+<a id="__codelineno-10-13" name="__codelineno-10-13" href="#__codelineno-10-13"></a>        <span class="n">total</span> <span class="o">+=</span> <span class="n">newton</span><span class="p">(</span><span class="mf">0.4</span> <span class="o">+</span> <span class="n">i</span> <span class="o">*</span> <span class="mf">1e-6</span><span class="p">)</span>
+<a id="__codelineno-10-14" name="__codelineno-10-14" href="#__codelineno-10-14"></a>    <span class="k">return</span> <span class="n">total</span> <span class="o">/</span> <span class="n">count</span>
+</code></pre></div>
+<p><strong>JAX</strong> -- <code>jax.grad</code> over <code>jnp</code> functions, and to run 100,000 solves it
+wants them batched: <code>vmap</code> under <code>jit</code>, the loop as <code>lax.fori_loop</code> so it
+traces, <code>jax_enable_x64</code> so the digits match:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="k">def</span><span class="w"> </span><span class="nf">newton</span><span class="p">(</span><span class="n">x</span><span class="p">):</span>
+<a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">step</span><span class="p">(</span><span class="n">_</span><span class="p">,</span> <span class="n">x</span><span class="p">):</span>
+<a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a>        <span class="k">return</span> <span class="n">x</span> <span class="o">-</span> <span class="n">g</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="o">/</span> <span class="n">dg</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+<a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a>
+<a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a>    <span class="k">return</span> <span class="n">jax</span><span class="o">.</span><span class="n">lax</span><span class="o">.</span><span class="n">fori_loop</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">6</span><span class="p">,</span> <span class="n">step</span><span class="p">,</span> <span class="n">x</span><span class="p">)</span>
+<a id="__codelineno-11-6" name="__codelineno-11-6" href="#__codelineno-11-6"></a>
+<a id="__codelineno-11-7" name="__codelineno-11-7" href="#__codelineno-11-7"></a>
+<a id="__codelineno-11-8" name="__codelineno-11-8" href="#__codelineno-11-8"></a><span class="n">newton_all</span> <span class="o">=</span> <span class="n">jax</span><span class="o">.</span><span class="n">jit</span><span class="p">(</span><span class="n">jax</span><span class="o">.</span><span class="n">vmap</span><span class="p">(</span><span class="n">newton</span><span class="p">))</span>
+</code></pre></div>
+<p><strong>PyTorch</strong> -- <code>torch.func.grad</code> and <code>vmap</code>; the six steps stay a Python
+loop over a 100,000-element tensor in float64:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="n">dg</span> <span class="o">=</span> <span class="n">grad</span><span class="p">(</span><span class="n">g</span><span class="p">)</span>
+<a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a>
+<a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a>
+<a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a><span class="k">def</span><span class="w"> </span><span class="nf">newton</span><span class="p">(</span><span class="n">x</span><span class="p">):</span>
+<a id="__codelineno-12-5" name="__codelineno-12-5" href="#__codelineno-12-5"></a>    <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">6</span><span class="p">):</span>
+<a id="__codelineno-12-6" name="__codelineno-12-6" href="#__codelineno-12-6"></a>        <span class="n">x</span> <span class="o">=</span> <span class="n">x</span> <span class="o">-</span> <span class="n">g</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="o">/</span> <span class="n">dg</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+<a id="__codelineno-12-7" name="__codelineno-12-7" href="#__codelineno-12-7"></a>    <span class="k">return</span> <span class="n">x</span>
+<a id="__codelineno-12-8" name="__codelineno-12-8" href="#__codelineno-12-8"></a>
+<a id="__codelineno-12-9" name="__codelineno-12-9" href="#__codelineno-12-9"></a>
+<a id="__codelineno-12-10" name="__codelineno-12-10" href="#__codelineno-12-10"></a><span class="n">newton_all</span> <span class="o">=</span> <span class="n">vmap</span><span class="p">(</span><span class="n">newton</span><span class="p">)</span>
+</code></pre></div>
+<!-- compare:start -->
 <table>
 <thead>
 <tr>
@@ -4532,42 +4642,59 @@ processes, in milliseconds. All three print the same answers.</p>
 <tbody>
 <tr>
 <td>newton, 100k starts</td>
-<td style="text-align: right;">12.25 ± 0.13</td>
-<td style="text-align: right;"><strong>1.58 ± 0.45</strong></td>
-<td style="text-align: right;">7.17 ± 1.57</td>
+<td style="text-align: right;">12.16 ± 0.11</td>
+<td style="text-align: right;"><strong>1.49 ± 0.26</strong></td>
+<td style="text-align: right;">8.81 ± 1.76</td>
 </tr>
 </tbody>
 </table>
-<p>What each port asked for:</p>
-<ul>
-<li><strong>PPY</strong> is the source above: <code>ppy.grad(g)</code> is a function, <code>newton</code> calls it
-  in a loop, and <code>newton_all</code> calls <code>newton</code> in a loop over the starting
-  points. Every call is native and scalar; nothing is batched.</li>
-<li><strong>JAX</strong> is <code>jax.grad</code> over <code>jnp</code> functions; to run 100,000 solves it wants
-  them batched -- <code>jax.vmap(newton)</code> under <code>jax.jit</code>, with the loop as
-  <code>lax.fori_loop</code> so it traces -- and then XLA vectorizes the whole batch.
-  <code>jax_enable_x64</code> is what makes the digits match.</li>
-<li><strong>PyTorch</strong> is <code>torch.func.grad</code> and <code>vmap</code>, the functional API; the Newton
-  loop stays a Python loop of six batched steps over a 100,000-element
-  tensor, in float64 by <code>set_default_dtype</code>.</li>
-</ul>
-<p>The derivative is the same in all three -- reverse mode, the same nine
-digits. What differs is the shape of the program: JAX and PyTorch are fast
-here because the problem batches, and a scalar <code>newton</code> in a Python loop
-would cost them tens of microseconds a call; PPY's scalar loop is native and
-pays nothing per call, and it is not vectorized across the batch.</p>
-<p>Intel Core Ultra 9 386H (16 threads); JAX 0.11.1 and PyTorch 2.14.0 (CPU) on CPython 3.13.13, PPY on
-CPython 3.13.13, from a checkout on a native filesystem.</p>
+<!-- compare:end -->
+
+<p>The derivative is the same nine digits in all three -- reverse mode over
+the same rule table. What differs is the shape of the program: JAX and
+PyTorch are fast here because the problem batches and XLA and ATen
+vectorize across the batch; a scalar <code>newton</code> in a Python loop would cost
+them tens of microseconds per call. PPY's scalar loop pays nothing per
+call and is not vectorized across the batch. Which one is faster depends
+on whether your problem comes as 100,000 independent solves or as one.</p>
+<p>Intel Core Ultra 9 386H; JAX 0.11.1 and PyTorch 2.14.0 (CPU) on CPython
+3.13.13, PPY on CPython 3.13.13, from a checkout on a native filesystem.</p>
 <h2 id="regular-expressions-compared-with-cpythons-re-and-rusts-regex">Regular expressions: Compared with CPython's <code>re</code> and Rust's <code>regex</code><a class="headerlink" href="#regular-expressions-compared-with-cpythons-re-and-rusts-regex" title="Permanent link">&para;</a></h2>
 <p>From <a href="../43_regex/">Regular expressions</a>.
-The same four passes over 400,000 generated lines -- 7.9 MB -- each written
-the way its tool is written, in <a href="https://github.com/franknoh/PPy/blob/main/examples/43_regex/compare"><code>compare/</code></a>:
-<a href="https://github.com/franknoh/PPy/blob/main/examples/43_regex/compare/patterns_bench.ppy"><code>patterns_bench.ppy</code></a> (this example's functions),
-<a href="https://github.com/franknoh/PPy/blob/main/examples/43_regex/compare/patterns_re.py"><code>patterns_re.py</code></a>, and <a href="https://github.com/franknoh/PPy/blob/main/examples/43_regex/compare/patterns.rs"><code>patterns.rs</code></a>
-with its <a href="https://github.com/franknoh/PPy/blob/main/examples/43_regex/compare/Cargo.toml"><code>Cargo.toml</code></a>. Each prints the best of five
-passes; <a href="https://github.com/franknoh/PPy/blob/main/examples/compare.py"><code>examples/compare.py</code></a> runs each program five times
-and reports the mean and standard deviation across processes, in
-milliseconds. All three print the same four answers.</p>
+Four passes over 400,000 generated lines (7.9 MB): count the words, find the
+longest, sum the <code>name = value</code> pairs, count the hex numbers. The programs
+are in <a href="https://github.com/franknoh/PPy/blob/main/examples/43_regex/compare"><code>compare/</code></a> -- <a href="https://github.com/franknoh/PPy/blob/main/examples/43_regex/compare/patterns_bench.ppy"><code>patterns_bench.ppy</code></a>,
+<a href="https://github.com/franknoh/PPy/blob/main/examples/43_regex/compare/patterns_re.py"><code>patterns_re.py</code></a>, <a href="https://github.com/franknoh/PPy/blob/main/examples/43_regex/compare/patterns.rs"><code>patterns.rs</code></a>
+with its <a href="https://github.com/franknoh/PPy/blob/main/examples/43_regex/compare/Cargo.toml"><code>Cargo.toml</code></a> -- and the site shows them
+whole. Milliseconds, best of five passes, mean and spread over five processes.</p>
+<p><strong>PPY</strong> -- a pattern compiled from a bytes literal, <code>search</code> from a position,
+<code>m.end()</code>; the same file runs on CPython:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="k">def</span><span class="w"> </span><span class="nf">sum_values</span><span class="p">(</span><span class="n">text</span><span class="p">:</span> <span class="n">Buffer</span><span class="p">[</span><span class="n">ppy</span><span class="o">.</span><span class="n">u8</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+<a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a>    <span class="n">total</span> <span class="o">=</span> <span class="mi">0</span>
+<a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a>    <span class="n">pos</span> <span class="o">=</span> <span class="mi">0</span>
+<a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a>    <span class="k">while</span> <span class="kc">True</span><span class="p">:</span>
+<a id="__codelineno-13-5" name="__codelineno-13-5" href="#__codelineno-13-5"></a>        <span class="n">m</span> <span class="o">=</span> <span class="n">PAIR</span><span class="o">.</span><span class="n">search</span><span class="p">(</span><span class="n">text</span><span class="p">,</span> <span class="n">pos</span><span class="p">)</span>
+<a id="__codelineno-13-6" name="__codelineno-13-6" href="#__codelineno-13-6"></a>        <span class="k">if</span> <span class="n">m</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-13-7" name="__codelineno-13-7" href="#__codelineno-13-7"></a>            <span class="k">return</span> <span class="n">total</span>
+<a id="__codelineno-13-8" name="__codelineno-13-8" href="#__codelineno-13-8"></a>        <span class="n">value</span> <span class="o">=</span> <span class="mi">0</span>
+<a id="__codelineno-13-9" name="__codelineno-13-9" href="#__codelineno-13-9"></a>        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">m</span><span class="o">.</span><span class="n">start</span><span class="p">(</span><span class="mi">2</span><span class="p">),</span> <span class="n">m</span><span class="o">.</span><span class="n">end</span><span class="p">(</span><span class="mi">2</span><span class="p">)):</span>
+<a id="__codelineno-13-10" name="__codelineno-13-10" href="#__codelineno-13-10"></a>            <span class="n">value</span> <span class="o">=</span> <span class="n">value</span> <span class="o">*</span> <span class="mi">10</span> <span class="o">+</span> <span class="p">(</span><span class="n">text</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">-</span> <span class="mi">48</span><span class="p">)</span>
+<a id="__codelineno-13-11" name="__codelineno-13-11" href="#__codelineno-13-11"></a>        <span class="n">total</span> <span class="o">+=</span> <span class="n">value</span>
+<a id="__codelineno-13-12" name="__codelineno-13-12" href="#__codelineno-13-12"></a>        <span class="n">pos</span> <span class="o">=</span> <span class="n">m</span><span class="o">.</span><span class="n">end</span><span class="p">()</span>
+</code></pre></div>
+<p><strong>CPython <code>re</code></strong> -- the idiomatic spelling, <code>finditer</code> and <code>int(m.group(2))</code>:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="k">def</span><span class="w"> </span><span class="nf">sum_values</span><span class="p">(</span><span class="n">text</span><span class="p">:</span> <span class="nb">bytes</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+<a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a>    <span class="k">return</span> <span class="nb">sum</span><span class="p">(</span><span class="nb">int</span><span class="p">(</span><span class="n">m</span><span class="o">.</span><span class="n">group</span><span class="p">(</span><span class="mi">2</span><span class="p">))</span> <span class="k">for</span> <span class="n">m</span> <span class="ow">in</span> <span class="n">PAIR</span><span class="o">.</span><span class="n">finditer</span><span class="p">(</span><span class="n">text</span><span class="p">))</span>
+</code></pre></div>
+<p><strong>Rust <code>regex</code></strong> -- <code>captures_iter</code> over <code>&amp;[u8]</code>, the number parsed from the
+captured bytes, <code>cargo build --release</code>:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="k">fn</span><span class="w"> </span><span class="nf">sum_values</span><span class="p">(</span><span class="n">pair</span><span class="p">:</span><span class="w"> </span><span class="kp">&amp;</span><span class="nc">Regex</span><span class="p">,</span><span class="w"> </span><span class="n">text</span><span class="p">:</span><span class="w"> </span><span class="kp">&amp;</span><span class="p">[</span><span class="kt">u8</span><span class="p">])</span><span class="w"> </span><span class="p">-&gt;</span><span class="w"> </span><span class="kt">u64</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a><span class="w">    </span><span class="n">pair</span><span class="p">.</span><span class="n">captures_iter</span><span class="p">(</span><span class="n">text</span><span class="p">)</span>
+<a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a><span class="w">        </span><span class="p">.</span><span class="n">map</span><span class="p">(</span><span class="o">|</span><span class="n">c</span><span class="o">|</span><span class="w"> </span><span class="n">std</span><span class="p">::</span><span class="kt">str</span><span class="p">::</span><span class="n">from_utf8</span><span class="p">(</span><span class="o">&amp;</span><span class="n">c</span><span class="p">[</span><span class="mi">2</span><span class="p">]).</span><span class="n">unwrap</span><span class="p">().</span><span class="n">parse</span><span class="p">::</span><span class="o">&lt;</span><span class="kt">u64</span><span class="o">&gt;</span><span class="p">().</span><span class="n">unwrap</span><span class="p">())</span>
+<a id="__codelineno-15-4" name="__codelineno-15-4" href="#__codelineno-15-4"></a><span class="w">        </span><span class="p">.</span><span class="n">sum</span><span class="p">()</span>
+<a id="__codelineno-15-5" name="__codelineno-15-5" href="#__codelineno-15-5"></a><span class="p">}</span>
+</code></pre></div>
+<!-- compare:start -->
 <table>
 <thead>
 <tr>
@@ -4580,63 +4707,98 @@ milliseconds. All three print the same four answers.</p>
 <tbody>
 <tr>
 <td>count_words</td>
-<td style="text-align: right;"><strong>6.54 ± 0.04</strong></td>
-<td style="text-align: right;">106.91 ± 2.51</td>
-<td style="text-align: right;">18.49 ± 0.08</td>
+<td style="text-align: right;"><strong>6.41 ± 0.03</strong></td>
+<td style="text-align: right;">104.44 ± 0.64</td>
+<td style="text-align: right;">17.95 ± 0.13</td>
 </tr>
 <tr>
 <td>longest_word</td>
-<td style="text-align: right;"><strong>6.47 ± 0.04</strong></td>
-<td style="text-align: right;">129.53 ± 2.90</td>
-<td style="text-align: right;">37.11 ± 2.49</td>
+<td style="text-align: right;"><strong>6.38 ± 0.02</strong></td>
+<td style="text-align: right;">126.79 ± 0.31</td>
+<td style="text-align: right;">37.35 ± 2.81</td>
 </tr>
 <tr>
 <td>sum_values</td>
-<td style="text-align: right;"><strong>56.22 ± 0.39</strong></td>
-<td style="text-align: right;">199.87 ± 3.33</td>
-<td style="text-align: right;">66.22 ± 0.90</td>
+<td style="text-align: right;"><strong>55.63 ± 0.34</strong></td>
+<td style="text-align: right;">194.38 ± 0.98</td>
+<td style="text-align: right;">65.00 ± 0.82</td>
 </tr>
 <tr>
 <td>count_hex</td>
-<td style="text-align: right;">6.55 ± 0.10</td>
-<td style="text-align: right;">10.39 ± 0.26</td>
-<td style="text-align: right;"><strong>2.34 ± 0.09</strong></td>
+<td style="text-align: right;">6.44 ± 0.03</td>
+<td style="text-align: right;">10.00 ± 0.07</td>
+<td style="text-align: right;"><strong>2.30 ± 0.05</strong></td>
 </tr>
 </tbody>
 </table>
-<p>What each port asked for:</p>
-<ul>
-<li><strong>PPY</strong> is the source above: <code>re.compile</code> of a bytes pattern, <code>search</code>
-  from a position, <code>m.end()</code>, over a <code>Buffer[ppy.u8]</code>. The same file runs on
-  CPython, where the buffer is an <code>array.array("B")</code> and <code>re</code> does the work.</li>
-<li><strong>CPython's <code>re</code></strong> is the idiomatic spelling -- <code>finditer</code> in a generator
-  expression, <code>int(m.group(2))</code> -- over <code>bytes</code>. Its matcher is a bytecode
-  interpreter, and each match builds a match object.</li>
-<li><strong>Rust's <code>regex</code></strong> is <code>find_iter(...).count()</code> and <code>captures_iter</code> over
-  <code>&amp;[u8]</code>, compiled with <code>cargo build --release</code>. The crate compiles a
-  pattern to a lazy DFA where it can, which is what makes <code>count_hex</code> fast;
-  <code>sum_values</code> needs capture groups, which is a slower engine, and the
-  number is parsed from the captured bytes.</li>
-</ul>
-<p>PPY's matcher is compiled from the pattern into a function of core
-operations, a backtracker with the run of a byte class scanned rather than
-stepped, and a match is a local rather than an object; that is the whole
-difference, and it is the difference of a compiled matcher against an
-interpreted one. Against Rust the pattern is what decides: a byte-class
-repeat is a scan in both, and a capture group is a backtrack in PPY where
-<code>regex</code> runs its slower engine.</p>
-<p>Intel Core Ultra 9 386H (16 threads); rustc 1.95.0 with regex 1.x, CPython 3.12.13 for <code>re</code>, PPY on
-CPython 3.13.13, from a checkout on a native filesystem.</p>
-<h2 id="gpu-kernels-compared-with-cupy-numba-triton-taichi-mojo-and-cuda-c">GPU kernels: Compared with CuPy, Numba, Triton, Taichi, Mojo, and CUDA C<a class="headerlink" href="#gpu-kernels-compared-with-cupy-numba-triton-taichi-mojo-and-cuda-c" title="Permanent link">&para;</a></h2>
+<!-- compare:end -->
+
+<p>PPY compiles each pattern into a function of core operations -- a
+backtracker in which a byte-class repeat scans its run instead of stepping
+byte by byte -- and a match is a few locals, not an object, so a search
+loop is a native loop. That is the whole distance to <code>re</code>, whose matcher is
+a bytecode interpreter allocating a match object per hit. Against Rust the
+pattern decides: <code>[A-Za-z]+</code> is a scan in both engines, <code>\w+\s*=\s*(\d+)</code>
+makes <code>regex</code> fall back to its slower capturing engine, and <code>0x[0-9a-f]+</code>
+under <code>(?i)</code> is where its lazy DFA wins outright -- a literal-prefix
+prefilter is the obvious next step for the PPY matcher there.</p>
+<p>Intel Core Ultra 9 386H; rustc 1.95.0 with regex 1.x, CPython 3.12.13 for
+<code>re</code>, PPY on CPython 3.13.13, from a checkout on a native filesystem.</p>
+<h2 id="gpu-kernels-compared-with-cupy-numba-mojo-and-cuda-c">GPU kernels: Compared with CuPy, Numba, Mojo, and CUDA C<a class="headerlink" href="#gpu-kernels-compared-with-cupy-numba-mojo-and-cuda-c" title="Permanent link">&para;</a></h2>
 <p>From <a href="../38_cuda/">GPU kernels</a>.
-The same two kernels over sixteen million doubles, each written the way its
-tool wants it, in <a href="https://github.com/franknoh/PPy/blob/main/examples/38_cuda/compare"><code>compare/</code></a>: <a href="https://github.com/franknoh/PPy/blob/main/examples/38_cuda/compare/saxpy_bench.ppy"><code>saxpy_bench.ppy</code></a>,
-<a href="https://github.com/franknoh/PPy/blob/main/examples/38_cuda/compare/saxpy_cupy.py"><code>saxpy_cupy.py</code></a>, <a href="https://github.com/franknoh/PPy/blob/main/examples/38_cuda/compare/saxpy_numba.py"><code>saxpy_numba.py</code></a>,
-<a href="https://github.com/franknoh/PPy/blob/main/examples/38_cuda/compare/saxpy_triton.py"><code>saxpy_triton.py</code></a>, <a href="https://github.com/franknoh/PPy/blob/main/examples/38_cuda/compare/saxpy_taichi.py"><code>saxpy_taichi.py</code></a>,
-<a href="https://github.com/franknoh/PPy/blob/main/examples/38_cuda/compare/saxpy.mojo"><code>saxpy.mojo</code></a>, and <a href="https://github.com/franknoh/PPy/blob/main/examples/38_cuda/compare/saxpy.cu"><code>saxpy.cu</code></a>. Each times
-the best of warm launches with the device synchronized, over five processes;
-milliseconds. <a href="https://github.com/franknoh/PPy/blob/main/examples/compare.py"><code>examples/compare.py</code></a> held all seven to the
-same two answers first.</p>
+The same two kernels over sixteen million doubles, written as thread-level
+kernels the way each tool spells them, in <a href="https://github.com/franknoh/PPy/blob/main/examples/38_cuda/compare"><code>compare/</code></a>:
+<a href="https://github.com/franknoh/PPy/blob/main/examples/38_cuda/compare/saxpy_bench.ppy"><code>saxpy_bench.ppy</code></a>, <a href="https://github.com/franknoh/PPy/blob/main/examples/38_cuda/compare/saxpy_cupy.py"><code>saxpy_cupy.py</code></a>,
+<a href="https://github.com/franknoh/PPy/blob/main/examples/38_cuda/compare/saxpy_numba.py"><code>saxpy_numba.py</code></a>, <a href="https://github.com/franknoh/PPy/blob/main/examples/38_cuda/compare/saxpy.mojo"><code>saxpy.mojo</code></a>,
+<a href="https://github.com/franknoh/PPy/blob/main/examples/38_cuda/compare/saxpy.cu"><code>saxpy.cu</code></a>. Milliseconds, best of warm launches with the
+device synchronized, over five processes. Tile-level tools -- Triton, Taichi
+-- program a block as one vector and never write the shared-memory
+exchange, which is a different kernel; they are compared with PPY's tile
+kernels, not with these. The block max, as each tool spells it:</p>
+<p><strong>PPY</strong> -- a Python function with <code>cuda.global_id()</code>, shared memory, a
+barrier, a shuffle; the same file runs on CPython through the reference
+launch:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="nd">@cuda</span><span class="o">.</span><span class="n">kernel</span>
+<a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a><span class="k">def</span><span class="w"> </span><span class="nf">block_max</span><span class="p">(</span><span class="n">x</span><span class="p">:</span> <span class="n">native</span><span class="o">.</span><span class="n">const_ptr</span><span class="p">[</span><span class="nb">float</span><span class="p">],</span> <span class="n">out</span><span class="p">:</span> <span class="n">native</span><span class="o">.</span><span class="n">ptr</span><span class="p">[</span><span class="nb">float</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a>    <span class="n">parked</span> <span class="o">=</span> <span class="n">cuda</span><span class="o">.</span><span class="n">shared</span><span class="p">[</span><span class="nb">float</span><span class="p">,</span> <span class="mi">64</span><span class="p">]()</span>
+<a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a>    <span class="n">tid</span> <span class="o">=</span> <span class="n">cuda</span><span class="o">.</span><span class="n">thread_id</span><span class="p">()</span>
+<a id="__codelineno-16-5" name="__codelineno-16-5" href="#__codelineno-16-5"></a>    <span class="n">native</span><span class="o">.</span><span class="n">store</span><span class="p">(</span><span class="n">native</span><span class="o">.</span><span class="n">offset</span><span class="p">(</span><span class="n">parked</span><span class="p">,</span> <span class="n">tid</span><span class="p">),</span> <span class="n">native</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">native</span><span class="o">.</span><span class="n">offset</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">cuda</span><span class="o">.</span><span class="n">global_id</span><span class="p">())))</span>
+<a id="__codelineno-16-6" name="__codelineno-16-6" href="#__codelineno-16-6"></a>    <span class="n">cuda</span><span class="o">.</span><span class="n">syncthreads</span><span class="p">()</span>
+<a id="__codelineno-16-7" name="__codelineno-16-7" href="#__codelineno-16-7"></a>    <span class="n">mine</span> <span class="o">=</span> <span class="n">native</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">native</span><span class="o">.</span><span class="n">offset</span><span class="p">(</span><span class="n">parked</span><span class="p">,</span> <span class="n">tid</span><span class="p">))</span>
+<a id="__codelineno-16-8" name="__codelineno-16-8" href="#__codelineno-16-8"></a>    <span class="n">other</span> <span class="o">=</span> <span class="n">cuda</span><span class="o">.</span><span class="n">shfl_xor</span><span class="p">(</span><span class="n">mine</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+<a id="__codelineno-16-9" name="__codelineno-16-9" href="#__codelineno-16-9"></a>    <span class="o">...</span>
+</code></pre></div>
+<p><strong>Numba CUDA</strong> reads the same way -- <code>@cuda.jit</code>, <code>cuda.grid(1)</code>,
+<code>cuda.shared.array</code>, <code>cuda.syncthreads()</code>, <code>cuda.shfl_xor_sync</code>:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a><span class="nd">@cuda</span><span class="o">.</span><span class="n">jit</span>
+<a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a><span class="k">def</span><span class="w"> </span><span class="nf">block_max</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">out</span><span class="p">):</span>
+<a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a>    <span class="n">parked</span> <span class="o">=</span> <span class="n">cuda</span><span class="o">.</span><span class="n">shared</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="mi">64</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">)</span>
+<a id="__codelineno-17-4" name="__codelineno-17-4" href="#__codelineno-17-4"></a>    <span class="n">tid</span> <span class="o">=</span> <span class="n">cuda</span><span class="o">.</span><span class="n">threadIdx</span><span class="o">.</span><span class="n">x</span>
+<a id="__codelineno-17-5" name="__codelineno-17-5" href="#__codelineno-17-5"></a>    <span class="n">parked</span><span class="p">[</span><span class="n">tid</span><span class="p">]</span> <span class="o">=</span> <span class="n">x</span><span class="p">[</span><span class="n">cuda</span><span class="o">.</span><span class="n">grid</span><span class="p">(</span><span class="mi">1</span><span class="p">)]</span>
+<a id="__codelineno-17-6" name="__codelineno-17-6" href="#__codelineno-17-6"></a>    <span class="n">cuda</span><span class="o">.</span><span class="n">syncthreads</span><span class="p">()</span>
+<a id="__codelineno-17-7" name="__codelineno-17-7" href="#__codelineno-17-7"></a>    <span class="n">mine</span> <span class="o">=</span> <span class="n">parked</span><span class="p">[</span><span class="n">tid</span><span class="p">]</span>
+<a id="__codelineno-17-8" name="__codelineno-17-8" href="#__codelineno-17-8"></a>    <span class="n">other</span> <span class="o">=</span> <span class="n">cuda</span><span class="o">.</span><span class="n">shfl_xor_sync</span><span class="p">(</span><span class="mh">0xFFFFFFFF</span><span class="p">,</span> <span class="n">mine</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+<a id="__codelineno-17-9" name="__codelineno-17-9" href="#__codelineno-17-9"></a>    <span class="o">...</span>
+</code></pre></div>
+<p><strong>CuPy</strong> writes saxpy in one line, an <code>ElementwiseKernel</code>, and the block max
+as CUDA C in a string handed to <code>RawKernel</code>. <strong>CUDA C</strong> is the kernel the
+others approximate, timed with events around the launch alone.</p>
+<p><strong>Mojo</strong> writes the kernel as a <code>def</code> with <code>global_idx</code>, <code>thread_idx</code>, a
+<code>stack_allocation</code> in <code>AddressSpace.SHARED</code>, <code>barrier()</code> from MAX's
+<code>max.gpu.sync</code>, and <code>shuffle_xor</code>, which has no <code>Float64</code> form, so the
+double crosses as its bits; arguments must be fixed-width (<code>Int64</code>, not
+<code>Int</code>), <code>out</code> is a reserved parameter name, and the launch is
+<code>DeviceContext.enqueue_function</code> with <code>grid_dim</code> and <code>block_dim</code>:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a><span class="k">def</span><span class="w"> </span><span class="nf">block_max</span><span class="p">(</span><span class="n">x</span><span class="p">:</span><span class="w"> </span><span class="n">UnsafePointer</span><span class="p">[</span><span class="nb">Float64</span><span class="p">,</span><span class="w"> </span><span class="n">MutAnyOrigin</span><span class="p">],</span><span class="w"> </span><span class="n">result</span><span class="p">:</span><span class="w"> </span><span class="n">UnsafePointer</span><span class="p">[</span><span class="nb">Float64</span><span class="p">,</span><span class="w"> </span><span class="n">MutAnyOrigin</span><span class="p">]):</span>
+<a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a><span class="w">    </span><span class="k">var</span><span class="w"> </span><span class="nv">parked</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">stack_allocation</span><span class="p">[</span><span class="mi">64</span><span class="p">,</span><span class="w"> </span><span class="nb">Float64</span><span class="p">,</span><span class="w"> </span><span class="n">address_space</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">AddressSpace</span><span class="o">.</span><span class="n">SHARED</span><span class="p">]()</span>
+<a id="__codelineno-18-3" name="__codelineno-18-3" href="#__codelineno-18-3"></a><span class="w">    </span><span class="k">var</span><span class="w"> </span><span class="nv">tid</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">Int</span><span class="p">(</span><span class="n">thread_idx</span><span class="o">.</span><span class="n">x</span><span class="p">)</span>
+<a id="__codelineno-18-4" name="__codelineno-18-4" href="#__codelineno-18-4"></a><span class="w">    </span><span class="n">parked</span><span class="p">[</span><span class="n">tid</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">x</span><span class="p">[</span><span class="nb">Int</span><span class="p">(</span><span class="n">global_idx</span><span class="o">.</span><span class="n">x</span><span class="p">)]</span>
+<a id="__codelineno-18-5" name="__codelineno-18-5" href="#__codelineno-18-5"></a><span class="w">    </span><span class="n">barrier</span><span class="p">()</span>
+<a id="__codelineno-18-6" name="__codelineno-18-6" href="#__codelineno-18-6"></a><span class="w">    </span><span class="k">var</span><span class="w"> </span><span class="nv">mine</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">parked</span><span class="p">[</span><span class="n">tid</span><span class="p">]</span>
+<a id="__codelineno-18-7" name="__codelineno-18-7" href="#__codelineno-18-7"></a><span class="w">    </span><span class="k">var</span><span class="w"> </span><span class="nv">other</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">bitcast</span><span class="p">[</span><span class="nb">DType</span><span class="o">.</span><span class="n">float64</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">](</span><span class="n">shuffle_xor</span><span class="p">(</span><span class="n">mine</span><span class="o">.</span><span class="n">to_bits</span><span class="p">[</span><span class="nb">DType</span><span class="o">.</span><span class="n">uint64</span><span class="p">](),</span><span class="w"> </span><span class="mi">1</span><span class="p">))</span>
+<a id="__codelineno-18-8" name="__codelineno-18-8" href="#__codelineno-18-8"></a><span class="w">    </span><span class="o">...</span>
+</code></pre></div>
+<!-- compare:start -->
 <table>
 <thead>
 <tr>
@@ -4644,8 +4806,6 @@ same two answers first.</p>
 <th style="text-align: right;">PPY <code>cuda.launch</code></th>
 <th style="text-align: right;">CuPy</th>
 <th style="text-align: right;">Numba CUDA</th>
-<th style="text-align: right;">Triton</th>
-<th style="text-align: right;">Taichi</th>
 <th style="text-align: right;">Mojo</th>
 <th style="text-align: right;">CUDA C</th>
 </tr>
@@ -4653,99 +4813,88 @@ same two answers first.</p>
 <tbody>
 <tr>
 <td>saxpy, arrays on the device</td>
-<td style="text-align: right;">0.66 ± 0.03</td>
 <td style="text-align: right;">0.67 ± 0.02</td>
-<td style="text-align: right;">0.69 ± 0.02</td>
-<td style="text-align: right;">0.70 ± 0.03</td>
-<td style="text-align: right;">0.69 ± 0.08</td>
+<td style="text-align: right;">0.68 ± 0.01</td>
+<td style="text-align: right;">0.71 ± 0.02</td>
 <td style="text-align: right;">0.52 ± 0.02</td>
-<td style="text-align: right;"><strong>0.51 ± 0.00</strong></td>
+<td style="text-align: right;"><strong>0.50 ± 0.00</strong></td>
 </tr>
 <tr>
 <td>block max, arrays on the device</td>
-<td style="text-align: right;">2.01 ± 0.02</td>
-<td style="text-align: right;">1.96 ± 0.01</td>
+<td style="text-align: right;">1.99 ± 0.02</td>
+<td style="text-align: right;">1.97 ± 0.02</td>
 <td style="text-align: right;">2.00 ± 0.02</td>
-<td style="text-align: right;">0.79 ± 0.02</td>
-<td style="text-align: right;"><strong>0.25 ± 0.01</strong></td>
-<td style="text-align: right;">1.96 ± 0.02</td>
-<td style="text-align: right;">1.88 ± 0.00</td>
+<td style="text-align: right;">1.97 ± 0.02</td>
+<td style="text-align: right;"><strong>1.88 ± 0.00</strong></td>
 </tr>
 <tr>
 <td>saxpy, arrays copied in and out per launch</td>
-<td style="text-align: right;">172.53 ± 1.62</td>
-<td style="text-align: right;">47.46 ± 1.54</td>
-<td style="text-align: right;">35.58 ± 0.28</td>
-<td style="text-align: right;">46.27 ± 0.56</td>
-<td style="text-align: right;">146.83 ± 9.47</td>
-<td style="text-align: right;"><strong>27.25 ± 0.41</strong></td>
-<td style="text-align: right;">29.95 ± 0.34</td>
+<td style="text-align: right;">37.66 ± 0.85</td>
+<td style="text-align: right;">45.32 ± 0.25</td>
+<td style="text-align: right;">36.01 ± 0.34</td>
+<td style="text-align: right;"><strong>25.12 ± 0.75</strong></td>
+<td style="text-align: right;">29.28 ± 0.40</td>
 </tr>
 <tr>
 <td>block max, array copied in per launch</td>
-<td style="text-align: right;">83.04 ± 0.45</td>
-<td style="text-align: right;">12.39 ± 0.54</td>
-<td style="text-align: right;">13.41 ± 0.10</td>
-<td style="text-align: right;">10.86 ± 0.07</td>
-<td style="text-align: right;">26.15 ± 0.31</td>
-<td style="text-align: right;"><strong>10.79 ± 0.20</strong></td>
-<td style="text-align: right;">10.83 ± 0.18</td>
+<td style="text-align: right;">14.93 ± 0.65</td>
+<td style="text-align: right;">11.95 ± 0.07</td>
+<td style="text-align: right;">13.59 ± 0.36</td>
+<td style="text-align: right;"><strong>10.14 ± 0.21</strong></td>
+<td style="text-align: right;">10.57 ± 0.15</td>
 </tr>
 </tbody>
 </table>
-<p>What each port asked for:</p>
-<ul>
-<li><strong>PPY</strong> is the source above: a Python function with <code>cuda.global_id()</code>,
-  shared memory, a barrier, a shuffle, launched with <code>cuda.launch</code>; the same
-  file runs on CPython through the reference launch.</li>
-<li><strong>CuPy</strong> is one line for saxpy, an <code>ElementwiseKernel</code>; its block max is
-  CUDA C in a string handed to <code>RawKernel</code>.</li>
-<li><strong>Numba CUDA</strong> reads like PPY: <code>@cuda.jit</code>, <code>cuda.grid(1)</code>,
-  <code>cuda.shared.array</code>, <code>cuda.syncthreads()</code>, <code>cuda.shfl_xor_sync</code>.</li>
-<li><strong>Triton</strong> has no thread to name: a program owns a block of 64 as one
-  vector, and the block max is <code>tl.max</code> over it, with no shared memory and
-  no shuffle to write. Its launcher wants a <code>data_ptr()</code> and a <code>dtype</code>, which
-  a six-line wrapper gives it over CuPy memory.</li>
-<li><strong>Taichi</strong> has no thread, block, or shared memory either: the outer loop of
-  a kernel is parallel over the blocks and the max of each block is an inner
-  serial loop over a <code>ti.field</code>. <code>ti.init(arch=ti.cuda, default_fp=ti.f64)</code>
-  is what makes the answers match, and on WSL the driver has to be put on
-  the library path by hand.</li>
-<li><strong>Mojo</strong> writes the kernel as a <code>def</code> with <code>global_idx</code>, <code>thread_idx</code>, a
-  <code>stack_allocation</code> in <code>AddressSpace.SHARED</code>, <code>barrier()</code> from MAX's
-  <code>max.gpu.sync</code>, and <code>shuffle_xor</code> -- which has no <code>Float64</code> form, so the
-  double crosses as its bits. Kernel arguments must be fixed-width
-  (<code>Int64</code>, not <code>Int</code>), a parameter may not be called <code>out</code>, and the launch is
-  <code>DeviceContext.enqueue_function</code> with <code>grid_dim</code> and <code>block_dim</code>.</li>
-<li><strong>CUDA C</strong> is the kernel the others are approximating, timed with CUDA
-  events around the launch alone, so its rows carry no host-side overhead.</li>
-</ul>
-<p>With the arrays on the device, a launch is the kernel: PPY, CuPy, Numba,
-Mojo, and CUDA C run the same block max the same way, and on saxpy the
-Python-hosted ports sit about 0.15 ms above Mojo and CUDA C, which is what
-a launch through the interpreter costs. Triton and Taichi are faster on it because
-they were written without the shared-memory exchange -- one vector
-reduction per block is a different kernel, and the fair statement is that
-their programming models do not ask for the exchange at all. The copying
-rows are the other memory model, a <code>native.stack_alloc</code> array sent in and
-brought back on every launch; there PPY's copies are four to six times
-slower than CuPy's, Numba's, Triton's, and Mojo's for the same traffic, and
-Taichi's <code>from_numpy</code> is slower still. A program keeps its data on the
-device by allocating it there.</p>
+<!-- compare:end -->
+
+<p>With the arrays on the device, a launch is the kernel: the five run the
+same block max in the same time, and on saxpy the Python-hosted ones sit a
+tenth of a millisecond above Mojo and CUDA C, the cost of a launch through
+the interpreter. The copying rows are the other memory model, a
+<code>native.stack_alloc</code> array sent in and brought back on every launch; there
+the driver reads the host array in place, and the traffic costs what it
+costs every tool. A program that launches more than once keeps its data on
+the device by allocating it there, with <code>cuda.device_alloc</code>.</p>
 <p>NVIDIA GeForce RTX 5080 Laptop GPU, driver 610.71, CUDA 13.3; CuPy 14.2.0,
-Numba 0.67.0, Triton 3.8.0, Taichi 1.7.4 on CPython 3.12.13; Mojo 1.0.0
-with MAX 26.5; nvcc 13.3; PPY on CPython 3.13.13.</p>
+Numba 0.67.0 on CPython 3.12.13; Mojo 1.0.0 with MAX 26.5; nvcc 13.3; PPY
+on CPython 3.13.13.</p>
 <h2 id="parallel-fused-kernels-compared-with-numpy-numexpr-numba-and-jax">Parallel fused kernels: Compared with NumPy, numexpr, Numba, and JAX<a class="headerlink" href="#parallel-fused-kernels-compared-with-numpy-numexpr-numba-and-jax" title="Permanent link">&para;</a></h2>
 <p>From <a href="../07_parallel/">Parallel fused kernels</a>.
 The fused expression and the sum of squares over eight million doubles, in
 <a href="https://github.com/franknoh/PPy/blob/main/examples/07_parallel/compare"><code>compare/</code></a>: <a href="https://github.com/franknoh/PPy/blob/main/examples/07_parallel/compare/fused_bench.ppy"><code>fused_bench.ppy</code></a>,
 <a href="https://github.com/franknoh/PPy/blob/main/examples/07_parallel/compare/fused_numpy.py"><code>fused_numpy.py</code></a>, <a href="https://github.com/franknoh/PPy/blob/main/examples/07_parallel/compare/fused_numexpr.py"><code>fused_numexpr.py</code></a>,
-<a href="https://github.com/franknoh/PPy/blob/main/examples/07_parallel/compare/fused_numba.py"><code>fused_numba.py</code></a>, and <a href="https://github.com/franknoh/PPy/blob/main/examples/07_parallel/compare/fused_jax.py"><code>fused_jax.py</code></a>.
-Each prints two elements of the result to twelve digits and the sum to
-three, then the best of five calls; <a href="https://github.com/franknoh/PPy/blob/main/examples/compare.py"><code>examples/compare.py</code></a>
-runs each five times and reports the mean and standard deviation across
-processes, in milliseconds. All five print the same answers: the elementwise
-result is bit-identical everywhere, and the sums agree to the digits shown.</p>
+<a href="https://github.com/franknoh/PPy/blob/main/examples/07_parallel/compare/fused_numba.py"><code>fused_numba.py</code></a>, <a href="https://github.com/franknoh/PPy/blob/main/examples/07_parallel/compare/fused_jax.py"><code>fused_jax.py</code></a>.
+Milliseconds, best of five calls, over five processes.</p>
+<p><strong>PPY</strong> -- the NumPy expression in a function, <code>@ppy.parallel</code> to split it;
+the serial row is the same expression fused into one loop with no
+decorator, and <code>strict_total</code> is NumPy's sum in NumPy's order:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a><span class="nd">@ppy</span><span class="o">.</span><span class="n">pure</span>
+<a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a><span class="nd">@ppy</span><span class="o">.</span><span class="n">parallel</span>
+<a id="__codelineno-19-3" name="__codelineno-19-3" href="#__codelineno-19-3"></a><span class="nd">@ppy</span><span class="o">.</span><span class="n">opt</span><span class="p">(</span><span class="mi">3</span><span class="p">)</span>
+<a id="__codelineno-19-4" name="__codelineno-19-4" href="#__codelineno-19-4"></a><span class="k">def</span><span class="w"> </span><span class="nf">parallel</span><span class="p">(</span><span class="n">a</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">b</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
+<a id="__codelineno-19-5" name="__codelineno-19-5" href="#__codelineno-19-5"></a>    <span class="k">return</span> <span class="p">(</span><span class="n">a</span> <span class="o">*</span> <span class="n">b</span> <span class="o">+</span> <span class="n">a</span><span class="p">)</span> <span class="o">*</span> <span class="p">(</span><span class="n">b</span> <span class="o">-</span> <span class="n">a</span><span class="p">)</span> <span class="o">+</span> <span class="n">a</span> <span class="o">*</span> <span class="mf">0.5</span> <span class="o">-</span> <span class="n">b</span> <span class="o">*</span> <span class="mf">0.25</span>
+</code></pre></div>
+<p><strong>NumPy</strong> is the expression as written -- five operations, four 64 MB
+temporaries, one thread. <strong>numexpr</strong> is the expression as a string,
+compiled to its own virtual machine and evaluated in chunks across threads:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a><span class="n">ne</span><span class="o">.</span><span class="n">evaluate</span><span class="p">(</span><span class="s2">"(x * y + x) * (y - x) + x * 0.5 - y * 0.25"</span><span class="p">,</span> <span class="n">local_dict</span><span class="o">=</span><span class="p">{</span><span class="s2">"x"</span><span class="p">:</span> <span class="n">x</span><span class="p">,</span> <span class="s2">"y"</span><span class="p">:</span> <span class="n">y</span><span class="p">})</span>
+</code></pre></div>
+<p><strong>Numba</strong> is an explicit loop under <code>@njit(parallel=True)</code> writing into
+<code>np.empty_like</code>:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a><span class="nd">@njit</span><span class="p">(</span><span class="n">parallel</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<a id="__codelineno-21-2" name="__codelineno-21-2" href="#__codelineno-21-2"></a><span class="k">def</span><span class="w"> </span><span class="nf">fused</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">):</span>
+<a id="__codelineno-21-3" name="__codelineno-21-3" href="#__codelineno-21-3"></a>    <span class="n">out</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">empty_like</span><span class="p">(</span><span class="n">a</span><span class="p">)</span>
+<a id="__codelineno-21-4" name="__codelineno-21-4" href="#__codelineno-21-4"></a>    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">prange</span><span class="p">(</span><span class="n">a</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]):</span>
+<a id="__codelineno-21-5" name="__codelineno-21-5" href="#__codelineno-21-5"></a>        <span class="n">out</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="n">a</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">*</span> <span class="n">b</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">+</span> <span class="n">a</span><span class="p">[</span><span class="n">i</span><span class="p">])</span> <span class="o">*</span> <span class="p">(</span><span class="n">b</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">-</span> <span class="n">a</span><span class="p">[</span><span class="n">i</span><span class="p">])</span> <span class="o">+</span> <span class="n">a</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">*</span> <span class="mf">0.5</span> <span class="o">-</span> <span class="n">b</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">*</span> <span class="mf">0.25</span>
+<a id="__codelineno-21-6" name="__codelineno-21-6" href="#__codelineno-21-6"></a>    <span class="k">return</span> <span class="n">out</span>
+</code></pre></div>
+<p><strong>JAX</strong> is the expression under <code>jax.jit</code> on the CPU, fused by XLA and run
+on its thread pool, with <code>jax_enable_x64</code>:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a><span class="nd">@jax</span><span class="o">.</span><span class="n">jit</span>
+<a id="__codelineno-22-2" name="__codelineno-22-2" href="#__codelineno-22-2"></a><span class="k">def</span><span class="w"> </span><span class="nf">fused</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">):</span>
+<a id="__codelineno-22-3" name="__codelineno-22-3" href="#__codelineno-22-3"></a>    <span class="k">return</span> <span class="p">(</span><span class="n">a</span> <span class="o">*</span> <span class="n">b</span> <span class="o">+</span> <span class="n">a</span><span class="p">)</span> <span class="o">*</span> <span class="p">(</span><span class="n">b</span> <span class="o">-</span> <span class="n">a</span><span class="p">)</span> <span class="o">+</span> <span class="n">a</span> <span class="o">*</span> <span class="mf">0.5</span> <span class="o">-</span> <span class="n">b</span> <span class="o">*</span> <span class="mf">0.25</span>
+</code></pre></div>
+<!-- compare:start -->
 <table>
 <thead>
 <tr>
@@ -4760,7 +4909,7 @@ result is bit-identical everywhere, and the sums agree to the digits shown.</p>
 <tbody>
 <tr>
 <td>fused, serial</td>
-<td style="text-align: right;">20.33 ± 0.33</td>
+<td style="text-align: right;">11.58 ± 0.44</td>
 <td style="text-align: right;">—</td>
 <td style="text-align: right;">—</td>
 <td style="text-align: right;">—</td>
@@ -4768,23 +4917,23 @@ result is bit-identical everywhere, and the sums agree to the digits shown.</p>
 </tr>
 <tr>
 <td>fused</td>
-<td style="text-align: right;">12.54 ± 0.42</td>
-<td style="text-align: right;">56.68 ± 1.49</td>
-<td style="text-align: right;">6.52 ± 0.43</td>
-<td style="text-align: right;"><strong>4.89 ± 1.64</strong></td>
-<td style="text-align: right;">6.07 ± 0.68</td>
+<td style="text-align: right;">4.21 ± 0.09</td>
+<td style="text-align: right;">56.33 ± 0.99</td>
+<td style="text-align: right;">6.67 ± 0.15</td>
+<td style="text-align: right;"><strong>3.75 ± 0.86</strong></td>
+<td style="text-align: right;">6.23 ± 0.66</td>
 </tr>
 <tr>
 <td>sum of squares</td>
-<td style="text-align: right;">18.45 ± 0.39</td>
-<td style="text-align: right;">12.63 ± 0.49</td>
-<td style="text-align: right;">6.59 ± 0.15</td>
+<td style="text-align: right;">13.21 ± 0.36</td>
+<td style="text-align: right;">12.17 ± 0.23</td>
+<td style="text-align: right;">6.73 ± 0.17</td>
 <td style="text-align: right;">4.13 ± 0.03</td>
-<td style="text-align: right;"><strong>0.72 ± 0.06</strong></td>
+<td style="text-align: right;"><strong>0.73 ± 0.06</strong></td>
 </tr>
 <tr>
 <td>sum of squares, relaxed</td>
-<td style="text-align: right;">7.03 ± 0.21</td>
+<td style="text-align: right;">4.48 ± 0.32</td>
 <td style="text-align: right;">—</td>
 <td style="text-align: right;">—</td>
 <td style="text-align: right;">—</td>
@@ -4792,31 +4941,22 @@ result is bit-identical everywhere, and the sums agree to the digits shown.</p>
 </tr>
 </tbody>
 </table>
-<p>What each port asked for:</p>
-<ul>
-<li><strong>PPY</strong> is the source above: the NumPy expression in a function, <code>@ppy.parallel</code>
-  to split it, <code>@ppy.fastmath</code> to let the sum reassociate. The serial row is
-  the same expression fused into one loop with no decorator; <code>strict_total</code>
-  is NumPy's sum in NumPy's order.</li>
-<li><strong>NumPy</strong> is the expression as written: five operations, four temporaries
-  of 64 MB each, one thread.</li>
-<li><strong>numexpr</strong> is the expression as a string, compiled to its virtual machine
-  and evaluated in chunks across threads; <code>sum(x * x)</code> likewise.</li>
-<li><strong>Numba</strong> is an explicit loop under <code>@njit(parallel=True)</code> with <code>prange</code>,
-  writing into <code>np.empty_like</code>; the sum is a serial <code>@njit</code> loop, and it
-  agrees with the others only to the digits printed.</li>
-<li><strong>JAX</strong> is the expression under <code>jax.jit</code> on the CPU, fused by XLA and
-  run on its thread pool, with <code>jax_enable_x64</code> so the answers match.</li>
-</ul>
-<p>The serial fused loop is well ahead of NumPy's four temporaries, and the
-parallel one is the slowest of the four threaded kernels here: Numba, JAX,
-and numexpr split the same work across the same cores in half the time.
-The ordered sum is NumPy's own order and pays for it; the relaxed one
-vectorizes, and JAX's reduction, which reassociates by default, is the row
-to compare it with.</p>
-<p>Intel Core Ultra 9 386H (16 threads), threads backend; NumPy 2.5.3, numexpr 2.14.2, Numba 0.67.0 on
-CPython 3.12.13, JAX 0.11.1 on CPython 3.13.13, PPY on CPython 3.13.13,
-from a checkout on a native filesystem.</p>
+<!-- compare:end -->
+
+<p>Fusing the expression is what removes NumPy's four temporaries: the serial
+fused loop reads the two inputs once and writes the output once, and
+splitting that loop across the cores is a memory-bandwidth problem that
+PPY, Numba, JAX, and numexpr solve the same way, within a couple of
+milliseconds of each other. The fused kernel also checks its own result in
+the same loop -- one add-reduction of non-finite elements the vectorizer
+keeps in a register, one guard after -- which is how it keeps NumPy's
+floating-point reporting without a second pass over 64 MB. The ordered sum
+is NumPy's order and NumPy's time; the relaxed one vectorizes on one
+thread, and JAX's reduction, reassociated across its pool, is the row that
+shows what the same permission buys with threads.</p>
+<p>Intel Core Ultra 9 386H (16 threads), threads backend; NumPy 2.5.3, numexpr
+2.14.2, Numba 0.67.0 on CPython 3.12.13, JAX 0.11.1 on CPython 3.13.13,
+PPY on CPython 3.13.13, from a checkout on a native filesystem.</p>
 
 
 

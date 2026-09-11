@@ -4069,6 +4069,29 @@ written only once the run is judged worth keeping.</p>
 project on a mounted Windows drive bakes that path into <code>sys.path</code>, and
 every import-bound number roughly quadruples; the numbers in the tree were
 taken from a worktree under <code>/tmp</code>, one session, nothing else running.</p>
+<p>The comparison tables -- an example against Numba, CuPy, Triton, Taichi,
+Mojo, Codon, JAX, PyTorch, Rust, C -- come from <code>scripts/compare_docs.py</code>.
+Its manifest names every <code>compare/</code> program and the command that runs it;
+the script builds what needs building, runs each program through
+<code>examples/compare.py</code>, which prints no table until every program prints the
+same answers, and writes the table between the <code>&lt;!-- compare:start --&gt;</code> and
+<code>&lt;!-- compare:end --&gt;</code> markers of the README, with the run recorded in
+<code>compare/measurements.json</code>. Without <code>--write</code> it reports drift beyond the
+tolerance; a comparison whose toolchain is missing is skipped and said so,
+never written from a partial run. Where the toolchains live is read from
+<code>PPY_COMPARE_PYTHON</code>, <code>PPY_JAX_PYTHON</code>, <code>PPY_CODON</code>, <code>PPY_MOJO</code>, <code>PPY_NVCC</code>,
+and <code>PPY_CARGO</code>.</p>
+<p>Both scripts run on every push to <code>dev</code> that touches code, in
+<code>.github/workflows/bench.yml</code>, on a self-hosted runner labelled <code>ppy-bench</code>
+-- the machine the numbers were taken on, with its GPU and the neighbours'
+toolchains -- and the workflow commits what moved back to <code>dev</code>. A hosted
+runner has none of that, which is why <code>benchmark.yml</code> only reports on a
+schedule. The runner lives in <code>~/actions-runner</code> on that machine and stops
+with it; <code>~/actions-runner/start.sh</code> brings it back. A change that touches
+only prose -- the docs, a README, the changelog, a recorded measurement --
+skips the test matrix: <code>ci.yml</code> sorts the changed files first, a skipped
+required check satisfies the branch protection, and the strict site build
+runs in its place.</p>
 <h2 id="releasing">Releasing<a class="headerlink" href="#releasing" title="Permanent link">&para;</a></h2>
 <p>The distribution is <strong><code>ppy-lang</code></strong>; the packages it installs are <code>ppy</code>,
 <code>ppy_compiler</code>, and <code>ppy_runtime</code>.</p>
