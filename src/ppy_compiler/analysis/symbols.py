@@ -377,6 +377,7 @@ DIRECTIVE_NAMES = frozenset(
         "cpu.target",
         "cuda.kernel",
         "cuda.device",
+        "tile.kernel",
         "hip.kernel",
         "hip.device",
     }

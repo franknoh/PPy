@@ -66,6 +66,7 @@ _KNOWN: dict[str, DecoratorSemantics] = {
     "ppy.cpu.target": _INERT,
     "ppy.xla.jit": _INERT,
     "ppy.cuda.kernel": _INERT,
+    "ppy.tile.kernel": _INERT,
     "ppy.cuda.device": _INERT,
     "ppy.hip.kernel": _INERT,
     "ppy.hip.device": _INERT,

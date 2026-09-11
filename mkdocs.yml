@@ -142,6 +142,7 @@ nav:
           - howto/43_regex.md
       - Accelerators:
           - howto/38_cuda.md
+          - howto/44_tile.md
           - howto/39_xla.md
       - Libraries:
           - howto/05_numpy.md

@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING
 
 from ppy_runtime.version import VERSION as __version__
 
-from . import aio, atomic, concurrent, cpu, cuda, ffi, hip, simd, xla
+from . import aio, atomic, concurrent, cpu, cuda, ffi, hip, simd, tile, xla
 from ._directives import (
     DIRECTIVE_ATTR,
     Directive,
@@ -143,6 +143,7 @@ __all__ = [
     "scan",
     "simd",
     "specialize",
+    "tile",
     "u8",
     "u16",
     "u32",

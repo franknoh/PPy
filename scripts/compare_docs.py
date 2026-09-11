@@ -209,6 +209,22 @@ MANIFEST: dict[str, Comparison] = {
         },
         needs=("CV", "MOJO", "NVCC"),
     ),
+    "44_tile": Comparison(
+        "44_tile",
+        [
+            ("ppy", "{PPY} run compare/tiles_bench.ppy"),
+            ("triton", "{CV} compare/tiles_triton.py"),
+            ("taichi", "{CV} compare/tiles_taichi.py"),
+        ],
+        {"ppy": "PPY `tile.launch`", "triton": "Triton", "taichi": "Taichi"},
+        rows={
+            "saxpy": "saxpy, arrays on the device",
+            "block_max": "block max, arrays on the device",
+            "saxpy with copies": "saxpy, arrays copied in and out per launch",
+            "block_max with copies": "block max, array copied in per launch",
+        },
+        needs=("CV",),
+    ),
     "43_regex": Comparison(
         "43_regex",
         [
