@@ -284,7 +284,12 @@ operations are the ones pandas and PyArrow share: `from_parts %values,
 bitmap); `add`, `sub`, `mul`, `div`, the six comparisons, `and`, `or`,
 `xor`, `negate`, `abs`, `invert` give a null where an input is null;
 `is_null`, `is_valid`, `fill_null`, `cast`, `select`, `fill %scalar, %n`
-(one value in every row); `filter` by a bool
+(one value in every row); `map %out, %outv, %columns..., %scalars...
+{expression, model, gives}` evaluates a whole expression tree --
+`(add (mul a0 a1) (fill_null a0 s0))` -- row by row into memory in one
+loop, under Arrow's null model (`bits`: validity bitmaps in, one out) or
+NumPy's (`nan`: an `f64` null is a NaN, a `bool` column is a byte per
+row, and the answer is written the same way); `filter` by a bool
 column, `take` by positions (a null position is a null row), `concat`;
 `sort_indices` (ascending, nulls last, stable); `aggregate {function}` --
 `sum`, `mean`, `min`, `max`, `count`, `any`, `all` over the valid rows, a

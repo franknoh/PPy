@@ -59,31 +59,7 @@ clang -O3 dijkstra.c -o dijkstra_clang && ./dijkstra_clang < input.txt
 <!-- outputs:start -->
 ## What it prints
 
-**`python  dijkstra.ppy < input.txt`**
-
-```text
-23
-```
-
-**`ppy run dijkstra.ppy < input.txt`**
-
-```text
-23
-```
-
-**`ppy build dijkstra.ppy -o dist && ./dist/dijkstra < input.txt`**
-
-```text
-23
-```
-
-**`gcc   -O3 dijkstra.c -o dijkstra_c     && ./dijkstra_c     < input.txt`**
-
-```text
-23
-```
-
-**`clang -O3 dijkstra.c -o dijkstra_clang && ./dijkstra_clang < input.txt`**
+**`python  dijkstra.ppy < input.txt`**, **`ppy run dijkstra.ppy < input.txt`**, **`ppy build dijkstra.ppy -o dist && ./dist/dijkstra < input.txt`**, **`gcc   -O3 dijkstra.c -o dijkstra_c     && ./dijkstra_c     < input.txt`**, **`clang -O3 dijkstra.c -o dijkstra_clang && ./dijkstra_clang < input.txt`**
 
 ```text
 23

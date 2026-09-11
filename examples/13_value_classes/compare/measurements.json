@@ -1,0 +1,41 @@
+{
+ "environment": {
+  "commit": "476188b",
+  "processor": "x86_64",
+  "platform": "Linux-6.6.114.1-microsoft-standard-WSL2-x86_64-with-glibc2.39",
+  "python": "3.14.5",
+  "runs": 5
+ },
+ "timings": {
+  "ppy": {
+   "distance2, a million calls from Python": {
+    "mean": 62.18,
+    "stdev": 0.4659399102888695
+   },
+   "travel, eight million steps over a Ray natively": {
+    "mean": 11.164,
+    "stdev": 0.19269146322554143
+   }
+  },
+  "python": {
+   "distance2, a million calls from Python": {
+    "mean": 63.128,
+    "stdev": 0.7061302995906609
+   },
+   "travel, eight million steps over a Ray natively": {
+    "mean": 262.976,
+    "stdev": 2.153155823436835
+   }
+  },
+  "numba": {
+   "distance2, a million calls from Python": {
+    "mean": 349.836,
+    "stdev": 7.468251468717441
+   },
+   "travel, eight million steps over a Ray natively": {
+    "mean": 10.97,
+    "stdev": 0.17277152543170948
+   }
+  }
+ }
+}

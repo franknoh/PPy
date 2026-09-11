@@ -2,8 +2,7 @@
 
 Exception behavior is part of the contract: `divide(1, 0)` raises
 `ZeroDivisionError` and `at([10, 20, 30], 9)` raises `IndexError` at the
-same point, with the same type, on plain CPython, on the Python backend, and
-on the native path.
+same point, with the same type, whichever path runs them.
 
 ## A guard where Python would raise
 
@@ -38,27 +37,7 @@ ppy run errors.ppy
 <!-- outputs:start -->
 ## What it prints
 
-**`python  errors.ppy`**
-
-```text
-3 0
-3 -4
-caught ZeroDivisionError
-20
-caught IndexError
-```
-
-**`ppy     errors.ppy`**
-
-```text
-3 0
-3 -4
-caught ZeroDivisionError
-20
-caught IndexError
-```
-
-**`ppy run errors.ppy`**
+**`python  errors.ppy`**, **`ppy     errors.ppy`**, **`ppy run errors.ppy`**
 
 ```text
 3 0

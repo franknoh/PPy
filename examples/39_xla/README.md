@@ -41,15 +41,7 @@ ppy emit stablehlo device_math.ppy
 <!-- outputs:start -->
 ## What it prints
 
-**`python  device_math.ppy`**
-
-```text
-0.445520207 0.387753845 -4.485479898
-2.0 1.5
-# devices: ['cpu:0']
-```
-
-**`ppy run device_math.ppy`**
+**`python  device_math.ppy`**, **`ppy run device_math.ppy`**
 
 ```text
 0.445520207 0.387753845 -4.485479898

@@ -59,31 +59,7 @@ clang -O3 kmp.c -o kmp_clang && ./kmp_clang < input.txt
 <!-- outputs:start -->
 ## What it prints
 
-**`python  kmp.ppy < input.txt`**
-
-```text
-3
-```
-
-**`ppy run kmp.ppy < input.txt`**
-
-```text
-3
-```
-
-**`ppy build kmp.ppy -o dist && ./dist/kmp < input.txt`**
-
-```text
-3
-```
-
-**`gcc   -O3 kmp.c -o kmp_c     && ./kmp_c     < input.txt`**
-
-```text
-3
-```
-
-**`clang -O3 kmp.c -o kmp_clang && ./kmp_clang < input.txt`**
+**`python  kmp.ppy < input.txt`**, **`ppy run kmp.ppy < input.txt`**, **`ppy build kmp.ppy -o dist && ./dist/kmp < input.txt`**, **`gcc   -O3 kmp.c -o kmp_c     && ./kmp_c     < input.txt`**, **`clang -O3 kmp.c -o kmp_clang && ./kmp_clang < input.txt`**
 
 ```text
 3

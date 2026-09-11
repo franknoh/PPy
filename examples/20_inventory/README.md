@@ -138,16 +138,7 @@ main()
 
 </details>
 
-**`python  inventory.ppy`**
-
-```text
-total=255.5 avg=63.88 root=15.98
-('bolt', 120, 0.2)
-['washer', 'bracket']
-units: 555
-```
-
-**`ppy run inventory.ppy`**
+**`python  inventory.ppy`**, **`ppy run inventory.ppy`**
 
 ```text
 total=255.5 avg=63.88 root=15.98

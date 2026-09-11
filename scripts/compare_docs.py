@@ -11,6 +11,7 @@ recording the run in `compare/measurements.json` beside the programs.
     python scripts/compare_docs.py            # report what drifted
     python scripts/compare_docs.py --write    # measure and rewrite the tables
     python scripts/compare_docs.py 38_cuda    # one comparison only
+    python scripts/compare_docs.py --place    # the recorded tables into the READMEs, no run
 
 The counterparts want toolchains this repository does not carry; where they
 live is read from the environment, with this machine's defaults:
@@ -52,6 +53,7 @@ TOOLS = {
     "NVCC": os.environ.get("PPY_NVCC", "/usr/local/cuda/bin/nvcc"),
     "CARGO": os.environ.get("PPY_CARGO", str(Path.home() / ".cargo/bin/cargo")),
     "PPY": f"{sys.executable} -m ppy_compiler",
+    "PY": sys.executable,
 }
 #: Where WSL keeps the CUDA driver library, which Taichi needs on the path.
 DRIVER_LIBS = "/usr/lib/wsl/lib"
@@ -71,6 +73,24 @@ class Comparison:
 
 
 MANIFEST: dict[str, Comparison] = {
+    "05_numpy": Comparison(
+        "05_numpy",
+        [
+            ("ppy", "{PPY} run compare/fusion_bench.ppy"),
+            ("numpy", "{CV} compare/fusion_numpy.py"),
+            ("numexpr", "{CV} compare/fusion_numexpr.py"),
+            ("numba", "{CV} compare/fusion_numba.py"),
+            ("jax", "{JV} compare/fusion_jax.py"),
+        ],
+        {
+            "ppy": "PPY",
+            "numpy": "NumPy",
+            "numexpr": "numexpr",
+            "numba": "Numba `@njit`",
+            "jax": "JAX `jit`",
+        },
+        needs=("CV", "JV"),
+    ),
     "07_parallel": Comparison(
         "07_parallel",
         [
@@ -89,6 +109,16 @@ MANIFEST: dict[str, Comparison] = {
         },
         reference="numpy",
         needs=("CV", "JV"),
+    ),
+    "09_torch": Comparison(
+        "09_torch",
+        [
+            ("ppy", "{PPY} run compare/layer_bench.ppy"),
+            ("eager", "{JV} compare/layer_eager.py"),
+            ("compile", "{JV} compare/layer_compile.py"),
+        ],
+        {"ppy": "PPY ATen region", "eager": "PyTorch eager", "compile": "`torch.compile`"},
+        needs=("JV",),
     ),
     "12_buffers_and_jit": Comparison(
         "12_buffers_and_jit",
@@ -123,6 +153,26 @@ MANIFEST: dict[str, Comparison] = {
         ],
         needs=("CV",),
     ),
+    "13_value_classes": Comparison(
+        "13_value_classes",
+        [
+            ("ppy", "{PPY} run compare/vectors_bench.ppy"),
+            ("python", "{PY} compare/vectors_bench.ppy"),
+            ("numba", "{CV} compare/vectors_numba.py"),
+        ],
+        {"ppy": "PPY `ppy run`", "python": "CPython, the same file", "numba": "Numba `@jitclass`"},
+        needs=("CV",),
+    ),
+    "14_tuples": Comparison(
+        "14_tuples",
+        [
+            ("ppy", "{PPY} run compare/pairs_bench.ppy"),
+            ("python", "{PY} compare/pairs_bench.ppy"),
+            ("numba", "{CV} compare/pairs_numba.py"),
+        ],
+        {"ppy": "PPY `ppy run`", "python": "CPython, the same file", "numba": "Numba `@njit`"},
+        needs=("CV",),
+    ),
     "15_algorithms": Comparison(
         "15_algorithms",
         [
@@ -145,6 +195,22 @@ MANIFEST: dict[str, Comparison] = {
             "{MOJO} build -O3 compare/algorithms.mojo -o compare/build/algorithms_mojo 2>/dev/null",
         ],
         needs=("CV", "MOJO", "CODON"),
+    ),
+    "21_training_torch": Comparison(
+        "21_training_torch",
+        [
+            ("ppy", "{PPY} run compare/train_bench.ppy"),
+            ("python", "{PY} compare/train_bench.ppy"),
+            ("eager", "{JV} compare/train_eager.py"),
+            ("compile", "{JV} compare/train_compile.py"),
+        ],
+        {
+            "ppy": "PPY `ppy run`",
+            "python": "CPython, the same file",
+            "eager": "PyTorch, vectorized",
+            "compile": "`torch.compile`",
+        },
+        needs=("JV",),
     ),
     "35_parallel_range": Comparison(
         "35_parallel_range",
@@ -223,6 +289,36 @@ MANIFEST: dict[str, Comparison] = {
             "saxpy with copies": "saxpy, arrays copied in and out per launch",
             "block_max with copies": "block max, array copied in per launch",
         },
+        needs=("CV",),
+    ),
+    "37_aio": Comparison(
+        "37_aio",
+        [
+            ("ppy", "{PPY} run compare/echo_bench.ppy"),
+            ("asyncio", "{PY} compare/echo_asyncio.py"),
+            ("uvloop", "{CV} compare/echo_uvloop.py"),
+        ],
+        {"ppy": "PPY `ppy.aio`", "asyncio": "asyncio streams", "uvloop": "uvloop"},
+        needs=("CV",),
+    ),
+    "40_generics": Comparison(
+        "40_generics",
+        [
+            ("ppy", "{PPY} run compare/generic_bench.ppy"),
+            ("python", "{PY} compare/generic_bench.ppy"),
+            ("numba", "{CV} compare/generic_numba.py"),
+        ],
+        {"ppy": "PPY `ppy run`", "python": "CPython, the same file", "numba": "Numba `@njit`"},
+        needs=("CV",),
+    ),
+    "41_columnar": Comparison(
+        "41_columnar",
+        [
+            ("ppy", "{PPY} run compare/frames_bench.ppy"),
+            ("pandas", "{CV} compare/frames_pandas.py"),
+            ("polars", "{CV} compare/frames_polars.py"),
+        ],
+        {"ppy": "PPY", "pandas": "pandas", "polars": "polars"},
         needs=("CV",),
     ),
     "43_regex": Comparison(
@@ -380,12 +476,33 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n", maxsplit=1)[0])
     parser.add_argument("names", nargs="*", help="which comparisons; every one by default")
     parser.add_argument("--write", action="store_true", help="rewrite the tables and records")
+    parser.add_argument(
+        "--place",
+        action="store_true",
+        help="write the recorded tables into the READMEs without measuring anything",
+    )
     options = parser.parse_args()
     chosen = options.names or list(MANIFEST)
     unknown = [name for name in chosen if name not in MANIFEST]
     if unknown:
         parser.error(f"no such comparison: {', '.join(unknown)}; one of {', '.join(MANIFEST)}")
     status = 0
+    if options.place:
+        for name in chosen:
+            comparison = MANIFEST[name]
+            record = EXAMPLES / comparison.folder / "compare" / "measurements.json"
+            if not record.is_file():
+                print(f"[SKIP] {name}: no record")
+                continue
+            stored = json.loads(record.read_text(encoding="utf-8"))["timings"]
+            readme = EXAMPLES / comparison.folder / "README.md"
+            moved = _place(readme, render(comparison, stored), True)
+            if moved and "markers" in moved:
+                status = 1
+                print(f"[FAIL] {name}: {moved}")
+            else:
+                print(f"[OK] {name}: {'placed' if moved else 'already in place'}")
+        return status
     for name in chosen:
         comparison = MANIFEST[name]
         missing = _missing(comparison)
@@ -408,6 +525,10 @@ def main() -> int:
         # every number in the tree by a few percent.
         rewrite = options.write and (not stored or bool(drifted))
         moved = _place(readme, render(comparison, measured), rewrite)
+        if moved and "markers" in moved:
+            status = 1
+            print(f"[FAIL] {name}: {moved}")
+            continue
         if rewrite:
             record.write_text(
                 json.dumps({"environment": _environment(), "timings": measured}, indent=1) + "\n",

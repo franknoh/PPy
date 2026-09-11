@@ -1,0 +1,44 @@
+"""Tuples two ways: a million `divmod_pair` calls from Python, and a native loop that unpacks a
+tuple parameter and walks eight million steps without allocating. The same file under `python` is
+the CPython column."""
+
+import time
+
+import ppy
+
+
+@ppy.pure
+@ppy.opt(3)
+def divmod_pair(a: int, b: int) -> tuple[int, int]:
+    return (a // b, a % b)
+
+
+@ppy.pure
+@ppy.opt(3)
+def walk(start: tuple[float, float], count: int) -> float:
+    x, y = start
+    for i in range(count):
+        x, y = (x + float(i)) / 2.0, (y + 1.0) / 2.0
+    return x + y
+
+
+def main() -> None:
+    walk((0.0, 0.0), 1000)
+    best_calls = 1e9
+    best_loop = 1e9
+    for _ in range(5):
+        started = time.perf_counter()
+        acc = 0
+        for i in range(1_000_000):
+            q, r = divmod_pair(i, 7)
+            acc += q - r
+        best_calls = min(best_calls, (time.perf_counter() - started) * 1000.0)
+        started = time.perf_counter()
+        far = walk((0.0, 0.0), 8_000_000)
+        best_loop = min(best_loop, (time.perf_counter() - started) * 1000.0)
+    print(f"# divmod_pair, a million calls from Python: {best_calls:.2f} ms")
+    print(f"# walk, eight million steps from a tuple natively: {best_loop:.2f} ms")
+    print(f"{acc} {far:.3f}")
+
+
+main()

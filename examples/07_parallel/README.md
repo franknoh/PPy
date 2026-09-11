@@ -135,9 +135,9 @@ ppy run parallel.ppy
 **`python  parallel.ppy`**
 
 ```text
-fused serial         87.2 ms   sample=-0.249979000059
-fused parallel       99.3 ms   sample=-0.249979000059
-numpy               100.8 ms   sample=-0.249979000059
+fused serial        114.8 ms   sample=-0.249979000059
+fused parallel      123.4 ms   sample=-0.249979000059
+numpy               121.4 ms   sample=-0.249979000059
 bit-identical: True
 strict == numpy: True
 relaxed close   : True
@@ -146,9 +146,9 @@ relaxed close   : True
 **`ppy     parallel.ppy`**
 
 ```text
-fused serial         84.3 ms   sample=-0.249979000059
-fused parallel       87.1 ms   sample=-0.249979000059
-numpy                89.4 ms   sample=-0.249979000059
+fused serial        113.8 ms   sample=-0.249979000059
+fused parallel      127.6 ms   sample=-0.249979000059
+numpy               132.2 ms   sample=-0.249979000059
 bit-identical: True
 strict == numpy: True
 relaxed close   : True
@@ -157,9 +157,9 @@ relaxed close   : True
 **`ppy run parallel.ppy`**
 
 ```text
-fused serial         20.3 ms   sample=-0.249979000059
-fused parallel       13.6 ms   sample=-0.249979000059
-numpy                21.6 ms   sample=-0.249979000059
+fused serial         14.9 ms   sample=-0.249979000059
+fused parallel        5.6 ms   sample=-0.249979000059
+numpy                18.3 ms   sample=-0.249979000059
 bit-identical: True
 strict == numpy: True
 relaxed close   : True

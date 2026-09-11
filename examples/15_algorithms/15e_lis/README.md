@@ -58,31 +58,7 @@ clang -O3 lis.c -o lis_clang && ./lis_clang < input.txt
 <!-- outputs:start -->
 ## What it prints
 
-**`python  lis.ppy < input.txt`**
-
-```text
-5
-```
-
-**`ppy run lis.ppy < input.txt`**
-
-```text
-5
-```
-
-**`ppy build lis.ppy -o dist && ./dist/lis < input.txt`**
-
-```text
-5
-```
-
-**`gcc   -O3 lis.c -o lis_c     && ./lis_c     < input.txt`**
-
-```text
-5
-```
-
-**`clang -O3 lis.c -o lis_clang && ./lis_clang < input.txt`**
+**`python  lis.ppy < input.txt`**, **`ppy run lis.ppy < input.txt`**, **`ppy build lis.ppy -o dist && ./dist/lis < input.txt`**, **`gcc   -O3 lis.c -o lis_c     && ./lis_c     < input.txt`**, **`clang -O3 lis.c -o lis_clang && ./lis_clang < input.txt`**
 
 ```text
 5

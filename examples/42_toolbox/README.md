@@ -4,7 +4,7 @@ One small program, and every way of looking inside its build: the IR at each
 stage, the source backends, the optimization report, the sanitizers, and
 profile-guided optimization. The program is ordinary — a loop with a
 branch, an indexed read, a function nobody calls — so that the tools have
-something to say, and it prints the same line under every command below.
+something to say.
 
 ## The IR at each stage
 
@@ -79,13 +79,7 @@ ppy build --pgo toolbox.ppyprof toolbox.ppy --report-opt
 <!-- outputs:start -->
 ## What it prints
 
-**`python  toolbox.ppy`**
-
-```text
-975000 798
-```
-
-**`ppy run toolbox.ppy`**
+**`python  toolbox.ppy`**, **`ppy run toolbox.ppy`**, **`ppy run --sanitize bounds,overflow toolbox.ppy`**, **`ppy run --profile toolbox.ppy`**
 
 ```text
 975000 798
@@ -313,18 +307,6 @@ module toolbox
     - dce: unused core.const removed
 ```
 
-**`ppy run --sanitize bounds,overflow toolbox.ppy`**
-
-```text
-975000 798
-```
-
-**`ppy run --profile toolbox.ppy`**
-
-```text
-975000 798
-```
-
 **`ppy build --pgo toolbox.ppyprof toolbox.ppy --report-opt`**
 
 <details markdown="1">
@@ -332,8 +314,8 @@ module toolbox
 
 ```text
 optimization report: PPy (O2, ir road)
-profile: toolbox.ppyprof (6 runs, hot from 15 calls)
-  toolbox.compute: hot, 300 calls; arguments 0: list[400] x300
+profile: toolbox.ppyprof (1 run, hot from 2 calls)
+  toolbox.compute: hot, 50 calls; arguments 0: list[400] x50
   toolbox.pick: cold, 0 calls
   toolbox.unused: cold, 0 calls
 module toolbox
@@ -347,7 +329,7 @@ module toolbox
   profile applied: 3
     - @toolbox_compute: core.cmp: folded 4 and 0
     - @toolbox_compute: core.guard: condition always holds
-    - profile: `toolbox.compute` is hot (300 call(s)); 2 branch(es) weighted, 1 loop(s) with trip counts
+    - profile: `toolbox.compute` is hot (50 call(s)); 2 branch(es) weighted, 1 loop(s) with trip counts
     - profile: `toolbox.pick` is cold (0 call(s)); 0 branch(es) weighted, 0 loop(s) with trip counts
     - profile: `toolbox.unused` is cold (0 call(s)); 0 branch(es) weighted, 0 loop(s) with trip counts
     - simplify-cfg: ^each.latch3 merged into ^endif7

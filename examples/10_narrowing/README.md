@@ -57,29 +57,7 @@ ppy run narrowing.ppy
 <!-- outputs:start -->
 ## What it prints
 
-**`python  narrowing.ppy`**
-
-```text
-3 0
-True False False
-3 -1 -1
-4 7
-none int:42 str:HI
-3 0
-```
-
-**`ppy     narrowing.ppy`**
-
-```text
-3 0
-True False False
-3 -1 -1
-4 7
-none int:42 str:HI
-3 0
-```
-
-**`ppy run narrowing.ppy`**
+**`python  narrowing.ppy`**, **`ppy     narrowing.ppy`**, **`ppy run narrowing.ppy`**
 
 ```text
 3 0

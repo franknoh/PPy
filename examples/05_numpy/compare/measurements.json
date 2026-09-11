@@ -1,0 +1,61 @@
+{
+ "environment": {
+  "commit": "476188b",
+  "processor": "x86_64",
+  "platform": "Linux-6.6.114.1-microsoft-standard-WSL2-x86_64-with-glibc2.39",
+  "python": "3.14.5",
+  "runs": 5
+ },
+ "timings": {
+  "ppy": {
+   "normalize": {
+    "mean": 24.052,
+    "stdev": 1.1835201730431135
+   },
+   "blend": {
+    "mean": 74.816,
+    "stdev": 0.6618383488435843
+   }
+  },
+  "numpy": {
+   "normalize": {
+    "mean": 24.31,
+    "stdev": 1.0377379245262264
+   },
+   "blend": {
+    "mean": 90.238,
+    "stdev": 2.1669725425117914
+   }
+  },
+  "numexpr": {
+   "normalize": {
+    "mean": 12.834,
+    "stdev": 0.44629586599026466
+   },
+   "blend": {
+    "mean": 11.868,
+    "stdev": 0.32828341414089185
+   }
+  },
+  "numba": {
+   "normalize": {
+    "mean": 27.168,
+    "stdev": 1.6676090668978758
+   },
+   "blend": {
+    "mean": 86.16,
+    "stdev": 0.9982234218851058
+   }
+  },
+  "jax": {
+   "normalize": {
+    "mean": 8.578,
+    "stdev": 0.41360609279844984
+   },
+   "blend": {
+    "mean": 24.695999999999998,
+    "stdev": 1.9295673090099756
+   }
+  }
+ }
+}

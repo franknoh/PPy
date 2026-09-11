@@ -127,14 +127,7 @@ ppy run gradients.ppy
 <!-- outputs:start -->
 ## What it prints
 
-**`python  gradients.ppy`**
-
-```text
-2.929684375 4.201088436
--2.488585914 0.523598776 4.7e-17
-```
-
-**`ppy run gradients.ppy`**
+**`python  gradients.ppy`**, **`ppy run gradients.ppy`**
 
 ```text
 2.929684375 4.201088436

@@ -83,31 +83,7 @@ clang -O3 nqueens.c -o nqueens_clang && ./nqueens_clang < input.txt
 <!-- outputs:start -->
 ## What it prints
 
-**`python  nqueens.ppy < input.txt`**
-
-```text
-14200
-```
-
-**`ppy run nqueens.ppy < input.txt`**
-
-```text
-14200
-```
-
-**`ppy build nqueens.ppy -o dist && ./dist/nqueens < input.txt`**
-
-```text
-14200
-```
-
-**`gcc   -O3 nqueens.c -o nqueens_c     && ./nqueens_c     < input.txt`**
-
-```text
-14200
-```
-
-**`clang -O3 nqueens.c -o nqueens_clang && ./nqueens_clang < input.txt`**
+**`python  nqueens.ppy < input.txt`**, **`ppy run nqueens.ppy < input.txt`**, **`ppy build nqueens.ppy -o dist && ./dist/nqueens < input.txt`**, **`gcc   -O3 nqueens.c -o nqueens_c     && ./nqueens_c     < input.txt`**, **`clang -O3 nqueens.c -o nqueens_clang && ./nqueens_clang < input.txt`**
 
 ```text
 14200

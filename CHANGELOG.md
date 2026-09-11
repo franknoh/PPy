@@ -177,6 +177,25 @@ Work toward the next release, on `dev`; alphas of it are tagged `v0.3.0aN`.
   CUDA and HIP get the same treatment, with C++'s `int64_t(x)` casts.
   `ppy emit --format` runs `c`, `cpp`, `cuda`, `hip`, and `header` output
   through clang-format, with the project's `.clang-format` where it has one.
+- A pandas or PyArrow expression fuses into one loop in fact, not only in
+  name: the kernel is a `columnar.map` that evaluates the whole tree row by
+  row, where it was one loop and one heap temporary per operation plus a
+  copy at the end (`s * t + s.fillna(0.0)` over eight million rows: 109 ms
+  to 35 ms, from slower than pandas to level with it). A NumPy-backed
+  Series now runs under NumPy's own null model, in the kernel's twin for
+  it: a NaN is the null `fillna` fills and `isna` finds -- before, the
+  kernel read a NaN as a value behind a bitmap of ones, so `s.fillna(0.0)`
+  under `ppy run` handed the NaN back -- a bool mask is a byte per row, a
+  bool answer over NumPy storage no longer falls back to pandas, and the
+  answer is written straight into the NumPy array its Series wraps. `!=`
+  is IEEE's on every path: a NaN differs from everything, as pandas and
+  Arrow have it.
+- A fused library expression inside a wider call is replaced, and the call
+  kept: the fusion plan is keyed by the expression's whole source span,
+  where it was keyed by the start alone, so `s.isna().sum()` -- which
+  begins where `s.isna()` does -- had the whole call rewritten to the
+  kernel and the `.sum()` lost. It went unnoticed while the kernel fell
+  back to pandas for that case, whose fallback was the whole expression.
 
 ## 0.2.1 — unreleased
 

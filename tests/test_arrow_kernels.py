@@ -89,10 +89,15 @@ def test_columnar_kernels_are_columnar_ir():
     text = encode(module)
     assert "func @k_blend(%out: ptr<f64>, %outv: ptr<u8>, %a0: ptr<f64>, %v0: ptr<u8>" in text
     assert "func @k_mask(%out: ptr<u8>, %outv: ptr<u8>" in text, "a bool result is a bitmap"
+    assert "columnar.from_parts" in text
     assert (
-        "columnar.from_parts" in text and "columnar.fill_null" in text and "columnar.select" in text
-    )
-    assert "columnar.fill %s0, %n" in text, "a scalar operand is a column of one value"
+        'columnar.map %10, %11, %6, %9, %s0 {expression = "(add (mul a0 a1) (fill_null a0 s0))", '
+        'gives = "f64", model = "bits"}'
+    ) in text, "one map evaluates the whole tree; a scalar operand is its own leaf"
+    assert 'expression = "(select a0 (negate a1) (fill_null a1 c0.0))", gives = "f64"' in text
+    assert "func @k_blend__nan(%out: ptr<f64>, %outv: ptr<u8>, %a0: ptr<f64>, %v0: ptr<u8>" in text
+    assert 'model = "nan"' in text, "every columnar kernel has a twin under NumPy's null model"
+    assert "columnar.mul" not in text and "columnar.fill_null" not in text, "nothing materialized"
 
 
 def _run(engine, name: str, out, outv, *arrays, scalars=(), n: int):  # type: ignore[no-untyped-def]

@@ -180,10 +180,16 @@ def bind_fused(
     *,
     parallel: bool = False,
     threads: str | int = "auto",
+    nan_address: int = 0,
 ) -> FusedBinding:
-    """Wrap one fused kernel in the guards its fast-path domain requires."""
+    """Wrap one fused kernel in the guards its fast-path domain requires.
+
+    A columnar kernel has a twin at `nan_address` for NumPy-backed pandas
+    Series, whose nulls are NaNs and whose masks are bytes; without one,
+    such Series run pandas.
+    """
     if loop.storage in {"pyarrow", "pandas"}:
-        return _bind_columnar(loop, address, fallback)
+        return _bind_columnar(loop, address, fallback, nan_address)
     storage = _storage(loop.storage)
     if storage is None:
         return FusedBinding(loop, fallback, fallback, reason=f"{loop.storage} is not importable")
@@ -339,25 +345,32 @@ class _Failed(Exception):
 # -- Arrow -----------------------------------------------------------------------------------------
 
 
-def _bind_columnar(loop: FusedLoop, address: int, fallback: Callable[..., object]) -> FusedBinding:
+def _bind_columnar(
+    loop: FusedLoop, address: int, fallback: Callable[..., object], nan_address: int = 0
+) -> FusedBinding:
     """A columnar kernel over PyArrow arrays or pandas Series, read in place.
 
     The kernel takes the result's values and validity buffers, then each
     array's values and validity buffers, the scalars, and the row count. A
-    PyArrow array is its buffers; a pandas Series is its Arrow array when it
-    is Arrow-backed, or its NumPy values with a bitmap of ones when it is
-    NumPy-backed, and the answer is a Series over the same index. An array
-    without nulls lends a bitmap of ones. A bit-packed buffer sliced inside
-    a byte, a chunked array, another type, Series whose indexes are not one
-    index, or a shape the kernel does not take run the library's own compute.
+    PyArrow array is its buffers, and so is an Arrow-backed pandas Series;
+    the answer is an Arrow array, or a Series over the same index. A
+    NumPy-backed Series -- `float64` values whose nulls are NaNs, or a
+    `bool` mask -- goes to the kernel's NaN-model twin, which reads and
+    writes that layout directly; the answer is a Series over a fresh NumPy
+    array, with no copy and no bitmap in between. An array without nulls
+    lends a bitmap of ones. A bit-packed buffer sliced inside a byte, a
+    chunked array, another type, Series whose indexes are not one index,
+    or a shape the kernel does not take run the library's own compute.
     """
     try:
         import pyarrow
     except ImportError:
         return FusedBinding(loop, fallback, fallback, reason="pyarrow is not importable")
     pandas: Any = None
+    numpy: Any = None
     if loop.storage == "pandas":
         try:
+            import numpy
             import pandas
         except ImportError:
             return FusedBinding(loop, fallback, fallback, reason="pandas is not importable")
@@ -375,9 +388,11 @@ def _bind_columnar(loop: FusedLoop, address: int, fallback: Callable[..., object
         ctypes.POINTER(ctypes.c_int64),
     )
     native = prototype(address)
+    nan_native = prototype(nan_address) if nan_address else None
     binding = FusedBinding(loop, lambda *a: None, fallback)
     ones = bytearray()
     types = {"f64": pyarrow.float64(), "bool": pyarrow.bool_()}
+    numpy_kinds = {"f64": "float64", "bool": "bool"}
 
     def all_valid(length: int) -> Any:
         nonlocal ones
@@ -418,12 +433,13 @@ def _bind_columnar(loop: FusedLoop, address: int, fallback: Callable[..., object
                 return None
             described = arrow_parts(chunked.chunk(0), kind)
             return None if described is None else (*described, "arrow")
-        if kind != "f64" or not isinstance(storage, pandas.arrays.NumpyExtensionArray):
+        if nan_native is None or not isinstance(storage, pandas.arrays.NumpyExtensionArray):
             return None
         values = value.to_numpy()
-        if str(values.dtype) != "float64" or not values.flags["C_CONTIGUOUS"]:
+        if str(values.dtype) != numpy_kinds[kind] or not values.flags["C_CONTIGUOUS"]:
             return None
         keep.append(values)
+        # The NaN-model kernel reads no validity; the bitmap only fills the argument.
         return values.ctypes.data, all_valid(len(values)), "numpy"
 
     def one_index(series: list) -> Any:
@@ -470,19 +486,33 @@ def _bind_columnar(loop: FusedLoop, address: int, fallback: Callable[..., object
         index = None
         if pandas is not None:
             index = one_index(list(arrays))
-            if index is None or (backings == {"numpy"} and loop.result != "f64"):
+            if index is None:
                 binding.fallbacks += 1
                 return fallback(*args)
         bitmap_bytes = (length + 7) // 8
+        placeholder = ctypes.c_int64(0)
+        widened = [float(s) for s in scalars]  # type: ignore[arg-type]
+        if backings == {"numpy"}:
+            assert nan_native is not None
+            # NumPy's layout in and out: the answer is the array the Series wraps.
+            answer = numpy.empty(length, dtype=numpy_kinds[loop.result])
+            status = nan_native(
+                answer.ctypes.data, all_valid(length), *atoms, *widened, length, placeholder
+            )
+            if status != _STATUS_OK:
+                binding.fallbacks += 1
+                return fallback(*args)
+            binding.calls += 1
+            names = {series.name for series in arrays}  # type: ignore[attr-defined]
+            return pandas.Series(answer, index=index, name=names.pop() if len(names) == 1 else None)
         values_bytes = length * _DOUBLE_SIZE if loop.result == "f64" else bitmap_bytes
         out_values = pyarrow.allocate_buffer(values_bytes, resizable=False)
         out_validity = pyarrow.allocate_buffer(bitmap_bytes, resizable=False)
-        placeholder = ctypes.c_int64(0)
         status = native(
             out_values.address,
             ctypes.cast(out_validity.address, byte_pointer),
             *atoms,
-            *[float(s) for s in scalars],  # type: ignore[arg-type]
+            *widened,
             length,
             placeholder,
         )
@@ -498,10 +528,7 @@ def _bind_columnar(loop: FusedLoop, address: int, fallback: Callable[..., object
             return result
         names = {series.name for series in arrays}  # type: ignore[attr-defined]
         name = names.pop() if len(names) == 1 else None
-        if backings == {"arrow"}:
-            return pandas.Series(pandas.arrays.ArrowExtensionArray(result), index=index, name=name)
-        # NumPy-backed in, NumPy-backed out: the values buffer, viewed, is the Series.
-        return pandas.Series(result.to_numpy(zero_copy_only=False), index=index, name=name)
+        return pandas.Series(pandas.arrays.ArrowExtensionArray(result), index=index, name=name)
 
     wrapper.__name__ = loop.symbol
     wrapper.__ppy_fused__ = loop  # type: ignore[attr-defined]

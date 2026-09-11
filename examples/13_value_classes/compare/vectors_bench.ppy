@@ -1,0 +1,70 @@
+"""Value classes two ways: a million `distance2` calls from Python, and a native loop over a
+`Ray`'s fields that never boxes it. The same file under `python` is the CPython column."""
+
+import time
+from dataclasses import dataclass
+
+import ppy
+
+
+@dataclass
+class Vec3:
+    x: float
+    y: float
+    z: float
+
+    @ppy.pure
+    @ppy.opt(3)
+    def norm2(self) -> float:
+        return self.x * self.x + self.y * self.y + self.z * self.z
+
+
+@ppy.pure
+@ppy.opt(3)
+def distance2(a: Vec3, b: Vec3) -> float:
+    dx: float = a.x - b.x
+    dy: float = a.y - b.y
+    dz: float = a.z - b.z
+    return dx * dx + dy * dy + dz * dz
+
+
+@dataclass
+class Ray:
+    origin: float
+    direction: float
+
+
+@ppy.pure
+@ppy.opt(3)
+def travel(ray: Ray, count: int) -> float:
+    """A native loop over a value class's fields: the `Ray` is two doubles in registers."""
+    position: float = ray.origin
+    total: float = 0.0
+    for i in range(count):
+        position = position * 0.999999 + ray.direction * (i % 3)
+        total += position
+    return total
+
+
+def main() -> None:
+    a = Vec3(1.0, 2.0, 3.0)
+    b = Vec3(0.5, 0.25, 0.125)
+    ray = Ray(1.0, 0.001)
+    travel(ray, 1000)
+    best_calls = 1e9
+    best_loop = 1e9
+    for _ in range(5):
+        started = time.perf_counter()
+        acc = 0.0
+        for _i in range(1_000_000):
+            acc += distance2(a, b)
+        best_calls = min(best_calls, (time.perf_counter() - started) * 1000.0)
+        started = time.perf_counter()
+        total = travel(ray, 8_000_000)
+        best_loop = min(best_loop, (time.perf_counter() - started) * 1000.0)
+    print(f"# distance2, a million calls from Python: {best_calls:.2f} ms")
+    print(f"# travel, eight million steps over a Ray natively: {best_loop:.2f} ms")
+    print(f"{acc:.6f} {total:.3f}")
+
+
+main()

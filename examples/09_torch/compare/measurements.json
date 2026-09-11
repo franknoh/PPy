@@ -1,0 +1,29 @@
+{
+ "environment": {
+  "commit": "476188b",
+  "processor": "x86_64",
+  "platform": "Linux-6.6.114.1-microsoft-standard-WSL2-x86_64-with-glibc2.39",
+  "python": "3.14.5",
+  "runs": 5
+ },
+ "timings": {
+  "ppy": {
+   "layer, per call": {
+    "mean": 0.00198,
+    "stdev": 4.4721359549995816e-05
+   }
+  },
+  "eager": {
+   "layer, per call": {
+    "mean": 0.002,
+    "stdev": 7.071067811865471e-05
+   }
+  },
+  "compile": {
+   "layer, per call": {
+    "mean": 0.00894,
+    "stdev": 0.00027018512172212564
+   }
+  }
+ }
+}
