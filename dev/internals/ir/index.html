@@ -4542,7 +4542,12 @@ operations are the ones pandas and PyArrow share: <code>from_parts %values,
 bitmap); <code>add</code>, <code>sub</code>, <code>mul</code>, <code>div</code>, the six comparisons, <code>and</code>, <code>or</code>,
 <code>xor</code>, <code>negate</code>, <code>abs</code>, <code>invert</code> give a null where an input is null;
 <code>is_null</code>, <code>is_valid</code>, <code>fill_null</code>, <code>cast</code>, <code>select</code>, <code>fill %scalar, %n</code>
-(one value in every row); <code>filter</code> by a bool
+(one value in every row); <code>map %out, %outv, %columns..., %scalars...
+{expression, model, gives}</code> evaluates a whole expression tree --
+<code>(add (mul a0 a1) (fill_null a0 s0))</code> -- row by row into memory in one
+loop, under Arrow's null model (<code>bits</code>: validity bitmaps in, one out) or
+NumPy's (<code>nan</code>: an <code>f64</code> null is a NaN, a <code>bool</code> column is a byte per
+row, and the answer is written the same way); <code>filter</code> by a bool
 column, <code>take</code> by positions (a null position is a null row), <code>concat</code>;
 <code>sort_indices</code> (ascending, nulls last, stable); <code>aggregate {function}</code> --
 <code>sum</code>, <code>mean</code>, <code>min</code>, <code>max</code>, <code>count</code>, <code>any</code>, <code>all</code> over the valid rows, a

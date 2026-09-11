@@ -3757,7 +3757,7 @@ folder holds both <code>&lt;name&gt;.py</code> and <code>&lt;name&gt;.ppy</code>
 <li>
 <p><strong><a href="18_errors/">Exceptions</a></strong></p>
 <hr />
-<p>Exception behavior is part of the contract: <code>divide(1, 0)</code> raises <code>ZeroDivisionError</code> and <code>at([10, 20, 30], 9)</code> raises <code>IndexError</code> at the same point, with the same type, on plain CPython, on the Python backend, and on the native path.</p>
+<p>Exception behavior is part of the contract: <code>divide(1, 0)</code> raises <code>ZeroDivisionError</code> and <code>at([10, 20, 30], 9)</code> raises <code>IndexError</code> at the same point, with the same type, whichever path runs them.</p>
 </li>
 <li>
 <p><strong><a href="19_strings/">Strings</a></strong></p>
@@ -3787,7 +3787,7 @@ folder holds both <code>&lt;name&gt;.py</code> and <code>&lt;name&gt;.ppy</code>
 <li>
 <p><strong><a href="32_native_memory/">Native memory</a></strong></p>
 <hr />
-<p>Typed pointers, memory a function owns, a C function bound from <code>libm</code>, and a function exported as a C symbol — each with a reference implementation under plain CPython, so <code>python native_memory.ppy</code> prints what <code>ppy run</code> prints.</p>
+<p>Typed pointers, memory a function owns, a C function bound from <code>libm</code>, and a function exported as a C symbol — each with a reference implementation under plain CPython.</p>
 </li>
 <li>
 <p><strong><a href="33_simd_and_cpu/">Lanes and the machine</a></strong></p>

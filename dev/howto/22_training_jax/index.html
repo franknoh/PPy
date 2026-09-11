@@ -3830,8 +3830,7 @@ call and there is no per-operator Python overhead left to remove.</p>
 </code></pre></div>
 <p>The converter declared both parameters <code>Buffer[float]</code> because the body
 indexes them and never slices, and the values feeding them became
-<code>array.array</code>. The loop lowers natively; <code>checksum</code> is identical on every
-path.</p>
+<code>array.array</code>. The loop lowers natively.</p>
 <h2 id="jaxjit-is-already-the-fast-path"><code>@jax.jit</code> is already the fast path<a class="headerlink" href="#jaxjit-is-already-the-fast-path" title="Permanent link">&para;</a></h2>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="nd">@jax</span><span class="o">.</span><span class="n">jit</span>
 <a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="k">def</span><span class="w"> </span><span class="nf">train_step</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">,</span> <span class="n">w1</span><span class="p">,</span> <span class="n">b1</span><span class="p">,</span> <span class="n">w2</span><span class="p">,</span> <span class="n">b2</span><span class="p">,</span> <span class="n">rate</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">jax</span><span class="o">.</span><span class="n">Array</span><span class="p">,</span> <span class="n">jax</span><span class="o">.</span><span class="n">Array</span><span class="p">,</span> <span class="n">jax</span><span class="o">.</span><span class="n">Array</span><span class="p">,</span> <span class="n">jax</span><span class="o">.</span><span class="n">Array</span><span class="p">]:</span>
@@ -3864,14 +3863,14 @@ would break <code>jax.grad</code> on a program that runs correctly under plain C
 <p><strong><code>python  train.ppy</code></strong></p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a># device: cpu
 <a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a># native prep: False
-<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>prep      66.5 ms   checksum=-21433.891867
-<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>train     91.2 ms   loss 1.0663 -&gt; 1.0109
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>prep      70.4 ms   checksum=-21433.891867
+<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>train    107.6 ms   loss 1.0663 -&gt; 1.0109
 </code></pre></div>
 <p><strong><code>ppy run train.ppy</code></strong></p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a># device: cpu
 <a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a># native prep: False
-<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>prep       0.9 ms   checksum=-21433.891867
-<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>train     93.7 ms   loss 1.0663 -&gt; 1.0109
+<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>prep       1.1 ms   checksum=-21433.891867
+<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>train    103.6 ms   loss 1.0663 -&gt; 1.0109
 </code></pre></div>
 <!-- outputs:end -->
 

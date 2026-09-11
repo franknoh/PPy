@@ -3918,8 +3918,7 @@ cold first build of the torch region takes tens of seconds, once.</p>
 </tr>
 </tbody>
 </table>
-<p>Checksums, bucket counts, and loss trajectories are identical on both paths
-and under every launcher. The preprocessing is the point. The region removes
+<p>The preprocessing is the point. The region removes
 four Python round trips per step, which
 <a href="../21_training_torch/">21_training_torch</a> measures at about 20%
 in isolation; here the step is dominated by the tensor work and the
@@ -3938,30 +3937,28 @@ the same files as plain Python; <code>PPY_QUIET=1</code> silences the per-rank n
 </code></pre></div>
 <!-- outputs:start -->
 <h2 id="what-it-prints">What it prints<a class="headerlink" href="#what-it-prints" title="Permanent link">&para;</a></h2>
-<p><strong><code>ppy build --warm .</code></strong></p>
+<p><strong><code>ppy build --warm .</code></strong>, <strong><code>ppy check .</code></strong></p>
 <p><em>(prints nothing; exits 0)</em></p>
 <p><strong><code>python train.py</code></strong></p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a># rank 0/1 device=cpu native=True region=True loader=GeneratedLoader
-<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>rank 0: prep       1.5 ms   checksum=-21015.470416 outside=4103
-<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>rank 0: train    757.3 ms   loss 1.0412 -&gt; 1.0107
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>rank 0: prep       1.9 ms   checksum=-21015.470416 outside=4103
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>rank 0: train  16513.7 ms   loss 1.0412 -&gt; 1.0107
 </code></pre></div>
 <p><strong><code>torchrun --standalone --nproc_per_node=2 train.py</code></strong></p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a># rank 0/2 device=cpu native=True region=True loader=GeneratedLoader
-<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>rank 0: prep       1.6 ms   checksum=-21015.470416 outside=4103
-<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>rank 0: train    601.0 ms   loss 1.0412 -&gt; 1.0123
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>rank 0: prep       1.9 ms   checksum=-21015.470416 outside=4103
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>rank 0: train    783.5 ms   loss 1.0412 -&gt; 1.0123
 <a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a># rank 1/2 device=cpu native=True region=True loader=GeneratedLoader
-<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>rank 1: prep       1.5 ms   checksum=-20883.104755 outside=4005
-<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>rank 1: train    598.8 ms   loss 1.0486 -&gt; 1.0239
+<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>rank 1: prep       1.9 ms   checksum=-20883.104755 outside=4005
+<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>rank 1: train    781.9 ms   loss 1.0486 -&gt; 1.0239
 </code></pre></div>
 <p><strong><code>accelerate launch --multi_gpu --num_processes 2 train.py</code></strong></p>
 <p><em>not run here: <code>accelerate</code> is not installed</em></p>
 <p><strong><code>PPY_IMPORT=python python train.py</code></strong></p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a># rank 0/1 device=cpu native=False region=False loader=PPySourceLoader
-<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>rank 0: prep     113.1 ms   checksum=-21015.470416 outside=4103
-<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>rank 0: train    261.8 ms   loss 1.0412 -&gt; 1.0107
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>rank 0: prep     125.0 ms   checksum=-21015.470416 outside=4103
+<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>rank 0: train  12706.6 ms   loss 1.0412 -&gt; 1.0107
 </code></pre></div>
-<p><strong><code>ppy check .</code></strong></p>
-<p><em>(prints nothing; exits 0)</em></p>
 <p><strong><code>python features.ppy &amp;&amp; ppy run features.ppy</code></strong></p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>checksum=-2083.056718 outside=134 counts=[452, 3853, 11555, 16790, 16661, 11022, 3174, 359]
 <a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>checksum=-2083.056718 outside=134 counts=[452, 3853, 11555, 16790, 16661, 11022, 3174, 359]

@@ -3985,25 +3985,25 @@ PPY on CPython 3.13.13, from a checkout on a native filesystem.</p>
 <!-- outputs:start -->
 <h2 id="what-it-prints">What it prints<a class="headerlink" href="#what-it-prints" title="Permanent link">&para;</a></h2>
 <p><strong><code>python  parallel.ppy</code></strong></p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>fused serial         87.2 ms   sample=-0.249979000059
-<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>fused parallel       99.3 ms   sample=-0.249979000059
-<a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a>numpy               100.8 ms   sample=-0.249979000059
+<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>fused serial        114.8 ms   sample=-0.249979000059
+<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>fused parallel      123.4 ms   sample=-0.249979000059
+<a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a>numpy               121.4 ms   sample=-0.249979000059
 <a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a>bit-identical: True
 <a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a>strict == numpy: True
 <a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a>relaxed close   : True
 </code></pre></div>
 <p><strong><code>ppy     parallel.ppy</code></strong></p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>fused serial         84.3 ms   sample=-0.249979000059
-<a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>fused parallel       87.1 ms   sample=-0.249979000059
-<a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a>numpy                89.4 ms   sample=-0.249979000059
+<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>fused serial        113.8 ms   sample=-0.249979000059
+<a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>fused parallel      127.6 ms   sample=-0.249979000059
+<a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a>numpy               132.2 ms   sample=-0.249979000059
 <a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a>bit-identical: True
 <a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a>strict == numpy: True
 <a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a>relaxed close   : True
 </code></pre></div>
 <p><strong><code>ppy run parallel.ppy</code></strong></p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>fused serial         20.3 ms   sample=-0.249979000059
-<a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>fused parallel       13.6 ms   sample=-0.249979000059
-<a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a>numpy                21.6 ms   sample=-0.249979000059
+<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>fused serial         14.9 ms   sample=-0.249979000059
+<a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>fused parallel        5.6 ms   sample=-0.249979000059
+<a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a>numpy                18.3 ms   sample=-0.249979000059
 <a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a>bit-identical: True
 <a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a>strict == numpy: True
 <a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a>relaxed close   : True
