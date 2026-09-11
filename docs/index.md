@@ -85,7 +85,7 @@ and Nuitka is on the [performance page](reference/performance.md).
 | | |
 |---|---|
 | **3** execution paths that must agree, checked on every example | **1,110** tests on Python 3.12, 3.13, and 3.14, **74%** statement coverage |
-| **42** example folders, **52** programs, every conversion regenerated to prove it | **76** diagnostic codes, each documented once |
+| **@@EXAMPLE_FOLDERS@@** example folders, **@@EXAMPLE_PROGRAMS@@** programs, every conversion regenerated to prove it; **@@COMPARED_FOLDERS@@** of the folders set beside other tools | **76** diagnostic codes, each documented once |
 | **18** IR dialects, **7** backends off one IR: LLVM, C11, C++17, CUDA, HIP, NVVM/PTX, StableHLO | **8** library plugins: NumPy, PyTorch, JAX/Flax, pydantic, FastAPI/Uvicorn, SciPy, pandas, PyArrow |
 | **47 ns** for a native two-`int` call, against **28 ns** for a plain Python call | **0** Python frames on the native call path |
 

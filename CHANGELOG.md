@@ -256,6 +256,37 @@ Work toward the next release, on `dev`; alphas of it are tagged `v0.3.0aN`.
   joins the two existing markers, the architecture page's program count is
   a marker, and a test holds `examples/README.md`'s own count to the same
   functions, so no page spells a number the tree has moved past.
+- `ppy convert` keeps Python's unpacking where the target is starred:
+  `a, *rest = map(int, input().split())` becomes
+  `a, *rest = ppy.input[list[int]]()`, a list of however many fields the
+  line holds, never a fixed-width tuple that would refuse a longer line;
+  `float` and `str` fields alike, and a target with anything but names in
+  it (a nested tuple) is left as it was written. A differential test runs
+  the Python and the conversion on the least arity, more, too few, an
+  empty line, integers past 64 bits, and non-ASCII digits.
+- `ppy.check[T]`: a `Literal` is its value and its type, so `Literal[1]`
+  refuses `True` and `Literal[False]` refuses `0` though the pairs compare
+  equal; a fixed-width integer (`i8`, `u8`, ...) refuses a `bool`; and the
+  whole of `T` is judged before any value is looked at, so a union with an
+  arm no value can be checked against (`int | Callable[..., int]`) is
+  refused whichever arm comes first and whatever the value.
+- The PJRT bridge no longer reads a JAX that will not initialize as the
+  CPU: the error is raised, and a JAX that came up on the CPU while an
+  accelerator plugin is installed (and `JAX_PLATFORMS` did not ask for the
+  CPU) is raised too, naming the plugin. Without JAX the platform is the
+  CPU `available()` already qualifies; `PPY_XLA_PLATFORM` still wins.
+- The hardware harness: a Pod that is not gone after a run fails the run
+  (`cleanup_ok`, and the exit status with it), `--keep` excepted; an AMD
+  type the stock list lacks is asked for in every datacenter whose
+  inventory names it, and NOT RUN is recorded only when every request was
+  refused; the ROCm environment is AMD's own JAX image with PPy installed
+  beside its JAX, which is checked to be the same version after the
+  install; and `ppy emit hip` is a step of a ROCm run. Unit tests with a
+  fake `runpodctl` hold the judgement.
+- The docs' landing page carries no count of folders or programs as
+  digits: the "by the numbers" row uses the markers, and the guard test
+  sees through Markdown emphasis. `examples/45_multi_gpu_jax` times its
+  steps without a host synchronization between them.
 
 ## 0.2.1 — unreleased
 

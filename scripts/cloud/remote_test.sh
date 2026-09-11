@@ -56,17 +56,25 @@ step apt bash -c 'for tool in git curl cc c++ make; do command -v $tool >/dev/nu
 step uv bash -c 'command -v uv || curl -LsSf https://astral.sh/uv/install.sh | sh'
 step clone bash -c "rm -rf $REPO && git clone -q https://github.com/franknoh/PPy $REPO && cd $REPO && git checkout -q $SHA && git rev-parse HEAD"
 cd "$REPO" || exit 1
-step sync bash -c 'uv python install -q 3.13 && uv sync -q -p 3.13 --group all'
-PY=$REPO/.venv/bin/python
-PPY=$REPO/.venv/bin/ppy
-JAX_VERSION=$("$PY" -c 'import jax; print(jax.__version__)')
-log "jax $JAX_VERSION from the lock; installing the accelerator plugin for it"
 if [ "$MODE" = rocm ]; then
-    # AMD publishes the ROCm PJRT plugin under its own names; the pin keeps
-    # the plugin at the jax version the lock resolved.
-    step jax_plugin bash -c "uv pip install -p $PY 'jax[rocm]==$JAX_VERSION' || uv pip install -p $PY 'jax-rocm7-plugin' 'jax-rocm7-pjrt' || uv pip install -p $PY 'jax-rocm60-plugin' 'jax-rocm60-pjrt'"
-    step vendor bash -c 'rocminfo | grep -E "Marketing Name|gfx" ; rocm-smi --showproductname --showdriverversion'
+    # AMD's image carries a JAX built for ROCm with its PJRT plugin; PPy goes in
+    # beside that interpreter and its groups resolve against the JAX already
+    # there, so no CPU wheel replaces it. The JAX is then checked to be the
+    # JAX that was there: a different version after the sync is a failure.
+    PY=$(command -v python3.12 || command -v python3)
+    BEFORE=$("$PY" -c 'import jax, jaxlib; print(jax.__version__, jaxlib.__version__)')
+    log "the image's JAX: $BEFORE at $PY"
+    step sync bash -c "uv pip install -p $PY -e '.' --group all && uv pip install -p $PY pytest"
+    step jax_plugin bash -c "AFTER=\$($PY -c 'import jax, jaxlib; print(jax.__version__, jaxlib.__version__)'); echo \"before: $BEFORE\"; echo \"after: \$AFTER\"; [ \"\$AFTER\" = \"$BEFORE\" ]"
+    PPY=$($PY -c 'import shutil; print(shutil.which("ppy") or "")')
+    [ -n "$PPY" ] || PPY="$PY -m ppy_compiler"
+    step vendor bash -c 'rocminfo | grep -E "Marketing Name|gfx" ; rocm-smi --showproductname --showdriverversion; cat /opt/rocm/.info/version 2>/dev/null'
 else
+    step sync bash -c 'uv python install -q 3.13 && uv sync -q -p 3.13 --group all'
+    PY=$REPO/.venv/bin/python
+    PPY=$REPO/.venv/bin/ppy
+    JAX_VERSION=$("$PY" -c 'import jax; print(jax.__version__)')
+    log "jax $JAX_VERSION from the lock; installing the accelerator plugin for it"
     step jax_plugin bash -c "uv pip install -p $PY 'jax[cuda12]==$JAX_VERSION'"
     step vendor bash -c 'nvidia-smi; nvidia-smi -L; nvcc --version || echo "nvcc: not installed"'
 fi
@@ -81,9 +89,16 @@ fi
 across accelerator "$PY" scripts/cloud/accelerator_check.py --require gpu --min-devices "$MIN" --out "$RESULTS/accelerator.json"
 # PPy's own device paths, the reason each took, and the tests around them.
 step xla_example bash -c "cd examples/39_xla && $PPY run device_math.ppy && $PPY explain device_math.ppy:6"
-step cuda_example bash -c "cd examples/38_cuda && $PPY run saxpy.ppy && $PPY explain saxpy.ppy:9 && $PPY explain saxpy.ppy:36"
-step tile_example bash -c "cd examples/44_tile && $PPY run tiles.ppy"
-step gpu_tests "$PY" -m pytest tests/test_gpu_frontend.py tests/test_ir_gpu.py tests/test_tile.py tests/test_xla.py -q
+if [ "$MODE" = rocm ]; then
+    # `ppy.hip` is source only: the HIP C++ is written and looked at, never launched.
+    step hip_emit bash -c "cd examples/38_cuda && $PPY emit hip saxpy.ppy > $RESULTS/saxpy.hip.cpp && grep -q '__global__' $RESULTS/saxpy.hip.cpp && grep -q 'hipLaunchKernelGGL\|<<<' $RESULTS/saxpy.hip.cpp && wc -l $RESULTS/saxpy.hip.cpp && (command -v hipcc >/dev/null && hipcc -fsyntax-only -x hip $RESULTS/saxpy.hip.cpp && echo 'hipcc: syntax ok' || echo 'hipcc: not installed, source not compiled')"
+    step cuda_example bash -c "cd examples/38_cuda && $PPY run saxpy.ppy"
+    step tile_example bash -c "cd examples/44_tile && $PPY run tiles.ppy"
+else
+    step cuda_example bash -c "cd examples/38_cuda && $PPY run saxpy.ppy && $PPY explain saxpy.ppy:9 && $PPY explain saxpy.ppy:36"
+    step tile_example bash -c "cd examples/44_tile && $PPY run tiles.ppy"
+fi
+step gpu_tests "$PY" -m pytest tests/test_gpu_frontend.py tests/test_ir_gpu.py tests/test_tile.py tests/test_xla.py -q -p no:cacheprovider
 step limits_tests "$PY" -m pytest tests/test_native_limits.py tests/test_multi_device_jax.py -q
 if [ "$MIN" -ge 2 ]; then
     across multigpu_train bash -c "cd examples/45_multi_gpu_jax && $PPY run train.ppy && $PY train.ppy"

@@ -38,24 +38,51 @@ def available() -> bool:
 
 
 def default_platform() -> str:
-    """The platform a client is made for: `PPY_XLA_PLATFORM`, else the one JAX would pick.
+    """The platform a client is made for: `PPY_XLA_PLATFORM`, else the one JAX picked.
 
     JAX's default backend is the accelerator its plugin found -- `gpu` on a
     machine with a CUDA or ROCm plugin installed, `tpu` on one with a TPU --
     and `cpu` only where there is nothing else; the bridge follows it, so a
     program on a GPU machine runs its StableHLO on the GPU rather than on a
     `cpu:0` it never asked for. `JAX_PLATFORMS` still steers JAX, and
-    `PPY_XLA_PLATFORM` steers the bridge alone.
+    `PPY_XLA_PLATFORM` steers the bridge alone. What is not done is to read
+    a failure as the CPU: a JAX that will not import or initialize raises,
+    and a JAX that came up on the CPU while an accelerator plugin is
+    installed (and `JAX_PLATFORMS` did not ask for the CPU) raises too,
+    naming the plugin, since that is the plugin failing, not a machine
+    without a GPU. Without JAX at all there is no platform, and `cpu` is the
+    answer `available()` already qualifies.
     """
     spelled = os.environ.get("PPY_XLA_PLATFORM")
     if spelled:
         return spelled
-    try:
-        import jax
-
-        return str(jax.default_backend())
-    except Exception:  # noqa: BLE001 - no JAX, or a JAX that cannot initialize: the CPU
+    if not available():
         return "cpu"
+    import jax
+
+    backend = str(jax.default_backend())
+    asked = os.environ.get("JAX_PLATFORMS", "")
+    if backend == "cpu" and not asked:
+        plugins = accelerator_plugins()
+        if plugins:
+            raise RuntimeError(
+                "JAX initialized on the CPU although an accelerator plugin is installed "
+                f"({', '.join(plugins)}): the plugin failed to initialize, which is not a "
+                "machine without an accelerator; JAX_PLATFORMS=cpu asks for the CPU on purpose"
+            )
+    return backend
+
+
+def accelerator_plugins() -> list[str]:
+    """The JAX accelerator plugin packages installed: `jax-cuda12-plugin`, `jax-rocm7-plugin`."""
+    import importlib.metadata
+
+    found = []
+    for distribution in importlib.metadata.distributions():
+        name = (distribution.metadata["Name"] or "").lower()
+        if name.startswith(("jax-cuda", "jax_cuda", "jax-rocm", "jax_rocm")) and "plugin" in name:
+            found.append(f"{name} {distribution.version}")
+    return sorted(found)
 
 
 def cache_directory() -> Path:

@@ -28,6 +28,7 @@ from __future__ import annotations
 import argparse
 import datetime as dt
 import json
+import os
 import subprocess
 import sys
 import time
@@ -36,6 +37,12 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent.parent
 HERE = Path(__file__).resolve().parent
+
+#: AMD's own JAX image: ROCm, jaxlib, and the ROCm PJRT plugin built together
+#: and known to load, one explicit tag (jax 0.11.0, the lock's minor). PPy is
+#: installed beside it without touching the JAX in it; `PPY_ROCM_IMAGE`
+#: names another tag of `rocm/jax` (or `rocm/jax-community`) for a try.
+ROCM_IMAGE = os.environ.get("PPY_ROCM_IMAGE", "rocm/jax:rocm10.0-jax0.11.0-py3.12")
 
 #: Environments: the vendor image, how many GPUs, the GPU types to try in order of
 #: preference (cheap and common first), and what the remote script is told.
@@ -73,14 +80,14 @@ ENVIRONMENTS = {
         "vendor": "NVIDIA",
     },
     "rocm": {
-        "image": "runpod/pytorch:2.4.0-py3.10-rocm6.1.0-ubuntu22.04",
+        "image": ROCM_IMAGE,
         "count": 1,
         "mode": "rocm",
         "prefer": ["AMD Instinct MI300X OAM", "AMD Instinct MI250X", "AMD Instinct MI250"],
         "vendor": "AMD",
     },
     "rocm-multigpu": {
-        "image": "runpod/pytorch:2.4.0-py3.10-rocm6.1.0-ubuntu22.04",
+        "image": ROCM_IMAGE,
         "count": 2,
         "mode": "rocm",
         "prefer": ["AMD Instinct MI300X OAM", "AMD Instinct MI250X"],
@@ -137,11 +144,41 @@ def _in_stock(vendor: str) -> dict[str, dict]:
     }
 
 
-def _candidates(environment: dict) -> list[str]:
-    """The GPU types to ask for, in order: the preferred ones in stock, then the rest in stock."""
+def _in_datacenters(vendor: str) -> list[tuple[str, str]]:
+    """(GPU type, datacenter) pairs the datacenter inventory names for `vendor`.
+
+    `runpodctl gpu list` carries no AMD type at all some days while
+    `runpodctl datacenter list` still names an MI300X somewhere, with no
+    stock status; a listing is a place to ask, never an answer, and the
+    create request decides.
+    """
+    listed = _runpod("datacenter", "list")
+    if not isinstance(listed, list):
+        return []
+    found = []
+    for datacenter in listed:
+        for gpu in datacenter.get("gpuAvailability", []) or []:
+            kind = str(gpu.get("gpuId", ""))
+            if kind.upper().startswith(vendor):
+                found.append((kind, str(datacenter.get("id", ""))))
+    return found
+
+
+def _candidates(environment: dict) -> list[tuple[str, str]]:
+    """The (GPU type, datacenter) pairs to ask for, in order.
+
+    The preferred types in stock first, then the rest in stock, each in any
+    datacenter; where the stock list has none of the vendor, every pair the
+    datacenter inventory names, preferred types first.
+    """
     stock = _in_stock(environment["vendor"])
     preferred = [wanted for wanted in environment["prefer"] if wanted in stock]
-    return preferred + [gpu for gpu in stock if gpu not in preferred]
+    stocked = [(gpu, "") for gpu in preferred + [gpu for gpu in stock if gpu not in preferred]]
+    if stocked:
+        return stocked
+    named = _in_datacenters(environment["vendor"])
+    rank = {wanted: index for index, wanted in enumerate(environment["prefer"])}
+    return sorted(named, key=lambda pair: (rank.get(pair[0], len(rank)), pair[1]))
 
 
 def _ssh_key() -> tuple[str, Path]:
@@ -424,23 +461,25 @@ def validate(
     # lists without a stock status); otherwise every type in stock is asked for in
     # turn, since stock moves between the listing and the request. The API's own
     # refusal is the reason when none can be had.
-    candidates = [gpu_id] if gpu_id else _candidates(environment)
+    candidates = [(gpu_id, datacenter)] if gpu_id else _candidates(environment)
     if not candidates:
         summary["reason"] = (
-            f"NOT RUN: no {environment['vendor']} GPU in stock at all "
-            f"(wanted {environment['prefer']})"
+            f"NOT RUN: no {environment['vendor']} GPU in stock or in any datacenter's "
+            f"inventory (wanted {environment['prefer']})"
         )
         print(summary["reason"])
         return summary
     pod: Pod | None = None
     refusals: list[str] = []
-    for gpu in candidates:
-        attempt = Pod(f"ppy-test-{name}-{uuid.uuid4().hex[:8]}", environment, gpu, log, datacenter)
+    for gpu, where in candidates:
+        attempt = Pod(f"ppy-test-{name}-{uuid.uuid4().hex[:8]}", environment, gpu, log, where)
         try:
             attempt.create()
         except Failed as error:
             if "no longer any instances" in str(error) or "not available" in str(error):
-                refusals.append(f"{gpu} x{environment['count']}: {error}")
+                refusals.append(
+                    f"{gpu} x{environment['count']}{f' in {where}' if where else ''}: {error}"
+                )
                 attempt._note(refusals[-1])
                 continue
             summary["verdict"] = "FAIL"
@@ -449,7 +488,8 @@ def validate(
         pod = attempt
         break
     if pod is None:
-        summary["reason"] = "NOT RUN: " + "; ".join(refusals)
+        summary["reason"] = "NOT RUN: every request refused -- " + "; ".join(refusals)
+        summary["refused"] = refusals
         print(summary["reason"])
         return summary
     summary["gpu"] = pod.gpu
@@ -472,7 +512,9 @@ def validate(
         if report.is_file():
             summary["accelerator"] = json.loads(report.read_text(encoding="utf-8"))
         required = ["accelerator", "xla_example", "gpu_tests"]
-        if environment["mode"] != "rocm":
+        if environment["mode"] == "rocm":
+            required += ["hip_emit"]
+        else:
             required += ["cuda_example", "tile_example"]
         if environment["count"] >= 2:
             required += ["multigpu_train", "multiprocess"]
@@ -492,15 +534,30 @@ def validate(
         summary["reason"] = str(error)
         pod._note(f"FAIL: {error}")
     finally:
-        if keep:
-            pod._note(f"--keep: {pod.name} ({pod.id}) is left running; delete it yourself")
-        else:
-            try:
-                pod.delete()
-            except Failed as error:
-                summary["cleanup"] = str(error)
-                pod._note(str(error))
+        _cleanup(summary, pod, keep)
     return summary
+
+
+def _cleanup(summary: dict, pod: Pod, keep: bool) -> None:
+    """Delete the Pod and record it; a Pod that is still there fails the run.
+
+    A test that passed on a GPU that keeps billing is not a pass. `--keep`
+    (and `--setup-only`) leave the Pod on purpose and say so in the record.
+    """
+    if keep:
+        pod._note(f"--keep: {pod.name} ({pod.id}) is left running; delete it yourself")
+        summary["cleanup_ok"] = None
+        summary["cleanup"] = f"kept on request: {pod.id}"
+        return
+    try:
+        pod.delete()
+    except Failed as error:
+        summary["cleanup_ok"] = False
+        summary["cleanup"] = str(error)
+        summary["verdict"] = "FAIL"
+        pod._note(f"FAIL: {error}")
+        return
+    summary["cleanup_ok"] = True
 
 
 def _line(summary: dict) -> str:

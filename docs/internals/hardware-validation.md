@@ -98,7 +98,9 @@ CUDA 12 plugin, NCCL 2.31.2) on driver 580.167.08 with a CUDA 13.0 image;
 `jax.devices()` = `[cuda:0, cuda:1]`, `jax.local_devices()` the same, both
 `NVIDIA GeForce RTX 4090`. The check sharded an array over both cards and
 reduced across them (relative error 8e-8). `examples/45_multi_gpu_jax`:
-the batch sharded over the two cards, a hundred steps, loss 1.0414 to
+the batch sharded over the two cards, a hundred steps dispatched without a
+host synchronization between them (the `train` time is the steps, not a
+wait per step), loss 1.0414 to
 1.0108 on two devices and the same on one, the largest parameter
 difference 6e-8, `PASS` under `ppy run` (the standardization native, 1.1
 ms) and under `python` (71 ms). `scripts/cloud/multiprocess_smoke.py`:
