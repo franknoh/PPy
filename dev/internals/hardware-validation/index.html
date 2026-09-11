@@ -3831,10 +3831,9 @@ Pods the run created are touched.</p>
   never overwritten by them.</li>
 </ul>
 <h2 id="last-run">Last run<a class="headerlink" href="#last-run" title="Permanent link">&para;</a></h2>
-<p>The <code>semantics-0.3</code> branch, 2026-09-11: the single-GPU run at commit
-<code>9e7caee</code>, the two-GPU run at <code>e9d2db3</code> (the same code but for a lint
-fix in the probe), from <code>cloud-results/</code> of those runs; the numbers are
-those machines' and are not the READMEs' tables.</p>
+<p>The <code>fixes-0.3</code> branch, 2026-09-11, all three environments at commit
+<code>e280fe5</code>, from <code>cloud-results/</code> of those runs; the numbers are those
+machines' and are not the READMEs' tables.</p>
 <table>
 <thead>
 <tr>
@@ -3879,10 +3878,10 @@ those machines' and are not the READMEs' tables.</p>
 <td>ROCm single</td>
 <td>AMD Instinct MI300X (RunPod, EU-RO-1)</td>
 <td style="text-align: right;">1</td>
-<td>--</td>
-<td>HIP is <code>ppy emit hip</code> only: there is no HIP launch runtime</td>
-<td>NOT RUN</td>
-<td>NOT RUN</td>
+<td>gpu (<code>rocm:0</code>)</td>
+<td><code>ppy.xla</code> on <code>rocm:0</code>; HIP is <code>ppy emit hip</code> only, the source compiled by the image's <code>hipcc</code> for gfx942, never launched by PPy</td>
+<td>PASS</td>
+<td>N/A</td>
 </tr>
 <tr>
 <td>ROCm multi</td>
@@ -3897,54 +3896,72 @@ those machines' and are not the READMEs' tables.</p>
 </table>
 <p><strong>CUDA single</strong>: Python 3.13.8; jax 0.11.1, jaxlib 0.11.1, jax-cuda12-plugin
 0.11.1, jax-cuda12-pjrt 0.11.1, nvidia-nccl-cu12 2.31.2 (CUDA 12.9 pip
-libraries); driver 570.195.03, CUDA 12.8 runtime in the image, no <code>nvcc</code>;
-<code>jax.default_backend()</code> = <code>gpu</code>, <code>jax.devices()</code> = <code>[cuda:0]</code>,
-<code>jax.local_devices()</code> = <code>[cuda:0]</code>. A jitted 1024×512×256 float32 matmul at
-full precision against NumPy: relative error 5.9e-7, reduction exact. PPy:
-<code>examples/38_cuda</code> and <code>examples/44_tile</code> under <code>ppy run</code> print <code>kernels
-compiled for a device here: True</code>, and <code>ppy explain</code> shows the host
-function boxed for its <code>GpuLaunch</code> effect, as the guide says it is;
-<code>examples/39_xla</code> prints <code># devices: ['cuda:0']</code>, the bridge having compiled
-for the GPU; 27 tests in <code>test_gpu_frontend</code>, <code>test_ir_gpu</code>, <code>test_tile</code>,
-<code>test_xla</code> pass, as do the lowering-limit tests. Benchmarks on that machine:
-PPy <code>cuda.launch</code> saxpy 0.40 ms against CuPy 0.44 ms, block max 1.03
-against 1.02, saxpy with copies 38 against 62; the JAX comparison ran
-JAX on the GPU (<code>blend</code> 0.7 ms) against PPy's fused loop on the Pod's CPU
-(205 ms), which measures the machines, not the compilers. The Triton
-counterpart's wheel found no driver in that image (<code>0 active drivers</code>), so
-its row is its own failure and the PPy tile row stands alone.</p>
+libraries); driver 580.159.04, CUDA 13.0 image, no <code>nvcc</code>;
+<code>jax.default_backend()</code> = <code>gpu</code>, <code>jax.devices()</code> = <code>[cuda:0]</code>. A jitted
+1024×512×256 float32 matmul at full precision against NumPy: relative
+error 5.9e-7, reduction exact. PPy: <code>examples/38_cuda</code> and
+<code>examples/44_tile</code> under <code>ppy run</code> print <code>kernels compiled for a device
+here: True</code>, and <code>ppy explain</code> shows the host function boxed for its
+<code>GpuLaunch</code> effect, as the guide says it is; <code>examples/39_xla</code> prints
+<code># devices: ['cuda:0']</code>, the bridge having compiled for the GPU; 32 tests
+in <code>test_gpu_frontend</code>, <code>test_ir_gpu</code>, <code>test_tile</code>, <code>test_xla</code> pass, as
+do the lowering-limit tests. Benchmarks on that machine: PPy
+<code>cuda.launch</code> saxpy 0.40 ms against CuPy 0.44 ms, block max 1.03 against
+1.02, saxpy with copies 42 against 59; the JAX comparison ran JAX on the
+GPU against PPy's fused loop on the Pod's CPU, which measures the
+machines, not the compilers. The Triton counterpart's wheel found no
+driver in that image (<code>0 active drivers</code>), so its row is its own failure
+and the PPy tile row stands alone.</p>
 <p><strong>CUDA multi</strong>: the same stack (Python 3.13.8, jax 0.11.1 with the
-CUDA 12 plugin, NCCL 2.31.2) on driver 580.167.08 with a CUDA 13.0 image;
+CUDA 12 plugin, NCCL 2.31.2) on driver 580.95.05 with a CUDA 13.0 image;
 <code>jax.devices()</code> = <code>[cuda:0, cuda:1]</code>, <code>jax.local_devices()</code> the same, both
 <code>NVIDIA GeForce RTX 4090</code>. The check sharded an array over both cards and
-reduced across them (relative error 8e-8). <code>examples/45_multi_gpu_jax</code>:
-the batch sharded over the two cards, a hundred steps, loss 1.0414 to
+reduced across them (exact). <code>examples/45_multi_gpu_jax</code>: the batch
+sharded over the two cards, a hundred steps dispatched without a host
+synchronization between them (the <code>train</code> time is the steps, not a wait
+per step: 573 ms under <code>ppy run</code>, 570 ms under <code>python</code>), loss 1.0414 to
 1.0108 on two devices and the same on one, the largest parameter
-difference 6e-8, <code>PASS</code> under <code>ppy run</code> (the standardization native, 1.1
-ms) and under <code>python</code> (71 ms). <code>scripts/cloud/multiprocess_smoke.py</code>:
+difference 7e-8 under <code>ppy run</code> (the standardization native, 1.1 ms) and
+5e-7 under <code>python</code> (71 ms), <code>PASS</code> on both. <code>scripts/cloud/multiprocess_smoke.py</code>:
 two processes, one per card, <code>jax.process_count()</code> 2, each seeing one
-local and two global devices, the collective sum exact in both. 28 GPU,
+local and two global devices, the collective sum exact in both. 32 GPU,
 tile, and XLA tests pass. PPy <code>cuda.launch</code> saxpy 0.39 ms against CuPy
-0.43, saxpy with copies 34 against 51.</p>
-<p>Two other two-GPU hosts were tried first and are the reason the harness
-records what it does. On a two-A6000 host NCCL's peer-to-peer transport
-hung (both cards at 100%, the collective never returning) and completed
-with <code>NCCL_P2P_DISABLE=1</code>; on a two-A40 host every check passed but the
-sharded trainer's loss came out wrong and different on each run (0.52,
-then 0.64, against 1.04 on one device), a collective answering wrongly
-rather than hanging. The same program on the two-4090 host, and on two
-virtual CPU devices, agrees with the single-device run to 6e-8. Those are
-the hosts' NCCL, not PPy's or JAX's arithmetic: <code>sharding_probe.py</code>
-compares every stage with NumPy and found nothing on the host that works.
-A run is therefore judged on its own transcript, never on a step's exit
-status alone, and the trainer exits non-zero on <code>FAIL</code>.</p>
-<p><strong>ROCm</strong>: <code>runpodctl gpu list</code> carried no AMD type; <code>runpodctl datacenter
-list</code> named an MI300X in EU-RO-1 with no stock status, and asking for it
-outright answered <code>There are no longer any instances available with the
-requested specifications</code>. Nothing AMD ran. Independently of capacity,
-<code>ppy.hip</code> is source only -- <code>ppy emit hip</code> writes HIP C++, and the guide
-says the module has no launch runtime -- so an MI300X run would validate
-JAX on ROCm and the emitted source, not a PPy HIP launch.</p>
+0.44, saxpy with copies 34 against 52.</p>
+<p>Two other two-GPU hosts were tried in an earlier run and are the reason
+the harness records what it does. On a two-A6000 host NCCL's peer-to-peer
+transport hung (both cards at 100%, the collective never returning) and
+completed with <code>NCCL_P2P_DISABLE=1</code>; on a two-A40 host every check passed
+but the sharded trainer's loss came out wrong and different on each run
+(0.52, then 0.64, against 1.04 on one device), a collective answering
+wrongly rather than hanging. The same program on the two-4090 host, and
+on two virtual CPU devices, agrees with the single-device run to 7e-8.
+Those are the hosts' NCCL, not PPy's or JAX's arithmetic:
+<code>sharding_probe.py</code> compares every stage with NumPy and found nothing on
+the host that works. A run is therefore judged on its own transcript,
+never on a step's exit status alone, and the trainer exits non-zero on
+<code>FAIL</code>.</p>
+<p><strong>ROCm single</strong>: an MI300X (gfx942) in EU-RO-1, refused earlier that day and
+granted in the evening, in AMD's <code>rocm/jax:rocm10.0-jax0.11.0-py3.12</code> image: Python
+3.12.3, jax 0.11.0, jaxlib 0.11.0, jax-rocm10-plugin and jax-rocm10-pjrt
+0.11.0+rocm10.0.0, ROCm 10.0.0 as the pip SDK, driver 6.10.5.
+<code>jax.default_backend()</code> = <code>gpu</code>, <code>jax.devices()</code> = <code>[rocm:0]</code>; the
+matmul and the reduction report a relative error of 0.0 against NumPy. PPy was
+installed beside that stack with the image's <code>jax</code> and <code>jaxlib</code> as
+constraints (without the <code>jax</code> group's flax, which wants a newer jax than
+the image has), and the run checks that every <code>jax*</code> distribution is the
+one that was there before the install; it is. <code>examples/39_xla</code> prints
+<code># devices: ['rocm:0']</code>, the bridge having compiled for the AMD card
+through the same PJRT path as on CUDA; <code>examples/38_cuda</code> and
+<code>examples/44_tile</code> run their CPU path there (<code>kernels compiled for a
+device here: False</code>), since <code>ppy.cuda</code> and <code>ppy.tile</code> launch CUDA only;
+31 GPU, tile, and XLA tests pass with one skipped, as do the
+lowering-limit tests. <code>ppy emit hip</code> on
+<code>examples/38_cuda/saxpy.ppy</code> writes 79 lines of HIP C++ with the
+<code>__global__</code> kernel and the <code>&lt;&lt;&lt;&gt;&gt;&gt;</code> launch, and the image's <code>hipcc</code>
+compiles it for gfx942 (<code>HIP_DEVICE_LIB_PATH</code> pointed at the SDK's
+device library). That is the extent of ROCm in PPy: <code>ppy.hip</code> is source
+only, and this run does not make it a launch runtime.</p>
+<p><strong>ROCm multi</strong>: not run; one MI300X was in stock.</p>
 <p>What the runs found in PPy: the PJRT bridge behind <code>ppy.xla</code> compiled
 for every device of the platform, so on the two-GPU hosts its executables
 expected one argument shard per device and refused the single buffers the
@@ -3952,12 +3969,17 @@ bridge places (<code>Expected args to execute_sharded_on_local_devices to have
 2 shards, got: [1, 1]</code>); it compiles for one device now, and a test over
 two virtual CPU devices holds it there. And it defaulted to the <code>cpu</code>
 platform whatever the machine had; it follows JAX's default backend now,
-which is how <code>examples/39_xla</code> came to print <code>cuda:0</code>. What the harness
-learned about itself: a float32 matmul on an Ampere-class card is TF32
-unless full precision is asked for, so the check asks; a cross-device
-step gets fifteen minutes and a recorded retry without peer-to-peer; and
-the one-process-per-GPU step counts its transcripts, since a loop that
-ran nothing had once exited zero.</p>
+and refuses to call an initialization failure or an installed-but-idle
+accelerator plugin "cpu", which is how <code>examples/39_xla</code> came to print
+<code>cuda:0</code> and <code>rocm:0</code>. What the harness learned about itself: a float32
+matmul on an Ampere-class card is TF32 unless full precision is asked
+for, so the check asks; a cross-device step gets fifteen minutes and a
+recorded retry without peer-to-peer; the one-process-per-GPU step counts
+its transcripts, since a loop that ran nothing had once exited zero; a
+Pod that is still listed after the run fails the run; and AMD's image
+runs no <code>sshd</code>, so the harness starts one for the injected key (RunPod's
+own pattern for a plain image) and hands the container's environment to
+the SSH session.</p>
 
 
 

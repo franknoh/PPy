@@ -4173,6 +4173,40 @@
   joins the two existing markers, the architecture page's program count is
   a marker, and a test holds <code>examples/README.md</code>'s own count to the same
   functions, so no page spells a number the tree has moved past.</li>
+<li><code>ppy convert</code> keeps Python's unpacking where the target is starred:
+  <code>a, *rest = map(int, input().split())</code> becomes
+  <code>a, *rest = ppy.input[list[int]]()</code>, a list of however many fields the
+  line holds, never a fixed-width tuple that would refuse a longer line;
+  <code>float</code> and <code>str</code> fields alike, and a target with anything but names in
+  it (a nested tuple) is left as it was written. A differential test runs
+  the Python and the conversion on the least arity, more, too few, an
+  empty line, integers past 64 bits, and non-ASCII digits.</li>
+<li><code>ppy.check[T]</code>: a <code>Literal</code> is its value and its type, so <code>Literal[1]</code>
+  refuses <code>True</code> and <code>Literal[False]</code> refuses <code>0</code> though the pairs compare
+  equal; a fixed-width integer (<code>i8</code>, <code>u8</code>, ...) refuses a <code>bool</code>; and the
+  whole of <code>T</code> is judged before any value is looked at, so a union with an
+  arm no value can be checked against (<code>int | Callable[..., int]</code>) is
+  refused whichever arm comes first and whatever the value.</li>
+<li>The PJRT bridge no longer reads a JAX that will not initialize as the
+  CPU: the error is raised, and a JAX that came up on the CPU while an
+  accelerator plugin is installed (and <code>JAX_PLATFORMS</code> did not ask for the
+  CPU) is raised too, naming the plugin. Without JAX the platform is the
+  CPU <code>available()</code> already qualifies; <code>PPY_XLA_PLATFORM</code> still wins.</li>
+<li>The hardware harness: a Pod that is not gone after a run fails the run
+  (<code>cleanup_ok</code>, and the exit status with it), <code>--keep</code> excepted; an AMD
+  type the stock list lacks is asked for in every datacenter whose
+  inventory names it, and NOT RUN is recorded only when every request was
+  refused; the ROCm environment is AMD's own JAX image, started under an
+  <code>sshd</code> for the injected key since the image runs none, with PPy
+  installed beside its JAX under version constraints and every <code>jax*</code>
+  distribution checked to be the one that was there; and <code>ppy emit hip</code>
+  is a step of a ROCm run, the source compiled by the image's <code>hipcc</code>.
+  An MI300X run passed on every step. Unit tests with a fake <code>runpodctl</code>
+  hold the judgement.</li>
+<li>The docs' landing page carries no count of folders or programs as
+  digits: the "by the numbers" row uses the markers, and the guard test
+  sees through Markdown emphasis. <code>examples/45_multi_gpu_jax</code> times its
+  steps without a host synchronization between them.</li>
 </ul>
 <h2 id="021-unreleased">0.2.1 — unreleased<a class="headerlink" href="#021-unreleased" title="Permanent link">&para;</a></h2>
 <ul>
