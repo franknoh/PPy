@@ -390,17 +390,23 @@ def main() -> int:
         record = EXAMPLES / comparison.folder / "compare" / "measurements.json"
         stored = json.loads(record.read_text(encoding="utf-8")) if record.is_file() else {}
         drifted = _drift(stored.get("timings", {}), measured)
-        moved = _place(
-            EXAMPLES / comparison.folder / "README.md", render(comparison, measured), options.write
-        )
-        if options.write:
+        readme = EXAMPLES / comparison.folder / "README.md"
+        # A run within the tolerance of the record is noise, not news: the
+        # table and the record stay as they are, so a push does not rewrite
+        # every number in the tree by a few percent.
+        rewrite = options.write and (not stored or bool(drifted))
+        moved = _place(readme, render(comparison, measured), rewrite)
+        if rewrite:
             record.write_text(
                 json.dumps({"environment": _environment(), "timings": measured}, indent=1) + "\n",
                 encoding="utf-8",
             )
-        verdict = "written" if options.write else ("drifted" if drifted or moved else "ok")
+        if options.write:
+            verdict = "written" if rewrite else "within tolerance, kept"
+        else:
+            verdict = "drifted" if drifted or moved else "ok"
         print(f"[{'OK' if verdict != 'drifted' else 'DRIFT'}] {name}: {verdict}")
-        for line in [*drifted, *([moved] if moved else [])]:
+        for line in [*drifted, *([moved] if moved and not options.write else [])]:
             print(f"       {line}")
         if verdict == "drifted":
             status = 1
