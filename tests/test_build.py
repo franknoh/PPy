@@ -458,6 +458,55 @@ def test_standalone_reads_input_without_an_interpreter(tmp_path: Path):
 
 
 @requires_c_compiler
+def test_standalone_scan_reads_exactly_n_integers_or_stops(tmp_path: Path):
+    """`ppy.scan[Buffer[int]](n)` with no interpreter: `n` values, or the same `EOFError`
+    the runtime raises, never a zero the input did not hold."""
+    (tmp_path / "pyproject.toml").write_text("[tool.ppy]\nstrict = false\n", encoding="utf-8")
+    (tmp_path / "summed.ppy").write_text(
+        textwrap.dedent(
+            """
+            import ppy
+            from ppy import Buffer
+
+
+            def main() -> None:
+                count: int = ppy.scan[int]()
+                values = ppy.scan[Buffer[int]](count)
+                total: int = 0
+                for i in range(count):
+                    total += values[i]
+                print(total)
+
+
+            main()
+            """
+        ).lstrip("\n"),
+        encoding="utf-8",
+    )
+    built = subprocess.run(
+        [sys.executable, "-m", "ppy_compiler", "build", "--standalone", "summed.ppy", "-o", "dist"],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert built.returncode == 0, built.stderr
+    binary = str(tmp_path / "dist" / "summed")
+    whole = subprocess.run(
+        [binary], input="3\n10 20 30\n", capture_output=True, text=True, check=False
+    )
+    assert whole.returncode == 0 and whole.stdout.strip() == "60", whole.stderr
+    short = subprocess.run(
+        [binary], input="3\n10 20\n", capture_output=True, text=True, check=False
+    )
+    assert short.returncode != 0 and "EOFError" in short.stderr, (short.stdout, short.stderr)
+    junk = subprocess.run(
+        [binary], input="3\n10 x 30\n", capture_output=True, text=True, check=False
+    )
+    assert junk.returncode != 0 and "ValueError" in junk.stderr, (junk.stdout, junk.stderr)
+
+
+@requires_c_compiler
 def test_standalone_rejects_a_python_reachable_graph(tmp_path: Path):
     (tmp_path / "pyproject.toml").write_text("[tool.ppy]\n", encoding="utf-8")
     (tmp_path / "floaty.ppy").write_text(

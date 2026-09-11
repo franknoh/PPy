@@ -1,0 +1,80 @@
+#!/usr/bin/env bash
+# The half of a hardware validation that runs on the Pod: environment, then
+# tests, examples, and a few benchmarks, every step logged and its exit status
+# recorded, nothing skipped silently. `runpod_matrix.py` copies this over,
+# runs it, and brings /workspace/ppy-results back.
+#
+#   bash remote_test.sh <commit-sha> <cuda|multigpu|rocm> <min-devices>
+set -uo pipefail
+SHA=$1
+MODE=$2
+MIN=$3
+RESULTS=/workspace/ppy-results
+REPO=/workspace/PPy
+mkdir -p "$RESULTS"
+: > "$RESULTS/steps.txt"
+echo "$SHA" > "$RESULTS/commit.txt"
+export DEBIAN_FRONTEND=noninteractive
+export PATH="$HOME/.local/bin:$PATH"
+
+log() { echo "[remote $(date -u +%H:%M:%S)] $*"; }
+# step NAME COMMAND...: run, log to its own file, record the status, never abort the matrix.
+step() {
+    local name=$1
+    shift
+    log "== $name"
+    ( "$@" ) > "$RESULTS/$name.log" 2>&1
+    local status=$?
+    echo "$name $status" >> "$RESULTS/steps.txt"
+    log "$name exit $status"
+}
+
+step apt bash -c 'apt-get update -qq && apt-get install -y -qq git build-essential curl ninja-build pkg-config'
+step uv bash -c 'command -v uv || curl -LsSf https://astral.sh/uv/install.sh | sh'
+step clone bash -c "rm -rf $REPO && git clone -q https://github.com/franknoh/PPy $REPO && cd $REPO && git checkout -q $SHA && git rev-parse HEAD"
+cd "$REPO" || exit 1
+step sync bash -c 'uv python install -q 3.13 && uv sync -q -p 3.13 --group all'
+PY=$REPO/.venv/bin/python
+PPY=$REPO/.venv/bin/ppy
+JAX_VERSION=$("$PY" -c 'import jax; print(jax.__version__)')
+log "jax $JAX_VERSION from the lock; installing the accelerator plugin for it"
+if [ "$MODE" = rocm ]; then
+    # AMD publishes the ROCm PJRT plugin under its own names; the pin keeps
+    # the plugin at the jax version the lock resolved.
+    step jax_plugin bash -c "uv pip install -p $PY 'jax[rocm]==$JAX_VERSION' || uv pip install -p $PY 'jax-rocm7-plugin' 'jax-rocm7-pjrt' || uv pip install -p $PY 'jax-rocm60-plugin' 'jax-rocm60-pjrt'"
+    step vendor bash -c 'rocminfo | grep -E "Marketing Name|gfx" ; rocm-smi --showproductname --showdriverversion'
+else
+    step jax_plugin bash -c "uv pip install -p $PY 'jax[cuda12]==$JAX_VERSION'"
+    step vendor bash -c 'nvidia-smi; nvidia-smi -L; nvcc --version || echo "nvcc: not installed"'
+fi
+# The environment as installed: what is in the venv after the plugin, in the lock's terms.
+step versions bash -c "$PY -c 'import sys, jax, jaxlib; print(sys.version); print(\"jax\", jax.__version__, \"jaxlib\", jaxlib.__version__)'; uv pip list -p $PY | grep -Ei 'jax|nvidia|rocm|torch|numpy|ppy'"
+# The acceptance check: a CPU-only JAX fails here, and the matrix stops being green.
+step accelerator "$PY" scripts/cloud/accelerator_check.py --require gpu --min-devices "$MIN" --out "$RESULTS/accelerator.json"
+# PPy's own device paths, the reason each took, and the tests around them.
+step xla_example bash -c "cd examples/39_xla && $PPY run device_math.ppy && $PPY explain device_math.ppy:6"
+step cuda_example bash -c "cd examples/38_cuda && $PPY run saxpy.ppy && $PPY explain saxpy.ppy:9 && $PPY explain saxpy.ppy:36"
+step tile_example bash -c "cd examples/44_tile && $PPY run tiles.ppy"
+step gpu_tests "$PY" -m pytest tests/test_gpu_frontend.py tests/test_ir_gpu.py tests/test_tile.py tests/test_xla.py -q
+step limits_tests "$PY" -m pytest tests/test_native_limits.py tests/test_multi_device_jax.py -q
+if [ "$MIN" -ge 2 ]; then
+    step multigpu_train bash -c "cd examples/45_multi_gpu_jax && $PPY run train.ppy && $PY train.ppy"
+    step multiprocess bash -c "
+        status=0
+        for i in \$(seq 0 \$((MIN - 1))); do
+            $PY scripts/cloud/multiprocess_smoke.py \$i $MIN > $RESULTS/multiprocess_\$i.log 2>&1 &
+        done
+        for job in \$(jobs -p); do wait \$job || status=1; done
+        cat $RESULTS/multiprocess_*.log
+        exit \$status"
+fi
+# Benchmarks: validation on this machine, never the canonical tables.
+step bench_jax bash -c "cd examples/05_numpy && $PY ../compare.py 3 'ppy=$PPY run compare/fusion_bench.ppy' 'jax=$PY compare/fusion_jax.py'"
+step bench_torch bash -c "cd examples/09_torch && $PY ../compare.py 3 'ppy=$PPY run compare/layer_bench.ppy' 'eager=$PY compare/layer_eager.py' 'compile=$PY compare/layer_compile.py'"
+if [ "$MODE" != rocm ]; then
+    step cupy bash -c "uv pip install -p $PY cupy-cuda12x triton"
+    step bench_cuda bash -c "cd examples/38_cuda && $PY ../compare.py 3 'ppy=$PPY run compare/saxpy_bench.ppy' 'cupy=$PY compare/saxpy_cupy.py'"
+    step bench_tile bash -c "cd examples/44_tile && $PY ../compare.py 3 'ppy=$PPY run compare/tiles_bench.ppy' 'triton=$PY compare/tiles_triton.py'"
+fi
+log "done; steps:"
+cat "$RESULTS/steps.txt"

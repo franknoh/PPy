@@ -42,15 +42,15 @@ means, which is what lets `ppy convert` turn `int(input())` into
   for an empty line. `list[float]` and `list[str]` likewise.
 - `ppy.input[Buffer[int]]()` reads one line of integers into a new buffer,
   as `array.array("q", map(int, input().split()))` does, and takes no count:
-  the line decides. The fields are read in C without a Python object each --
-  a sign, digits, single underscores between them, the ASCII forms `int()`
-  accepts -- and a field that is not one is `ValueError`, one outside 64
-  bits `OverflowError`, as the array would raise; either way the line was
-  read whole first, as `input()` had read it. That is the one place the
-  typed read is narrower than `input()`: non-ASCII digits and integers
-  past 64 bits, which `int()` takes, are refused by a buffer line read and
-  by a tuple of `int`. A block of integers spread over several lines is
-  `ppy.scan[Buffer[int]](n)`.
+  the line decides. The fields are parsed in C without a Python object each
+  -- a sign, digits, single underscores between them, the ASCII forms
+  `int()` accepts -- and a field outside what C reads is handed to `int()`
+  and the array themselves, so the read means exactly what the idiom means:
+  a field that is no integer is `int()`'s `ValueError`, one past 64 bits the
+  array's `OverflowError`, non-ASCII digits are read as `int()` reads them.
+  A tuple of `int` is parsed the same way, and there a field past 64 bits is
+  simply the integer, as `map(int, input().split())` gives it. A block of
+  integers spread over several lines is `ppy.scan[Buffer[int]](n)`.
 
 A read takes no argument. A prompt is a `print` before it, the way any
 other output is written, so reading and printing stay two things.
@@ -58,6 +58,13 @@ other output is written, so reading and printing stay two things.
 ## `ppy.scan`: tokens
 
 `ppy.scan[T]()` reads the next whitespace-delimited token wherever it is.
+`ppy.scan[Buffer[int]](n)` reads exactly `n` integers into a new buffer: the
+input ending first is `EOFError`, a token that is not an integer
+`ValueError`, one outside 64 bits the scanner's `ValueError` for it, and a
+negative `n` is `ValueError` -- a value that was never read is not a zero.
+The tokens before the offending one were read, and the reader stands after
+it. `ppy.read_ints(buffer)` is the partial read: it fills what it can and
+says how many it got.
 Newlines are whitespace to it, as they are to `scanf`, so a million numbers
 spread over any number of lines read the same way:
 

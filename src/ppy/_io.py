@@ -57,7 +57,7 @@ _LIMIT = 1 << 63
 #: Naming the artifact from this and the interpreter's own tag keeps the
 #: fast path free of `hashlib` and `sysconfig`, which cost more to import
 #: than everything else a launch does.
-_READER_VERSION = 4
+_READER_VERSION = 5
 
 
 def _cache_directory() -> str:
@@ -122,14 +122,6 @@ def _malformed(token: bytes) -> ValueError:
     return ValueError(f"expected an integer, got {shown!r}")
 
 
-def _bad_field(token: bytes, overflow: bool) -> Exception:
-    """What `array.array("q", map(int, line.split()))` raises for the field, from either reader."""
-    if overflow:
-        return OverflowError("int too big to convert")
-    shown = token[: _BAD - 1].decode("utf-8", "replace")
-    return ValueError(f"invalid literal for int() with base 10: {shown!r}")
-
-
 def _address(view: memoryview, kind):  # type: ignore[no-untyped-def]
     return ctypes.cast(ctypes.addressof(ctypes.c_char.from_buffer(view)), ctypes.POINTER(kind))
 
@@ -140,24 +132,22 @@ class _Compiled:
     __slots__ = (
         "_bad",
         "_chunk",
-        "_fixed",
         "_ints",
         "_library",
         "_line",
-        "_line_ints",
         "_more",
         "_more_ref",
+        "_parse",
         "_token",
         "_wide",
     )
     _bad: Any
     _chunk: Any
-    _fixed: Any
     _ints: Any
     _library: Any
     _line: Any
-    _line_ints: Any
     _more: Any
+    _parse: Any
     _more_ref: Any
     _token: Any
     _wide: Any
@@ -177,12 +167,9 @@ class _Compiled:
         self._ints = library.ppy_rt_read_ints
         self._ints.argtypes = [p64, i64, p8, i64]
         self._ints.restype = i64
-        self._line_ints = library.ppy_rt_input_ints
-        self._line_ints.argtypes = [p64, i64, p8, i64, i8, p8]
-        self._line_ints.restype = i64
-        self._fixed = library.ppy_rt_input_fixed
-        self._fixed.argtypes = [p64, i64, p8, i64]
-        self._fixed.restype = i64
+        self._parse = library.ppy_rt_parse_ints
+        self._parse.argtypes = [ctypes.c_char_p, i64, p64, i64, p8, i64]
+        self._parse.restype = i64
         # The library is kept beside the entry points: dropping it would
         # unload the code the pointers refer to.
         self._library = library
@@ -241,49 +228,12 @@ class _Compiled:
             raise _malformed(ctypes.string_at(self._bad))
         return got
 
-    def line_fields(self, _view: memoryview, address, room: int) -> int:  # type: ignore[no-untyped-def]
-        """A line of integers into the `room` slots at `address`; how many the line held.
-
-        Every field is checked, the ones past the room included, and the line
-        is consumed whole; more fields than room is answered by their count.
-        """
-        got = self._fixed(address, room, self._bad, _BAD)
-        if got >= 0:
-            return got
-        if got == -1:
-            raise EOFError("EOF when reading a line")
-        raise _bad_field(ctypes.string_at(self._bad), got == -3)
-
-    def line_ints(self) -> _array.array:
-        """One line of integers into a new buffer, however many the line holds."""
-        values = _array.array("q", bytes(8 * _LINE_SLOTS))
-        filled = 0
-        continuing = 0
-        while True:
-            # The view is let go before the array is resized, which an export forbids.
-            with memoryview(values)[filled:] as view:
-                got = int(
-                    self._line_ints(
-                        _address(view, ctypes.c_int64),
-                        view.shape[0],
-                        self._bad,
-                        _BAD,
-                        continuing,
-                        self._more_ref,
-                    )
-                )
-            if got < 0:
-                raise EOFError("EOF when reading a line")
-            filled += got
-            state = self._more.value
-            if state >= 2:
-                raise _bad_field(ctypes.string_at(self._bad), state == 3)
-            if state == 0:
-                break
-            values.frombytes(bytes(8 * len(values)))
-            continuing = 1
-        del values[filled:]
-        return values
+    def parse_ints(self, text: bytes, view: memoryview, room: int) -> int:
+        """The fields of `text` into `view`'s first `room` slots: how many there were,
+        or -2 for a field that is not an ASCII integer, -3 for one outside 64 bits."""
+        return int(
+            self._parse(text, len(text), _address(view, ctypes.c_int64), room, self._bad, _BAD)
+        )
 
 
 _SPACE_BYTES = re.compile(rb"[ \t\n\r\f\v]")
@@ -377,29 +327,18 @@ class _Fallback:
             count += 1
         return count
 
-    def _fields(self) -> list[int]:
-        """A line's integer fields, every one checked left to right, as the C reader does."""
-        line = self.line()
-        if line is None:
-            raise EOFError("EOF when reading a line")
-        values = []
-        for field in line.split():
+    def parse_ints(self, text: bytes, view: memoryview, room: int) -> int:
+        count = 0
+        for field in text.split():
             if not _FIELD.match(field):
-                raise _bad_field(field, False)
+                return -2
             value = int(field)
             if not -_LIMIT <= value < _LIMIT:
-                raise _bad_field(field, True)
-            values.append(value)
-        return values
-
-    def line_fields(self, view: memoryview, _address, room: int) -> int:  # type: ignore[no-untyped-def]
-        values = self._fields()
-        for index, value in enumerate(values[:room]):
-            view[index] = value
-        return len(values)
-
-    def line_ints(self) -> _array.array:
-        return _array.array("q", self._fields())
+                return -3
+            if count < room:
+                view[count] = value
+            count += 1
+        return count
 
 
 _SOURCE: list[object] = []
@@ -436,6 +375,8 @@ def read_ints(buffer) -> int:  # type: ignore[no-untyped-def]
     view = memoryview(buffer)
     if view.readonly or not view.c_contiguous or view.itemsize != 8:
         raise TypeError("read_ints needs a writable buffer of 64-bit integers")
+    if view.shape[0] == 0:
+        return 0
     return _source().ints_into(view)
 
 
@@ -504,11 +445,22 @@ def _spelled(what: str, spec) -> str:  # type: ignore[no-untyped-def]
     return f"ppy.{what}[{getattr(spec, '__name__', spec)!r}]"
 
 
-class _IntFields:
-    """`ppy.input[tuple[int, ...]]()` with every field an integer: read in C, into one slot."""
+def _exact_fields(raw: bytes) -> list[int]:
+    """The line's fields as `int()` reads them, Python's own errors and all.
 
-    __slots__ = ("_address", "_count", "_slot", "_unpack", "_view")
-    _address: Any
+    The C parser reads the forms `int()` reads of an ASCII field within 64
+    bits, and hands anything else -- a wider integer, non-ASCII digits, a
+    field that is no integer -- to this, so a typed read means exactly what
+    `map(int, input().split())` means, and refuses exactly what it refuses.
+    """
+    return [int(field) for field in raw.decode("utf-8").split()]
+
+
+class _IntFields:
+    """`ppy.input[tuple[int, ...]]()` with every field an integer: the line parsed in C into one
+    slot, and by `int()` itself where a field is outside what C reads."""
+
+    __slots__ = ("_count", "_slot", "_unpack", "_view")
     _count: int
     _slot: _array.array
     _unpack: Any
@@ -519,14 +471,21 @@ class _IntFields:
         # One slot more than the tuple, so a longer line is seen as one.
         self._slot = _array.array("q", bytes(8 * (count + 1)))
         self._view = memoryview(self._slot)
-        self._address = _address(self._view, ctypes.c_int64)
         self._unpack = _struct.Struct("=" + "q" * count).unpack_from
 
     def __call__(self) -> tuple:
-        got = _source().line_fields(self._view, self._address, self._count + 1)
+        source = _source()
+        raw = source.line()
+        if raw is None:
+            raise EOFError("EOF when reading a line")
+        got = source.parse_ints(raw, self._view, self._count + 1)
+        fields = None
+        if got < 0:
+            fields = _exact_fields(raw)
+            got = len(fields)
         if got != self._count:
             raise ValueError(f"expected {self._count} field(s) on the line, got {got}")
-        return self._unpack(self._slot)
+        return self._unpack(self._slot) if fields is None else tuple(fields)
 
 
 class _Fields:
@@ -550,7 +509,26 @@ class _Fields:
 
 
 def _line_buffer() -> _array.array:
-    return _source().line_ints()
+    """`ppy.input[Buffer[int]]()`: what `array.array("q", map(int, input().split()))` gives.
+
+    The line is parsed in C into a buffer that grows to the line; a field
+    outside what C reads goes through `int()` and the array itself, so a
+    field that is no integer is `int()`'s `ValueError` and one outside 64
+    bits is the array's `OverflowError`, as the idiom raises them.
+    """
+    source = _source()
+    raw = source.line()
+    if raw is None:
+        raise EOFError("EOF when reading a line")
+    values = _array.array("q", bytes(8 * _LINE_SLOTS))
+    got = source.parse_ints(raw, memoryview(values), len(values))
+    if got > len(values):
+        values = _array.array("q", bytes(8 * got))
+        got = source.parse_ints(raw, memoryview(values), got)
+    if got < 0:
+        return _array.array("q", _exact_fields(raw))
+    del values[got:]
+    return values
 
 
 class _LineRead:
@@ -634,8 +612,13 @@ class _TokenRead:
                 raise TypeError("reading a buffer needs how many values to read")
             if element is not int:
                 raise TypeError("only `Buffer[int]` can be scanned for now")
-            values = _array.array("q", bytes(8 * max(argument, 0)))
-            read_ints(values)
+            if argument < 0:
+                raise ValueError(f"cannot read {argument} values")
+            values = _array.array("q", bytes(8 * argument))
+            got = read_ints(values) if argument else 0
+            if got < argument:
+                # A value that was never read is not a zero: the buffer is exactly `n`.
+                raise EOFError(f"the input ended after {got} of {argument} integers")
             return values
         if argument is not None:
             raise TypeError("`ppy.scan[T]()` takes no argument; print a prompt first, then read")

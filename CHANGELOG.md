@@ -20,9 +20,16 @@ Work toward the next release, on `dev`; alphas of it are tagged `v0.3.0aN`.
   `array.array("q", map(int, input().split()))` would, with no count to
   give and no Python object per field; the converter writes both idioms so.
   A tuple of `int` is read the same way, in C; a typed read is planned once
-  per type, so a read in a loop costs the read and nothing else. Integer
-  fields read in C are ASCII and 64-bit, the one place the typed read is
-  narrower than `int()`.
+  per type, so a read in a loop costs the read and nothing else. The C
+  parser reads the ASCII forms `int()` reads within 64 bits and hands any
+  other field -- a wider integer, non-ASCII digits, no integer at all -- to
+  `int()` itself, so a typed line read means exactly what the idiom it
+  stands for means: `a, b = ppy.input[tuple[int, int]]()` reads
+  `9223372036854775808` as `map(int, input().split())` does, and a
+  converted program keeps Python's input semantics on every field. A
+  differential test runs the original and the converted program as
+  subprocesses on the same input and holds them to one output and one
+  exception.
   `ppy.read_ints` and `ppy.read_token` stay the buffer-oriented forms;
   `read_token` cuts a token at the buffer's capacity and says so.
 - One scanner grammar, implemented once in C (`ppy_runtime.scanner`) for
@@ -34,6 +41,27 @@ Work toward the next release, on `dev`; alphas of it are tagged `v0.3.0aN`.
   fallback raised. A high-level string read is never cut: `ppy.input[str]()`
   and `ppy.scan[str]()` read a line or a token of any length, where the old
   scalar read cut at 4096 bytes and dropped the rest.
+- `ppy.scan[Buffer[int]](n)` reads exactly `n` integers or raises: the
+  input ending first is `EOFError` with the tokens before it read, where it
+  used to hand back a buffer padded with zeros that were never in the
+  input; a negative `n` is `ValueError`. A standalone binary ends with the
+  same message. `ppy.read_ints(buffer)` stays the partial read.
+- `ppy.check[T](value)` checks every PPy refinement in an `Annotated`, not
+  only the type under it: `ppy.check[ppy.i8](300)` is refused, as are
+  `ppy.check[ppy.Array[int, 3]]((1, 2))`, a `Vector[T]` with a wrong
+  element, a `Buffer[T]` whose buffer holds another format or is not one
+  contiguous dimension, a value outside its `Range`, a `Length`, a `Shape`
+  (symbolic dimensions bound consistently), a `DType`, or a `Contiguous`
+  the value's own metadata contradicts; an `f32` wider than a float32 holds
+  is refused too. A contract no single value can bear witness to --
+  `Owned[T]`, `Borrowed[T]`, `Mut[T]`, `NoAlias`, a symbolic array length
+  -- is rejected outright rather than stripped, and `ppy.assume[T]` stays
+  the unchecked crossing. The guide said validation was shallow; it is not,
+  and the guide says what the code does.
+- The PJRT bridge behind `ppy.xla` compiles for the platform JAX would pick
+  -- the GPU where a CUDA or ROCm plugin is installed -- where it used to
+  compile for `cpu` unless `PPY_XLA_PLATFORM` said otherwise, so an
+  `@xla.jit` function on a GPU machine ran on a `cpu:0` it never asked for.
 - `ppy.check[T](value)` validates all the way down: a `list[int]` element by
   element, a `dict[str, float]` key and value, a tuple field by field, a
   dataclass field by field, a union member by member. A `T` it cannot
@@ -190,12 +218,39 @@ Work toward the next release, on `dev`; alphas of it are tagged `v0.3.0aN`.
   answer is written straight into the NumPy array its Series wraps. `!=`
   is IEEE's on every path: a NaN differs from everything, as pandas and
   Arrow have it.
+- `&` and `|` on pandas Series lower to the columnar dialect's new
+  `and_kleene` and `or_kleene`, the three-valued logic pandas computes over
+  an Arrow-backed Series: `(s > t) & t.notna()` is false, not null, where
+  `t` is null. PyArrow's `and_`/`or_` keep the two-valued `and`/`or`, and
+  `pc.and_kleene`/`pc.or_kleene` name the Kleene forms. A fused answer no
+  null can reach -- `isna()`, `notna()`, logic over them -- comes back as
+  the NumPy bool Series pandas gives, whatever the inputs' backing; the
+  nullability of a fused tree is derived from the tree, not from its root
+  alone. An end-to-end test holds `ppy run` to what `python` prints for
+  finite values, NaNs, `fillna`, nested trees, and mixed arithmetic and
+  null handling on both backings.
 - A fused library expression inside a wider call is replaced, and the call
   kept: the fusion plan is keyed by the expression's whole source span,
   where it was keyed by the start alone, so `s.isna().sum()` -- which
   begins where `s.isna()` does -- had the whole call rewritten to the
   kernel and the `.sum()` lost. It went unnoticed while the kernel fell
   back to pandas for that case, whose fallback was the whole expression.
+- `examples/45_multi_gpu_jax`: a data-parallel MLP over a mesh of every
+  accelerator in the machine, the batch sharded and the parameters
+  replicated, the gradient summed across devices, held to a single-device
+  run; fewer than two accelerators is reported, never worked around with a
+  CPU or a virtual device. `scripts/cloud/runpod_matrix.py` validates the
+  accelerator stack on rented hardware on demand -- one NVIDIA GPU, two or
+  more in one Pod, an AMD Instinct where one is in stock -- with
+  `accelerator_check.py` failing a GPU run whose JAX sees only a CPU, the
+  CUDA, tile, and XLA examples under `ppy run` with `ppy explain` beside
+  them, the multi-GPU trainer, a one-process-per-GPU distributed smoke
+  test, and a few benchmarks as validation numbers; every Pod it makes it
+  deletes. The docs' `internals/hardware-validation.md` records the last run.
+- The docs' example counts come from the tree: `@@COMPARED_FOLDERS@@`
+  joins the two existing markers, the architecture page's program count is
+  a marker, and a test holds `examples/README.md`'s own count to the same
+  functions, so no page spells a number the tree has moved past.
 
 ## 0.2.1 — unreleased
 

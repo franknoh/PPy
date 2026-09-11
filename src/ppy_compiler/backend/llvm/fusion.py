@@ -66,8 +66,19 @@ COLUMNAR: dict[str, tuple[tuple[str, ...], str]] = {
     "fill_null": (("f64", "scalar"), "f64"),
     "select": (("bool", "f64", "f64"), "f64"),
 }
-#: Columnar operations whose result has no nulls.
+#: Columnar operations whose result has no nulls whatever their operands hold.
 _NEVER_NULL = frozenset({"is_null", "is_valid", "fill_null"})
+
+
+def _nullable(node: _Node) -> bool:
+    """Whether a null can reach the root: an array leaf brings them, `is_null`,
+    `is_valid`, and `fill_null` stop them, every other operation passes them on."""
+    if node.op == "array":
+        return True
+    if node.op in _NEVER_NULL or node.op in {"scalar", "constant"}:
+        return False
+    return any(_nullable(child) for child in node.operands)
+
 
 #: Reductions whose fused form reassociates the accumulation. NumPy sums
 #: pairwise and torch vectorizes, so a sequential loop is a different --
@@ -304,7 +315,7 @@ def _search(
             continue
         if not shape.arrays:
             continue
-        nullable = shape.storage in COLUMNAR_STORAGES and operations[0] not in _NEVER_NULL
+        nullable = shape.storage in COLUMNAR_STORAGES and _nullable(_parse(expression))
         loop = FusedLoop(
             symbol="ppy_fused_" + prefix.replace(".", "_") + f"_{node.lineno}_{node.col_offset}",
             arrays=tuple(shape.arrays),
@@ -424,7 +435,9 @@ def _render_operator(
         found = _COLUMNAR_OPERATOR_OP.get(type(node.op))
         if found is None:
             raise _Unsupported
-        name = found
+        # The plugin says which logic the library means by the operator:
+        # pandas' `&` on Series is Kleene's, PyArrow's `and_` is not.
+        name = operation[1] if operation[1] in (found, f"{found}_kleene") else found
         operands = [node.left, node.right]
     elif isinstance(node, ast.UnaryOp) and isinstance(node.op, ast.Invert):
         name = "invert"

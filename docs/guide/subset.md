@@ -61,11 +61,21 @@ Three different absences of a type, held apart on purpose:
 - **`ppy.Dynamic`** is the policed boundary. Any value may become `Dynamic`;
   a `Dynamic` value fits only `Dynamic`, `Any`, or `object`. Crossing into
   typed code — a typed return, parameter, field, or declared variable — is
-  `E1508` until it passes through `ppy.check[T](value)`, which validates at
-  runtime (raising `TypeError`) and hands back a typed value. `ppy.check` is
-  the inverse of `typing.cast`: it checks and asserts nothing, where `cast`
-  asserts and checks nothing. Validation is shallow — `list[int]` is checked
-  to be a `list`, not walked — because the check runs on the boundary.
+  `E1508` until it passes through `ppy.check[T](value)` or
+  `ppy.assume[T](value)`. `ppy.check[T](value)` validates every
+  runtime-checkable part of `T`, recursively -- a `list[int]` element by
+  element, a dataclass field by field, an `i8`'s range, an `Array[int, 3]`'s
+  length, a `Buffer[float]`'s format, a `Range`, `Length`, `Shape`, `DType`,
+  or `Contiguous` refinement against the value's own metadata -- raising
+  `TypeError` where the value falls short, and hands back a value typed as
+  `T`. A `T` PPy cannot validate soundly at runtime -- a callable, an
+  iterator, a protocol, or a contract between caller and callee such as
+  `Owned[T]`, `Borrowed[T]`, `Mut[T]`, or `NoAlias` that no single value can
+  bear witness to -- is rejected, never checked in part. `ppy.assume[T](value)`
+  performs no runtime validation: it is an explicit unchecked assertion the
+  programmer takes responsibility for, and it should look like one. Both
+  differ from `typing.cast` in behavior: `cast` asserts and checks nothing,
+  `check` checks and asserts nothing, `assume` asserts and says so.
 
 Examples: [Dynamic boundaries](../howto/16_dynamic.md),
 [Narrowing](../howto/10_narrowing.md), [Classes](../howto/04_classes.md).

@@ -38,7 +38,24 @@ def available() -> bool:
 
 
 def default_platform() -> str:
-    return os.environ.get("PPY_XLA_PLATFORM", "cpu")
+    """The platform a client is made for: `PPY_XLA_PLATFORM`, else the one JAX would pick.
+
+    JAX's default backend is the accelerator its plugin found -- `gpu` on a
+    machine with a CUDA or ROCm plugin installed, `tpu` on one with a TPU --
+    and `cpu` only where there is nothing else; the bridge follows it, so a
+    program on a GPU machine runs its StableHLO on the GPU rather than on a
+    `cpu:0` it never asked for. `JAX_PLATFORMS` still steers JAX, and
+    `PPY_XLA_PLATFORM` steers the bridge alone.
+    """
+    spelled = os.environ.get("PPY_XLA_PLATFORM")
+    if spelled:
+        return spelled
+    try:
+        import jax
+
+        return str(jax.default_backend())
+    except Exception:  # noqa: BLE001 - no JAX, or a JAX that cannot initialize: the CPU
+        return "cpu"
 
 
 def cache_directory() -> Path:

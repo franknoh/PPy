@@ -197,10 +197,14 @@ def test_a_buffer_of_the_wrong_width_is_refused():
             "ValueError invalid literal for int() with base 10: 'x'",
         ),
         ("+1 -2_0\n", "ppy.input[tuple[int, int]]()", "(1, -20)"),
+        ("1 99999999999999999999\n", "ppy.input[tuple[int, int]]()", "(1, 99999999999999999999)"),
+        ("9223372036854775808 1\n", "ppy.input[tuple[int, int]]()", "(9223372036854775808, 1)"),
+        ("\uff11\uff12 3\n", "ppy.input[tuple[int, int]]()", "(12, 3)"),
+        # `a, b = map(int, line.split())` meets the `x` before it counts the fields.
         (
-            "1 99999999999999999999\n",
+            "1 x 3 4\n",
             "ppy.input[tuple[int, int]]()",
-            "OverflowError int too big to convert",
+            "ValueError invalid literal for int() with base 10: 'x'",
         ),
         (
             "1 2.5\n",
@@ -234,6 +238,7 @@ def test_a_buffer_of_the_wrong_width_is_refused():
             "ppy.input[Buffer[int]]()",
             "OverflowError int too big to convert",
         ),
+        ("\uff11\uff12 3\n", "list(ppy.input[Buffer[int]]())", "[12, 3]"),
         (
             "1 x 3\n",
             "ppy.input[Buffer[int]]()",
@@ -484,6 +489,51 @@ def test_scan_fills_a_buffer_by_count():
         """,
     )
     assert output == "3 [10, 20, 30] 40"
+
+
+@pytest.mark.parametrize(
+    ("text", "count", "expected"),
+    [
+        ("10 20\n", 0, "[] | 10"),
+        ("10 20\n", -1, "ValueError cannot read -1 values | 10"),
+        ("10 20 30\n", 3, "[10, 20, 30] | EOFError the input ended where an integer was expected"),
+        (
+            "10 20\n",
+            3,
+            "EOFError the input ended after 2 of 3 integers | EOFError the input ended where an integer was expected",
+        ),
+        (
+            "",
+            2,
+            "EOFError the input ended after 0 of 2 integers | EOFError the input ended where an integer was expected",
+        ),
+        ("10 x 30\n", 3, "ValueError expected an integer, got 'x' | 30"),
+        (
+            "10 99999999999999999999 30\n",
+            3,
+            "ValueError the integer 99999999999999999999 does not fit in 64 bits | 30",
+        ),
+        ("1\n2\n3\n4\n", 3, "[1, 2, 3] | 4"),
+    ],
+)
+def test_a_buffer_scan_is_exactly_n_integers_or_an_error(text, count, expected):
+    """Never a zero the input did not hold; the reader stands after what was read."""
+    output = _both(
+        text,
+        f"""
+        import ppy
+        from ppy import Buffer
+        try:
+            print(list(ppy.scan[Buffer[int]]({count})), end=" | ")
+        except Exception as error:
+            print(type(error).__name__, error, end=" | ")
+        try:
+            print(ppy.scan[int]())
+        except Exception as error:
+            print(type(error).__name__, error)
+        """,
+    )
+    assert output == expected
 
 
 def test_a_token_read_leaves_the_rest_of_its_line():

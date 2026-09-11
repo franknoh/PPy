@@ -2302,6 +2302,13 @@ def test_a_converted_reader_reads_what_the_python_read(workspace: Path):
         "3\n1 2 3\nx\n1\n",
         "3 4\n1 2\nx\n1\n",
         "3\n",
+        # `int()` reads past 64 bits and reads non-ASCII digits; so must the conversion.
+        "3\n9223372036854775808 1\n a name \n2.5\n7 8\n",
+        "3\n-9223372036854775809 99999999999999999999999\n n \n1e3\n1\n",
+        "3\n\uff11\uff12 3\n n \n2.5\n4\n",
+        "3\n1_000 2\n n \n2.5\n9223372036854775808\n",
+        "3\n1 2\n n \n2.5\n\uff11\uff12 3\n",
+        "99999999999999999999\n1 2\n n \n2.5\n1\n",
     ):
         python = subprocess.run(
             [sys.executable, "same.py"],
@@ -2324,6 +2331,7 @@ def test_a_converted_reader_reads_what_the_python_read(workspace: Path):
         if python.returncode != 0:
             kind = python.stderr.strip().splitlines()[-1].split(":")[0]
             assert kind in ours.stderr, (kind, ours.stderr)
+            assert kind in ours.stderr.strip().splitlines()[-1], (kind, ours.stderr)
 
 
 def test_a_module_that_also_reads_stdin_keeps_its_input(workspace: Path):

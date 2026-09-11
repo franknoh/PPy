@@ -260,15 +260,42 @@ def _describe(target: Any) -> str:
     return getattr(target, "__name__", None) or repr(target)
 
 
+_BUFFER_FORMATS: dict[Any, frozenset[str]] = {
+    int: frozenset({"q", "l8"}),
+    float: frozenset({"d"}),
+    bool: frozenset({"?"}),
+    ("i", 8): frozenset({"b"}),
+    ("u", 8): frozenset({"B"}),
+    ("i", 16): frozenset({"h"}),
+    ("u", 16): frozenset({"H"}),
+    ("i", 32): frozenset({"i", "l4"}),
+    ("u", 32): frozenset({"I", "L4"}),
+    ("i", 64): frozenset({"q", "l8"}),
+    ("u", 64): frozenset({"Q", "L8"}),
+    ("f", 32): frozenset({"f"}),
+    ("f", 64): frozenset({"d"}),
+}
+#: The largest finite value a narrower float holds; wider than this is not that float.
+_FLOAT_LIMITS = {16: 65504.0, 32: 3.4028234663852886e38}
+#: Contracts between a caller and a callee that no one value can bear witness to.
+_UNCHECKABLE = (NoAlias, Owned, Borrowed, Mut)
+
+
 class _Validation:
     """The runtime validation `ppy.check[T]` does: sound, for every `T` it accepts.
 
     A value is checked all the way down -- a `list[int]` element by element,
     a `dict[str, float]` key and value, a tuple field by field, a dataclass
-    field by field -- because the point of the check is that what comes out
-    is what typed code was promised. A `T` this cannot validate soundly (a
-    callable's signature, an iterator, a protocol) is refused outright
-    rather than checked in part; `ppy.assume[T]` is the unchecked crossing.
+    field by field -- and every PPy refinement in an `Annotated` is checked
+    too: an `i8` is an `int` from -128 to 127, an `Array[int, 3]` is a tuple
+    of three ints, a `Buffer[float]` is a contiguous one-dimensional buffer
+    of doubles, a `Range`, `Length`, `Shape`, `DType`, or `Contiguous` is
+    what it says of the value. What comes out is what typed code was
+    promised. A `T` this cannot validate soundly -- a callable's signature,
+    an iterator, a protocol, or a contract between caller and callee such as
+    `Owned[T]`, `Borrowed[T]`, `Mut[T]`, or `NoAlias` that no single value
+    can bear witness to -- is refused outright rather than checked in part;
+    `ppy.assume[T]` is the unchecked crossing.
     """
 
     __slots__ = ("target",)
@@ -297,14 +324,16 @@ class _Validation:
         origin = typing.get_origin(target)
         arguments = typing.get_args(target)
         if origin is typing.Annotated:
-            self._validate(arguments[0], value, where)
+            self._annotated(target, arguments[0], arguments[1:], value, where)
             return
         if origin is typing.Union or isinstance(target, types.UnionType):
             for member in arguments:
                 try:
                     self._validate(member, value, where)
                     return
-                except TypeError:
+                except TypeError as error:
+                    if str(error).startswith("ppy.check cannot validate"):
+                        raise
                     continue
             raise TypeError(f"{where}: expected {target!r}, got {type(value).__name__}")
         if origin is typing.Literal:
@@ -352,6 +381,165 @@ class _Validation:
             return
         raise TypeError(f"ppy.check cannot validate against {target!r}")
 
+    # -- Annotated: every PPy refinement checked, the uncheckable refused ------------------
+
+    def _annotated(self, target: Any, base: Any, metadata: tuple, value: Any, where: str) -> None:
+        buffer = None
+        for item in metadata:
+            if isinstance(item, _UNCHECKABLE):
+                raise TypeError(
+                    f"ppy.check cannot validate against {target!r}: {type(item).__name__} is a "
+                    "contract between a caller and a callee, not a property of one value; "
+                    "`ppy.assume[T](value)` is the unchecked crossing"
+                )
+            if isinstance(item, BufferSpec):
+                buffer = item
+            elif isinstance(item, ArraySpec) and (
+                not isinstance(item.length, int) or isinstance(item.length, bool)
+            ):
+                raise TypeError(
+                    f"ppy.check cannot validate against Array[..., {item.length!r}]: "
+                    "the length is not a number"
+                )
+            elif isinstance(item, _Meta) and not isinstance(item, _CHECKED_META):
+                raise TypeError(
+                    f"ppy.check cannot validate against {target!r}: {item!r} has no runtime check"
+                )
+        if buffer is not None:
+            # The representation is the buffer protocol, of which `memoryview` is
+            # the spelling: an `array.array("q")` is a `Buffer[int]` as much as a view is.
+            self._buffer(buffer, value, where)
+        else:
+            self._validate(base, value, where)
+        for item in metadata:
+            if isinstance(item, IntWidth):
+                self._int_width(item, value, where)
+            elif isinstance(item, FloatWidth):
+                self._float_width(item, value, where)
+            elif isinstance(item, ArraySpec):
+                self._array(item, value, where)
+            elif isinstance(item, Range):
+                if not isinstance(value, (int, float)) or isinstance(value, bool):
+                    raise TypeError(f"{where}: {item!r} needs a number, got {type(value).__name__}")
+                if not item.low <= value <= item.high:
+                    raise TypeError(f"{where}: {value!r} is outside {item!r}")
+            elif isinstance(item, Length):
+                self._length(item.size, value, where, item)
+            elif isinstance(item, Shape):
+                self._shape(item, value, where)
+            elif isinstance(item, DType):
+                self._dtype(item, value, where)
+            elif isinstance(item, Contiguous):
+                self._contiguous(value, where)
+
+    def _int_width(self, width: IntWidth, value: Any, where: str) -> None:
+        if not isinstance(value, int):
+            raise TypeError(f"{where}: expected {width.name}, got {type(value).__name__}")
+        if not width.low <= value <= width.high:
+            raise TypeError(
+                f"{where}: {value!r} does not fit {width.name} ({width.low}..{width.high})"
+            )
+
+    def _float_width(self, width: FloatWidth, value: Any, where: str) -> None:
+        limit = _FLOAT_LIMITS.get(width.bits)
+        if limit is None:
+            return
+        import math
+
+        magnitude = abs(float(value))
+        if math.isinf(magnitude) or math.isnan(magnitude):
+            return
+        if magnitude > limit:
+            raise TypeError(
+                f"{where}: {value!r} is wider than {width.name} holds (|x| <= {limit!r})"
+            )
+
+    def _array(self, spec: ArraySpec, value: Any, where: str) -> None:
+        self._length(spec.length, value, where, spec)
+
+    def _length(self, size: int, value: Any, where: str, spec: Any) -> None:
+        try:
+            found = len(value)
+        except TypeError as error:
+            raise TypeError(f"{where}: {spec!r} needs a value with a length") from error
+        if found != size:
+            raise TypeError(f"{where}: expected a length of {size}, got {found}")
+
+    def _buffer(self, spec: BufferSpec, value: Any, where: str) -> None:
+        formats = _BUFFER_FORMATS.get(_buffer_key(spec.element))
+        if formats is None:
+            raise TypeError(
+                f"ppy.check cannot validate against Buffer[{_describe(spec.element)}]: "
+                "the element has no buffer format"
+            )
+        try:
+            view = memoryview(value)
+        except TypeError as error:
+            raise TypeError(
+                f"{where}: expected a buffer of {_describe(spec.element)}, "
+                f"got {type(value).__name__}"
+            ) from error
+        with view:
+            if view.ndim != 1 or not view.c_contiguous:
+                raise TypeError(f"{where}: a Buffer is one contiguous dimension")
+            spelled = view.format.lstrip("@=<>!")
+            if spelled in ("l", "L"):
+                spelled += str(view.itemsize)
+            if spelled not in formats:
+                raise TypeError(
+                    f"{where}: a Buffer[{_describe(spec.element)}] holds "
+                    f"{min(formats, key=len)!r} elements, this holds {view.format!r}"
+                )
+
+    def _shape(self, spec: Shape, value: Any, where: str) -> None:
+        shape = getattr(value, "shape", None)
+        if shape is None:
+            raise TypeError(f"{where}: {spec!r} needs a value with a shape")
+        shape = tuple(shape)
+        if len(shape) != len(spec.dims):
+            raise TypeError(f"{where}: expected {len(spec.dims)} dimension(s), got shape {shape!r}")
+        bound: dict[str, int] = {}
+        for wanted, found in zip(spec.dims, shape, strict=True):
+            if isinstance(wanted, str):
+                if bound.setdefault(wanted, found) != found:
+                    raise TypeError(
+                        f"{where}: dimension {wanted!r} is {bound[wanted]} and {found} in {shape!r}"
+                    )
+            elif wanted != found:
+                raise TypeError(f"{where}: expected shape {spec.dims!r}, got {shape!r}")
+
+    def _dtype(self, spec: DType, value: Any, where: str) -> None:
+        dtype = getattr(value, "dtype", None)
+        if dtype is None:
+            raise TypeError(f"{where}: {spec!r} needs a value with a dtype")
+        names = {str(dtype), str(dtype).rpartition(".")[2], str(getattr(dtype, "name", ""))}
+        if spec.name not in names:
+            raise TypeError(f"{where}: expected dtype {spec.name!r}, got {dtype!s}")
+
+    def _contiguous(self, value: Any, where: str) -> None:
+        flags = getattr(value, "flags", None)
+        if flags is not None:
+            try:
+                contiguous = bool(flags["C_CONTIGUOUS"])
+            except (KeyError, TypeError):
+                contiguous = None
+        elif hasattr(value, "is_contiguous"):
+            contiguous = bool(value.is_contiguous())
+        elif isinstance(value, memoryview):
+            contiguous = value.c_contiguous
+        else:
+            try:
+                with memoryview(value) as view:
+                    contiguous = view.c_contiguous
+            except TypeError:
+                contiguous = None
+        if contiguous is None:
+            raise TypeError(f"{where}: cannot tell whether a {type(value).__name__} is contiguous")
+        if not contiguous:
+            raise TypeError(f"{where}: not C-contiguous")
+
+    # -- containers ---------------------------------------------------------------------
+
     def _sequence(self, origin: Any, arguments: tuple, value: Any, where: str) -> None:
         if len(arguments) > 1:
             raise TypeError(f"ppy.check cannot validate against {origin.__name__}{arguments!r}")
@@ -388,6 +576,36 @@ class _Validation:
         for key, item in value.items():
             self._validate(arguments[0], key, f"{where} key {key!r}")
             self._validate(arguments[1], item, f"{where}[{key!r}]")
+
+
+#: The refinements the validation checks; any other PPy metadata is refused.
+_CHECKED_META = (
+    IntWidth,
+    FloatWidth,
+    ArraySpec,
+    VectorSpec,
+    BufferSpec,
+    Range,
+    Length,
+    Shape,
+    DType,
+    Contiguous,
+)
+
+
+def _buffer_key(element: Any) -> Any:
+    """What `_BUFFER_FORMATS` is keyed by for a buffer element: a type or a (kind, bits)."""
+    import typing
+
+    if typing.get_origin(element) is typing.Annotated:
+        base, *metadata = typing.get_args(element)
+        for item in metadata:
+            if isinstance(item, IntWidth):
+                return ("i" if item.signed else "u", item.bits)
+            if isinstance(item, FloatWidth):
+                return ("f", item.bits)
+        return base
+    return element
 
 
 def collections_deque() -> Any:
