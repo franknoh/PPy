@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import dataclasses
+import re
 from collections.abc import Callable
 from typing import Annotated, Any, Literal, Optional
 
@@ -80,6 +81,137 @@ def test_check_refuses_what_does_not_fit_all_the_way_down(target, value, where):
         .replace("|", r"\|"),
     ):
         ppy.check[target](value)
+
+
+@pytest.mark.parametrize(
+    ("target", "value"),
+    [
+        (ppy.i8, 127),
+        (ppy.i8, -128),
+        (ppy.u8, 0),
+        (ppy.u8, 255),
+        (ppy.i32, -(1 << 31)),
+        (ppy.u64, (1 << 64) - 1),
+        (ppy.f32, 1.5),
+        (ppy.f32, 3),
+        (ppy.f64, 1e300),
+        (ppy.Array[int, 3], (1, 2, 3)),
+        (ppy.Array[float, 0], ()),
+        (ppy.Vector[int], [1, 2]),
+        (ppy.Vector[str], []),
+        (Annotated[int, ppy.Range(0, 10)], 10),
+        (Annotated[float, ppy.Range(0.0, 1.0)], 0.5),
+        (Annotated[list[int], ppy.Length(2)], [1, 2]),
+        (Annotated[str, ppy.Length(3)], "abc"),
+        (ppy.i8 | None, None),
+        (ppy.i8 | None, -5),
+        (list[ppy.u8], [0, 255]),
+        (tuple[ppy.i8, ppy.u8], (-1, 200)),
+    ],
+)
+def test_a_refinement_that_holds_passes(target, value):
+    assert ppy.check[target](value) is value or ppy.check[target](value) == value
+
+
+@pytest.mark.parametrize(
+    ("target", "value", "where"),
+    [
+        (ppy.i8, 128, "value: 128 does not fit i8 (-128..127)"),
+        (ppy.i8, -129, "value: -129 does not fit i8 (-128..127)"),
+        (ppy.u8, -1, "value: -1 does not fit u8 (0..255)"),
+        (ppy.u8, 256, "value: 256 does not fit u8 (0..255)"),
+        (ppy.i8, 300, "value: 300 does not fit i8"),
+        (ppy.i8, 1.5, "value: expected int, got float"),
+        (ppy.u64, 1 << 64, "does not fit u64"),
+        (ppy.f32, 1e39, "value: 1e+39 is wider than f32 holds"),
+        (ppy.f16, 70000.0, "is wider than f16 holds"),
+        (ppy.f32, "x", "value: expected float, got str"),
+        (ppy.Array[int, 3], (1, 2), "value: expected a length of 3, got 2"),
+        (ppy.Array[int, 3], (1, 2, 3, 4), "value: expected a length of 3, got 4"),
+        (ppy.Array[int, 3], (1, "x", 3), "value[1]: expected int, got str"),
+        (ppy.Array[int, 3], [1, 2, 3], "value: expected tuple, got list"),
+        (ppy.Vector[int], [1, "x"], "value[1]: expected int, got str"),
+        (ppy.Vector[int], (1, 2), "value: expected list, got tuple"),
+        (Annotated[int, ppy.Range(0, 10)], 11, "value: 11 is outside ppy.Range(low=0, high=10)"),
+        (Annotated[int, ppy.Range(0, 10)], -1, "is outside"),
+        (Annotated[int, ppy.Range(0, 10)], "5", "value: expected int, got str"),
+        (Annotated[list[int], ppy.Length(2)], [1], "value: expected a length of 2, got 1"),
+        (list[ppy.u8], [0, 256], "value[1]: 256 does not fit u8"),
+        (tuple[ppy.i8, ppy.u8], (-1, -1), "value[1]: -1 does not fit u8"),
+        (ppy.i8 | None, 300, "expected"),
+    ],
+)
+def test_a_refinement_that_fails_is_refused(target, value, where):
+    with pytest.raises(TypeError, match=re.escape(where)):
+        ppy.check[target](value)
+
+
+def test_a_buffer_is_the_buffer_protocol_with_the_elements_format():
+    import array
+
+    ints = array.array("q", [1, 2, 3])
+    assert ppy.check[ppy.Buffer[int]](ints) is ints
+    assert ppy.check[ppy.Buffer[int]](memoryview(ints)) is not None
+    doubles = array.array("d", [1.0])
+    assert ppy.check[ppy.Buffer[float]](doubles) is doubles
+    assert ppy.check[ppy.Buffer[ppy.f64]](doubles) is doubles
+    assert ppy.check[ppy.Buffer[ppy.i8]](array.array("b", [1])) is not None
+    assert ppy.check[ppy.Buffer[ppy.u8]](bytearray(b"ab")) is not None
+    assert ppy.check[ppy.Buffer[ppy.i32]](array.array("i", [1])) is not None
+    with pytest.raises(TypeError, match=r"a Buffer\[int\] holds 'q' elements, this holds 'd'"):
+        ppy.check[ppy.Buffer[int]](doubles)
+    with pytest.raises(TypeError, match="expected a buffer of int, got list"):
+        ppy.check[ppy.Buffer[int]]([1, 2, 3])
+    with pytest.raises(TypeError, match="holds 'q' elements, this holds 'B'"):
+        ppy.check[ppy.Buffer[int]](b"bytes are not 64-bit integers")
+    with pytest.raises(TypeError, match="one contiguous dimension"):
+        ppy.check[ppy.Buffer[int]](memoryview(ints)[::2])
+    with pytest.raises(TypeError, match=r"cannot validate against Buffer\[str\]"):
+        ppy.check[ppy.Buffer[str]](ints)
+
+
+def test_array_refinements_read_the_arrays_own_metadata():
+    numpy = pytest.importorskip("numpy")
+    matrix = numpy.zeros((2, 3))
+    target = Annotated[numpy.ndarray, ppy.Shape(2, "n"), ppy.DType("float64"), ppy.Contiguous()]
+    assert ppy.check[target](matrix) is matrix
+    assert ppy.check[Annotated[numpy.ndarray, ppy.Shape("n", "n")]](numpy.eye(3)) is not None
+    with pytest.raises(TypeError, match="dimension 'n' is 2 and 3"):
+        ppy.check[Annotated[numpy.ndarray, ppy.Shape("n", "n")]](matrix)
+    with pytest.raises(TypeError, match=r"expected 2 dimension\(s\), got shape \(6,\)"):
+        ppy.check[Annotated[numpy.ndarray, ppy.Shape(2, 3)]](matrix.reshape(6))
+    with pytest.raises(TypeError, match=r"expected shape \(3, 2\), got \(2, 3\)"):
+        ppy.check[Annotated[numpy.ndarray, ppy.Shape(3, 2)]](matrix)
+    with pytest.raises(TypeError, match="expected dtype 'float32', got float64"):
+        ppy.check[Annotated[numpy.ndarray, ppy.DType("float32")]](matrix)
+    with pytest.raises(TypeError, match="not C-contiguous"):
+        ppy.check[Annotated[numpy.ndarray, ppy.Contiguous()]](matrix.T)
+    with pytest.raises(TypeError, match="needs a value with a shape"):
+        ppy.check[Annotated[object, ppy.Shape(2)]]([1, 2])
+    with pytest.raises(TypeError, match="cannot tell whether a int is contiguous"):
+        ppy.check[Annotated[object, ppy.Contiguous()]](3)
+
+
+@pytest.mark.parametrize(
+    "target",
+    [
+        ppy.Owned[int],
+        ppy.Borrowed[list[int]],
+        ppy.Mut[ppy.Buffer[float]],
+        Annotated[int, ppy.NoAlias()],
+        Annotated[list[int], ppy.Owned(), ppy.Length(2)],
+        ppy.Array[int, "n"],
+    ],
+)
+def test_a_contract_no_single_value_can_witness_is_refused_not_stripped(target):
+    """`Owned`, `Borrowed`, `Mut`, `NoAlias`, a symbolic length: `check` refuses the target."""
+    with pytest.raises(TypeError, match=r"ppy\.check cannot validate"):
+        ppy.check[target]([1, 2])
+    assert ppy.assume[target]([1, 2]) == [1, 2], "the unchecked crossing still takes it"
+
+
+def test_metadata_that_is_not_ppys_is_not_a_contract():
+    assert ppy.check[Annotated[int, "meta", 3]](5) == 5
 
 
 def test_a_shallow_check_can_no_longer_inject_a_false_type():

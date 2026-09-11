@@ -11,11 +11,12 @@ says so. `verify_conversions.py` regenerates every one of them and fails on any
 difference, so a hand edit to a file that claims to be generated is caught
 rather than believed.
 
-Sixteen folders carry a `compare/` directory: the same work written for
+17 folders carry a `compare/` directory: the same work written for
 other tools -- Numba, Cython, NumPy, numexpr, JAX, PyTorch, CuPy, Triton,
 Taichi, Mojo, Codon, Rust, C, CUDA C, pandas, polars, asyncio, uvloop -- each
 the way its tool wants it, and a section of the README that puts the code
-and the timings side by side and says what each port asked for.
+side by side with the timings, or, in `11_numerics`, with what each prints,
+and says what each port asked for.
 `compare.py` is the harness: it runs every program several times, refuses to
 print a table until every one of them prints the same answers, and reports
 the mean and spread. The site collects those sections on one page.
@@ -66,6 +67,7 @@ the mean and spread. The site collects those sections on one page.
 | `42_toolbox` | `ppy emit`, `ppy inspect --stage`, `--report-opt`, `--sanitize`, `--profile`, and `--pgo` on one program |
 | `43_regex` | regular expressions over byte buffers, compiled to native matchers; against CPython's `re`, Rust's `regex` |
 | `44_tile` | kernels over tiles in `ppy.tile`: no thread, no shared memory, no shuffle to write; against Triton, Taichi |
+| `45_multi_gpu_jax` | a data-parallel JAX MLP over a mesh of every accelerator, held to a single-device run; validated on real GPUs by `scripts/cloud` |
 
 A folder of related problems keeps them in numbered subfolders, and every
 runner reaches them: `15_algorithms/15a_nqueens` and its five siblings are

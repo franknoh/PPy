@@ -528,6 +528,10 @@ def _bind_columnar(
             return result
         names = {series.name for series in arrays}  # type: ignore[attr-defined]
         name = names.pop() if len(names) == 1 else None
+        if loop.result == "bool" and not loop.nullable:
+            # A mask that no null can reach -- `isna()`, `notna()`, and logic over
+            # them -- is a NumPy bool Series in pandas, whatever the inputs' backing.
+            return pandas.Series(result.to_numpy(zero_copy_only=False), index=index, name=name)
         return pandas.Series(pandas.arrays.ArrowExtensionArray(result), index=index, name=name)
 
     wrapper.__name__ = loop.symbol

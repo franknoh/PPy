@@ -180,6 +180,39 @@ def test_columnar_kernels_keep_arrow_null_semantics():
 
 
 @requires_llvm
+def test_kleene_logic_is_arrows_three_valued_and_and_or():
+    """`and_kleene`/`or_kleene` decide on one valid side, as `pc.and_kleene` and `pc.or_kleene` do;
+    `and`/`or` are null wherever a side is, as `pc.and_` and `pc.or_` are."""
+    pa = pytest.importorskip("pyarrow")
+    pc = pytest.importorskip("pyarrow.compute")
+    loops = [
+        FusedLoop(
+            f"k_{name}",
+            ("a", "b"),
+            (),
+            expression=f"({name} a0 a1)",
+            storage="pyarrow",
+            kinds=("bool", "bool"),
+            result="bool",
+        )
+        for name in ("and", "or", "and_kleene", "or_kleene")
+    ]
+    module = kernel_module(loops, "kernels")
+    optimize(module, 2)
+    engine = JitEngine(opt_level=2).open()
+    engine.add(emit_module(module))
+    engine.finalize()
+    values = [True, False, None]
+    a = pa.array([x for x in values for _ in values], type=pa.bool_())
+    b = pa.array([y for _ in values for y in values], type=pa.bool_())
+    for loop, reference in zip(loops, (pc.and_, pc.or_, pc.and_kleene, pc.or_kleene), strict=True):
+        binding = bind_fused(loop, engine.address(loop.symbol), reference)
+        result = binding.wrapper(a, b)
+        assert binding.calls == 1, loop.symbol
+        assert result.equals(reference(a, b)), (loop.symbol, result, reference(a, b))
+
+
+@requires_llvm
 def test_pyarrow_compute_expressions_fuse(write, analyze):
     from ppy_compiler.backend.llvm import _collect
 

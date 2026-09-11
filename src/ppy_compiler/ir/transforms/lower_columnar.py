@@ -327,9 +327,38 @@ class ColumnarLowering:
 
         return handler
 
+    def _logic(
+        self, b: Builder, name: str, x: Value, vx: Value, y: Value, vy: Value
+    ) -> tuple[Value, Value]:
+        """`name` of two bools with their validity: a null where either side is null,
+        or Kleene's three-valued `and`/`or`, where a valid false (a valid true) decides."""
+        both = self._bitwise(b, "and", vx, vy)
+        true = core.const(b, True, BOOL)
+        if name == "and_kleene":
+            false_here = self._bitwise(b, "and", vx, self._bitwise(b, "xor", x, true))
+            false_there = self._bitwise(b, "and", vy, self._bitwise(b, "xor", y, true))
+            decided = self._bitwise(b, "or", false_here, false_there)
+            return self._bitwise(b, "xor", decided, true), self._bitwise(b, "or", both, decided)
+        if name == "or_kleene":
+            true_here = self._bitwise(b, "and", vx, x)
+            decided = self._bitwise(b, "or", true_here, self._bitwise(b, "and", vy, y))
+            return decided, self._bitwise(b, "or", both, decided)
+        return self._bitwise(b, name, x, y), both
+
     def _boolean(self, name: str):  # type: ignore[no-untyped-def]
         def handler(op: Operation) -> None:
-            self._elementwise2(op, lambda b, x, y: self._bitwise(b, name, x, y))
+            a, c = self.column(op.operands[0]), self.column(op.operands[1])
+            info = columnar.describe(op.result.type)
+            assert info is not None
+            b = Builder().before(op)
+            rows = self._same_length(b, a, c)
+            result = self._new_column(b, info.dtype, info.nullable, rows, op.local_name)
+            inner, i, _next = self.range_loop(op, self._i64(b, 0), rows)  # type: ignore[attr-defined]
+            x, vx = self._get(inner, a, i)
+            y, vy = self._get(inner, c, i)
+            value, valid = self._logic(inner, name, x, vx, y, vy)
+            self._put(inner, result, i, value, valid)
+            self.columns[id(op.result)] = result
 
         return handler
 
@@ -427,8 +456,10 @@ class ColumnarLowering:
         buffer, bit by bit. Under the `nan` model an `f64` input is valid
         where it is not NaN, a `bool` input is a byte per row, and the
         answer is stored as computed: an arithmetic or `select` over a null
-        is already NaN, a comparison is IEEE's (`NaN != x` is true, as
-        pandas has it), and `is_null`/`fill_null` test the value itself.
+        is already NaN, a comparison is IEEE's decision and never a null
+        (`NaN != x` is true and `NaN > x` false, as pandas has them, so
+        logic over comparisons is two-valued), and `is_null`/`fill_null`
+        test the value itself.
         """
         expression = columnar.parse_expression(str(op.attributes["expression"]))
         model = str(op.attributes["model"])
@@ -483,10 +514,14 @@ class ColumnarLowering:
                 return value, self._bitwise(inner, "and", vx, vy)
             if node.op in columnar.COMPARISON:
                 (x, vx), (y, vy) = pairs
+                # Under NumPy's model a comparison is IEEE's decision, never a null:
+                # `NaN > 2` is false and `NaN != 2` is true, as pandas has them.
+                if model == "nan":
+                    return self._compare(inner, node.op, x, y), true
                 return self._compare(inner, node.op, x, y), self._bitwise(inner, "and", vx, vy)
             if node.op in columnar.BOOLEAN:
                 (x, vx), (y, vy) = pairs
-                return self._bitwise(inner, node.op, x, y), self._bitwise(inner, "and", vx, vy)
+                return self._logic(inner, node.op, x, vx, y, vy)
             if node.op in {"negate", "abs"}:
                 ((x, vx),) = pairs
                 return tensors.scalar_unary(

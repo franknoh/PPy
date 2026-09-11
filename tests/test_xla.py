@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib.util
+import os
 import subprocess
 import sys
 import textwrap
@@ -134,6 +135,45 @@ def test_stablehlo_runs_on_the_device_and_agrees_with_numpy():
     assert client.compile(emit_module(module, ("loss",), entry="loss")) is executable, (
         "cached by its digest"
     )
+
+
+@requires_xla
+def test_the_bridge_compiles_for_one_device_of_a_machine_that_has_several(tmp_path: Path):
+    """Two devices on the platform: the executable takes one buffer per argument, not one
+    shard per device, which is what a two-GPU machine refused before."""
+    program = textwrap.dedent(
+        """
+        import numpy as np
+        from ppy_compiler.backend.stablehlo import emit_module
+        from ppy_runtime.xla import pjrt
+        from test_xla import _tensor_module
+
+        client = pjrt.client()
+        assert len(client.devices()) == 2, client.devices()
+        executable = client.compile(emit_module(_tensor_module(), ("loss",), entry="loss"))
+        rng = np.random.default_rng(3)
+        a, w = rng.normal(size=(4, 3)), rng.normal(size=(3, 2))
+        total, centered = client.execute(executable, [a, w, np.array(0.5)])
+        scaled = np.exp(a @ w) * 0.5
+        np.testing.assert_allclose(centered, scaled - scaled.sum(axis=1, keepdims=True))
+        print("ran on", client.device(), "of", len(client.devices()))
+        """
+    )
+    done = subprocess.run(
+        [sys.executable, "-c", program],
+        cwd=Path(__file__).parent,
+        capture_output=True,
+        text=True,
+        check=False,
+        env={
+            **os.environ,
+            "JAX_PLATFORMS": "cpu",
+            "XLA_FLAGS": "--xla_force_host_platform_device_count=2",
+            "XDG_CACHE_HOME": str(tmp_path),
+        },
+    )
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.strip() == "ran on cpu:0 of 2", done.stdout
 
 
 @requires_xla

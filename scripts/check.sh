@@ -6,6 +6,8 @@ cd "$(dirname "$0")/.."
 FILES=(examples/run_all.py examples/lint_all.py examples/verify_conversions.py examples/record_outputs.py
        examples/bench_startup.py examples/bench_boundary.py examples/compare.py
        examples/15_algorithms/bench.py scripts/refresh.py scripts/doc_examples.py scripts/compare_docs.py
+       scripts/cloud/runpod_matrix.py scripts/cloud/accelerator_check.py scripts/cloud/multiprocess_smoke.py
+       scripts/cloud/sharding_probe.py
        docs/gen/counts.py docs/gen/folders.py docs/gen/gallery.py docs/gen/reference.py docs/gen/repo.py)
 
 uv run ruff check src tests "${FILES[@]}"

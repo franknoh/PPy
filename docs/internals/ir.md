@@ -282,7 +282,11 @@ operations are the ones pandas and PyArrow share: `from_parts %values,
 %validity, %length` and `store` move a column to and from Arrow's layout
 (values one per row -- one bit for `bool` -- and a bit-packed validity
 bitmap); `add`, `sub`, `mul`, `div`, the six comparisons, `and`, `or`,
-`xor`, `negate`, `abs`, `invert` give a null where an input is null;
+`xor`, `negate`, `abs`, `invert` give a null where an input is null, and
+`and_kleene`, `or_kleene` are the three-valued forms, where a false on
+one side of `and` (a true on one side of `or`) decides whatever the other
+side holds -- what PyArrow's `and_kleene` computes and pandas' `&` on an
+Arrow-backed Series means;
 `is_null`, `is_valid`, `fill_null`, `cast`, `select`, `fill %scalar, %n`
 (one value in every row); `map %out, %outv, %columns..., %scalars...
 {expression, model, gives}` evaluates a whole expression tree --

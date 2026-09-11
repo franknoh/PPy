@@ -75,7 +75,9 @@ def test_series_expressions_fuse_onto_columnar_kernels(write, analyze):
     assert len(module.fused) == 2, module.fusion_notes
     above, blend = sorted(module.fused.values(), key=lambda loop: loop.symbol)
     assert blend.storage == "pandas" and blend.expression == "(add (mul a0 a1) (fill_null a0 c0.0))"
-    assert above.expression == "(and (greater a0 a1) (is_valid a1))"
+    assert above.expression == "(and_kleene (greater a0 a1) (is_valid a1))", (
+        "pandas' `&` is Kleene's"
+    )
     assert above.kinds == ("f64", "f64") and above.result == "bool" and above.nullable
     assert "pandas expression fused" in " ".join(note for _line, note in module.fusion_notes)
 
@@ -254,3 +256,94 @@ def test_an_arrow_array_crosses_the_boundary_through_the_c_data_interface():
     valid = np.unpackbits(outv, bitorder="little")[:5].astype(bool)
     np.testing.assert_array_equal(valid, [False, True, True, False, True])
     np.testing.assert_array_equal(out[valid], [2.0, -4.0, -6.0])
+
+
+COLUMNAR_PROGRAM = """
+import numpy as np
+import pandas as pd
+import pyarrow as pa
+
+import ppy
+
+
+@ppy.pure
+def blend(s: pd.Series, t: pd.Series) -> pd.Series:
+    return s * t + s.fillna(0.0)
+
+
+@ppy.pure
+def above(s: pd.Series, t: pd.Series) -> pd.Series:
+    return (s > t) & t.notna()
+
+
+@ppy.pure
+def filled(s: pd.Series) -> pd.Series:
+    return s.fillna(-1.0)
+
+
+@ppy.pure
+def missing(s: pd.Series) -> pd.Series:
+    return s.isna()
+
+
+@ppy.pure
+def nested(s: pd.Series, t: pd.Series, scale: float) -> pd.Series:
+    return (s.fillna(0.0) * scale - t.fillna(1.0)) / (t.fillna(2.0) + s.fillna(1.0)) + s * t
+
+
+@ppy.pure
+def differs(s: pd.Series, t: pd.Series) -> pd.Series:
+    return (s != t) | (s.isna() & t.isna())
+
+
+def show(name: str, result: pd.Series) -> None:
+    print(name, result.dtype, [None if pd.isna(x) else round(float(x), 6) for x in result.tolist()])
+
+
+def main() -> None:
+    left = pd.Series([1.0, float("nan"), 3.0, 4.0, 2.5, float("nan"), -7.25], name="s")
+    right = pd.Series([2.0, 2.0, float("nan"), 0.5, 2.5, float("nan"), 8.0], name="t")
+    for s, t in ((left, right), (left.astype(pd.ArrowDtype(pa.float64())), right.astype(pd.ArrowDtype(pa.float64())))):
+        show("blend", blend(s, t))
+        show("above", above(s, t))
+        show("filled", filled(s))
+        show("missing", missing(s))
+        show("nested", nested(s, t, 1.5))
+        show("differs", differs(s, t))
+        print("sums", round(float(blend(s, t).sum()), 6), int(above(s, t).sum()), int(missing(s).sum()))
+
+
+main()
+"""
+
+
+@requires_llvm
+def test_columnar_programs_answer_as_pandas_does_on_every_path(tmp_path):
+    """Finite values, NaN, `fillna`, nested trees, arithmetic with null handling, the sums after:
+    what `python` prints -- pandas itself -- `ppy run` prints, NumPy-backed and Arrow-backed."""
+    import subprocess
+    import sys
+    import textwrap
+
+    pytest.importorskip("pandas")
+    pytest.importorskip("pyarrow")
+    path = tmp_path / "frames.ppy"
+    path.write_text(textwrap.dedent(COLUMNAR_PROGRAM).lstrip("\n"), encoding="utf-8")
+    (tmp_path / "pyproject.toml").write_text("[tool.ppy]\nstrict = false\n", encoding="utf-8")
+    plain = subprocess.run(
+        [sys.executable, "frames.ppy"], cwd=tmp_path, capture_output=True, text=True, check=False
+    )
+    native = subprocess.run(
+        [sys.executable, "-m", "ppy_compiler", "run", "frames.ppy"],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert plain.returncode == 0, plain.stderr
+    assert native.returncode == 0, native.stderr
+    assert native.stdout == plain.stdout
+    lines = native.stdout.splitlines()
+    assert lines[0] == "blend float64 [3.0, None, None, 6.0, 8.75, None, -65.25]"
+    assert lines[2] == "filled float64 [1.0, -1.0, 3.0, 4.0, 2.5, -1.0, -7.25]"
+    assert lines[3] == "missing bool [0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0]"

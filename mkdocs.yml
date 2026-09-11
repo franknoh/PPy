@@ -144,6 +144,7 @@ nav:
           - howto/38_cuda.md
           - howto/44_tile.md
           - howto/39_xla.md
+          - howto/45_multi_gpu_jax.md
       - Libraries:
           - howto/05_numpy.md
           - howto/06_pydantic.md
@@ -183,5 +184,6 @@ nav:
       - Migrating a real project: internals/migrating.md
       - Plugins: internals/plugins.md
       - Where a solver fits: internals/solver.md
+      - Hardware validation: internals/hardware-validation.md
   - Contributing: contributing.md
   - Changelog: changelog.md

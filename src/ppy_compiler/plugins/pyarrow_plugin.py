@@ -70,6 +70,8 @@ COMPUTE: dict[str, str] = {
     "greater_equal": "greater_equal",
     "and_": "and",
     "or_": "or",
+    "and_kleene": "and_kleene",
+    "or_kleene": "or_kleene",
     "invert": "invert",
     "xor": "xor",
     "cast": "cast",

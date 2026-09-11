@@ -64,8 +64,9 @@ _COLUMNAR_OPERATORS: dict[str, str] = {
     "le": "less_equal",
     "gt": "greater",
     "ge": "greater_equal",
-    "and_": "and",
-    "or_": "or",
+    # `&` and `|` on Series are three-valued over nulls, as Arrow's Kleene forms are.
+    "and_": "and_kleene",
+    "or_": "or_kleene",
 }
 CALLBACK_METHODS = frozenset({"apply", "map", "applymap", "transform", "agg", "aggregate", "pipe"})
 READERS = frozenset({"read_csv", "read_parquet", "read_json", "read_feather", "read_excel"})

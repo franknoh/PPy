@@ -159,38 +159,21 @@ READ_INTS = """{
     return count;
 }""".replace("IS_SPACE", _IS_SPACE)
 
-#: `ppy.input[Buffer[int]]()`: one line, every field an integer as Python's
-#: `int()` reads an ASCII one -- a sign, digits, single underscores between
-#: them -- into `data`. `*more` says how the call ended: 0 at the end of the
-#: line (consumed), 1 with the line continuing past `capacity` (call again
-#: with `continuing`), 2 with a field that is not an integer and 3 with one
-#: outside 64 bits; for 2 the field is in `bad`, cut to fit with its NUL, and
-#: for both the rest of the line is consumed, as `input()` had read it whole.
-#: Returns -1 where the input ended before a line began.
-INPUT_INTS = """{
-    int c = ppy_rt_next(1);
-    if (c == -1 && !continuing) {
-        *more = 0;
-        return -1;
-    }
+#: The fields of a line already read, each an integer as Python's `int()`
+#: reads an ASCII one -- a sign, digits, single underscores between them --
+#: into the `room` slots at `data`; the fields past the room are checked and
+#: counted but not stored. Returns how many fields the line held, -2 for a
+#: field that is not an integer (copied into `bad`, cut to fit with its NUL),
+#: -3 for one outside 64 bits. The caller holds the line, so a field this
+#: cannot read is handed to `int()` itself, which reads every form it does.
+PARSE_INTS = """{
     int64_t count = 0;
-    for (;;) {
-        while (c != -1 && c != '\\n' && IS_SPACE) {
-            ppy_rt_next(0);
-            c = ppy_rt_next(1);
-        }
-        if (c == -1) {
-            *more = 0;
-            return count;
-        }
-        if (c == '\\n') {
-            ppy_rt_next(0);
-            *more = 0;
-            return count;
-        }
-        if (count == capacity) {
-            *more = 1;
-            return count;
+    int64_t i = 0;
+    while (i < length) {
+        int c = (unsigned char)text[i];
+        if (IS_SPACE) {
+            i++;
+            continue;
         }
         int64_t seen = 0;
         int negative = 0;
@@ -201,10 +184,10 @@ INPUT_INTS = """{
         if (c == '-' || c == '+') {
             negative = c == '-';
             bad[seen++] = (int8_t)c;
-            ppy_rt_next(0);
-            c = ppy_rt_next(1);
+            i++;
+            c = i < length ? (unsigned char)text[i] : -1;
         }
-        while (c != -1 && !IS_SPACE) {
+        while (i < length && !IS_SPACE) {
             if (seen < bad_capacity - 1) {
                 bad[seen] = (int8_t)c;
             }
@@ -227,48 +210,23 @@ INPUT_INTS = """{
                 digits++;
                 last_underscore = 0;
             }
-            ppy_rt_next(0);
-            c = ppy_rt_next(1);
+            i++;
+            c = i < length ? (unsigned char)text[i] : -1;
         }
         if (digits == 0 || last_underscore) {
             failed = 2;
         }
         if (failed) {
             bad[seen < bad_capacity - 1 ? seen : bad_capacity - 1] = 0;
-            while (c != -1 && c != '\\n') {
-                ppy_rt_next(0);
-                c = ppy_rt_next(1);
-            }
-            if (c == '\\n') {
-                ppy_rt_next(0);
-            }
-            *more = (int8_t)failed;
-            return count;
+            return -(int64_t)failed;
         }
-        data[count++] = negative ? (int64_t)(0 - magnitude) : (int64_t)magnitude;
+        if (count < room) {
+            data[count] = negative ? (int64_t)(0 - magnitude) : (int64_t)magnitude;
+        }
+        count++;
     }
+    return count;
 }""".replace("IS_SPACE", _IS_SPACE)
-
-#: `ppy.input[tuple[int, ...]]()`: a line of integers into the `room` slots at
-#: `data`, every field checked, the line consumed whole. Returns how many
-#: fields the line held (more than `room` is answered by the count, the rest
-#: having gone into scratch), -1 where the input ended before a line, -2 for
-#: a field that is not an integer (in `bad`), -3 for one outside 64 bits.
-INPUT_FIXED = """{
-    int64_t drain[64];
-    int8_t more = 0;
-    int64_t got = ppy_rt_input_ints(data, room, bad, bad_capacity, 0, &more);
-    if (got < 0) {
-        return -1;
-    }
-    while (more == 1) {
-        got += ppy_rt_input_ints(drain, 64, bad, bad_capacity, 1, &more);
-    }
-    if (more >= 2) {
-        return -(int64_t)more;
-    }
-    return got;
-}"""
 
 #: What a standalone binary does where Python would raise: say so and stop.
 _STANDALONE_FAIL = """{
@@ -335,14 +293,18 @@ INPUT_INT = """{
     "IS_SPACE_AT(end - 1)", _IS_SPACE.replace("c ==", "line[end - 1] ==")
 )
 
-#: `ppy.scan[Buffer[int]](n)` with no interpreter: `count` integers into
-#: `data`, fewer where the input ends, an error that ends the program where
-#: a token is not an integer.
+#: `ppy.scan[Buffer[int]](n)` with no interpreter: exactly `count` integers
+#: into `data`, or an error that ends the program -- where a token is not an
+#: integer, or where the input ends first, since a value that was never read
+#: is not a zero.
 FILL_INTS = """{
     int8_t bad[64];
     int64_t got = ppy_rt_read_ints(data, count, bad, (int64_t)sizeof bad);
     if (got < 0) {
         ppy_rt_fail("ppy: ValueError: expected an integer token");
+    }
+    if (got < count) {
+        ppy_rt_fail("ppy: EOFError: the input ended before every integer was read");
     }
     return got;
 }"""
@@ -393,26 +355,19 @@ FUNCTIONS: dict[str, tuple[str, tuple[str, ...], str, tuple[str, ...], tuple[str
         ("stdint.h",),
         ("ppy_rt_next",),
     ),
-    "ppy_rt_input_ints": (
+    "ppy_rt_parse_ints": (
         "int64_t",
         (
+            "const char *text",
+            "int64_t length",
             "int64_t *data",
-            "int64_t capacity",
+            "int64_t room",
             "int8_t *bad",
             "int64_t bad_capacity",
-            "int8_t continuing",
-            "int8_t *more",
         ),
-        INPUT_INTS,
+        PARSE_INTS,
         ("stdint.h",),
-        ("ppy_rt_next",),
-    ),
-    "ppy_rt_input_fixed": (
-        "int64_t",
-        ("int64_t *data", "int64_t room", "int8_t *bad", "int64_t bad_capacity"),
-        INPUT_FIXED,
-        ("stdint.h",),
-        ("ppy_rt_input_ints",),
+        (),
     ),
     "ppy_rt_fail": (
         "void",
@@ -458,8 +413,7 @@ LIBRARY = (
     "ppy_rt_read_token_wide",
     "ppy_rt_read_line",
     "ppy_rt_read_ints",
-    "ppy_rt_input_ints",
-    "ppy_rt_input_fixed",
+    "ppy_rt_parse_ints",
 )
 
 

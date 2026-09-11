@@ -6,7 +6,8 @@ run-time fact, not part of its type: a `filter` keeps as many rows as its
 mask allows. `columnar.table<a, column<i64>, b, column<f64, nullable>>` is a
 table of named columns. The operations are the ones pandas and PyArrow
 share (spec 51): arithmetic, comparison, and boolean logic over columns,
-with a null where any input is null; `cast`, `is_null`, `is_valid`,
+with a null where any input is null (`and_kleene` and `or_kleene` are the
+three-valued forms, where a false or a true on one side decides); `cast`, `is_null`, `is_valid`,
 `fill_null`, `select`, `fill` (one scalar, `n` rows); `map`, a whole
 elementwise expression over columns evaluated row by row into memory, under
 Arrow's null model or NumPy's (a NaN is the null); `filter`, `take`,
@@ -64,7 +65,11 @@ ARITHMETIC = ("add", "sub", "mul", "div")
 #: Two columns in, a bool column out.
 COMPARISON = ("equal", "not_equal", "less", "less_equal", "greater", "greater_equal")
 #: Two bool columns in, one out.
-BOOLEAN = ("and", "or", "xor")
+#: `and`, `or`, `xor` give a null where either side is null, as PyArrow's
+#: `and_` and `or_` do; `and_kleene` and `or_kleene` are three-valued, as
+#: `and_kleene`, `or_kleene`, and pandas' `&` and `|` on Arrow-backed Series
+#: are: a null `and` a false is false, a null `or` a true is true.
+BOOLEAN = ("and", "or", "xor", "and_kleene", "or_kleene")
 #: What `aggregate` folds a column to.
 AGGREGATES = ("sum", "mean", "min", "max", "count", "any", "all")
 #: What `group_by` folds each group's values with.
