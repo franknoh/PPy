@@ -2,334 +2,338 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
     <url>
          <loc>https://ppy.franknoh.dev/dev/</loc>
-         <lastmod>2026-09-10</lastmod>
+         <lastmod>2026-09-11</lastmod>
     </url>
     <url>
          <loc>https://ppy.franknoh.dev/dev/changelog/</loc>
-         <lastmod>2026-09-10</lastmod>
+         <lastmod>2026-09-11</lastmod>
     </url>
     <url>
          <loc>https://ppy.franknoh.dev/dev/cli/</loc>
-         <lastmod>2026-09-10</lastmod>
+         <lastmod>2026-09-11</lastmod>
     </url>
     <url>
          <loc>https://ppy.franknoh.dev/dev/contributing/</loc>
-         <lastmod>2026-09-10</lastmod>
+         <lastmod>2026-09-11</lastmod>
     </url>
     <url>
          <loc>https://ppy.franknoh.dev/dev/getting-started/</loc>
-         <lastmod>2026-09-10</lastmod>
+         <lastmod>2026-09-11</lastmod>
     </url>
     <url>
          <loc>https://ppy.franknoh.dev/dev/installing/</loc>
-         <lastmod>2026-09-10</lastmod>
+         <lastmod>2026-09-11</lastmod>
     </url>
     <url>
          <loc>https://ppy.franknoh.dev/dev/api/</loc>
-         <lastmod>2026-09-10</lastmod>
+         <lastmod>2026-09-11</lastmod>
     </url>
     <url>
          <loc>https://ppy.franknoh.dev/dev/api/ir/</loc>
-         <lastmod>2026-09-10</lastmod>
+         <lastmod>2026-09-11</lastmod>
     </url>
     <url>
          <loc>https://ppy.franknoh.dev/dev/api/plugins/</loc>
-         <lastmod>2026-09-10</lastmod>
+         <lastmod>2026-09-11</lastmod>
     </url>
     <url>
          <loc>https://ppy.franknoh.dev/dev/api/ppy/</loc>
-         <lastmod>2026-09-10</lastmod>
+         <lastmod>2026-09-11</lastmod>
     </url>
     <url>
          <loc>https://ppy.franknoh.dev/dev/api/runtime/</loc>
-         <lastmod>2026-09-10</lastmod>
+         <lastmod>2026-09-11</lastmod>
     </url>
     <url>
          <loc>https://ppy.franknoh.dev/dev/guide/</loc>
-         <lastmod>2026-09-10</lastmod>
+         <lastmod>2026-09-11</lastmod>
     </url>
     <url>
          <loc>https://ppy.franknoh.dev/dev/guide/aio/</loc>
-         <lastmod>2026-09-10</lastmod>
+         <lastmod>2026-09-11</lastmod>
     </url>
     <url>
          <loc>https://ppy.franknoh.dev/dev/guide/autodiff/</loc>
-         <lastmod>2026-09-10</lastmod>
+         <lastmod>2026-09-11</lastmod>
     </url>
     <url>
          <loc>https://ppy.franknoh.dev/dev/guide/concurrency/</loc>
-         <lastmod>2026-09-10</lastmod>
+         <lastmod>2026-09-11</lastmod>
     </url>
     <url>
          <loc>https://ppy.franknoh.dev/dev/guide/directives/</loc>
-         <lastmod>2026-09-10</lastmod>
+         <lastmod>2026-09-11</lastmod>
     </url>
     <url>
          <loc>https://ppy.franknoh.dev/dev/guide/effects/</loc>
-         <lastmod>2026-09-10</lastmod>
+         <lastmod>2026-09-11</lastmod>
     </url>
     <url>
          <loc>https://ppy.franknoh.dev/dev/guide/generics/</loc>
-         <lastmod>2026-09-10</lastmod>
+         <lastmod>2026-09-11</lastmod>
     </url>
     <url>
          <loc>https://ppy.franknoh.dev/dev/guide/gpu/</loc>
-         <lastmod>2026-09-10</lastmod>
+         <lastmod>2026-09-11</lastmod>
     </url>
     <url>
          <loc>https://ppy.franknoh.dev/dev/guide/input/</loc>
-         <lastmod>2026-09-10</lastmod>
+         <lastmod>2026-09-11</lastmod>
     </url>
     <url>
          <loc>https://ppy.franknoh.dev/dev/guide/native-lowering/</loc>
-         <lastmod>2026-09-10</lastmod>
+         <lastmod>2026-09-11</lastmod>
     </url>
     <url>
          <loc>https://ppy.franknoh.dev/dev/guide/native/</loc>
-         <lastmod>2026-09-10</lastmod>
+         <lastmod>2026-09-11</lastmod>
     </url>
     <url>
          <loc>https://ppy.franknoh.dev/dev/guide/parallel/</loc>
-         <lastmod>2026-09-10</lastmod>
+         <lastmod>2026-09-11</lastmod>
     </url>
     <url>
          <loc>https://ppy.franknoh.dev/dev/guide/regex/</loc>
-         <lastmod>2026-09-10</lastmod>
+         <lastmod>2026-09-11</lastmod>
     </url>
     <url>
          <loc>https://ppy.franknoh.dev/dev/guide/simd-cpu/</loc>
-         <lastmod>2026-09-10</lastmod>
+         <lastmod>2026-09-11</lastmod>
     </url>
     <url>
          <loc>https://ppy.franknoh.dev/dev/guide/subset/</loc>
-         <lastmod>2026-09-10</lastmod>
+         <lastmod>2026-09-11</lastmod>
     </url>
     <url>
          <loc>https://ppy.franknoh.dev/dev/guide/xla/</loc>
-         <lastmod>2026-09-10</lastmod>
+         <lastmod>2026-09-11</lastmod>
     </url>
     <url>
          <loc>https://ppy.franknoh.dev/dev/howto/</loc>
-         <lastmod>2026-09-10</lastmod>
+         <lastmod>2026-09-11</lastmod>
     </url>
     <url>
          <loc>https://ppy.franknoh.dev/dev/howto/01_basics/</loc>
-         <lastmod>2026-09-10</lastmod>
+         <lastmod>2026-09-11</lastmod>
     </url>
     <url>
          <loc>https://ppy.franknoh.dev/dev/howto/02_arbitrary_precision/</loc>
-         <lastmod>2026-09-10</lastmod>
+         <lastmod>2026-09-11</lastmod>
     </url>
     <url>
          <loc>https://ppy.franknoh.dev/dev/howto/03_effects_and_contracts/</loc>
-         <lastmod>2026-09-10</lastmod>
+         <lastmod>2026-09-11</lastmod>
     </url>
     <url>
          <loc>https://ppy.franknoh.dev/dev/howto/04_classes/</loc>
-         <lastmod>2026-09-10</lastmod>
+         <lastmod>2026-09-11</lastmod>
     </url>
     <url>
          <loc>https://ppy.franknoh.dev/dev/howto/05_numpy/</loc>
-         <lastmod>2026-09-10</lastmod>
+         <lastmod>2026-09-11</lastmod>
     </url>
     <url>
          <loc>https://ppy.franknoh.dev/dev/howto/06_pydantic/</loc>
-         <lastmod>2026-09-10</lastmod>
+         <lastmod>2026-09-11</lastmod>
     </url>
     <url>
          <loc>https://ppy.franknoh.dev/dev/howto/07_parallel/</loc>
-         <lastmod>2026-09-10</lastmod>
+         <lastmod>2026-09-11</lastmod>
     </url>
     <url>
          <loc>https://ppy.franknoh.dev/dev/howto/08_native_data/</loc>
-         <lastmod>2026-09-10</lastmod>
+         <lastmod>2026-09-11</lastmod>
     </url>
     <url>
          <loc>https://ppy.franknoh.dev/dev/howto/09_torch/</loc>
-         <lastmod>2026-09-10</lastmod>
+         <lastmod>2026-09-11</lastmod>
     </url>
     <url>
          <loc>https://ppy.franknoh.dev/dev/howto/10_narrowing/</loc>
-         <lastmod>2026-09-10</lastmod>
+         <lastmod>2026-09-11</lastmod>
     </url>
     <url>
          <loc>https://ppy.franknoh.dev/dev/howto/11_numerics/</loc>
-         <lastmod>2026-09-10</lastmod>
+         <lastmod>2026-09-11</lastmod>
     </url>
     <url>
          <loc>https://ppy.franknoh.dev/dev/howto/12_buffers_and_jit/</loc>
-         <lastmod>2026-09-10</lastmod>
+         <lastmod>2026-09-11</lastmod>
     </url>
     <url>
          <loc>https://ppy.franknoh.dev/dev/howto/13_value_classes/</loc>
-         <lastmod>2026-09-10</lastmod>
+         <lastmod>2026-09-11</lastmod>
     </url>
     <url>
          <loc>https://ppy.franknoh.dev/dev/howto/14_tuples/</loc>
-         <lastmod>2026-09-10</lastmod>
+         <lastmod>2026-09-11</lastmod>
     </url>
     <url>
          <loc>https://ppy.franknoh.dev/dev/howto/15_algorithms/</loc>
-         <lastmod>2026-09-10</lastmod>
+         <lastmod>2026-09-11</lastmod>
     </url>
     <url>
          <loc>https://ppy.franknoh.dev/dev/howto/16_dynamic/</loc>
-         <lastmod>2026-09-10</lastmod>
+         <lastmod>2026-09-11</lastmod>
     </url>
     <url>
          <loc>https://ppy.franknoh.dev/dev/howto/17_containers/</loc>
-         <lastmod>2026-09-10</lastmod>
+         <lastmod>2026-09-11</lastmod>
     </url>
     <url>
          <loc>https://ppy.franknoh.dev/dev/howto/18_errors/</loc>
-         <lastmod>2026-09-10</lastmod>
+         <lastmod>2026-09-11</lastmod>
     </url>
     <url>
          <loc>https://ppy.franknoh.dev/dev/howto/19_strings/</loc>
-         <lastmod>2026-09-10</lastmod>
+         <lastmod>2026-09-11</lastmod>
     </url>
     <url>
          <loc>https://ppy.franknoh.dev/dev/howto/20_inventory/</loc>
-         <lastmod>2026-09-10</lastmod>
+         <lastmod>2026-09-11</lastmod>
     </url>
     <url>
          <loc>https://ppy.franknoh.dev/dev/howto/21_training_torch/</loc>
-         <lastmod>2026-09-10</lastmod>
+         <lastmod>2026-09-11</lastmod>
     </url>
     <url>
          <loc>https://ppy.franknoh.dev/dev/howto/22_training_jax/</loc>
-         <lastmod>2026-09-10</lastmod>
+         <lastmod>2026-09-11</lastmod>
     </url>
     <url>
          <loc>https://ppy.franknoh.dev/dev/howto/23_inference/</loc>
-         <lastmod>2026-09-10</lastmod>
+         <lastmod>2026-09-11</lastmod>
     </url>
     <url>
          <loc>https://ppy.franknoh.dev/dev/howto/24_interop/</loc>
-         <lastmod>2026-09-10</lastmod>
+         <lastmod>2026-09-11</lastmod>
     </url>
     <url>
          <loc>https://ppy.franknoh.dev/dev/howto/25_jax_export/</loc>
-         <lastmod>2026-09-10</lastmod>
+         <lastmod>2026-09-11</lastmod>
     </url>
     <url>
          <loc>https://ppy.franknoh.dev/dev/howto/26_project/</loc>
-         <lastmod>2026-09-10</lastmod>
+         <lastmod>2026-09-11</lastmod>
     </url>
     <url>
          <loc>https://ppy.franknoh.dev/dev/howto/27_uvicorn/</loc>
-         <lastmod>2026-09-10</lastmod>
+         <lastmod>2026-09-11</lastmod>
     </url>
     <url>
          <loc>https://ppy.franknoh.dev/dev/howto/28_threads/</loc>
-         <lastmod>2026-09-10</lastmod>
+         <lastmod>2026-09-11</lastmod>
     </url>
     <url>
          <loc>https://ppy.franknoh.dev/dev/howto/29_flax/</loc>
-         <lastmod>2026-09-10</lastmod>
+         <lastmod>2026-09-11</lastmod>
     </url>
     <url>
          <loc>https://ppy.franknoh.dev/dev/howto/30_migrate/</loc>
-         <lastmod>2026-09-10</lastmod>
+         <lastmod>2026-09-11</lastmod>
     </url>
     <url>
          <loc>https://ppy.franknoh.dev/dev/howto/31_torchrun/</loc>
-         <lastmod>2026-09-10</lastmod>
+         <lastmod>2026-09-11</lastmod>
     </url>
     <url>
          <loc>https://ppy.franknoh.dev/dev/howto/32_native_memory/</loc>
-         <lastmod>2026-09-10</lastmod>
+         <lastmod>2026-09-11</lastmod>
     </url>
     <url>
          <loc>https://ppy.franknoh.dev/dev/howto/33_simd_and_cpu/</loc>
-         <lastmod>2026-09-10</lastmod>
+         <lastmod>2026-09-11</lastmod>
     </url>
     <url>
          <loc>https://ppy.franknoh.dev/dev/howto/34_atomics_and_threads/</loc>
-         <lastmod>2026-09-10</lastmod>
+         <lastmod>2026-09-11</lastmod>
     </url>
     <url>
          <loc>https://ppy.franknoh.dev/dev/howto/35_parallel_range/</loc>
-         <lastmod>2026-09-10</lastmod>
+         <lastmod>2026-09-11</lastmod>
     </url>
     <url>
          <loc>https://ppy.franknoh.dev/dev/howto/36_autodiff/</loc>
-         <lastmod>2026-09-10</lastmod>
+         <lastmod>2026-09-11</lastmod>
     </url>
     <url>
          <loc>https://ppy.franknoh.dev/dev/howto/37_aio/</loc>
-         <lastmod>2026-09-10</lastmod>
+         <lastmod>2026-09-11</lastmod>
     </url>
     <url>
          <loc>https://ppy.franknoh.dev/dev/howto/38_cuda/</loc>
-         <lastmod>2026-09-10</lastmod>
+         <lastmod>2026-09-11</lastmod>
     </url>
     <url>
          <loc>https://ppy.franknoh.dev/dev/howto/39_xla/</loc>
-         <lastmod>2026-09-10</lastmod>
+         <lastmod>2026-09-11</lastmod>
     </url>
     <url>
          <loc>https://ppy.franknoh.dev/dev/howto/40_generics/</loc>
-         <lastmod>2026-09-10</lastmod>
+         <lastmod>2026-09-11</lastmod>
     </url>
     <url>
          <loc>https://ppy.franknoh.dev/dev/howto/41_columnar/</loc>
-         <lastmod>2026-09-10</lastmod>
+         <lastmod>2026-09-11</lastmod>
     </url>
     <url>
          <loc>https://ppy.franknoh.dev/dev/howto/42_toolbox/</loc>
-         <lastmod>2026-09-10</lastmod>
+         <lastmod>2026-09-11</lastmod>
     </url>
     <url>
          <loc>https://ppy.franknoh.dev/dev/howto/43_regex/</loc>
-         <lastmod>2026-09-10</lastmod>
+         <lastmod>2026-09-11</lastmod>
+    </url>
+    <url>
+         <loc>https://ppy.franknoh.dev/dev/howto/comparisons/</loc>
+         <lastmod>2026-09-11</lastmod>
     </url>
     <url>
          <loc>https://ppy.franknoh.dev/dev/internals/</loc>
-         <lastmod>2026-09-10</lastmod>
+         <lastmod>2026-09-11</lastmod>
     </url>
     <url>
          <loc>https://ppy.franknoh.dev/dev/internals/architecture/</loc>
-         <lastmod>2026-09-10</lastmod>
+         <lastmod>2026-09-11</lastmod>
     </url>
     <url>
          <loc>https://ppy.franknoh.dev/dev/internals/conversion/</loc>
-         <lastmod>2026-09-10</lastmod>
+         <lastmod>2026-09-11</lastmod>
     </url>
     <url>
          <loc>https://ppy.franknoh.dev/dev/internals/ir/</loc>
-         <lastmod>2026-09-10</lastmod>
+         <lastmod>2026-09-11</lastmod>
     </url>
     <url>
          <loc>https://ppy.franknoh.dev/dev/internals/migrating/</loc>
-         <lastmod>2026-09-10</lastmod>
+         <lastmod>2026-09-11</lastmod>
     </url>
     <url>
          <loc>https://ppy.franknoh.dev/dev/internals/plugins/</loc>
-         <lastmod>2026-09-10</lastmod>
+         <lastmod>2026-09-11</lastmod>
     </url>
     <url>
          <loc>https://ppy.franknoh.dev/dev/internals/solver/</loc>
-         <lastmod>2026-09-10</lastmod>
+         <lastmod>2026-09-11</lastmod>
     </url>
     <url>
          <loc>https://ppy.franknoh.dev/dev/reference/</loc>
-         <lastmod>2026-09-10</lastmod>
+         <lastmod>2026-09-11</lastmod>
     </url>
     <url>
          <loc>https://ppy.franknoh.dev/dev/reference/compatibility/</loc>
-         <lastmod>2026-09-10</lastmod>
+         <lastmod>2026-09-11</lastmod>
     </url>
     <url>
          <loc>https://ppy.franknoh.dev/dev/reference/config/</loc>
-         <lastmod>2026-09-10</lastmod>
+         <lastmod>2026-09-11</lastmod>
     </url>
     <url>
          <loc>https://ppy.franknoh.dev/dev/reference/diagnostics/</loc>
-         <lastmod>2026-09-10</lastmod>
+         <lastmod>2026-09-11</lastmod>
     </url>
     <url>
          <loc>https://ppy.franknoh.dev/dev/reference/performance/</loc>
-         <lastmod>2026-09-10</lastmod>
+         <lastmod>2026-09-11</lastmod>
     </url>
 </urlset>
