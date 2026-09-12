@@ -1,9 +1,15 @@
 # PPY
 
-**Python's syntax, compiled.** A `.ppy` file *is* valid Python and runs under
-plain CPython with no compiler involved. The compiler adds a strict static
-checker, an optimized Python backend, and an LLVM native backend — and the
-three must print the same answer, or it is a bug.
+**Python as the frontend. A compiler underneath.** A `.ppy` file *is* valid
+Python and runs under plain CPython with no compiler involved, and that run
+is the reference answer. The compiler reads the same file, proves what it
+can about it, lowers that through a canonical IR, and hands the result to a
+backend — the optimized Python backend, LLVM, C or C++ source, CUDA, PTX,
+StableHLO, or one an installed package brings. What it cannot prove it does
+not compile: the supported static subset is documented, a program that
+leaves it is told where, and a guard that fails falls back to the Python
+body. Plain CPython, the Python backend, and the LLVM backend must print the
+same answer, or it is a bug.
 
 ```python
 import ppy
