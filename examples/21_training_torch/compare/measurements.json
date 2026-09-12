@@ -1,6 +1,6 @@
 {
  "environment": {
-  "commit": "0ec5e34",
+  "commit": "d3adcad",
   "processor": "x86_64",
   "platform": "Linux-6.6.114.1-microsoft-standard-WSL2-x86_64-with-glibc2.39",
   "python": "3.14.5",
@@ -9,42 +9,42 @@
  "timings": {
   "ppy": {
    "standardize, 20000 rows": {
-    "mean": 0.884,
-    "stdev": 0.008944271909999166
+    "mean": 1.272,
+    "stdev": 0.2764416755845616
    },
    "forward pass, per call": {
-    "mean": 0.11834,
-    "stdev": 0.0032523837411966017
+    "mean": 0.13394,
+    "stdev": 0.00595298244579975
    }
   },
   "python": {
    "standardize, 20000 rows": {
-    "mean": 66.96,
-    "stdev": 0.6243396511515228
+    "mean": 72.138,
+    "stdev": 2.319379227293374
    },
    "forward pass, per call": {
-    "mean": 0.11552,
-    "stdev": 0.0009628083921528755
+    "mean": 0.12332,
+    "stdev": 0.0067072348997183635
    }
   },
   "eager": {
    "standardize, 20000 rows": {
-    "mean": 0.722,
-    "stdev": 0.05540758070878029
+    "mean": 1.056,
+    "stdev": 0.25919104922817066
    },
    "forward pass, per call": {
-    "mean": 0.11788,
-    "stdev": 0.004581157059084526
+    "mean": 0.1251,
+    "stdev": 0.004868778080791936
    }
   },
   "compile": {
    "standardize, 20000 rows": {
-    "mean": 0.6819999999999999,
-    "stdev": 0.07049822692805828
+    "mean": 0.894,
+    "stdev": 0.23447814397081876
    },
    "forward pass, per call": {
-    "mean": 0.11334,
-    "stdev": 0.005278541465215558
+    "mean": 0.1176,
+    "stdev": 0.0034256386265921293
    }
   }
  }

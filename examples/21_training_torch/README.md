@@ -83,8 +83,8 @@ column.
 <!-- compare:start -->
 | | PPY `ppy run` | CPython, the same file | PyTorch, vectorized | `torch.compile` |
 |---|---:|---:|---:|---:|
-| standardize, 20000 rows | 0.88 ± 0.01 | 66.96 ± 0.62 | 0.72 ± 0.06 | **0.68 ± 0.07** |
-| forward pass, per call | 0.12 ± 0.00 | 0.12 ± 0.00 | 0.12 ± 0.00 | **0.11 ± 0.01** |
+| standardize, 20000 rows | 1.27 ± 0.28 | 72.14 ± 2.32 | 1.06 ± 0.26 | **0.89 ± 0.23** |
+| forward pass, per call | 0.13 ± 0.01 | 0.12 ± 0.01 | 0.13 ± 0.00 | **0.12 ± 0.00** |
 <!-- compare:end -->
 
 The loop as the script wrote it, compiled, is level with the vectorized
