@@ -206,7 +206,13 @@ def build_parser() -> argparse.ArgumentParser:
         help="package the exports as a library: lib/, include/, a pkg-config file, "
         "and the manifest, in one directory",
     )
-    build.add_argument("--backend", choices=("llvm", "python"), default="llvm")
+    build.add_argument(
+        "--backend",
+        default="llvm",
+        metavar="NAME",
+        help="`llvm` (the default), `python`, or an installed backend's name; "
+        "`ppy doctor` lists them",
+    )
     build.add_argument("-o", "--output", type=Path, help="output directory")
     build.add_argument(
         "--warm",
@@ -220,12 +226,14 @@ def build_parser() -> argparse.ArgumentParser:
     emit = subparsers.add_parser("emit", help="print a compiler stage as text")
     emit.add_argument(
         "kind",
-        choices=_EMIT_KINDS,
-        help="`ir` is the canonical IR (.ppyir); `linked-ir` the whole program as one "
+        metavar="KIND",
+        help="one of " + ", ".join(_EMIT_KINDS) + ": "
+        "`ir` is the canonical IR (.ppyir); `linked-ir` the whole program as one "
         "optimized module; `c`, `cpp` a translation unit; "
         "`header` the C declarations of the exports; `stablehlo` the @ppy.xla.jit "
         "functions as an MLIR module for XLA; `cuda`, `hip` the kernels and their "
-        "launches as CUDA or HIP C++; `nvvm-ir`, `ptx` the kernels as NVPTX LLVM IR or PTX",
+        "launches as CUDA or HIP C++; `nvvm-ir`, `ptx` the kernels as NVPTX LLVM IR or PTX; "
+        "or a format an installed backend registers (`ppy doctor` lists them)",
     )
     emit.add_argument("target", type=Path)
     emit.add_argument(

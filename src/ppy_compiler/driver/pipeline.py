@@ -207,6 +207,10 @@ def module_cache_key(
     ]
     config = bundle.project.config
     if target == "llvm":
+        from ..backend.builtin import builtin_backend
+
+        # The LLVM under the objects: another llvmlite is other code generation.
+        extra = (*extra, f"backend={builtin_backend('llvm').fingerprint()}")
         if config.llvm.sanitize:
             extra = (*extra, f"sanitize={','.join(sorted(config.llvm.sanitize))}")
         if config.llvm.instrument:
@@ -234,6 +238,54 @@ def module_cache_key(
             *extra,
         ),
     )
+
+
+def backend_identity(  # type: ignore[no-untyped-def]
+    bundle: AnalysisBundle, module_name: str, backend, opt_level: int
+) -> CacheKey:
+    """What identifies one module's artifact from an external backend: the
+    module key (source, compiler, dependencies, plugins, options) with the
+    backend's name, its fingerprint, its configuration, its target, and
+    the IR schema the backend reads."""
+    from ..ir import IR_SCHEMA_VERSION
+
+    settings = bundle.project.config.backend(backend.name)
+    return module_cache_key(
+        bundle,
+        module_name,
+        target=f"backend:{backend.name}",
+        opt_level=opt_level,
+        extra=(
+            f"ir-schema={IR_SCHEMA_VERSION}",
+            f"backend={backend.fingerprint()}",
+            f"backend-config={settings.fingerprint()}",
+            f"backend-target={settings.get('target', '')}",
+        ),
+    )
+
+
+def backend_context(  # type: ignore[no-untyped-def]
+    bundle: AnalysisBundle, backend, *, opt_level: int | None = None, entry: Path | None = None
+):
+    """Everything an external backend is told besides the IR (`BackendContext`)."""
+    from ..backend.base import BackendContext
+
+    config = bundle.project.config
+    settings = config.backend(backend.name)
+    level = opt_level if opt_level is not None else config.opt_level
+    context = BackendContext(
+        root=bundle.project.root,
+        config=config,
+        backend_config=settings,
+        opt_level=level,
+        target=str(settings.get("target", "")),
+        registry=bundle.project.plugins.dialect_registry(),
+        plugin_fingerprints=bundle.project.plugins.fingerprints(),
+        entry=entry,
+    )
+    for name in bundle.symbols.modules:
+        context.identity[name] = backend_identity(bundle, name, backend, level).hex()
+    return context
 
 
 def _prover_descriptor(config) -> str:  # type: ignore[no-untyped-def]

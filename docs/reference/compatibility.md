@@ -25,6 +25,7 @@ happens when the two sides of a boundary disagree.
 | `ppy check` / `ppy run` / `ppy build` and their flags | settling | flags are added; removals get a deprecation release |
 | `ppy convert` / `ppy migrate` output | settling | the output is regenerated from source, so a change shows up as a diff, not a break |
 | diagnostic codes (`E1xxx`, `W2xxx`, `R3xxx`) | settling | a code keeps its meaning; new codes are added freely |
+| the backend interface in `backend/base.py` (`BACKEND_API_VERSION` 1) | experimental | added in 0.3: a package registers a backend through `ppy.backends`, receives the canonical IR after the shared passes, and emits or builds; the version number is the interface's own, bumped when a method's meaning changes |
 | the plugin interface in `plugins/base.py` | settling | the second version: types, effects, lowerings, and the IR hooks (`register_dialects`, `register_passes`, `register_patterns`, `register_lowerings`) the builtin plugins use themselves |
 | the cache format | internal | see below; never read it yourself |
 | the built-artifact ABI | versioned | see below |

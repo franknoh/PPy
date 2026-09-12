@@ -169,6 +169,7 @@ nav:
       - ppy: api/ppy.md
       - ppy_runtime: api/runtime.md
       - Plugin API: api/plugins.md
+      - Backend API: api/backends.md
       - IR: api/ir.md
   - Reference:
       - reference/index.md
@@ -183,6 +184,7 @@ nav:
       - Conversion and inference: internals/conversion.md
       - Migrating a real project: internals/migrating.md
       - Plugins: internals/plugins.md
+      - Backends: internals/backends.md
       - Where a solver fits: internals/solver.md
       - Hardware validation: internals/hardware-validation.md
   - Contributing: contributing.md

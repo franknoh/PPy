@@ -207,3 +207,9 @@ Two plugins claiming one module are reported (`E1901`) rather than settled
 by registration order; a plugin written against another interface version
 is refused with the reason; a plugin pass that leaves the IR invalid is
 named in the error (`E1902`).
+
+A plugin is not a backend. A plugin models a library -- types, effects,
+how an operation lowers, dialects and passes for the IR -- and never emits
+code; a backend makes code from the IR and never types a call. An
+accelerator's package may carry both, one entry point in `ppy.plugins` and
+one in `ppy.backends`; the second is [Backends](backends.md).

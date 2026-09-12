@@ -30,13 +30,15 @@ __all__ = [
     "PassVerificationError",
 ]
 
-#: Where a plugin may hang a pass of its own.
+#: Where a plugin may hang a pass of its own; `backend` is where a backend
+#: hangs its own, after every shared pass and the plugins' `before-backend`.
 STAGES = (
     "after-ir-generation",
     "after-canonicalization",
     "before-optimization",
     "after-optimization",
     "before-backend",
+    "backend",
 )
 
 

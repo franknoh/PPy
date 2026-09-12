@@ -77,6 +77,11 @@ CODES: dict[str, str] = {
     "E1806": "A C header could not be imported; the reason is named.",
     "E1901": "A plugin the project asked for could not be loaded, or two plugins claim one module.",
     "E1902": "A plugin's compiler pass left the IR invalid; the pass is named.",
+    "E1903": (
+        "A backend could not be used: unknown, registered twice, written against another "
+        "interface version, or not loadable; the reason is named."
+    ),
+    "E1904": "A backend's compiler pass left the IR invalid; the pass is named.",
     "W2001": "A module is shadowed by a same-named source with a different extension.",
     "W2002": "A `bool` value takes part in arithmetic, which is legal but usually unintended.",
     "W2003": "Unknown `Annotated` metadata was preserved but not interpreted.",

@@ -40,9 +40,9 @@ def stage_texts(bundle, stage: str) -> dict[str, str]:  # type: ignore[no-untype
         from .emit import _stablehlo_texts
 
         return _stablehlo_texts(bundle)
-    from ..backend.llvm.ir_pipeline import ir_modules
     from ..ir import encode, print_function
     from ..ir.dialects.gpu import kind_of
+    from .ir_pipeline import canonical_ir_modules as ir_modules
 
     modules = ir_modules(bundle, launches=True, until=_STOPS.get(stage))
     texts: dict[str, str] = {}

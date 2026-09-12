@@ -337,6 +337,8 @@ def build(options: argparse.Namespace, reporter: Reporter) -> int:
         return build_ir_file(target, options, reporter)
     backend = options.backend
     project = open_project(target, config_overrides=_overrides(options))
+    if backend not in ("llvm", "python"):
+        return _build_with_backend(backend, target, options, reporter, project)
     machine = None
     if backend == "llvm":
         _answer_removed_road(project, reporter)
@@ -457,6 +459,80 @@ def build(options: argparse.Namespace, reporter: Reporter) -> int:
         reporter.note(f"package:  {artifacts.package}")
     for note in artifacts.notes:
         reporter.emit(Diagnostic("W2004", Severity.WARNING, note))
+    return 0
+
+
+def _build_with_backend(  # type: ignore[no-untyped-def]
+    name: str, target: Path, options: argparse.Namespace, reporter: Reporter, project
+) -> int:
+    """`ppy build TARGET --backend NAME` for a backend the registry knows.
+
+    The backend is loaded with its `[tool.ppy.backends.NAME]` table; its
+    toolchain must be here; every module goes through the shared passes and
+    the backend's own, then its validation; then `build` writes into `-o`
+    (or `<cache>/backends/NAME`) and says what it wrote. The diagnostics are
+    `ppy emit`'s: `E1903`, `E1801`, `E1904`, `E1802`.
+    """
+    from ..backend import (
+        BackendError,
+        BackendLoadError,
+        BackendUnavailable,
+        BackendValidationError,
+        load_backend,
+    )
+    from ..ir import PassVerificationError
+    from .ir_pipeline import canonical_ir_modules, prepare_for_backend
+    from .pipeline import backend_context
+
+    try:
+        backend = load_backend(name, project.config.backend(name))
+    except BackendLoadError as error:
+        reporter.emit(Diagnostic("E1903", Severity.ERROR, str(error)))
+        return 2
+    status = backend.toolchain_status()
+    if not status.available:
+        reporter.emit(
+            Diagnostic(
+                "E1801", Severity.ERROR, f"backend {name!r} is unavailable here: {status.detail}"
+            )
+        )
+        return 2
+    bundle = analyze_paths(project, collect_sources(target), backend="llvm")
+    errors = reporter.report(bundle.diagnostics)
+    if errors:
+        reporter.summary(errors, 0)
+        return 1
+    entry = target.resolve() if target.is_file() else None
+    output: Path = options.output or (project.config.cache_path / "backends" / name)
+    level = _overrides(options).get("opt_level")
+    try:
+        modules = canonical_ir_modules(bundle, launches=True, backend=backend)
+        if not modules:
+            reporter.emit(
+                Diagnostic("E1002", Severity.ERROR, "nothing to build: no module lowered")
+            )
+            return 1
+        context = backend_context(bundle, backend, opt_level=level, entry=entry)  # type: ignore[arg-type]
+        for module in modules.values():
+            prepare_for_backend(module, backend, context)
+        output.mkdir(parents=True, exist_ok=True)
+        result = backend.build(dict(sorted(modules.items())), output, context)
+    except PassVerificationError as error:
+        reporter.emit(Diagnostic("E1904", Severity.ERROR, f"backend {name!r}: {error}"))
+        return 2
+    except BackendUnavailable as error:
+        reporter.emit(Diagnostic("E1801", Severity.ERROR, str(error)))
+        return 2
+    except (BackendValidationError, BackendError) as error:
+        reporter.emit(Diagnostic("E1802", Severity.ERROR, str(error)))
+        return 2
+    reporter.note(f"backend:  {name}")
+    reporter.note(f"output:   {output}")
+    reporter.note(f"outputs:  {len(result.outputs)}")
+    for path in result.outputs:
+        reporter.note(f"  {path}")
+    for note in (*context.notes, *result.notes):
+        reporter.note(note)
     return 0
 
 
@@ -704,6 +780,28 @@ def doctor(options: argparse.Namespace, reporter: Reporter) -> int:
     print("plugins:")
     for plugin in project.plugins:
         print(f"  {plugin.name:<10} {plugin.fingerprint()}")
+
+    from ..backend import BackendLoadError, available_backends, load_backend
+
+    catalog = available_backends()
+    print("backends:")
+    for name in catalog.names():
+        info = catalog.backends[name]
+        try:
+            backend = load_backend(name, project.config.backend(name))
+        except BackendLoadError as error:
+            print(f"  {name:<10} unusable: {error}")
+            continue
+        state = backend.toolchain_status()
+        line = f"  {name:<10} {'available' if state.available else 'unavailable'}"
+        if state.detail:
+            line += f", {state.detail}"
+        print(line + ("" if info.builtin else f" [{info.origin}]"))
+        formats = ", ".join(spec.name for spec in backend.emit_formats())
+        extra = f"fingerprint {backend.fingerprint()[:16]}"
+        print(f"  {'':<10} {'emits ' + formats + '; ' if formats else ''}{extra}")
+    for problem in catalog.problems:
+        print(f"  !          {problem}")
 
     from ..plugins.torch_build import toolchain_ready
 
