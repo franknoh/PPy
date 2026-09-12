@@ -38,7 +38,10 @@ def test_the_examples_index_spells_the_compared_count_the_tree_has():
 #: Markdown emphasis and code spans, which a count may be dressed in: `**42** example folders`.
 _DECORATION = re.compile(r"[*_`]+")
 #: A count of folders or programs written as digits: the markers' business, not prose's.
-_SPELLED = re.compile(r"\b\d[\d,]* (example |comparison |compared )?(folders|programs)\b")
+_SPELLED = re.compile(
+    r"\b\d[\d,]* (?:(?:example |comparison |compared )?(?:folders|programs)"
+    r"|test functions|diagnostic codes)\b"
+)
 
 
 def test_no_page_spells_a_count_the_markers_carry():
@@ -57,6 +60,9 @@ def test_the_guard_sees_through_markdown_emphasis():
         "_52_ programs",
         "`45` folders",
         "42 example folders",
+        "**1,110** test functions",
+        "1,058 test functions",
+        "76 diagnostic codes",
     ):
         assert _SPELLED.search(_DECORATION.sub("", dressed)), dressed
     assert not _SPELLED.search("@@EXAMPLE_FOLDERS@@ example folders")
@@ -67,3 +73,14 @@ def test_the_markers_fill_inside_emphasis():
         "**@@EXAMPLE_FOLDERS@@** folders, `@@EXAMPLE_PROGRAMS@@` programs"
     )
     assert filled == f"**{counts._folders()}** folders, `{counts._programs()}` programs"
+
+
+def test_the_test_and_code_counts_are_the_tree_s():
+    from ppy_compiler.diagnostics import CODES  # pylint: disable=import-outside-toplevel
+
+    assert counts._diagnostic_codes() == len(CODES) > 0
+    functions = counts._test_functions()
+    here = (ROOT / "tests" / "test_docs_counts.py").read_text(encoding="utf-8")
+    assert functions >= here.count("\ndef test_") > 0
+    filled = counts.on_page_markdown("**@@TEST_FUNCTIONS@@** tests, @@DIAGNOSTIC_CODES@@ codes")
+    assert filled == f"**{functions}** tests, {len(CODES)} codes"

@@ -223,5 +223,6 @@ def run(awaitable: Awaitable[Any]) -> Any:
 
 def compiled(function: Callable[..., Any]) -> bool:
     """Whether calling `function` starts a native coroutine here."""
-    signature = getattr(function, "__ppy_native__", None)
+    runtime = sys.modules.get("ppy_runtime.binding")
+    signature = runtime.signature_of(function) if runtime is not None else None
     return bool(getattr(signature, "future", ""))

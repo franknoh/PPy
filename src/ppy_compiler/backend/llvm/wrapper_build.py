@@ -49,7 +49,9 @@ class BuiltWrappers:
             getattr(self.module, f"bind_{index}")(address, types, fallback)
         except Exception:  # noqa: BLE001 - a refusal keeps the slower path
             return None
-        return getattr(self.module, f"call_{index}", None)
+        # A wrapper module built before the entry points carried their names
+        # still answers to the index.
+        return getattr(self.module, qualname, None) or getattr(self.module, f"call_{index}", None)
 
     def registrar(self, qualname: str):  # type: ignore[no-untyped-def]
         """A callable that hands one specialization to the generated wrapper."""

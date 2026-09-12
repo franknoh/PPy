@@ -313,6 +313,19 @@ Work toward the next release, on `dev`; alphas of it are tagged `v0.3.0aN`.
   digits: the "by the numbers" row uses the markers, and the guard test
   sees through Markdown emphasis. `examples/45_multi_gpu_jax` times its
   steps without a host synchronization between them.
+- `ppy.native.compiled(f)` says whether calling `f` runs its native form
+  here. Under `ppy run` the object in a module's namespace may be the
+  generated C entry point itself, which carries no attribute; the runtime
+  now knows those by identity, `aio.compiled` answers through the same
+  probe, the training examples print `# native prep: True` under `ppy run`
+  as they should, and the entry point bears the function's qualified name
+  rather than `call_0`.
+- The landing page's test and diagnostic-code counts come from the tree
+  through markers (`@@TEST_FUNCTIONS@@`, `@@DIAGNOSTIC_CODES@@`), and the
+  guard refuses those spelled as digits. The GPU guide says what a ROCm
+  machine gets: no launch, `compiled` false, `ppy emit hip` for `hipcc`.
+- The ROCm harness installs every group when the image's JAX allows it
+  and every group but `jax` otherwise, and says which.
 
 ## 0.2.1 — unreleased
 

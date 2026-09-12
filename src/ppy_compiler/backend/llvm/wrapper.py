@@ -188,8 +188,8 @@ class WrapperModule:
     def bind_name(self, index: int) -> str:
         return f"bind_{index}"
 
-    def call_name(self, index: int) -> str:
-        return f"call_{index}"
+    def call_name(self, qualname: str) -> str:
+        return qualname
 
 
 def generate(name: str, signatures: dict[str, NativeSignature]) -> WrapperModule:
@@ -203,8 +203,11 @@ def generate(name: str, signatures: dict[str, NativeSignature]) -> WrapperModule
         parts.append(_function(index, signature))
         methods.append(f'    {{"bind_{index}", ppy_bind_{index}, METH_VARARGS, NULL}},')
         methods.append(f'    {{"specialize_{index}", ppy_specialize_{index}, METH_VARARGS, NULL}},')
+        # The entry point stands in the module's namespace in the function's
+        # place, so it bears the function's qualified name (`mod.f`,
+        # `mod.Class.method`) rather than an index.
         methods.append(
-            f'    {{"call_{index}", (PyCFunction)(void *)ppy_call_{index}, METH_FASTCALL, NULL}},'
+            f'    {{"{qualname}", (PyCFunction)(void *)ppy_call_{index}, METH_FASTCALL, NULL}},'
         )
 
     parts.append(_FOOTER.format(methods="\n".join(methods), name=name))
