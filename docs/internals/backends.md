@@ -55,17 +55,34 @@ A backend is a class extending `ppy_compiler.backend.Backend`, with a
 |---|---|
 | `fingerprint()` | what identifies its code generation for the cache: its version, its SDK's, anything whose change makes an old artifact wrong. |
 | `emit_formats()` | the `EmitFormat`s `ppy emit` may ask it for: a name, a file suffix, whether the output is bytes. |
-| `register_passes(manager)` | its own passes, hung at the `backend` stage of the shared `PassManager`. |
+| `register_passes(passes)` | its own passes, through a `BackendPassRegistrar`: `passes.add(MyPass)`, which hangs them at the `backend` stage and can reach no other. |
 | `validate(module, context)` | refuse IR it cannot take, with `BackendValidationError`: the backend, what, the capability it lacks, the location. |
-| `emit(module, format, context)` | one module as text, or bytes for a binary format. |
+| `emit(module, format, context)` | one module as text, or bytes for a binary format; for a `module`-scoped format, which is the default. |
+| `emit_program(modules, format, context)` | every module at once, one artifact, for a format declared `scope="program"`. |
 | `build(modules, output, context)` | every module into a directory; `BuildResult` says what was written. |
 | `toolchain_status()` | whether it can work here, and what `ppy doctor` should print. |
 
 `BACKEND_API_VERSION` numbers the interface, independently of the
-compiler's version. A backend declares the version it was written against
-(`api_version`, inherited as the current one); one declaring another is
-refused at load time with both numbers in the message, never loaded and
-hoped about.
+compiler's version, and an external backend declares the version it
+implements **as a literal of its own**:
+
+```python
+class MyBackend(Backend):
+    api_version = 1
+```
+
+Not `api_version = BACKEND_API_VERSION`: a package that spells the constant
+is rewritten by every compiler it is imported into, so a backend written
+against version 1 would call itself version 2 the moment a version-2
+compiler imported it, and the number would catch nothing. The base class
+declares no version at all, and a backend that declares none is refused
+with what to write instead -- an inherited version is not a declared one.
+A backend declaring a version this compiler does not speak is refused with
+both numbers. A backend package with a base class of its own may declare
+once there for all of them.
+
+The compiler's own backends ship with the interface and are upgraded with
+it, so they track the constant; nothing installed should.
 
 The `BackendContext` a backend receives with the IR carries the project
 root and configuration, the backend's own table from `pyproject.toml`
@@ -99,6 +116,18 @@ package never breaks the others: `ppy doctor` prints it as `unusable`
 with the reason and goes on. A backend registering a builtin's name is
 reported and ignored; the builtin is used.
 
+`ppy emit <format>` has to know which backend owns a format before it can
+load one. A distribution may say so in a second, optional entry-point
+group, `ppy.backend-formats`, whose entry names are formats and whose
+values are the backend's name; discovery reads it without importing
+anything, and the one backend it names is then imported and asked. A
+format no distribution declares is still found, by loading the installed
+backends and asking each -- correct, but it imports every accelerator SDK
+on the machine to answer one question, so declaring the group is worth it.
+The group is a hint and never the authority: the backend it names is asked
+all the same, and a format it does not actually emit is an error. Two
+distributions declaring one format leaves neither owning it.
+
 The builtin backends -- `llvm`, `python`, `c`, `nvvm`, `stablehlo`, and
 `ir` for the canonical IR itself -- stand in the same registry, with their
 formats, fingerprints, and toolchain status behind the same interface.
@@ -116,9 +145,16 @@ For one module, in order:
 2. canonicalization, then `after-canonicalization`;
 3. `before-optimization`, the shared optimization, `after-optimization`;
 4. tensor and parallel lowering, then `before-backend`;
-5. the `backend` stage: the backend's `register_passes`;
+5. the `backend` stage: the passes the backend hung with `passes.add(...)`;
 6. the backend's `validate`;
 7. the backend's `emit` or `build`.
+
+A backend reaches the `backend` stage and no other. What it is handed is a
+`BackendPassRegistrar`, not the `PassManager`: the stages before `backend`
+are the shared pipeline's and the plugins', and a pass of one backend's
+running among them would be deciding for every other backend what the
+canonical IR is. A backend that asks for another stage is refused by name
+(`E1802`), rather than quietly shaping the IR everything else receives.
 
 The module is verified before the first pass and after the last, and when
 a plugin or a backend contributed a pass, after every pass, so the one
@@ -142,7 +178,37 @@ A backend's table is handed to that backend and to no other; a table for a
 backend that is not installed is not an error, so a `pyproject.toml` can
 carry settings for a backend a colleague has. `target` is the one key the
 driver reads itself, into `BackendContext.target` and the cache key; the
-rest means what the backend says it means.
+rest means what the backend says it means. `ppy build --target` is the
+LLVM road's triple and is refused for a backend of its own, which builds
+for what this `target` names.
+
+## Emit scope
+
+An `EmitFormat` says whether it is written per module or per program:
+
+```python
+EmitFormat("toy", ".toy")  # scope="module", the default
+EmitFormat("toy-image", ".img", binary=True, scope="program")
+```
+
+A **module-scoped** format is asked for once per module, through `emit`,
+and one artifact comes back for each. One module goes to standard output
+or to `-o FILE`; a target that resolves to more than one needs `-o DIR`,
+and one file per module is written into it, named for the module with the
+format's suffix. Two artifacts are never written end to end into one file:
+two object files, two firmware images, or two device programs do not
+become one by concatenation, and the ambiguity is refused (`E1002`) with
+the names of the files `-o DIR` would write.
+
+A **program-scoped** format is asked for once, through `emit_program`,
+with every module at once, and answers the single artifact. That is the
+one for a linked image, a package, or an archive -- a whole-program
+artifact is the backend's to make from every module, not something the
+driver can assemble from per-module answers.
+
+Either way the answer's type must match the format: text for a text
+format, `bytes` for one declared `binary`, or the backend is refused
+(`E1802`).
 
 ## The cache key
 
@@ -151,12 +217,45 @@ The identity the driver computes for one module's artifact from a backend
 the module's key -- its source digest, the compiler version and
 fingerprint, its dependencies' public ABI, the directives, the
 optimization level, the project options, and the plugin fingerprints --
-with the backend's name, the backend's `fingerprint()`, the digest of its
-configuration table, its `target`, and the IR schema version. A new SDK
-under the backend, a changed setting, another target: each is a different
-key, and an old artifact is never reused for it. The builtin LLVM road's
+with the backend's name, the distribution it came from and that
+distribution's version, the interface version it declares, the backend's
+`fingerprint()`, the digest of its configuration table, its `target`, and
+the IR schema version. A new SDK under the backend, a changed setting,
+another target: each is a different key, and an old artifact is never
+reused for it.
+
+The distribution's version is in the key whether or not the backend's
+author put it in `fingerprint()`. Two releases of one package carry the
+same module and class names and the same interface version and can
+generate entirely different code, so `ppy-toy 0.1` and `ppy-toy 0.2`
+address different artifacts by construction; `fingerprint()` is for what
+the package version does not cover -- the SDK under it, a firmware
+revision, the version of a code generator it calls. The builtin LLVM road's
 keys carry the same kind of thing -- the `llvmlite` under the objects is
 part of them -- so a cached object does not outlive the LLVM that made it.
+
+## Building
+
+`ppy build TARGET --backend NAME` loads the backend with its table, checks
+its toolchain, runs the shared passes and the backend's, validates, and
+calls `build` with every module and a directory to write into -- `-o`, or
+`<cache>/backends/NAME`. `BuildResult.outputs` is what the driver lists.
+
+`ppy build TARGET.ppyir --backend NAME` is the same below the boundary
+without the frontend above it: the file is canonical IR that has already
+been through the shared passes, so the backend's own passes run over it,
+then its validation, then its `build`. Its artifact identity is the
+module's encoded bytes with everything that identifies the compiler and
+the backend, since there is no source bundle behind it.
+
+The LLVM road's options are the LLVM road's: `--unsafe`, `--sanitize`,
+`--pgo`, `--prover`, `--host-cpu`, `--standalone`, `--python-extension`,
+`--library`, `--report-opt`, `--report-opt-json`, and `--target` are
+refused for another backend (`E1002`) rather than accepted and ignored,
+each saying what it does and, for `--target`, where to name a target that
+does reach the backend. `--warm` builds the artifact `ppy run` and
+`import ppy` take, which is the LLVM backend's, and is refused for any
+other backend. `-o` and `-O` reach every backend.
 
 ## A minimal backend
 
@@ -185,6 +284,7 @@ class CountOps(FunctionPass):
 
 class ToyBackend(Backend):
     name = "toy"
+    api_version = 1  # the version this package implements, as a literal
 
     def fingerprint(self):
         return f"toy:{self.options.get('sdk-version', '0')}"
@@ -192,8 +292,8 @@ class ToyBackend(Backend):
     def emit_formats(self):
         return (EmitFormat("toy", ".toy", description="each function, counted"),)
 
-    def register_passes(self, manager):
-        manager.register_stage_pass("backend", CountOps)
+    def register_passes(self, passes):
+        passes.add(CountOps)
 
     def validate(self, module, context):
         for function in module.functions.values():
@@ -240,6 +340,11 @@ dependencies = ["ppy-lang"]
 
 [project.entry-points."ppy.backends"]
 toy = "ppy_toy:create_backend"
+
+# Optional, and worth declaring: which formats this backend owns, so that
+# `ppy emit toy` imports this package and no other installed backend.
+[project.entry-points."ppy.backend-formats"]
+toy = "toy"
 ```
 
 Installed beside the compiler:
@@ -256,10 +361,10 @@ Everything the package imports is `ppy_compiler.backend` and
 
 ## What is not there
 
-A backend receives modules one at a time, each through the shared passes
-on its own; a whole-program view (`ppy emit linked-ir`'s) is the linker's,
-`ppy_compiler.ir.linker.link`, which a backend may call on the modules it
-is given. The `ppy run` road -- the JIT, the guarded bindings, the
+A module-scoped format receives modules one at a time, each through the
+shared passes on its own; a program-scoped format and `build` receive them
+together, and may link them with `ppy_compiler.ir.linker.link`, which is
+what `ppy emit linked-ir` uses. The `ppy run` road -- the JIT, the guarded bindings, the
 fallback to Python -- is the LLVM backend's and is not opened to an
 installed backend: a backend builds and emits; running what it built is
 its own runtime's business. The Python backend and the LLVM backend keep

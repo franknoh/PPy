@@ -11,6 +11,7 @@ from ..analysis.checker import ProjectAnalysis, analyze
 from ..analysis.contracts import ContractReport, verify
 from ..analysis.symbols import ProjectSymbols
 from ..cache import CacheKey, CacheStore
+from ..cache.keys import digest, environment_fingerprint
 from ..diagnostics import Diagnostic, DiagnosticBag, Severity
 from ..frontend.modules import ModuleGraph, build_graph
 from ..opt.manager import OptimizationResult, Optimizer
@@ -245,11 +246,19 @@ def backend_identity(  # type: ignore[no-untyped-def]
 ) -> CacheKey:
     """What identifies one module's artifact from an external backend: the
     module key (source, compiler, dependencies, plugins, options) with the
-    backend's name, its fingerprint, its configuration, its target, and
-    the IR schema the backend reads."""
+    backend's name, the distribution and version it came from, the interface
+    version, its fingerprint, its configuration, its target, and the IR
+    schema the backend reads.
+
+    The distribution's version is in the key whether or not the backend's
+    author thought to put it in `fingerprint()`: two releases of one package
+    can carry the same module and class names and generate different code,
+    and an artifact from the older one must not be served for the newer.
+    """
     from ..ir import IR_SCHEMA_VERSION
 
     settings = bundle.project.config.backend(backend.name)
+    distribution = backend.distribution or ("", "")
     return module_cache_key(
         bundle,
         module_name,
@@ -258,6 +267,8 @@ def backend_identity(  # type: ignore[no-untyped-def]
         extra=(
             f"ir-schema={IR_SCHEMA_VERSION}",
             f"backend={backend.fingerprint()}",
+            f"backend-api={backend.api_version}",
+            f"backend-dist={distribution[0]} {distribution[1]}",
             f"backend-config={settings.fingerprint()}",
             f"backend-target={settings.get('target', '')}",
         ),
@@ -286,6 +297,48 @@ def backend_context(  # type: ignore[no-untyped-def]
     for name in bundle.symbols.modules:
         context.identity[name] = backend_identity(bundle, name, backend, level).hex()
     return context
+
+
+def ir_file_backend_context(  # type: ignore[no-untyped-def]
+    project: Project, backend, module, *, opt_level: int, entry: Path | None = None
+):
+    """A `BackendContext` for IR read from a `.ppyir` file.
+
+    There is no analysis bundle behind it -- the file is the whole input --
+    so the artifact's identity is the module's own encoded bytes with
+    everything that identifies the compiler and the backend, which is what
+    the bundle's key carries for a source build.
+    """
+    from ..backend.base import BackendContext
+    from ..ir import IR_SCHEMA_VERSION, encode
+
+    config = project.config
+    settings = config.backend(backend.name)
+    distribution = backend.distribution or ("", "")
+    identity = digest(
+        f"{COMPILER_VERSION}+{compiler_fingerprint()}",
+        IR_SCHEMA_VERSION,
+        encode(module),
+        backend.name,
+        backend.api_version,
+        f"{distribution[0]} {distribution[1]}",
+        backend.fingerprint(),
+        settings.fingerprint(),
+        settings.get("target", ""),
+        opt_level,
+        environment_fingerprint(),
+    )
+    return BackendContext(
+        root=project.root,
+        config=config,
+        backend_config=settings,
+        opt_level=opt_level,
+        target=str(settings.get("target", "")),
+        registry=project.plugins.dialect_registry(),
+        plugin_fingerprints=project.plugins.fingerprints(),
+        identity={module.name: identity},
+        entry=entry,
+    )
 
 
 def _prover_descriptor(config) -> str:  # type: ignore[no-untyped-def]

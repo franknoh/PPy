@@ -69,7 +69,10 @@ Three different absences of a type, held apart on purpose:
   or `Contiguous` refinement against the value's own metadata -- raising
   `TypeError` where the value falls short, and hands back a value typed as
   `T`. A `T` PPy cannot validate soundly at runtime -- a callable, an
-  iterator, a protocol, or a contract between caller and callee such as
+  iterator, a protocol (`@runtime_checkable` or not: `isinstance` against one
+  answers whether the attributes are there and nothing of what they take or
+  answer, so a class whose `f(self)` returns a string satisfies a protocol
+  declaring `f(self, x: int) -> int`), or a contract between caller and callee such as
   `Owned[T]`, `Borrowed[T]`, `Mut[T]`, or `NoAlias` that no single value can
   bear witness to -- is rejected, never checked in part. `ppy.assume[T](value)`
   performs no runtime validation: it is an explicit unchecked assertion the
