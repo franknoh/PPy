@@ -4,6 +4,29 @@
 
 Work toward the next release, on `dev`; alphas of it are tagged `v0.3.0aN`.
 
+- A backend can be a package of its own. `ppy_compiler.backend` is the
+  interface (`Backend`, `BackendContext`, `EmitFormat`, `BuildResult`,
+  `ToolchainStatus`, `BackendValidationError`; `BACKEND_API_VERSION` 1, a
+  version of the interface, not of the compiler): a backend consumes the
+  canonical IR after the shared passes, hangs its own passes at the new
+  `backend` stage, refuses in `validate` what it cannot take, and emits
+  text or bytes or builds. A distribution registers one through the
+  `ppy.backends` entry-point group; discovery reads the entry points
+  without importing, and the package is imported when its backend is
+  asked for. `ppy emit <format>` takes any format an installed backend
+  registers under the rules the builtin kinds follow; `ppy build --backend
+  NAME` builds through it; `ppy doctor` lists every backend with its
+  toolchain, formats, and fingerprint; `[tool.ppy.backends.<name>]` is
+  the backend's own configuration. The artifact key carries the backend's
+  name, fingerprint, configuration, and target (the LLVM road's now
+  carries the `llvmlite` under it too). Refusals are `E1903` (a backend
+  that cannot be used: unknown, registered twice, another interface
+  version, a failing factory), `E1801` (toolchain missing), `E1802` (IR
+  refused, with what and where), and `E1904` (a backend pass that broke
+  the IR, named). The shared IR pipeline moved out of the LLVM package
+  into `driver/ir_pipeline.py` (`canonical_ir_modules`,
+  `optimize_shared_ir`); the builtin backends stand in the same registry
+  with their formats, fingerprints, and toolchain status.
 - `ppy.input[T]()` reads one line and means what the builtin `input()`
   means: `ppy.input[str]()` is the line with its newline removed, spaces
   kept, `""` for an empty line, `EOFError` at the end; `ppy.input[int]()`

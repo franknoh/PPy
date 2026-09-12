@@ -110,6 +110,24 @@ class PluginConfig:
     options: dict[str, Any] = field(default_factory=dict)
 
 
+@dataclass(frozen=True, slots=True)
+class BackendConfig:
+    """The `[tool.ppy.backends.<name>]` table, as the backend receives it."""
+
+    name: str
+    options: Mapping[str, object] = field(default_factory=dict)
+
+    def get(self, key: str, default: object = None) -> object:
+        return self.options.get(key, default)
+
+    def fingerprint(self) -> str:
+        """A digest of the options: part of every artifact key, so a changed
+        setting is a different artifact."""
+        from ..cache.keys import digest
+
+        return digest(self.name, tuple(sorted((k, repr(v)) for k, v in self.options.items())))
+
+
 @dataclass(slots=True)
 class GenericsConfig:
     """How far monomorphization may go before it is refused."""
@@ -159,6 +177,10 @@ class Config:
     parallel: ParallelConfig = field(default_factory=ParallelConfig)
     inference: InferenceConfig = field(default_factory=InferenceConfig)
     plugins: dict[str, PluginConfig] = field(default_factory=dict)
+    #: `[tool.ppy.backends.<name>]`: each backend's own table, handed to that
+    #: backend and to no other; a table for a backend that is not installed
+    #: is not an error.
+    backends: dict[str, BackendConfig] = field(default_factory=dict)
     generics: GenericsConfig = field(default_factory=GenericsConfig)
     convert: ConvertConfig = field(default_factory=ConvertConfig)
     format: FormatConfig = field(default_factory=FormatConfig)
@@ -178,6 +200,9 @@ class Config:
 
     def plugin(self, name: str) -> PluginConfig:
         return self.plugins.get(name, PluginConfig())
+
+    def backend(self, name: str) -> BackendConfig:
+        return self.backends.get(name, BackendConfig(name))
 
     def with_overrides(self, **overrides: Any) -> Config:
         clean = {k: v for k, v in overrides.items() if v is not None}
@@ -286,4 +311,8 @@ def _apply(config: Config, table: Mapping[str, Any]) -> Config:
                     enabled=_as_bool(options.get("enabled"), True),
                     options={k: v for k, v in options.items() if k != "enabled"},
                 )
+    if isinstance(sub := table.get("backends"), Mapping):
+        for name, options in sub.items():
+            if isinstance(options, Mapping):
+                config.backends[str(name)] = BackendConfig(str(name), dict(options))
     return config

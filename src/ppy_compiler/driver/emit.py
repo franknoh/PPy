@@ -6,12 +6,16 @@ per module into the directory `-o` names. `ir` is the canonical IR after
 the shared passes; `llvm-ir` is what the LLVM backend makes of it; `c` and
 `cpp` are what the C backend makes of it, a translation unit each, or with
 `--header-only` a header that carries the functions inline; `header` is
-the C declarations of the module's exports.
+the C declarations of the module's exports. Any other kind is a format an
+installed backend registers (`ppy_compiler.backend`): the backend is
+loaded, handed the canonical IR after the shared passes and its own, and
+asked for the format, text or bytes, under the same rule.
 """
 
 from __future__ import annotations
 
 import argparse
+import sys
 from pathlib import Path
 
 from ..diagnostics import Diagnostic, Severity
@@ -76,6 +80,22 @@ def run_emit(options: argparse.Namespace, reporter: Reporter) -> int:
         )
         return 2
     formatting = bool(getattr(options, "format", False))
+    if options.kind not in KINDS:
+        for flag, given in (
+            ("--header-only", header_only),
+            ("--standalone", standalone),
+            ("--format", formatting),
+        ):
+            if given:
+                reporter.emit(
+                    Diagnostic(
+                        "E1002",
+                        Severity.ERROR,
+                        f"`{flag}` applies to the builtin kinds, not to a backend's format",
+                    )
+                )
+                return 2
+        return _emit_with_backend(options.kind, target, output, reporter)
     if formatting and options.kind not in _FORMATTED:
         reporter.emit(
             Diagnostic(
@@ -131,6 +151,113 @@ def run_emit(options: argparse.Namespace, reporter: Reporter) -> int:
     return 0
 
 
+def _emit_with_backend(kind: str, target: Path, output: Path | None, reporter: Reporter) -> int:
+    """`ppy emit <format>` for a format an installed backend registers.
+
+    The backend is found by its format and loaded; its toolchain must be
+    here; the modules go through the shared passes and the backend's own,
+    then its validation, then `emit`, one module at a time in name order.
+    A refusal is a diagnostic with the backend's reason: `E1903` when no
+    backend can be used for the format, `E1801` when its toolchain is
+    missing, `E1904` when one of its passes broke the IR, `E1802` when it
+    cannot take the IR or the format.
+    """
+    from ..backend import (
+        BackendError,
+        BackendLoadError,
+        BackendUnavailable,
+        BackendValidationError,
+        emit_format_owner,
+    )
+    from ..ir import PassVerificationError
+    from .ir_pipeline import canonical_ir_modules, prepare_for_backend
+    from .pipeline import backend_context
+
+    project = open_project(target)
+    try:
+        owner = emit_format_owner(kind, project.config.backend)
+    except BackendLoadError as error:
+        reporter.emit(Diagnostic("E1903", Severity.ERROR, str(error)))
+        return 2
+    backend, spec = owner.backend, owner.format
+    status = backend.toolchain_status()
+    if not status.available:
+        reporter.emit(
+            Diagnostic(
+                "E1801",
+                Severity.ERROR,
+                f"backend {backend.name!r} is unavailable here: {status.detail}",
+            )
+        )
+        return 2
+    bundle = analyze_paths(project, collect_sources(target), backend="llvm")
+    errors = reporter.report(bundle.diagnostics)
+    if errors:
+        reporter.summary(errors, 0)
+        return 1
+    outputs: dict[str, str | bytes] = {}
+    try:
+        modules = canonical_ir_modules(bundle, launches=True, backend=backend)
+        context = backend_context(bundle, backend)
+        for name, module in sorted(modules.items()):
+            prepare_for_backend(module, backend, context)
+            outputs[name] = backend.emit(module, spec.name, context)
+    except PassVerificationError as error:
+        reporter.emit(Diagnostic("E1904", Severity.ERROR, f"backend {backend.name!r}: {error}"))
+        return 2
+    except BackendUnavailable as error:
+        reporter.emit(Diagnostic("E1801", Severity.ERROR, str(error)))
+        return 2
+    except (BackendValidationError, BackendError) as error:
+        reporter.emit(Diagnostic("E1802", Severity.ERROR, str(error)))
+        return 2
+    for note in context.notes:
+        reporter.note(note)
+    if not outputs:
+        reporter.emit(Diagnostic("E1002", Severity.ERROR, "nothing to emit: no module lowered"))
+        return 1
+    for text in outputs.values():
+        if isinstance(text, bytes) != spec.binary:
+            reporter.emit(
+                Diagnostic(
+                    "E1802",
+                    Severity.ERROR,
+                    f"backend {backend.name!r} answered {type(text).__name__} for "
+                    f"{spec.name!r}, a {'binary' if spec.binary else 'text'} format",
+                )
+            )
+            return 2
+    if target.is_file():
+        if spec.binary:
+            data = b"".join(outputs.values())  # type: ignore[arg-type]
+            if output is None:
+                sys.stdout.buffer.write(data)
+                sys.stdout.flush()
+            else:
+                output.parent.mkdir(parents=True, exist_ok=True)
+                output.write_bytes(data)
+                reporter.note(f"wrote {output}")
+            return 0
+        joined = "\n".join(outputs.values())  # type: ignore[arg-type]
+        if output is None:
+            print(joined, end="" if joined.endswith("\n") else "\n")
+        else:
+            output.parent.mkdir(parents=True, exist_ok=True)
+            output.write_text(joined, encoding="utf-8")
+            reporter.note(f"wrote {output}")
+        return 0
+    assert output is not None
+    output.mkdir(parents=True, exist_ok=True)
+    for name, text in outputs.items():
+        path = output / f"{name}{spec.suffix}"
+        if isinstance(text, bytes):
+            path.write_bytes(text)
+        else:
+            path.write_text(text, encoding="utf-8")
+        reporter.note(f"wrote {path}")
+    return 0
+
+
 def _standalone_text(kind: str, bundle, reporter: Reporter, entry: Path, header_only: bool):  # type: ignore[no-untyped-def]
     """The whole program from `main` as one unit, or the exit status."""
     from ..backend.c import Language, emit_module
@@ -162,8 +289,8 @@ def _refusal_code(error: Exception) -> str:
 
 def _texts(kind: str, bundle, header_only: bool) -> dict[str, str]:  # type: ignore[no-untyped-def]
     from ..backend.llvm import emit_ir
-    from ..backend.llvm.ir_pipeline import ir_modules
     from ..ir import encode
+    from .ir_pipeline import canonical_ir_modules as ir_modules
 
     if kind == "ir":
         return {name: encode(module) for name, module in ir_modules(bundle, launches=True).items()}
@@ -211,8 +338,8 @@ def _texts(kind: str, bundle, header_only: bool) -> dict[str, str]:  # type: ign
 def _device_texts(bundle, kind: str) -> dict[str, str]:  # type: ignore[no-untyped-def]
     """Each module's kernels and device functions as NVVM IR, or as PTX; none where it has none."""
     from ..backend.c import EmitError
-    from ..backend.llvm.ir_pipeline import ir_modules
     from ..backend.nvvm import NvvmError, emit_module, ptx_from_ir
+    from .ir_pipeline import canonical_ir_modules as ir_modules
 
     texts: dict[str, str] = {}
     for name, module in ir_modules(bundle).items():
@@ -231,8 +358,8 @@ def _stablehlo_texts(bundle) -> dict[str, str]:  # type: ignore[no-untyped-def]
     A function XLA cannot take is left out and named in the reporter's notes;
     a module with nothing XLA takes produces no text.
     """
-    from ..backend.llvm.ir_pipeline import ir_modules
     from ..backend.stablehlo import emit_module, prepare, supports
+    from .ir_pipeline import canonical_ir_modules as ir_modules
 
     texts: dict[str, str] = {}
     for name, module in ir_modules(bundle).items():
@@ -261,7 +388,6 @@ def build_ir_file(path: Path, options: argparse.Namespace, reporter: Reporter) -
     """`ppy build foo.ppyir`: objects, a library, and a manifest from IR alone."""
     from ..backend.llvm import LlvmUnavailable
     from ..backend.llvm.from_ir import emit_module
-    from ..backend.llvm.ir_pipeline import optimize
     from ..backend.llvm.jit import JitEngine, available
     from ..backend.llvm.link import (
         ToolchainError,
@@ -271,6 +397,7 @@ def build_ir_file(path: Path, options: argparse.Namespace, reporter: Reporter) -
     )
     from ..ir import CodecError, read
     from ..lowering.abi import signature_from_ir
+    from .ir_pipeline import optimize_shared_ir as optimize
 
     try:
         module = read(path)

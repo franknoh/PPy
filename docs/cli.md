@@ -165,14 +165,16 @@ and which stayed boxed, with the reason.
 ```bash
 ppy build TARGET [--unsafe] [--host-cpu] [--standalone]
                  [--target TRIPLE] [--python-extension] [--library]
-                 [--backend {llvm,python}] [-o DIR]
+                 [--backend NAME] [-o DIR]
                  [--sanitize KINDS] [--pgo FILE]
                  [--report-opt] [--report-opt-json FILE]
 ppy build --warm TARGET
 ppy build foo.ppyir                  # from the IR alone; see `ppy emit`
 ```
 
-`--backend llvm` (default) writes objects, `libppy_<project>.so`,
+`--backend` is `llvm` (the default), `python`, or the name of an installed
+backend ([Backends](internals/backends.md)); `ppy doctor` lists them.
+`--backend llvm` writes objects, `libppy_<project>.so`,
 `ppy-bindings.json`, a launcher, and -- when a function is
 `@ppy.native.export`ed -- a C header declaring the public symbols. A build
 keeps Python's integers bit-for-bit, exactly as `ppy run` does: overflow is
@@ -206,6 +208,23 @@ begins, against about 0.7 s for a cold `ppy run` that compiles first (a warm
 `ppy run` takes this same launcher path, from the cache).
 `examples/bench_startup.py` measures the categories separately, and
 `--standalone` below removes that 35 ms too.
+
+### `--backend NAME`
+
+```bash
+ppy build foo.ppy --backend toy -o out/
+```
+
+An installed backend is loaded with its `[tool.ppy.backends.NAME]` table
+and asked for its toolchain; the modules go through the shared passes and
+the backend's own passes and validation; then its `build` writes into
+`-o` (or `<cache>/backends/NAME`) and what it wrote is listed, with any
+notes the backend adds. `-O` reaches it; the LLVM flags (`--target`,
+`--python-extension`, `--library`, `--standalone`, `--host-cpu`) are the
+LLVM road's. The diagnostics are `ppy emit`'s: `E1903` for a backend that
+cannot be used, `E1801` for a missing toolchain, `E1802` for IR it
+refuses, `E1904` for a pass of its that broke the IR. A builtin backend
+that only emits (`--backend c`) is refused with `E1802`.
 
 ### `--target`, `--python-extension`, `--library`
 
@@ -318,6 +337,7 @@ ppy emit c --standalone prog.ppy     # the whole program from main(), shims and 
 ppy emit c --format foo.ppy          # ... laid out by clang-format (the project's .clang-format, or LLVM style)
 ppy emit header foo.ppy              # the C declarations of the exports
 ppy emit stablehlo foo.ppy           # the @ppy.xla.jit functions as StableHLO for XLA
+ppy emit toy foo.ppy                 # a format an installed backend registers; ppy doctor lists them
 ```
 
 One rule for every kind: a single file with no `-o` prints to standard
@@ -325,7 +345,18 @@ output, `-o FILE` writes that file, and a directory target writes one file
 per module into the directory `-o` names (and refuses to guess without
 it). `ir` is the canonical IR after the shared passes ([The IR](internals/ir.md));
 `llvm-ir` is the optimized LLVM IR. The output is deterministic for one
-input and configuration.
+input and configuration. Any other kind is a format an installed backend
+registers ([Backends](internals/backends.md)): the backend is loaded, its
+toolchain checked, the modules run through the shared passes and the
+backend's own, validated by it, and written under the same rule -- text
+or, for a format the backend declares binary, bytes; a directory target
+writes one file per module with the format's suffix. `--header-only`,
+`--standalone`, and `--format` belong to the builtin kinds. A format no
+backend emits, a format two backends claim, or a backend that cannot be
+loaded is `E1903` with the reason and the formats there are; a backend
+whose toolchain is missing is `E1801`; IR the backend refuses is `E1802`,
+with what it cannot take and where; a backend pass that breaks the IR is
+`E1904`.
 
 `c` and `cpp` are the C backend's reading of the same IR: a translation
 unit per module in the internal ABI the runtime binds (atoms in, result
@@ -589,8 +620,12 @@ ppy doctor [--verbose]
 ```
 
 Versions, project root, cache location, effective configuration, whether the
-LLVM backend and native toolchain are usable, and each plugin's fingerprint.
-Run it first when something compiles on one machine and not another.
+LLVM backend and native toolchain are usable, each plugin's fingerprint,
+and every backend -- builtin and installed -- with its toolchain status,
+the formats it emits, and its fingerprint; an installed backend that
+cannot be loaded is printed as `unusable` with the reason, and a name two
+distributions register is reported. Run it first when something compiles
+on one machine and not another.
 
 ## `ppy lsp`
 

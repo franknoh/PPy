@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import ast
 import contextlib
 import json
 import os
@@ -13,6 +12,8 @@ from pathlib import Path
 
 from ...cache import CacheKey
 from ...diagnostics import Diagnostic, Severity, Span
+from ...driver.ir_pipeline import definitions as _definitions
+from ...driver.ir_pipeline import value_class_layouts as _value_class_layouts
 from ...plugins.torch_region import find_regions
 from ...target import TargetInfo, configured_target
 from ..binder import LibraryBinder
@@ -79,54 +80,6 @@ class NativeModule:
 
 
 #: Members that make attribute reads observable, so the class stays boxed.
-_INTERCEPTORS = {"__getattr__", "__getattribute__", "__setattr__", "__init_subclass__"}
-
-
-def _definitions(tree: ast.Module):  # type: ignore[no-untyped-def]
-    """Every function the backend may lower, with its owning class if any."""
-    for node in tree.body:
-        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-            yield "", node
-        elif isinstance(node, ast.ClassDef):
-            for child in node.body:
-                if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                    yield node.name, child
-
-
-def _value_class_layouts(bundle) -> dict[str, tuple[tuple[str, str], ...]]:  # type: ignore[no-untyped-def]
-    """Classes whose instances can be flattened into scalar arguments.
-
-    A value class here is one with a fixed set of scalar fields and no base
-    beyond `object`: nothing about it needs a Python object to represent
-    (spec 13.2, 25.4).
-    """
-    from ...analysis import types as T
-
-    scalars = {"int", "float", "bool"}
-    layouts: dict[str, tuple[tuple[str, str], ...]] = {}
-    for qualname, info in bundle.symbols.classes.items():
-        if info.is_protocol or info.is_enum or info.is_pydantic:
-            continue
-        if tuple(entry for entry in info.mro if entry != "object") != (qualname,):
-            continue
-        # Reading a field must be a plain attribute read: anything that can
-        # intercept it could observe the flattening.
-        if _INTERCEPTORS & set(info.methods):
-            continue
-        if set(info.fields) & set(info.methods):
-            continue
-        fields: list[tuple[str, str]] = []
-        for name, declared in info.fields.items():
-            if name in info.class_vars:
-                continue
-            base = T.strip_literal(declared)
-            if not isinstance(base, T.Instance) or base.name not in scalars:
-                fields = []
-                break
-            fields.append((name, base.name))
-        if fields:
-            layouts[qualname] = tuple(fields)
-    return layouts
 
 
 def prover_for(config):  # type: ignore[no-untyped-def]

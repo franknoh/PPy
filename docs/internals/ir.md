@@ -526,7 +526,11 @@ loop of them with no temporaries), `lower-tensor`, `lower-regex`, and `lower-par
 `transforms.default_pipeline(level)` orders them and marks the
 stages -- `after-ir-generation`, `after-canonicalization`,
 `before-optimization`, `after-optimization`, `before-backend` -- where a
-plugin's `register_stage_pass` puts a pass of its own.
+plugin's `register_stage_pass` puts a pass of its own, and last the
+`backend` stage, where a backend's `register_passes` puts its own before
+its validation. `driver/ir_pipeline.py` runs that pipeline over every
+module of a project (`canonical_ir_modules`) and is the one road to every
+backend, builtin or installed ([Backends](backends.md)).
 
 ## From Python to the IR
 

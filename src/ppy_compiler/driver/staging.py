@@ -360,7 +360,7 @@ def _stage_cuda(bundle, result: StagingResult) -> None:  # type: ignore[no-untyp
             for info in infos:
                 decline(module_name, info, "this LLVM has no NVPTX backend")
         return
-    from ..backend.llvm.ir_pipeline import ir_modules
+    from .ir_pipeline import canonical_ir_modules as ir_modules
 
     modules = ir_modules(bundle)
     for module_name, infos in pending.items():

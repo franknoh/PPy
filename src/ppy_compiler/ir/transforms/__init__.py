@@ -120,4 +120,5 @@ def default_pipeline(  # type: ignore[no-untyped-def]
         manager.add(SimplifyCFG())
         manager.add(DeadCodeElimination())
     manager.add_stage("before-backend")
+    manager.add_stage("backend")
     return manager
