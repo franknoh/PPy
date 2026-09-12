@@ -3486,6 +3486,11 @@ class _Checker:
         if subscript is None:
             if operation in {"extern", "export"}:
                 return None
+            if operation == "compiled":
+                if len(args) != 1:
+                    self._error("E1305", "`ppy.native.compiled(f)` takes the function", node)
+                self._effects = self._effects.add(Effect.READ_GLOBAL)
+                return Binding(T.BOOL)
             self._error("E1630", f"`ppy.native.{operation}` is not a function", node)
             return Binding(T.UNKNOWN)
         resolved = self.annotations.resolve(subscript)

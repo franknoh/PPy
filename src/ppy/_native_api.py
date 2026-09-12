@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import array as _array
 import ctypes
+import sys
 from collections.abc import Callable
 from typing import Annotated, Any, TypeVar
 
@@ -325,6 +326,13 @@ class _Native:
             )
 
         return bind
+
+    @staticmethod
+    def compiled(function: Callable[..., Any]) -> bool:
+        """Whether calling `function` runs its native form here: under `ppy run`
+        or a built artifact, once the runtime bound it; under plain CPython, never."""
+        runtime = sys.modules.get("ppy_runtime.binding")
+        return runtime is not None and runtime.signature_of(function) is not None
 
     def __repr__(self) -> str:
         return "ppy.native"

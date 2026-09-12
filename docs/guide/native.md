@@ -27,6 +27,7 @@ def scratch() -> int:
 | `native.sizeof[T]()`, `native.alignof[T]()` | constants the checker knows. |
 | `native.stack_alloc[T](n)` | `n` zeroed elements the function owns; native code needs a constant `n`, and the memory cannot be returned or stored -- the IR's verifier holds that. |
 | `@native.extern("sin", library="m", pure=True)` | a stub is a C function. Under CPython the call goes through ctypes; in native code straight to the symbol. The directive says what the C function does (`pure=True` or, by default, reads and writes of native memory), and the signature must be fully annotated (`E1633`). |
+| `native.compiled(f)` | whether calling `f` runs its native form here: `True` under `ppy run` or a built artifact once the runtime has bound it, `False` under plain CPython. It answers for the object standing in the namespace, which under `ppy run` may be the C entry point itself (named `module.f`). |
 | `@native.export(name="ppy_dot")` | a public C symbol in the built library, declared in the header `ppy build` writes beside it. A C caller has no Python to fall back to, so a failed guard traps. |
 
 Under plain CPython every one of these has a reference implementation over

@@ -77,9 +77,11 @@ PYEOF
     # reads `HIP_DEVICE_LIB_PATH`, so `hipcc` can build for the card.
     LIBS=$(find /opt/venv/lib /opt/rocm -type d -path '*amdgcn/bitcode' 2>/dev/null | head -1)
     if [ -n "$LIBS" ]; then export HIP_DEVICE_LIB_PATH="$LIBS"; log "HIP device library: $LIBS"; fi
-    # Every group but `jax`, whose flax wants a newer jax than the image's:
-    # flatbuffers from that group by name, flax not at all (nothing here needs it).
-    step sync bash -c "uv pip install -p $PY -c $RESULTS/constraints.txt -e '.' --group dev --group torch --group uvicorn --group scipy --group pandas --group pyarrow 'flatbuffers>=24.0' pytest"
+    # Every group, under the constraints; when that cannot resolve (the `jax`
+    # group's flax wants a newer jax than the image has), every group but
+    # `jax`, with flatbuffers from it by name and flax not at all: nothing in
+    # the ROCm scope needs it. The transcript says which one was installed.
+    step sync bash -c "uv pip install -p $PY -c $RESULTS/constraints.txt -e '.' --group all pytest && echo 'installed: every group' || (echo 'the jax group did not resolve against the image; installing without it' && uv pip install -p $PY -c $RESULTS/constraints.txt -e '.' --group dev --group torch --group uvicorn --group scipy --group pandas --group pyarrow 'flatbuffers>=24.0' pytest && echo 'installed: every group but jax')"
     step jax_plugin bash -c "AFTER=\$($PY $RESULTS/jax_stack.py); echo \"before: $BEFORE\"; echo \"after: \$AFTER\"; [ \"\$AFTER\" = \"$BEFORE\" ]"
     PPY=$($PY -c 'import shutil; print(shutil.which("ppy") or "")')
     [ -n "$PPY" ] || PPY="$PY -m ppy_compiler"
