@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.4.0 — unreleased
+
+Work toward the next release, on `dev`; alphas of it are tagged `v0.4.0aN`.
+
 ## 0.3.0 — 2026-09-13
 
 The release that makes the compiler an open one: a public backend interface
