@@ -38,12 +38,12 @@ rows.
 
 | path | wall |
 |---|---:|
-| plain CPython | 2037.0 ± 289.1 ms |
-| `ppy run` | 1446.1 ± 224.9 ms |
-| `ppy build --unsafe` | 1806.0 ± 252.5 ms |
-| `ppy build --standalone --unsafe` | **40.1 ± 2.2 ms** |
-| C (`gcc -O3`, `scanf`) | 66.0 ± 6.0 ms |
-| C (`clang -O3`, `scanf`) | 65.1 ± 4.8 ms |
+| plain CPython | 1696.3 ± 19.0 ms |
+| `ppy run` | 1379.4 ± 205.6 ms |
+| `ppy build --unsafe` | 1617.0 ± 38.0 ms |
+| `ppy build --standalone --unsafe` | **32.0 ± 0.8 ms** |
+| C (`gcc -O3`, `scanf`) | 54.4 ± 1.2 ms |
+| C (`clang -O3`, `scanf`) | 53.3 ± 1.0 ms |
 
 ## Run it
 
