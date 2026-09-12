@@ -109,10 +109,10 @@ def block_max():
 <!-- compare:start -->
 | | PPY `tile.launch` | Triton | Taichi |
 |---|---:|---:|---:|
-| saxpy, arrays on the device | **0.64 ± 0.03** | 0.68 ± 0.03 | 0.64 ± 0.07 |
-| block max, arrays on the device | 0.41 ± 0.03 | 0.78 ± 0.01 | **0.25 ± 0.01** |
-| saxpy, arrays copied in and out per launch | **37.34 ± 0.26** | 46.32 ± 0.47 | 145.89 ± 8.52 |
-| block max, array copied in per launch | 13.41 ± 0.26 | **10.79 ± 0.12** | 26.64 ± 0.49 |
+| saxpy, arrays on the device | **0.72 ± 0.09** | 0.77 ± 0.10 | 0.89 ± 0.11 |
+| block max, arrays on the device | 0.41 ± 0.02 | 0.81 ± 0.02 | **0.31 ± 0.03** |
+| saxpy, arrays copied in and out per launch | **41.11 ± 0.67** | 51.73 ± 6.92 | 163.66 ± 7.49 |
+| block max, array copied in per launch | 14.87 ± 0.40 | **11.38 ± 0.36** | 29.90 ± 2.21 |
 <!-- compare:end -->
 
 On saxpy the three are the memory bandwidth of the device. On the block
