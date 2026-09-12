@@ -10,13 +10,13 @@
       
       
       
-        <link rel="canonical" href="https://ppy.franknoh.dev/dev/howto/39_xla/">
+        <link rel="canonical" href="https://ppy.franknoh.dev/dev/api/backends/">
       
       
-        <link rel="prev" href="../44_tile/">
+        <link rel="prev" href="../plugins/">
       
       
-        <link rel="next" href="../45_multi_gpu_jax/">
+        <link rel="next" href="../ir/">
       
       
         
@@ -27,7 +27,7 @@
     
     
       
-        <title>XLA - PPY</title>
+        <title>Backend API - PPY</title>
       
     
     
@@ -82,7 +82,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#xla" class="md-skip">
+        <a href="#backend-api" class="md-skip">
           Skip to content
         </a>
       
@@ -122,7 +122,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              XLA
+              Backend API
             
           </span>
         </div>
@@ -306,13 +306,11 @@
   
   
   
-    
-  
   
     
     
-      <li class="md-tabs__item md-tabs__item--active">
-        <a href="../" class="md-tabs__link">
+      <li class="md-tabs__item">
+        <a href="../../howto/" class="md-tabs__link">
           
   
   
@@ -349,11 +347,13 @@
   
   
   
+    
+  
   
     
     
-      <li class="md-tabs__item">
-        <a href="../../api/" class="md-tabs__link">
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="../" class="md-tabs__link">
           
   
   
@@ -1109,8 +1109,6 @@
       
   
   
-    
-  
   
   
     
@@ -1136,23 +1134,20 @@
     
     
       
-        
-        
-      
       
         
       
     
     
-    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" checked>
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
         
           
           <div class="md-nav__link md-nav__container">
-            <a href="../" class="md-nav__link ">
+            <a href="../../howto/" class="md-nav__link ">
               
   
   
@@ -1170,13 +1165,13 @@
             </a>
             
               
-              <label class="md-nav__link " for="__nav_5" id="__nav_5_label" tabindex="">
+              <label class="md-nav__link " for="__nav_5" id="__nav_5_label" tabindex="0">
                 <span class="md-nav__icon md-icon"></span>
               </label>
             
           </div>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="true">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_5">
             <span class="md-nav__icon md-icon"></span>
             
@@ -1196,7 +1191,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../comparisons/" class="md-nav__link">
+      <a href="../../howto/comparisons/" class="md-nav__link">
         
   
   
@@ -1258,20 +1253,17 @@
       
       
         
-          
-          
-        
       
     
     
-    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--nested">
       
         
         
         <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5_3" >
         
           
-          <label class="md-nav__link" for="__nav_5_3" id="__nav_5_3_label" tabindex="">
+          <label class="md-nav__link" for="__nav_5_3" id="__nav_5_3_label" tabindex="0">
             
   
   
@@ -1307,7 +1299,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../01_basics/" class="md-nav__link">
+      <a href="../../howto/01_basics/" class="md-nav__link">
         
   
   
@@ -1335,7 +1327,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../02_arbitrary_precision/" class="md-nav__link">
+      <a href="../../howto/02_arbitrary_precision/" class="md-nav__link">
         
   
   
@@ -1363,7 +1355,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../03_effects_and_contracts/" class="md-nav__link">
+      <a href="../../howto/03_effects_and_contracts/" class="md-nav__link">
         
   
   
@@ -1391,7 +1383,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../04_classes/" class="md-nav__link">
+      <a href="../../howto/04_classes/" class="md-nav__link">
         
   
   
@@ -1419,7 +1411,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../08_native_data/" class="md-nav__link">
+      <a href="../../howto/08_native_data/" class="md-nav__link">
         
   
   
@@ -1447,7 +1439,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../10_narrowing/" class="md-nav__link">
+      <a href="../../howto/10_narrowing/" class="md-nav__link">
         
   
   
@@ -1475,7 +1467,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../11_numerics/" class="md-nav__link">
+      <a href="../../howto/11_numerics/" class="md-nav__link">
         
   
   
@@ -1503,7 +1495,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../13_value_classes/" class="md-nav__link">
+      <a href="../../howto/13_value_classes/" class="md-nav__link">
         
   
   
@@ -1531,7 +1523,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../14_tuples/" class="md-nav__link">
+      <a href="../../howto/14_tuples/" class="md-nav__link">
         
   
   
@@ -1559,7 +1551,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../16_dynamic/" class="md-nav__link">
+      <a href="../../howto/16_dynamic/" class="md-nav__link">
         
   
   
@@ -1587,7 +1579,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../17_containers/" class="md-nav__link">
+      <a href="../../howto/17_containers/" class="md-nav__link">
         
   
   
@@ -1615,7 +1607,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../18_errors/" class="md-nav__link">
+      <a href="../../howto/18_errors/" class="md-nav__link">
         
   
   
@@ -1643,7 +1635,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../19_strings/" class="md-nav__link">
+      <a href="../../howto/19_strings/" class="md-nav__link">
         
   
   
@@ -1711,20 +1703,17 @@
       
       
         
-          
-          
-        
       
     
     
-    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--nested">
       
         
         
         <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5_4" >
         
           
-          <label class="md-nav__link" for="__nav_5_4" id="__nav_5_4_label" tabindex="">
+          <label class="md-nav__link" for="__nav_5_4" id="__nav_5_4_label" tabindex="0">
             
   
   
@@ -1760,7 +1749,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../12_buffers_and_jit/" class="md-nav__link">
+      <a href="../../howto/12_buffers_and_jit/" class="md-nav__link">
         
   
   
@@ -1788,7 +1777,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../15_algorithms/" class="md-nav__link">
+      <a href="../../howto/15_algorithms/" class="md-nav__link">
         
   
   
@@ -1816,7 +1805,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../28_threads/" class="md-nav__link">
+      <a href="../../howto/28_threads/" class="md-nav__link">
         
   
   
@@ -1844,7 +1833,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../32_native_memory/" class="md-nav__link">
+      <a href="../../howto/32_native_memory/" class="md-nav__link">
         
   
   
@@ -1872,7 +1861,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../33_simd_and_cpu/" class="md-nav__link">
+      <a href="../../howto/33_simd_and_cpu/" class="md-nav__link">
         
   
   
@@ -1900,7 +1889,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../34_atomics_and_threads/" class="md-nav__link">
+      <a href="../../howto/34_atomics_and_threads/" class="md-nav__link">
         
   
   
@@ -1928,7 +1917,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../35_parallel_range/" class="md-nav__link">
+      <a href="../../howto/35_parallel_range/" class="md-nav__link">
         
   
   
@@ -1956,7 +1945,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../36_autodiff/" class="md-nav__link">
+      <a href="../../howto/36_autodiff/" class="md-nav__link">
         
   
   
@@ -1984,7 +1973,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../37_aio/" class="md-nav__link">
+      <a href="../../howto/37_aio/" class="md-nav__link">
         
   
   
@@ -2012,7 +2001,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../40_generics/" class="md-nav__link">
+      <a href="../../howto/40_generics/" class="md-nav__link">
         
   
   
@@ -2040,7 +2029,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../42_toolbox/" class="md-nav__link">
+      <a href="../../howto/42_toolbox/" class="md-nav__link">
         
   
   
@@ -2068,7 +2057,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../43_regex/" class="md-nav__link">
+      <a href="../../howto/43_regex/" class="md-nav__link">
         
   
   
@@ -2101,10 +2090,8 @@
                 
   
   
-    
   
   
-  
     
     
       
@@ -2121,21 +2108,18 @@
     
       
       
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5_5" >
         
           
-          
-        
-      
-    
-    
-    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
-      
-        
-        
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5_5" checked>
-        
-          
-          <label class="md-nav__link" for="__nav_5_5" id="__nav_5_5_label" tabindex="">
+          <label class="md-nav__link" for="__nav_5_5" id="__nav_5_5_label" tabindex="0">
             
   
   
@@ -2153,7 +2137,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_5_5_label" aria-expanded="true">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_5_5_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_5_5">
             <span class="md-nav__icon md-icon"></span>
             
@@ -2171,7 +2155,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../38_cuda/" class="md-nav__link">
+      <a href="../../howto/38_cuda/" class="md-nav__link">
         
   
   
@@ -2199,7 +2183,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../44_tile/" class="md-nav__link">
+      <a href="../../howto/44_tile/" class="md-nav__link">
         
   
   
@@ -2224,37 +2208,10 @@
                 
   
   
-    
   
   
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
-      
-      
-        
-      
-      
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    XLA
-  
-
-    
-  </span>
-  
-  
-
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
-      <a href="./" class="md-nav__link md-nav__link--active">
+    <li class="md-nav__item">
+      <a href="../../howto/39_xla/" class="md-nav__link">
         
   
   
@@ -2270,81 +2227,6 @@
   
 
       </a>
-      
-        
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-    
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#what-xla-takes-today" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        What XLA takes today
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#devices-and-the-last-bits" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Devices and the last bits
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#run-it" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Run it
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#what-it-prints" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        What it prints
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#39_xladevice_mathppy" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        39_xla/device_math.ppy
-      
-    </span>
-  </a>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-      
     </li>
   
 
@@ -2357,7 +2239,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../45_multi_gpu_jax/" class="md-nav__link">
+      <a href="../../howto/45_multi_gpu_jax/" class="md-nav__link">
         
   
   
@@ -2423,20 +2305,17 @@
       
       
         
-          
-          
-        
       
     
     
-    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--nested">
       
         
         
         <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5_6" >
         
           
-          <label class="md-nav__link" for="__nav_5_6" id="__nav_5_6_label" tabindex="">
+          <label class="md-nav__link" for="__nav_5_6" id="__nav_5_6_label" tabindex="0">
             
   
   
@@ -2472,7 +2351,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../05_numpy/" class="md-nav__link">
+      <a href="../../howto/05_numpy/" class="md-nav__link">
         
   
   
@@ -2500,7 +2379,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../06_pydantic/" class="md-nav__link">
+      <a href="../../howto/06_pydantic/" class="md-nav__link">
         
   
   
@@ -2528,7 +2407,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../07_parallel/" class="md-nav__link">
+      <a href="../../howto/07_parallel/" class="md-nav__link">
         
   
   
@@ -2556,7 +2435,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../09_torch/" class="md-nav__link">
+      <a href="../../howto/09_torch/" class="md-nav__link">
         
   
   
@@ -2584,7 +2463,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../21_training_torch/" class="md-nav__link">
+      <a href="../../howto/21_training_torch/" class="md-nav__link">
         
   
   
@@ -2612,7 +2491,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../22_training_jax/" class="md-nav__link">
+      <a href="../../howto/22_training_jax/" class="md-nav__link">
         
   
   
@@ -2640,7 +2519,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../25_jax_export/" class="md-nav__link">
+      <a href="../../howto/25_jax_export/" class="md-nav__link">
         
   
   
@@ -2668,7 +2547,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../27_uvicorn/" class="md-nav__link">
+      <a href="../../howto/27_uvicorn/" class="md-nav__link">
         
   
   
@@ -2696,7 +2575,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../29_flax/" class="md-nav__link">
+      <a href="../../howto/29_flax/" class="md-nav__link">
         
   
   
@@ -2724,7 +2603,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../31_torchrun/" class="md-nav__link">
+      <a href="../../howto/31_torchrun/" class="md-nav__link">
         
   
   
@@ -2752,7 +2631,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../41_columnar/" class="md-nav__link">
+      <a href="../../howto/41_columnar/" class="md-nav__link">
         
   
   
@@ -2806,20 +2685,17 @@
       
       
         
-          
-          
-        
       
     
     
-    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--nested">
       
         
         
         <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5_7" >
         
           
-          <label class="md-nav__link" for="__nav_5_7" id="__nav_5_7_label" tabindex="">
+          <label class="md-nav__link" for="__nav_5_7" id="__nav_5_7_label" tabindex="0">
             
   
   
@@ -2855,7 +2731,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../20_inventory/" class="md-nav__link">
+      <a href="../../howto/20_inventory/" class="md-nav__link">
         
   
   
@@ -2883,7 +2759,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../23_inference/" class="md-nav__link">
+      <a href="../../howto/23_inference/" class="md-nav__link">
         
   
   
@@ -2911,7 +2787,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../24_interop/" class="md-nav__link">
+      <a href="../../howto/24_interop/" class="md-nav__link">
         
   
   
@@ -2939,7 +2815,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../26_project/" class="md-nav__link">
+      <a href="../../howto/26_project/" class="md-nav__link">
         
   
   
@@ -2967,7 +2843,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../30_migrate/" class="md-nav__link">
+      <a href="../../howto/30_migrate/" class="md-nav__link">
         
   
   
@@ -3034,6 +2910,8 @@
       
   
   
+    
+  
   
   
     
@@ -3057,20 +2935,23 @@
     
     
       
+        
+        
+      
       
         
       
     
     
-    <li class="md-nav__item md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" checked>
         
           
           <div class="md-nav__link md-nav__container">
-            <a href="../../api/" class="md-nav__link ">
+            <a href="../" class="md-nav__link ">
               
   
   
@@ -3088,13 +2969,13 @@
             </a>
             
               
-              <label class="md-nav__link " for="__nav_7" id="__nav_7_label" tabindex="0">
+              <label class="md-nav__link " for="__nav_7" id="__nav_7_label" tabindex="">
                 <span class="md-nav__icon md-icon"></span>
               </label>
             
           </div>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="true">
           <label class="md-nav__title" for="__nav_7">
             <span class="md-nav__icon md-icon"></span>
             
@@ -3114,7 +2995,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../api/ppy/" class="md-nav__link">
+      <a href="../ppy/" class="md-nav__link">
         
   
   
@@ -3142,7 +3023,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../api/runtime/" class="md-nav__link">
+      <a href="../runtime/" class="md-nav__link">
         
   
   
@@ -3170,7 +3051,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../api/plugins/" class="md-nav__link">
+      <a href="../plugins/" class="md-nav__link">
         
   
   
@@ -3195,10 +3076,37 @@
                 
   
   
+    
   
   
-    <li class="md-nav__item">
-      <a href="../../api/backends/" class="md-nav__link">
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Backend API
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
         
   
   
@@ -3214,6 +3122,358 @@
   
 
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#ppy_compiler.backend.base" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-module"></code>&nbsp;base
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label=" base">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#ppy_compiler.backend.base.BackendConfig" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;BackendConfig
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label=" BackendConfig">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#ppy_compiler.backend.base.BackendConfig.fingerprint" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;fingerprint
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ppy_compiler.backend.base.BackendError" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;BackendError
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ppy_compiler.backend.base.BackendUnavailable" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;BackendUnavailable
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ppy_compiler.backend.base.BackendValidationError" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;BackendValidationError
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ppy_compiler.backend.base.EmitFormat" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;EmitFormat
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ppy_compiler.backend.base.ToolchainStatus" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;ToolchainStatus
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ppy_compiler.backend.base.BuildResult" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;BuildResult
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ppy_compiler.backend.base.BackendContext" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;BackendContext
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ppy_compiler.backend.base.Backend" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;Backend
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label=" Backend">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#ppy_compiler.backend.base.Backend.fingerprint" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;fingerprint
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ppy_compiler.backend.base.Backend.emit_formats" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;emit_formats
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ppy_compiler.backend.base.Backend.register_passes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;register_passes
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ppy_compiler.backend.base.Backend.validate" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;validate
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ppy_compiler.backend.base.Backend.emit" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;emit
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ppy_compiler.backend.base.Backend.build" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;build
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ppy_compiler.backend.base.Backend.toolchain_status" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;toolchain_status
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-registry" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The registry
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#ppy_compiler.backend.registry" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-module"></code>&nbsp;registry
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label=" registry">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#ppy_compiler.backend.registry.BackendLoadError" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;BackendLoadError
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ppy_compiler.backend.registry.BackendInfo" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;BackendInfo
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ppy_compiler.backend.registry.BackendCatalog" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;BackendCatalog
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ppy_compiler.backend.registry.FormatOwner" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;FormatOwner
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ppy_compiler.backend.registry.discover_external_backends" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;discover_external_backends
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ppy_compiler.backend.registry.available_backends" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;available_backends
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ppy_compiler.backend.registry.load_backend" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;load_backend
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ppy_compiler.backend.registry.emit_format_owner" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;emit_format_owner
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
     </li>
   
 
@@ -3226,7 +3486,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../api/ir/" class="md-nav__link">
+      <a href="../ir/" class="md-nav__link">
         
   
   
@@ -3843,10 +4103,226 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#what-xla-takes-today" class="md-nav__link">
+  <a href="#ppy_compiler.backend.base" class="md-nav__link">
     <span class="md-ellipsis">
       
-        What XLA takes today
+        <code class="doc-symbol doc-symbol-toc doc-symbol-module"></code>&nbsp;base
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label=" base">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#ppy_compiler.backend.base.BackendConfig" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;BackendConfig
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label=" BackendConfig">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#ppy_compiler.backend.base.BackendConfig.fingerprint" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;fingerprint
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ppy_compiler.backend.base.BackendError" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;BackendError
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ppy_compiler.backend.base.BackendUnavailable" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;BackendUnavailable
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ppy_compiler.backend.base.BackendValidationError" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;BackendValidationError
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ppy_compiler.backend.base.EmitFormat" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;EmitFormat
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ppy_compiler.backend.base.ToolchainStatus" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;ToolchainStatus
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ppy_compiler.backend.base.BuildResult" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;BuildResult
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ppy_compiler.backend.base.BackendContext" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;BackendContext
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ppy_compiler.backend.base.Backend" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;Backend
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label=" Backend">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#ppy_compiler.backend.base.Backend.fingerprint" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;fingerprint
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ppy_compiler.backend.base.Backend.emit_formats" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;emit_formats
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ppy_compiler.backend.base.Backend.register_passes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;register_passes
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ppy_compiler.backend.base.Backend.validate" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;validate
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ppy_compiler.backend.base.Backend.emit" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;emit
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ppy_compiler.backend.base.Backend.build" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;build
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ppy_compiler.backend.base.Backend.toolchain_status" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;toolchain_status
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-registry" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The registry
       
     </span>
   </a>
@@ -3854,46 +4330,107 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#devices-and-the-last-bits" class="md-nav__link">
+  <a href="#ppy_compiler.backend.registry" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Devices and the last bits
+        <code class="doc-symbol doc-symbol-toc doc-symbol-module"></code>&nbsp;registry
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label=" registry">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#ppy_compiler.backend.registry.BackendLoadError" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;BackendLoadError
       
     </span>
   </a>
   
 </li>
-      
-        <li class="md-nav__item">
-  <a href="#run-it" class="md-nav__link">
+        
+          <li class="md-nav__item">
+  <a href="#ppy_compiler.backend.registry.BackendInfo" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Run it
+        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;BackendInfo
       
     </span>
   </a>
   
 </li>
-      
-        <li class="md-nav__item">
-  <a href="#what-it-prints" class="md-nav__link">
+        
+          <li class="md-nav__item">
+  <a href="#ppy_compiler.backend.registry.BackendCatalog" class="md-nav__link">
     <span class="md-ellipsis">
       
-        What it prints
+        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;BackendCatalog
       
     </span>
   </a>
   
 </li>
-      
-        <li class="md-nav__item">
-  <a href="#39_xladevice_mathppy" class="md-nav__link">
+        
+          <li class="md-nav__item">
+  <a href="#ppy_compiler.backend.registry.FormatOwner" class="md-nav__link">
     <span class="md-ellipsis">
       
-        39_xla/device_math.ppy
+        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;FormatOwner
       
     </span>
   </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ppy_compiler.backend.registry.discover_external_backends" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;discover_external_backends
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ppy_compiler.backend.registry.available_backends" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;available_backends
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ppy_compiler.backend.registry.load_backend" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;load_backend
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ppy_compiler.backend.registry.emit_format_owner" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;emit_format_owner
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -3917,92 +4454,946 @@
   
 
 
-<h1 id="xla">XLA<a class="headerlink" href="#xla" title="Permanent link">&para;</a></h1>
-<p><code>@xla.jit</code> marks a function of floats, ints, and bools whose body is one
-block of arithmetic and math. The compiler lowers it to the IR and emits
-StableHLO itself — no trace, no JAX in the compiler — and the PJRT bridge
-compiles the module once and runs each call on a device.</p>
-<h2 id="what-xla-takes-today">What XLA takes today<a class="headerlink" href="#what-xla-takes-today" title="Permanent link">&para;</a></h2>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nd">@xla</span><span class="o">.</span><span class="n">jit</span>
-<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="k">def</span><span class="w"> </span><span class="nf">f</span><span class="p">(</span><span class="n">x</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="n">y</span><span class="p">:</span> <span class="nb">float</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">float</span><span class="p">:</span>
-<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>    <span class="n">product</span> <span class="o">=</span> <span class="n">math</span><span class="o">.</span><span class="n">sin</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="o">*</span> <span class="n">y</span>
-<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>    <span class="k">return</span> <span class="p">(</span><span class="n">product</span> <span class="o">+</span> <span class="p">(</span><span class="n">x</span> <span class="k">if</span> <span class="n">product</span> <span class="o">&gt;</span> <span class="mf">0.0</span> <span class="k">else</span> <span class="o">-</span><span class="n">x</span><span class="p">))</span> <span class="o">/</span> <span class="mf">2.0</span>
-</code></pre></div>
-<p>Arithmetic, <code>math.sin</code>, and a conditional expression that lowers to a
-<code>select</code>: <code>f</code> is what the StableHLO backend accepts, and <code>ppy emit
-stablehlo</code> prints the module (<code>ppy inspect --stage stablehlo</code> the same).
-<code>branchy</code> is not, yet — an <code>if</code> statement is control flow — so the compiler
-reports <code>W2007</code> and the function runs as written.</p>
-<h2 id="devices-and-the-last-bits">Devices and the last bits<a class="headerlink" href="#devices-and-the-last-bits" title="Permanent link">&para;</a></h2>
-<p>Under plain CPython, and wherever no device is present, every function runs
-as written. XLA computes <code>sin</code> with its own library, so the last bits of a
-result can differ from CPython's <code>math</code>; the printed digits are rounded so
-the three paths compare equal where they should. <code>xla.devices()</code> is what the
-bridge sees, and the line that prints it starts with <code>#</code>, the mark for
-output that may differ between machines. The bridge needs JAX installed to
-place arrays on a device; the compiler that wrote the StableHLO does not.</p>
-<h2 id="run-it">Run it<a class="headerlink" href="#run-it" title="Permanent link">&para;</a></h2>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>python<span class="w">  </span>device_math.ppy
-<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>ppy<span class="w"> </span>run<span class="w"> </span>device_math.ppy
-<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>ppy<span class="w"> </span>emit<span class="w"> </span>stablehlo<span class="w"> </span>device_math.ppy
-</code></pre></div>
-<!-- outputs:start -->
-<h2 id="what-it-prints">What it prints<a class="headerlink" href="#what-it-prints" title="Permanent link">&para;</a></h2>
-<p><strong><code>python  device_math.ppy</code></strong>, <strong><code>ppy run device_math.ppy</code></strong></p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>0.445520207 0.387753845 -4.485479898
-<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>2.0 1.5
-<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a># devices: ['cpu:0']
-</code></pre></div>
-<p><strong><code>ppy emit stablehlo device_math.ppy</code></strong></p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>module @device_math {
-<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>  func.func public @device_math_f(%x: tensor&lt;f64&gt;, %y: tensor&lt;f64&gt;) -&gt; (tensor&lt;f64&gt;) {
-<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>    %1 = stablehlo.sine %x : tensor&lt;f64&gt;
-<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>    %2 = stablehlo.multiply %1, %y : tensor&lt;f64&gt;
-<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>    %3 = stablehlo.constant dense&lt;0.00000000000000000e+00&gt; : tensor&lt;f64&gt;
-<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>    %4 = stablehlo.compare GT, %2, %3, FLOAT : (tensor&lt;f64&gt;, tensor&lt;f64&gt;) -&gt; tensor&lt;i1&gt;
-<a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a>    %5 = stablehlo.negate %x : tensor&lt;f64&gt;
-<a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a>    %6 = stablehlo.select %4, %x, %5 : tensor&lt;i1&gt;, tensor&lt;f64&gt;
-<a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a>    %7 = stablehlo.add %2, %6 : tensor&lt;f64&gt;
-<a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a>    %8 = stablehlo.constant dense&lt;2.00000000000000000e+00&gt; : tensor&lt;f64&gt;
-<a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a>    %9 = stablehlo.divide %7, %8 : tensor&lt;f64&gt;
-<a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a>    return %9 : tensor&lt;f64&gt;
-<a id="__codelineno-3-13" name="__codelineno-3-13" href="#__codelineno-3-13"></a>  }
-<a id="__codelineno-3-14" name="__codelineno-3-14" href="#__codelineno-3-14"></a>}
-</code></pre></div>
-<!-- outputs:end -->
+<h1 id="backend-api">Backend API<a class="headerlink" href="#backend-api" title="Permanent link">&para;</a></h1>
+<p>The backend interface, version 1 (<code>BACKEND_API_VERSION</code>). A backend
+consumes the canonical IR after the shared passes and answers with text,
+bytes, or built artifacts; it may hang passes at the <code>backend</code> stage, must
+refuse in <code>validate</code> what it cannot take, and says whether its toolchain
+is here. An external backend is a package with an entry point in the
+<code>ppy.backends</code> group; the compiler finds it without importing it and loads
+it when it is asked for. How the pieces fit, and a whole example package,
+is in <a href="../../internals/backends/">Backends</a>.</p>
+<p>What a backend package imports is this module and <a href="../ir/"><code>ppy_compiler.ir</code></a>.</p>
 
-<p>Read on: <a href="../../guide/xla/">XLA</a> ·
-<a href="../25_jax_export/">JAX export</a></p>
-<p><code>device_math.ppy</code> is hand-written; there is no <code>.py</code> source and no conversion
-step.</p>
-<h2 id="39_xladevice_mathppy"><code>39_xla/device_math.ppy</code><a class="headerlink" href="#39_xladevice_mathppy" title="Permanent link">&para;</a></h2>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">math</span>
-<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>
-<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ppy</span><span class="w"> </span><span class="kn">import</span> <span class="n">xla</span>
-<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>
-<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>
-<a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="nd">@xla</span><span class="o">.</span><span class="n">jit</span>
-<a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="k">def</span><span class="w"> </span><span class="nf">f</span><span class="p">(</span><span class="n">x</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="n">y</span><span class="p">:</span> <span class="nb">float</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">float</span><span class="p">:</span>
-<a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a>    <span class="n">product</span> <span class="o">=</span> <span class="n">math</span><span class="o">.</span><span class="n">sin</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="o">*</span> <span class="n">y</span>
-<a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a>    <span class="k">return</span> <span class="p">(</span><span class="n">product</span> <span class="o">+</span> <span class="p">(</span><span class="n">x</span> <span class="k">if</span> <span class="n">product</span> <span class="o">&gt;</span> <span class="mf">0.0</span> <span class="k">else</span> <span class="o">-</span><span class="n">x</span><span class="p">))</span> <span class="o">/</span> <span class="mf">2.0</span>
-<a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a>
-<a id="__codelineno-4-11" name="__codelineno-4-11" href="#__codelineno-4-11"></a>
-<a id="__codelineno-4-12" name="__codelineno-4-12" href="#__codelineno-4-12"></a><span class="nd">@xla</span><span class="o">.</span><span class="n">jit</span>
-<a id="__codelineno-4-13" name="__codelineno-4-13" href="#__codelineno-4-13"></a><span class="k">def</span><span class="w"> </span><span class="nf">branchy</span><span class="p">(</span><span class="n">x</span><span class="p">:</span> <span class="nb">float</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">float</span><span class="p">:</span>
-<a id="__codelineno-4-14" name="__codelineno-4-14" href="#__codelineno-4-14"></a>    <span class="k">if</span> <span class="n">x</span> <span class="o">&gt;</span> <span class="mf">0.0</span><span class="p">:</span>
-<a id="__codelineno-4-15" name="__codelineno-4-15" href="#__codelineno-4-15"></a>        <span class="k">return</span> <span class="n">x</span>
-<a id="__codelineno-4-16" name="__codelineno-4-16" href="#__codelineno-4-16"></a>    <span class="k">return</span> <span class="o">-</span><span class="n">x</span>
-<a id="__codelineno-4-17" name="__codelineno-4-17" href="#__codelineno-4-17"></a>
-<a id="__codelineno-4-18" name="__codelineno-4-18" href="#__codelineno-4-18"></a>
-<a id="__codelineno-4-19" name="__codelineno-4-19" href="#__codelineno-4-19"></a><span class="k">def</span><span class="w"> </span><span class="nf">main</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<a id="__codelineno-4-20" name="__codelineno-4-20" href="#__codelineno-4-20"></a>    <span class="nb">print</span><span class="p">(</span><span class="nb">round</span><span class="p">(</span><span class="n">f</span><span class="p">(</span><span class="mf">0.3</span><span class="p">,</span> <span class="mf">2.0</span><span class="p">),</span> <span class="mi">9</span><span class="p">),</span> <span class="nb">round</span><span class="p">(</span><span class="n">f</span><span class="p">(</span><span class="o">-</span><span class="mf">1.25</span><span class="p">,</span> <span class="mf">0.5</span><span class="p">),</span> <span class="mi">9</span><span class="p">),</span> <span class="nb">round</span><span class="p">(</span><span class="n">f</span><span class="p">(</span><span class="mf">7.0</span><span class="p">,</span> <span class="o">-</span><span class="mf">3.0</span><span class="p">),</span> <span class="mi">9</span><span class="p">))</span>
-<a id="__codelineno-4-21" name="__codelineno-4-21" href="#__codelineno-4-21"></a>    <span class="nb">print</span><span class="p">(</span><span class="n">branchy</span><span class="p">(</span><span class="o">-</span><span class="mf">2.0</span><span class="p">),</span> <span class="n">branchy</span><span class="p">(</span><span class="mf">1.5</span><span class="p">))</span>
-<a id="__codelineno-4-22" name="__codelineno-4-22" href="#__codelineno-4-22"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"# devices: </span><span class="si">{</span><span class="n">xla</span><span class="o">.</span><span class="n">devices</span><span class="p">()</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
-<a id="__codelineno-4-23" name="__codelineno-4-23" href="#__codelineno-4-23"></a>
-<a id="__codelineno-4-24" name="__codelineno-4-24" href="#__codelineno-4-24"></a>
-<a id="__codelineno-4-25" name="__codelineno-4-25" href="#__codelineno-4-25"></a><span class="n">main</span><span class="p">()</span>
+
+<div class="doc doc-object doc-module">
+
+
+
+<h2 id="ppy_compiler.backend.base" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-module"></code>            <code>ppy_compiler.backend.base</code>
+
+
+<a href="#ppy_compiler.backend.base" class="headerlink" title="Permanent link">&para;</a></h2>
+
+    <div class="doc doc-contents first">
+
+        <p>The backend interface: what a code generator is to the compiler.</p>
+<p>A backend consumes the canonical IR after the shared passes and nothing
+else -- never the Python AST, never the checker's tables -- and answers
+with text, bytes, or built artifacts. It may hang passes of its own at the
+<code>backend</code> stage, must refuse IR it cannot take in <code>validate</code>, and says
+whether its toolchain is here. Plugins are the other extension: a plugin
+models a library's semantics and lowering; a backend makes code. Neither
+does the other's job.</p>
+<p>An external backend is a package with an entry point in the <code>ppy.backends</code>
+group whose factory takes the backend's options from <code>pyproject.toml</code>
+(<code>[tool.ppy.backends.&lt;name&gt;]</code>) and returns a <code>Backend</code>::</p>
+<div class="highlight"><pre><span></span><code>[project.entry-points."ppy.backends"]
+toy = "ppy_toy:create_backend"
 </code></pre></div>
-<p>The folder in the repository: <a href="https://github.com/franknoh/PPy/blob/main/examples/39_xla"><code>examples/39_xla</code></a>.</p>
+<p>The interface is versioned by <code>BACKEND_API_VERSION</code>, independently of the
+compiler's version: a backend written against another one is refused with
+the reason, never loaded and hoped about.</p>
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+<div class="doc doc-object doc-class">
+
+
+
+<h3 id="ppy_compiler.backend.base.BackendConfig" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>              <code class="highlight language-python"><span class="n">BackendConfig</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">options</span><span class="o">=</span><span class="nb">dict</span><span class="p">())</span></code>
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-dataclass"><code>dataclass</code></small>
+  </span>
+
+<a href="#ppy_compiler.backend.base.BackendConfig" class="headerlink" title="Permanent link">&para;</a></h3>
+
+
+    <div class="doc doc-contents ">
+
+
+
+        <p>The <code>[tool.ppy.backends.&lt;name&gt;]</code> table, as the backend receives it.</p>
+
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="ppy_compiler.backend.base.BackendConfig.fingerprint" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <code class="highlight language-python"><span class="n">fingerprint</span><span class="p">()</span></code>
+
+<a href="#ppy_compiler.backend.base.BackendConfig.fingerprint" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>A digest of the options: part of every artifact key, so a changed
+setting is a different artifact.</p>
+
+
+    </div>
+
+</div>
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-class">
+
+
+
+<h3 id="ppy_compiler.backend.base.BackendError" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>            <code>BackendError</code>
+
+
+<a href="#ppy_compiler.backend.base.BackendError" class="headerlink" title="Permanent link">&para;</a></h3>
+
+
+    <div class="doc doc-contents ">
+            <p class="doc doc-class-bases">
+              Bases: <code><span title="Exception">Exception</span></code></p>
+
+
+
+        <p>A backend's refusal; the message is the reason.</p>
+
+
+
+
+
+
+
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-class">
+
+
+
+<h3 id="ppy_compiler.backend.base.BackendUnavailable" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>            <code>BackendUnavailable</code>
+
+
+<a href="#ppy_compiler.backend.base.BackendUnavailable" class="headerlink" title="Permanent link">&para;</a></h3>
+
+
+    <div class="doc doc-contents ">
+            <p class="doc doc-class-bases">
+              Bases: <code><a class="autorefs autorefs-internal" title="            BackendError (ppy_compiler.backend.base.BackendError)" href="#ppy_compiler.backend.base.BackendError">BackendError</a></code></p>
+
+
+
+        <p>The backend's toolchain is not here; what is missing is named.</p>
+
+
+
+
+
+
+
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-class">
+
+
+
+<h3 id="ppy_compiler.backend.base.BackendValidationError" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>              <code class="highlight language-python"><span class="n">BackendValidationError</span><span class="p">(</span><span class="n">backend</span><span class="p">,</span> <span class="n">what</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">capability</span><span class="o">=</span><span class="s1">''</span><span class="p">,</span> <span class="n">location</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
+
+<a href="#ppy_compiler.backend.base.BackendValidationError" class="headerlink" title="Permanent link">&para;</a></h3>
+
+
+    <div class="doc doc-contents ">
+            <p class="doc doc-class-bases">
+              Bases: <code><a class="autorefs autorefs-internal" title="            BackendError (ppy_compiler.backend.base.BackendError)" href="#ppy_compiler.backend.base.BackendError">BackendError</a></code></p>
+
+
+
+        <p>IR the backend does not take: the backend, what it cannot take, the
+capability it lacks, and the source location when the IR carries one.</p>
+
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-class">
+
+
+
+<h3 id="ppy_compiler.backend.base.EmitFormat" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>              <code class="highlight language-python"><span class="n">EmitFormat</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">suffix</span><span class="p">,</span> <span class="n">binary</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">description</span><span class="o">=</span><span class="s1">''</span><span class="p">)</span></code>
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-dataclass"><code>dataclass</code></small>
+  </span>
+
+<a href="#ppy_compiler.backend.base.EmitFormat" class="headerlink" title="Permanent link">&para;</a></h3>
+
+
+    <div class="doc doc-contents ">
+
+
+
+        <p>One thing a backend can write for <code>ppy emit &lt;name&gt;</code>.</p>
+
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-class">
+
+
+
+<h3 id="ppy_compiler.backend.base.ToolchainStatus" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>              <code class="highlight language-python"><span class="n">ToolchainStatus</span><span class="p">(</span><span class="n">available</span><span class="p">,</span> <span class="n">detail</span><span class="o">=</span><span class="s1">''</span><span class="p">)</span></code>
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-dataclass"><code>dataclass</code></small>
+  </span>
+
+<a href="#ppy_compiler.backend.base.ToolchainStatus" class="headerlink" title="Permanent link">&para;</a></h3>
+
+
+    <div class="doc doc-contents ">
+
+
+
+        <p>Whether the backend can build here, and what it found or missed.</p>
+
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-class">
+
+
+
+<h3 id="ppy_compiler.backend.base.BuildResult" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>              <code class="highlight language-python"><span class="n">BuildResult</span><span class="p">(</span><span class="n">outputs</span><span class="o">=</span><span class="p">(),</span> <span class="n">notes</span><span class="o">=</span><span class="p">())</span></code>
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-dataclass"><code>dataclass</code></small>
+  </span>
+
+<a href="#ppy_compiler.backend.base.BuildResult" class="headerlink" title="Permanent link">&para;</a></h3>
+
+
+    <div class="doc doc-contents ">
+
+
+
+        <p>What <code>build</code> produced.</p>
+
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-class">
+
+
+
+<h3 id="ppy_compiler.backend.base.BackendContext" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>              <code class="highlight language-python"><span class="n">BackendContext</span><span class="p">(</span><span class="n">root</span><span class="p">,</span> <span class="n">config</span><span class="p">,</span> <span class="n">backend_config</span><span class="p">,</span> <span class="n">opt_level</span><span class="p">,</span> <span class="n">target</span><span class="p">,</span> <span class="n">registry</span><span class="p">,</span> <span class="n">plugin_fingerprints</span><span class="o">=</span><span class="p">(),</span> <span class="n">identity</span><span class="o">=</span><span class="nb">dict</span><span class="p">(),</span> <span class="n">entry</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">notes</span><span class="o">=</span><span class="nb">list</span><span class="p">())</span></code>
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-dataclass"><code>dataclass</code></small>
+  </span>
+
+<a href="#ppy_compiler.backend.base.BackendContext" class="headerlink" title="Permanent link">&para;</a></h3>
+
+
+    <div class="doc doc-contents ">
+
+
+
+        <p>Everything a backend is told besides the IR.</p>
+<p>The IR is already through the shared passes and the backend's own;
+nothing here reaches back into the frontend. <code>identity</code> is the cache
+key the driver computed for the module (compiler, IR, backend, its
+fingerprint and configuration, target, optimization level, plugins),
+for a backend that keeps artifacts of its own.</p>
+
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-class">
+
+
+
+<h3 id="ppy_compiler.backend.base.Backend" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>              <code class="highlight language-python"><span class="n">Backend</span><span class="p">(</span><span class="n">options</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
+
+<a href="#ppy_compiler.backend.base.Backend" class="headerlink" title="Permanent link">&para;</a></h3>
+
+
+    <div class="doc doc-contents ">
+
+
+
+        <p>The class an external backend extends. Every method has a default: a
+backend that emits registers formats and implements <code>emit</code>; one that
+builds implements <code>build</code>; the rest is optional.</p>
+
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="ppy_compiler.backend.base.Backend.fingerprint" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <code class="highlight language-python"><span class="n">fingerprint</span><span class="p">()</span></code>
+
+<a href="#ppy_compiler.backend.base.Backend.fingerprint" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>What identifies this backend's code generation for the cache: its
+version, its SDK's, anything whose change makes old artifacts wrong.
+The default is the class and the interface version -- a backend with
+a toolchain under it should include that toolchain's version.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="ppy_compiler.backend.base.Backend.emit_formats" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <code class="highlight language-python"><span class="n">emit_formats</span><span class="p">()</span></code>
+
+<a href="#ppy_compiler.backend.base.Backend.emit_formats" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>The formats <code>ppy emit</code> may ask this backend for.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="ppy_compiler.backend.base.Backend.register_passes" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <code class="highlight language-python"><span class="n">register_passes</span><span class="p">(</span><span class="n">manager</span><span class="p">)</span></code>
+
+<a href="#ppy_compiler.backend.base.Backend.register_passes" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Hang the backend's passes at the <code>backend</code> stage:
+<code>manager.register_stage_pass("backend", MyPass)</code>.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="ppy_compiler.backend.base.Backend.validate" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <code class="highlight language-python"><span class="n">validate</span><span class="p">(</span><span class="n">module</span><span class="p">,</span> <span class="n">context</span><span class="p">)</span></code>
+
+<a href="#ppy_compiler.backend.base.Backend.validate" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Refuse IR the backend cannot take, with a <code>BackendValidationError</code>
+naming what and why. Called after every pass, before <code>emit</code> or <code>build</code>.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="ppy_compiler.backend.base.Backend.emit" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <code class="highlight language-python"><span class="n">emit</span><span class="p">(</span><span class="n">module</span><span class="p">,</span> <span class="nb">format</span><span class="p">,</span> <span class="n">context</span><span class="p">)</span></code>
+
+<a href="#ppy_compiler.backend.base.Backend.emit" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p><code>format</code> (one of <code>emit_formats</code>) for one module: text, or bytes for
+a binary format.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="ppy_compiler.backend.base.Backend.build" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <code class="highlight language-python"><span class="n">build</span><span class="p">(</span><span class="n">modules</span><span class="p">,</span> <span class="n">output</span><span class="p">,</span> <span class="n">context</span><span class="p">)</span></code>
+
+<a href="#ppy_compiler.backend.base.Backend.build" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Build every module into <code>output</code>, which exists, and say what was written.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="ppy_compiler.backend.base.Backend.toolchain_status" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <code class="highlight language-python"><span class="n">toolchain_status</span><span class="p">()</span></code>
+
+<a href="#ppy_compiler.backend.base.Backend.toolchain_status" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Whether the backend can work here; <code>ppy doctor</code> prints the detail.</p>
+
+
+    </div>
+
+</div>
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+
+
+
+  </div>
+
+    </div>
+
+</div><h2 id="the-registry">The registry<a class="headerlink" href="#the-registry" title="Permanent link">&para;</a></h2>
+
+
+<div class="doc doc-object doc-module">
+
+
+
+<h2 id="ppy_compiler.backend.registry" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-module"></code>            <code>ppy_compiler.backend.registry</code>
+
+
+<a href="#ppy_compiler.backend.registry" class="headerlink" title="Permanent link">&para;</a></h2>
+
+    <div class="doc doc-contents first">
+
+        <p>Which backends there are, and loading one when it is asked for.</p>
+<p>The builtin backends are always here. An external one is a distribution
+with an entry point in the <code>ppy.backends</code> group; discovery reads the entry
+points without importing anything, and the package is imported only when
+its backend is selected -- by <code>--backend</code>, by a format it registers, or by
+<code>ppy doctor</code>. One broken package does not break the others: its failure
+is a reported problem, or the error of the command that asked for it. A
+name registered twice is never settled by luck: it is reported, and asking
+for it is an error naming both distributions.</p>
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+<div class="doc doc-object doc-class">
+
+
+
+<h3 id="ppy_compiler.backend.registry.BackendLoadError" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>            <code>BackendLoadError</code>
+
+
+<a href="#ppy_compiler.backend.registry.BackendLoadError" class="headerlink" title="Permanent link">&para;</a></h3>
+
+
+    <div class="doc doc-contents ">
+            <p class="doc doc-class-bases">
+              Bases: <code><a class="autorefs autorefs-internal" title="            BackendError (ppy_compiler.backend.base.BackendError)" href="#ppy_compiler.backend.base.BackendError">BackendError</a></code></p>
+
+
+
+        <p>A backend that cannot be used: unknown, duplicated, incompatible, or
+failing to load; the message says which and names what is available.</p>
+
+
+
+
+
+
+
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-class">
+
+
+
+<h3 id="ppy_compiler.backend.registry.BackendInfo" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>              <code class="highlight language-python"><span class="n">BackendInfo</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">builtin</span><span class="p">,</span> <span class="n">origin</span><span class="p">,</span> <span class="n">entry</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-dataclass"><code>dataclass</code></small>
+  </span>
+
+<a href="#ppy_compiler.backend.registry.BackendInfo" class="headerlink" title="Permanent link">&para;</a></h3>
+
+
+    <div class="doc doc-contents ">
+
+
+
+        <p>One backend as discovery sees it, loaded or not.</p>
+
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-class">
+
+
+
+<h3 id="ppy_compiler.backend.registry.BackendCatalog" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>              <code class="highlight language-python"><span class="n">BackendCatalog</span><span class="p">(</span><span class="n">backends</span><span class="o">=</span><span class="nb">dict</span><span class="p">(),</span> <span class="n">problems</span><span class="o">=</span><span class="nb">list</span><span class="p">(),</span> <span class="n">duplicates</span><span class="o">=</span><span class="nb">dict</span><span class="p">())</span></code>
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-dataclass"><code>dataclass</code></small>
+  </span>
+
+<a href="#ppy_compiler.backend.registry.BackendCatalog" class="headerlink" title="Permanent link">&para;</a></h3>
+
+
+    <div class="doc doc-contents ">
+
+
+
+        <p>Every backend by name, and what discovery had to refuse.</p>
+
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-class">
+
+
+
+<h3 id="ppy_compiler.backend.registry.FormatOwner" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>              <code class="highlight language-python"><span class="n">FormatOwner</span><span class="p">(</span><span class="n">backend</span><span class="p">,</span> <span class="nb">format</span><span class="p">)</span></code>
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-dataclass"><code>dataclass</code></small>
+  </span>
+
+<a href="#ppy_compiler.backend.registry.FormatOwner" class="headerlink" title="Permanent link">&para;</a></h3>
+
+
+    <div class="doc doc-contents ">
+
+
+
+        <p>The backend that emits a format, and the format as it declared it.</p>
+
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="ppy_compiler.backend.registry.discover_external_backends" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-function"></code>            <code class="highlight language-python"><span class="n">discover_external_backends</span><span class="p">()</span></code>
+
+<a href="#ppy_compiler.backend.registry.discover_external_backends" class="headerlink" title="Permanent link">&para;</a></h3>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Every installed external backend by name, without importing any, and
+the names that were registered more than once (each is a problem).</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="ppy_compiler.backend.registry.available_backends" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-function"></code>            <code class="highlight language-python"><span class="n">available_backends</span><span class="p">()</span></code>
+
+<a href="#ppy_compiler.backend.registry.available_backends" class="headerlink" title="Permanent link">&para;</a></h3>
+
+
+    <div class="doc doc-contents ">
+
+        <p>The builtin backends and every discovered external one, nothing imported.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="ppy_compiler.backend.registry.load_backend" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-function"></code>            <code class="highlight language-python"><span class="n">load_backend</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">options</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
+
+<a href="#ppy_compiler.backend.registry.load_backend" class="headerlink" title="Permanent link">&para;</a></h3>
+
+
+    <div class="doc doc-contents ">
+
+        <p>The backend called <code>name</code>, constructed with its options: a builtin one
+directly, an external one through its entry point, imported now.</p>
+<p>Refused with a <code>BackendLoadError</code> that says why: no such backend (and
+which there are), registered twice, a factory that fails or answers
+something that is not a <code>Backend</code>, or an interface version other than
+<code>BACKEND_API_VERSION</code>.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="ppy_compiler.backend.registry.emit_format_owner" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-function"></code>            <code class="highlight language-python"><span class="n">emit_format_owner</span><span class="p">(</span><span class="n">kind</span><span class="p">,</span> <span class="n">options_for</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
+
+<a href="#ppy_compiler.backend.registry.emit_format_owner" class="headerlink" title="Permanent link">&para;</a></h3>
+
+
+    <div class="doc doc-contents ">
+
+        <p>The backend that emits <code>kind</code>.</p>
+<p>A builtin format is answered without loading anything. For any other
+name every external backend is loaded (each with the options
+<code>options_for(name)</code> gives it) and asked; a backend that fails to load
+is reported in the error only when the format is not found elsewhere.
+Two backends claiming one format is an error naming both.</p>
+
+
+    </div>
+
+</div>
+
+
+
+  </div>
+
+    </div>
+
+</div>
 
 
 
@@ -4040,7 +5431,7 @@ step.</p>
       <nav class="md-footer__inner md-grid" aria-label="Footer" >
         
           
-          <a href="../44_tile/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Tile kernels">
+          <a href="../plugins/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Plugin API">
             <div class="md-footer__button md-icon">
               
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
@@ -4050,20 +5441,20 @@ step.</p>
                 Previous
               </span>
               <div class="md-ellipsis">
-                Tile kernels
+                Plugin API
               </div>
             </div>
           </a>
         
         
           
-          <a href="../45_multi_gpu_jax/" class="md-footer__link md-footer__link--next" aria-label="Next: Multi-GPU JAX training">
+          <a href="../ir/" class="md-footer__link md-footer__link--next" aria-label="Next: IR">
             <div class="md-footer__title">
               <span class="md-footer__direction">
                 Next
               </span>
               <div class="md-ellipsis">
-                Multi-GPU JAX training
+                IR
               </div>
             </div>
             <div class="md-footer__button md-icon">

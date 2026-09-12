@@ -3013,6 +3013,17 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
+  <a href="#-backend-name" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        --backend NAME
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#-target-python-extension-library" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3255,6 +3266,8 @@
       
         
       
+        
+      
     
     
     
@@ -3380,6 +3393,34 @@
     
   
     Plugin API
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/backends/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Backend API
   
 
     
@@ -3649,6 +3690,8 @@
       
         
       
+        
+      
     
     
     
@@ -3830,6 +3873,34 @@
     
   
     Plugins
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../internals/backends/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Backends
   
 
     
@@ -4052,6 +4123,17 @@
   
     <nav class="md-nav" aria-label="ppy build — compile without running">
       <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#-backend-name" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        --backend NAME
+      
+    </span>
+  </a>
+  
+</li>
         
           <li class="md-nav__item">
   <a href="#-target-python-extension-library" class="md-nav__link">
@@ -4500,13 +4582,15 @@ and which stayed boxed, with the reason.</p>
 <h2 id="ppy-build-compile-without-running"><code>ppy build</code> — compile without running<a class="headerlink" href="#ppy-build-compile-without-running" title="Permanent link">&para;</a></h2>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>ppy<span class="w"> </span>build<span class="w"> </span>TARGET<span class="w"> </span><span class="o">[</span>--unsafe<span class="o">]</span><span class="w"> </span><span class="o">[</span>--host-cpu<span class="o">]</span><span class="w"> </span><span class="o">[</span>--standalone<span class="o">]</span>
 <a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="w">                 </span><span class="o">[</span>--target<span class="w"> </span>TRIPLE<span class="o">]</span><span class="w"> </span><span class="o">[</span>--python-extension<span class="o">]</span><span class="w"> </span><span class="o">[</span>--library<span class="o">]</span>
-<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="w">                 </span><span class="o">[</span>--backend<span class="w"> </span><span class="o">{</span>llvm,python<span class="o">}]</span><span class="w"> </span><span class="o">[</span>-o<span class="w"> </span>DIR<span class="o">]</span>
+<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="w">                 </span><span class="o">[</span>--backend<span class="w"> </span>NAME<span class="o">]</span><span class="w"> </span><span class="o">[</span>-o<span class="w"> </span>DIR<span class="o">]</span>
 <a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="w">                 </span><span class="o">[</span>--sanitize<span class="w"> </span>KINDS<span class="o">]</span><span class="w"> </span><span class="o">[</span>--pgo<span class="w"> </span>FILE<span class="o">]</span>
 <a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="w">                 </span><span class="o">[</span>--report-opt<span class="o">]</span><span class="w"> </span><span class="o">[</span>--report-opt-json<span class="w"> </span>FILE<span class="o">]</span>
 <a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a>ppy<span class="w"> </span>build<span class="w"> </span>--warm<span class="w"> </span>TARGET
 <a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a>ppy<span class="w"> </span>build<span class="w"> </span>foo.ppyir<span class="w">                  </span><span class="c1"># from the IR alone; see `ppy emit`</span>
 </code></pre></div>
-<p><code>--backend llvm</code> (default) writes objects, <code>libppy_&lt;project&gt;.so</code>,
+<p><code>--backend</code> is <code>llvm</code> (the default), <code>python</code>, or the name of an installed
+backend (<a href="../internals/backends/">Backends</a>); <code>ppy doctor</code> lists them.
+<code>--backend llvm</code> writes objects, <code>libppy_&lt;project&gt;.so</code>,
 <code>ppy-bindings.json</code>, a launcher, and -- when a function is
 <code>@ppy.native.export</code>ed -- a C header declaring the public symbols. A build
 keeps Python's integers bit-for-bit, exactly as <code>ppy run</code> does: overflow is
@@ -4539,10 +4623,23 @@ begins, against about 0.7 s for a cold <code>ppy run</code> that compiles first 
 <code>ppy run</code> takes this same launcher path, from the cache).
 <code>examples/bench_startup.py</code> measures the categories separately, and
 <code>--standalone</code> below removes that 35 ms too.</p>
+<h3 id="-backend-name"><code>--backend NAME</code><a class="headerlink" href="#-backend-name" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>ppy<span class="w"> </span>build<span class="w"> </span>foo.ppy<span class="w"> </span>--backend<span class="w"> </span>toy<span class="w"> </span>-o<span class="w"> </span>out/
+</code></pre></div>
+<p>An installed backend is loaded with its <code>[tool.ppy.backends.NAME]</code> table
+and asked for its toolchain; the modules go through the shared passes and
+the backend's own passes and validation; then its <code>build</code> writes into
+<code>-o</code> (or <code>&lt;cache&gt;/backends/NAME</code>) and what it wrote is listed, with any
+notes the backend adds. <code>-O</code> reaches it; the LLVM flags (<code>--target</code>,
+<code>--python-extension</code>, <code>--library</code>, <code>--standalone</code>, <code>--host-cpu</code>) are the
+LLVM road's. The diagnostics are <code>ppy emit</code>'s: <code>E1903</code> for a backend that
+cannot be used, <code>E1801</code> for a missing toolchain, <code>E1802</code> for IR it
+refuses, <code>E1904</code> for a pass of its that broke the IR. A builtin backend
+that only emits (<code>--backend c</code>) is refused with <code>E1802</code>.</p>
 <h3 id="-target-python-extension-library"><code>--target</code>, <code>--python-extension</code>, <code>--library</code><a class="headerlink" href="#-target-python-extension-library" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>ppy<span class="w"> </span>build<span class="w"> </span>foo.ppy<span class="w"> </span>--target<span class="w"> </span>aarch64-linux-gnu<span class="w">     </span><span class="c1"># objects, library, header for it</span>
-<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>ppy<span class="w"> </span>build<span class="w"> </span>foo.ppy<span class="w"> </span>--python-extension<span class="w"> </span>-o<span class="w"> </span>dist<span class="w">     </span><span class="c1"># dist/foo.so: `import foo`</span>
-<a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a>ppy<span class="w"> </span>build<span class="w"> </span>lib.ppy<span class="w"> </span>--library<span class="w"> </span>-o<span class="w"> </span>dist<span class="w">              </span><span class="c1"># dist/lib, dist/include, a .pc</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>ppy<span class="w"> </span>build<span class="w"> </span>foo.ppy<span class="w"> </span>--target<span class="w"> </span>aarch64-linux-gnu<span class="w">     </span><span class="c1"># objects, library, header for it</span>
+<a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>ppy<span class="w"> </span>build<span class="w"> </span>foo.ppy<span class="w"> </span>--python-extension<span class="w"> </span>-o<span class="w"> </span>dist<span class="w">     </span><span class="c1"># dist/foo.so: `import foo`</span>
+<a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a>ppy<span class="w"> </span>build<span class="w"> </span>lib.ppy<span class="w"> </span>--library<span class="w"> </span>-o<span class="w"> </span>dist<span class="w">              </span><span class="c1"># dist/lib, dist/include, a .pc</span>
 </code></pre></div>
 <p><code>--target TRIPLE</code> (or <code>[tool.ppy.llvm] target</code>) compiles for another
 machine: the objects carry that triple and data layout, the library is
@@ -4569,8 +4666,8 @@ library, <code>include/</code> with the header, <code>lib/pkgconfig/&lt;name&gt;
 manifest describing the ABI. A module with no <code>@ppy.native.export</code> has
 nothing to package and says so (<code>E1805</code>).</p>
 <h3 id="-warm"><code>--warm</code><a class="headerlink" href="#-warm" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>ppy<span class="w"> </span>build<span class="w"> </span>--warm<span class="w"> </span>train/kernels/<span class="w">        </span><span class="c1"># every .ppy under it</span>
-<a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>ppy<span class="w"> </span>build<span class="w"> </span>--warm<span class="w"> </span>train/reward.ppy
+<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>ppy<span class="w"> </span>build<span class="w"> </span>--warm<span class="w"> </span>train/kernels/<span class="w">        </span><span class="c1"># every .ppy under it</span>
+<a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>ppy<span class="w"> </span>build<span class="w"> </span>--warm<span class="w"> </span>train/reward.ppy
 </code></pre></div>
 <p>Builds ahead of time exactly what <code>ppy run FILE</code> and <code>import ppy</code> build on
 their first use -- the artifact in the project cache, under the key an
@@ -4588,7 +4685,7 @@ stderr, and a module that needs the in-process JIT is reported and skipped.
 The key covers every source under the project root, so run it after the
 last edit, not before.</p>
 <h3 id="-standalone"><code>--standalone</code><a class="headerlink" href="#-standalone" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>ppy<span class="w"> </span>build<span class="w"> </span>--standalone<span class="w"> </span>app.ppy
+<div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>ppy<span class="w"> </span>build<span class="w"> </span>--standalone<span class="w"> </span>app.ppy
 </code></pre></div>
 <p>Links a fully native executable with <strong>no CPython inside</strong> — <code>ldd</code> shows
 libc and nothing else, and startup is C startup (~a few ms). It asks less of
@@ -4617,29 +4714,41 @@ text arrives as a token, and <code>ppy.read_token</code> has no standalone lower
 <code>examples/15_algorithms/standalone/</code> holds the five, timed against every
 other path by the benchmark beside them.</p>
 <h2 id="ppy-emit-a-compiler-stage-as-text"><code>ppy emit</code> — a compiler stage as text<a class="headerlink" href="#ppy-emit-a-compiler-stage-as-text" title="Permanent link">&para;</a></h2>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>ppy<span class="w"> </span>emit<span class="w"> </span>ir<span class="w"> </span>foo.ppy<span class="w">                  </span><span class="c1"># the canonical IR, to stdout</span>
-<a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>ppy<span class="w"> </span>emit<span class="w"> </span>ir<span class="w"> </span>foo.ppy<span class="w"> </span>-o<span class="w"> </span>foo.ppyir<span class="w">     </span><span class="c1"># ... to a file</span>
-<a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a>ppy<span class="w"> </span>emit<span class="w"> </span>ir<span class="w"> </span>src/<span class="w"> </span>-o<span class="w"> </span>build/ir/<span class="w">        </span><span class="c1"># one .ppyir per module</span>
-<a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a>ppy<span class="w"> </span>emit<span class="w"> </span>linked-ir<span class="w"> </span>app.ppy<span class="w">           </span><span class="c1"># the whole program: every module linked and optimized as one</span>
-<a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a>ppy<span class="w"> </span>emit<span class="w"> </span>llvm-ir<span class="w"> </span>foo.ppy<span class="w">             </span><span class="c1"># what the LLVM backend makes of it</span>
-<a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a>ppy<span class="w"> </span>emit<span class="w"> </span>c<span class="w"> </span>foo.ppy<span class="w">                   </span><span class="c1"># what the C backend makes of it: one C11 unit</span>
-<a id="__codelineno-10-7" name="__codelineno-10-7" href="#__codelineno-10-7"></a>ppy<span class="w"> </span>emit<span class="w"> </span>cpp<span class="w"> </span>foo.ppy<span class="w">                 </span><span class="c1"># ... as C++17, exports behind extern "C"</span>
-<a id="__codelineno-10-8" name="__codelineno-10-8" href="#__codelineno-10-8"></a>ppy<span class="w"> </span>emit<span class="w"> </span>cuda<span class="w"> </span>foo.ppy<span class="w">                </span><span class="c1"># the kernels, device functions, and launches as CUDA C++</span>
-<a id="__codelineno-10-9" name="__codelineno-10-9" href="#__codelineno-10-9"></a>ppy<span class="w"> </span>emit<span class="w"> </span>hip<span class="w"> </span>foo.ppy<span class="w">                 </span><span class="c1"># ... as HIP C++</span>
-<a id="__codelineno-10-10" name="__codelineno-10-10" href="#__codelineno-10-10"></a>ppy<span class="w"> </span>emit<span class="w"> </span>nvvm-ir<span class="w"> </span>foo.ppy<span class="w">             </span><span class="c1"># the kernels as LLVM IR for NVPTX</span>
-<a id="__codelineno-10-11" name="__codelineno-10-11" href="#__codelineno-10-11"></a>ppy<span class="w"> </span>emit<span class="w"> </span>ptx<span class="w"> </span>foo.ppy<span class="w">                 </span><span class="c1"># ... as PTX (PPY_CUDA_ARCH names the architecture, sm_70 by default)</span>
-<a id="__codelineno-10-12" name="__codelineno-10-12" href="#__codelineno-10-12"></a>ppy<span class="w"> </span>emit<span class="w"> </span>c<span class="w"> </span>--header-only<span class="w"> </span>foo.ppy<span class="w">     </span><span class="c1"># every function static inline in a header</span>
-<a id="__codelineno-10-13" name="__codelineno-10-13" href="#__codelineno-10-13"></a>ppy<span class="w"> </span>emit<span class="w"> </span>c<span class="w"> </span>--standalone<span class="w"> </span>prog.ppy<span class="w">     </span><span class="c1"># the whole program from main(), shims and all</span>
-<a id="__codelineno-10-14" name="__codelineno-10-14" href="#__codelineno-10-14"></a>ppy<span class="w"> </span>emit<span class="w"> </span>c<span class="w"> </span>--format<span class="w"> </span>foo.ppy<span class="w">          </span><span class="c1"># ... laid out by clang-format (the project's .clang-format, or LLVM style)</span>
-<a id="__codelineno-10-15" name="__codelineno-10-15" href="#__codelineno-10-15"></a>ppy<span class="w"> </span>emit<span class="w"> </span>header<span class="w"> </span>foo.ppy<span class="w">              </span><span class="c1"># the C declarations of the exports</span>
-<a id="__codelineno-10-16" name="__codelineno-10-16" href="#__codelineno-10-16"></a>ppy<span class="w"> </span>emit<span class="w"> </span>stablehlo<span class="w"> </span>foo.ppy<span class="w">           </span><span class="c1"># the @ppy.xla.jit functions as StableHLO for XLA</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a>ppy<span class="w"> </span>emit<span class="w"> </span>ir<span class="w"> </span>foo.ppy<span class="w">                  </span><span class="c1"># the canonical IR, to stdout</span>
+<a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a>ppy<span class="w"> </span>emit<span class="w"> </span>ir<span class="w"> </span>foo.ppy<span class="w"> </span>-o<span class="w"> </span>foo.ppyir<span class="w">     </span><span class="c1"># ... to a file</span>
+<a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a>ppy<span class="w"> </span>emit<span class="w"> </span>ir<span class="w"> </span>src/<span class="w"> </span>-o<span class="w"> </span>build/ir/<span class="w">        </span><span class="c1"># one .ppyir per module</span>
+<a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a>ppy<span class="w"> </span>emit<span class="w"> </span>linked-ir<span class="w"> </span>app.ppy<span class="w">           </span><span class="c1"># the whole program: every module linked and optimized as one</span>
+<a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a>ppy<span class="w"> </span>emit<span class="w"> </span>llvm-ir<span class="w"> </span>foo.ppy<span class="w">             </span><span class="c1"># what the LLVM backend makes of it</span>
+<a id="__codelineno-11-6" name="__codelineno-11-6" href="#__codelineno-11-6"></a>ppy<span class="w"> </span>emit<span class="w"> </span>c<span class="w"> </span>foo.ppy<span class="w">                   </span><span class="c1"># what the C backend makes of it: one C11 unit</span>
+<a id="__codelineno-11-7" name="__codelineno-11-7" href="#__codelineno-11-7"></a>ppy<span class="w"> </span>emit<span class="w"> </span>cpp<span class="w"> </span>foo.ppy<span class="w">                 </span><span class="c1"># ... as C++17, exports behind extern "C"</span>
+<a id="__codelineno-11-8" name="__codelineno-11-8" href="#__codelineno-11-8"></a>ppy<span class="w"> </span>emit<span class="w"> </span>cuda<span class="w"> </span>foo.ppy<span class="w">                </span><span class="c1"># the kernels, device functions, and launches as CUDA C++</span>
+<a id="__codelineno-11-9" name="__codelineno-11-9" href="#__codelineno-11-9"></a>ppy<span class="w"> </span>emit<span class="w"> </span>hip<span class="w"> </span>foo.ppy<span class="w">                 </span><span class="c1"># ... as HIP C++</span>
+<a id="__codelineno-11-10" name="__codelineno-11-10" href="#__codelineno-11-10"></a>ppy<span class="w"> </span>emit<span class="w"> </span>nvvm-ir<span class="w"> </span>foo.ppy<span class="w">             </span><span class="c1"># the kernels as LLVM IR for NVPTX</span>
+<a id="__codelineno-11-11" name="__codelineno-11-11" href="#__codelineno-11-11"></a>ppy<span class="w"> </span>emit<span class="w"> </span>ptx<span class="w"> </span>foo.ppy<span class="w">                 </span><span class="c1"># ... as PTX (PPY_CUDA_ARCH names the architecture, sm_70 by default)</span>
+<a id="__codelineno-11-12" name="__codelineno-11-12" href="#__codelineno-11-12"></a>ppy<span class="w"> </span>emit<span class="w"> </span>c<span class="w"> </span>--header-only<span class="w"> </span>foo.ppy<span class="w">     </span><span class="c1"># every function static inline in a header</span>
+<a id="__codelineno-11-13" name="__codelineno-11-13" href="#__codelineno-11-13"></a>ppy<span class="w"> </span>emit<span class="w"> </span>c<span class="w"> </span>--standalone<span class="w"> </span>prog.ppy<span class="w">     </span><span class="c1"># the whole program from main(), shims and all</span>
+<a id="__codelineno-11-14" name="__codelineno-11-14" href="#__codelineno-11-14"></a>ppy<span class="w"> </span>emit<span class="w"> </span>c<span class="w"> </span>--format<span class="w"> </span>foo.ppy<span class="w">          </span><span class="c1"># ... laid out by clang-format (the project's .clang-format, or LLVM style)</span>
+<a id="__codelineno-11-15" name="__codelineno-11-15" href="#__codelineno-11-15"></a>ppy<span class="w"> </span>emit<span class="w"> </span>header<span class="w"> </span>foo.ppy<span class="w">              </span><span class="c1"># the C declarations of the exports</span>
+<a id="__codelineno-11-16" name="__codelineno-11-16" href="#__codelineno-11-16"></a>ppy<span class="w"> </span>emit<span class="w"> </span>stablehlo<span class="w"> </span>foo.ppy<span class="w">           </span><span class="c1"># the @ppy.xla.jit functions as StableHLO for XLA</span>
+<a id="__codelineno-11-17" name="__codelineno-11-17" href="#__codelineno-11-17"></a>ppy<span class="w"> </span>emit<span class="w"> </span>toy<span class="w"> </span>foo.ppy<span class="w">                 </span><span class="c1"># a format an installed backend registers; ppy doctor lists them</span>
 </code></pre></div>
 <p>One rule for every kind: a single file with no <code>-o</code> prints to standard
 output, <code>-o FILE</code> writes that file, and a directory target writes one file
 per module into the directory <code>-o</code> names (and refuses to guess without
 it). <code>ir</code> is the canonical IR after the shared passes (<a href="../internals/ir/">The IR</a>);
 <code>llvm-ir</code> is the optimized LLVM IR. The output is deterministic for one
-input and configuration.</p>
+input and configuration. Any other kind is a format an installed backend
+registers (<a href="../internals/backends/">Backends</a>): the backend is loaded, its
+toolchain checked, the modules run through the shared passes and the
+backend's own, validated by it, and written under the same rule -- text
+or, for a format the backend declares binary, bytes; a directory target
+writes one file per module with the format's suffix. <code>--header-only</code>,
+<code>--standalone</code>, and <code>--format</code> belong to the builtin kinds. A format no
+backend emits, a format two backends claim, or a backend that cannot be
+loaded is <code>E1903</code> with the reason and the formats there are; a backend
+whose toolchain is missing is <code>E1801</code>; IR the backend refuses is <code>E1802</code>,
+with what it cannot take and where; a backend pass that breaks the IR is
+<code>E1904</code>.</p>
 <p><code>c</code> and <code>cpp</code> are the C backend's reading of the same IR: a translation
 unit per module in the internal ABI the runtime binds (atoms in, result
 slots out, a status back), every <code>@native.export</code> behind its public C
@@ -4673,9 +4782,9 @@ binds is internalized, small callees are inlined across the seam, dead
 private code goes -- and one object comes out; <code>ppy emit linked-ir</code> shows
 that program.</p>
 <h2 id="ppy-bind-bindings-for-foreign-code"><code>ppy bind</code> — bindings for foreign code<a class="headerlink" href="#ppy-bind-bindings-for-foreign-code" title="Permanent link">&para;</a></h2>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a>ppy<span class="w"> </span><span class="nb">bind</span><span class="w"> </span>header<span class="w"> </span>foo.h<span class="w">                     </span><span class="c1"># the bindings module, to stdout</span>
-<a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a>ppy<span class="w"> </span><span class="nb">bind</span><span class="w"> </span>header<span class="w"> </span>foo.h<span class="w"> </span>-o<span class="w"> </span>foo.ppy<span class="w">          </span><span class="c1"># ... to a file</span>
-<a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a>ppy<span class="w"> </span><span class="nb">bind</span><span class="w"> </span>header<span class="w"> </span>foo.h<span class="w"> </span>--library<span class="w"> </span>foo<span class="w"> </span>-I<span class="w"> </span>include/
+<div class="highlight"><pre><span></span><code><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a>ppy<span class="w"> </span><span class="nb">bind</span><span class="w"> </span>header<span class="w"> </span>foo.h<span class="w">                     </span><span class="c1"># the bindings module, to stdout</span>
+<a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a>ppy<span class="w"> </span><span class="nb">bind</span><span class="w"> </span>header<span class="w"> </span>foo.h<span class="w"> </span>-o<span class="w"> </span>foo.ppy<span class="w">          </span><span class="c1"># ... to a file</span>
+<a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a>ppy<span class="w"> </span><span class="nb">bind</span><span class="w"> </span>header<span class="w"> </span>foo.h<span class="w"> </span>--library<span class="w"> </span>foo<span class="w"> </span>-I<span class="w"> </span>include/
 </code></pre></div>
 <p>Clang reads the header -- the real parser, through libclang
 (<code>ppy-lang[bind]</code>), never a regular expression -- and the importer walks
@@ -4692,15 +4801,15 @@ and listed by name at the end of the module. The module type-checks under
 directly in native code. A header Clang cannot read is refused with its
 line (<code>E1806</code>).</p>
 <h2 id="ppy-explain-why-it-compiled-that-way"><code>ppy explain</code> — why it compiled that way<a class="headerlink" href="#ppy-explain-why-it-compiled-that-way" title="Permanent link">&para;</a></h2>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a>ppy<span class="w"> </span>explain<span class="w"> </span>LOCATION
+<div class="highlight"><pre><span></span><code><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a>ppy<span class="w"> </span>explain<span class="w"> </span>LOCATION
 </code></pre></div>
 <p><code>LOCATION</code> is a <code>FILE:LINE</code>, a function name or qualname, or a diagnostic code.
 For a function it reports the semantic type, effects, purity, the backend
 decision, the representation chosen for every parameter, and each library
 call's lowering with its guards.</p>
 <h2 id="ppy-inspect-generated-artifacts"><code>ppy inspect</code> — generated artifacts<a class="headerlink" href="#ppy-inspect-generated-artifacts" title="Permanent link">&para;</a></h2>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a>ppy<span class="w"> </span>inspect<span class="w"> </span>TARGET<span class="w"> </span><span class="o">[</span>--backend<span class="w"> </span><span class="o">{</span>python,llvm<span class="o">}]</span><span class="w"> </span><span class="o">[</span>--ir<span class="o">]</span>
-<a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a>ppy<span class="w"> </span>inspect<span class="w"> </span>TARGET<span class="w"> </span>--stage<span class="w"> </span><span class="o">{</span>analysis,ir,canonical,optimized,tensor,columnar,gpu,stablehlo,llvm<span class="o">}</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a>ppy<span class="w"> </span>inspect<span class="w"> </span>TARGET<span class="w"> </span><span class="o">[</span>--backend<span class="w"> </span><span class="o">{</span>python,llvm<span class="o">}]</span><span class="w"> </span><span class="o">[</span>--ir<span class="o">]</span>
+<a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a>ppy<span class="w"> </span>inspect<span class="w"> </span>TARGET<span class="w"> </span>--stage<span class="w"> </span><span class="o">{</span>analysis,ir,canonical,optimized,tensor,columnar,gpu,stablehlo,llvm<span class="o">}</span>
 </code></pre></div>
 <p>The optimized Python by default, including plugin rewrites, so it is what to
 read when a result differs from plain CPython. <code>--ir</code> prints what the native
@@ -4714,8 +4823,8 @@ lowers to loops, <code>columnar</code> the same point for the modules holding
 columnar operations; <code>optimized</code> what a backend receives; <code>gpu</code> the device
 code alone; <code>stablehlo</code> and <code>llvm</code> what those backends write.</p>
 <h2 id="sanitizers-sanitize">Sanitizers: <code>--sanitize</code><a class="headerlink" href="#sanitizers-sanitize" title="Permanent link">&para;</a></h2>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a>ppy<span class="w"> </span>run<span class="w"> </span>--sanitize<span class="w"> </span>bounds,overflow<span class="w"> </span>foo.ppy
-<a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a>ppy<span class="w"> </span>build<span class="w"> </span>--sanitize<span class="w"> </span>pointer,alignment<span class="w"> </span>.
+<div class="highlight"><pre><span></span><code><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a>ppy<span class="w"> </span>run<span class="w"> </span>--sanitize<span class="w"> </span>bounds,overflow<span class="w"> </span>foo.ppy
+<a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a>ppy<span class="w"> </span>build<span class="w"> </span>--sanitize<span class="w"> </span>pointer,alignment<span class="w"> </span>.
 </code></pre></div>
 <p>A sanitizer instruments the IR with checks the program did not ask for:
 <code>bounds</code> checks every buffer index, whether or not a proof or a hoist
@@ -4742,10 +4851,10 @@ way, so a tool can count by category across versions. A build guided by a
 profile lists it first: the file, its runs, and every measured function's
 calls, hotness, and argument kinds.</p>
 <h2 id="profile-guided-optimization-profile-pgo">Profile-guided optimization: <code>--profile</code>, <code>--pgo</code><a class="headerlink" href="#profile-guided-optimization-profile-pgo" title="Permanent link">&para;</a></h2>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a>ppy<span class="w"> </span>run<span class="w"> </span>--profile<span class="w"> </span>foo.ppy<span class="w">            </span><span class="c1"># runs, then writes foo.ppyprof</span>
-<a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a>ppy<span class="w"> </span>run<span class="w"> </span>--profile<span class="w"> </span>--profile-out<span class="w"> </span>p.ppyprof<span class="w"> </span>foo.ppy<span class="w"> </span>--<span class="w"> </span>args
-<a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a>ppy<span class="w"> </span>build<span class="w"> </span>--pgo<span class="w"> </span>foo.ppyprof<span class="w"> </span>foo.ppy
-<a id="__codelineno-15-4" name="__codelineno-15-4" href="#__codelineno-15-4"></a>ppy<span class="w"> </span>run<span class="w"> </span>--pgo<span class="w"> </span>foo.ppyprof<span class="w"> </span>foo.ppy
+<div class="highlight"><pre><span></span><code><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a>ppy<span class="w"> </span>run<span class="w"> </span>--profile<span class="w"> </span>foo.ppy<span class="w">            </span><span class="c1"># runs, then writes foo.ppyprof</span>
+<a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a>ppy<span class="w"> </span>run<span class="w"> </span>--profile<span class="w"> </span>--profile-out<span class="w"> </span>p.ppyprof<span class="w"> </span>foo.ppy<span class="w"> </span>--<span class="w"> </span>args
+<a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a>ppy<span class="w"> </span>build<span class="w"> </span>--pgo<span class="w"> </span>foo.ppyprof<span class="w"> </span>foo.ppy
+<a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a>ppy<span class="w"> </span>run<span class="w"> </span>--pgo<span class="w"> </span>foo.ppyprof<span class="w"> </span>foo.ppy
 </code></pre></div>
 <p>A profiling run is a JIT run with counters: every native function counts
 its blocks and the taken edge of every conditional branch, and the boundary
@@ -4775,18 +4884,18 @@ is fast, never what is computed: the program's output under <code>--pgo</code> i
 the program's output. The profile's content is part of every cache key
 and of the warm run directory's name, so a new profile is a new build.</p>
 <h2 id="ppy-test"><code>ppy test</code><a class="headerlink" href="#ppy-test" title="Permanent link">&para;</a></h2>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a>ppy<span class="w"> </span><span class="nb">test</span><span class="w"> </span><span class="o">[</span>PATH<span class="o">]</span><span class="w"> </span><span class="o">[</span>--backend<span class="w"> </span><span class="o">{</span>differential,pytest<span class="o">}]</span><span class="w"> </span><span class="o">[</span>--<span class="w"> </span>ARGS...<span class="o">]</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a>ppy<span class="w"> </span><span class="nb">test</span><span class="w"> </span><span class="o">[</span>PATH<span class="o">]</span><span class="w"> </span><span class="o">[</span>--backend<span class="w"> </span><span class="o">{</span>differential,pytest<span class="o">}]</span><span class="w"> </span><span class="o">[</span>--<span class="w"> </span>ARGS...<span class="o">]</span>
 </code></pre></div>
 <p><code>differential</code> (default) runs each program on all three paths and compares
 stdout, stderr, and exit status.</p>
 <p><code>pytest</code> runs an ordinary test suite with the <code>.ppy</code> import hook already
 installed and the project's source roots registered, so tests can import the
 modules under test. Arguments after <code>--</code> reach pytest.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a>ppy<span class="w"> </span><span class="nb">test</span><span class="w"> </span>--backend<span class="w"> </span>pytest<span class="w"> </span>tests<span class="w"> </span>--<span class="w"> </span>-k<span class="w"> </span>buffers<span class="w"> </span>-q
+<div class="highlight"><pre><span></span><code><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a>ppy<span class="w"> </span><span class="nb">test</span><span class="w"> </span>--backend<span class="w"> </span>pytest<span class="w"> </span>tests<span class="w"> </span>--<span class="w"> </span>-k<span class="w"> </span>buffers<span class="w"> </span>-q
 </code></pre></div>
 <h2 id="ppy-lint"><code>ppy lint</code><a class="headerlink" href="#ppy-lint" title="Permanent link">&para;</a></h2>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a>ppy<span class="w"> </span>lint<span class="w"> </span><span class="o">[</span>PATH<span class="o">]</span><span class="w"> </span><span class="o">[</span>--backend<span class="w"> </span><span class="o">{</span>auto,pyright,pylint,ruff,mypy<span class="o">}]</span>
-<a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a><span class="w">         </span><span class="o">[</span>--all-rules<span class="o">]</span><span class="w"> </span><span class="o">[</span>--no-strict<span class="o">]</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a>ppy<span class="w"> </span>lint<span class="w"> </span><span class="o">[</span>PATH<span class="o">]</span><span class="w"> </span><span class="o">[</span>--backend<span class="w"> </span><span class="o">{</span>auto,pyright,pylint,ruff,mypy<span class="o">}]</span>
+<a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a><span class="w">         </span><span class="o">[</span>--all-rules<span class="o">]</span><span class="w"> </span><span class="o">[</span>--no-strict<span class="o">]</span>
 </code></pre></div>
 <p>External tools key off the <code>.py</code> extension, so the sources are mirrored into a
 staging tree, the tool runs there, and the paths in its output are mapped back
@@ -4795,7 +4904,7 @@ mode — <code>pyright</code> gets <code>typeCheckingMode = "strict"</code> — 
 project's own rule selection, because "every rule there is" is not the same
 kind of setting. <code>--all-rules</code> turns <code>ruff</code> up to <code>--select ALL</code> when that is
 what you want; <code>--no-strict</code> turns a type checker down.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a>ppy<span class="w"> </span>lint<span class="w"> </span>--backend<span class="w"> </span>pyright<span class="w"> </span>src
+<div class="highlight"><pre><span></span><code><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a>ppy<span class="w"> </span>lint<span class="w"> </span>--backend<span class="w"> </span>pyright<span class="w"> </span>src
 </code></pre></div>
 <p>The staging tree mirrors the project: every tool config at the root
 (<code>pyproject.toml</code>, <code>pyrightconfig.json</code>, <code>.pylintrc</code>, <code>ruff.toml</code>,
@@ -4803,7 +4912,7 @@ what you want; <code>--no-strict</code> turns a type checker down.</p>
 staged sources, so imports resolve and the project's own configuration —
 <code>extraPaths</code>, per-rule overrides, execution environments — keeps applying.</p>
 <h2 id="ppy-fmt-formatting"><code>ppy fmt</code> — formatting<a class="headerlink" href="#ppy-fmt-formatting" title="Permanent link">&para;</a></h2>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a>ppy<span class="w"> </span>fmt<span class="w"> </span><span class="o">[</span>PATH<span class="o">]</span><span class="w"> </span><span class="o">[</span>--check<span class="o">]</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a>ppy<span class="w"> </span>fmt<span class="w"> </span><span class="o">[</span>PATH<span class="o">]</span><span class="w"> </span><span class="o">[</span>--check<span class="o">]</span>
 </code></pre></div>
 <p>The built-in pass runs first and settles what an external formatter has no
 opinion about: import grouping that keeps <code>ppy</code> ahead of a sibling module, and
@@ -4815,9 +4924,9 @@ config, crash, timeout — is an error (<code>E1802</code>), not a silent fallba
 byte-identical on every machine. Pass <code>--format</code>, or set
 <code>[tool.ppy.convert] format = true</code>, to apply the project's style on top.</p>
 <h2 id="ppy-cache"><code>ppy cache</code><a class="headerlink" href="#ppy-cache" title="Permanent link">&para;</a></h2>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a>ppy<span class="w"> </span>cache<span class="w"> </span>status
-<a id="__codelineno-21-2" name="__codelineno-21-2" href="#__codelineno-21-2"></a>ppy<span class="w"> </span>cache<span class="w"> </span>clean
-<a id="__codelineno-21-3" name="__codelineno-21-3" href="#__codelineno-21-3"></a>ppy<span class="w"> </span>cache<span class="w"> </span>gc<span class="w"> </span><span class="o">[</span>--max-age-days<span class="w"> </span>N<span class="o">]</span><span class="w"> </span><span class="o">[</span>--max-bytes<span class="w"> </span>N<span class="o">]</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a>ppy<span class="w"> </span>cache<span class="w"> </span>status
+<a id="__codelineno-22-2" name="__codelineno-22-2" href="#__codelineno-22-2"></a>ppy<span class="w"> </span>cache<span class="w"> </span>clean
+<a id="__codelineno-22-3" name="__codelineno-22-3" href="#__codelineno-22-3"></a>ppy<span class="w"> </span>cache<span class="w"> </span>gc<span class="w"> </span><span class="o">[</span>--max-age-days<span class="w"> </span>N<span class="o">]</span><span class="w"> </span><span class="o">[</span>--max-bytes<span class="w"> </span>N<span class="o">]</span>
 </code></pre></div>
 <p>A cache key covers the source digest, compiler version, optimization level,
 directives, dependency hashes, and the fingerprints of the plugins the module
@@ -4870,13 +4979,17 @@ dependent's key includes the public summaries it compiled against.</p>
 <p>Removes the whole cache directory. <code>ppy cache clean</code> empties it but leaves the
 directory; neither touches an output directory named with <code>build -o</code>.</p>
 <h2 id="ppy-doctor"><code>ppy doctor</code><a class="headerlink" href="#ppy-doctor" title="Permanent link">&para;</a></h2>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a>ppy<span class="w"> </span>doctor<span class="w"> </span><span class="o">[</span>--verbose<span class="o">]</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a>ppy<span class="w"> </span>doctor<span class="w"> </span><span class="o">[</span>--verbose<span class="o">]</span>
 </code></pre></div>
 <p>Versions, project root, cache location, effective configuration, whether the
-LLVM backend and native toolchain are usable, and each plugin's fingerprint.
-Run it first when something compiles on one machine and not another.</p>
+LLVM backend and native toolchain are usable, each plugin's fingerprint,
+and every backend -- builtin and installed -- with its toolchain status,
+the formats it emits, and its fingerprint; an installed backend that
+cannot be loaded is printed as <code>unusable</code> with the reason, and a name two
+distributions register is reported. Run it first when something compiles
+on one machine and not another.</p>
 <h2 id="ppy-lsp"><code>ppy lsp</code><a class="headerlink" href="#ppy-lsp" title="Permanent link">&para;</a></h2>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a>ppy<span class="w"> </span>lsp<span class="w"> </span><span class="o">[</span>--root<span class="w"> </span>DIR<span class="o">]</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a>ppy<span class="w"> </span>lsp<span class="w"> </span><span class="o">[</span>--root<span class="w"> </span>DIR<span class="o">]</span>
 </code></pre></div>
 <p>LSP over stdio.</p>
 <h2 id="configuration">Configuration<a class="headerlink" href="#configuration" title="Permanent link">&para;</a></h2>

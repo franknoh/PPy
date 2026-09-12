@@ -2925,6 +2925,8 @@
       
         
       
+        
+      
     
     
     
@@ -3050,6 +3052,34 @@
     
   
     Plugin API
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/backends/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Backend API
   
 
     
@@ -3319,6 +3349,8 @@
       
         
       
+        
+      
     
     
     
@@ -3500,6 +3532,34 @@
     
   
     Plugins
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../internals/backends/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Backends
   
 
     
@@ -3915,6 +3975,29 @@
 <h2 id="030-unreleased">0.3.0 — unreleased<a class="headerlink" href="#030-unreleased" title="Permanent link">&para;</a></h2>
 <p>Work toward the next release, on <code>dev</code>; alphas of it are tagged <code>v0.3.0aN</code>.</p>
 <ul>
+<li>A backend can be a package of its own. <code>ppy_compiler.backend</code> is the
+  interface (<code>Backend</code>, <code>BackendContext</code>, <code>EmitFormat</code>, <code>BuildResult</code>,
+  <code>ToolchainStatus</code>, <code>BackendValidationError</code>; <code>BACKEND_API_VERSION</code> 1, a
+  version of the interface, not of the compiler): a backend consumes the
+  canonical IR after the shared passes, hangs its own passes at the new
+  <code>backend</code> stage, refuses in <code>validate</code> what it cannot take, and emits
+  text or bytes or builds. A distribution registers one through the
+  <code>ppy.backends</code> entry-point group; discovery reads the entry points
+  without importing, and the package is imported when its backend is
+  asked for. <code>ppy emit &lt;format&gt;</code> takes any format an installed backend
+  registers under the rules the builtin kinds follow; <code>ppy build --backend
+  NAME</code> builds through it; <code>ppy doctor</code> lists every backend with its
+  toolchain, formats, and fingerprint; <code>[tool.ppy.backends.&lt;name&gt;]</code> is
+  the backend's own configuration. The artifact key carries the backend's
+  name, fingerprint, configuration, and target (the LLVM road's now
+  carries the <code>llvmlite</code> under it too). Refusals are <code>E1903</code> (a backend
+  that cannot be used: unknown, registered twice, another interface
+  version, a failing factory), <code>E1801</code> (toolchain missing), <code>E1802</code> (IR
+  refused, with what and where), and <code>E1904</code> (a backend pass that broke
+  the IR, named). The shared IR pipeline moved out of the LLVM package
+  into <code>driver/ir_pipeline.py</code> (<code>canonical_ir_modules</code>,
+  <code>optimize_shared_ir</code>); the builtin backends stand in the same registry
+  with their formats, fingerprints, and toolchain status.</li>
 <li><code>ppy.input[T]()</code> reads one line and means what the builtin <code>input()</code>
   means: <code>ppy.input[str]()</code> is the line with its newline removed, spaces
   kept, <code>""</code> for an empty line, <code>EOFError</code> at the end; <code>ppy.input[int]()</code>
@@ -4215,7 +4298,7 @@
   as they should, and the entry point bears the function's qualified name
   rather than <code>call_0</code>.</li>
 <li>The landing page's test and diagnostic-code counts come from the tree
-  through markers (<code>1061</code>, <code>76</code>), and the
+  through markers (<code>1085</code>, <code>78</code>), and the
   guard refuses those spelled as digits. The GPU guide says what a ROCm
   machine gets: no launch, <code>compiled</code> false, <code>ppy emit hip</code> for <code>hipcc</code>.</li>
 <li>The ROCm harness installs every group when the image's JAX allows it

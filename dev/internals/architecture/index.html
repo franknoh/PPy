@@ -2927,6 +2927,8 @@
       
         
       
+        
+      
     
     
     
@@ -3052,6 +3054,34 @@
     
   
     Plugin API
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/backends/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Backend API
   
 
     
@@ -3307,6 +3337,8 @@
       
         
           
+        
+      
         
       
         
@@ -3662,6 +3694,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../backends/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Backends
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../solver/" class="md-nav__link">
         
   
@@ -3919,17 +3979,20 @@
 <a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>     ├── migration/                              rewrite passes + report behind `ppy migrate`
 <a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>     ├── opt/                                   AST passes for the Python backend
 <a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>     ├── lowering/                              typed AST → canonical IR (ir/)
-<a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a>     │      ir/transforms                       passes; ir/linker joins modules into a program
+<a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a>     │      driver/ir_pipeline                  the shared passes (ir/transforms); ir/linker joins modules
 <a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a>     │      ├── backend/llvm/                   IR → LLVM IR → wrapper → link/JIT
 <a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a>     │      ├── backend/c/                      IR → C11, C++17, CUDA, HIP source
 <a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a>     │      ├── backend/nvvm/                   IR → NVVM IR → PTX, launched by ppy_runtime.cuda
-<a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a>     │      └── backend/stablehlo/              IR → StableHLO, run by ppy_runtime.xla
-<a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a>     └── lsp/, driver/explain                   the same analysis, served interactively
+<a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a>     │      ├── backend/stablehlo/              IR → StableHLO, run by ppy_runtime.xla
+<a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a>     │      └── an installed backend            IR → whatever it makes (ppy.backends entry point)
+<a id="__codelineno-0-19" name="__codelineno-0-19" href="#__codelineno-0-19"></a>     └── lsp/, driver/explain                   the same analysis, served interactively
 </code></pre></div>
 <p>Analysis produces data; only <code>driver/rewrite.py</code> touches source text, and only
 through the <code>ConversionPlan</code> that <code>driver/convert.py</code> filled in. Nothing in
 <code>analysis/</code> knows the output is text, and nothing in the backends re-derives
-what the checker already proved.</p>
+what the checker already proved. The backends, the compiler's own and an
+installed one alike, read the canonical IR after the shared passes and
+nothing above it (<a href="../backends/">Backends</a>).</p>
 <h2 id="modules">Modules<a class="headerlink" href="#modules" title="Permanent link">&para;</a></h2>
 <table>
 <thead>
@@ -3996,8 +4059,12 @@ what the checker already proved.</p>
 <td>IR → StableHLO for <code>@ppy.xla.jit</code> functions; <code>ppy_runtime.xla</code> compiles and runs it through PJRT.</td>
 </tr>
 <tr>
+<td><code>backend/</code></td>
+<td><code>base</code> (the interface a backend implements: formats, passes, validation, emit, build, toolchain, fingerprint), <code>registry</code> (the builtin backends and the installed ones, found through the <code>ppy.backends</code> entry-point group and loaded when asked for), <code>builtin</code> (the compiler's own backends described through the same interface). See <a href="../backends/">Backends</a>.</td>
+</tr>
+<tr>
 <td><code>backend/llvm/</code></td>
-<td><code>ir_pipeline</code> (the passes, sanitizers, and profile around a module's IR) and <code>from_ir</code> (canonical IR → LLVM IR, dialect by dialect; <code>lowering</code> keeps the native ABI and eligibility rules, <code>lowering_cache</code> what a build reuses), <code>wrapper</code> (generated CPython-ABI entry points, <code>METH_FASTCALL</code>, GIL release), <code>fusion</code> (NumPy elementwise loops), <code>specialize</code>/<code>jit</code> (guarded runtime specialization), <code>parallel</code> (the worker pool), <code>link</code> (objects → shared library, for the host or a <code>--target</code>), <code>extension</code>/<code>packaging</code> (<code>--python-extension</code>, <code>--library</code>).</td>
+<td><code>ir_pipeline</code> (the LLVM road over the shared passes, which live in <code>driver/ir_pipeline</code>) and <code>from_ir</code> (canonical IR → LLVM IR, dialect by dialect; <code>lowering</code> keeps the native ABI and eligibility rules, <code>lowering_cache</code> what a build reuses), <code>wrapper</code> (generated CPython-ABI entry points, <code>METH_FASTCALL</code>, GIL release), <code>fusion</code> (NumPy elementwise loops), <code>specialize</code>/<code>jit</code> (guarded runtime specialization), <code>parallel</code> (the worker pool), <code>link</code> (objects → shared library, for the host or a <code>--target</code>), <code>extension</code>/<code>packaging</code> (<code>--python-extension</code>, <code>--library</code>).</td>
 </tr>
 <tr>
 <td><code>plugins/</code></td>
@@ -4009,7 +4076,7 @@ what the checker already proved.</p>
 </tr>
 <tr>
 <td><code>driver/</code></td>
-<td>CLI, pipeline orchestration, <code>convert</code> (what to write) and <code>rewrite</code> (writing it) either side of <code>plan</code>, fmt, lint, test, explain.</td>
+<td>CLI, pipeline orchestration, <code>ir_pipeline</code> (the canonical IR of a project after the shared passes -- the one road every backend takes -- and the backend boundary after it), <code>convert</code> (what to write) and <code>rewrite</code> (writing it) either side of <code>plan</code>, fmt, lint, test, explain.</td>
 </tr>
 <tr>
 <td><code>lsp/</code></td>

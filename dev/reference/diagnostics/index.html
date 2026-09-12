@@ -2927,6 +2927,8 @@
       
         
       
+        
+      
     
     
     
@@ -3052,6 +3054,34 @@
     
   
     Plugin API
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/backends/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Backend API
   
 
     
@@ -3379,10 +3409,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#plugins" class="md-nav__link">
+  <a href="#plugins-and-backends" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Plugins
+        Plugins and backends
       
     </span>
   </a>
@@ -3533,6 +3563,8 @@
       
         
           
+        
+      
         
       
         
@@ -3730,6 +3762,34 @@
     
   
     Plugins
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../internals/backends/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Backends
   
 
     
@@ -4019,10 +4079,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#plugins" class="md-nav__link">
+  <a href="#plugins-and-backends" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Plugins
+        Plugins and backends
       
     </span>
   </a>
@@ -4454,7 +4514,7 @@ sound fallback, and never the rest.</p>
 </tr>
 </tbody>
 </table>
-<h2 id="plugins">Plugins<a class="headerlink" href="#plugins" title="Permanent link">&para;</a></h2>
+<h2 id="plugins-and-backends">Plugins and backends<a class="headerlink" href="#plugins-and-backends" title="Permanent link">&para;</a></h2>
 <table>
 <thead>
 <tr>
@@ -4470,6 +4530,14 @@ sound fallback, and never the rest.</p>
 <tr>
 <td><code>E1902</code></td>
 <td>A plugin's compiler pass left the IR invalid; the pass is named.</td>
+</tr>
+<tr>
+<td><code>E1903</code></td>
+<td>A backend could not be used: unknown, registered twice, written against another interface version, or not loadable; the reason is named.</td>
+</tr>
+<tr>
+<td><code>E1904</code></td>
+<td>A backend's compiler pass left the IR invalid; the pass is named.</td>
 </tr>
 </tbody>
 </table>

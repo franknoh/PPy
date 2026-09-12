@@ -2927,6 +2927,8 @@
       
         
       
+        
+      
     
     
     
@@ -3052,6 +3054,34 @@
     
   
     Plugin API
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/backends/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Backend API
   
 
     
@@ -3439,6 +3469,8 @@
       
         
       
+        
+      
     
     
     
@@ -3620,6 +3652,34 @@
     
   
     Plugins
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../internals/backends/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Backends
   
 
     
@@ -3952,6 +4012,11 @@ happens when the two sides of a boundary disagree.</p>
 <td>diagnostic codes (<code>E1xxx</code>, <code>W2xxx</code>, <code>R3xxx</code>)</td>
 <td>settling</td>
 <td>a code keeps its meaning; new codes are added freely</td>
+</tr>
+<tr>
+<td>the backend interface in <code>backend/base.py</code> (<code>BACKEND_API_VERSION</code> 1)</td>
+<td>experimental</td>
+<td>added in 0.3: a package registers a backend through <code>ppy.backends</code>, receives the canonical IR after the shared passes, and emits or builds; the version number is the interface's own, bumped when a method's meaning changes</td>
 </tr>
 <tr>
 <td>the plugin interface in <code>plugins/base.py</code></td>

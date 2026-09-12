@@ -29,6 +29,10 @@
          <lastmod>2026-09-12</lastmod>
     </url>
     <url>
+         <loc>https://ppy.franknoh.dev/dev/api/backends/</loc>
+         <lastmod>2026-09-12</lastmod>
+    </url>
+    <url>
          <loc>https://ppy.franknoh.dev/dev/api/ir/</loc>
          <lastmod>2026-09-12</lastmod>
     </url>
@@ -302,6 +306,10 @@
     </url>
     <url>
          <loc>https://ppy.franknoh.dev/dev/internals/architecture/</loc>
+         <lastmod>2026-09-12</lastmod>
+    </url>
+    <url>
+         <loc>https://ppy.franknoh.dev/dev/internals/backends/</loc>
          <lastmod>2026-09-12</lastmod>
     </url>
     <url>

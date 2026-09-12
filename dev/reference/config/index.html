@@ -2927,6 +2927,8 @@
       
         
       
+        
+      
     
     
     
@@ -3052,6 +3054,34 @@
     
   
     Plugin API
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/backends/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Backend API
   
 
     
@@ -3336,6 +3366,8 @@
       
         
       
+        
+      
     
     
     
@@ -3517,6 +3549,34 @@
     
   
     Plugins
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../internals/backends/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Backends
   
 
     
@@ -3734,6 +3794,10 @@ walking up to the nearest <code>pyproject.toml</code>, <code>ppy.toml</code>, or
 <a id="__codelineno-0-43" name="__codelineno-0-43" href="#__codelineno-0-43"></a>
 <a id="__codelineno-0-44" name="__codelineno-0-44" href="#__codelineno-0-44"></a><span class="k">[tool.ppy.plugins.numpy]</span>
 <a id="__codelineno-0-45" name="__codelineno-0-45" href="#__codelineno-0-45"></a><span class="n">enabled</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">true</span><span class="w">                    </span><span class="c1"># any other keys are plugin options</span>
+<a id="__codelineno-0-46" name="__codelineno-0-46" href="#__codelineno-0-46"></a>
+<a id="__codelineno-0-47" name="__codelineno-0-47" href="#__codelineno-0-47"></a><span class="k">[tool.ppy.backends.toy]</span>
+<a id="__codelineno-0-48" name="__codelineno-0-48" href="#__codelineno-0-48"></a><span class="n">target</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">"rngd"</span><span class="w">                   </span><span class="c1"># the one key the driver reads; the rest is the backend's</span>
+<a id="__codelineno-0-49" name="__codelineno-0-49" href="#__codelineno-0-49"></a><span class="n">sdk-version</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">"1.4"</span>
 </code></pre></div>
 <table>
 <thead>
@@ -3768,6 +3832,11 @@ walking up to the nearest <code>pyproject.toml</code>, <code>ppy.toml</code>, or
 <td><code>llvm.prover</code></td>
 <td><code>off</code></td>
 <td><code>z3</code> proves overflow guards away where the ranges the analysis established allow it: a chain of <code>+</code>, <code>-</code>, <code>*</code> over values with declared ranges and <code>range()</code> bounds that provably fits a 64-bit word is emitted without its guard, and the function checks its parameters' declared ranges once on entry so that a call outside them takes the fallback. Needs <code>ppy-lang[solver]</code>; without the solver the setting is an error. Never runs in <code>ppy check</code>.</td>
+</tr>
+<tr>
+<td><code>backends.&lt;name&gt;.*</code></td>
+<td>unset</td>
+<td>an installed backend's own table (<a href="../../internals/backends/">Backends</a>), handed to that backend and to no other; <code>target</code> also goes into the artifact's cache key. A table for a backend that is not installed is not an error.</td>
 </tr>
 <tr>
 <td><code>plugins.&lt;name&gt;.enabled</code></td>

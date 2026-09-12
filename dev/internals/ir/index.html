@@ -2927,6 +2927,8 @@
       
         
       
+        
+      
     
     
     
@@ -3052,6 +3054,34 @@
     
   
     Plugin API
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/backends/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Backend API
   
 
     
@@ -3307,6 +3337,8 @@
       
         
           
+        
+      
         
       
         
@@ -3840,6 +3872,34 @@
     
   
     Plugins
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../backends/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Backends
   
 
     
@@ -4815,7 +4875,11 @@ loop of them with no temporaries), <code>lower-tensor</code>, <code>lower-regex<
 <code>transforms.default_pipeline(level)</code> orders them and marks the
 stages -- <code>after-ir-generation</code>, <code>after-canonicalization</code>,
 <code>before-optimization</code>, <code>after-optimization</code>, <code>before-backend</code> -- where a
-plugin's <code>register_stage_pass</code> puts a pass of its own.</p>
+plugin's <code>register_stage_pass</code> puts a pass of its own, and last the
+<code>backend</code> stage, where a backend's <code>register_passes</code> puts its own before
+its validation. <code>driver/ir_pipeline.py</code> runs that pipeline over every
+module of a project (<code>canonical_ir_modules</code>) and is the one road to every
+backend, builtin or installed (<a href="../backends/">Backends</a>).</p>
 <h2 id="from-python-to-the-ir">From Python to the IR<a class="headerlink" href="#from-python-to-the-ir" title="Permanent link">&para;</a></h2>
 <p><code>ppy_compiler.lowering.ast_to_ir</code> reads an analyzed function once and
 writes IR: parameters become entry-block arguments held in stack slots,
