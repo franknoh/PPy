@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import subprocess
 import sys
 import textwrap
@@ -20,6 +21,7 @@ from ppy_compiler.backend import (
     BackendLoadError,
     available_backends,
     discover_external_backends,
+    discover_format_owners,
     emit_format_owner,
     load_backend,
 )
@@ -84,6 +86,7 @@ DUMMY = '''
 
     class DummyBackend(Backend):
         name = "dummy"
+        api_version = 1
 
         def fingerprint(self):
             return f"dummy:{self.options.get('sdk', '0')}"
@@ -92,10 +95,19 @@ DUMMY = '''
             return (
                 EmitFormat("dummy", ".dummy", description="a summary of the IR"),
                 EmitFormat("dummy-bin", ".dbin", binary=True, description="the summary, packed"),
+                EmitFormat(
+                    "dummy-prog",
+                    ".dprog",
+                    scope="program",
+                    description="every module in one artifact",
+                ),
+                EmitFormat(
+                    "dummy-prog-bin", ".dpbin", binary=True, scope="program", description="packed"
+                ),
             )
 
-        def register_passes(self, manager):
-            manager.register_stage_pass("backend", lambda: Tag(bool(self.options.get("break"))))
+        def register_passes(self, passes):
+            passes.add(lambda: Tag(bool(self.options.get("break"))))
 
         def validate(self, module, context):
             refused = str(self.options.get("refuse", ""))
@@ -130,8 +142,19 @@ DUMMY = '''
             if format == "dummy-bin":
                 return b"DUMMY\\0" + text.encode("utf-8")
             if format == "dummy":
+                if self.options.get("wrong-type"):
+                    return b"bytes where the format says text"
                 return text
             return super().emit(module, format, context)
+
+        def emit_program(self, modules, format, context):
+            joined = "".join(self._summary(m, context) for _n, m in sorted(modules.items()))
+            head = "program of " + str(len(modules)) + ": " + ", ".join(sorted(modules))
+            if format == "dummy-prog-bin":
+                return b"DPROG" + (head + chr(10) + joined).encode("utf-8")
+            if format == "dummy-prog":
+                return head + chr(10) + joined
+            return super().emit_program(modules, format, context)
 
         def build(self, modules, output, context):
             written = []
@@ -164,17 +187,30 @@ DUMMY = '''
 
 
 def _install_backend(
-    tmp_path: Path, monkeypatch, source: str, name: str = "dummy", module: str | None = None
+    tmp_path: Path,
+    monkeypatch,
+    source: str,
+    name: str = "dummy",
+    module: str | None = None,
+    version: str = "1.0",
+    formats: tuple[str, ...] = (),
 ) -> None:
-    """A distribution in `tmp_path/site` registering `name` in the `ppy.backends` group."""
+    """A distribution in `tmp_path/site` registering `name` in the `ppy.backends` group.
+
+    `formats` also declares them in `ppy.backend-formats`, the optional group
+    that says which backend owns which format without importing anything.
+    """
     module = module or f"{name}_backend"
     site = tmp_path / "site"
     site.mkdir(exist_ok=True)
     (site / f"{module}.py").write_text(textwrap.dedent(source), encoding="utf-8")
-    info = site / f"{module}-1.0.dist-info"
-    info.mkdir()
-    (info / "METADATA").write_text(f"Metadata-Version: 2.1\nName: {module}\nVersion: 1.0\n")
-    (info / "entry_points.txt").write_text(f"[ppy.backends]\n{name} = {module}:create_backend\n")
+    info = site / f"{module}-{version}.dist-info"
+    info.mkdir(exist_ok=True)
+    (info / "METADATA").write_text(f"Metadata-Version: 2.1\nName: {module}\nVersion: {version}\n")
+    entries = f"[ppy.backends]\n{name} = {module}:create_backend\n"
+    if formats:
+        entries += "\n[ppy.backend-formats]\n" + "".join(f"{f} = {name}\n" for f in formats)
+    (info / "entry_points.txt").write_text(entries)
     monkeypatch.syspath_prepend(str(site))
     sys.modules.pop(module, None)
 
@@ -567,8 +603,454 @@ def test_doctor_lists_every_backend_with_its_toolchain(tmp_path: Path, monkeypat
     assert "backends:" in lines
     dummy = next(line for line in lines if line.startswith("  dummy"))
     assert "unavailable, missing dummy-sdk" in dummy and "dummy_backend:create_backend" in dummy
-    assert any("emits dummy, dummy-bin; fingerprint dummy:0" in line for line in lines)
+    assert any(
+        "emits dummy, dummy-bin, dummy-prog, dummy-prog-bin; fingerprint dummy:0" in line
+        for line in lines
+    )
     broken = next(line for line in lines if line.startswith("  broken"))
     assert "unusable" in broken and "no sdk" in broken
     llvm = next(line for line in lines if line.startswith("  llvm "))
     assert "emits llvm-ir" in "\n".join(lines) and ("available" in llvm)
+
+
+# -- the interface version is the backend package's own ----------------------------
+
+#: A backend whose only interesting property is the version it declares.
+VERSIONED = """
+    from ppy_compiler.backend import Backend, EmitFormat
+
+
+    class Versioned(Backend):
+        name = "versioned"
+    {declaration}
+
+        def emit_formats(self):
+            return (EmitFormat("versioned", ".v"),)
+
+
+    def create_backend(options):
+        return Versioned(options)
+    """
+
+
+def _install_versioned(tmp_path: Path, monkeypatch, declaration: str, name: str = "versioned"):
+    source = VERSIONED.format(declaration=declaration).replace(
+        "class Versioned", f"class {name.title()}"
+    )
+    source = source.replace('name = "versioned"', f'name = "{name}"').replace(
+        "return Versioned(options)", f"return {name.title()}(options)"
+    )
+    _install_backend(tmp_path, monkeypatch, source, name=name)
+
+
+def test_a_backend_declaring_the_current_version_loads(tmp_path: Path, monkeypatch):
+    _install_versioned(tmp_path, monkeypatch, "    api_version = 1")
+    backend = load_backend("versioned")
+    assert backend.api_version == BACKEND_API_VERSION == 1
+
+
+def test_a_backend_declaring_an_older_version_is_refused(tmp_path: Path, monkeypatch):
+    _install_versioned(tmp_path, monkeypatch, "    api_version = 0")
+    with pytest.raises(BackendLoadError) as raised:
+        load_backend("versioned")
+    message = str(raised.value)
+    assert "versioned" in message, "the backend is named"
+    assert "declares backend API version 0" in message, "what it declared is named"
+    assert f"speaks version {BACKEND_API_VERSION}" in message, "what the compiler speaks is named"
+
+
+def test_a_backend_that_declares_no_version_is_refused_not_assumed_current(
+    tmp_path: Path, monkeypatch
+):
+    """The bug this guards: an old backend subclasses `Backend` and declares
+    nothing, so a later compiler's `Backend.api_version` would be inherited and
+    the old package would call itself current forever."""
+    _install_versioned(tmp_path, monkeypatch, "")
+    with pytest.raises(BackendLoadError) as raised:
+        load_backend("versioned")
+    message = str(raised.value)
+    assert "does not declare the backend API version" in message
+    assert f"api_version = {BACKEND_API_VERSION}" in message, "the fix is spelled out"
+    assert "versioned" in message and "versioned_backend" in message, "backend and distribution"
+
+
+def test_declaring_the_version_on_the_backends_own_base_class_counts(tmp_path: Path, monkeypatch):
+    """A package with a base class of its own declares once, for all of them."""
+    _install_backend(
+        tmp_path,
+        monkeypatch,
+        """
+        from ppy_compiler.backend import Backend
+
+
+        class OurBackend(Backend):
+            api_version = 1
+
+
+        class Derived(OurBackend):
+            name = "derived"
+
+
+        def create_backend(options):
+            return Derived(options)
+        """,
+        name="derived",
+    )
+    assert load_backend("derived").api_version == 1
+
+
+def test_the_compilers_own_backends_need_no_boilerplate():
+    """Builtins ship with the interface, so they track the constant rather than
+    a literal; nothing about them is refused."""
+    for name in ("llvm", "python", "c", "nvvm", "stablehlo", "ir"):
+        assert load_backend(name).api_version == BACKEND_API_VERSION
+
+
+def test_the_base_class_declares_no_version_of_its_own():
+    from ppy_compiler.backend import UNDECLARED_API_VERSION
+
+    assert Backend.api_version is UNDECLARED_API_VERSION is None
+
+
+# -- a backend's passes run at the backend stage and nowhere else -------------------
+
+#: A backend that tries to hang a pass where the shared pipeline runs.
+TRESPASSER = """
+    from ppy_compiler.backend import Backend, EmitFormat
+    from ppy_compiler.ir import FunctionPass
+
+
+    class Noop(FunctionPass):
+        name = "trespass"
+
+        def run_on_function(self, function, ctx):
+            return False
+
+
+    class Trespasser(Backend):
+        name = "trespasser"
+        api_version = 1
+
+        def emit_formats(self):
+            return (EmitFormat("trespass", ".t"),)
+
+        def register_passes(self, passes):
+            passes.register_stage_pass("{stage}", Noop)
+
+        def emit(self, module, format, context):
+            return "nothing"
+
+
+    def create_backend(options):
+        return Trespasser(options)
+    """
+
+
+@pytest.mark.parametrize(
+    "stage", ["before-optimization", "after-ir-generation", "before-backend", "after-optimization"]
+)
+def test_a_backend_cannot_register_a_pass_before_the_backend_stage(
+    tmp_path: Path, monkeypatch, stage: str
+):
+    _install_backend(tmp_path, monkeypatch, TRESPASSER.format(stage=stage), name="trespasser")
+    path = _project(tmp_path)
+    result = _ppy(path.parent, "emit", "trespass", path.name)
+    assert result.returncode == 2, result.stdout
+    assert "E1802" in result.stderr
+    assert f"registers a pass at the {stage!r} stage" in result.stderr
+    assert "backend" in result.stderr and "add(factory)" in result.stderr
+
+
+def test_the_registrar_reaches_only_the_backend_stage():
+    from ppy_compiler.backend import BackendError, BackendPassRegistrar
+    from ppy_compiler.ir import PassContext, PassManager
+
+    manager = PassManager(PassContext(None))
+    manager.add_stage("backend")
+    registrar = BackendPassRegistrar(manager, "toy")
+    assert not hasattr(registrar, "add_stage"), "the manager itself is not handed over"
+    sentinel = object()
+    registrar.add(lambda: sentinel)
+    registrar.register_stage_pass("backend", lambda: sentinel)
+    assert manager.passes() == [sentinel, sentinel]
+    for stage in STAGES:
+        if stage == "backend":
+            continue
+        with pytest.raises(BackendError, match=r"registers a pass at the"):
+            registrar.register_stage_pass(stage, lambda: sentinel)
+
+
+def test_a_backend_stage_pass_still_runs_and_is_still_verified(tmp_path: Path, monkeypatch):
+    """The valid case keeps working, and a pass that breaks the IR is still named."""
+    _install_backend(tmp_path, monkeypatch, DUMMY)
+    path = _project(tmp_path)
+    good = _ppy(path.parent, "emit", "dummy", path.name)
+    assert good.returncode == 0 and "tagged=True" in good.stdout
+    (path.parent / "pyproject.toml").write_text(
+        "[tool.ppy]\nstrict = true\n[tool.ppy.backends.dummy]\nbreak = true\n"
+    )
+    broken = _ppy(path.parent, "emit", "dummy", path.name)
+    assert broken.returncode == 2 and "E1904" in broken.stderr and "dummy-tag" in broken.stderr
+
+
+# -- the distribution's version is part of the artifact's identity ------------------
+
+
+def test_a_new_release_of_a_backend_package_is_new_artifacts(tmp_path: Path, monkeypatch):
+    """Two releases can carry the same module, class, and API version and
+    generate different code; an artifact from the old one must not be served."""
+    path = _project(tmp_path)
+
+    def identity(version: str) -> str:
+        site = tmp_path / "site"
+        if site.exists():
+            shutil.rmtree(site)
+        sys.modules.pop("dummy_backend", None)
+        _install_backend(tmp_path, monkeypatch, DUMMY, version=version)
+        project = open_project(path)
+        bundle = analyze_paths(project, collect_sources(path), backend="llvm")
+        backend = load_backend("dummy")
+        assert backend.distribution == ("dummy_backend", version)
+        return backend_identity(bundle, "kernel", backend, 2).hex()
+
+    first = identity("1.0")
+    assert first == identity("1.0"), "the same release is the same artifact"
+    assert first != identity("1.1"), "a new release is a new artifact"
+
+
+def test_the_builtin_backends_have_no_distribution_of_their_own():
+    assert load_backend("llvm").distribution is None
+
+
+# -- emit scope --------------------------------------------------------------------
+
+
+def _two_module_project(tmp_path: Path, config: str = "") -> Path:
+    """An entry importing a second local module, so one file target is two modules."""
+    path = _project(tmp_path, config)
+    (path.parent / "helper.ppy").write_text("def twice(n: int) -> int:\n    return n * 2\n")
+    path.write_text(
+        "import helper\n\n\ndef own(n: int) -> int:\n    return n + 1\n\n\n"
+        "def use(n: int) -> int:\n    return helper.twice(n)\n",
+        encoding="utf-8",
+    )
+    return path
+
+
+def test_one_module_goes_to_standard_output_or_to_the_file_named(tmp_path: Path, monkeypatch):
+    _install_backend(tmp_path, monkeypatch, DUMMY)
+    path = _project(tmp_path)
+    printed = _ppy(path.parent, "emit", "dummy", path.name)
+    assert printed.returncode == 0 and printed.stdout.startswith("module kernel\n")
+    named = _ppy(path.parent, "emit", "dummy", path.name, "-o", "one.dummy")
+    assert named.returncode == 0
+    assert (path.parent / "one.dummy").read_text().startswith("module kernel\n")
+
+
+def test_several_modules_are_never_concatenated_into_one_file(tmp_path: Path, monkeypatch):
+    """Two artifacts written end to end are not one artifact: the ambiguity is
+    refused, and `-o DIR` is what writes them."""
+    _install_backend(tmp_path, monkeypatch, DUMMY)
+    path = _two_module_project(tmp_path)
+    for kind in ("dummy", "dummy-bin"):
+        refused = _ppy(path.parent, "emit", kind, path.name)
+        assert refused.returncode == 2, refused.stdout[:200]
+        assert "E1002" in refused.stderr
+        assert "2 module(s)" in refused.stderr and "one artifact per module" in refused.stderr
+        assert "-o DIR" in refused.stderr
+        assert "helper" in refused.stderr and "kernel" in refused.stderr
+    written = _ppy(path.parent, "emit", "dummy", path.name, "-o", "out")
+    assert written.returncode == 0, written.stderr
+    assert sorted(p.name for p in (path.parent / "out").iterdir()) == [
+        "helper.dummy",
+        "kernel.dummy",
+    ]
+    binary = _ppy(path.parent, "emit", "dummy-bin", path.name, "-o", "bin")
+    assert binary.returncode == 0
+    assert (path.parent / "bin" / "helper.dbin").read_bytes().startswith(b"DUMMY\0")
+
+
+def test_a_program_scoped_format_is_one_artifact_for_every_module(tmp_path: Path, monkeypatch):
+    _install_backend(tmp_path, monkeypatch, DUMMY)
+    path = _two_module_project(tmp_path)
+    printed = _ppy(path.parent, "emit", "dummy-prog", path.name)
+    assert printed.returncode == 0, printed.stderr
+    assert printed.stdout.startswith("program of 2: helper, kernel\n")
+    assert "module kernel" in printed.stdout and "module helper" in printed.stdout
+    named = _ppy(path.parent, "emit", "dummy-prog", path.name, "-o", "whole.dprog")
+    assert named.returncode == 0
+    assert (path.parent / "whole.dprog").read_text().startswith("program of 2:")
+    packed = _ppy(path.parent, "emit", "dummy-prog-bin", path.name, "-o", "whole.dpbin")
+    assert packed.returncode == 0
+    assert (path.parent / "whole.dpbin").read_bytes().startswith(b"DPROGprogram of 2:")
+
+
+def test_a_directory_target_writes_one_file_per_module_for_either_scope(
+    tmp_path: Path, monkeypatch
+):
+    _install_backend(tmp_path, monkeypatch, DUMMY)
+    path = _two_module_project(tmp_path)
+    per_module = _ppy(path.parent, "emit", "dummy", ".", "-o", "out")
+    assert per_module.returncode == 0, per_module.stderr
+    assert sorted(p.name for p in (path.parent / "out").iterdir()) == [
+        "helper.dummy",
+        "kernel.dummy",
+    ]
+    whole = _ppy(path.parent, "emit", "dummy-prog", ".", "-o", "prog")
+    assert whole.returncode == 0, whole.stderr
+    written = list((path.parent / "prog").iterdir())
+    assert len(written) == 1 and written[0].suffix == ".dprog"
+
+
+def test_a_format_scope_is_module_or_program():
+    from ppy_compiler.backend import EmitFormat
+
+    assert EmitFormat("a", ".a").scope == "module"
+    with pytest.raises(ValueError, match=r"module.*program"):
+        EmitFormat("a", ".a", scope="whole-world")
+
+
+def test_a_backend_answering_the_wrong_type_for_a_format_is_refused(tmp_path: Path, monkeypatch):
+    _install_backend(tmp_path, monkeypatch, DUMMY)
+    path = _project(tmp_path, "[tool.ppy.backends.dummy]\nwrong-type = true\n")
+    result = _ppy(path.parent, "emit", "dummy", path.name)
+    assert result.returncode == 2
+    assert "E1802" in result.stderr and "answered bytes for 'dummy', a text format" in result.stderr
+
+
+# -- the build road --------------------------------------------------------------
+
+
+def test_a_ppyir_file_builds_through_the_backend_that_was_chosen(tmp_path: Path, monkeypatch):
+    """The bug this guards: `--backend NAME` with a `.ppyir` target ran the
+    LLVM road and wrote LLVM artifacts, whatever the backend said."""
+    _install_backend(tmp_path, monkeypatch, DUMMY)
+    path = _project(tmp_path)
+    emitted = _ppy(path.parent, "emit", "ir", path.name, "-o", "kernel.ppyir")
+    assert emitted.returncode == 0, emitted.stderr
+    built = _ppy(path.parent, "build", "kernel.ppyir", "--backend", "dummy", "-o", "out")
+    assert built.returncode == 0, built.stderr
+    assert "backend:  dummy" in built.stderr
+    assert (path.parent / "out" / "kernel.dummy").read_text().startswith("module kernel\n")
+    assert not (path.parent / "out" / "ppy-bindings.json").exists(), "no LLVM artifact"
+    record = json.loads((path.parent / "out" / "build.json").read_text())
+    assert record["modules"] == ["kernel"] and len(record["identity"]["kernel"]) == 64
+
+
+def test_warm_is_the_llvm_artifact_and_is_refused_for_another_backend(tmp_path: Path, monkeypatch):
+    _install_backend(tmp_path, monkeypatch, DUMMY)
+    path = _project(tmp_path)
+    result = _ppy(path.parent, "build", path.name, "--warm", "--backend", "dummy")
+    assert result.returncode == 2
+    assert "E1002" in result.stderr and "`--warm`" in result.stderr
+    assert "dummy" in result.stderr and "ppy run" in result.stderr
+    assert not (path.parent / ".ppy-cache" / "backends").exists()
+
+
+@pytest.mark.parametrize(
+    ("flag", "value"),
+    [
+        ("--unsafe", None),
+        ("--standalone", None),
+        ("--host-cpu", None),
+        ("--python-extension", None),
+        ("--library", None),
+        ("--report-opt", None),
+        ("--sanitize", "bounds"),
+        ("--prover", "z3"),
+        ("--target", "aarch64-linux-gnu"),
+        ("--pgo", "some.ppyprof"),
+        ("--report-opt-json", "report.json"),
+    ],
+)
+def test_an_llvm_only_option_is_refused_rather_than_ignored(
+    tmp_path: Path, monkeypatch, flag: str, value: str | None
+):
+    """Every option argparse accepts either means something to the backend or
+    says so; none is quietly dropped."""
+    _install_backend(tmp_path, monkeypatch, DUMMY)
+    path = _project(tmp_path)
+    arguments = ["build", path.name, "--backend", "dummy", flag]
+    if value is not None:
+        arguments.append(value)
+    result = _ppy(path.parent, *arguments)
+    assert result.returncode == 2, result.stderr
+    assert "E1002" in result.stderr and flag in result.stderr and "dummy" in result.stderr
+    assert not (path.parent / ".ppy-cache" / "backends").exists(), "nothing was built"
+
+
+def test_the_target_refusal_says_where_to_name_the_target_instead(tmp_path: Path, monkeypatch):
+    _install_backend(tmp_path, monkeypatch, DUMMY)
+    path = _project(tmp_path)
+    result = _ppy(path.parent, "build", path.name, "--backend", "dummy", "--target", "rngd")
+    assert result.returncode == 2
+    assert "[tool.ppy.backends.dummy] target" in result.stderr
+
+
+def test_the_llvm_road_keeps_every_one_of_those_options(tmp_path: Path, monkeypatch):
+    """The refusals are about the backend chosen, not about the options."""
+    path = _project(tmp_path)
+    result = _ppy(path.parent, "build", path.name, "--unsafe", "-o", "out")
+    assert result.returncode == 0, result.stderr
+    assert (path.parent / "out").is_dir()
+
+
+def test_output_and_opt_level_reach_an_external_build(tmp_path: Path, monkeypatch):
+    _install_backend(tmp_path, monkeypatch, DUMMY)
+    path = _project(tmp_path)
+    result = _ppy(path.parent, "-O", "1", "build", path.name, "--backend", "dummy", "-o", "here")
+    assert result.returncode == 0, result.stderr
+    record = json.loads((path.parent / "here" / "build.json").read_text())
+    assert record["opt_level"] == 1
+
+
+# -- finding a format without importing every backend -------------------------------
+
+
+def test_a_declared_format_imports_only_its_own_backend(tmp_path: Path, monkeypatch):
+    """`ppy.backend-formats` says who owns what, so one heavy or broken SDK
+    package beside the one asked for is never imported."""
+    _install_backend(tmp_path, monkeypatch, DUMMY, formats=("dummy", "dummy-bin"))
+    _install_backend(
+        tmp_path,
+        monkeypatch,
+        """
+        raise RuntimeError("this SDK is not importable here")
+        """,
+        name="heavy",
+    )
+    declared, problems = discover_format_owners()
+    assert declared["dummy"] == "dummy" and problems == []
+    assert "heavy_backend" not in sys.modules and "dummy_backend" not in sys.modules
+    owner = emit_format_owner("dummy")
+    assert owner.backend.name == "dummy" and owner.format.suffix == ".dummy"
+    assert "heavy_backend" not in sys.modules, "the other backend was never imported"
+
+
+def test_a_format_declared_for_a_backend_that_does_not_emit_it_is_an_error(
+    tmp_path: Path, monkeypatch
+):
+    _install_backend(tmp_path, monkeypatch, DUMMY, formats=("dummy-elsewhere",))
+    with pytest.raises(BackendLoadError, match=r"entry point and the backend disagree"):
+        emit_format_owner("dummy-elsewhere")
+
+
+def test_a_format_two_distributions_declare_is_not_settled_by_order(tmp_path: Path, monkeypatch):
+    _install_backend(tmp_path, monkeypatch, DUMMY, formats=("dummy",))
+    _install_backend(
+        tmp_path,
+        monkeypatch,
+        DUMMY.replace('name = "dummy"', 'name = "rival"'),
+        name="rival",
+        formats=("dummy",),
+    )
+    declared, problems = discover_format_owners()
+    assert "dummy" not in declared, "neither claimant wins by luck"
+    assert any("claimed by more than one distribution" in problem for problem in problems)
+
+
+def test_an_undeclared_format_is_still_found_by_asking_the_backends(tmp_path: Path, monkeypatch):
+    """The manifest is optional: a backend that does not declare its formats
+    still works, by the slower road."""
+    _install_backend(tmp_path, monkeypatch, DUMMY)
+    assert emit_format_owner("dummy-bin").backend.name == "dummy"

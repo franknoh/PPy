@@ -341,6 +341,7 @@ class _Validation:
         if origin is None:
             if not isinstance(target, type):
                 raise TypeError(f"ppy.check cannot validate against {target!r}")
+            self._accept_class(target)
             if dataclasses.is_dataclass(target):
                 try:
                     hints = typing.get_type_hints(target, include_extras=True)
@@ -371,6 +372,30 @@ class _Validation:
         if isinstance(origin, type) and not arguments:
             return
         raise TypeError(f"ppy.check cannot validate against {target!r}")
+
+    def _accept_class(self, target: type) -> None:
+        """A plain class is checked with `isinstance`; a protocol is not.
+
+        A protocol is a static promise about names, signatures, and the types
+        either side of them. `isinstance` against a `@runtime_checkable` one
+        answers whether the attributes are present and nothing more -- not
+        what they take, not what they return -- so a class whose `f(self)`
+        returns a string satisfies it where the protocol declares
+        `f(self, x: int) -> int`. Handing that value back as the protocol
+        would be the false typed value `ppy.check` exists to refuse; the
+        unchecked crossing is `ppy.assume`.
+        """
+        if getattr(target, "_is_protocol", False):
+            runtime = (
+                " even @runtime_checkable" if getattr(target, "_is_runtime_protocol", False) else ""
+            )
+            raise TypeError(
+                f"ppy.check cannot validate against {target.__name__!r}: a protocol is a "
+                f"static contract over names, signatures, and their types, and no runtime "
+                f"check establishes it{runtime} -- `isinstance` sees the attributes exist "
+                f"and nothing of what they take or answer; `ppy.assume[T](value)` is the "
+                f"unchecked crossing"
+            )
 
     def _accept_metadata(self, target: Any, metadata: tuple) -> None:
         for item in metadata:

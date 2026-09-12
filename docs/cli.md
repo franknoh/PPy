@@ -219,12 +219,24 @@ An installed backend is loaded with its `[tool.ppy.backends.NAME]` table
 and asked for its toolchain; the modules go through the shared passes and
 the backend's own passes and validation; then its `build` writes into
 `-o` (or `<cache>/backends/NAME`) and what it wrote is listed, with any
-notes the backend adds. `-O` reaches it; the LLVM flags (`--target`,
-`--python-extension`, `--library`, `--standalone`, `--host-cpu`) are the
-LLVM road's. The diagnostics are `ppy emit`'s: `E1903` for a backend that
-cannot be used, `E1801` for a missing toolchain, `E1802` for IR it
-refuses, `E1904` for a pass of its that broke the IR. A builtin backend
-that only emits (`--backend c`) is refused with `E1802`.
+notes the backend adds. A `.ppyir` target builds through the chosen
+backend too: the file is canonical IR, so the backend's passes,
+validation, and build run over it without a frontend above them.
+
+`-o` and `-O` reach every backend. The LLVM road's options are the LLVM
+road's, and `--backend NAME` refuses them (`E1002`) rather than accepting
+and ignoring one: `--unsafe`, `--sanitize`, `--pgo`, `--prover`,
+`--host-cpu`, `--standalone`, `--python-extension`, `--library`,
+`--report-opt`, `--report-opt-json`, and `--target` -- what an installed
+backend builds for is `[tool.ppy.backends.NAME] target`, which reaches it
+through the backend context and the artifact's identity, where a compiler
+triple would not. `--warm` builds the artifact `ppy run` and `import ppy`
+take, which is the LLVM backend's, and is refused for any other backend.
+
+The diagnostics are `ppy emit`'s: `E1903` for a backend that cannot be
+used, `E1801` for a missing toolchain, `E1802` for IR it refuses, `E1904`
+for a pass of its that broke the IR. A builtin backend that only emits
+(`--backend c`) is refused with `E1802`.
 
 ### `--target`, `--python-extension`, `--library`
 
@@ -349,8 +361,12 @@ input and configuration. Any other kind is a format an installed backend
 registers ([Backends](internals/backends.md)): the backend is loaded, its
 toolchain checked, the modules run through the shared passes and the
 backend's own, validated by it, and written under the same rule -- text
-or, for a format the backend declares binary, bytes; a directory target
-writes one file per module with the format's suffix. `--header-only`,
+or, for a format the backend declares binary, bytes. A format may be
+written per module (the default) or per program. A per-module format
+writes one artifact for each: one module goes to standard output or `-o
+FILE`, and a target that resolves to several needs `-o DIR`, since two
+artifacts are not one file and are never concatenated into one. A
+per-program format is one artifact for every module together. `--header-only`,
 `--standalone`, and `--format` belong to the builtin kinds. A format no
 backend emits, a format two backends claim, or a backend that cannot be
 loaded is `E1903` with the reason and the formats there are; a backend
