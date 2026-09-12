@@ -53,7 +53,8 @@ class BackendInfo:
     builtin: bool
     #: `builtin`, or the distribution and the object the entry point names.
     origin: str
-    entry: importlib.metadata.EntryPoint | None = None
+    #: The `importlib.metadata.EntryPoint`; `object` for the compiler's own checker.
+    entry: object | None = None
 
 
 @dataclass(slots=True)
@@ -69,16 +70,17 @@ class BackendCatalog:
         return tuple(sorted(self.backends))
 
 
-def _origin(entry: importlib.metadata.EntryPoint) -> str:
+def _origin(entry: object) -> str:
     dist = getattr(entry, "dist", None)
     where = f"{dist.name} {dist.version}" if dist is not None else "an unnamed distribution"
-    return f"{where} ({entry.value})"
+    return f"{where} ({getattr(entry, 'value', '?')})"
 
 
-def discover_external_backends() -> tuple[dict[str, importlib.metadata.EntryPoint], list[str]]:
+def discover_external_backends() -> tuple[dict[str, object], list[str]]:
     """Every installed external backend by name, without importing any, and
     the names that were registered more than once (each is a problem)."""
-    found: dict[str, importlib.metadata.EntryPoint] = {}
+    # `object` for the compiler's own checker, which has no model of an entry point.
+    found: dict[str, object] = {}
     claimants: dict[str, list[str]] = {}
     try:
         entries = importlib.metadata.entry_points(group=ENTRY_POINT_GROUP)
@@ -146,7 +148,7 @@ def load_backend(name: str, options: Mapping[str, object] | BackendConfig | None
             f"({', '.join(catalog.duplicates[name])}); uninstall all but one"
         )
     try:
-        factory = info.entry.load()
+        factory = info.entry.load()  # type: ignore[attr-defined]
     except Exception as error:
         raise BackendLoadError(
             f"backend {name!r} could not be imported from {info.origin}: {error}"
