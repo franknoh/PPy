@@ -3735,6 +3735,10 @@
 <td>a stub is a C function. Under CPython the call goes through ctypes; in native code straight to the symbol. The directive says what the C function does (<code>pure=True</code> or, by default, reads and writes of native memory), and the signature must be fully annotated (<code>E1633</code>).</td>
 </tr>
 <tr>
+<td><code>native.compiled(f)</code></td>
+<td>whether calling <code>f</code> runs its native form here: <code>True</code> under <code>ppy run</code> or a built artifact once the runtime has bound it, <code>False</code> under plain CPython. It answers for the object standing in the namespace, which under <code>ppy run</code> may be the C entry point itself (named <code>module.f</code>).</td>
+</tr>
+<tr>
 <td><code>@native.export(name="ppy_dot")</code></td>
 <td>a public C symbol in the built library, declared in the header <code>ppy build</code> writes beside it. A C caller has no Python to fall back to, so a failed guard traps.</td>
 </tr>

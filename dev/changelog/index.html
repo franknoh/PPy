@@ -4207,6 +4207,19 @@
   digits: the "by the numbers" row uses the markers, and the guard test
   sees through Markdown emphasis. <code>examples/45_multi_gpu_jax</code> times its
   steps without a host synchronization between them.</li>
+<li><code>ppy.native.compiled(f)</code> says whether calling <code>f</code> runs its native form
+  here. Under <code>ppy run</code> the object in a module's namespace may be the
+  generated C entry point itself, which carries no attribute; the runtime
+  now knows those by identity, <code>aio.compiled</code> answers through the same
+  probe, the training examples print <code># native prep: True</code> under <code>ppy run</code>
+  as they should, and the entry point bears the function's qualified name
+  rather than <code>call_0</code>.</li>
+<li>The landing page's test and diagnostic-code counts come from the tree
+  through markers (<code>1061</code>, <code>76</code>), and the
+  guard refuses those spelled as digits. The GPU guide says what a ROCm
+  machine gets: no launch, <code>compiled</code> false, <code>ppy emit hip</code> for <code>hipcc</code>.</li>
+<li>The ROCm harness installs every group when the image's JAX allows it
+  and every group but <code>jax</code> otherwise, and says which.</li>
 </ul>
 <h2 id="021-unreleased">0.2.1 — unreleased<a class="headerlink" href="#021-unreleased" title="Permanent link">&para;</a></h2>
 <ul>

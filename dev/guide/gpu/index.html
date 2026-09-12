@@ -3802,7 +3802,10 @@ launch means what the reference launch means. <code>cuda.compiled(kernel)</code>
 says whether that is so here. Where the driver, a device, or the NVPTX
 backend is missing, the reference launch runs and <code>W2008</code> says why.
 <code>PPY_CUDA_ARCH</code> names the architecture the PTX is written for (<code>sm_70</code>
-unless set; a driver compiles PTX forward).</p>
+unless set; a driver compiles PTX forward). An AMD card has no launch
+runtime in PPy: <code>ppy.cuda</code> and <code>ppy.tile</code> launch through the CUDA driver
+only, so on a ROCm machine <code>compiled</code> is <code>False</code> and the reference launch
+runs; HIP is <code>ppy emit hip</code>, the source for <code>hipcc</code>.</p>
 <p><code>cuda.device_alloc[T](n)</code> is <code>n</code> zeroed elements of <code>T</code> that live on the
 device between launches: a <code>native.ptr[T]</code> like <code>stack_alloc</code>'s, so the same
 loops fill and read it and <code>native.offset</code> keeps its kind. The host reads and

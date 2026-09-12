@@ -4003,17 +4003,17 @@ column.</p>
 <tbody>
 <tr>
 <td>standardize, 20000 rows</td>
-<td style="text-align: right;"><strong>0.90 ± 0.01</strong></td>
-<td style="text-align: right;">68.01 ± 1.84</td>
-<td style="text-align: right;">1.19 ± 0.56</td>
-<td style="text-align: right;">0.92 ± 0.26</td>
+<td style="text-align: right;">0.87 ± 0.02</td>
+<td style="text-align: right;">66.53 ± 0.98</td>
+<td style="text-align: right;"><strong>0.73 ± 0.10</strong></td>
+<td style="text-align: right;">0.80 ± 0.27</td>
 </tr>
 <tr>
 <td>forward pass, per call</td>
+<td style="text-align: right;">0.12 ± 0.00</td>
+<td style="text-align: right;">0.12 ± 0.00</td>
+<td style="text-align: right;"><strong>0.11 ± 0.00</strong></td>
 <td style="text-align: right;">0.12 ± 0.01</td>
-<td style="text-align: right;">0.12 ± 0.01</td>
-<td style="text-align: right;">0.12 ± 0.01</td>
-<td style="text-align: right;"><strong>0.11 ± 0.01</strong></td>
 </tr>
 </tbody>
 </table>
@@ -4039,15 +4039,15 @@ filesystem.</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a># device: cpu
 <a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a># native prep: False
 <a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a># aten region: False
-<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>prep      70.1 ms   checksum=-21282.454900
-<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>train   2524.2 ms   loss 1.0250 -&gt; 1.0019
+<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>prep      66.7 ms   checksum=-21282.454900
+<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>train    142.6 ms   loss 1.0250 -&gt; 1.0019
 </code></pre></div>
 <p><strong><code>ppy run train.ppy</code></strong></p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a># device: cpu
-<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a># native prep: False
+<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a># native prep: True
 <a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a># aten region: True
-<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a>prep       0.9 ms   checksum=-21282.454900
-<a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a>train   9706.0 ms   loss 1.0250 -&gt; 1.0019
+<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a>prep       1.1 ms   checksum=-21282.454900
+<a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a>train    320.7 ms   loss 1.0250 -&gt; 1.0019
 </code></pre></div>
 <!-- outputs:end -->
 
@@ -4175,7 +4175,7 @@ filesystem.</p>
 <a id="__codelineno-6-115" name="__codelineno-6-115" href="#__codelineno-6-115"></a>    <span class="n">train_ms</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="p">(</span><span class="n">time</span><span class="o">.</span><span class="n">perf_counter</span><span class="p">()</span> <span class="o">-</span> <span class="n">started</span><span class="p">)</span> <span class="o">*</span> <span class="mf">1000.0</span>
 <a id="__codelineno-6-116" name="__codelineno-6-116" href="#__codelineno-6-116"></a>
 <a id="__codelineno-6-117" name="__codelineno-6-117" href="#__codelineno-6-117"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"# device: </span><span class="si">{</span><span class="n">device</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
-<a id="__codelineno-6-118" name="__codelineno-6-118" href="#__codelineno-6-118"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"# native prep: </span><span class="si">{</span><span class="nb">getattr</span><span class="p">(</span><span class="n">standardize</span><span class="p">,</span><span class="w"> </span><span class="s1">'__ppy_native__'</span><span class="p">,</span><span class="w"> </span><span class="kc">None</span><span class="p">)</span><span class="w"> </span><span class="ow">is</span><span class="w"> </span><span class="ow">not</span><span class="w"> </span><span class="kc">None</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+<a id="__codelineno-6-118" name="__codelineno-6-118" href="#__codelineno-6-118"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"# native prep: </span><span class="si">{</span><span class="n">ppy</span><span class="o">.</span><span class="n">native</span><span class="o">.</span><span class="n">compiled</span><span class="p">(</span><span class="n">standardize</span><span class="p">)</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
 <a id="__codelineno-6-119" name="__codelineno-6-119" href="#__codelineno-6-119"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"# aten region: </span><span class="si">{</span><span class="nb">getattr</span><span class="p">(</span><span class="n">forward_loss</span><span class="p">,</span><span class="w"> </span><span class="s1">'__ppy_region__'</span><span class="p">,</span><span class="w"> </span><span class="kc">False</span><span class="p">)</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
 <a id="__codelineno-6-120" name="__codelineno-6-120" href="#__codelineno-6-120"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"prep  </span><span class="si">{</span><span class="n">prep_ms</span><span class="si">:</span><span class="s2">8.1f</span><span class="si">}</span><span class="s2"> ms   checksum=</span><span class="si">{</span><span class="n">checksum</span><span class="si">:</span><span class="s2">.6f</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
 <a id="__codelineno-6-121" name="__codelineno-6-121" href="#__codelineno-6-121"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"train </span><span class="si">{</span><span class="n">train_ms</span><span class="si">:</span><span class="s2">8.1f</span><span class="si">}</span><span class="s2"> ms   loss </span><span class="si">{</span><span class="n">first</span><span class="si">:</span><span class="s2">.4f</span><span class="si">}</span><span class="s2"> -&gt; </span><span class="si">{</span><span class="n">last</span><span class="si">:</span><span class="s2">.4f</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
