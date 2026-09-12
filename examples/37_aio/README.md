@@ -78,7 +78,7 @@ async def serve(reader, writer):
 <!-- compare:start -->
 | | PPY `ppy.aio` | asyncio streams | uvloop |
 |---|---:|---:|---:|
-| 20000 round trips | **103.98 ± 2.18** | 810.53 ± 298.97 | 721.51 ± 358.05 |
+| 20000 round trips | **102.52 ± 2.81** | 682.49 ± 26.46 | 153.19 ± 3.17 |
 <!-- compare:end -->
 
 A round trip is four socket operations and four resumptions of a

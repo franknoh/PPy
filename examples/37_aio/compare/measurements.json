@@ -1,6 +1,6 @@
 {
  "environment": {
-  "commit": "066a437",
+  "commit": "89200bc",
   "processor": "x86_64",
   "platform": "Linux-6.6.114.1-microsoft-standard-WSL2-x86_64-with-glibc2.39",
   "python": "3.14.5",
@@ -9,20 +9,20 @@
  "timings": {
   "ppy": {
    "20000 round trips": {
-    "mean": 103.97800000000001,
-    "stdev": 2.18304145631731
+    "mean": 102.51599999999999,
+    "stdev": 2.809338000312528
    }
   },
   "asyncio": {
    "20000 round trips": {
-    "mean": 810.526,
-    "stdev": 298.9673794580272
+    "mean": 682.492,
+    "stdev": 26.462275412367713
    }
   },
   "uvloop": {
    "20000 round trips": {
-    "mean": 721.512,
-    "stdev": 358.053703681445
+    "mean": 153.192,
+    "stdev": 3.1674705997056947
    }
   }
  }

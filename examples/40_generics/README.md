@@ -79,7 +79,7 @@ def clamp(x, lo, hi):
 <!-- compare:start -->
 | | PPY `ppy run` | CPython, the same file | Numba `@njit` |
 |---|---:|---:|---:|
-| sweep, eight million clamps and comparisons | 8.59 ± 1.27 | 545.08 ± 22.79 | **5.35 ± 0.19** |
+| sweep, eight million clamps and comparisons | 5.87 ± 0.03 | 428.92 ± 9.67 | **5.09 ± 0.06** |
 <!-- compare:end -->
 
 Both compile `largest` twice -- once for ints, once for floats -- and call
