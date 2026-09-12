@@ -4,6 +4,7 @@ to emit and build -- through `ppy emit` and `ppy build --backend` like a builtin
 
 from __future__ import annotations
 
+import argparse
 import json
 import os
 import shutil
@@ -1054,3 +1055,120 @@ def test_an_undeclared_format_is_still_found_by_asking_the_backends(tmp_path: Pa
     still works, by the slower road."""
     _install_backend(tmp_path, monkeypatch, DUMMY)
     assert emit_format_owner("dummy-bin").backend.name == "dummy"
+
+
+# -- the Python backend is a backend too -------------------------------------------
+
+#: Everything `ppy build` accepts that belongs to the LLVM road alone.
+LLVM_ONLY = [
+    ("--unsafe", None),
+    ("--standalone", None),
+    ("--host-cpu", None),
+    ("--python-extension", None),
+    ("--library", None),
+    ("--report-opt", None),
+    ("--sanitize", "bounds"),
+    ("--prover", "z3"),
+    ("--pgo", "some.ppyprof"),
+    ("--report-opt-json", "report.json"),
+    ("--target", "aarch64-linux-gnu"),
+]
+
+
+def _llvm_artifacts(directory: Path) -> list[str]:
+    """Anything the LLVM road writes: objects, a library, a manifest, a launcher."""
+    if not directory.exists():
+        return []
+    return sorted(
+        path.name
+        for path in directory.rglob("*")
+        if path.suffix in {".o", ".so", ".dylib", ".dll"} or path.name == "ppy-bindings.json"
+    )
+
+
+def test_the_python_backend_builds_source_and_takes_the_generic_options(tmp_path: Path):
+    path = _project(tmp_path)
+    plain = _ppy(path.parent, "build", path.name, "--backend", "python")
+    assert plain.returncode == 0, plain.stderr
+    assert "built 1 module(s)" in plain.stderr
+    cache = path.parent / ".ppy-cache"
+    assert cache.is_dir() and _llvm_artifacts(cache) == [], "nothing native was built"
+    levelled = _ppy(path.parent, "-O", "1", "build", path.name, "--backend", "python")
+    assert levelled.returncode == 0, levelled.stderr
+
+
+@pytest.mark.parametrize(("flag", "value"), LLVM_ONLY)
+def test_an_llvm_only_option_is_refused_for_the_python_backend(
+    tmp_path: Path, flag: str, value: str | None
+):
+    """The bug this guards: `--backend python` sat inside the LLVM branch, so
+    every one of these was accepted and quietly dropped."""
+    path = _project(tmp_path)
+    arguments = ["build", path.name, "--backend", "python", flag]
+    if value is not None:
+        arguments.append(value)
+    result = _ppy(path.parent, *arguments)
+    assert result.returncode != 0, result.stderr
+    assert "E1002" in result.stderr
+    assert flag in result.stderr and "'python'" in result.stderr
+    assert "LLVM" in result.stderr, "the message says whose option it is"
+    assert _llvm_artifacts(path.parent) == [], "nothing was built"
+
+
+def test_warm_is_refused_for_the_python_backend_before_anything_is_built(tmp_path: Path):
+    path = _project(tmp_path)
+    result = _ppy(path.parent, "build", path.name, "--warm", "--backend", "python")
+    assert result.returncode != 0
+    assert "E1002" in result.stderr and "`--warm`" in result.stderr
+    assert "'python'" in result.stderr and "ppy run" in result.stderr
+    assert _llvm_artifacts(path.parent) == [] and not (path.parent / ".ppy-cache").exists()
+
+
+def test_the_python_backend_refuses_a_ppyir_target(tmp_path: Path):
+    """The bug this guards: `ppy build foo.ppyir --backend python` ran the LLVM
+    road and wrote an object, a shared library, and a manifest."""
+    path = _project(tmp_path)
+    emitted = _ppy(path.parent, "emit", "ir", path.name, "-o", "kernel.ppyir")
+    assert emitted.returncode == 0, emitted.stderr
+    result = _ppy(path.parent, "build", "kernel.ppyir", "--backend", "python", "-o", "out")
+    assert result.returncode != 0, result.stderr
+    assert "E1002" in result.stderr
+    assert "the Python backend builds PPY source" in result.stderr
+    assert "`.ppyir`" in result.stderr, "what it cannot build is named"
+    assert _llvm_artifacts(path.parent) == [], "no LLVM artifact"
+    assert not (path.parent / "out").exists(), "no artifact of any other backend"
+
+
+def test_the_python_backend_refuses_an_output_directory_it_would_not_write(tmp_path: Path):
+    """`-o` was accepted and ignored: the directory was never even created."""
+    path = _project(tmp_path)
+    result = _ppy(path.parent, "build", path.name, "--backend", "python", "-o", "out")
+    assert result.returncode != 0
+    assert "E1002" in result.stderr and "`-o`" in result.stderr
+    assert "project cache" in result.stderr, "where its modules do go"
+    assert not (path.parent / "out").exists()
+
+
+def test_the_llvm_road_still_answers_warm_and_a_ppyir_target(tmp_path: Path):
+    """The refusals are about the backend chosen; LLVM keeps both roads."""
+    path = _project(tmp_path)
+    emitted = _ppy(path.parent, "emit", "ir", path.name, "-o", "kernel.ppyir")
+    assert emitted.returncode == 0, emitted.stderr
+    built = _ppy(path.parent, "build", "kernel.ppyir", "-o", "out")
+    assert built.returncode == 0, built.stderr
+    assert "ppy-bindings.json" in _llvm_artifacts(path.parent / "out")
+    warmed = _ppy(path.parent, "build", path.name, "--warm")
+    assert warmed.returncode == 0, warmed.stderr
+
+
+def test_one_policy_decides_the_options_of_every_backend_that_is_not_llvm(tmp_path: Path):
+    """Python and an installed backend are refused by the same table, so the two
+    cannot drift apart."""
+    from ppy_compiler.driver import commands
+
+    assert not hasattr(commands, "_external_build_refusal"), "one helper, not two"
+    options = argparse.Namespace(warm=False, unsafe=True)
+    for name in ("python", "toy"):
+        refusal = commands._non_llvm_build_refusal(name, options)
+        assert refusal is not None and f"{name!r}" in refusal.message
+    assert commands._non_llvm_build_refusal("python", argparse.Namespace(warm=False)) is None
