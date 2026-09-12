@@ -22,7 +22,7 @@ the reason, never loaded and hoped about.
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -31,14 +31,16 @@ from ..cache.keys import digest
 from ..driver.config import BackendConfig
 
 if TYPE_CHECKING:
-    from ..ir import DialectRegistry, IRModule, PassManager, SourceLocation
+    from ..ir import DialectRegistry, IRModule, Pass, PassManager, SourceLocation
 
 __all__ = [
     "BACKEND_API_VERSION",
+    "UNDECLARED_API_VERSION",
     "Backend",
     "BackendConfig",
     "BackendContext",
     "BackendError",
+    "BackendPassRegistrar",
     "BackendUnavailable",
     "BackendValidationError",
     "BuildResult",
@@ -49,7 +51,17 @@ __all__ = [
 #: The interface a backend is written against. Bumped when a method's
 #: meaning or signature changes; a backend declaring another version is
 #: refused at load time.
+#:
+#: An external backend declares the version it implements as a literal of
+#: its own -- `api_version = 1` -- and never as this constant: a package
+#: that spells the constant is rewritten by every compiler upgrade it is
+#: imported into, which is exactly the compatibility break the number is
+#: there to catch.
 BACKEND_API_VERSION = 1
+
+#: `Backend.api_version` unless a subclass declares one. An external backend
+#: that leaves it is refused rather than assumed current.
+UNDECLARED_API_VERSION: int | None = None
 
 
 class BackendError(Exception):
@@ -93,6 +105,18 @@ class EmitFormat:
     binary: bool = False
     #: One line for `--help` and `ppy doctor`.
     description: str = ""
+    #: `module`: one artifact per module, from `emit`; a target resolving to
+    #: several modules needs `-o DIR`, since two artifacts are not one file.
+    #: `program`: one artifact for the whole program, from `emit_program`,
+    #: which is handed every module at once.
+    scope: str = "module"
+
+    def __post_init__(self) -> None:
+        if self.scope not in ("module", "program"):
+            raise ValueError(
+                f"the emit format {self.name!r} has scope {self.scope!r}; "
+                "a format is either 'module' or 'program' scoped"
+            )
 
 
 @dataclass(frozen=True, slots=True)
@@ -112,6 +136,44 @@ class BuildResult:
     outputs: tuple[Path, ...] = ()
     #: Remarks for the driver to print as notes (not warnings).
     notes: tuple[str, ...] = ()
+
+
+class BackendPassRegistrar:
+    """Where a backend hangs its passes: the `backend` stage, and nowhere else.
+
+    The stages before it belong to the shared pipeline and to the plugins --
+    a pass of a backend's own running among them would decide for every other
+    backend what the canonical IR is. A backend is handed this rather than the
+    `PassManager` so that the invalid thing cannot be spelled.
+    """
+
+    __slots__ = ("_backend", "_manager")
+
+    #: The one stage a backend may register at.
+    STAGE = "backend"
+
+    def __init__(self, manager: PassManager, backend: str) -> None:
+        self._manager = manager
+        self._backend = backend
+
+    def add(self, factory: Callable[[], Pass]) -> None:
+        """Run `factory()`'s pass at the `backend` stage, after every shared pass."""
+        self._manager.register_stage_pass(self.STAGE, factory)
+
+    def register_stage_pass(self, stage: str, factory: Callable[[], Pass]) -> None:
+        """`add(factory)`, for the one stage a backend owns; any other is refused."""
+        if stage != self.STAGE:
+            raise BackendError(
+                f"backend {self._backend!r} registers a pass at the {stage!r} stage: a "
+                f"backend's passes run at the {self.STAGE!r} stage, after the shared "
+                f"pipeline and the plugins, and `BackendPassRegistrar.add(factory)` is "
+                f"how one is hung there. A transformation that must run earlier belongs "
+                f"to a plugin or to the shared pipeline, not to one backend"
+            )
+        self.add(factory)
+
+    def __repr__(self) -> str:
+        return f"<backend passes for {self._backend}>"
 
 
 @dataclass(slots=True)
@@ -158,8 +220,21 @@ class Backend:
 
     #: The backend's name: the word after `--backend`, the entry point's name.
     name: str = ""
-    #: The interface version this backend was written against.
-    api_version: int = BACKEND_API_VERSION
+    #: The interface version this backend implements, which an external
+    #: backend declares as a literal of its own::
+    #:
+    #:     class MyBackend(Backend):
+    #:         api_version = 1
+    #:
+    #: Left undeclared it is refused: a package that inherits whatever the
+    #: compiler it is imported into happens to say would be called current
+    #: forever, and the number would catch nothing.
+    api_version: int | None = UNDECLARED_API_VERSION
+    #: The distribution this backend came from, as (name, version), filled in
+    #: by the registry; None for a builtin. It is part of every artifact's
+    #: identity, so a new release of the package is new artifacts whether or
+    #: not its author touched `fingerprint`.
+    distribution: tuple[str, str] | None = None
 
     def __init__(self, options: Mapping[str, object] | None = None) -> None:
         self.options: dict[str, object] = dict(options or {})
@@ -175,9 +250,12 @@ class Backend:
         """The formats `ppy emit` may ask this backend for."""
         return ()
 
-    def register_passes(self, manager: PassManager) -> None:
-        """Hang the backend's passes at the `backend` stage:
-        `manager.register_stage_pass("backend", MyPass)`."""
+    def register_passes(self, passes: BackendPassRegistrar) -> None:
+        """Hang the backend's own passes: `passes.add(MyPass)`.
+
+        They run at the `backend` stage, after every shared pass and every
+        plugin's, and the module is verified after each of them.
+        """
 
     def validate(self, module: IRModule, context: BackendContext) -> None:
         """Refuse IR the backend cannot take, with a `BackendValidationError`
@@ -189,6 +267,16 @@ class Backend:
         """`format` (one of `emit_formats`) for one module: text, or bytes for
         a binary format."""
         raise BackendError(f"backend {self.name!r} does not emit {format!r}")
+
+    def emit_program(  # pylint: disable=redefined-builtin
+        self, modules: Mapping[str, IRModule], format: str, context: BackendContext
+    ) -> str | bytes:
+        """A `program`-scoped format: every module at once, one artifact back.
+
+        Only a format that declared `scope="program"` arrives here; a
+        module-scoped one goes to `emit`, once per module.
+        """
+        raise BackendError(f"backend {self.name!r} does not emit {format!r} for a whole program")
 
     def build(
         self, modules: Mapping[str, IRModule], output: Path, context: BackendContext

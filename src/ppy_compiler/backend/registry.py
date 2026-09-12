@@ -27,17 +27,33 @@ from .builtin import BUILTIN_BACKENDS, builtin_backend
 
 __all__ = [
     "ENTRY_POINT_GROUP",
+    "FORMAT_ENTRY_POINT_GROUP",
     "BackendCatalog",
     "BackendInfo",
     "BackendLoadError",
     "FormatOwner",
     "available_backends",
     "discover_external_backends",
+    "discover_format_owners",
     "emit_format_owner",
     "load_backend",
 ]
 
 ENTRY_POINT_GROUP = "ppy.backends"
+#: An optional second group naming which backend owns which emit format, so
+#: that `ppy emit <format>` can find the one backend to import instead of
+#: importing every installed one to ask. The entry point's name is the
+#: format, its value the backend's name::
+#:
+#:     [project.entry-points."ppy.backend-formats"]
+#:     toy = "toy"
+#:
+#: It is a hint, never the authority: the backend it names is loaded and
+#: asked, and a format it does not actually declare is an error.
+FORMAT_ENTRY_POINT_GROUP = "ppy.backend-formats"
+
+#: `_declared_api_version` for a backend that declares none of its own.
+_UNDECLARED = object()
 
 
 class BackendLoadError(BackendError):
@@ -53,6 +69,9 @@ class BackendInfo:
     builtin: bool
     #: `builtin`, or the distribution and the object the entry point names.
     origin: str
+    #: The distribution's name and version, or ("", "") for a builtin: part of
+    #: every artifact's identity, so a new release is new artifacts.
+    distribution: tuple[str, str] = ("", "")
     #: The `importlib.metadata.EntryPoint`; `object` for the compiler's own checker.
     entry: object | None = None
 
@@ -70,10 +89,36 @@ class BackendCatalog:
         return tuple(sorted(self.backends))
 
 
-def _origin(entry: object) -> str:
+def _distribution(entry: object) -> tuple[str, str]:
+    """The distribution an entry point came from, as (name, version)."""
     dist = getattr(entry, "dist", None)
-    where = f"{dist.name} {dist.version}" if dist is not None else "an unnamed distribution"
+    if dist is None:
+        return ("", "")
+    return (str(getattr(dist, "name", "")), str(getattr(dist, "version", "")))
+
+
+def _origin(entry: object) -> str:
+    name, version = _distribution(entry)
+    where = f"{name} {version}" if name else "an unnamed distribution"
     return f"{where} ({getattr(entry, 'value', '?')})"
+
+
+def _declared_api_version(backend: Backend) -> object:
+    """The interface version this backend declares for itself.
+
+    Read from the instance and from every class of its own, stopping at
+    `Backend`: what the base class carries is the compiler's own number,
+    which a package would inherit anew from every compiler it is imported
+    into, so finding it there is finding nothing declared.
+    """
+    if "api_version" in vars(backend):
+        return vars(backend)["api_version"]
+    for klass in type(backend).__mro__:
+        if klass is Backend:
+            break
+        if "api_version" in klass.__dict__:
+            return klass.__dict__["api_version"]
+    return _UNDECLARED
 
 
 def discover_external_backends() -> tuple[dict[str, object], list[str]]:
@@ -120,7 +165,9 @@ def available_backends() -> BackendCatalog:
         where = tuple(claimants.get(name, ()))
         if len(where) > 1:
             catalog.duplicates[name] = where
-        catalog.backends[name] = BackendInfo(name, False, _origin(entry), entry)
+        catalog.backends[name] = BackendInfo(
+            name, False, _origin(entry), _distribution(entry), entry
+        )
     return catalog
 
 
@@ -164,12 +211,22 @@ def load_backend(name: str, options: Mapping[str, object] | BackendConfig | None
             f"backend {name!r} ({info.origin}) answered {type(backend).__name__}, "
             "not a ppy_compiler.backend.Backend"
         )
-    version = getattr(backend, "api_version", None)
+    version = _declared_api_version(backend)
+    if version is _UNDECLARED:
+        raise BackendLoadError(
+            f"backend {name!r} ({info.origin}) does not declare the backend API version it "
+            f"implements; declare it on the class as a literal -- `api_version = "
+            f"{BACKEND_API_VERSION}` -- rather than inheriting it, so that a later compiler "
+            f"can tell an older backend from a current one. This compiler speaks version "
+            f"{BACKEND_API_VERSION}"
+        )
     if version != BACKEND_API_VERSION:
         raise BackendLoadError(
-            f"backend {name!r} is written against backend API version {version!r}; "
-            f"this compiler speaks version {BACKEND_API_VERSION}"
+            f"backend {name!r} ({info.origin}) declares backend API version {version!r}; "
+            f"this compiler speaks version {BACKEND_API_VERSION}. Upgrade the backend, or "
+            f"install a compiler that speaks version {version!r}"
         )
+    backend.distribution = info.distribution or None
     if not backend.name:
         backend.name = name
     elif backend.name != name:
@@ -178,6 +235,28 @@ def load_backend(name: str, options: Mapping[str, object] | BackendConfig | None
             "the entry point's name and the backend's must agree"
         )
     return backend
+
+
+def discover_format_owners() -> tuple[dict[str, str], list[str]]:
+    """Which backend each installed distribution says owns which emit format,
+    from `ppy.backend-formats` alone: no backend package is imported."""
+    owners: dict[str, str] = {}
+    claimants: dict[str, list[str]] = {}
+    try:
+        entries = importlib.metadata.entry_points(group=FORMAT_ENTRY_POINT_GROUP)
+    except Exception as error:  # noqa: BLE001 - a broken distribution must not break discovery
+        return owners, [f"emit-format discovery failed: {error}"]
+    for entry in entries:
+        claimants.setdefault(entry.name, []).append(_origin(entry))
+        owners.setdefault(entry.name, entry.value)
+    problems = [
+        f"the emit format {name!r} is claimed by more than one distribution: {', '.join(where)}"
+        for name, where in sorted(claimants.items())
+        if len(where) > 1
+    ]
+    for name in (problem_name for problem_name, where in claimants.items() if len(where) > 1):
+        owners.pop(name, None)
+    return owners, problems
 
 
 @dataclass(frozen=True, slots=True)
@@ -209,10 +288,24 @@ def emit_format_owner(kind: str, options_for=None) -> FormatOwner:  # type: igno
     builtin = _builtin_formats()
     if kind in builtin:
         return builtin[kind]
+    declared, format_problems = discover_format_owners()
+    if kind in declared and declared[kind] not in BUILTIN_BACKENDS:
+        # One distribution says which backend owns this format: that backend is
+        # loaded and asked, and no other package is imported to find out.
+        named = declared[kind]
+        backend = load_backend(named, options_for(named) if options_for is not None else None)
+        for spec in backend.emit_formats():
+            if spec.name == kind:
+                return FormatOwner(backend, spec)
+        raise BackendLoadError(
+            f"the distribution declaring {kind!r} names backend {named!r}, which emits "
+            f"{', '.join(spec.name for spec in backend.emit_formats()) or 'nothing'}; "
+            f"the `{FORMAT_ENTRY_POINT_GROUP}` entry point and the backend disagree"
+        )
     catalog = available_backends()
     owners: list[tuple[str, FormatOwner]] = []
     known: list[str] = sorted(builtin)
-    failures: list[str] = list(catalog.problems)
+    failures: list[str] = [*catalog.problems, *format_problems]
     for name, info in sorted(catalog.backends.items()):
         if info.builtin:
             continue

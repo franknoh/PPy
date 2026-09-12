@@ -323,22 +323,90 @@ def run_llvm_backend(
         return 2
 
 
+#: Options of the LLVM road: what each does belongs to that backend's
+#: artifacts -- its guards, its objects, its launcher, its profile -- and
+#: means nothing to a backend with its own toolchain. Rather than accept one
+#: and quietly drop it, `ppy build --backend NAME` refuses it by name.
+#: `--target` is here too: what an installed backend builds for is
+#: `[tool.ppy.backends.NAME] target`, which reaches it through
+#: `BackendContext.target` and the artifact's identity, where a triple for a
+#: C toolchain would not.
+_LLVM_ONLY_BUILD_OPTIONS: tuple[tuple[str, str, str], ...] = (
+    ("--unsafe", "unsafe", "the overflow guards are the LLVM backend's"),
+    ("--sanitize", "sanitize", "the sanitizers instrument LLVM's native code"),
+    ("--pgo", "pgo", "the profile guides LLVM's optimizer"),
+    ("--prover", "prover", "the prover removes guards the LLVM backend emits"),
+    ("--host-cpu", "host_cpu", "the host CPU is what LLVM compiles the objects for"),
+    ("--standalone", "standalone", "a standalone executable is linked by the LLVM road"),
+    ("--python-extension", "python_extension", "the extension holds LLVM-built native code"),
+    ("--library", "library", "the library packages the LLVM road's objects and header"),
+    ("--report-opt", "report_opt", "the report is of LLVM's optimization"),
+    ("--report-opt-json", "report_opt_json", "the report is of LLVM's optimization"),
+    (
+        "--target",
+        "triple",
+        'a backend of its own builds for what `[tool.ppy.backends.%s] target = "..."` names',
+    ),
+)
+
+
+def _external_build_refusal(  # type: ignore[no-untyped-def]
+    name: str, options: argparse.Namespace
+) -> Diagnostic | None:
+    """The first option asked for that the backend `name` cannot honor.
+
+    An option argparse accepted and the build then ignored would be a silent
+    answer to a question the user asked; each one is either understood by
+    every backend or refused here with what it does and where to say it
+    instead.
+    """
+    if getattr(options, "warm", False):
+        return Diagnostic(
+            "E1002",
+            Severity.ERROR,
+            f"`--warm` builds the artifact `ppy run` and `import ppy` take, which is the "
+            f"LLVM backend's, and cannot be combined with backend {name!r}; "
+            f"`ppy build --backend {name}` builds that backend's own artifacts",
+        )
+    for flag, dest, why in _LLVM_ONLY_BUILD_OPTIONS:
+        value = getattr(options, dest, None)
+        if value in (None, False):
+            continue
+        return Diagnostic(
+            "E1002",
+            Severity.ERROR,
+            f"`{flag}` applies to the LLVM backend, not to backend {name!r}: "
+            + (why % name if "%s" in why else why),
+        )
+    return None
+
+
 def build(options: argparse.Namespace, reporter: Reporter) -> int:
     """`ppy build TARGET`: compile without running."""
     target: Path = options.target
     if not target.exists():
         reporter.emit(Diagnostic("E1002", Severity.ERROR, f"{target} does not exist"))
         return 2
+    backend = options.backend
+    # The backend is chosen before anything is done, so that no road but the
+    # chosen one ever runs: `--warm` and a `.ppyir` target used to be answered
+    # by the LLVM road whatever `--backend` said.
+    if backend not in ("llvm", "python"):
+        refusal = _external_build_refusal(backend, options)
+        if refusal is not None:
+            reporter.emit(refusal)
+            return 2
+        project = open_project(target, config_overrides=_overrides(options))
+        if target.suffix == ".ppyir":
+            return _build_ir_file_with_backend(backend, target, options, reporter, project)
+        return _build_with_backend(backend, target, options, reporter, project)
     if getattr(options, "warm", False):
         return _warm(options, reporter, target)
     if target.suffix == ".ppyir":
         from .emit import build_ir_file
 
         return build_ir_file(target, options, reporter)
-    backend = options.backend
     project = open_project(target, config_overrides=_overrides(options))
-    if backend not in ("llvm", "python"):
-        return _build_with_backend(backend, target, options, reporter, project)
     machine = None
     if backend == "llvm":
         _answer_removed_road(project, reporter)
@@ -526,6 +594,75 @@ def _build_with_backend(  # type: ignore[no-untyped-def]
     except (BackendValidationError, BackendError) as error:
         reporter.emit(Diagnostic("E1802", Severity.ERROR, str(error)))
         return 2
+    _report_backend_build(name, output, result, context, reporter)
+    return 0
+
+
+def _build_ir_file_with_backend(  # type: ignore[no-untyped-def]
+    name: str, target: Path, options: argparse.Namespace, reporter: Reporter, project
+) -> int:
+    """`ppy build foo.ppyir --backend NAME`: a backend builds from the IR alone.
+
+    The file is canonical IR that has already been through the shared
+    passes, so what runs here is the backend's own passes, its validation,
+    and its build -- the same road a source build takes below the boundary,
+    without the frontend above it.
+    """
+    from ..backend import (
+        BackendError,
+        BackendLoadError,
+        BackendUnavailable,
+        BackendValidationError,
+        load_backend,
+    )
+    from ..ir import CodecError, PassVerificationError, read
+    from .ir_pipeline import backend_pass_manager, prepare_for_backend
+    from .pipeline import ir_file_backend_context
+
+    try:
+        backend = load_backend(name, project.config.backend(name))
+    except BackendLoadError as error:
+        reporter.emit(Diagnostic("E1903", Severity.ERROR, str(error)))
+        return 2
+    status = backend.toolchain_status()
+    if not status.available:
+        reporter.emit(
+            Diagnostic(
+                "E1801", Severity.ERROR, f"backend {name!r} is unavailable here: {status.detail}"
+            )
+        )
+        return 2
+    try:
+        module = read(target)
+    except CodecError as error:
+        reporter.emit(Diagnostic("E1801", Severity.ERROR, str(error)))
+        return 2
+    level = _overrides(options).get("opt_level") or project.config.opt_level
+    output: Path = options.output or (project.config.cache_path / "backends" / name)
+    try:
+        context = ir_file_backend_context(
+            project, backend, module, opt_level=level, entry=target.resolve()
+        )
+        backend_pass_manager(backend, context).run(module)
+        prepare_for_backend(module, backend, context)
+        output.mkdir(parents=True, exist_ok=True)
+        result = backend.build({module.name: module}, output, context)
+    except PassVerificationError as error:
+        reporter.emit(Diagnostic("E1904", Severity.ERROR, f"backend {name!r}: {error}"))
+        return 2
+    except BackendUnavailable as error:
+        reporter.emit(Diagnostic("E1801", Severity.ERROR, str(error)))
+        return 2
+    except (BackendValidationError, BackendError) as error:
+        reporter.emit(Diagnostic("E1802", Severity.ERROR, str(error)))
+        return 2
+    _report_backend_build(name, output, result, context, reporter)
+    return 0
+
+
+def _report_backend_build(  # type: ignore[no-untyped-def]
+    name: str, output: Path, result, context, reporter: Reporter
+) -> None:
     reporter.note(f"backend:  {name}")
     reporter.note(f"output:   {output}")
     reporter.note(f"outputs:  {len(result.outputs)}")
@@ -533,7 +670,6 @@ def _build_with_backend(  # type: ignore[no-untyped-def]
         reporter.note(f"  {path}")
     for note in (*context.notes, *result.notes):
         reporter.note(note)
-    return 0
 
 
 def _warm(options: argparse.Namespace, reporter: Reporter, target: Path) -> int:

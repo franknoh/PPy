@@ -16,7 +16,7 @@ import importlib.metadata
 from collections.abc import Callable, Mapping
 
 from ..cache.keys import digest
-from .base import Backend, EmitFormat, ToolchainStatus
+from .base import BACKEND_API_VERSION, Backend, EmitFormat, ToolchainStatus
 
 __all__ = ["BUILTIN_BACKENDS", "builtin_backend", "distribution_version"]
 
@@ -29,7 +29,15 @@ def distribution_version(name: str) -> str:
         return "absent"
 
 
-class IrBackend(Backend):
+class _Builtin(Backend):
+    """A backend of the compiler's own: it ships with the interface, so it
+    tracks the constant. An installed backend declares a literal instead --
+    see `BACKEND_API_VERSION`."""
+
+    api_version = BACKEND_API_VERSION
+
+
+class IrBackend(_Builtin):
     """The canonical IR itself: what every other backend receives."""
 
     name = "ir"
@@ -48,7 +56,7 @@ class IrBackend(Backend):
         return digest("ir", IR_SCHEMA_VERSION)
 
 
-class LlvmBackend(Backend):
+class LlvmBackend(_Builtin):
     """Canonical IR to LLVM IR, objects, libraries, and the JIT."""
 
     name = "llvm"
@@ -74,7 +82,7 @@ class LlvmBackend(Backend):
         return ToolchainStatus(True, f"llvmlite {version}, {toolchain}")
 
 
-class PythonBackend(Backend):
+class PythonBackend(_Builtin):
     """Optimized Python under CPython: the backend `ppy FILE.ppy` runs on."""
 
     name = "python"
@@ -85,7 +93,7 @@ class PythonBackend(Backend):
         return digest("python", COMPILER_VERSION)
 
 
-class CBackend(Backend):
+class CBackend(_Builtin):
     """Canonical IR as C11, C++17, CUDA, or HIP source, or a C header."""
 
     name = "c"
@@ -103,7 +111,7 @@ class CBackend(Backend):
         return ToolchainStatus(True, "source only; any C11 or C++17 compiler builds it")
 
 
-class NvvmBackend(Backend):
+class NvvmBackend(_Builtin):
     """Device code as NVVM IR and PTX through LLVM's NVPTX target."""
 
     name = "nvvm"
@@ -125,7 +133,7 @@ class NvvmBackend(Backend):
         return ToolchainStatus(False, "this LLVM has no NVPTX backend")
 
 
-class StableHloBackend(Backend):
+class StableHloBackend(_Builtin):
     """`@ppy.xla.jit` functions as StableHLO for XLA."""
 
     name = "stablehlo"
