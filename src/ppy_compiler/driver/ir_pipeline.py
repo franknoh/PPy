@@ -33,11 +33,13 @@ from ..ir import IRModule, PassContext, PassManager, verify_or_raise
 from ..ir.transforms import default_pipeline
 
 __all__ = [
+    "backend_pass_manager",
     "canonical_ir_modules",
     "definitions",
     "optimize_shared_ir",
     "parallel_pass",
     "prepare_for_backend",
+    "register_backend_passes",
     "value_class_layouts",
 ]
 
@@ -93,7 +95,7 @@ def optimize_shared_ir(  # type: ignore[no-untyped-def]
     if plugins is not None:
         plugins.register_passes(manager)
     if backend is not None:
-        backend.register_passes(manager)
+        register_backend_passes(backend, manager)
     manager.run(module)
     verify_or_raise(module, registry)
     return ctx
@@ -217,6 +219,19 @@ def canonical_ir_modules(  # type: ignore[no-untyped-def]
     return modules
 
 
+def register_backend_passes(backend, manager: PassManager) -> None:  # type: ignore[no-untyped-def]
+    """Hang a backend's passes on `manager`, at the `backend` stage and nowhere else.
+
+    The backend is handed a `BackendPassRegistrar`, not the manager: the
+    stages before `backend` are the shared pipeline's and the plugins', and
+    a backend reaching into them would be deciding for every other backend
+    what the canonical IR is. One that tries is refused by name.
+    """
+    from ..backend.base import BackendPassRegistrar
+
+    backend.register_passes(BackendPassRegistrar(manager, backend.name))
+
+
 def prepare_for_backend(module: IRModule, backend, context) -> None:  # type: ignore[no-untyped-def]
     """Hand `module`, already through the shared passes and the backend's own,
     to the backend's validation: the last word before it emits or builds.
@@ -235,5 +250,5 @@ def backend_pass_manager(backend, context) -> PassManager:  # type: ignore[no-un
     ctx = PassContext(context.registry, verify_after_each=True)
     manager = PassManager(ctx)
     manager.add_stage("backend")
-    backend.register_passes(manager)
+    register_backend_passes(backend, manager)
     return manager

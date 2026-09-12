@@ -156,11 +156,24 @@ def _emit_with_backend(kind: str, target: Path, output: Path | None, reporter: R
 
     The backend is found by its format and loaded; its toolchain must be
     here; the modules go through the shared passes and the backend's own,
-    then its validation, then `emit`, one module at a time in name order.
+    then its validation, and then the format's scope decides what is asked
+    for and what is written:
+
+    * `module` scope, the default: `emit` once per module, one artifact
+      each. One module goes to standard output or to `-o FILE`; more than
+      one needs `-o DIR` and is written one file per module, named for the
+      module with the format's suffix. Two artifacts are never concatenated
+      into one file -- two object files, two firmware images, or two
+      programs do not become one by being written end to end.
+    * `program` scope: `emit_program` once, every module at once, one
+      artifact, to standard output or to `-o` (a file, or a directory the
+      project's name is written into).
+
     A refusal is a diagnostic with the backend's reason: `E1903` when no
     backend can be used for the format, `E1801` when its toolchain is
     missing, `E1904` when one of its passes broke the IR, `E1802` when it
-    cannot take the IR or the format.
+    cannot take the IR or the format, `E1002` when the output asked for
+    cannot hold what the format makes.
     """
     from ..backend import (
         BackendError,
@@ -199,9 +212,16 @@ def _emit_with_backend(kind: str, target: Path, output: Path | None, reporter: R
     try:
         modules = canonical_ir_modules(bundle, launches=True, backend=backend)
         context = backend_context(bundle, backend)
-        for name, module in sorted(modules.items()):
+        for module in modules.values():
             prepare_for_backend(module, backend, context)
-            outputs[name] = backend.emit(module, spec.name, context)
+        if spec.scope == "program":
+            if modules:
+                outputs[project.root.name] = backend.emit_program(
+                    dict(sorted(modules.items())), spec.name, context
+                )
+        else:
+            for name, module in sorted(modules.items()):
+                outputs[name] = backend.emit(module, spec.name, context)
     except PassVerificationError as error:
         reporter.emit(Diagnostic("E1904", Severity.ERROR, f"backend {backend.name!r}: {error}"))
         return 2
@@ -227,33 +247,54 @@ def _emit_with_backend(kind: str, target: Path, output: Path | None, reporter: R
                 )
             )
             return 2
-    if target.is_file():
-        if spec.binary:
-            data = b"".join(outputs.values())  # type: ignore[arg-type]
-            if output is None:
-                sys.stdout.buffer.write(data)
-                sys.stdout.flush()
-            else:
-                output.parent.mkdir(parents=True, exist_ok=True)
-                output.write_bytes(data)
-                reporter.note(f"wrote {output}")
-            return 0
-        joined = "\n".join(outputs.values())  # type: ignore[arg-type]
+    if len(outputs) == 1 and not target.is_dir():
+        only = next(iter(outputs.values()))
         if output is None:
-            print(joined, end="" if joined.endswith("\n") else "\n")
+            _print_artifact(only)
+            return 0
+        if output.is_dir():
+            return _write_artifacts(outputs, output, spec.suffix, reporter)
+        output.parent.mkdir(parents=True, exist_ok=True)
+        if isinstance(only, bytes):
+            output.write_bytes(only)
         else:
-            output.parent.mkdir(parents=True, exist_ok=True)
-            output.write_text(joined, encoding="utf-8")
-            reporter.note(f"wrote {output}")
+            output.write_text(only, encoding="utf-8")
+        reporter.note(f"wrote {output}")
         return 0
-    assert output is not None
-    output.mkdir(parents=True, exist_ok=True)
-    for name, text in outputs.items():
-        path = output / f"{name}{spec.suffix}"
-        if isinstance(text, bytes):
-            path.write_bytes(text)
+    if output is None:
+        reporter.emit(
+            Diagnostic(
+                "E1002",
+                Severity.ERROR,
+                f"{target} is {len(outputs)} module(s) and `{spec.name}` is written one "
+                f"artifact per module: `-o DIR` says where to write them "
+                f"({', '.join(f'{name}{spec.suffix}' for name in sorted(outputs))})",
+            )
+        )
+        return 2
+    return _write_artifacts(outputs, output, spec.suffix, reporter)
+
+
+def _print_artifact(artifact: str | bytes) -> None:
+    """One artifact to standard output: bytes as bytes, text with a final newline."""
+    if isinstance(artifact, bytes):
+        sys.stdout.buffer.write(artifact)
+        sys.stdout.flush()
+        return
+    print(artifact, end="" if artifact.endswith("\n") else "\n")
+
+
+def _write_artifacts(
+    outputs: dict[str, str | bytes], directory: Path, suffix: str, reporter: Reporter
+) -> int:
+    """One file per artifact, named for its module, in `directory`."""
+    directory.mkdir(parents=True, exist_ok=True)
+    for name, artifact in sorted(outputs.items()):
+        path = directory / f"{name}{suffix}"
+        if isinstance(artifact, bytes):
+            path.write_bytes(artifact)
         else:
-            path.write_text(text, encoding="utf-8")
+            path.write_text(artifact, encoding="utf-8")
         reporter.note(f"wrote {path}")
     return 0
 

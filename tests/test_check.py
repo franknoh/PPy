@@ -5,7 +5,7 @@ from __future__ import annotations
 import dataclasses
 import re
 from collections.abc import Callable
-from typing import Annotated, Any, Literal, Optional
+from typing import Annotated, Any, Literal, Optional, Protocol, runtime_checkable
 
 import pytest
 
@@ -363,3 +363,82 @@ def test_a_dynamic_value_crossing_is_told_about_both(write, analyze):
     assert [d.code for d in diagnostics] == ["E1508"]
     assert "ppy.check[T](value)" in (diagnostics[0].help or "")
     assert "ppy.assume[T](value)" in (diagnostics[0].help or "")
+
+
+@runtime_checkable
+class Greeter(Protocol):
+    """A protocol whose contract is more than the presence of a name."""
+
+    def greet(self, name: str) -> str: ...
+
+
+class Quiet(Protocol):
+    """The same, without `@runtime_checkable`: `isinstance` refuses it outright."""
+
+    def greet(self, name: str) -> str: ...
+
+
+class Impostor:
+    """It has `greet`, and `greet` means something else entirely."""
+
+    def greet(self):  # the wrong signature is the point
+        return 0
+
+
+@pytest.mark.parametrize(
+    "target",
+    [
+        Greeter,
+        Quiet,
+        list[Greeter],
+        set[Greeter],
+        tuple[Greeter, ...],
+        tuple[int, Greeter],
+        dict[str, Greeter],
+        dict[Greeter, str],
+        list[list[Greeter]],
+        Annotated[Greeter, "meta"],
+        int | Greeter,
+        Greeter | int,
+        Optional[Greeter],  # noqa: UP045 -- the spelling must be refused too
+    ],
+)
+def test_a_protocol_is_refused_wherever_it_appears_in_the_target(target):
+    """`isinstance` against a protocol sees that the attributes exist and nothing
+    of what they take or answer, so no run of it establishes the protocol; the
+    refusal does not depend on which arm of a union the protocol is."""
+    with pytest.raises(TypeError, match="cannot validate"):
+        ppy.check[target](Impostor())
+    with pytest.raises(TypeError, match="cannot validate"):
+        ppy.check[target]([Impostor()])
+
+
+def test_the_protocol_refusal_says_why_and_where_to_go():
+    with pytest.raises(TypeError) as raised:
+        ppy.check[Greeter](Impostor())
+    message = str(raised.value)
+    assert "Greeter" in message, "the protocol is named"
+    assert "static contract" in message and "isinstance" in message, "why it cannot be checked"
+    assert "ppy.assume[T](value)" in message, "what to use instead"
+
+
+def test_a_runtime_checkable_protocol_is_no_more_checkable_than_a_plain_one():
+    """It is the `isinstance` that a runtime-checkable protocol allows which is
+    unsound here: it passes for a class whose method takes and answers anything."""
+    assert isinstance(Impostor(), Greeter), "Python says yes to the structure"
+    with pytest.raises(TypeError, match="cannot validate"):
+        ppy.check[Greeter](Impostor())
+
+
+def test_assume_still_crosses_a_protocol_unchecked():
+    value = Impostor()
+    assert ppy.assume[Greeter](value) is value
+    assert ppy.assume[list[Greeter]]([value]) == [value]
+
+
+def test_a_plain_class_and_a_dataclass_are_still_checked():
+    """The refusal is of protocols, not of classes."""
+    assert ppy.check[Impostor](Impostor()) is not None
+    assert ppy.check[Point](Point(1, ["a"])).x == 1
+    with pytest.raises(TypeError, match="expected Impostor, got int"):
+        ppy.check[Impostor](3)

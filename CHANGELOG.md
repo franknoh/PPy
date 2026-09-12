@@ -4,6 +4,52 @@
 
 Work toward the next release, on `dev`; alphas of it are tagged `v0.3.0aN`.
 
+- `ppy.check[T]` refuses a protocol. `isinstance` against a
+  `@runtime_checkable` protocol answers whether the attributes are there
+  and nothing of what they take or answer, so a class whose `f(self)`
+  returns a string satisfies a protocol declaring `f(self, x: int) -> int`;
+  handing that value back as the protocol was the false typed value
+  `ppy.check` exists to refuse. Plain and runtime-checkable protocols are
+  refused alike, wherever they appear in the target -- nested in a `list`,
+  `tuple`, `set`, or `dict`, behind `Annotated`, or as a union arm in
+  either order -- and `ppy.assume[T]` remains the unchecked crossing. The
+  guide already said protocols were refused; now they are.
+- The backend interface, tightened while it is young:
+  - an external backend declares the interface version it implements as a
+    literal of its own (`api_version = 1`) and is refused if it declares
+    none. Inheriting the base class's number would have made every
+    installed backend call itself current the moment a later compiler
+    imported it, which is the compatibility break the number exists to
+    catch; the base class now declares nothing.
+  - a backend's passes reach the `backend` stage and no other. What
+    `register_passes` receives is a `BackendPassRegistrar` (`passes.add(MyPass)`),
+    not the `PassManager`, so a backend can no longer hang a pass among the
+    shared pipeline's or the plugins' stages and decide for every other
+    backend what the canonical IR is; one that asks is refused by name.
+  - an artifact's identity carries the distribution the backend came from
+    and that distribution's version, so a new release of a backend package
+    is new artifacts whether or not its author touched `fingerprint()`.
+  - an `EmitFormat` says whether it is written per module (the default,
+    through `emit`) or per program (through `emit_program`, every module at
+    once). A per-module format whose target resolves to several modules
+    needs `-o DIR` and writes one file for each: two artifacts are no
+    longer written end to end into one file, which for two object files or
+    two device images made a thing that was neither.
+  - `ppy build --backend NAME` chooses the backend before anything runs. A
+    `.ppyir` target builds through that backend -- the file is canonical
+    IR, so its passes, validation, and build run over it -- where it used
+    to be answered by the LLVM road whatever `--backend` said, and `--warm`
+    is refused for a backend other than LLVM's rather than silently
+    building the LLVM artifact. Every LLVM-road option (`--unsafe`,
+    `--sanitize`, `--pgo`, `--prover`, `--host-cpu`, `--standalone`,
+    `--python-extension`, `--library`, `--report-opt`, `--report-opt-json`,
+    `--target`) is refused by name for another backend instead of being
+    accepted and ignored.
+  - a distribution may declare which formats its backend owns in the
+    optional `ppy.backend-formats` entry-point group, so `ppy emit
+    <format>` imports the one backend that owns it rather than every
+    installed backend to ask. Undeclared formats are still found the slower
+    way.
 - A backend can be a package of its own. `ppy_compiler.backend` is the
   interface (`Backend`, `BackendContext`, `EmitFormat`, `BuildResult`,
   `ToolchainStatus`, `BackendValidationError`; `BACKEND_API_VERSION` 1, a

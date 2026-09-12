@@ -8,10 +8,12 @@ one -- `llvm`, `c`, `nvvm`, `stablehlo`, `python` -- are the compiler's own.
 
 from .base import (
     BACKEND_API_VERSION,
+    UNDECLARED_API_VERSION,
     Backend,
     BackendConfig,
     BackendContext,
     BackendError,
+    BackendPassRegistrar,
     BackendUnavailable,
     BackendValidationError,
     BuildResult,
@@ -20,11 +22,13 @@ from .base import (
 )
 from .registry import (
     ENTRY_POINT_GROUP,
+    FORMAT_ENTRY_POINT_GROUP,
     BackendCatalog,
     BackendInfo,
     BackendLoadError,
     available_backends,
     discover_external_backends,
+    discover_format_owners,
     emit_format_owner,
     load_backend,
 )
@@ -32,6 +36,8 @@ from .registry import (
 __all__ = [
     "BACKEND_API_VERSION",
     "ENTRY_POINT_GROUP",
+    "FORMAT_ENTRY_POINT_GROUP",
+    "UNDECLARED_API_VERSION",
     "Backend",
     "BackendCatalog",
     "BackendConfig",
@@ -39,6 +45,7 @@ __all__ = [
     "BackendError",
     "BackendInfo",
     "BackendLoadError",
+    "BackendPassRegistrar",
     "BackendUnavailable",
     "BackendValidationError",
     "BuildResult",
@@ -46,6 +53,7 @@ __all__ = [
     "ToolchainStatus",
     "available_backends",
     "discover_external_backends",
+    "discover_format_owners",
     "emit_format_owner",
     "load_backend",
 ]
