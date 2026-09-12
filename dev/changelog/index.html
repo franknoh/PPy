@@ -3730,21 +3730,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#030-unreleased" class="md-nav__link">
+  <a href="#030-2026-09-13" class="md-nav__link">
     <span class="md-ellipsis">
       
-        0.3.0 — unreleased
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#021-unreleased" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        0.2.1 — unreleased
+        0.3.0 — 2026-09-13
       
     </span>
   </a>
@@ -3858,21 +3847,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#030-unreleased" class="md-nav__link">
+  <a href="#030-2026-09-13" class="md-nav__link">
     <span class="md-ellipsis">
       
-        0.3.0 — unreleased
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#021-unreleased" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        0.2.1 — unreleased
+        0.3.0 — 2026-09-13
       
     </span>
   </a>
@@ -3972,8 +3950,14 @@
 
 
 <h1 id="changelog">Changelog<a class="headerlink" href="#changelog" title="Permanent link">&para;</a></h1>
-<h2 id="030-unreleased">0.3.0 — unreleased<a class="headerlink" href="#030-unreleased" title="Permanent link">&para;</a></h2>
-<p>Work toward the next release, on <code>dev</code>; alphas of it are tagged <code>v0.3.0aN</code>.</p>
+<h2 id="030-2026-09-13">0.3.0 — 2026-09-13<a class="headerlink" href="#030-2026-09-13" title="Permanent link">&para;</a></h2>
+<p>The release that makes the compiler an open one: a public backend interface
+behind the canonical IR, so a code generator for another target is a Python
+package with an entry point rather than a fork of this repository. Around
+it, the semantics that surround such a boundary were tightened -- what
+<code>ppy.check</code> may claim about a value, what <code>ppy.input</code> and <code>ppy.scan</code> read,
+what a backend may be asked for -- and the accelerator paths were validated
+on real hardware. The entries below are in the order the work landed.</p>
 <ul>
 <li><code>ppy build --backend python</code> is held to the same policy as every other
   backend that is not LLVM. It shared the LLVM branch of the dispatch, so
@@ -4364,9 +4348,6 @@
   machine gets: no launch, <code>compiled</code> false, <code>ppy emit hip</code> for <code>hipcc</code>.</li>
 <li>The ROCm harness installs every group when the image's JAX allows it
   and every group but <code>jax</code> otherwise, and says which.</li>
-</ul>
-<h2 id="021-unreleased">0.2.1 — unreleased<a class="headerlink" href="#021-unreleased" title="Permanent link">&para;</a></h2>
-<ul>
 <li>The lowering cache dropped a coroutine's future kind from its signature,
   so the second <code>ppy run</code> of a program whose entry coroutine was served from
   the cache bound it through the plain boundary and handed <code>aio.run</code> a bare
