@@ -325,12 +325,9 @@ def run_llvm_backend(
 
 #: Options of the LLVM road: what each does belongs to that backend's
 #: artifacts -- its guards, its objects, its launcher, its profile -- and
-#: means nothing to a backend with its own toolchain. Rather than accept one
-#: and quietly drop it, `ppy build --backend NAME` refuses it by name.
-#: `--target` is here too: what an installed backend builds for is
-#: `[tool.ppy.backends.NAME] target`, which reaches it through
-#: `BackendContext.target` and the artifact's identity, where a triple for a
-#: C toolchain would not.
+#: means nothing to another backend, whether it is the Python backend or one
+#: a package installed. Rather than accept one and quietly drop it,
+#: `ppy build --backend NAME` refuses it by name.
 _LLVM_ONLY_BUILD_OPTIONS: tuple[tuple[str, str, str], ...] = (
     ("--unsafe", "unsafe", "the overflow guards are the LLVM backend's"),
     ("--sanitize", "sanitize", "the sanitizers instrument LLVM's native code"),
@@ -342,23 +339,51 @@ _LLVM_ONLY_BUILD_OPTIONS: tuple[tuple[str, str, str], ...] = (
     ("--library", "library", "the library packages the LLVM road's objects and header"),
     ("--report-opt", "report_opt", "the report is of LLVM's optimization"),
     ("--report-opt-json", "report_opt_json", "the report is of LLVM's optimization"),
-    (
-        "--target",
-        "triple",
-        'a backend of its own builds for what `[tool.ppy.backends.%s] target = "..."` names',
-    ),
+    ("--target", "triple", "the triple is the machine LLVM compiles the objects for"),
 )
 
 
-def _external_build_refusal(  # type: ignore[no-untyped-def]
-    name: str, options: argparse.Namespace
-) -> Diagnostic | None:
+def _target_instead(name: str) -> str:
+    """Where a backend other than LLVM is told what it builds for."""
+    if name == "python":
+        return "the Python backend writes Python for the interpreter that loads it"
+    return f"a backend of its own builds for what `[tool.ppy.backends.{name}] target` names"
+
+
+def _python_build_refusal(target: Path, options: argparse.Namespace) -> Diagnostic | None:
+    """What the Python backend cannot be asked for, beyond the LLVM road's options.
+
+    It reads PPY source and publishes optimized Python to the project cache,
+    which is where `import ppy` and `ppy run` look for it; it has no artifact
+    to put somewhere else and no reader for canonical IR.
+    """
+    if target.suffix == ".ppyir":
+        return Diagnostic(
+            "E1002",
+            Severity.ERROR,
+            "the Python backend builds PPY source and cannot build canonical `.ppyir`: "
+            "`ppy build TARGET.ppyir` builds it through the LLVM backend, and a backend "
+            "of its own builds it with `--backend NAME`",
+        )
+    if getattr(options, "output", None) is not None:
+        return Diagnostic(
+            "E1002",
+            Severity.ERROR,
+            "`-o` names where a backend writes its artifacts, and the Python backend "
+            "publishes its modules to the project cache, where `import ppy` and `ppy run` "
+            "read them; `[tool.ppy] cache-dir` moves that, and `PPY_CACHE_DIR` overrides it",
+        )
+    return None
+
+
+def _non_llvm_build_refusal(name: str, options: argparse.Namespace) -> Diagnostic | None:
     """The first option asked for that the backend `name` cannot honor.
 
-    An option argparse accepted and the build then ignored would be a silent
-    answer to a question the user asked; each one is either understood by
-    every backend or refused here with what it does and where to say it
-    instead.
+    One policy for every backend that is not the LLVM one -- the Python
+    backend and an installed backend alike. An option argparse accepted and
+    the build then ignored would be a silent answer to a question the user
+    asked; each one is either understood by every backend or refused here
+    with what it does and where to say it instead.
     """
     if getattr(options, "warm", False):
         return Diagnostic(
@@ -372,11 +397,11 @@ def _external_build_refusal(  # type: ignore[no-untyped-def]
         value = getattr(options, dest, None)
         if value in (None, False):
             continue
+        detail = f"{why}; {_target_instead(name)}" if flag == "--target" else why
         return Diagnostic(
             "E1002",
             Severity.ERROR,
-            f"`{flag}` applies to the LLVM backend, not to backend {name!r}: "
-            + (why % name if "%s" in why else why),
+            f"`{flag}` applies to the LLVM backend, not to backend {name!r}: {detail}",
         )
     return None
 
@@ -387,19 +412,29 @@ def build(options: argparse.Namespace, reporter: Reporter) -> int:
     if not target.exists():
         reporter.emit(Diagnostic("E1002", Severity.ERROR, f"{target} does not exist"))
         return 2
+    # The backend is chosen before anything is done, and what the command line
+    # asked for is judged against that backend, so that no road but the chosen
+    # one ever runs: `--warm` and a `.ppyir` target were once answered by the
+    # LLVM road whatever `--backend` said, and the options of the LLVM road
+    # were accepted and dropped by every other backend.
     backend = options.backend
-    # The backend is chosen before anything is done, so that no road but the
-    # chosen one ever runs: `--warm` and a `.ppyir` target used to be answered
-    # by the LLVM road whatever `--backend` said.
-    if backend not in ("llvm", "python"):
-        refusal = _external_build_refusal(backend, options)
+    if backend != "llvm":
+        refusal = _non_llvm_build_refusal(backend, options)
         if refusal is not None:
             reporter.emit(refusal)
             return 2
+    if backend not in ("llvm", "python"):
         project = open_project(target, config_overrides=_overrides(options))
         if target.suffix == ".ppyir":
             return _build_ir_file_with_backend(backend, target, options, reporter, project)
         return _build_with_backend(backend, target, options, reporter, project)
+    if backend == "python":
+        refusal = _python_build_refusal(target, options)
+        if refusal is not None:
+            reporter.emit(refusal)
+            return 2
+    # Only the LLVM road reaches here with either of these: `--warm` and a
+    # `.ppyir` target are refused above for every other backend.
     if getattr(options, "warm", False):
         return _warm(options, reporter, target)
     if target.suffix == ".ppyir":
@@ -677,7 +712,9 @@ def _warm(options: argparse.Namespace, reporter: Reporter, target: Path) -> int:
 
     A flag that would key a different artifact is refused rather than
     honored: `import ppy` takes no flags, so nothing would ever find what
-    the flag built.
+    the flag built. Which backend was asked for is not judged here -- only
+    the LLVM road reaches this, since `build` refuses `--warm` for every
+    other backend before any of it runs.
     """
     from .native_import import warm
 
@@ -692,7 +729,6 @@ def _warm(options: argparse.Namespace, reporter: Reporter, target: Path) -> int:
             ("--host-cpu", getattr(options, "host_cpu", False)),
             ("--prover", getattr(options, "prover", None) is not None),
             ("-o", getattr(options, "output", None) is not None),
-            ("--backend python", getattr(options, "backend", "llvm") == "python"),
             ("--opt-level", getattr(options, "opt_level", None) is not None),
             ("--no-strict", getattr(options, "no_strict", False)),
         )
