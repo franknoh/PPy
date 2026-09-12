@@ -14,6 +14,7 @@ import json
 import sys
 from pathlib import Path
 
+from .abi import NativeSignature
 from .binding import bind, remember, value_class_types
 from .dispatch import LibraryBinder
 from .execute import execute, format_traceback
@@ -46,7 +47,7 @@ class PrebuiltBinder(LibraryBinder):
     def __init__(self, manifest: Manifest, library) -> None:  # type: ignore[no-untyped-def]
         super().__init__()
         self._library = library
-        self._entries: dict[str, dict[str, object]] = {}
+        self._entries: dict[str, dict[str, NativeSignature]] = {}
         self._wrappers = _wrapper_module(manifest)
         self._wrapper_entries = manifest.wrapper_entries or {}
         self._region_libraries = manifest.regions or {}
@@ -108,9 +109,9 @@ class PrebuiltBinder(LibraryBinder):
             getattr(self._wrappers, f"bind_{index}")(address, types, fallback)
         except Exception:  # noqa: BLE001 - a refusal keeps the slower path
             return None
-        return getattr(self._wrappers, signature.qualname, None) or getattr(
-            self._wrappers, f"call_{index}", None
-        )
+        # The entry point bears the function's qualified name in the library
+        # `ppy build` writes beside the manifest.
+        return getattr(self._wrappers, signature.qualname, None)
 
     def bind(self, module: str, function: str, fallback):  # type: ignore[no-untyped-def]
         signature = self._entries.get(module, {}).get(function)
