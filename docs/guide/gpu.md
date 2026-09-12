@@ -53,9 +53,70 @@ launch means what the reference launch means. `cuda.compiled(kernel)`
 says whether that is so here. Where the driver, a device, or the NVPTX
 backend is missing, the reference launch runs and `W2008` says why.
 `PPY_CUDA_ARCH` names the architecture the PTX is written for (`sm_70`
-unless set; a driver compiles PTX forward). A built artifact carries its
+unless set; a driver compiles PTX forward). An AMD card has no launch
+runtime in PPy: `ppy.cuda` and `ppy.tile` launch through the CUDA driver
+only, so on a ROCm machine `compiled` is `False` and the reference launch
+runs; HIP is `ppy emit hip`, the source for `hipcc`.
+
+`cuda.device_alloc[T](n)` is `n` zeroed elements of `T` that live on the
+device between launches: a `native.ptr[T]` like `stack_alloc`'s, so the same
+loops fill and read it and `native.offset` keeps its kind. The host reads and
+writes through a mirror, and whichever side wrote last holds the truth: a
+launch takes the device address and copies nothing, a host read after a
+launch brings the array back once, a host write before a launch sends it
+once. Without a device -- and under `hip`, which has no launch runtime yet
+-- there is only the mirror, and every path reads and writes it directly, so
+the program means the same thing everywhere. Under `ppy run` a function
+that allocates device memory stays in Python, as one that launches does;
+`ppy emit cuda` and `ppy emit hip` write it into the host function as a
+managed allocation (`cudaMallocManaged`), which the host reads and writes
+as the mirror is, freed when the function returns. A built artifact carries its
 kernels: `ppy build` writes each staged payload beside the manifest, and
 the launcher binds it without the compiler -- as it does an `@xla.jit`
 function's StableHLO.
 
 Examples: [CUDA](../howto/38_cuda.md).
+
+## Tile kernels
+
+`ppy.tile` is the other way to write a kernel: a program owns a tile of
+`BLOCK` lanes rather than a thread owning one element, and the block's
+threads, shared memory, and shuffles are the compiler's to write.
+
+```python
+from ppy import native, tile
+
+
+@tile.kernel
+def block_max(x: native.const_ptr[float], out: native.ptr[float]) -> None:
+    pid = tile.program_id()
+    values = tile.load(x, pid * 64 + tile.arange(64))
+    tile.store(out, pid, tile.max(values))
+
+
+def run(blocks: int, x: native.const_ptr[float], out: native.ptr[float]) -> None:
+    tile.launch(block_max, blocks, x, out)
+```
+
+`tile.arange(BLOCK)` names the kernel's block size -- one per kernel, a power
+of two of at least 32 -- and is the lane index; `tile.program_id()` and
+`tile.num_programs()` say where a program is. `tile.load(p, offsets, mask,
+other)` gathers a tile of `int`, `float`, or `bool` elements through a
+pointer, reading nothing where `mask` is false and giving `other` there;
+`tile.store(p, offsets, value, mask)` scatters one, and with a single
+offset and a scalar writes one element. Arithmetic (`+ - * / // %`), the
+comparisons, and `& | ^ ~` are lane by lane, a scalar beside a tile is
+broadcast, `tile.where(mask, a, b)` chooses per lane, and `tile.sum`,
+`tile.max`, `tile.min` reduce a tile to a scalar. `tile.launch(kernel,
+programs, *args)` runs it and waits, on the device where the build staged
+the kernel and through the reference launch otherwise.
+
+Natively a program is a block of up to 256 threads; a tile is a vector of
+`BLOCK / threads` lanes per thread, strided across the block so a load is
+coalesced, a gather or scatter is that many lane loads or stores, and a
+reduction is each thread's lanes, then a shuffle tree across the warp, then
+the warps through shared memory, every thread ending with the same number.
+`ppy emit cuda` and `ppy emit ptx` write a tile kernel like any other; the
+`tile.compiled` check says whether a launch runs on the device here. The
+[tile example](../howto/44_tile.md) measures the two kernels against Triton
+and Taichi.

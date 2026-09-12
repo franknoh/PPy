@@ -61,21 +61,7 @@ ppy run classes.ppy
 <!-- outputs:start -->
 ## What it prints
 
-**`python  classes.ppy`**
-
-```text
-circle 12.5664 12.0
-none text of 5 number 7
-```
-
-**`ppy     classes.ppy`**
-
-```text
-circle 12.5664 12.0
-none text of 5 number 7
-```
-
-**`ppy run classes.ppy`**
+**`python  classes.ppy`**, **`ppy     classes.ppy`**, **`ppy run classes.ppy`**
 
 ```text
 circle 12.5664 12.0

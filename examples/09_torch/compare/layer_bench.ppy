@@ -1,0 +1,33 @@
+"""`layer` on an 8x32 CPU input, twenty thousand calls: one ATen region per call. The PPY side."""
+
+import time
+
+import ppy
+import torch
+
+
+@ppy.opt(3)
+def layer(x: torch.Tensor, weight: torch.Tensor, bias: torch.Tensor) -> torch.Tensor:
+    return torch.relu(torch.add(torch.matmul(x, weight), bias))
+
+
+def main() -> None:
+    torch.manual_seed(0)
+    torch.set_num_threads(1)
+    x = torch.randn(8, 32)
+    w = torch.randn(32, 32)
+    b = torch.randn(32)
+    for _i in range(300):
+        layer(x, w, b)
+    rounds: int = 20000
+    best = 1e9
+    for _ in range(5):
+        start: float = time.perf_counter()
+        for _i in range(rounds):
+            out = layer(x, w, b)
+        best = min(best, (time.perf_counter() - start) / rounds * 1000.0)
+    print(f"# layer, per call: {best:.4f} ms")
+    print(f"{float(out.sum()):.4f}")
+
+
+main()

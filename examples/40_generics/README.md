@@ -42,6 +42,56 @@ argument), and a generic that calls itself with its own parameter wrapped in
 a type is refused outright (`E1723`) because its specializations would never
 end.
 
+## Compared with Numba
+
+`sweep` over eight million values, in [`compare/`](compare/):
+[`generic_bench.ppy`](compare/generic_bench.ppy) -- under `ppy run` and, the
+same file, under `python` -- and
+[`generic_numba.py`](compare/generic_numba.py). Milliseconds, best of five,
+over five processes.
+
+**PPY** is the generics as Python 3.12 spells them, with bounds, called
+from a plain function; **Numba** is the same three functions under
+`@njit`, generic by dispatch: each is compiled once per tuple of argument
+types it meets, which is the same instance-per-type-tuple rule without the
+declaration:
+
+```python
+def largest[T: int | float](a: T, b: T) -> T:
+    return a if a > b else b
+
+
+def clamp[T: int | float](x: T, lo: T, hi: T) -> T:
+    return largest(lo, x) if x < hi else hi
+```
+
+```python
+@njit
+def largest(a, b):
+    return a if a > b else b
+
+
+@njit
+def clamp(x, lo, hi):
+    return largest(lo, x) if x < hi else hi
+```
+
+<!-- compare:start -->
+| | PPY `ppy run` | CPython, the same file | Numba `@njit` |
+|---|---:|---:|---:|
+| sweep, eight million clamps and comparisons | 5.87 ± 0.03 | 428.92 ± 9.67 | **5.09 ± 0.06** |
+<!-- compare:end -->
+
+Both compile `largest` twice -- once for ints, once for floats -- and call
+the instances directly from the loop, and the loop is the same code
+either way. What PPY adds is at the source: the bound is written, so
+`largest("a", 1)` is refused before anything runs, and the file is still
+the file `python` runs. What Numba adds is nothing to write; the types are
+whatever arrives first.
+
+Intel Core Ultra 9 386H; Numba 0.67.0 on CPython 3.12.13, PPY on CPython
+3.14.5, from a checkout on a native filesystem.
+
 ## Run it
 
 ```bash
@@ -53,14 +103,7 @@ ppy emit ir generic.ppy
 <!-- outputs:start -->
 ## What it prints
 
-**`python  generic.ppy`**
-
-```text
-2 2.5 at (3, 4) 7
-10 0.0 509303.5
-```
-
-**`ppy run generic.ppy`**
+**`python  generic.ppy`**, **`ppy run generic.ppy`**
 
 ```text
 2 2.5 at (3, 4) 7

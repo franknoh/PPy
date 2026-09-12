@@ -15,23 +15,23 @@ def cube(x: int) -> int:
 
 Every `+`, `-`, and `*` on a plain `int` lowers to LLVM's overflow-checking
 form. A set flag means the true value no longer fits, so the function
-returns to its Python body with the original arguments and computes there.
-The three paths print the same output because the native path never answers
-with a wrapped number; it either has the right one or steps aside.
+returns to its Python body with the original arguments and computes there:
+the native path never answers with a wrapped number, it either has the right
+one or steps aside.
 
-`ppy build` changes the default: an artifact wraps at 64 bits like every
-native compiler's output, and `--safe` keeps the guards. That difference is
-the 10 ms between `ppy run` and `ppy build` on the README's collatz kernel.
+`ppy build` keeps the same guards, so an artifact answers as `ppy run`
+does. `--unsafe`, on either command, drops them: the code wraps at 64 bits
+like every native compiler's output, which is the 10 ms between `ppy run`
+and `ppy build --unsafe` on the README's collatz kernel.
 
 ## Floor division and the sign of the remainder
 
 `floor_and_mod(-7, 2)` is `-4 + 1`, and `floor_and_mod(7, -2)` is
 `-4 + -1`: `//` rounds toward negative infinity and `%` takes the sign of
 the divisor. The IR carries `rounding = "floor"` on the operation and the
-LLVM backend emits the sign-corrected sequence, so the native path agrees
-with CPython where C's truncating division would not. Division by zero is a
-guard as well: `divide(1, 0)` raises `ZeroDivisionError` from the Python
-body on every path.
+LLVM backend emits the sign-corrected sequence where C's truncating division
+would give `-3`. Division by zero is a guard as well: `divide(1, 0)` raises
+`ZeroDivisionError` from the Python body.
 
 ## Run it
 
@@ -44,25 +44,7 @@ ppy run arbitrary_precision.ppy
 <!-- outputs:start -->
 ## What it prints
 
-**`python  arbitrary_precision.ppy`**
-
-```text
-27
-1000000000000000000000
--3 -5
-caught ZeroDivisionError
-```
-
-**`ppy     arbitrary_precision.ppy`**
-
-```text
-27
-1000000000000000000000
--3 -5
-caught ZeroDivisionError
-```
-
-**`ppy run arbitrary_precision.ppy`**
+**`python  arbitrary_precision.ppy`**, **`ppy     arbitrary_precision.ppy`**, **`ppy run arbitrary_precision.ppy`**
 
 ```text
 27

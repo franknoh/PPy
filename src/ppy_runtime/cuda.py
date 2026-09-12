@@ -5,8 +5,10 @@ The build stages a kernel as PTX with the kinds of its parameters; a
 Scalars are passed by value; a `native` pointer's whole array goes to the
 device before the launch and comes back after it when the pointer is
 mutable, so a launch means exactly what the reference launch means, only on
-the device. A machine without the driver, or without a device, has no
-kernel to bind: the reference runs instead, and the binding says why.
+the device. Memory made by `cuda.device_alloc` already lives there: its
+address is passed and nothing is copied. A machine without the driver, or
+without a device, has no kernel to bind: the reference runs instead, and
+the binding says why.
 """
 
 from __future__ import annotations
@@ -39,7 +41,7 @@ class Driver:
 
     def __init__(self, library: Any) -> None:
         self.lib = library
-        self.lock = threading.Lock()
+        self.lock = threading.RLock()
         self._declare()
         self.check(library.cuInit(0), "cuInit")
         count = ctypes.c_int(0)
@@ -168,11 +170,20 @@ def available() -> bool:
 class Kernel:
     """One compiled kernel: its PTX, its symbol, and the kinds of its parameters."""
 
-    def __init__(self, function: str, symbol: str, ptx: str, params: list[dict[str, Any]]) -> None:
+    def __init__(
+        self,
+        function: str,
+        symbol: str,
+        ptx: str,
+        params: list[dict[str, Any]],
+        threads: int = 0,
+    ) -> None:
         self.function = function
         self.symbol = symbol
         self.ptx = ptx
         self.params = params
+        #: A tile kernel's block: the threads that share one program's tiles.
+        self.threads = threads
         self._handle: ctypes.c_void_p | None = None
 
     def _loaded(self, d: Driver) -> ctypes.c_void_p:
@@ -196,6 +207,7 @@ class Kernel:
             handle = self._loaded(d)
             holders: list[Any] = []
             copies: list[tuple[ctypes.c_uint64, Any, int, bool]] = []
+            written: list[Any] = []
             try:
                 for value, described in zip(arguments, self.params, strict=True):
                     kind = described["kind"]
@@ -205,13 +217,22 @@ class Kernel:
                         holders.append(ctypes.c_double(float(value)))
                     elif kind == "bool":
                         holders.append(ctypes.c_int8(1 if value else 0))
+                    elif kind in {"ptr", "const_ptr"} and getattr(value, "home", None) is not None:
+                        # Memory that lives on the device: its address, no copy.
+                        home = value.home
+                        base = home.device_address()
+                        if base is None:
+                            raise CudaError("device memory was made without a device")
+                        holders.append(ctypes.c_uint64(base + value.index * home.width))
+                        if kind == "ptr" and bool(getattr(value, "mutable", True)):
+                            written.append(home)
                     elif kind in {"ptr", "const_ptr"}:
                         memory = value.memory
                         nbytes = len(memory) * memory.itemsize
                         pointer = d.alloc(nbytes)
                         writable = kind == "ptr" and bool(getattr(value, "mutable", True))
                         copies.append((pointer, memory, nbytes, writable))
-                        d.upload(pointer, (ctypes.c_char * nbytes).from_buffer_copy(memory), nbytes)
+                        d.upload(pointer, _host_address(memory, nbytes), nbytes)
                         holders.append(
                             ctypes.c_uint64(pointer.value + value.index * memory.itemsize)
                         )
@@ -221,12 +242,27 @@ class Kernel:
                     *(ctypes.addressof(h) for h in holders)
                 )
                 d.launch(handle, grid, block, parameters)
+                for home in written:
+                    home.device_written()
                 for pointer, memory, nbytes, writable in copies:
                     if writable:
                         d.download((ctypes.c_char * nbytes).from_buffer(memory), pointer, nbytes)
             finally:
                 for pointer, _memory, _nbytes, _writable in copies:
                     d.free(pointer)
+
+
+def _host_address(memory: memoryview, nbytes: int) -> Any:
+    """What the driver reads a host array from: the array itself, not a copy of it.
+
+    A copy into a ctypes buffer costs more than the transfer -- 90 ms against
+    12 for 128 MB here -- so a writable buffer hands over its own address.
+    Only a read-only view, which ctypes cannot address in place, is copied.
+    """
+    try:
+        return ctypes.c_void_p(ctypes.addressof(ctypes.c_char.from_buffer(memory)))
+    except TypeError:
+        return (ctypes.c_char * nbytes).from_buffer_copy(memory)
 
 
 def kernel_binding(function: str, payload: bytes, fallback: Any):  # type: ignore[no-untyped-def]
@@ -246,7 +282,11 @@ def kernel_binding(function: str, payload: bytes, fallback: Any):  # type: ignor
     if described.get("kind") != KIND:
         raise ValueError("not a ppy.cuda payload")
     kernel = Kernel(
-        described["function"], described["symbol"], described["ptx"], described["params"]
+        described["function"],
+        described["symbol"],
+        described["ptx"],
+        described["params"],
+        int(described.get("threads", 0)),
     )
 
     def wrapper(*args: Any, **kwargs: Any) -> Any:

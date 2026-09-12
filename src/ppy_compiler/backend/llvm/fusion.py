@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import ast
 from collections.abc import Iterable
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 from ...analysis import types as T
 from ...analysis.checker import ModuleAnalysis
@@ -66,8 +66,19 @@ COLUMNAR: dict[str, tuple[tuple[str, ...], str]] = {
     "fill_null": (("f64", "scalar"), "f64"),
     "select": (("bool", "f64", "f64"), "f64"),
 }
-#: Columnar operations whose result has no nulls.
+#: Columnar operations whose result has no nulls whatever their operands hold.
 _NEVER_NULL = frozenset({"is_null", "is_valid", "fill_null"})
+
+
+def _nullable(node: _Node) -> bool:
+    """Whether a null can reach the root: an array leaf brings them, `is_null`,
+    `is_valid`, and `fill_null` stop them, every other operation passes them on."""
+    if node.op == "array":
+        return True
+    if node.op in _NEVER_NULL or node.op in {"scalar", "constant"}:
+        return False
+    return any(_nullable(child) for child in node.operands)
+
 
 #: Reductions whose fused form reassociates the accumulation. NumPy sums
 #: pairwise and torch vectorizes, so a sequential loop is a different --
@@ -131,6 +142,44 @@ class FusedLoop:
     @property
     def returns_scalar(self) -> bool:
         return bool(self.reduction)
+
+    @property
+    def nan_symbol(self) -> str:
+        """The columnar kernel's twin under NumPy's null model: a NaN is the null.
+
+        A NumPy-backed pandas Series has no validity bitmap; its `float64`
+        nulls are NaNs and its bool masks are bytes, so a kernel over one
+        reads and writes that layout directly, with no bitmap of ones in
+        between. Only columnar kernels have this twin.
+        """
+        return f"{self.symbol}__nan"
+
+    @property
+    def guarded(self) -> bool:
+        """Whether the kernel itself refuses a non-finite result with its status.
+
+        A NumPy map kernel checks every element as it writes it -- an
+        or-reduction in the same loop, one guard after it -- so the runtime
+        needs no pass of its own over the output. A reduction gives one
+        number, checked where it lands; a torch kernel may keep its NaNs.
+        """
+        return self.storage == "numpy" and not self.returns_scalar
+
+
+#: Where an expression stands in its source: the start and the end, since an
+#: outer call shares its start with the expression it wraps -- `s.isna().sum()`
+#: begins where `s.isna()` does -- and only the end tells them apart.
+SourceSpan = tuple[int, int, int, int]
+
+
+def span(node: ast.expr) -> SourceSpan:
+    """The source span a fusion plan keys an expression by."""
+    return (
+        node.lineno,
+        node.col_offset,
+        getattr(node, "end_lineno", None) or node.lineno,
+        getattr(node, "end_col_offset", None) or node.col_offset,
+    )
 
 
 @dataclass(slots=True)
@@ -266,7 +315,7 @@ def _search(
             continue
         if not shape.arrays:
             continue
-        nullable = shape.storage in COLUMNAR_STORAGES and operations[0] not in _NEVER_NULL
+        nullable = shape.storage in COLUMNAR_STORAGES and _nullable(_parse(expression))
         loop = FusedLoop(
             symbol="ppy_fused_" + prefix.replace(".", "_") + f"_{node.lineno}_{node.col_offset}",
             arrays=tuple(shape.arrays),
@@ -386,7 +435,9 @@ def _render_operator(
         found = _COLUMNAR_OPERATOR_OP.get(type(node.op))
         if found is None:
             raise _Unsupported
-        name = found
+        # The plugin says which logic the library means by the operator:
+        # pandas' `&` on Series is Kleene's, PyArrow's `and_` is not.
+        name = operation[1] if operation[1] in (found, f"{found}_kleene") else found
         operands = [node.left, node.right]
     elif isinstance(node, ast.UnaryOp) and isinstance(node.op, ast.Invert):
         name = "invert"
@@ -479,6 +530,10 @@ def _build(module: IRModule, loop: FusedLoop) -> None:
         params,
         [F64] if loop.returns_scalar else [],  # type: ignore[arg-type]
     )
+    if loop.guarded:
+        # `lower-tensor` folds a finiteness check into the map's loop and
+        # guards on it after: a non-finite element is the status, not a pass.
+        function.attributes["ppy.finite_guard"] = True
     entry = function.add_entry_block()
     b = Builder(entry)
     arguments = list(entry.arguments)
@@ -533,9 +588,21 @@ def _build(module: IRModule, loop: FusedLoop) -> None:
 
 
 _KINDS: dict[str, IRType] = {"f64": F64, "bool": BOOL}
+_Node = columnar.Node
+_parse = columnar.parse_expression
 
 
 def _build_columnar(module: IRModule, loop: FusedLoop) -> None:
+    """Two functions of one loop each: `loop.symbol` over Arrow's validity bits,
+    `loop.nan_symbol` over NumPy's layout, where a NaN is the null and a bool
+    is a byte per row. Both take the same arguments: the answer's values and
+    validity buffers, then each column's values and validity buffers, the
+    scalars, and the row count."""
+    for model, symbol in (("bits", loop.symbol), ("nan", loop.nan_symbol)):
+        _build_columnar_model(module, loop, symbol, model)
+
+
+def _build_columnar_model(module: IRModule, loop: FusedLoop, symbol: str, model: str) -> None:
     kinds = loop.kinds or ("f64",) * len(loop.arrays)
     result_type = _KINDS[loop.result]
     params: list[tuple[str, object]] = [
@@ -547,7 +614,7 @@ def _build_columnar(module: IRModule, loop: FusedLoop) -> None:
         params.append((f"v{i}", PtrType(U8)))
     params.extend((f"s{i}", F64) for i in range(len(loop.scalars)))
     params.append(("n", I64))
-    function = module.add_function(loop.symbol, params, [])  # type: ignore[arg-type]
+    function = module.add_function(symbol, params, [])  # type: ignore[arg-type]
     entry = function.add_entry_block()
     b = Builder(entry)
     arguments = list(entry.arguments)
@@ -564,86 +631,26 @@ def _build_columnar(module: IRModule, loop: FusedLoop) -> None:
         ).results[0]
 
     def rows_of(dtype: IRType) -> Value:
-        return bits if dtype is BOOL else n
+        # A bool column is bits under Arrow's layout, bytes under NumPy's.
+        return bits if dtype is BOOL and model == "bits" else n
 
-    scalar_values = arguments[2 + 2 * len(kinds) : -1]
+    scalar_values = tuple(arguments[2 + 2 * len(kinds) : -1])
     columns = []
     for i, kind in enumerate(kinds):
         dtype = _KINDS[kind]
         values = as_buffer(arguments[2 + 2 * i], rows_of(dtype), columnar.values_element(dtype))
         validity = as_buffer(arguments[3 + 2 * i], bits, U8)
         columns.append(columnar.from_parts(b, values, validity, n, dtype, f"a{i}"))
-
-    def scalar_of(node: _Node) -> Value:
-        if node.op == "scalar":
-            return scalar_values[node.scalar]
-        return core.const(b, node.constant, F64)
-
-    def emit(node: _Node) -> Value:
-        if node.op == "array":
-            return columns[node.array]
-        if node.op in {"scalar", "constant"}:
-            return columnar.fill(b, scalar_of(node), n)
-        if node.op == "fill_null":
-            return columnar.fill_null(b, emit(node.operands[0]), scalar_of(node.operands[1]))
-        operands = [emit(child) for child in node.operands]
-        if node.op in {"negate", "abs", "invert"}:
-            return columnar.unary(b, node.op, operands[0])
-        if node.op == "is_null":
-            return columnar.is_null(b, operands[0])
-        if node.op == "is_valid":
-            return columnar.is_valid(b, operands[0])
-        if node.op == "select":
-            return columnar.select(b, operands[0], operands[1], operands[2])
-        if (
-            node.op in columnar.ARITHMETIC
-            or node.op in columnar.COMPARISON
-            or node.op in columnar.BOOLEAN
-        ):
-            return columnar.binary(b, node.op, operands[0], operands[1])
-        raise ValueError(f"fused expression uses {node.op!r}, which the columnar dialect lacks")
-
-    value = emit(_parse(loop.expression))
     out = as_buffer(arguments[0], rows_of(result_type), columnar.values_element(result_type))
-    info = columnar.describe(value.type)
-    assert info is not None
-    if info.nullable:
-        columnar.store(b, value, out, as_buffer(arguments[1], bits, U8))
-    else:
-        columnar.store(b, value, out)
+    outv = as_buffer(arguments[1], bits, U8)
+    columnar.map_(
+        b,
+        out,
+        outv,
+        tuple(columns),
+        scalar_values,
+        expression=loop.expression,
+        model=model,
+        gives=loop.result,
+    )
     core.ret(b)
-
-
-@dataclass(slots=True)
-class _Node:
-    op: str
-    operands: list[_Node] = field(default_factory=list)
-    array: int = -1
-    scalar: int = -1
-    constant: float = 0.0
-
-
-def _parse(text: str) -> _Node:
-    """Parse the prefix program rendered by `_render`."""
-    tokens = text.replace("(", " ( ").replace(")", " ) ").split()
-    position = 0
-
-    def parse() -> _Node:
-        nonlocal position
-        token = tokens[position]
-        position += 1
-        if token == "(":
-            operation = tokens[position]
-            position += 1
-            operands = []
-            while tokens[position] != ")":
-                operands.append(parse())
-            position += 1
-            return _Node(operation, operands)
-        if token.startswith("a"):
-            return _Node("array", array=int(token[1:]))
-        if token.startswith("s"):
-            return _Node("scalar", scalar=int(token[1:]))
-        return _Node("constant", constant=float(token[1:]))
-
-    return parse()

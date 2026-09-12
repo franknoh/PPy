@@ -31,16 +31,19 @@ input, interpreter startup and all. Mean ± standard deviation over 5 runs;
 drifted. `ppy run` compiles before it runs, which is most of its time; it is
 the development path, not the one to submit. `ppy build` still starts an
 embedded CPython and imports the runtime, about 35 ms, before the program
-begins.
+begins. Here `main` reads the 400 thousand command lines, one `ppy.input[tuple[int, int, int]]()` each, and that loop
+runs in the interpreter on every path but the standalone one, which scans
+the same input natively; the reads are most of the plain and `ppy build`
+rows.
 
 | path | wall |
 |---|---:|
-| plain CPython | 482.8 ± 7.7 ms |
-| `ppy run` | 220.4 ± 303.9 ms |
-| `ppy build` | 113.0 ± 6.0 ms |
-| `ppy build --standalone` | **23.9 ± 0.8 ms** |
-| C (`gcc -O3`, `scanf`) | 50.7 ± 1.2 ms |
-| C (`clang -O3`, `scanf`) | 51.8 ± 1.1 ms |
+| plain CPython | 2037.0 ± 289.1 ms |
+| `ppy run` | 1446.1 ± 224.9 ms |
+| `ppy build --unsafe` | 1806.0 ± 252.5 ms |
+| `ppy build --standalone --unsafe` | **40.1 ± 2.2 ms** |
+| C (`gcc -O3`, `scanf`) | 66.0 ± 6.0 ms |
+| C (`clang -O3`, `scanf`) | 65.1 ± 4.8 ms |
 
 ## Run it
 
@@ -57,31 +60,7 @@ clang -O3 segment_tree.c -o segment_tree_clang && ./segment_tree_clang < input.t
 <!-- outputs:start -->
 ## What it prints
 
-**`python  segment_tree.ppy < input.txt`**
-
-```text
-28
-```
-
-**`ppy run segment_tree.ppy < input.txt`**
-
-```text
-28
-```
-
-**`ppy build segment_tree.ppy -o dist && ./dist/segment_tree < input.txt`**
-
-```text
-28
-```
-
-**`gcc   -O3 segment_tree.c -o segment_tree_c     && ./segment_tree_c     < input.txt`**
-
-```text
-28
-```
-
-**`clang -O3 segment_tree.c -o segment_tree_clang && ./segment_tree_clang < input.txt`**
+**`python  segment_tree.ppy < input.txt`**, **`ppy run segment_tree.ppy < input.txt`**, **`ppy build segment_tree.ppy -o dist && ./dist/segment_tree < input.txt`**, **`gcc   -O3 segment_tree.c -o segment_tree_c     && ./segment_tree_c     < input.txt`**, **`clang -O3 segment_tree.c -o segment_tree_clang && ./segment_tree_clang < input.txt`**
 
 ```text
 28

@@ -1,0 +1,101 @@
+{
+ "environment": {
+  "commit": "8d3e5fa",
+  "processor": "x86_64",
+  "platform": "Linux-6.6.114.1-microsoft-standard-WSL2-x86_64-with-glibc2.39",
+  "python": "3.14.5",
+  "runs": 5
+ },
+ "timings": {
+  "ppy": {
+   "saxpy": {
+    "mean": 0.7696,
+    "stdev": 0.07862760329553482
+   },
+   "block_max": {
+    "mean": 2.0278,
+    "stdev": 0.054901730391673405
+   },
+   "saxpy with copies": {
+    "mean": 39.1908,
+    "stdev": 1.600258166671866
+   },
+   "block_max with copies": {
+    "mean": 15.6648,
+    "stdev": 0.4263381287194476
+   }
+  },
+  "cupy": {
+   "saxpy": {
+    "mean": 0.7842,
+    "stdev": 0.07665311474428159
+   },
+   "block_max": {
+    "mean": 1.977,
+    "stdev": 0.01874833325925268
+   },
+   "saxpy with copies": {
+    "mean": 48.918600000000005,
+    "stdev": 2.0464283031662744
+   },
+   "block_max with copies": {
+    "mean": 12.334200000000001,
+    "stdev": 0.34368401184809316
+   }
+  },
+  "numba": {
+   "saxpy": {
+    "mean": 0.7214,
+    "stdev": 0.06253239160627072
+   },
+   "block_max": {
+    "mean": 2.0174,
+    "stdev": 0.028562212799431302
+   },
+   "saxpy with copies": {
+    "mean": 36.7902,
+    "stdev": 1.4981147152337844
+   },
+   "block_max with copies": {
+    "mean": 14.1054,
+    "stdev": 0.41525450027663763
+   }
+  },
+  "mojo": {
+   "saxpy": {
+    "mean": 0.5541246,
+    "stdev": 0.053401602586439285
+   },
+   "block_max": {
+    "mean": 1.9770824,
+    "stdev": 0.02177341618350237
+   },
+   "saxpy with copies": {
+    "mean": 28.4333686,
+    "stdev": 1.4525920518281439
+   },
+   "block_max with copies": {
+    "mean": 11.2051814,
+    "stdev": 0.32548396637668636
+   }
+  },
+  "cudac": {
+   "saxpy": {
+    "mean": 0.5026,
+    "stdev": 0.0018165902124584966
+   },
+   "block_max": {
+    "mean": 1.883,
+    "stdev": 0.0012247448713916355
+   },
+   "saxpy with copies": {
+    "mean": 30.458199999999998,
+    "stdev": 0.7361587464670913
+   },
+   "block_max with copies": {
+    "mean": 11.256,
+    "stdev": 0.20423883078396285
+   }
+  }
+ }
+}

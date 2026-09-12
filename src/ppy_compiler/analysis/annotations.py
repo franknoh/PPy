@@ -124,6 +124,22 @@ def vector_type(element: T.Type, count: int) -> T.Instance:
     )
 
 
+TILE = "ppy.tile.Tile"
+
+
+def tile_type(element: T.Type) -> T.Instance:
+    """The analysis type of `tile.Tile[element]`: lanes of one scalar, however many."""
+    return T.Instance(TILE, (element,), (TILE, "object"))
+
+
+def tile_element(t: T.Type) -> T.Type | None:
+    """The lane type of a tile type, or None for anything else."""
+    base = T.strip_literal(t)
+    if not isinstance(base, T.Instance) or base.name != TILE or len(base.args) != 1:
+        return None
+    return base.args[0]
+
+
 def vector_parts(t: T.Type) -> tuple[T.Type, int] | None:
     """(element, count) of a vector type, or None for anything else."""
     base = T.strip_literal(t)
@@ -287,6 +303,8 @@ class AnnotationResolver:
         if qualname == "ppy.Vector":
             element = self._resolve(args[0]).type if args else T.UNKNOWN
             return Resolved(T.list_of(element))
+        if qualname == TILE:
+            return self._tile(args, expr)
         if qualname in _OWNERSHIP:
             inner = self._resolve(args[0]) if args else Resolved(T.UNKNOWN)
             return Resolved(inner.type, inner.facts.with_(ownership=_OWNERSHIP[qualname]))
@@ -436,6 +454,16 @@ class AnnotationResolver:
         if len(args) == 1 and isinstance(args[0], ast.Tuple) and not args[0].elts:
             return Resolved(T.Tuple_(()))
         return Resolved(T.Tuple_(tuple(self._resolve(a).type for a in args)))
+
+    def _tile(self, args: list[ast.expr], expr: ast.Subscript) -> Resolved:
+        """`tile.Tile[T]`: lanes of the scalar `T`, as many as the kernel's block."""
+        element = T.strip_literal(self._resolve(args[0]).type) if len(args) == 1 else None
+        if element is None or element not in (T.INT, T.FLOAT, T.BOOL):
+            self._error(
+                "E1644", "tile.Tile takes a lane type of int, float, or bool: Tile[T]", expr
+            )
+            return Resolved(T.UNKNOWN)
+        return Resolved(tile_type(element))
 
     def _simd_vector(self, args: list[ast.expr], expr: ast.Subscript) -> Resolved:
         """`simd.Vector[T, N]`: `N` lanes of the scalar `T`."""

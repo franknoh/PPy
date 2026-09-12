@@ -298,7 +298,7 @@ def _stage_cuda(bundle, result: StagingResult) -> None:  # type: ignore[no-untyp
         found = [
             info
             for info in symbols.functions.values()
-            if any(info.directive(f"{api}.kernel") is not None for api in ("cuda", "hip"))
+            if any(info.directive(f"{api}.kernel") is not None for api in ("cuda", "hip", "tile"))
         ]
         if found:
             kernels[module_name] = found
@@ -360,7 +360,7 @@ def _stage_cuda(bundle, result: StagingResult) -> None:  # type: ignore[no-untyp
             for info in infos:
                 decline(module_name, info, "this LLVM has no NVPTX backend")
         return
-    from ..backend.llvm.ir_pipeline import ir_modules
+    from .ir_pipeline import canonical_ir_modules as ir_modules
 
     modules = ir_modules(bundle)
     for module_name, infos in pending.items():
@@ -390,6 +390,7 @@ def _stage_cuda(bundle, result: StagingResult) -> None:  # type: ignore[no-untyp
                     "symbol": str(function.attributes.get("ppy.symbol", function.name)),
                     "arch": arch,
                     "params": [kind_of_type(t) for _name, t in function.params],
+                    "threads": int(function.attributes.get("tile.threads", 0)),  # type: ignore[call-overload]
                     "ptx": ptx,
                 }
             ).encode("utf-8")

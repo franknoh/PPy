@@ -1,0 +1,87 @@
+"""saxpy over sixteen million doubles and a per-block max as tile kernels: PPY over device
+memory and over host arrays."""
+
+import time
+
+from ppy import cuda, native, tile
+
+N = 1 << 24
+
+
+@tile.kernel
+def saxpy(n: int, a: float, x: native.const_ptr[float], y: native.ptr[float]) -> None:
+    offsets = tile.program_id() * 256 + tile.arange(256)
+    mask = offsets < n
+    xs = tile.load(x, offsets, mask)
+    ys = tile.load(y, offsets, mask)
+    tile.store(y, offsets, a * xs + ys, mask)
+
+
+@tile.kernel
+def block_max(x: native.const_ptr[float], out: native.ptr[float]) -> None:
+    pid = tile.program_id()
+    values = tile.load(x, pid * 64 + tile.arange(64))
+    tile.store(out, pid, tile.max(values))
+
+
+def run_saxpy(n: int, a: float, x: native.const_ptr[float], y: native.ptr[float]) -> None:
+    tile.launch(saxpy, (n + 255) // 256, n, a, x, y)
+
+
+def run_block_max(blocks: int, x: native.const_ptr[float], out: native.ptr[float]) -> None:
+    tile.launch(block_max, blocks, x, out)
+
+
+def main() -> None:
+    x = cuda.device_alloc[float](N)
+    y = cuda.device_alloc[float](N)
+    values = cuda.device_alloc[float](N)
+    out = cuda.device_alloc[float](N // 64)
+    for i in range(N):
+        native.store(native.offset(x, i), float(i))
+        native.store(native.offset(y, i), 1.0)
+        native.store(native.offset(values, i), float((i * 37) % 101))
+    run_saxpy(N, 2.0, x, y)
+    run_block_max(N // 64, values, out)
+    total = 0.0
+    for i in range(N):
+        total += native.load(native.offset(y, i))
+    best = 0.0
+    for i in range(N // 64):
+        candidate = native.load(native.offset(out, i))
+        best = candidate if candidate > best else best
+    print(total, best)
+    print(f"# kernels compiled for a device here: {tile.compiled(saxpy)}")
+    best_saxpy = 1e9
+    best_block = 1e9
+    for _ in range(5):
+        started = time.perf_counter()
+        run_saxpy(N, 2.0, x, y)
+        best_saxpy = min(best_saxpy, (time.perf_counter() - started) * 1000.0)
+        started = time.perf_counter()
+        run_block_max(N // 64, values, out)
+        best_block = min(best_block, (time.perf_counter() - started) * 1000.0)
+    print(f"# saxpy: {best_saxpy:.3f} ms")
+    print(f"# block_max: {best_block:.3f} ms")
+    hx = native.stack_alloc[float](N)
+    hy = native.stack_alloc[float](N)
+    hv = native.stack_alloc[float](N)
+    hout = native.stack_alloc[float](N // 64)
+    for i in range(N):
+        native.store(native.offset(hx, i), float(i))
+        native.store(native.offset(hy, i), 1.0)
+        native.store(native.offset(hv, i), float((i * 37) % 101))
+    best_saxpy = 1e9
+    best_block = 1e9
+    for _ in range(5):
+        started = time.perf_counter()
+        run_saxpy(N, 2.0, hx, hy)
+        best_saxpy = min(best_saxpy, (time.perf_counter() - started) * 1000.0)
+        started = time.perf_counter()
+        run_block_max(N // 64, hv, hout)
+        best_block = min(best_block, (time.perf_counter() - started) * 1000.0)
+    print(f"# saxpy with copies: {best_saxpy:.3f} ms")
+    print(f"# block_max with copies: {best_block:.3f} ms")
+
+
+main()

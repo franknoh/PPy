@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import ast
 import operator
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -258,6 +259,8 @@ class ModuleSymbols:
     globals: dict[str, T.Type] = field(default_factory=dict)
     global_facts: dict[str, Facts] = field(default_factory=dict)
     constant_globals: dict[str, object] = field(default_factory=dict)
+    #: Module-level names bound once to `re.compile(<bytes literal>)`: name -> (pattern, flags).
+    pattern_globals: dict[str, tuple[bytes, int]] = field(default_factory=dict)
     #: Module-level names bound to `ppy.grad(f)` / `ppy.value_and_grad(f)`:
     #: name -> (f's qualname, argnums, value_and_grad).
     derivatives: dict[str, tuple[str, tuple[int, ...], bool]] = field(default_factory=dict)
@@ -374,6 +377,7 @@ DIRECTIVE_NAMES = frozenset(
         "cpu.target",
         "cuda.kernel",
         "cuda.device",
+        "tile.kernel",
         "hip.kernel",
         "hip.device",
     }
@@ -690,6 +694,7 @@ class ProjectSymbols:
         for symbols in self.modules.values():
             counts: dict[str, int] = {}
             literals: dict[str, object] = {}
+            patterns: dict[str, tuple[bytes, int]] = {}
             for node in symbols.module.nodes:
                 if isinstance(node, ast.Name) and isinstance(node.ctx, (ast.Store, ast.Del)):
                     counts[node.id] = counts.get(node.id, 0) + 1
@@ -704,6 +709,10 @@ class ProjectSymbols:
                 ):
                     target, value = node.targets[0].id, node.value
                 if target is None or value is None:
+                    continue
+                compiled = pattern_call(symbols, value)
+                if compiled is not None:
+                    patterns[target] = compiled
                     continue
                 literal = self._constant_value(value)
                 if literal is _NOT_CONSTANT:
@@ -721,6 +730,13 @@ class ProjectSymbols:
                     facts = facts.with_(int_range=IntRange(literal, literal))
                 symbols.global_facts[name] = facts
                 symbols.globals.setdefault(name, T.type_of_constant(literal))
+            for name, compiled in patterns.items():
+                if counts.get(name, 0) != 1 or (symbols.name, name) in rebound:
+                    continue
+                symbols.pattern_globals[name] = compiled
+                symbols.globals.setdefault(
+                    name, T.Instance("re.Pattern", (), ("re.Pattern", "object"))
+                )
 
     def resolver(self, symbols: ModuleSymbols) -> NameResolver:
         return NameResolver(symbols, self)
@@ -1331,3 +1347,72 @@ def _guarded(compute):  # type: ignore[no-untyped-def]
     if isinstance(value, int) and not isinstance(value, bool) and abs(value) >= _FOLD_LIMIT:
         return _NOT_CONSTANT
     return value
+
+
+#: `re`'s flags by the names a pattern spells them with.
+_RE_FLAGS = {
+    "IGNORECASE": int(re.IGNORECASE),
+    "I": int(re.IGNORECASE),
+    "MULTILINE": int(re.MULTILINE),
+    "M": int(re.MULTILINE),
+    "DOTALL": int(re.DOTALL),
+    "S": int(re.DOTALL),
+    "ASCII": int(re.ASCII),
+    "A": int(re.ASCII),
+    "VERBOSE": int(re.VERBOSE),
+    "X": int(re.VERBOSE),
+}
+
+
+def _is_re(symbols: ModuleSymbols, node: ast.expr) -> bool:
+    """Whether `node` names the `re` module, however it was imported."""
+    if not isinstance(node, ast.Name):
+        return False
+    binding = symbols.imports.get(node.id)
+    return binding is not None and binding.canonical == "re"
+
+
+def fold_flags(symbols: ModuleSymbols, node: ast.expr) -> int | None:
+    """`re.I | re.M`, or a literal, as the integer `re` sees; None otherwise."""
+    if isinstance(node, ast.Constant) and isinstance(node.value, int):
+        return int(node.value)
+    if isinstance(node, ast.Attribute) and _is_re(symbols, node.value):
+        return _RE_FLAGS.get(node.attr)
+    if isinstance(node, ast.BinOp) and isinstance(node.op, ast.BitOr):
+        left, right = fold_flags(symbols, node.left), fold_flags(symbols, node.right)
+        return None if left is None or right is None else left | right
+    return None
+
+
+def pattern_call(symbols: ModuleSymbols, node: ast.expr) -> tuple[bytes, int] | None:
+    """`re.compile(rb"...", flags)` with a bytes literal and spelled-out flags:
+    (pattern, flags); None for any other expression."""
+    if not isinstance(node, ast.Call):
+        return None
+    func = node.func
+    if isinstance(func, ast.Attribute):
+        if func.attr != "compile" or not _is_re(symbols, func.value):
+            return None
+    elif isinstance(func, ast.Name):
+        binding = symbols.imports.get(func.id)
+        if binding is None or binding.canonical != "re.compile":
+            return None
+    else:
+        return None
+    if not node.args or not isinstance(node.args[0], ast.Constant):
+        return None
+    pattern = node.args[0].value
+    if not isinstance(pattern, bytes) or len(node.args) > 2:
+        return None
+    flags = 0
+    extra = [a.value for a in node.keywords if a.arg == "flags"]
+    if len(node.args) == 2:
+        extra.append(node.args[1])
+    if len(extra) > 1 or any(k.arg != "flags" for k in node.keywords):
+        return None
+    if extra:
+        folded = fold_flags(symbols, extra[0])
+        if folded is None:
+            return None
+        flags = folded
+    return pattern, flags

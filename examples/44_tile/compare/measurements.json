@@ -1,0 +1,65 @@
+{
+ "environment": {
+  "commit": "066a437",
+  "processor": "x86_64",
+  "platform": "Linux-6.6.114.1-microsoft-standard-WSL2-x86_64-with-glibc2.39",
+  "python": "3.14.5",
+  "runs": 5
+ },
+ "timings": {
+  "ppy": {
+   "saxpy": {
+    "mean": 0.7228,
+    "stdev": 0.0858323948168755
+   },
+   "block_max": {
+    "mean": 0.4076,
+    "stdev": 0.01553383404057091
+   },
+   "saxpy with copies": {
+    "mean": 41.1098,
+    "stdev": 0.6680416903158063
+   },
+   "block_max with copies": {
+    "mean": 14.8656,
+    "stdev": 0.3968630746239815
+   }
+  },
+  "triton": {
+   "saxpy": {
+    "mean": 0.7707999999999999,
+    "stdev": 0.10020578825596856
+   },
+   "block_max": {
+    "mean": 0.81,
+    "stdev": 0.019583156027566107
+   },
+   "saxpy with copies": {
+    "mean": 51.73,
+    "stdev": 6.920902686788768
+   },
+   "block_max with copies": {
+    "mean": 11.3794,
+    "stdev": 0.36461801930239324
+   }
+  },
+  "taichi": {
+   "saxpy": {
+    "mean": 0.8858,
+    "stdev": 0.11019618868182328
+   },
+   "block_max": {
+    "mean": 0.3106,
+    "stdev": 0.029804362096847507
+   },
+   "saxpy with copies": {
+    "mean": 163.6612,
+    "stdev": 7.489235922308758
+   },
+   "block_max with copies": {
+    "mean": 29.8984,
+    "stdev": 2.2136380237066753
+   }
+  }
+ }
+}

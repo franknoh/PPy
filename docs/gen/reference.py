@@ -18,7 +18,7 @@ PATHS = ["plain", "ppy run", "ppy build", "standalone", "C gcc", "C clang"]
 LABELS = {
     "plain": "CPython",
     "ppy run": "`ppy run`",
-    "ppy build": "`ppy build`",
+    "ppy build": "`ppy build --unsafe`",
     "standalone": "`--standalone`",
     "C gcc": "C (`gcc -O3`)",
     "C clang": "C (`clang -O3`)",
@@ -62,7 +62,7 @@ def _page() -> str:
         "",
         "The collatz kernel from the README: one machine, ten runs each in a fresh",
         "process, the kernel's wall time (mean ± standard deviation). Of the PPY rows,",
-        "`ppy build` is the wrap-semantics artifact and `ppy run` keeps Python-integer",
+        "`ppy build --unsafe` is the wrap-semantics artifact and `ppy run` keeps Python-integer",
         "semantics — overflow is guarded and falls back to arbitrary precision.",
         "",
         _readme_table(),

@@ -1,9 +1,15 @@
 # PPY
 
-**Python's syntax, compiled.** A `.ppy` file *is* valid Python and runs under
-plain CPython with no compiler involved. The compiler adds a strict static
-checker, an optimized Python backend, and an LLVM native backend — and the
-three must print the same answer, or it is a bug.
+**Python as the frontend. A compiler underneath.** A `.ppy` file *is* valid
+Python and runs under plain CPython with no compiler involved, and that run
+is the reference answer. The compiler reads the same file, proves what it
+can about it, lowers that through a canonical IR, and hands the result to a
+backend — the optimized Python backend, LLVM, C or C++ source, CUDA, PTX,
+StableHLO, or one an installed package brings. What it cannot prove it does
+not compile: the supported static subset is documented, a program that
+leaves it is told where, and a guard that fails falls back to the Python
+body. Plain CPython, the Python backend, and the LLVM backend must print the
+same answer, or it is a bug.
 
 ```python
 import ppy
@@ -49,14 +55,15 @@ and Nuitka is on the [performance page](reference/performance.md).
     ---
 
     The subset, directives, native memory, SIMD, threads, parallel loops,
-    derivatives, coroutines, GPU kernels, XLA, generics.
+    derivatives, coroutines, GPU kernels, XLA, generics, regular expressions.
 
 -   **[Examples](howto/index.md)**
 
     ---
 
-    42 folders, 52 programs — the code, the commands, and what they print,
-    the same on all three paths.
+    @@EXAMPLE_FOLDERS@@ folders, @@EXAMPLE_PROGRAMS@@ programs — the code, the commands, and what they print;
+    @@COMPARED_FOLDERS@@ of them set beside Numba, Cython, NumPy, numexpr, JAX,
+    PyTorch, CuPy, Triton, Taichi, Mojo, Codon, Rust, C, pandas, polars, asyncio, and uvloop, collected on one [comparisons page](howto/comparisons.md).
 
 -   **[CLI](cli.md)**
 
@@ -83,8 +90,8 @@ and Nuitka is on the [performance page](reference/performance.md).
 
 | | |
 |---|---|
-| **3** execution paths that must agree, checked on every example | **1,110** tests on Python 3.12, 3.13, and 3.14, **74%** statement coverage |
-| **42** example folders, **52** programs, every conversion regenerated to prove it | **76** diagnostic codes, each documented once |
+| **3** execution paths that must agree, checked on every example | **@@TEST_FUNCTIONS@@** test functions on Python 3.12, 3.13, and 3.14, **74%** statement coverage |
+| **@@EXAMPLE_FOLDERS@@** example folders, **@@EXAMPLE_PROGRAMS@@** programs, every conversion regenerated to prove it; **@@COMPARED_FOLDERS@@** of the folders set beside other tools | **@@DIAGNOSTIC_CODES@@** diagnostic codes, each documented once |
 | **18** IR dialects, **7** backends off one IR: LLVM, C11, C++17, CUDA, HIP, NVVM/PTX, StableHLO | **8** library plugins: NumPy, PyTorch, JAX/Flax, pydantic, FastAPI/Uvicorn, SciPy, pandas, PyArrow |
 | **47 ns** for a native two-`int` call, against **28 ns** for a plain Python call | **0** Python frames on the native call path |
 

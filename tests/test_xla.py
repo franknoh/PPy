@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib.util
+import os
 import subprocess
 import sys
 import textwrap
@@ -134,6 +135,100 @@ def test_stablehlo_runs_on_the_device_and_agrees_with_numpy():
     assert client.compile(emit_module(module, ("loss",), entry="loss")) is executable, (
         "cached by its digest"
     )
+
+
+@requires_xla
+def test_the_bridge_compiles_for_one_device_of_a_machine_that_has_several(tmp_path: Path):
+    """Two devices on the platform: the executable takes one buffer per argument, not one
+    shard per device, which is what a two-GPU machine refused before."""
+    program = textwrap.dedent(
+        """
+        import numpy as np
+        from ppy_compiler.backend.stablehlo import emit_module
+        from ppy_runtime.xla import pjrt
+        from test_xla import _tensor_module
+
+        client = pjrt.client()
+        assert len(client.devices()) == 2, client.devices()
+        executable = client.compile(emit_module(_tensor_module(), ("loss",), entry="loss"))
+        rng = np.random.default_rng(3)
+        a, w = rng.normal(size=(4, 3)), rng.normal(size=(3, 2))
+        total, centered = client.execute(executable, [a, w, np.array(0.5)])
+        scaled = np.exp(a @ w) * 0.5
+        np.testing.assert_allclose(centered, scaled - scaled.sum(axis=1, keepdims=True))
+        print("ran on", client.device(), "of", len(client.devices()))
+        """
+    )
+    done = subprocess.run(
+        [sys.executable, "-c", program],
+        cwd=Path(__file__).parent,
+        capture_output=True,
+        text=True,
+        check=False,
+        env={
+            **os.environ,
+            "JAX_PLATFORMS": "cpu",
+            "XLA_FLAGS": "--xla_force_host_platform_device_count=2",
+            "XDG_CACHE_HOME": str(tmp_path),
+        },
+    )
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.strip() == "ran on cpu:0 of 2", done.stdout
+
+
+def _fake_jax(monkeypatch, backend: str | Exception):
+    """A `jax` whose `default_backend()` answers `backend`, or raises it."""
+    import types
+
+    module = types.ModuleType("jax")
+
+    def default_backend():
+        if isinstance(backend, Exception):
+            raise backend
+        return backend
+
+    module.default_backend = default_backend  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, "jax", module)
+    from ppy_runtime.xla import pjrt
+
+    monkeypatch.setattr(pjrt, "available", lambda: True)
+    monkeypatch.delenv("PPY_XLA_PLATFORM", raising=False)
+    monkeypatch.delenv("JAX_PLATFORMS", raising=False)
+    return pjrt
+
+
+def test_the_bridge_follows_a_jax_that_came_up_on_the_cpu_with_nothing_else(monkeypatch):
+    pjrt = _fake_jax(monkeypatch, "cpu")
+    monkeypatch.setattr(pjrt, "accelerator_plugins", list)
+    assert pjrt.default_platform() == "cpu"
+    _fake_jax(monkeypatch, "gpu")
+    assert pjrt.default_platform() == "gpu"
+
+
+def test_a_jax_that_cannot_initialize_is_not_read_as_the_cpu(monkeypatch):
+    pjrt = _fake_jax(monkeypatch, RuntimeError("Unable to initialize backend 'cuda': ..."))
+    with pytest.raises(RuntimeError, match="Unable to initialize backend"):
+        pjrt.default_platform()
+
+
+def test_a_plugin_that_failed_to_initialize_is_not_a_machine_without_a_gpu(monkeypatch):
+    pjrt = _fake_jax(monkeypatch, "cpu")
+    monkeypatch.setattr(pjrt, "accelerator_plugins", lambda: ["jax-cuda12-plugin 0.11.1"])
+    with pytest.raises(RuntimeError, match=r"jax-cuda12-plugin 0\.11\.1"):
+        pjrt.default_platform()
+    monkeypatch.setenv("JAX_PLATFORMS", "cpu")
+    assert pjrt.default_platform() == "cpu", "the CPU asked for is the CPU"
+    monkeypatch.setenv("PPY_XLA_PLATFORM", "gpu")
+    assert pjrt.default_platform() == "gpu", "the bridge's own override wins"
+
+
+def test_without_jax_the_platform_is_the_cpu_and_nothing_is_imported(monkeypatch):
+    from ppy_runtime.xla import pjrt
+
+    monkeypatch.setattr(pjrt, "available", lambda: False)
+    monkeypatch.delenv("PPY_XLA_PLATFORM", raising=False)
+    monkeypatch.setitem(sys.modules, "jax", None)
+    assert pjrt.default_platform() == "cpu"
 
 
 @requires_xla

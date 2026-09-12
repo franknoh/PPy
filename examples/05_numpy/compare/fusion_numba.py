@@ -1,0 +1,52 @@
+"""The same two expressions under Numba: explicit loops in `@njit`, one pass each."""
+
+import math
+import time
+
+import numpy as np
+from numba import njit
+
+
+@njit
+def normalize(x):
+    total = 0.0
+    for i in range(x.shape[0]):
+        total += x[i] * x[i]
+    scale = math.sqrt(total)
+    out = np.empty_like(x)
+    for i in range(x.shape[0]):
+        out[i] = x[i] / scale
+    return out
+
+
+@njit
+def blend(a, b):
+    out = np.empty_like(a)
+    for i in range(a.shape[0]):
+        out[i] = math.sin(a[i]) * 2.0 + math.cos(b[i])
+    return out
+
+
+def timed(label, run):
+    best = 1e9
+    answer = None
+    for _ in range(5):
+        started = time.perf_counter()
+        answer = run()
+        best = min(best, (time.perf_counter() - started) * 1000.0)
+    print(f"# {label}: {best:.2f} ms")
+    return answer
+
+
+def main():
+    values = np.linspace(0.0, 10.0, 8_000_000)
+    other = np.linspace(1.0, 5.0, 8_000_000)
+    normalize(values)
+    blend(values, other)
+    normalized = timed("normalize", lambda: normalize(values))
+    mixed = timed("blend", lambda: blend(values, other))
+    print(f"{float(normalized[1]):.9f} {float(normalized[-1]):.9f}")
+    print(f"{float(mixed[1]):.9f} {float(mixed[-1]):.9f}")
+
+
+main()

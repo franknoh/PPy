@@ -25,9 +25,9 @@ ppy run FILE.ppy [-- ARGS...]    # compile through LLVM, then run
 ```
 
 Everything after `--` reaches the program as `sys.argv[1:]`. `ppy run`
-keeps Python-integer semantics by default; `--unsafe` drops the overflow
-guards on data arithmetic (64-bit wrap, bounds checks stay), and
-`--safeguards {hoisted,inline,off}` names the guard mode outright.
+keeps Python-integer semantics by default, as `ppy build` does; `--unsafe`
+drops the overflow guards on data arithmetic (64-bit wrap, bounds checks
+stay), and `--safeguards {hoisted,inline,off}` names the guard mode outright.
 `--prover {off,z3}` asks the solver to prove overflow guards away where the
 analysis allows it, overriding `[tool.ppy.llvm] prover`; see [Where a solver fits](internals/solver.md).
 
@@ -163,22 +163,25 @@ and which stayed boxed, with the reason.
 ## `ppy build` — compile without running
 
 ```bash
-ppy build TARGET [--safe] [--host-cpu] [--standalone]
+ppy build TARGET [--unsafe] [--host-cpu] [--standalone]
                  [--target TRIPLE] [--python-extension] [--library]
-                 [--backend {llvm,python}] [-o DIR]
+                 [--backend NAME] [-o DIR]
                  [--sanitize KINDS] [--pgo FILE]
                  [--report-opt] [--report-opt-json FILE]
 ppy build --warm TARGET
 ppy build foo.ppyir                  # from the IR alone; see `ppy emit`
 ```
 
-`--backend llvm` (default) writes objects, `libppy_<project>.so`,
+`--backend` is `llvm` (the default), `python`, or the name of an installed
+backend ([Backends](internals/backends.md)); `ppy doctor` lists them.
+`--backend llvm` writes objects, `libppy_<project>.so`,
 `ppy-bindings.json`, a launcher, and -- when a function is
-`@ppy.native.export`ed -- a C header declaring the public symbols. A build is a wrap-semantics artifact by
-default — data arithmetic overflows at 64 bits like every native compiler's
-output, while bounds checks stay; `--safe` keeps Python's integers
-bit-for-bit instead, and the launcher always runs with exactly the mode it
-was built with. It is a native executable that embeds the
+`@ppy.native.export`ed -- a C header declaring the public symbols. A build
+keeps Python's integers bit-for-bit, exactly as `ppy run` does: overflow is
+guarded and falls back to arbitrary precision. `--unsafe` is the same flag
+it is on `run` -- data arithmetic wraps at 64 bits like every native
+compiler's output, while bounds checks stay -- and the launcher always runs
+with exactly the mode it was built with. It is a native executable that embeds the
 interpreter and is `ppy run` in a compiled coat: it enters the same CLI, the
 same pipeline, and the same guarded bindings, and only takes its machine code
 from the library built next to it instead of a JIT (`ppy run --prebuilt
@@ -205,6 +208,46 @@ begins, against about 0.7 s for a cold `ppy run` that compiles first (a warm
 `ppy run` takes this same launcher path, from the cache).
 `examples/bench_startup.py` measures the categories separately, and
 `--standalone` below removes that 35 ms too.
+
+### `--backend NAME`
+
+```bash
+ppy build foo.ppy --backend toy -o out/
+```
+
+An installed backend is loaded with its `[tool.ppy.backends.NAME]` table
+and asked for its toolchain; the modules go through the shared passes and
+the backend's own passes and validation; then its `build` writes into
+`-o` (or `<cache>/backends/NAME`) and what it wrote is listed, with any
+notes the backend adds. A `.ppyir` target builds through the chosen
+backend too: the file is canonical IR, so the backend's passes,
+validation, and build run over it without a frontend above them.
+
+`-O` reaches every backend, and `-o` names the directory a backend writes
+its artifacts into. The LLVM road's options are the LLVM road's, and every
+backend but `llvm` -- `python` and an installed one alike -- refuses them
+(`E1002`) rather than accepting and ignoring one: `--unsafe`,
+`--sanitize`, `--pgo`, `--prover`,
+`--host-cpu`, `--standalone`, `--python-extension`, `--library`,
+`--report-opt`, `--report-opt-json`, and `--target` -- what an installed
+backend builds for is `[tool.ppy.backends.NAME] target`, which reaches it
+through the backend context and the artifact's identity, where a compiler
+triple would not. `--warm` builds the artifact `ppy run` and `import ppy`
+take, which is the LLVM backend's, and is refused for any other backend.
+
+The diagnostics are `ppy emit`'s: `E1903` for a backend that cannot be
+used, `E1801` for a missing toolchain, `E1802` for IR it refuses, `E1904`
+for a pass of its that broke the IR. A builtin backend that only emits
+(`--backend c`) is refused with `E1802`.
+
+`--backend python` builds the same optimized Python that `ppy FILE.ppy`
+runs and publishes it to the project cache, where `import ppy` and `ppy
+run` read it. It takes `-O` and the analysis flags; it refuses the LLVM
+road's options above, `--warm` (that artifact is the LLVM backend's), a
+`.ppyir` target (it reads PPY source, not canonical IR), and `-o` (its
+modules go to the cache, which `[tool.ppy] cache-dir` and `PPY_CACHE_DIR`
+move). Whichever backend is named, no other backend's road runs: every
+option is either understood by the backend chosen or refused by name.
 
 ### `--target`, `--python-extension`, `--library`
 
@@ -251,7 +294,7 @@ ppy build --warm train/reward.ppy
 Builds ahead of time exactly what `ppy run FILE` and `import ppy` build on
 their first use -- the artifact in the project cache, under the key an
 import of that module will look for -- and stops. It takes no flags that
-would change the artifact (`--safe`, `--host-cpu`, `--prover`, `-o`, and
+would change the artifact (`--unsafe`, `--host-cpu`, `--prover`, `-o`, and
 the rest are refused): an import takes none either, so the project
 configuration is the only thing that names the build, and what a flag built
 nothing would find. Its place is the step before a launch that starts many
@@ -279,14 +322,17 @@ lower, plus `print` of integers, booleans, and string literals through C
 shims (floats wait until native formatting can reproduce Python's
 shortest-round-trip repr exactly), plus the memory the program makes for
 itself — `ppy.buffer[int](n)` is a zeroed native allocation here and
-`ppy.input[Buffer[int]](n)` is that allocation with the input read straight
+`ppy.scan[Buffer[int]](n)` is that allocation with the input read straight
 into it, because there is no `array.array` to build. Anything else is `E1803` with the path
 that reaches it, never a workaround. There is no Python to fall back to, so
-in `--safe` mode a failed guard aborts with a message instead of retrying
-in Python; `ppy.input[int]()` reads through the C support rather than the
-runtime's reader, and answers 0 at end of input because there is no
-exception to raise; the default wrap-semantics build has almost no guards left to
-fail.
+a failed guard ends the process with a message on standard error instead of
+retrying in Python -- a standalone build keeps the guards, like every
+build, and never claims Python's integers it cannot provide; `--unsafe`
+asks for wrap semantics outright, with almost no guards left to fail.
+`ppy.input[int]()` and `ppy.scan[int]()` are the scanner itself, the same
+C the runtime's reader compiles, and where Python would raise -- the end
+of the input, a token that is not an integer -- the binary says so on
+standard error and stops.
 
 Five of the six problems in `examples/15_algorithms` build this way once
 their buffers come from `ppy.buffer` rather than `array.array`, and four of
@@ -311,8 +357,10 @@ ppy emit nvvm-ir foo.ppy             # the kernels as LLVM IR for NVPTX
 ppy emit ptx foo.ppy                 # ... as PTX (PPY_CUDA_ARCH names the architecture, sm_70 by default)
 ppy emit c --header-only foo.ppy     # every function static inline in a header
 ppy emit c --standalone prog.ppy     # the whole program from main(), shims and all
+ppy emit c --format foo.ppy          # ... laid out by clang-format (the project's .clang-format, or LLVM style)
 ppy emit header foo.ppy              # the C declarations of the exports
 ppy emit stablehlo foo.ppy           # the @ppy.xla.jit functions as StableHLO for XLA
+ppy emit toy foo.ppy                 # a format an installed backend registers; ppy doctor lists them
 ```
 
 One rule for every kind: a single file with no `-o` prints to standard
@@ -320,7 +368,22 @@ output, `-o FILE` writes that file, and a directory target writes one file
 per module into the directory `-o` names (and refuses to guess without
 it). `ir` is the canonical IR after the shared passes ([The IR](internals/ir.md));
 `llvm-ir` is the optimized LLVM IR. The output is deterministic for one
-input and configuration.
+input and configuration. Any other kind is a format an installed backend
+registers ([Backends](internals/backends.md)): the backend is loaded, its
+toolchain checked, the modules run through the shared passes and the
+backend's own, validated by it, and written under the same rule -- text
+or, for a format the backend declares binary, bytes. A format may be
+written per module (the default) or per program. A per-module format
+writes one artifact for each: one module goes to standard output or `-o
+FILE`, and a target that resolves to several needs `-o DIR`, since two
+artifacts are not one file and are never concatenated into one. A
+per-program format is one artifact for every module together. `--header-only`,
+`--standalone`, and `--format` belong to the builtin kinds. A format no
+backend emits, a format two backends claim, or a backend that cannot be
+loaded is `E1903` with the reason and the formats there are; a backend
+whose toolchain is missing is `E1801`; IR the backend refuses is `E1802`,
+with what it cannot take and where; a backend pass that breaks the IR is
+`E1904`.
 
 `c` and `cpp` are the C backend's reading of the same IR: a translation
 unit per module in the internal ABI the runtime binds (atoms in, result
@@ -336,6 +399,12 @@ standard input) is refused there with `E1804` and its name.
 `main` and everything it reaches, all of it native -- and ends the unit in
 a C `main`, so the text is a whole program. `header` is the declarations
 of a module's exports, the same text `ppy build` writes beside a library.
+The C is written to be read: loops are `while`, branches are `if`/`else`,
+a local keeps its Python name, and a value read once is written where it
+is read. `--format` (for `c`, `cpp`, `cuda`, `hip`, and `header`) runs the
+text through `clang-format`, with the project's `.clang-format` where it
+has one and LLVM style at four spaces and a hundred columns otherwise; a
+missing `clang-format` is `E1802`.
 
 `.ppyir` is the IR's on-disk form -- public from 0.2.0 at schema 1 -- and
 `ppy build foo.ppyir` builds one without the Python that produced it: the file
@@ -578,8 +647,12 @@ ppy doctor [--verbose]
 ```
 
 Versions, project root, cache location, effective configuration, whether the
-LLVM backend and native toolchain are usable, and each plugin's fingerprint.
-Run it first when something compiles on one machine and not another.
+LLVM backend and native toolchain are usable, each plugin's fingerprint,
+and every backend -- builtin and installed -- with its toolchain status,
+the formats it emits, and its fingerprint; an installed backend that
+cannot be loaded is printed as `unusable` with the reason, and a name two
+distributions register is reported. Run it first when something compiles
+on one machine and not another.
 
 ## `ppy lsp`
 

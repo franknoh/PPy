@@ -91,6 +91,29 @@ def value_class_types(signature: NativeSignature, fallback: Callable[..., object
     return tuple(found)
 
 
+#: The C entry points that stand in a module's namespace themselves. No Python
+#: frame is on their call path, so there is nothing to hang `__ppy_native__` on;
+#: they are known by identity and kept here, as their modules keep them.
+_ADOPTED: dict[int, tuple[object, NativeSignature]] = {}
+
+
+def remember(entry: Callable[..., object], signature: NativeSignature) -> None:
+    """Record that `entry`, a generated C entry point, runs `signature` natively."""
+    _ADOPTED[id(entry)] = (entry, signature)
+
+
+def signature_of(function: object) -> NativeSignature | None:
+    """The native signature calling `function` runs under here, or None when the
+    call is Python's: the wrapper's attribute, or the adopted C entry point."""
+    signature = getattr(function, "__ppy_native__", None)
+    if signature is not None:
+        return signature
+    known = _ADOPTED.get(id(function))
+    if known is not None and known[0] is function:
+        return known[1]
+    return None
+
+
 def adopt(
     signature: NativeSignature,
     entry: Callable[..., object],
@@ -103,6 +126,7 @@ def adopt(
     Nothing stands between the caller and the C entry point, so per-call
     statistics are not collected on this path.
     """
+    remember(entry, signature)
     return NativeBinding(
         signature=signature, wrapper=entry, fallback=fallback, fast_entry=entry, owner=owner
     )

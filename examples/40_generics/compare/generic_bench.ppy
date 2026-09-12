@@ -1,0 +1,33 @@
+"""`sweep` over eight million values: two generics instantiated once each per type
+argument, called from a native loop. The same file under `python` is the CPython column."""
+
+import time
+
+
+def largest[T: int | float](a: T, b: T) -> T:
+    return a if a > b else b
+
+
+def clamp[T: int | float](x: T, lo: T, hi: T) -> T:
+    return largest(lo, x) if x < hi else hi
+
+
+def sweep(n: int) -> float:
+    total = 0.0
+    for i in range(n):
+        total += clamp(i * 0.25, 1.0, 10.0) + largest(i, 3)
+    return total
+
+
+def main() -> None:
+    sweep(1000)
+    best = 1e9
+    for _ in range(5):
+        started = time.perf_counter()
+        total = sweep(8_000_000)
+        best = min(best, (time.perf_counter() - started) * 1000.0)
+    print(f"# sweep, eight million clamps and comparisons: {best:.2f} ms")
+    print(f"{total:.1f}")
+
+
+main()

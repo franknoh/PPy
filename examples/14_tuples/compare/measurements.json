@@ -1,0 +1,41 @@
+{
+ "environment": {
+  "commit": "476188b",
+  "processor": "x86_64",
+  "platform": "Linux-6.6.114.1-microsoft-standard-WSL2-x86_64-with-glibc2.39",
+  "python": "3.14.5",
+  "runs": 5
+ },
+ "timings": {
+  "ppy": {
+   "divmod_pair, a million calls from Python": {
+    "mean": 32.775999999999996,
+    "stdev": 1.3965600595749539
+   },
+   "walk, eight million steps from a tuple natively": {
+    "mean": 11.262,
+    "stdev": 0.11670475568716167
+   }
+  },
+  "python": {
+   "divmod_pair, a million calls from Python": {
+    "mean": 47.856,
+    "stdev": 0.32807011445726164
+   },
+   "walk, eight million steps from a tuple natively": {
+    "mean": 316.304,
+    "stdev": 2.1438236867802454
+   }
+  },
+  "numba": {
+   "divmod_pair, a million calls from Python": {
+    "mean": 107.03,
+    "stdev": 5.774954545275657
+   },
+   "walk, eight million steps from a tuple natively": {
+    "mean": 11.251999999999999,
+    "stdev": 0.1937008002048521
+   }
+  }
+ }
+}

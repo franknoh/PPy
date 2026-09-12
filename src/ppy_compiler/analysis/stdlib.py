@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import ast
 import contextlib
+import re as _re
 
 from . import types as T
 from .effects import Effect, EffectSet
@@ -403,6 +404,7 @@ _FUNCTIONS: dict[str, tuple[T.Type, EffectSet]] = {
     ),
     "ppy.xla.device_put": _fn("ppy.xla.device_put", T.ANY, EffectSet.of(Effect.READ_GLOBAL)),
     "ppy.cuda.kernel": _fn("ppy.cuda.kernel", T.ANY, EffectSet()),
+    "ppy.tile.kernel": _fn("ppy.tile.kernel", T.ANY, EffectSet()),
     "ppy.cuda.device": _fn("ppy.cuda.device", T.ANY, EffectSet()),
     "ppy.hip.kernel": _fn("ppy.hip.kernel", T.ANY, EffectSet()),
     "ppy.hip.device": _fn("ppy.hip.device", T.ANY, EffectSet()),
@@ -472,6 +474,7 @@ MODULE_ATTRIBUTES: dict[str, tuple[T.Type, Facts]] = {
     "ppy.concurrent": (T.Module_("ppy.concurrent"), Facts()),
     "ppy.xla": (T.Module_("ppy.xla"), Facts()),
     "ppy.cuda": (T.Module_("ppy.cuda"), Facts()),
+    "ppy.tile": (T.Module_("ppy.tile"), Facts()),
     "ppy.hip": (T.Module_("ppy.hip"), Facts()),
     "ppy.aio": (T.Module_("ppy.aio"), Facts()),
     "ppy.ffi.nullable": (T.ANY, Facts()),
@@ -495,6 +498,73 @@ MODULE_ATTRIBUTES: dict[str, tuple[T.Type, Facts]] = {
     "os.linesep": (T.STR, Facts()),
     "os.name": (T.STR, Facts()),
 }
+
+
+# -- re: a pattern over bytes, matched natively --------------------------------------
+#: `re.compile(rb"...")` at module level compiles to a native matcher; the
+#: checker types the pattern and its matches from these.
+_RE_PATTERN = T.Instance("re.Pattern", (), ("re.Pattern", "object"))
+_RE_MATCH = T.Instance("re.Match", (), ("re.Match", "object"))
+_RE_OPTIONAL_MATCH = T.union(_RE_MATCH, T.NONE)
+_RE_TEXT = T.union(T.BYTES, T.STR)
+_RE_ERROR = EffectSet.of(raises=("re.error",))
+_RE_SEARCH = _ALLOC | EffectSet.of(raises=("TypeError",))
+
+_FUNCTIONS.update(
+    {
+        "re.compile": (T.Callable_((), _RE_PATTERN, "re.compile"), _RE_ERROR | _ALLOC),
+        "re.search": (T.Callable_((), _RE_OPTIONAL_MATCH, "re.search"), _RE_ERROR | _RE_SEARCH),
+        "re.match": (T.Callable_((), _RE_OPTIONAL_MATCH, "re.match"), _RE_ERROR | _RE_SEARCH),
+        "re.fullmatch": (
+            T.Callable_((), _RE_OPTIONAL_MATCH, "re.fullmatch"),
+            _RE_ERROR | _RE_SEARCH,
+        ),
+        "re.escape": (T.Callable_((), _RE_TEXT, "re.escape"), _ALLOC),
+    }
+)
+INSTANCE_ATTRS["re.Pattern"] = {
+    "search": (T.Callable_((), _RE_OPTIONAL_MATCH, "re.Pattern.search"), _RE_SEARCH),
+    "match": (T.Callable_((), _RE_OPTIONAL_MATCH, "re.Pattern.match"), _RE_SEARCH),
+    "fullmatch": (T.Callable_((), _RE_OPTIONAL_MATCH, "re.Pattern.fullmatch"), _RE_SEARCH),
+    "pattern": (_RE_TEXT, EffectSet()),
+    "flags": (T.INT, EffectSet()),
+    "groups": (T.INT, EffectSet()),
+}
+INSTANCE_ATTRS["re.Match"] = {
+    "start": (T.Callable_((), T.INT, "re.Match.start"), EffectSet.of(raises=("IndexError",))),
+    "end": (T.Callable_((), T.INT, "re.Match.end"), EffectSet.of(raises=("IndexError",))),
+    "span": (
+        T.Callable_((), T.Tuple_((T.INT, T.INT)), "re.Match.span"),
+        EffectSet.of(raises=("IndexError",)),
+    ),
+    "group": (
+        T.Callable_((), T.union(_RE_TEXT, T.NONE), "re.Match.group"),
+        _ALLOC | EffectSet.of(raises=("IndexError",)),
+    ),
+    "pos": (T.INT, EffectSet()),
+    "endpos": (T.INT, EffectSet()),
+    "lastindex": (T.union(T.INT, T.NONE), EffectSet()),
+    "re": (_RE_PATTERN, EffectSet()),
+    "string": (_RE_TEXT, EffectSet()),
+}
+_opaque("re", ("Pattern", "Match"))
+MODULE_ATTRIBUTES.update(
+    {
+        f"re.{name}": (T.INT, Facts(constant=int(flag), has_constant=True))
+        for name, flag in (
+            ("IGNORECASE", _re.IGNORECASE),
+            ("I", _re.IGNORECASE),
+            ("MULTILINE", _re.MULTILINE),
+            ("M", _re.MULTILINE),
+            ("DOTALL", _re.DOTALL),
+            ("S", _re.DOTALL),
+            ("ASCII", _re.ASCII),
+            ("A", _re.ASCII),
+            ("VERBOSE", _re.VERBOSE),
+            ("X", _re.VERBOSE),
+        )
+    }
+)
 
 
 def lookup(qualname: str) -> tuple[T.Type, EffectSet] | None:

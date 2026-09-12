@@ -2,8 +2,7 @@
 
 Typed pointers, memory a function owns, a C function bound from `libm`, and
 a function exported as a C symbol — each with a reference implementation
-under plain CPython, so `python native_memory.ppy` prints what `ppy run`
-prints.
+under plain CPython.
 
 ## Pointers
 
@@ -66,14 +65,7 @@ ppy emit ir native_memory.ppy
 <!-- outputs:start -->
 ## What it prints
 
-**`python  native_memory.ppy`**
-
-```text
-9.0 93 0
-5.612486 5.612486
-```
-
-**`ppy run native_memory.ppy`**
+**`python  native_memory.ppy`**, **`ppy run native_memory.ppy`**
 
 ```text
 9.0 93 0

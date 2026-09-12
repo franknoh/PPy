@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import ast
 import contextlib
 import json
 import os
@@ -13,10 +12,20 @@ from pathlib import Path
 
 from ...cache import CacheKey
 from ...diagnostics import Diagnostic, Severity, Span
+from ...driver.ir_pipeline import definitions as _definitions
+from ...driver.ir_pipeline import value_class_layouts as _value_class_layouts
 from ...plugins.torch_region import find_regions
 from ...target import TargetInfo, configured_target
 from ..binder import LibraryBinder
-from .fusion import FusedLoop, find_candidates, find_module_candidates, kernel_module
+from .fusion import (
+    COLUMNAR_STORAGES,
+    FusedLoop,
+    SourceSpan,
+    find_candidates,
+    find_module_candidates,
+    kernel_module,
+    span,
+)
 from .jit import JitEngine, LlvmUnavailable, available, llvm_status
 from .link import (
     BuildArtifacts,
@@ -58,7 +67,7 @@ class NativeModule:
     rejected: dict[str, str] = field(default_factory=dict)
     sources: dict[str, tuple] = field(default_factory=dict)
     fused: dict[str, FusedLoop] = field(default_factory=dict)
-    fusion_plan: dict[tuple[int, int], FusedLoop] = field(default_factory=dict)
+    fusion_plan: dict[SourceSpan, FusedLoop] = field(default_factory=dict)
     fusion_notes: list[tuple[int, str]] = field(default_factory=list)
     #: Per function, the arithmetic whose overflow guard a proof left out.
     proved: dict[str, tuple[str, ...]] = field(default_factory=dict)
@@ -71,54 +80,6 @@ class NativeModule:
 
 
 #: Members that make attribute reads observable, so the class stays boxed.
-_INTERCEPTORS = {"__getattr__", "__getattribute__", "__setattr__", "__init_subclass__"}
-
-
-def _definitions(tree: ast.Module):  # type: ignore[no-untyped-def]
-    """Every function the backend may lower, with its owning class if any."""
-    for node in tree.body:
-        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-            yield "", node
-        elif isinstance(node, ast.ClassDef):
-            for child in node.body:
-                if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                    yield node.name, child
-
-
-def _value_class_layouts(bundle) -> dict[str, tuple[tuple[str, str], ...]]:  # type: ignore[no-untyped-def]
-    """Classes whose instances can be flattened into scalar arguments.
-
-    A value class here is one with a fixed set of scalar fields and no base
-    beyond `object`: nothing about it needs a Python object to represent
-    (spec 13.2, 25.4).
-    """
-    from ...analysis import types as T
-
-    scalars = {"int", "float", "bool"}
-    layouts: dict[str, tuple[tuple[str, str], ...]] = {}
-    for qualname, info in bundle.symbols.classes.items():
-        if info.is_protocol or info.is_enum or info.is_pydantic:
-            continue
-        if tuple(entry for entry in info.mro if entry != "object") != (qualname,):
-            continue
-        # Reading a field must be a plain attribute read: anything that can
-        # intercept it could observe the flattening.
-        if _INTERCEPTORS & set(info.methods):
-            continue
-        if set(info.fields) & set(info.methods):
-            continue
-        fields: list[tuple[str, str]] = []
-        for name, declared in info.fields.items():
-            if name in info.class_vars:
-                continue
-            base = T.strip_literal(declared)
-            if not isinstance(base, T.Instance) or base.name not in scalars:
-                fields = []
-                break
-            fields.append((name, base.name))
-        if fields:
-            layouts[qualname] = tuple(fields)
-    return layouts
 
 
 def prover_for(config):  # type: ignore[no-untyped-def]
@@ -307,7 +268,7 @@ def _module_from_cache(name: str, reused, candidates) -> NativeModule:  # type: 
 def _fuse(symbols, analysis):  # type: ignore[no-untyped-def]
     """Collect the fusible library expressions in one module (spec 19.4)."""
     loops: dict[str, FusedLoop] = {}
-    plan: dict[tuple[int, int], FusedLoop] = {}
+    plan: dict[SourceSpan, FusedLoop] = {}
     notes: list[tuple[int, str]] = []
     functions = list(symbols.functions.values())
     for cls in symbols.classes.values():
@@ -325,7 +286,7 @@ def _fuse(symbols, analysis):  # type: ignore[no-untyped-def]
 
     for candidate in candidates:
         loops[candidate.loop.symbol] = candidate.loop
-        plan[(candidate.node.lineno, candidate.node.col_offset)] = candidate.loop
+        plan[span(candidate.node)] = candidate.loop
         library = _LIBRARIES.get(candidate.loop.storage, candidate.loop.storage)
         fused = ", ".join(candidate.operations)
         notes.append(
@@ -1003,7 +964,10 @@ def compile_and_run(  # type: ignore[no-untyped-def]
         for symbol, loop in native.fused.items():
             address = engine.address(symbol)
             if address:
-                binder.add_fused(name, loop, address)
+                nan_address = (
+                    engine.address(loop.nan_symbol) if loop.storage in COLUMNAR_STORAGES else 0
+                )
+                binder.add_fused(name, loop, address, nan_address)
         _report(native, reporter, bundle)
 
     regions = compile_torch_regions(bundle, notify=reporter.note)
@@ -1096,8 +1060,8 @@ class _Binder(LibraryBinder):
             engine,
         )
 
-    def add_fused(self, module: str, loop, address: int) -> None:  # type: ignore[no-untyped-def]
-        self._fused.setdefault(module, {})[loop.symbol] = (loop, address)
+    def add_fused(self, module: str, loop, address: int, nan_address: int = 0) -> None:  # type: ignore[no-untyped-def]
+        self._fused.setdefault(module, {})[loop.symbol] = (loop, address, nan_address)
 
     def names(self, module: str) -> frozenset[str]:
         return frozenset(self._entries.get(module, {}))
@@ -1108,8 +1072,15 @@ class _Binder(LibraryBinder):
         entry = self._fused.get(module, {}).get(symbol)
         if entry is None:
             return fallback
-        loop, address = entry
-        binding = bind_fused(loop, address, fallback, parallel=loop.parallel, threads=self.threads)
+        loop, address, nan_address = entry
+        binding = bind_fused(
+            loop,
+            address,
+            fallback,
+            parallel=loop.parallel,
+            threads=self.threads,
+            nan_address=nan_address,
+        )
         self.fused_bindings.append(binding)
         return binding.wrapper
 

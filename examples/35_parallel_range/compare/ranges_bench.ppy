@@ -1,0 +1,82 @@
+"""The four parallel kernels over eight million elements, timed warm."""
+
+import array
+import time
+
+import ppy
+from ppy import Buffer, parallel
+
+N = 8_000_000
+
+
+def squares(out: Buffer[int]) -> int:
+    for i in parallel.range(len(out)):
+        out[i] = i * i
+    return out[len(out) - 1]
+
+
+def dot(a: Buffer[float], b: Buffer[float]) -> float:
+    total = 0.0
+    for i in parallel.range(len(a)):
+        total += a[i] * b[i]
+    return total
+
+
+@ppy.fastmath
+def dot_relaxed(a: Buffer[float], b: Buffer[float]) -> float:
+    total = 0.0
+    for i in parallel.range(len(a)):
+        total += a[i] * b[i]
+    return total
+
+
+def count_odd(xs: Buffer[int], scale: int) -> int:
+    hits = 0
+    for i in parallel.range(0, len(xs)):
+        if xs[i] % 2 == 1:
+            hits += scale
+    return hits
+
+
+@ppy.parallel
+def fill(out: Buffer[float], base: float) -> float:
+    for i in range(len(out)):
+        out[i] = base + i
+    acc = 0.0
+    for j in range(len(out)):
+        acc += out[j]
+    return acc
+
+
+def main() -> None:
+    a = memoryview(array.array("d", (0.001 * i for i in range(N))))
+    b = memoryview(array.array("d", (1.0 / (1 + i) for i in range(N))))
+    ints = memoryview(array.array("q", (i % 3 for i in range(N))))
+    room = memoryview(array.array("q", bytes(8 * N)))
+    floats = memoryview(array.array("d", bytes(8 * N)))
+    ordered = round(dot(a, b), 6)
+    relaxed = round(dot_relaxed(a, b), 3)
+    print(squares(room), ordered, relaxed, count_odd(ints, 3), fill(floats, 0.5))
+    best = [1e9, 1e9, 1e9, 1e9, 1e9]
+    for _ in range(5):
+        started = time.perf_counter()
+        squares(room)
+        best[0] = min(best[0], (time.perf_counter() - started) * 1000.0)
+        started = time.perf_counter()
+        dot(a, b)
+        best[1] = min(best[1], (time.perf_counter() - started) * 1000.0)
+        started = time.perf_counter()
+        dot_relaxed(a, b)
+        best[2] = min(best[2], (time.perf_counter() - started) * 1000.0)
+        started = time.perf_counter()
+        count_odd(ints, 3)
+        best[3] = min(best[3], (time.perf_counter() - started) * 1000.0)
+        started = time.perf_counter()
+        fill(floats, 0.5)
+        best[4] = min(best[4], (time.perf_counter() - started) * 1000.0)
+    labels = ("squares", "dot", "dot_relaxed", "count_odd", "fill")
+    for label, took in zip(labels, best, strict=True):
+        print(f"# {label}: {took:.2f} ms")
+
+
+main()

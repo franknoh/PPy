@@ -19,7 +19,10 @@ shows the text -- and the build stages it; at run time the PJRT bridge
 compiles the module once, caching the executable by the module's digest,
 the bindings' version, and the device, and each call runs on the device.
 `xla.devices()`, `xla.default_device()`, and `xla.device_put(x)` ask the
-bridge; without one they answer nothing, `None`, and the value itself.
+bridge; without one they answer nothing, `None`, and the value itself. The
+bridge compiles for the platform JAX would pick -- the GPU where a CUDA or
+ROCm plugin is installed, the CPU otherwise -- and `PPY_XLA_PLATFORM`
+names one explicitly (`cpu`, `gpu`).
 Under plain CPython, and wherever there is no device, the function runs
 as written. A branch, a loop, a guard, or a buffer parameter is not yet
 what XLA takes: the function is reported (`W2007`) and stays where it is.

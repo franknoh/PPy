@@ -47,6 +47,81 @@ division. The guard on the value is in the generated C wrapper, and a call
 with a different modulus falls back to the generic version or compiles
 another specialization, up to four.
 
+## Compared with Numba, Cython, NumPy, and C
+
+The three kernels over 8,192 elements -- a sum, a dot product in order and
+reassociated, a modular digest -- each call timed as the mean of 2,000
+calls, best of five rounds, milliseconds per call over five processes. The
+programs are in [`compare/`](compare/): [`kernels_bench.ppy`](compare/kernels_bench.ppy),
+[`kernels_numba.py`](compare/kernels_numba.py), [`kernels_cython.pyx`](compare/kernels_cython.pyx),
+[`kernels_numpy.py`](compare/kernels_numpy.py), [`kernels.c`](compare/kernels.c).
+At this size a call is a few microseconds, so the table is as much about the
+call boundary as about the loop.
+
+**PPY** -- the loop as written, a `Buffer[float]` borrowed from an
+`array.array`, `@ppy.fastmath` where reassociation is allowed:
+
+```python
+@ppy.pure
+@ppy.opt(3)
+def dot(a: Buffer[float], b: Buffer[float]) -> float:
+    result: float = 0.0
+    for i in range(len(a)):
+        result += a[i] * b[i]
+    return result
+```
+
+**Numba** -- the same loop under `@njit`, no annotations, NumPy arrays,
+`fastmath=True` for the relaxed dot; its dispatcher types the arguments on
+every call:
+
+```python
+@njit
+def dot(a, b):
+    result = 0.0
+    for i in range(len(a)):
+        result += a[i] * b[i]
+    return result
+```
+
+**Cython** -- typed memoryviews and `cdef` locals in a `.pyx`, built into an
+extension by `cythonize -i`; `boundscheck=False` is what makes it a C loop,
+and there is no relaxed dot to write:
+
+```cython
+cpdef double dot(double[::1] a, double[::1] b):
+    cdef double result = 0.0
+    cdef Py_ssize_t i
+    for i in range(a.shape[0]):
+        result += a[i] * b[i]
+    return result
+```
+
+**NumPy** -- no loop: `np.dot` is BLAS, `np.sum` pairwise, and
+`(counts % m).sum()` builds a temporary. **C** is the loop with no Python
+around it, timed inside the process: the floor.
+
+<!-- compare:start -->
+| | PPY `ppy run` | Numba `@njit` | Cython | NumPy | C (the loop alone) |
+|---|---:|---:|---:|---:|---:|
+| total | 0.0039 ± 0.0000 | 0.0039 ± 0.0000 | 0.0045 ± 0.0008 | **0.0024 ± 0.0003** | 0.0038 ± 0.0000 |
+| dot | 0.0039 ± 0.0000 | 0.0039 ± 0.0001 | 0.0049 ± 0.0007 | **0.0015 ± 0.0002** | 0.0038 ± 0.0000 |
+| dot_relaxed | **0.0011 ± 0.0000** | 0.0011 ± 0.0000 | 0.0046 ± 0.0009 | 0.0015 ± 0.0002 | 0.0038 ± 0.0000 |
+| digest | 0.0080 ± 0.0000 | 0.0121 ± 0.0001 | 0.0106 ± 0.0029 | 0.0205 ± 0.0026 | **0.0049 ± 0.0000** |
+<!-- compare:end -->
+
+The ordered sums sit on the C loop in PPY, Numba, and Cython alike, a
+microsecond of call above it; the reassociated dot is where
+`@ppy.fastmath` and Numba's `fastmath=True` let the vectorizer in and
+Cython, with no such switch, stays scalar. NumPy's `dot` is BLAS and the
+fastest row, its `digest` pays for an 8,192-element temporary and is the
+slowest. The C `digest` is the loop's floor; what stands between it and
+the others is the price of a call through the interpreter.
+
+Intel Core Ultra 9 386H; Numba 0.67.0, Cython 3.3.0, NumPy 2.5.3 on
+CPython 3.12.13, gcc 13.3, PPY on CPython 3.13.13, from a checkout on a
+native filesystem.
+
 ## Run it
 
 ```bash
@@ -61,34 +136,34 @@ ppy run buffers_and_jit.ppy
 **`python  buffers_and_jit.ppy`**
 
 ```text
-list[float] copied         97.306 us   
-Buffer[float] borrowed    153.282 us   0.63x, same sum: True
-dot, strict order         244.091 us   
-dot, @ppy.fastmath        238.020 us   1.03x, differs by 0.00e+00
-digest, generic           239.351 us   
-digest, @ppy.jit          237.332 us   1.01x, same: True
+list[float] copied        104.387 us   
+Buffer[float] borrowed    158.837 us   0.66x, same sum: True
+dot, strict order         277.649 us   
+dot, @ppy.fastmath        257.140 us   1.08x, differs by 0.00e+00
+digest, generic           263.962 us   
+digest, @ppy.jit          260.730 us   1.01x, same: True
 ```
 
 **`ppy     buffers_and_jit.ppy`**
 
 ```text
-list[float] copied         92.352 us   
-Buffer[float] borrowed    146.138 us   0.63x, same sum: True
-dot, strict order         238.365 us   
-dot, @ppy.fastmath        236.017 us   1.01x, differs by 0.00e+00
-digest, generic           246.093 us   
-digest, @ppy.jit          245.886 us   1.00x, same: True
+list[float] copied        102.127 us   
+Buffer[float] borrowed    162.701 us   0.63x, same sum: True
+dot, strict order         261.217 us   
+dot, @ppy.fastmath        259.543 us   1.01x, differs by 0.00e+00
+digest, generic           270.856 us   
+digest, @ppy.jit          268.401 us   1.01x, same: True
 ```
 
 **`ppy run buffers_and_jit.ppy`**
 
 ```text
-list[float] copied         10.684 us   
-Buffer[float] borrowed      3.485 us   3.07x, same sum: True
-dot, strict order           3.541 us   
-dot, @ppy.fastmath          1.186 us   2.99x, differs by 4.07e-10
-digest, generic            10.894 us   
-digest, @ppy.jit            7.474 us   1.46x, same: True
+list[float] copied         11.790 us   
+Buffer[float] borrowed      3.726 us   3.16x, same sum: True
+dot, strict order           4.196 us   
+dot, @ppy.fastmath          0.849 us   4.94x, differs by 4.07e-10
+digest, generic            11.656 us   
+digest, @ppy.jit            8.874 us   1.31x, same: True
 ```
 
 <!-- outputs:end -->

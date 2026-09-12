@@ -2,12 +2,13 @@
 
 Every README has a `## Run it` block. This runs each of its commands in the
 example's folder and keeps the output under `## What it prints`, so the
-README shows the command and its answer side by side. A short output is
-shown as it is; a longer one is folded into a `<details>` block the reader
-opens; a very long one is kept as a file under the folder's `outputs/`,
-linked from the README and embedded by the documentation site. Each output
-exists once. Timings differ from machine to machine and are shown as one
-run; answers do not, and a run that changes one is a change to the example.
+README shows the command and its answer side by side. Commands that print
+the same thing share one block. A short output is shown as it is; a longer
+one is folded into a `<details>` block the reader opens; a very long one is
+kept as a file under the folder's `outputs/`, linked from the README and
+embedded by the documentation site. Each output exists once. Timings differ
+from machine to machine and are shown as one run; answers do not, and a run
+that changes one is a change to the example.
 
     python examples/record_outputs.py             # every example
     python examples/record_outputs.py 15_ 40_     # folders matching a token
@@ -123,20 +124,34 @@ def _render(folder: Path, index: int, command: str, text: str) -> list[str]:
 
 
 def section(folder: Path, listed: list[str]) -> tuple[str, list[str]]:
-    """The `## What it prints` section for one README, and what failed."""
+    """The `## What it prints` section for one README, and what failed.
+
+    Commands that print the same thing share one block, headed by all of
+    them: that the three paths agree is the compiler's contract and
+    `run_all.py`'s check, not something a README needs to show three times.
+    An output that differs -- a report, a timing -- keeps its own block.
+    """
     parts = [START, HEADING, ""]
     failed = []
     shutil.rmtree(folder / OUTPUTS, ignore_errors=True)
-    for index, command in enumerate(listed, 1):
+    groups: list[tuple[list[str], str, str]] = []
+    for command in listed:
         output, verdict = run(command, folder)
         if verdict == "failed":
             failed.append(command)
-        parts.append(f"**`{command}`**")
+        for group in groups:
+            if verdict == "ok" and group[2] == "ok" and group[1] == output:
+                group[0].append(command)
+                break
+        else:
+            groups.append(([command], output, verdict))
+    for index, (members, output, verdict) in enumerate(groups, 1):
+        parts.append(", ".join(f"**`{command}`**" for command in members))
         parts.append("")
         if verdict == "skipped":
             parts.append(f"*{output}*")
         elif output:
-            parts.extend(_render(folder, index, command, output))
+            parts.extend(_render(folder, index, members[0], output))
         else:
             parts.append("*(prints nothing; exits 0)*")
         parts.append("")

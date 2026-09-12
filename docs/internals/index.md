@@ -20,6 +20,14 @@ about how something compiled all the way down.
     The typed SSA IR between analysis and every backend: dialects, passes,
     `.ppyir`, the linker, sanitizers, profiles.
 
+-   **[Backends](backends.md)**
+
+    ---
+
+    The backend boundary, the interface a backend implements, discovery
+    through `ppy.backends`, passes, validation, the cache key, a whole
+    example.
+
 -   **[Conversion and inference](conversion.md)**
 
     ---

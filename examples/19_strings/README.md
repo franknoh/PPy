@@ -43,23 +43,7 @@ ppy run strings.ppy
 <!-- outputs:start -->
 ## What it prints
 
-**`python  strings.ppy`**
-
-```text
-ALK
-True False
-[('a', 3), ('b', 2), ('c', 1)]
-```
-
-**`ppy     strings.ppy`**
-
-```text
-ALK
-True False
-[('a', 3), ('b', 2), ('c', 1)]
-```
-
-**`ppy run strings.ppy`**
+**`python  strings.ppy`**, **`ppy     strings.ppy`**, **`ppy run strings.ppy`**
 
 ```text
 ALK
@@ -69,7 +53,8 @@ True False
 
 <!-- outputs:end -->
 
-Read on: [Input and native lowering](../../docs/guide/native-lowering.md) ·
+Read on: [Reading input](../../docs/guide/input.md) ·
+[Native lowering](../../docs/guide/native-lowering.md) ·
 [Algorithms: substring search](../15_algorithms/15c_kmp/README.md)
 
 `strings.ppy` is hand-written; there is no `.py` source and no conversion step.

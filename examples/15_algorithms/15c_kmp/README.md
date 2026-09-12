@@ -38,11 +38,11 @@ begins.
 
 | path | wall |
 |---|---:|
-| plain CPython | 283.0 ± 2.9 ms |
-| `ppy run` | 137.3 ± 153.8 ms |
-| `ppy build` | 52.4 ± 2.0 ms |
-| C (`gcc -O3`, `scanf`) | 9.4 ± 0.3 ms |
-| C (`clang -O3`, `scanf`) | **9.0 ± 0.2 ms** |
+| plain CPython | 318.6 ± 12.7 ms |
+| `ppy run` | 168.8 ± 189.1 ms |
+| `ppy build --unsafe` | 62.6 ± 0.7 ms |
+| C (`gcc -O3`, `scanf`) | 10.6 ± 0.1 ms |
+| C (`clang -O3`, `scanf`) | **9.9 ± 0.2 ms** |
 
 ## Run it
 
@@ -59,31 +59,7 @@ clang -O3 kmp.c -o kmp_clang && ./kmp_clang < input.txt
 <!-- outputs:start -->
 ## What it prints
 
-**`python  kmp.ppy < input.txt`**
-
-```text
-3
-```
-
-**`ppy run kmp.ppy < input.txt`**
-
-```text
-3
-```
-
-**`ppy build kmp.ppy -o dist && ./dist/kmp < input.txt`**
-
-```text
-3
-```
-
-**`gcc   -O3 kmp.c -o kmp_c     && ./kmp_c     < input.txt`**
-
-```text
-3
-```
-
-**`clang -O3 kmp.c -o kmp_clang && ./kmp_clang < input.txt`**
+**`python  kmp.ppy < input.txt`**, **`ppy run kmp.ppy < input.txt`**, **`ppy build kmp.ppy -o dist && ./dist/kmp < input.txt`**, **`gcc   -O3 kmp.c -o kmp_c     && ./kmp_c     < input.txt`**, **`clang -O3 kmp.c -o kmp_clang && ./kmp_clang < input.txt`**
 
 ```text
 3

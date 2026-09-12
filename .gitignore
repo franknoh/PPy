@@ -30,3 +30,10 @@ site/
 *.ppyprof
 examples/**/report.json
 examples/**/input.txt.out
+examples/*/compare/target/
+examples/*/compare/Cargo.lock
+examples/*/compare/build/
+examples/*/compare/*.so
+examples/*/compare/*_cython.c
+# what a RunPod validation run brings back
+cloud-results/

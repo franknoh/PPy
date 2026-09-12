@@ -30,16 +30,19 @@ input, interpreter startup and all. Mean ± standard deviation over 5 runs;
 drifted. `ppy run` compiles before it runs, which is most of its time; it is
 the development path, not the one to submit. `ppy build` still starts an
 embedded CPython and imports the runtime, about 35 ms, before the program
-begins.
+begins. Here `main` reads the 1.2 million edge lines, one `ppy.input[tuple[int, int, int]]()` each, and that loop
+runs in the interpreter on every path but the standalone one, which scans
+the same input natively; the reads are most of the plain and `ppy build`
+rows.
 
 | path | wall |
 |---|---:|
-| plain CPython | 1511.0 ± 10.5 ms |
-| `ppy run` | 286.5 ± 225.4 ms |
-| `ppy build` | 251.9 ± 2.6 ms |
-| `ppy build --standalone` | **104.8 ± 4.3 ms** |
-| C (`gcc -O3`, `scanf`) | 147.3 ± 2.2 ms |
-| C (`clang -O3`, `scanf`) | 141.6 ± 4.6 ms |
+| plain CPython | 5309.1 ± 121.9 ms |
+| `ppy run` | 4009.5 ± 279.9 ms |
+| `ppy build --unsafe` | 5299.7 ± 429.0 ms |
+| `ppy build --standalone --unsafe` | **135.0 ± 4.5 ms** |
+| C (`gcc -O3`, `scanf`) | 172.0 ± 7.9 ms |
+| C (`clang -O3`, `scanf`) | 154.0 ± 2.2 ms |
 
 ## Run it
 
@@ -56,31 +59,7 @@ clang -O3 dijkstra.c -o dijkstra_clang && ./dijkstra_clang < input.txt
 <!-- outputs:start -->
 ## What it prints
 
-**`python  dijkstra.ppy < input.txt`**
-
-```text
-23
-```
-
-**`ppy run dijkstra.ppy < input.txt`**
-
-```text
-23
-```
-
-**`ppy build dijkstra.ppy -o dist && ./dist/dijkstra < input.txt`**
-
-```text
-23
-```
-
-**`gcc   -O3 dijkstra.c -o dijkstra_c     && ./dijkstra_c     < input.txt`**
-
-```text
-23
-```
-
-**`clang -O3 dijkstra.c -o dijkstra_clang && ./dijkstra_clang < input.txt`**
+**`python  dijkstra.ppy < input.txt`**, **`ppy run dijkstra.ppy < input.txt`**, **`ppy build dijkstra.ppy -o dist && ./dist/dijkstra < input.txt`**, **`gcc   -O3 dijkstra.c -o dijkstra_c     && ./dijkstra_c     < input.txt`**, **`clang -O3 dijkstra.c -o dijkstra_clang && ./dijkstra_clang < input.txt`**
 
 ```text
 23

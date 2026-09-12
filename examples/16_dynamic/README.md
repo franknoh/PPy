@@ -50,25 +50,7 @@ ppy run dynamic.ppy
 <!-- outputs:start -->
 ## What it prints
 
-**`python  dynamic.ppy`**
-
-```text
-10
-ABC
-int str list
-42
-```
-
-**`ppy     dynamic.ppy`**
-
-```text
-10
-ABC
-int str list
-42
-```
-
-**`ppy run dynamic.ppy`**
+**`python  dynamic.ppy`**, **`ppy     dynamic.ppy`**, **`ppy run dynamic.ppy`**
 
 ```text
 10

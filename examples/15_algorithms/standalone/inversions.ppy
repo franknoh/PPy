@@ -36,8 +36,8 @@ def count_inversions(values: Buffer[int], tree: Buffer[int]) -> int:
 
 
 def main() -> None:
-    count: int = ppy.input[int]()
-    values: Buffer[int] = ppy.input[Buffer[int]](count)
+    count: int = ppy.scan[int]()
+    values: Buffer[int] = ppy.scan[Buffer[int]](count)
     tree: Buffer[int] = ppy.buffer[int](LIMIT)
     print(count_inversions(values, tree))
 

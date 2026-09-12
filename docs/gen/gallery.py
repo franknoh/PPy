@@ -9,72 +9,17 @@ from __future__ import annotations
 
 import posixpath
 import re
+import sys
 from pathlib import Path
 
 import mkdocs_gen_files
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from folders import FOLDERS, GROUPS  # pylint: disable=wrong-import-position
+
 ROOT = Path(__file__).resolve().parent.parent.parent
 EXAMPLES = ROOT / "examples"
 REPO = "https://github.com/franknoh/PPy/blob/main"
-
-GROUPS = [
-    (
-        "Basics",
-        [
-            "01_basics",
-            "02_arbitrary_precision",
-            "03_effects_and_contracts",
-            "04_classes",
-            "08_native_data",
-            "10_narrowing",
-            "11_numerics",
-            "13_value_classes",
-            "14_tuples",
-            "16_dynamic",
-            "17_containers",
-            "18_errors",
-            "19_strings",
-        ],
-    ),
-    (
-        "Native code",
-        [
-            "12_buffers_and_jit",
-            "15_algorithms",
-            "28_threads",
-            "32_native_memory",
-            "33_simd_and_cpu",
-            "34_atomics_and_threads",
-            "35_parallel_range",
-            "36_autodiff",
-            "37_aio",
-            "40_generics",
-            "42_toolbox",
-        ],
-    ),
-    ("Accelerators", ["38_cuda", "39_xla"]),
-    (
-        "Libraries",
-        [
-            "05_numpy",
-            "06_pydantic",
-            "07_parallel",
-            "09_torch",
-            "21_training_torch",
-            "22_training_jax",
-            "25_jax_export",
-            "27_uvicorn",
-            "29_flax",
-            "31_torchrun",
-            "41_columnar",
-        ],
-    ),
-    (
-        "Conversion and projects",
-        ["20_inventory", "23_inference", "24_interop", "26_project", "30_migrate"],
-    ),
-]
-FOLDERS = [folder for _, folders in GROUPS for folder in folders]
 
 _LINK = re.compile(r"\]\((?!https?://|#)([^)]+)\)")
 
@@ -188,8 +133,84 @@ def _page(folder: str) -> str:
         lines.append(source.read_text(encoding="utf-8").rstrip("\n"))
         lines.append("```")
         lines.append("")
+    counterparts = _counterparts(directory)
+    if counterparts:
+        lines.append("## The counterparts, side by side")
+        lines.append("")
+        lines.append(
+            "The programs the comparison above was measured with, each written the way "
+            "its tool wants it; the PPY one is first."
+        )
+        lines.append("")
+        for source in counterparts:
+            body = source.read_text(encoding="utf-8").rstrip("\n")
+            lines.append(f'??? example "`{source.name}` -- {_TOOLS[source.suffix]}"')
+            lines.append("")
+            lines.append(f"    ```{_FENCES[source.suffix]}")
+            lines.extend("    " + line if line else "" for line in body.splitlines())
+            lines.append("    ```")
+            lines.append("")
     lines.append(f"The folder in the repository: [`examples/{folder}`]({REPO}/examples/{folder}).")
     lines.append("")
+    return "\n".join(lines)
+
+
+#: How a counterpart is fenced and named on the page, by its suffix.
+_FENCES = {
+    ".ppy": "python",
+    ".py": "python",
+    ".pyx": "cython",
+    ".mojo": "mojo",
+    ".rs": "rust",
+    ".c": "c",
+    ".cu": "cuda",
+}
+_TOOLS = {
+    ".ppy": "PPY",
+    ".py": "Python",
+    ".pyx": "Cython",
+    ".mojo": "Mojo",
+    ".rs": "Rust",
+    ".c": "C",
+    ".cu": "CUDA C",
+}
+
+
+def _counterparts(directory: Path) -> list[Path]:
+    """The `compare/` programs, the PPY one first, then the rest by name."""
+    compare = directory / "compare"
+    if not compare.is_dir():
+        return []
+    found = [p for p in sorted(compare.iterdir()) if p.suffix in _FENCES and p.is_file()]
+    return sorted(found, key=lambda p: (p.suffix != ".ppy", p.name))
+
+
+_COMPARED = re.compile(
+    r"^## (?:Compared with|The .* against) .*?(?=^## |\Z)", re.MULTILINE | re.DOTALL
+)
+
+
+def _comparisons() -> str:
+    """One page of every comparison section, so the tables can be read together."""
+    lines = [
+        "# Comparisons",
+        "",
+        "Every example that measures itself against other tools, collected. Each section",
+        "is the example's own, with its table and what each port asked for; the",
+        "counterpart programs are on the example's page and in its `compare/` folder,",
+        "and `examples/compare.py` is the harness that held them to one answer before",
+        "timing them.",
+        "",
+    ]
+    for folder in FOLDERS:
+        title, _, body = _readme(folder)
+        for section in _COMPARED.findall(body):
+            heading, _, rest = section.partition("\n")
+            lines.append(f"## {title}: {heading.removeprefix('## ').strip()}")
+            lines.append("")
+            lines.append(f"From [{title}]({folder}.md).")
+            lines.append(rest.strip("\n"))
+            lines.append("")
     return "\n".join(lines)
 
 
@@ -229,3 +250,6 @@ for folder in FOLDERS:
     with mkdocs_gen_files.open(f"howto/{folder}.md", "w") as handle:
         handle.write(_page(folder))
     mkdocs_gen_files.set_edit_path(f"howto/{folder}.md", f"../examples/{folder}/README.md")
+
+with mkdocs_gen_files.open("howto/comparisons.md", "w") as handle:
+    handle.write(_comparisons())

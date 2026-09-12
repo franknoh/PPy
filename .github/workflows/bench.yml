@@ -1,0 +1,66 @@
+name: bench
+
+# The numbers in the READMEs are measurements, and a change to the compiler
+# or the runtime can move them. Every push to `dev` that touches code
+# re-measures on the machine the numbers came from -- a self-hosted runner
+# with the GPU and the neighbours' toolchains -- and commits what moved:
+# the algorithm tables through `scripts/refresh.py`, every comparison
+# through `scripts/compare_docs.py`. A hosted runner cannot do this, which
+# is why `benchmark.yml` only reports on a schedule.
+on:
+  push:
+    branches: [dev]
+    paths:
+      - "src/**"
+      - "examples/**/*.ppy"
+      - "examples/**/compare/**"
+      - "scripts/compare_docs.py"
+      - "scripts/refresh.py"
+  workflow_dispatch:
+
+concurrency:
+  group: bench
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  measure:
+    # The commit this job pushes is made with the workflow token, which
+    # starts no workflow; the guard is for a person replaying it by hand.
+    if: github.actor != 'github-actions[bot]'
+    runs-on: [self-hosted, ppy-bench]
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      # The PPY side of a comparison imports the library it fuses -- torch,
+      # pandas -- so the environment carries every plugin group.
+      - run: uv sync --group all
+      # A comparison whose run was unstable, or whose tool was missing,
+      # is reported and left as it was; the tables that did move are still
+      # committed, and the job is still red at the end so the log is read.
+      - id: refresh
+        continue-on-error: true
+        run: uv run python scripts/refresh.py --write
+      - id: compare
+        continue-on-error: true
+        run: uv run python scripts/compare_docs.py --write
+      - name: commit what moved
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if git diff --quiet; then
+            echo "nothing moved"
+          else
+            git add -A examples
+            git commit -m "measurements refreshed on $(hostname) for ${GITHUB_SHA::7}"
+            git push origin HEAD:dev
+          fi
+      - name: fail if a measurement did not land
+        if: steps.refresh.outcome == 'failure' || steps.compare.outcome == 'failure'
+        run: |
+          echo "a measurement step failed; see its log above (the tables that moved were committed)"
+          exit 1

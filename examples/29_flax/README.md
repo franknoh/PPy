@@ -29,8 +29,7 @@ which the plugin supplies, so `model.init(key, xs)` and `model.apply(p, xs)`
 type-check. Layer constructors (`nn.Dense`), activations (`nn.relu`),
 `optax.adam`, and `tx.update`'s `(updates, state)` pair all have signatures.
 Parameter pytrees are an explicit `Any` boundary, declared in the source,
-not an inferred one. All three paths train to the same loss on the same
-device, matching the original `.py`.
+not an inferred one.
 
 ## Run it
 
@@ -42,15 +41,7 @@ ppy run train.ppy
 <!-- outputs:start -->
 ## What it prints
 
-**`python  train.ppy`**
-
-```text
-device=cpu
-loss 3.0810 -> 0.0105
-learned
-```
-
-**`ppy run train.ppy`**
+**`python  train.ppy`**, **`ppy run train.ppy`**
 
 ```text
 device=cpu

@@ -267,7 +267,7 @@ def test_build_defaults_to_wrap_semantics_and_safe_restores_python_integers(tmp_
     )
 
     def built(*extra: str) -> str:
-        out = tmp_path / ("safe" if extra else "fast")
+        out = tmp_path / ("fast" if extra else "safe")
         result = subprocess.run(
             [sys.executable, "-m", "ppy_compiler", "build", *extra, "spin.ppy", "-o", str(out)],
             cwd=tmp_path,
@@ -285,8 +285,8 @@ def test_build_defaults_to_wrap_semantics_and_safe_restores_python_integers(tmp_
         assert ran.returncode == 0, ran.stderr
         return ran.stdout
 
-    assert built().strip() == "8606135309836935036"
-    assert built("--safe") == plain.stdout
+    assert built() == plain.stdout, "a build keeps Python's integers, as `ppy run` does"
+    assert built("--unsafe").strip() == "8606135309836935036", "`--unsafe` wraps, asked for"
 
 
 @requires_toolchain
@@ -458,6 +458,55 @@ def test_standalone_reads_input_without_an_interpreter(tmp_path: Path):
 
 
 @requires_c_compiler
+def test_standalone_scan_reads_exactly_n_integers_or_stops(tmp_path: Path):
+    """`ppy.scan[Buffer[int]](n)` with no interpreter: `n` values, or the same `EOFError`
+    the runtime raises, never a zero the input did not hold."""
+    (tmp_path / "pyproject.toml").write_text("[tool.ppy]\nstrict = false\n", encoding="utf-8")
+    (tmp_path / "summed.ppy").write_text(
+        textwrap.dedent(
+            """
+            import ppy
+            from ppy import Buffer
+
+
+            def main() -> None:
+                count: int = ppy.scan[int]()
+                values = ppy.scan[Buffer[int]](count)
+                total: int = 0
+                for i in range(count):
+                    total += values[i]
+                print(total)
+
+
+            main()
+            """
+        ).lstrip("\n"),
+        encoding="utf-8",
+    )
+    built = subprocess.run(
+        [sys.executable, "-m", "ppy_compiler", "build", "--standalone", "summed.ppy", "-o", "dist"],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert built.returncode == 0, built.stderr
+    binary = str(tmp_path / "dist" / "summed")
+    whole = subprocess.run(
+        [binary], input="3\n10 20 30\n", capture_output=True, text=True, check=False
+    )
+    assert whole.returncode == 0 and whole.stdout.strip() == "60", whole.stderr
+    short = subprocess.run(
+        [binary], input="3\n10 20\n", capture_output=True, text=True, check=False
+    )
+    assert short.returncode != 0 and "EOFError" in short.stderr, (short.stdout, short.stderr)
+    junk = subprocess.run(
+        [binary], input="3\n10 x 30\n", capture_output=True, text=True, check=False
+    )
+    assert junk.returncode != 0 and "ValueError" in junk.stderr, (junk.stdout, junk.stderr)
+
+
+@requires_c_compiler
 def test_standalone_rejects_a_python_reachable_graph(tmp_path: Path):
     (tmp_path / "pyproject.toml").write_text("[tool.ppy]\n", encoding="utf-8")
     (tmp_path / "floaty.ppy").write_text(
@@ -541,7 +590,7 @@ def test_standalone_allocates_and_fills_its_own_buffers(tmp_path: Path):
 
             def main() -> None:
                 count: int = ppy.input[int]()
-                values: Buffer[int] = ppy.input[Buffer[int]](count)
+                values: Buffer[int] = ppy.scan[Buffer[int]](count)
                 room: Buffer[int] = ppy.buffer[int](count)
                 doubled(values, room)
                 print(total(room))
@@ -1040,9 +1089,9 @@ def test_build_warm_prepares_what_import_ppy_serves(tmp_path: Path):
     assert "kernel.ppy: already built" in again.stderr
     assert "warm: 0 built, 1 already built" in again.stderr
 
-    refused = _ppy(tmp_path, "build", "--warm", "--safe", "kernel.ppy")
+    refused = _ppy(tmp_path, "build", "--warm", "--unsafe", "kernel.ppy")
     assert refused.returncode == 2
-    assert "--safe" in refused.stderr
+    assert "--unsafe" in refused.stderr
 
     (tmp_path / "broken.ppy").write_text(
         "def wrong(n: int) -> int:\n    return n + missing\n", encoding="utf-8"

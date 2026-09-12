@@ -145,15 +145,7 @@ if overall is not None:
 
 </details>
 
-**`python  pipeline.py`**
-
-```text
-n=8 mean=5.000 sd=2.000 first=-1.5
-empty
-n=8 mean=10.000 sd=4.000
-```
-
-**`ppy run pipeline.ppy`**
+**`python  pipeline.py`**, **`ppy run pipeline.ppy`**
 
 ```text
 n=8 mean=5.000 sd=2.000 first=-1.5

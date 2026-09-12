@@ -42,8 +42,12 @@ def main() -> int:
     failures = 0
     checked = 0
     for folder in sorted(p for p in ROOT.iterdir() if p.is_dir()):
+        # `compare/` holds other tools' programs -- Numba, CuPy, Taichi -- written
+        # their way and imported from their environments; they are not linted here.
         sources = sorted(
-            p for p in folder.rglob("*.py") if p.name not in SKIP and ".ppy-cache" not in str(p)
+            p
+            for p in folder.rglob("*.py")
+            if p.name not in SKIP and ".ppy-cache" not in str(p) and "compare" not in p.parts
         )
         if folder.name in BEFORE_PICTURES:
             sources = []

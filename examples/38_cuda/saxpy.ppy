@@ -39,8 +39,8 @@ def run(n: int, a: float, x: native.const_ptr[float], y: native.ptr[float]) -> N
 
 def main() -> None:
     n = 300
-    x = native.stack_alloc[float](n)
-    y = native.stack_alloc[float](n)
+    x = cuda.device_alloc[float](n)
+    y = cuda.device_alloc[float](n)
     for i in range(n):
         native.store(native.offset(x, i), float(i))
         native.store(native.offset(y, i), 1.0)

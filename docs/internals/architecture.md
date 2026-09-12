@@ -13,18 +13,21 @@ type & effect analysis   analysis/checker       flow typing, refinements, purity
      ├── migration/                              rewrite passes + report behind `ppy migrate`
      ├── opt/                                   AST passes for the Python backend
      ├── lowering/                              typed AST → canonical IR (ir/)
-     │      ir/transforms                       passes; ir/linker joins modules into a program
+     │      driver/ir_pipeline                  the shared passes (ir/transforms); ir/linker joins modules
      │      ├── backend/llvm/                   IR → LLVM IR → wrapper → link/JIT
      │      ├── backend/c/                      IR → C11, C++17, CUDA, HIP source
      │      ├── backend/nvvm/                   IR → NVVM IR → PTX, launched by ppy_runtime.cuda
-     │      └── backend/stablehlo/              IR → StableHLO, run by ppy_runtime.xla
+     │      ├── backend/stablehlo/              IR → StableHLO, run by ppy_runtime.xla
+     │      └── an installed backend            IR → whatever it makes (ppy.backends entry point)
      └── lsp/, driver/explain                   the same analysis, served interactively
 ```
 
 Analysis produces data; only `driver/rewrite.py` touches source text, and only
 through the `ConversionPlan` that `driver/convert.py` filled in. Nothing in
 `analysis/` knows the output is text, and nothing in the backends re-derives
-what the checker already proved.
+what the checker already proved. The backends, the compiler's own and an
+installed one alike, read the canonical IR after the shared passes and
+nothing above it ([Backends](backends.md)).
 
 ## Modules
 
@@ -44,10 +47,11 @@ what the checker already proved.
 | `backend/c/` | the source backends: `emit` reads the canonical IR and writes one C11 or C++17 translation unit (or a header-only form), and with `gpu` the CUDA or HIP spelling of the same IR, kernels and launches included; `runtime` holds the C shims a standalone program links (the LLVM standalone build compiles the same table). |
 | `backend/nvvm/` | the device backend: IR → NVVM IR → PTX through LLVM's NVPTX target with libdevice linked in; `ppy_runtime.cuda` launches it. |
 | `backend/stablehlo/` | IR → StableHLO for `@ppy.xla.jit` functions; `ppy_runtime.xla` compiles and runs it through PJRT. |
-| `backend/llvm/` | `ir_pipeline` (the passes, sanitizers, and profile around a module's IR) and `from_ir` (canonical IR → LLVM IR, dialect by dialect; `lowering` keeps the native ABI and eligibility rules, `lowering_cache` what a build reuses), `wrapper` (generated CPython-ABI entry points, `METH_FASTCALL`, GIL release), `fusion` (NumPy elementwise loops), `specialize`/`jit` (guarded runtime specialization), `parallel` (the worker pool), `link` (objects → shared library, for the host or a `--target`), `extension`/`packaging` (`--python-extension`, `--library`). |
+| `backend/` | `base` (the interface a backend implements: formats, passes, validation, emit, build, toolchain, fingerprint), `registry` (the builtin backends and the installed ones, found through the `ppy.backends` entry-point group and loaded when asked for), `builtin` (the compiler's own backends described through the same interface). See [Backends](backends.md). |
+| `backend/llvm/` | `ir_pipeline` (the LLVM road over the shared passes, which live in `driver/ir_pipeline`) and `from_ir` (canonical IR → LLVM IR, dialect by dialect; `lowering` keeps the native ABI and eligibility rules, `lowering_cache` what a build reuses), `wrapper` (generated CPython-ABI entry points, `METH_FASTCALL`, GIL release), `fusion` (NumPy elementwise loops), `specialize`/`jit` (guarded runtime specialization), `parallel` (the worker pool), `link` (objects → shared library, for the host or a `--target`), `extension`/`packaging` (`--python-extension`, `--library`). |
 | `plugins/` | numpy, torch, jax, pydantic, uvicorn — see [Plugins](plugins.md). |
 | `cache/` | the content-addressed store (SQLite) and key construction. |
-| `driver/` | CLI, pipeline orchestration, `convert` (what to write) and `rewrite` (writing it) either side of `plan`, fmt, lint, test, explain. |
+| `driver/` | CLI, pipeline orchestration, `ir_pipeline` (the canonical IR of a project after the shared passes -- the one road every backend takes -- and the backend boundary after it), `convert` (what to write) and `rewrite` (writing it) either side of `plan`, fmt, lint, test, explain. |
 | `lsp/` | the language server, on the same analysis. |
 
 ## The three-path invariant
@@ -55,7 +59,7 @@ what the checker already proved.
 Plain CPython, the Python backend, and the LLVM backend must produce the same
 answer; a guard that fails at runtime falls back to the Python body rather than
 ever answering differently. The invariant is enforced, not assumed:
-`examples/run_all.py` runs all 52 example programs on all three paths and
+`examples/run_all.py` runs all @@EXAMPLE_PROGRAMS@@ example programs on all three paths and
 diffs the output, and the test suite does the same per feature.
 
 ## Cache and incremental builds
@@ -115,12 +119,12 @@ machines.
 
 `ppy/_io.py` is a runtime-only reader: a small C scanner over file
 descriptor 0, compiled on first use into the user cache and bound through
-ctypes, exposed as `ppy.input[T]()` and the lower-level `ppy.read_ints` /
+ctypes, exposed as `ppy.input[T]()` for lines, `ppy.scan[T]()` for tokens, and the lower-level `ppy.read_ints` /
 `ppy.read_token`; `ppy.buffer[T](n)` beside it is the allocation both a
 CPython run and a standalone binary understand. It lives in the `ppy` package rather than the compiler
 because it is useful on every path, plain CPython included, and it degrades
 to a pure-Python implementation where no C compiler exists. The checker
-types `ppy.input[T]()` from its subscript, the way it types `ppy.check[T]`.
+types `ppy.input[T]()` and `ppy.scan[T]()` from their subscript, the way it types `ppy.check[T]` and `ppy.assume[T]`.
 
 ## The boundary
 

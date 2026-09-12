@@ -22,7 +22,9 @@ and runs once per thread of a launch; `@device` one a kernel calls. Inside,
 say where a thread is, `syncthreads()` and `syncwarp()` wait for the block
 and the warp, `shared[T, N]()` and `local[T, N]()` are memory of the block
 and of the thread, and the `shfl` family trades a scalar across the warp.
-`launch(kernel, grid, block, *args)` runs a kernel and waits. Under CPython
+`launch(kernel, grid, block, *args)` runs a kernel and waits, and
+`device_alloc[T](n)` is memory that lives on the device between launches, a
+`native.ptr[T]` the host reads and writes through a mirror. Under CPython
 the launch runs the grid here, on threads that know their position -- the
 reference, exact and slow (spec 72); the compiler lowers the same calls to
 the gpu dialect, and `ppy emit cuda` writes them as CUDA C++.
@@ -41,6 +43,7 @@ __all__ = [
     "block_id",
     "compiled",
     "device",
+    "device_alloc",
     "global_id",
     "grid_dim",
     "kernel",
@@ -59,6 +62,7 @@ __all__ = [
 
 kernel = _flexible("cuda.kernel")
 device = _flexible("cuda.device")
+device_alloc = _gpu.device_alloc("cuda")
 
 
 def launch(function: Callable[..., Any], grid: Any, block: Any, /, *arguments: Any) -> None:

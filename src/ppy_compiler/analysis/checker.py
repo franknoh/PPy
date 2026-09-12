@@ -18,7 +18,15 @@ from . import builtins as B
 from . import stdlib
 from . import types as T
 from .aliasing import EXTERNAL, AliasInfo, analyze_aliases
-from .annotations import AnnotationResolver, Resolved, narrow_element, vector_parts, vector_type
+from .annotations import (
+    AnnotationResolver,
+    Resolved,
+    narrow_element,
+    tile_element,
+    tile_type,
+    vector_parts,
+    vector_type,
+)
 from .binding import bind_call, positional_values
 from .effects import Effect, EffectSet
 from .env import Binding, Env
@@ -408,6 +416,17 @@ def _read_element(element: T.Type) -> T.Type:
     return T.INT if _scalar_name_of(element) in {"i8", "u8"} else element
 
 
+def _line_readable(t: T.Type) -> bool:
+    """What `ppy.input[T]` reads a line as: a scalar, a tuple of scalars, or a list of one."""
+    if t in (T.INT, T.FLOAT, T.STR, T.UNKNOWN):
+        return True
+    if isinstance(t, T.Tuple_) and not t.homogeneous and t.items:
+        return all(T.strip_literal(item) in (T.INT, T.FLOAT, T.STR) for item in t.items)
+    if isinstance(t, T.Instance) and t.name == "list" and len(t.args) == 1:
+        return T.strip_literal(t.args[0]) in (T.INT, T.FLOAT, T.STR)
+    return False
+
+
 def _holdable_element(t: T.Type) -> bool:
     base = T.strip_literal(t)
     return isinstance(base, T.Instance) and base.name in _HOLDABLE
@@ -415,6 +434,22 @@ def _holdable_element(t: T.Type) -> bool:
 
 _GPU_POSITIONS = frozenset({"thread_id", "block_id", "block_dim", "grid_dim", "global_id"})
 _GPU_SHUFFLES = frozenset({"shfl", "shfl_up", "shfl_down", "shfl_xor"})
+
+
+def _tile_lane(t: T.Type) -> T.Type | None:
+    """The lane type a tile operand contributes: its element, or the scalar it is."""
+    element = tile_element(t)
+    if element is not None:
+        return T.strip_literal(element)
+    base = T.strip_literal(t)
+    return base if base in (T.INT, T.FLOAT, T.BOOL) else None
+
+
+def _tile_join(first: T.Type, second: T.Type) -> T.Type:
+    """The lane type of `first op second`: a float wins, then an int."""
+    if T.FLOAT in (first, second):
+        return T.FLOAT
+    return T.INT if T.INT in (first, second) else T.BOOL
 
 
 def _gpu_extent(t: T.Type) -> bool:
@@ -438,11 +473,11 @@ def _is_fresh_allocation(node: ast.expr) -> bool:
         return True
     if isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
         return node.func.id in {"list", "dict", "set", "bytearray"}
-    # `ppy.buffer[int](n)` and `ppy.input[Buffer[int]](n)` make the memory
+    # `ppy.buffer[int](n)` and `ppy.scan[Buffer[int]](n)` make the memory
     # they hand back, so nothing else can already be holding it.
     if isinstance(node, ast.Call) and isinstance(node.func, ast.Subscript):
         spelled = ast.unparse(node.func.value)
-        return spelled in {"ppy.buffer", "ppy.input"}
+        return spelled in {"ppy.buffer", "ppy.scan", "ppy.input"}
     return False
 
 
@@ -1612,6 +1647,14 @@ class _Checker:
             if T.strip_literal(element) == T.BOOL:
                 self._error("E1640", "`-` is not defined for a vector of bools", node)
             return Binding(base)
+        lane = tile_element(base)
+        if lane is not None:
+            lane = T.strip_literal(lane)
+            if isinstance(node.op, ast.USub) and lane == T.BOOL:
+                self._error("E1644", "`-` is not defined for a tile of bools", node)
+            if isinstance(node.op, ast.Invert) and lane == T.FLOAT:
+                self._error("E1644", "`~` is not defined for a tile of floats", node)
+            return Binding(base)
         if isinstance(node.op, ast.USub):
             facts = Facts()
             if operand.facts.int_range is not None:
@@ -1677,6 +1720,9 @@ class _Checker:
             )
             if plugin_result is not None:
                 return plugin_result
+        tiles = self._tile_comparison(node, operands)
+        if tiles is not None:
+            return tiles
         lanes = self._vector_comparison(node, operands)
         if lanes is not None:
             return lanes
@@ -2918,6 +2964,9 @@ class _Checker:
         plugin_result = self._plugin_operator(_ARITH_OPS.get(op, ""), [left, right], node)
         if plugin_result is not None:
             return plugin_result
+        tiles = self._tile_operator(left_base, right_base, op, node)
+        if tiles is not None:
+            return tiles
         lanes = self._vector_operator(left_base, right_base, op, node)
         if lanes is not None:
             return lanes
@@ -3437,6 +3486,11 @@ class _Checker:
         if subscript is None:
             if operation in {"extern", "export"}:
                 return None
+            if operation == "compiled":
+                if len(args) != 1:
+                    self._error("E1305", "`ppy.native.compiled(f)` takes the function", node)
+                self._effects = self._effects.add(Effect.READ_GLOBAL)
+                return Binding(T.BOOL)
             self._error("E1630", f"`ppy.native.{operation}` is not a function", node)
             return Binding(T.UNKNOWN)
         resolved = self.annotations.resolve(subscript)
@@ -3502,6 +3556,7 @@ class _Checker:
             "ppy.parallel.": self._parallel_call,
             "ppy.cuda.": self._cuda_call,
             "ppy.hip.": self._hip_call,
+            "ppy.tile.": self._tile_call,
             "ppy.aio.": self._aio_call,
         }
         for prefix, handler in handlers.items():
@@ -3925,6 +3980,28 @@ class _Checker:
                 self._error("E1644", f"`{spelled}()` takes no arguments", node)
             self._effects = self._effects.add(Effect.SYNC)
             return Binding(T.NONE)
+        if operation == "device_alloc":
+            if subscript is None or isinstance(subscript, ast.Tuple):
+                self._error("E1644", f"`{spelled}[T](n)` takes the element type", node)
+                return Binding(T.UNKNOWN)
+            resolved = self.annotations.resolve(subscript)
+            element = narrow_element(resolved) or resolved.type
+            if not _holdable_element(element):
+                self._error(
+                    "E1644",
+                    f"`{spelled}` holds `int`, `float`, `bool`, `ppy.i8`, or `ppy.u8`, "
+                    f"not `{element}`",
+                    node,
+                )
+                return Binding(T.UNKNOWN)
+            if len(args) != 1:
+                self._error("E1644", f"`{spelled}[T](n)` takes how many elements to make", node)
+            elif T.strip_literal(args[0].type) not in (T.INT, T.UNKNOWN):
+                self._mismatch(
+                    "E1301", "a device allocation's count expects", node.args[0], args[0].type
+                )
+            self._effects = self._effects.add(Effect.ALLOC)
+            return Binding(T.Instance("ppy.native.ptr", (element,), ("ppy.native.ptr", "object")))
         if operation in {"shared", "local"}:
             element = self._gpu_element(subscript, spelled, node)
             if args:
@@ -3951,6 +4028,245 @@ class _Checker:
             return self._gpu_launch(spelled, node, args)
         self._error("E1644", f"`{spelled}` is not part of the {api} namespace", node)
         return Binding(T.UNKNOWN)
+
+    # -- the tile namespace: kernels over tiles --------------------------------
+
+    def _tile_call(
+        self, operation: str, node: ast.Call, subscript: ast.expr | None, env: Env
+    ) -> Binding | None:
+        """`ppy.tile.*`: a kernel of tiles, typed lane by lane (spec 74)."""
+        del subscript
+        if operation == "kernel":
+            return None
+        spelled = f"ppy.tile.{operation}"
+        if node.keywords:
+            self._error("E1644", f"`{spelled}` takes no keyword arguments", node)
+        args = [self._expr(argument, env) for argument in node.args]
+        if operation == "Tile":
+            self._error(
+                "E1644", "`ppy.tile.Tile[T]` is a type; a tile comes from `arange` or `load`", node
+            )
+            return Binding(T.UNKNOWN)
+        if operation in {"program_id", "num_programs"}:
+            if args:
+                self._error("E1644", f"`{spelled}()` takes no arguments", node)
+            return Binding(T.INT)
+        if operation == "compiled":
+            if len(args) != 1:
+                self._error("E1644", f"`{spelled}(kernel)` takes the kernel", node)
+            self._effects = self._effects.add(Effect.READ_GLOBAL)
+            return Binding(T.BOOL)
+        if operation == "arange":
+            block = (
+                args[0].facts.constant if len(args) == 1 and args[0].facts.has_constant else None
+            )
+            if (
+                not isinstance(block, int)
+                or isinstance(block, bool)
+                or block < 32
+                or block & (block - 1)
+            ):
+                self._error(
+                    "E1644",
+                    "`ppy.tile.arange(BLOCK)` takes a constant power of two, 32 or more",
+                    node,
+                )
+            return Binding(tile_type(T.INT))
+        if operation == "load":
+            return self._tile_load(spelled, node, args)
+        if operation == "store":
+            return self._tile_store(spelled, node, args)
+        if operation == "where":
+            mask = _tile_lane(args[0].type) if len(args) == 3 else None
+            if mask is None or T.strip_literal(mask) != T.BOOL:
+                self._error("E1644", f"`{spelled}(mask, a, b)` takes a tile of bools first", node)
+                return Binding(T.UNKNOWN)
+            first, second = _tile_lane(args[1].type), _tile_lane(args[2].type)
+            if (
+                first is None
+                or second is None
+                or (tile_element(args[1].type) is None and tile_element(args[2].type) is None)
+            ):
+                self._error(
+                    "E1644",
+                    f"`{spelled}(mask, a, b)` chooses between tiles, or a tile and a scalar",
+                    node,
+                )
+                return Binding(T.UNKNOWN)
+            return Binding(tile_type(_tile_join(first, second)))
+        if operation in {"sum", "max", "min"}:
+            lane = tile_element(args[0].type) if len(args) == 1 else None
+            if lane is None:
+                self._error("E1644", f"`{spelled}(t)` takes a tile", node)
+                return Binding(T.UNKNOWN)
+            lane = T.strip_literal(lane)
+            return Binding(T.INT if lane == T.BOOL and operation == "sum" else lane)
+        if operation == "launch":
+            return self._tile_launch(spelled, node, args)
+        self._error("E1644", f"`{spelled}` is not part of the tile namespace", node)
+        return Binding(T.UNKNOWN)
+
+    def _tile_pointer(
+        self, argument: Binding, node: ast.AST, spelled: str
+    ) -> tuple[T.Instance, T.Type] | None:
+        """The pointer a tile reads or writes through, and its element."""
+        if not _is_pointer(argument.type):
+            self._error("E1644", f"`{spelled}` goes through a `ppy.native.ptr`", node)
+            return None
+        pointer = T.strip_literal(argument.type)
+        assert isinstance(pointer, T.Instance)
+        element = T.strip_literal(pointer.args[0])
+        if element not in (T.INT, T.FLOAT, T.BOOL):
+            self._error(
+                "E1644",
+                f"`{spelled}` reads `int`, `float`, or `bool` elements, not `{element}`",
+                node,
+            )
+            return None
+        return pointer, element
+
+    def _tile_load(self, spelled: str, node: ast.Call, args: list[Binding]) -> Binding:
+        self._effects = self._effects.add(Effect.READ_MEMORY)
+        if not 2 <= len(args) <= 4:
+            self._error("E1644", f"`{spelled}(p, offsets, mask=None, other=0)`", node)
+            return Binding(T.UNKNOWN)
+        found = self._tile_pointer(args[0], node.args[0], spelled)
+        if found is None:
+            return Binding(T.UNKNOWN)
+        _pointer, element = found
+        offsets = T.strip_literal(args[1].type)
+        if offsets == T.INT:
+            if len(args) > 2:
+                self._error("E1644", f"`{spelled}` of one element takes no mask", node)
+            return Binding(element)
+        if T.strip_literal(tile_element(offsets) or T.UNKNOWN) != T.INT:
+            self._error("E1644", f"`{spelled}` takes an `int` or a tile of ints as offsets", node)
+            return Binding(T.UNKNOWN)
+        if len(args) > 2 and T.strip_literal(tile_element(args[2].type) or T.UNKNOWN) != T.BOOL:
+            self._error("E1644", f"`{spelled}` takes a tile of bools as its mask", node.args[2])
+        if len(args) > 3 and not T.is_assignable(args[3].type, element):
+            self._mismatch("E1301", f"`{spelled}`'s `other` expects", node.args[3], args[3].type)
+        return Binding(tile_type(element))
+
+    def _tile_store(self, spelled: str, node: ast.Call, args: list[Binding]) -> Binding:
+        self._effects = self._effects.add(Effect.WRITE_MEMORY)
+        if not 3 <= len(args) <= 4:
+            self._error("E1644", f"`{spelled}(p, offsets, value, mask=None)`", node)
+            return Binding(T.NONE)
+        found = self._tile_pointer(args[0], node.args[0], spelled)
+        if found is None:
+            return Binding(T.NONE)
+        pointer, element = found
+        if pointer.name == "ppy.native.const_ptr":
+            self._error("E1631", f"`{spelled}` cannot write through a `const_ptr`", node)
+        offsets = T.strip_literal(args[1].type)
+        value_lane = _tile_lane(args[2].type)
+        if offsets == T.INT:
+            if tile_element(args[2].type) is not None or len(args) > 3:
+                self._error("E1644", f"`{spelled}` of one element takes a scalar and no mask", node)
+            elif not T.is_assignable(args[2].type, element):
+                self._mismatch("E1301", f"`{spelled}` expects", node.args[2], args[2].type)
+            return Binding(T.NONE)
+        if T.strip_literal(tile_element(offsets) or T.UNKNOWN) != T.INT:
+            self._error("E1644", f"`{spelled}` takes an `int` or a tile of ints as offsets", node)
+            return Binding(T.NONE)
+        if value_lane is None or not T.is_assignable(value_lane, element):
+            self._mismatch(
+                "E1301",
+                f"`{spelled}` writes `{element}` lanes; it expects",
+                node.args[2],
+                args[2].type,
+            )
+        if len(args) > 3 and T.strip_literal(tile_element(args[3].type) or T.UNKNOWN) != T.BOOL:
+            self._error("E1644", f"`{spelled}` takes a tile of bools as its mask", node.args[3])
+        return Binding(T.NONE)
+
+    def _tile_launch(self, spelled: str, node: ast.Call, args: list[Binding]) -> Binding:
+        self._effects = self._effects.add(Effect.GPU_LAUNCH)
+        if len(args) < 2:
+            self._error(
+                "E1644",
+                f"`{spelled}(kernel, programs, *args)` takes the kernel and its programs",
+                node,
+            )
+            return Binding(T.NONE)
+        callee = T.strip_literal(args[0].type)
+        if isinstance(callee, T.Callable_):
+            if callee.ret not in (T.NONE, T.ANY, T.UNKNOWN):
+                self._error(
+                    "E1644",
+                    f"a kernel returns nothing; `{callee.qualname or callee}` "
+                    f"returns `{callee.ret}`",
+                    node.args[0],
+                )
+            positional = [p for p in callee.params if p.kind in _POSITIONAL]
+            if callee.params and len(positional) != len(args) - 2:
+                self._error(
+                    "E1644",
+                    f"`{callee.qualname or 'the kernel'}` takes {len(positional)} "
+                    f"argument(s), {len(args) - 2} given",
+                    node,
+                )
+            for parameter, argument, arg_node in zip(
+                positional, args[2:], node.args[2:], strict=False
+            ):
+                if not T.is_assignable(argument.type, parameter.type):
+                    self._mismatch("E1301", f"`{parameter.name}` expects", arg_node, argument.type)
+        elif not isinstance(callee, (T.AnyType, T.UnknownType)):
+            self._error("E1644", f"`{spelled}` takes a kernel function", node.args[0])
+        if T.strip_literal(args[1].type) not in (T.INT, T.UNKNOWN):
+            self._error("E1644", "the number of programs is an `int`", node.args[1])
+        return Binding(T.NONE)
+
+    def _tile_operator(
+        self, left: T.Type, right: T.Type, op: type[ast.operator], node: ast.AST
+    ) -> Binding | None:
+        """`a + b` with a tile on either side: lane by lane, a scalar broadcast."""
+        if tile_element(left) is None and tile_element(right) is None:
+            return None
+        symbol = _ARITH_OPS.get(op, "?")
+        first, second = _tile_lane(left), _tile_lane(right)
+        if first is None or second is None:
+            self._error(
+                "E1644",
+                f"`{symbol}` takes a tile and a tile or a scalar of int, float, or bool",
+                node,
+            )
+            return Binding(T.UNKNOWN)
+        first, second = T.strip_literal(first), T.strip_literal(second)
+        if op in {ast.Add, ast.Sub, ast.Mult, ast.Div, ast.FloorDiv, ast.Mod, ast.Pow}:
+            if T.BOOL in (first, second):
+                self._error("E1644", f"`{symbol}` is not defined for a tile of bools", node)
+                return Binding(T.UNKNOWN)
+            if op in {ast.FloorDiv, ast.Mod} and T.FLOAT in (first, second):
+                self._error("E1644", f"`{symbol}` takes tiles of ints", node)
+                return Binding(T.UNKNOWN)
+            if op is ast.Pow:
+                self._error("E1644", "`**` has no tile form yet", node)
+                return Binding(T.UNKNOWN)
+            element = T.FLOAT if op is ast.Div else _tile_join(first, second)
+            return Binding(tile_type(element))
+        if op in {ast.BitAnd, ast.BitOr, ast.BitXor}:
+            if first != second or first == T.FLOAT:
+                self._error("E1644", f"`{symbol}` takes two tiles of ints or of bools", node)
+                return Binding(T.UNKNOWN)
+            return Binding(tile_type(first))
+        self._error("E1644", f"`{symbol}` is not defined for tiles", node)
+        return Binding(T.UNKNOWN)
+
+    def _tile_comparison(self, node: ast.Compare, operands: list[Binding]) -> Binding | None:
+        if len(operands) != 2 or all(tile_element(o.type) is None for o in operands):
+            return None
+        lanes = [_tile_lane(o.type) for o in operands]
+        if None in lanes:
+            self._error(
+                "E1644", "a tile compares with a tile or a scalar of int, float, or bool", node
+            )
+            return Binding(T.UNKNOWN)
+        if not isinstance(node.ops[0], (ast.Eq, ast.NotEq, ast.Lt, ast.LtE, ast.Gt, ast.GtE)):
+            self._error("E1644", "a tile comparison is `==`, `!=`, `<`, `<=`, `>`, or `>=`", node)
+            return Binding(T.UNKNOWN)
+        return Binding(tile_type(T.BOOL))
 
     def _gpu_element(
         self, subscript: ast.expr | None, spelled: str, node: ast.AST
@@ -4274,46 +4590,93 @@ class _Checker:
         return Binding(T.instance("Buffer", element.type))
 
     def _typed_input(self, node: ast.Call, env: Env) -> Binding | None:
-        """`ppy.input[T](...)`: read the next value, typed by what was asked for.
+        """`ppy.input[T]()` and `ppy.scan[T](...)`: a read typed by what was asked for.
 
         The subscript is read as a type, the way an annotation is, so
         `ppy.input[tuple[int, int]]()` types as that tuple and
-        `ppy.input[Buffer[int]](n)` as that buffer. The call takes a prompt
-        for a scalar, or how many values to read for a buffer.
+        `ppy.scan[Buffer[int]](n)` as that buffer. `input` reads one line the
+        way the builtin does and knows `int`, `float`, `str`, tuples and
+        lists of them, and `Buffer[int]` for a line of integers, which the
+        line counts; `scan` reads tokens, whatever line they are on, and
+        fills a buffer given how many values to read. Neither takes anything
+        else -- a prompt is a `print` before the read.
         """
         func = node.func
         assert isinstance(func, ast.Subscript)
-        if self.project.resolver(self.symbols).canonical(func.value) != "ppy.input":
+        canonical = self.project.resolver(self.symbols).canonical(func.value)
+        if canonical not in {"ppy.input", "ppy.scan"}:
             return None
-        if len(node.args) > 1 or node.keywords:
-            self._error("E1305", "`ppy.input[T]` takes a prompt or a count, and nothing else", node)
+        what = canonical.rpartition(".")[2]
         resolved = self.annotations.resolve(func.slice)
+        base = T.strip_literal(resolved.type)
+        buffer = getattr(base, "name", None) == "Buffer"
+        counted = buffer and what == "scan"
+        if what == "input":
+            if buffer:
+                element = T.INT
+                if isinstance(base, T.Instance) and base.args:
+                    element = T.strip_literal(base.args[0])
+                if element not in (T.INT, T.UNKNOWN):
+                    self._error(
+                        "E1305",
+                        f"a line of integers reads into `Buffer[int]`, not `{resolved.type}`",
+                        node,
+                    )
+            elif not _line_readable(base):
+                self._error(
+                    "E1305",
+                    f"`ppy.input[T]` reads a line as `int`, `float`, `str`, a tuple or a "
+                    f"list of them, or `Buffer[int]`, not `{resolved.type}`",
+                    node,
+                )
+        if node.keywords or (len(node.args) != 1 if counted else node.args):
+            if counted:
+                wanted = "`ppy.scan[Buffer[T]]` takes how many values to read, and nothing else"
+            elif buffer:
+                wanted = (
+                    "`ppy.input[Buffer[int]]()` reads the whole line and takes no count; "
+                    "`ppy.scan[Buffer[int]](n)` reads n tokens"
+                )
+            else:
+                wanted = f"`ppy.{what}[T]()` takes no argument; print a prompt first, then read"
+            self._error("E1305", wanted, node)
         for argument in node.args:
-            self._expr(argument, env)
+            count = self._expr(argument, env)
+            if counted and T.strip_literal(count.type) not in (T.INT, T.UNKNOWN):
+                self._error(
+                    "E1301",
+                    f"a buffer is read with how many values it holds, not `{count.type}`",
+                    argument,
+                )
         self._effects = self._effects | EffectSet.of(
             Effect.IO, Effect.ALLOC, raises=("EOFError", "TypeError", "ValueError")
         )
         return Binding(resolved.type, resolved.facts)
 
     def _checked_conversion(self, node: ast.Call, env: Env) -> Binding | None:
-        """`ppy.check[T](value)`: the sanctioned crossing out of dynamic code.
+        """`ppy.check[T](value)` and `ppy.assume[T](value)`: crossings out of dynamic code.
 
-        The runtime validates the value against `T` (raising `TypeError`) and
-        hands it back; the checker takes that word and types the result `T`.
-        This is the inverse of `typing.cast`, which asserts and checks
-        nothing -- the name is different because the behavior is.
+        `check` validates the value against `T` at runtime, all the way down
+        (raising `TypeError`), and hands it back; the checker takes that
+        word and types the result `T`. `assume` validates nothing: the
+        result is typed `T` on the programmer's word alone, which is the
+        escape hatch, and reads as one. Both are the inverse of
+        `typing.cast` in spelling because they differ from it in behavior.
         """
         func = node.func
         assert isinstance(func, ast.Subscript)
-        if self.project.resolver(self.symbols).canonical(func.value) != "ppy.check":
+        canonical = self.project.resolver(self.symbols).canonical(func.value)
+        if canonical not in {"ppy.check", "ppy.assume"}:
             return None
+        what = canonical.rpartition(".")[2]
         resolved = self.annotations.resolve(func.slice)
         if len(node.args) != 1 or node.keywords:
-            self._error("E1305", "`ppy.check[T]` takes exactly one positional value", node)
+            self._error("E1305", f"`ppy.{what}[T]` takes exactly one positional value", node)
         for argument in node.args:
             self._expr(argument, env)
             self._mark_escape(argument, env)
-        self._effects = self._effects | EffectSet.of(raises=("TypeError",))
+        if what == "check":
+            self._effects = self._effects | EffectSet.of(raises=("TypeError",))
         return Binding(resolved.type, resolved.facts)
 
     def _check_forbidden_call(self, node: ast.Call, env: Env) -> bool:
@@ -4420,7 +4783,8 @@ class _Checker:
                 f"{message}; a dynamic value is crossing into typed code",
                 node,
                 help="validate it explicitly: `ppy.check[T](value)` checks at "
-                "runtime and hands back a typed value",
+                "runtime and hands back a typed value; `ppy.assume[T](value)` takes "
+                "your word for it, unchecked",
             )
             return
         self._error(code, message, node)
@@ -4599,7 +4963,7 @@ class _Checker:
         """A mutable module-level binding, which reading is an effect."""
         if name in self._function_locals or name in self.symbols.constant_globals:
             return False
-        if name in self.symbols.derivatives:
+        if name in self.symbols.derivatives or name in self.symbols.pattern_globals:
             return False
         return (
             name in self.symbols.globals

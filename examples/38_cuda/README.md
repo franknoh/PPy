@@ -22,7 +22,10 @@ a kernel calls. `thread_id`, `block_id`, `block_dim`, and `global_id` say
 where a thread is. `cuda.launch(kernel, grid, block, *args)` runs the kernel
 over `grid` blocks of `block` threads and waits; a `native` pointer's whole
 array goes to the device and, when the pointer is mutable, comes back, so a
-launch means what the reference launch means.
+launch means what the reference launch means. `x` and `y` are made with
+`cuda.device_alloc[float](n)` instead: memory that lives on the device
+between launches, filled and read through the same `native.store` and
+`native.load`, so the launch passes an address and copies nothing.
 
 ## Shared memory, a barrier, a shuffle
 
@@ -44,6 +47,93 @@ machine. `PPY_CUDA_ARCH` picks the architecture the PTX is written for
 (`sm_70` unless set). A built artifact carries its kernels: `ppy build`
 stages each PTX beside the manifest and the launcher binds it without the
 compiler.
+
+## Compared with CuPy, Numba, Mojo, and CUDA C
+
+The same two kernels over sixteen million doubles, written as thread-level
+kernels the way each tool spells them, in [`compare/`](compare/):
+[`saxpy_bench.ppy`](compare/saxpy_bench.ppy), [`saxpy_cupy.py`](compare/saxpy_cupy.py),
+[`saxpy_numba.py`](compare/saxpy_numba.py), [`saxpy.mojo`](compare/saxpy.mojo),
+[`saxpy.cu`](compare/saxpy.cu). Milliseconds, best of warm launches with the
+device synchronized, over five processes. Tile-level tools -- Triton, Taichi
+-- program a block as one vector and never write the shared-memory
+exchange, which is a different kernel; they are compared with PPY's tile
+kernels, not with these. The block max, as each tool spells it:
+
+**PPY** -- a Python function with `cuda.global_id()`, shared memory, a
+barrier, a shuffle; the same file runs on CPython through the reference
+launch:
+
+```python
+@cuda.kernel
+def block_max(x: native.const_ptr[float], out: native.ptr[float]) -> None:
+    parked = cuda.shared[float, 64]()
+    tid = cuda.thread_id()
+    native.store(native.offset(parked, tid), native.load(native.offset(x, cuda.global_id())))
+    cuda.syncthreads()
+    mine = native.load(native.offset(parked, tid))
+    other = cuda.shfl_xor(mine, 1)
+    ...
+```
+
+**Numba CUDA** reads the same way -- `@cuda.jit`, `cuda.grid(1)`,
+`cuda.shared.array`, `cuda.syncthreads()`, `cuda.shfl_xor_sync`:
+
+```python
+@cuda.jit
+def block_max(x, out):
+    parked = cuda.shared.array(64, dtype=np.float64)
+    tid = cuda.threadIdx.x
+    parked[tid] = x[cuda.grid(1)]
+    cuda.syncthreads()
+    mine = parked[tid]
+    other = cuda.shfl_xor_sync(0xFFFFFFFF, mine, 1)
+    ...
+```
+
+**CuPy** writes saxpy in one line, an `ElementwiseKernel`, and the block max
+as CUDA C in a string handed to `RawKernel`. **CUDA C** is the kernel the
+others approximate, timed with events around the launch alone.
+
+**Mojo** writes the kernel as a `def` with `global_idx`, `thread_idx`, a
+`stack_allocation` in `AddressSpace.SHARED`, `barrier()` from MAX's
+`max.gpu.sync`, and `shuffle_xor`, which has no `Float64` form, so the
+double crosses as its bits; arguments must be fixed-width (`Int64`, not
+`Int`), `out` is a reserved parameter name, and the launch is
+`DeviceContext.enqueue_function` with `grid_dim` and `block_dim`:
+
+```mojo
+def block_max(x: UnsafePointer[Float64, MutAnyOrigin], result: UnsafePointer[Float64, MutAnyOrigin]):
+    var parked = stack_allocation[64, Float64, address_space = AddressSpace.SHARED]()
+    var tid = Int(thread_idx.x)
+    parked[tid] = x[Int(global_idx.x)]
+    barrier()
+    var mine = parked[tid]
+    var other = bitcast[DType.float64, 1](shuffle_xor(mine.to_bits[DType.uint64](), 1))
+    ...
+```
+
+<!-- compare:start -->
+| | PPY `cuda.launch` | CuPy | Numba CUDA | Mojo | CUDA C |
+|---|---:|---:|---:|---:|---:|
+| saxpy, arrays on the device | 0.77 ± 0.08 | 0.78 ± 0.08 | 0.72 ± 0.06 | 0.55 ± 0.05 | **0.50 ± 0.00** |
+| block max, arrays on the device | 2.03 ± 0.05 | 1.98 ± 0.02 | 2.02 ± 0.03 | 1.98 ± 0.02 | **1.88 ± 0.00** |
+| saxpy, arrays copied in and out per launch | 39.19 ± 1.60 | 48.92 ± 2.05 | 36.79 ± 1.50 | **28.43 ± 1.45** | 30.46 ± 0.74 |
+| block max, array copied in per launch | 15.66 ± 0.43 | 12.33 ± 0.34 | 14.11 ± 0.42 | **11.21 ± 0.33** | 11.26 ± 0.20 |
+<!-- compare:end -->
+
+With the arrays on the device, a launch is the kernel: the five run the
+same block max in the same time, and on saxpy the Python-hosted ones sit a
+tenth of a millisecond above Mojo and CUDA C, the cost of a launch through
+the interpreter. The copying rows are the other memory model, a
+`native.stack_alloc` array sent in and brought back on every launch; there
+the driver reads the host array in place, and the traffic costs what it
+costs every tool. A program that launches more than once keeps its data on
+the device by allocating it there, with `cuda.device_alloc`.
+
+NVIDIA GeForce RTX 5080 Laptop GPU, driver 610.71, CUDA 13.3; CuPy 14.2.0,
+Numba 0.67.0 on CPython 3.12.13; Mojo 1.0.0 with MAX 26.5; nvcc 13.3; PPY
+on CPython 3.13.13.
 
 ## Run it
 
@@ -77,11 +167,181 @@ ppy inspect saxpy.ppy --stage gpu
 
 **`ppy emit cuda saxpy.ppy`**
 
-*345 lines: [outputs/03-ppy-emit-cuda-saxpy-ppy.txt](outputs/03-ppy-emit-cuda-saxpy-ppy.txt)*
+<details markdown="1">
+<summary>79 lines</summary>
+
+```text
+/* saxpy: generated by ppy, CUDA C++ */
+#include <cuda_runtime.h>
+#include <cmath>
+#include <cstdint>
+#include <cstdlib>
+
+static inline __host__ __device__ int ppy_ovf_add_i64(int64_t a, int64_t b, int64_t *out) {
+#if defined(__GNUC__) || defined(__clang__)
+    return __builtin_add_overflow(a, b, out);
+#else
+    if ((b > 0 && a > INT64_MAX - b) || (b < 0 && a < INT64_MIN - b)) {
+        return 1;
+    }
+    *out = a + b;
+    return 0;
+#endif
+}
+
+extern "C" {
+
+static __device__ double ppy_saxpy_fma(double a, double x, double y);
+__global__ void ppy_saxpy_saxpy(int64_t n, double a, const double *x, double *y);
+__global__ void ppy_saxpy_block_max(const double *x, double *out);
+int32_t ppy_saxpy_run(int64_t n, double a, const double *x, double *y, int64_t *out);
+
+static __device__ double ppy_saxpy_fma(double a, double x, double y) {
+    return a * x + y;
+}
+
+__global__ void ppy_saxpy_saxpy(int64_t n, double a, const double *x, double *y) {
+    int64_t t1 = (int64_t)blockIdx.x;
+    int64_t t2 = (int64_t)blockDim.x;
+    int64_t t3 = (int64_t)threadIdx.x;
+    int64_t i = int64_t(uint64_t(t1) * uint64_t(t2) + uint64_t(t3));
+    if (i < n) {
+        double *slot = y + i;
+        *slot = ppy_saxpy_fma(a, x[i], *slot);
+    }
+}
+
+__global__ void ppy_saxpy_block_max(const double *x, double *out) {
+    __shared__ double shared[64];
+
+    double *parked = shared;
+    int64_t tid = (int64_t)threadIdx.x;
+    int64_t t1 = (int64_t)blockIdx.x;
+    int64_t t2 = (int64_t)blockDim.x;
+    int64_t t3 = (int64_t)threadIdx.x;
+    parked[tid] = x[int64_t(uint64_t(t1) * uint64_t(t2) + uint64_t(t3))];
+    __syncthreads();
+    double mine = parked[tid];
+    double other = __shfl_xor_sync(0xffffffffu, mine, (int)1);
+    mine = other > mine ? other : mine;
+    parked[tid] = mine;
+    __syncthreads();
+    if (tid == 0) {
+        double best = *parked;
+        int64_t t4 = (int64_t)blockDim.x;
+        int64_t k = 1;
+        while (k < t4) {
+            double candidate = parked[k];
+            best = candidate > best ? candidate : best;
+            k = int64_t(uint64_t(k) + 1u);
+        }
+        int64_t t5 = (int64_t)blockIdx.x;
+        out[t5] = best;
+    }
+}
+
+int32_t ppy_saxpy_run(int64_t n, double a, const double *x, double *y, int64_t *out) {
+    int64_t t1;
+    if (ppy_ovf_add_i64(n, 255, &t1)) return 1; /* arith.ok */
+    ppy_saxpy_saxpy<<<dim3((unsigned)(t1 / 256 - (t1 % 256 < 0)), (unsigned)1, (unsigned)1), dim3((unsigned)256, (unsigned)1, (unsigned)1)>>>(n, a, x, y);
+    if (cudaDeviceSynchronize() != cudaSuccess) return 1; /* launch.ok */
+    *out = 0;
+    return 0;
+}
+
+} /* extern "C" */
+```
+
+</details>
 
 **`ppy emit hip saxpy.ppy`**
 
-*345 lines: [outputs/04-ppy-emit-hip-saxpy-ppy.txt](outputs/04-ppy-emit-hip-saxpy-ppy.txt)*
+<details markdown="1">
+<summary>79 lines</summary>
+
+```text
+/* saxpy: generated by ppy, HIP C++ */
+#include <hip/hip_runtime.h>
+#include <cmath>
+#include <cstdint>
+#include <cstdlib>
+
+static inline __host__ __device__ int ppy_ovf_add_i64(int64_t a, int64_t b, int64_t *out) {
+#if defined(__GNUC__) || defined(__clang__)
+    return __builtin_add_overflow(a, b, out);
+#else
+    if ((b > 0 && a > INT64_MAX - b) || (b < 0 && a < INT64_MIN - b)) {
+        return 1;
+    }
+    *out = a + b;
+    return 0;
+#endif
+}
+
+extern "C" {
+
+static __device__ double ppy_saxpy_fma(double a, double x, double y);
+__global__ void ppy_saxpy_saxpy(int64_t n, double a, const double *x, double *y);
+__global__ void ppy_saxpy_block_max(const double *x, double *out);
+int32_t ppy_saxpy_run(int64_t n, double a, const double *x, double *y, int64_t *out);
+
+static __device__ double ppy_saxpy_fma(double a, double x, double y) {
+    return a * x + y;
+}
+
+__global__ void ppy_saxpy_saxpy(int64_t n, double a, const double *x, double *y) {
+    int64_t t1 = (int64_t)blockIdx.x;
+    int64_t t2 = (int64_t)blockDim.x;
+    int64_t t3 = (int64_t)threadIdx.x;
+    int64_t i = int64_t(uint64_t(t1) * uint64_t(t2) + uint64_t(t3));
+    if (i < n) {
+        double *slot = y + i;
+        *slot = ppy_saxpy_fma(a, x[i], *slot);
+    }
+}
+
+__global__ void ppy_saxpy_block_max(const double *x, double *out) {
+    __shared__ double shared[64];
+
+    double *parked = shared;
+    int64_t tid = (int64_t)threadIdx.x;
+    int64_t t1 = (int64_t)blockIdx.x;
+    int64_t t2 = (int64_t)blockDim.x;
+    int64_t t3 = (int64_t)threadIdx.x;
+    parked[tid] = x[int64_t(uint64_t(t1) * uint64_t(t2) + uint64_t(t3))];
+    __syncthreads();
+    double mine = parked[tid];
+    double other = __shfl_xor(mine, (int)1);
+    mine = other > mine ? other : mine;
+    parked[tid] = mine;
+    __syncthreads();
+    if (tid == 0) {
+        double best = *parked;
+        int64_t t4 = (int64_t)blockDim.x;
+        int64_t k = 1;
+        while (k < t4) {
+            double candidate = parked[k];
+            best = candidate > best ? candidate : best;
+            k = int64_t(uint64_t(k) + 1u);
+        }
+        int64_t t5 = (int64_t)blockIdx.x;
+        out[t5] = best;
+    }
+}
+
+int32_t ppy_saxpy_run(int64_t n, double a, const double *x, double *y, int64_t *out) {
+    int64_t t1;
+    if (ppy_ovf_add_i64(n, 255, &t1)) return 1; /* arith.ok */
+    ppy_saxpy_saxpy<<<dim3((unsigned)(t1 / 256 - (t1 % 256 < 0)), (unsigned)1, (unsigned)1), dim3((unsigned)256, (unsigned)1, (unsigned)1)>>>(n, a, x, y);
+    if (hipDeviceSynchronize() != hipSuccess) return 1; /* launch.ok */
+    *out = 0;
+    return 0;
+}
+
+} /* extern "C" */
+```
+
+</details>
 
 **`ppy emit ptx saxpy.ppy`**
 

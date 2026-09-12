@@ -15,7 +15,7 @@ Same machine, same session, kernel wall time — mean ± standard deviation
 over 7 runs, each a fresh process. Every row prints the same answer in every
 column:
 
-| kernel | plain | `ppy run` | `ppy build` | C (`gcc -O3`) | C (`clang -O3`) |
+| kernel | plain | `ppy run` | `ppy build --unsafe` | C (`gcc -O3`) | C (`clang -O3`) |
 |---|---:|---:|---:|---:|---:|
 | sieve 2e6 | 173.1 ± 2.9 | 9.2 ± 0.5 | **8.8 ± 0.4** | 13.9 ± 0.6 | 13.8 ± 0.3 |
 | collatz 3e5 | 1111.0 ± 13.1 | 39.9 ± 0.8 | **30.3 ± 0.4** | 41.4 ± 0.5 | 32.2 ± 0.3 |
@@ -29,7 +29,7 @@ column:
 The native path is 9× to 160× faster than plain CPython on these eight, and
 all three paths print identical answers. Bold is the fastest cell in the
 row. `ppy run` keeps Python-integer semantics — overflow is guarded and
-falls back to arbitrary precision — and `ppy build` is the wrap-semantics
+falls back to arbitrary precision — and `ppy build --unsafe` is the wrap-semantics
 artifact, which is where collatz picks up its remaining 10 ms and knapsack
 its 1.4 ms; the other kernels are already guard-free in the loop and do not
 move. `--host-cpu` is within the noise on all eight.
@@ -45,6 +45,84 @@ remaining guards live on data values no range can prove. gcc 13.3 and
 clang 22.1, both `-O3`, no `-march`. Writes go through borrowed buffers,
 so the caller sees them.
 
+## The eight kernels against Numba, Mojo, and Codon
+
+The same eight kernels ported to three tools that compile Python-shaped
+code, in [`compare/`](compare/): [`algorithms_numba.py`](compare/algorithms_numba.py),
+[`algorithms.mojo`](compare/algorithms.mojo), [`algorithms_codon.py`](compare/algorithms_codon.py).
+Kernel wall time inside the program, milliseconds, mean and spread over
+seven fresh processes; Numba is timed after one warm call so its compile is
+not in the number. Collatz, as each of them spells it:
+
+**PPY** -- annotated Python, and `ppy run` keeps Python's integers: the
+multiply is overflow-checked and falls back to arbitrary precision.
+
+```python
+def collatz_longest(limit: int) -> int:
+    best: int = 0
+    for start in range(1, limit):
+        n: int = start
+        steps: int = 0
+        while n != 1:
+            n = n // 2 if n % 2 == 0 else 3 * n + 1
+            steps += 1
+        best = max(best, steps)
+    return best
+```
+
+**Numba** is the same function with `@njit` in place of the annotations and
+a NumPy array in place of `array.array`; **Codon** is the same source with
+`List[int]` annotations, run with `codon run -release`. Both wrap at 64 bits
+without a word.
+
+```python
+@njit
+def collatz_longest(limit):
+    best = 0
+    for start in range(1, limit):
+        n = start
+        ...
+```
+
+**Mojo** is typed by hand -- `Int` for every index, `Int64` for every
+element, `var` on every local -- and is the plain `List` version without
+`UnsafePointer`:
+
+```mojo
+def collatz_longest(limit: Int) -> Int64:
+    var best: Int64 = 0
+    for start in range(1, limit):
+        var n = Int64(start)
+        var steps: Int64 = 0
+        while n != 1:
+            n = n // 2 if n % 2 == 0 else 3 * n + 1
+            steps += 1
+        best = max(best, steps)
+    return best
+```
+
+<!-- compare:start -->
+| | `ppy run` | `ppy build --unsafe` | Numba `@njit` | Mojo | Codon |
+|---|---:|---:|---:|---:|---:|
+| sieve 2e6 | 9.14 ± 0.67 | 9.04 ± 0.67 | **8.04 ± 0.25** | 11.42 ± 0.41 | 8.28 ± 0.38 |
+| collatz 3e5 | 41.56 ± 1.13 | **31.40 ± 0.55** | 33.14 ± 0.73 | 70.72 ± 0.97 | 33.38 ± 0.56 |
+| knapsack 400x2e4 | 5.08 ± 0.04 | 3.66 ± 0.09 | 4.48 ± 0.08 | **2.26 ± 0.11** | 5.90 ± 0.10 |
+| edit 2000x2000 | 3.02 ± 0.16 | 2.86 ± 0.05 | **1.76 ± 0.05** | 8.32 ± 0.20 | 2.46 ± 0.05 |
+| floyd 220 | 3.22 ± 0.04 | 3.10 ± 0.00 | 2.48 ± 0.08 | 3.15 ± 0.18 | **1.30 ± 0.34** |
+| matmul 220 | 3.64 ± 0.05 | 3.72 ± 0.08 | **3.48 ± 0.11** | 8.25 ± 0.16 | 3.90 ± 0.10 |
+| union-find 5e5 | 3.10 ± 0.07 | 3.18 ± 0.41 | **2.46 ± 0.05** | 6.68 ± 0.51 | 3.98 ± 0.32 |
+| fermat 6e4 | 2.36 ± 0.05 | 2.62 ± 0.04 | 1.74 ± 0.05 | 2.20 ± 0.03 | **1.52 ± 0.04** |
+<!-- compare:end -->
+
+`ppy build --unsafe` is the wrap-semantics column and the one to read
+against the other three; `ppy run` carries the overflow guards, which is
+where collatz pays its 10 ms. Numba leads on six of the eight by ten to
+thirty percent -- the same LLVM, a `for` over a NumPy array, and no guard
+of any kind. Mojo's plain `List` loop is the slowest on five kernels and
+the fastest on knapsack, where its bounds-free table indexing shows.
+Numba 0.67.0 on CPython 3.12.13, Mojo 1.0.0 (`-O3`), Codon 0.19.6, PPY on
+CPython 3.13.13; Intel Core Ultra 9 386H.
+
 ## The six problems
 
 Each subfolder is one competitive-programming problem — the shapes a judge
@@ -54,14 +132,14 @@ inside the programs is instrumented: the times below are wall time of the
 whole process, measured from outside, input and interpreter startup
 included. The C reference reads the same input with `scanf`.
 
-| | problem | plain | `ppy build` | `--standalone` | C (`gcc`) | C (`clang`) |
+| | problem | plain | `ppy build --unsafe` | `--standalone --unsafe` | C (`gcc`) | C (`clang`) |
 |---|---|---:|---:|---:|---:|---:|
-| [15a](15a_nqueens/) | N-Queens | 135.5 ms | 41.2 ms | 5.6 ms | 4.8 ms | 5.4 ms |
-| [15b](15b_dijkstra/) | shortest path | 1511.0 ms | 251.9 ms | **104.8 ms** | 147.3 ms | 141.6 ms |
-| [15c](15c_kmp/) | substring search | 283.0 ms | 52.4 ms | — | 9.4 ms | 9.0 ms |
-| [15d](15d_segment_tree/) | range sums | 482.8 ms | 113.0 ms | **23.9 ms** | 50.7 ms | 51.8 ms |
-| [15e](15e_lis/) | longest increasing subsequence | 507.0 ms | 102.9 ms | **35.9 ms** | 59.0 ms | 55.5 ms |
-| [15f](15f_input/) | counting inversions | 630.0 ms | 94.6 ms | **37.6 ms** | 46.0 ms | 45.4 ms |
+| [15a](15a_nqueens/) | N-Queens | 219.4 ms | 162.9 ms | 8.3 ms | 7.9 ms | 7.9 ms |
+| [15b](15b_dijkstra/) | shortest path | 5309.1 ms | 5299.7 ms | **135.0 ms** | 172.0 ms | 154.0 ms |
+| [15c](15c_kmp/) | substring search | 318.6 ms | 62.6 ms | — | 10.6 ms | 9.9 ms |
+| [15d](15d_segment_tree/) | range sums | 2037.0 ms | 1806.0 ms | **40.1 ms** | 66.0 ms | 65.1 ms |
+| [15e](15e_lis/) | longest increasing subsequence | 615.6 ms | 127.9 ms | **43.8 ms** | 62.7 ms | 60.2 ms |
+| [15f](15f_input/) | counting inversions | 647.6 ms | 107.2 ms | **43.1 ms** | 49.1 ms | 50.2 ms |
 
 Every cell is the mean of five runs, recorded in
 [`measurements.json`](measurements.json) with the machine it was measured
@@ -71,20 +149,24 @@ is faster than both C references. `ppy run` is left out because it compiles
 before it runs — a flat two seconds or so on every row, which is the
 development path rather than the one to submit.
 
-## `ppy build` and `--standalone`
+## `ppy build --unsafe` and `--standalone --unsafe`
 
-- **`ppy build`** is the hybrid: the kernels are native, but the glue around
+- **`ppy build --unsafe`** is the hybrid: the kernels are native, but the glue around
   them — `main`, the buffers, `print` of a Python `int` — is the optimized
   Python the build wrote, so the binary embeds an interpreter and imports
   the runtime before the program begins. That is ~35 ms, and on the smaller
-  problems it is most of what separates the column from C.
+  problems it is most of what separates the column from C. Where `main`
+  reads its input line by line -- 1.2 million edge lines in 15b, 400
+  thousand command lines in 15d -- each `ppy.input[...]()` is a call into
+  the runtime from the interpreter, about a microsecond apiece, and those
+  reads are most of the plain and `ppy build --unsafe` columns there.
 - **`--standalone`** is a binary with no CPython in it at all. `ldd` shows
-  libc and nothing else, `ppy.input[int]()` lowers to the same buffered scan
+  libc and nothing else, `ppy.scan[int]()` lowers to the same buffered scan
   of standard input that `scanf` does, and the whole N-Queens executable is
   17.0 KB against the C one's 16.1 KB.
 
 Four of the five standalone rows beat both C references for one reason:
-`ppy.input` reads into memory faster than `scanf` parses. N-Queens, which
+`ppy.scan` reads into memory faster than `scanf` parses. N-Queens, which
 reads a single integer and then computes, stays behind — there is nothing
 there for a faster reader to win back. The column covers five of the six: a
 standalone build needs everything `main` reaches to be native, and
@@ -103,20 +185,23 @@ character buffer it wants has no plain-Python spelling that converts to it.
 ## Reading input
 
 ```python
-n = ppy.input[int]()
-a, b = ppy.input[tuple[int, int]]()
-values = ppy.input[Buffer[int]](n)
+n = ppy.input[int]()                 # one line, as int(input()) reads it
+a, b = ppy.input[tuple[int, int]]()  # one line, exactly two fields
+row = ppy.input[Buffer[int]]()       # one line of integers, into a buffer
+values = ppy.scan[Buffer[int]](n)    # n integer tokens, whatever lines they are on
 ```
 
-`ppy.input[T]()` reads the next value the way `T` says to and types the
-result the same way. It goes straight into memory rather than building a
-Python object per field — 12.6 ms for 500k integers against 49.8 ms for
+`ppy.input[T]()` reads one line the way the builtin `input()` does and
+types the result from `T`; `ppy.scan[T]()` reads tokens across lines. Both
+buffer reads go straight into memory rather than building a Python object
+per field — 12.6 ms for 500k integers against 49.8 ms for
 `sys.stdin.read().split()` and 20.6 ms for C's `scanf`. The conversion
-writes it for you: `int(input())` becomes `ppy.input[int]()`,
-`a, b = map(int, input().split())` becomes the tuple read, and a loop that
-fills a buffer one value at a time becomes one bulk `ppy.read_ints`. A
-module that also touches `sys.stdin` keeps the `input` it has, since the
-typed reader owns the file descriptor.
+writes the line reads for you: `int(input())` becomes `ppy.input[int]()`,
+`a, b = map(int, input().split())` the tuple read,
+`array.array("q", map(int, input().split()))` the buffer line read, and
+each reads the line the original read. A module that also touches
+`sys.stdin` keeps the `input` it has, since the typed reader owns the file
+descriptor.
 
 ## Run it
 
@@ -133,53 +218,53 @@ clang -O3 algorithms.c -o algorithms_clang -lm && ./algorithms_clang
 **`python  algorithms.ppy`**
 
 ```text
-sieve 2e6              167.7 ms   -> 148933
-collatz 3e5           1089.0 ms   -> 442
-knapsack 400x2e4       411.8 ms   -> 199600
-edit 2000x2000         463.6 ms   -> 1846
-floyd 220              435.1 ms   -> 558837
-matmul 220             469.4 ms   -> 18883
-union-find 5e5         142.5 ms   -> 250000
-fermat 6e4              23.8 ms   -> 6114
+sieve 2e6              195.0 ms   -> 148933
+collatz 3e5           1209.1 ms   -> 442
+knapsack 400x2e4       480.0 ms   -> 199600
+edit 2000x2000         515.0 ms   -> 1846
+floyd 220              473.4 ms   -> 558837
+matmul 220             505.6 ms   -> 18883
+union-find 5e5         155.6 ms   -> 250000
+fermat 6e4              26.3 ms   -> 6114
 ```
 
 **`ppy run algorithms.ppy`**
 
 ```text
-sieve 2e6                8.3 ms   -> 148933
-collatz 3e5             39.9 ms   -> 442
-knapsack 400x2e4         4.8 ms   -> 199600
-edit 2000x2000           2.9 ms   -> 1846
-floyd 220                3.0 ms   -> 558837
-matmul 220               3.5 ms   -> 18883
-union-find 5e5           3.0 ms   -> 250000
-fermat 6e4               2.3 ms   -> 6114
+sieve 2e6                9.9 ms   -> 148933
+collatz 3e5             41.8 ms   -> 442
+knapsack 400x2e4         5.1 ms   -> 199600
+edit 2000x2000           3.7 ms   -> 1846
+floyd 220                3.2 ms   -> 558837
+matmul 220               4.0 ms   -> 18883
+union-find 5e5           3.3 ms   -> 250000
+fermat 6e4               2.7 ms   -> 6114
 ```
 
 **`gcc   -O3 algorithms.c -o algorithms_c     -lm && ./algorithms_c`**
 
 ```text
-sieve 2e6               14.6 ms   -> 148933
-collatz 3e5             40.9 ms   -> 442
-knapsack 400x2e4         2.4 ms   -> 199600
+sieve 2e6               15.9 ms   -> 148933
+collatz 3e5             43.6 ms   -> 442
+knapsack 400x2e4         2.6 ms   -> 199600
 edit 2000x2000           3.8 ms   -> 1846
-floyd 220                5.2 ms   -> 558837
-matmul 220               2.1 ms   -> 18883
-union-find 5e5           3.4 ms   -> 250000
-fermat 6e4               1.7 ms   -> 6114
+floyd 220                5.8 ms   -> 558837
+matmul 220               2.5 ms   -> 18883
+union-find 5e5           3.7 ms   -> 250000
+fermat 6e4               1.8 ms   -> 6114
 ```
 
 **`clang -O3 algorithms.c -o algorithms_clang -lm && ./algorithms_clang`**
 
 ```text
-sieve 2e6               13.2 ms   -> 148933
-collatz 3e5             32.3 ms   -> 442
-knapsack 400x2e4         1.8 ms   -> 199600
-edit 2000x2000           3.3 ms   -> 1846
-floyd 220                2.8 ms   -> 558837
-matmul 220               3.4 ms   -> 18883
-union-find 5e5           3.5 ms   -> 250000
-fermat 6e4               1.4 ms   -> 6114
+sieve 2e6               18.7 ms   -> 148933
+collatz 3e5             40.2 ms   -> 442
+knapsack 400x2e4         2.0 ms   -> 199600
+edit 2000x2000           3.6 ms   -> 1846
+floyd 220                3.0 ms   -> 558837
+matmul 220               3.9 ms   -> 18883
+union-find 5e5           3.9 ms   -> 250000
+fermat 6e4               1.5 ms   -> 6114
 ```
 
 <!-- outputs:end -->
@@ -187,7 +272,8 @@ fermat 6e4               1.4 ms   -> 6114
 Each subfolder's README has its own commands, with a small `input.txt` so
 they run as written; `bench.py` generates the judge-sized inputs.
 
-Read on: [Input and native lowering](../../docs/guide/native-lowering.md) ·
+Read on: [Reading input](../../docs/guide/input.md) ·
+[Native lowering](../../docs/guide/native-lowering.md) ·
 [Performance](../../docs/reference/performance.md) ·
 [Buffers and JIT](../12_buffers_and_jit/README.md)
 

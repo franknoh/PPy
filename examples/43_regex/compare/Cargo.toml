@@ -1,0 +1,11 @@
+[package]
+name = "patterns"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "patterns"
+path = "patterns.rs"
+
+[dependencies]
+regex = "1"

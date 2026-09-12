@@ -89,10 +89,15 @@ def test_columnar_kernels_are_columnar_ir():
     text = encode(module)
     assert "func @k_blend(%out: ptr<f64>, %outv: ptr<u8>, %a0: ptr<f64>, %v0: ptr<u8>" in text
     assert "func @k_mask(%out: ptr<u8>, %outv: ptr<u8>" in text, "a bool result is a bitmap"
+    assert "columnar.from_parts" in text
     assert (
-        "columnar.from_parts" in text and "columnar.fill_null" in text and "columnar.select" in text
-    )
-    assert "columnar.fill %s0, %n" in text, "a scalar operand is a column of one value"
+        'columnar.map %10, %11, %6, %9, %s0 {expression = "(add (mul a0 a1) (fill_null a0 s0))", '
+        'gives = "f64", model = "bits"}'
+    ) in text, "one map evaluates the whole tree; a scalar operand is its own leaf"
+    assert 'expression = "(select a0 (negate a1) (fill_null a1 c0.0))", gives = "f64"' in text
+    assert "func @k_blend__nan(%out: ptr<f64>, %outv: ptr<u8>, %a0: ptr<f64>, %v0: ptr<u8>" in text
+    assert 'model = "nan"' in text, "every columnar kernel has a twin under NumPy's null model"
+    assert "columnar.mul" not in text and "columnar.fill_null" not in text, "nothing materialized"
 
 
 def _run(engine, name: str, out, outv, *arrays, scalars=(), n: int):  # type: ignore[no-untyped-def]
@@ -172,6 +177,39 @@ def test_columnar_kernels_keep_arrow_null_semantics():
     assert _run(engine, "k_scaled", scaled, scaledv, (a, a_valid), scalars=(2.5,), n=n) == STATUS_OK
     np.testing.assert_array_equal(_unpack(scaledv, n), a_valid)
     np.testing.assert_allclose(scaled[a_valid], (a * 2.5)[a_valid])
+
+
+@requires_llvm
+def test_kleene_logic_is_arrows_three_valued_and_and_or():
+    """`and_kleene`/`or_kleene` decide on one valid side, as `pc.and_kleene` and `pc.or_kleene` do;
+    `and`/`or` are null wherever a side is, as `pc.and_` and `pc.or_` are."""
+    pa = pytest.importorskip("pyarrow")
+    pc = pytest.importorskip("pyarrow.compute")
+    loops = [
+        FusedLoop(
+            f"k_{name}",
+            ("a", "b"),
+            (),
+            expression=f"({name} a0 a1)",
+            storage="pyarrow",
+            kinds=("bool", "bool"),
+            result="bool",
+        )
+        for name in ("and", "or", "and_kleene", "or_kleene")
+    ]
+    module = kernel_module(loops, "kernels")
+    optimize(module, 2)
+    engine = JitEngine(opt_level=2).open()
+    engine.add(emit_module(module))
+    engine.finalize()
+    values = [True, False, None]
+    a = pa.array([x for x in values for _ in values], type=pa.bool_())
+    b = pa.array([y for _ in values for y in values], type=pa.bool_())
+    for loop, reference in zip(loops, (pc.and_, pc.or_, pc.and_kleene, pc.or_kleene), strict=True):
+        binding = bind_fused(loop, engine.address(loop.symbol), reference)
+        result = binding.wrapper(a, b)
+        assert binding.calls == 1, loop.symbol
+        assert result.equals(reference(a, b)), (loop.symbol, result, reference(a, b))
 
 
 @requires_llvm

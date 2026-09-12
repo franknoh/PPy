@@ -403,6 +403,24 @@ def test_explain_reports_which_boundary_a_function_crosses(workspace: Path):
     assert "selects the specialization" in jitted.stdout
     assert "specializes on x" in jitted.stdout
 
+    (workspace / "par.ppy").write_text(
+        textwrap.dedent(
+            """
+            from ppy import Buffer, parallel
+
+
+            def squares(out: Buffer[int]) -> int:
+                for i in parallel.range(len(out)):
+                    out[i] = i * i
+                return out[len(out) - 1]
+            """
+        ).lstrip("\n"),
+        encoding="utf-8",
+    )
+    split = _ppy(["explain", "par.ppy:4"], workspace)
+    assert "llvm backend: native" in split.stdout, split.stdout
+    assert "parallel: accepted" in split.stdout
+
 
 def test_convert_propagates_types_through_a_call_chain(workspace: Path):
     (workspace / "chain.py").write_text(
@@ -2216,12 +2234,18 @@ def test_convert_reads_input_by_type(workspace: Path):
     source.write_text(
         textwrap.dedent(
             """
+            import array
+
+
             def main():
                 count = int(input())
                 a, b = map(int, input().split())
                 name = input()
                 ratio = float(input("ratio? "))
-                print(count, a + b, name, ratio)
+                values = list(map(int, input().split()))
+                words = [str(w) for w in input("words? ").split()]
+                data = array.array("q", map(int, input("data? ").split()))
+                print(count, a + b, name, ratio, values, words, sum(data))
 
 
             main()
@@ -2235,8 +2259,171 @@ def test_convert_reads_input_by_type(workspace: Path):
     assert "count: int = ppy.input[int]()" in converted
     assert "a, b = ppy.input[tuple[int, int]]()" in converted
     assert "name: str = ppy.input[str]()" in converted
-    # The prompt is carried across rather than dropped.
-    assert 'ratio: float = ppy.input[float]("ratio? ")' in converted
+    # The prompt is printed before the statement that reads, not dropped.
+    assert 'print("ratio? ", end="", flush=True)\n' in converted
+    assert "ratio: float = ppy.input[float]()" in converted
+    assert converted.index('print("ratio? "') < converted.index("ratio: float = ppy.input")
+    # A line of fields is a line read too, into a list or straight into a buffer.
+    assert "values: list[int] = ppy.input[list[int]]()" in converted
+    assert "words: list[str] = ppy.input[list[str]]()" in converted
+    assert "data: Buffer[int] = ppy.input[Buffer[int]]()" in converted
+    assert converted.count('print("words? "') == 1 and converted.count('print("data? "') == 1
+
+
+def test_a_converted_reader_reads_what_the_python_read(workspace: Path):
+    """The conversion preserves `input()` semantics: same answers, same errors."""
+    source = workspace / "same.py"
+    source.write_text(
+        textwrap.dedent(
+            """
+            import array
+
+
+            def main():
+                count = int(input())
+                a, b = map(int, input().split())
+                name = input()
+                ratio = float(input("ratio? "))
+                values = array.array("q", map(int, input().split()))
+                print(count, a + b, repr(name), ratio, list(values))
+
+
+            main()
+            """
+        ).lstrip("\n"),
+        encoding="utf-8",
+    )
+    assert _ppy(["convert", "same.py"], workspace).returncode == 0
+    for text in (
+        "3\n1 2\n a name \n2.5\n 7 8 9 \n",
+        "3\n1 2\n a name \n2.5\n\n",
+        "3\n1 2\n a name \n2.5\n7 x\n",
+        "3\n1 2\n a name \n2.5\n99999999999999999999\n",
+        "3\n1 2 3\nx\n1\n",
+        "3 4\n1 2\nx\n1\n",
+        "3\n",
+        # `int()` reads past 64 bits and reads non-ASCII digits; so must the conversion.
+        "3\n9223372036854775808 1\n a name \n2.5\n7 8\n",
+        "3\n-9223372036854775809 99999999999999999999999\n n \n1e3\n1\n",
+        "3\n\uff11\uff12 3\n n \n2.5\n4\n",
+        "3\n1_000 2\n n \n2.5\n9223372036854775808\n",
+        "3\n1 2\n n \n2.5\n\uff11\uff12 3\n",
+        "99999999999999999999\n1 2\n n \n2.5\n1\n",
+    ):
+        python = subprocess.run(
+            [sys.executable, "same.py"],
+            cwd=workspace,
+            input=text,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        ours = subprocess.run(
+            [sys.executable, "-m", "ppy_compiler", "run", "same.ppy"],
+            cwd=workspace,
+            input=text,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert ours.stdout == python.stdout, (text, ours.stderr)
+        assert (ours.returncode == 0) == (python.returncode == 0), (text, ours.stderr)
+        if python.returncode != 0:
+            kind = python.stderr.strip().splitlines()[-1].split(":")[0]
+            assert kind in ours.stderr, (kind, ours.stderr)
+            assert kind in ours.stderr.strip().splitlines()[-1], (kind, ours.stderr)
+
+
+def test_a_starred_target_reads_a_list_not_a_fixed_tuple(workspace: Path):
+    """`a, *rest = map(int, input().split())` takes however many fields the line holds."""
+    source = workspace / "starred.py"
+    source.write_text(
+        textwrap.dedent(
+            """
+            def main():
+                a, *b = map(int, input().split())
+                *c, d = map(int, input().split())
+                e, *f, g = map(int, input().split())
+                [h, *i] = map(int, input().split())
+                x, *y = map(float, input().split())
+                p, *q = map(str, input().split())
+                (m, n), *o = map(int, input().split())
+                print(a, b, c, d, e, f, g, h, i, x, y, p, q)
+
+
+            main()
+            """
+        ).lstrip("\n"),
+        encoding="utf-8",
+    )
+    assert _ppy(["convert", "starred.py"], workspace).returncode == 0
+    converted = (workspace / "starred.ppy").read_text(encoding="utf-8")
+    assert "a, *b = ppy.input[list[int]]()" in converted
+    assert "*c, d = ppy.input[list[int]]()" in converted
+    assert "e, *f, g = ppy.input[list[int]]()" in converted
+    assert "[h, *i] = ppy.input[list[int]]()" in converted
+    assert "x, *y = ppy.input[list[float]]()" in converted
+    assert "p, *q = ppy.input[list[str]]()" in converted
+    # A nested target is not a shape the rewrite knows: the line keeps its `map`, and
+    # the `input()` inside it is the one-line read it always becomes.
+    assert "(m, n), *o = map(int, ppy.input[str]().split())" in converted
+    assert "ppy.input[tuple" not in converted
+
+
+def test_a_starred_read_unpacks_as_the_python_did(workspace: Path):
+    """Exactly the least, more than the least, too few, an empty line, a wide integer,
+    non-ASCII digits: the same answers and the same errors as the Python."""
+    source = workspace / "arity.py"
+    source.write_text(
+        textwrap.dedent(
+            """
+            def main():
+                a, *b = map(int, input().split())
+                *c, d = map(int, input().split())
+                e, *f, g = map(int, input().split())
+                [h, *i] = map(int, input().split())
+                print(a, b, c, d, e, f, g, h, i)
+
+
+            main()
+            """
+        ).lstrip("\n"),
+        encoding="utf-8",
+    )
+    assert _ppy(["convert", "arity.py"], workspace).returncode == 0
+    for text in (
+        "1\n2\n3 4\n5\n",
+        "1 2 3\n4 5 6\n7 8 9 10\n11 12\n",
+        "\n1\n2 3\n4\n",
+        "1\n\n2 3\n4\n",
+        "1\n2\n3\n4\n",
+        "1\n2\n3 4\n\n",
+        "9223372036854775808 1\n-9223372036854775809\n99999999999999999999 2 3\n4 5\n",
+        "\uff11\uff12 3\n\uff14\n5 \uff16 7\n8\n",
+        "1 x\n2\n3 4\n5\n",
+        "1\n2\n3 4\n",
+    ):
+        python = subprocess.run(
+            [sys.executable, "arity.py"],
+            cwd=workspace,
+            input=text,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        ours = subprocess.run(
+            [sys.executable, "-m", "ppy_compiler", "run", "arity.ppy"],
+            cwd=workspace,
+            input=text,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert ours.stdout == python.stdout, (text, ours.stderr)
+        assert (ours.returncode == 0) == (python.returncode == 0), (text, ours.stderr)
+        if python.returncode != 0:
+            kind = python.stderr.strip().splitlines()[-1].split(":")[0]
+            assert kind in ours.stderr.strip().splitlines()[-1], (kind, ours.stderr)
 
 
 def test_a_module_that_also_reads_stdin_keeps_its_input(workspace: Path):

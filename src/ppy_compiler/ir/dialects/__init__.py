@@ -22,6 +22,7 @@ def builtin_dialects() -> list[Dialect]:
     from .math import MathDialect
     from .parallel import ParallelDialect
     from .prof import ProfDialect
+    from .regex import RegexDialect
     from .simd import SimdDialect
     from .sparse import SparseDialect
     from .special import SpecialDialect
@@ -46,4 +47,5 @@ def builtin_dialects() -> list[Dialect]:
         GpuDialect(),
         AsyncDialect(),
         ProfDialect(),
+        RegexDialect(),
     ]

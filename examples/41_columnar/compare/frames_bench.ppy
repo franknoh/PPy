@@ -1,0 +1,43 @@
+"""The two Series expressions of `frames.ppy` over eight million rows with NaNs, timed: PPY."""
+
+import time
+
+import numpy as np
+import pandas as pd
+import ppy
+
+
+@ppy.pure
+def blend(s: pd.Series, t: pd.Series) -> pd.Series:
+    return s * t + s.fillna(0.0)
+
+
+@ppy.pure
+def above(s: pd.Series, t: pd.Series) -> pd.Series:
+    return (s > t) & t.notna()
+
+
+def main() -> None:
+    n = 8_000_000
+    left = np.linspace(0.0, 10.0, n)
+    right = np.linspace(5.0, 0.0, n)
+    left[::7] = np.nan
+    right[::11] = np.nan
+    s = pd.Series(left, name="s")
+    t = pd.Series(right, name="t")
+    blend(s, t)
+    above(s, t)
+    best = [1e9, 1e9]
+    for _ in range(5):
+        started = time.perf_counter()
+        mixed = blend(s, t)
+        best[0] = min(best[0], (time.perf_counter() - started) * 1000.0)
+        started = time.perf_counter()
+        mask = above(s, t)
+        best[1] = min(best[1], (time.perf_counter() - started) * 1000.0)
+    print(f"# blend: {best[0]:.2f} ms")
+    print(f"# above: {best[1]:.2f} ms")
+    print(f"{float(mixed.sum()):.3f} {int(mask.sum())} {int(mixed.isna().sum())}")
+
+
+main()

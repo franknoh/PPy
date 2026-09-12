@@ -110,10 +110,10 @@ def build_csr(
 
 
 def main() -> None:
-    count: int = ppy.input[int]()
-    edges: int = ppy.input[int]()
-    source: int = ppy.input[int]()
-    fields: Buffer[int] = ppy.input[Buffer[int]](edges * 3)
+    count: int = ppy.scan[int]()
+    edges: int = ppy.scan[int]()
+    source: int = ppy.scan[int]()
+    fields: Buffer[int] = ppy.scan[Buffer[int]](edges * 3)
     offsets: Buffer[int] = ppy.buffer[int](count + 1)
     cursor: Buffer[int] = ppy.buffer[int](count)
     targets: Buffer[int] = ppy.buffer[int](edges)

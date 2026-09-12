@@ -31,13 +31,17 @@ from ..dialects import core, sparse
 from ..dialects import tensor as tensors
 from ..model import Block, Builder, IRFunction, IRModule, Operation, Successor, Value
 from ..passes import Pass, PassContext
-from ..types import I32, I64, U8, BufferType, FloatType, IndexType, IntType, IRType, PtrType
+from ..types import F64, I32, I64, U8, BufferType, FloatType, IndexType, IntType, IRType, PtrType
 from .lower_columnar import ColumnarLowering
 
 __all__ = ["STACK_LIMIT", "LowerTensor", "LoweringError"]
 
 #: Tensors up to this many bytes live on the stack; larger ones on the heap.
 STACK_LIMIT = 1 << 16
+
+
+#: The largest finite double: `|x| <= _LARGEST` is false for every NaN and infinity.
+_LARGEST = 1.7976931348623157e308
 
 
 class LoweringError(ValueError):
@@ -515,6 +519,14 @@ class _FunctionLowering(ColumnarLowering):
         if kind is not None:
             inner, indices, _next = self.loops(op, result.shape)
             self.store(inner, result, indices, _identity(inner, str(kind), info.dtype))
+        # A guarded map counts its non-finite elements as it writes them: an
+        # add-reduction the vectorizer keeps in a register, and one guard after
+        # the loop, so the caller never rereads the output to check it.
+        guarded = kind is None and bool(self.function.attributes.get("ppy.finite_guard"))
+        bad: Value | None = None
+        if guarded:
+            before = Builder().before(op)
+            bad = self.slot(before, I64, core.const(before, 0, I64), "nonfinite")
         inner, indices, _next = self.loops(op, iteration)
         mapping: dict[int, Value] = {}
         for argument, operand in zip(body.arguments, op.operands, strict=True):
@@ -540,6 +552,23 @@ class _FunctionLowering(ColumnarLowering):
         assert produced is not None
         if kind is None:
             self.store(inner, result, indices, produced)
+            if bad is not None:
+                magnitude = core.call_intrinsic(inner, "math.fabs", (produced,), (F64,)).results[0]
+                finite = core.cmp(inner, "le", magnitude, core.const(inner, _LARGEST, F64))
+                seen = core.select(
+                    inner, finite, core.const(inner, 0, I64), core.const(inner, 1, I64)
+                )
+                core.store(
+                    inner, core.add(inner, core.load(inner, bad), seen, overflow="wrap"), bad
+                )
+                after = Builder().before(op)
+                total = core.load(after, bad)
+                core.guard(
+                    after,
+                    core.cmp(after, "eq", total, core.const(after, 0, I64)),
+                    "range",
+                    "a fused kernel produced a non-finite value; NumPy reports it",
+                )
         else:
             axes = tuple(int(a) for a in op.attributes["axes"])  # type: ignore[union-attr]
             keepdims = bool(op.attributes.get("keepdims", False))

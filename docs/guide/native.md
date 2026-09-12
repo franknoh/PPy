@@ -21,12 +21,13 @@ def scratch() -> int:
 
 | | |
 |---|---|
-| `native.ptr[T]`, `native.const_ptr[T]` | a typed pointer; `T` is `int`, `float`, `bool`, `ppy.i8`, or `ppy.u8`. A `const_ptr` refuses `store` (`E1631`). |
+| `native.ptr[T]`, `native.const_ptr[T]` | a typed pointer; `T` is `int`, `float`, `bool`, or any fixed-width marker -- `ppy.i8`, `u8`, `i16`, `u16`, `i32`, `u32`, `i64`, `u64`, `f32`, `f64` -- each stored at its own width. A `const_ptr` refuses `store` (`E1631`). |
 | `native.load(p)`, `native.store(p, v)`, `native.offset(p, n)` | read, write, move. Reading a byte hands out an `int`, as a buffer does. |
 | `native.cast[U](p)` | the same memory read as `U`. |
 | `native.sizeof[T]()`, `native.alignof[T]()` | constants the checker knows. |
 | `native.stack_alloc[T](n)` | `n` zeroed elements the function owns; native code needs a constant `n`, and the memory cannot be returned or stored -- the IR's verifier holds that. |
 | `@native.extern("sin", library="m", pure=True)` | a stub is a C function. Under CPython the call goes through ctypes; in native code straight to the symbol. The directive says what the C function does (`pure=True` or, by default, reads and writes of native memory), and the signature must be fully annotated (`E1633`). |
+| `native.compiled(f)` | whether calling `f` runs its native form here: `True` under `ppy run` or a built artifact once the runtime has bound it, `False` under plain CPython. It answers for the object standing in the namespace, which under `ppy run` may be the C entry point itself (named `module.f`). |
 | `@native.export(name="ppy_dot")` | a public C symbol in the built library, declared in the header `ppy build` writes beside it. A C caller has no Python to fall back to, so a failed guard traps. |
 
 Under plain CPython every one of these has a reference implementation over

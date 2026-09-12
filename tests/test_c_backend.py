@@ -188,7 +188,7 @@ def test_a_program_carries_the_runtime_shims_it_calls(write, analyze, tmp_path):
     path = write("reader.ppy", READER)
     lowered = _ir_module(analyze, path, standalone=True)
     text = emit_module(lowered.module, Language.C)
-    assert "static int64_t ppy_rt_read_int(void)" in text
+    assert "static int64_t ppy_rt_input_int(void)" in text
     assert "static void ppy_rt_print_i64(int64_t value)" in text
     assert "ppy_rt_print_str" not in text, "only the shims the unit calls"
     source = tmp_path / "reader.c"
@@ -205,7 +205,7 @@ def test_a_program_carries_the_runtime_shims_it_calls(write, analyze, tmp_path):
     assert built.returncode == 0, built.stderr
     ran = subprocess.run([str(binary)], input="21\n", capture_output=True, text=True, check=False)
     assert ran.stdout == "42\n"
-    with pytest.raises(HeaderOnlyError, match="ppy_rt_read_int"):
+    with pytest.raises(HeaderOnlyError, match="ppy_rt_input_int"):
         emit_module(lowered.module, Language.C, header_only=True)
 
 
@@ -297,7 +297,7 @@ def test_emit_c_cpp_and_header_follow_the_emit_rules(tmp_path: Path):
     )
     program = _ppy(tmp_path, "emit", "c", "--standalone", "reader.ppy")
     assert program.returncode == 0, program.stderr
-    assert "static int64_t ppy_rt_read_int(void)" in program.stdout
+    assert "static int64_t ppy_rt_input_int(void)" in program.stdout
     assert program.stdout.rstrip().endswith(
         'int main(void) {\n    int64_t out = 0;\n    int32_t status = ppy_reader_main(&out);\n    if (status != 0) {\n        fputs("ppy: a native guard failed and there is no Python to fall back to\\n", stderr);\n        return 70;\n    }\n    return 0;\n}'
     )
@@ -323,8 +323,72 @@ def test_emit_c_cpp_and_header_follow_the_emit_rules(tmp_path: Path):
         assert ran.stdout == "7\n"
     refused = _ppy(tmp_path, "emit", "c", "--standalone", "--header-only", "reader.ppy")
     assert refused.returncode == 2
-    assert "E1804" in refused.stderr and "ppy_rt_read_int" in refused.stderr
+    assert "E1804" in refused.stderr and "ppy_rt_input_int" in refused.stderr
     not_a_program = _ppy(tmp_path, "emit", "c", "--standalone", "kernels.ppy")
     assert not_a_program.returncode == 1 and "E1803" in not_a_program.stderr
     misplaced = _ppy(tmp_path, "emit", "ir", "--header-only", "kernels.ppy")
     assert misplaced.returncode == 2 and "applies to" in misplaced.stderr
+
+
+@requires_llvm
+@requires_cc
+def test_the_c_is_structured_and_the_labels_writer_answers_the_same(
+    write, analyze, tmp_path, monkeypatch
+):
+    """No `goto` in the structured text; forced onto labels, the same answers."""
+    from ppy_compiler.backend.c import emit as emitter
+
+    path = write("kernels.ppy", KERNELS)
+    lowered = _ir_module(analyze, path)
+    structured = emit_module(lowered.module, Language.C)
+    assert "goto" not in structured and "while (n != 1)" in structured
+    assert "int64_t n_addr" not in structured, "a parameter is its own variable"
+    assert "if (b == 0) return 1; /* zero_division.ok */" in structured
+    assert "(n % 2 + 2) % 2 == 0" in structured
+    assert "int64_t steps = 0;" in structured and "&steps)) return 1;" in structured
+    (tmp_path / "structured").mkdir()
+    (tmp_path / "labels").mkdir()
+    unit = _Library(_compile(structured, tmp_path / "structured", Language.C))
+
+    class Labels(emitter._FunctionEmitter):
+        def __init__(self, owner, function, structured=True):
+            super().__init__(owner, function, structured=False)
+
+    monkeypatch.setattr(emitter, "_FunctionEmitter", Labels)
+    labelled = emit_module(lowered.module, Language.C)
+    assert "goto" in labelled and "while (" not in labelled
+    fallback = _Library(_compile(labelled, tmp_path / "labels", Language.C))
+    new = _lower(analyze, path)
+    for name, cases in CASES.items():
+        signature = new.functions[f"kernels.{name}"].signature
+        for arguments in cases:
+            assert _call(unit, signature, arguments) == _call(fallback, signature, arguments), (
+                f"{name}{arguments}"
+            )
+
+
+def test_clang_format_lays_the_text_out_or_says_it_is_missing(monkeypatch, tmp_path: Path):
+    from ppy_compiler.backend.c.format import ClangFormatError, clang_format
+
+    if shutil.which("clang-format") is not None:
+        text = clang_format("int  main( void ){return   0 ;}\n", ".c", tmp_path)
+        assert text == "int main(void) { return 0; }\n" or "int main(void) {\n" in text
+    monkeypatch.setattr(shutil, "which", lambda _name: None)
+    with pytest.raises(ClangFormatError, match="clang-format"):
+        clang_format("int x;\n", ".c", None)
+
+
+@requires_llvm
+def test_emit_format_is_for_the_c_family(tmp_path: Path):
+    (tmp_path / "pyproject.toml").write_text("[tool.ppy]\nstrict = true\n", encoding="utf-8")
+    (tmp_path / "kernels.ppy").write_text(
+        "from ppy import native\n\n\n@native.export()\ndef twice(n: int) -> int:\n    return n * 2\n",
+        encoding="utf-8",
+    )
+    refused = _ppy(tmp_path, "emit", "ir", "--format", "kernels.ppy")
+    assert refused.returncode == 2 and "E1002" in refused.stderr
+    if shutil.which("clang-format") is None:
+        return
+    formatted = _ppy(tmp_path, "emit", "c", "--format", "kernels.ppy")
+    assert formatted.returncode == 0, formatted.stderr
+    assert "int64_t twice(int64_t n) {" in formatted.stdout

@@ -2,8 +2,7 @@
 
 `ppy.simd` is a few scalars operated on at once; `ppy.cpu` is the machine
 as a facade with no instruction named. Both have a reference implementation
-under CPython and a lowering to a dialect of the IR, so the numbers match on
-every path down to the wrap.
+under CPython and a lowering to a dialect of the IR.
 
 ## The simd vocabulary
 
@@ -32,7 +31,7 @@ so the sum is one number everywhere. `bytes_sum` masks eight `u8` lanes with
 `ramp` starts three below the largest `int` and adds a lane-wise `v + v`.
 Vector integer arithmetic carries `wrap` semantics — there is no unbounded
 integer in a register — and the reference implementation wraps the same
-way, so `python` and `ppy run` print the same wrapped value.
+way.
 
 ## The machine as constants
 
@@ -52,18 +51,7 @@ ppy run lanes.ppy
 <!-- outputs:start -->
 ## What it prints
 
-**`python  lanes.ppy`**
-
-```text
-10.0
-18446744073709551615 0
--6.0 2.0 2.0
-28 1.5
-# vector width for float: 4 lanes
-# avx2 here: True
-```
-
-**`ppy run lanes.ppy`**
+**`python  lanes.ppy`**, **`ppy run lanes.ppy`**
 
 ```text
 10.0

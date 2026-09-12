@@ -1,0 +1,178 @@
+"""A data-parallel MLP across every accelerator in the machine.
+
+The batch is sharded over a mesh of the accelerators, the parameters are
+replicated, and the gradient of the mean loss is summed across devices by
+the collective `jax.jit` inserts; PPy standardizes the input natively
+first, as the single-device trainer does. Fewer than two accelerators is
+reported, not worked around: a CPU is not a GPU, and a virtual device is
+not a second card. `--allow-cpu-devices` is for a test that made virtual
+CPU devices on purpose; it is never a hardware pass.
+"""
+
+import array
+import math
+import sys
+import time
+
+import jax
+import jax.numpy as jnp
+import numpy as np
+from jax.sharding import Mesh, NamedSharding, PartitionSpec
+
+import ppy
+from ppy import Buffer
+
+ROWS: int = 20000
+COLS: int = 16
+HIDDEN: int = 32
+STEPS: int = 100
+RATE: float = 0.02
+
+
+def standardize(raw: Buffer[float], out: Buffer[float], rows: int, cols: int) -> float:
+    total: float = 0.0
+    for row in range(rows):
+        base: int = row * cols
+        target: int = row * cols * 2
+
+        sum_: float = 0.0
+        for i in range(cols):
+            sum_ += raw[base + i]
+        mean: float = sum_ / cols
+
+        spread: float = 0.0
+        for i in range(cols):
+            spread += (raw[base + i] - mean) * (raw[base + i] - mean)
+        deviation: float = math.sqrt(spread / cols) + 1e-8
+
+        for i in range(cols):
+            value: float = (raw[base + i] - mean) / deviation
+            out[target + i] = value
+            total += value
+        for i in range(cols):
+            interaction: float = out[target + i] * out[target + (i + 1) % cols]
+            out[target + cols + i] = interaction
+            total += interaction
+    return total
+
+
+@jax.jit
+def forward_loss(
+    x: jax.Array,
+    y: jax.Array,
+    w1: jax.Array,
+    b1: jax.Array,
+    w2: jax.Array,
+    b2: jax.Array,
+) -> jax.Array:
+    hidden: jax.Array = jnp.maximum(jnp.dot(x, w1) + b1, 0.0)
+    predicted: jax.Array = jnp.dot(hidden, w2) + b2
+    residual: jax.Array = predicted - y
+    return jnp.mean(residual * residual)
+
+
+loss_and_gradients = jax.value_and_grad(forward_loss, argnums=(2, 3, 4, 5))
+
+
+@jax.jit
+def train_step(
+    x: jax.Array,
+    y: jax.Array,
+    w1: jax.Array,
+    b1: jax.Array,
+    w2: jax.Array,
+    b2: jax.Array,
+    rate: float,
+) -> tuple[jax.Array, jax.Array, jax.Array, jax.Array, jax.Array]:
+    loss, grads = loss_and_gradients(x, y, w1, b1, w2, b2)
+    return (
+        loss,
+        w1 - rate * grads[0],
+        b1 - rate * grads[1],
+        w2 - rate * grads[2],
+        b2 - rate * grads[3],
+    )
+
+
+@ppy.dynamic
+def accelerators() -> ppy.Dynamic:
+    """The devices that are not the host, in the order JAX lists them."""
+    with ppy.dynamic:
+        found = list(jax.devices())
+        if "--allow-cpu-devices" in sys.argv:
+            return found
+        return [device for device in found if device.platform != "cpu"]
+
+
+@ppy.dynamic
+def train(devices: ppy.Dynamic, x_host: ppy.Dynamic, y_host: ppy.Dynamic) -> ppy.Dynamic:
+    """The trainer over a mesh of `devices`: the batch sharded, the parameters replicated.
+
+    With one device the mesh is one device and the sharding is a no-op,
+    which is the reference the multi-device run is held to.
+    """
+    with ppy.dynamic:
+        mesh = Mesh(devices, ("batch",))
+        by_batch = NamedSharding(mesh, PartitionSpec("batch"))
+        everywhere = NamedSharding(mesh, PartitionSpec())
+        x = jax.device_put(x_host, by_batch)
+        y = jax.device_put(y_host, by_batch)
+        k1, k2 = jax.random.split(jax.random.PRNGKey(1))
+        w1 = jax.device_put(jax.random.normal(k1, (COLS * 2, HIDDEN)) * 0.1, everywhere)
+        b1 = jax.device_put(jnp.zeros((HIDDEN,)), everywhere)
+        w2 = jax.device_put(jax.random.normal(k2, (HIDDEN, 1)) * 0.1, everywhere)
+        b2 = jax.device_put(jnp.zeros((1,)), everywhere)
+        # The steps are dispatched without a host synchronization between them:
+        # a `float(loss)` each step would wait for the device every time and
+        # the time would measure that wait. The first and the last loss stay on
+        # the device until the timing has ended.
+        first = None
+        loss = None
+        started = time.perf_counter()
+        for _ in range(STEPS):
+            loss, w1, b1, w2, b2 = train_step(x, y, w1, b1, w2, b2, RATE)
+            if first is None:
+                first = loss
+        w1.block_until_ready()
+        elapsed = (time.perf_counter() - started) * 1000.0
+        return (float(first), float(loss)), (w1, b1, w2, b2), elapsed
+
+
+def main() -> None:
+    devices = accelerators()
+    if len(devices) < 2:
+        print(f"requires >= 2 physical accelerator devices; found {len(devices)}")
+        return
+    k1, k2 = jax.random.split(jax.random.PRNGKey(0))
+    raw = array.array("d", jax.random.normal(k1, (ROWS * COLS,)).tolist())
+    features = array.array("d", [0.0] * (ROWS * COLS * 2))
+    started: float = time.perf_counter()
+    checksum: float = standardize(raw, features, ROWS, COLS)
+    prep_ms: float = (time.perf_counter() - started) * 1000.0
+    x_host = jnp.asarray(features, dtype=jnp.float32).reshape(ROWS, COLS * 2)
+    y_host = jax.random.normal(k2, (ROWS, 1))
+
+    losses, params, train_ms = train(devices, x_host, y_host)
+    reference, single, _ = train(devices[:1], x_host, y_host)
+    drift: float = 0.0
+    with ppy.dynamic:
+        for mine, theirs in zip(params, single, strict=True):
+            # Fetched to the host: the two live on different meshes.
+            drift = max(drift, float(np.max(np.abs(np.asarray(mine) - np.asarray(theirs)))))
+        kinds = sorted({device.platform for device in devices})
+        first, last = losses
+        agrees = abs(last - reference[-1]) <= 1e-3 * max(1.0, abs(reference[-1]))
+    print(f"# devices: {len(devices)} x {'/'.join(kinds)}")
+    print(f"# native prep: {ppy.native.compiled(standardize)}")
+    print(f"prep  {prep_ms:8.1f} ms   checksum={checksum:.6f}")
+    print(f"train {train_ms:8.1f} ms   loss {first:.4f} -> {last:.4f}")
+    print(
+        f"single device: loss {reference[0]:.4f} -> {reference[-1]:.4f}, max |dparam| {drift:.2e}"
+    )
+    passed: bool = first > last and drift < 1e-3 and agrees
+    print("PASS" if passed else "FAIL")
+    if not passed:
+        sys.exit(1)
+
+
+main()

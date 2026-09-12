@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import array as _array
 import ctypes
+import sys
 from collections.abc import Callable
 from typing import Annotated, Any, TypeVar
 
@@ -97,6 +98,13 @@ class Pointer[T]:
         _code, width = _layout(self.element)
         buffer = (ctypes.c_char * (len(self.memory) * width)).from_buffer(self.memory)
         return ctypes.addressof(buffer) + self.index * width
+
+    def offset(self, count: int) -> Pointer[T]:
+        """The pointer `count` elements on, into the same memory."""
+        return Pointer(self.memory, self.index + count, self.element, mutable=self.mutable)
+
+    def touch(self) -> None:
+        """A store went through this pointer: memory that lives elsewhere too takes note."""
 
 
 class _PointerType:
@@ -189,12 +197,13 @@ def _store(pointer: Pointer[Any], value: Any) -> None:
     if not pointer.mutable:
         raise TypeError("native.store cannot write through a const_ptr")
     pointer.memory[pointer.index] = int(value) if pointer.element is bool else value  # type: ignore[call-overload]
+    pointer.touch()
 
 
 def _offset(pointer: Pointer[Any], count: int) -> Pointer[Any]:
     if not isinstance(pointer, Pointer):
         raise TypeError("native.offset moves a native.ptr")
-    return Pointer(pointer.memory, pointer.index + count, pointer.element, mutable=pointer.mutable)
+    return pointer.offset(count)
 
 
 class _Extern:
@@ -317,6 +326,13 @@ class _Native:
             )
 
         return bind
+
+    @staticmethod
+    def compiled(function: Callable[..., Any]) -> bool:
+        """Whether calling `function` runs its native form here: under `ppy run`
+        or a built artifact, once the runtime bound it; under plain CPython, never."""
+        runtime = sys.modules.get("ppy_runtime.binding")
+        return runtime is not None and runtime.signature_of(function) is not None
 
     def __repr__(self) -> str:
         return "ppy.native"

@@ -1,0 +1,84 @@
+"""The kernels of `buffers_and_jit.ppy` on 8,192 elements, microseconds per call: the PPY side."""
+
+import array
+import time
+
+import ppy
+from ppy import Buffer
+
+
+@ppy.pure
+@ppy.opt(3)
+def total(values: Buffer[float]) -> float:
+    result: float = 0.0
+    for i in range(len(values)):
+        result += values[i]
+    return result
+
+
+@ppy.pure
+@ppy.opt(3)
+def dot(a: Buffer[float], b: Buffer[float]) -> float:
+    result: float = 0.0
+    for i in range(len(a)):
+        result += a[i] * b[i]
+    return result
+
+
+@ppy.pure
+@ppy.fastmath
+@ppy.opt(3)
+def dot_relaxed(a: Buffer[float], b: Buffer[float]) -> float:
+    result: float = 0.0
+    for i in range(len(a)):
+        result += a[i] * b[i]
+    return result
+
+
+@ppy.jit(threshold=4, max_specializations=4)
+@ppy.pure
+@ppy.opt(3)
+def digest(values: Buffer[int], modulus: int) -> int:
+    result: int = 0
+    for i in range(len(values)):
+        result += values[i] % modulus
+    return result
+
+
+def main() -> None:
+    size = 8192
+    x = array.array("d", [float(i) * 0.001 for i in range(size)])
+    y = array.array("d", [float(i) * 0.002 for i in range(size)])
+    counts = array.array("q", [i * 7919 for i in range(size)])
+    for _ in range(50):
+        total(x)
+        dot(x, y)
+        dot_relaxed(x, y)
+        digest(counts, 1000003)
+    rounds = 2000
+    best = [1e9, 1e9, 1e9, 1e9]
+    for _ in range(5):
+        started = time.perf_counter()
+        for _i in range(rounds):
+            total(x)
+        best[0] = min(best[0], (time.perf_counter() - started) * 1000.0 / rounds)
+        started = time.perf_counter()
+        for _i in range(rounds):
+            dot(x, y)
+        best[1] = min(best[1], (time.perf_counter() - started) * 1000.0 / rounds)
+        started = time.perf_counter()
+        for _i in range(rounds):
+            dot_relaxed(x, y)
+        best[2] = min(best[2], (time.perf_counter() - started) * 1000.0 / rounds)
+        started = time.perf_counter()
+        for _i in range(rounds):
+            digest(counts, 1000003)
+        best[3] = min(best[3], (time.perf_counter() - started) * 1000.0 / rounds)
+    labels = ["total", "dot", "dot_relaxed", "digest"]
+    for label, took in zip(labels, best, strict=True):
+        print(f"# {label}: {took:.4f} ms")
+    relaxed = round(dot_relaxed(x, y), 3)
+    print(round(total(x), 6), round(dot(x, y), 6), relaxed, digest(counts, 1000003))
+
+
+main()

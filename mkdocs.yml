@@ -48,6 +48,9 @@ extra:
     provider: mike
     default: latest
 
+hooks:
+  - docs/gen/counts.py
+
 plugins:
   - search
   - gen-files:
@@ -104,9 +107,12 @@ nav:
       - XLA: guide/xla.md
       - Generics: guide/generics.md
       - Effects and the three paths: guide/effects.md
-      - Input and native lowering: guide/native-lowering.md
+      - Reading input: guide/input.md
+      - Native lowering: guide/native-lowering.md
+      - Regular expressions: guide/regex.md
   - Examples:
       - howto/index.md
+      - Comparisons: howto/comparisons.md
       - Basics:
           - howto/01_basics.md
           - howto/02_arbitrary_precision.md
@@ -133,9 +139,12 @@ nav:
           - howto/37_aio.md
           - howto/40_generics.md
           - howto/42_toolbox.md
+          - howto/43_regex.md
       - Accelerators:
           - howto/38_cuda.md
+          - howto/44_tile.md
           - howto/39_xla.md
+          - howto/45_multi_gpu_jax.md
       - Libraries:
           - howto/05_numpy.md
           - howto/06_pydantic.md
@@ -160,6 +169,7 @@ nav:
       - ppy: api/ppy.md
       - ppy_runtime: api/runtime.md
       - Plugin API: api/plugins.md
+      - Backend API: api/backends.md
       - IR: api/ir.md
   - Reference:
       - reference/index.md
@@ -174,6 +184,8 @@ nav:
       - Conversion and inference: internals/conversion.md
       - Migrating a real project: internals/migrating.md
       - Plugins: internals/plugins.md
+      - Backends: internals/backends.md
       - Where a solver fits: internals/solver.md
+      - Hardware validation: internals/hardware-validation.md
   - Contributing: contributing.md
   - Changelog: changelog.md

@@ -94,6 +94,35 @@ backend lowers it to the intrinsic of that name, a C backend to libm, a GPU
 backend to its device library. A math function of a constant folds, and
 `floor(floor(x))` is `floor(x)`.
 
+## The regex dialect
+
+`regex.search %buf, %pos, %endpos {pattern = "...", flags = 0}` is what
+`PATTERN.search(buf, pos, endpos)` means for a pattern compiled from a bytes
+literal at module level; `regex.match` and `regex.fullmatch` are the anchored
+forms. The operation takes a `buffer<u8>` and yields whether there was a
+match, then the span of every group -- start and end of group 0, of group
+1, and so on -- with -1 for a group that took no part. The pattern is read
+by CPython's own parser, so its syntax and its meaning are `re`'s.
+
+The `lower-regex` pass, which runs right after `lower-async`, compiles each
+distinct pattern into one private function of core operations and turns the
+operation into a call. The matcher backtracks the way CPython's does, on an
+explicit stack rather than by recursion: an entry records where to resume,
+the position, and every loop's count, so popping one puts the matcher back
+exactly. Alternatives are tried in order, a greedy repeat gives back one
+iteration at a time, a lazy one takes one more, a group keeps the position
+of its last iteration, and an iteration that took nothing is the last one
+tried. A repeat of one byte class scans the run instead of pushing an entry
+per byte. The stack holds 4096 entries; a match that would need more fails
+a `regex.stack.ok` guard, which sends the calling function to its fallback,
+where `re` answers. Every backend runs the matcher as it runs any other
+function; no backend needs a regex library.
+
+Backreferences, lookaround, atomic groups and possessive repeats, and locale
+categories are refused when the pattern is analysed, and a function that uses
+one stays on Python with the reason. [Regular expressions](../guide/regex.md)
+is the surface.
+
 ## The simd dialect
 
 `vector<T, N>` is `N` scalars operated on at once, and the core dialect's
@@ -253,9 +282,18 @@ operations are the ones pandas and PyArrow share: `from_parts %values,
 %validity, %length` and `store` move a column to and from Arrow's layout
 (values one per row -- one bit for `bool` -- and a bit-packed validity
 bitmap); `add`, `sub`, `mul`, `div`, the six comparisons, `and`, `or`,
-`xor`, `negate`, `abs`, `invert` give a null where an input is null;
+`xor`, `negate`, `abs`, `invert` give a null where an input is null, and
+`and_kleene`, `or_kleene` are the three-valued forms, where a false on
+one side of `and` (a true on one side of `or`) decides whatever the other
+side holds -- what PyArrow's `and_kleene` computes and pandas' `&` on an
+Arrow-backed Series means;
 `is_null`, `is_valid`, `fill_null`, `cast`, `select`, `fill %scalar, %n`
-(one value in every row); `filter` by a bool
+(one value in every row); `map %out, %outv, %columns..., %scalars...
+{expression, model, gives}` evaluates a whole expression tree --
+`(add (mul a0 a1) (fill_null a0 s0))` -- row by row into memory in one
+loop, under Arrow's null model (`bits`: validity bitmaps in, one out) or
+NumPy's (`nan`: an `f64` null is a NaN, a `bool` column is a byte per
+row, and the answer is written the same way); `filter` by a bool
 column, `take` by positions (a null position is a null row), `concat`;
 `sort_indices` (ascending, nulls last, stable); `aggregate {function}` --
 `sum`, `mean`, `min`, `max`, `count`, `any`, `all` over the valid rows, a
@@ -290,14 +328,18 @@ from `gpu.thread_id.x`, `block_id.y`, `block_dim.z`, `grid_dim.x` (each an
 `subgroup_barrier`, trades a scalar across the subgroup with
 `subgroup_shuffle.idx|up|down|xor %v, %lane`, and takes `shared_alloc
 {count = N} : ptr<T, shared>` or `private_alloc {count = N} : ptr<T,
-private>`; atomics are the atomic dialect's over those pointers. The
+private>`; atomics are the atomic dialect's over those pointers. A host
+function takes `device_alloc %n : ptr<T, generic>`, memory on the device
+that the host reads and writes too, and hands it to a launch. The
 verifier holds the kinds: a device operation in a host function; a host one
 in device code -- a guard, a buffer, an intrinsic, a call to a host
 function, any other dialect; a kernel that returns or takes stack memory;
 a launch of anything but a kernel, or with anything but its parameters.
 `ppy.cuda` and `ppy.hip` lower to it ([GPU kernels](../guide/gpu.md)); `ppy emit cuda`
 and `ppy emit hip` write device code and the host's launches as CUDA or
-HIP C++ (the C backend with the spellings in `backend/c/gpu.py`); the C,
+HIP C++ (the C backend with the spellings in `backend/c/gpu.py`; device
+memory is a managed allocation, `cudaMallocManaged`, freed with the host
+function however it leaves); the C,
 C++, and LLVM backends leave device code to them. `backend/nvvm` writes
 the same device code as LLVM IR for NVPTX (`ppy emit nvvm-ir`) -- a kernel
 a `ptx_kernel`, positions the `llvm.nvvm.read.ptx.sreg.*` registers,
@@ -480,11 +522,15 @@ over `fill`s is a `fill`, `x * fill 1` is `x`), `tensor-fusion` (a chain
 of elementwise tensor operations whose intermediates have one reader, and
 a `reduce` at its root, become one `tensor.fused` -- a region computing
 one element from one element of each input -- so `lower-tensor` makes one
-loop of them with no temporaries), `lower-tensor`, and `lower-parallel`;
+loop of them with no temporaries), `lower-tensor`, `lower-regex`, and `lower-parallel`;
 `transforms.default_pipeline(level)` orders them and marks the
 stages -- `after-ir-generation`, `after-canonicalization`,
 `before-optimization`, `after-optimization`, `before-backend` -- where a
-plugin's `register_stage_pass` puts a pass of its own.
+plugin's `register_stage_pass` puts a pass of its own, and last the
+`backend` stage, where a backend's `register_passes` puts its own before
+its validation. `driver/ir_pipeline.py` runs that pipeline over every
+module of a project (`canonical_ir_modules`) and is the one road to every
+backend, builtin or installed ([Backends](backends.md)).
 
 ## From Python to the IR
 
@@ -509,10 +555,20 @@ power-of-two divisor), and block arguments to phis.
 `backend/c/emit` reads the same IR and writes C11 or C++17: the same
 ABI, `python` overflow through checking helpers (the compiler's
 `__builtin_*_overflow` where it has them, plain C otherwise), `floor`
-rounding as the sign-corrected sequence, blocks as labels and block
-arguments as parallel assignments before a `goto`. `ppy emit c` and
-`ppy emit cpp` print it; `tests/test_c_backend.py` compiles it and calls
-it on the LLVM road's inputs.
+rounding as the sign-corrected sequence or, by a positive constant, as
+`(a % b + b) % b`. Control flow is rebuilt from the graph: the dominator
+tree and the loops give `while`, `if`/`else`, `break`, `continue`, and
+`return`, a block argument is a variable assigned on each edge into its
+block, and a stack slot that is only loaded and stored is a variable named
+after it. A value read once, in its own block, is written where it is read,
+with the parentheses C's precedence needs and no others; a parameter keeps
+its Python name. A graph the reconstruction cannot express -- a loop with
+two exits, a block reached from two places that dominate neither -- falls
+back, for that function alone, to blocks as labels and branches as
+`goto`s, so the text is always correct and usually plain. `ppy emit c` and
+`ppy emit cpp` print it (`--format` runs it through clang-format);
+`tests/test_c_backend.py` compiles it and calls it on the LLVM road's
+inputs, and holds the labels writer to the same answers.
 
 This is the LLVM backend's one road. 0.2.0 began with the direct
 AST-to-LLVM lowering beside it and a differential run comparing the two on

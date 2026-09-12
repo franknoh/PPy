@@ -141,6 +141,44 @@ def test_a_staged_kernel_launches_on_the_device(write, analyze):
     assert stage_project(bundle).artifacts["gpu_prog"]["saxpy"].payload == payload, "cached"
 
 
+@requires_device
+def test_device_memory_stays_on_the_device_between_launches(monkeypatch, write, analyze):
+    """`device_alloc` memory is uploaded once, launched over as often as asked,
+    and downloaded when the host reads it."""
+    from ppy_compiler.driver.staging import stage_project
+    from ppy_runtime.exported import bind_exported
+
+    counts = {"upload": 0, "download": 0}
+    for name in counts:
+        original = getattr(runtime.Driver, name)
+
+        def counted(self, *args, _name=name, _original=original):  # type: ignore[no-untyped-def]
+            counts[_name] += 1
+            return _original(self, *args)
+
+        monkeypatch.setattr(runtime.Driver, name, counted)
+    bundle, _module = _ir(write, analyze, "gpu_prog", PROGRAM)
+    payload = stage_project(bundle).artifacts["gpu_prog"]["saxpy"].payload
+    binding = bind_exported("saxpy", payload, _program()["saxpy"])
+    assert binding.routed
+    n = 1000
+    x = cuda.device_alloc[float](n)
+    y = cuda.device_alloc[float](n)
+    for i in range(n):
+        native.store(native.offset(x, i), float(i))
+        native.store(native.offset(y, i), 1.0)
+    assert counts == {"upload": 0, "download": 0}, "host writes go to the mirror"
+    for _ in range(6):
+        cuda.launch(binding.wrapper, (n + 255) // 256, 256, n, 2.0, x, y)
+    assert counts == {"upload": 2, "download": 0}, "one upload per array, then none"
+    assert native.load(native.offset(y, 999)) == 1.0 + 2.0 * 999 * 6
+    assert counts == {"upload": 2, "download": 1}, "the host read brought the result back"
+    native.store(y, 5.0)
+    cuda.launch(binding.wrapper, (n + 255) // 256, 256, n, 2.0, x, y)
+    assert native.load(y) == 5.0 and counts == {"upload": 3, "download": 2}
+    assert binding.fallbacks == 0
+
+
 @requires_nvptx
 def test_without_a_driver_the_reference_launch_runs(monkeypatch, write, analyze):
     from ppy_compiler.driver.staging import stage_project
@@ -175,8 +213,8 @@ def test_ppy_run_launches_its_kernels_on_the_device(tmp_path: Path):
     on_device = _ppy(tmp_path, "run", entry.name)
     assert plain.returncode == 0, plain.stderr
     assert on_device.returncode == 0, on_device.stderr
-    assert plain.stdout == "False False\n90000.0\n100.0 98.0\n"
-    assert on_device.stdout == "True True\n90000.0\n100.0 98.0\n"
+    assert plain.stdout == "False False\n90000.0\n100.0 98.0\n90000.0\n"
+    assert on_device.stdout == "True True\n90000.0\n100.0 98.0\n90000.0\n"
 
 
 @requires_device
@@ -194,4 +232,4 @@ def test_a_built_artifact_carries_its_kernels(tmp_path: Path):
     assert (tmp_path / "dist" / manifest["staged"]["gpu_run"]["saxpy"]).is_file()
     ran = _ppy(tmp_path, "run", "--prebuilt", "dist/ppy-bindings.json", "gpu_run.ppy")
     assert ran.returncode == 0, ran.stderr
-    assert ran.stdout == "True\n90000.0\n100.0 98.0\n"
+    assert ran.stdout == "True\n90000.0\n100.0 98.0\n90000.0\n"

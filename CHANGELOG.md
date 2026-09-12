@@ -1,7 +1,398 @@
 # Changelog
 
-## 0.2.1 — unreleased
+## 0.3.0 — 2026-09-13
 
+The release that makes the compiler an open one: a public backend interface
+behind the canonical IR, so a code generator for another target is a Python
+package with an entry point rather than a fork of this repository. Around
+it, the semantics that surround such a boundary were tightened -- what
+`ppy.check` may claim about a value, what `ppy.input` and `ppy.scan` read,
+what a backend may be asked for -- and the accelerator paths were validated
+on real hardware. The entries below are in the order the work landed.
+
+- `ppy build --backend python` is held to the same policy as every other
+  backend that is not LLVM. It shared the LLVM branch of the dispatch, so
+  `ppy build foo.ppyir --backend python` built an object, a shared
+  library, and a manifest through the LLVM road, and `--unsafe`,
+  `--sanitize`, `--pgo`, `--prover`, `--host-cpu`, `--standalone`,
+  `--python-extension`, `--library`, `--report-opt`, `--report-opt-json`,
+  and `--target` were accepted and dropped. The backend is now chosen
+  first and what was asked for is judged against it: one refusal table
+  serves the Python backend and installed backends alike, a `.ppyir`
+  target is refused for the Python backend, which reads PPY source, and
+  `-o` is refused rather than ignored, since its modules go to the project
+  cache. `--warm` is refused at dispatch for any backend but LLVM, so the
+  warm command no longer carries a second, differently worded rule of its
+  own. The LLVM road keeps every one of those options, `--warm`, and
+  `.ppyir`.
+- `ppy.check[T]` refuses a protocol. `isinstance` against a
+  `@runtime_checkable` protocol answers whether the attributes are there
+  and nothing of what they take or answer, so a class whose `f(self)`
+  returns a string satisfies a protocol declaring `f(self, x: int) -> int`;
+  handing that value back as the protocol was the false typed value
+  `ppy.check` exists to refuse. Plain and runtime-checkable protocols are
+  refused alike, wherever they appear in the target -- nested in a `list`,
+  `tuple`, `set`, or `dict`, behind `Annotated`, or as a union arm in
+  either order -- and `ppy.assume[T]` remains the unchecked crossing. The
+  guide already said protocols were refused; now they are.
+- The backend interface, tightened while it is young:
+  - an external backend declares the interface version it implements as a
+    literal of its own (`api_version = 1`) and is refused if it declares
+    none. Inheriting the base class's number would have made every
+    installed backend call itself current the moment a later compiler
+    imported it, which is the compatibility break the number exists to
+    catch; the base class now declares nothing.
+  - a backend's passes reach the `backend` stage and no other. What
+    `register_passes` receives is a `BackendPassRegistrar` (`passes.add(MyPass)`),
+    not the `PassManager`, so a backend can no longer hang a pass among the
+    shared pipeline's or the plugins' stages and decide for every other
+    backend what the canonical IR is; one that asks is refused by name.
+  - an artifact's identity carries the distribution the backend came from
+    and that distribution's version, so a new release of a backend package
+    is new artifacts whether or not its author touched `fingerprint()`.
+  - an `EmitFormat` says whether it is written per module (the default,
+    through `emit`) or per program (through `emit_program`, every module at
+    once). A per-module format whose target resolves to several modules
+    needs `-o DIR` and writes one file for each: two artifacts are no
+    longer written end to end into one file, which for two object files or
+    two device images made a thing that was neither.
+  - `ppy build --backend NAME` chooses the backend before anything runs. A
+    `.ppyir` target builds through that backend -- the file is canonical
+    IR, so its passes, validation, and build run over it -- where it used
+    to be answered by the LLVM road whatever `--backend` said, and `--warm`
+    is refused for a backend other than LLVM's rather than silently
+    building the LLVM artifact. Every LLVM-road option (`--unsafe`,
+    `--sanitize`, `--pgo`, `--prover`, `--host-cpu`, `--standalone`,
+    `--python-extension`, `--library`, `--report-opt`, `--report-opt-json`,
+    `--target`) is refused by name for another backend instead of being
+    accepted and ignored.
+  - a distribution may declare which formats its backend owns in the
+    optional `ppy.backend-formats` entry-point group, so `ppy emit
+    <format>` imports the one backend that owns it rather than every
+    installed backend to ask. Undeclared formats are still found the slower
+    way.
+- A backend can be a package of its own. `ppy_compiler.backend` is the
+  interface (`Backend`, `BackendContext`, `EmitFormat`, `BuildResult`,
+  `ToolchainStatus`, `BackendValidationError`; `BACKEND_API_VERSION` 1, a
+  version of the interface, not of the compiler): a backend consumes the
+  canonical IR after the shared passes, hangs its own passes at the new
+  `backend` stage, refuses in `validate` what it cannot take, and emits
+  text or bytes or builds. A distribution registers one through the
+  `ppy.backends` entry-point group; discovery reads the entry points
+  without importing, and the package is imported when its backend is
+  asked for. `ppy emit <format>` takes any format an installed backend
+  registers under the rules the builtin kinds follow; `ppy build --backend
+  NAME` builds through it; `ppy doctor` lists every backend with its
+  toolchain, formats, and fingerprint; `[tool.ppy.backends.<name>]` is
+  the backend's own configuration. The artifact key carries the backend's
+  name, fingerprint, configuration, and target (the LLVM road's now
+  carries the `llvmlite` under it too). Refusals are `E1903` (a backend
+  that cannot be used: unknown, registered twice, another interface
+  version, a failing factory), `E1801` (toolchain missing), `E1802` (IR
+  refused, with what and where), and `E1904` (a backend pass that broke
+  the IR, named). The shared IR pipeline moved out of the LLVM package
+  into `driver/ir_pipeline.py` (`canonical_ir_modules`,
+  `optimize_shared_ir`); the builtin backends stand in the same registry
+  with their formats, fingerprints, and toolchain status.
+- `ppy.input[T]()` reads one line and means what the builtin `input()`
+  means: `ppy.input[str]()` is the line with its newline removed, spaces
+  kept, `""` for an empty line, `EOFError` at the end; `ppy.input[int]()`
+  and `[float]` parse the whole line as `int(input())` and `float(input())`
+  do, so `1 2` is `ValueError`; `ppy.input[tuple[int, int]]()` splits one
+  line and requires exactly its fields, never reaching into the next. The
+  scanner the old `ppy.input` was is `ppy.scan[T]()`: tokens wherever they
+  fall, `ppy.scan[Buffer[int]](n)` for n of them into a buffer. A converted
+  program therefore reads what it read as Python -- `ppy convert` no longer
+  turns a loop of `int(input())` into a bulk scan that would read across
+  lines. A line of fields is a line read too: `ppy.input[list[int]]()` is
+  `list(map(int, input().split()))`, and `ppy.input[Buffer[int]]()` reads a
+  line of integers straight into a buffer, as
+  `array.array("q", map(int, input().split()))` would, with no count to
+  give and no Python object per field; the converter writes both idioms so.
+  A tuple of `int` is read the same way, in C; a typed read is planned once
+  per type, so a read in a loop costs the read and nothing else. The C
+  parser reads the ASCII forms `int()` reads within 64 bits and hands any
+  other field -- a wider integer, non-ASCII digits, no integer at all -- to
+  `int()` itself, so a typed line read means exactly what the idiom it
+  stands for means: `a, b = ppy.input[tuple[int, int]]()` reads
+  `9223372036854775808` as `map(int, input().split())` does, and a
+  converted program keeps Python's input semantics on every field. A
+  differential test runs the original and the converted program as
+  subprocesses on the same input and holds them to one output and one
+  exception.
+  `ppy.read_ints` and `ppy.read_token` stay the buffer-oriented forms;
+  `read_token` cuts a token at the buffer's capacity and says so.
+- One scanner grammar, implemented once in C (`ppy_runtime.scanner`) for
+  the runtime's compiled reader and for a standalone binary's runtime alike,
+  and once more in the pure-Python fallback: whitespace is ASCII, an
+  integer token is `[+-]?[0-9]+` within 64 bits, and a token that is not an
+  integer where one is expected is `ValueError` naming it -- the compiled
+  reader no longer skips over `abc` to find the `3` after it while the
+  fallback raised. A high-level string read is never cut: `ppy.input[str]()`
+  and `ppy.scan[str]()` read a line or a token of any length, where the old
+  scalar read cut at 4096 bytes and dropped the rest.
+- `ppy.scan[Buffer[int]](n)` reads exactly `n` integers or raises: the
+  input ending first is `EOFError` with the tokens before it read, where it
+  used to hand back a buffer padded with zeros that were never in the
+  input; a negative `n` is `ValueError`. A standalone binary ends with the
+  same message. `ppy.read_ints(buffer)` stays the partial read.
+- `ppy.check[T](value)` checks every PPy refinement in an `Annotated`, not
+  only the type under it: `ppy.check[ppy.i8](300)` is refused, as are
+  `ppy.check[ppy.Array[int, 3]]((1, 2))`, a `Vector[T]` with a wrong
+  element, a `Buffer[T]` whose buffer holds another format or is not one
+  contiguous dimension, a value outside its `Range`, a `Length`, a `Shape`
+  (symbolic dimensions bound consistently), a `DType`, or a `Contiguous`
+  the value's own metadata contradicts; an `f32` wider than a float32 holds
+  is refused too. A contract no single value can bear witness to --
+  `Owned[T]`, `Borrowed[T]`, `Mut[T]`, `NoAlias`, a symbolic array length
+  -- is rejected outright rather than stripped, and `ppy.assume[T]` stays
+  the unchecked crossing. The guide said validation was shallow; it is not,
+  and the guide says what the code does.
+- The PJRT bridge behind `ppy.xla` compiles for the platform JAX would pick
+  -- the GPU where a CUDA or ROCm plugin is installed -- where it used to
+  compile for `cpu` unless `PPY_XLA_PLATFORM` said otherwise, so an
+  `@xla.jit` function on a GPU machine ran on a `cpu:0` it never asked for.
+  It compiles for one device of that platform (the first; `PPY_XLA_DEVICE`
+  names another): compiled for every device, its executables expected one
+  argument shard per device, and a machine with two GPUs refused the single
+  buffers the bridge places -- found on a two-GPU RunPod machine, held by a
+  test over two virtual CPU devices.
+- `ppy.check[T](value)` validates all the way down: a `list[int]` element by
+  element, a `dict[str, float]` key and value, a tuple field by field, a
+  dataclass field by field, a union member by member. A `T` it cannot
+  validate soundly -- a callable, an iterator, a protocol -- is refused
+  rather than checked in part. `ppy.assume[T](value)` is the unchecked
+  crossing, typed on the programmer's word alone; the checker types both and
+  gives only `check` the `TypeError` it may raise.
+- `ppy run` and `ppy build` mean the same program: both keep Python's
+  integer semantics by default, and `--unsafe` on either is the one spelling
+  of 64-bit wrap semantics. `build --safe` is gone, having become the
+  default. A standalone build keeps the guards too, and a guard that fails
+  ends the process with a message rather than wrapping in silence; the
+  benchmarks that want wrap semantics build with `--unsafe` and say so.
+- `examples/compare.py` holds every counterpart to one answer before it
+  prints a timing: a tool that fails, answers differently from itself
+  between runs, answers differently from the reference, or prints no timing
+  for a kernel is an error and the exit status is 1.
+- The guide splits into "Reading input" and "Native lowering"; the example
+  count on the landing pages is generated from the tree; the native-memory
+  guide names every pointer element width the runtime supports; `ppy.buffer`,
+  `ppy.scan`, and `ppy.assume` are declared in the package's public surface.
+
+- `cuda.device_alloc[T](n)`: memory that lives on the device between
+  launches. It is a `native.ptr[T]` like `stack_alloc`'s -- the same loops
+  fill and read it, `native.offset` keeps its kind -- and the host sees it
+  through a mirror that whichever side wrote last keeps current: a launch
+  passes the device address and copies nothing, a host read after a launch
+  brings the array back once, a host write before a launch sends it once.
+  Without a device there is only the mirror. `hip.device_alloc` is the same
+  surface; the checker types both (`E1644` for a misuse) and a function that
+  allocates stays in Python under `ppy run`, as one that launches does,
+  while `ppy emit cuda` and `ppy emit hip` write it into the host function
+  as a `gpu.device_alloc` -- a managed allocation the host reads and writes,
+  freed when the function returns. The CUDA example makes its saxpy arrays
+  this way, and its comparison with CuPy and Numba gained the
+  device-resident rows.
+- `ppy explain` reports a body that lowered as `llvm backend: native`, whatever
+  the effects suggested: a parallel loop's `Thread` effect was reported as
+  boxing the function while the function ran natively. Thread and sync
+  effects no longer count against lowering in the contract report either.
+
+- `ppy.tile`: kernels over tiles. `@tile.kernel` runs once per program of a
+  launch; `tile.arange(BLOCK)` is the lane index, `tile.load` and `tile.store`
+  gather and scatter through a `native.ptr` with a mask, arithmetic and
+  comparisons are lane by lane with a scalar broadcast, `tile.where` chooses
+  per lane, and `tile.sum`, `tile.max`, `tile.min` reduce a tile to one
+  number. The compiler lowers a program to a block of threads that each
+  hold a slice of every tile as a vector, gathers and scatters lane by
+  lane, and reduces across the block with a shuffle tree and shared memory;
+  the CUDA source backend writes the same kernels, and the reference launch
+  runs the programs in order under CPython. The new `44_tile` example is
+  compared with Triton and Taichi, the tools that program tiles, and the
+  CUDA example keeps to thread-level kernels: CuPy, Numba, Mojo, CUDA C.
+- The comparison tables are measured and written by `scripts/compare_docs.py`
+  from a manifest of every counterpart program, between markers in each
+  README, with the run recorded beside the programs; `bench.yml` runs it and
+  `scripts/refresh.py` on a self-hosted runner for every push to `dev` that
+  touches code and commits what moved, and a change that touches only prose
+  skips the test matrix for the strict docs build. The comparison
+  sections themselves now show each tool's kernel side by side and say what
+  the numbers mean, rather than that they agree.
+- Three hot paths in the runtime, found by the comparisons. A CUDA launch
+  over host arrays uploaded each array from a copy of it, and the copy cost
+  more than the transfer -- 90 ms against 12 for 128 MB -- so the driver
+  now reads the array itself; the copying rows of the CUDA example fall from
+  172 ms to 38 ms, beside CuPy. A fused NumPy kernel confirmed its result
+  finite by rereading the output and every input after the loop; the map
+  kernel now counts non-finite elements in the loop itself, one add
+  reduction the vectorizer keeps in a register, and guards on it once, and
+  a reduction checks only its number -- the inputs never needed a pass,
+  since any condition NumPy would report leaves a non-finite result. The
+  fused kernel of the parallel example runs in 4 ms where it took 12.5, its
+  serial form in 12 where it took 20, and an ordered `np.sum(x * x)` costs
+  what NumPy's does. The chunk a worker wrote is also what it checks, where
+  a check is still made.
+- Four more examples measure themselves against their neighbours, with
+  the counterpart programs in each `compare/` folder and the site showing
+  them side by side on the example's page and on one comparisons page:
+  regular expressions against CPython's `re` and Rust's `regex`, the buffer
+  kernels against Numba, Cython, NumPy, and C, the fused NumPy kernel
+  against NumPy, numexpr, Numba, and JAX, and Newton's method on a
+  `ppy.grad` derivative against JAX and PyTorch; the numerics example shows
+  what Numba, Codon, Mojo, C, and Rust print where Python keeps the integer.
+  The CUDA example's table gains Mojo 1.0 GPU kernels and a CUDA C
+  reference beside CuPy and Numba -- thread-level kernels against
+  thread-level kernels; Triton and Taichi, which program tiles, are the
+  counterparts of PPY's tile kernels instead. `examples/compare.py` prints microseconds to four
+  places where a kernel is that small.
+- Three examples compare PPY with the tools that do the same job, code and
+  numbers side by side: the parallel ranges against Numba, Taichi, Mojo, and
+  NumPy; the CUDA kernels against CuPy and Numba; the eight algorithm kernels
+  against Numba, Mojo, and Codon. Each counterpart is in the example's
+  `compare/` folder, written the way its tool wants it, and
+  `examples/compare.py` holds them all to one answer and tabulates the
+  timings. The CUDA table says plainly what PPY lacks: an array that lives
+  on the device between launches.
+- A parallel body that writes a buffer element, `out[i] = i * i` under
+  `parallel.range`, lowers: the store writes through `out` and binds nothing
+  outside the loop, which is what the guide promised and what the check
+  mistook for an assignment of `out`.
+- Regular expressions run natively. A pattern compiled from a bytes literal
+  at module level -- `WORD = re.compile(rb"[A-Za-z]+")` -- or written into
+  `re.search(rb"...", buf)` becomes a `regex.search`, `regex.match`, or
+  `regex.fullmatch` operation over a `Buffer[ppy.u8]`, and the new
+  `lower-regex` pass compiles each pattern into a matcher function of core
+  operations, so the LLVM and C backends run it as they run anything else.
+  The matcher backtracks the way CPython's does and answers exactly what
+  `re` answers -- ordered alternation, greedy and lazy repeats, the group's
+  last iteration, `$` before a trailing newline, `\b` at ASCII word edges,
+  `pos` and `endpos` -- on random inputs across both backends. A match is a
+  local whose `start`, `end`, and `span` are native; `m is None` and `if m:`
+  narrow it; `group()` stays on Python. Backreferences, lookaround, atomic
+  groups, possessive repeats, and locale categories are refused with the
+  reason, and a match that would need more than the matcher's stack falls
+  back to `re`. The checker types `re.compile`, `re.Pattern`, `re.Match`,
+  and the flags. A `while True:` loop that only leaves by returning lowers
+  too, which is how a search loop is written.
+- The project scan skips a virtual environment by any name -- a directory
+  holding `pyvenv.cfg` -- not only `.venv` and `venv`; a second environment
+  kept beside the first no longer costs a scan of every package in it.
+- `ppy.input[T]()` takes no argument, and `ppy.scan[Buffer[int]](n)` takes
+  only how many values to read: reading and printing are two things, so a
+  prompt is a `print` before the read rather than an argument that meant a
+  prompt for one type and a count for another. The checker says so (`E1305`
+  for an argument to a scalar read or a missing count, `E1301` for a count
+  that is not an `int`), and the converter writes `input("p")`'s prompt as
+  `print("p", end="", flush=True)` before the statement that reads -- or,
+  inside a loop's test or a comprehension, as the one-expression
+  `print(...) or ppy.input[T]()` so it still prints each time.
+- The C backend writes structured code. Loops are `while`, branches are
+  `if`/`else` with `break`, `continue`, and `return`, rebuilt from the IR's
+  dominator tree and loops; a stack slot that is only loaded and stored is a
+  variable named after it, a parameter keeps its Python name and is the
+  variable its slot was, and a value read once is written where it is read
+  with the parentheses C's precedence needs and no others. Python's floor
+  division by a positive constant is `(a % b + b) % b`, a failed guard is
+  `if (b == 0) return 1;`, a checked addition into a variable writes the
+  variable itself. A graph the reconstruction cannot express falls back, for
+  that function alone, to the labels-and-`goto` writer, so every unit is
+  still correct; the tests hold both writers to the LLVM road's answers.
+  CUDA and HIP get the same treatment, with C++'s `int64_t(x)` casts.
+  `ppy emit --format` runs `c`, `cpp`, `cuda`, `hip`, and `header` output
+  through clang-format, with the project's `.clang-format` where it has one.
+- A pandas or PyArrow expression fuses into one loop in fact, not only in
+  name: the kernel is a `columnar.map` that evaluates the whole tree row by
+  row, where it was one loop and one heap temporary per operation plus a
+  copy at the end (`s * t + s.fillna(0.0)` over eight million rows: 109 ms
+  to 35 ms, from slower than pandas to level with it). A NumPy-backed
+  Series now runs under NumPy's own null model, in the kernel's twin for
+  it: a NaN is the null `fillna` fills and `isna` finds -- before, the
+  kernel read a NaN as a value behind a bitmap of ones, so `s.fillna(0.0)`
+  under `ppy run` handed the NaN back -- a bool mask is a byte per row, a
+  bool answer over NumPy storage no longer falls back to pandas, and the
+  answer is written straight into the NumPy array its Series wraps. `!=`
+  is IEEE's on every path: a NaN differs from everything, as pandas and
+  Arrow have it.
+- `&` and `|` on pandas Series lower to the columnar dialect's new
+  `and_kleene` and `or_kleene`, the three-valued logic pandas computes over
+  an Arrow-backed Series: `(s > t) & t.notna()` is false, not null, where
+  `t` is null. PyArrow's `and_`/`or_` keep the two-valued `and`/`or`, and
+  `pc.and_kleene`/`pc.or_kleene` name the Kleene forms. A fused answer no
+  null can reach -- `isna()`, `notna()`, logic over them -- comes back as
+  the NumPy bool Series pandas gives, whatever the inputs' backing; the
+  nullability of a fused tree is derived from the tree, not from its root
+  alone. An end-to-end test holds `ppy run` to what `python` prints for
+  finite values, NaNs, `fillna`, nested trees, and mixed arithmetic and
+  null handling on both backings.
+- A fused library expression inside a wider call is replaced, and the call
+  kept: the fusion plan is keyed by the expression's whole source span,
+  where it was keyed by the start alone, so `s.isna().sum()` -- which
+  begins where `s.isna()` does -- had the whole call rewritten to the
+  kernel and the `.sum()` lost. It went unnoticed while the kernel fell
+  back to pandas for that case, whose fallback was the whole expression.
+- `examples/45_multi_gpu_jax`: a data-parallel MLP over a mesh of every
+  accelerator in the machine, the batch sharded and the parameters
+  replicated, the gradient summed across devices, held to a single-device
+  run; fewer than two accelerators is reported, never worked around with a
+  CPU or a virtual device. `scripts/cloud/runpod_matrix.py` validates the
+  accelerator stack on rented hardware on demand -- one NVIDIA GPU, two or
+  more in one Pod, an AMD Instinct where one is in stock -- with
+  `accelerator_check.py` failing a GPU run whose JAX sees only a CPU, the
+  CUDA, tile, and XLA examples under `ppy run` with `ppy explain` beside
+  them, the multi-GPU trainer, a one-process-per-GPU distributed smoke
+  test, and a few benchmarks as validation numbers; every Pod it makes it
+  deletes. The docs' `internals/hardware-validation.md` records the last run.
+- The docs' example counts come from the tree: `@@COMPARED_FOLDERS@@`
+  joins the two existing markers, the architecture page's program count is
+  a marker, and a test holds `examples/README.md`'s own count to the same
+  functions, so no page spells a number the tree has moved past.
+- `ppy convert` keeps Python's unpacking where the target is starred:
+  `a, *rest = map(int, input().split())` becomes
+  `a, *rest = ppy.input[list[int]]()`, a list of however many fields the
+  line holds, never a fixed-width tuple that would refuse a longer line;
+  `float` and `str` fields alike, and a target with anything but names in
+  it (a nested tuple) is left as it was written. A differential test runs
+  the Python and the conversion on the least arity, more, too few, an
+  empty line, integers past 64 bits, and non-ASCII digits.
+- `ppy.check[T]`: a `Literal` is its value and its type, so `Literal[1]`
+  refuses `True` and `Literal[False]` refuses `0` though the pairs compare
+  equal; a fixed-width integer (`i8`, `u8`, ...) refuses a `bool`; and the
+  whole of `T` is judged before any value is looked at, so a union with an
+  arm no value can be checked against (`int | Callable[..., int]`) is
+  refused whichever arm comes first and whatever the value.
+- The PJRT bridge no longer reads a JAX that will not initialize as the
+  CPU: the error is raised, and a JAX that came up on the CPU while an
+  accelerator plugin is installed (and `JAX_PLATFORMS` did not ask for the
+  CPU) is raised too, naming the plugin. Without JAX the platform is the
+  CPU `available()` already qualifies; `PPY_XLA_PLATFORM` still wins.
+- The hardware harness: a Pod that is not gone after a run fails the run
+  (`cleanup_ok`, and the exit status with it), `--keep` excepted; an AMD
+  type the stock list lacks is asked for in every datacenter whose
+  inventory names it, and NOT RUN is recorded only when every request was
+  refused; the ROCm environment is AMD's own JAX image, started under an
+  `sshd` for the injected key since the image runs none, with PPy
+  installed beside its JAX under version constraints and every `jax*`
+  distribution checked to be the one that was there; and `ppy emit hip`
+  is a step of a ROCm run, the source compiled by the image's `hipcc`.
+  An MI300X run passed on every step. Unit tests with a fake `runpodctl`
+  hold the judgement.
+- The docs' landing page carries no count of folders or programs as
+  digits: the "by the numbers" row uses the markers, and the guard test
+  sees through Markdown emphasis. `examples/45_multi_gpu_jax` times its
+  steps without a host synchronization between them.
+- `ppy.native.compiled(f)` says whether calling `f` runs its native form
+  here. Under `ppy run` the object in a module's namespace may be the
+  generated C entry point itself, which carries no attribute; the runtime
+  now knows those by identity, `aio.compiled` answers through the same
+  probe, the training examples print `# native prep: True` under `ppy run`
+  as they should, and the entry point bears the function's qualified name
+  rather than `call_0`.
+- The landing page's test and diagnostic-code counts come from the tree
+  through markers (`@@TEST_FUNCTIONS@@`, `@@DIAGNOSTIC_CODES@@`), and the
+  guard refuses those spelled as digits. The GPU guide says what a ROCm
+  machine gets: no launch, `compiled` false, `ppy emit hip` for `hipcc`.
+- The ROCm harness installs every group when the image's JAX allows it
+  and every group but `jax` otherwise, and says which.
 - The lowering cache dropped a coroutine's future kind from its signature,
   so the second `ppy run` of a program whose entry coroutine was served from
   the cache bound it through the plain boundary and handed `aio.run` a bare

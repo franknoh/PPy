@@ -26,12 +26,12 @@ begins.
 
 | path | wall |
 |---|---:|
-| plain CPython | 135.5 ± 1.8 ms |
-| `ppy run` | 123.1 ± 143.6 ms |
-| `ppy build` | 41.2 ± 1.4 ms |
-| `ppy build --standalone` | 5.6 ± 0.4 ms |
-| C (`gcc -O3`, `scanf`) | **4.8 ± 0.2 ms** |
-| C (`clang -O3`, `scanf`) | 5.4 ± 0.2 ms |
+| plain CPython | 219.4 ± 41.5 ms |
+| `ppy run` | 357.4 ± 415.6 ms |
+| `ppy build --unsafe` | 162.9 ± 44.6 ms |
+| `ppy build --standalone --unsafe` | 8.3 ± 1.1 ms |
+| C (`gcc -O3`, `scanf`) | **7.9 ± 0.8 ms** |
+| C (`clang -O3`, `scanf`) | 7.9 ± 0.6 ms |
 
 ## Without CPython at all
 
@@ -54,8 +54,8 @@ It comes out of a binary the size of the C one:
 
 | path | binary |
 |---|---:|
-| `ppy build` (hybrid) | 16.3 KB + the runtime it imports |
-| `ppy build --standalone` | 17.0 KB |
+| `ppy build --unsafe` (hybrid) | 16.3 KB + the runtime it imports |
+| `ppy build --standalone --unsafe` | 17.0 KB |
 | C (`gcc -O3`, `scanf`) | 16.1 KB |
 
 `ppy.input[int]()` lowers to the same buffered scan of standard input that
@@ -83,31 +83,7 @@ clang -O3 nqueens.c -o nqueens_clang && ./nqueens_clang < input.txt
 <!-- outputs:start -->
 ## What it prints
 
-**`python  nqueens.ppy < input.txt`**
-
-```text
-14200
-```
-
-**`ppy run nqueens.ppy < input.txt`**
-
-```text
-14200
-```
-
-**`ppy build nqueens.ppy -o dist && ./dist/nqueens < input.txt`**
-
-```text
-14200
-```
-
-**`gcc   -O3 nqueens.c -o nqueens_c     && ./nqueens_c     < input.txt`**
-
-```text
-14200
-```
-
-**`clang -O3 nqueens.c -o nqueens_clang && ./nqueens_clang < input.txt`**
+**`python  nqueens.ppy < input.txt`**, **`ppy run nqueens.ppy < input.txt`**, **`ppy build nqueens.ppy -o dist && ./dist/nqueens < input.txt`**, **`gcc   -O3 nqueens.c -o nqueens_c     && ./nqueens_c     < input.txt`**, **`clang -O3 nqueens.c -o nqueens_clang && ./nqueens_clang < input.txt`**
 
 ```text
 14200
