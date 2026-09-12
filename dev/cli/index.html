@@ -4633,9 +4633,11 @@ the backend's own passes and validation; then its <code>build</code> writes into
 notes the backend adds. A <code>.ppyir</code> target builds through the chosen
 backend too: the file is canonical IR, so the backend's passes,
 validation, and build run over it without a frontend above them.</p>
-<p><code>-o</code> and <code>-O</code> reach every backend. The LLVM road's options are the LLVM
-road's, and <code>--backend NAME</code> refuses them (<code>E1002</code>) rather than accepting
-and ignoring one: <code>--unsafe</code>, <code>--sanitize</code>, <code>--pgo</code>, <code>--prover</code>,
+<p><code>-O</code> reaches every backend, and <code>-o</code> names the directory a backend writes
+its artifacts into. The LLVM road's options are the LLVM road's, and every
+backend but <code>llvm</code> -- <code>python</code> and an installed one alike -- refuses them
+(<code>E1002</code>) rather than accepting and ignoring one: <code>--unsafe</code>,
+<code>--sanitize</code>, <code>--pgo</code>, <code>--prover</code>,
 <code>--host-cpu</code>, <code>--standalone</code>, <code>--python-extension</code>, <code>--library</code>,
 <code>--report-opt</code>, <code>--report-opt-json</code>, and <code>--target</code> -- what an installed
 backend builds for is <code>[tool.ppy.backends.NAME] target</code>, which reaches it
@@ -4646,6 +4648,14 @@ take, which is the LLVM backend's, and is refused for any other backend.</p>
 used, <code>E1801</code> for a missing toolchain, <code>E1802</code> for IR it refuses, <code>E1904</code>
 for a pass of its that broke the IR. A builtin backend that only emits
 (<code>--backend c</code>) is refused with <code>E1802</code>.</p>
+<p><code>--backend python</code> builds the same optimized Python that <code>ppy FILE.ppy</code>
+runs and publishes it to the project cache, where <code>import ppy</code> and <code>ppy
+run</code> read it. It takes <code>-O</code> and the analysis flags; it refuses the LLVM
+road's options above, <code>--warm</code> (that artifact is the LLVM backend's), a
+<code>.ppyir</code> target (it reads PPY source, not canonical IR), and <code>-o</code> (its
+modules go to the cache, which <code>[tool.ppy] cache-dir</code> and <code>PPY_CACHE_DIR</code>
+move). Whichever backend is named, no other backend's road runs: every
+option is either understood by the backend chosen or refused by name.</p>
 <h3 id="-target-python-extension-library"><code>--target</code>, <code>--python-extension</code>, <code>--library</code><a class="headerlink" href="#-target-python-extension-library" title="Permanent link">&para;</a></h3>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>ppy<span class="w"> </span>build<span class="w"> </span>foo.ppy<span class="w"> </span>--target<span class="w"> </span>aarch64-linux-gnu<span class="w">     </span><span class="c1"># objects, library, header for it</span>
 <a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>ppy<span class="w"> </span>build<span class="w"> </span>foo.ppy<span class="w"> </span>--python-extension<span class="w"> </span>-o<span class="w"> </span>dist<span class="w">     </span><span class="c1"># dist/foo.so: `import foo`</span>

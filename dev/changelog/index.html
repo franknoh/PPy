@@ -3975,6 +3975,21 @@
 <h2 id="030-unreleased">0.3.0 — unreleased<a class="headerlink" href="#030-unreleased" title="Permanent link">&para;</a></h2>
 <p>Work toward the next release, on <code>dev</code>; alphas of it are tagged <code>v0.3.0aN</code>.</p>
 <ul>
+<li><code>ppy build --backend python</code> is held to the same policy as every other
+  backend that is not LLVM. It shared the LLVM branch of the dispatch, so
+  <code>ppy build foo.ppyir --backend python</code> built an object, a shared
+  library, and a manifest through the LLVM road, and <code>--unsafe</code>,
+  <code>--sanitize</code>, <code>--pgo</code>, <code>--prover</code>, <code>--host-cpu</code>, <code>--standalone</code>,
+  <code>--python-extension</code>, <code>--library</code>, <code>--report-opt</code>, <code>--report-opt-json</code>,
+  and <code>--target</code> were accepted and dropped. The backend is now chosen
+  first and what was asked for is judged against it: one refusal table
+  serves the Python backend and installed backends alike, a <code>.ppyir</code>
+  target is refused for the Python backend, which reads PPY source, and
+  <code>-o</code> is refused rather than ignored, since its modules go to the project
+  cache. <code>--warm</code> is refused at dispatch for any backend but LLVM, so the
+  warm command no longer carries a second, differently worded rule of its
+  own. The LLVM road keeps every one of those options, <code>--warm</code>, and
+  <code>.ppyir</code>.</li>
 <li><code>ppy.check[T]</code> refuses a protocol. <code>isinstance</code> against a
   <code>@runtime_checkable</code> protocol answers whether the attributes are there
   and nothing of what they take or answer, so a class whose <code>f(self)</code>
@@ -4344,7 +4359,7 @@
   as they should, and the entry point bears the function's qualified name
   rather than <code>call_0</code>.</li>
 <li>The landing page's test and diagnostic-code counts come from the tree
-  through markers (<code>1117</code>, <code>78</code>), and the
+  through markers (<code>1124</code>, <code>78</code>), and the
   guard refuses those spelled as digits. The GPU guide says what a ROCm
   machine gets: no launch, <code>compiled</code> false, <code>ppy emit hip</code> for <code>hipcc</code>.</li>
 <li>The ROCm harness installs every group when the image's JAX allows it
