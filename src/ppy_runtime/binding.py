@@ -8,7 +8,9 @@ and its machinery is imported only when it is actually used.
 from __future__ import annotations
 
 import array
+import contextlib
 import ctypes
+import weakref
 from collections.abc import Callable
 from dataclasses import dataclass, field
 
@@ -91,6 +93,31 @@ def value_class_types(signature: NativeSignature, fallback: Callable[..., object
     return tuple(found)
 
 
+#: The C entry points that stand in a module's namespace themselves. No Python
+#: frame is on their call path, so there is nothing to hang `__ppy_native__` on;
+#: they are known by identity, for as long as the module keeps them.
+_ADOPTED: weakref.WeakKeyDictionary = weakref.WeakKeyDictionary()
+
+
+def remember(entry: Callable[..., object], signature: NativeSignature) -> None:
+    """Record that `entry`, a generated C entry point, runs `signature` natively."""
+    # Not weak-referenceable means nothing to know it by later; that is allowed.
+    with contextlib.suppress(TypeError):
+        _ADOPTED[entry] = signature
+
+
+def signature_of(function: object) -> NativeSignature | None:
+    """The native signature calling `function` runs under here, or None when the
+    call is Python's: the wrapper's attribute, or the adopted C entry point."""
+    signature = getattr(function, "__ppy_native__", None)
+    if signature is not None:
+        return signature
+    try:
+        return _ADOPTED.get(function)
+    except TypeError:
+        return None
+
+
 def adopt(
     signature: NativeSignature,
     entry: Callable[..., object],
@@ -103,6 +130,7 @@ def adopt(
     Nothing stands between the caller and the C entry point, so per-call
     statistics are not collected on this path.
     """
+    remember(entry, signature)
     return NativeBinding(
         signature=signature, wrapper=entry, fallback=fallback, fast_entry=entry, owner=owner
     )

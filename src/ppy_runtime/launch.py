@@ -14,7 +14,7 @@ import json
 import sys
 from pathlib import Path
 
-from .binding import bind, value_class_types
+from .binding import bind, remember, value_class_types
 from .dispatch import LibraryBinder
 from .execute import execute, format_traceback
 from .generated import GeneratedModule
@@ -108,7 +108,9 @@ class PrebuiltBinder(LibraryBinder):
             getattr(self._wrappers, f"bind_{index}")(address, types, fallback)
         except Exception:  # noqa: BLE001 - a refusal keeps the slower path
             return None
-        return getattr(self._wrappers, f"call_{index}", None)
+        return getattr(self._wrappers, signature.qualname, None) or getattr(
+            self._wrappers, f"call_{index}", None
+        )
 
     def bind(self, module: str, function: str, fallback):  # type: ignore[no-untyped-def]
         signature = self._entries.get(module, {}).get(function)
@@ -125,6 +127,7 @@ class PrebuiltBinder(LibraryBinder):
         # would hand back the bare handle.
         entry = None if signature.future else self._fast_entry(signature, address, fallback)
         if entry is not None:
+            remember(entry, signature)
             return entry
         binding = bind(signature, address, fallback, owner=self._library)
         return binding.wrapper
