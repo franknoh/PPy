@@ -1,6 +1,6 @@
 {
  "environment": {
-  "commit": "476188b",
+  "commit": "066a437",
   "processor": "x86_64",
   "platform": "Linux-6.6.114.1-microsoft-standard-WSL2-x86_64-with-glibc2.39",
   "python": "3.14.5",
@@ -9,20 +9,20 @@
  "timings": {
   "ppy": {
    "sweep, eight million clamps and comparisons": {
-    "mean": 5.766,
-    "stdev": 0.03435112807463534
+    "mean": 8.586,
+    "stdev": 1.2733145722876185
    }
   },
   "python": {
    "sweep, eight million clamps and comparisons": {
-    "mean": 485.64,
-    "stdev": 62.81579419222524
+    "mean": 545.076,
+    "stdev": 22.789657303259283
    }
   },
   "numba": {
    "sweep, eight million clamps and comparisons": {
-    "mean": 5.036,
-    "stdev": 0.0873498712076898
+    "mean": 5.346,
+    "stdev": 0.18716303053755023
    }
   }
  }
