@@ -1,6 +1,6 @@
 # Compatibility
 
-PPY is version 0.2. The surface is wide, and not all of it is equally
+PPY is version 0.3. The surface is wide, and not all of it is equally
 settled. This says which parts you may build on, which will move, and what
 happens when the two sides of a boundary disagree.
 

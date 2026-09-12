@@ -6,7 +6,7 @@ name = "ppy-lang"
 # caches on: packaging metadata that could disagree with it would be a
 # second answer to a question with one.
 dynamic = ["version"]
-description = "Pretty Python: a source-compatible, statically analyzable subset of Python"
+description = "Pretty Python: a general-purpose compiler with Python as its frontend"
 readme = "README.md"
 requires-python = ">=3.12"
 license = "MIT"
@@ -37,7 +37,7 @@ dependencies = [
 [project.urls]
 Homepage = "https://github.com/franknoh/PPy"
 Repository = "https://github.com/franknoh/PPy"
-Documentation = "https://github.com/franknoh/PPy/blob/main/docs/guide.md"
+Documentation = "https://ppy.franknoh.dev/"
 Issues = "https://github.com/franknoh/PPy/issues"
 Changelog = "https://github.com/franknoh/PPy/blob/main/CHANGELOG.md"
 
