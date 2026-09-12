@@ -3685,10 +3685,32 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#emit-scope" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Emit scope
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#the-cache-key" class="md-nav__link">
     <span class="md-ellipsis">
       
         The cache key
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#building" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Building
       
     </span>
   </a>
@@ -3936,10 +3958,32 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#emit-scope" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Emit scope
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#the-cache-key" class="md-nav__link">
     <span class="md-ellipsis">
       
         The cache key
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#building" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Building
       
     </span>
   </a>
@@ -4047,8 +4091,8 @@ entry points in two groups.</p>
 <td>the <code>EmitFormat</code>s <code>ppy emit</code> may ask it for: a name, a file suffix, whether the output is bytes.</td>
 </tr>
 <tr>
-<td><code>register_passes(manager)</code></td>
-<td>its own passes, hung at the <code>backend</code> stage of the shared <code>PassManager</code>.</td>
+<td><code>register_passes(passes)</code></td>
+<td>its own passes, through a <code>BackendPassRegistrar</code>: <code>passes.add(MyPass)</code>, which hangs them at the <code>backend</code> stage and can reach no other.</td>
 </tr>
 <tr>
 <td><code>validate(module, context)</code></td>
@@ -4056,7 +4100,11 @@ entry points in two groups.</p>
 </tr>
 <tr>
 <td><code>emit(module, format, context)</code></td>
-<td>one module as text, or bytes for a binary format.</td>
+<td>one module as text, or bytes for a binary format; for a <code>module</code>-scoped format, which is the default.</td>
+</tr>
+<tr>
+<td><code>emit_program(modules, format, context)</code></td>
+<td>every module at once, one artifact, for a format declared <code>scope="program"</code>.</td>
 </tr>
 <tr>
 <td><code>build(modules, output, context)</code></td>
@@ -4069,10 +4117,22 @@ entry points in two groups.</p>
 </tbody>
 </table>
 <p><code>BACKEND_API_VERSION</code> numbers the interface, independently of the
-compiler's version. A backend declares the version it was written against
-(<code>api_version</code>, inherited as the current one); one declaring another is
-refused at load time with both numbers in the message, never loaded and
-hoped about.</p>
+compiler's version, and an external backend declares the version it
+implements <strong>as a literal of its own</strong>:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="k">class</span><span class="w"> </span><span class="nc">MyBackend</span><span class="p">(</span><span class="n">Backend</span><span class="p">):</span>
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>    <span class="n">api_version</span> <span class="o">=</span> <span class="mi">1</span>
+</code></pre></div>
+<p>Not <code>api_version = BACKEND_API_VERSION</code>: a package that spells the constant
+is rewritten by every compiler it is imported into, so a backend written
+against version 1 would call itself version 2 the moment a version-2
+compiler imported it, and the number would catch nothing. The base class
+declares no version at all, and a backend that declares none is refused
+with what to write instead -- an inherited version is not a declared one.
+A backend declaring a version this compiler does not speak is refused with
+both numbers. A backend package with a base class of its own may declare
+once there for all of them.</p>
+<p>The compiler's own backends ship with the interface and are upgraded with
+it, so they track the constant; nothing installed should.</p>
 <p>The <code>BackendContext</code> a backend receives with the IR carries the project
 root and configuration, the backend's own table from <code>pyproject.toml</code>
 (<code>backend_config</code>), the optimization level, the <code>target</code> that table names,
@@ -4082,8 +4142,8 @@ cache key below), and <code>note()</code> for remarks the driver prints.</p>
 <h2 id="discovery-and-loading">Discovery and loading<a class="headerlink" href="#discovery-and-loading" title="Permanent link">&para;</a></h2>
 <p>An external backend is a distribution with an entry point in the
 <code>ppy.backends</code> group, the same way a plugin is one in <code>ppy.plugins</code>:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="k">[project.entry-points.</span><span class="s2">"ppy.backends"</span><span class="k">]</span>
-<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="n">toy</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">"ppy_toy:create_backend"</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="k">[project.entry-points.</span><span class="s2">"ppy.backends"</span><span class="k">]</span>
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="n">toy</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">"ppy_toy:create_backend"</span>
 </code></pre></div>
 <p>Discovery (<code>available_backends()</code>) reads the entry points without
 importing anything; the package is imported when its backend is selected
@@ -4099,6 +4159,17 @@ error is the message), a factory answering something that is not a
 package never breaks the others: <code>ppy doctor</code> prints it as <code>unusable</code>
 with the reason and goes on. A backend registering a builtin's name is
 reported and ignored; the builtin is used.</p>
+<p><code>ppy emit &lt;format&gt;</code> has to know which backend owns a format before it can
+load one. A distribution may say so in a second, optional entry-point
+group, <code>ppy.backend-formats</code>, whose entry names are formats and whose
+values are the backend's name; discovery reads it without importing
+anything, and the one backend it names is then imported and asked. A
+format no distribution declares is still found, by loading the installed
+backends and asking each -- correct, but it imports every accelerator SDK
+on the machine to answer one question, so declaring the group is worth it.
+The group is a hint and never the authority: the backend it names is asked
+all the same, and a format it does not actually emit is an error. Two
+distributions declaring one format leaves neither owning it.</p>
 <p>The builtin backends -- <code>llvm</code>, <code>python</code>, <code>c</code>, <code>nvvm</code>, <code>stablehlo</code>, and
 <code>ir</code> for the canonical IR itself -- stand in the same registry, with their
 formats, fingerprints, and toolchain status behind the same interface.
@@ -4114,10 +4185,16 @@ called through the interface and nothing else.</p>
 <li>canonicalization, then <code>after-canonicalization</code>;</li>
 <li><code>before-optimization</code>, the shared optimization, <code>after-optimization</code>;</li>
 <li>tensor and parallel lowering, then <code>before-backend</code>;</li>
-<li>the <code>backend</code> stage: the backend's <code>register_passes</code>;</li>
+<li>the <code>backend</code> stage: the passes the backend hung with <code>passes.add(...)</code>;</li>
 <li>the backend's <code>validate</code>;</li>
 <li>the backend's <code>emit</code> or <code>build</code>.</li>
 </ol>
+<p>A backend reaches the <code>backend</code> stage and no other. What it is handed is a
+<code>BackendPassRegistrar</code>, not the <code>PassManager</code>: the stages before <code>backend</code>
+are the shared pipeline's and the plugins', and a pass of one backend's
+running among them would be deciding for every other backend what the
+canonical IR is. A backend that asks for another stage is refused by name
+(<code>E1802</code>), rather than quietly shaping the IR everything else receives.</p>
 <p>The module is verified before the first pass and after the last, and when
 a plugin or a backend contributed a pass, after every pass, so the one
 that leaves the IR invalid is named -- <code>E1902</code> for a plugin's, <code>E1904</code> for
@@ -4128,117 +4205,174 @@ when the IR has one (<code>E1802</code>), and never emit it wrongly. There is no
 fallback on the <code>ppy build --backend</code> and <code>ppy emit</code> roads; a program a
 backend cannot take is an error, not a quieter artifact.</p>
 <h2 id="configuration">Configuration<a class="headerlink" href="#configuration" title="Permanent link">&para;</a></h2>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="k">[tool.ppy.backends.toy]</span>
-<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="n">target</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">"rngd"</span>
-<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="n">sdk-version</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">"1.4"</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="k">[tool.ppy.backends.toy]</span>
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="n">target</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">"rngd"</span>
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="n">sdk-version</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">"1.4"</span>
 </code></pre></div>
 <p>A backend's table is handed to that backend and to no other; a table for a
 backend that is not installed is not an error, so a <code>pyproject.toml</code> can
 carry settings for a backend a colleague has. <code>target</code> is the one key the
 driver reads itself, into <code>BackendContext.target</code> and the cache key; the
-rest means what the backend says it means.</p>
+rest means what the backend says it means. <code>ppy build --target</code> is the
+LLVM road's triple and is refused for a backend of its own, which builds
+for what this <code>target</code> names.</p>
+<h2 id="emit-scope">Emit scope<a class="headerlink" href="#emit-scope" title="Permanent link">&para;</a></h2>
+<p>An <code>EmitFormat</code> says whether it is written per module or per program:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="n">EmitFormat</span><span class="p">(</span><span class="s2">"toy"</span><span class="p">,</span> <span class="s2">".toy"</span><span class="p">)</span>  <span class="c1"># scope="module", the default</span>
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="n">EmitFormat</span><span class="p">(</span><span class="s2">"toy-image"</span><span class="p">,</span> <span class="s2">".img"</span><span class="p">,</span> <span class="n">binary</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">scope</span><span class="o">=</span><span class="s2">"program"</span><span class="p">)</span>
+</code></pre></div>
+<p>A <strong>module-scoped</strong> format is asked for once per module, through <code>emit</code>,
+and one artifact comes back for each. One module goes to standard output
+or to <code>-o FILE</code>; a target that resolves to more than one needs <code>-o DIR</code>,
+and one file per module is written into it, named for the module with the
+format's suffix. Two artifacts are never written end to end into one file:
+two object files, two firmware images, or two device programs do not
+become one by concatenation, and the ambiguity is refused (<code>E1002</code>) with
+the names of the files <code>-o DIR</code> would write.</p>
+<p>A <strong>program-scoped</strong> format is asked for once, through <code>emit_program</code>,
+with every module at once, and answers the single artifact. That is the
+one for a linked image, a package, or an archive -- a whole-program
+artifact is the backend's to make from every module, not something the
+driver can assemble from per-module answers.</p>
+<p>Either way the answer's type must match the format: text for a text
+format, <code>bytes</code> for one declared <code>binary</code>, or the backend is refused
+(<code>E1802</code>).</p>
 <h2 id="the-cache-key">The cache key<a class="headerlink" href="#the-cache-key" title="Permanent link">&para;</a></h2>
 <p>The identity the driver computes for one module's artifact from a backend
 (<code>BackendContext.identity[module]</code>, <code>driver.pipeline.backend_identity</code>) is
 the module's key -- its source digest, the compiler version and
 fingerprint, its dependencies' public ABI, the directives, the
 optimization level, the project options, and the plugin fingerprints --
-with the backend's name, the backend's <code>fingerprint()</code>, the digest of its
-configuration table, its <code>target</code>, and the IR schema version. A new SDK
-under the backend, a changed setting, another target: each is a different
-key, and an old artifact is never reused for it. The builtin LLVM road's
+with the backend's name, the distribution it came from and that
+distribution's version, the interface version it declares, the backend's
+<code>fingerprint()</code>, the digest of its configuration table, its <code>target</code>, and
+the IR schema version. A new SDK under the backend, a changed setting,
+another target: each is a different key, and an old artifact is never
+reused for it.</p>
+<p>The distribution's version is in the key whether or not the backend's
+author put it in <code>fingerprint()</code>. Two releases of one package carry the
+same module and class names and the same interface version and can
+generate entirely different code, so <code>ppy-toy 0.1</code> and <code>ppy-toy 0.2</code>
+address different artifacts by construction; <code>fingerprint()</code> is for what
+the package version does not cover -- the SDK under it, a firmware
+revision, the version of a code generator it calls. The builtin LLVM road's
 keys carry the same kind of thing -- the <code>llvmlite</code> under the objects is
 part of them -- so a cached object does not outlive the LLVM that made it.</p>
+<h2 id="building">Building<a class="headerlink" href="#building" title="Permanent link">&para;</a></h2>
+<p><code>ppy build TARGET --backend NAME</code> loads the backend with its table, checks
+its toolchain, runs the shared passes and the backend's, validates, and
+calls <code>build</code> with every module and a directory to write into -- <code>-o</code>, or
+<code>&lt;cache&gt;/backends/NAME</code>. <code>BuildResult.outputs</code> is what the driver lists.</p>
+<p><code>ppy build TARGET.ppyir --backend NAME</code> is the same below the boundary
+without the frontend above it: the file is canonical IR that has already
+been through the shared passes, so the backend's own passes run over it,
+then its validation, then its <code>build</code>. Its artifact identity is the
+module's encoded bytes with everything that identifies the compiler and
+the backend, since there is no source bundle behind it.</p>
+<p>The LLVM road's options are the LLVM road's: <code>--unsafe</code>, <code>--sanitize</code>,
+<code>--pgo</code>, <code>--prover</code>, <code>--host-cpu</code>, <code>--standalone</code>, <code>--python-extension</code>,
+<code>--library</code>, <code>--report-opt</code>, <code>--report-opt-json</code>, and <code>--target</code> are
+refused for another backend (<code>E1002</code>) rather than accepted and ignored,
+each saying what it does and, for <code>--target</code>, where to name a target that
+does reach the backend. <code>--warm</code> builds the artifact <code>ppy run</code> and
+<code>import ppy</code> take, which is the LLVM backend's, and is refused for any
+other backend. <code>-o</code> and <code>-O</code> reach every backend.</p>
 <h2 id="a-minimal-backend">A minimal backend<a class="headerlink" href="#a-minimal-backend" title="Permanent link">&para;</a></h2>
 <p><code>ppy_toy/__init__.py</code>, the whole package:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
-<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>
-<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ppy_compiler.backend</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
-<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>    <span class="n">Backend</span><span class="p">,</span>
-<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>    <span class="n">BackendValidationError</span><span class="p">,</span>
-<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>    <span class="n">BuildResult</span><span class="p">,</span>
-<a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a>    <span class="n">EmitFormat</span><span class="p">,</span>
-<a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a>    <span class="n">ToolchainStatus</span><span class="p">,</span>
-<a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a><span class="p">)</span>
-<a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ppy_compiler.ir</span><span class="w"> </span><span class="kn">import</span> <span class="n">FunctionPass</span><span class="p">,</span> <span class="n">print_function</span>
-<a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a>
-<a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a>
-<a id="__codelineno-3-13" name="__codelineno-3-13" href="#__codelineno-3-13"></a><span class="k">class</span><span class="w"> </span><span class="nc">CountOps</span><span class="p">(</span><span class="n">FunctionPass</span><span class="p">):</span>
-<a id="__codelineno-3-14" name="__codelineno-3-14" href="#__codelineno-3-14"></a>    <span class="n">name</span> <span class="o">=</span> <span class="s2">"toy-count-ops"</span>
-<a id="__codelineno-3-15" name="__codelineno-3-15" href="#__codelineno-3-15"></a>
-<a id="__codelineno-3-16" name="__codelineno-3-16" href="#__codelineno-3-16"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">run_on_function</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">function</span><span class="p">,</span> <span class="n">ctx</span><span class="p">):</span>
-<a id="__codelineno-3-17" name="__codelineno-3-17" href="#__codelineno-3-17"></a>        <span class="n">function</span><span class="o">.</span><span class="n">attributes</span><span class="p">[</span><span class="s2">"toy.ops"</span><span class="p">]</span> <span class="o">=</span> <span class="nb">sum</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">b</span><span class="o">.</span><span class="n">operations</span><span class="p">)</span> <span class="k">for</span> <span class="n">b</span> <span class="ow">in</span> <span class="n">function</span><span class="o">.</span><span class="n">body</span><span class="o">.</span><span class="n">blocks</span><span class="p">)</span>
-<a id="__codelineno-3-18" name="__codelineno-3-18" href="#__codelineno-3-18"></a>        <span class="k">return</span> <span class="kc">True</span>
-<a id="__codelineno-3-19" name="__codelineno-3-19" href="#__codelineno-3-19"></a>
-<a id="__codelineno-3-20" name="__codelineno-3-20" href="#__codelineno-3-20"></a>
-<a id="__codelineno-3-21" name="__codelineno-3-21" href="#__codelineno-3-21"></a><span class="k">class</span><span class="w"> </span><span class="nc">ToyBackend</span><span class="p">(</span><span class="n">Backend</span><span class="p">):</span>
-<a id="__codelineno-3-22" name="__codelineno-3-22" href="#__codelineno-3-22"></a>    <span class="n">name</span> <span class="o">=</span> <span class="s2">"toy"</span>
-<a id="__codelineno-3-23" name="__codelineno-3-23" href="#__codelineno-3-23"></a>
-<a id="__codelineno-3-24" name="__codelineno-3-24" href="#__codelineno-3-24"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">fingerprint</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-<a id="__codelineno-3-25" name="__codelineno-3-25" href="#__codelineno-3-25"></a>        <span class="k">return</span> <span class="sa">f</span><span class="s2">"toy:</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">'sdk-version'</span><span class="p">,</span><span class="w"> </span><span class="s1">'0'</span><span class="p">)</span><span class="si">}</span><span class="s2">"</span>
-<a id="__codelineno-3-26" name="__codelineno-3-26" href="#__codelineno-3-26"></a>
-<a id="__codelineno-3-27" name="__codelineno-3-27" href="#__codelineno-3-27"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">emit_formats</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-<a id="__codelineno-3-28" name="__codelineno-3-28" href="#__codelineno-3-28"></a>        <span class="k">return</span> <span class="p">(</span><span class="n">EmitFormat</span><span class="p">(</span><span class="s2">"toy"</span><span class="p">,</span> <span class="s2">".toy"</span><span class="p">,</span> <span class="n">description</span><span class="o">=</span><span class="s2">"each function, counted"</span><span class="p">),)</span>
-<a id="__codelineno-3-29" name="__codelineno-3-29" href="#__codelineno-3-29"></a>
-<a id="__codelineno-3-30" name="__codelineno-3-30" href="#__codelineno-3-30"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">register_passes</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">manager</span><span class="p">):</span>
-<a id="__codelineno-3-31" name="__codelineno-3-31" href="#__codelineno-3-31"></a>        <span class="n">manager</span><span class="o">.</span><span class="n">register_stage_pass</span><span class="p">(</span><span class="s2">"backend"</span><span class="p">,</span> <span class="n">CountOps</span><span class="p">)</span>
-<a id="__codelineno-3-32" name="__codelineno-3-32" href="#__codelineno-3-32"></a>
-<a id="__codelineno-3-33" name="__codelineno-3-33" href="#__codelineno-3-33"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">validate</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">module</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
-<a id="__codelineno-3-34" name="__codelineno-3-34" href="#__codelineno-3-34"></a>        <span class="k">for</span> <span class="n">function</span> <span class="ow">in</span> <span class="n">module</span><span class="o">.</span><span class="n">functions</span><span class="o">.</span><span class="n">values</span><span class="p">():</span>
-<a id="__codelineno-3-35" name="__codelineno-3-35" href="#__codelineno-3-35"></a>            <span class="k">for</span> <span class="n">block</span> <span class="ow">in</span> <span class="n">function</span><span class="o">.</span><span class="n">body</span><span class="o">.</span><span class="n">blocks</span><span class="p">:</span>
-<a id="__codelineno-3-36" name="__codelineno-3-36" href="#__codelineno-3-36"></a>                <span class="k">for</span> <span class="n">op</span> <span class="ow">in</span> <span class="n">block</span><span class="o">.</span><span class="n">operations</span><span class="p">:</span>
-<a id="__codelineno-3-37" name="__codelineno-3-37" href="#__codelineno-3-37"></a>                    <span class="k">if</span> <span class="n">op</span><span class="o">.</span><span class="n">dialect</span> <span class="o">==</span> <span class="s2">"gpu"</span><span class="p">:</span>
-<a id="__codelineno-3-38" name="__codelineno-3-38" href="#__codelineno-3-38"></a>                        <span class="k">raise</span> <span class="n">BackendValidationError</span><span class="p">(</span>
-<a id="__codelineno-3-39" name="__codelineno-3-39" href="#__codelineno-3-39"></a>                            <span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="p">,</span>
-<a id="__codelineno-3-40" name="__codelineno-3-40" href="#__codelineno-3-40"></a>                            <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">op</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2"> in </span><span class="si">{</span><span class="n">function</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2">"</span><span class="p">,</span>
-<a id="__codelineno-3-41" name="__codelineno-3-41" href="#__codelineno-3-41"></a>                            <span class="n">capability</span><span class="o">=</span><span class="s2">"device kernels"</span><span class="p">,</span>
-<a id="__codelineno-3-42" name="__codelineno-3-42" href="#__codelineno-3-42"></a>                            <span class="n">location</span><span class="o">=</span><span class="n">op</span><span class="o">.</span><span class="n">location</span><span class="p">,</span>
-<a id="__codelineno-3-43" name="__codelineno-3-43" href="#__codelineno-3-43"></a>                        <span class="p">)</span>
-<a id="__codelineno-3-44" name="__codelineno-3-44" href="#__codelineno-3-44"></a>
-<a id="__codelineno-3-45" name="__codelineno-3-45" href="#__codelineno-3-45"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">emit</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">module</span><span class="p">,</span> <span class="nb">format</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
-<a id="__codelineno-3-46" name="__codelineno-3-46" href="#__codelineno-3-46"></a>        <span class="k">return</span> <span class="s2">""</span><span class="o">.</span><span class="n">join</span><span class="p">(</span>
-<a id="__codelineno-3-47" name="__codelineno-3-47" href="#__codelineno-3-47"></a>            <span class="sa">f</span><span class="s2">"// </span><span class="si">{</span><span class="n">f</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">f</span><span class="o">.</span><span class="n">attributes</span><span class="p">[</span><span class="s1">'toy.ops'</span><span class="p">]</span><span class="si">}</span><span class="s2"> operations</span><span class="se">\n</span><span class="s2">"</span> <span class="o">+</span> <span class="n">print_function</span><span class="p">(</span><span class="n">f</span><span class="p">)</span> <span class="o">+</span> <span class="s2">"</span><span class="se">\n</span><span class="s2">"</span>
-<a id="__codelineno-3-48" name="__codelineno-3-48" href="#__codelineno-3-48"></a>            <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="n">module</span><span class="o">.</span><span class="n">functions</span><span class="o">.</span><span class="n">values</span><span class="p">()</span>
-<a id="__codelineno-3-49" name="__codelineno-3-49" href="#__codelineno-3-49"></a>            <span class="k">if</span> <span class="ow">not</span> <span class="n">f</span><span class="o">.</span><span class="n">is_declaration</span>
-<a id="__codelineno-3-50" name="__codelineno-3-50" href="#__codelineno-3-50"></a>        <span class="p">)</span>
-<a id="__codelineno-3-51" name="__codelineno-3-51" href="#__codelineno-3-51"></a>
-<a id="__codelineno-3-52" name="__codelineno-3-52" href="#__codelineno-3-52"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">build</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">modules</span><span class="p">,</span> <span class="n">output</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
-<a id="__codelineno-3-53" name="__codelineno-3-53" href="#__codelineno-3-53"></a>        <span class="n">written</span> <span class="o">=</span> <span class="p">[]</span>
-<a id="__codelineno-3-54" name="__codelineno-3-54" href="#__codelineno-3-54"></a>        <span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">module</span> <span class="ow">in</span> <span class="n">modules</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
-<a id="__codelineno-3-55" name="__codelineno-3-55" href="#__codelineno-3-55"></a>            <span class="n">path</span> <span class="o">=</span> <span class="n">output</span> <span class="o">/</span> <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2">.toy"</span>
-<a id="__codelineno-3-56" name="__codelineno-3-56" href="#__codelineno-3-56"></a>            <span class="n">path</span><span class="o">.</span><span class="n">write_text</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">emit</span><span class="p">(</span><span class="n">module</span><span class="p">,</span> <span class="s2">"toy"</span><span class="p">,</span> <span class="n">context</span><span class="p">),</span> <span class="n">encoding</span><span class="o">=</span><span class="s2">"utf-8"</span><span class="p">)</span>
-<a id="__codelineno-3-57" name="__codelineno-3-57" href="#__codelineno-3-57"></a>            <span class="n">written</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">path</span><span class="p">)</span>
-<a id="__codelineno-3-58" name="__codelineno-3-58" href="#__codelineno-3-58"></a>        <span class="k">return</span> <span class="n">BuildResult</span><span class="p">(</span><span class="n">outputs</span><span class="o">=</span><span class="nb">tuple</span><span class="p">(</span><span class="n">written</span><span class="p">))</span>
-<a id="__codelineno-3-59" name="__codelineno-3-59" href="#__codelineno-3-59"></a>
-<a id="__codelineno-3-60" name="__codelineno-3-60" href="#__codelineno-3-60"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">toolchain_status</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-<a id="__codelineno-3-61" name="__codelineno-3-61" href="#__codelineno-3-61"></a>        <span class="k">return</span> <span class="n">ToolchainStatus</span><span class="p">(</span><span class="kc">True</span><span class="p">,</span> <span class="sa">f</span><span class="s2">"toy sdk </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">'sdk-version'</span><span class="p">,</span><span class="w"> </span><span class="s1">'0'</span><span class="p">)</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
-<a id="__codelineno-3-62" name="__codelineno-3-62" href="#__codelineno-3-62"></a>
-<a id="__codelineno-3-63" name="__codelineno-3-63" href="#__codelineno-3-63"></a>
-<a id="__codelineno-3-64" name="__codelineno-3-64" href="#__codelineno-3-64"></a><span class="k">def</span><span class="w"> </span><span class="nf">create_backend</span><span class="p">(</span><span class="n">options</span><span class="p">):</span>
-<a id="__codelineno-3-65" name="__codelineno-3-65" href="#__codelineno-3-65"></a>    <span class="k">return</span> <span class="n">ToyBackend</span><span class="p">(</span><span class="n">options</span><span class="p">)</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
+<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>
+<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ppy_compiler.backend</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a>    <span class="n">Backend</span><span class="p">,</span>
+<a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a>    <span class="n">BackendValidationError</span><span class="p">,</span>
+<a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a>    <span class="n">BuildResult</span><span class="p">,</span>
+<a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a>    <span class="n">EmitFormat</span><span class="p">,</span>
+<a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a>    <span class="n">ToolchainStatus</span><span class="p">,</span>
+<a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a><span class="p">)</span>
+<a id="__codelineno-5-10" name="__codelineno-5-10" href="#__codelineno-5-10"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ppy_compiler.ir</span><span class="w"> </span><span class="kn">import</span> <span class="n">FunctionPass</span><span class="p">,</span> <span class="n">print_function</span>
+<a id="__codelineno-5-11" name="__codelineno-5-11" href="#__codelineno-5-11"></a>
+<a id="__codelineno-5-12" name="__codelineno-5-12" href="#__codelineno-5-12"></a>
+<a id="__codelineno-5-13" name="__codelineno-5-13" href="#__codelineno-5-13"></a><span class="k">class</span><span class="w"> </span><span class="nc">CountOps</span><span class="p">(</span><span class="n">FunctionPass</span><span class="p">):</span>
+<a id="__codelineno-5-14" name="__codelineno-5-14" href="#__codelineno-5-14"></a>    <span class="n">name</span> <span class="o">=</span> <span class="s2">"toy-count-ops"</span>
+<a id="__codelineno-5-15" name="__codelineno-5-15" href="#__codelineno-5-15"></a>
+<a id="__codelineno-5-16" name="__codelineno-5-16" href="#__codelineno-5-16"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">run_on_function</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">function</span><span class="p">,</span> <span class="n">ctx</span><span class="p">):</span>
+<a id="__codelineno-5-17" name="__codelineno-5-17" href="#__codelineno-5-17"></a>        <span class="n">function</span><span class="o">.</span><span class="n">attributes</span><span class="p">[</span><span class="s2">"toy.ops"</span><span class="p">]</span> <span class="o">=</span> <span class="nb">sum</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">b</span><span class="o">.</span><span class="n">operations</span><span class="p">)</span> <span class="k">for</span> <span class="n">b</span> <span class="ow">in</span> <span class="n">function</span><span class="o">.</span><span class="n">body</span><span class="o">.</span><span class="n">blocks</span><span class="p">)</span>
+<a id="__codelineno-5-18" name="__codelineno-5-18" href="#__codelineno-5-18"></a>        <span class="k">return</span> <span class="kc">True</span>
+<a id="__codelineno-5-19" name="__codelineno-5-19" href="#__codelineno-5-19"></a>
+<a id="__codelineno-5-20" name="__codelineno-5-20" href="#__codelineno-5-20"></a>
+<a id="__codelineno-5-21" name="__codelineno-5-21" href="#__codelineno-5-21"></a><span class="k">class</span><span class="w"> </span><span class="nc">ToyBackend</span><span class="p">(</span><span class="n">Backend</span><span class="p">):</span>
+<a id="__codelineno-5-22" name="__codelineno-5-22" href="#__codelineno-5-22"></a>    <span class="n">name</span> <span class="o">=</span> <span class="s2">"toy"</span>
+<a id="__codelineno-5-23" name="__codelineno-5-23" href="#__codelineno-5-23"></a>    <span class="n">api_version</span> <span class="o">=</span> <span class="mi">1</span>  <span class="c1"># the version this package implements, as a literal</span>
+<a id="__codelineno-5-24" name="__codelineno-5-24" href="#__codelineno-5-24"></a>
+<a id="__codelineno-5-25" name="__codelineno-5-25" href="#__codelineno-5-25"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">fingerprint</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<a id="__codelineno-5-26" name="__codelineno-5-26" href="#__codelineno-5-26"></a>        <span class="k">return</span> <span class="sa">f</span><span class="s2">"toy:</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">'sdk-version'</span><span class="p">,</span><span class="w"> </span><span class="s1">'0'</span><span class="p">)</span><span class="si">}</span><span class="s2">"</span>
+<a id="__codelineno-5-27" name="__codelineno-5-27" href="#__codelineno-5-27"></a>
+<a id="__codelineno-5-28" name="__codelineno-5-28" href="#__codelineno-5-28"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">emit_formats</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<a id="__codelineno-5-29" name="__codelineno-5-29" href="#__codelineno-5-29"></a>        <span class="k">return</span> <span class="p">(</span><span class="n">EmitFormat</span><span class="p">(</span><span class="s2">"toy"</span><span class="p">,</span> <span class="s2">".toy"</span><span class="p">,</span> <span class="n">description</span><span class="o">=</span><span class="s2">"each function, counted"</span><span class="p">),)</span>
+<a id="__codelineno-5-30" name="__codelineno-5-30" href="#__codelineno-5-30"></a>
+<a id="__codelineno-5-31" name="__codelineno-5-31" href="#__codelineno-5-31"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">register_passes</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">passes</span><span class="p">):</span>
+<a id="__codelineno-5-32" name="__codelineno-5-32" href="#__codelineno-5-32"></a>        <span class="n">passes</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">CountOps</span><span class="p">)</span>
+<a id="__codelineno-5-33" name="__codelineno-5-33" href="#__codelineno-5-33"></a>
+<a id="__codelineno-5-34" name="__codelineno-5-34" href="#__codelineno-5-34"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">validate</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">module</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
+<a id="__codelineno-5-35" name="__codelineno-5-35" href="#__codelineno-5-35"></a>        <span class="k">for</span> <span class="n">function</span> <span class="ow">in</span> <span class="n">module</span><span class="o">.</span><span class="n">functions</span><span class="o">.</span><span class="n">values</span><span class="p">():</span>
+<a id="__codelineno-5-36" name="__codelineno-5-36" href="#__codelineno-5-36"></a>            <span class="k">for</span> <span class="n">block</span> <span class="ow">in</span> <span class="n">function</span><span class="o">.</span><span class="n">body</span><span class="o">.</span><span class="n">blocks</span><span class="p">:</span>
+<a id="__codelineno-5-37" name="__codelineno-5-37" href="#__codelineno-5-37"></a>                <span class="k">for</span> <span class="n">op</span> <span class="ow">in</span> <span class="n">block</span><span class="o">.</span><span class="n">operations</span><span class="p">:</span>
+<a id="__codelineno-5-38" name="__codelineno-5-38" href="#__codelineno-5-38"></a>                    <span class="k">if</span> <span class="n">op</span><span class="o">.</span><span class="n">dialect</span> <span class="o">==</span> <span class="s2">"gpu"</span><span class="p">:</span>
+<a id="__codelineno-5-39" name="__codelineno-5-39" href="#__codelineno-5-39"></a>                        <span class="k">raise</span> <span class="n">BackendValidationError</span><span class="p">(</span>
+<a id="__codelineno-5-40" name="__codelineno-5-40" href="#__codelineno-5-40"></a>                            <span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="p">,</span>
+<a id="__codelineno-5-41" name="__codelineno-5-41" href="#__codelineno-5-41"></a>                            <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">op</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2"> in </span><span class="si">{</span><span class="n">function</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2">"</span><span class="p">,</span>
+<a id="__codelineno-5-42" name="__codelineno-5-42" href="#__codelineno-5-42"></a>                            <span class="n">capability</span><span class="o">=</span><span class="s2">"device kernels"</span><span class="p">,</span>
+<a id="__codelineno-5-43" name="__codelineno-5-43" href="#__codelineno-5-43"></a>                            <span class="n">location</span><span class="o">=</span><span class="n">op</span><span class="o">.</span><span class="n">location</span><span class="p">,</span>
+<a id="__codelineno-5-44" name="__codelineno-5-44" href="#__codelineno-5-44"></a>                        <span class="p">)</span>
+<a id="__codelineno-5-45" name="__codelineno-5-45" href="#__codelineno-5-45"></a>
+<a id="__codelineno-5-46" name="__codelineno-5-46" href="#__codelineno-5-46"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">emit</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">module</span><span class="p">,</span> <span class="nb">format</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
+<a id="__codelineno-5-47" name="__codelineno-5-47" href="#__codelineno-5-47"></a>        <span class="k">return</span> <span class="s2">""</span><span class="o">.</span><span class="n">join</span><span class="p">(</span>
+<a id="__codelineno-5-48" name="__codelineno-5-48" href="#__codelineno-5-48"></a>            <span class="sa">f</span><span class="s2">"// </span><span class="si">{</span><span class="n">f</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">f</span><span class="o">.</span><span class="n">attributes</span><span class="p">[</span><span class="s1">'toy.ops'</span><span class="p">]</span><span class="si">}</span><span class="s2"> operations</span><span class="se">\n</span><span class="s2">"</span> <span class="o">+</span> <span class="n">print_function</span><span class="p">(</span><span class="n">f</span><span class="p">)</span> <span class="o">+</span> <span class="s2">"</span><span class="se">\n</span><span class="s2">"</span>
+<a id="__codelineno-5-49" name="__codelineno-5-49" href="#__codelineno-5-49"></a>            <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="n">module</span><span class="o">.</span><span class="n">functions</span><span class="o">.</span><span class="n">values</span><span class="p">()</span>
+<a id="__codelineno-5-50" name="__codelineno-5-50" href="#__codelineno-5-50"></a>            <span class="k">if</span> <span class="ow">not</span> <span class="n">f</span><span class="o">.</span><span class="n">is_declaration</span>
+<a id="__codelineno-5-51" name="__codelineno-5-51" href="#__codelineno-5-51"></a>        <span class="p">)</span>
+<a id="__codelineno-5-52" name="__codelineno-5-52" href="#__codelineno-5-52"></a>
+<a id="__codelineno-5-53" name="__codelineno-5-53" href="#__codelineno-5-53"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">build</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">modules</span><span class="p">,</span> <span class="n">output</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
+<a id="__codelineno-5-54" name="__codelineno-5-54" href="#__codelineno-5-54"></a>        <span class="n">written</span> <span class="o">=</span> <span class="p">[]</span>
+<a id="__codelineno-5-55" name="__codelineno-5-55" href="#__codelineno-5-55"></a>        <span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">module</span> <span class="ow">in</span> <span class="n">modules</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+<a id="__codelineno-5-56" name="__codelineno-5-56" href="#__codelineno-5-56"></a>            <span class="n">path</span> <span class="o">=</span> <span class="n">output</span> <span class="o">/</span> <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2">.toy"</span>
+<a id="__codelineno-5-57" name="__codelineno-5-57" href="#__codelineno-5-57"></a>            <span class="n">path</span><span class="o">.</span><span class="n">write_text</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">emit</span><span class="p">(</span><span class="n">module</span><span class="p">,</span> <span class="s2">"toy"</span><span class="p">,</span> <span class="n">context</span><span class="p">),</span> <span class="n">encoding</span><span class="o">=</span><span class="s2">"utf-8"</span><span class="p">)</span>
+<a id="__codelineno-5-58" name="__codelineno-5-58" href="#__codelineno-5-58"></a>            <span class="n">written</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">path</span><span class="p">)</span>
+<a id="__codelineno-5-59" name="__codelineno-5-59" href="#__codelineno-5-59"></a>        <span class="k">return</span> <span class="n">BuildResult</span><span class="p">(</span><span class="n">outputs</span><span class="o">=</span><span class="nb">tuple</span><span class="p">(</span><span class="n">written</span><span class="p">))</span>
+<a id="__codelineno-5-60" name="__codelineno-5-60" href="#__codelineno-5-60"></a>
+<a id="__codelineno-5-61" name="__codelineno-5-61" href="#__codelineno-5-61"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">toolchain_status</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<a id="__codelineno-5-62" name="__codelineno-5-62" href="#__codelineno-5-62"></a>        <span class="k">return</span> <span class="n">ToolchainStatus</span><span class="p">(</span><span class="kc">True</span><span class="p">,</span> <span class="sa">f</span><span class="s2">"toy sdk </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">options</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">'sdk-version'</span><span class="p">,</span><span class="w"> </span><span class="s1">'0'</span><span class="p">)</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+<a id="__codelineno-5-63" name="__codelineno-5-63" href="#__codelineno-5-63"></a>
+<a id="__codelineno-5-64" name="__codelineno-5-64" href="#__codelineno-5-64"></a>
+<a id="__codelineno-5-65" name="__codelineno-5-65" href="#__codelineno-5-65"></a><span class="k">def</span><span class="w"> </span><span class="nf">create_backend</span><span class="p">(</span><span class="n">options</span><span class="p">):</span>
+<a id="__codelineno-5-66" name="__codelineno-5-66" href="#__codelineno-5-66"></a>    <span class="k">return</span> <span class="n">ToyBackend</span><span class="p">(</span><span class="n">options</span><span class="p">)</span>
 </code></pre></div>
 <p><code>pyproject.toml</code> of that package:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="k">[project]</span>
-<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="n">name</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">"ppy-toy"</span>
-<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="n">version</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">"0.1"</span>
-<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="n">dependencies</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">"ppy-lang"</span><span class="p">]</span>
-<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>
-<a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="k">[project.entry-points.</span><span class="s2">"ppy.backends"</span><span class="k">]</span>
-<a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="n">toy</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">"ppy_toy:create_backend"</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="k">[project]</span>
+<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="n">name</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">"ppy-toy"</span>
+<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="n">version</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">"0.1"</span>
+<a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="n">dependencies</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">"ppy-lang"</span><span class="p">]</span>
+<a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a>
+<a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a><span class="k">[project.entry-points.</span><span class="s2">"ppy.backends"</span><span class="k">]</span>
+<a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a><span class="n">toy</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">"ppy_toy:create_backend"</span>
+<a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a>
+<a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a><span class="c1"># Optional, and worth declaring: which formats this backend owns, so that</span>
+<a id="__codelineno-6-10" name="__codelineno-6-10" href="#__codelineno-6-10"></a><span class="c1"># `ppy emit toy` imports this package and no other installed backend.</span>
+<a id="__codelineno-6-11" name="__codelineno-6-11" href="#__codelineno-6-11"></a><span class="k">[project.entry-points.</span><span class="s2">"ppy.backend-formats"</span><span class="k">]</span>
+<a id="__codelineno-6-12" name="__codelineno-6-12" href="#__codelineno-6-12"></a><span class="n">toy</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">"toy"</span>
 </code></pre></div>
 <p>Installed beside the compiler:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>ppy<span class="w"> </span>emit<span class="w"> </span>toy<span class="w"> </span>foo.ppy<span class="w">                    </span><span class="c1"># to stdout</span>
-<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>ppy<span class="w"> </span>emit<span class="w"> </span>toy<span class="w"> </span>src/<span class="w"> </span>-o<span class="w"> </span>build/toy/<span class="w">         </span><span class="c1"># one .toy per module</span>
-<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>ppy<span class="w"> </span>build<span class="w"> </span>foo.ppy<span class="w"> </span>--backend<span class="w"> </span>toy<span class="w"> </span>-o<span class="w"> </span>out/<span class="w"> </span><span class="c1"># what build() wrote, listed</span>
-<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a>ppy<span class="w"> </span>doctor<span class="w">                              </span><span class="c1"># toy  available, toy sdk 0 [ppy-toy 0.1 (ppy_toy:create_backend)]</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>ppy<span class="w"> </span>emit<span class="w"> </span>toy<span class="w"> </span>foo.ppy<span class="w">                    </span><span class="c1"># to stdout</span>
+<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>ppy<span class="w"> </span>emit<span class="w"> </span>toy<span class="w"> </span>src/<span class="w"> </span>-o<span class="w"> </span>build/toy/<span class="w">         </span><span class="c1"># one .toy per module</span>
+<a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a>ppy<span class="w"> </span>build<span class="w"> </span>foo.ppy<span class="w"> </span>--backend<span class="w"> </span>toy<span class="w"> </span>-o<span class="w"> </span>out/<span class="w"> </span><span class="c1"># what build() wrote, listed</span>
+<a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a>ppy<span class="w"> </span>doctor<span class="w">                              </span><span class="c1"># toy  available, toy sdk 0 [ppy-toy 0.1 (ppy_toy:create_backend)]</span>
 </code></pre></div>
 <p>Everything the package imports is <code>ppy_compiler.backend</code> and
 <code>ppy_compiler.ir</code>; nothing under <code>backend/llvm</code> or the driver.</p>
 <h2 id="what-is-not-there">What is not there<a class="headerlink" href="#what-is-not-there" title="Permanent link">&para;</a></h2>
-<p>A backend receives modules one at a time, each through the shared passes
-on its own; a whole-program view (<code>ppy emit linked-ir</code>'s) is the linker's,
-<code>ppy_compiler.ir.linker.link</code>, which a backend may call on the modules it
-is given. The <code>ppy run</code> road -- the JIT, the guarded bindings, the
+<p>A module-scoped format receives modules one at a time, each through the
+shared passes on its own; a program-scoped format and <code>build</code> receive them
+together, and may link them with <code>ppy_compiler.ir.linker.link</code>, which is
+what <code>ppy emit linked-ir</code> uses. The <code>ppy run</code> road -- the JIT, the guarded bindings, the
 fallback to Python -- is the LLVM backend's and is not opened to an
 installed backend: a backend builds and emits; running what it built is
 its own runtime's business. The Python backend and the LLVM backend keep

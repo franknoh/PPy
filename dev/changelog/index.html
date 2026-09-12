@@ -3975,6 +3975,52 @@
 <h2 id="030-unreleased">0.3.0 — unreleased<a class="headerlink" href="#030-unreleased" title="Permanent link">&para;</a></h2>
 <p>Work toward the next release, on <code>dev</code>; alphas of it are tagged <code>v0.3.0aN</code>.</p>
 <ul>
+<li><code>ppy.check[T]</code> refuses a protocol. <code>isinstance</code> against a
+  <code>@runtime_checkable</code> protocol answers whether the attributes are there
+  and nothing of what they take or answer, so a class whose <code>f(self)</code>
+  returns a string satisfies a protocol declaring <code>f(self, x: int) -&gt; int</code>;
+  handing that value back as the protocol was the false typed value
+  <code>ppy.check</code> exists to refuse. Plain and runtime-checkable protocols are
+  refused alike, wherever they appear in the target -- nested in a <code>list</code>,
+  <code>tuple</code>, <code>set</code>, or <code>dict</code>, behind <code>Annotated</code>, or as a union arm in
+  either order -- and <code>ppy.assume[T]</code> remains the unchecked crossing. The
+  guide already said protocols were refused; now they are.</li>
+<li>The backend interface, tightened while it is young:</li>
+<li>an external backend declares the interface version it implements as a
+    literal of its own (<code>api_version = 1</code>) and is refused if it declares
+    none. Inheriting the base class's number would have made every
+    installed backend call itself current the moment a later compiler
+    imported it, which is the compatibility break the number exists to
+    catch; the base class now declares nothing.</li>
+<li>a backend's passes reach the <code>backend</code> stage and no other. What
+    <code>register_passes</code> receives is a <code>BackendPassRegistrar</code> (<code>passes.add(MyPass)</code>),
+    not the <code>PassManager</code>, so a backend can no longer hang a pass among the
+    shared pipeline's or the plugins' stages and decide for every other
+    backend what the canonical IR is; one that asks is refused by name.</li>
+<li>an artifact's identity carries the distribution the backend came from
+    and that distribution's version, so a new release of a backend package
+    is new artifacts whether or not its author touched <code>fingerprint()</code>.</li>
+<li>an <code>EmitFormat</code> says whether it is written per module (the default,
+    through <code>emit</code>) or per program (through <code>emit_program</code>, every module at
+    once). A per-module format whose target resolves to several modules
+    needs <code>-o DIR</code> and writes one file for each: two artifacts are no
+    longer written end to end into one file, which for two object files or
+    two device images made a thing that was neither.</li>
+<li><code>ppy build --backend NAME</code> chooses the backend before anything runs. A
+    <code>.ppyir</code> target builds through that backend -- the file is canonical
+    IR, so its passes, validation, and build run over it -- where it used
+    to be answered by the LLVM road whatever <code>--backend</code> said, and <code>--warm</code>
+    is refused for a backend other than LLVM's rather than silently
+    building the LLVM artifact. Every LLVM-road option (<code>--unsafe</code>,
+    <code>--sanitize</code>, <code>--pgo</code>, <code>--prover</code>, <code>--host-cpu</code>, <code>--standalone</code>,
+    <code>--python-extension</code>, <code>--library</code>, <code>--report-opt</code>, <code>--report-opt-json</code>,
+    <code>--target</code>) is refused by name for another backend instead of being
+    accepted and ignored.</li>
+<li>a distribution may declare which formats its backend owns in the
+    optional <code>ppy.backend-formats</code> entry-point group, so <code>ppy emit
+    &lt;format&gt;</code> imports the one backend that owns it rather than every
+    installed backend to ask. Undeclared formats are still found the slower
+    way.</li>
 <li>A backend can be a package of its own. <code>ppy_compiler.backend</code> is the
   interface (<code>Backend</code>, <code>BackendContext</code>, <code>EmitFormat</code>, <code>BuildResult</code>,
   <code>ToolchainStatus</code>, <code>BackendValidationError</code>; <code>BACKEND_API_VERSION</code> 1, a
@@ -4298,7 +4344,7 @@
   as they should, and the entry point bears the function's qualified name
   rather than <code>call_0</code>.</li>
 <li>The landing page's test and diagnostic-code counts come from the tree
-  through markers (<code>1085</code>, <code>78</code>), and the
+  through markers (<code>1117</code>, <code>78</code>), and the
   guard refuses those spelled as digits. The GPU guide says what a ROCm
   machine gets: no launch, <code>compiled</code> false, <code>ppy emit hip</code> for <code>hipcc</code>.</li>
 <li>The ROCm harness installs every group when the image's JAX allows it

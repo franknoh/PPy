@@ -3900,7 +3900,10 @@ PPY program.</p>
   or <code>Contiguous</code> refinement against the value's own metadata -- raising
   <code>TypeError</code> where the value falls short, and hands back a value typed as
   <code>T</code>. A <code>T</code> PPy cannot validate soundly at runtime -- a callable, an
-  iterator, a protocol, or a contract between caller and callee such as
+  iterator, a protocol (<code>@runtime_checkable</code> or not: <code>isinstance</code> against one
+  answers whether the attributes are there and nothing of what they take or
+  answer, so a class whose <code>f(self)</code> returns a string satisfies a protocol
+  declaring <code>f(self, x: int) -&gt; int</code>), or a contract between caller and callee such as
   <code>Owned[T]</code>, <code>Borrowed[T]</code>, <code>Mut[T]</code>, or <code>NoAlias</code> that no single value can
   bear witness to -- is rejected, never checked in part. <code>ppy.assume[T](value)</code>
   performs no runtime validation: it is an explicit unchecked assertion the

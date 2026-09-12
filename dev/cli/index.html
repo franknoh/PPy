@@ -4630,12 +4630,22 @@ begins, against about 0.7 s for a cold <code>ppy run</code> that compiles first 
 and asked for its toolchain; the modules go through the shared passes and
 the backend's own passes and validation; then its <code>build</code> writes into
 <code>-o</code> (or <code>&lt;cache&gt;/backends/NAME</code>) and what it wrote is listed, with any
-notes the backend adds. <code>-O</code> reaches it; the LLVM flags (<code>--target</code>,
-<code>--python-extension</code>, <code>--library</code>, <code>--standalone</code>, <code>--host-cpu</code>) are the
-LLVM road's. The diagnostics are <code>ppy emit</code>'s: <code>E1903</code> for a backend that
-cannot be used, <code>E1801</code> for a missing toolchain, <code>E1802</code> for IR it
-refuses, <code>E1904</code> for a pass of its that broke the IR. A builtin backend
-that only emits (<code>--backend c</code>) is refused with <code>E1802</code>.</p>
+notes the backend adds. A <code>.ppyir</code> target builds through the chosen
+backend too: the file is canonical IR, so the backend's passes,
+validation, and build run over it without a frontend above them.</p>
+<p><code>-o</code> and <code>-O</code> reach every backend. The LLVM road's options are the LLVM
+road's, and <code>--backend NAME</code> refuses them (<code>E1002</code>) rather than accepting
+and ignoring one: <code>--unsafe</code>, <code>--sanitize</code>, <code>--pgo</code>, <code>--prover</code>,
+<code>--host-cpu</code>, <code>--standalone</code>, <code>--python-extension</code>, <code>--library</code>,
+<code>--report-opt</code>, <code>--report-opt-json</code>, and <code>--target</code> -- what an installed
+backend builds for is <code>[tool.ppy.backends.NAME] target</code>, which reaches it
+through the backend context and the artifact's identity, where a compiler
+triple would not. <code>--warm</code> builds the artifact <code>ppy run</code> and <code>import ppy</code>
+take, which is the LLVM backend's, and is refused for any other backend.</p>
+<p>The diagnostics are <code>ppy emit</code>'s: <code>E1903</code> for a backend that cannot be
+used, <code>E1801</code> for a missing toolchain, <code>E1802</code> for IR it refuses, <code>E1904</code>
+for a pass of its that broke the IR. A builtin backend that only emits
+(<code>--backend c</code>) is refused with <code>E1802</code>.</p>
 <h3 id="-target-python-extension-library"><code>--target</code>, <code>--python-extension</code>, <code>--library</code><a class="headerlink" href="#-target-python-extension-library" title="Permanent link">&para;</a></h3>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>ppy<span class="w"> </span>build<span class="w"> </span>foo.ppy<span class="w"> </span>--target<span class="w"> </span>aarch64-linux-gnu<span class="w">     </span><span class="c1"># objects, library, header for it</span>
 <a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>ppy<span class="w"> </span>build<span class="w"> </span>foo.ppy<span class="w"> </span>--python-extension<span class="w"> </span>-o<span class="w"> </span>dist<span class="w">     </span><span class="c1"># dist/foo.so: `import foo`</span>
@@ -4741,8 +4751,12 @@ input and configuration. Any other kind is a format an installed backend
 registers (<a href="../internals/backends/">Backends</a>): the backend is loaded, its
 toolchain checked, the modules run through the shared passes and the
 backend's own, validated by it, and written under the same rule -- text
-or, for a format the backend declares binary, bytes; a directory target
-writes one file per module with the format's suffix. <code>--header-only</code>,
+or, for a format the backend declares binary, bytes. A format may be
+written per module (the default) or per program. A per-module format
+writes one artifact for each: one module goes to standard output or <code>-o
+FILE</code>, and a target that resolves to several needs <code>-o DIR</code>, since two
+artifacts are not one file and are never concatenated into one. A
+per-program format is one artifact for every module together. <code>--header-only</code>,
 <code>--standalone</code>, and <code>--format</code> belong to the builtin kinds. A format no
 backend emits, a format two backends claim, or a backend that cannot be
 loaded is <code>E1903</code> with the reason and the formats there are; a backend

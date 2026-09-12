@@ -4016,7 +4016,7 @@ happens when the two sides of a boundary disagree.</p>
 <tr>
 <td>the backend interface in <code>backend/base.py</code> (<code>BACKEND_API_VERSION</code> 1)</td>
 <td>experimental</td>
-<td>added in 0.3: a package registers a backend through <code>ppy.backends</code>, receives the canonical IR after the shared passes, and emits or builds; the version number is the interface's own, bumped when a method's meaning changes</td>
+<td>added in 0.3: a package registers a backend through <code>ppy.backends</code>, declares <code>api_version = 1</code> as a literal of its own, receives the canonical IR after the shared passes, hangs passes at the <code>backend</code> stage alone, and emits (per module or per program) or builds; the version number is the interface's own, bumped when a method's meaning changes</td>
 </tr>
 <tr>
 <td>the plugin interface in <code>plugins/base.py</code></td>
