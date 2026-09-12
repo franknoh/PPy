@@ -86,8 +86,8 @@ def blend(a, b):
 <!-- compare:start -->
 | | PPY | NumPy | numexpr | Numba `@njit` | JAX `jit` |
 |---|---:|---:|---:|---:|---:|
-| normalize | 33.27 ± 3.78 | 31.40 ± 3.98 | 19.45 ± 3.13 | 36.06 ± 4.20 | **10.21 ± 1.01** |
-| blend | 100.66 ± 10.39 | 111.29 ± 10.50 | **21.20 ± 1.69** | 125.29 ± 20.21 | 31.28 ± 3.37 |
+| normalize | 22.25 ± 0.49 | 21.68 ± 0.54 | 13.03 ± 0.28 | 25.63 ± 0.79 | **8.03 ± 0.14** |
+| blend | 73.52 ± 0.72 | 88.02 ± 0.73 | **10.07 ± 0.20** | 84.53 ± 0.84 | 22.84 ± 0.22 |
 <!-- compare:end -->
 
 `blend` is two transcendentals per element, and on one thread that is

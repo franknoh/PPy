@@ -60,7 +60,7 @@ def layer(x, weight, bias):
 <!-- compare:start -->
 | | PPY ATen region | PyTorch eager | `torch.compile` |
 |---|---:|---:|---:|
-| layer, per call | **0.0019 ± 0.0001** | 0.0020 ± 0.0000 | 0.0133 ± 0.0040 |
+| layer, per call | **0.0019 ± 0.0000** | 0.0020 ± 0.0000 | 0.0087 ± 0.0002 |
 <!-- compare:end -->
 
 Three operators on a tensor this small cost about two microseconds either

@@ -1,6 +1,6 @@
 {
  "environment": {
-  "commit": "14e48ae",
+  "commit": "c3e5b7b",
   "processor": "x86_64",
   "platform": "Linux-6.6.114.1-microsoft-standard-WSL2-x86_64-with-glibc2.39",
   "python": "3.14.5",
@@ -9,20 +9,20 @@
  "timings": {
   "ppy": {
    "layer, per call": {
-    "mean": 0.0019,
-    "stdev": 0.00010000000000000005
+    "mean": 0.00188,
+    "stdev": 4.4721359549995816e-05
    }
   },
   "eager": {
    "layer, per call": {
-    "mean": 0.002,
-    "stdev": 0.0
+    "mean": 0.00198,
+    "stdev": 4.4721359549995816e-05
    }
   },
   "compile": {
    "layer, per call": {
-    "mean": 0.013260000000000001,
-    "stdev": 0.003992868642968361
+    "mean": 0.00868,
+    "stdev": 0.00019235384061671367
    }
   }
  }

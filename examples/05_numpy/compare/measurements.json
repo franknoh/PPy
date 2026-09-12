@@ -1,6 +1,6 @@
 {
  "environment": {
-  "commit": "14e48ae",
+  "commit": "c3e5b7b",
   "processor": "x86_64",
   "platform": "Linux-6.6.114.1-microsoft-standard-WSL2-x86_64-with-glibc2.39",
   "python": "3.14.5",
@@ -9,52 +9,52 @@
  "timings": {
   "ppy": {
    "normalize": {
-    "mean": 33.274,
-    "stdev": 3.778403101840776
+    "mean": 22.252,
+    "stdev": 0.4896120913539607
    },
    "blend": {
-    "mean": 100.664,
-    "stdev": 10.394423023910466
+    "mean": 73.524,
+    "stdev": 0.7196387982870273
    }
   },
   "numpy": {
    "normalize": {
-    "mean": 31.404,
-    "stdev": 3.9765915052969683
+    "mean": 21.684,
+    "stdev": 0.5397036223706492
    },
    "blend": {
-    "mean": 111.288,
-    "stdev": 10.496917166482742
+    "mean": 88.024,
+    "stdev": 0.7301575172522734
    }
   },
   "numexpr": {
    "normalize": {
-    "mean": 19.448,
-    "stdev": 3.127334328145937
+    "mean": 13.032,
+    "stdev": 0.2760796986379112
    },
    "blend": {
-    "mean": 21.204,
-    "stdev": 1.6895354391074495
+    "mean": 10.07,
+    "stdev": 0.20037464909513855
    }
   },
   "numba": {
    "normalize": {
-    "mean": 36.06,
-    "stdev": 4.201505682490502
+    "mean": 25.63,
+    "stdev": 0.7923067587746555
    },
    "blend": {
-    "mean": 125.294,
-    "stdev": 20.210944559817083
+    "mean": 84.53,
+    "stdev": 0.843889803232626
    }
   },
   "jax": {
    "normalize": {
-    "mean": 10.206,
-    "stdev": 1.0114741716919913
+    "mean": 8.032,
+    "stdev": 0.13899640283115214
    },
    "blend": {
-    "mean": 31.276,
-    "stdev": 3.369477704333417
+    "mean": 22.844,
+    "stdev": 0.219271521178652
    }
   }
  }
