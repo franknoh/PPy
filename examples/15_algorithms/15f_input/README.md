@@ -50,12 +50,12 @@ begins.
 
 | path | wall |
 |---|---:|
-| plain CPython | 628.9 ± 16.0 ms |
-| `ppy run` | 199.8 ± 169.2 ms |
-| `ppy build --unsafe` | 107.2 ± 1.5 ms |
-| `ppy build --standalone --unsafe` | **40.6 ± 2.3 ms** |
-| C (`gcc -O3`, `scanf`) | 48.0 ± 0.5 ms |
-| C (`clang -O3`, `scanf`) | 47.9 ± 1.5 ms |
+| plain CPython | 631.6 ± 21.1 ms |
+| `ppy run` | 202.1 ± 174.8 ms |
+| `ppy build --unsafe` | 106.2 ± 3.3 ms |
+| `ppy build --standalone --unsafe` | **42.9 ± 1.2 ms** |
+| C (`gcc -O3`, `scanf`) | 48.7 ± 1.2 ms |
+| C (`clang -O3`, `scanf`) | 48.0 ± 0.4 ms |
 
 ## Run it
 
