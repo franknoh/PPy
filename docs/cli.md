@@ -223,9 +223,11 @@ notes the backend adds. A `.ppyir` target builds through the chosen
 backend too: the file is canonical IR, so the backend's passes,
 validation, and build run over it without a frontend above them.
 
-`-o` and `-O` reach every backend. The LLVM road's options are the LLVM
-road's, and `--backend NAME` refuses them (`E1002`) rather than accepting
-and ignoring one: `--unsafe`, `--sanitize`, `--pgo`, `--prover`,
+`-O` reaches every backend, and `-o` names the directory a backend writes
+its artifacts into. The LLVM road's options are the LLVM road's, and every
+backend but `llvm` -- `python` and an installed one alike -- refuses them
+(`E1002`) rather than accepting and ignoring one: `--unsafe`,
+`--sanitize`, `--pgo`, `--prover`,
 `--host-cpu`, `--standalone`, `--python-extension`, `--library`,
 `--report-opt`, `--report-opt-json`, and `--target` -- what an installed
 backend builds for is `[tool.ppy.backends.NAME] target`, which reaches it
@@ -237,6 +239,15 @@ The diagnostics are `ppy emit`'s: `E1903` for a backend that cannot be
 used, `E1801` for a missing toolchain, `E1802` for IR it refuses, `E1904`
 for a pass of its that broke the IR. A builtin backend that only emits
 (`--backend c`) is refused with `E1802`.
+
+`--backend python` builds the same optimized Python that `ppy FILE.ppy`
+runs and publishes it to the project cache, where `import ppy` and `ppy
+run` read it. It takes `-O` and the analysis flags; it refuses the LLVM
+road's options above, `--warm` (that artifact is the LLVM backend's), a
+`.ppyir` target (it reads PPY source, not canonical IR), and `-o` (its
+modules go to the cache, which `[tool.ppy] cache-dir` and `PPY_CACHE_DIR`
+move). Whichever backend is named, no other backend's road runs: every
+option is either understood by the backend chosen or refused by name.
 
 ### `--target`, `--python-extension`, `--library`
 

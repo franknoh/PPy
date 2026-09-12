@@ -4,6 +4,21 @@
 
 Work toward the next release, on `dev`; alphas of it are tagged `v0.3.0aN`.
 
+- `ppy build --backend python` is held to the same policy as every other
+  backend that is not LLVM. It shared the LLVM branch of the dispatch, so
+  `ppy build foo.ppyir --backend python` built an object, a shared
+  library, and a manifest through the LLVM road, and `--unsafe`,
+  `--sanitize`, `--pgo`, `--prover`, `--host-cpu`, `--standalone`,
+  `--python-extension`, `--library`, `--report-opt`, `--report-opt-json`,
+  and `--target` were accepted and dropped. The backend is now chosen
+  first and what was asked for is judged against it: one refusal table
+  serves the Python backend and installed backends alike, a `.ppyir`
+  target is refused for the Python backend, which reads PPY source, and
+  `-o` is refused rather than ignored, since its modules go to the project
+  cache. `--warm` is refused at dispatch for any backend but LLVM, so the
+  warm command no longer carries a second, differently worded rule of its
+  own. The LLVM road keeps every one of those options, `--warm`, and
+  `.ppyir`.
 - `ppy.check[T]` refuses a protocol. `isinstance` against a
   `@runtime_checkable` protocol answers whether the attributes are there
   and nothing of what they take or answer, so a class whose `f(self)`
