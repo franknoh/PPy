@@ -1,8 +1,14 @@
 # Changelog
 
-## 0.3.0 — unreleased
+## 0.3.0 — 2026-09-13
 
-Work toward the next release, on `dev`; alphas of it are tagged `v0.3.0aN`.
+The release that makes the compiler an open one: a public backend interface
+behind the canonical IR, so a code generator for another target is a Python
+package with an entry point rather than a fork of this repository. Around
+it, the semantics that surround such a boundary were tightened -- what
+`ppy.check` may claim about a value, what `ppy.input` and `ppy.scan` read,
+what a backend may be asked for -- and the accelerator paths were validated
+on real hardware. The entries below are in the order the work landed.
 
 - `ppy build --backend python` is held to the same policy as every other
   backend that is not LLVM. It shared the LLVM branch of the dispatch, so
@@ -387,9 +393,6 @@ Work toward the next release, on `dev`; alphas of it are tagged `v0.3.0aN`.
   machine gets: no launch, `compiled` false, `ppy emit hip` for `hipcc`.
 - The ROCm harness installs every group when the image's JAX allows it
   and every group but `jax` otherwise, and says which.
-
-## 0.2.1 — unreleased
-
 - The lowering cache dropped a coroutine's future kind from its signature,
   so the second `ppy run` of a program whose entry coroutine was served from
   the cache bound it through the plain boundary and handed `aio.run` a bare

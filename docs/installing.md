@@ -11,7 +11,7 @@ The distribution is `ppy-lang`; what it installs is three packages, `ppy`
 (the runtime and the directives), `ppy_compiler`, and `ppy_runtime`.
 Before 1.0 a minor release may move the language and the diagnostics — the
 [changelog](changelog.md) says what moved — so pin an exact version
-(`ppy-lang[llvm]==0.2.0`). For the development tip instead:
+(`ppy-lang[llvm]==0.3.0`). For the development tip instead:
 
 ```bash
 uv add "ppy-lang[llvm] @ git+https://github.com/franknoh/PPy.git"
