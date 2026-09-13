@@ -4005,6 +4005,12 @@
 <h2 id="040-unreleased">0.4.0 — unreleased<a class="headerlink" href="#040-unreleased" title="Permanent link">&para;</a></h2>
 <p>Work toward the next release, on <code>dev</code>; alphas of it are tagged <code>v0.4.0aN</code>.</p>
 <ul>
+<li>A region may write through a parameter. <code>narrow</code> and <code>copy_</code> joined the
+  curated set, so a slot of a preallocated tensor can be filled in place --
+  the other way to keep a KV cache, and the one a long context wants, since
+  growing by <code>cat</code> copies the whole cache per token. The write is not
+  silent: <code>copy_</code> carries <code>WriteMemory</code>, which <code>@ppy.pure</code> forbids, so a
+  function that fills a caller's buffer is refused the claim by name.</li>
 <li>An ATen region can hand back several tensors, which is what a KV cache
   needs. A region returned one <code>at::Tensor</code>, so a block could not give back
   the key and value it had just grown beside its output and incremental
@@ -4431,7 +4437,7 @@ on real hardware. The entries below are in the order the work landed.</p>
   as they should, and the entry point bears the function's qualified name
   rather than <code>call_0</code>.</li>
 <li>The landing page's test and diagnostic-code counts come from the tree
-  through markers (<code>1128</code>, <code>78</code>), and the
+  through markers (<code>1130</code>, <code>78</code>), and the
   guard refuses those spelled as digits. The GPU guide says what a ROCm
   machine gets: no launch, <code>compiled</code> false, <code>ppy emit hip</code> for <code>hipcc</code>.</li>
 <li>The ROCm harness installs every group when the image's JAX allows it

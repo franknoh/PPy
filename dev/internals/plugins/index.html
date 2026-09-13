@@ -4061,7 +4061,11 @@ against another, and a module that imports none of them pays for none of them.
   over named dimensions) takes the one the call fills. That is enough for a
   whole transformer block -- <code>layer_norm</code>, <code>linear</code>, reshapes, transposes,
   <code>scaled_dot_product_attention</code>, <code>gelu</code> -- to be one region
-  (<code>examples/46_gpt2</code>).</li>
+  (<code>examples/46_gpt2</code>). A region hands back one tensor or a fixed tuple of
+  them -- <code>tuple[torch.Tensor, torch.Tensor]</code> becomes a <code>std::tuple</code>, which
+  pybind11 gives Python as an ordinary tuple -- and may write through a
+  parameter with <code>narrow</code> and <code>copy_</code>, which carries <code>WriteMemory</code> and so
+  cannot appear in a <code>@ppy.pure</code> function.</li>
 <li>The region still calls through the dispatcher, so autograd, device
   selection, and backend keys behave identically; a tensor subclass or
   <code>__torch_function__</code> override fails the guard and the Python body runs.</li>

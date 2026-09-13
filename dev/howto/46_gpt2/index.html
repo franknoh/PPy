@@ -4231,12 +4231,17 @@ prefills a prompt under a causal mask and then decodes a token at a time out
 of the cache it built. <code>gpt2.ppy</code> prints whether the two agree, because that
 is the check that matters: the last position of a whole forward pass, and the
 same position reached one token at a time, are the same logits.</p>
+<p>A region may also write into a buffer the caller owns, which is the other
+way to keep a cache: <code>torch.narrow(k_cache, 2, position, length).copy_(k)</code>
+fills a slot of a preallocated tensor instead of growing a new one. That is
+an in-place write through a parameter, so it carries <code>WriteMemory</code> and a
+function doing it cannot be <code>@ppy.pure</code> -- the checker says so by name. The
+example keeps the <code>cat</code> form because at a 256-token context the copy is a
+small part of a step and every column pays it equally; at a context of
+thousands it would not be.</p>
 <h2 id="what-a-region-will-not-do-yet">What a region will not do yet<a class="headerlink" href="#what-a-region-will-not-do-yet" title="Permanent link">&para;</a></h2>
 <p>Everything a region reaches is straight-line: no loop, no branch, and no
-tensor it did not receive as a parameter. The cache above grows by <code>cat</code>
-rather than being written into a preallocated buffer, because a region has
-no in-place write; that costs a copy per token, the same copy in every
-column here.</p>
+tensor it did not receive as a parameter.</p>
 <p>Read on: <a href="../09_torch/">PyTorch ATen regions</a> ·
 <a href="../../internals/plugins/">Plugins: PyTorch</a> ·
 <a href="../21_training_torch/">Training with torch</a></p>
