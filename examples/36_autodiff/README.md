@@ -103,7 +103,7 @@ newton_all = vmap(newton)
 <!-- compare:start -->
 | | PPY | JAX `vmap` + `jit` | PyTorch `torch.func` |
 |---|---:|---:|---:|
-| newton, 100k starts | 12.33 ± 0.08 | **1.80 ± 0.24** | 6.54 ± 2.06 |
+| newton, 100k starts | 11.89 ± 0.07 | **1.23 ± 0.10** | 6.52 ± 1.04 |
 <!-- compare:end -->
 
 The derivative is the same nine digits in all three -- reverse mode over

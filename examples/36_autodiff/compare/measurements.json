@@ -1,6 +1,6 @@
 {
  "environment": {
-  "commit": "bb7faec",
+  "commit": "cd944f4",
   "processor": "x86_64",
   "platform": "Linux-6.6.114.1-microsoft-standard-WSL2-x86_64-with-glibc2.39",
   "python": "3.14.5",
@@ -9,20 +9,20 @@
  "timings": {
   "ppy": {
    "newton, 100k starts": {
-    "mean": 12.33,
-    "stdev": 0.07582875444051512
+    "mean": 11.888,
+    "stdev": 0.0676017751246224
    }
   },
   "jax": {
    "newton, 100k starts": {
-    "mean": 1.8039999999999998,
-    "stdev": 0.23954122818421045
+    "mean": 1.234,
+    "stdev": 0.10014988766843425
    }
   },
   "torch": {
    "newton, 100k starts": {
-    "mean": 6.5360000000000005,
-    "stdev": 2.058064624835673
+    "mean": 6.516,
+    "stdev": 1.0358957476503126
    }
   }
  }
