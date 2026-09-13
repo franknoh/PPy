@@ -4,6 +4,21 @@
 
 Work toward the next release, on `dev`; alphas of it are tagged `v0.4.0aN`.
 
+- An ATen region can hand back several tensors, which is what a KV cache
+  needs. A region returned one `at::Tensor`, so a block could not give back
+  the key and value it had just grown beside its output and incremental
+  decoding stayed in Python -- the place the Python between operators costs
+  the most. A return annotation of `tuple[torch.Tensor, ...]` now becomes a
+  `std::tuple`, which pybind11 hands Python as an ordinary tuple, and with
+  `causal` a `bool` parameter and `length` an `int64_t` rather than
+  constants folded in, one compiled function prefills a prompt under a
+  causal mask and then decodes a token at a time out of the cache it built.
+  `examples/46_gpt2` measures that: 128 tokens through forty-eight blocks is
+  6144 region calls with almost no arithmetic in each, the row where the
+  interpreter is most of the wall clock. It is also the row where
+  `torch.compile`'s CUDA-graphs mode refuses to run at all until each
+  invocation is announced and the cache is cloned, since a cache is exactly
+  the memory those graphs reuse.
 - An ATen region can hold a whole transformer block. What a region was
   allowed to emit was a table of `(C++ function, arity)` pairs, which is
   enough for `relu(add(matmul(x, w), b))` and not enough for anything with
