@@ -73,6 +73,22 @@ CURATED_OPS = frozenset(
         "rand",
         "zeros_like",
         "ones_like",
+        # Elementwise transcendentals, and the activations a block uses.
+        "exp",
+        "log",
+        "sqrt",
+        "rsqrt",
+        "sin",
+        "cos",
+        "erf",
+        "silu",
+        "maximum",
+        "minimum",
+        "t",
+        # Normalization and attention: the two fused kernels a transformer
+        # block is built out of, and the ones a region must not reimplement.
+        "layer_norm",
+        "scaled_dot_product_attention",
     }
 )
 
@@ -141,6 +157,11 @@ _TENSOR_MEMBERS: dict[str, str] = {
     "cuda": "tensor",
     "float": "tensor",
     "double": "tensor",
+    "half": "tensor",
+    "bfloat16": "tensor",
+    # Turning autograd on for a weight is how a training step is written
+    # without `nn.Parameter`, which a region has no use for.
+    "requires_grad_": "tensor",
     "matmul": "tensor",
     "mm": "tensor",
     "t": "tensor",
@@ -158,7 +179,18 @@ _TENSOR_MEMBERS: dict[str, str] = {
 }
 
 #: Operations that need dispatcher behavior PPY must not bypass (spec 20.3).
-_DISPATCH_SENSITIVE = frozenset({"linear", "matmul", "mm", "bmm", "softmax", "log_softmax"})
+_DISPATCH_SENSITIVE = frozenset(
+    {
+        "linear",
+        "matmul",
+        "mm",
+        "bmm",
+        "softmax",
+        "log_softmax",
+        "layer_norm",
+        "scaled_dot_product_attention",
+    }
+)
 
 _TENSOR = T.Instance("torch.Tensor", (), ("torch.Tensor", "object"))
 _MODULE = T.Instance("torch.nn.Module", (), ("torch.nn.Module", "object"))
@@ -250,6 +282,19 @@ ATEN_SCHEMAS: dict[str, str | tuple[str, str]] = {
     "argmax": "argmax.default",
     "argmin": "argmin.default",
     "sigmoid_": "sigmoid_.default",
+    "maximum": "maximum.default",
+    "minimum": "minimum.default",
+    "softmax": "softmax.int",
+    "log_softmax": "log_softmax.int",
+    "layer_norm": "layer_norm.default",
+    "scaled_dot_product_attention": "scaled_dot_product_attention.default",
+    "reshape": "reshape.default",
+    "transpose": "transpose.int",
+    "permute": "permute.default",
+    "unsqueeze": "unsqueeze.default",
+    "flatten": "flatten.using_ints",
+    "cat": "cat.default",
+    "stack": "stack.default",
 }
 
 #: Python operators mapped to their ATen operator names.
@@ -461,6 +506,9 @@ class TorchPlugin(Plugin):
                 "int",
                 "float",
                 "bool",
+                # A mode string -- `gelu`'s "tanh" -- names an overload; it is
+                # an argument of the operation, not an operand beside it.
+                "str",
             }:
                 return (
                     Lowering.PYTHON_FALLBACK,

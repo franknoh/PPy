@@ -1,0 +1,188 @@
+"""GPT-2: one ATen region per transformer block.
+
+Every block is seventeen weights and one straight line of tensor operations,
+which is exactly what a region is. The Python loop over blocks stays in
+Python; what leaves it is the ten dispatcher round trips inside each block.
+"""
+
+import time
+
+import ppy
+import torch
+import torch.nn.functional as F
+
+EPS: float = 1e-5
+
+
+@ppy.opt(3)
+def block(
+    x: torch.Tensor,
+    ln1_w: torch.Tensor,
+    ln1_b: torch.Tensor,
+    q_w: torch.Tensor,
+    q_b: torch.Tensor,
+    k_w: torch.Tensor,
+    k_b: torch.Tensor,
+    v_w: torch.Tensor,
+    v_b: torch.Tensor,
+    o_w: torch.Tensor,
+    o_b: torch.Tensor,
+    ln2_w: torch.Tensor,
+    ln2_b: torch.Tensor,
+    fc_w: torch.Tensor,
+    fc_b: torch.Tensor,
+    proj_w: torch.Tensor,
+    proj_b: torch.Tensor,
+    batch: int,
+    length: int,
+    heads: int,
+    head_dim: int,
+    width: int,
+    eps: float,
+) -> torch.Tensor:
+    """One pre-norm block: attention with a causal mask, then the MLP."""
+    # A region takes every weight as a parameter of its own: that is what a
+    # region is, and seventeen tensors beside six dimensions is the shape of
+    # one transformer block.
+    # pylint: disable=too-many-arguments,too-many-positional-arguments,too-many-locals
+    h = torch.layer_norm(x, (width,), ln1_w, ln1_b, eps)
+    q = F.linear(h, q_w, q_b).reshape((batch, length, heads, head_dim)).transpose(1, 2)
+    k = F.linear(h, k_w, k_b).reshape((batch, length, heads, head_dim)).transpose(1, 2)
+    v = F.linear(h, v_w, v_b).reshape((batch, length, heads, head_dim)).transpose(1, 2)
+    a = F.scaled_dot_product_attention(q, k, v, is_causal=True)
+    merged = a.transpose(1, 2).reshape((batch, length, width))
+    attended = torch.add(x, F.linear(merged, o_w, o_b))
+    n = torch.layer_norm(attended, (width,), ln2_w, ln2_b, eps)
+    f = F.gelu(F.linear(n, fc_w, fc_b), approximate="tanh")
+    return torch.add(attended, F.linear(f, proj_w, proj_b))
+
+
+def scaled(rows: int, columns: int, spread: float, device: str) -> torch.Tensor:
+    """A weight of the given shape, small enough that 48 blocks stay finite."""
+    return torch.mul(torch.randn(rows, columns), spread).to(device)
+
+
+class Block:  # pylint: disable=too-many-instance-attributes
+    """The seventeen weights one block's region takes, in the order it takes them."""
+
+    def __init__(self, width: int, device: str) -> None:
+        inner: int = 4 * width
+        spread: float = 0.02
+        self.ln1_w: torch.Tensor = torch.ones(width).to(device)
+        self.ln1_b: torch.Tensor = torch.zeros(width).to(device)
+        self.q_w: torch.Tensor = scaled(width, width, spread, device)
+        self.q_b: torch.Tensor = torch.zeros(width).to(device)
+        self.k_w: torch.Tensor = scaled(width, width, spread, device)
+        self.k_b: torch.Tensor = torch.zeros(width).to(device)
+        self.v_w: torch.Tensor = scaled(width, width, spread, device)
+        self.v_b: torch.Tensor = torch.zeros(width).to(device)
+        self.o_w: torch.Tensor = scaled(width, width, spread, device)
+        self.o_b: torch.Tensor = torch.zeros(width).to(device)
+        self.ln2_w: torch.Tensor = torch.ones(width).to(device)
+        self.ln2_b: torch.Tensor = torch.zeros(width).to(device)
+        self.fc_w: torch.Tensor = scaled(inner, width, spread, device)
+        self.fc_b: torch.Tensor = torch.zeros(inner).to(device)
+        self.proj_w: torch.Tensor = scaled(width, inner, spread, device)
+        self.proj_b: torch.Tensor = torch.zeros(width).to(device)
+
+
+class Model:  # pylint: disable=too-many-instance-attributes
+    """GPT-2's shape: embeddings, a stack of blocks, and a tied output head."""
+
+    def __init__(self, layers: int, heads: int, head_dim: int, vocab: int, device: str) -> None:
+        width: int = heads * head_dim
+        self.layers: int = layers
+        self.heads: int = heads
+        self.head_dim: int = head_dim
+        self.width: int = width
+        self.vocab: int = vocab
+        self.wte: torch.Tensor = scaled(vocab, width, 0.02, device)
+        self.wpe: torch.Tensor = scaled(1024, width, 0.01, device)
+        self.lnf_w: torch.Tensor = torch.ones(width).to(device)
+        self.lnf_b: torch.Tensor = torch.zeros(width).to(device)
+        self.blocks: list[Block] = [Block(width, device) for _i in range(layers)]
+
+    def forward(self, ids: torch.Tensor, batch: int, length: int) -> torch.Tensor:
+        """Logits for every position, the way the reference implementation computes them."""
+        h: torch.Tensor = torch.add(self.wte[ids], self.wpe[0:length])
+        for layer in self.blocks:
+            h = block(
+                h,
+                layer.ln1_w,
+                layer.ln1_b,
+                layer.q_w,
+                layer.q_b,
+                layer.k_w,
+                layer.k_b,
+                layer.v_w,
+                layer.v_b,
+                layer.o_w,
+                layer.o_b,
+                layer.ln2_w,
+                layer.ln2_b,
+                layer.fc_w,
+                layer.fc_b,
+                layer.proj_w,
+                layer.proj_b,
+                batch,
+                length,
+                self.heads,
+                self.head_dim,
+                self.width,
+                EPS,
+            )
+        normed: torch.Tensor = torch.layer_norm(h, (self.width,), self.lnf_w, self.lnf_b, EPS)
+        return torch.matmul(normed, self.wte.t())
+
+
+def measure(model: Model, ids: torch.Tensor, batch: int, length: int, rounds: int) -> float:
+    """The best of `rounds` forward passes, in milliseconds."""
+    best: float = 1e9
+    for _round in range(rounds):
+        if ids.is_cuda:
+            torch.cuda.synchronize()
+        start: float = time.perf_counter()
+        model.forward(ids, batch, length)
+        if ids.is_cuda:
+            torch.cuda.synchronize()
+        elapsed: float = (time.perf_counter() - start) * 1000.0
+        best = elapsed if elapsed < best else best
+    return best
+
+
+def answer(logits: torch.Tensor) -> str:
+    """Three aggregates: what the paths in `compare/` agree on to three decimals."""
+    wide = logits.float()
+    return (
+        f"mean={float(wide.mean()):.3f} "
+        f"absmean={float(wide.abs().mean()):.3f} "
+        f"meansq={float(torch.mul(wide, wide).mean()):.3f}"
+    )
+
+
+def main() -> None:
+    on_cuda: bool = torch.cuda.is_available()
+    device: str = "cuda" if on_cuda else "cpu"
+    # GPT-2 XL where there is a device for it, and a stack short enough to run
+    # on a CPU in a few seconds where there is not.
+    layers: int = 48 if on_cuda else 6
+    heads: int = 25 if on_cuda else 12
+    vocab: int = 50257 if on_cuda else 8192
+    length: int = 512 if on_cuda else 128
+    batch: int = 1
+
+    print("torch", torch.__version__, "| cuda", on_cuda)
+    print("# region active:", getattr(block, "__ppy_region__", False))
+    print(f"# {layers} layers, {heads} heads, width {heads * 64}, batch {batch}, length {length}")
+
+    torch.manual_seed(0)
+    model = Model(layers, heads, 64, vocab, device)
+    ids = torch.remainder(torch.arange(batch * length).reshape((batch, length)), vocab).to(device)
+
+    warm = model.forward(ids, batch, length)
+    print(answer(warm))
+    print(f"# forward: {measure(model, ids, batch, length, 5):.3f} ms")
+
+
+if __name__ == "__main__":
+    main()

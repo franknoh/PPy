@@ -90,6 +90,104 @@ def test_operators_translate_to_their_aten_counterparts(write, analyze):
     assert ("k", "scalar") in region.parameters
 
 
+def test_a_whole_transformer_block_is_one_region(write, analyze):
+    """Dimensions, shapes, a flag, and a mode string in one straight line."""
+    path = write(
+        "gpt.ppy",
+        """
+        import torch
+        import torch.nn.functional as F
+
+
+        def block(
+            x: torch.Tensor,
+            ln_w: torch.Tensor,
+            ln_b: torch.Tensor,
+            q_w: torch.Tensor,
+            fc_w: torch.Tensor,
+            batch: int,
+            length: int,
+            heads: int,
+            head_dim: int,
+            width: int,
+            eps: float,
+        ) -> torch.Tensor:
+            h = torch.layer_norm(x, (width,), ln_w, ln_b, eps)
+            q = F.linear(h, q_w).reshape((batch, length, heads, head_dim)).transpose(1, 2)
+            a = F.scaled_dot_product_attention(q, q, q, is_causal=True)
+            merged = a.transpose(1, 2).reshape((batch, length, width))
+            return F.gelu(F.linear(merged, fc_w), approximate="tanh")
+        """,
+    )
+    bundle = analyze(path)
+    region = find_regions(bundle.symbols.modules["gpt"], bundle.analysis.modules["gpt"])[0]
+    assert region.reason == ""
+    bindings = dict(region.bindings)
+    # A shape is an `IntArrayRef`, a dimension an `int64_t`, `eps` a `double`.
+    assert bindings["h"] == "at::layer_norm(x, {width}, ln_w, ln_b, static_cast<double>(eps))"
+    assert bindings["q"].endswith(".reshape({batch, length, heads, head_dim})).transpose(1, 2)")
+    # `is_causal=True` is a keyword; the optional arguments before it take
+    # the C++ defaults so the flag lands in the right slot.
+    assert bindings["a"] == "at::scaled_dot_product_attention(q, q, q, {}, 0.0, true)"
+    assert region.body == 'at::gelu(at::linear(merged, fc_w), "tanh")'
+    # An `int` parameter is declared as one, not as a double.
+    assert "int64_t batch" in region.declaration()
+    assert "double eps" in region.declaration()
+
+
+def test_an_operation_takes_the_overload_the_call_fills(write, analyze):
+    path = write(
+        "over.ppy",
+        """
+        import torch
+
+
+        def both(x: torch.Tensor) -> torch.Tensor:
+            whole = torch.mean(x)
+            rows = torch.mean(x, -1, True)
+            return torch.add(rows, whole)
+        """,
+    )
+    bundle = analyze(path)
+    region = find_regions(bundle.symbols.modules["over"], bundle.analysis.modules["over"])[0]
+    bindings = dict(region.bindings)
+    assert bindings["whole"] == "at::mean(x)"
+    assert bindings["rows"] == "at::mean(x, {-1}, true)"
+
+
+def test_an_argument_that_does_not_fit_its_slot_refuses_the_region(write, analyze):
+    path = write(
+        "slots.ppy",
+        """
+        import torch
+
+
+        def wrong(x: torch.Tensor, k: float) -> torch.Tensor:
+            return torch.softmax(x, k)
+
+
+        def unknown(x: torch.Tensor) -> torch.Tensor:
+            return torch.softmax(x, dim=-1)
+
+
+        def crowded(x: torch.Tensor) -> torch.Tensor:
+            return torch.transpose(x, 0, 1, 2)
+        """,
+    )
+    bundle = analyze(path)
+    regions = {
+        r.name: r
+        for r in find_regions(bundle.symbols.modules["slots"], bundle.analysis.modules["slots"])
+    }
+    # `softmax` takes a dimension, and a `float` parameter is not one.
+    assert not regions["wrong"].body
+    assert "dimension" in regions["wrong"].reason
+    # ATen spells it `dim`, and PPY accepts the C++ parameter's name.
+    assert regions["unknown"].body == "at::softmax(x, -1)"
+    assert not regions["crowded"].body
+    assert "3 argument(s)" in regions["crowded"].reason
+
+
 def test_a_function_outside_the_curated_domain_is_rejected(write, analyze):
     path = write(
         "reject.ppy",
@@ -159,6 +257,22 @@ def test_the_aten_schema_table_documents_every_overload():
         forms = schema if isinstance(schema, tuple) else (schema,)
         for form in forms:
             assert "." in form, f"{operation} -> {form} has no overload"
+
+
+@requires_torch
+def test_every_aten_schema_names_a_real_overload():
+    """The table is diagnostics; a name that no longer resolves is a wrong answer."""
+    import torch
+
+    for operation, schema in ATEN_SCHEMAS.items():
+        forms = schema if isinstance(schema, tuple) else (schema,)
+        for form in forms:
+            name, _, overload = form.partition(".")
+            packet = getattr(torch.ops.aten, name, None)
+            assert packet is not None, f"{operation} -> aten::{form} has no operator"
+            assert getattr(packet, overload, None) is not None, (
+                f"{operation} -> aten::{form} has no such overload"
+            )
 
 
 @requires_torch

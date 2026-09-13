@@ -1,0 +1,99 @@
+{
+ "environment": {
+  "commit": "1d38fe5",
+  "processor": "x86_64",
+  "platform": "Linux-6.8.0-117-generic-x86_64-with-glibc2.39 (RunPod, RTX 4090)",
+  "python": "3.13.15",
+  "runs": 5
+ },
+ "timings": {
+  "ppy": {
+   "forward b1 s32": {
+    "mean": 9.2154,
+    "stdev": 0.16277684110462404
+   },
+   "forward b1 s128": {
+    "mean": 9.653,
+    "stdev": 0.24495815969263024
+   },
+   "forward b1 s512": {
+    "mean": 15.247,
+    "stdev": 0.015215124054702678
+   },
+   "forward b8 s512": {
+    "mean": 96.7428,
+    "stdev": 0.205001707309966
+   },
+   "training step b4 s512": {
+    "mean": 139.051,
+    "stdev": 0.07655390257850139
+   }
+  },
+  "eager": {
+   "forward b1 s32": {
+    "mean": 11.2854,
+    "stdev": 0.20654733113744134
+   },
+   "forward b1 s128": {
+    "mean": 11.6002,
+    "stdev": 0.28549203141243745
+   },
+   "forward b1 s512": {
+    "mean": 15.2958,
+    "stdev": 0.0058906705900093085
+   },
+   "forward b8 s512": {
+    "mean": 96.9914,
+    "stdev": 0.10179538299942337
+   },
+   "training step b4 s512": {
+    "mean": 139.347,
+    "stdev": 0.11804871875628924
+   }
+  },
+  "compile": {
+   "forward b1 s32": {
+    "mean": 8.1366,
+    "stdev": 0.30827147127166976
+   },
+   "forward b1 s128": {
+    "mean": 8.5316,
+    "stdev": 0.12276725947906493
+   },
+   "forward b1 s512": {
+    "mean": 15.153599999999999,
+    "stdev": 0.017966635745180187
+   },
+   "forward b8 s512": {
+    "mean": 96.9352,
+    "stdev": 0.1216951108303026
+   },
+   "training step b4 s512": {
+    "mean": 137.649,
+    "stdev": 0.2520039682227222
+   }
+  },
+  "reduce": {
+   "forward b1 s32": {
+    "mean": 13.6126,
+    "stdev": 0.06409602171742024
+   },
+   "forward b1 s128": {
+    "mean": 14.3318,
+    "stdev": 0.03406170870640539
+   },
+   "forward b1 s512": {
+    "mean": 23.4252,
+    "stdev": 0.026640195194480847
+   },
+   "forward b8 s512": {
+    "mean": 104.4406,
+    "stdev": 0.09631614610230503
+   },
+   "training step b4 s512": {
+    "mean": 145.1828,
+    "stdev": 0.10193723559132171
+   }
+  }
+ }
+}

@@ -9,7 +9,7 @@ cd "$(dirname "$0")/.."
 
 plugin="${1:?usage: plugin_check.sh <torch|jax|uvicorn|scipy|pandas|pyarrow>}"
 case "$plugin" in
-  torch)   library=torch;   examples=(09_torch 21_training_torch 31_torchrun) ;;
+  torch)   library=torch;   examples=(09_torch 21_training_torch 31_torchrun 46_gpt2) ;;
   jax)     library=jax;     examples=(22_training_jax 25_jax_export 29_flax) ;;
   uvicorn) library=uvicorn; examples=(27_uvicorn) ;;
   scipy)   library=scipy;   examples=() ;;

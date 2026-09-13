@@ -14,6 +14,14 @@ disable =
     eval-used,
     wrong-import-position,
     unused-argument,
+    # The suppression audit, which `enable = all` turns on: a local disable
+    # would otherwise be a finding about itself, and there is no other way
+    # for one example to exceed a limit every other example is held to --
+    # `46_gpt2`'s region takes each of a transformer block's weights as a
+    # parameter of its own, which is what a region is.
+    locally-disabled,
+    suppressed-message,
+    useless-suppression,
 
 [FORMAT]
 max-line-length = 100
