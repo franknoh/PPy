@@ -28,6 +28,7 @@ import datetime as dt
 import shutil
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -62,17 +63,48 @@ PREFERRED = [
 FOLDERS = ["46_gpt2"]
 
 
-def _gpu(wanted: str) -> str:
-    """The GPU type to ask for: the one named, else the best of what is in stock."""
-    stock = _in_stock("NVIDIA")
+#: How many times to ask for the first choice before moving down the list.
+#: `gpu list` calls a type available while `pod create` refuses it -- the
+#: listing is a place to ask and the create request decides -- and the stock
+#: it is wrong about comes back within a few minutes.
+ATTEMPTS = 4
+PAUSE = 45
+
+
+def _order(wanted: str) -> list[str]:
+    """The GPU types to ask for, best first.
+
+    The card the table is quoted on comes first even when the listing does
+    not have it: a stale listing is not a reason to measure on another card
+    and quietly publish it under the old hardware line.
+    """
     if wanted:
-        if wanted not in stock:
-            print(f"note: {wanted} is not listed as in stock; asking anyway")
-        return wanted
-    for candidate in PREFERRED:
-        if candidate in stock:
-            return candidate
-    raise Failed(f"none of {', '.join(PREFERRED)} is in stock; name one with --gpu-id")
+        return [wanted]
+    stock = _in_stock("NVIDIA")
+    listed = [gpu for gpu in PREFERRED if gpu in stock]
+    rest = [gpu for gpu in PREFERRED if gpu not in stock]
+    return [PREFERRED[0], *[gpu for gpu in listed + rest if gpu != PREFERRED[0]]]
+
+
+def _rent(name: str, environment: dict, order: list[str], log: Path) -> Pod:
+    """A Pod on the first GPU type that can actually be had."""
+    refusals: list[str] = []
+    for attempt in range(ATTEMPTS):
+        for gpu in order:
+            pod = Pod(name, environment, gpu, log)
+            try:
+                pod.create()
+            except Failed as error:
+                refusals.append(f"{gpu}: {error}")
+                continue
+            if gpu != order[0]:
+                print(f"note: {order[0]} could not be had; this run is on {gpu}")
+                print("the README's hardware line names the card and has to be rewritten to match")
+            return pod
+        if attempt + 1 < ATTEMPTS:
+            print(f"nothing available on attempt {attempt + 1}; asking again in {PAUSE}s")
+            time.sleep(PAUSE)
+    raise Failed("no GPU could be had: " + "; ".join(refusals[-len(order) :]))
 
 
 def _collect(pod: Pod, results: Path, folders: list[str], apply: bool) -> list[str]:
@@ -100,10 +132,9 @@ def measure(sha: str, folders: list[str], out: Path, wanted: str, keep: bool, ap
     log = out / "bench.log"
     environment = {"image": IMAGE, "start": "", "count": 1, "mode": "cuda", "vendor": "NVIDIA"}
     stamp = dt.datetime.now(dt.UTC).strftime("%H%M%S")
-    pod = Pod(f"ppy-bench-{stamp}", environment, _gpu(wanted), log)
+    pod = _rent(f"ppy-bench-{stamp}", environment, _order(wanted), log)
     status = 1
     try:
-        pod.create()
         pod.wait_ready()
         pod.copy_to(HERE / "remote_bench.sh", "/workspace/remote_bench.sh")
         # Each compiled counterpart warms up for minutes and is run five times;
