@@ -184,6 +184,17 @@ ATEN_CALLS: dict[str, tuple[AtenCall, ...]] = {
         ),
     ),
     "t": _unary("at::t"),
+    # A view of a buffer, and the write into it. `copy_` hands back the
+    # destination, so filling a slot is an assignment like any other binding,
+    # and it carries `WriteMemory` so nothing that does it can be `@ppy.pure`.
+    "narrow": (
+        AtenCall(
+            "at::narrow",
+            (("self", OPERAND), ("dim", DIM), ("start", DIM), ("length", DIM)),
+            4,
+        ),
+    ),
+    "copy_": (AtenCall("copy_", (("self", OPERAND), ("src", OPERAND)), 2, free=False),),
     "contiguous": (AtenCall("contiguous", (("self", OPERAND),), 1, free=False),),
     "clone": _unary("at::clone"),
     "detach": _unary("at::detach"),

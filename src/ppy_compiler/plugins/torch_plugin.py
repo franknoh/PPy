@@ -89,10 +89,19 @@ CURATED_OPS = frozenset(
         # block is built out of, and the ones a region must not reimplement.
         "layer_norm",
         "scaled_dot_product_attention",
+        # A view of a preallocated buffer, and the write into it: what a KV
+        # cache is, once it stops growing by `cat`.
+        "narrow",
+        "copy_",
     }
 )
 
 _RANDOM_OPS = frozenset({"randn", "rand", "randint", "randperm", "manual_seed"})
+
+#: Operations that write through a tensor the caller still holds. They carry
+#: `WriteMemory`, which `@ppy.pure` forbids, so a function that fills a
+#: buffer cannot claim to be pure (spec 11.2).
+_WRITING_OPS = frozenset({"copy_"})
 
 #: Non-tensor library functions the analyzer needs a signature for.
 _UTILITIES: dict[str, tuple[str, str]] = {
@@ -146,6 +155,8 @@ _TENSOR_MEMBERS: dict[str, str] = {
     "detach": "tensor",
     "contiguous": "tensor",
     "reshape": "tensor",
+    "narrow": "tensor",
+    "copy_": "tensor",
     "view": "tensor",
     "transpose": "tensor",
     "permute": "tensor",
@@ -288,6 +299,8 @@ ATEN_SCHEMAS: dict[str, str | tuple[str, str]] = {
     "log_softmax": "log_softmax.int",
     "layer_norm": "layer_norm.default",
     "scaled_dot_product_attention": "scaled_dot_product_attention.default",
+    "narrow": "narrow.default",
+    "copy_": "copy_.default",
     "reshape": "reshape.default",
     "transpose": "transpose.int",
     "permute": "permute.default",
@@ -479,6 +492,8 @@ class TorchPlugin(Plugin):
         effects = EffectSet.of(Effect.ALLOC, raises=("RuntimeError", "TypeError"))
         if operation in _RANDOM_OPS:
             effects = effects.add(Effect.RANDOM)
+        if operation in _WRITING_OPS:
+            effects = effects.add(Effect.WRITE_MEMORY)
 
         lowering, reason, guards = self._lowering(operation, args, keywords)
         schema = self.schema_for(operation, [t for t, _facts in args])

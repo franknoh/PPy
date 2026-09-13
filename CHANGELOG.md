@@ -4,6 +4,12 @@
 
 Work toward the next release, on `dev`; alphas of it are tagged `v0.4.0aN`.
 
+- A region may write through a parameter. `narrow` and `copy_` joined the
+  curated set, so a slot of a preallocated tensor can be filled in place --
+  the other way to keep a KV cache, and the one a long context wants, since
+  growing by `cat` copies the whole cache per token. The write is not
+  silent: `copy_` carries `WriteMemory`, which `@ppy.pure` forbids, so a
+  function that fills a caller's buffer is refused the claim by name.
 - An ATen region can hand back several tensors, which is what a KV cache
   needs. A region returned one `at::Tensor`, so a block could not give back
   the key and value it had just grown beside its output and incremental
