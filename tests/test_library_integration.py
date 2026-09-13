@@ -135,6 +135,44 @@ def test_a_whole_transformer_block_is_one_region(write, analyze):
     assert "double eps" in region.declaration()
 
 
+def test_a_region_may_write_into_a_buffer_the_caller_owns(write, analyze):
+    """`narrow` gives the slot and `copy_` fills it, which is a KV cache."""
+    path = write(
+        "cache.ppy",
+        """
+        import torch
+
+
+        def fill(dst: torch.Tensor, src: torch.Tensor, at: int, n: int) -> torch.Tensor:
+            slot = torch.narrow(dst, 2, at, n).copy_(src)
+            return torch.narrow(dst, 2, 0, n)
+        """,
+    )
+    bundle = analyze(path)
+    region = find_regions(bundle.symbols.modules["cache"], bundle.analysis.modules["cache"])[0]
+    assert region.reason == ""
+    assert dict(region.bindings)["slot"] == "(at::narrow(dst, 2, at, n)).copy_(src)"
+    assert region.body == "at::narrow(dst, 2, 0, n)"
+
+
+def test_writing_through_a_tensor_is_an_effect_purity_forbids(write, analyze):
+    """A region that fills a caller's buffer may not claim to be pure."""
+    path = write(
+        "pure.ppy",
+        """
+        import ppy
+        import torch
+
+
+        @ppy.pure
+        def fill(dst: torch.Tensor, src: torch.Tensor, at: int, n: int) -> torch.Tensor:
+            return torch.narrow(dst, 2, at, n).copy_(src)
+        """,
+    )
+    found = [d.code for d in analyze(path).diagnostics if d.code == "E1601"]
+    assert found, "a `copy_` inside a `@ppy.pure` function is `WriteMemory`"
+
+
 def test_an_operation_takes_the_overload_the_call_fills(write, analyze):
     path = write(
         "over.ppy",

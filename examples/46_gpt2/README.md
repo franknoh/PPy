@@ -206,13 +206,19 @@ of the cache it built. `gpt2.ppy` prints whether the two agree, because that
 is the check that matters: the last position of a whole forward pass, and the
 same position reached one token at a time, are the same logits.
 
+A region may also write into a buffer the caller owns, which is the other
+way to keep a cache: `torch.narrow(k_cache, 2, position, length).copy_(k)`
+fills a slot of a preallocated tensor instead of growing a new one. That is
+an in-place write through a parameter, so it carries `WriteMemory` and a
+function doing it cannot be `@ppy.pure` -- the checker says so by name. The
+example keeps the `cat` form because at a 256-token context the copy is a
+small part of a step and every column pays it equally; at a context of
+thousands it would not be.
+
 ## What a region will not do yet
 
 Everything a region reaches is straight-line: no loop, no branch, and no
-tensor it did not receive as a parameter. The cache above grows by `cat`
-rather than being written into a preallocated buffer, because a region has
-no in-place write; that costs a copy per token, the same copy in every
-column here.
+tensor it did not receive as a parameter.
 
 Read on: [PyTorch ATen regions](../09_torch/README.md) ·
 [Plugins: PyTorch](../../docs/internals/plugins.md) ·
