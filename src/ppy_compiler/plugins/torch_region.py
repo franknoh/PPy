@@ -16,7 +16,7 @@ transposes, `layer_norm`, attention -- be one region instead of a dozen.
 from __future__ import annotations
 
 import ast
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 from ..analysis import types as T
 from ..analysis.checker import FunctionAnalysis, ModuleAnalysis
@@ -223,7 +223,8 @@ class _Context:
     analysis: ModuleAnalysis
     #: Every name in scope, and the kind it was declared or bound with.
     kinds: dict[str, str]
-    operations: list[str] = field(default_factory=list)
+    #: The C++ functions the region calls, in the order it calls them.
+    operations: list[str]
 
     @property
     def names(self) -> set[str]:
@@ -318,7 +319,7 @@ def _region_for(
             reason="a region ends in a `return` expression",
         )
 
-    context = _Context(analysis, dict(parameters))
+    context = _Context(analysis, dict(parameters), [])
     bindings: list[tuple[str, str]] = []
     try:
         # Intermediates are how model code is actually written, and each one
@@ -442,15 +443,21 @@ def _render_text(node: ast.expr, context: _Context) -> str:
     raise Unsupported("this argument is one of the mode strings ATen accepts")
 
 
-_SLOTS = {
-    OPERAND: _render,
-    DIM: _render_int,
-    DIMS: _render_dims,
-    TENSORS: _render_tensors,
-    SCALAR: _render_scalar,
-    FLAG: _render_flag,
-    TEXT: _render_text,
-}
+def _render_slot(slot: str, node: ast.expr, context: _Context) -> str:
+    """One argument, rendered the way the C++ parameter it fills wants it."""
+    if slot == DIM:
+        return _render_int(node, context)
+    if slot == DIMS:
+        return _render_dims(node, context)
+    if slot == TENSORS:
+        return _render_tensors(node, context)
+    if slot == SCALAR:
+        return _render_scalar(node, context)
+    if slot == FLAG:
+        return _render_flag(node, context)
+    if slot == TEXT:
+        return _render_text(node, context)
+    return _render(node, context)
 
 
 def _render_call(node: ast.Call, context: _Context) -> str:
@@ -468,7 +475,9 @@ def _render_call(node: ast.Call, context: _Context) -> str:
         raise Unsupported(f"`{operation}` exists on a tensor, not as a free `at::` function")
 
     offset = 1 if is_method else 0
-    bound: list[ast.expr | None] = [None] * len(call.params)
+    # Which parameter each argument fills; a position absent from this is one
+    # the call left to its C++ default.
+    bound: dict[int, ast.expr] = {}
     if isinstance(node.func, ast.Attribute) and is_method:
         bound[0] = node.func.value
     for index, argument in enumerate(node.args):
@@ -478,7 +487,7 @@ def _render_call(node: ast.Call, context: _Context) -> str:
         position = positions.get(keyword.arg or "")
         if position is None:
             raise Unsupported(f"`{operation}` takes no `{keyword.arg}` argument in the C++ API")
-        if bound[position] is not None:
+        if position in bound:
             raise Unsupported(f"`{operation}` was given `{keyword.arg}` twice")
         bound[position] = keyword.value
 
@@ -511,23 +520,23 @@ def _select(
 def _fill(
     operation: str,
     call: AtenCall,
-    bound: list[ast.expr | None],
+    bound: dict[int, ast.expr],
     context: _Context,
 ) -> list[str]:
     """Render every argument through to the last one the call supplied."""
-    last = max((i for i, value in enumerate(bound) if value is not None), default=-1)
+    last = max(bound, default=-1)
     for index in range(call.required):
-        if bound[index] is None:
+        if index not in bound:
             name = call.params[index][0]
             raise Unsupported(f"`{operation}` needs its `{name}` argument")
     rendered: list[str] = []
     for index in range(last + 1):
-        value = bound[index]
+        value = bound.get(index)
         if value is None:
             rendered.append(call.defaults[index - call.required])
             continue
         slot = call.params[index][1]
-        rendered.append(_SLOTS[slot](value, context))
+        rendered.append(_render_slot(slot, value, context))
     return rendered
 
 
