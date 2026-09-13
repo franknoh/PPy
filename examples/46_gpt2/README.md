@@ -161,13 +161,39 @@ mean=0.004 absmean=0.439 meansq=0.301
 
 <!-- outputs:end -->
 
+## The cache the region keeps
+
+A region may hand back several tensors, which is what a KV cache needs: the
+block returns its output beside the key and value it just grew, so the cache
+never leaves the region to be reassembled in Python.
+
+```python
+@ppy.opt(3)
+def step(x, k_cache, v_cache, ..., batch, length, ..., causal: bool
+         ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    ...
+    k_all = torch.cat((k_cache, k), 2)
+    v_all = torch.cat((v_cache, v), 2)
+    a = F.scaled_dot_product_attention(q, k_all, v_all, is_causal=causal)
+    ...
+    return torch.add(attended, F.linear(f, proj_w, proj_b)), k_all, v_all
+```
+
+It becomes a `std::tuple<at::Tensor, at::Tensor, at::Tensor>`, which pybind11
+hands Python as an ordinary tuple. `causal` is a `bool` parameter rather than
+a constant folded in, and `length` an `int64_t`, so **one** compiled function
+prefills a prompt under a causal mask and then decodes a token at a time out
+of the cache it built. `gpt2.ppy` prints whether the two agree, because that
+is the check that matters: the last position of a whole forward pass, and the
+same position reached one token at a time, are the same logits.
+
 ## What a region will not do yet
 
-A region returns one tensor. A block cannot hand back its own key and value
-projections beside its output, so incremental decoding with a KV cache --
-where the Python between operators costs the most -- stays in Python for
-now. Everything a region does reach is straight-line: no loop, no branch,
-and no tensor it did not receive as a parameter.
+Everything a region reaches is straight-line: no loop, no branch, and no
+tensor it did not receive as a parameter. The cache above grows by `cat`
+rather than being written into a preallocated buffer, because a region has
+no in-place write; that costs a copy per token, the same copy in every
+column here.
 
 Read on: [PyTorch ATen regions](../09_torch/README.md) ·
 [Plugins: PyTorch](../../docs/internals/plugins.md) ·
