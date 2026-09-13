@@ -2299,6 +2299,8 @@
       
         
       
+        
+      
     
     
     
@@ -2443,6 +2445,34 @@
     
   
     PyTorch ATen regions
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../howto/46_gpt2/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    GPT-2 XL: one region per block
   
 
     
@@ -4018,9 +4048,20 @@ against another, and a module that imports none of them pays for none of them.
 </ul>
 <h2 id="pytorch">PyTorch<a class="headerlink" href="#pytorch" title="Permanent link">&para;</a></h2>
 <ul>
-<li>A function whose body is entirely curated tensor operations (55 ops,
+<li>A function whose body is entirely curated tensor operations (68 ops,
   <code>plugins/torch_plugin.CURATED_OPS</code>) compiles into one C++ region calling
   ATen directly — one Python round trip per call instead of one per operator.</li>
+<li>What a region may emit is the narrower table
+  <code>plugins/torch_region.ATEN_CALLS</code>: 45 operations, each described by the C++
+  signature it is called through rather than by an arity. A dimension is an
+  <code>int64_t</code>, a shape or a list of dimensions an <code>at::IntArrayRef</code> written as
+  a tuple, <code>keepdim</code> and <code>is_causal</code> a <code>bool</code>, <code>gelu</code>'s approximation a
+  mode string; keyword arguments are matched against the C++ parameter
+  names, and an operation with two signatures (<code>mean</code> over everything, or
+  over named dimensions) takes the one the call fills. That is enough for a
+  whole transformer block -- <code>layer_norm</code>, <code>linear</code>, reshapes, transposes,
+  <code>scaled_dot_product_attention</code>, <code>gelu</code> -- to be one region
+  (<code>examples/46_gpt2</code>).</li>
 <li>The region still calls through the dispatcher, so autograd, device
   selection, and backend keys behave identically; a tensor subclass or
   <code>__torch_function__</code> override fails the guard and the Python body runs.</li>
@@ -4032,8 +4073,12 @@ against another, and a module that imports none of them pays for none of them.
   <code>.ppy</code> served by <code>import ppy</code> all get the region, under any launcher
   (<code>examples/31_torchrun</code>). A region library that has gone missing is the
   Python body, not a broken artifact.</li>
-<li>Worth ~20% on small CPU tensors; nothing on an accelerator, where kernel
-  launch latency dominates. Measured honestly in <code>examples/21_training_torch</code>.</li>
+<li>Worth ~20% on small CPU tensors. On an accelerator it is worth whatever
+  the Python between operators costs: nothing on a shape whose kernels are
+  long, and ~20% on GPT-2 XL at a short sequence, where 480 dispatches per
+  forward pass are a fifth of the wall clock (<code>examples/46_gpt2</code>). A region
+  is not a fusing compiler and does not pretend to be one: it removes the
+  interpreter, not the kernel boundaries.</li>
 <li>The curated arithmetic and reductions -- <code>add</code>, <code>sub</code>, <code>mul</code>, <code>div</code>,
   <code>pow</code>, <code>neg</code>, <code>abs</code>, <code>sum</code>, <code>prod</code>, <code>mean</code>, <code>max</code>, <code>min</code> -- are the same
   tensor operations NumPy's are, and an expression tree of them over

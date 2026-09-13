@@ -2297,6 +2297,8 @@
       
         
       
+        
+      
     
     
     
@@ -2441,6 +2443,34 @@
     
   
     PyTorch ATen regions
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../howto/46_gpt2/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    GPT-2 XL: one region per block
   
 
     
@@ -3974,6 +4004,25 @@
 <h1 id="changelog">Changelog<a class="headerlink" href="#changelog" title="Permanent link">&para;</a></h1>
 <h2 id="040-unreleased">0.4.0 — unreleased<a class="headerlink" href="#040-unreleased" title="Permanent link">&para;</a></h2>
 <p>Work toward the next release, on <code>dev</code>; alphas of it are tagged <code>v0.4.0aN</code>.</p>
+<ul>
+<li>An ATen region can hold a whole transformer block. What a region was
+  allowed to emit was a table of <code>(C++ function, arity)</code> pairs, which is
+  enough for <code>relu(add(matmul(x, w), b))</code> and not enough for anything with
+  a dimension in it: <code>softmax</code>, <code>transpose</code>, <code>reshape</code>, <code>layer_norm</code>, and
+  <code>scaled_dot_product_attention</code> had no entry, keyword arguments were
+  refused outright, and an <code>int</code> parameter of the region was declared
+  <code>double</code>. Each operation is now described by the C++ signature it is
+  called through -- a dimension is an <code>int64_t</code>, a shape an
+  <code>at::IntArrayRef</code> written as a tuple, <code>keepdim</code> and <code>is_causal</code> a <code>bool</code>,
+  <code>gelu</code>'s approximation a mode string -- so an argument is rendered by the
+  slot it fills. Keywords are matched against the C++ parameter names,
+  optional arguments take the C++ defaults when a later one is given, and
+  an operation with two signatures (<code>mean</code> over everything, or over named
+  dimensions) takes the one the call fills. Thirteen operations were added
+  to the curated set for it, and <code>examples/46_gpt2</code> is GPT-2 XL with each
+  of its forty-eight blocks compiled to one region, measured against
+  PyTorch eager and <code>torch.compile</code> on an RTX 4090.</li>
+</ul>
 <h2 id="030-2026-09-13">0.3.0 — 2026-09-13<a class="headerlink" href="#030-2026-09-13" title="Permanent link">&para;</a></h2>
 <p>The release that makes the compiler an open one: a public backend interface
 behind the canonical IR, so a code generator for another target is a Python
@@ -4321,7 +4370,7 @@ on real hardware. The entries below are in the order the work landed.</p>
   them, the multi-GPU trainer, a one-process-per-GPU distributed smoke
   test, and a few benchmarks as validation numbers; every Pod it makes it
   deletes. The docs' <code>internals/hardware-validation.md</code> records the last run.</li>
-<li>The docs' example counts come from the tree: <code>17</code>
+<li>The docs' example counts come from the tree: <code>18</code>
   joins the two existing markers, the architecture page's program count is
   a marker, and a test holds <code>examples/README.md</code>'s own count to the same
   functions, so no page spells a number the tree has moved past.</li>
@@ -4367,7 +4416,7 @@ on real hardware. The entries below are in the order the work landed.</p>
   as they should, and the entry point bears the function's qualified name
   rather than <code>call_0</code>.</li>
 <li>The landing page's test and diagnostic-code counts come from the tree
-  through markers (<code>1124</code>, <code>78</code>), and the
+  through markers (<code>1128</code>, <code>78</code>), and the
   guard refuses those spelled as digits. The GPU guide says what a ROCm
   machine gets: no launch, <code>compiled</code> false, <code>ppy emit hip</code> for <code>hipcc</code>.</li>
 <li>The ROCm harness installs every group when the image's JAX allows it

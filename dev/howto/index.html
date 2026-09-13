@@ -2313,6 +2313,8 @@
       
         
       
+        
+      
     
     
     
@@ -2460,6 +2462,34 @@
     
   
     PyTorch ATen regions
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="46_gpt2/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    GPT-2 XL: one region per block
   
 
     
@@ -3998,6 +4028,11 @@ folder holds both <code>&lt;name&gt;.py</code> and <code>&lt;name&gt;.ppy</code>
 <p><strong><a href="09_torch/">PyTorch ATen regions</a></strong></p>
 <hr />
 <p>A function whose body is entirely curated tensor operations compiles into one C++ region that calls ATen directly: one Python round trip per call instead of one per operator.</p>
+</li>
+<li>
+<p><strong><a href="46_gpt2/">GPT-2 XL: one region per block</a></strong></p>
+<hr />
+<p>A transformer block is seventeen weights and one straight line of tensor operations, which is exactly what an ATen region is.</p>
 </li>
 <li>
 <p><strong><a href="21_training_torch/">Training a torch MLP</a></strong></p>
