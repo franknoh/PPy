@@ -277,14 +277,30 @@ def main():
 
     forward = model.forward
     runner = model.run
+    # A KV cache is a tensor the caller keeps across invocations, which is
+    # exactly what CUDA graphs reuse the memory of. `reduce-overhead` refuses
+    # the decode loop outright -- "accessing tensor output of CUDAGraphs that
+    # has been overwritten by a subsequent run" -- until each invocation is
+    # announced, which is what its own error message asks for.
+    mark = None
     if mode == "compile":
         forward = torch.compile(model.forward)
         runner = torch.compile(model.run)
     elif mode == "reduce-overhead":
         forward = torch.compile(model.forward, mode="reduce-overhead")
         runner = torch.compile(model.run, mode="reduce-overhead")
+        mark = torch.compiler.cudagraph_mark_step_begin
+        # Announcing the step is not enough on its own: the cache is a
+        # user-visible output that has to stay live across generations, and
+        # this is the switch the error message names for that case.
+        torch._inductor.config.triton.cudagraph_trees_generation_cloning = "user_visible"
     elif mode != "eager":
         raise SystemExit(f"unknown mode {mode!r}")
+
+    def advance(*arguments):
+        if mark is not None:
+            mark()
+        return runner(*arguments)
 
     for batch, length in [(1, 32), (1, 128), (1, 512), (8, 512)]:
         ids = ids_for(batch, length, device)
@@ -302,13 +318,13 @@ def main():
         # own argmax: sampling would send the four paths down different
         # sequences and measure different work.
         model.reset(1, device)
-        runner(ids[:, 0:prompt], 1, prompt, True)
+        advance(ids[:, 0:prompt], 1, prompt, True)
         if ON_CUDA:
             torch.cuda.synchronize()
         started = time.perf_counter()
         for offset in range(steps):
             at = prompt + offset
-            runner(ids[:, at : at + 1], 1, 1, False)
+            advance(ids[:, at : at + 1], 1, 1, False)
         if ON_CUDA:
             torch.cuda.synchronize()
         return (time.perf_counter() - started) * 1000.0
@@ -316,8 +332,8 @@ def main():
     for _warm in range(2):
         decode_ms()
     model.reset(1, device)
-    runner(ids[:, 0:prompt], 1, prompt, True)
-    print(answer(runner(ids[:, prompt : prompt + 1], 1, 1, False)))
+    advance(ids[:, 0:prompt], 1, prompt, True)
+    print(answer(advance(ids[:, prompt : prompt + 1], 1, 1, False)))
     print(f"# decode {steps} tokens: {min(decode_ms() for _ in range(3)):.3f} ms")
 
     model.trainable()
