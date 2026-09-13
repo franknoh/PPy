@@ -57,6 +57,60 @@ def block(
     return torch.add(attended, F.linear(f, proj_w, proj_b))
 
 
+@ppy.opt(3)
+def step(
+    x: torch.Tensor,
+    k_cache: torch.Tensor,
+    v_cache: torch.Tensor,
+    ln1_w: torch.Tensor,
+    ln1_b: torch.Tensor,
+    q_w: torch.Tensor,
+    q_b: torch.Tensor,
+    k_w: torch.Tensor,
+    k_b: torch.Tensor,
+    v_w: torch.Tensor,
+    v_b: torch.Tensor,
+    o_w: torch.Tensor,
+    o_b: torch.Tensor,
+    ln2_w: torch.Tensor,
+    ln2_b: torch.Tensor,
+    fc_w: torch.Tensor,
+    fc_b: torch.Tensor,
+    proj_w: torch.Tensor,
+    proj_b: torch.Tensor,
+    batch: int,
+    length: int,
+    heads: int,
+    head_dim: int,
+    width: int,
+    eps: float,
+    causal: bool,
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    """The same block, keeping its own key and value.
+
+    It hands back three tensors, so the cache never leaves the region to be
+    reassembled in Python; `causal` is a parameter rather than a constant, so
+    one compiled function prefills a prompt and then decodes a token at a
+    time out of what it built.
+    """
+    # A region takes every weight as a parameter of its own: that is what a
+    # region is, and seventeen tensors beside six dimensions is the shape of
+    # one transformer block.
+    # pylint: disable=too-many-arguments,too-many-positional-arguments,too-many-locals
+    h = torch.layer_norm(x, (width,), ln1_w, ln1_b, eps)
+    q = F.linear(h, q_w, q_b).reshape((batch, length, heads, head_dim)).transpose(1, 2)
+    k = F.linear(h, k_w, k_b).reshape((batch, length, heads, head_dim)).transpose(1, 2)
+    v = F.linear(h, v_w, v_b).reshape((batch, length, heads, head_dim)).transpose(1, 2)
+    k_all = torch.cat((k_cache, k), 2)
+    v_all = torch.cat((v_cache, v), 2)
+    a = F.scaled_dot_product_attention(q, k_all, v_all, is_causal=causal)
+    merged = a.transpose(1, 2).reshape((batch, length, width))
+    attended = torch.add(x, F.linear(merged, o_w, o_b))
+    n = torch.layer_norm(attended, (width,), ln2_w, ln2_b, eps)
+    f = F.gelu(F.linear(n, fc_w, fc_b), approximate="tanh")
+    return torch.add(attended, F.linear(f, proj_w, proj_b)), k_all, v_all
+
+
 def scaled(rows: int, columns: int, spread: float, device: str) -> torch.Tensor:
     """A weight of the given shape, small enough that 48 blocks stay finite."""
     return torch.mul(torch.randn(rows, columns), spread).to(device)
@@ -101,6 +155,57 @@ class Model:  # pylint: disable=too-many-instance-attributes
         self.lnf_w: torch.Tensor = torch.ones(width).to(device)
         self.lnf_b: torch.Tensor = torch.zeros(width).to(device)
         self.blocks: list[Block] = [Block(width, device) for _i in range(layers)]
+        #: The key and value of every layer so far, and how many tokens that is.
+        self.position: int = 0
+        self.ks: list[torch.Tensor] = []
+        self.vs: list[torch.Tensor] = []
+
+    def reset(self, batch: int, device: str) -> None:
+        """An empty cache per layer, and the position the next token sits at."""
+        self.position = 0
+        empty = torch.zeros(batch, self.heads, 0, self.head_dim).to(device)
+        self.ks = [empty for _i in range(self.layers)]
+        self.vs = [empty for _i in range(self.layers)]
+
+    def run(self, ids: torch.Tensor, batch: int, length: int, causal: bool) -> torch.Tensor:
+        """Prefill when `length` is the prompt, one decode step when it is 1."""
+        start: int = self.position
+        h: torch.Tensor = torch.add(self.wte[ids], self.wpe[start : start + length])
+        for index in range(self.layers):
+            layer = self.blocks[index]
+            h, k_all, v_all = step(
+                h,
+                self.ks[index],
+                self.vs[index],
+                layer.ln1_w,
+                layer.ln1_b,
+                layer.q_w,
+                layer.q_b,
+                layer.k_w,
+                layer.k_b,
+                layer.v_w,
+                layer.v_b,
+                layer.o_w,
+                layer.o_b,
+                layer.ln2_w,
+                layer.ln2_b,
+                layer.fc_w,
+                layer.fc_b,
+                layer.proj_w,
+                layer.proj_b,
+                batch,
+                length,
+                self.heads,
+                self.head_dim,
+                self.width,
+                EPS,
+                causal,
+            )
+            self.ks[index] = k_all
+            self.vs[index] = v_all
+        self.position = start + length
+        normed: torch.Tensor = torch.layer_norm(h, (self.width,), self.lnf_w, self.lnf_b, EPS)
+        return torch.matmul(normed, self.wte.t())
 
     def forward(self, ids: torch.Tensor, batch: int, length: int) -> torch.Tensor:
         """Logits for every position, the way the reference implementation computes them."""
@@ -182,6 +287,18 @@ def main() -> None:
     warm = model.forward(ids, batch, length)
     print(answer(warm))
     print(f"# forward: {measure(model, ids, batch, length, 5):.3f} ms")
+
+    # The same weights through the cache: prefill all but the last token, then
+    # take that one step incrementally. The two paths compute the same logits,
+    # which is the check that the cache the region keeps is the right one.
+    model.reset(batch, device)
+    model.run(ids[:, 0 : length - 1], batch, length - 1, True)
+    stepped = model.run(ids[:, length - 1 : length], batch, 1, False)
+    whole = warm[:, length - 1 : length]
+    # `allclose` takes `rtol` before `atol`, and a logit near zero fails a
+    # relative test that a difference of 1e-6 has no business failing.
+    matches: bool = bool(torch.allclose(stepped, whole, 1e-4, 1e-4))
+    print("cached decode matches the whole forward:", matches)
 
 
 if __name__ == "__main__":
