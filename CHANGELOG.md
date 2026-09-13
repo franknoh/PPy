@@ -4,6 +4,24 @@
 
 Work toward the next release, on `dev`; alphas of it are tagged `v0.4.0aN`.
 
+- An ATen region can hold a whole transformer block. What a region was
+  allowed to emit was a table of `(C++ function, arity)` pairs, which is
+  enough for `relu(add(matmul(x, w), b))` and not enough for anything with
+  a dimension in it: `softmax`, `transpose`, `reshape`, `layer_norm`, and
+  `scaled_dot_product_attention` had no entry, keyword arguments were
+  refused outright, and an `int` parameter of the region was declared
+  `double`. Each operation is now described by the C++ signature it is
+  called through -- a dimension is an `int64_t`, a shape an
+  `at::IntArrayRef` written as a tuple, `keepdim` and `is_causal` a `bool`,
+  `gelu`'s approximation a mode string -- so an argument is rendered by the
+  slot it fills. Keywords are matched against the C++ parameter names,
+  optional arguments take the C++ defaults when a later one is given, and
+  an operation with two signatures (`mean` over everything, or over named
+  dimensions) takes the one the call fills. Thirteen operations were added
+  to the curated set for it, and `examples/46_gpt2` is GPT-2 XL with each
+  of its forty-eight blocks compiled to one region, measured against
+  PyTorch eager and `torch.compile` on an RTX 4090.
+
 ## 0.3.0 — 2026-09-13
 
 The release that makes the compiler an open one: a public backend interface

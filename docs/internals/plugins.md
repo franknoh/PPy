@@ -31,9 +31,20 @@ against another, and a module that imports none of them pays for none of them.
 
 ## PyTorch
 
-- A function whose body is entirely curated tensor operations (55 ops,
+- A function whose body is entirely curated tensor operations (68 ops,
   `plugins/torch_plugin.CURATED_OPS`) compiles into one C++ region calling
   ATen directly — one Python round trip per call instead of one per operator.
+- What a region may emit is the narrower table
+  `plugins/torch_region.ATEN_CALLS`: 45 operations, each described by the C++
+  signature it is called through rather than by an arity. A dimension is an
+  `int64_t`, a shape or a list of dimensions an `at::IntArrayRef` written as
+  a tuple, `keepdim` and `is_causal` a `bool`, `gelu`'s approximation a
+  mode string; keyword arguments are matched against the C++ parameter
+  names, and an operation with two signatures (`mean` over everything, or
+  over named dimensions) takes the one the call fills. That is enough for a
+  whole transformer block -- `layer_norm`, `linear`, reshapes, transposes,
+  `scaled_dot_product_attention`, `gelu` -- to be one region
+  (`examples/46_gpt2`).
 - The region still calls through the dispatcher, so autograd, device
   selection, and backend keys behave identically; a tensor subclass or
   `__torch_function__` override fails the guard and the Python body runs.
@@ -45,8 +56,12 @@ against another, and a module that imports none of them pays for none of them.
   `.ppy` served by `import ppy` all get the region, under any launcher
   (`examples/31_torchrun`). A region library that has gone missing is the
   Python body, not a broken artifact.
-- Worth ~20% on small CPU tensors; nothing on an accelerator, where kernel
-  launch latency dominates. Measured honestly in `examples/21_training_torch`.
+- Worth ~20% on small CPU tensors. On an accelerator it is worth whatever
+  the Python between operators costs: nothing on a shape whose kernels are
+  long, and ~20% on GPT-2 XL at a short sequence, where 480 dispatches per
+  forward pass are a fifth of the wall clock (`examples/46_gpt2`). A region
+  is not a fusing compiler and does not pretend to be one: it removes the
+  interpreter, not the kernel boundaries.
 - The curated arithmetic and reductions -- `add`, `sub`, `mul`, `div`,
   `pow`, `neg`, `abs`, `sum`, `prod`, `mean`, `max`, `min` -- are the same
   tensor operations NumPy's are, and an expression tree of them over

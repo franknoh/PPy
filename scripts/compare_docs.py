@@ -52,6 +52,12 @@ TOOLS = {
     "MOJO": os.environ.get("PPY_MOJO", "/tmp/compare-venv/bin/mojo"),
     "NVCC": os.environ.get("PPY_NVCC", "/usr/local/cuda/bin/nvcc"),
     "CARGO": os.environ.get("PPY_CARGO", str(Path.home() / ".cargo/bin/cargo")),
+    # A Python whose PyTorch was built for the accelerator the model-scale
+    # comparison is quoted on. It is deliberately not this machine's: the
+    # GPT-2 table is measured on the datacenter card named under it, and a
+    # run here would rewrite it with numbers from a different GPU. Where
+    # this path does not exist the comparison is skipped and left alone.
+    "TV": os.environ.get("PPY_TORCH_CUDA_PYTHON", "/tmp/torch-cuda-venv/bin/python"),
     "PPY": f"{sys.executable} -m ppy_compiler",
     "PY": sys.executable,
 }
@@ -331,6 +337,23 @@ MANIFEST: dict[str, Comparison] = {
         {"ppy": "PPY `ppy run`", "re": "CPython `re`", "rust": "Rust `regex`"},
         builds=["{CARGO} build -q --release --manifest-path compare/Cargo.toml"],
         needs=("CV", "CARGO"),
+    ),
+    "46_gpt2": Comparison(
+        "46_gpt2",
+        [
+            ("ppy", "{TV} -m ppy_compiler compare/gpt2_bench.ppy"),
+            ("eager", "{TV} compare/gpt2_torch.py eager"),
+            ("compile", "{TV} compare/gpt2_torch.py compile"),
+            ("reduce", "{TV} compare/gpt2_torch.py reduce-overhead"),
+        ],
+        {
+            "ppy": "PPY ATen regions",
+            "eager": "PyTorch eager",
+            "compile": "`torch.compile`",
+            "reduce": "`torch.compile` reduce-overhead",
+        },
+        reference="eager",
+        needs=("TV",),
     ),
 }
 
