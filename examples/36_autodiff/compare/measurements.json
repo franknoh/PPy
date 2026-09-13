@@ -1,6 +1,6 @@
 {
  "environment": {
-  "commit": "d3adcad",
+  "commit": "18eca1a",
   "processor": "x86_64",
   "platform": "Linux-6.6.114.1-microsoft-standard-WSL2-x86_64-with-glibc2.39",
   "python": "3.14.5",
@@ -9,20 +9,20 @@
  "timings": {
   "ppy": {
    "newton, 100k starts": {
-    "mean": 15.204,
-    "stdev": 2.6331312158720843
+    "mean": 12.186,
+    "stdev": 0.19372661149155537
    }
   },
   "jax": {
    "newton, 100k starts": {
-    "mean": 3.432,
-    "stdev": 1.6091208779951867
+    "mean": 1.3559999999999999,
+    "stdev": 0.3003830887383642
    }
   },
   "torch": {
    "newton, 100k starts": {
-    "mean": 10.318,
-    "stdev": 2.6343443206991752
+    "mean": 6.048,
+    "stdev": 1.2013201072153918
    }
   }
  }
