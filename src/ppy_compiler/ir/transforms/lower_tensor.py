@@ -31,7 +31,19 @@ from ..dialects import core, sparse
 from ..dialects import tensor as tensors
 from ..model import Block, Builder, IRFunction, IRModule, Operation, Successor, Value
 from ..passes import Pass, PassContext
-from ..types import F64, I32, I64, U8, BufferType, FloatType, IndexType, IntType, IRType, PtrType
+from ..types import (
+    BF16,
+    F64,
+    I32,
+    I64,
+    U8,
+    BufferType,
+    FloatType,
+    IndexType,
+    IntType,
+    IRType,
+    PtrType,
+)
 from .lower_columnar import ColumnarLowering
 
 __all__ = ["STACK_LIMIT", "LowerTensor", "LoweringError"]
@@ -99,6 +111,17 @@ class LowerTensor(Pass):
         for function in list(module.functions.values()):
             if function.is_declaration:
                 continue
+            value_types = [t for _name, t in function.params] + list(function.results)
+            value_types.extend(
+                value.type for op in function.operations() for value in (*op.operands, *op.results)
+            )
+            if any(
+                info is not None and info.dtype == BF16
+                for info in (tensors.describe(t) for t in value_types)
+            ):
+                raise LoweringError(
+                    f"@{function.name}: bfloat16 tensors require a backend-specific lowering"
+                )
             if any(tensors.describe(t) is not None for _n, t in function.params) or any(
                 tensors.describe(t) is not None for t in function.results
             ):
@@ -646,6 +669,11 @@ class _FunctionLowering(ColumnarLowering):
         self.views[id(op.result)] = _View(
             source.buffer, info, _broadcast_strides(source, info.shape), source.offset
         )
+
+    def op_shape_cast(self, op: Operation) -> None:
+        # Common Tensor modules leave shape abstraction to their selected backend.
+        # Legacy memory lowering has no scoped shape binding for generalized symbols.
+        raise LoweringError("tensor.shape_cast requires a backend supporting logical tensor shapes")
 
     def op_reshape(self, op: Operation) -> None:
         source = self.view(op.operands[0])

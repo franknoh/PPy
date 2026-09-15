@@ -27,7 +27,7 @@ from .annotations import (
     vector_parts,
     vector_type,
 )
-from .binding import bind_call, positional_values
+from .binding import bind_ast_call, bind_call, positional_values
 from .effects import Effect, EffectSet
 from .env import Binding, Env
 from .refinements import Facts, IntRange, width_range
@@ -35,7 +35,7 @@ from .results import FunctionAnalysis, LoweringNote, ModuleAnalysis, ProjectAnal
 from .symbols import ClassInfo, FunctionInfo, ModuleSymbols, ProjectSymbols
 
 if TYPE_CHECKING:
-    from ..plugins.base import PluginRegistry
+    from ..plugins.base import CallResult, PluginRegistry
 
 __all__ = ["FunctionAnalysis", "LoweringNote", "ModuleAnalysis", "ProjectAnalysis", "analyze"]
 
@@ -174,6 +174,50 @@ def _display_fits(node: ast.expr, actual: T.Type, declared: T.Type) -> bool:
         isinstance(held, T.NeverType) or T.is_assignable(held, wanted)
         for held, wanted in zip(actual.args, declared.args, strict=True)
     )
+
+
+def _shapes_conflict(
+    expected: tuple[int | str, ...] | None,
+    actual: tuple[int | str, ...] | None,
+) -> bool:
+    """Whether two known shapes prove a contract cannot be satisfied."""
+    if expected is None or actual is None:
+        return False
+    if len(expected) != len(actual):
+        return True
+    links: dict[tuple[str, str], set[tuple[str, str]]] = {}
+    constants: dict[tuple[str, str], set[int]] = {}
+    for wanted, found in zip(expected, actual, strict=True):
+        if isinstance(wanted, int) and isinstance(found, int):
+            if wanted != found:
+                return True
+            continue
+        if isinstance(wanted, str) and isinstance(found, int):
+            constants.setdefault(("expected", wanted), set()).add(found)
+            continue
+        if isinstance(wanted, int) and isinstance(found, str):
+            constants.setdefault(("actual", found), set()).add(wanted)
+            continue
+        left, right = ("expected", wanted), ("actual", found)
+        links.setdefault(left, set()).add(right)
+        links.setdefault(right, set()).add(left)
+
+    seen: set[tuple[str, str]] = set()
+    for symbol in links.keys() | constants.keys():
+        if symbol in seen:
+            continue
+        component_constants: set[int] = set()
+        pending = [symbol]
+        while pending:
+            current = pending.pop()
+            if current in seen:
+                continue
+            seen.add(current)
+            component_constants.update(constants.get(current, ()))
+            pending.extend(links.get(current, set()) - seen)
+        if len(component_constants) > 1:
+            return True
+    return False
 
 
 def _attribute_path(node: ast.expr) -> str | None:
@@ -556,6 +600,8 @@ class _Checker:
         self._reported: set[int] = set()
         self._function_locals: set[str] = set()
         self._attribute_owners: dict[int, T.Type] = {}
+        #: Source annotations remain contracts after flow-sensitive rebinding.
+        self._declarations: dict[str, Binding] = {}
 
     def check_module(self) -> ModuleAnalysis:
         env = Env()
@@ -649,6 +695,7 @@ class _Checker:
             self._returned_names,
             self._external_writes,
             self._aliases,
+            self._declarations,
         )
         self._effects = EffectSet()
         self._unknown = []
@@ -667,6 +714,7 @@ class _Checker:
         self._shared = set()
         self._returned_names = set()
         self._external_writes = False
+        self._declarations = {}
         # Names are not objects: everything below that asks "what does this
         # mutate or share?" resolves the name through the alias map first.
         # The map depends on the body and on which parameters are immutable,
@@ -717,6 +765,7 @@ class _Checker:
             self._returned_names,
             self._external_writes,
             self._aliases,
+            self._declarations,
         ) = previous
         return result
 
@@ -780,6 +829,12 @@ class _Checker:
             ret_facts = settled[0].facts
             for extra in settled[1:]:
                 ret_facts = ret_facts.merge(extra.facts)
+            if any(self._provisional_returns):
+                # Settled branches seed the recursive return type, but their
+                # facts do not describe the provisional recursive branches.
+                # Publishing the base case's constant, for example, makes a
+                # recursive accumulator appear constant on the next round.
+                ret_facts = Facts()
             if env.reachable:
                 inferred = T.join(inferred, T.NONE)
                 ret_facts = Facts()
@@ -958,10 +1013,12 @@ class _Checker:
                 # `list[ast.stmt]` being narrowed. Each element is held to the
                 # declared element type instead.
                 value = Binding(resolved.type, value.facts)
-            if not T.is_assignable(value.type, resolved.type):
+            fact_mismatch = self._fact_mismatch(resolved.facts, value.facts)
+            if not T.is_assignable(value.type, resolved.type) or fact_mismatch:
                 self._mismatch(
                     "E1301",
-                    f"cannot assign `{value.type}` to a variable declared `{resolved.type}`",
+                    f"cannot assign `{value.type}` to a variable declared `{resolved.type}`"
+                    + (f": {fact_mismatch}" if fact_mismatch else ""),
                     node.value,
                     value.type,
                 )
@@ -971,6 +1028,11 @@ class _Checker:
         self._bind_target(
             node.target, declared, env, declared_type=resolved.type, source=node.value
         )
+        if isinstance(node.target, ast.Name) and any(
+            fact is not None
+            for fact in (resolved.facts.dtype, resolved.facts.shape, resolved.facts.ownership)
+        ):
+            self._declarations[node.target.id] = Binding(resolved.type, resolved.facts)
 
     def _stmt_AugAssign(self, node: ast.AugAssign, env: Env) -> None:
         current = self._load_target(node.target, env)
@@ -1006,10 +1068,12 @@ class _Checker:
             self._mark_escape(node.value, env)
             info = self._current
             if info is not None and info.ret_annotated:
-                if not T.is_assignable(value.type, info.ret):
+                fact_mismatch = self._fact_mismatch(info.ret_facts, value.facts)
+                if not T.is_assignable(value.type, info.ret) or fact_mismatch:
                     self._mismatch(
                         "E1303",
-                        f"returning `{value.type}` from a function declared `-> {info.ret}`",
+                        f"returning `{value.type}` from a function declared `-> {info.ret}`"
+                        + (f": {fact_mismatch}" if fact_mismatch else ""),
                         node.value,
                         value.type,
                     )
@@ -1425,7 +1489,30 @@ class _Checker:
         source: ast.expr | None = None,
     ) -> None:
         if isinstance(target, ast.Name):
-            binding = Binding(declared_type or value.type, value.facts)
+            constraint = self._declarations.get(target.id) if declared_type is None else None
+            if constraint is not None:
+                checked = (
+                    Binding(constraint.type, value.facts)
+                    if source is not None and _display_fits(source, value.type, constraint.type)
+                    else value
+                )
+                fact_mismatch = self._fact_mismatch(constraint.facts, checked.facts)
+                if not T.is_assignable(checked.type, constraint.type) or fact_mismatch:
+                    self._mismatch(
+                        "E1301",
+                        f"cannot assign `{value.type}` to a variable declared "
+                        f"`{constraint.type}`" + (f": {fact_mismatch}" if fact_mismatch else ""),
+                        source or target,
+                        value.type,
+                    )
+                    binding = constraint
+                else:
+                    binding = Binding(
+                        constraint.type,
+                        self._merge_declared(constraint.facts, checked.facts),
+                    )
+            else:
+                binding = Binding(declared_type or value.type, value.facts)
             env.set(target.id, binding)
             _forget_attributes(env, target.id)
             self._record(target, binding)
@@ -1801,16 +1888,15 @@ class _Checker:
         args = [
             self._expr(arg.value if isinstance(arg, ast.Starred) else arg, env) for arg in node.args
         ]
-        keywords = {kw.arg: self._expr(kw.value, env) for kw in node.keywords if kw.arg}
-        retains = not _is_inspecting_builtin(node, env)
-        for argument in node.args:
-            self._mark_escape(argument, env, retains=retains)
+        keywords: dict[str | None, Binding] = {}
         for keyword in node.keywords:
-            self._mark_escape(keyword.value, env, retains=retains)
-
+            value = self._expr(keyword.value, env)
+            if keyword.arg is not None:
+                keywords[keyword.arg] = value
         if isinstance(node.func, ast.Name) and node.func.id not in env:
             result = B.call_builtin(node.func.id, [(a.type, a.facts) for a in args])
             if result is not None:
+                self._mark_call_arguments(node, env, retains=not _is_inspecting_builtin(node, env))
                 self._effects = self._effects | result.effects
                 if Effect.IO in result.effects:
                     self._blockers.append(f"calls `{node.func.id}` which performs I/O")
@@ -1823,8 +1909,14 @@ class _Checker:
             return plugin_result
 
         if isinstance(callee.type, T.ClassObject):
+            self._mark_call_arguments(node, env)
             return self._construct(callee.type, node, args, keywords, env)
         if isinstance(callee.type, T.Callable_):
+            local_info = self.project.functions.get(callee.type.qualname)
+            if local_info is None:
+                self._mark_call_arguments(node, env)
+            else:
+                self._mark_local_call_arguments(local_info, node, env)
             refined = self._refine_builtin_method(callee.type, args)
             if refined is not None:
                 return refined
@@ -1859,9 +1951,12 @@ class _Checker:
             self._error("E1306", "a module is not callable", node)
             return Binding(T.UNKNOWN)
         if isinstance(callee.type, T.Instance):
+            self._mark_call_arguments(node, env)
             called = self._instance_call(callee.type, node, args, keywords)
             if called is not None:
                 return called
+        else:
+            self._mark_call_arguments(node, env)
         return self._opaque_call(node, callee)
 
     def _instance_call(
@@ -2086,7 +2181,7 @@ class _Checker:
             if info.is_async:
                 # Calling a coroutine makes an awaitable of its result.
                 return Binding(_awaitable_of(info.ret))
-            return Binding(info.ret, info.ret_facts if info.ret_annotated else Facts())
+            return Binding(info.ret, info.ret_facts)
         for index, (param, argument) in enumerate(zip(signature.params, args, strict=False)):
             fits = T.is_assignable(argument.type, param.type)
             if not fits and signature.qualname in _LOOKUPS and index == 0:
@@ -2196,7 +2291,10 @@ class _Checker:
         for reached in bind_call(info.params, positional, list(keywords.items()), offset=offset):
             param, argument = reached.param, reached.value
             expected = T.substitute(param.type, bindings)
-            if isinstance(expected, T.UnknownType) or T.is_assignable(argument.type, expected):
+            fact_mismatch = self._fact_mismatch(param.facts, argument.facts)
+            if (
+                isinstance(expected, T.UnknownType) or T.is_assignable(argument.type, expected)
+            ) and not fact_mismatch:
                 continue
             where = node
             if not reached.keyword and reached.index - offset < len(node.args):
@@ -2204,7 +2302,7 @@ class _Checker:
             self._mismatch(
                 "E1301",
                 f"`{info.name}` parameter `{param.name}` expects `{expected}`, "
-                f"got `{argument.type}`",
+                f"got `{argument.type}`" + (f": {fact_mismatch}" if fact_mismatch else ""),
                 where,
                 argument.type,
             )
@@ -2212,7 +2310,7 @@ class _Checker:
         if info.dynamic:
             self._native_blockers.append(f"`{info.name}` is a dynamic boundary")
         result = T.substitute(info.ret, bindings)
-        return Binding(result, info.ret_facts if info.ret_annotated else Facts())
+        return Binding(result, info.ret_facts)
 
     def _note_specialization(
         self, info: FunctionInfo, bindings: dict[T.TypeVar_, T.Type], node: ast.Call
@@ -2279,11 +2377,13 @@ class _Checker:
             where = node
             if not reached.keyword and reached.index - offset < len(node.args):
                 where = node.args[reached.index - offset]
-            if not T.is_assignable(argument.type, param.type):
+            fact_mismatch = self._fact_mismatch(param.facts, argument.facts)
+            if not T.is_assignable(argument.type, param.type) or fact_mismatch:
                 self._mismatch(
                     "E1301",
                     f"`{info.name}` parameter `{param.name}` "
-                    f"expects `{param.type}`, got `{argument.type}`",
+                    f"expects `{param.type}`, got `{argument.type}`"
+                    + (f": {fact_mismatch}" if fact_mismatch else ""),
                     where,
                     argument.type,
                 )
@@ -5026,6 +5126,64 @@ class _Checker:
             if retains:
                 self._shared.update(roots - {EXTERNAL})
 
+    def _mark_call_arguments(self, node: ast.Call, env: Env, *, retains: bool = True) -> None:
+        for argument in node.args:
+            expression = argument.value if isinstance(argument, ast.Starred) else argument
+            self._mark_expanded_escape(expression, env, retains=retains)
+        for keyword in node.keywords:
+            if keyword.arg is None:
+                self._mark_expanded_escape(keyword.value, env, retains=retains)
+            else:
+                self._mark_escape(keyword.value, env, retains=retains)
+
+    def _mark_expanded_escape(self, node: ast.expr, env: Env, *, retains: bool = True) -> None:
+        """Conservatively trace values held by an unpacked display."""
+        if isinstance(node, ast.Name):
+            self._mark_escape(node, env, retains=retains)
+            return
+        if isinstance(node, (ast.List, ast.Tuple, ast.Set)):
+            for element in node.elts:
+                expression = element.value if isinstance(element, ast.Starred) else element
+                self._mark_expanded_escape(expression, env, retains=retains)
+            return
+        if isinstance(node, ast.Dict):
+            for key, value in zip(node.keys, node.values, strict=True):
+                if key is not None:
+                    self._mark_expanded_escape(key, env, retains=retains)
+                self._mark_expanded_escape(value, env, retains=retains)
+            return
+        self._mark_escape(node, env, retains=retains)
+
+    def _mark_local_call_arguments(self, info: FunctionInfo, node: ast.Call, env: Env) -> None:
+        """Use a known helper's parameter lifetimes before falling back."""
+        if any(isinstance(argument, ast.Starred) for argument in node.args):
+            for argument in node.args:
+                expression = argument.value if isinstance(argument, ast.Starred) else argument
+                self._mark_expanded_escape(expression, env)
+            positional_bound: set[int] = set()
+        else:
+            positional_bound = set()
+            for reached in bind_ast_call(info, node):
+                if reached.keyword:
+                    continue
+                positional_bound.add(id(reached.value))
+                if reached.param.facts.ownership not in {"borrowed", "mut"}:
+                    self._mark_expanded_escape(reached.value, env)
+            for argument in node.args:
+                if id(argument) not in positional_bound:
+                    self._mark_expanded_escape(argument, env)
+
+        keyword_bound: set[int] = set()
+        for reached in bind_ast_call(info, node):
+            if not reached.keyword:
+                continue
+            keyword_bound.add(id(reached.value))
+            if reached.param.facts.ownership not in {"borrowed", "mut"}:
+                self._mark_expanded_escape(reached.value, env)
+        for keyword in node.keywords:
+            if keyword.arg is None or id(keyword.value) not in keyword_bound:
+                self._mark_expanded_escape(keyword.value, env)
+
     def _note_mutation(self, node: ast.expr, env: Env) -> None:
         if isinstance(node, ast.Name):
             roots = self._roots(node, node.id)
@@ -5055,22 +5213,36 @@ class _Checker:
         The write only stays local if every argument was allocated here, so
         anything else makes this function's own writes externally visible.
         """
-        if Effect.WRITE_OBJECT not in info.effects:
+        if not ({Effect.WRITE_OBJECT, Effect.WRITE_MEMORY} & info.effects.effects):
             return
-        positional = [a.value if isinstance(a, ast.Starred) else a for a in node.args]
-        named = [(k.arg, k.value) for k in node.keywords]
-        for index, argument in enumerate(positional):
-            declared = info.params[index].type if index < len(info.params) else None
-            if self._argument_is_safe(argument, declared):
+        summary = self.module.functions.get(info.qualname) or self.analysis.function(info.qualname)
+        written = summary.mutated_params | summary.delegated_writes if summary is not None else None
+        reached_nodes: set[int] = set()
+        for reached in bind_ast_call(info, node):
+            reached_nodes.add(id(reached.value))
+            if written is not None:
+                if reached.param.name not in written:
+                    continue
+            elif reached.param.facts.ownership == "borrowed":
                 continue
-            self._note_delegated_write(argument)
-            self._external_writes = True
-        for name, argument in named:
-            declared = next((p.type for p in info.params if p.name == name), None)
-            if self._argument_is_safe(argument, declared):
+            self._propagate_callee_write(reached.value, reached.param.type)
+
+        if written is not None and not written:
+            return
+        for argument in node.args:
+            if id(argument) in reached_nodes:
                 continue
-            self._note_delegated_write(argument)
-            self._external_writes = True
+            expression = argument.value if isinstance(argument, ast.Starred) else argument
+            self._propagate_callee_write(expression, None)
+        for keyword in node.keywords:
+            if id(keyword.value) not in reached_nodes:
+                self._propagate_callee_write(keyword.value, None)
+
+    def _propagate_callee_write(self, argument: ast.expr, declared: T.Type | None) -> None:
+        if self._argument_is_safe(argument, declared):
+            return
+        self._note_delegated_write(argument)
+        self._external_writes = True
 
     def _note_delegated_write(self, argument: ast.expr) -> None:
         """One of our parameters was handed to a callee that writes.
@@ -5119,7 +5291,9 @@ class _Checker:
             float_bits=declared.float_bits,
             no_alias=declared.no_alias,
             contiguous=declared.contiguous,
-            shape=declared.shape,
+            shape=self._merge_shape(declared.shape, value.shape),
+            dtype=declared.dtype or value.dtype,
+            ownership=declared.ownership or value.ownership,
             exact_class=declared.exact_class,
         )
         if value.int_range is not None:
@@ -5131,6 +5305,33 @@ class _Checker:
         if value.length is not None:
             merged = merged.with_(length=value.length)
         return merged
+
+    @staticmethod
+    def _fact_mismatch(declared: Facts, value: Facts) -> str:
+        mismatches: list[str] = []
+        if declared.dtype is not None and value.dtype is not None and declared.dtype != value.dtype:
+            mismatches.append(f"dtype `{declared.dtype}` expected, got `{value.dtype}`")
+        if _shapes_conflict(declared.shape, value.shape):
+            mismatches.append(f"shape `{declared.shape}` expected, got `{value.shape}`")
+        required = declared.ownership
+        actual = value.ownership
+        if required == "mut" and actual not in {"mut", "owned"}:
+            mismatches.append("writable ownership requires `ppy.Mut[...]` or `ppy.Owned[...]`")
+        elif required == "owned" and actual != "owned":
+            mismatches.append("retained ownership requires `ppy.Owned[...]`")
+        return "; ".join(mismatches)
+
+    @staticmethod
+    def _merge_shape(
+        declared: tuple[int | str, ...] | None,
+        value: tuple[int | str, ...] | None,
+    ) -> tuple[int | str, ...] | None:
+        if declared is None or value is None or len(declared) != len(value):
+            return declared if declared is not None else value
+        return tuple(
+            expected if isinstance(expected, int) or not isinstance(actual, int) else actual
+            for expected, actual in zip(declared, value, strict=True)
+        )
 
     def _refine_builtin_method(self, signature: T.Callable_, args: list[Binding]) -> Binding | None:
         """Some builtin methods have a result the argument count decides."""
@@ -5187,12 +5388,86 @@ class _Checker:
             return None
         self._effects = self._effects | result.effects
         if result.kind == "Reject":
-            self._error("E1802", f"`{qualname}` is not supported under the current PPY mode", node)
+            reason = result.reason or getattr(result.spec, "reason", "")
+            message = f"`{qualname}` is not supported under the current PPY mode"
+            self._error("E1802", message + (f": {reason}" if reason else ""), node)
+        else:
+            self._apply_plugin_argument_contracts(node, args, keywords, result, env)
         if result.kind == "PythonFallback":
             self._native_blockers.append(f"`{qualname}` stays on the Python path: {result.reason}")
         if self.record:
             self._note(plugin, qualname, result, node)
         return Binding(result.type, result.facts)
+
+    def _apply_plugin_argument_contracts(
+        self,
+        node: ast.Call,
+        args: list[Binding],
+        keywords: dict[str | None, Binding],
+        result: CallResult,
+        env: Env,
+    ) -> None:
+        """Apply a plugin's borrow contract, retaining unspecified arguments."""
+        positional = {
+            index: (
+                argument.value if isinstance(argument, ast.Starred) else argument,
+                binding,
+            )
+            for index, (argument, binding) in enumerate(zip(node.args, args, strict=False))
+        }
+        named = {
+            keyword.arg: (keyword.value, keywords[keyword.arg])
+            for keyword in node.keywords
+            if keyword.arg is not None and keyword.arg in keywords
+        }
+        positional_unresolved = any(isinstance(argument, ast.Starred) for argument in node.args)
+        contracted: set[int | str] = set()
+        for contract in result.arguments:
+            if positional_unresolved and isinstance(contract.argument, int):
+                # An expansion changes every following runtime position, so a
+                # source-list index cannot safely select the plugin argument.
+                continue
+            located = (
+                positional.get(contract.argument)
+                if isinstance(contract.argument, int)
+                else named.get(contract.argument)
+            )
+            if located is None:
+                continue
+            expression, binding = located
+            contracted.add(contract.argument)
+            mode = str(contract.ownership)
+            if mode == "borrowed":
+                continue
+            actual = binding.facts.ownership
+            if mode == "mut":
+                if actual not in {"mut", "owned"}:
+                    reason = (
+                        contract.reason or result.reason or "argument requires writable storage"
+                    )
+                    self._error("E1802", reason, expression)
+                    continue
+                self._note_mutation(expression, env)
+                self._effects = self._effects.add(Effect.WRITE_MEMORY)
+                continue
+            if actual != "owned":
+                reason = contract.reason or result.reason or "argument is retained beyond the call"
+                self._error("E1802", reason, expression)
+                continue
+            self._mark_expanded_escape(expression, env)
+
+        for index, (expression, _binding) in positional.items():
+            if index not in contracted:
+                if positional_unresolved:
+                    self._mark_expanded_escape(expression, env)
+                else:
+                    self._mark_expanded_escape(expression, env)
+        for name, (expression, _binding) in named.items():
+            if name not in contracted:
+                self._mark_expanded_escape(expression, env)
+        for keyword in node.keywords:
+            if keyword.arg is None:
+                self._mark_expanded_escape(keyword.value, env)
 
     def _note(self, plugin, qualname: str, result, node: ast.AST) -> None:  # type: ignore[no-untyped-def]
         """Record the plugin's verdict, and the shared operation the call is."""

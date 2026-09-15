@@ -10,6 +10,47 @@ What each builtin plugin does is in [Plugins](../internals/plugins.md).
 
 ::: ppy_compiler.plugins.base
 
+## Tensor ownership and backend types (PPy 0.3.3)
+
+Plugin interface 2 remains compatible. Plugins using the APIs in this section
+must require compiler version 0.3.3 or newer.
+
+`CallResult.arguments` describes what a recognized call does with individual
+arguments. Address a positional argument by its zero-based index or a keyword
+argument by its name:
+
+```python
+CallResult(
+    T.NONE,
+    arguments=(
+        CallArgument(0, ArgumentOwnership.BORROWED),
+        CallArgument("out", ArgumentOwnership.MUT, "out must be writable"),
+    ),
+)
+```
+
+`BORROWED` reads an argument only for the duration of the call. `MUT` permits
+call-scoped writes and requires a `ppy.Mut[...]` or `ppy.Owned[...]` value.
+`OWNED` means the callee may retain the value and therefore requires
+`ppy.Owned[...]`. Mutations follow aliases back to the function parameter.
+Arguments without a contract keep the conservative behavior: the compiler
+assumes the callee may retain them. Starred positional arguments and unpacked
+keyword arguments are also conservative because their runtime positions or
+names are unknown.
+
+An ownership violation reports E1802 at the argument. Its explanation comes
+from `CallArgument.reason`, then `CallResult.reason`, then a compiler default.
+A rejected call uses `CallResult.reason` or `RejectSpec.reason` in its E1802
+diagnostic.
+
+`Plugin.lower_type_for_backend(type_, facts, backend) -> IRType | None` lets a
+plugin claim a representation only when that backend is explicitly selected.
+The default returns `None`. `PluginRegistry.lower_type` accepts the optional
+`backend` argument, rejects competing backend claims, and otherwise preserves
+the registration-order behavior of `Plugin.lower_type`. The shared
+`ppy.Tensor` type has no legacy plugin-specific representation when no backend
+is selected; its neutral canonical form is handled by the compiler.
+
 ## Canonical types and operations (PPy 0.3.2)
 
 Plugin interface 2 remains compatible. Plugins using the following additions

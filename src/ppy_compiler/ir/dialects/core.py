@@ -22,6 +22,7 @@ from ..types import (
     BOOL,
     I64,
     INDEX,
+    BFloat16Type,
     BoolType,
     BufferType,
     FloatType,
@@ -205,7 +206,7 @@ def _verify_const(op: Operation, checker: Checker) -> None:
     elif isinstance(t, IndexType):
         if not isinstance(value, int) or isinstance(value, bool):
             checker.error(op, f"an index constant needs an integer value, not {value!r}")
-    elif isinstance(t, FloatType):
+    elif isinstance(t, (FloatType, BFloat16Type)):
         if not isinstance(value, (int, float)) or isinstance(value, bool):
             checker.error(op, f"a float constant needs a number, not {value!r}")
     elif isinstance(t, PtrType):

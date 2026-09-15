@@ -32,7 +32,9 @@ if TYPE_CHECKING:
 
 __all__ = [
     "PLUGIN_API_VERSION",
+    "ArgumentOwnership",
     "CallAdjustment",
+    "CallArgument",
     "CallResult",
     "DialectOperationSpec",
     "DirectCallSpec",
@@ -67,6 +69,36 @@ class Lowering(enum.StrEnum):
     GRAPH_REGION = "GraphRegion"
     PYTHON_FALLBACK = "PythonFallback"
     REJECT = "Reject"
+
+
+class ArgumentOwnership(enum.StrEnum):
+    """What a plugin call does with one argument."""
+
+    BORROWED = "borrowed"
+    MUT = "mut"
+    OWNED = "owned"
+
+
+@dataclass(frozen=True, slots=True)
+class CallArgument:
+    """One positional or keyword argument's ownership contract."""
+
+    argument: int | str
+    ownership: ArgumentOwnership | str = ArgumentOwnership.BORROWED
+    reason: str = ""
+
+    def __post_init__(self) -> None:
+        if isinstance(self.argument, bool) or (
+            isinstance(self.argument, int) and self.argument < 0
+        ):
+            raise ValueError("a positional call argument index is a non-negative integer")
+        if not isinstance(self.argument, (int, str)) or self.argument == "":
+            raise ValueError("a call argument is addressed by its index or keyword name")
+        try:
+            ownership = ArgumentOwnership(self.ownership)
+        except ValueError as error:
+            raise ValueError("a call argument is borrowed, mut, or owned") from error
+        object.__setattr__(self, "ownership", ownership)
 
 
 # -- typed lowering specs (spec 19) ------------------------------------------
@@ -169,6 +201,7 @@ class CallResult:
     lowering: Lowering | LoweringSpec = Lowering.PYTHON_FALLBACK
     reason: str = ""
     guards: tuple[str, ...] = ()
+    arguments: tuple[CallArgument, ...] = ()
 
     @property
     def kind(self) -> Lowering:
@@ -317,6 +350,10 @@ class Plugin:
         """
         return None
 
+    def lower_type_for_backend(self, type_: T.Type, facts: Facts, backend: str) -> IRType | None:
+        """A backend-selected representation, or None for the common type."""
+        return None
+
     def register_dialects(self, registry: DialectRegistry) -> None:
         """Dialects this plugin defines: `registry.register(MyDialect())`."""
 
@@ -401,11 +438,25 @@ class PluginRegistry:
                 plugin
                 for plugin in self._plugins
                 if roots & {module.partition(".")[0] for module in plugin.modules}
+                or type(plugin).lower_type_for_backend is not Plugin.lower_type_for_backend
             ]
         return tuple(sorted(f"{p.name}:{p.fingerprint()}" for p in selected))
 
-    def lower_type(self, type_: T.Type, facts: Facts) -> IRType | None:
-        """Ask enabled plugins in registration order for a canonical IR type."""
+    def lower_type(self, type_: T.Type, facts: Facts, backend: str | None = None) -> IRType | None:
+        """The common or explicitly backend-selected representation of a type."""
+        if backend is not None:
+            claims = [
+                (plugin, lowered)
+                for plugin in self._plugins
+                if (lowered := plugin.lower_type_for_backend(type_, facts, backend)) is not None
+            ]
+            if len(claims) > 1:
+                names = ", ".join(repr(plugin.name) for plugin, _lowered in claims)
+                raise PluginError(f"plugins {names} both lower `{type_}` for backend {backend!r}")
+            if claims:
+                return claims[0][1]
+        if T.is_tensor(type_):
+            return None
         for plugin in self._plugins:
             lowered = plugin.lower_type(type_, facts)
             if lowered is not None:

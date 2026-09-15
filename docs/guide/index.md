@@ -70,6 +70,12 @@ program using any of them runs the same on every path.
 
     `ppy.cuda` and `ppy.hip`: kernels in Python, PTX under `ppy run`.
 
+-   **[Common tensors](tensors.md)**
+
+    ---
+
+    `Tensor[dtype, shape]`, bfloat16, mutable borrows, and backend storage.
+
 -   **[XLA](xla.md)**
 
     ---
