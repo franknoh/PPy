@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.3.1 — 2026-09-15
+## 0.3.2 — 2026-09-15
 
 - Plugins can lower analyzed types and facts into IR types, preserving tensor
   dtype and shape across function parameters, results, local values, and calls.
@@ -15,6 +15,8 @@
 - Source emission formats can declare `requires_toolchain=False` to work
   without an installed SDK. Existing formats and artifact builds retain
   their toolchain checks.
+
+## 0.3.1 — 2026-09-15
 
 - Standalone builds and C emission support `print` with string literal `end`
   and `sep`, boolean literal `flush`, and basic integer and boolean f-strings.
