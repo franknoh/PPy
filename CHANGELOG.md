@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.3.1 — unreleased
+## 0.3.1 — 2026-09-15
 
 - Standalone builds and C emission support `print` with string literal `end`
   and `sep`, boolean literal `flush`, and basic integer and boolean f-strings.

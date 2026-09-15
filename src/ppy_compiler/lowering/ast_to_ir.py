@@ -2746,10 +2746,11 @@ class _FunctionLowering:
         return core.const(self.b, 0, I64)
 
     def _standalone_print_parts(self, argument: ast.expr) -> list[str | Value]:
+        parts: list[str | Value] = []
         if isinstance(argument, ast.Constant) and isinstance(argument.value, str):
-            return [argument.value]
+            parts.append(argument.value)
+            return parts
         if isinstance(argument, ast.JoinedStr):
-            parts: list[str | Value] = []
             for item in argument.values:
                 if isinstance(item, ast.FormattedValue):
                     if item.conversion != -1 or item.format_spec is not None:
@@ -2763,7 +2764,8 @@ class _FunctionLowering:
         value = self._expr(argument)
         if value.type not in {I64, BOOL}:
             raise Unsupported("only integers, booleans, and string literals print natively")
-        return [value]
+        parts.append(value)
+        return parts
 
     def _standalone_print_text(self, value: str) -> None:
         if not value:
