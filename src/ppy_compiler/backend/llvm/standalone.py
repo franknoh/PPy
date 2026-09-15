@@ -111,6 +111,7 @@ def standalone_ir(bundle, reporter, entry: Path, opt_level: int | None = None): 
         analysis,
         functions,
         cpu_compatible=True,
+        backend_name="llvm",
         safeguards=config.llvm.safeguards or "hoisted",
         standalone=True,
         prover=prover_for(config),

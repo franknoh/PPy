@@ -2,7 +2,9 @@
 
 from .base import (
     PLUGIN_API_VERSION,
+    ArgumentOwnership,
     CallAdjustment,
+    CallArgument,
     CallResult,
     DialectOperationSpec,
     DirectCallSpec,
@@ -20,7 +22,9 @@ from .base import (
 
 __all__ = [
     "PLUGIN_API_VERSION",
+    "ArgumentOwnership",
     "CallAdjustment",
+    "CallArgument",
     "CallResult",
     "DialectOperationSpec",
     "DirectCallSpec",

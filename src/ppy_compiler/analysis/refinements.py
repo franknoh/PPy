@@ -122,6 +122,7 @@ class Facts:
             non_null=self.non_null and other.non_null,
             contiguous=self.contiguous and other.contiguous,
             no_alias=self.no_alias and other.no_alias,
+            ownership=self.ownership if self.ownership == other.ownership else None,
             shape=self.shape if self.shape == other.shape else None,
             dtype=self.dtype if self.dtype == other.dtype else None,
             width=self.width if self.width == other.width else None,

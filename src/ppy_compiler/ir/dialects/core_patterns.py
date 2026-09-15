@@ -18,13 +18,18 @@ from collections.abc import Callable
 
 from ..model import Attribute, Operation, Value
 from ..pattern import Pattern, PatternSet, Rewriter, RewriteResult
-from ..types import BoolType, FloatType, IndexType, IntType, IRType
+from ..types import BFloat16Type, BoolType, FloatType, IndexType, IntType, IRType, is_floating
 from . import core
 
 __all__ = ["canonicalization_patterns", "folding_patterns"]
 
 
 def _constant(value: Value) -> Attribute | None:
+    if isinstance(value.type, BFloat16Type):
+        # The literal payload is a Python number, not a value rounded to
+        # BF16. Preserve it for backend rounding rather than folding casts
+        # or comparisons with the host's different precision.
+        return None
     op = value.owner
     if isinstance(op, Operation) and op.name == "core.const":
         return op.attributes.get("value")
@@ -316,7 +321,7 @@ class _FoldCast(Pattern):
             value = int(a)  # a float truncates toward zero, like C
             folded = (
                 _fit(value, target, "wrap")
-                if not isinstance(source, FloatType)
+                if not is_floating(source)
                 else (value if target.fits(value) else None)
             )
         elif isinstance(target, IndexType) and isinstance(a, int):

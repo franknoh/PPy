@@ -98,6 +98,27 @@ _INT_MARKERS = {
     for signed in (True, False)
 }
 _FLOAT_MARKERS = {f"ppy.f{bits}": bits for bits in (16, 32, 64)}
+_TENSOR_DTYPES = {
+    "ppy.bf16": "bfloat16",
+    "ppy.f16": "float16",
+    "ppy.f32": "float32",
+    "ppy.f64": "float64",
+    "builtins.bool": "bool",
+    "builtins.int": "int64",
+    "builtins.float": "float64",
+    **{f"ppy.i{bits}": f"int{bits}" for bits in (8, 16, 32, 64)},
+    **{f"ppy.u{bits}": f"uint{bits}" for bits in (8, 16, 32, 64)},
+}
+_TENSOR_DTYPE_ALIASES = {
+    "bf16": "bfloat16",
+    "bfloat16": "bfloat16",
+    "f16": "float16",
+    "f32": "float32",
+    "f64": "float64",
+    **{name: name for name in _TENSOR_DTYPES.values()},
+    **{f"i{bits}": f"int{bits}" for bits in (8, 16, 32, 64)},
+    **{f"u{bits}": f"uint{bits}" for bits in (8, 16, 32, 64)},
+}
 
 _PASSTHROUGH = {"typing.Final", "typing.ClassVar", "typing.Required", "typing.NotRequired"}
 
@@ -239,11 +260,15 @@ class AnnotationResolver:
             return Resolved(T.ANY)
         if qualname == "ppy.Dynamic":
             return Resolved(T.DYNAMIC)
+        if qualname == "ppy.Tensor":
+            return Resolved(T.TENSOR)
         if qualname in _INT_MARKERS:
             bits, signed = _INT_MARKERS[qualname]
             return Resolved(T.INT, Facts(width=(bits, signed), int_range=width_range(bits, signed)))
         if qualname in _FLOAT_MARKERS:
             return Resolved(T.FLOAT, Facts(float_bits=_FLOAT_MARKERS[qualname]))
+        if qualname == "ppy.bf16":
+            return Resolved(T.FLOAT, Facts(dtype="bfloat16"))
         if qualname in _BARE_GENERIC:
             name, arity = _BARE_GENERIC[qualname]
             self._bare_generic(name, expr)
@@ -300,6 +325,8 @@ class AnnotationResolver:
             return Resolved(T.instance("type"))
         if qualname == "ppy.Array":
             return self._ppy_array(args, expr)
+        if qualname == "ppy.Tensor":
+            return self._tensor(args, expr)
         if qualname == "ppy.Vector":
             element = self._resolve(args[0]).type if args else T.UNKNOWN
             return Resolved(T.list_of(element))
@@ -373,10 +400,24 @@ class AnnotationResolver:
             case "ppy.Contiguous":
                 return facts.with_(contiguous=True)
             case "ppy.Shape":
-                dims = tuple(v for v in values if isinstance(v, (int, str)))
+                dims = tuple(values)
+                if T.is_tensor(base) and not self._valid_tensor_shape(dims):
+                    self._error(
+                        "E1301",
+                        "Tensor shape dimensions must be nonnegative integers or names",
+                        meta,
+                    )
+                    return facts
                 return facts.with_(shape=dims)
             case "ppy.DType" if len(values) == 1 and isinstance(values[0], str):
-                return facts.with_(dtype=values[0])
+                dtype = self._normalize_tensor_dtype(values[0]) if T.is_tensor(base) else values[0]
+                if dtype is None:
+                    self._error("E1301", f"unsupported Tensor dtype {values[0]!r}", meta)
+                    return facts
+                return facts.with_(dtype=dtype)
+            case "ppy.DType" if T.is_tensor(base):
+                self._error("E1301", "Tensor dtype must be a supported dtype name", meta)
+                return facts
             case "ppy.IntWidth" if len(values) >= 1 and isinstance(values[0], int):
                 signed = bool(values[1]) if len(values) > 1 else bool(keywords.get("signed", True))
                 return facts.with_(
@@ -487,6 +528,43 @@ class AnnotationResolver:
         if isinstance(length, int):
             return Resolved(T.Tuple_(tuple(element for _ in range(length))), facts)
         return Resolved(T.Tuple_((element,), homogeneous=True), facts)
+
+    def _tensor(self, args: list[ast.expr], expr: ast.Subscript) -> Resolved:
+        if len(args) != 2:
+            self._error("E1301", "ppy.Tensor takes a dtype and shape: Tensor[dtype, shape]", expr)
+            return Resolved(T.TENSOR)
+        qualname = self.resolver.canonical(args[0])
+        dtype = _TENSOR_DTYPES.get(qualname or "")
+        if dtype is None:
+            literal = self._literal_value(args[0])
+            dtype = self._normalize_tensor_dtype(literal) if isinstance(literal, str) else None
+        if dtype is None:
+            self._error("E1301", "unsupported Tensor dtype", args[0])
+        shape_value = self._literal_value(args[1])
+        shape = shape_value if isinstance(shape_value, tuple) else None
+        if shape is None or not self._valid_tensor_shape(shape):
+            self._error(
+                "E1301",
+                "Tensor shape must be a tuple of nonnegative integers or symbolic names",
+                args[1],
+            )
+            shape = None
+        return Resolved(T.TENSOR, Facts(dtype=dtype, shape=shape))
+
+    @staticmethod
+    def _normalize_tensor_dtype(dtype: str) -> str | None:
+        return _TENSOR_DTYPE_ALIASES.get(dtype)
+
+    @staticmethod
+    def _valid_tensor_shape(shape: tuple[object, ...]) -> bool:
+        return all(
+            not isinstance(dim, bool)
+            and (
+                (isinstance(dim, int) and dim >= 0)
+                or (isinstance(dim, str) and bool(dim) and dim.isidentifier())
+            )
+            for dim in shape
+        )
 
     def _alias(self, expr: ast.expr) -> Resolved | None:
         """Expand a module-level type alias, guarding against a cycle.
