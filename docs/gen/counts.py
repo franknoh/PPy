@@ -13,11 +13,19 @@ is not a page, so a test holds its own count to the same functions.
 from __future__ import annotations
 
 import re
+import runpy
 import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent.parent
 EXAMPLES = ROOT / "examples"
+
+
+def on_config(config, **_kwargs: object):
+    """Label the docs with the version in this checkout, including archived builds."""
+    version = runpy.run_path(str(ROOT / "src" / "ppy_compiler" / "version.py"))
+    config.extra["ppy_version"] = version["COMPILER_VERSION"]
+    return config
 
 
 def _folders() -> int:
