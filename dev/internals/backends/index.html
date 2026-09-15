@@ -4167,6 +4167,13 @@ both numbers. A backend package with a base class of its own may declare
 once there for all of them.</p>
 <p>The compiler's own backends ship with the interface and are upgraded with
 it, so they track the constant; nothing installed should.</p>
+<p>An <code>EmitFormat</code> checks <code>toolchain_status()</code> before analysis by default.
+A format that only writes source can declare <code>requires_toolchain=False</code>
+to emit without an installed SDK. This applies to both module and program
+scope; validation and passes still run. <code>ppy build</code> always checks the
+backend's toolchain, regardless of its formats' emission requirements.
+Packages using this field must require <code>ppy-lang&gt;=0.3.2</code>; existing backend
+API version 1 implementations continue to load with the default behavior.</p>
 <p>The <code>BackendContext</code> a backend receives with the IR carries the project
 root and configuration, the backend's own table from <code>pyproject.toml</code>
 (<code>backend_config</code>), the optimization level, the <code>target</code> that table names,
