@@ -213,7 +213,7 @@
   </div>
   <div class="md-source__repository">
     franknoh/PPy
-    <span class="ppy-source-version" title="Documentation version">v0.3.1</span>
+    <span class="ppy-source-version" title="Documentation version">v0.3.2</span>
   </div>
 </a>
       </div>
@@ -497,7 +497,7 @@
   </div>
   <div class="md-source__repository">
     franknoh/PPy
-    <span class="ppy-source-version" title="Documentation version">v0.3.1</span>
+    <span class="ppy-source-version" title="Documentation version">v0.3.2</span>
   </div>
 </a>
     </div>
@@ -3420,6 +3420,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#ppy_compiler.plugins.base.Plugin.lower_type" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;lower_type
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#ppy_compiler.plugins.base.Plugin.register_dialects" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3492,6 +3503,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#ppy_compiler.plugins.base.PluginRegistry.lower_type" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;lower_type
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#ppy_compiler.plugins.base.PluginRegistry.dialect_registry" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3509,6 +3531,17 @@
         
       </ul>
     </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#canonical-types-and-operations-ppy-032" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Canonical types and operations (PPy 0.3.2)
+      
+    </span>
+  </a>
   
 </li>
       
@@ -4478,6 +4511,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#ppy_compiler.plugins.base.Plugin.lower_type" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;lower_type
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#ppy_compiler.plugins.base.Plugin.register_dialects" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4550,6 +4594,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#ppy_compiler.plugins.base.PluginRegistry.lower_type" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;lower_type
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#ppy_compiler.plugins.base.PluginRegistry.dialect_registry" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4567,6 +4622,17 @@
         
       </ul>
     </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#canonical-types-and-operations-ppy-032" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Canonical types and operations (PPy 0.3.2)
+      
+    </span>
+  </a>
   
 </li>
       
@@ -4776,7 +4842,7 @@ only when a project enables it.</p>
 
 
 <h3 id="ppy_compiler.plugins.base.DialectOperationSpec" class="doc doc-heading">
-<code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>              <code class="highlight language-python"><span class="n">DialectOperationSpec</span><span class="p">(</span><span class="n">dialect</span><span class="p">,</span> <span class="n">operation</span><span class="p">,</span> <span class="n">attributes</span><span class="o">=</span><span class="p">())</span></code>
+<code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>              <code class="highlight language-python"><span class="n">DialectOperationSpec</span><span class="p">(</span><span class="n">dialect</span><span class="p">,</span> <span class="n">operation</span><span class="p">,</span> <span class="n">attributes</span><span class="o">=</span><span class="p">(),</span> <span class="n">keyword_operands</span><span class="o">=</span><span class="p">(),</span> <span class="n">keyword_attributes</span><span class="o">=</span><span class="p">())</span></code>
 
   <span class="doc doc-labels">
       <small class="doc doc-label doc-label-dataclass"><code>dataclass</code></small>
@@ -5476,6 +5542,26 @@ call's own lowering is.</p>
 <div class="doc doc-object doc-function">
 
 
+<h4 id="ppy_compiler.plugins.base.Plugin.lower_type" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <code class="highlight language-python"><span class="n">lower_type</span><span class="p">(</span><span class="n">type_</span><span class="p">,</span> <span class="n">facts</span><span class="p">)</span></code>
+
+<a href="#ppy_compiler.plugins.base.Plugin.lower_type" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Canonical representation of a source type, retaining its proven facts.</p>
+<p>Return None when this plugin does not provide a representation. This
+hook describes IR types, independently of any backend's native ABI.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
 <h4 id="ppy_compiler.plugins.base.Plugin.register_dialects" class="doc doc-heading">
 <code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <code class="highlight language-python"><span class="n">register_dialects</span><span class="p">(</span><span class="n">registry</span><span class="p">)</span></code>
 
@@ -5616,6 +5702,24 @@ actually imported keeps that cost off every other compilation. Pass
 <div class="doc doc-object doc-function">
 
 
+<h4 id="ppy_compiler.plugins.base.PluginRegistry.lower_type" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <code class="highlight language-python"><span class="n">lower_type</span><span class="p">(</span><span class="n">type_</span><span class="p">,</span> <span class="n">facts</span><span class="p">)</span></code>
+
+<a href="#ppy_compiler.plugins.base.PluginRegistry.lower_type" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Ask enabled plugins in registration order for a canonical IR type.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
 <h4 id="ppy_compiler.plugins.base.PluginRegistry.dialect_registry" class="doc doc-heading">
 <code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <code class="highlight language-python"><span class="n">dialect_registry</span><span class="p">()</span></code>
 
@@ -5647,7 +5751,45 @@ dialect, pattern, and lowering the enabled plugins register.</p>
 
     </div>
 
-</div>
+</div><h2 id="canonical-types-and-operations-ppy-032">Canonical types and operations (PPy 0.3.2)<a class="headerlink" href="#canonical-types-and-operations-ppy-032" title="Permanent link">&para;</a></h2>
+<p>Plugin interface 2 remains compatible. Plugins using the following additions
+must require compiler version 0.3.2 or newer.</p>
+<p><code>Plugin.lower_type(type_, facts) -&gt; IRType | None</code> chooses a canonical IR
+representation. The registry asks enabled plugins in registration order and
+uses the first non-<code>None</code> answer. The frontend supplies the actual <code>Facts</code>,
+including dtype and shape, for parameters, returns and plugin call results.
+Returning <code>None</code> lets the builtin type conversion try next. Register every
+custom type's dialect through <code>register_dialects</code>.</p>
+<p>Canonical signatures, local values and function calls use IR types. A custom
+tensor or pointer does not need a CPU <code>NativeSignature</code>; CPU emission checks
+its own ABI and preserves Python fallback when that boundary is unavailable.
+An explicit external backend request reports functions it cannot lower with
+the function name, source location and reason.</p>
+<p>A <code>CallResult</code> with <code>DialectOperationSpec</code> becomes the named operation. Positional
+arguments become SSA operands in source order. The result type comes from
+<code>lower_type</code>; a <code>CallResult</code> with the analysis type <code>T.NONE</code> produces zero
+results, allowing a store as a statement.
+Effects, guards and the call's source location are retained on the operation.
+Observable writes cannot be removed by dead-code elimination.</p>
+<p>Keyword arguments have explicit roles:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="n">DialectOperationSpec</span><span class="p">(</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>    <span class="s2">"example"</span><span class="p">,</span>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>    <span class="s2">"scale"</span><span class="p">,</span>
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>    <span class="n">attributes</span><span class="o">=</span><span class="p">((</span><span class="s2">"mode"</span><span class="p">,</span> <span class="s2">"linear"</span><span class="p">),),</span>
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>    <span class="n">keyword_operands</span><span class="o">=</span><span class="p">(</span><span class="s2">"factor"</span><span class="p">,),</span>
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>    <span class="n">keyword_attributes</span><span class="o">=</span><span class="p">(</span><span class="s2">"axis"</span><span class="p">,),</span>
+<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="p">)</span>
+</code></pre></div>
+<p>For <code>scale(x, factor=n, axis=1)</code>, <code>x</code> and <code>n</code> are operands and <code>axis=1</code>
+is an attribute. Keyword operand values are evaluated in Python source order
+and appended in the declared order. Omitted keywords are omitted from the
+operation; the plugin must supply any required defaults in its contract.
+Keyword attributes must be literals or names with proven constant values.
+Undeclared keyword roles, unpacked arguments and nonconstant attributes are
+rejected. Fixed attributes must agree with corresponding keyword attributes.
+Attribute values use the IR's serializable scalar, type, tuple and dictionary
+forms. <code>guards</code> are contract metadata for backend validation/lowering; a
+backend must implement required checks or reject the operation.</p>
 
 
 

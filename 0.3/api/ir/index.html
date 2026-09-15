@@ -213,7 +213,7 @@
   </div>
   <div class="md-source__repository">
     franknoh/PPy
-    <span class="ppy-source-version" title="Documentation version">v0.3.1</span>
+    <span class="ppy-source-version" title="Documentation version">v0.3.2</span>
   </div>
 </a>
       </div>
@@ -497,7 +497,7 @@
   </div>
   <div class="md-source__repository">
     franknoh/PPy
-    <span class="ppy-source-version" title="Documentation version">v0.3.1</span>
+    <span class="ppy-source-version" title="Documentation version">v0.3.2</span>
   </div>
 </a>
     </div>
@@ -3283,6 +3283,45 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#ppy_compiler.ir.model.Block" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;Block
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label=" Block">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#ppy_compiler.ir.model.Block.terminator_for" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;terminator_for
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ppy_compiler.ir.model.Block.successors_for" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;successors_for
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#ppy_compiler.ir.model.Operation" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -5346,6 +5385,45 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#ppy_compiler.ir.model.Block" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;Block
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label=" Block">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#ppy_compiler.ir.model.Block.terminator_for" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;terminator_for
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ppy_compiler.ir.model.Block.successors_for" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;successors_for
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#ppy_compiler.ir.model.Operation" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -7026,6 +7104,85 @@ dialect's <code>OpSpec</code> says what is allowed, and the verifier asks it.</p
 
 
 
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-class">
+
+
+
+<h3 id="ppy_compiler.ir.model.Block" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>              <code class="highlight language-python"><span class="n">Block</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">region</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
+
+<a href="#ppy_compiler.ir.model.Block" class="headerlink" title="Permanent link">&para;</a></h3>
+
+
+    <div class="doc doc-contents ">
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="ppy_compiler.ir.model.Block.terminator_for" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <code class="highlight language-python"><span class="n">terminator_for</span><span class="p">(</span><span class="n">registry</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
+
+<a href="#ppy_compiler.ir.model.Block.terminator_for" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>The final operation when <code>registry</code> defines it as a terminator.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="ppy_compiler.ir.model.Block.successors_for" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <code class="highlight language-python"><span class="n">successors_for</span><span class="p">(</span><span class="n">registry</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
+
+<a href="#ppy_compiler.ir.model.Block.successors_for" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Blocks reached by this block's terminator in <code>registry</code>.</p>
+
+
+    </div>
+
+</div>
 
 
 
@@ -10400,7 +10557,7 @@ per buffer in <code>wrt</code>, named <code>grad_&lt;parameter&gt;</code>.</p>
 
 
 <h3 id="ppy_compiler.ir.transforms.cfg_digest" class="doc doc-heading">
-<code class="doc-symbol doc-symbol-heading doc-symbol-function"></code>            <code class="highlight language-python"><span class="n">cfg_digest</span><span class="p">(</span><span class="n">function</span><span class="p">)</span></code>
+<code class="doc-symbol doc-symbol-heading doc-symbol-function"></code>            <code class="highlight language-python"><span class="n">cfg_digest</span><span class="p">(</span><span class="n">function</span><span class="p">,</span> <span class="n">registry</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
 
 <a href="#ppy_compiler.ir.transforms.cfg_digest" class="headerlink" title="Permanent link">&para;</a></h3>
 

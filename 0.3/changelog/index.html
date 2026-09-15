@@ -211,7 +211,7 @@
   </div>
   <div class="md-source__repository">
     franknoh/PPy
-    <span class="ppy-source-version" title="Documentation version">v0.3.1</span>
+    <span class="ppy-source-version" title="Documentation version">v0.3.2</span>
   </div>
 </a>
       </div>
@@ -495,7 +495,7 @@
   </div>
   <div class="md-source__repository">
     franknoh/PPy
-    <span class="ppy-source-version" title="Documentation version">v0.3.1</span>
+    <span class="ppy-source-version" title="Documentation version">v0.3.2</span>
   </div>
 </a>
     </div>
@@ -3734,6 +3734,17 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#032-2026-09-15" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        0.3.2 — 2026-09-15
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#031-2026-09-15" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3862,6 +3873,17 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#032-2026-09-15" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        0.3.2 — 2026-09-15
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#031-2026-09-15" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3976,6 +3998,22 @@
 
 
 <h1 id="changelog">Changelog<a class="headerlink" href="#changelog" title="Permanent link">&para;</a></h1>
+<h2 id="032-2026-09-15">0.3.2 — 2026-09-15<a class="headerlink" href="#032-2026-09-15" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Plugins can lower analyzed types and facts into IR types, preserving tensor
+  dtype and shape across function parameters, results, local values, and calls.
+  Canonical IR generation no longer depends on the CPU native ABI.</li>
+<li>Plugin dialect calls carry operands, constant keyword attributes, effects,
+  guards, and source locations into the IR, including operations without a
+  result. Optimizations preserve operations with write effects.</li>
+<li>Explicit external-backend compilation reports lowering failures with the
+  function's location and reason, while ordinary Python fallback remains available.</li>
+<li>Project dialect registries govern verification, control-flow analysis,
+  transformations, and IR-file builds without process-global registration.</li>
+<li>Source emission formats can declare <code>requires_toolchain=False</code> to work
+  without an installed SDK. Existing formats and artifact builds retain
+  their toolchain checks.</li>
+</ul>
 <h2 id="031-2026-09-15">0.3.1 — 2026-09-15<a class="headerlink" href="#031-2026-09-15" title="Permanent link">&para;</a></h2>
 <ul>
 <li>Standalone builds and C emission support <code>print</code> with string literal <code>end</code>
@@ -4375,7 +4413,7 @@ on real hardware. The entries below are in the order the work landed.</p>
   as they should, and the entry point bears the function's qualified name
   rather than <code>call_0</code>.</li>
 <li>The landing page's test and diagnostic-code counts come from the tree
-  through markers (<code>1132</code>, <code>78</code>), and the
+  through markers (<code>1156</code>, <code>78</code>), and the
   guard refuses those spelled as digits. The GPU guide says what a ROCm
   machine gets: no launch, <code>compiled</code> false, <code>ppy emit hip</code> for <code>hipcc</code>.</li>
 <li>The ROCm harness installs every group when the image's JAX allows it
