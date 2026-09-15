@@ -628,6 +628,8 @@
       
         
       
+        
+      
     
     
     
@@ -921,6 +923,34 @@
     
   
     GPU kernels
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guide/tensors/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Common tensors
   
 
     
@@ -3519,6 +3549,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#ppy_compiler.ir.types.BFloat16Type" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;BFloat16Type
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#ppy_compiler.ir.types.IndexType" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -5621,6 +5662,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#ppy_compiler.ir.types.BFloat16Type" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;BFloat16Type
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#ppy_compiler.ir.types.IndexType" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -7620,6 +7672,63 @@ spelling, so the same program always prints to the same bytes.</p>
 
 
         <p>Base of every IR type. Subclasses are frozen dataclasses.</p>
+
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-class">
+
+
+
+<h3 id="ppy_compiler.ir.types.BFloat16Type" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>              <code class="highlight language-python"><span class="n">BFloat16Type</span><span class="p">()</span></code>
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-dataclass"><code>dataclass</code></small>
+  </span>
+
+<a href="#ppy_compiler.ir.types.BFloat16Type" class="headerlink" title="Permanent link">&para;</a></h3>
+
+
+    <div class="doc doc-contents ">
+            <p class="doc doc-class-bases">
+              Bases: <code><a class="autorefs autorefs-internal" title="              IRType()
+
+  
+      dataclass
+   (ppy_compiler.ir.types.IRType)" href="#ppy_compiler.ir.types.IRType">IRType</a></code></p>
+
+
+
+        <p>Brain floating point: 8 exponent bits and 7 explicit fraction bits.</p>
+<p>This is distinct from IEEE binary16 and deliberately not a FloatType,
+so a backend dispatching IEEE types by width cannot substitute f16.</p>
 
 
 
@@ -10641,7 +10750,7 @@ per buffer in <code>wrt</code>, named <code>grad_&lt;parameter&gt;</code>.</p>
 
 
 <h3 id="ppy_compiler.ir.transforms.default_pipeline" class="doc doc-heading">
-<code class="doc-symbol doc-symbol-heading doc-symbol-function"></code>            <code class="highlight language-python"><span class="n">default_pipeline</span><span class="p">(</span><span class="n">level</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">ctx</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">parallel</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">sanitize</span><span class="o">=</span><span class="p">(),</span> <span class="n">until</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">instrument</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">profile</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
+<code class="doc-symbol doc-symbol-heading doc-symbol-function"></code>            <code class="highlight language-python"><span class="n">default_pipeline</span><span class="p">(</span><span class="n">level</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">ctx</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">parallel</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">sanitize</span><span class="o">=</span><span class="p">(),</span> <span class="n">until</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">instrument</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">profile</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">lower_tensors</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span></code>
 
 <a href="#ppy_compiler.ir.transforms.default_pipeline" class="headerlink" title="Permanent link">&para;</a></h3>
 

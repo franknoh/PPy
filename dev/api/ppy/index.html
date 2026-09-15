@@ -628,6 +628,8 @@
       
         
       
+        
+      
     
     
     
@@ -921,6 +923,34 @@
     
   
     GPU kernels
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guide/tensors/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Common tensors
   
 
     
@@ -3320,6 +3350,28 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#ppy._markers.FloatFormat" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;FloatFormat
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#ppy._markers.TensorSpec" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;TensorSpec
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#ppy._markers.Range" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3445,6 +3497,17 @@
     <span class="md-ellipsis">
       
         <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;Buffer
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#ppy._markers.Tensor" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;Tensor
       
     </span>
   </a>
@@ -5356,6 +5419,28 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#ppy._markers.FloatFormat" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;FloatFormat
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#ppy._markers.TensorSpec" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;TensorSpec
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#ppy._markers.Range" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -5481,6 +5566,17 @@
     <span class="md-ellipsis">
       
         <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;Buffer
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#ppy._markers.Tensor" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;Tensor
       
     </span>
   </a>
@@ -6959,6 +7055,100 @@ working under plain CPython and under any Python-aware editor.</p>
 
 
 
+<h2 id="ppy._markers.FloatFormat" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>              <code class="highlight language-python"><span class="n">FloatFormat</span><span class="p">(</span><span class="n">name</span><span class="p">)</span></code>
+
+<a href="#ppy._markers.FloatFormat" class="headerlink" title="Permanent link">&para;</a></h2>
+
+
+    <div class="doc doc-contents ">
+            <p class="doc doc-class-bases">
+              Bases: <code><span title="ppy._markers._Meta">_Meta</span></code></p>
+
+
+
+        <p>A named floating-point format whose width alone is ambiguous.</p>
+
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-class">
+
+
+
+<h2 id="ppy._markers.TensorSpec" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>              <code class="highlight language-python"><span class="n">TensorSpec</span><span class="p">(</span><span class="n">dtype</span><span class="p">,</span> <span class="n">shape</span><span class="p">)</span></code>
+
+<a href="#ppy._markers.TensorSpec" class="headerlink" title="Permanent link">&para;</a></h2>
+
+
+    <div class="doc doc-contents ">
+            <p class="doc doc-class-bases">
+              Bases: <code><span title="ppy._markers._Meta">_Meta</span></code></p>
+
+
+
+        <p>The framework-neutral element dtype and shape of a tensor annotation.</p>
+
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-class">
+
+
+
 <h2 id="ppy._markers.Range" class="doc doc-heading">
 <code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>              <code class="highlight language-python"><span class="n">Range</span><span class="p">(</span><span class="n">low</span><span class="p">,</span> <span class="n">high</span><span class="p">)</span></code>
 
@@ -7492,6 +7682,52 @@ it may not return it, store it where it outlives the call, or mutate it.</p>
 
 
         <p><code>Buffer[T]</code>: contiguous borrowed buffer view (buffer protocol).</p>
+
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-class">
+
+
+
+<h2 id="ppy._markers.Tensor" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>            <code>Tensor</code>
+
+
+<a href="#ppy._markers.Tensor" class="headerlink" title="Permanent link">&para;</a></h2>
+
+
+    <div class="doc doc-contents ">
+
+
+
+        <p>Framework-neutral tensor annotation: <code>Tensor[dtype, shape]</code>.</p>
 
 
 
