@@ -16,8 +16,12 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Iterator, Sequence
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 from .types import IRType
+
+if TYPE_CHECKING:
+    from .dialect import DialectRegistry
 
 __all__ = [
     "Attribute",
@@ -202,7 +206,11 @@ class Block:
 
     @property
     def terminator(self) -> Operation | None:
-        if self.operations and self.operations[-1].spec_is_terminator():
+        return self.terminator_for()
+
+    def terminator_for(self, registry: DialectRegistry | None = None) -> Operation | None:
+        """The final operation when `registry` defines it as a terminator."""
+        if self.operations and self.operations[-1].spec_is_terminator(registry):
             return self.operations[-1]
         return None
 
@@ -220,7 +228,11 @@ class Block:
 
     @property
     def successors(self) -> list[Block]:
-        terminator = self.terminator
+        return self.successors_for()
+
+    def successors_for(self, registry: DialectRegistry | None = None) -> list[Block]:
+        """Blocks reached by this block's terminator in `registry`."""
+        terminator = self.terminator_for(registry)
         return [s.block for s in terminator.successors] if terminator is not None else []
 
     def __iter__(self) -> Iterator[Operation]:
@@ -285,10 +297,11 @@ class Operation:
             raise ValueError(f"{self.name} has {len(self.results)} results, not one")
         return self.results[0]
 
-    def spec_is_terminator(self) -> bool:
-        from .dialect import registry
+    def spec_is_terminator(self, registry: DialectRegistry | None = None) -> bool:
+        from .dialect import registry as default_registry
 
-        spec = registry().op_spec(self.name)
+        dialects = registry if registry is not None else default_registry()
+        spec = dialects.op_spec(self.name)
         return spec is not None and spec.terminator
 
     def set_operand(self, index: int, value: Value) -> None:

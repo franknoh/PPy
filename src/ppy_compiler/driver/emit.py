@@ -154,10 +154,10 @@ def run_emit(options: argparse.Namespace, reporter: Reporter) -> int:
 def _emit_with_backend(kind: str, target: Path, output: Path | None, reporter: Reporter) -> int:
     """`ppy emit <format>` for a format an installed backend registers.
 
-    The backend is found by its format and loaded; its toolchain must be
-    here; the modules go through the shared passes and the backend's own,
-    then its validation, and then the format's scope decides what is asked
-    for and what is written:
+    The backend is found by its format and loaded; formats declaring a
+    toolchain requirement check it; the modules go through the shared passes
+    and the backend's own, then its validation, and then the format's scope
+    decides what is asked for and what is written:
 
     * `module` scope, the default: `emit` once per module, one artifact
       each. One module goes to standard output or to `-o FILE`; more than
@@ -193,16 +193,17 @@ def _emit_with_backend(kind: str, target: Path, output: Path | None, reporter: R
         reporter.emit(Diagnostic("E1903", Severity.ERROR, str(error)))
         return 2
     backend, spec = owner.backend, owner.format
-    status = backend.toolchain_status()
-    if not status.available:
-        reporter.emit(
-            Diagnostic(
-                "E1801",
-                Severity.ERROR,
-                f"backend {backend.name!r} is unavailable here: {status.detail}",
+    if spec.requires_toolchain:
+        status = backend.toolchain_status()
+        if not status.available:
+            reporter.emit(
+                Diagnostic(
+                    "E1801",
+                    Severity.ERROR,
+                    f"backend {backend.name!r} is unavailable here: {status.detail}",
+                )
             )
-        )
-        return 2
+            return 2
     bundle = analyze_paths(project, collect_sources(target), backend="llvm")
     errors = reporter.report(bundle.diagnostics)
     if errors:
@@ -334,7 +335,11 @@ def _texts(kind: str, bundle, header_only: bool) -> dict[str, str]:  # type: ign
     from .ir_pipeline import canonical_ir_modules as ir_modules
 
     if kind == "ir":
-        return {name: encode(module) for name, module in ir_modules(bundle, launches=True).items()}
+        registry = bundle.project.plugins.dialect_registry()
+        return {
+            name: encode(module, registry)
+            for name, module in ir_modules(bundle, launches=True).items()
+        }
     if kind == "linked-ir":
         from ..ir.linker import link
         from ..ir.transforms import whole_program
@@ -343,8 +348,14 @@ def _texts(kind: str, bundle, header_only: bool) -> dict[str, str]:  # type: ign
         if not modules:
             return {}
         linked = link(list(modules.values()), bundle.project.root.name)
-        whole_program(linked.module, set(linked.module.functions), bundle.project.config.opt_level)
-        return {linked.module.name: encode(linked.module)}
+        registry = bundle.project.plugins.dialect_registry()
+        whole_program(
+            linked.module,
+            set(linked.module.functions),
+            bundle.project.config.opt_level,
+            registry=registry,
+        )
+        return {linked.module.name: encode(linked.module, registry)}
     if kind == "llvm-ir":
         return emit_ir(bundle)
     if kind == "stablehlo":
@@ -440,29 +451,29 @@ def build_ir_file(path: Path, options: argparse.Namespace, reporter: Reporter) -
     from ..lowering.abi import signature_from_ir
     from .ir_pipeline import optimize_shared_ir as optimize
 
+    project = open_project(path)
     try:
-        module = read(path)
+        module = read(path, project.plugins.dialect_registry())
     except CodecError as error:
         reporter.emit(Diagnostic("E1801", Severity.ERROR, str(error)))
         return 2
     if not available():
         reporter.emit(Diagnostic("E1801", Severity.ERROR, "llvmlite is not installed"))
         return 2
-    project = open_project(path)
     level = getattr(options, "opt_level", None) or project.config.opt_level
     try:
-        optimize(module, level, parallel=project.config.parallel)
+        optimize(module, level, plugins=project.plugins, parallel=project.config.parallel)
         text = emit_module(module)
+        signatures = {
+            f.attributes.get("ppy.qualname", name): signature_from_ir(f)
+            for name, f in module.functions.items()
+            if not f.is_declaration and "ppy.synthesized" not in f.attributes
+        }
     except Exception as error:  # noqa: BLE001 - the verifier's or the backend's refusal
         reporter.emit(Diagnostic("E1801", Severity.ERROR, str(error)))
         return 2
     output: Path = options.output or (project.config.cache_path / "native")
     output.mkdir(parents=True, exist_ok=True)
-    signatures = {
-        f.attributes.get("ppy.qualname", name): signature_from_ir(f)
-        for name, f in module.functions.items()
-        if not f.is_declaration and "ppy.synthesized" not in f.attributes
-    }
     try:
         engine = JitEngine(opt_level=level).open()
         object_path = emit_object(

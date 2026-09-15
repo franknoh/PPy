@@ -389,7 +389,7 @@ def test_the_program_runs_natively_and_answers_like_python(tmp_path: Path):
     assert "dialect regex 1" in text
     for name in ("count_words", "sum_values", "is_identifier"):
         assert f"func @words_{name}(%text: buffer<u8>" in text, f"{name} lowered natively"
-    assert "func @words_doubled(buffer<u8>" in text, "a backreference stays on Python"
+    assert "func @words_doubled" not in text, "a backreference stays on Python without an IR stub"
     assert "private func @ppy.regex." in text
     explained = _ppy(tmp_path, "explain", "words.ppy:44")
     assert "backreference" in explained.stdout

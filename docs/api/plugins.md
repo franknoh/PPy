@@ -9,3 +9,51 @@ IR. Every hook has a no-op default, so the compiler calls them directly.
 What each builtin plugin does is in [Plugins](../internals/plugins.md).
 
 ::: ppy_compiler.plugins.base
+
+## Canonical types and operations (PPy 0.3.2)
+
+Plugin interface 2 remains compatible. Plugins using the following additions
+must require compiler version 0.3.2 or newer.
+
+`Plugin.lower_type(type_, facts) -> IRType | None` chooses a canonical IR
+representation. The registry asks enabled plugins in registration order and
+uses the first non-`None` answer. The frontend supplies the actual `Facts`,
+including dtype and shape, for parameters, returns and plugin call results.
+Returning `None` lets the builtin type conversion try next. Register every
+custom type's dialect through `register_dialects`.
+
+Canonical signatures, local values and function calls use IR types. A custom
+tensor or pointer does not need a CPU `NativeSignature`; CPU emission checks
+its own ABI and preserves Python fallback when that boundary is unavailable.
+An explicit external backend request reports functions it cannot lower with
+the function name, source location and reason.
+
+A `CallResult` with `DialectOperationSpec` becomes the named operation. Positional
+arguments become SSA operands in source order. The result type comes from
+`lower_type`; a `CallResult` with the analysis type `T.NONE` produces zero
+results, allowing a store as a statement.
+Effects, guards and the call's source location are retained on the operation.
+Observable writes cannot be removed by dead-code elimination.
+
+Keyword arguments have explicit roles:
+
+```python
+DialectOperationSpec(
+    "example",
+    "scale",
+    attributes=(("mode", "linear"),),
+    keyword_operands=("factor",),
+    keyword_attributes=("axis",),
+)
+```
+
+For `scale(x, factor=n, axis=1)`, `x` and `n` are operands and `axis=1`
+is an attribute. Keyword operand values are evaluated in Python source order
+and appended in the declared order. Omitted keywords are omitted from the
+operation; the plugin must supply any required defaults in its contract.
+Keyword attributes must be literals or names with proven constant values.
+Undeclared keyword roles, unpacked arguments and nonconstant attributes are
+rejected. Fixed attributes must agree with corresponding keyword attributes.
+Attribute values use the IR's serializable scalar, type, tuple and dictionary
+forms. `guards` are contract metadata for backend validation/lowering; a
+backend must implement required checks or reject the operation.

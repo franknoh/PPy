@@ -23,7 +23,7 @@ from ...driver.ir_pipeline import (
 )
 from ...ir import encode
 from .from_ir import emit_module
-from .lowering import ClassLayouts, LoweringResult, Unsupported
+from .lowering import ClassLayouts, LoweredFunction, LoweringResult, Unsupported
 from .prover import Prover
 
 __all__ = [
@@ -63,11 +63,13 @@ def lower_module_via_ir(
         module,
         functions,
         layouts,
+        cpu_compatible=True,
         safeguards=safeguards,
         standalone=standalone,
         prover=prover,
         root=root,
         imports=imports,
+        plugins=plugins,
     )
     ctx = optimize(
         lowered.module,
@@ -78,6 +80,7 @@ def lower_module_via_ir(
         instrument=instrument,
         profile=profile,
     )
+    _reject_external_operations(lowered)
     text = emit_module(lowered.module, target) if lowered.functions else ""
     libraries = lowered.module.attributes.get("ppy.libraries", ())
     exports = {
@@ -87,14 +90,72 @@ def lower_module_via_ir(
     }
     return LoweringResult(
         ir=text,
-        ppyir=encode(lowered.module) if lowered.functions else "",
-        functions=lowered.functions,
+        ppyir=encode(lowered.module, ctx.registry) if lowered.functions else "",
+        functions={
+            name: LoweredFunction(
+                entry.info,
+                entry.signature.native,
+                exposed=entry.exposed,
+                exposure_reason=entry.exposure_reason,
+            )
+            for name, entry in lowered.functions.items()
+            if entry.signature.native is not None
+        },
         rejected=lowered.rejected,
         proved=lowered.proved,
         libraries=tuple(str(lib) for lib in libraries),  # type: ignore[union-attr]
         exports=exports,
         remarks=(*lowered.remarks, *ctx.remarks),
     )
+
+
+def _reject_external_operations(lowered) -> None:  # type: ignore[no-untyped-def]
+    """Keep unsupported plugin operations on Python after shared lowering.
+
+    Plugin passes may convert their dialect to builtin operations. Surviving
+    external operations have no LLVM emitter; reject those functions and all
+    callers before emission, preserving unrelated native functions.
+    """
+    from ...ir import DialectRegistry, SymbolRef
+    from ...ir.dialects import builtin_dialects
+
+    registry = DialectRegistry()
+    for dialect in builtin_dialects():
+        registry.register(dialect)
+    rejected: dict[str, str] = {}
+    references: dict[str, set[str]] = {}
+
+    def symbols(value: object) -> set[str]:
+        if isinstance(value, SymbolRef):
+            return {value.name}
+        if isinstance(value, dict):
+            return set().union(*(symbols(item) for item in value.values()))
+        if isinstance(value, (tuple, list)):
+            return set().union(*(symbols(item) for item in value))
+        return set()
+
+    for name, function in lowered.module.functions.items():
+        references[name] = symbols(function.attributes)
+        for op in function.operations():
+            references[name].update(symbols(op.attributes))
+            if registry.op_spec(op.name) is None:
+                rejected[name] = f"operation `{op.name}` has no LLVM lowering"
+    while True:
+        blocked = {
+            name: f"callee `{min(callees & rejected.keys())}` has no LLVM lowering"
+            for name, callees in references.items()
+            if name not in rejected and callees & rejected.keys()
+        }
+        if not blocked:
+            break
+        rejected.update(blocked)
+    for qualname in list(lowered.functions):
+        name = qualname.replace(".", "_")
+        if name in rejected:
+            lowered.rejected[qualname] = rejected[name]
+            del lowered.functions[qualname]
+    for name in rejected:
+        lowered.module.functions.pop(name, None)
 
 
 def lower_specialization_via_ir(
@@ -117,6 +178,7 @@ def lower_specialization_via_ir(
             info,
             node,
             constants=constants,
+            cpu_compatible=True,
             symbol=symbol,
             layouts=layouts,
             safeguards=safeguards,

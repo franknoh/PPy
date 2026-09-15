@@ -314,7 +314,10 @@ def _linked_program(bundle, natives, level, target):  # type: ignore[no-untyped-
     with_functions = [native for native in natives.values() if native.functions]
     if not with_functions or any(not native.ppyir for native in with_functions):
         return None
-    linked = link([decode(native.ppyir) for native in with_functions], bundle.project.root.name)
+    registry = bundle.project.plugins.dialect_registry()
+    linked = link(
+        [decode(native.ppyir, registry) for native in with_functions], bundle.project.root.name
+    )
     if linked.unresolved:
         return None
     exposed = {
@@ -328,7 +331,7 @@ def _linked_program(bundle, natives, level, target):  # type: ignore[no-untyped-
         for name, function in linked.module.functions.items()
         if function.attributes.get("ppy.qualname") in exposed
     }
-    whole_program(linked.module, keep, level)
+    whole_program(linked.module, keep, level, registry=registry)
     text = from_ir_emit(linked.module, target)
     for native in with_functions:
         if native.fused:

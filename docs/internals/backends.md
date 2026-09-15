@@ -84,6 +84,14 @@ once there for all of them.
 The compiler's own backends ship with the interface and are upgraded with
 it, so they track the constant; nothing installed should.
 
+An `EmitFormat` checks `toolchain_status()` before analysis by default.
+A format that only writes source can declare `requires_toolchain=False`
+to emit without an installed SDK. This applies to both module and program
+scope; validation and passes still run. `ppy build` always checks the
+backend's toolchain, regardless of its formats' emission requirements.
+Packages using this field must require `ppy-lang>=0.3.2`; existing backend
+API version 1 implementations continue to load with the default behavior.
+
 The `BackendContext` a backend receives with the IR carries the project
 root and configuration, the backend's own table from `pyproject.toml`
 (`backend_config`), the optimization level, the `target` that table names,

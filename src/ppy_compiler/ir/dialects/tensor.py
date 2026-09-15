@@ -292,7 +292,7 @@ def _verify_fused(op: Operation, checker: Checker) -> None:
                 f"body argument {argument.type} does not match an element of {operand.type}",
             )
             return
-    terminator = body.terminator
+    terminator = body.terminator_for(checker.registry)
     if terminator is None or terminator.name != "tensor.yield":
         checker.error(op, "a fused body ends in tensor.yield")
         return
