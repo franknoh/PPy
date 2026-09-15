@@ -46,6 +46,7 @@ GROUPS = [
             "06_pydantic",
             "07_parallel",
             "09_torch",
+            "46_gpt2",
             "21_training_torch",
             "22_training_jax",
             "25_jax_export",

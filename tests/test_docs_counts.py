@@ -29,7 +29,9 @@ def test_the_examples_index_spells_the_compared_count_the_tree_has():
     found = re.search(r"^(\d+) folders carry a `compare/` directory", text, re.MULTILINE)
     assert found is not None, "the index says how many folders carry counterparts"
     assert int(found.group(1)) == counts._compared()
-    rows = re.findall(r"^\| `(\d\d_[a-z_]+)` \|", text, re.MULTILINE)
+    # A folder may carry a digit past its prefix -- `46_gpt2` -- and this
+    # pattern is looking for the table's rows, not policing the names.
+    rows = re.findall(r"^\| `(\d\d_[a-z0-9_]+)` \|", text, re.MULTILINE)
     from folders import FOLDERS  # pylint: disable=import-outside-toplevel
 
     assert sorted(rows) == sorted(FOLDERS), "one row per gallery folder"

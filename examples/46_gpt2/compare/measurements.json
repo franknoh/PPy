@@ -1,0 +1,115 @@
+{
+ "environment": {
+  "commit": "d83f6f8",
+  "processor": "x86_64",
+  "platform": "Linux-6.8.0-138-generic-x86_64-with-glibc2.39 (RunPod, RTX 4090)",
+  "python": "3.13.15",
+  "runs": 5
+ },
+ "timings": {
+  "ppy": {
+   "forward b1 s32": {
+    "mean": 8.7822,
+    "stdev": 0.11995082325686639
+   },
+   "forward b1 s128": {
+    "mean": 9.236,
+    "stdev": 0.1796454842182231
+   },
+   "forward b1 s512": {
+    "mean": 14.866,
+    "stdev": 0.008276472678623773
+   },
+   "forward b8 s512": {
+    "mean": 95.3266,
+    "stdev": 0.29997383219207496
+   },
+   "decode 128 tokens": {
+    "mean": 1204.2408,
+    "stdev": 28.33608652760641
+   },
+   "training step b4 s512": {
+    "mean": 136.615,
+    "stdev": 0.22598008761835356
+   }
+  },
+  "eager": {
+   "forward b1 s32": {
+    "mean": 10.7724,
+    "stdev": 0.07755514167352168
+   },
+   "forward b1 s128": {
+    "mean": 11.0572,
+    "stdev": 0.07936434967918532
+   },
+   "forward b1 s512": {
+    "mean": 14.8956,
+    "stdev": 0.011148990985735014
+   },
+   "forward b8 s512": {
+    "mean": 95.502,
+    "stdev": 0.1814510953397654
+   },
+   "decode 128 tokens": {
+    "mean": 1484.259,
+    "stdev": 17.627364493877113
+   },
+   "training step b4 s512": {
+    "mean": 136.7282,
+    "stdev": 0.20893467878740618
+   }
+  },
+  "compile": {
+   "forward b1 s32": {
+    "mean": 7.4602,
+    "stdev": 0.2831628506707757
+   },
+   "forward b1 s128": {
+    "mean": 7.8848,
+    "stdev": 0.2779670843823062
+   },
+   "forward b1 s512": {
+    "mean": 14.7372,
+    "stdev": 0.06844852080213301
+   },
+   "forward b8 s512": {
+    "mean": 95.5524,
+    "stdev": 0.2556859401687922
+   },
+   "decode 128 tokens": {
+    "mean": 1057.0094,
+    "stdev": 41.66265640594705
+   },
+   "training step b4 s512": {
+    "mean": 135.5822,
+    "stdev": 0.2503910940908303
+   }
+  },
+  "reduce": {
+   "forward b1 s32": {
+    "mean": 13.3624,
+    "stdev": 0.023901882771029063
+   },
+   "forward b1 s128": {
+    "mean": 14.106,
+    "stdev": 0.012186057606953819
+   },
+   "forward b1 s512": {
+    "mean": 22.8576,
+    "stdev": 0.019514097468240583
+   },
+   "forward b8 s512": {
+    "mean": 102.9614,
+    "stdev": 0.6588389788104506
+   },
+   "decode 128 tokens": {
+    "mean": 1658.1648,
+    "stdev": 1.8375729101181089
+   },
+   "training step b4 s512": {
+    "mean": 143.5262,
+    "stdev": 0.6736053740878301
+   }
+  }
+ }
+}

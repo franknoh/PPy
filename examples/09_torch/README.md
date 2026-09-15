@@ -71,6 +71,12 @@ source, its autograd, and its dispatcher, and that a built artifact carries
 it with no compiler in the process. `torch.compile` pays for its guards on
 every call, which on an 8×32 input is more than the work.
 
+One layer of one shape is not the question anyone asks about
+`torch.compile`, and this table cannot answer it: the work is two
+microseconds, so every column is measuring its own overhead.
+[`46_gpt2`](../46_gpt2/README.md) asks it at model scale instead -- GPT-2
+XL, forty-eight blocks, one region each, on a datacenter GPU.
+
 Intel Core Ultra 9 386H; PyTorch 2.14.0 (CPU) on CPython 3.13.13, PPY
 against the same PyTorch on CPython 3.14.5, from a checkout on a native
 filesystem.

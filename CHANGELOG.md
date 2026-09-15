@@ -1,10 +1,51 @@
 # Changelog
 
-## 0.3.1 — 2026-09-15
+## 0.4.0 — unreleased
+
+Work toward the next release, on `dev`; alphas of it are tagged `v0.4.0aN`.
 
 - Standalone builds and C emission support `print` with string literal `end`
   and `sep`, boolean literal `flush`, and basic integer and boolean f-strings.
   Converted input prompts retain their output and flush before reading.
+
+- A region may write through a parameter. `narrow` and `copy_` joined the
+  curated set, so a slot of a preallocated tensor can be filled in place --
+  the other way to keep a KV cache, and the one a long context wants, since
+  growing by `cat` copies the whole cache per token. The write is not
+  silent: `copy_` carries `WriteMemory`, which `@ppy.pure` forbids, so a
+  function that fills a caller's buffer is refused the claim by name.
+- An ATen region can hand back several tensors, which is what a KV cache
+  needs. A region returned one `at::Tensor`, so a block could not give back
+  the key and value it had just grown beside its output and incremental
+  decoding stayed in Python -- the place the Python between operators costs
+  the most. A return annotation of `tuple[torch.Tensor, ...]` now becomes a
+  `std::tuple`, which pybind11 hands Python as an ordinary tuple, and with
+  `causal` a `bool` parameter and `length` an `int64_t` rather than
+  constants folded in, one compiled function prefills a prompt under a
+  causal mask and then decodes a token at a time out of the cache it built.
+  `examples/46_gpt2` measures that: 128 tokens through forty-eight blocks is
+  6144 region calls with almost no arithmetic in each, the row where the
+  interpreter is most of the wall clock. It is also the row where
+  `torch.compile`'s CUDA-graphs mode refuses to run at all until each
+  invocation is announced and the cache is cloned, since a cache is exactly
+  the memory those graphs reuse.
+- An ATen region can hold a whole transformer block. What a region was
+  allowed to emit was a table of `(C++ function, arity)` pairs, which is
+  enough for `relu(add(matmul(x, w), b))` and not enough for anything with
+  a dimension in it: `softmax`, `transpose`, `reshape`, `layer_norm`, and
+  `scaled_dot_product_attention` had no entry, keyword arguments were
+  refused outright, and an `int` parameter of the region was declared
+  `double`. Each operation is now described by the C++ signature it is
+  called through -- a dimension is an `int64_t`, a shape an
+  `at::IntArrayRef` written as a tuple, `keepdim` and `is_causal` a `bool`,
+  `gelu`'s approximation a mode string -- so an argument is rendered by the
+  slot it fills. Keywords are matched against the C++ parameter names,
+  optional arguments take the C++ defaults when a later one is given, and
+  an operation with two signatures (`mean` over everything, or over named
+  dimensions) takes the one the call fills. Thirteen operations were added
+  to the curated set for it, and `examples/46_gpt2` is GPT-2 XL with each
+  of its forty-eight blocks compiled to one region, measured against
+  PyTorch eager and `torch.compile` on an RTX 4090.
 
 ## 0.3.0 — 2026-09-13
 
