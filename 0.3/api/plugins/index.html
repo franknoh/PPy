@@ -213,7 +213,7 @@
   </div>
   <div class="md-source__repository">
     franknoh/PPy
-    <span class="ppy-source-version" title="Documentation version">v0.3.2</span>
+    <span class="ppy-source-version" title="Documentation version">v0.3.3</span>
   </div>
 </a>
       </div>
@@ -497,7 +497,7 @@
   </div>
   <div class="md-source__repository">
     franknoh/PPy
-    <span class="ppy-source-version" title="Documentation version">v0.3.2</span>
+    <span class="ppy-source-version" title="Documentation version">v0.3.3</span>
   </div>
 </a>
     </div>
@@ -596,6 +596,8 @@
       
         
           
+        
+      
         
       
         
@@ -921,6 +923,34 @@
     
   
     GPU kernels
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guide/tensors/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Common tensors
   
 
     
@@ -3149,6 +3179,28 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#ppy_compiler.plugins.base.ArgumentOwnership" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;ArgumentOwnership
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ppy_compiler.plugins.base.CallArgument" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;CallArgument
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#ppy_compiler.plugins.base.IntrinsicSpec" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3431,6 +3483,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#ppy_compiler.plugins.base.Plugin.lower_type_for_backend" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;lower_type_for_backend
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#ppy_compiler.plugins.base.Plugin.register_dialects" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3531,6 +3594,17 @@
         
       </ul>
     </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tensor-ownership-and-backend-types-ppy-033" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tensor ownership and backend types (PPy 0.3.3)
+      
+    </span>
+  </a>
   
 </li>
       
@@ -4240,6 +4314,28 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#ppy_compiler.plugins.base.ArgumentOwnership" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;ArgumentOwnership
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ppy_compiler.plugins.base.CallArgument" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;CallArgument
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#ppy_compiler.plugins.base.IntrinsicSpec" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4522,6 +4618,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#ppy_compiler.plugins.base.Plugin.lower_type_for_backend" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;lower_type_for_backend
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#ppy_compiler.plugins.base.Plugin.register_dialects" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4622,6 +4729,17 @@
         
       </ul>
     </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tensor-ownership-and-backend-types-ppy-033" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tensor ownership and backend types (PPy 0.3.3)
+      
+    </span>
+  </a>
   
 </li>
       
@@ -4758,6 +4876,103 @@ only when a project enables it.</p>
 
 
         <p>The kind of lowering a plugin selects for a recognized operation (spec 18.2).</p>
+
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-class">
+
+
+
+<h3 id="ppy_compiler.plugins.base.ArgumentOwnership" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>            <code>ArgumentOwnership</code>
+
+
+<a href="#ppy_compiler.plugins.base.ArgumentOwnership" class="headerlink" title="Permanent link">&para;</a></h3>
+
+
+    <div class="doc doc-contents ">
+            <p class="doc doc-class-bases">
+              Bases: <code><span title="enum.StrEnum">StrEnum</span></code></p>
+
+
+
+        <p>What a plugin call does with one argument.</p>
+
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-class">
+
+
+
+<h3 id="ppy_compiler.plugins.base.CallArgument" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>              <code class="highlight language-python"><span class="n">CallArgument</span><span class="p">(</span><span class="n">argument</span><span class="p">,</span> <span class="n">ownership</span><span class="o">=</span><span class="n">ArgumentOwnership</span><span class="o">.</span><span class="n">BORROWED</span><span class="p">,</span> <span class="n">reason</span><span class="o">=</span><span class="s1">''</span><span class="p">)</span></code>
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-dataclass"><code>dataclass</code></small>
+  </span>
+
+<a href="#ppy_compiler.plugins.base.CallArgument" class="headerlink" title="Permanent link">&para;</a></h3>
+
+
+    <div class="doc doc-contents ">
+
+
+
+        <p>One positional or keyword argument's ownership contract.</p>
 
 
 
@@ -5087,7 +5302,7 @@ only when a project enables it.</p>
 
 
 <h3 id="ppy_compiler.plugins.base.CallResult" class="doc doc-heading">
-<code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>              <code class="highlight language-python"><span class="n">CallResult</span><span class="p">(</span><span class="nb">type</span><span class="p">,</span> <span class="n">facts</span><span class="o">=</span><span class="n">Facts</span><span class="p">(),</span> <span class="n">effects</span><span class="o">=</span><span class="n">EffectSet</span><span class="p">(),</span> <span class="n">lowering</span><span class="o">=</span><span class="n">Lowering</span><span class="o">.</span><span class="n">PYTHON_FALLBACK</span><span class="p">,</span> <span class="n">reason</span><span class="o">=</span><span class="s1">''</span><span class="p">,</span> <span class="n">guards</span><span class="o">=</span><span class="p">())</span></code>
+<code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>              <code class="highlight language-python"><span class="n">CallResult</span><span class="p">(</span><span class="nb">type</span><span class="p">,</span> <span class="n">facts</span><span class="o">=</span><span class="n">Facts</span><span class="p">(),</span> <span class="n">effects</span><span class="o">=</span><span class="n">EffectSet</span><span class="p">(),</span> <span class="n">lowering</span><span class="o">=</span><span class="n">Lowering</span><span class="o">.</span><span class="n">PYTHON_FALLBACK</span><span class="p">,</span> <span class="n">reason</span><span class="o">=</span><span class="s1">''</span><span class="p">,</span> <span class="n">guards</span><span class="o">=</span><span class="p">(),</span> <span class="n">arguments</span><span class="o">=</span><span class="p">())</span></code>
 
   <span class="doc doc-labels">
       <small class="doc doc-label doc-label-dataclass"><code>dataclass</code></small>
@@ -5562,6 +5777,24 @@ hook describes IR types, independently of any backend's native ABI.</p>
 <div class="doc doc-object doc-function">
 
 
+<h4 id="ppy_compiler.plugins.base.Plugin.lower_type_for_backend" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <code class="highlight language-python"><span class="n">lower_type_for_backend</span><span class="p">(</span><span class="n">type_</span><span class="p">,</span> <span class="n">facts</span><span class="p">,</span> <span class="n">backend</span><span class="p">)</span></code>
+
+<a href="#ppy_compiler.plugins.base.Plugin.lower_type_for_backend" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>A backend-selected representation, or None for the common type.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
 <h4 id="ppy_compiler.plugins.base.Plugin.register_dialects" class="doc doc-heading">
 <code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <code class="highlight language-python"><span class="n">register_dialects</span><span class="p">(</span><span class="n">registry</span><span class="p">)</span></code>
 
@@ -5703,14 +5936,14 @@ actually imported keeps that cost off every other compilation. Pass
 
 
 <h4 id="ppy_compiler.plugins.base.PluginRegistry.lower_type" class="doc doc-heading">
-<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <code class="highlight language-python"><span class="n">lower_type</span><span class="p">(</span><span class="n">type_</span><span class="p">,</span> <span class="n">facts</span><span class="p">)</span></code>
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <code class="highlight language-python"><span class="n">lower_type</span><span class="p">(</span><span class="n">type_</span><span class="p">,</span> <span class="n">facts</span><span class="p">,</span> <span class="n">backend</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
 
 <a href="#ppy_compiler.plugins.base.PluginRegistry.lower_type" class="headerlink" title="Permanent link">&para;</a></h4>
 
 
     <div class="doc doc-contents ">
 
-        <p>Ask enabled plugins in registration order for a canonical IR type.</p>
+        <p>The common or explicitly backend-selected representation of a type.</p>
 
 
     </div>
@@ -5751,7 +5984,40 @@ dialect, pattern, and lowering the enabled plugins register.</p>
 
     </div>
 
-</div><h2 id="canonical-types-and-operations-ppy-032">Canonical types and operations (PPy 0.3.2)<a class="headerlink" href="#canonical-types-and-operations-ppy-032" title="Permanent link">&para;</a></h2>
+</div><h2 id="tensor-ownership-and-backend-types-ppy-033">Tensor ownership and backend types (PPy 0.3.3)<a class="headerlink" href="#tensor-ownership-and-backend-types-ppy-033" title="Permanent link">&para;</a></h2>
+<p>Plugin interface 2 remains compatible. Plugins using the APIs in this section
+must require compiler version 0.3.3 or newer.</p>
+<p><code>CallResult.arguments</code> describes what a recognized call does with individual
+arguments. Address a positional argument by its zero-based index or a keyword
+argument by its name:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="n">CallResult</span><span class="p">(</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>    <span class="n">T</span><span class="o">.</span><span class="n">NONE</span><span class="p">,</span>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>    <span class="n">arguments</span><span class="o">=</span><span class="p">(</span>
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>        <span class="n">CallArgument</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">ArgumentOwnership</span><span class="o">.</span><span class="n">BORROWED</span><span class="p">),</span>
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>        <span class="n">CallArgument</span><span class="p">(</span><span class="s2">"out"</span><span class="p">,</span> <span class="n">ArgumentOwnership</span><span class="o">.</span><span class="n">MUT</span><span class="p">,</span> <span class="s2">"out must be writable"</span><span class="p">),</span>
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>    <span class="p">),</span>
+<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="p">)</span>
+</code></pre></div>
+<p><code>BORROWED</code> reads an argument only for the duration of the call. <code>MUT</code> permits
+call-scoped writes and requires a <code>ppy.Mut[...]</code> or <code>ppy.Owned[...]</code> value.
+<code>OWNED</code> means the callee may retain the value and therefore requires
+<code>ppy.Owned[...]</code>. Mutations follow aliases back to the function parameter.
+Arguments without a contract keep the conservative behavior: the compiler
+assumes the callee may retain them. Starred positional arguments and unpacked
+keyword arguments are also conservative because their runtime positions or
+names are unknown.</p>
+<p>An ownership violation reports E1802 at the argument. Its explanation comes
+from <code>CallArgument.reason</code>, then <code>CallResult.reason</code>, then a compiler default.
+A rejected call uses <code>CallResult.reason</code> or <code>RejectSpec.reason</code> in its E1802
+diagnostic.</p>
+<p><code>Plugin.lower_type_for_backend(type_, facts, backend) -&gt; IRType | None</code> lets a
+plugin claim a representation only when that backend is explicitly selected.
+The default returns <code>None</code>. <code>PluginRegistry.lower_type</code> accepts the optional
+<code>backend</code> argument, rejects competing backend claims, and otherwise preserves
+the registration-order behavior of <code>Plugin.lower_type</code>. The shared
+<code>ppy.Tensor</code> type has no legacy plugin-specific representation when no backend
+is selected; its neutral canonical form is handled by the compiler.</p>
+<h2 id="canonical-types-and-operations-ppy-032">Canonical types and operations (PPy 0.3.2)<a class="headerlink" href="#canonical-types-and-operations-ppy-032" title="Permanent link">&para;</a></h2>
 <p>Plugin interface 2 remains compatible. Plugins using the following additions
 must require compiler version 0.3.2 or newer.</p>
 <p><code>Plugin.lower_type(type_, facts) -&gt; IRType | None</code> chooses a canonical IR
@@ -5772,13 +6038,13 @@ results, allowing a store as a statement.
 Effects, guards and the call's source location are retained on the operation.
 Observable writes cannot be removed by dead-code elimination.</p>
 <p>Keyword arguments have explicit roles:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="n">DialectOperationSpec</span><span class="p">(</span>
-<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>    <span class="s2">"example"</span><span class="p">,</span>
-<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>    <span class="s2">"scale"</span><span class="p">,</span>
-<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>    <span class="n">attributes</span><span class="o">=</span><span class="p">((</span><span class="s2">"mode"</span><span class="p">,</span> <span class="s2">"linear"</span><span class="p">),),</span>
-<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>    <span class="n">keyword_operands</span><span class="o">=</span><span class="p">(</span><span class="s2">"factor"</span><span class="p">,),</span>
-<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>    <span class="n">keyword_attributes</span><span class="o">=</span><span class="p">(</span><span class="s2">"axis"</span><span class="p">,),</span>
-<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="p">)</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="n">DialectOperationSpec</span><span class="p">(</span>
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>    <span class="s2">"example"</span><span class="p">,</span>
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>    <span class="s2">"scale"</span><span class="p">,</span>
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>    <span class="n">attributes</span><span class="o">=</span><span class="p">((</span><span class="s2">"mode"</span><span class="p">,</span> <span class="s2">"linear"</span><span class="p">),),</span>
+<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>    <span class="n">keyword_operands</span><span class="o">=</span><span class="p">(</span><span class="s2">"factor"</span><span class="p">,),</span>
+<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>    <span class="n">keyword_attributes</span><span class="o">=</span><span class="p">(</span><span class="s2">"axis"</span><span class="p">,),</span>
+<a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="p">)</span>
 </code></pre></div>
 <p>For <code>scale(x, factor=n, axis=1)</code>, <code>x</code> and <code>n</code> are operands and <code>axis=1</code>
 is an attribute. Keyword operand values are evaluated in Python source order

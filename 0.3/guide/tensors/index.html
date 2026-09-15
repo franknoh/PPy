@@ -10,13 +10,13 @@
       
       
       
-        <link rel="canonical" href="https://ppy.franknoh.dev/0.3/internals/hardware-validation/">
+        <link rel="canonical" href="https://ppy.franknoh.dev/0.3/guide/tensors/">
       
       
-        <link rel="prev" href="../solver/">
+        <link rel="prev" href="../gpu/">
       
       
-        <link rel="next" href="../../contributing/">
+        <link rel="next" href="../xla/">
       
       
         
@@ -27,7 +27,7 @@
     
     
       
-        <title>Hardware validation - PPY</title>
+        <title>Common tensors - PPY</title>
       
     
     
@@ -84,7 +84,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#hardware-validation" class="md-skip">
+        <a href="#common-tensors" class="md-skip">
           Skip to content
         </a>
       
@@ -124,7 +124,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Hardware validation
+              Common tensors
             
           </span>
         </div>
@@ -287,11 +287,13 @@
   
   
   
+    
+  
   
     
     
-      <li class="md-tabs__item">
-        <a href="../../guide/" class="md-tabs__link">
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="../" class="md-tabs__link">
           
   
   
@@ -394,13 +396,11 @@
   
   
   
-    
-  
   
     
     
-      <li class="md-tabs__item md-tabs__item--active">
-        <a href="../" class="md-tabs__link">
+      <li class="md-tabs__item">
+        <a href="../../internals/" class="md-tabs__link">
           
   
   
@@ -589,6 +589,8 @@
       
   
   
+    
+  
   
   
     
@@ -634,20 +636,23 @@
     
     
       
+        
+        
+      
       
         
       
     
     
-    <li class="md-nav__item md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" checked>
         
           
           <div class="md-nav__link md-nav__container">
-            <a href="../../guide/" class="md-nav__link ">
+            <a href="../" class="md-nav__link ">
               
   
   
@@ -665,13 +670,13 @@
             </a>
             
               
-              <label class="md-nav__link " for="__nav_4" id="__nav_4_label" tabindex="0">
+              <label class="md-nav__link " for="__nav_4" id="__nav_4_label" tabindex="">
                 <span class="md-nav__icon md-icon"></span>
               </label>
             
           </div>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="true">
           <label class="md-nav__title" for="__nav_4">
             <span class="md-nav__icon md-icon"></span>
             
@@ -691,7 +696,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../guide/subset/" class="md-nav__link">
+      <a href="../subset/" class="md-nav__link">
         
   
   
@@ -719,7 +724,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../guide/directives/" class="md-nav__link">
+      <a href="../directives/" class="md-nav__link">
         
   
   
@@ -747,7 +752,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../guide/native/" class="md-nav__link">
+      <a href="../native/" class="md-nav__link">
         
   
   
@@ -775,7 +780,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../guide/simd-cpu/" class="md-nav__link">
+      <a href="../simd-cpu/" class="md-nav__link">
         
   
   
@@ -803,7 +808,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../guide/concurrency/" class="md-nav__link">
+      <a href="../concurrency/" class="md-nav__link">
         
   
   
@@ -831,7 +836,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../guide/parallel/" class="md-nav__link">
+      <a href="../parallel/" class="md-nav__link">
         
   
   
@@ -859,7 +864,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../guide/autodiff/" class="md-nav__link">
+      <a href="../autodiff/" class="md-nav__link">
         
   
   
@@ -887,7 +892,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../guide/aio/" class="md-nav__link">
+      <a href="../aio/" class="md-nav__link">
         
   
   
@@ -915,7 +920,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../guide/gpu/" class="md-nav__link">
+      <a href="../gpu/" class="md-nav__link">
         
   
   
@@ -940,10 +945,37 @@
                 
   
   
+    
   
   
-    <li class="md-nav__item">
-      <a href="../../guide/tensors/" class="md-nav__link">
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Common tensors
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
         
   
   
@@ -959,6 +991,48 @@
   
 
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#writing-through-an-argument" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Writing through an argument
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#storage-and-backends" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Storage and backends
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
     </li>
   
 
@@ -971,7 +1045,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../guide/xla/" class="md-nav__link">
+      <a href="../xla/" class="md-nav__link">
         
   
   
@@ -999,7 +1073,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../guide/generics/" class="md-nav__link">
+      <a href="../generics/" class="md-nav__link">
         
   
   
@@ -1027,7 +1101,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../guide/effects/" class="md-nav__link">
+      <a href="../effects/" class="md-nav__link">
         
   
   
@@ -1055,7 +1129,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../guide/input/" class="md-nav__link">
+      <a href="../input/" class="md-nav__link">
         
   
   
@@ -1083,7 +1157,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../guide/native-lowering/" class="md-nav__link">
+      <a href="../native-lowering/" class="md-nav__link">
         
   
   
@@ -1111,7 +1185,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../guide/regex/" class="md-nav__link">
+      <a href="../regex/" class="md-nav__link">
         
   
   
@@ -3362,8 +3436,6 @@
       
   
   
-    
-  
   
   
     
@@ -3393,23 +3465,20 @@
     
     
       
-        
-        
-      
       
         
       
     
     
-    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9" checked>
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9" >
         
           
           <div class="md-nav__link md-nav__container">
-            <a href="../" class="md-nav__link ">
+            <a href="../../internals/" class="md-nav__link ">
               
   
   
@@ -3427,13 +3496,13 @@
             </a>
             
               
-              <label class="md-nav__link " for="__nav_9" id="__nav_9_label" tabindex="">
+              <label class="md-nav__link " for="__nav_9" id="__nav_9_label" tabindex="0">
                 <span class="md-nav__icon md-icon"></span>
               </label>
             
           </div>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="true">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_9">
             <span class="md-nav__icon md-icon"></span>
             
@@ -3453,7 +3522,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../architecture/" class="md-nav__link">
+      <a href="../../internals/architecture/" class="md-nav__link">
         
   
   
@@ -3481,7 +3550,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../ir/" class="md-nav__link">
+      <a href="../../internals/ir/" class="md-nav__link">
         
   
   
@@ -3509,7 +3578,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../conversion/" class="md-nav__link">
+      <a href="../../internals/conversion/" class="md-nav__link">
         
   
   
@@ -3537,7 +3606,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../migrating/" class="md-nav__link">
+      <a href="../../internals/migrating/" class="md-nav__link">
         
   
   
@@ -3565,7 +3634,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../plugins/" class="md-nav__link">
+      <a href="../../internals/plugins/" class="md-nav__link">
         
   
   
@@ -3593,7 +3662,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../backends/" class="md-nav__link">
+      <a href="../../internals/backends/" class="md-nav__link">
         
   
   
@@ -3621,7 +3690,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../solver/" class="md-nav__link">
+      <a href="../../internals/solver/" class="md-nav__link">
         
   
   
@@ -3646,37 +3715,10 @@
                 
   
   
-    
   
   
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
-      
-      
-        
-      
-      
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Hardware validation
-  
-
-    
-  </span>
-  
-  
-
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
-      <a href="./" class="md-nav__link md-nav__link--active">
+    <li class="md-nav__item">
+      <a href="../../internals/hardware-validation/" class="md-nav__link">
         
   
   
@@ -3692,48 +3734,6 @@
   
 
       </a>
-      
-        
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-    
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#what-a-run-checks" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        What a run checks
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#last-run" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Last run
-      
-    </span>
-  </a>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-      
     </li>
   
 
@@ -3827,10 +3827,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#what-a-run-checks" class="md-nav__link">
+  <a href="#writing-through-an-argument" class="md-nav__link">
     <span class="md-ellipsis">
       
-        What a run checks
+        Writing through an argument
       
     </span>
   </a>
@@ -3838,10 +3838,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#last-run" class="md-nav__link">
+  <a href="#storage-and-backends" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Last run
+        Storage and backends
       
     </span>
   </a>
@@ -3868,212 +3868,74 @@
   
 
 
-<h1 id="hardware-validation">Hardware validation<a class="headerlink" href="#hardware-validation" title="Permanent link">&para;</a></h1>
-<p>The hosted CI runs on CPUs. What the accelerator stack does on a real GPU
--- whether JAX sees the card or quietly answers <code>CpuDevice(id=0)</code>, whether
-<code>ppy.cuda</code> launches, whether <code>ppy.xla</code> compiles for the GPU, whether a
-sharded trainer spans two physical cards -- is checked on rented machines
-by <code>scripts/cloud/runpod_matrix.py</code>, on demand, never on a push.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>python<span class="w"> </span>scripts/cloud/runpod_matrix.py<span class="w"> </span>--cuda<span class="w">        </span><span class="c1"># one NVIDIA GPU</span>
-<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>python<span class="w"> </span>scripts/cloud/runpod_matrix.py<span class="w"> </span>--multigpu<span class="w">    </span><span class="c1"># two or more NVIDIA GPUs in one Pod</span>
-<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>python<span class="w"> </span>scripts/cloud/runpod_matrix.py<span class="w"> </span>--rocm<span class="w">        </span><span class="c1"># one AMD Instinct GPU</span>
-<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>python<span class="w"> </span>scripts/cloud/runpod_matrix.py<span class="w"> </span>--all
+<h1 id="common-tensors">Common tensors<a class="headerlink" href="#common-tensors" title="Permanent link">&para;</a></h1>
+<p><code>ppy.Tensor[dtype, shape]</code> describes a tensor independently of the library
+that owns its storage. PPy carries its element type and dimensions through
+type checking, function calls, and canonical IR. The annotation does not
+allocate memory, wrap an array, or import a GPU framework.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">ppy</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="k">def</span><span class="w"> </span><span class="nf">identity</span><span class="p">(</span><span class="n">x</span><span class="p">:</span> <span class="n">ppy</span><span class="o">.</span><span class="n">Tensor</span><span class="p">[</span><span class="n">ppy</span><span class="o">.</span><span class="n">bf16</span><span class="p">,</span> <span class="p">(</span><span class="mi">3840</span><span class="p">,)])</span> <span class="o">-&gt;</span> <span class="n">ppy</span><span class="o">.</span><span class="n">Tensor</span><span class="p">[</span><span class="n">ppy</span><span class="o">.</span><span class="n">bf16</span><span class="p">,</span> <span class="p">(</span><span class="mi">3840</span><span class="p">,)]:</span>
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>    <span class="k">return</span> <span class="n">x</span>
 </code></pre></div>
-<p>The script needs an authenticated <code>runpodctl</code> (<code>runpodctl doctor</code>) and a
-public key in <code>~/.ssh</code>; it never reads or prints the API key. For each
-environment it asks what is in stock, prefers a common card (an RTX 4090,
-an A6000, an A40, an L40S) over an expensive one, makes a Pod named
-<code>ppy-test-&lt;env&gt;-&lt;id&gt;</code> from a vendor image with a four-hour termination
-set on it, waits for SSH, and runs <code>scripts/cloud/remote_test.sh</code> there
-against the exact commit named (<code>--sha</code>, the checkout's HEAD by default,
-which the Pod clones, so it must be pushed). Every step of the remote
-script is logged and its status recorded; nothing is skipped silently.
-The results come back under <code>cloud-results/&lt;stamp&gt;/&lt;env&gt;/</code>, which git
-ignores, and the Pod is deleted in a <code>finally</code> and confirmed gone. Only
-Pods the run created are touched.</p>
-<h2 id="what-a-run-checks">What a run checks<a class="headerlink" href="#what-a-run-checks" title="Permanent link">&para;</a></h2>
-<ul>
-<li><strong>The environment as installed.</strong> The lock's JAX is synced, then the
-  accelerator plugin for that same version is installed (<code>jax[cuda12]</code>,
-  or AMD's ROCm plugin), and <code>scripts/cloud/accelerator_check.py</code> records
-  the interpreter, JAX, jaxlib, every plugin package, the driver and
-  toolkit the vendor tools report, <code>jax.default_backend()</code>, and every
-  device -- then fails, with the report written, if every device is a CPU.
-  An import that succeeded proves nothing; a CPU is not a pass for a GPU
-  test.</li>
-<li><strong>A computation on the device.</strong> A jitted matrix multiplication and a
-  reduction, synchronized with <code>block_until_ready()</code>, against a NumPy
-  reference; with two or more devices, an array sharded across them and
-  a reduction across the shards.</li>
-<li><strong>PPy's own paths.</strong> <code>examples/39_xla</code> under <code>ppy run</code> with the bridge
-  compiling for the GPU; <code>examples/38_cuda</code> and <code>examples/44_tile</code> under
-  <code>ppy run</code>, with <code>ppy explain</code> on the kernels so a launch that fell back
-  to the reference is seen as one; the GPU, tile, and XLA test files; and
-  the lowering-limit tests, so a function that stays in Python is the
-  one the docs say stays.</li>
-<li><strong>Multi-GPU.</strong> <code>examples/45_multi_gpu_jax</code> under <code>ppy run</code> and <code>python</code>
-  -- the batch sharded over a mesh of the cards, the gradient summed
-  across them, the loss falling, the result held to a single-device run
-  -- and <code>scripts/cloud/multiprocess_smoke.py</code>, one JAX process per card
-  with a coordinator on the loopback address, asserting
-  <code>jax.process_count()</code>, <code>jax.process_index()</code>, the device lists, and one
-  collective across the processes.</li>
-<li><strong>A few benchmarks</strong>, for a sanity check of accelerator performance:
-  the JAX and PyTorch comparisons, the CUDA and tile examples against
-  CuPy and Triton. These are validation numbers from a rented machine;
-  the tables in the READMEs come from the dedicated bench runner and are
-  never overwritten by them.</li>
-</ul>
-<h2 id="last-run">Last run<a class="headerlink" href="#last-run" title="Permanent link">&para;</a></h2>
-<p>The <code>fixes-0.3</code> branch, 2026-09-11, all three environments at commit
-<code>e280fe5</code>, from <code>cloud-results/</code> of those runs; the numbers are those
-machines' and are not the READMEs' tables.</p>
-<table>
-<thead>
-<tr>
-<th>Environment</th>
-<th>Hardware</th>
-<th style="text-align: right;">Count</th>
-<th>JAX backend</th>
-<th>PPy backend</th>
-<th>JAX compute</th>
-<th>Training</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>Local</td>
-<td>Intel Core Ultra 9 386H (CPU)</td>
-<td style="text-align: right;">1</td>
-<td>cpu</td>
-<td>LLVM</td>
-<td>PASS (two virtual CPU devices, <code>tests/test_multi_device_jax.py</code>)</td>
-<td>PASS on virtual devices, not a hardware pass</td>
-</tr>
-<tr>
-<td>CUDA single</td>
-<td>NVIDIA GeForce RTX 4090 (RunPod)</td>
-<td style="text-align: right;">1</td>
-<td>gpu (<code>cuda:0</code>)</td>
-<td>CUDA: kernels compiled for the device, <code>ppy.xla</code> on <code>cuda:0</code></td>
-<td>PASS</td>
-<td>N/A</td>
-</tr>
-<tr>
-<td>CUDA multi</td>
-<td>2 × NVIDIA GeForce RTX 4090 (RunPod)</td>
-<td style="text-align: right;">2</td>
-<td>gpu (<code>cuda:0</code>, <code>cuda:1</code>)</td>
-<td>CUDA</td>
-<td>PASS: sharded across both, reduced across both</td>
-<td>PASS under <code>ppy run</code> and <code>python</code>; one process per GPU PASS</td>
-</tr>
-<tr>
-<td>ROCm single</td>
-<td>AMD Instinct MI300X (RunPod, EU-RO-1)</td>
-<td style="text-align: right;">1</td>
-<td>gpu (<code>rocm:0</code>)</td>
-<td><code>ppy.xla</code> on <code>rocm:0</code>; HIP is <code>ppy emit hip</code> only, the source compiled by the image's <code>hipcc</code> for gfx942, never launched by PPy</td>
-<td>PASS</td>
-<td>N/A</td>
-</tr>
-<tr>
-<td>ROCm multi</td>
-<td>--</td>
-<td style="text-align: right;">--</td>
-<td>--</td>
-<td>--</td>
-<td>NOT RUN</td>
-<td>NOT RUN</td>
-</tr>
-</tbody>
-</table>
-<p><strong>CUDA single</strong>: Python 3.13.8; jax 0.11.1, jaxlib 0.11.1, jax-cuda12-plugin
-0.11.1, jax-cuda12-pjrt 0.11.1, nvidia-nccl-cu12 2.31.2 (CUDA 12.9 pip
-libraries); driver 580.159.04, CUDA 13.0 image, no <code>nvcc</code>;
-<code>jax.default_backend()</code> = <code>gpu</code>, <code>jax.devices()</code> = <code>[cuda:0]</code>. A jitted
-1024×512×256 float32 matmul at full precision against NumPy: relative
-error 5.9e-7, reduction exact. PPy: <code>examples/38_cuda</code> and
-<code>examples/44_tile</code> under <code>ppy run</code> print <code>kernels compiled for a device
-here: True</code>, and <code>ppy explain</code> shows the host function boxed for its
-<code>GpuLaunch</code> effect, as the guide says it is; <code>examples/39_xla</code> prints
-<code># devices: ['cuda:0']</code>, the bridge having compiled for the GPU; 32 tests
-in <code>test_gpu_frontend</code>, <code>test_ir_gpu</code>, <code>test_tile</code>, <code>test_xla</code> pass, as
-do the lowering-limit tests. Benchmarks on that machine: PPy
-<code>cuda.launch</code> saxpy 0.40 ms against CuPy 0.44 ms, block max 1.03 against
-1.02, saxpy with copies 42 against 59; the JAX comparison ran JAX on the
-GPU against PPy's fused loop on the Pod's CPU, which measures the
-machines, not the compilers. The Triton counterpart's wheel found no
-driver in that image (<code>0 active drivers</code>), so its row is its own failure
-and the PPy tile row stands alone.</p>
-<p><strong>CUDA multi</strong>: the same stack (Python 3.13.8, jax 0.11.1 with the
-CUDA 12 plugin, NCCL 2.31.2) on driver 580.95.05 with a CUDA 13.0 image;
-<code>jax.devices()</code> = <code>[cuda:0, cuda:1]</code>, <code>jax.local_devices()</code> the same, both
-<code>NVIDIA GeForce RTX 4090</code>. The check sharded an array over both cards and
-reduced across them (exact). <code>examples/45_multi_gpu_jax</code>: the batch
-sharded over the two cards, a hundred steps dispatched without a host
-synchronization between them (the <code>train</code> time is the steps, not a wait
-per step: 573 ms under <code>ppy run</code>, 570 ms under <code>python</code>), loss 1.0414 to
-1.0108 on two devices and the same on one, the largest parameter
-difference 7e-8 under <code>ppy run</code> (the standardization native, 1.1 ms) and
-5e-7 under <code>python</code> (71 ms), <code>PASS</code> on both. <code>scripts/cloud/multiprocess_smoke.py</code>:
-two processes, one per card, <code>jax.process_count()</code> 2, each seeing one
-local and two global devices, the collective sum exact in both. 32 GPU,
-tile, and XLA tests pass. PPy <code>cuda.launch</code> saxpy 0.39 ms against CuPy
-0.44, saxpy with copies 34 against 52.</p>
-<p>Two other two-GPU hosts were tried in an earlier run and are the reason
-the harness records what it does. On a two-A6000 host NCCL's peer-to-peer
-transport hung (both cards at 100%, the collective never returning) and
-completed with <code>NCCL_P2P_DISABLE=1</code>; on a two-A40 host every check passed
-but the sharded trainer's loss came out wrong and different on each run
-(0.52, then 0.64, against 1.04 on one device), a collective answering
-wrongly rather than hanging. The same program on the two-4090 host, and
-on two virtual CPU devices, agrees with the single-device run to 7e-8.
-Those are the hosts' NCCL, not PPy's or JAX's arithmetic:
-<code>sharding_probe.py</code> compares every stage with NumPy and found nothing on
-the host that works. A run is therefore judged on its own transcript,
-never on a step's exit status alone, and the trainer exits non-zero on
-<code>FAIL</code>.</p>
-<p><strong>ROCm single</strong>: an MI300X (gfx942) in EU-RO-1, refused earlier that day and
-granted in the evening, in AMD's <code>rocm/jax:rocm10.0-jax0.11.0-py3.12</code> image: Python
-3.12.3, jax 0.11.0, jaxlib 0.11.0, jax-rocm10-plugin and jax-rocm10-pjrt
-0.11.0+rocm10.0.0, ROCm 10.0.0 as the pip SDK, driver 6.10.5.
-<code>jax.default_backend()</code> = <code>gpu</code>, <code>jax.devices()</code> = <code>[rocm:0]</code>; the
-matmul and the reduction report a relative error of 0.0 against NumPy. PPy was
-installed beside that stack with the image's <code>jax</code> and <code>jaxlib</code> as
-constraints (without the <code>jax</code> group's flax, which wants a newer jax than
-the image has), and the run checks that every <code>jax*</code> distribution is the
-one that was there before the install; it is. <code>examples/39_xla</code> prints
-<code># devices: ['rocm:0']</code>, the bridge having compiled for the AMD card
-through the same PJRT path as on CUDA; <code>examples/38_cuda</code> and
-<code>examples/44_tile</code> run their CPU path there (<code>kernels compiled for a
-device here: False</code>), since <code>ppy.cuda</code> and <code>ppy.tile</code> launch CUDA only;
-31 GPU, tile, and XLA tests pass with one skipped, as do the
-lowering-limit tests. <code>ppy emit hip</code> on
-<code>examples/38_cuda/saxpy.ppy</code> writes 79 lines of HIP C++ with the
-<code>__global__</code> kernel and the <code>&lt;&lt;&lt;&gt;&gt;&gt;</code> launch, and the image's <code>hipcc</code>
-compiles it for gfx942 (<code>HIP_DEVICE_LIB_PATH</code> pointed at the SDK's
-device library). That is the extent of ROCm in PPy: <code>ppy.hip</code> is source
-only, and this run does not make it a launch runtime.</p>
-<p><strong>ROCm multi</strong>: not run; one MI300X was in stock.</p>
-<p>What the runs found in PPy: the PJRT bridge behind <code>ppy.xla</code> compiled
-for every device of the platform, so on the two-GPU hosts its executables
-expected one argument shard per device and refused the single buffers the
-bridge places (<code>Expected args to execute_sharded_on_local_devices to have
-2 shards, got: [1, 1]</code>); it compiles for one device now, and a test over
-two virtual CPU devices holds it there. And it defaulted to the <code>cpu</code>
-platform whatever the machine had; it follows JAX's default backend now,
-and refuses to call an initialization failure or an installed-but-idle
-accelerator plugin "cpu", which is how <code>examples/39_xla</code> came to print
-<code>cuda:0</code> and <code>rocm:0</code>. What the harness learned about itself: a float32
-matmul on an Ampere-class card is TF32 unless full precision is asked
-for, so the check asks; a cross-device step gets fifteen minutes and a
-recorded retry without peer-to-peer; the one-process-per-GPU step counts
-its transcripts, since a loop that ran nothing had once exited zero; a
-Pod that is still listed after the run fails the run; and AMD's image
-runs no <code>sshd</code>, so the harness starts one for the injected key (RunPod's
-own pattern for a plain image) and hands the container's environment to
-the SSH session.</p>
+<p><code>ppy.bf16</code> names bfloat16. It remains distinct from <code>ppy.f16</code>, which names
+IEEE float16, even though both occupy 16 bits. The tensor's shape is a tuple;
+the comma in <code>(3840,)</code> makes it a one-dimensional shape.</p>
+<p>Dimensions can be nonnegative integers or symbolic names. <code>()</code> describes a
+scalar tensor. The existing <code>Shape</code> and <code>DType</code> refinements offer the same
+contract:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Annotated</span>
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="kn">import</span><span class="w"> </span><span class="nn">ppy</span>
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="n">Matrix</span> <span class="o">=</span> <span class="n">ppy</span><span class="o">.</span><span class="n">Tensor</span><span class="p">[</span><span class="n">ppy</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="p">(</span><span class="s2">"N"</span><span class="p">,</span> <span class="mi">4</span><span class="p">)]</span>
+<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="n">Scalar</span> <span class="o">=</span> <span class="n">ppy</span><span class="o">.</span><span class="n">Tensor</span><span class="p">[</span><span class="n">ppy</span><span class="o">.</span><span class="n">bf16</span><span class="p">,</span> <span class="p">()]</span>
+<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="n">Vector</span> <span class="o">=</span> <span class="n">Annotated</span><span class="p">[</span><span class="n">ppy</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span> <span class="n">ppy</span><span class="o">.</span><span class="n">DType</span><span class="p">(</span><span class="s2">"bfloat16"</span><span class="p">),</span> <span class="n">ppy</span><span class="o">.</span><span class="n">Shape</span><span class="p">(</span><span class="mi">3840</span><span class="p">)]</span>
+</code></pre></div>
+<p><code>ppy.check[TensorType](value)</code> validates the object's <code>shape</code> and <code>dtype</code>
+metadata without importing its framework. Repeated symbolic names within
+one shape must have the same size. Ownership markers describe a relationship
+between caller and callee, so <code>ppy.check</code> cannot establish <code>Mut</code> or <code>Owned</code>
+from one object's metadata.</p>
+<p>A bare <code>ppy.Tensor</code> leaves dtype and shape unspecified. Canonical lowering
+requires those facts to be known from the annotation or analysis.</p>
+<h2 id="writing-through-an-argument">Writing through an argument<a class="headerlink" href="#writing-through-an-argument" title="Permanent link">&para;</a></h2>
+<p><code>ppy.Mut[ppy.Tensor[...]]</code> permits writes for the duration of a call. A
+plugin declares which arguments it reads, writes, or retains. A borrowed
+argument may not be kept after the call, and a read-only borrow cannot be
+passed to an operation that writes through it.</p>
+<p>For a device plugin implementing the common tensor and borrowing APIs, a
+broadcast into preallocated output can have this form:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">ppy</span>
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="kn">import</span><span class="w"> </span><span class="nn">ppy_furiosa</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">fx</span>
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>
+<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>
+<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="k">def</span><span class="w"> </span><span class="nf">broadcast</span><span class="p">(</span>
+<a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>    <span class="n">x</span><span class="p">:</span> <span class="n">ppy</span><span class="o">.</span><span class="n">Tensor</span><span class="p">[</span><span class="n">ppy</span><span class="o">.</span><span class="n">bf16</span><span class="p">,</span> <span class="p">(</span><span class="mi">3840</span><span class="p">,)],</span>
+<a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a>    <span class="n">out</span><span class="p">:</span> <span class="n">ppy</span><span class="o">.</span><span class="n">Mut</span><span class="p">[</span><span class="n">ppy</span><span class="o">.</span><span class="n">Tensor</span><span class="p">[</span><span class="n">ppy</span><span class="o">.</span><span class="n">bf16</span><span class="p">,</span> <span class="p">(</span><span class="mi">256</span><span class="p">,</span> <span class="mi">3840</span><span class="p">)]],</span>
+<a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a>    <span class="n">value</span> <span class="o">=</span> <span class="n">fx</span><span class="o">.</span><span class="n">broadcast</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">copies</span><span class="o">=</span><span class="mi">256</span><span class="p">)</span>
+<a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a>    <span class="n">fx</span><span class="o">.</span><span class="n">store</span><span class="p">(</span><span class="n">out</span><span class="p">,</span> <span class="n">value</span><span class="p">)</span>
+</code></pre></div>
+<p>The plugin must describe <code>store</code> as a write and declare its output argument
+as a mutable borrow. PPy preserves the write even though the call returns no
+value. An existing plugin needs to adopt these contracts before accepting
+this example; installing PPy alone does not update a device plugin.</p>
+<h2 id="storage-and-backends">Storage and backends<a class="headerlink" href="#storage-and-backends" title="Permanent link">&para;</a></h2>
+<p>Without a selected device backend, a common tensor uses the shared tensor
+IR type. A backend extension can choose a physical representation from the
+same analyzed type and facts. Address spaces, device memory placement, and
+device-specific execution settings belong to that extension.</p>
+<p>Enabling several plugins does not let registration order choose the storage
+of a common tensor. The selected backend determines which extension can
+provide its representation. If multiple extensions claim it for that
+backend, compilation reports the ambiguity.</p>
+<p>Common tensor annotations do not create a CPU native ABI. A CPU path that
+cannot represent a tensor retains Python fallback; an explicit external
+backend request reports a located lowering error when its representation
+or operation is unsupported.</p>
+<p>See the <a href="../../api/plugins/">plugin API</a> for argument contracts and type
+lowering hooks.</p>
 
 
 
@@ -4111,7 +3973,7 @@ the SSH session.</p>
       <nav class="md-footer__inner md-grid" aria-label="Footer" >
         
           
-          <a href="../solver/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Where a solver fits">
+          <a href="../gpu/" class="md-footer__link md-footer__link--prev" aria-label="Previous: GPU kernels">
             <div class="md-footer__button md-icon">
               
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
@@ -4121,20 +3983,20 @@ the SSH session.</p>
                 Previous
               </span>
               <div class="md-ellipsis">
-                Where a solver fits
+                GPU kernels
               </div>
             </div>
           </a>
         
         
           
-          <a href="../../contributing/" class="md-footer__link md-footer__link--next" aria-label="Next: Contributing">
+          <a href="../xla/" class="md-footer__link md-footer__link--next" aria-label="Next: XLA">
             <div class="md-footer__title">
               <span class="md-footer__direction">
                 Next
               </span>
               <div class="md-ellipsis">
-                Contributing
+                XLA
               </div>
             </div>
             <div class="md-footer__button md-icon">

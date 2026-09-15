@@ -213,7 +213,7 @@
   </div>
   <div class="md-source__repository">
     franknoh/PPy
-    <span class="ppy-source-version" title="Documentation version">v0.3.2</span>
+    <span class="ppy-source-version" title="Documentation version">v0.3.3</span>
   </div>
 </a>
       </div>
@@ -497,7 +497,7 @@
   </div>
   <div class="md-source__repository">
     franknoh/PPy
-    <span class="ppy-source-version" title="Documentation version">v0.3.2</span>
+    <span class="ppy-source-version" title="Documentation version">v0.3.3</span>
   </div>
 </a>
     </div>
@@ -598,6 +598,8 @@
       
         
           
+        
+      
         
       
         
@@ -995,6 +997,34 @@
     
   
     GPU kernels
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../tensors/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Common tensors
   
 
     
@@ -3914,6 +3944,14 @@ contracts the compiler verifies, not hints it trusts.</p>
 <tr>
 <td><code>f16 f32 f64</code></td>
 <td>floating-point width.</td>
+</tr>
+<tr>
+<td><code>bf16</code></td>
+<td>bfloat16 element format, distinct from IEEE float16.</td>
+</tr>
+<tr>
+<td><code>Tensor[dtype, shape]</code></td>
+<td>a common tensor contract, including dtype and dimensions; storage belongs to the selected backend. See <a href="../tensors/">Common tensors</a>.</td>
 </tr>
 <tr>
 <td><code>Buffer[T]</code></td>
