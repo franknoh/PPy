@@ -8,6 +8,7 @@ copyright: MIT License
 
 theme:
   name: material
+  custom_dir: docs/overrides
   language: en
   icon:
     repo: fontawesome/brands/github
@@ -42,6 +43,7 @@ theme:
 
 extra_css:
   - stylesheets/extra.css
+  - stylesheets/version.css
 
 extra:
   version:
