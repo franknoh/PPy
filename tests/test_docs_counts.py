@@ -6,11 +6,29 @@ from __future__ import annotations
 import re
 import sys
 from pathlib import Path
+from types import SimpleNamespace
+
+import pytest
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "docs" / "gen"))
 
 import counts  # noqa: E402  pylint: disable=wrong-import-position
+
+
+@pytest.mark.parametrize("version", ["0.2.0", "0.3.1", "0.4.0a1"])
+def test_repository_badge_uses_the_document_checkout(tmp_path, monkeypatch, version):
+    """Archived and development docs must not inherit the installed/latest release."""
+    source = tmp_path / "src" / "ppy_compiler" / "version.py"
+    source.parent.mkdir(parents=True)
+    source.write_text(f'COMPILER_VERSION = "{version}"\n', encoding="utf-8")
+    monkeypatch.setattr(counts, "ROOT", tmp_path)
+    config = SimpleNamespace(extra={"version": {"provider": "mike"}})
+
+    counts.on_config(config)
+
+    assert config.extra["ppy_version"] == version
+    assert config.extra["version"] == {"provider": "mike"}
 
 
 def test_the_markers_count_what_the_tree_holds():
