@@ -2,13 +2,3 @@
 .md-typeset pre > code {
   max-height: 40rem;
 }
-
-/* The document version is fixed at build time; GitHub's latest release is not. */
-.md-source__fact--version {
-  display: none;
-}
-
-.ppy-source-version {
-  margin-left: 0.4em;
-  font-weight: 400;
-}

@@ -43,6 +43,7 @@ theme:
 
 extra_css:
   - stylesheets/extra.css
+  - stylesheets/version.css
 
 extra:
   version:
