@@ -15,6 +15,7 @@ inlined, and neither is a call the profile never reached.
 
 from __future__ import annotations
 
+from ..dialect import DialectRegistry
 from ..dialects import core
 from ..model import (
     Block,
@@ -128,7 +129,7 @@ class Inline(Pass):
                 ):
                     continue
                 callee = module.functions.get(op.attributes["callee"].name)  # type: ignore[union-attr]
-                if callee is None or not self._inlinable(callee, function, op):
+                if callee is None or not self._inlinable(callee, function, op, ctx.registry):
                     continue
                 self._inline(function, op, callee)
                 inlined += 1
@@ -141,7 +142,11 @@ class Inline(Pass):
         return changed
 
     def _inlinable(
-        self, callee: IRFunction, caller: IRFunction, call: Operation | None = None
+        self,
+        callee: IRFunction,
+        caller: IRFunction,
+        call: Operation | None = None,
+        registry: DialectRegistry | None = None,
     ) -> bool:
         if callee.is_declaration or callee is caller:
             return False
@@ -162,7 +167,7 @@ class Inline(Pass):
                 return False  # recursion
         if attributes.get("ppy.inline"):
             return True
-        if attributes.get("ppy.profile.cold") or _never_reached(call):
+        if attributes.get("ppy.profile.cold") or _never_reached(call, registry):
             self._held += 1
             return False
         budget = self.budget * 4 if attributes.get("ppy.profile.hot") else self.budget
@@ -227,18 +232,26 @@ class Inline(Pass):
         call.erase()
 
 
-def _never_reached(call: Operation | None) -> bool:
+def _never_reached(call: Operation | None, registry: DialectRegistry | None = None) -> bool:
     """Whether the profile measured the call's block and saw it run zero times."""
-    if call is None or call.parent is None or call.parent.terminator is None:
+    if call is None or call.parent is None:
         return False
-    count = call.parent.terminator.attributes.get("ppy.profile.count")
+    terminator = call.parent.terminator_for(registry)
+    if terminator is None:
+        return False
+    count = terminator.attributes.get("ppy.profile.count")
     return isinstance(count, int) and not isinstance(count, bool) and count == 0
 
 
-def whole_program(module: IRModule, keep: set[str], level: int = 2) -> PassContext:
+def whole_program(
+    module: IRModule,
+    keep: set[str],
+    level: int = 2,
+    registry: DialectRegistry | None = None,
+) -> PassContext:
     """Internalize, inline, clean up, and drop the dead: the program as one unit."""
     internalize(module, keep)
-    ctx = PassContext()
+    ctx = PassContext(registry)
     manager = PassManager(ctx)
     if level >= 1:
         manager.add(Inline())

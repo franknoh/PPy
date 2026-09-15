@@ -44,7 +44,7 @@ class SimplifyCFG(FunctionPass):
     @staticmethod
     def _fold_branches(region: Region, ctx: PassContext) -> bool:
         for block in region.blocks:
-            terminator = block.terminator
+            terminator = block.terminator_for(ctx.registry)
             if terminator is None or terminator.name != "core.cond_br":
                 continue
             then, otherwise = terminator.successors
@@ -70,7 +70,7 @@ class SimplifyCFG(FunctionPass):
 
     @staticmethod
     def _drop_unreachable(region: Region, ctx: PassContext) -> bool:
-        live = reachable_blocks(region)
+        live = reachable_blocks(region, ctx.registry)
         dead = [block for block in region.blocks if block not in live]
         if not dead:
             return False
@@ -86,10 +86,10 @@ class SimplifyCFG(FunctionPass):
         """`A: ... br B(args)` with B's only predecessor A: B's body joins A."""
         predecessors: dict[Block, list[Block]] = {b: [] for b in region.blocks}
         for block in region.blocks:
-            for successor in block.successors:
+            for successor in block.successors_for(ctx.registry):
                 predecessors[successor].append(block)
         for block in region.blocks:
-            terminator = block.terminator
+            terminator = block.terminator_for(ctx.registry)
             if terminator is None or terminator.name != "core.br":
                 continue
             target = terminator.successors[0].block

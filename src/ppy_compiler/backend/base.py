@@ -49,7 +49,7 @@ __all__ = [
 ]
 
 #: The interface a backend is written against. Bumped when a method's
-#: meaning or signature changes; a backend declaring another version is
+#: meaning or signature changes incompatibly; a backend declaring another version is
 #: refused at load time.
 #:
 #: An external backend declares the version it implements as a literal of
@@ -110,6 +110,9 @@ class EmitFormat:
     #: `program`: one artifact for the whole program, from `emit_program`,
     #: which is handed every module at once.
     scope: str = "module"
+    #: Whether emission needs the backend's SDK or compiler. Source formats
+    #: may opt out; building artifacts always checks the toolchain.
+    requires_toolchain: bool = True
 
     def __post_init__(self) -> None:
         if self.scope not in ("module", "program"):

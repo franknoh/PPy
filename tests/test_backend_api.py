@@ -508,6 +508,46 @@ def test_a_missing_toolchain_is_an_error_before_any_analysis(tmp_path: Path, mon
     assert build.returncode == 2 and "missing dummy-sdk" in build.stderr
 
 
+@pytest.mark.parametrize("scope", ["module", "program"])
+def test_source_emit_can_skip_the_toolchain_but_build_still_requires_it(
+    tmp_path: Path, monkeypatch, scope: str
+):
+    source = DUMMY.replace(
+        'description="a summary of the IR"',
+        'description="a summary of the IR", requires_toolchain=False',
+    ).replace(
+        'description="every module in one artifact"',
+        'description="every module in one artifact", requires_toolchain=False',
+    )
+    _install_backend(tmp_path, monkeypatch, source)
+    path = _project(tmp_path, '[tool.ppy.backends.dummy]\ntoolchain = "missing"\n')
+    kind = "dummy" if scope == "module" else "dummy-prog"
+    result = _ppy(path.parent, "emit", kind, path.name)
+    assert result.returncode == 0, result.stderr
+    assert "function kernel_scale tagged=True" in result.stdout
+    assert "verified: True" in result.stdout
+    binary = _ppy(path.parent, "emit", "dummy-bin", path.name)
+    assert binary.returncode == 2 and "missing dummy-sdk" in binary.stderr
+    build = _ppy(path.parent, "build", path.name, "--backend", "dummy")
+    assert build.returncode == 2 and "missing dummy-sdk" in build.stderr
+
+
+@pytest.mark.parametrize("valid_function", ["", "def good(n: int) -> int:\n    return n + 1\n\n"])
+def test_explicit_backend_reports_an_undecorated_function_that_cannot_lower(
+    tmp_path: Path, monkeypatch, valid_function: str
+):
+    _install_backend(tmp_path, monkeypatch, DUMMY)
+    path = _project(tmp_path)
+    path.write_text(valid_function + "def bad(value: str) -> str:\n    return value\n")
+    for command in [("emit", "dummy", path.name), ("build", path.name, "--backend", "dummy")]:
+        result = _ppy(path.parent, *command)
+        assert result.returncode == 2, result.stderr
+        assert "E1802" in result.stderr
+        assert "kernel.bad" in result.stderr and "kernel.ppy:" in result.stderr
+        assert "str" in result.stderr
+        assert "Traceback" not in result.stderr
+
+
 # -- ppy build ---------------------------------------------------------------------
 
 

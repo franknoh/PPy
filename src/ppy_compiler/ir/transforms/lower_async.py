@@ -22,6 +22,7 @@ runtime's -- its own future, the future it awaits, its state.
 from __future__ import annotations
 
 from ..analysis import region_dominators
+from ..dialect import DialectRegistry
 from ..dialects import aio as async_dialect
 from ..dialects import core
 from ..model import Block, Builder, IRFunction, IRModule, Operation, Successor, Value
@@ -51,7 +52,7 @@ class LowerAsync(Pass):
     name = "lower-async"
 
     def run(self, module: IRModule, ctx: PassContext) -> bool:
-        lowered = lower_async(module)
+        lowered = lower_async(module, ctx.registry)
         if lowered:
             for function in module.functions.values():
                 if not function.is_declaration:
@@ -59,7 +60,7 @@ class LowerAsync(Pass):
         return bool(lowered)
 
 
-def lower_async(module: IRModule) -> int:
+def lower_async(module: IRModule, registry: DialectRegistry | None = None) -> int:
     """Lower every coroutine of `module`; how many there were."""
     coroutines = [
         f
@@ -81,7 +82,7 @@ def lower_async(module: IRModule) -> int:
     if not coroutines:
         return 0
     module.require("async", 1)
-    plans = [_Plan(module, f) for f in coroutines]
+    plans = [_Plan(module, f, registry) for f in coroutines]
     for plan in plans:
         plan.build_resume()
     for plan in plans:
@@ -114,9 +115,15 @@ def _words(t: IRType) -> int:
 class _Plan:
     """One coroutine's lowering: its resume function, its frame, its starter."""
 
-    def __init__(self, module: IRModule, function: IRFunction) -> None:
+    def __init__(
+        self,
+        module: IRModule,
+        function: IRFunction,
+        registry: DialectRegistry | None = None,
+    ) -> None:
         self.module = module
         self.function = function
+        self.registry = registry
         self.inner: IRType = function.results[0] if function.results else VOID
         if len(function.results) > 1:
             raise AsyncLoweringError(f"@{function.name}: a coroutine returns one value or none")
@@ -223,7 +230,7 @@ class _Plan:
             if id(block) in seen:
                 return
             seen.add(id(block))
-            for successor in block.successors:
+            for successor in block.successors_for(self.registry):
                 visit(successor)
             order.append(block)
 
@@ -287,10 +294,10 @@ class _Plan:
     def _spill(self) -> None:
         """Every value read where its definition no longer dominates goes through the frame."""
         region = self.resume.body
-        dominators = region_dominators(region)
+        dominators = region_dominators(region, self.registry)
         owners: dict[int, Operation] = {}
         for block in region.blocks:
-            terminator = block.terminator
+            terminator = block.terminator_for(self.registry)
             if terminator is not None:
                 for successor in terminator.successors:
                     owners[id(successor)] = terminator

@@ -29,6 +29,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from ..analysis import region_dominators
+from ..dialect import DialectRegistry
 from ..dialects import prof
 from ..model import Block, Builder, IRFunction, IRModule
 from ..passes import Pass, PassContext
@@ -58,14 +59,14 @@ class ProfileError(Exception):
     """A `.ppyprof` that is missing, unreadable, or not a profile."""
 
 
-def cfg_digest(function: IRFunction) -> str:
+def cfg_digest(function: IRFunction, registry: DialectRegistry | None = None) -> str:
     """The shape a profile keys on: every block's label, terminator, and successors."""
     hasher = hashlib.blake2b(digest_size=8)
     for block in function.body.blocks:
-        terminator = block.terminator
+        terminator = block.terminator_for(registry)
         line = (
             f"{block.name}|{terminator.name if terminator is not None else ''}|"
-            f"{','.join(successor.name for successor in block.successors)}\n"
+            f"{','.join(successor.name for successor in block.successors_for(registry))}\n"
         )
         hasher.update(line.encode("utf-8"))
     return hasher.hexdigest()
@@ -267,7 +268,7 @@ class Instrument(Pass):
         for function in module.functions.values():
             if not _profiled(function) or function.entry is None:
                 continue
-            digest = cfg_digest(function)
+            digest = cfg_digest(function, ctx.registry)
             blocks: dict[str, int] = {}
             edges: dict[str, int] = {}
             for block in function.body.blocks:
@@ -276,7 +277,7 @@ class Instrument(Pass):
                 prof.hit(b, counter)
                 counter += 1
             for block in function.body.blocks:
-                terminator = block.terminator
+                terminator = block.terminator_for(ctx.registry)
                 if terminator is None or terminator.name != "core.cond_br":
                     continue
                 edges[block.name] = counter
@@ -313,19 +314,26 @@ class Annotated:
     loops: int
 
 
-def back_edges(function: IRFunction) -> list[tuple[Block, Block]]:
+def back_edges(
+    function: IRFunction, registry: DialectRegistry | None = None
+) -> list[tuple[Block, Block]]:
     """Every (latch, header) edge: a jump to a block that dominates the jumper."""
-    dominators = region_dominators(function.body)
+    dominators = region_dominators(function.body, registry)
     return [
         (block, successor)
         for block in function.body.blocks
-        for successor in block.successors
+        for successor in block.successors_for(registry)
         if successor in dominators.get(block, frozenset())
     ]
 
 
-def _edge_count(latch: Block, header: Block, record: FunctionProfile) -> int | None:
-    terminator = latch.terminator
+def _edge_count(
+    latch: Block,
+    header: Block,
+    record: FunctionProfile,
+    registry: DialectRegistry | None = None,
+) -> int | None:
+    terminator = latch.terminator_for(registry)
     if terminator is None:
         return None
     if terminator.name == "core.br":
@@ -337,7 +345,12 @@ def _edge_count(latch: Block, header: Block, record: FunctionProfile) -> int | N
     return None
 
 
-def annotate(function: IRFunction, record: FunctionProfile, threshold: int) -> Annotated:
+def annotate(
+    function: IRFunction,
+    record: FunctionProfile,
+    threshold: int,
+    registry: DialectRegistry | None = None,
+) -> Annotated:
     """Write `record`'s counts onto `function`; what was written."""
     calls = record.calls
     function.attributes["ppy.profile.calls"] = calls
@@ -346,7 +359,7 @@ def annotate(function: IRFunction, record: FunctionProfile, threshold: int) -> A
         function.attributes[f"ppy.profile.{kind}"] = True
     branches = 0
     for block in function.body.blocks:
-        terminator = block.terminator
+        terminator = block.terminator_for(registry)
         count = record.blocks.get(block.name)
         if terminator is None or count is None:
             continue
@@ -356,14 +369,15 @@ def annotate(function: IRFunction, record: FunctionProfile, threshold: int) -> A
             terminator.attributes["ppy.weights"] = (taken, not_taken)
             branches += 1
     loops = 0
-    for latch, header in back_edges(function):
-        taken = _edge_count(latch, header, record)
+    for latch, header in back_edges(function, registry):
+        taken = _edge_count(latch, header, record, registry)
         header_count = record.blocks.get(header.name)
-        if taken is None or header_count is None or latch.terminator is None:
+        terminator = latch.terminator_for(registry)
+        if taken is None or header_count is None or terminator is None:
             continue
         entries = max(header_count - taken, 0)
         trips = taken / entries if entries else float(taken)
-        latch.terminator.attributes["ppy.profile.trips"] = round(trips, 2)
+        terminator.attributes["ppy.profile.trips"] = round(trips, 2)
         loops += 1
     return Annotated(kind, branches, loops)
 
@@ -386,13 +400,13 @@ class AnnotateProfile(Pass):
             record = self.profile.functions.get(qualname)
             if record is None or not record.cfg:
                 continue
-            if record.cfg != cfg_digest(function):
+            if record.cfg != cfg_digest(function, ctx.registry):
                 ctx.remark(
                     f"profile: stale for `{qualname}`: the function changed since the profile "
                     "was recorded; its counts were ignored"
                 )
                 continue
-            result = annotate(function, record, threshold)
+            result = annotate(function, record, threshold, ctx.registry)
             ctx.remark(
                 f"profile: `{qualname}` is {result.kind} ({record.calls} call(s)); "
                 f"{result.branches} branch(es) weighted, {result.loops} loop(s) with trip counts"

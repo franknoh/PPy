@@ -28,7 +28,7 @@ if TYPE_CHECKING:
     import ast
 
     from ..analysis.decorators import DecoratorSemantics
-    from ..ir import DialectRegistry, PassManager
+    from ..ir import DialectRegistry, IRType, PassManager
 
 __all__ = [
     "PLUGIN_API_VERSION",
@@ -92,6 +92,10 @@ class DialectOperationSpec:
     dialect: str
     operation: str
     attributes: tuple[tuple[str, object], ...] = ()
+    #: Keywords appended as SSA operands, in this explicit order.
+    keyword_operands: tuple[str, ...] = ()
+    #: Keywords evaluated as compile-time constants and copied to attributes.
+    keyword_attributes: tuple[str, ...] = ()
 
     @property
     def kind(self) -> Lowering:
@@ -305,6 +309,14 @@ class Plugin:
 
     # -- the IR ---------------------------------------------------------------
 
+    def lower_type(self, type_: T.Type, facts: Facts) -> IRType | None:
+        """Canonical representation of a source type, retaining its proven facts.
+
+        Return None when this plugin does not provide a representation. This
+        hook describes IR types, independently of any backend's native ABI.
+        """
+        return None
+
     def register_dialects(self, registry: DialectRegistry) -> None:
         """Dialects this plugin defines: `registry.register(MyDialect())`."""
 
@@ -391,6 +403,14 @@ class PluginRegistry:
                 if roots & {module.partition(".")[0] for module in plugin.modules}
             ]
         return tuple(sorted(f"{p.name}:{p.fingerprint()}" for p in selected))
+
+    def lower_type(self, type_: T.Type, facts: Facts) -> IRType | None:
+        """Ask enabled plugins in registration order for a canonical IR type."""
+        for plugin in self._plugins:
+            lowered = plugin.lower_type(type_, facts)
+            if lowered is not None:
+                return lowered
+        return None
 
     def dialect_registry(self) -> DialectRegistry:
         """The IR registry for this project: the builtin dialects plus every

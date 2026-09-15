@@ -14,7 +14,7 @@ import time
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
 
-from .analysis import ANALYSES
+from .analysis import ANALYSES, dominators
 from .dialect import DialectRegistry
 from .dialect import registry as default_registry
 from .model import IRFunction, IRModule
@@ -66,7 +66,10 @@ class PassContext:
             compute = ANALYSES.get(name)
             if compute is None:
                 raise KeyError(f"no analysis named {name!r}")
-            self._analyses[key] = compute(function)
+            if compute is dominators:
+                self._analyses[key] = compute(function, self.registry)
+            else:
+                self._analyses[key] = compute(function)
             self._functions[id(function)] = function
         return self._analyses[key]
 
