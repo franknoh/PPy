@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING
 
 from ..dialect import Dialect, DialectRegistry, OpSpec
 from ..model import Builder, Operation, Value
-from ..types import FloatType, IndexType, IntType
+from ..types import IndexType, IntType, is_floating
 
 if TYPE_CHECKING:
     from ..verify import Checker
@@ -41,7 +41,7 @@ ORDERED = {"bessel_jn": "jn", "bessel_yn": "yn"}
 
 def _verify_unary(op: Operation, checker: Checker) -> None:
     t = op.operands[0].type
-    if not isinstance(t, FloatType):
+    if not is_floating(t):
         checker.error(op, f"{op.name} takes a floating-point value, not {t}")
         return
     if op.results[0].type != t:
@@ -52,7 +52,7 @@ def _verify_ordered(op: Operation, checker: Checker) -> None:
     order, value = (v.type for v in op.operands)
     if not isinstance(order, (IntType, IndexType)):
         checker.error(op, f"{op.name} takes an integer order first, not {order}")
-    if not isinstance(value, FloatType):
+    if not is_floating(value):
         checker.error(op, f"{op.name} takes a floating-point value, not {value}")
         return
     if op.results[0].type != value:

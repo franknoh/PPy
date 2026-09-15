@@ -6,7 +6,7 @@ working under plain CPython and under any Python-aware editor.
 
 from __future__ import annotations
 
-from typing import Annotated, Any
+from typing import Annotated, Any, cast
 
 __all__ = [
     "NUMERIC_MARKERS",
@@ -18,6 +18,7 @@ __all__ = [
     "Contiguous",
     "DType",
     "Dynamic",
+    "FloatFormat",
     "FloatWidth",
     "IntWidth",
     "Length",
@@ -26,9 +27,12 @@ __all__ = [
     "Owned",
     "Range",
     "Shape",
+    "Tensor",
+    "TensorSpec",
     "Vector",
     "VectorSpec",
     "assume",
+    "bf16",
     "check",
     "f16",
     "f32",
@@ -98,6 +102,16 @@ class FloatWidth(_Meta):
         return f"f{self.bits}"
 
 
+class FloatFormat(_Meta):
+    """A named floating-point format whose width alone is ambiguous."""
+
+    __slots__ = ("name",)
+    _fields = ("name",)
+
+    def __init__(self, name: str) -> None:
+        self.name = name
+
+
 class ArraySpec(_Meta):
     __slots__ = ("element", "length")
     _fields = ("element", "length")
@@ -121,6 +135,17 @@ class BufferSpec(_Meta):
 
     def __init__(self, element: Any) -> None:
         self.element = element
+
+
+class TensorSpec(_Meta):
+    """The framework-neutral element dtype and shape of a tensor annotation."""
+
+    __slots__ = ("dtype", "shape")
+    _fields = ("dtype", "shape")
+
+    def __init__(self, dtype: str, shape: tuple[int | str, ...]) -> None:
+        self.dtype = dtype
+        self.shape = shape
 
 
 class Range(_Meta):
@@ -239,6 +264,91 @@ class Buffer:
         return Annotated[memoryview, BufferSpec(element)]
 
 
+_DTYPE_ALIASES: dict[str, str] = {
+    "bf16": "bfloat16",
+    "bfloat16": "bfloat16",
+    "f16": "float16",
+    "float16": "float16",
+    "f32": "float32",
+    "float32": "float32",
+    "f64": "float64",
+    "float64": "float64",
+    "bool": "bool",
+    "int8": "int8",
+    "int16": "int16",
+    "int32": "int32",
+    "int64": "int64",
+    "uint8": "uint8",
+    "uint16": "uint16",
+    "uint32": "uint32",
+    "uint64": "uint64",
+    "i8": "int8",
+    "i16": "int16",
+    "i32": "int32",
+    "i64": "int64",
+    "u8": "uint8",
+    "u16": "uint16",
+    "u32": "uint32",
+    "u64": "uint64",
+}
+
+
+def _normalize_dtype(dtype: Any) -> str:
+    """Return the stable PPy spelling for a supported scalar dtype."""
+    import typing
+
+    if dtype is bool:
+        return "bool"
+    if dtype is int:
+        return "int64"
+    if dtype is float:
+        return "float64"
+    arguments = typing.get_args(dtype) if typing.get_origin(dtype) is Annotated else ()
+    base = arguments[0] if arguments else None
+    metadata = arguments[1:]
+    for item in metadata:
+        if isinstance(item, IntWidth):
+            name = f"{'int' if item.signed else 'uint'}{item.bits}"
+            if base is int and name in _DTYPE_ALIASES.values():
+                return name
+            break
+        if isinstance(item, FloatWidth):
+            name = f"float{item.bits}"
+            if base is float and name in _DTYPE_ALIASES.values():
+                return name
+            break
+        if isinstance(item, FloatFormat):
+            if base is float and item.name == "bfloat16":
+                return item.name
+            break
+    if isinstance(dtype, str) and dtype in _DTYPE_ALIASES:
+        return _DTYPE_ALIASES[dtype]
+    raise TypeError(f"unsupported tensor dtype {dtype!r}")
+
+
+def _normalize_shape(shape: Any) -> tuple[int | str, ...]:
+    if not isinstance(shape, tuple):
+        raise TypeError("ppy.Tensor shape must be a tuple")
+    for dim in shape:
+        if isinstance(dim, bool) or (
+            not isinstance(dim, (int, str))
+            or (isinstance(dim, int) and dim < 0)
+            or (isinstance(dim, str) and not dim.isidentifier())
+        ):
+            raise TypeError(f"invalid tensor dimension {dim!r}")
+    return cast(tuple[int | str, ...], shape)
+
+
+class Tensor:
+    """Framework-neutral tensor annotation: ``Tensor[dtype, shape]``."""
+
+    def __class_getitem__(cls, params: Any) -> Any:
+        if not isinstance(params, tuple) or len(params) != 2:
+            raise TypeError("ppy.Tensor requires two parameters: Tensor[dtype, shape]")
+        dtype, shape = params
+        return Annotated[cls, TensorSpec(_normalize_dtype(dtype), _normalize_shape(shape))]
+
+
 i8 = Annotated[int, IntWidth(8, True)]
 i16 = Annotated[int, IntWidth(16, True)]
 i32 = Annotated[int, IntWidth(32, True)]
@@ -250,6 +360,7 @@ u64 = Annotated[int, IntWidth(64, False)]
 f16 = Annotated[float, FloatWidth(16)]
 f32 = Annotated[float, FloatWidth(32)]
 f64 = Annotated[float, FloatWidth(64)]
+bf16 = Annotated[float, FloatFormat("bfloat16")]
 
 #: An explicit Python-dynamic boundary. `Dynamic` is `Any` at runtime, but
 #: spelling it says the dynamism is a decision, not an inference failure.
@@ -277,6 +388,7 @@ _BUFFER_FORMATS: dict[Any, frozenset[str]] = {
 }
 #: The largest finite value a narrower float holds; wider than this is not that float.
 _FLOAT_LIMITS = {16: 65504.0, 32: 3.4028234663852886e38}
+_BFLOAT16_MAX = (2 - 2**-7) * 2**127
 #: Contracts between a caller and a callee that no one value can bear witness to.
 _UNCHECKABLE = (NoAlias, Owned, Borrowed, Mut)
 
@@ -398,6 +510,18 @@ class _Validation:
             )
 
     def _accept_metadata(self, target: Any, metadata: tuple) -> None:
+        import typing
+
+        arguments = typing.get_args(target)
+        if arguments and arguments[0] is Tensor:
+            for item in metadata:
+                if isinstance(item, Shape):
+                    _normalize_shape(item.dims)
+                elif isinstance(item, DType):
+                    _normalize_dtype(item.name)
+                elif isinstance(item, TensorSpec):
+                    _normalize_shape(item.shape)
+                    _normalize_dtype(item.dtype)
         for item in metadata:
             if isinstance(item, _UNCHECKABLE):
                 raise TypeError(
@@ -455,6 +579,9 @@ class _Validation:
         if origin is None:
             if not isinstance(target, type):
                 raise TypeError(f"ppy.check cannot validate against {target!r}")
+            if target is Tensor:
+                self._tensor_base(value, where)
+                return
             if target is float and isinstance(value, int) and not isinstance(value, bool):
                 # Typed code accepts an int where a float is expected; the check does too.
                 return
@@ -497,6 +624,7 @@ class _Validation:
 
     def _annotated(self, target: Any, base: Any, metadata: tuple, value: Any, where: str) -> None:
         buffer = None
+        tensor = None
         for item in metadata:
             if isinstance(item, _UNCHECKABLE):
                 raise TypeError(
@@ -506,6 +634,8 @@ class _Validation:
                 )
             if isinstance(item, BufferSpec):
                 buffer = item
+            elif isinstance(item, TensorSpec):
+                tensor = item
             elif isinstance(item, ArraySpec) and (
                 not isinstance(item.length, int) or isinstance(item.length, bool)
             ):
@@ -517,17 +647,26 @@ class _Validation:
                 raise TypeError(
                     f"ppy.check cannot validate against {target!r}: {item!r} has no runtime check"
                 )
-        if buffer is not None:
+        if base is Tensor:
+            self._tensor_base(value, where)
+        if tensor is not None:
+            # Tensor is an annotation abstraction. Framework values qualify by
+            # their public shape and dtype rather than by inheriting this marker.
+            self._shape(Shape(*tensor.shape), value, where)
+            self._dtype(DType(tensor.dtype), value, where)
+        elif buffer is not None:
             # The representation is the buffer protocol, of which `memoryview` is
             # the spelling: an `array.array("q")` is a `Buffer[int]` as much as a view is.
             self._buffer(buffer, value, where)
-        else:
+        elif base is not Tensor:
             self._validate(base, value, where)
         for item in metadata:
             if isinstance(item, IntWidth):
                 self._int_width(item, value, where)
             elif isinstance(item, FloatWidth):
                 self._float_width(item, value, where)
+            elif isinstance(item, FloatFormat):
+                self._float_format(item, value, where)
             elif isinstance(item, ArraySpec):
                 self._array(item, value, where)
             elif isinstance(item, Range):
@@ -565,6 +704,34 @@ class _Validation:
         if magnitude > limit:
             raise TypeError(
                 f"{where}: {value!r} is wider than {width.name} holds (|x| <= {limit!r})"
+            )
+
+    def _float_format(self, format_: FloatFormat, value: Any, where: str) -> None:
+        if not isinstance(value, (int, float)) or isinstance(value, bool):
+            raise TypeError(f"{where}: expected {format_.name}, got {type(value).__name__}")
+        if format_.name == "bfloat16":
+            import math
+
+            magnitude = abs(float(value))
+            limit = _BFLOAT16_MAX
+            if not (math.isinf(magnitude) or math.isnan(magnitude)) and magnitude > limit:
+                raise TypeError(f"{where}: {value!r} is wider than bfloat16 holds")
+
+    @staticmethod
+    def _tensor_base(value: Any, where: str) -> None:
+        shape = getattr(value, "shape", None)
+        dtype = getattr(value, "dtype", None)
+        try:
+            tuple(shape)
+        except TypeError as error:
+            raise TypeError(
+                f"{where}: expected a tensor-like value with shape and dtype, "
+                f"got {type(value).__name__}"
+            ) from error
+        if dtype is None:
+            raise TypeError(
+                f"{where}: expected a tensor-like value with shape and dtype, "
+                f"got {type(value).__name__}"
             )
 
     def _array(self, spec: ArraySpec, value: Any, where: str) -> None:
@@ -625,8 +792,9 @@ class _Validation:
         dtype = getattr(value, "dtype", None)
         if dtype is None:
             raise TypeError(f"{where}: {spec!r} needs a value with a dtype")
-        names = {str(dtype), str(dtype).rpartition(".")[2], str(getattr(dtype, "name", ""))}
-        if spec.name not in names:
+        raw_names = {str(dtype), str(dtype).rpartition(".")[2], str(getattr(dtype, "name", ""))}
+        names = {_DTYPE_ALIASES.get(name, name) for name in raw_names}
+        if _DTYPE_ALIASES.get(spec.name, spec.name) not in names:
             raise TypeError(f"{where}: expected dtype {spec.name!r}, got {dtype!s}")
 
     def _contiguous(self, value: Any, where: str) -> None:
@@ -695,9 +863,11 @@ class _Validation:
 _CHECKED_META = (
     IntWidth,
     FloatWidth,
+    FloatFormat,
     ArraySpec,
     VectorSpec,
     BufferSpec,
+    TensorSpec,
     Range,
     Length,
     Shape,
@@ -788,4 +958,5 @@ NUMERIC_MARKERS: dict[str, Any] = {
     "f16": f16,
     "f32": f32,
     "f64": f64,
+    "bf16": bf16,
 }

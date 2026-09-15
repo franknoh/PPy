@@ -15,6 +15,7 @@ from dataclasses import dataclass
 from typing import ClassVar
 
 __all__ = [
+    "BF16",
     "BOOL",
     "F16",
     "F32",
@@ -29,6 +30,7 @@ __all__ = [
     "U32",
     "U64",
     "VOID",
+    "BFloat16Type",
     "BoolType",
     "BufferType",
     "DialectType",
@@ -44,6 +46,7 @@ __all__ = [
     "VectorType",
     "VoidType",
     "is_arithmetic",
+    "is_floating",
     "is_integer",
     "is_scalar",
     "parse_type",
@@ -113,6 +116,20 @@ class FloatType(IRType):
 
     def __str__(self) -> str:
         return f"f{self.width}"
+
+
+@dataclass(frozen=True, slots=True)
+class BFloat16Type(IRType):
+    """Brain floating point: 8 exponent bits and 7 explicit fraction bits.
+
+    This is distinct from IEEE binary16 and deliberately not a FloatType,
+    so a backend dispatching IEEE types by width cannot substitute f16.
+    """
+
+    width: ClassVar[int] = 16
+
+    def __str__(self) -> str:
+        return "bf16"
 
 
 @dataclass(frozen=True, slots=True)
@@ -241,6 +258,7 @@ U8 = IntType(8, False)
 U16 = IntType(16, False)
 U32 = IntType(32, False)
 U64 = IntType(64, False)
+BF16 = BFloat16Type()
 F16 = FloatType(16)
 F32 = FloatType(32)
 F64 = FloatType(64)
@@ -257,11 +275,16 @@ _NAMED: dict[str, IRType] = {
     "u16": U16,
     "u32": U32,
     "u64": U64,
+    "bf16": BF16,
     "f16": F16,
     "f32": F32,
     "f64": F64,
     "index": INDEX,
 }
+
+
+def is_floating(t: IRType) -> bool:
+    return isinstance(t, (FloatType, BFloat16Type))
 
 
 def is_integer(t: IRType) -> bool:
@@ -272,11 +295,11 @@ def is_arithmetic(t: IRType) -> bool:
     """Something `core.add` and friends operate on: a number, or a vector of them."""
     if isinstance(t, VectorType):
         return is_arithmetic(t.element)
-    return isinstance(t, (IntType, FloatType, IndexType))
+    return isinstance(t, (IntType, FloatType, BFloat16Type, IndexType))
 
 
 def is_scalar(t: IRType) -> bool:
-    return isinstance(t, (BoolType, IntType, FloatType, IndexType))
+    return isinstance(t, (BoolType, IntType, FloatType, BFloat16Type, IndexType))
 
 
 def scalar_of(t: IRType) -> IRType:

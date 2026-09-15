@@ -69,6 +69,7 @@ def optimize_shared_ir(  # type: ignore[no-untyped-def]
     instrument: bool = False,
     profile=None,
     backend=None,
+    lower_tensors: bool = True,
 ) -> PassContext:
     """Verify the frontend's IR, run the shared passes, verify again.
 
@@ -77,7 +78,8 @@ def optimize_shared_ir(  # type: ignore[no-untyped-def]
     each verified so that one which breaks the IR is named. `parallel` is
     the project's `ParallelConfig`, which decides how a parallel loop is
     lowered. A `backend` registers its own passes at the `backend` stage,
-    which the pipeline marks last.
+    which the pipeline marks last. `lower_tensors=False` preserves tensor
+    values for a backend's own lowering instead of the generic memory pass.
     """
     registry = plugins.dialect_registry() if plugins is not None else None
     verify_or_raise(module, registry)
@@ -91,6 +93,7 @@ def optimize_shared_ir(  # type: ignore[no-untyped-def]
         until=until,
         instrument=instrument,
         profile=profile,
+        lower_tensors=lower_tensors,
     )
     if plugins is not None:
         plugins.register_passes(manager)
@@ -202,6 +205,7 @@ def canonical_ir_modules(  # type: ignore[no-untyped-def]
             launches=launches,
             imports=available.get,
             plugins=bundle.project.plugins,
+            backend_name=backend.name if backend is not None else None,
         )
         if backend is not None:
             for qualname, reason in lowered.rejected.items():
@@ -217,6 +221,9 @@ def canonical_ir_modules(  # type: ignore[no-untyped-def]
             continue
         for qualname, entry in lowered.functions.items():
             available[qualname] = (entry.info, entry.signature)
+        # A common-Tensor module opts into backend-owned tensor lowering as
+        # a whole, including any legacy tensor helpers injected by plugins.
+        # Legacy-only modules keep the shared memory lowering for all backends.
         optimize_shared_ir(
             lowered.module,
             config.opt_level,
@@ -227,6 +234,7 @@ def canonical_ir_modules(  # type: ignore[no-untyped-def]
             instrument=config.llvm.instrument,
             profile=profile_for(config),
             backend=backend,
+            lower_tensors=not lowered.module.attributes.get("ppy.common_tensor", False),
         )
         modules[module.name] = lowered.module
     return modules

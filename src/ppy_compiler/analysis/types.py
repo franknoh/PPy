@@ -25,6 +25,7 @@ __all__ = [
     "NONE",
     "OBJECT",
     "STR",
+    "TENSOR",
     "UNKNOWN",
     "AnyType",
     "Callable_",
@@ -47,6 +48,7 @@ __all__ = [
     "is_exact_builtin",
     "is_numeric",
     "is_optional",
+    "is_tensor",
     "join",
     "list_of",
     "numeric_rank",
@@ -427,6 +429,7 @@ COMPLEX = instance("complex")
 STR = instance("str")
 BYTES = instance("bytes")
 OBJECT = instance("object")
+TENSOR = Instance("ppy.Tensor", (), ("ppy.Tensor", "object"))
 ELLIPSIS_T = instance("ellipsis")
 
 _NUMERIC_RANK = {"bool": 0, "int": 1, "float": 2, "complex": 3}
@@ -800,6 +803,12 @@ def strip_literal(t: Type) -> Type:
     if isinstance(t, Instance) and t.args:
         return Instance(t.name, tuple(strip_literal(a) for a in t.args), t.mro)
     return t
+
+
+def is_tensor(t: Type) -> bool:
+    """Whether ``t`` is the common framework-neutral PPy tensor type."""
+    base = strip_literal(t)
+    return isinstance(base, Instance) and base.name == "ppy.Tensor"
 
 
 def members_of(t: Type) -> Sequence[Type]:

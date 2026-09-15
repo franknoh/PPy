@@ -7,8 +7,10 @@ be a symbol or an expression in parentheses (`tensor.tensor<f64, N, (N *
 rules in `ir.shape` -- and the verifier holds the written result to it.
 `load` and `store` move a tensor to and from a buffer of its elements in
 row-major order; `fill` makes a tensor of one scalar; everything else is
-arithmetic on the values, and says nothing about memory. `lower-tensor`
-decides that. `fused` holds a region computing one element from one
+arithmetic on the values, and says nothing about memory. `shape_cast` only
+generalizes dimensions to symbols, preserving dtype, rank,
+layout and every known constraint; it never reshapes or converts elements.
+`lower-tensor` decides physical storage. `fused` holds a region computing one element from one
 element of each operand -- what `tensor-fusion` makes of a chain of
 elementwise operations -- and lowers to a single loop.
 """
@@ -21,7 +23,7 @@ from typing import TYPE_CHECKING
 from .. import shape as shapes
 from ..dialect import Dialect, DialectRegistry, OpSpec
 from ..model import Builder, IRModule, Operation, Value
-from ..types import BufferType, DialectType, FloatType, IndexType, IntType, IRType, is_scalar
+from ..types import BufferType, DialectType, IndexType, IntType, IRType, is_floating, is_scalar
 from . import core
 from . import layout as layouts
 from .math import UNARY as _MATH_UNARY
@@ -105,9 +107,38 @@ def describe(t: IRType) -> TensorInfo | None:
     rest = list(t.args[1:])
     layout = layouts.Layout()
     if rest and isinstance(rest[-1], DialectType):
-        layout = layouts.describe(rest.pop())
+        layout_type = rest.pop()
+        assert isinstance(layout_type, DialectType)
+        layout = layouts.describe(layout_type)
     dims = tuple(shapes.parse_dim(d) for d in rest)  # type: ignore[arg-type]
     return TensorInfo(dtype, dims, layout)
+
+
+def can_generalize_shape(source: IRType, target: IRType) -> bool:
+    """Whether target forgets shape detail without asserting any new constraint."""
+    left, right = describe(source), describe(target)
+    if left is None or right is None:
+        return False
+    if left.dtype != right.dtype or left.layout != right.layout or left.rank != right.rank:
+        return False
+    bindings: dict[shapes.Symbol, shapes.Dim] = {}
+    for actual, expected in zip(left.shape, right.shape, strict=True):
+        if isinstance(expected, shapes.Symbol):
+            if expected in bindings and bindings[expected] != actual:
+                return False
+            bindings[expected] = actual
+        elif actual != expected:
+            return False
+    return True
+
+
+def _verify_shape_cast(op: Operation, checker: Checker) -> None:
+    if not can_generalize_shape(op.operands[0].type, op.results[0].type):
+        checker.error(
+            op,
+            "shape_cast only generalizes shape while preserving dtype, layout, rank "
+            "and known dimensions",
+        )
 
 
 def verify_tensor(t: DialectType) -> str | None:
@@ -118,6 +149,7 @@ def verify_tensor(t: DialectType) -> str | None:
     rest = list(t.args[1:])
     if rest and isinstance(rest[-1], DialectType):
         layout = rest.pop()
+        assert isinstance(layout, DialectType)
         reason = layouts.verify_layout(layout)
         if reason is not None:
             return reason
@@ -192,7 +224,7 @@ def _verify_elementwise(op: Operation, checker: Checker) -> None:
             op, f"{op.name} takes tensors of one element type, not {a.dtype} and {b.dtype}"
         )
         return
-    if op.local_name in {"div", "pow"} and not isinstance(a.dtype, FloatType):
+    if op.local_name in {"div", "pow"} and not is_floating(a.dtype):
         checker.error(op, f"{op.name} takes floating-point tensors")
     try:
         shape = shapes.broadcast(a.shape, b.shape)
@@ -223,7 +255,7 @@ def _verify_unary(op: Operation, checker: Checker) -> None:
         return
     if source is None:
         return
-    if kind not in _INTEGER_UNARY and not isinstance(source.dtype, FloatType):
+    if kind not in _INTEGER_UNARY and not is_floating(source.dtype):
         checker.error(op, f"tensor.unary {kind} takes a floating-point tensor, not {source.dtype}")
     _result_shape(op, checker, source.dtype, source.shape)
 
@@ -465,7 +497,7 @@ def _verify_convert(op: Operation, checker: Checker) -> None:
         return
     if result.shape != source.shape:
         checker.error(op, "convert keeps the shape")
-    if not isinstance(result.dtype, (IntType, IndexType, FloatType)):
+    if not (isinstance(result.dtype, (IntType, IndexType)) or is_floating(result.dtype)):
         checker.error(op, f"convert gives numbers, not {result.dtype}")
 
 
@@ -496,6 +528,9 @@ class TensorDialect(Dialect):
             )
         )
         add(OpSpec("tensor.broadcast", pure=True, verify=_verify_broadcast, operands=1, results=1))
+        add(
+            OpSpec("tensor.shape_cast", pure=True, verify=_verify_shape_cast, operands=1, results=1)
+        )
         add(OpSpec("tensor.reshape", pure=True, verify=_verify_reshape, operands=1, results=1))
         add(
             OpSpec(
@@ -621,7 +656,7 @@ def scalar_unary(b: Builder, kind: str, value: Value, module: IRModule | None = 
     The math and special dialects are required of `module` when given, so
     a body built here verifies.
     """
-    floating = isinstance(value.type, FloatType)
+    floating = is_floating(value.type)
     if kind == "neg":
         return core.neg(b, value) if floating else core.neg(b, value, overflow="wrap")
     if kind == "abs" and not floating:
@@ -640,7 +675,7 @@ def scalar_binary(
     b: Builder, name: str, left: Value, right: Value, module: IRModule | None = None
 ) -> Value:
     """`name` -- one of `ELEMENTWISE` -- over two elements."""
-    floating = isinstance(left.type, FloatType)
+    floating = is_floating(left.type)
     if name == "div":
         return core.div(b, left, right)
     if name == "pow":
@@ -660,7 +695,7 @@ def scalar_extremum(b: Builder, kind: str, a: Value, c: Value) -> Value:
     `c` wins the comparison it fails."""
     keep_a = core.cmp(b, "le" if kind == "min" else "ge", a, c)
     chosen = core.select(b, keep_a, a, c)
-    if not isinstance(a.type, FloatType):
+    if not is_floating(a.type):
         return chosen
     a_is_number = core.cmp(b, "eq", a, a)
     return core.select(b, a_is_number, chosen, a)

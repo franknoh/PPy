@@ -39,6 +39,7 @@ from .passes import (
 from .pattern import GreedyRewriteDriver, Pattern, PatternSet, Rewriter, RewriteResult
 from .printer import print_function, print_module
 from .types import (
+    BF16,
     BOOL,
     F16,
     F32,
@@ -53,6 +54,7 @@ from .types import (
     U32,
     U64,
     VOID,
+    BFloat16Type,
     BoolType,
     BufferType,
     DialectType,
@@ -71,6 +73,7 @@ from .types import (
 from .verify import VerificationError, VerifyError, verify, verify_or_raise
 
 __all__ = [
+    "BF16",
     "BOOL",
     "F16",
     "F32",
@@ -88,6 +91,7 @@ __all__ = [
     "U64",
     "VOID",
     "Attribute",
+    "BFloat16Type",
     "Block",
     "BlockArgument",
     "BoolType",

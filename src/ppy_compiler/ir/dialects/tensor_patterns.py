@@ -15,7 +15,7 @@ from __future__ import annotations
 from .. import shape as shapes
 from ..model import Attribute, Operation, Value
 from ..pattern import Pattern, PatternSet, Rewriter, RewriteResult
-from ..types import FloatType
+from ..types import is_floating
 from . import tensor as tensors
 
 __all__ = ["canonicalization_patterns", "register"]
@@ -193,7 +193,7 @@ class _FillIdentity(Pattern):
         info = tensors.describe(op.results[0].type)
         if info is None:
             return RewriteResult.failure()
-        if isinstance(info.dtype, FloatType) and not self.floats:
+        if is_floating(info.dtype) and not self.floats:
             return RewriteResult.failure("-0.0 + 0.0 is 0.0: floats keep their addition")
         for position in self.positions:
             constant = _fill_constant(op.operands[position])

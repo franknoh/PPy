@@ -69,6 +69,7 @@ def default_pipeline(  # type: ignore[no-untyped-def]
     until=None,
     instrument: bool = False,
     profile=None,
+    lower_tensors: bool = True,
 ):
     """The passes a module goes through before a backend, by optimization level.
 
@@ -113,7 +114,8 @@ def default_pipeline(  # type: ignore[no-untyped-def]
         manager.add(FuseTensor())
     if until == "after-fusion":
         return manager
-    manager.add(LowerTensor())
+    if lower_tensors:
+        manager.add(LowerTensor())
     if parallel is not None:
         manager.add(parallel)
         manager.add(Canonicalize())

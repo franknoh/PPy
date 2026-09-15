@@ -106,6 +106,7 @@ nav:
       - Derivatives: guide/autodiff.md
       - Coroutines: guide/aio.md
       - GPU kernels: guide/gpu.md
+      - Common tensors: guide/tensors.md
       - XLA: guide/xla.md
       - Generics: guide/generics.md
       - Effects and the three paths: guide/effects.md
