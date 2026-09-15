@@ -66,6 +66,7 @@ SHIMS: dict[str, Shim] = {
     ),
     "ppy_rt_print_sep": Shim("void", (), "{ fputc(' ', stdout); }", ("stdio.h",)),
     "ppy_rt_print_nl": Shim("void", (), "{ fputc('\\n', stdout); }", ("stdio.h",)),
+    "ppy_rt_flush_stdout": Shim("void", (), "{ fflush(stdout); }", ("stdio.h",)),
     "ppy_rt_alloc": Shim(
         "int64_t *", ("int64_t count", "int64_t width"), _ALLOC, ("stdio.h", "stdlib.h")
     ),

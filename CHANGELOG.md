@@ -4,6 +4,10 @@
 
 Work toward the next release, on `dev`; alphas of it are tagged `v0.4.0aN`.
 
+- Standalone builds and C emission support `print` with string literal `end`
+  and `sep`, boolean literal `flush`, and basic integer and boolean f-strings.
+  Converted input prompts retain their output and flush before reading.
+
 - A region may write through a parameter. `narrow` and `copy_` joined the
   curated set, so a slot of a preallocated tensor can be filled in place --
   the other way to keep a KV cache, and the one a long context wants, since

@@ -2204,7 +2204,7 @@ class _FunctionEmitter:
             return
         if shim is not None:
             self.owner.shim(symbol)
-            parameter_types = [p.rsplit(" ", 1)[0] for p in shim.parameters]
+            parameter_types = [re.sub(r"[A-Za-z_]\w*$", "", p).strip() for p in shim.parameters]
             arguments = []
             for operand, expected in zip(op.operands, parameter_types, strict=True):
                 atom = self.extern_atom(operand)
