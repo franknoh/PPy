@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.1 — 2026-09-15
+
+- Standalone builds and C emission support `print` with string literal `end`
+  and `sep`, boolean literal `flush`, and basic integer and boolean f-strings.
+  Converted input prompts retain their output and flush before reading.
+
 ## 0.3.0 — 2026-09-13
 
 The release that makes the compiler an open one: a public backend interface

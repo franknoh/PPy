@@ -23,6 +23,7 @@ from ppy_runtime.aio import available as aio_available
 
 from ..analysis import types as T
 from ..analysis.checker import FunctionAnalysis, ModuleAnalysis
+from ..analysis.lexical import LexicalBindings
 from ..analysis.symbols import FunctionInfo, derivative_spec, fold_flags
 from ..backend.llvm.lowering import (
     _ALLOCATIONS,
@@ -1521,10 +1522,14 @@ class _FunctionLowering:
         namespace = _dialect_namespace(target)
         if namespace is not None:
             return self._dialect_call(namespace, node)
+        if self.frontend.standalone and target == "print":
+            lexical = self.frontend.analysis.symbols.lexical
+            if isinstance(lexical, LexicalBindings) and lexical.targets_at(node.func) == {
+                "builtins.print"
+            }:
+                return self._standalone_print(node)
         if node.keywords:
             raise Unsupported("keyword arguments have no native ABI")
-        if self.frontend.standalone and target == "print":
-            return self._standalone_print(node)
         if self.frontend.standalone and target == "ppy.input[int]" and not node.args:
             return core.call_extern(self.b, "ppy_rt_input_int", (), (I64,)).results[0]
         if self.frontend.standalone and target == "ppy.scan[int]" and not node.args:
@@ -2702,34 +2707,87 @@ class _FunctionLowering:
         return call.results[0] if results else core.const(self.b, 0, I64)
 
     def _standalone_print(self, node: ast.Call) -> Value:
-        for index, argument in enumerate(node.args):
-            if index:
-                core.call_extern(self.b, "ppy_rt_print_sep", (), ())
-            if isinstance(argument, ast.Constant) and isinstance(argument.value, str):
-                text = self.frontend.module.add_global(
-                    f"ppy.str.{len(self.frontend.module.globals)}",
-                    BufferType(U8),
-                    argument.value,
-                    visibility="private",
-                )
-                pointer = self.b.create(
-                    "core.call_intrinsic",
-                    (),
-                    (PtrType(U8),),
-                    {"intrinsic": "ppy.string_data", "symbol": text.symbol.name},
-                ).result
-                length = core.const(self.b, len(argument.value.encode("utf-8")), I64)
-                core.call_extern(self.b, "ppy_rt_print_str", (pointer, length), ())
-                continue
-            value = self._expr(argument)
-            if value.type == I64:
-                core.call_extern(self.b, "ppy_rt_print_i64", (value,), ())
-            elif value.type == BOOL:
-                core.call_extern(self.b, "ppy_rt_print_bool", (value,), ())
+        separator, end, flush = " ", "\n", False
+        seen: set[str] = set()
+        for keyword in node.keywords:
+            name, value = keyword.arg, keyword.value
+            if name not in {"sep", "end", "flush"}:
+                raise Unsupported(f"standalone print does not support `{name or '**kwargs'}`")
+            assert name is not None
+            if name in seen:
+                raise Unsupported(f"standalone print repeats keyword `{name}`")
+            seen.add(name)
+            if name == "flush":
+                if not isinstance(value, ast.Constant) or not isinstance(value.value, bool):
+                    raise Unsupported("standalone print `flush` must be a boolean literal")
+                flush = value.value
             else:
-                raise Unsupported("only integers, booleans, and string literals print natively")
-        core.call_extern(self.b, "ppy_rt_print_nl", (), ())
+                if not isinstance(value, ast.Constant) or not isinstance(value.value, str):
+                    raise Unsupported(f"standalone print `{name}` must be a string literal")
+                if name == "sep":
+                    separator = value.value
+                else:
+                    end = value.value
+
+        # Python evaluates all arguments before print writes any of them.
+        arguments = [self._standalone_print_parts(argument) for argument in node.args]
+        for index, parts in enumerate(arguments):
+            if index:
+                self._standalone_print_text(separator)
+            for part in parts:
+                if isinstance(part, str):
+                    self._standalone_print_text(part)
+                else:
+                    shim = "ppy_rt_print_bool" if part.type == BOOL else "ppy_rt_print_i64"
+                    core.call_extern(self.b, shim, (part,), ())
+        self._standalone_print_text(end)
+        if flush:
+            core.call_extern(self.b, "ppy_rt_flush_stdout", (), ())
         return core.const(self.b, 0, I64)
+
+    def _standalone_print_parts(self, argument: ast.expr) -> list[str | Value]:
+        parts: list[str | Value] = []
+        if isinstance(argument, ast.Constant) and isinstance(argument.value, str):
+            parts.append(argument.value)
+            return parts
+        if isinstance(argument, ast.JoinedStr):
+            for item in argument.values:
+                if isinstance(item, ast.FormattedValue):
+                    if item.conversion != -1 or item.format_spec is not None:
+                        raise Unsupported(
+                            "standalone print does not support f-string format specs or conversions"
+                        )
+                    parts.extend(self._standalone_print_parts(item.value))
+                else:
+                    parts.extend(self._standalone_print_parts(item))
+            return parts
+        value = self._expr(argument)
+        if value.type not in {I64, BOOL}:
+            raise Unsupported("only integers, booleans, and string literals print natively")
+        parts.append(value)
+        return parts
+
+    def _standalone_print_text(self, value: str) -> None:
+        if not value:
+            return
+        if value in {" ", "\n"}:
+            shim = "ppy_rt_print_sep" if value == " " else "ppy_rt_print_nl"
+            core.call_extern(self.b, shim, (), ())
+            return
+        text = self.frontend.module.add_global(
+            f"ppy.str.{len(self.frontend.module.globals)}",
+            BufferType(U8),
+            value,
+            visibility="private",
+        )
+        pointer = self.b.create(
+            "core.call_intrinsic",
+            (),
+            (PtrType(U8),),
+            {"intrinsic": "ppy.string_data", "symbol": text.symbol.name},
+        ).result
+        length = core.const(self.b, len(value.encode("utf-8")), I64)
+        core.call_extern(self.b, "ppy_rt_print_str", (pointer, length), ())
 
     def _extremum(self, target: str, node: ast.Call) -> Value:
         values = [self._expr(argument) for argument in node.args]
