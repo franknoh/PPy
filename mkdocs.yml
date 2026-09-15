@@ -8,6 +8,7 @@ copyright: MIT License
 
 theme:
   name: material
+  custom_dir: docs/overrides
   language: en
   icon:
     repo: fontawesome/brands/github
