@@ -10,6 +10,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass
 
+from .dialect import DialectRegistry
 from .model import Block, IRFunction, Region
 
 __all__ = ["ANALYSES", "Dominators", "dominators", "register_analysis"]
@@ -34,7 +35,9 @@ class Dominators:
         return best
 
 
-def region_dominators(region: Region) -> dict[Block, frozenset[Block]]:
+def region_dominators(
+    region: Region, registry: DialectRegistry | None = None
+) -> dict[Block, frozenset[Block]]:
     """Dominator sets by the classic iteration; regions are small."""
     blocks = region.blocks
     if not blocks:
@@ -42,7 +45,7 @@ def region_dominators(region: Region) -> dict[Block, frozenset[Block]]:
     entry = blocks[0]
     predecessors: dict[Block, list[Block]] = {b: [] for b in blocks}
     for block in blocks:
-        for successor in block.successors:
+        for successor in block.successors_for(registry):
             if successor in predecessors:
                 predecessors[successor].append(block)
     everything = set(blocks)
@@ -61,12 +64,12 @@ def region_dominators(region: Region) -> dict[Block, frozenset[Block]]:
     return {block: frozenset(dominating) for block, dominating in sets.items()}
 
 
-def dominators(function: IRFunction) -> Dominators:
+def dominators(function: IRFunction, registry: DialectRegistry | None = None) -> Dominators:
     sets: dict[Block, frozenset[Block]] = {}
     pending: list[Region] = [function.body]
     while pending:
         region = pending.pop()
-        sets.update(region_dominators(region))
+        sets.update(region_dominators(region, registry))
         for block in region.blocks:
             for op in block.operations:
                 pending.extend(op.regions)

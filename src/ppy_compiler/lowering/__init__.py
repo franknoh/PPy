@@ -9,6 +9,22 @@ the reason, the same reasons the LLVM lowering gave.
 
 from __future__ import annotations
 
-from .ast_to_ir import Frontend, Lowered, lower_function, lower_module_to_ir
+from .ast_to_ir import (
+    CanonicalFunction,
+    Frontend,
+    IRParameter,
+    IRSignature,
+    Lowered,
+    lower_function,
+    lower_module_to_ir,
+)
 
-__all__ = ["Frontend", "Lowered", "lower_function", "lower_module_to_ir"]
+__all__ = [
+    "CanonicalFunction",
+    "Frontend",
+    "IRParameter",
+    "IRSignature",
+    "Lowered",
+    "lower_function",
+    "lower_module_to_ir",
+]

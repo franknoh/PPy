@@ -157,7 +157,7 @@ def _verify_region(region: Region, checker: Checker, defined_outside: set[int]) 
     for block in region.blocks:
         checker.block = block
         _verify_block_structure(block, region, checker)
-    dominators = region_dominators(region)
+    dominators = region_dominators(region, checker.registry)
     # What each block may read: everything defined outside, its dominators'
     # definitions, its own arguments, and then its operations in order.
     definitions: dict[Block, set[int]] = {}
@@ -197,10 +197,10 @@ def _verify_block_structure(block: Block, region: Region, checker: Checker) -> N
         checker.error(None, f"block ^{block.name} is empty: it needs a terminator")
         return
     for op in block.operations[:-1]:
-        if op.spec_is_terminator():
+        if op.spec_is_terminator(checker.registry):
             checker.error(op, "a terminator in the middle of a block")
     last = block.operations[-1]
-    if not last.spec_is_terminator():
+    if not last.spec_is_terminator(checker.registry):
         checker.error(last, f"block ^{block.name} does not end in a terminator")
     for op in block.operations:
         for successor in op.successors:

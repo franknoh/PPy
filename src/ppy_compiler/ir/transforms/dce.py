@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from ..dialect import DialectRegistry
 from ..model import Block, IRFunction, Region
 from ..passes import FunctionPass, PassContext
 
@@ -34,7 +35,7 @@ def _removable_call(op, region: Region) -> bool:  # type: ignore[no-untyped-def]
         return False
 
 
-def reachable_blocks(region: Region) -> set[Block]:
+def reachable_blocks(region: Region, registry: DialectRegistry | None = None) -> set[Block]:
     entry = region.entry
     if entry is None:
         return set()
@@ -42,7 +43,7 @@ def reachable_blocks(region: Region) -> set[Block]:
     pending = [entry]
     while pending:
         block = pending.pop()
-        for successor in block.successors:
+        for successor in block.successors_for(registry):
             if successor not in seen:
                 seen.add(successor)
                 pending.append(successor)
@@ -68,7 +69,7 @@ class DeadCodeElimination(FunctionPass):
 
     @staticmethod
     def _drop_unreachable(region: Region, ctx: PassContext) -> bool:
-        live = reachable_blocks(region)
+        live = reachable_blocks(region, ctx.registry)
         dead = [block for block in region.blocks if block not in live]
         if not dead:
             return False
@@ -88,6 +89,17 @@ class DeadCodeElimination(FunctionPass):
                 for op in list(reversed(block.operations)):
                     spec = ctx.registry.op_spec(op.name)
                     if spec is None or op.regions:
+                        continue
+                    dynamically_removable = True
+                    if "effects" in op.attributes:
+                        effects = op.attributes["effects"]
+                        from ...analysis.effects import EffectSet
+
+                        try:
+                            dynamically_removable = EffectSet.parse(effects).is_removable
+                        except (TypeError, ValueError):
+                            dynamically_removable = False
+                    if not dynamically_removable:
                         continue
                     if not spec.pure and not _removable_call(op, region):
                         continue

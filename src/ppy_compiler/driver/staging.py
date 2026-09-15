@@ -220,6 +220,7 @@ def _stage_xla(bundle, result: StagingResult) -> None:  # type: ignore[no-untype
                     safeguards=config.llvm.safeguards or "hoisted",
                     prover=prover_for(config),
                     root=bundle.project.root,
+                    plugins=bundle.project.plugins,
                 )
                 if info.qualname in lowered.rejected:
                     raise Unsupported(lowered.rejected[info.qualname])

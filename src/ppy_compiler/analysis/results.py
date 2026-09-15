@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import ast
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
 
 from ..diagnostics import DiagnosticBag
 from . import types as T
@@ -16,6 +17,9 @@ from .aliasing import AliasInfo
 from .effects import EffectSet
 from .refinements import Facts
 from .symbols import FunctionInfo, ModuleSymbols, ProjectSymbols
+
+if TYPE_CHECKING:
+    from ..plugins.base import LoweringSpec
 
 __all__ = ["FunctionAnalysis", "LoweringNote", "ModuleAnalysis", "ProjectAnalysis"]
 
@@ -33,6 +37,11 @@ class LoweringNote:
     #: its attributes, when the plugin names one; empty otherwise.
     operation: str = ""
     attributes: tuple[tuple[str, object], ...] = ()
+    #: The original contract, distinct from optional tensor convergence.
+    spec: LoweringSpec | None = None
+    effects: EffectSet = field(default_factory=EffectSet)
+    result_type: T.Type = T.UNKNOWN
+    facts: Facts = field(default_factory=Facts)
 
 
 @dataclass(slots=True)

@@ -668,7 +668,7 @@ def _build_ir_file_with_backend(  # type: ignore[no-untyped-def]
         )
         return 2
     try:
-        module = read(target)
+        module = read(target, project.plugins.dialect_registry())
     except CodecError as error:
         reporter.emit(Diagnostic("E1801", Severity.ERROR, str(error)))
         return 2

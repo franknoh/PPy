@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import ast
 from collections.abc import Callable
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 
 from ppy_runtime.abi import NativeParam, NativeSignature
@@ -24,6 +24,7 @@ from ppy_runtime.aio import available as aio_available
 from ..analysis import types as T
 from ..analysis.checker import FunctionAnalysis, ModuleAnalysis
 from ..analysis.lexical import LexicalBindings
+from ..analysis.refinements import Facts
 from ..analysis.symbols import FunctionInfo, derivative_spec, fold_flags
 from ..backend.llvm.lowering import (
     _ALLOCATIONS,
@@ -31,9 +32,9 @@ from ..backend.llvm.lowering import (
     _MAX_TUPLE_WIDTH,
     _NARROW,
     ClassLayouts,
-    LoweredFunction,
     Unsupported,
     _declared_bounds,
+    _native_param,
     _read_as,
     _return_atoms,
     _signature,
@@ -49,10 +50,12 @@ from ..ir import (
     I64,
     U8,
     VOID,
+    Attribute,
     Block,
     BlockArgument,
     BufferType,
     Builder,
+    DialectType,
     FutureType,
     IRFunction,
     IRModule,
@@ -62,6 +65,7 @@ from ..ir import (
     SourceLocation,
     StructType,
     Successor,
+    SymbolRef,
     TupleType,
     Value,
     VectorType,
@@ -77,6 +81,7 @@ from ..ir.dialects import parallel as parallel_dialect
 from ..ir.dialects import regex as regex_dialect
 from ..ir.dialects import simd as simd_dialect
 from ..ir.transforms.autodiff import AutodiffError, differentiate
+from ..plugins.base import DialectOperationSpec, PluginRegistry
 from .abi import signature_from_ir
 
 __all__ = ["Frontend", "Lowered", "lower_function", "lower_module_to_ir"]
@@ -112,12 +117,99 @@ def _struct_type(class_name: str, fields: tuple[tuple[str, str], ...]) -> Struct
     return StructType(class_name.replace(".", "_"), tuple((f, _scalar_type(k)) for f, k in fields))
 
 
+@dataclass(frozen=True)
+class IRParameter:
+    """An actual IR parameter, with optional Python boundary metadata."""
+
+    name: str
+    type: IRType
+    native: NativeParam | None = None
+
+    @property
+    def is_buffer(self) -> bool:
+        return self.native.is_buffer if self.native is not None else False
+
+    @property
+    def is_pointer(self) -> bool:
+        return self.native.is_pointer if self.native is not None else False
+
+    @property
+    def is_object(self) -> bool:
+        return self.native.is_object if self.native is not None else False
+
+    @property
+    def is_borrowed(self) -> bool:
+        return self.native.is_borrowed if self.native is not None else False
+
+    @property
+    def is_tuple(self) -> bool:
+        return self.native.is_tuple if self.native is not None else False
+
+    @property
+    def kind(self) -> str:
+        return self.native.kind if self.native is not None else str(self.type)
+
+    @property
+    def element(self) -> str:
+        return self.native.element if self.native is not None else ""
+
+    @property
+    def elements(self) -> tuple[str, ...]:
+        return self.native.elements if self.native is not None else ()
+
+    @property
+    def fields(self) -> tuple[tuple[str, str], ...]:
+        return self.native.fields if self.native is not None else ()
+
+    @property
+    def class_name(self) -> str:
+        return self.native.class_name if self.native is not None else ""
+
+
+@dataclass(frozen=True)
+class IRSignature:
+    """Canonical function types; a CPU ABI exists only when representable."""
+
+    qualname: str
+    symbol: str
+    parameters: tuple[IRParameter, ...]
+    results: tuple[IRType, ...]
+    native: NativeSignature | None = None
+
+    @property
+    def releases_gil(self) -> bool:
+        return self.native.releases_gil if self.native is not None else False
+
+    @property
+    def future(self) -> str:
+        return self.native.future if self.native is not None else ""
+
+    @property
+    def returns_tuple(self) -> bool:
+        return len(self.results) == 1 and isinstance(self.results[0], TupleType)
+
+    def __getattr__(self, name: str):  # type: ignore[no-untyped-def]
+        if self.native is not None:
+            return getattr(self.native, name)
+        raise AttributeError(f"{self.qualname} has no CPU ABI ({name})")
+
+
+@dataclass(slots=True)
+class CanonicalFunction:
+    """A lowered source function, before a backend selects its calling ABI."""
+
+    info: FunctionInfo
+    signature: IRSignature
+    exposed: bool = True
+    exposure_reason: str = ""
+
+
 @dataclass(slots=True)
 class Lowered:
     """One module's IR with what the driver records per function."""
 
     module: IRModule
-    functions: dict[str, LoweredFunction] = field(default_factory=dict)
+    functions: dict[str, CanonicalFunction] = field(default_factory=dict)
     rejected: dict[str, str] = field(default_factory=dict)
     #: Per function, the arithmetic whose overflow guard a proof left out.
     proved: dict[str, tuple[str, ...]] = field(default_factory=dict)
@@ -137,6 +229,8 @@ def lower_module_to_ir(
     launches: bool = False,
     asynchronous: bool | None = None,
     imports: ImportResolver | None = None,
+    plugins: PluginRegistry | None = None,
+    cpu_compatible: bool = False,
 ) -> Lowered:
     """The IR of every eligible function in one module."""
     frontend = Frontend(
@@ -149,6 +243,8 @@ def lower_module_to_ir(
         launches=launches,
         asynchronous=asynchronous,
         imports=imports,
+        plugins=plugins,
+        cpu_compatible=cpu_compatible,
     )
     return frontend.build(functions)
 
@@ -163,6 +259,8 @@ def lower_function(
     layouts: ClassLayouts | None = None,
     safeguards: str = "hoisted",
     prover: Prover | None = None,
+    plugins: PluginRegistry | None = None,
+    cpu_compatible: bool = False,
 ) -> IRModule:
     """One function, optionally with parameters pinned to constants.
 
@@ -170,16 +268,27 @@ def lower_function(
     and the body uses the constant, which is what lets the optimizer fold
     around it.
     """
-    frontend = Frontend(module, layouts, safeguards=safeguards, prover=prover)
+    frontend = Frontend(
+        module,
+        layouts,
+        safeguards=safeguards,
+        prover=prover,
+        plugins=plugins,
+        cpu_compatible=cpu_compatible,
+    )
     analysis = module.functions.get(info.qualname)
-    signature = _signature(info, layouts, analysis)
+    if cpu_compatible and analysis is not None:
+        ok, reason = eligible(info, analysis, layouts)
+        if not ok:
+            raise Unsupported(reason)
+    signature = frontend.signature(info, analysis)
     if symbol is not None:
-        signature = NativeSignature(
-            qualname=signature.qualname,
+        signature = replace(
+            signature,
             symbol=symbol,
-            parameters=signature.parameters,
-            returns=signature.returns,
-            releases_gil=signature.releases_gil,
+            native=replace(signature.native, symbol=symbol)
+            if signature.native is not None
+            else None,
         )
     frontend.declare(info, signature)
     frontend.define(info, node, constants or {})
@@ -188,7 +297,7 @@ def lower_function(
 
 #: What the driver answers when a module calls a function of another: the
 #: callee's info and native signature, or None when it did not lower.
-ImportResolver = Callable[[str], "tuple[FunctionInfo, NativeSignature] | None"]
+ImportResolver = Callable[[str], "tuple[FunctionInfo, NativeSignature | IRSignature] | None"]
 
 
 class Frontend:
@@ -206,8 +315,17 @@ class Frontend:
         launches: bool = False,
         asynchronous: bool | None = None,
         imports: ImportResolver | None = None,
+        plugins: PluginRegistry | None = None,
+        cpu_compatible: bool = False,
     ) -> None:
         self.analysis = analysis
+        self.plugins = plugins
+        self.registry = (
+            plugins.dialect_registry()
+            if plugins is not None
+            else PluginRegistry().dialect_registry()
+        )
+        self.cpu_compatible = cpu_compatible
         self.layouts: ClassLayouts = dict(layouts or {})
         self.safeguards = safeguards
         self.standalone = standalone
@@ -227,7 +345,7 @@ class Frontend:
         self.imports = imports
         self.module = IRModule(analysis.name)
         #: qualname -> (IR function, its native signature), for calls.
-        self.declared: dict[str, tuple[IRFunction, NativeSignature]] = {}
+        self.declared: dict[str, tuple[IRFunction, NativeSignature | IRSignature]] = {}
         #: Bodies outlined from parallel loops, numbered per module.
         self.outlined = 0
         #: What the frontend decided about parallel loops.
@@ -235,7 +353,9 @@ class Frontend:
         #: Generic functions by qualname, lowered per instantiation.
         self.generics: dict[str, tuple[FunctionInfo, FunctionAnalysis, ast.FunctionDef]] = {}
         #: Instantiations made so far: (qualname, type arguments) -> declaration.
-        self.instances: dict[tuple[str, tuple[str, ...]], tuple[IRFunction, NativeSignature]] = {}
+        self.instances: dict[
+            tuple[str, tuple[str, ...]], tuple[IRFunction, NativeSignature | IRSignature]
+        ] = {}
         #: C bindings by qualname: the stub and its directive's options.
         self.externs: dict[str, tuple[FunctionInfo, dict[str, object]]] = {}
         self._instantiating: list[tuple[str, tuple[str, ...]]] = []
@@ -245,7 +365,7 @@ class Frontend:
         )
         #: Derived functions made so far, by (qualname, argnums, value_and_grad).
         self.derived: dict[
-            tuple[str, tuple[int, ...], bool], tuple[IRFunction, NativeSignature]
+            tuple[str, tuple[int, ...], bool], tuple[IRFunction, NativeSignature | IRSignature]
         ] = {}
         self._pending: dict[str, tuple[FunctionInfo, FunctionAnalysis, ast.FunctionDef]] = {}
         self._defined: dict[str, list[str]] = {}
@@ -272,20 +392,29 @@ class Frontend:
                     "it has no single native entry point"
                 )
                 continue
-            ok, reason = eligible(
-                info,
-                analysis,
-                self.layouts,
-                allow_io=self.standalone,
-                allow_launch=self.launches,
-                allow_async=self.asynchronous,
-            )
-            if ok:
+            try:
+                if self.cpu_compatible:
+                    ok, reason = eligible(
+                        info,
+                        analysis,
+                        self.layouts,
+                        allow_io=self.standalone,
+                        allow_launch=self.launches,
+                        allow_async=self.asynchronous,
+                    )
+                    if not ok:
+                        raise Unsupported(reason)
+                if info.is_generator:
+                    raise Unsupported("generators use the boxed runtime")
+                if info.is_async and not self.asynchronous:
+                    raise Unsupported("a coroutine runs natively only where the async runtime does")
+                if any(p.kind in {"var_positional", "var_keyword"} for p in info.params):
+                    raise Unsupported("variadic parameters have no canonical IR representation")
+                signature = self.signature(info, analysis)
+                self.declare(info, signature)
                 candidates[qualname] = (info, analysis, node)
-            else:
-                lowered.rejected[qualname] = reason
-        for info, analysis, _node in candidates.values():
-            self.declare(info, _signature(info, self.layouts, analysis))
+            except Unsupported as error:
+                lowered.rejected[qualname] = str(error)
         self._pending = dict(candidates)
         for qualname, (info, analysis, _node) in candidates.items():
             try:
@@ -297,12 +426,94 @@ class Frontend:
             if proved:
                 lowered.proved[qualname] = tuple(proved)
             exposed, why = should_lower_native(info, analysis)
-            lowered.functions[qualname] = LoweredFunction(
-                info, self.declared[qualname][1], exposed=exposed, exposure_reason=why
+            signature = self.declared[qualname][1]
+            assert isinstance(signature, IRSignature)
+            lowered.functions[qualname] = CanonicalFunction(
+                info, signature, exposed=exposed, exposure_reason=why
             )
         self._reject_callers_of_rejected(lowered)
+        for qualname in lowered.rejected:
+            declaration = self.declared.get(qualname)
+            if declaration is not None and declaration[0].is_declaration:
+                self.module.functions.pop(declaration[0].name, None)
         lowered.remarks = tuple(self.remarks)
         return lowered
+
+    def lower_type(self, type_: T.Type, facts: Facts | None = None) -> IRType:
+        facts = facts if facts is not None else Facts()
+        if self.plugins is not None:
+            found = self.plugins.lower_type(type_, facts)
+            if found is not None:
+                self.require_type(found)
+                return found
+        if type_ == T.NONE:
+            return VOID
+        parameter = _native_param("value", type_, self.layouts)
+        if parameter is not None:
+            return _param_type(parameter)
+        raise Unsupported(f"type `{type_}` has no canonical IR representation (no native ABI)")
+
+    def require_type(self, type_: IRType) -> None:
+        if isinstance(type_, DialectType):
+            dialect = self.registry.dialect(type_.dialect)
+            if dialect is None:
+                raise Unsupported(f"type `{type_}` uses unregistered dialect `{type_.dialect}`")
+            self.module.require(dialect.name, dialect.version)
+            for argument in type_.args:
+                if isinstance(argument, IRType):
+                    self.require_type(argument)
+        elif isinstance(type_, (PtrType, BufferType, VectorType)):
+            if isinstance(type_, PtrType):
+                for dialect in self.registry.dialects.values():
+                    if type_.address_space in dialect.address_spaces():
+                        self.module.require(dialect.name, dialect.version)
+            self.require_type(type_.pointee if isinstance(type_, PtrType) else type_.element)
+        elif isinstance(type_, FutureType):
+            self.require_type(type_.inner)
+        elif isinstance(type_, TupleType):
+            for item in type_.items:
+                self.require_type(item)
+        elif isinstance(type_, StructType):
+            for _name, item in type_.fields:
+                self.require_type(item)
+
+    def signature(
+        self, info: FunctionInfo, analysis: FunctionAnalysis | None = None
+    ) -> IRSignature:
+        parameters = []
+        for parameter in info.params:
+            ir_type = self.lower_type(parameter.type, parameter.facts)
+            native_param = _native_param(parameter.name, parameter.type, self.layouts)
+            if native_param is not None and _param_type(native_param) != ir_type:
+                native_param = None
+            parameters.append(IRParameter(parameter.name, ir_type, native_param))
+        facts = info.ret_facts
+        if analysis is not None:
+            facts = replace(
+                analysis.ret_facts,
+                dtype=analysis.ret_facts.dtype or facts.dtype,
+                shape=analysis.ret_facts.shape
+                if analysis.ret_facts.shape is not None
+                else facts.shape,
+            )
+        result = self.lower_type(info.ret, facts)
+        results = () if result == VOID else (result,)
+        native = None
+        if (
+            all(p.native is not None and _param_type(p.native) == p.type for p in parameters)
+            and (_return_atoms(info.ret) is not None or info.ret == T.NONE)
+            and results == _result_types(info)
+        ):
+            native = _signature(info, self.layouts, analysis)
+        if self.cpu_compatible and native is None:
+            raise Unsupported("canonical signature has no CPU native ABI")
+        return IRSignature(
+            info.qualname,
+            "ppy_" + info.qualname.replace(".", "_"),
+            tuple(parameters),
+            results,
+            native,
+        )
 
     def _effects_of(self, info: FunctionInfo) -> tuple[str, ...]:
         """What the IR says the function may do: the analysis's effects, with
@@ -312,18 +523,18 @@ class Frontend:
         spelled = set(effects.spelled())
         if analysis is not None and (analysis.mutated_params or analysis.delegated_writes):
             spelled.add("write_memory")
-        if any(p.is_buffer for p in _signature(info, self.layouts).parameters):
+        if any(isinstance(self.lower_type(p.type, p.facts), BufferType) for p in info.params):
             spelled.add("read_memory")
         return tuple(sorted(spelled))
 
-    def declare(self, info: FunctionInfo, signature: NativeSignature) -> IRFunction:
+    def declare(self, info: FunctionInfo, signature: NativeSignature | IRSignature) -> IRFunction:
         params: list[tuple[str, IRType]] = []
-        attributes: dict[str, object] = {}
-        kinds: list[dict[str, object]] = []
+        attributes: dict[str, Attribute] = {}
+        kinds: list[dict[str, Attribute]] = []
         facts_by_name = {p.name: p.facts for p in info.params}
         for parameter in signature.parameters:
             params.append((parameter.name, _param_type(parameter)))
-            described: dict[str, object] = {}
+            described: dict[str, Attribute] = {}
             if parameter.is_buffer:
                 described["ppy.kind"] = parameter.kind
             elif parameter.is_object:
@@ -339,7 +550,7 @@ class Frontend:
             if facts is not None and facts.no_alias:
                 described["noalias"] = True
             kinds.append(described)
-        results = _result_types(info)
+        results = signature.results if isinstance(signature, IRSignature) else _result_types(info)
         function = self.module.add_function(
             info.qualname.replace(".", "_"),
             params,
@@ -347,7 +558,9 @@ class Frontend:
             attributes={
                 "ppy.symbol": signature.symbol,
                 "ppy.qualname": info.qualname,
-                "ppy.abi": "ppy",
+                "ppy.abi": "canonical"
+                if isinstance(signature, IRSignature) and signature.native is None
+                else "ppy",
                 "ppy.releases_gil": signature.releases_gil,
                 "effects": self._effects_of(info),
                 **({"fastmath": True} if info.directive("fastmath") is not None else {}),
@@ -385,7 +598,9 @@ class Frontend:
         self.declared[info.qualname] = (function, signature)
         return function
 
-    def declare_external(self, info: FunctionInfo, signature: NativeSignature) -> IRFunction:
+    def declare_external(
+        self, info: FunctionInfo, signature: NativeSignature | IRSignature
+    ) -> IRFunction:
         """Another module's native function, declared here by its symbol for the link to resolve."""
         known = self.declared.get(info.qualname)
         if known is not None:
@@ -398,7 +613,13 @@ class Frontend:
                 () if signature.future == "none" else (_scalar_type(signature.future),)
             )
         else:
-            results = _result_types(info)
+            results = (
+                signature.results if isinstance(signature, IRSignature) else _result_types(info)
+            )
+        for _name, type_ in params:
+            self.require_type(type_)
+        for type_ in results:
+            self.require_type(type_)
         function = self.module.add_function(
             info.qualname.replace(".", "_"),
             params,
@@ -456,7 +677,7 @@ class Frontend:
 
     def derivative(
         self, qualname: str, argnums: tuple[int, ...], value: bool
-    ) -> tuple[IRFunction, NativeSignature]:
+    ) -> tuple[IRFunction, NativeSignature | IRSignature]:
         """The native derivative of `qualname`, made from its IR the first time."""
         key = (qualname, argnums, value)
         found = self.derived.get(key)
@@ -489,7 +710,7 @@ class Frontend:
 
     def instantiate(
         self, qualname: str, arguments: tuple[T.Type, ...]
-    ) -> tuple[IRFunction, NativeSignature] | None:
+    ) -> tuple[IRFunction, NativeSignature | IRSignature] | None:
         """The native function `qualname[arguments]`, made now if it is new.
 
         Monomorphization: the generic's body is lowered with its type
@@ -510,17 +731,20 @@ class Frontend:
             raise Unsupported(f"`{qualname}` instantiates itself with the same arguments")
         bindings = dict(zip(info.type_params, arguments, strict=True))
         specialized = _specialized_info(info, bindings, key[1])
-        ok, reason = eligible(
-            specialized,
-            analysis,
-            self.layouts,
-            allow_io=self.standalone,
-            allow_launch=self.launches,
-            allow_async=self.asynchronous,
-        )
-        if not ok:
-            raise Unsupported(f"`{qualname}[{', '.join(key[1])}]` has no native lowering: {reason}")
-        signature = _signature(specialized, self.layouts, analysis)
+        if self.cpu_compatible:
+            ok, reason = eligible(
+                specialized,
+                analysis,
+                self.layouts,
+                allow_io=self.standalone,
+                allow_launch=self.launches,
+                allow_async=self.asynchronous,
+            )
+            if not ok:
+                raise Unsupported(
+                    f"`{qualname}[{', '.join(key[1])}]` has no native lowering: {reason}"
+                )
+        signature = self.signature(specialized, analysis)
         function = self.declare(specialized, signature)
         function.attributes["ppy.generic"] = qualname
         function.attributes["ppy.type_arguments"] = key[1]
@@ -567,6 +791,8 @@ class Frontend:
 
 
 def _param_type(parameter) -> IRType:  # type: ignore[no-untyped-def]
+    if isinstance(parameter, IRParameter):
+        return parameter.type
     if parameter.is_buffer:
         return BufferType(_scalar_type(parameter.element))
     if parameter.is_pointer:
@@ -616,7 +842,7 @@ class _FunctionLowering:
         self,
         frontend: Frontend,
         function: IRFunction,
-        signature: NativeSignature,
+        signature: NativeSignature | IRSignature,
         info: FunctionInfo,
         constants: dict[str, object],
     ) -> None:
@@ -760,7 +986,7 @@ class _FunctionLowering:
         assert self.entry is not None
         if self.b.block is self.entry and self.b.anchor is None:
             return self.b
-        if self.entry.terminator is not None:
+        if self.entry.terminator_for(self.frontend.registry) is not None:
             return Builder().before(self.entry.operations[-1])
         return Builder(self.entry)
 
@@ -779,7 +1005,7 @@ class _FunctionLowering:
 
     def _open(self) -> bool:
         block = self.b.block
-        return block is not None and block.terminator is None
+        return block is not None and block.terminator_for(self.frontend.registry) is None
 
     def _location(self, node: ast.AST) -> None:
         line = getattr(node, "lineno", None)
@@ -853,11 +1079,21 @@ class _FunctionLowering:
             case ast.Expr(value=ast.Constant()):
                 return
             case ast.Expr(value=ast.Call() | ast.Await()):
-                self._expr(node.value)
+                if isinstance(node.value, ast.Call) and self._plugin_spec(node.value) is not None:
+                    self._plugin_call(node.value)
+                else:
+                    self._expr(node.value)
             case _:
                 raise Unsupported(f"`{type(node).__name__}` has no native lowering")
 
     def _return(self, node: ast.Return) -> None:
+        if (
+            node.value is None
+            or (isinstance(node.value, ast.Constant) and node.value.value is None)
+        ) and not self.function.results:
+            self._check_thread_failures()
+            core.ret(self.b)
+            return
         if node.value is None:
             raise Unsupported("a native function must return a value")
         results = self.function.results
@@ -870,11 +1106,11 @@ class _FunctionLowering:
             if values is None or len(values) != len(expected.items):
                 raise Unsupported("the returned tuple does not match the declared shape")
             items = [
-                self._coerce(item, _kind(t)) for item, t in zip(values, expected.items, strict=True)
+                self._coerce_type(item, t) for item, t in zip(values, expected.items, strict=True)
             ]
             core.ret(self.b, core.tuple_make(self.b, *items))
             return
-        core.ret(self.b, self._coerce(self._expr(node.value), _kind(expected)))
+        core.ret(self.b, self._coerce_type(self._expr(node.value), expected))
 
     def _return_default(self) -> None:
         if self.b.block is not None and id(self.b.block) in self._dead:
@@ -1022,7 +1258,7 @@ class _FunctionLowering:
                 raise Unsupported("a pointer or vector local keeps one type")
             core.store(self.b, value, slot)
             return
-        core.store(self.b, self._coerce(value, _kind(slot.type.pointee)), slot)
+        core.store(self.b, self._coerce_type(value, slot.type.pointee), slot)
 
     def _if(self, node: ast.If) -> None:
         condition = self._truth(self._expr(node.test))
@@ -1508,7 +1744,105 @@ class _FunctionLowering:
             self.b, condition, self._coerce(then_value, kind), self._coerce(else_value, kind)
         )
 
+    def _plugin_spec(self, node: ast.Call) -> DialectOperationSpec | None:
+        note = self.frontend.analysis.lowerings.get(id(node))
+        return (
+            note.spec if note is not None and isinstance(note.spec, DialectOperationSpec) else None
+        )
+
+    def _plugin_attribute(self, value: object) -> Attribute:
+        if isinstance(value, (str, bool, int, float, IRType, SymbolRef)):
+            return value
+        if isinstance(value, (tuple, list)):
+            return tuple(self._plugin_attribute(item) for item in value)
+        if isinstance(value, dict) and all(isinstance(key, str) for key in value):
+            return {key: self._plugin_attribute(item) for key, item in value.items()}
+        raise Unsupported(f"unsupported dialect attribute value `{value!r}`")
+
+    def _plugin_call(self, node: ast.Call) -> Operation:
+        note = self.frontend.analysis.lowerings[id(node)]
+        spec = note.spec
+        assert isinstance(spec, DialectOperationSpec)
+        dialect = self.frontend.registry.dialect(spec.dialect)
+        if dialect is None:
+            raise Unsupported(f"operation uses unregistered dialect `{spec.dialect}`")
+        self.frontend.module.require(dialect.name, dialect.version)
+        if not spec.dialect or not spec.operation:
+            raise Unsupported(f"`{note.qualname}` has an incomplete dialect operation contract")
+        if any(isinstance(arg, ast.Starred) for arg in node.args):
+            raise Unsupported("a dialect operation requires explicit operands")
+        operation_name = f"{spec.dialect}.{spec.operation}"
+        if self.frontend.registry.op_spec(operation_name) is None:
+            raise Unsupported(f"operation `{operation_name}` is not registered")
+        attributes = {name: self._plugin_attribute(value) for name, value in spec.attributes}
+        operands = [self._expr(arg) for arg in node.args]
+        keywords = {}
+        for keyword in node.keywords:
+            if keyword.arg is None or keyword.arg in keywords:
+                raise Unsupported("a dialect operation requires explicit, unique keywords")
+            keywords[keyword.arg] = keyword.value
+        if len(set(spec.keyword_operands)) != len(spec.keyword_operands) or len(
+            set(spec.keyword_attributes)
+        ) != len(spec.keyword_attributes):
+            raise Unsupported("a dialect operation repeats a keyword role")
+        overlap = set(spec.keyword_operands) & set(spec.keyword_attributes)
+        if overlap:
+            raise Unsupported(f"keywords have both operand and attribute roles: {sorted(overlap)}")
+        unknown = keywords.keys() - set(spec.keyword_operands) - set(spec.keyword_attributes)
+        if unknown:
+            raise Unsupported(
+                f"dialect operation keywords have no declared role: {sorted(unknown)}"
+            )
+        # Evaluate keyword operands in Python source order, then arrange their
+        # SSA values in the order promised by the operation contract.
+        values = {
+            name: self._expr(expr)
+            for name, expr in keywords.items()
+            if name in spec.keyword_operands
+        }
+        operands.extend(values[name] for name in spec.keyword_operands if name in values)
+        for name in spec.keyword_attributes:
+            if name not in keywords:
+                continue
+            expr = keywords[name]
+            facts = self.frontend.analysis.facts_of(expr)
+            if isinstance(expr, ast.Name) and facts.has_constant:
+                value = facts.constant
+            else:
+                try:
+                    value = ast.literal_eval(expr)
+                except (ValueError, TypeError, SyntaxError) as error:
+                    raise Unsupported(
+                        f"keyword `{name}` must be a compile-time constant"
+                    ) from error
+            if name in attributes and attributes[name] != value:
+                raise Unsupported(f"keyword `{name}` conflicts with its fixed operation attribute")
+            attributes[name] = self._plugin_attribute(value)
+        declared_effects = attributes.get("effects", ())
+        if not isinstance(declared_effects, tuple) or not all(
+            isinstance(effect, str) for effect in declared_effects
+        ):
+            raise Unsupported("operation effects must be a tuple of effect names")
+        effects = set(declared_effects) | set(note.effects.spelled())
+        if effects:
+            attributes["effects"] = tuple(sorted(effects))
+        if note.guards:
+            attributes["guards"] = note.guards
+        result = self.frontend.lower_type(note.result_type, note.facts)
+        self._location(node)
+        return self.b.create(
+            f"{spec.dialect}.{spec.operation}",
+            operands,
+            () if result == VOID else (result,),
+            attributes,
+        )
+
     def _call(self, node: ast.Call) -> Value:
+        if self._plugin_spec(node) is not None:
+            op = self._plugin_call(node)
+            if not op.results:
+                raise Unsupported("a void dialect operation cannot be used as a value")
+            return op.result
         target = ast.unparse(node.func)
         if (
             isinstance(node.func, ast.Attribute)
@@ -1576,13 +1910,15 @@ class _FunctionLowering:
         for qualname, (info, _analysis, _node) in self.frontend.generics.items():
             if qualname.rpartition(".")[2] == target:
                 return self._generic_call(qualname, info, node)
-        binding = self.frontend.analysis.symbols.imports.get(target)
+        head, dot, tail = target.partition(".")
+        binding = self.frontend.analysis.symbols.imports.get(head)
+        imported = binding.canonical + (dot + tail if dot else "") if binding is not None else ""
         if binding is not None and self.frontend.imports is not None:
-            found = self.frontend.imports(binding.canonical)
+            found = self.frontend.imports(imported)
             if found is not None:
                 info, signature = found
                 function = self.frontend.declare_external(info, signature)
-                return self._native_call(function, signature, binding.canonical, node)
+                return self._native_call(function, signature, imported, node)
         raise Unsupported(f"`{target}` has no native lowering")
 
     def _derivative_spec(self, func: ast.expr) -> tuple[str, tuple[int, ...], bool] | None:
@@ -1713,7 +2049,7 @@ class _FunctionLowering:
         params: list[tuple[str, IRType]] = []
         natives: list[NativeParam] = []
         arguments: list[Value] = []
-        kinds: list[dict[str, object]] = []
+        kinds: list[dict[str, Attribute]] = []
         for name in captures:
             if name in self.tuples:
                 raise Unsupported(f"a parallel body cannot capture the tuple `{name}`")
@@ -1831,7 +2167,8 @@ class _FunctionLowering:
         core.guard(self.b, ok, "contract", "a spawned thread failed a guard")
 
     def _parameter_named(self, name: str) -> NativeParam | None:
-        return next((p for p in self.signature.parameters if p.name == name), None)
+        parameter = next((p for p in self.signature.parameters if p.name == name), None)
+        return parameter.native if isinstance(parameter, IRParameter) else parameter
 
     def run_body(
         self, body: list[ast.stmt], loop_var: str, reduction: str | None, location: ast.AST
@@ -1985,12 +2322,14 @@ class _FunctionLowering:
             vector, scalar = right, left
         if isinstance(scalar.type, VectorType):
             return left, right
+        assert isinstance(vector.type, VectorType)
+        count = vector.type.count
         kind = _kind(vector.type.element)
         if kind == "int" and scalar.type == F64:
             vector = self._vector_as_float(vector)
             kind = "float"
         self.frontend.module.require("simd", 1)
-        splat = simd_dialect.splat(self.b, self._coerce(scalar, kind), vector.type.count)
+        splat = simd_dialect.splat(self.b, self._coerce(scalar, kind), count)
         return (vector, splat) if vector is left else (splat, vector)
 
     def _vector_as_int(self, vector: Value) -> Value:
@@ -2208,13 +2547,14 @@ class _FunctionLowering:
         for k in range(lanes):
             index = self._int_constant(k)
             offset = simd_dialect.extract(b, offsets, index)
+            allowed = None
             if mask is not None:
                 # A masked lane reads element 0 and keeps `other`: no address is
                 # formed past the array, and no branch breaks the vector.
                 allowed = simd_dialect.extract(b, mask, index)
                 offset = core.select(b, allowed, offset, self._int_constant(0))
             loaded = core.load(b, core.ptr_offset(b, pointer, offset))
-            if mask is not None:
+            if allowed is not None:
                 loaded = core.select(b, allowed, loaded, other)
             result = simd_dialect.insert(b, result, loaded, index)
         return result
@@ -2619,13 +2959,16 @@ class _FunctionLowering:
         return core.const(self.b, 0, I64)
 
     def _call_arguments(
-        self, signature: NativeSignature, spelled: list[ast.expr], qualname: str
+        self, signature: NativeSignature | IRSignature, spelled: list[ast.expr], qualname: str
     ) -> list[Value]:
         """Arguments for a native callee, each in the shape its parameter takes."""
         if len(spelled) != len(signature.parameters):
             raise Unsupported(f"`{qualname}` called with the wrong number of arguments")
         arguments: list[Value] = []
         for argument, parameter in zip(spelled, signature.parameters, strict=True):
+            if isinstance(parameter, IRParameter) and parameter.native is None:
+                arguments.append(self._coerce_type(self._expr(argument), parameter.type))
+                continue
             if parameter.is_buffer:
                 if not isinstance(argument, ast.Name) or argument.id not in self.buffers:
                     raise Unsupported("a buffer argument must be a buffer this function holds")
@@ -2804,7 +3147,11 @@ class _FunctionLowering:
         return best
 
     def _native_call(
-        self, function: IRFunction, signature: NativeSignature, qualname: str, node: ast.Call
+        self,
+        function: IRFunction,
+        signature: NativeSignature | IRSignature,
+        qualname: str,
+        node: ast.Call,
     ) -> Value:
         if aio_dialect.is_async(function):
             if not aio_dialect.is_async(self.function):
@@ -3274,6 +3621,13 @@ class _FunctionLowering:
             return "int"
         return "bool"
 
+    def _coerce_type(self, value: Value, expected: IRType) -> Value:
+        if value.type == expected:
+            return value
+        if expected not in _KINDS:
+            raise Unsupported(f"expected `{expected}`, got `{value.type}`")
+        return self._coerce(value, _kind(expected))
+
     def _coerce(self, value: Value, kind: str) -> Value:
         if isinstance(value.type, PtrType):
             if kind == "const_ptr" and value.type.mutable:
@@ -3482,8 +3836,6 @@ def _specialized_info(
     info: FunctionInfo, bindings: dict[T.TypeVar_, T.Type], arguments: tuple[str, ...]
 ) -> FunctionInfo:
     """`info` with its type parameters replaced: what one instantiation is."""
-    from dataclasses import replace
-
     spelled = "_".join(a.replace(".", "_").replace("[", "_").replace("]", "") for a in arguments)
     params = [replace(p, type=T.substitute(p.type, bindings)) for p in info.params]
     return replace(

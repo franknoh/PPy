@@ -16,6 +16,7 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 
+from ..dialect import DialectRegistry
 from ..dialects import core, regex
 from ..dialects.regex import Alt, Anchor, Chars, Compiled, Group, Node, Repeat, Seq
 from ..model import Attribute, Block, Builder, IRFunction, IRModule, Operation, Successor, Value
@@ -53,7 +54,9 @@ class LowerRegex(Pass):
                     if matcher is None:
                         compiled = regex.analyse(pattern, flags)
                         index = sum(1 for f in module.functions if f.startswith("ppy.regex."))
-                        matcher = _Matcher(module, op.local_name, compiled, index).build()
+                        matcher = _Matcher(
+                            module, op.local_name, compiled, index, ctx.registry
+                        ).build()
                         matchers[key] = matcher
                     b = Builder().before(op)
                     call = core.call(b, matcher.name, tuple(op.operands), tuple(matcher.results))
@@ -86,11 +89,19 @@ def _simple(node: Repeat) -> bool:
 class _Matcher:
     """One pattern's matcher function."""
 
-    def __init__(self, module: IRModule, mode: str, compiled: Compiled, index: int) -> None:
+    def __init__(
+        self,
+        module: IRModule,
+        mode: str,
+        compiled: Compiled,
+        index: int,
+        registry: DialectRegistry | None = None,
+    ) -> None:
         self.module = module
         self.mode = mode
         self.compiled = compiled
         self.name = f"ppy.regex.{index}"
+        self.registry = registry
         self.loops = [n for n in _walk(compiled.tree) if isinstance(n, Repeat) and not _simple(n)]
         self.loop_index = {id(loop): k for k, loop in enumerate(self.loops)}
         #: An entry: the handler, the position, one value of the handler's own,
@@ -324,7 +335,7 @@ class _Matcher:
             if id(block) in reachable:
                 continue
             reachable.add(id(block))
-            work.extend(block.successors)
+            work.extend(block.successors_for(self.registry))
         for block in list(region.blocks):
             if id(block) in reachable:
                 continue
