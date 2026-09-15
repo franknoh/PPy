@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.3.3 — 2026-09-15
+
+- `ppy.Tensor[dtype, shape]` carries common tensor contracts through type
+  checking and IR, with `ppy.bf16` distinct from IEEE float16.
+- Plugins can declare call-scoped read-only and mutable argument borrows,
+  allowing `ppy.Mut[ppy.Tensor[...]]` without a separate plugin-owned type.
+- Common tensors retain a shared IR representation and can use an explicit
+  backend's physical type lowering without depending on plugin order.
+- Plugin rejection diagnostics include the supplied reason at the call site.
+
 ## 0.3.2 — 2026-09-15
 
 - Plugins can lower analyzed types and facts into IR types, preserving tensor

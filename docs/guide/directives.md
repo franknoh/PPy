@@ -29,6 +29,8 @@ Ordinary `Annotated` aliases from `ppy`:
 |---|---|
 | `i8 i16 i32 i64 u8 u16 u32 u64` | fixed-width integer contract. A value provably outside the range is `E1401`; a check the contract mode forbids is `E1402`. |
 | `f16 f32 f64` | floating-point width. |
+| `bf16` | bfloat16 element format, distinct from IEEE float16. |
+| `Tensor[dtype, shape]` | a common tensor contract, including dtype and dimensions; storage belongs to the selected backend. See [Common tensors](tensors.md). |
 | `Buffer[T]` | a borrowed writable buffer (`memoryview` over `array.array`) — zero-copy in and out of native code. `T` may be `int`, `float`, or `ppy.i8`/`ppy.u8` for one byte per element. |
 | `Array[T]`, `Vector[T]` | contiguous numeric containers with a known element type. |
 | `Range(lo, hi)` | an integer refinement the checker propagates. |

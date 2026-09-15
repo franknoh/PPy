@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING
 from ..dialect import Dialect, DialectRegistry, OpSpec
 from ..model import Builder, Operation, Value
 from ..pattern import Pattern, Rewriter, RewriteResult
-from ..types import FloatType, IRType, VectorType
+from ..types import FloatType, IRType, VectorType, is_floating
 from . import core
 
 if TYPE_CHECKING:
@@ -61,7 +61,7 @@ _FOLD = {
 
 
 def _floating(t: IRType) -> bool:
-    return isinstance(t.element if isinstance(t, VectorType) else t, FloatType)
+    return is_floating(t.element if isinstance(t, VectorType) else t)
 
 
 def _verify(op: Operation, checker: Checker) -> None:
