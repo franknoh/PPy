@@ -5205,6 +5205,10 @@ class _Checker:
             line=getattr(node, "lineno", 0),
             operation=operation,
             attributes=attributes,
+            spec=result.spec,
+            effects=result.effects,
+            result_type=result.type,
+            facts=result.facts,
         )
 
     def _plugin_operator(

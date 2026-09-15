@@ -286,7 +286,7 @@ class _FunctionLowering(ColumnarLowering):
         self.ctx.invalidate(self.function)
         dominators = self.ctx.analysis("dominators", self.function)
         for block in self.function.body.blocks:
-            terminator = block.terminator
+            terminator = block.terminator_for(self.ctx.registry)
             if terminator is None or terminator.name != "core.ret":
                 continue
             b = Builder().before(terminator)

@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.3.2 — 2026-09-15
+
+- Plugins can lower analyzed types and facts into IR types, preserving tensor
+  dtype and shape across function parameters, results, local values, and calls.
+  Canonical IR generation no longer depends on the CPU native ABI.
+- Plugin dialect calls carry operands, constant keyword attributes, effects,
+  guards, and source locations into the IR, including operations without a
+  result. Optimizations preserve operations with write effects.
+- Explicit external-backend compilation reports lowering failures with the
+  function's location and reason, while ordinary Python fallback remains available.
+- Project dialect registries govern verification, control-flow analysis,
+  transformations, and IR-file builds without process-global registration.
+- Source emission formats can declare `requires_toolchain=False` to work
+  without an installed SDK. Existing formats and artifact builds retain
+  their toolchain checks.
+
 ## 0.3.1 — 2026-09-15
 
 - Standalone builds and C emission support `print` with string literal `end`

@@ -163,7 +163,9 @@ def canonical_ir_modules(  # type: ignore[no-untyped-def]
     runtime. With a `backend`, its passes run at the `backend` stage of
     every module; its validation is `prepare_for_backend`'s.
     """
+    from ..backend.base import BackendValidationError
     from ..backend.llvm import prover_for
+    from ..ir import SourceLocation
     from ..lowering import lower_module_to_ir
     from .profile import profile_for
 
@@ -199,7 +201,18 @@ def canonical_ir_modules(  # type: ignore[no-untyped-def]
             root=bundle.project.root,
             launches=launches,
             imports=available.get,
+            plugins=bundle.project.plugins,
         )
+        if backend is not None:
+            for qualname, reason in lowered.rejected.items():
+                info, _analysis, node = candidates[qualname]
+                if info.directive("native.extern") is not None or info.type_params:
+                    continue
+                raise BackendValidationError(
+                    backend.name,
+                    f"function `{qualname}`: {reason}",
+                    location=SourceLocation(str(info.path), node.lineno, node.col_offset),
+                )
         if not lowered.functions:
             continue
         for qualname, entry in lowered.functions.items():

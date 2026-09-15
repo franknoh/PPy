@@ -110,6 +110,7 @@ def standalone_ir(bundle, reporter, entry: Path, opt_level: int | None = None): 
     lowered = lower_module_to_ir(
         analysis,
         functions,
+        cpu_compatible=True,
         safeguards=config.llvm.safeguards or "hoisted",
         standalone=True,
         prover=prover_for(config),
