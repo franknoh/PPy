@@ -237,6 +237,12 @@ def build_parser() -> argparse.ArgumentParser:
     )
     emit.add_argument("target", type=Path)
     emit.add_argument(
+        "--int-width",
+        type=int,
+        choices=(32, 64),
+        help="integer width for unsafe standalone C/C++ source (default: 64); 32 uses plain int",
+    )
+    emit.add_argument(
         "--unsafe",
         action="store_true",
         help="for `c` and `cpp`: machine-width arithmetic; standalone source uses native stdio",

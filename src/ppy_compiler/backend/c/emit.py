@@ -37,10 +37,12 @@ import math
 import re
 from collections.abc import Sequence
 from dataclasses import dataclass, field
+from itertools import groupby
 
 from ppy_runtime.abi import SANITIZERS, STATUS_FALLBACK, STATUS_OK, STATUS_SANITIZER_BASE
 
 from ...ir import (
+    Block,
     BoolType,
     BufferType,
     FloatType,
@@ -77,7 +79,9 @@ from .dialects import (
 from .gpu import emit_gpu
 from .presentation import PrintFormat, string_literal, string_symbol
 from .prof import emit_prof
+from .ranges import truncating_divisions
 from .runtime import SHIMS, definition, program_main
+from .source import definition_order
 
 __all__ = ["EmitError", "HeaderOnlyError", "Language", "emit_module"]
 
@@ -224,6 +228,7 @@ _KEYWORDS = frozenset(
     log log2 log10 floor ceil trunc fabs
     pow fmod hypot round erf erfc tgamma lgamma isnan isinf NAN INFINITY NULL
     int8_t int16_t int32_t int64_t uint8_t uint16_t uint32_t uint64_t intptr_t uintptr_t size_t
+    INT_MIN INT_MAX UINT_MAX CHAR_BIT
     INT64_MIN INT64_MAX UINT64_MAX INT64_C UINT64_C PRId64 PRIu64 SCNd64 SCNu64""".split()  # noqa: SIM905
 )
 _IDENTIFIER = re.compile(r"^[A-Za-z_]\w*$")
@@ -359,7 +364,7 @@ class _Unstructured(Exception):
 
 @dataclass(slots=True)
 class _Loop:
-    header: object
+    header: Block
     latches: list = field(default_factory=list)
     body: set = field(default_factory=set)
     exits: list = field(default_factory=list)
@@ -441,6 +446,14 @@ class _ModuleEmitter:
         self.target = target
         self.unit = _Unit()
         self.readable = readable and entry is not None
+        self.int32 = self.readable and module.attributes.get("ppy.source_int_width") == 32
+        if self.int32:
+            self.unit.headers.add("limits.h")
+            assertion = "static_assert" if self.cpp else "_Static_assert"
+            self.unit.prelude["int_width"] = (
+                f"{assertion}(INT_MAX == 2147483647 && INT_MIN == (-2147483647 - 1), "
+                '"this program requires 32-bit int");\n'
+            )
         operations = [op for function in module.functions.values() for op in function.operations()]
         self.native_input = not any(
             op.name == "core.call_extern"
@@ -553,6 +566,8 @@ class _ModuleEmitter:
                 self.unit.headers.add("stdbool.h")
             return "bool"
         if isinstance(t, IntType):
+            if self.int32 and t.width == 32:
+                return "int" if t.signed else "unsigned int"
             self.unit.headers.add("stdint.h")
             name = f"{'' if t.signed else 'u'}int{t.width}_t"
             return self.std(name) if self.readable else name
@@ -661,15 +676,24 @@ class _ModuleEmitter:
         defined = [f for f in defined if kind_of(f) == "host"]
         if self.gpu:
             defined = device + defined
+        prototypes = {function.name for function in defined}
+        if self.readable:
+            defined, prototypes = definition_order(defined)
         for function in defined:
-            if not self.is_main(function):
+            if not self.is_main(function) and function.name in prototypes:
                 self.unit.prototypes.append(self.scoped(function, self.prototype(function) + ";"))
+        bodies: list[tuple[IRFunction, str]] = []
         for function in defined:
             try:
                 text = _FunctionEmitter(self, function).run()
             except _Unstructured:
                 text = _FunctionEmitter(self, function, structured=False).run()
-            self.unit.functions.append(self.scoped(function, text))
+            bodies.append((function, text))
+        for _, group in groupby(bodies, key=lambda item: self.namespaces.get(item[0].name)):
+            members = list(group)
+            self.unit.functions.append(
+                self.scoped(members[0][0], "\n".join(text for _, text in members))
+            )
         for function in defined:
             if "ppy.export" in function.attributes and not self.readable:
                 self.unit.exports.append(self.export(function))
@@ -965,6 +989,8 @@ class _FunctionEmitter:
         #: Declarations at the top of the function: slots, block parameters,
         #: and anything a `goto` may otherwise jump across.
         self.declarations: list[str] = []
+        #: First stores that can introduce a variable in their lexical scope.
+        self.slot_declarations: dict[int, str] = {}
         self.body = _Body()
         self.print_format: PrintFormat | None = None
         self.used: set[str] = set(owner.reserved)
@@ -975,6 +1001,7 @@ class _FunctionEmitter:
         #: A coroutine's resume function: the frame in, nothing out.
         self.resume = function.attributes.get("ppy.abi") == "resume"
         self.direct = function.name in owner.direct
+        self.truncating = truncating_divisions(function) if owner.readable else set()
         self.parameters = owner.parameter_atoms(function)
         self.used.update(name for _kind, name in self.parameters)
         self.results = (
@@ -1228,6 +1255,9 @@ class _FunctionEmitter:
             return None
         self.skipped.add(id(user))
         self.scalars[id(v)] = slot
+        declaration = self.slot_declarations.pop(id(user), None)
+        if declaration is not None:
+            self.line(f"{declaration};")
         return slot
 
     def _consumed_next(self, v: Value) -> bool:
@@ -1557,10 +1587,52 @@ class _FunctionEmitter:
                 if name is None:
                     hint = re.sub(r"[._]addr$", "", pointer.name or "") or "slot"
                     name = self.fresh(hint)
-                    self.declarations.append(f"    {_declare(self.owner.c_type(t.pointee), name)};")
+                    declaration = _declare(self.owner.c_type(t.pointee), name)
+                    first = self._slot_start(pointer, stores)
+                    if first is not None:
+                        self.slot_declarations[id(first)] = declaration
+                    else:
+                        self.declarations.append(f"    {declaration};")
                 self.slots[id(pointer)] = name
                 if len(stores) <= 1:
                     self.immutable.add(name)
+
+    def _slot_start(self, pointer: Value, stores: list[Operation]) -> Operation | None:
+        """A store dominating every access, in a scope containing every access.
+
+        A loop-local declaration must be initialized before each iteration's
+        reads; a value carried around a back edge remains outside that loop.
+        """
+        if not self.structured or not self.owner.readable:
+            return None
+        users = [user for user, _ in pointer.uses if isinstance(user, Operation)]
+        for store in stores:
+            block = store.parent
+            if block is None:
+                continue
+            if any(
+                not self._dominates(block, user.parent)
+                or (
+                    user.parent is block
+                    and block.operations.index(user) < block.operations.index(store)
+                )
+                for user in users
+            ):
+                continue
+            loop = self.loop_of.get(id(block))
+            if loop is not None and any(id(user.parent) not in loop.body for user in users):
+                continue
+            # Entry and the unconditional start of a while body have stable
+            # lexical scopes. Elsewhere, keep only block-local declarations.
+            body_start = (
+                loop is not None
+                and block is not loop.header
+                and block in loop.header.successors
+                and self._entering(block) == [loop.header]
+            )
+            if block is self.blocks[0] or body_start or all(user.parent is block for user in users):
+                return store
+        return None
 
     def _parameter_slot(self, stores: list[Operation], entry) -> str | None:  # type: ignore[no-untyped-def]
         """The parameter a slot is the home of: stored into it on entry and
@@ -2000,6 +2072,10 @@ class _FunctionEmitter:
                 if slot is None:
                     self.line(f"{self.deref(pointer)[0]} = {self.bare(value)};")
                     return
+                declaration = self.slot_declarations.pop(id(op), None)
+                if declaration is not None:
+                    self.line(f"{declaration} = {self.bare(value)};")
+                    return
                 parts = self.infixes.get(id(value))
                 if parts is not None and parts[1][0] == slot:
                     symbol, _left, right = parts
@@ -2078,6 +2154,12 @@ class _FunctionEmitter:
                 return "nullptr", _ATOM
             return f"(({self.owner.c_type(t)})0)", _ATOM
         number = int(value)  # type: ignore[call-overload]
+        if self.owner.int32 and isinstance(t, IntType) and t.width == 32:
+            if not t.signed:
+                return f"{number}u", _ATOM
+            if number == -(1 << 31):
+                return "(-2147483647 - 1)", _ATOM
+            return str(number), (_UNARY if number < 0 else _ATOM)
         if isinstance(t, IntType) and not t.signed:
             return (str(number) if number < (1 << 31) else f"UINT64_C({number})"), _ATOM
         if number == -(1 << 63):
@@ -2156,16 +2238,47 @@ class _FunctionEmitter:
         self.fail_unless(f"!{helper}({a[0]}, {b[0]}, &{result})", "arith.ok")
 
     def machine_typed(self, value: Value) -> bool:
-        """A named machine value already has its declared C type."""
-        return isinstance(value.type, (IntType, IndexType)) and bool(
-            _IDENTIFIER.fullmatch(self.bare(value))
-        )
+        """Whether the emitted expression already evaluates at its IR width."""
+        if not isinstance(value.type, (IntType, IndexType)):
+            return False
+        if self.owner.int32 and value.type == IntType(32):
+            return True  # Every signed integer expression is at least C's int.
+        if _IDENTIFIER.fullmatch(self.bare(value)):
+            return True
+        producer = value.owner
+        if not isinstance(producer, Operation):
+            return False
+        if producer.name in {
+            "core.add",
+            "core.sub",
+            "core.mul",
+            "core.neg",
+            "core.div",
+            "core.mod",
+        }:
+            # These emitters promote before arithmetic, including literal-only inputs.
+            return producer.attributes.get("overflow") in {"native", "wrap"} or any(
+                self.machine_typed(v) for v in producer.operands
+            )
+        if producer.name == "core.select":
+            return any(self.machine_typed(v) for v in producer.operands[1:])
+        if producer.name == "core.cast":
+            source = producer.operands[0]
+            return self.owner.c_type(source.type) != self.owner.c_type(
+                value.type
+            ) or self.machine_typed(source)
+        if producer.name == "core.call":
+            return True
+        if producer.name == "core.const":
+            number = self.constant(value)
+            return number is not None and not -(1 << 31) < number < (1 << 31)
+        return False
 
     def wrapped(self, v: Value, t: IRType, a: Value | _Expr, b: Value | _Expr, symbol: str) -> None:
         """`v` as two's-complement arithmetic through the unsigned type: signed
         overflow is undefined in C, unsigned wraps. An operand that is such
         arithmetic itself stays unsigned in between."""
-        unsigned = _unsigned(t)
+        unsigned = self.owner.c_type(IntType(t.width if isinstance(t, IntType) else 64, False))
         wide = _infix(symbol, self._unsigned(a, unsigned), self._unsigned(b, unsigned))
         text, level = self.cast_text(wide, t)
         reads = self.reading([x for x in (a, b) if isinstance(x, Value)])
@@ -2223,14 +2336,21 @@ class _FunctionEmitter:
             held = _infix("&&", _infix("==", a, minimum), _infix("==", b, minus_one))
             failed = _infix("||", _infix("!=", a, minimum), _infix("!=", b, minus_one))
             self.fail_unless(failed[0], "div.ok", failed=held[0])
-        if op.attributes.get("rounding", "floor") == "trunc":
+        if op.attributes.get("rounding", "floor") == "trunc" or id(op) in self.truncating:
             self.fold(op.result, _infix(symbol, a, b), reads=reads)
             return
         if divisor is not None and 0 < divisor < (1 << 31) and _IDENTIFIER.match(a[0]):
             # Python's floor division by a positive constant, in one expression.
             remainder = _infix("%", a, b)
             if name == "mod":
-                self.fold(op.result, _infix("%", _infix("+", remainder, b), b), reads=reads)
+                if 2 * divisor - 1 <= (1 << (width - 1)) - 1:
+                    self.fold(op.result, _infix("%", _infix("+", remainder, b), b), reads=reads)
+                    return
+                # Adding the divisor to a positive remainder can overflow at
+                # 32 bits. Python's correction is needed only when negative.
+                r = (self.temporary("r", self.owner.c_type(t), remainder[0]), _ATOM)
+                corrected = _ternary(_infix("<", r, zero), _infix("+", r, b), r)
+                self.fold(op.result, corrected, reads=reads)
             else:
                 negative = _infix("<", remainder, zero)
                 self.fold(op.result, _infix("-", _infix("/", a, b), negative), reads=reads)
@@ -2254,7 +2374,7 @@ class _FunctionEmitter:
         if name == "shr":
             self.infix(op.result, ">>", a, b, reads)
             return
-        unsigned = _unsigned(t)
+        unsigned = self.owner.c_type(IntType(t.width if isinstance(t, IntType) else 64, False))
         wide = _infix("<<", self._unsigned(op.operands[0], unsigned), self.cast_text(b, unsigned))
         if op.attributes.get("overflow", "wrap") in {"wrap", "native"}:
             text, level = self.cast_text(wide, t)
@@ -2312,7 +2432,10 @@ class _FunctionEmitter:
         symbol = self.owner.symbol_of(target)
         arguments: list[str] = []
         for operand in op.operands:
-            arguments.extend(self.flatten(operand))
+            if target.name in self.owner.direct and isinstance(operand.type, BoolType):
+                arguments.append(self.bare(operand))
+            else:
+                arguments.extend(self.flatten(operand))
         if self.device or target.name in self.owner.direct:
             direct = f"{symbol}({', '.join(arguments)})"
             if op.results and op.results[0].uses:
@@ -2369,10 +2492,13 @@ class _FunctionEmitter:
         ):
             # Unsafe source explicitly selects the host stdio parser. A failed
             # conversion stops before an uninitialized value can be observed.
-            self.owner.unit.headers.update({"stdio.h", "inttypes.h"})
+            self.owner.unit.headers.add("stdio.h")
+            if not self.owner.int32:
+                self.owner.unit.headers.add("inttypes.h")
             result = self.sink(op.result) or self.variable(op.result)
             scan = self.owner.std("scanf")
-            self.line(f'if ({scan}("%" SCNd64, &{result}) != 1) {{ {self.failure()} }}')
+            spec = '"%d"' if self.owner.int32 else '"%" SCNd64'
+            self.line(f"if ({scan}({spec}, &{result}) != 1) {{ {self.failure()} }}")
             return
         shim = SHIMS.get(symbol)
         libc = _LIBC.get(symbol)
@@ -2516,18 +2642,22 @@ class _FunctionEmitter:
             expression = _ternary(self.expr(op.operands[0]), ('"True"', _ATOM), ('"False"', _ATOM))
             self.print_format.value("%s", expression[0])
         else:
-            self.owner.unit.headers.add("inttypes.h")
             unsigned = symbol == "ppy_rt_print_u64"
             operand = op.operands[0]
             argument = self.bare(operand)
-            exact_type = operand.type == IntType(64, not unsigned) or (
+            width = 32 if self.owner.int32 else 64
+            exact_type = operand.type == IntType(width, not unsigned) or (
                 isinstance(operand.type, IndexType) and not unsigned
             )
-            if not exact_type or not _IDENTIFIER.fullmatch(argument):
+            if not exact_type or not self.machine_typed(operand):
                 argument = self.owner.cast(
-                    argument, self.owner.std("uint64_t" if unsigned else "int64_t")
+                    argument, self.owner.c_type(IntType(width, not unsigned))
                 )
-            self.print_format.value("%", argument, "PRIu64" if unsigned else "PRId64")
+            if self.owner.int32:
+                self.print_format.value("%u" if unsigned else "%d", argument)
+            else:
+                self.owner.unit.headers.add("inttypes.h")
+                self.print_format.value("%", argument, "PRIu64" if unsigned else "PRId64")
         if symbol == "ppy_rt_print_nl" or (data is not None and data.endswith(b"\n")):
             self.flush_print()
         return True
@@ -2645,8 +2775,3 @@ def _unique(name: str, used: set[str]) -> str:
         candidate = f"{name}_{n}"
     used.add(candidate)
     return candidate
-
-
-def _unsigned(t: IRType) -> str:
-    width = t.width if isinstance(t, IntType) else 64
-    return f"uint{width}_t"

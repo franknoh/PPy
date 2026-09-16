@@ -84,6 +84,15 @@ operation and may tell the optimizer it never wraps. `native`, selected before
 IR construction for unsafe standalone source, uses target-language machine
 arithmetic without overflow fallback; signed overflow is outside its portable
 domain. It does not replace the `wrap` guarantee used by unsafe LLVM builds.
+For standalone C/C++ source, `--int-width 32` retypes the linked scalar graph
+from `i64`/`u64` to `i32`/`u32`, including signatures and local pointers,
+before shared optimization. The source backend spells that selected model
+as `int`/`unsigned int` and checks the target range at compile time. Fixed
+runtime and buffer ABIs are refused rather than retyped. The default model
+is unchanged. Source-only interval analysis may omit floor-division
+corrections when acyclic branch bounds prove floor equals truncation; it
+never changes an operation's overflow mode or assumes a wrapping result
+stays within its pre-overflow interval.
 Bounds checks are explicit `core.guard`s the frontend emits; a sanitizer
 pass adds more.
 
