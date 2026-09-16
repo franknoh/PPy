@@ -357,6 +357,8 @@ ppy emit nvvm-ir foo.ppy             # the kernels as LLVM IR for NVPTX
 ppy emit ptx foo.ppy                 # ... as PTX (PPY_CUDA_ARCH names the architecture, sm_70 by default)
 ppy emit c --header-only foo.ppy     # every function static inline in a header
 ppy emit c --standalone prog.ppy     # the whole program from main(), shims and all
+ppy emit c --standalone --unsafe --format app.ppy -o app.c
+ppy emit cpp --standalone --unsafe --format app.ppy -o app.cpp
 ppy emit c --format foo.ppy          # ... laid out by clang-format (the project's .clang-format, or LLVM style)
 ppy emit header foo.ppy              # the C declarations of the exports
 ppy emit stablehlo foo.ppy           # the @ppy.xla.jit functions as StableHLO for XLA
@@ -405,6 +407,29 @@ is read. `--format` (for `c`, `cpp`, `cuda`, `hip`, and `header`) runs the
 text through `clang-format`, with the project's `.clang-format` where it
 has one and LLVM style at four spaces and a hundred columns otherwise; a
 missing `clang-format` is `E1802`.
+
+`--unsafe` applies only to `emit c` and `emit cpp`, using the build command's
+safeguard configuration. With `--standalone`, it emits readable source with
+direct scalar/void returns, one global `main`, source function names, and
+C++17 module namespaces (nested for packages). C qualifies names only when
+they collide. Project imports are linked after checking that every imported
+module has no executable initialization and every reachable function is native.
+
+Unsafe standalone source selects native C/C++ integer arithmetic in the IR,
+before presentation lowering. Addition, subtraction and multiplication use
+ordinary operators; signed overflow is outside the portable input domain.
+This differs from the guaranteed 64-bit wrap of `build/run --unsafe` and
+non-standalone unsafe emission. Division retains Python floor rounding.
+Adjacent canonical print operations fuse within a block into `printf`, with
+byte-exact literals, Python `True`/`False`, `end`, and explicit `fflush`.
+Integer `ppy.input` and `ppy.scan` use `scanf`: native whitespace/token parsing,
+not Python's line parsing or underscore syntax, with a failed conversion
+exiting with status 1 before the value is used. Input must fit its machine type.
+Safe standalone emission and builds retain the existing scanner and guards.
+Programs sharing a buffered scanner retain that scanner for all reads.
+The C++ spelling uses `<cstdint>`, `<cinttypes>`, `<cstdio>` and `std::` stdio;
+headers and helpers are included only when needed. Aggregate-returning and
+runtime-managed functions retain their internal ABI when required.
 
 `.ppyir` is the IR's on-disk form -- public from 0.2.0 at schema 1 -- and
 `ppy build foo.ppyir` builds one without the Python that produced it: the file

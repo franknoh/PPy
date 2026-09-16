@@ -9,7 +9,10 @@ Overflow is an attribute, never a guess: `python` means the true value is
 what Python computes and the backend must guard for it, `checked` means an
 overflow is a failure the guard catches, and `wrap` means two's-complement
 wrap like C. Integer division and remainder carry their rounding the same
-way (`floor` is Python's, `trunc` is C's).
+way (`floor` is Python's, `trunc` is C's). `native` selects the target
+language's machine arithmetic without overflow fallback; signed overflow
+is outside its portable domain. Unsafe standalone source selects this mode
+in the frontend; it is distinct from guaranteed two's-complement `wrap`.
 """
 
 from __future__ import annotations
@@ -53,7 +56,7 @@ __all__ = [
 #: `proven`: a proof -- a corner check hoisted ahead of the loop, or the
 #: solver -- established that the true value fits, so the backend emits the
 #: plain operation and may tell the optimizer it never wraps.
-OVERFLOW_MODES = ("python", "checked", "wrap", "proven")
+OVERFLOW_MODES = ("python", "checked", "wrap", "proven", "native")
 ROUNDING_MODES = ("floor", "trunc")
 PREDICATES = ("eq", "ne", "lt", "le", "gt", "ge")
 ADDRESS_SPACES = frozenset({"generic", "stack"})

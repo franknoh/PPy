@@ -28,7 +28,7 @@ def _fail(reporter, message: str, help_text: str | None = None) -> int:  # type:
     return 1
 
 
-def _program(bundle, reporter, entry: Path):  # type: ignore[no-untyped-def]
+def _program(bundle, reporter, entry: Path, *, project_modules: bool = False):  # type: ignore[no-untyped-def]
     """The functions a standalone program is made of, or the exit status.
 
     `main` in the entry module, and every project function it reaches,
@@ -52,12 +52,27 @@ def _program(bundle, reporter, entry: Path):  # type: ignore[no-untyped-def]
             f"a standalone build starts at `{module_name}.main`, which does not exist",
             help_text="define `def main() -> None:` and call it at module level",
         )
-    problem = _module_shape(symbols)
+    allowed = set(bundle.symbols.modules) if project_modules else set()
+    problem = _module_shape(symbols, allowed)
     if problem is not None:
         return _fail(
             reporter, problem, "a standalone module holds defs, `import ppy`, and one `main()` call"
         )
 
+    analyses = dict(analysis.functions)
+    infos = (
+        dict(bundle.symbols.functions)
+        if project_modules
+        else {info.qualname: info for info in symbols.functions.values()}
+    )
+    if project_modules:
+        # Imports execute even when none of their functions is called. Check
+        # every project module's top level before retaining only reachable defs.
+        for name, other in bundle.symbols.modules.items():
+            problem = _module_shape(other, allowed, entry=name == module_name)
+            if problem is not None:
+                return _fail(reporter, f"{name}: {problem}")
+            analyses.update(bundle.analysis.modules[name].functions)
     # Reachability: every project function `main` can reach must lower.
     reachable: list[str] = []
     frontier = [entry_qualname]
@@ -67,18 +82,18 @@ def _program(bundle, reporter, entry: Path):  # type: ignore[no-untyped-def]
         if qualname in reachable:
             continue
         reachable.append(qualname)
-        function = analysis.functions.get(qualname)
+        function = analyses.get(qualname)
         if function is None:
             continue
         for callee in sorted(function.calls):
-            if callee in analysis.functions and callee not in reached_from:
+            if callee in infos and callee not in reached_from:
                 reached_from[callee] = qualname
                 frontier.append(callee)
 
     functions = {}
     for qualname in reachable:
-        info = symbols.functions.get(qualname.rpartition(".")[2])
-        function = analysis.functions.get(qualname)
+        info = infos.get(qualname)
+        function = analyses.get(qualname)
         if info is None or function is None:
             return _fail(
                 reporter, _chain(reached_from, qualname, "is not a function of this module")
@@ -98,39 +113,53 @@ def standalone_ir(bundle, reporter, entry: Path, opt_level: int | None = None): 
     and run through the shared passes. The result carries the entry's
     symbol as `ppy.entry`.
     """
-    from ...lowering import lower_module_to_ir
+    from ...ir.linker import link
+    from ...lowering.ast_to_ir import Frontend
     from .ir_pipeline import optimize
 
-    program = _program(bundle, reporter, entry)
+    program = _program(bundle, reporter, entry, project_modules=True)
     if isinstance(program, int):
         return program
     module_name, entry_qualname, functions, reached_from = program
-    analysis = bundle.analysis.modules[module_name]
     config = bundle.project.config
-    lowered = lower_module_to_ir(
-        analysis,
-        functions,
-        cpu_compatible=True,
-        backend_name="llvm",
-        safeguards=config.llvm.safeguards or "hoisted",
-        standalone=True,
-        prover=prover_for(config),
-        root=bundle.project.root,
-    )
-    for qualname, reason in sorted(lowered.rejected.items()):
-        return _fail(reporter, _chain(reached_from, qualname, reason))
-    if entry_qualname not in lowered.functions:
-        return _fail(reporter, f"`{entry_qualname}` did not lower")
+    frontends = {
+        name: Frontend(
+            bundle.analysis.modules[name],
+            cpu_compatible=True,
+            backend_name="llvm",
+            safeguards=config.llvm.safeguards or "hoisted",
+            standalone=True,
+            prover=prover_for(config),
+            root=bundle.project.root,
+            native_arithmetic=config.llvm.safeguards == "off",
+        )
+        for name in sorted({info.module for info, _, _ in functions.values()})
+    }
+    signatures = {
+        qualname: (info, frontends[info.module].signature(info, analysis))
+        for qualname, (info, analysis, _) in functions.items()
+    }
+    modules = []
+    for name, frontend in frontends.items():
+        frontend.imports = signatures.get
+        lowered = frontend.build({q: f for q, f in functions.items() if f[0].module == name})
+        for qualname, reason in sorted(lowered.rejected.items()):
+            return _fail(reporter, _chain(reached_from, qualname, reason))
+        modules.append(lowered.module)
+    linked = link(modules, module_name)
+    if linked.unresolved:
+        return _fail(reporter, f"unresolved standalone functions: {', '.join(linked.unresolved)}")
+    module = linked.module
     level = opt_level if opt_level is not None else config.opt_level
     optimize(
-        lowered.module,
+        module,
         level,
         bundle.project.plugins,
         config.parallel,
         sanitize=config.llvm.sanitize,
     )
-    lowered.module.attributes["ppy.entry"] = lowered.functions[entry_qualname].signature.symbol
-    return lowered.module
+    module.attributes["ppy.entry"] = signatures[entry_qualname][1].symbol
+    return module
 
 
 def _runtime_sources(result) -> list[str]:  # type: ignore[no-untyped-def]
@@ -223,7 +252,9 @@ def _binds_a_constant(statement, constants: dict) -> bool:  # type: ignore[no-un
     return False
 
 
-def _module_shape(symbols) -> str | None:  # type: ignore[no-untyped-def]
+def _module_shape(
+    symbols, project_modules: set[str] | None = None, *, entry: bool = True
+) -> str | None:  # type: ignore[no-untyped-def]
     import ast
 
     for index, statement in enumerate(symbols.module.tree.body):
@@ -246,9 +277,18 @@ def _module_shape(symbols) -> str | None:  # type: ignore[no-untyped-def]
             listed = [alias.name for alias in statement.names]
             if names == "ppy" or listed == ["ppy"]:
                 continue
+            if project_modules and all(
+                (binding := symbols.imports.get(alias.asname or alias.name.split(".")[0]))
+                is not None
+                and not binding.external
+                and (binding.module in project_modules or binding.canonical in project_modules)
+                for alias in statement.names
+            ):
+                continue
             return f"`{ast.unparse(statement)}` reaches the Python runtime"
         if (
-            isinstance(statement, ast.Expr)
+            entry
+            and isinstance(statement, ast.Expr)
             and isinstance(statement.value, ast.Call)
             and isinstance(statement.value.func, ast.Name)
             and statement.value.func.id == "main"

@@ -1,34 +1,14 @@
 # Changelog
 
-## 0.4.0 — unreleased
+## 0.3.4 — 2026-09-16
 
-Work toward the next release, on `dev`; alphas of it are tagged `v0.4.0aN`.
-
-- `ppy.Tensor[dtype, shape]` carries common tensor contracts through type
-  checking and IR, with `ppy.bf16` distinct from IEEE float16.
-- Plugins can declare call-scoped read-only and mutable argument borrows,
-  allowing `ppy.Mut[ppy.Tensor[...]]` without a separate plugin-owned type.
-- Common tensors retain a shared IR representation and can use an explicit
-  backend's physical type lowering without depending on plugin order.
-- Plugin rejection diagnostics include the supplied reason at the call site.
-
-- Plugins can lower analyzed types and facts into IR types, preserving tensor
-  dtype and shape across function parameters, results, local values, and calls.
-  Canonical IR generation no longer depends on the CPU native ABI.
-- Plugin dialect calls carry operands, constant keyword attributes, effects,
-  guards, and source locations into the IR, including operations without a
-  result. Optimizations preserve operations with write effects.
-- Explicit external-backend compilation reports lowering failures with the
-  function's location and reason, while ordinary Python fallback remains available.
-- Project dialect registries govern verification, control-flow analysis,
-  transformations, and IR-file builds without process-global registration.
-- Source emission formats can declare `requires_toolchain=False` to work
-  without an installed SDK. Existing formats and artifact builds retain
-  their toolchain checks.
-
-- Standalone builds and C emission support `print` with string literal `end`
-  and `sep`, boolean literal `flush`, and basic integer and boolean f-strings.
-  Converted input prompts retain their output and flush before reading.
+- `ppy emit c/cpp --standalone --unsafe [--format]` emits readable standalone
+  source with direct scalar/void returns, one `main`, source names, C++ module
+  namespaces, inline literals, fused stdio output, and checked `scanf` reads.
+  Native arithmetic is selected in IR; signed overflow follows C/C++ semantics.
+  Safe builds and ordinary emission retain their existing ABI and semantics.
+- Standalone source links reachable functions across project modules while
+  rejecting imported initialization that requires Python.
 
 - A region may write through a parameter. `narrow` and `copy_` joined the
   curated set, so a slot of a preallocated tensor can be filled in place --
@@ -68,6 +48,38 @@ Work toward the next release, on `dev`; alphas of it are tagged `v0.4.0aN`.
   to the curated set for it, and `examples/46_gpt2` is GPT-2 XL with each
   of its forty-eight blocks compiled to one region, measured against
   PyTorch eager and `torch.compile` on an RTX 4090.
+
+## 0.3.3 — 2026-09-15
+
+- `ppy.Tensor[dtype, shape]` carries common tensor contracts through type
+  checking and IR, with `ppy.bf16` distinct from IEEE float16.
+- Plugins can declare call-scoped read-only and mutable argument borrows,
+  allowing `ppy.Mut[ppy.Tensor[...]]` without a separate plugin-owned type.
+- Common tensors retain a shared IR representation and can use an explicit
+  backend's physical type lowering without depending on plugin order.
+- Plugin rejection diagnostics include the supplied reason at the call site.
+
+## 0.3.2 — 2026-09-15
+
+- Plugins can lower analyzed types and facts into IR types, preserving tensor
+  dtype and shape across function parameters, results, local values, and calls.
+  Canonical IR generation no longer depends on the CPU native ABI.
+- Plugin dialect calls carry operands, constant keyword attributes, effects,
+  guards, and source locations into the IR, including operations without a
+  result. Optimizations preserve operations with write effects.
+- Explicit external-backend compilation reports lowering failures with the
+  function's location and reason, while ordinary Python fallback remains available.
+- Project dialect registries govern verification, control-flow analysis,
+  transformations, and IR-file builds without process-global registration.
+- Source emission formats can declare `requires_toolchain=False` to work
+  without an installed SDK. Existing formats and artifact builds retain
+  their toolchain checks.
+
+## 0.3.1 — 2026-09-15
+
+- Standalone builds and C emission support `print` with string literal `end`
+  and `sep`, boolean literal `flush`, and basic integer and boolean f-strings.
+  Converted input prompts retain their output and flush before reading.
 
 ## 0.3.0 — 2026-09-13
 

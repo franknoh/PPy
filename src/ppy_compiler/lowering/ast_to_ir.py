@@ -323,6 +323,7 @@ class Frontend:
         plugins: PluginRegistry | None = None,
         cpu_compatible: bool = False,
         backend_name: str | None = None,
+        native_arithmetic: bool = False,
     ) -> None:
         self.analysis = analysis
         self.plugins = plugins
@@ -335,6 +336,9 @@ class Frontend:
         self.backend_name = backend_name
         self.layouts: ClassLayouts = dict(layouts or {})
         self.safeguards = safeguards
+        # Source-only unsafe semantics are selected before IR construction.
+        # LLVM build/run retain their existing explicit two's-complement wrap.
+        self.native_arithmetic = native_arithmetic and safeguards == "off"
         self.standalone = standalone
         self.prover = prover
         #: Source locations are spelled relative to this, so the IR text is
@@ -881,6 +885,8 @@ class _FunctionLowering:
         self.info = info
         self.constants = constants
         self.overflow = "wrap" if frontend.safeguards == "off" else "python"
+        if frontend.native_arithmetic:
+            self.overflow = "native"
         self.hoist = frontend.safeguards != "inline"
         #: Proves an arithmetic chain fits the word, so its guard is left out.
         self.prover = frontend.prover if frontend.safeguards != "off" else None
@@ -1912,6 +1918,17 @@ class _FunctionLowering:
                     "a derivative giving several values is unpacked into as many names"
                 )
             return values[0]
+        head, dot, tail = target.partition(".")
+        binding = self.frontend.analysis.symbols.imports.get(head)
+        imported = binding.canonical + (dot + tail if dot else "") if binding is not None else ""
+        if binding is not None and self.frontend.imports is not None:
+            found = self.frontend.imports(imported)
+            if found is not None:
+                info, signature = found
+                function = self.frontend.declare_external(info, signature)
+                return self._native_call(
+                    function, signature, imported, node, discard_result=discard_result
+                )
         if target.startswith("math."):
             return self._math_call(target.removeprefix("math."), node)
         if target.startswith(("ppy.native.", "native.")):
@@ -1943,17 +1960,6 @@ class _FunctionLowering:
         for qualname, (info, _analysis, _node) in self.frontend.generics.items():
             if qualname.rpartition(".")[2] == target:
                 return self._generic_call(qualname, info, node)
-        head, dot, tail = target.partition(".")
-        binding = self.frontend.analysis.symbols.imports.get(head)
-        imported = binding.canonical + (dot + tail if dot else "") if binding is not None else ""
-        if binding is not None and self.frontend.imports is not None:
-            found = self.frontend.imports(imported)
-            if found is not None:
-                info, signature = found
-                function = self.frontend.declare_external(info, signature)
-                return self._native_call(
-                    function, signature, imported, node, discard_result=discard_result
-                )
         raise Unsupported(f"`{target}` has no native lowering")
 
     def _derivative_spec(self, func: ast.expr) -> tuple[str, tuple[int, ...], bool] | None:
