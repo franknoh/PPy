@@ -359,6 +359,7 @@ ppy emit c --header-only foo.ppy     # every function static inline in a header
 ppy emit c --standalone prog.ppy     # the whole program from main(), shims and all
 ppy emit c --standalone --unsafe --format app.ppy -o app.c
 ppy emit cpp --standalone --unsafe --format app.ppy -o app.cpp
+ppy emit c --standalone --unsafe --int-width 32 --format app.ppy -o app.c
 ppy emit c --format foo.ppy          # ... laid out by clang-format (the project's .clang-format, or LLVM style)
 ppy emit header foo.ppy              # the C declarations of the exports
 ppy emit stablehlo foo.ppy           # the @ppy.xla.jit functions as StableHLO for XLA
@@ -420,6 +421,13 @@ before presentation lowering. Addition, subtraction and multiplication use
 ordinary operators; signed overflow is outside the portable input domain.
 This differs from the guaranteed 64-bit wrap of `build/run --unsafe` and
 non-standalone unsafe emission. Division retains Python floor rounding.
+When integer bounds prove that truncation gives the same answer, division
+and remainder use plain `/` and `%`. The proof follows acyclic branches and
+local assignments, discarding bounds when arithmetic could overflow; loops
+retain the general correction. Expressions keep their required arithmetic
+width without redundant casts. Functions appear before their callers where
+possible, with prototypes for recursion and runtime callbacks. Local
+declarations move to their first write when every use stays in that scope.
 Adjacent canonical print operations fuse within a block into `printf`, with
 byte-exact literals, Python `True`/`False`, `end`, and explicit `fflush`.
 Integer `ppy.input` and `ppy.scan` use `scanf`: native whitespace/token parsing,
@@ -430,6 +438,25 @@ Programs sharing a buffered scanner retain that scanner for all reads.
 The C++ spelling uses `<cstdint>`, `<cinttypes>`, `<cstdio>` and `std::` stdio;
 headers and helpers are included only when needed. Aggregate-returning and
 runtime-managed functions retain their internal ABI when required.
+
+`--int-width 32` selects 32-bit integers for unsafe standalone C/C++ source.
+Signed integers are spelled `int`, unsigned integers `unsigned int`, and
+stdio uses `%d`/`%u`. The generated unit asserts that the target's `int` has
+the required 32-bit range. This changes the IR types **before optimization**,
+including function parameters, return values, local slots, and arithmetic;
+it is not a spelling alias for 64-bit integers. All signed input and
+intermediate results must fit `[-2147483648, 2147483647]`. Out-of-range
+integer constants are rejected, and signed overflow follows native C/C++
+semantics. Python floor rounding is still preserved for negative operands.
+
+The 32-bit model currently accepts scalar programs with integer/bool output,
+literal strings, and scalar integer input. Buffers, aggregates, foreign
+functions, and runtime-managed operations have fixed ABIs and are rejected
+with a diagnostic directing you to `--int-width 64`. Fixed-width `i64`/`u64`
+values in the selected scalar program are narrowed too. The default remains
+64 bits; `--int-width 64` selects it explicitly. The flag requires
+`--standalone` and safeguards off (`--unsafe` or project configuration), and
+does not change `run`, `build`, or ordinary module emission.
 
 `.ppyir` is the IR's on-disk form -- public from 0.2.0 at schema 1 -- and
 `ppy build foo.ppyir` builds one without the Python that produced it: the file

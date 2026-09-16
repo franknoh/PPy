@@ -28,8 +28,12 @@ def language(request):
     return request.param
 
 
-def _emit(path: Path, language: str, *, formatted: bool = False) -> str:
+def _emit(
+    path: Path, language: str, *, formatted: bool = False, int_width: int | None = None
+) -> str:
     flags = ["--format"] if formatted else []
+    if int_width is not None:
+        flags += ["--int-width", str(int_width)]
     done = _ppy(path.parent, "emit", language, "--standalone", "--unsafe", *flags, path.name)
     assert done.returncode == 0, done.stderr
     return done.stdout
@@ -417,3 +421,273 @@ def test_native_expressions_keep_machine_width(write, language):
     ran = subprocess.run([str(executable)], capture_output=True, check=False)
     assert ran.returncode == 0, ran.stderr
     assert ran.stdout == b"3000000000 4000000000 3\n"
+
+
+@pytest.mark.parametrize("width", [32, 64])
+def test_readable_integer_model(write, language, width):
+    path = write("problem1.ppy", PROGRAM)
+    text = _emit(path, language, int_width=width)
+    # Callees precede callers, without a redundant forward declaration.
+    assert text.index("parking_fee(") < text.index("int main(")
+    assert text.count("parking_fee(") == 2
+    assert "(chargeable_minutes + 9) / 10" in text
+    assert "10 < 0" not in text and " r =" not in text
+    loop = text.index("while (")
+    assert text.index(" parking_time;") > loop
+    assert text.index(" fee =", text.index("int main(")) > loop
+    assert text.index(" number_of_cars;") > text.index("fflush(stdout)")
+    if width == 32:
+        assert "int parking_fee(int minutes)" in text
+        assert 'scanf("%d", &number_of_cars)' in text
+        assert '"Car %d fee: %d won\\n"' in text
+        assert "int64_t" not in text and "int32_t" not in text
+        assert "inttypes" not in text and "stdint" not in text
+        assert "INT_MAX" in text
+    executable = _compile(path, language, text)
+    ran = subprocess.run(
+        [str(executable)], input=b"3\n20\n45\n300\n", capture_output=True, check=False
+    )
+    expected = subprocess.run(
+        [sys.executable, str(path)], input=b"3\n20\n45\n300\n", capture_output=True, check=False
+    )
+    assert ran.returncode == 0, ran.stderr
+    assert ran.stdout == expected.stdout
+
+
+def test_int32_boundaries_and_negative_division(write, language):
+    path = write(
+        "app.ppy",
+        """
+        import ppy
+
+        def calculate(x: int) -> None:
+            print(x, x // 10, x % 10, x // -10, x % -10)
+
+        def main() -> None:
+            x: int = ppy.input[int]()
+            calculate(x)
+            print(-2147483648, 2147483647, 1 if x else 2)
+
+        main()
+        """,
+    )
+    executable = _compile(path, language, _emit(path, language, int_width=32))
+    for x in [-2147483648, -11, -1, 0, 1, 11, 2147483647]:
+        ran = subprocess.run(
+            [str(executable)], input=f"{x}\n".encode(), capture_output=True, check=False
+        )
+        expected = f"{x} {x // 10} {x % 10} {x // -10} {x % -10}\n"
+        expected += f"-2147483648 2147483647 {1 if x else 2}\n"
+        assert ran.returncode == 0, ran.stderr
+        assert ran.stdout == expected.encode()
+
+
+@pytest.mark.parametrize("literal", ["2147483648", "-2147483649"])
+def test_int32_rejects_wide_constants(write, literal):
+    path = write("app.ppy", f"def main() -> None:\n    print({literal})\n\nmain()\n")
+    done = _ppy(
+        path.parent, "emit", "c", "--standalone", "--unsafe", "--int-width", "32", path.name
+    )
+    assert done.returncode == 2
+    assert "32-bit" in done.stderr and "--int-width 64" in done.stderr
+    assert not done.stdout
+
+
+@pytest.mark.parametrize("flags", [("ir", "--unsafe"), ("c", "--unsafe"), ("c", "--standalone")])
+def test_int_width_requires_unsafe_standalone(write, flags):
+    path = write("app.ppy", "def main() -> None:\n    print(1)\n\nmain()\n")
+    done = _ppy(path.parent, "emit", *flags, "--int-width", "32", path.name)
+    assert done.returncode == 2
+    assert "--int-width" in done.stderr and "standalone" in done.stderr
+
+
+def test_int32_ir_before_optimization(write, analyze):
+    from ppy_compiler.backend.llvm.standalone import standalone_ir
+    from ppy_compiler.driver.reporting import Reporter
+    from ppy_compiler.ir import I32, IntType, PtrType, verify
+
+    path = write("app.ppy", PROGRAM)
+    bundle = analyze(path, backend="llvm")
+    bundle.project.config.llvm.safeguards = "off"
+    module = standalone_ir(bundle, Reporter(color=False), path, int_width=32)
+    assert not isinstance(module, int)
+    assert not verify(module)
+    values = [v for f in module.functions.values() for op in f.operations() for v in op.results]
+    assert any(v.type == I32 for v in values)
+    assert all(
+        (t.width == 32 if isinstance(t, IntType) and t.width != 8 else True)
+        for v in values
+        for t in [v.type.pointee if isinstance(v.type, PtrType) else v.type]
+    )
+
+
+def test_int32_large_remainder_and_boolean_call(write, language):
+    path = write(
+        "app.ppy",
+        """
+        import ppy
+
+        def show(ok: bool, x: int) -> None:
+            print(ok, x % 2000000000)
+
+        def main() -> None:
+            x: int = ppy.input[int]()
+            show(x > 0, x)
+
+        main()
+        """,
+    )
+    executable = _compile(path, language, _emit(path, language, int_width=32))
+    for x in [1500000000, -1500000000]:
+        ran = subprocess.run(
+            [str(executable)], input=f"{x}\n".encode(), capture_output=True, check=False
+        )
+        assert ran.returncode == 0, ran.stderr
+        assert ran.stdout == f"{x > 0} {x % 2000000000}\n".encode()
+
+
+@pytest.mark.parametrize("width", [32, 64])
+def test_ranges_and_loop_lifetimes(write, language, width):
+    path = write(
+        "app.ppy",
+        """
+        import ppy
+
+        def fee(x: int) -> int:
+            if x > 0:
+                x = -x
+            else:
+                x = x - 1
+            return (x + 3) // 10
+
+        def main() -> None:
+            x: int = ppy.input[int]()
+            previous: int = 7
+            count: int = 0
+            while count < 3:
+                print(previous)
+                previous = fee(x)
+                count += 1
+            print(previous)
+
+        main()
+        """,
+    )
+    executable = _compile(path, language, _emit(path, language, int_width=width))
+    for x in [-25, -1, 0, 1, 25]:
+        data = f"{x}\n".encode()
+        ran = subprocess.run([str(executable)], input=data, capture_output=True, check=False)
+        expected = subprocess.run(
+            [sys.executable, str(path)], input=data, capture_output=True, check=False
+        )
+        assert ran.returncode == expected.returncode == 0, (ran.stderr, expected.stderr)
+        assert ran.stdout == expected.stdout
+
+
+def test_mutually_recursive_source(write, language):
+    path = write(
+        "app.ppy",
+        """
+        def even(x: int) -> bool:
+            if x == 0:
+                return True
+            return odd(x - 1)
+
+        def odd(x: int) -> bool:
+            if x == 0:
+                return False
+            return even(x - 1)
+
+        def main() -> None:
+            print(even(4), odd(4))
+
+        main()
+        """,
+    )
+    executable = _compile(path, language, _emit(path, language, int_width=32))
+    ran = subprocess.run([str(executable)], capture_output=True, check=False)
+    assert ran.returncode == 0, ran.stderr
+    assert ran.stdout == b"True False\n"
+
+
+def test_int32_shifts_and_header_names(write, language):
+    path = write(
+        "app.ppy",
+        """
+        import ppy
+
+        def INT_MAX(x: int) -> int:
+            return x << 2
+
+        def main() -> None:
+            x: int = ppy.input[int]()
+            print(INT_MAX(x), x >> 2)
+
+        main()
+        """,
+    )
+    executable = _compile(path, language, _emit(path, language, int_width=32))
+    ran = subprocess.run([str(executable)], input=b"17\n", capture_output=True, check=False)
+    assert ran.returncode == 0, ran.stderr
+    assert ran.stdout == b"68 4\n"
+
+
+def test_int32_rejects_fixed_runtime_abi(write):
+    path = write(
+        "app.ppy",
+        """
+        import ppy
+        from ppy import Buffer
+
+        def main() -> None:
+            values: Buffer[int] = ppy.scan[Buffer[int]](2)
+            print(values[0])
+
+        main()
+        """,
+    )
+    done = _ppy(
+        path.parent, "emit", "c", "--standalone", "--unsafe", "--int-width", "32", path.name
+    )
+    assert done.returncode == 2
+    assert "fixed runtime ABI" in done.stderr and "--int-width 64" in done.stderr
+    assert not done.stdout
+
+
+def test_int_width_configured_unsafe(write):
+    path = write("app.ppy", "def main() -> None:\n    print(42)\n\nmain()\n")
+    config = path.parent / "pyproject.toml"
+    config.write_text(config.read_text() + '\n[tool.ppy.llvm]\nsafeguards = "off"\n')
+    done = _ppy(path.parent, "emit", "c", "--standalone", "--int-width", "32", path.name)
+    assert done.returncode == 0, done.stderr
+    assert 'printf("%d\\n", 42)' in done.stdout
+
+
+def test_int32_unsigned_and_overflow_bounds(tmp_path, language):
+    from ppy_compiler.backend.c import Language, emit_module
+    from ppy_compiler.backend.c.ranges import truncating_divisions
+    from ppy_compiler.backend.c.source import narrow_integers
+    from ppy_compiler.ir import I64, U64, Builder, IRModule, verify
+    from ppy_compiler.ir.dialects import core
+
+    module = IRModule("app")
+    function = module.add_function("entry", [], [], attributes={"ppy.symbol": "entry"})
+    builder = Builder(function.add_entry_block())
+    core.call_extern(builder, "ppy_rt_print_u64", (core.const(builder, 2**32 - 1, U64),), ())
+    core.call_extern(builder, "ppy_rt_print_nl", (), ())
+    wrapped = core.add(
+        builder, core.const(builder, 2**31 - 1, I64), core.const(builder, 2, I64), overflow="wrap"
+    )
+    quotient = core.div(builder, wrapped, core.const(builder, 10, I64), overflow="native")
+    core.call_extern(builder, "ppy_rt_print_i64", (quotient,), ())
+    core.call_extern(builder, "ppy_rt_print_nl", (), ())
+    core.ret(builder)
+    narrow_integers(module)
+    assert not verify(module)
+    assert id(quotient.owner) not in truncating_divisions(function)
+    text = emit_module(module, Language(language), entry="entry", readable=True)
+    assert '"%u\\n"' in text and "int64_t" not in text and "int32_t" not in text
+    executable = _compile(tmp_path / "app.ppy", language, text)
+    ran = subprocess.run([str(executable)], capture_output=True, check=False)
+    assert ran.returncode == 0, ran.stderr
+    assert ran.stdout == b"4294967295\n-214748365\n"

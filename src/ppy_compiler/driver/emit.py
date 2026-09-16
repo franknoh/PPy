@@ -63,6 +63,14 @@ def run_emit(options: argparse.Namespace, reporter: Reporter) -> int:
         return 2
     standalone = bool(getattr(options, "standalone", False))
     unsafe = bool(getattr(options, "unsafe", False))
+    int_width = getattr(options, "int_width", None)
+    if int_width is not None and (options.kind not in _HEADER_ONLY_SUFFIXES or not standalone):
+        reporter.emit(
+            Diagnostic(
+                "E1002", Severity.ERROR, "`--int-width` requires unsafe standalone C/C++ source"
+            )
+        )
+        return 2
     for flag, given in (
         ("--header-only", header_only),
         ("--standalone", standalone),
@@ -116,6 +124,13 @@ def run_emit(options: argparse.Namespace, reporter: Reporter) -> int:
     project.config.llvm.safeguards = resolved_safeguards(
         options, project.config.llvm.safeguards, "emit"
     )
+    if int_width is not None and project.config.llvm.safeguards != "off":
+        reporter.emit(
+            Diagnostic(
+                "E1002", Severity.ERROR, "`--int-width` requires unsafe standalone C/C++ source"
+            )
+        )
+        return 2
     bundle = analyze_paths(project, collect_sources(target), backend="llvm")
     errors = reporter.report(bundle.diagnostics)
     if errors:
@@ -123,7 +138,9 @@ def run_emit(options: argparse.Namespace, reporter: Reporter) -> int:
         return 1
     try:
         if standalone:
-            texts = _standalone_text(options.kind, bundle, reporter, target, header_only)
+            texts = _standalone_text(
+                options.kind, bundle, reporter, target, header_only, int_width or 64
+            )
             if isinstance(texts, int):
                 return texts
         else:
@@ -310,12 +327,14 @@ def _write_artifacts(
     return 0
 
 
-def _standalone_text(kind: str, bundle, reporter: Reporter, entry: Path, header_only: bool):  # type: ignore[no-untyped-def]
+def _standalone_text(  # type: ignore[no-untyped-def]
+    kind: str, bundle, reporter: Reporter, entry: Path, header_only: bool, int_width: int = 64
+):
     """The whole program from `main` as one unit, or the exit status."""
     from ..backend.c import Language, emit_module
     from ..backend.llvm.standalone import standalone_ir
 
-    module = standalone_ir(bundle, reporter, entry)
+    module = standalone_ir(bundle, reporter, entry, int_width=int_width)
     if isinstance(module, int):
         return module
     from ..target import configured_target
