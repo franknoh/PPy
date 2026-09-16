@@ -237,6 +237,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     emit.add_argument("target", type=Path)
     emit.add_argument(
+        "--unsafe",
+        action="store_true",
+        help="for `c` and `cpp`: machine-width arithmetic; standalone source uses native stdio",
+    )
+    emit.add_argument(
         "--header-only",
         action="store_true",
         help="for `c` and `cpp`: a header carrying every function inline",

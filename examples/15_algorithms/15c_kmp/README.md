@@ -38,11 +38,11 @@ begins.
 
 | path | wall |
 |---|---:|
-| plain CPython | 318.6 ± 12.7 ms |
-| `ppy run` | 168.8 ± 189.1 ms |
-| `ppy build --unsafe` | 62.6 ± 0.7 ms |
-| C (`gcc -O3`, `scanf`) | 10.6 ± 0.1 ms |
-| C (`clang -O3`, `scanf`) | **9.9 ± 0.2 ms** |
+| plain CPython | 292.4 ± 12.8 ms |
+| `ppy run` | 145.5 ± 160.1 ms |
+| `ppy build --unsafe` | 53.3 ± 1.3 ms |
+| C (`gcc -O3`, `scanf`) | 9.3 ± 0.1 ms |
+| C (`clang -O3`, `scanf`) | **9.0 ± 0.4 ms** |
 
 ## Run it
 

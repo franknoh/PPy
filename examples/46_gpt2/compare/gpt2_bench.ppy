@@ -1,0 +1,377 @@
+"""GPT-2 XL forward and training step, with each block compiled to one ATen region."""
+
+import time
+
+import ppy
+import torch
+import torch.nn.functional as F
+
+EPS: float = 1e-5
+LAYERS: int = 48
+HEADS: int = 25
+HEAD_DIM: int = 64
+VOCAB: int = 50257
+#: A CPU run of this bench is a smoke test; only a device needs synchronizing.
+ON_CUDA: bool = torch.cuda.is_available()
+
+
+@ppy.opt(3)
+def block(
+    x: torch.Tensor,
+    ln1_w: torch.Tensor,
+    ln1_b: torch.Tensor,
+    q_w: torch.Tensor,
+    q_b: torch.Tensor,
+    k_w: torch.Tensor,
+    k_b: torch.Tensor,
+    v_w: torch.Tensor,
+    v_b: torch.Tensor,
+    o_w: torch.Tensor,
+    o_b: torch.Tensor,
+    ln2_w: torch.Tensor,
+    ln2_b: torch.Tensor,
+    fc_w: torch.Tensor,
+    fc_b: torch.Tensor,
+    proj_w: torch.Tensor,
+    proj_b: torch.Tensor,
+    batch: int,
+    length: int,
+    heads: int,
+    head_dim: int,
+    width: int,
+    eps: float,
+) -> torch.Tensor:
+    # A region takes every weight as a parameter of its own: that is what a
+    # region is, and seventeen tensors beside six dimensions is the shape of
+    # one transformer block.
+    # pylint: disable=too-many-arguments,too-many-positional-arguments,too-many-locals
+    h = torch.layer_norm(x, (width,), ln1_w, ln1_b, eps)
+    q = F.linear(h, q_w, q_b).reshape((batch, length, heads, head_dim)).transpose(1, 2)
+    k = F.linear(h, k_w, k_b).reshape((batch, length, heads, head_dim)).transpose(1, 2)
+    v = F.linear(h, v_w, v_b).reshape((batch, length, heads, head_dim)).transpose(1, 2)
+    a = F.scaled_dot_product_attention(q, k, v, is_causal=True)
+    merged = a.transpose(1, 2).reshape((batch, length, width))
+    attended = torch.add(x, F.linear(merged, o_w, o_b))
+    n = torch.layer_norm(attended, (width,), ln2_w, ln2_b, eps)
+    f = F.gelu(F.linear(n, fc_w, fc_b), approximate="tanh")
+    return torch.add(attended, F.linear(f, proj_w, proj_b))
+
+
+@ppy.opt(3)
+def step(
+    x: torch.Tensor,
+    k_cache: torch.Tensor,
+    v_cache: torch.Tensor,
+    ln1_w: torch.Tensor,
+    ln1_b: torch.Tensor,
+    q_w: torch.Tensor,
+    q_b: torch.Tensor,
+    k_w: torch.Tensor,
+    k_b: torch.Tensor,
+    v_w: torch.Tensor,
+    v_b: torch.Tensor,
+    o_w: torch.Tensor,
+    o_b: torch.Tensor,
+    ln2_w: torch.Tensor,
+    ln2_b: torch.Tensor,
+    fc_w: torch.Tensor,
+    fc_b: torch.Tensor,
+    proj_w: torch.Tensor,
+    proj_b: torch.Tensor,
+    batch: int,
+    length: int,
+    heads: int,
+    head_dim: int,
+    width: int,
+    eps: float,
+    causal: bool,
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    """The same block, keeping its own key and value.
+
+    It hands back three tensors, so the cache never leaves the region to be
+    reassembled in Python; `causal` is a parameter rather than a constant, so
+    one compiled function prefills a prompt and then decodes a token at a
+    time out of what it built.
+    """
+    # A region takes every weight as a parameter of its own: that is what a
+    # region is, and seventeen tensors beside six dimensions is the shape of
+    # one transformer block.
+    # pylint: disable=too-many-arguments,too-many-positional-arguments,too-many-locals
+    h = torch.layer_norm(x, (width,), ln1_w, ln1_b, eps)
+    q = F.linear(h, q_w, q_b).reshape((batch, length, heads, head_dim)).transpose(1, 2)
+    k = F.linear(h, k_w, k_b).reshape((batch, length, heads, head_dim)).transpose(1, 2)
+    v = F.linear(h, v_w, v_b).reshape((batch, length, heads, head_dim)).transpose(1, 2)
+    k_all = torch.cat((k_cache, k), 2)
+    v_all = torch.cat((v_cache, v), 2)
+    a = F.scaled_dot_product_attention(q, k_all, v_all, is_causal=causal)
+    merged = a.transpose(1, 2).reshape((batch, length, width))
+    attended = torch.add(x, F.linear(merged, o_w, o_b))
+    n = torch.layer_norm(attended, (width,), ln2_w, ln2_b, eps)
+    f = F.gelu(F.linear(n, fc_w, fc_b), approximate="tanh")
+    return torch.add(attended, F.linear(f, proj_w, proj_b)), k_all, v_all
+
+
+def scaled(rows: int, columns: int, spread: float, device: str) -> torch.Tensor:
+    """One weight, drawn in the order every counterpart draws it."""
+    return torch.mul(torch.randn(rows, columns), spread).to(device).bfloat16()
+
+
+def flat(width: int, value: float, device: str) -> torch.Tensor:
+    return torch.mul(torch.ones(width), value).to(device).bfloat16()
+
+
+def empty_cache(batch: int, device: str) -> torch.Tensor:
+    """A key or value cache with no tokens in it yet."""
+    return torch.zeros(batch, HEADS, 0, HEAD_DIM).to(device).bfloat16()
+
+
+class Block:  # pylint: disable=too-many-instance-attributes
+    """The seventeen weights of one block, in the order its region takes them."""
+
+    def __init__(self, width: int, device: str) -> None:
+        inner: int = 4 * width
+        spread: float = 0.02
+        self.ln1_w: torch.Tensor = flat(width, 1.0, device)
+        self.ln1_b: torch.Tensor = flat(width, 0.0, device)
+        self.q_w: torch.Tensor = scaled(width, width, spread, device)
+        self.q_b: torch.Tensor = flat(width, 0.0, device)
+        self.k_w: torch.Tensor = scaled(width, width, spread, device)
+        self.k_b: torch.Tensor = flat(width, 0.0, device)
+        self.v_w: torch.Tensor = scaled(width, width, spread, device)
+        self.v_b: torch.Tensor = flat(width, 0.0, device)
+        self.o_w: torch.Tensor = scaled(width, width, spread, device)
+        self.o_b: torch.Tensor = flat(width, 0.0, device)
+        self.ln2_w: torch.Tensor = flat(width, 1.0, device)
+        self.ln2_b: torch.Tensor = flat(width, 0.0, device)
+        self.fc_w: torch.Tensor = scaled(inner, width, spread, device)
+        self.fc_b: torch.Tensor = flat(inner, 0.0, device)
+        self.proj_w: torch.Tensor = scaled(width, inner, spread, device)
+        self.proj_b: torch.Tensor = flat(width, 0.0, device)
+
+    def trainable(self) -> None:
+        """Autograd on the two projections a training step differentiates."""
+        self.fc_w = self.fc_w.requires_grad_(True)
+        self.proj_w = self.proj_w.requires_grad_(True)
+
+    def zero_grads(self) -> None:
+        """What an optimizer's `zero_grad(set_to_none=True)` does."""
+        self.fc_w.grad = None
+        self.proj_w.grad = None
+
+
+class Model:  # pylint: disable=too-many-instance-attributes
+    """GPT-2 XL's shape: embeddings, 48 blocks, and a tied output head."""
+
+    def __init__(self, device: str) -> None:
+        width: int = HEADS * HEAD_DIM
+        self.width: int = width
+        self.wte: torch.Tensor = scaled(VOCAB, width, 0.02, device)
+        self.wpe: torch.Tensor = scaled(1024, width, 0.01, device)
+        self.lnf_w: torch.Tensor = flat(width, 1.0, device)
+        self.lnf_b: torch.Tensor = flat(width, 0.0, device)
+        self.blocks: list[Block] = [Block(width, device) for _i in range(LAYERS)]
+        #: The key and value of every layer so far, and how many tokens that is.
+        self.position: int = 0
+        self.ks: list[torch.Tensor] = []
+        self.vs: list[torch.Tensor] = []
+
+    def trainable(self) -> None:
+        for layer in self.blocks:
+            layer.trainable()
+
+    def zero_grads(self) -> None:
+        for layer in self.blocks:
+            layer.zero_grads()
+
+    def forward(self, ids: torch.Tensor, batch: int, length: int) -> torch.Tensor:
+        h: torch.Tensor = torch.add(self.wte[ids], self.wpe[0:length])
+        for layer in self.blocks:
+            h = block(
+                h,
+                layer.ln1_w,
+                layer.ln1_b,
+                layer.q_w,
+                layer.q_b,
+                layer.k_w,
+                layer.k_b,
+                layer.v_w,
+                layer.v_b,
+                layer.o_w,
+                layer.o_b,
+                layer.ln2_w,
+                layer.ln2_b,
+                layer.fc_w,
+                layer.fc_b,
+                layer.proj_w,
+                layer.proj_b,
+                batch,
+                length,
+                HEADS,
+                HEAD_DIM,
+                self.width,
+                EPS,
+            )
+        normed: torch.Tensor = torch.layer_norm(h, (self.width,), self.lnf_w, self.lnf_b, EPS)
+        return torch.matmul(normed, self.wte.t())
+
+    def reset(self, batch: int, device: str) -> None:
+        """An empty cache per layer, and the position the next token sits at."""
+        self.position = 0
+        self.ks = [empty_cache(batch, device) for _i in range(LAYERS)]
+        self.vs = [empty_cache(batch, device) for _i in range(LAYERS)]
+
+    def run(self, ids: torch.Tensor, batch: int, length: int, causal: bool) -> torch.Tensor:
+        """Prefill when `length` is the prompt, one decode step when it is 1."""
+        start: int = self.position
+        h: torch.Tensor = torch.add(self.wte[ids], self.wpe[start : start + length])
+        for index in range(LAYERS):
+            layer = self.blocks[index]
+            h, k_all, v_all = step(
+                h,
+                self.ks[index],
+                self.vs[index],
+                layer.ln1_w,
+                layer.ln1_b,
+                layer.q_w,
+                layer.q_b,
+                layer.k_w,
+                layer.k_b,
+                layer.v_w,
+                layer.v_b,
+                layer.o_w,
+                layer.o_b,
+                layer.ln2_w,
+                layer.ln2_b,
+                layer.fc_w,
+                layer.fc_b,
+                layer.proj_w,
+                layer.proj_b,
+                batch,
+                length,
+                HEADS,
+                HEAD_DIM,
+                self.width,
+                EPS,
+                causal,
+            )
+            self.ks[index] = k_all
+            self.vs[index] = v_all
+        self.position = start + length
+        normed: torch.Tensor = torch.layer_norm(h, (self.width,), self.lnf_w, self.lnf_b, EPS)
+        return torch.matmul(normed, self.wte.t())
+
+
+def ids_for(batch: int, length: int, device: str) -> torch.Tensor:
+    return torch.remainder(torch.arange(batch * length).reshape((batch, length)), VOCAB).to(device)
+
+
+def forward_ms(model: Model, ids: torch.Tensor, batch: int, length: int, rounds: int) -> float:
+    """The best of `rounds` forward passes, in milliseconds."""
+    best: float = 1e9
+    for _round in range(rounds):
+        if ON_CUDA:
+            torch.cuda.synchronize()
+        start: float = time.perf_counter()
+        model.forward(ids, batch, length)
+        if ON_CUDA:
+            torch.cuda.synchronize()
+        elapsed: float = (time.perf_counter() - start) * 1000.0
+        best = elapsed if elapsed < best else best
+    return best
+
+
+def step_ms(model: Model, ids: torch.Tensor, batch: int, length: int, rounds: int) -> float:
+    """The best forward-and-backward, which is what a training step costs."""
+    best: float = 1e9
+    for _round in range(rounds):
+        if ON_CUDA:
+            torch.cuda.synchronize()
+        start: float = time.perf_counter()
+        # A step that accumulated instead would leave `reduce-overhead` with
+        # a gradient buffer its CUDA graph had already overwritten.
+        model.zero_grads()
+        model.forward(ids, batch, length).sum().backward()
+        if ON_CUDA:
+            torch.cuda.synchronize()
+        elapsed: float = (time.perf_counter() - start) * 1000.0
+        best = elapsed if elapsed < best else best
+    return best
+
+
+def decode_ms(model: Model, ids: torch.Tensor, batch: int, prompt: int, steps: int) -> float:
+    """One prefill, then `steps` tokens out of the cache; only the decode is timed.
+
+    The token fed at each step is the next one of `ids`, not the model's own
+    argmax: on weights drawn from a generator the top two logits are usually
+    a tie, so sampling would send the four paths down different sequences and
+    measure different work.
+    """
+    model.reset(batch, "cuda" if ON_CUDA else "cpu")
+    model.run(ids[:, 0:prompt], batch, prompt, True)
+    if ON_CUDA:
+        torch.cuda.synchronize()
+    start: float = time.perf_counter()
+    for offset in range(steps):
+        at: int = prompt + offset
+        model.run(ids[:, at : at + 1], batch, 1, False)
+    if ON_CUDA:
+        torch.cuda.synchronize()
+    return (time.perf_counter() - start) * 1000.0
+
+
+def best_decode(model: Model, ids: torch.Tensor, batch: int, prompt: int, steps: int) -> float:
+    best: float = 1e9
+    for _round in range(3):
+        elapsed: float = decode_ms(model, ids, batch, prompt, steps)
+        best = elapsed if elapsed < best else best
+    return best
+
+
+def answer(logits: torch.Tensor) -> str:
+    """What every path must agree on.
+
+    Not the greedy token, and not an extreme: on weights drawn from a
+    generator the top two logits of a position are often a tie, and both
+    fusing the reductions differently and ordering an argmax differently
+    flip it. Three aggregates over the whole tensor do hold, to three
+    decimals, across every path here.
+    """
+    wide = logits.float()
+    return (
+        f"mean={float(wide.mean()):.3f} "
+        f"absmean={float(wide.abs().mean()):.3f} "
+        f"meansq={float(torch.mul(wide, wide).mean()):.3f}"
+    )
+
+
+def main() -> None:
+    device: str = "cuda" if ON_CUDA else "cpu"
+    torch.manual_seed(0)
+    model = Model(device)
+
+    for batch, length in [(1, 32), (1, 128), (1, 512), (8, 512)]:
+        ids = ids_for(batch, length, device)
+        for _warm in range(8):
+            model.forward(ids, batch, length)
+        print(answer(model.forward(ids, batch, length)))
+        print(f"# forward b{batch} s{length}: {forward_ms(model, ids, batch, length, 10):.3f} ms")
+
+    prompt: int = 128
+    steps: int = 128
+    ids = ids_for(1, prompt + steps, device)
+    model.reset(1, device)
+    model.run(ids[:, 0:prompt], 1, prompt, True)
+    last = model.run(ids[:, prompt : prompt + 1], 1, 1, False)
+    print(answer(last))
+    print(f"# decode {steps} tokens: {best_decode(model, ids, 1, prompt, steps):.3f} ms")
+
+    model.trainable()
+    ids = ids_for(4, 512, device)
+    for _warm in range(8):
+        model.zero_grads()
+        model.forward(ids, 4, 512).sum().backward()
+    print(f"# training step b4 s512: {step_ms(model, ids, 4, 512, 10):.3f} ms")
+
+
+if __name__ == "__main__":
+    main()

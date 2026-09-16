@@ -17,7 +17,7 @@ def canonicalization_patterns(registry: DialectRegistry) -> PatternSet:
     for dialect in registry.dialects.values():
         dialect.register_patterns(patterns)
     for pattern in registry.patterns:
-        patterns.add(pattern)  # type: ignore[arg-type]
+        patterns.add(pattern)
     return patterns
 
 
