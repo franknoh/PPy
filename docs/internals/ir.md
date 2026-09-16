@@ -61,7 +61,7 @@ address space; the gpu dialect adds `global`, `shared`, `private`, and
 | operation | meaning |
 |---|---|
 | `core.const V : T` | a constant; `V` must fit `T` |
-| `core.add`, `sub`, `mul`, `div`, `mod`, `neg` | arithmetic on numbers or vectors of them. Integer forms carry `overflow` (`python` \| `checked` \| `wrap` \| `proven`); `div`/`mod` also `rounding` (`floor` \| `trunc`). The backend never guesses either. |
+| `core.add`, `sub`, `mul`, `div`, `mod`, `neg` | arithmetic on numbers or vectors of them. Integer forms carry `overflow` (`python` \| `checked` \| `wrap` \| `proven` \| `native`); `div`/`mod` also `rounding` (`floor` \| `trunc`). The backend never guesses either. |
 | `core.and`, `or`, `xor`, `shl`, `shr` | bitwise on integers or bools |
 | `core.cmp.<eq,ne,lt,le,gt,ge>` | comparison to `bool`, or `vector<bool, N>` |
 | `core.select` | `bool ? a : b` |
@@ -80,7 +80,10 @@ what Python computes -- the backend guards and falls back; `checked` means
 overflow is a guard failure; `wrap` means two's-complement wrap like C;
 `proven` means a proof -- a corner check hoisted ahead of the loop, or the
 solver -- established that the value fits, so the backend emits the plain
-operation and may tell the optimizer it never wraps.
+operation and may tell the optimizer it never wraps. `native`, selected before
+IR construction for unsafe standalone source, uses target-language machine
+arithmetic without overflow fallback; signed overflow is outside its portable
+domain. It does not replace the `wrap` guarantee used by unsafe LLVM builds.
 Bounds checks are explicit `core.guard`s the frontend emits; a sanitizer
 pass adds more.
 

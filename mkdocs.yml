@@ -153,6 +153,7 @@ nav:
           - howto/06_pydantic.md
           - howto/07_parallel.md
           - howto/09_torch.md
+          - howto/46_gpt2.md
           - howto/21_training_torch.md
           - howto/22_training_jax.md
           - howto/25_jax_export.md

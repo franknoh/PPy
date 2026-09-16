@@ -16,8 +16,11 @@ from typing import TYPE_CHECKING
 
 from .types import DialectType, IRType
 
+# `pattern` imports `model` and nothing from here, so naming it costs no cycle
+# at runtime and `from __future__ import annotations` keeps it a string.
 if TYPE_CHECKING:
     from .model import IRFunction, Operation
+    from .pattern import Pattern
     from .verify import Checker
 
 __all__ = ["Dialect", "DialectRegistry", "OpSpec", "registry"]
@@ -92,7 +95,7 @@ class DialectRegistry:
         self.dialects: dict[str, Dialect] = {}
         self._ops: dict[str, OpSpec] = {}
         #: Patterns contributed outside any dialect: a plugin's rewrites.
-        self.patterns: list[object] = []
+        self.patterns: list[Pattern] = []
 
     def register(self, dialect: Dialect) -> None:
         if not dialect.name:
@@ -113,7 +116,7 @@ class DialectRegistry:
             raise ValueError(f"{spec.name} belongs to unregistered dialect {dialect!r}")
         self._ops[spec.name] = spec
 
-    def add_pattern(self, pattern: object) -> None:
+    def add_pattern(self, pattern: Pattern) -> None:
         """A rewrite pattern that belongs to no dialect of its own."""
         self.patterns.append(pattern)
 

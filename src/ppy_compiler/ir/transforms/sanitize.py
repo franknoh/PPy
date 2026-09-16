@@ -109,7 +109,11 @@ def _bounds(op: Operation) -> int:
 
 def _overflow(op: Operation) -> int:
     t = op.results[0].type
-    if not isinstance(t, IntType) or op.attributes.get("overflow") not in {"wrap", "proven"}:
+    if not isinstance(t, IntType) or op.attributes.get("overflow") not in {
+        "wrap",
+        "proven",
+        "native",
+    }:
         return 0
     b = Builder().before(op)
     wrapped, overflowed = core.checked(b, _ARITHMETIC[op.name], op.operands[0], op.operands[1])

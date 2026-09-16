@@ -585,7 +585,7 @@ class _FunctionEmitter:
             return
         overflow = op.attributes.get("overflow", "python")
         emit = {"add": b.add, "sub": b.sub, "mul": b.mul}[name]
-        if overflow == "wrap":
+        if overflow in {"wrap", "native"}:
             self.set(op.result, emit(left, right))
             return
         if isinstance(t, VectorType) and overflow != "proven":
@@ -623,7 +623,7 @@ class _FunctionEmitter:
             self.set(op.result, b.fneg(operand))
             return
         zero = self.ir.Constant(self.owner.llvm_type(t), None if isinstance(t, VectorType) else 0)
-        if op.attributes.get("overflow", "python") == "wrap":
+        if op.attributes.get("overflow", "python") in {"wrap", "native"}:
             self.set(op.result, b.sub(zero, operand))
             return
         if isinstance(t, VectorType):
@@ -651,7 +651,7 @@ class _FunctionEmitter:
         if not signed:
             self.set(op.result, b.udiv(left, right) if name == "div" else b.urem(left, right))
             return
-        if op.attributes.get("overflow", "python") != "wrap":
+        if op.attributes.get("overflow", "python") not in {"wrap", "native"}:
             minimum = ir.Constant(word, -(1 << (word.width - 1)))
             minus_one = ir.Constant(word, -1)
             overflows = b.and_(
@@ -688,7 +688,7 @@ class _FunctionEmitter:
             self.set(op.result, b.ashr(left, right) if signed else b.lshr(left, right))
             return
         shifted = b.shl(left, right)
-        if op.attributes.get("overflow", "wrap") != "wrap":
+        if op.attributes.get("overflow", "wrap") not in {"wrap", "native"}:
             restored = b.ashr(shifted, right) if signed else b.lshr(shifted, right)
             self.fail_if(b.icmp_signed("!=", restored, left), "shl.ok")
         self.set(op.result, shifted)

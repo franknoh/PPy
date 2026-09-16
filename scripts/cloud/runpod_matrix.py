@@ -303,6 +303,13 @@ class Pod:
                     self._note(f"ssh info not ready: {error}")
                     info = None
                 target = self._ssh_target(info, details)
+                if target is None:
+                    # `runpodctl ssh info` answers `{"error": "pod not ready"}`
+                    # with a zero status while a Pod is still starting; without
+                    # this the wait looks identical to a Pod that will never
+                    # come up, for twenty-five minutes.
+                    said = info.get("error") if isinstance(info, dict) else None
+                    self._note(f"no ssh target yet: {said or 'the listing carries no address'}")
                 if target is not None:
                     self.ssh = target
                     if self._reachable():

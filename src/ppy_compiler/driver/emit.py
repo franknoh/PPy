@@ -62,7 +62,12 @@ def run_emit(options: argparse.Namespace, reporter: Reporter) -> int:
         reporter.emit(Diagnostic("E1002", Severity.ERROR, f"{target} does not exist"))
         return 2
     standalone = bool(getattr(options, "standalone", False))
-    for flag, given in (("--header-only", header_only), ("--standalone", standalone)):
+    unsafe = bool(getattr(options, "unsafe", False))
+    for flag, given in (
+        ("--header-only", header_only),
+        ("--standalone", standalone),
+        ("--unsafe", unsafe),
+    ):
         if given and options.kind not in _HEADER_ONLY_SUFFIXES:
             reporter.emit(
                 Diagnostic("E1002", Severity.ERROR, f"`{flag}` applies to `emit c` and `emit cpp`")
@@ -106,6 +111,11 @@ def run_emit(options: argparse.Namespace, reporter: Reporter) -> int:
         )
         return 2
     project = open_project(target)
+    from .warm import resolved_safeguards
+
+    project.config.llvm.safeguards = resolved_safeguards(
+        options, project.config.llvm.safeguards, "emit"
+    )
     bundle = analyze_paths(project, collect_sources(target), backend="llvm")
     errors = reporter.report(bundle.diagnostics)
     if errors:
@@ -314,7 +324,12 @@ def _standalone_text(kind: str, bundle, reporter: Reporter, entry: Path, header_
     machine = configured_target(bundle.project.config.llvm.target)
     return {
         module.name: emit_module(
-            module, Language(kind), header_only=header_only, entry=entry_symbol, target=machine
+            module,
+            Language(kind),
+            header_only=header_only,
+            entry=entry_symbol,
+            target=machine,
+            readable=bundle.project.config.llvm.safeguards == "off",
         )
     }
 
