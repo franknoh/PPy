@@ -213,7 +213,7 @@
   </div>
   <div class="md-source__repository">
     franknoh/PPy
-    <span class="ppy-source-version" title="Documentation version">v0.4.0a1</span>
+    <span class="ppy-source-version" title="Documentation version">v0.3.4</span>
   </div>
 </a>
       </div>
@@ -497,7 +497,7 @@
   </div>
   <div class="md-source__repository">
     franknoh/PPy
-    <span class="ppy-source-version" title="Documentation version">v0.4.0a1</span>
+    <span class="ppy-source-version" title="Documentation version">v0.3.4</span>
   </div>
 </a>
     </div>
@@ -4491,7 +4491,7 @@ address space; the gpu dialect adds <code>global</code>, <code>shared</code>, <c
 </tr>
 <tr>
 <td><code>core.add</code>, <code>sub</code>, <code>mul</code>, <code>div</code>, <code>mod</code>, <code>neg</code></td>
-<td>arithmetic on numbers or vectors of them. Integer forms carry <code>overflow</code> (<code>python</code> | <code>checked</code> | <code>wrap</code> | <code>proven</code>); <code>div</code>/<code>mod</code> also <code>rounding</code> (<code>floor</code> | <code>trunc</code>). The backend never guesses either.</td>
+<td>arithmetic on numbers or vectors of them. Integer forms carry <code>overflow</code> (<code>python</code> | <code>checked</code> | <code>wrap</code> | <code>proven</code> | <code>native</code>); <code>div</code>/<code>mod</code> also <code>rounding</code> (<code>floor</code> | <code>trunc</code>). The backend never guesses either.</td>
 </tr>
 <tr>
 <td><code>core.and</code>, <code>or</code>, <code>xor</code>, <code>shl</code>, <code>shr</code></td>
@@ -4548,7 +4548,10 @@ what Python computes -- the backend guards and falls back; <code>checked</code> 
 overflow is a guard failure; <code>wrap</code> means two's-complement wrap like C;
 <code>proven</code> means a proof -- a corner check hoisted ahead of the loop, or the
 solver -- established that the value fits, so the backend emits the plain
-operation and may tell the optimizer it never wraps.
+operation and may tell the optimizer it never wraps. <code>native</code>, selected before
+IR construction for unsafe standalone source, uses target-language machine
+arithmetic without overflow fallback; signed overflow is outside its portable
+domain. It does not replace the <code>wrap</code> guarantee used by unsafe LLVM builds.
 Bounds checks are explicit <code>core.guard</code>s the frontend emits; a sanitizer
 pass adds more.</p>
 <h2 id="the-math-dialect">The math dialect<a class="headerlink" href="#the-math-dialect" title="Permanent link">&para;</a></h2>

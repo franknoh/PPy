@@ -211,7 +211,7 @@
   </div>
   <div class="md-source__repository">
     franknoh/PPy
-    <span class="ppy-source-version" title="Documentation version">v0.4.0a1</span>
+    <span class="ppy-source-version" title="Documentation version">v0.3.4</span>
   </div>
 </a>
       </div>
@@ -495,7 +495,7 @@
   </div>
   <div class="md-source__repository">
     franknoh/PPy
-    <span class="ppy-source-version" title="Documentation version">v0.4.0a1</span>
+    <span class="ppy-source-version" title="Documentation version">v0.3.4</span>
   </div>
 </a>
     </div>
@@ -3794,10 +3794,43 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#040-unreleased" class="md-nav__link">
+  <a href="#034-2026-09-16" class="md-nav__link">
     <span class="md-ellipsis">
       
-        0.4.0 — unreleased
+        0.3.4 — 2026-09-16
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#033-2026-09-15" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        0.3.3 — 2026-09-15
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#032-2026-09-15" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        0.3.2 — 2026-09-15
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#031-2026-09-15" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        0.3.1 — 2026-09-15
       
     </span>
   </a>
@@ -3922,10 +3955,43 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#040-unreleased" class="md-nav__link">
+  <a href="#034-2026-09-16" class="md-nav__link">
     <span class="md-ellipsis">
       
-        0.4.0 — unreleased
+        0.3.4 — 2026-09-16
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#033-2026-09-15" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        0.3.3 — 2026-09-15
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#032-2026-09-15" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        0.3.2 — 2026-09-15
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#031-2026-09-15" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        0.3.1 — 2026-09-15
       
     </span>
   </a>
@@ -4036,39 +4102,16 @@
 
 
 <h1 id="changelog">Changelog<a class="headerlink" href="#changelog" title="Permanent link">&para;</a></h1>
-<h2 id="040-unreleased">0.4.0 — unreleased<a class="headerlink" href="#040-unreleased" title="Permanent link">&para;</a></h2>
-<p>Work toward the next release, on <code>dev</code>; alphas of it are tagged <code>v0.4.0aN</code>.</p>
+<h2 id="034-2026-09-16">0.3.4 — 2026-09-16<a class="headerlink" href="#034-2026-09-16" title="Permanent link">&para;</a></h2>
 <ul>
-<li><code>ppy.Tensor[dtype, shape]</code> carries common tensor contracts through type
-  checking and IR, with <code>ppy.bf16</code> distinct from IEEE float16.</li>
-<li>Plugins can declare call-scoped read-only and mutable argument borrows,
-  allowing <code>ppy.Mut[ppy.Tensor[...]]</code> without a separate plugin-owned type.</li>
-<li>Common tensors retain a shared IR representation and can use an explicit
-  backend's physical type lowering without depending on plugin order.</li>
+<li><code>ppy emit c/cpp --standalone --unsafe [--format]</code> emits readable standalone
+  source with direct scalar/void returns, one <code>main</code>, source names, C++ module
+  namespaces, inline literals, fused stdio output, and checked <code>scanf</code> reads.
+  Native arithmetic is selected in IR; signed overflow follows C/C++ semantics.
+  Safe builds and ordinary emission retain their existing ABI and semantics.</li>
 <li>
-<p>Plugin rejection diagnostics include the supplied reason at the call site.</p>
-</li>
-<li>
-<p>Plugins can lower analyzed types and facts into IR types, preserving tensor
-  dtype and shape across function parameters, results, local values, and calls.
-  Canonical IR generation no longer depends on the CPU native ABI.</p>
-</li>
-<li>Plugin dialect calls carry operands, constant keyword attributes, effects,
-  guards, and source locations into the IR, including operations without a
-  result. Optimizations preserve operations with write effects.</li>
-<li>Explicit external-backend compilation reports lowering failures with the
-  function's location and reason, while ordinary Python fallback remains available.</li>
-<li>Project dialect registries govern verification, control-flow analysis,
-  transformations, and IR-file builds without process-global registration.</li>
-<li>
-<p>Source emission formats can declare <code>requires_toolchain=False</code> to work
-  without an installed SDK. Existing formats and artifact builds retain
-  their toolchain checks.</p>
-</li>
-<li>
-<p>Standalone builds and C emission support <code>print</code> with string literal <code>end</code>
-  and <code>sep</code>, boolean literal <code>flush</code>, and basic integer and boolean f-strings.
-  Converted input prompts retain their output and flush before reading.</p>
+<p>Standalone source links reachable functions across project modules while
+  rejecting imported initialization that requires Python.</p>
 </li>
 <li>
 <p>A region may write through a parameter. <code>narrow</code> and <code>copy_</code> joined the
@@ -4110,6 +4153,38 @@
   to the curated set for it, and <code>examples/46_gpt2</code> is GPT-2 XL with each
   of its forty-eight blocks compiled to one region, measured against
   PyTorch eager and <code>torch.compile</code> on an RTX 4090.</li>
+</ul>
+<h2 id="033-2026-09-15">0.3.3 — 2026-09-15<a class="headerlink" href="#033-2026-09-15" title="Permanent link">&para;</a></h2>
+<ul>
+<li><code>ppy.Tensor[dtype, shape]</code> carries common tensor contracts through type
+  checking and IR, with <code>ppy.bf16</code> distinct from IEEE float16.</li>
+<li>Plugins can declare call-scoped read-only and mutable argument borrows,
+  allowing <code>ppy.Mut[ppy.Tensor[...]]</code> without a separate plugin-owned type.</li>
+<li>Common tensors retain a shared IR representation and can use an explicit
+  backend's physical type lowering without depending on plugin order.</li>
+<li>Plugin rejection diagnostics include the supplied reason at the call site.</li>
+</ul>
+<h2 id="032-2026-09-15">0.3.2 — 2026-09-15<a class="headerlink" href="#032-2026-09-15" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Plugins can lower analyzed types and facts into IR types, preserving tensor
+  dtype and shape across function parameters, results, local values, and calls.
+  Canonical IR generation no longer depends on the CPU native ABI.</li>
+<li>Plugin dialect calls carry operands, constant keyword attributes, effects,
+  guards, and source locations into the IR, including operations without a
+  result. Optimizations preserve operations with write effects.</li>
+<li>Explicit external-backend compilation reports lowering failures with the
+  function's location and reason, while ordinary Python fallback remains available.</li>
+<li>Project dialect registries govern verification, control-flow analysis,
+  transformations, and IR-file builds without process-global registration.</li>
+<li>Source emission formats can declare <code>requires_toolchain=False</code> to work
+  without an installed SDK. Existing formats and artifact builds retain
+  their toolchain checks.</li>
+</ul>
+<h2 id="031-2026-09-15">0.3.1 — 2026-09-15<a class="headerlink" href="#031-2026-09-15" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Standalone builds and C emission support <code>print</code> with string literal <code>end</code>
+  and <code>sep</code>, boolean literal <code>flush</code>, and basic integer and boolean f-strings.
+  Converted input prompts retain their output and flush before reading.</li>
 </ul>
 <h2 id="030-2026-09-13">0.3.0 — 2026-09-13<a class="headerlink" href="#030-2026-09-13" title="Permanent link">&para;</a></h2>
 <p>The release that makes the compiler an open one: a public backend interface
@@ -4504,7 +4579,7 @@ on real hardware. The entries below are in the order the work landed.</p>
   as they should, and the entry point bears the function's qualified name
   rather than <code>call_0</code>.</li>
 <li>The landing page's test and diagnostic-code counts come from the tree
-  through markers (<code>1208</code>, <code>78</code>), and the
+  through markers (<code>1221</code>, <code>78</code>), and the
   guard refuses those spelled as digits. The GPU guide says what a ROCm
   machine gets: no launch, <code>compiled</code> false, <code>ppy emit hip</code> for <code>hipcc</code>.</li>
 <li>The ROCm harness installs every group when the image's JAX allows it
