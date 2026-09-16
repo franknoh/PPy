@@ -105,7 +105,9 @@ def _program(bundle, reporter, entry: Path, *, project_modules: bool = False):  
     return module_name, entry_qualname, functions, reached_from
 
 
-def standalone_ir(bundle, reporter, entry: Path, opt_level: int | None = None):  # type: ignore[no-untyped-def]
+def standalone_ir(  # type: ignore[no-untyped-def]
+    bundle, reporter, entry: Path, opt_level: int | None = None, *, int_width: int = 64
+):
     """The canonical IR of a whole standalone program, or the exit status.
 
     What `ppy emit c --standalone` hands the C backend: the same reachable
@@ -150,6 +152,16 @@ def standalone_ir(bundle, reporter, entry: Path, opt_level: int | None = None): 
     if linked.unresolved:
         return _fail(reporter, f"unresolved standalone functions: {', '.join(linked.unresolved)}")
     module = linked.module
+    if int_width != 64:
+        from ..c import EmitError
+        from ..c.source import narrow_integers
+
+        if config.llvm.safeguards != "off" or int_width != 32:
+            raise EmitError("32-bit integers require unsafe standalone C/C++ source")
+        try:
+            narrow_integers(module)
+        except ValueError as error:
+            raise EmitError(str(error)) from error
     level = opt_level if opt_level is not None else config.opt_level
     optimize(
         module,

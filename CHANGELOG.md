@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.3.5 — 2026-09-16
+
+- Unsafe standalone C/C++ source accepts `--int-width 32`, using actual
+  32-bit arithmetic, plain `int` declarations, and `%d` input/output. The
+  default remains 64 bits; constants outside the selected range and fixed
+  runtime ABIs that cannot be narrowed are rejected.
+- Readable source places callees before callers and local declarations near
+  their first write, removes redundant arithmetic casts, and uses plain
+  division when branch bounds prove Python's floor correction unnecessary.
+  Large positive divisors no longer overflow an intermediate remainder
+  correction in the 32-bit model.
+
 ## 0.3.4 — 2026-09-16
 
 - `ppy emit c/cpp --standalone --unsafe [--format]` emits readable standalone
