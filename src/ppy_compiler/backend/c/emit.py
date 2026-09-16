@@ -75,6 +75,7 @@ from .dialects import (
     vector_name,
 )
 from .gpu import emit_gpu
+from .presentation import PrintFormat, string_literal, string_symbol
 from .prof import emit_prof
 from .runtime import SHIMS, definition, program_main
 
@@ -98,7 +99,17 @@ class Language(enum.StrEnum):
 
 #: The C standard headers a C++ unit includes as `<cX>`; any other keeps its name.
 _C_STANDARD_HEADERS = frozenset(
-    {"stdint.h", "stdlib.h", "math.h", "stdbool.h", "string.h", "stdio.h", "limits.h", "float.h"}
+    {
+        "stdint.h",
+        "stdlib.h",
+        "math.h",
+        "stdbool.h",
+        "string.h",
+        "stdio.h",
+        "limits.h",
+        "float.h",
+        "inttypes.h",
+    }
 )
 _DIALECT_NAMES = {
     Language.C: "C11",
@@ -209,8 +220,11 @@ _KEYWORDS = frozenset(
     this thread_local throw true try typedef typeid typename union unsigned using virtual void
     volatile wchar_t while xor xor_eq _Bool _Complex _Imaginary _Alignas _Alignof _Atomic _Generic
     _Noreturn _Static_assert _Thread_local main abort exit free malloc calloc realloc memcpy
-    memmove memset printf fputs puts sqrt sin cos tan exp exp2 log log2 log10 floor ceil trunc fabs
-    pow fmod hypot round erf erfc tgamma lgamma isnan isinf NAN INFINITY NULL""".split()  # noqa: SIM905
+    memmove memset printf scanf fflush stdout stderr stdin std fputs puts sqrt sin cos tan exp exp2
+    log log2 log10 floor ceil trunc fabs
+    pow fmod hypot round erf erfc tgamma lgamma isnan isinf NAN INFINITY NULL
+    int8_t int16_t int32_t int64_t uint8_t uint16_t uint32_t uint64_t intptr_t uintptr_t size_t
+    INT64_MIN INT64_MAX UINT64_MAX INT64_C UINT64_C PRId64 PRIu64 SCNd64 SCNu64""".split()  # noqa: SIM905
 )
 _IDENTIFIER = re.compile(r"^[A-Za-z_]\w*$")
 _NUMBER = re.compile(r"^(\d[\w.+-]*|\.\d+)$")
@@ -390,6 +404,7 @@ def emit_module(
     header_only: bool = False,
     entry: str | None = None,
     target: TargetInfo | None = None,
+    readable: bool = False,
 ) -> str:
     """The translation unit (or, header-only, the header) for `module`.
 
@@ -399,7 +414,9 @@ def emit_module(
     is for, where a dialect's lowering depends on it.
     """
     try:
-        return _ModuleEmitter(module, language, header_only, entry, target or host_target()).run()
+        return _ModuleEmitter(
+            module, language, header_only, entry, target or host_target(), readable
+        ).run()
     except _DialectEmitError as error:
         raise EmitError(str(error)) from error
 
@@ -412,6 +429,7 @@ class _ModuleEmitter:
         header_only: bool,
         entry: str | None,
         target: TargetInfo,
+        readable: bool = False,
     ) -> None:
         self.module = module
         self.language = language
@@ -422,7 +440,87 @@ class _ModuleEmitter:
         self.entry = entry
         self.target = target
         self.unit = _Unit()
+        self.readable = readable and entry is not None
+        operations = [op for function in module.functions.values() for op in function.operations()]
+        self.native_input = not any(
+            op.name == "core.call_extern"
+            and str(op.attributes.get("callee", "")).startswith(
+                ("ppy_rt_scan_", "ppy_rt_input_", "ppy_rt_read_")
+            )
+            and op.attributes.get("callee") not in {"ppy_rt_input_int", "ppy_rt_scan_int"}
+            for op in operations
+        )
+        self.names: dict[str, str] = {}
+        self.namespaces: dict[str, str] = {}
+        self.direct: set[str] = set()
+        self.reserved: set[str] = set()
+        if self.readable:
+            self._source_names()
+            # Status capture and runtime callbacks have an ABI consumer other
+            # than ordinary source calls, so their signatures must stay intact.
+            for op in operations:
+                if op.name != "core.call" or op.attributes.get("capture_status"):
+                    callee = getattr(op.attributes.get("callee"), "name", None)
+                    self.direct.discard(callee)
+            self.reserved = set(self.names.values()) | {
+                scope.split("::")[0] for scope in self.namespaces.values() if scope
+            }
         self.type_names: dict[IRType, str] = {}
+
+    def _source_names(self) -> None:
+        """Assign source names once, reserving library and global identifiers."""
+        functions = list(self.module.functions.values())
+        parts = {
+            f.name: str(f.attributes.get("ppy.qualname", f.name)).rpartition(".") for f in functions
+        }
+        used = set(_LIBC) | {"main", "printf", "scanf", "fflush", "stdout", "std"}
+        namespace_names: dict[str, str] = {}
+        prefixes: dict[tuple[str, ...], str] = {(): ""}
+        scoped_names: dict[str, set[str]] = {"": used}
+        for module in sorted({p[0] for p in parts.values()}):
+            segments = module.split(".") if module else ["program"]
+            for index, segment in enumerate(segments):
+                prefix = tuple(segments[: index + 1])
+                if prefix not in prefixes:
+                    parent = prefixes[prefix[:-1]]
+                    name = _unique(_cname(segment), scoped_names.setdefault(parent, set()))
+                    prefixes[prefix] = f"{parent}::{name}" if parent else name
+            namespace_names[module] = prefixes[tuple(segments)]
+        used = set(_LIBC) | {"main", "printf", "scanf", "fflush", "stdout"}
+        for function in sorted(functions, key=lambda f: f.name):
+            module, _, short = parts[function.name]
+            name = _cname(short)
+            if str(function.attributes.get("ppy.symbol")) == self.entry:
+                name = "main"
+                scope = ""
+            elif self.cpp:
+                scope = namespace_names[module]
+                name = _unique(name, scoped_names.setdefault(scope, set()))
+            else:
+                scope = ""
+                if sum(_cname(p[2]) == name for p in parts.values()) > 1 or name in used:
+                    name = _cname(module.replace(".", "_") + "_" + short)
+                name = _unique(name, used)
+            self.names[function.name] = name
+            self.namespaces[function.name] = scope
+            if (
+                not function.is_declaration
+                and kind_of(function) == "host"
+                and function.attributes.get("ppy.abi") != "resume"
+                and len(function.results) <= 1
+                and all(
+                    isinstance(t, (IntType, IndexType, BoolType, FloatType, PtrType))
+                    for t in function.results
+                )
+            ):
+                self.direct.add(function.name)
+
+    def scoped(self, function: IRFunction, text: str) -> str:
+        scope = self.namespaces.get(function.name)
+        return f"namespace {scope} {{\n{text}\n}} // namespace {scope}\n" if scope else text
+
+    def is_main(self, function: IRFunction) -> bool:
+        return self.readable and str(function.attributes.get("ppy.symbol")) == self.entry
 
     # -- spellings the two languages make differently -----------------------
 
@@ -451,11 +549,16 @@ class _ModuleEmitter:
 
     def c_type(self, t: IRType) -> str:
         if isinstance(t, BoolType):
+            if not self.cpp:
+                self.unit.headers.add("stdbool.h")
             return "bool"
         if isinstance(t, IntType):
-            return f"{'' if t.signed else 'u'}int{t.width}_t"
+            self.unit.headers.add("stdint.h")
+            name = f"{'' if t.signed else 'u'}int{t.width}_t"
+            return self.std(name) if self.readable else name
         if isinstance(t, IndexType):
-            return "int64_t"
+            self.unit.headers.add("stdint.h")
+            return self.std("int64_t") if self.readable else "int64_t"
         if isinstance(t, FloatType):
             if t.width == 16:
                 raise EmitError("a 16-bit float has no portable C type")
@@ -476,6 +579,10 @@ class _ModuleEmitter:
         return _declare(spelled, name)
 
     def symbol_of(self, function: IRFunction) -> str:
+        if self.readable:
+            name = self.names[function.name]
+            scope = self.namespaces[function.name]
+            return f"{scope}::{name}" if scope else name
         return _ident(str(function.attributes.get("ppy.symbol", function.name)))
 
     def aggregate(self, t: TupleType | StructType) -> str:
@@ -492,7 +599,7 @@ class _ModuleEmitter:
     def atoms(self, t: IRType) -> list[str]:
         """The C types a value of `t` crosses the boundary as."""
         if isinstance(t, BoolType):
-            return ["int8_t"]
+            return [self.c_type(t)] if self.readable else ["int8_t"]
         if isinstance(t, BufferType):
             return [f"{self.c_type(t.element)} *", "int64_t"]
         if isinstance(t, (TupleType, StructType)):
@@ -537,6 +644,8 @@ class _ModuleEmitter:
     def run(self) -> str:
         for name, item in self.module.globals.items():
             if isinstance(item.type, BufferType) and isinstance(item.value, str):
+                if self.readable:
+                    continue
                 data = item.value.encode("utf-8")
                 literal = ", ".join(str(b) for b in data) or "0"
                 self.unit.strings[name] = (
@@ -553,21 +662,23 @@ class _ModuleEmitter:
         if self.gpu:
             defined = device + defined
         for function in defined:
-            self.unit.prototypes.append(self.prototype(function) + ";")
+            if not self.is_main(function):
+                self.unit.prototypes.append(self.scoped(function, self.prototype(function) + ";"))
         for function in defined:
             try:
                 text = _FunctionEmitter(self, function).run()
             except _Unstructured:
                 text = _FunctionEmitter(self, function, structured=False).run()
-            self.unit.functions.append(text)
+            self.unit.functions.append(self.scoped(function, text))
         for function in defined:
-            if "ppy.export" in function.attributes:
+            if "ppy.export" in function.attributes and not self.readable:
                 self.unit.exports.append(self.export(function))
         if self.entry is not None:
             if self.header_only:
                 raise HeaderOnlyError("a program's `main` is a definition a header cannot carry")
-            self.unit.headers.add("stdio.h")
-            self.unit.exports.append(program_main(_ident(self.entry), self.std("fputs")))
+            if not self.readable:
+                self.unit.headers.add("stdio.h")
+                self.unit.exports.append(program_main(_ident(self.entry), self.std("fputs")))
         return self.assemble()
 
     def parameter_atoms(self, function: IRFunction) -> list[tuple[str, str]]:
@@ -577,7 +688,7 @@ class _ModuleEmitter:
         and `<name>_len`; a value class or tuple is `<name>_0`, `<name>_1`,
         ...; a name C has taken gets a trailing underscore.
         """
-        used: set[str] = set()
+        used: set[str] = set(self.reserved)
         atoms: list[tuple[str, str]] = []
         for index, (pname, t) in enumerate(function.params):
             base = _cname(pname) if pname and not pname.isdigit() else f"a{index}"
@@ -599,15 +710,24 @@ class _ModuleEmitter:
         return [(atom, _unique(name, used)) for atom, name in zip(outs, names, strict=True)]
 
     def prototype(self, function: IRFunction) -> str:
+        if self.is_main(function):
+            return "int main()" if self.cpp else "int main(void)"
+        if function.name in self.direct:
+            parameters = [_declare(kind, name) for kind, name in self.parameter_atoms(function)]
+            result = self.c_type(function.results[0]) if function.results else "void"
+            storage = "" if self.cpp else "static "
+            spelled = ", ".join(parameters) or ("" if self.cpp else "void")
+            return f"{storage}{result} {self.names[function.name]}({spelled})"
         if kind_of(function) != "host":
             return self.device_prototype(function)
         if function.attributes.get("ppy.abi") == "resume":
-            return f"static void {self.symbol_of(function)}(int64_t *frame)"
+            symbol = self.names[function.name] if self.readable else self.symbol_of(function)
+            return f"static void {symbol}(int64_t *frame)"
         atoms = self.parameter_atoms(function)
         parameters = [_declare(kind, name) for kind, name in atoms]
         results = self.result_atoms(function, {name for _kind, name in atoms})
         parameters.extend(_declare(kind, f"*{name}") for kind, name in results)
-        symbol = _ident(str(function.attributes.get("ppy.symbol", function.name)))
+        symbol = self.names[function.name] if self.readable else self.symbol_of(function)
         return f"{self.storage}int32_t {symbol}({', '.join(parameters)})"
 
     def device_prototype(self, function: IRFunction) -> str:
@@ -673,8 +793,12 @@ class _ModuleEmitter:
         guard = "PPY_" + _ident(self.module.name).upper() + ("_HPP" if cpp else "_H")
         if self.header_only:
             lines += [f"#ifndef {guard}", f"#define {guard}"]
-        headers = {"stdint.h", "stdlib.h", "math.h"} | self.unit.headers
-        if not cpp:
+        headers = (
+            set(self.unit.headers)
+            if self.readable
+            else {"stdint.h", "stdlib.h", "math.h"} | self.unit.headers
+        )
+        if not cpp and not self.readable:
             headers.add("stdbool.h")
         if self.language is Language.CUDA:
             headers.add("cuda_runtime.h")
@@ -711,7 +835,7 @@ class _ModuleEmitter:
                 lines.append("}")
             lines.append("")
         lines.extend(self.unit.strings.values())
-        if cpp:
+        if cpp and not self.readable:
             # The internal ABI is a C ABI: the runtime binds these symbols
             # by name, so C++ must not mangle them.
             lines.append('extern "C" {\n')
@@ -720,7 +844,7 @@ class _ModuleEmitter:
         lines.extend(self.unit.trampolines.values())
         lines.extend(self.unit.functions)
         lines.extend(self.unit.exports)
-        if cpp:
+        if cpp and not self.readable:
             lines.append('} /* extern "C" */')
         if self.header_only:
             lines.append(f"#endif /* {guard} */")
@@ -842,16 +966,20 @@ class _FunctionEmitter:
         #: and anything a `goto` may otherwise jump across.
         self.declarations: list[str] = []
         self.body = _Body()
-        self.used: set[str] = set()
+        self.print_format: PrintFormat | None = None
+        self.used: set[str] = set(owner.reserved)
         self.counter = 0
         self.labels: dict[int, str] = {}
         #: A kernel or a device function: it returns its value, and nothing falls back.
         self.device = kind_of(function) != "host"
         #: A coroutine's resume function: the frame in, nothing out.
         self.resume = function.attributes.get("ppy.abi") == "resume"
+        self.direct = function.name in owner.direct
         self.parameters = owner.parameter_atoms(function)
         self.used.update(name for _kind, name in self.parameters)
-        self.results = owner.result_atoms(function, self.used) if not self.device else []
+        self.results = (
+            owner.result_atoms(function, self.used) if not (self.device or self.direct) else []
+        )
         if self.resume:
             self.used.add("frame")
         # The graph.
@@ -1248,6 +1376,11 @@ class _FunctionEmitter:
         if self.resume:
             declare_async(self.owner, "ppy_aio_fail")
             return "{ ppy_aio_fail(frame, 0); return; }"
+        if self.direct:
+            if self.owner.is_main(self.function):
+                return "return 1;"
+            self.owner.unit.headers.add("stdlib.h")
+            return f"{self.owner.std('exit')}(1);"
         return f"return {STATUS_FALLBACK};"
 
     # -- the function ------------------------------------------------------------
@@ -1482,6 +1615,7 @@ class _FunctionEmitter:
         for op in block.operations[:-1]:
             if id(op) not in self.dead:
                 self.op(op)
+        self.flush_print()
         if terminator.name == "core.br":
             self._jump(block, terminator.successors[0], follow)
         elif terminator.name == "core.cond_br":
@@ -1726,6 +1860,7 @@ class _FunctionEmitter:
             for op in block.operations:
                 if id(op) not in self.dead:
                     self.op(op)
+            self.flush_print()
         if any("goto fallback;" in line for line in self.body):
             self.body.append("fallback:")
             if self.resume:
@@ -1733,7 +1868,7 @@ class _FunctionEmitter:
                 self.body.append("    ppy_aio_fail(frame, 0);")
                 self.body.append("    return;")
             else:
-                self.body.append(f"    return {STATUS_FALLBACK};")
+                self.body.append(f"    {self.failure()}")
 
     def branch(self, successor: Successor, indent: str) -> None:
         """Labels mode: assign the target's parameters, then jump."""
@@ -1760,6 +1895,15 @@ class _FunctionEmitter:
     # -- operations ----------------------------------------------------------------
 
     def op(self, op: Operation) -> None:
+        if self.owner.readable:
+            if self.print_operation(op):
+                return
+            setup = op.name == "core.const" or (
+                op.name == "core.call_intrinsic"
+                and op.attributes.get("intrinsic") == "ppy.string_data"
+            )
+            if not setup:
+                self.flush_print()
         c = self.owner.c_type
         name = op.local_name
         if op.dialect == "math":
@@ -1807,6 +1951,16 @@ class _FunctionEmitter:
                 self.branch(op.successors[1], "        ")
                 self.body.append("    }")
             case "ret":
+                if self.direct:
+                    if self.owner.is_main(self.function):
+                        for value in op.operands:
+                            self.line(f"(void)({self.bare(value)});")
+                        self.line("return 0;")
+                    else:
+                        self.line(
+                            f"return {self.bare(op.operands[0])};" if op.operands else "return;"
+                        )
+                    return
                 if self.device or self.resume:
                     atoms = [atom for value in op.operands for atom in self.flatten(value)]
                     self.line(f"return {atoms[0]};" if atoms else "return;")
@@ -1889,7 +2043,7 @@ class _FunctionEmitter:
                 self.call_intrinsic(op)
             case "guard":
                 label = str(op.attributes.get("label") or f"{op.attributes['kind']}.ok")
-                if label.startswith("sanitize:"):
+                if label.startswith("sanitize:") and not self.direct:
                     # A sanitizer's check returns its status; nothing falls back.
                     status = STATUS_SANITIZER_BASE + SANITIZERS.index(label.partition(":")[2])
                     if self.structured:
@@ -1905,17 +2059,23 @@ class _FunctionEmitter:
 
     def literal(self, t: IRType, value: object) -> _Expr:
         if isinstance(t, BoolType):
+            if not self.owner.cpp:
+                self.owner.unit.headers.add("stdbool.h")
             return ("true" if value else "false"), _ATOM
         if isinstance(t, FloatType):
             number = float(value)  # type: ignore[arg-type]
             if math.isnan(number):
+                self.owner.unit.headers.add("math.h")
                 return "NAN", _ATOM
             if number in (float("inf"), float("-inf")):
+                self.owner.unit.headers.add("math.h")
                 return ("INFINITY", _ATOM) if number > 0 else ("-INFINITY", _UNARY)
             text = repr(number)
             text = text if ("." in text or "e" in text) else f"{text}.0"
             return text, (_UNARY if text.startswith("-") else _ATOM)
         if isinstance(t, PtrType):
+            if self.owner.cpp:
+                return "nullptr", _ATOM
             return f"(({self.owner.c_type(t)})0)", _ATOM
         number = int(value)  # type: ignore[call-overload]
         if isinstance(t, IntType) and not t.signed:
@@ -1937,6 +2097,7 @@ class _FunctionEmitter:
         return int(producer.attributes["value"])  # type: ignore[call-overload]
 
     def math(self, op: Operation, name: str, arguments: list[str]) -> None:
+        self.owner.unit.headers.add("math.h")
         t = op.results[0].type
         if isinstance(t, VectorType) and isinstance(t.element, FloatType):
             self.vector_math(op, name, arguments, t)
@@ -1978,7 +2139,12 @@ class _FunctionEmitter:
             self.infix(op.result, symbol, a, b, reads)
             return
         overflow = op.attributes.get("overflow", "python")
-        if overflow == "proven":
+        if overflow == "native" and not any(self.machine_typed(v) for v in op.operands):
+            # Small literals and conditional expressions may have C's `int`
+            # type even when their canonical type is i64. Widen before the
+            # operation, not after an intermediate has already overflowed.
+            a = self.cast_text(a, t)
+        if overflow in {"proven", "native"}:
             # Shown never to overflow: the plain operation is defined.
             self.infix(op.result, symbol, a, b, reads)
             return
@@ -1988,6 +2154,12 @@ class _FunctionEmitter:
         result = self.sink(op.result) or self.variable(op.result)
         helper = self.owner.helper(name, t)
         self.fail_unless(f"!{helper}({a[0]}, {b[0]}, &{result})", "arith.ok")
+
+    def machine_typed(self, value: Value) -> bool:
+        """A named machine value already has its declared C type."""
+        return isinstance(value.type, (IntType, IndexType)) and bool(
+            _IDENTIFIER.fullmatch(self.bare(value))
+        )
 
     def wrapped(self, v: Value, t: IRType, a: Value | _Expr, b: Value | _Expr, symbol: str) -> None:
         """`v` as two's-complement arithmetic through the unsigned type: signed
@@ -2014,7 +2186,9 @@ class _FunctionEmitter:
     def neg(self, op: Operation) -> None:
         t = op.result.type
         (x,), reads = self.operands(op)
-        if isinstance(t, FloatType):
+        if op.attributes.get("overflow") == "native" and not self.machine_typed(op.operands[0]):
+            x = self.cast_text(x, t)
+        if isinstance(t, FloatType) or op.attributes.get("overflow") == "native":
             self.fold(op.result, _prefix("-", x), reads=reads)
             return
         if op.attributes.get("overflow", "python") == "wrap":
@@ -2027,6 +2201,10 @@ class _FunctionEmitter:
     def divmod(self, op: Operation, name: str) -> None:
         t = op.result.type
         (a, b), reads = self.operands(op)
+        if op.attributes.get("overflow") == "native" and not any(
+            self.machine_typed(v) for v in op.operands
+        ):
+            a = self.cast_text(a, t)
         if isinstance(t, FloatType):
             if name == "mod":
                 raise EmitError("float remainder has no C lowering with Python semantics")
@@ -2040,7 +2218,7 @@ class _FunctionEmitter:
         width = t.width if isinstance(t, IntType) else 64
         divisor = self.constant(op.operands[1])
         zero, minus_one = ("0", _ATOM), ("-1", _UNARY)
-        if op.attributes.get("overflow", "python") != "wrap" and divisor is None:
+        if op.attributes.get("overflow", "python") not in {"wrap", "native"} and divisor is None:
             minimum = (f"INT{width}_MIN", _ATOM)
             held = _infix("&&", _infix("==", a, minimum), _infix("==", b, minus_one))
             failed = _infix("||", _infix("!=", a, minimum), _infix("!=", b, minus_one))
@@ -2078,7 +2256,7 @@ class _FunctionEmitter:
             return
         unsigned = _unsigned(t)
         wide = _infix("<<", self._unsigned(op.operands[0], unsigned), self.cast_text(b, unsigned))
-        if op.attributes.get("overflow", "wrap") == "wrap":
+        if op.attributes.get("overflow", "wrap") in {"wrap", "native"}:
             text, level = self.cast_text(wide, t)
             if self.fold(op.result, (text, level), reads=reads) == text:
                 self.unsigned_form[id(op.result)] = wide
@@ -2131,11 +2309,11 @@ class _FunctionEmitter:
         target = self.owner.module.functions.get(callee_name)
         if target is None:
             raise EmitError(f"call to @{callee_name}, which was not emitted")
-        symbol = _ident(str(target.attributes.get("ppy.symbol", target.name)))
+        symbol = self.owner.symbol_of(target)
         arguments: list[str] = []
         for operand in op.operands:
             arguments.extend(self.flatten(operand))
-        if self.device:
+        if self.device or target.name in self.owner.direct:
             direct = f"{symbol}({', '.join(arguments)})"
             if op.results and op.results[0].uses:
                 self.effect(op.results[0], direct)
@@ -2184,6 +2362,18 @@ class _FunctionEmitter:
 
     def call_extern(self, op: Operation) -> None:
         symbol = str(op.attributes["callee"])
+        if (
+            self.owner.readable
+            and self.owner.native_input
+            and symbol in {"ppy_rt_input_int", "ppy_rt_scan_int"}
+        ):
+            # Unsafe source explicitly selects the host stdio parser. A failed
+            # conversion stops before an uninitialized value can be observed.
+            self.owner.unit.headers.update({"stdio.h", "inttypes.h"})
+            result = self.sink(op.result) or self.variable(op.result)
+            scan = self.owner.std("scanf")
+            self.line(f'if ({scan}("%" SCNd64, &{result}) != 1) {{ {self.failure()} }}')
+            return
         shim = SHIMS.get(symbol)
         libc = _LIBC.get(symbol)
         if libc is not None:
@@ -2252,6 +2442,23 @@ class _FunctionEmitter:
             self.define_buffer(op.results[0], data, length)
             return
         if name == "ppy.string_data":
+            if self.owner.readable:
+                symbol = str(op.attributes["symbol"])
+                data = str(self.owner.module.globals[symbol].value).encode("utf-8")
+                # Printing consumes literal bytes directly; other consumers keep
+                # their addressable storage and the original pointer contract.
+                if all(
+                    isinstance(u, Operation)
+                    and u.name == "core.call_extern"
+                    and u.attributes.get("callee") == "ppy_rt_print_str"
+                    for u, _ in op.result.uses
+                ):
+                    self.scalars[id(op.result)] = string_literal(data)
+                    return
+                self.owner.unit.strings[symbol] = (
+                    f"static {self.owner.c_type(IntType(8, False))} {_ident(symbol)}[] = "
+                    "{" + (", ".join(str(b) for b in data) or "0") + "};\n"
+                )
             self.fold(op.results[0], (_ident(str(op.attributes["symbol"])), _ATOM))
             return
         if name in {"llvm.smin.i64", "llvm.smax.i64"}:
@@ -2267,6 +2474,63 @@ class _FunctionEmitter:
             self.define(op.results[1], f"{helper}({a}, {b}, &{result}) != 0")
             return
         raise EmitError(f"intrinsic {name!r} has no C lowering")
+
+    def flush_print(self) -> None:
+        if self.print_format is not None:
+            self.line(f"{self.owner.std('printf')}({self.print_format.finish()});")
+            self.print_format = None
+
+    def print_operation(self, op: Operation) -> bool:
+        if op.name != "core.call_extern":
+            return False
+        symbol = str(op.attributes["callee"])
+        if symbol == "ppy_rt_flush_stdout":
+            self.flush_print()
+            self.owner.unit.headers.add("stdio.h")
+            self.line(f"{self.owner.std('fflush')}(stdout);")
+            return True
+        if symbol not in {
+            "ppy_rt_print_str",
+            "ppy_rt_print_i64",
+            "ppy_rt_print_u64",
+            "ppy_rt_print_bool",
+            "ppy_rt_print_nl",
+            "ppy_rt_print_sep",
+        }:
+            return False
+        data = None
+        if symbol == "ppy_rt_print_str":
+            name = string_symbol(op.operands[0])
+            length = self.constant(op.operands[1])
+            if name is None or length is None or length < 0:
+                return False
+            data = str(self.owner.module.globals[name].value).encode("utf-8")[:length]
+        self.owner.unit.headers.add("stdio.h")
+        if self.print_format is None:
+            self.print_format = PrintFormat()
+        if data is not None:
+            self.print_format.literal(data)
+        elif symbol in {"ppy_rt_print_sep", "ppy_rt_print_nl"}:
+            self.print_format.literal(b" " if symbol.endswith("sep") else b"\n")
+        elif symbol == "ppy_rt_print_bool":
+            expression = _ternary(self.expr(op.operands[0]), ('"True"', _ATOM), ('"False"', _ATOM))
+            self.print_format.value("%s", expression[0])
+        else:
+            self.owner.unit.headers.add("inttypes.h")
+            unsigned = symbol == "ppy_rt_print_u64"
+            operand = op.operands[0]
+            argument = self.bare(operand)
+            exact_type = operand.type == IntType(64, not unsigned) or (
+                isinstance(operand.type, IndexType) and not unsigned
+            )
+            if not exact_type or not _IDENTIFIER.fullmatch(argument):
+                argument = self.owner.cast(
+                    argument, self.owner.std("uint64_t" if unsigned else "int64_t")
+                )
+            self.print_format.value("%", argument, "PRIu64" if unsigned else "PRId64")
+        if symbol == "ppy_rt_print_nl" or (data is not None and data.endswith(b"\n")):
+            self.flush_print()
+        return True
 
 
 #: Operations with no effect on memory: a value read before one of these can

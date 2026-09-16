@@ -351,9 +351,11 @@ def test_arithmetic_needs_its_overflow_and_rounding_semantics_spelled():
     bare = b.create("core.add", (x, x), (I64,))
     core.ret(b, bare.result)
     assert _errors(module) == [
-        "integer core.add needs overflow in ('python', 'checked', 'wrap', 'proven')"
+        "integer core.add needs overflow in ('python', 'checked', 'wrap', 'proven', 'native')"
     ]
     bare.attributes["overflow"] = "wrap"
+    assert not verify(module)
+    bare.attributes["overflow"] = "native"
     assert not verify(module)
     entry.operations[-1].erase()
     entry.operations[-1].erase()
