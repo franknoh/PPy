@@ -213,7 +213,7 @@
   </div>
   <div class="md-source__repository">
     franknoh/PPy
-    <span class="ppy-source-version" title="Documentation version">v0.3.4</span>
+    <span class="ppy-source-version" title="Documentation version">v0.3.5</span>
   </div>
 </a>
       </div>
@@ -497,7 +497,7 @@
   </div>
   <div class="md-source__repository">
     franknoh/PPy
-    <span class="ppy-source-version" title="Documentation version">v0.3.4</span>
+    <span class="ppy-source-version" title="Documentation version">v0.3.5</span>
   </div>
 </a>
     </div>
@@ -4552,6 +4552,15 @@ operation and may tell the optimizer it never wraps. <code>native</code>, select
 IR construction for unsafe standalone source, uses target-language machine
 arithmetic without overflow fallback; signed overflow is outside its portable
 domain. It does not replace the <code>wrap</code> guarantee used by unsafe LLVM builds.
+For standalone C/C++ source, <code>--int-width 32</code> retypes the linked scalar graph
+from <code>i64</code>/<code>u64</code> to <code>i32</code>/<code>u32</code>, including signatures and local pointers,
+before shared optimization. The source backend spells that selected model
+as <code>int</code>/<code>unsigned int</code> and checks the target range at compile time. Fixed
+runtime and buffer ABIs are refused rather than retyped. The default model
+is unchanged. Source-only interval analysis may omit floor-division
+corrections when acyclic branch bounds prove floor equals truncation; it
+never changes an operation's overflow mode or assumes a wrapping result
+stays within its pre-overflow interval.
 Bounds checks are explicit <code>core.guard</code>s the frontend emits; a sanitizer
 pass adds more.</p>
 <h2 id="the-math-dialect">The math dialect<a class="headerlink" href="#the-math-dialect" title="Permanent link">&para;</a></h2>
