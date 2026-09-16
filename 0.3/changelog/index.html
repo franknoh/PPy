@@ -211,7 +211,7 @@
   </div>
   <div class="md-source__repository">
     franknoh/PPy
-    <span class="ppy-source-version" title="Documentation version">v0.3.3</span>
+    <span class="ppy-source-version" title="Documentation version">v0.3.4</span>
   </div>
 </a>
       </div>
@@ -495,7 +495,7 @@
   </div>
   <div class="md-source__repository">
     franknoh/PPy
-    <span class="ppy-source-version" title="Documentation version">v0.3.3</span>
+    <span class="ppy-source-version" title="Documentation version">v0.3.4</span>
   </div>
 </a>
     </div>
@@ -2331,6 +2331,8 @@
       
         
       
+        
+      
     
     
     
@@ -2475,6 +2477,34 @@
     
   
     PyTorch ATen regions
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../howto/46_gpt2/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    GPT-2 XL: one region per block
   
 
     
@@ -3764,6 +3794,17 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#034-2026-09-16" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        0.3.4 — 2026-09-16
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#033-2026-09-15" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3914,6 +3955,17 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#034-2026-09-16" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        0.3.4 — 2026-09-16
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#033-2026-09-15" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4050,6 +4102,58 @@
 
 
 <h1 id="changelog">Changelog<a class="headerlink" href="#changelog" title="Permanent link">&para;</a></h1>
+<h2 id="034-2026-09-16">0.3.4 — 2026-09-16<a class="headerlink" href="#034-2026-09-16" title="Permanent link">&para;</a></h2>
+<ul>
+<li><code>ppy emit c/cpp --standalone --unsafe [--format]</code> emits readable standalone
+  source with direct scalar/void returns, one <code>main</code>, source names, C++ module
+  namespaces, inline literals, fused stdio output, and checked <code>scanf</code> reads.
+  Native arithmetic is selected in IR; signed overflow follows C/C++ semantics.
+  Safe builds and ordinary emission retain their existing ABI and semantics.</li>
+<li>
+<p>Standalone source links reachable functions across project modules while
+  rejecting imported initialization that requires Python.</p>
+</li>
+<li>
+<p>A region may write through a parameter. <code>narrow</code> and <code>copy_</code> joined the
+  curated set, so a slot of a preallocated tensor can be filled in place --
+  the other way to keep a KV cache, and the one a long context wants, since
+  growing by <code>cat</code> copies the whole cache per token. The write is not
+  silent: <code>copy_</code> carries <code>WriteMemory</code>, which <code>@ppy.pure</code> forbids, so a
+  function that fills a caller's buffer is refused the claim by name.</p>
+</li>
+<li>An ATen region can hand back several tensors, which is what a KV cache
+  needs. A region returned one <code>at::Tensor</code>, so a block could not give back
+  the key and value it had just grown beside its output and incremental
+  decoding stayed in Python -- the place the Python between operators costs
+  the most. A return annotation of <code>tuple[torch.Tensor, ...]</code> now becomes a
+  <code>std::tuple</code>, which pybind11 hands Python as an ordinary tuple, and with
+  <code>causal</code> a <code>bool</code> parameter and <code>length</code> an <code>int64_t</code> rather than
+  constants folded in, one compiled function prefills a prompt under a
+  causal mask and then decodes a token at a time out of the cache it built.
+  <code>examples/46_gpt2</code> measures that: 128 tokens through forty-eight blocks is
+  6144 region calls with almost no arithmetic in each, the row where the
+  interpreter is most of the wall clock. It is also the row where
+  <code>torch.compile</code>'s CUDA-graphs mode refuses to run at all until each
+  invocation is announced and the cache is cloned, since a cache is exactly
+  the memory those graphs reuse.</li>
+<li>An ATen region can hold a whole transformer block. What a region was
+  allowed to emit was a table of <code>(C++ function, arity)</code> pairs, which is
+  enough for <code>relu(add(matmul(x, w), b))</code> and not enough for anything with
+  a dimension in it: <code>softmax</code>, <code>transpose</code>, <code>reshape</code>, <code>layer_norm</code>, and
+  <code>scaled_dot_product_attention</code> had no entry, keyword arguments were
+  refused outright, and an <code>int</code> parameter of the region was declared
+  <code>double</code>. Each operation is now described by the C++ signature it is
+  called through -- a dimension is an <code>int64_t</code>, a shape an
+  <code>at::IntArrayRef</code> written as a tuple, <code>keepdim</code> and <code>is_causal</code> a <code>bool</code>,
+  <code>gelu</code>'s approximation a mode string -- so an argument is rendered by the
+  slot it fills. Keywords are matched against the C++ parameter names,
+  optional arguments take the C++ defaults when a later one is given, and
+  an operation with two signatures (<code>mean</code> over everything, or over named
+  dimensions) takes the one the call fills. Thirteen operations were added
+  to the curated set for it, and <code>examples/46_gpt2</code> is GPT-2 XL with each
+  of its forty-eight blocks compiled to one region, measured against
+  PyTorch eager and <code>torch.compile</code> on an RTX 4090.</li>
+</ul>
 <h2 id="033-2026-09-15">0.3.3 — 2026-09-15<a class="headerlink" href="#033-2026-09-15" title="Permanent link">&para;</a></h2>
 <ul>
 <li><code>ppy.Tensor[dtype, shape]</code> carries common tensor contracts through type
@@ -4429,7 +4533,7 @@ on real hardware. The entries below are in the order the work landed.</p>
   them, the multi-GPU trainer, a one-process-per-GPU distributed smoke
   test, and a few benchmarks as validation numbers; every Pod it makes it
   deletes. The docs' <code>internals/hardware-validation.md</code> records the last run.</li>
-<li>The docs' example counts come from the tree: <code>17</code>
+<li>The docs' example counts come from the tree: <code>18</code>
   joins the two existing markers, the architecture page's program count is
   a marker, and a test holds <code>examples/README.md</code>'s own count to the same
   functions, so no page spells a number the tree has moved past.</li>
@@ -4475,7 +4579,7 @@ on real hardware. The entries below are in the order the work landed.</p>
   as they should, and the entry point bears the function's qualified name
   rather than <code>call_0</code>.</li>
 <li>The landing page's test and diagnostic-code counts come from the tree
-  through markers (<code>1202</code>, <code>78</code>), and the
+  through markers (<code>1221</code>, <code>78</code>), and the
   guard refuses those spelled as digits. The GPU guide says what a ROCm
   machine gets: no launch, <code>compiled</code> false, <code>ppy emit hip</code> for <code>hipcc</code>.</li>
 <li>The ROCm harness installs every group when the image's JAX allows it

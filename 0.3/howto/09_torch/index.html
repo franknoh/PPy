@@ -16,7 +16,7 @@
         <link rel="prev" href="../07_parallel/">
       
       
-        <link rel="next" href="../21_training_torch/">
+        <link rel="next" href="../46_gpt2/">
       
       
         
@@ -213,7 +213,7 @@
   </div>
   <div class="md-source__repository">
     franknoh/PPy
-    <span class="ppy-source-version" title="Documentation version">v0.3.3</span>
+    <span class="ppy-source-version" title="Documentation version">v0.3.4</span>
   </div>
 </a>
       </div>
@@ -497,7 +497,7 @@
   </div>
   <div class="md-source__repository">
     franknoh/PPy
-    <span class="ppy-source-version" title="Documentation version">v0.3.3</span>
+    <span class="ppy-source-version" title="Documentation version">v0.3.4</span>
   </div>
 </a>
     </div>
@@ -2349,6 +2349,8 @@
       
         
       
+        
+      
     
     
     
@@ -2628,6 +2630,34 @@
   
 </nav>
       
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../46_gpt2/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    GPT-2 XL: one region per block
+  
+
+    
+  </span>
+  
+  
+
+      </a>
     </li>
   
 
@@ -4066,6 +4096,11 @@ region's value is not this number; it is that the function keeps its
 source, its autograd, and its dispatcher, and that a built artifact carries
 it with no compiler in the process. <code>torch.compile</code> pays for its guards on
 every call, which on an 8×32 input is more than the work.</p>
+<p>One layer of one shape is not the question anyone asks about
+<code>torch.compile</code>, and this table cannot answer it: the work is two
+microseconds, so every column is measuring its own overhead.
+<a href="../46_gpt2/"><code>46_gpt2</code></a> asks it at model scale instead -- GPT-2
+XL, forty-eight blocks, one region each, on a datacenter GPU.</p>
 <p>Intel Core Ultra 9 386H; PyTorch 2.14.0 (CPU) on CPython 3.13.13, PPY
 against the same PyTorch on CPython 3.14.5, from a checkout on a native
 filesystem.</p>
@@ -4319,13 +4354,13 @@ step.</p>
         
         
           
-          <a href="../21_training_torch/" class="md-footer__link md-footer__link--next" aria-label="Next: Training a torch MLP">
+          <a href="../46_gpt2/" class="md-footer__link md-footer__link--next" aria-label="Next: GPT-2 XL: one region per block">
             <div class="md-footer__title">
               <span class="md-footer__direction">
                 Next
               </span>
               <div class="md-ellipsis">
-                Training a torch MLP
+                GPT-2 XL: one region per block
               </div>
             </div>
             <div class="md-footer__button md-icon">

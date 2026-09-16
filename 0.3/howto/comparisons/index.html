@@ -213,7 +213,7 @@
   </div>
   <div class="md-source__repository">
     franknoh/PPy
-    <span class="ppy-source-version" title="Documentation version">v0.3.3</span>
+    <span class="ppy-source-version" title="Documentation version">v0.3.4</span>
   </div>
 </a>
       </div>
@@ -497,7 +497,7 @@
   </div>
   <div class="md-source__repository">
     franknoh/PPy
-    <span class="ppy-source-version" title="Documentation version">v0.3.3</span>
+    <span class="ppy-source-version" title="Documentation version">v0.3.4</span>
   </div>
 </a>
     </div>
@@ -1492,6 +1492,17 @@
     <span class="md-ellipsis">
       
         PyTorch ATen regions: Compared with PyTorch eager and torch.compile
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#gpt-2-xl-one-region-per-block-compared-with-pytorch-eager-and-torchcompile-at-model-scale" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GPT-2 XL: one region per block: Compared with PyTorch eager and torch.compile at model scale
       
     </span>
   </a>
@@ -2625,6 +2636,8 @@
       
         
       
+        
+      
     
     
     
@@ -2772,6 +2785,34 @@
     
   
     PyTorch ATen regions
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../46_gpt2/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    GPT-2 XL: one region per block
   
 
     
@@ -4260,6 +4301,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#gpt-2-xl-one-region-per-block-compared-with-pytorch-eager-and-torchcompile-at-model-scale" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GPT-2 XL: one region per block: Compared with PyTorch eager and torch.compile at model scale
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#training-a-torch-mlp-compared-with-pytorch-as-it-is-usually-written" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4587,35 +4639,35 @@ around it, timed inside the process: the floor.</p>
 <tbody>
 <tr>
 <td>total</td>
-<td style="text-align: right;">0.0039 ± 0.0000</td>
-<td style="text-align: right;">0.0039 ± 0.0000</td>
-<td style="text-align: right;">0.0045 ± 0.0008</td>
-<td style="text-align: right;"><strong>0.0024 ± 0.0003</strong></td>
-<td style="text-align: right;">0.0038 ± 0.0000</td>
+<td style="text-align: right;">0.0035 ± 0.0000</td>
+<td style="text-align: right;">0.0036 ± 0.0000</td>
+<td style="text-align: right;">0.0036 ± 0.0001</td>
+<td style="text-align: right;"><strong>0.0021 ± 0.0001</strong></td>
+<td style="text-align: right;">0.0034 ± 0.0001</td>
 </tr>
 <tr>
 <td>dot</td>
-<td style="text-align: right;">0.0039 ± 0.0000</td>
-<td style="text-align: right;">0.0039 ± 0.0001</td>
-<td style="text-align: right;">0.0049 ± 0.0007</td>
-<td style="text-align: right;"><strong>0.0015 ± 0.0002</strong></td>
-<td style="text-align: right;">0.0038 ± 0.0000</td>
+<td style="text-align: right;">0.0035 ± 0.0000</td>
+<td style="text-align: right;">0.0036 ± 0.0000</td>
+<td style="text-align: right;">0.0036 ± 0.0000</td>
+<td style="text-align: right;"><strong>0.0012 ± 0.0001</strong></td>
+<td style="text-align: right;">0.0035 ± 0.0001</td>
 </tr>
 <tr>
 <td>dot_relaxed</td>
-<td style="text-align: right;"><strong>0.0011 ± 0.0000</strong></td>
+<td style="text-align: right;"><strong>0.0011 ± 0.0001</strong></td>
 <td style="text-align: right;">0.0011 ± 0.0000</td>
-<td style="text-align: right;">0.0046 ± 0.0009</td>
-<td style="text-align: right;">0.0015 ± 0.0002</td>
-<td style="text-align: right;">0.0038 ± 0.0000</td>
+<td style="text-align: right;">0.0036 ± 0.0001</td>
+<td style="text-align: right;">0.0012 ± 0.0001</td>
+<td style="text-align: right;">0.0034 ± 0.0000</td>
 </tr>
 <tr>
 <td>digest</td>
-<td style="text-align: right;">0.0080 ± 0.0000</td>
-<td style="text-align: right;">0.0121 ± 0.0001</td>
-<td style="text-align: right;">0.0106 ± 0.0029</td>
-<td style="text-align: right;">0.0205 ± 0.0026</td>
-<td style="text-align: right;"><strong>0.0049 ± 0.0000</strong></td>
+<td style="text-align: right;">0.0072 ± 0.0000</td>
+<td style="text-align: right;">0.0112 ± 0.0001</td>
+<td style="text-align: right;">0.0078 ± 0.0001</td>
+<td style="text-align: right;">0.0199 ± 0.0002</td>
+<td style="text-align: right;"><strong>0.0045 ± 0.0001</strong></td>
 </tr>
 </tbody>
 </table>
@@ -4888,56 +4940,56 @@ included. The C reference reads the same input with <code>scanf</code>.</p>
 <tr>
 <td><a href="https://github.com/franknoh/PPy/blob/main/examples/15_algorithms/15a_nqueens">15a</a></td>
 <td>N-Queens</td>
-<td style="text-align: right;">219.4 ms</td>
-<td style="text-align: right;">162.9 ms</td>
-<td style="text-align: right;">8.3 ms</td>
-<td style="text-align: right;">7.9 ms</td>
-<td style="text-align: right;">7.9 ms</td>
+<td style="text-align: right;">142.0 ms</td>
+<td style="text-align: right;">48.7 ms</td>
+<td style="text-align: right;">5.7 ms</td>
+<td style="text-align: right;">4.8 ms</td>
+<td style="text-align: right;">5.4 ms</td>
 </tr>
 <tr>
 <td><a href="https://github.com/franknoh/PPy/blob/main/examples/15_algorithms/15b_dijkstra">15b</a></td>
 <td>shortest path</td>
-<td style="text-align: right;">5309.1 ms</td>
-<td style="text-align: right;">5299.7 ms</td>
-<td style="text-align: right;"><strong>135.0 ms</strong></td>
-<td style="text-align: right;">172.0 ms</td>
-<td style="text-align: right;">154.0 ms</td>
+<td style="text-align: right;">4858.5 ms</td>
+<td style="text-align: right;">4426.9 ms</td>
+<td style="text-align: right;"><strong>111.7 ms</strong></td>
+<td style="text-align: right;">142.2 ms</td>
+<td style="text-align: right;">134.3 ms</td>
 </tr>
 <tr>
 <td><a href="https://github.com/franknoh/PPy/blob/main/examples/15_algorithms/15c_kmp">15c</a></td>
 <td>substring search</td>
-<td style="text-align: right;">318.6 ms</td>
-<td style="text-align: right;">62.6 ms</td>
+<td style="text-align: right;">292.4 ms</td>
+<td style="text-align: right;">53.3 ms</td>
 <td style="text-align: right;">—</td>
-<td style="text-align: right;">10.6 ms</td>
-<td style="text-align: right;">9.9 ms</td>
+<td style="text-align: right;">9.3 ms</td>
+<td style="text-align: right;">9.0 ms</td>
 </tr>
 <tr>
 <td><a href="https://github.com/franknoh/PPy/blob/main/examples/15_algorithms/15d_segment_tree">15d</a></td>
 <td>range sums</td>
-<td style="text-align: right;">2037.0 ms</td>
-<td style="text-align: right;">1806.0 ms</td>
-<td style="text-align: right;"><strong>40.1 ms</strong></td>
-<td style="text-align: right;">66.0 ms</td>
-<td style="text-align: right;">65.1 ms</td>
+<td style="text-align: right;">1571.7 ms</td>
+<td style="text-align: right;">1524.4 ms</td>
+<td style="text-align: right;"><strong>30.1 ms</strong></td>
+<td style="text-align: right;">50.8 ms</td>
+<td style="text-align: right;">50.9 ms</td>
 </tr>
 <tr>
 <td><a href="https://github.com/franknoh/PPy/blob/main/examples/15_algorithms/15e_lis">15e</a></td>
 <td>longest increasing subsequence</td>
-<td style="text-align: right;">615.6 ms</td>
-<td style="text-align: right;">127.9 ms</td>
-<td style="text-align: right;"><strong>43.8 ms</strong></td>
-<td style="text-align: right;">62.7 ms</td>
-<td style="text-align: right;">60.2 ms</td>
+<td style="text-align: right;">541.6 ms</td>
+<td style="text-align: right;">111.5 ms</td>
+<td style="text-align: right;"><strong>41.5 ms</strong></td>
+<td style="text-align: right;">57.7 ms</td>
+<td style="text-align: right;">53.9 ms</td>
 </tr>
 <tr>
 <td><a href="https://github.com/franknoh/PPy/blob/main/examples/15_algorithms/15f_input">15f</a></td>
 <td>counting inversions</td>
-<td style="text-align: right;">647.6 ms</td>
-<td style="text-align: right;">107.2 ms</td>
-<td style="text-align: right;"><strong>43.1 ms</strong></td>
-<td style="text-align: right;">49.1 ms</td>
-<td style="text-align: right;">50.2 ms</td>
+<td style="text-align: right;">603.7 ms</td>
+<td style="text-align: right;">98.4 ms</td>
+<td style="text-align: right;"><strong>38.6 ms</strong></td>
+<td style="text-align: right;">43.5 ms</td>
+<td style="text-align: right;">44.2 ms</td>
 </tr>
 </tbody>
 </table>
@@ -5171,9 +5223,9 @@ on this hybrid CPU and the batch takes hundreds of milliseconds some runs:</p>
 <tbody>
 <tr>
 <td>newton, 100k starts</td>
-<td style="text-align: right;">12.81 ± 0.07</td>
-<td style="text-align: right;"><strong>1.51 ± 0.16</strong></td>
-<td style="text-align: right;">6.02 ± 0.51</td>
+<td style="text-align: right;">11.89 ± 0.07</td>
+<td style="text-align: right;"><strong>1.23 ± 0.10</strong></td>
+<td style="text-align: right;">6.52 ± 1.04</td>
 </tr>
 </tbody>
 </table>
@@ -5726,7 +5778,7 @@ on its thread pool, with <code>jax_enable_x64</code>:</p>
 <tbody>
 <tr>
 <td>fused, serial</td>
-<td style="text-align: right;">12.49 ± 0.50</td>
+<td style="text-align: right;">12.09 ± 0.41</td>
 <td style="text-align: right;">—</td>
 <td style="text-align: right;">—</td>
 <td style="text-align: right;">—</td>
@@ -5734,23 +5786,23 @@ on its thread pool, with <code>jax_enable_x64</code>:</p>
 </tr>
 <tr>
 <td>fused</td>
-<td style="text-align: right;"><strong>4.27 ± 0.14</strong></td>
-<td style="text-align: right;">59.21 ± 0.56</td>
-<td style="text-align: right;">7.03 ± 0.37</td>
-<td style="text-align: right;">5.56 ± 1.00</td>
-<td style="text-align: right;">7.92 ± 0.42</td>
+<td style="text-align: right;">4.10 ± 0.18</td>
+<td style="text-align: right;">56.26 ± 0.39</td>
+<td style="text-align: right;">6.80 ± 0.31</td>
+<td style="text-align: right;"><strong>3.37 ± 0.41</strong></td>
+<td style="text-align: right;">5.91 ± 0.46</td>
 </tr>
 <tr>
 <td>sum of squares</td>
-<td style="text-align: right;">14.04 ± 0.43</td>
-<td style="text-align: right;">13.17 ± 0.16</td>
-<td style="text-align: right;">7.17 ± 0.05</td>
-<td style="text-align: right;">4.29 ± 0.07</td>
-<td style="text-align: right;"><strong>0.81 ± 0.08</strong></td>
+<td style="text-align: right;">13.35 ± 0.50</td>
+<td style="text-align: right;">12.35 ± 0.27</td>
+<td style="text-align: right;">6.90 ± 0.13</td>
+<td style="text-align: right;">3.99 ± 0.08</td>
+<td style="text-align: right;"><strong>0.65 ± 0.01</strong></td>
 </tr>
 <tr>
 <td>sum of squares, relaxed</td>
-<td style="text-align: right;">4.59 ± 0.22</td>
+<td style="text-align: right;">4.47 ± 0.21</td>
 <td style="text-align: right;">—</td>
 <td style="text-align: right;">—</td>
 <td style="text-align: right;">—</td>
@@ -5821,9 +5873,129 @@ region's value is not this number; it is that the function keeps its
 source, its autograd, and its dispatcher, and that a built artifact carries
 it with no compiler in the process. <code>torch.compile</code> pays for its guards on
 every call, which on an 8×32 input is more than the work.</p>
+<p>One layer of one shape is not the question anyone asks about
+<code>torch.compile</code>, and this table cannot answer it: the work is two
+microseconds, so every column is measuring its own overhead.
+<a href="../46_gpt2/"><code>46_gpt2</code></a> asks it at model scale instead -- GPT-2
+XL, forty-eight blocks, one region each, on a datacenter GPU.</p>
 <p>Intel Core Ultra 9 386H; PyTorch 2.14.0 (CPU) on CPython 3.13.13, PPY
 against the same PyTorch on CPython 3.14.5, from a checkout on a native
 filesystem.</p>
+<h2 id="gpt-2-xl-one-region-per-block-compared-with-pytorch-eager-and-torchcompile-at-model-scale">GPT-2 XL: one region per block: Compared with PyTorch eager and <code>torch.compile</code> at model scale<a class="headerlink" href="#gpt-2-xl-one-region-per-block-compared-with-pytorch-eager-and-torchcompile-at-model-scale" title="Permanent link">&para;</a></h2>
+<p>From <a href="../46_gpt2/">GPT-2 XL: one region per block</a>.</p>
+<!-- compare:start -->
+<table>
+<thead>
+<tr>
+<th></th>
+<th style="text-align: right;">PPY ATen regions</th>
+<th style="text-align: right;">PyTorch eager</th>
+<th style="text-align: right;"><code>torch.compile</code></th>
+<th style="text-align: right;"><code>torch.compile</code> reduce-overhead</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>forward b1 s32</td>
+<td style="text-align: right;">8.78 ± 0.12</td>
+<td style="text-align: right;">10.77 ± 0.08</td>
+<td style="text-align: right;"><strong>7.46 ± 0.28</strong></td>
+<td style="text-align: right;">13.36 ± 0.02</td>
+</tr>
+<tr>
+<td>forward b1 s128</td>
+<td style="text-align: right;">9.24 ± 0.18</td>
+<td style="text-align: right;">11.06 ± 0.08</td>
+<td style="text-align: right;"><strong>7.88 ± 0.28</strong></td>
+<td style="text-align: right;">14.11 ± 0.01</td>
+</tr>
+<tr>
+<td>forward b1 s512</td>
+<td style="text-align: right;">14.87 ± 0.01</td>
+<td style="text-align: right;">14.90 ± 0.01</td>
+<td style="text-align: right;"><strong>14.74 ± 0.07</strong></td>
+<td style="text-align: right;">22.86 ± 0.02</td>
+</tr>
+<tr>
+<td>forward b8 s512</td>
+<td style="text-align: right;"><strong>95.33 ± 0.30</strong></td>
+<td style="text-align: right;">95.50 ± 0.18</td>
+<td style="text-align: right;">95.55 ± 0.26</td>
+<td style="text-align: right;">102.96 ± 0.66</td>
+</tr>
+<tr>
+<td>decode 128 tokens</td>
+<td style="text-align: right;">1204.24 ± 28.34</td>
+<td style="text-align: right;">1484.26 ± 17.63</td>
+<td style="text-align: right;"><strong>1057.01 ± 41.66</strong></td>
+<td style="text-align: right;">1658.16 ± 1.84</td>
+</tr>
+<tr>
+<td>training step b4 s512</td>
+<td style="text-align: right;">136.62 ± 0.23</td>
+<td style="text-align: right;">136.73 ± 0.21</td>
+<td style="text-align: right;"><strong>135.58 ± 0.25</strong></td>
+<td style="text-align: right;">143.53 ± 0.67</td>
+</tr>
+</tbody>
+</table>
+<!-- compare:end -->
+
+<p>Milliseconds per pass of the whole model, bfloat16, best of ten in each of
+five processes; the decode row is a 128-token prompt and then 128 tokens one
+at a time out of the cache, timed without the prefill. Every column is the
+same forty-eight blocks on the same weights, and all four agree on the
+answer to three decimals -- which is what the agreement is checked on,
+because the greedy token is not stable under any of this: on weights drawn
+from a generator the top two logits of a position are usually a tie, and
+fusing a reduction differently flips it. The decode loop feeds the next
+token of a fixed sequence rather than the model's own argmax, for the same
+reason: sampling would send the four columns down four different sequences.</p>
+<p>The rows are one axis: how much of the wall clock is the Python between
+operators. At <code>b1 s32</code> the GEMMs are small and reading the weights is about
+three milliseconds, so the rest is dispatch -- and removing it is worth 18%
+to the region and 31% to <code>torch.compile</code>. At <code>b8 s512</code> the same forty-eight
+blocks are 95 ms of cuBLAS and the Python is a rounding error; the first
+three columns are the same number, and they should be. The training step is
+the same story with a backward pass on it.</p>
+<p>Decode is that axis at its far end. One token through forty-eight blocks is
+6144 region calls for 128 tokens, and almost no arithmetic per call: the
+region takes 19% off eager, <code>torch.compile</code> 29%, and the two are within 14%
+of each other. It is the row where removing the interpreter is worth the
+most, and it is still the row where a fusing compiler wins.</p>
+<p>That is the honest shape of it. A region is not a fusing compiler: it
+removes the interpreter between the operators and leaves the kernels where
+they were, so where Inductor's own win is also interpreter overhead the two
+land close, and where Inductor could fuse -- the two <code>layer_norm</code>s, the
+<code>gelu</code>, the residual adds -- there is not enough of it in a model that is
+98% GEMM for the fusion to show at this size. What the columns do not show
+is what each cost to get: the region is one C++ translation unit, 19 s to
+build once and cached on disk for every process after; <code>torch.compile</code>
+spends about 18 s on the first shape's forward graph in every new process,
+and several minutes to reach all five shapes and the backward with a cold
+Inductor cache.</p>
+<p><code>reduce-overhead</code> -- the CUDA-graphs mode -- is slower here in every row
+than plain <code>torch.compile</code>, and slower than eager too. Reproducibly so, the
+same numbers in its own process with a single shape rather than five, and
+with no warning from Inductor that it declined to capture.</p>
+<p>It also does not run a KV cache as written. A cache is a tensor the caller
+keeps across invocations, which is exactly the memory CUDA graphs reuse, and
+the decode loop fails outright -- <em>accessing tensor output of CUDAGraphs
+that has been overwritten by a subsequent run</em> -- until the counterpart
+announces each invocation with <code>cudagraph_mark_step_begin()</code> <strong>and</strong> sets
+<code>cudagraph_trees_generation_cloning = "user_visible"</code>, which are the two
+things its own error message asks for. The cloning that second switch turns
+on is part of what the last column costs. The training step needed the same
+care for the same reason: gradients are set to <code>None</code> before each backward
+rather than accumulated, which is what an optimizer does anyway.</p>
+<p>The PPY column is <code>ppy &lt;file&gt;</code> -- the staged Python that loads the compiled
+regions -- not <code>ppy run</code>. Compiling the driver natively has nothing to do
+here: outside the regions the program is forty-eight calls and a loop.</p>
+<p>NVIDIA GeForce RTX 4090 24 GB, driver 580.126.20, CUDA 13.0; PyTorch
+2.14.0+cu130 on CPython 3.13.15, on a rented Pod. Not the machine the other
+tables come from: <code>scripts/compare_docs.py</code> skips this comparison unless
+<code>PPY_TORCH_CUDA_PYTHON</code> names a PyTorch with a device, so the bench runner
+leaves it alone, and <code>scripts/cloud/runpod_bench.py</code> is what re-measures it.</p>
 <h2 id="training-a-torch-mlp-compared-with-pytorch-as-it-is-usually-written">Training a torch MLP: Compared with PyTorch as it is usually written<a class="headerlink" href="#training-a-torch-mlp-compared-with-pytorch-as-it-is-usually-written" title="Permanent link">&para;</a></h2>
 <p>From <a href="../21_training_torch/">Training a torch MLP</a>.
 The standardization of 20,000×16 rows, and one forward pass of the step's
@@ -5872,16 +6044,16 @@ column.</p>
 <tbody>
 <tr>
 <td>standardize, 20000 rows</td>
-<td style="text-align: right;">0.91 ± 0.00</td>
-<td style="text-align: right;">68.04 ± 0.80</td>
-<td style="text-align: right;"><strong>0.89 ± 0.23</strong></td>
-<td style="text-align: right;">0.94 ± 0.23</td>
+<td style="text-align: right;">0.83 ± 0.02</td>
+<td style="text-align: right;">62.74 ± 0.20</td>
+<td style="text-align: right;"><strong>0.72 ± 0.04</strong></td>
+<td style="text-align: right;"><strong>0.72 ± 0.08</strong></td>
 </tr>
 <tr>
 <td>forward pass, per call</td>
-<td style="text-align: right;">0.12 ± 0.00</td>
-<td style="text-align: right;">0.12 ± 0.00</td>
-<td style="text-align: right;">0.12 ± 0.01</td>
+<td style="text-align: right;">0.11 ± 0.01</td>
+<td style="text-align: right;">0.11 ± 0.00</td>
+<td style="text-align: right;">0.11 ± 0.00</td>
 <td style="text-align: right;"><strong>0.11 ± 0.00</strong></td>
 </tr>
 </tbody>

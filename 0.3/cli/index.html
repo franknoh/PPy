@@ -213,7 +213,7 @@
   </div>
   <div class="md-source__repository">
     franknoh/PPy
-    <span class="ppy-source-version" title="Documentation version">v0.3.3</span>
+    <span class="ppy-source-version" title="Documentation version">v0.3.4</span>
   </div>
 </a>
       </div>
@@ -497,7 +497,7 @@
   </div>
   <div class="md-source__repository">
     franknoh/PPy
-    <span class="ppy-source-version" title="Documentation version">v0.3.3</span>
+    <span class="ppy-source-version" title="Documentation version">v0.3.4</span>
   </div>
 </a>
     </div>
@@ -2333,6 +2333,8 @@
       
         
       
+        
+      
     
     
     
@@ -2477,6 +2479,34 @@
     
   
     PyTorch ATen regions
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../howto/46_gpt2/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    GPT-2 XL: one region per block
   
 
     
@@ -4781,10 +4811,12 @@ other path by the benchmark beside them.</p>
 <a id="__codelineno-11-11" name="__codelineno-11-11" href="#__codelineno-11-11"></a>ppy<span class="w"> </span>emit<span class="w"> </span>ptx<span class="w"> </span>foo.ppy<span class="w">                 </span><span class="c1"># ... as PTX (PPY_CUDA_ARCH names the architecture, sm_70 by default)</span>
 <a id="__codelineno-11-12" name="__codelineno-11-12" href="#__codelineno-11-12"></a>ppy<span class="w"> </span>emit<span class="w"> </span>c<span class="w"> </span>--header-only<span class="w"> </span>foo.ppy<span class="w">     </span><span class="c1"># every function static inline in a header</span>
 <a id="__codelineno-11-13" name="__codelineno-11-13" href="#__codelineno-11-13"></a>ppy<span class="w"> </span>emit<span class="w"> </span>c<span class="w"> </span>--standalone<span class="w"> </span>prog.ppy<span class="w">     </span><span class="c1"># the whole program from main(), shims and all</span>
-<a id="__codelineno-11-14" name="__codelineno-11-14" href="#__codelineno-11-14"></a>ppy<span class="w"> </span>emit<span class="w"> </span>c<span class="w"> </span>--format<span class="w"> </span>foo.ppy<span class="w">          </span><span class="c1"># ... laid out by clang-format (the project's .clang-format, or LLVM style)</span>
-<a id="__codelineno-11-15" name="__codelineno-11-15" href="#__codelineno-11-15"></a>ppy<span class="w"> </span>emit<span class="w"> </span>header<span class="w"> </span>foo.ppy<span class="w">              </span><span class="c1"># the C declarations of the exports</span>
-<a id="__codelineno-11-16" name="__codelineno-11-16" href="#__codelineno-11-16"></a>ppy<span class="w"> </span>emit<span class="w"> </span>stablehlo<span class="w"> </span>foo.ppy<span class="w">           </span><span class="c1"># the @ppy.xla.jit functions as StableHLO for XLA</span>
-<a id="__codelineno-11-17" name="__codelineno-11-17" href="#__codelineno-11-17"></a>ppy<span class="w"> </span>emit<span class="w"> </span>toy<span class="w"> </span>foo.ppy<span class="w">                 </span><span class="c1"># a format an installed backend registers; ppy doctor lists them</span>
+<a id="__codelineno-11-14" name="__codelineno-11-14" href="#__codelineno-11-14"></a>ppy<span class="w"> </span>emit<span class="w"> </span>c<span class="w"> </span>--standalone<span class="w"> </span>--unsafe<span class="w"> </span>--format<span class="w"> </span>app.ppy<span class="w"> </span>-o<span class="w"> </span>app.c
+<a id="__codelineno-11-15" name="__codelineno-11-15" href="#__codelineno-11-15"></a>ppy<span class="w"> </span>emit<span class="w"> </span>cpp<span class="w"> </span>--standalone<span class="w"> </span>--unsafe<span class="w"> </span>--format<span class="w"> </span>app.ppy<span class="w"> </span>-o<span class="w"> </span>app.cpp
+<a id="__codelineno-11-16" name="__codelineno-11-16" href="#__codelineno-11-16"></a>ppy<span class="w"> </span>emit<span class="w"> </span>c<span class="w"> </span>--format<span class="w"> </span>foo.ppy<span class="w">          </span><span class="c1"># ... laid out by clang-format (the project's .clang-format, or LLVM style)</span>
+<a id="__codelineno-11-17" name="__codelineno-11-17" href="#__codelineno-11-17"></a>ppy<span class="w"> </span>emit<span class="w"> </span>header<span class="w"> </span>foo.ppy<span class="w">              </span><span class="c1"># the C declarations of the exports</span>
+<a id="__codelineno-11-18" name="__codelineno-11-18" href="#__codelineno-11-18"></a>ppy<span class="w"> </span>emit<span class="w"> </span>stablehlo<span class="w"> </span>foo.ppy<span class="w">           </span><span class="c1"># the @ppy.xla.jit functions as StableHLO for XLA</span>
+<a id="__codelineno-11-19" name="__codelineno-11-19" href="#__codelineno-11-19"></a>ppy<span class="w"> </span>emit<span class="w"> </span>toy<span class="w"> </span>foo.ppy<span class="w">                 </span><span class="c1"># a format an installed backend registers; ppy doctor lists them</span>
 </code></pre></div>
 <p>One rule for every kind: a single file with no <code>-o</code> prints to standard
 output, <code>-o FILE</code> writes that file, and a directory target writes one file
@@ -4827,6 +4859,27 @@ is read. <code>--format</code> (for <code>c</code>, <code>cpp</code>, <code>cuda
 text through <code>clang-format</code>, with the project's <code>.clang-format</code> where it
 has one and LLVM style at four spaces and a hundred columns otherwise; a
 missing <code>clang-format</code> is <code>E1802</code>.</p>
+<p><code>--unsafe</code> applies only to <code>emit c</code> and <code>emit cpp</code>, using the build command's
+safeguard configuration. With <code>--standalone</code>, it emits readable source with
+direct scalar/void returns, one global <code>main</code>, source function names, and
+C++17 module namespaces (nested for packages). C qualifies names only when
+they collide. Project imports are linked after checking that every imported
+module has no executable initialization and every reachable function is native.</p>
+<p>Unsafe standalone source selects native C/C++ integer arithmetic in the IR,
+before presentation lowering. Addition, subtraction and multiplication use
+ordinary operators; signed overflow is outside the portable input domain.
+This differs from the guaranteed 64-bit wrap of <code>build/run --unsafe</code> and
+non-standalone unsafe emission. Division retains Python floor rounding.
+Adjacent canonical print operations fuse within a block into <code>printf</code>, with
+byte-exact literals, Python <code>True</code>/<code>False</code>, <code>end</code>, and explicit <code>fflush</code>.
+Integer <code>ppy.input</code> and <code>ppy.scan</code> use <code>scanf</code>: native whitespace/token parsing,
+not Python's line parsing or underscore syntax, with a failed conversion
+exiting with status 1 before the value is used. Input must fit its machine type.
+Safe standalone emission and builds retain the existing scanner and guards.
+Programs sharing a buffered scanner retain that scanner for all reads.
+The C++ spelling uses <code>&lt;cstdint&gt;</code>, <code>&lt;cinttypes&gt;</code>, <code>&lt;cstdio&gt;</code> and <code>std::</code> stdio;
+headers and helpers are included only when needed. Aggregate-returning and
+runtime-managed functions retain their internal ABI when required.</p>
 <p><code>.ppyir</code> is the IR's on-disk form -- public from 0.2.0 at schema 1 -- and
 <code>ppy build foo.ppyir</code> builds one without the Python that produced it: the file
 carries its schema and dialect versions, every function's ABI, and its
