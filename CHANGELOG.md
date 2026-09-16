@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.3.5 — 2026-09-16
 
 - Unsafe standalone C/C++ source accepts `--int-width 32`, using actual
   32-bit arithmetic, plain `int` declarations, and `%d` input/output. The
