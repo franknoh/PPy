@@ -211,7 +211,7 @@
   </div>
   <div class="md-source__repository">
     franknoh/PPy
-    <span class="ppy-source-version" title="Documentation version">v0.3.5</span>
+    <span class="ppy-source-version" title="Documentation version">v0.3.6</span>
   </div>
 </a>
       </div>
@@ -495,7 +495,7 @@
   </div>
   <div class="md-source__repository">
     franknoh/PPy
-    <span class="ppy-source-version" title="Documentation version">v0.3.5</span>
+    <span class="ppy-source-version" title="Documentation version">v0.3.6</span>
   </div>
 </a>
     </div>
@@ -3794,6 +3794,17 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#036-2026-09-21" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        0.3.6 — 2026-09-21
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#035-2026-09-16" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3966,6 +3977,17 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#036-2026-09-21" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        0.3.6 — 2026-09-21
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#035-2026-09-16" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4124,6 +4146,16 @@
 
 
 <h1 id="changelog">Changelog<a class="headerlink" href="#changelog" title="Permanent link">&para;</a></h1>
+<h2 id="036-2026-09-21">0.3.6 — 2026-09-21<a class="headerlink" href="#036-2026-09-21" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Unsafe standalone C/C++ source emits integer <code>ppy.input</code> and <code>ppy.scan</code>
+  as plain <code>scanf(...);</code> calls without conversion checks, assuming valid input
+  within the selected 32-bit or 64-bit range. Safe emission and builds retain
+  their input validation.</li>
+<li>Explicit <code>print(..., flush=True)</code> continues to flush stdout; omitted or false
+  <code>flush</code> does not emit <code>fflush</code>. Regression tests cover both languages and
+  integer widths, normal reads, and safe-mode rejection of invalid input.</li>
+</ul>
 <h2 id="035-2026-09-16">0.3.5 — 2026-09-16<a class="headerlink" href="#035-2026-09-16" title="Permanent link">&para;</a></h2>
 <ul>
 <li>Unsafe standalone C/C++ source accepts <code>--int-width 32</code>, using actual
@@ -4613,7 +4645,7 @@ on real hardware. The entries below are in the order the work landed.</p>
   as they should, and the entry point bears the function's qualified name
   rather than <code>call_0</code>.</li>
 <li>The landing page's test and diagnostic-code counts come from the tree
-  through markers (<code>1233</code>, <code>78</code>), and the
+  through markers (<code>1235</code>, <code>78</code>), and the
   guard refuses those spelled as digits. The GPU guide says what a ROCm
   machine gets: no launch, <code>compiled</code> false, <code>ppy emit hip</code> for <code>hipcc</code>.</li>
 <li>The ROCm harness installs every group when the image's JAX allows it
