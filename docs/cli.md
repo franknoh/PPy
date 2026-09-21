@@ -429,10 +429,15 @@ width without redundant casts. Functions appear before their callers where
 possible, with prototypes for recursion and runtime callbacks. Local
 declarations move to their first write when every use stays in that scope.
 Adjacent canonical print operations fuse within a block into `printf`, with
-byte-exact literals, Python `True`/`False`, `end`, and explicit `fflush`.
+byte-exact literals, Python `True`/`False`, and `end`. Explicit
+`print(..., flush=True)` emits `fflush(stdout)` (in C++, `std::fflush(stdout)`);
+omitting `flush` or passing `flush=False` does not emit a flush.
 Integer `ppy.input` and `ppy.scan` use `scanf`: native whitespace/token parsing,
-not Python's line parsing or underscore syntax, with a failed conversion
-exiting with status 1 before the value is used. Input must fit its machine type.
+not Python's line parsing or underscore syntax. Unsafe standalone source assumes
+every integer read succeeds and fits its machine type, and emits a plain
+`scanf(...);` without checking the return value. Malformed input, premature EOF,
+and out-of-range values are outside this mode's input contract; a failed read
+can leave the destination uninitialized.
 Safe standalone emission and builds retain the existing scanner and guards.
 Programs sharing a buffered scanner retain that scanner for all reads.
 The C++ spelling uses `<cstdint>`, `<cinttypes>`, `<cstdio>` and `std::` stdio;

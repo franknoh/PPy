@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.3.6 — 2026-09-21
+
+- Unsafe standalone C/C++ source emits integer `ppy.input` and `ppy.scan`
+  as plain `scanf(...);` calls without conversion checks, assuming valid input
+  within the selected 32-bit or 64-bit range. Safe emission and builds retain
+  their input validation.
+- Explicit `print(..., flush=True)` continues to flush stdout; omitted or false
+  `flush` does not emit `fflush`. Regression tests cover both languages and
+  integer widths, normal reads, and safe-mode rejection of invalid input.
+
 ## 0.3.5 — 2026-09-16
 
 - Unsafe standalone C/C++ source accepts `--int-width 32`, using actual
