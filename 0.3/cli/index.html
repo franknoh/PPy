@@ -213,7 +213,7 @@
   </div>
   <div class="md-source__repository">
     franknoh/PPy
-    <span class="ppy-source-version" title="Documentation version">v0.3.5</span>
+    <span class="ppy-source-version" title="Documentation version">v0.3.6</span>
   </div>
 </a>
       </div>
@@ -497,7 +497,7 @@
   </div>
   <div class="md-source__repository">
     franknoh/PPy
-    <span class="ppy-source-version" title="Documentation version">v0.3.5</span>
+    <span class="ppy-source-version" title="Documentation version">v0.3.6</span>
   </div>
 </a>
     </div>
@@ -4879,10 +4879,15 @@ width without redundant casts. Functions appear before their callers where
 possible, with prototypes for recursion and runtime callbacks. Local
 declarations move to their first write when every use stays in that scope.
 Adjacent canonical print operations fuse within a block into <code>printf</code>, with
-byte-exact literals, Python <code>True</code>/<code>False</code>, <code>end</code>, and explicit <code>fflush</code>.
+byte-exact literals, Python <code>True</code>/<code>False</code>, and <code>end</code>. Explicit
+<code>print(..., flush=True)</code> emits <code>fflush(stdout)</code> (in C++, <code>std::fflush(stdout)</code>);
+omitting <code>flush</code> or passing <code>flush=False</code> does not emit a flush.
 Integer <code>ppy.input</code> and <code>ppy.scan</code> use <code>scanf</code>: native whitespace/token parsing,
-not Python's line parsing or underscore syntax, with a failed conversion
-exiting with status 1 before the value is used. Input must fit its machine type.
+not Python's line parsing or underscore syntax. Unsafe standalone source assumes
+every integer read succeeds and fits its machine type, and emits a plain
+<code>scanf(...);</code> without checking the return value. Malformed input, premature EOF,
+and out-of-range values are outside this mode's input contract; a failed read
+can leave the destination uninitialized.
 Safe standalone emission and builds retain the existing scanner and guards.
 Programs sharing a buffered scanner retain that scanner for all reads.
 The C++ spelling uses <code>&lt;cstdint&gt;</code>, <code>&lt;cinttypes&gt;</code>, <code>&lt;cstdio&gt;</code> and <code>std::</code> stdio;
