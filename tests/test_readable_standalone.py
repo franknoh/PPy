@@ -144,8 +144,6 @@ def test_parking_program(write, language, formatted):
     )
     assert ran.returncode == expected.returncode == 0, (ran.stderr, expected.stderr)
     assert ran.stdout == expected.stdout
-    failed = subprocess.run([str(executable)], input=b"bad\n", capture_output=True, check=False)
-    assert failed.returncode == 1
 
 
 @pytest.mark.parametrize("kind", ["ir", "llvm-ir", "header", "stablehlo", "cuda", "hip", "ptx"])
@@ -236,14 +234,56 @@ def test_source_edge_cases(write, language, source, expected):
     assert ran.stdout == expected
 
 
-def test_failed_input_in_helper_stops_program(write, language):
+@pytest.mark.parametrize("kind", ["input", "scan"])
+@pytest.mark.parametrize("int_width", [32, 64])
+def test_unsafe_integer_input_is_unchecked(write, language, kind, int_width):
     path = write(
         "app.ppy",
-        """
+        f"""
         import ppy
 
         def read() -> int:
-            return ppy.input[int]()
+            return ppy.{kind}[int]()
+
+        def main() -> None:
+            number_of_cars: int = ppy.{kind}[int]()
+            print(number_of_cars, read())
+
+        main()
+    """,
+    )
+    text = _emit(path, language, int_width=int_width)
+    prefix = "std::" if language == "cpp" else ""
+    spelling = "int" if int_width == 32 else f"{prefix}int64_t"
+    spec = '"%d"' if int_width == 32 else '"%" SCNd64'
+    assert f"{spelling} number_of_cars;" in text
+    assert f"{prefix}scanf({spec}, &number_of_cars);" in text
+    scans = [line.strip() for line in text.splitlines() if "scanf(" in line]
+    assert len(scans) == 2
+    assert all(line.startswith(f"{prefix}scanf(") and line.endswith(");") for line in scans)
+    assert "exit(" not in text
+    if language == "cpp":
+        assert "namespace app" in text and "app::read()" in text
+    executable = _compile(path, language, text)
+    data = (
+        b"2147483647 -2147483648\n"
+        if int_width == 32
+        else b"9223372036854775807 -9223372036854775808\n"
+    )
+    ran = subprocess.run([str(executable)], input=data, capture_output=True, check=False)
+    assert ran.returncode == 0, ran.stderr
+    assert ran.stdout == data
+
+
+@pytest.mark.parametrize("kind", ["input", "scan"])
+def test_safe_failed_input_in_helper_stops_program(write, language, kind):
+    path = write(
+        "app.ppy",
+        f"""
+        import ppy
+
+        def read() -> int:
+            return ppy.{kind}[int]()
 
         def main() -> None:
             print(read())
@@ -252,11 +292,18 @@ def test_failed_input_in_helper_stops_program(write, language):
         main()
     """,
     )
-    executable = _compile(path, language, _emit(path, language))
-    for data in (b"", b"bad\n"):
+    emitted = _ppy(path.parent, "emit", language, "--standalone", path.name)
+    assert emitted.returncode == 0, emitted.stderr
+    assert f"ppy_rt_{kind}_int(" in emitted.stdout
+    assert "scanf(" not in emitted.stdout
+    executable = _compile(path, language, emitted.stdout)
+    for data in (b"", b"bad\n", b"9223372036854775808\n"):
         ran = subprocess.run([str(executable)], input=data, capture_output=True, check=False)
         assert ran.returncode == 1
         assert ran.stdout == b""
+    ran = subprocess.run([str(executable)], input=b"42\n", capture_output=True, check=False)
+    assert ran.returncode == 0, ran.stderr
+    assert ran.stdout == b"42\nunreachable\n"
 
 
 def test_imported_side_effects_are_rejected(write, language):
@@ -309,7 +356,37 @@ def test_canonical_unsigned_print(tmp_path, language):
     assert ran.stdout == b"18446744073709551615\n"
 
 
-def test_flush_before_input(write, language):
+@pytest.mark.parametrize("int_width", [32, 64])
+@pytest.mark.parametrize("flush", ["", ", flush=False", ", flush=True"])
+def test_unsafe_print_flush_is_explicit(write, language, int_width, flush):
+    path = write(
+        "app.ppy",
+        f"""
+        import ppy
+
+        def main() -> None:
+            print("x: ", end=""{flush})
+            x: int = ppy.input[int]()
+            print(x)
+
+        main()
+    """,
+    )
+    text = _emit(path, language, int_width=int_width)
+    expected_flushes = 1 if flush == ", flush=True" else 0
+    assert text.count("fflush(") == expected_flushes
+    if expected_flushes:
+        prefix = "std::" if language == "cpp" else ""
+        assert f"{prefix}fflush(stdout);" in text
+        assert text.index("printf(") < text.index("fflush(") < text.index("scanf(")
+    executable = _compile(path, language, text)
+    ran = subprocess.run([str(executable)], input=b"42\n", capture_output=True, check=False)
+    assert ran.returncode == 0, ran.stderr
+    assert ran.stdout == b"x: 42\n"
+
+
+@pytest.mark.parametrize("int_width", [32, 64])
+def test_flush_before_input(write, language, int_width):
     path = write(
         "app.ppy",
         """
@@ -323,7 +400,7 @@ def test_flush_before_input(write, language):
         main()
     """,
     )
-    text = _emit(path, language)
+    text = _emit(path, language, int_width=int_width)
     assert text.count("printf(") == 2
     executable = _compile(path, language, text)
     with (

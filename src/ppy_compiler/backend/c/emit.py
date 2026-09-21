@@ -2490,15 +2490,14 @@ class _FunctionEmitter:
             and self.owner.native_input
             and symbol in {"ppy_rt_input_int", "ppy_rt_scan_int"}
         ):
-            # Unsafe source explicitly selects the host stdio parser. A failed
-            # conversion stops before an uninitialized value can be observed.
+            # Unsafe source assumes valid, in-range input for the host stdio parser.
             self.owner.unit.headers.add("stdio.h")
             if not self.owner.int32:
                 self.owner.unit.headers.add("inttypes.h")
             result = self.sink(op.result) or self.variable(op.result)
             scan = self.owner.std("scanf")
             spec = '"%d"' if self.owner.int32 else '"%" SCNd64'
-            self.line(f"if ({scan}({spec}, &{result}) != 1) {{ {self.failure()} }}")
+            self.line(f"{scan}({spec}, &{result});")
             return
         shim = SHIMS.get(symbol)
         libc = _LIBC.get(symbol)
