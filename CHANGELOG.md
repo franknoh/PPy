@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.3.7 — unreleased
+
+- A standalone binary reads more than `int`. `ppy.input` and `ppy.scan` of
+  `float`, of the fixed widths (`ppy.i8` through `ppy.u64`, `ppy.f32`,
+  `ppy.f64`), and of tuples of them lower to the C runtime, and so do
+  `ppy.input[Buffer[int]]()`, `ppy.input[Buffer[float]]()`,
+  `ppy.input[list[int]]()`, `ppy.input[list[float]]()`, and
+  `ppy.scan[Buffer[float]](n)`. The float grammar is `float()`'s, and where
+  CPython raises the binary names the same exception and stops.
+- A standalone `print` writes a float the way `repr` does: the shortest
+  digits that read back as the same double.
+- `ppy.input[ppy.i32]()` and the other fixed widths read under CPython too,
+  where they used to be a `TypeError`: the value is read as `int` and must
+  fit, or the read raises `OverflowError`.
+- `ppy.input[Model]()` reads one line of JSON into a dataclass, a pydantic
+  model, or a `TypedDict`, and `ppy.input[list[Model]]()` a JSON array of
+  them. `ppy.scan[Model]()` reads the next JSON value over as many lines as
+  it spans. A dataclass or `TypedDict` is checked field by field and a
+  mismatch is a `ValueError` naming where (`$.items[2].price`); a pydantic
+  model is validated by pydantic.
+- The standalone runtime's `ppy_rt_alloc` returns `int8_t *`, the type the
+  IR gives it, so emitted C no longer warns about incompatible pointers
+  (an error from GCC 14 on).
+
 ## 0.3.6 — 2026-09-21
 
 - Unsafe standalone C/C++ source emits integer `ppy.input` and `ppy.scan`

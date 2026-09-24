@@ -1092,6 +1092,11 @@ class _FunctionLowering:
                         and self._standalone_buffer(node.target.id, node.value)
                     ):
                         return
+                    if self.frontend.standalone and _tuple_read(node.value):
+                        values = self._standalone_read(node.value)
+                        if values is not None:
+                            self._store_tuple(node.target, values)
+                            return
                     self._store(node.target, self._expr(node.value))
             case ast.AugAssign():
                 self._augassign(node)
@@ -1182,14 +1187,31 @@ class _FunctionLowering:
         self._store(target, self._expr(node.value))
 
     def _standalone_buffer(self, name: str, value: ast.expr) -> bool:
-        """`xs = ppy.buffer[int](n)`: a zeroed allocation from the C support."""
-        if not isinstance(value, ast.Call) or len(value.args) != 1:
+        """`xs = ppy.buffer[int](n)`: a zeroed allocation from the C support.
+
+        `ppy.scan[Buffer[T]](n)` fills it with `n` tokens, and
+        `ppy.input[Buffer[T]]()` with the fields of one line, which the line
+        counts first.
+        """
+        if not isinstance(value, ast.Call):
             return False
-        described = _ALLOCATIONS.get(ast.unparse(value.func))
-        if described is None:
-            return False
-        element, reads = described
-        count = self._coerce(self._expr(value.args[0]), "int")
+        line = _line_buffer_read(value)
+        if line is not None:
+            element, reads = line, "ppy_rt_line_ints" if line == "int" else "ppy_rt_line_floats"
+            count = core.call_extern(
+                self.b, "ppy_rt_line_open", (core.const(self.b, -1, I64),), (I64,)
+            ).results[0]
+        else:
+            if len(value.args) != 1:
+                return False
+            described = _ALLOCATIONS.get(ast.unparse(value.func))
+            if described is None:
+                return False
+            element, scans = described
+            reads = (
+                ("ppy_rt_fill_ints" if element == "int" else "ppy_rt_fill_floats") if scans else ""
+            )
+            count = self._coerce(self._expr(value.args[0]), "int")
         element_type = _scalar_type(element)
         width = core.const(self.b, 1 if element in _NARROW else 8, I64)
         raw = core.call_extern(
@@ -1197,7 +1219,7 @@ class _FunctionLowering:
         ).results[0]
         data = core.cast(self.b, raw, PtrType(element_type)) if element_type != I8 else raw
         if reads:
-            core.call_extern(self.b, "ppy_rt_fill_ints", (data, count), (I64,))
+            core.call_extern(self.b, reads, (data, count), (I64,))
         buffer = self.b.create(
             "core.call_intrinsic",
             (data, count),
@@ -1208,6 +1230,76 @@ class _FunctionLowering:
         self.buffers[name] = buffer
         self.slots.pop(name, None)
         return True
+
+    def _standalone_read(self, node: ast.expr) -> list[Value] | None:
+        """`ppy.input[T]()` and `ppy.scan[T]()` of numbers, as runtime calls.
+
+        A scalar is one call. A tuple read from a line opens the line once,
+        requiring exactly its fields, and takes them one by one; a tuple
+        scanned is its fields scanned in order. A fixed width is read as
+        `int` and then held to its range, as the Python read holds it.
+        """
+        if not isinstance(node, ast.Call) or node.args or node.keywords:
+            return None
+        func = node.func
+        if not isinstance(func, ast.Subscript):
+            return None
+        what = ast.unparse(func.value)
+        if what not in {"ppy.input", "ppy.scan"}:
+            return None
+        spec = func.slice
+        if _tuple_read(node):
+            assert isinstance(spec, ast.Subscript)
+            parts = spec.slice.elts if isinstance(spec.slice, ast.Tuple) else [spec.slice]
+            kinds = [self._read_kind(part) for part in parts]
+            if not parts or len(parts) > _MAX_TUPLE_WIDTH or None in kinds:
+                raise Unsupported(
+                    f"`{ast.unparse(func)}` has no native lowering: a tuple read natively "
+                    "has int, float, or fixed-width fields"
+                )
+            if what == "ppy.input":
+                count = core.const(self.b, len(parts), I64)
+                core.call_extern(self.b, "ppy_rt_line_open", (count,), (I64,))
+                return [self._read_value("line", kind) for kind in kinds if kind is not None]
+            return [self._read_value("scan", kind) for kind in kinds if kind is not None]
+        kind = self._read_kind(spec)
+        if kind is None:
+            return None
+        return [self._read_value(what.rpartition(".")[2], kind)]
+
+    def _read_kind(self, spec: ast.expr) -> tuple[str, tuple[int, int] | None] | None:
+        """What one field reads as: `int` or `float`, and the range a width holds it to."""
+        name = ""
+        if isinstance(spec, ast.Name):
+            name = spec.id
+            binding = self.frontend.analysis.symbols.imports.get(spec.id)
+            if binding is not None and binding.canonical.startswith("ppy."):
+                name = binding.canonical.removeprefix("ppy.")
+            elif binding is not None:
+                return None
+        elif (
+            isinstance(spec, ast.Attribute)
+            and isinstance(spec.value, ast.Name)
+            and spec.value.id == "ppy"
+        ):
+            name = spec.attr
+        if name in {"int", "float"}:
+            return name, None
+        if name in _READ_FLOATS:
+            return "float", None
+        bounds = _READ_WIDTHS.get(name)
+        return ("int", bounds) if bounds is not None else None
+
+    def _read_value(self, source: str, kind: tuple[str, tuple[int, int] | None]) -> Value:
+        scalar, bounds = kind
+        result = I64 if scalar == "int" else F64
+        value = core.call_extern(self.b, f"ppy_rt_{source}_{scalar}", (), (result,)).results[0]
+        if bounds is not None:
+            low, high = (core.const(self.b, bound, I64) for bound in bounds)
+            value = core.call_extern(
+                self.b, "ppy_rt_check_width", (value, low, high), (I64,)
+            ).results[0]
+        return value
 
     def _store_tuple(self, target: ast.expr, values: list[Value]) -> None:
         if isinstance(target, ast.Name):
@@ -1230,6 +1322,8 @@ class _FunctionLowering:
     def _tuple_expr(self, node: ast.expr) -> list[Value] | None:
         if isinstance(node, ast.Call):
             func = node.func
+            if self.frontend.standalone and _tuple_read(node):
+                return self._standalone_read(node)
             if (
                 isinstance(func, ast.Attribute)
                 and isinstance(func.value, ast.Name)
@@ -1901,15 +1995,15 @@ class _FunctionLowering:
                 return self._standalone_print(node)
         if node.keywords:
             raise Unsupported("keyword arguments have no native ABI")
-        if self.frontend.standalone and target == "ppy.input[int]" and not node.args:
-            return core.call_extern(self.b, "ppy_rt_input_int", (), (I64,)).results[0]
-        if self.frontend.standalone and target == "ppy.scan[int]" and not node.args:
-            return core.call_extern(self.b, "ppy_rt_scan_int", (), (I64,)).results[0]
-        if self.frontend.standalone and target.startswith("ppy.input[Buffer"):
-            raise Unsupported(
-                "`ppy.input[Buffer[int]]()` has no standalone lowering yet; "
-                "`ppy.scan[Buffer[int]](n)` reads n tokens"
-            )
+        if self.frontend.standalone:
+            read = self._standalone_read(node)
+            if read is not None:
+                return read[0] if len(read) == 1 else core.tuple_make(self.b, *read)
+            if target.startswith(("ppy.input[", "ppy.scan[")) and "Buffer" in target:
+                raise Unsupported(
+                    "a buffer read is bound to a name in a standalone build: "
+                    "`values = ppy.input[Buffer[int]]()`"
+                )
         derivative = self._derivative_spec(node.func)
         if derivative is not None:
             values = self._derivative_call(derivative, node)
@@ -3122,7 +3216,7 @@ class _FunctionLowering:
                 if isinstance(part, str):
                     self._standalone_print_text(part)
                 else:
-                    shim = "ppy_rt_print_bool" if part.type == BOOL else "ppy_rt_print_i64"
+                    shim = _PRINT_SHIMS[part.type]
                     core.call_extern(self.b, shim, (part,), ())
         self._standalone_print_text(end)
         if flush:
@@ -3146,8 +3240,8 @@ class _FunctionLowering:
                     parts.extend(self._standalone_print_parts(item))
             return parts
         value = self._expr(argument)
-        if value.type not in {I64, BOOL}:
-            raise Unsupported("only integers, booleans, and string literals print natively")
+        if value.type not in _PRINT_SHIMS:
+            raise Unsupported("only integers, floats, booleans, and string literals print natively")
         parts.append(value)
         return parts
 
@@ -3931,3 +4025,58 @@ _ELEMENTS: dict[str, IRType] = {
 def _element_type(annotation: ast.expr) -> IRType | None:
     """The element an `[T]` subscript on the native namespace names."""
     return _ELEMENTS.get(ast.unparse(annotation))
+
+
+#: The fixed widths a read holds an `int` to. A `u64` holds what a native
+#: `int` can: the machine word is signed.
+_READ_WIDTHS = {
+    "i8": (-(1 << 7), (1 << 7) - 1),
+    "i16": (-(1 << 15), (1 << 15) - 1),
+    "i32": (-(1 << 31), (1 << 31) - 1),
+    "i64": (-(1 << 63), (1 << 63) - 1),
+    "u8": (0, (1 << 8) - 1),
+    "u16": (0, (1 << 16) - 1),
+    "u32": (0, (1 << 32) - 1),
+    "u64": (0, (1 << 63) - 1),
+}
+
+#: Float widths a read hands out as a `float`, which is what they hold natively.
+_READ_FLOATS = frozenset({"f32", "f64"})
+
+
+def _tuple_read(node: ast.expr) -> bool:
+    """Is this `ppy.input[tuple[...]]()` or `ppy.scan[tuple[...]]()`?"""
+    if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Subscript):
+        return False
+    spec = node.func.slice
+    return (
+        ast.unparse(node.func.value) in {"ppy.input", "ppy.scan"}
+        and isinstance(spec, ast.Subscript)
+        and ast.unparse(spec.value) == "tuple"
+    )
+
+
+def _line_buffer_read(node: ast.Call) -> str | None:
+    """The element of `ppy.input[Buffer[int]]()` or `[Buffer[float]]()`, if it is one.
+
+    A `list[int]` or `list[float]` read from a line is the same memory: a
+    native list is a buffer, and anything that would grow it has no lowering.
+    """
+    func = node.func
+    if node.args or node.keywords or not isinstance(func, ast.Subscript):
+        return None
+    if ast.unparse(func.value) != "ppy.input":
+        return None
+    spec = func.slice
+    if not isinstance(spec, ast.Subscript) or ast.unparse(spec.value) not in {
+        "Buffer",
+        "ppy.Buffer",
+        "list",
+    }:
+        return None
+    element = ast.unparse(spec.slice)
+    return element if element in {"int", "float"} else None
+
+
+#: How a standalone `print` writes each scalar: a float as Python's `repr` does.
+_PRINT_SHIMS = {I64: "ppy_rt_print_i64", F64: "ppy_rt_print_f64", BOOL: "ppy_rt_print_bool"}
