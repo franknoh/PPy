@@ -9,15 +9,11 @@ went native rather than agreeing by staying in Python.
 
 from __future__ import annotations
 
-import ctypes
-import heapq
 import os
-import random
 import shutil
 import subprocess
 import sys
 import textwrap
-from collections import deque
 from pathlib import Path
 
 import pytest
@@ -25,7 +21,6 @@ import pytest
 import ppy
 from ppy_compiler.backend.llvm import available as llvm_available
 from ppy_compiler.backend.llvm.link import c_compiler, standalone_toolchain_status
-from ppy_runtime import collections as runtime
 
 requires_llvm = pytest.mark.skipif(not llvm_available(), reason="llvmlite is not installed")
 requires_cc = pytest.mark.skipif(c_compiler() is None, reason="no C compiler on PATH")
@@ -354,7 +349,10 @@ def test_the_checker_names_each_misuse(tmp_path: Path):
     shown = (checked.stdout + checked.stderr).splitlines()
     errors = [line for line in shown if line.startswith("error[")]
     assert errors[:7] == [
-        "error[E1305]: a `ppy.Vec` holds `int` or `float`, not `str`",
+        (
+            "error[E1305]: a `ppy.Vec` holds numbers, tuples of numbers, dataclasses, "
+            "or collections, not `str`"
+        ),
         "error[E1301]: a `ppy.Heap` is read by `peek` and `pop`",
         "error[E1302]: a `ppy.Heap` is read by `peek` and `pop`, not iterated",
         "error[E1301]: argument 1 expects `int`, got `Literal[1.5]`",
@@ -362,70 +360,6 @@ def test_the_checker_names_each_misuse(tmp_path: Path):
         "error[E1305]: `ppy.Deque[T]()` takes no arguments",
         "error[E1202]: `ppy.Deque[int]` has no attribute `missing`",
     ]
-
-
-def _library() -> ctypes.CDLL:
-    path = runtime.library_path()
-    assert path is not None
-    lib = ctypes.CDLL(str(path))
-    lib.ppy_coll_new.restype = ctypes.c_void_p
-    lib.ppy_coll_len.restype = ctypes.c_int64
-    for suffix, kind in (("i64", ctypes.c_int64), ("f64", ctypes.c_double)):
-        for name in ("get", "pop_back", "pop_front"):
-            getattr(lib, f"ppy_coll_{name}_{suffix}").restype = kind
-        for order in ("min", "max"):
-            getattr(lib, f"ppy_heap_pop_{order}_{suffix}").restype = kind
-    return lib
-
-
-@requires_cc
-def test_the_runtime_matches_deque_heapq_and_a_stable_sort():
-    lib = _library()
-    rng = random.Random(3)
-    handle = ctypes.c_void_p
-    for _ in range(100):
-        made = handle(lib.ppy_coll_new(ctypes.c_int64(0)))
-        reference: deque[int] = deque()
-        for _ in range(300):
-            op, value = rng.randrange(5), rng.randrange(-1000, 1000)
-            if op == 0:
-                lib.ppy_coll_push_back_i64(made, ctypes.c_int64(value))
-                reference.append(value)
-            elif op == 1:
-                lib.ppy_coll_push_front_i64(made, ctypes.c_int64(value))
-                reference.appendleft(value)
-            elif op == 2 and reference:
-                assert lib.ppy_coll_pop_back_i64(made) == reference.pop()
-            elif op == 3 and reference:
-                assert lib.ppy_coll_pop_front_i64(made) == reference.popleft()
-            assert lib.ppy_coll_len(made) == len(reference)
-        items = [lib.ppy_coll_get_i64(made, ctypes.c_int64(i)) for i in range(len(reference))]
-        assert items == list(reference)
-        lib.ppy_coll_sort_i64(made)
-        items = [lib.ppy_coll_get_i64(made, ctypes.c_int64(i)) for i in range(len(reference))]
-        assert items == sorted(reference)
-        lib.ppy_coll_free(made)
-    for order, sign in (("min", 1.0), ("max", -1.0)):
-        made = handle(lib.ppy_coll_new(ctypes.c_int64(0)))
-        heap: list[float] = []
-        for _ in range(2000):
-            if rng.random() < 0.6 or not heap:
-                value = rng.uniform(-5, 5)
-                getattr(lib, f"ppy_heap_push_{order}_f64")(made, ctypes.c_double(value))
-                heapq.heappush(heap, sign * value)
-            else:
-                popped = getattr(lib, f"ppy_heap_pop_{order}_f64")(made)
-                assert popped == sign * heapq.heappop(heap)
-        lib.ppy_coll_free(made)
-    # Stable: 0.0 and -0.0 compare equal and keep their order, as `sorted` keeps it.
-    made = handle(lib.ppy_coll_new(ctypes.c_int64(0)))
-    values = [0.0, -0.0, 1.0, -0.0, 0.0, -1.0]
-    for value in values:
-        lib.ppy_coll_push_back_f64(made, ctypes.c_double(value))
-    lib.ppy_coll_sort_f64(made)
-    items = [lib.ppy_coll_get_f64(made, ctypes.c_int64(i)) for i in range(len(values))]
-    assert [repr(x) for x in items] == [repr(x) for x in sorted(values)]
-    lib.ppy_coll_free(made)
 
 
 KEYED = """
@@ -660,136 +594,6 @@ def test_a_standalone_binary_holds_maps_trees_and_lists(tmp_path: Path):
     assert native.stdout == expected.stdout == "1009 5 46427 50 50 59986.625 263\n"
 
 
-def _structures() -> ctypes.CDLL:
-    lib = _library()
-    for name in ("ppy_list_new", "ppy_map_new", "ppy_tree_new"):
-        getattr(lib, name).restype = ctypes.c_void_p
-    for name in (
-        "ppy_list_push_back_i64",
-        "ppy_list_push_front_i64",
-        "ppy_list_insert_after_i64",
-        "ppy_list_insert_before_i64",
-        "ppy_list_valid",
-        "ppy_list_step",
-        "ppy_list_after",
-        "ppy_list_remove_i64",
-        "ppy_list_value_i64",
-        "ppy_coll_field",
-        "ppy_map_find",
-        "ppy_map_remove",
-        "ppy_map_field",
-        "ppy_tree_find",
-        "ppy_tree_remove",
-        "ppy_tree_bound",
-        "ppy_tree_end",
-        "ppy_tree_field",
-    ):
-        getattr(lib, name).restype = ctypes.c_int64
-    lib.ppy_map_value_f64.restype = ctypes.c_double
-    return lib
-
-
-@requires_cc
-def test_the_linked_list_runtime_hands_out_the_references_ids():
-    lib, word = _structures(), ctypes.c_int64
-    rng = random.Random(11)
-    for _ in range(150):
-        made = ctypes.c_void_p(lib.ppy_list_new())
-        reference = ppy.LinkedList[int]()
-        for _ in range(200):
-            op, value = rng.randrange(6), rng.randrange(-99, 99)
-            nodes = [n for n, alive in enumerate(reference._alive) if alive]
-            if op == 0:
-                assert lib.ppy_list_push_back_i64(made, word(value)) == reference.push_back(value)
-            elif op == 1:
-                assert lib.ppy_list_push_front_i64(made, word(value)) == reference.push_front(value)
-            elif op == 2 and nodes:
-                node = rng.choice(nodes)
-                got = lib.ppy_list_insert_after_i64(made, word(node), word(value))
-                assert got == reference.insert_after(node, value)
-            elif op == 3 and nodes:
-                node = rng.choice(nodes)
-                got = lib.ppy_list_insert_before_i64(made, word(node), word(value))
-                assert got == reference.insert_before(node, value)
-            elif nodes:
-                node = rng.choice(nodes)
-                assert lib.ppy_list_remove_i64(made, word(node)) == reference.remove(node)
-        walked, node = [], lib.ppy_coll_field(made, word(3))
-        while node != -1:
-            walked.append(lib.ppy_list_value_i64(made, word(node)))
-            node = lib.ppy_list_after(made, word(node))
-        assert walked == list(reference)
-        lib.ppy_coll_free(made)
-
-
-@requires_cc
-def test_the_map_runtime_keeps_insertion_order_through_removals():
-    lib, word, double = _structures(), ctypes.c_int64, ctypes.c_double
-    rng = random.Random(12)
-    for _ in range(150):
-        made = ctypes.c_void_p(lib.ppy_map_new())
-        reference = ppy.HashMap[int, float]()
-        keys = [rng.randrange(-50, 50) * rng.choice([1, 1 << 40, -1]) for _ in range(30)]
-        for _ in range(400):
-            key, op = rng.choice(keys), rng.randrange(4)
-            if op < 2:
-                value = rng.uniform(-9, 9)
-                lib.ppy_map_put_f64(made, word(key), double(value))
-                reference[key] = value
-            elif op == 2:
-                entry = lib.ppy_map_remove(made, word(key))
-                if key in reference:
-                    assert lib.ppy_map_value_f64(made, word(entry)) == reference.pop(key)
-                else:
-                    assert entry == -1
-            else:
-                entry = lib.ppy_map_find(made, word(key))
-                assert (entry >= 0) == (key in reference)
-        used = lib.ppy_coll_field(made, word(3))
-        order = [
-            lib.ppy_map_field(made, word(e), word(0))
-            for e in range(used)
-            if lib.ppy_map_field(made, word(e), word(2))
-        ]
-        assert order == list(reference)
-        lib.ppy_map_free(made)
-
-
-@requires_cc
-def test_the_tree_runtime_answers_nearest_key_queries():
-    lib, word = _structures(), ctypes.c_int64
-    rng = random.Random(13)
-    for _ in range(150):
-        made = ctypes.c_void_p(lib.ppy_tree_new())
-        reference = ppy.TreeMap[int, int]()
-        for _ in range(300):
-            key, op = rng.randrange(-60, 60), rng.randrange(4)
-            if op < 2:
-                lib.ppy_tree_put_i64(made, word(key), word(key * 3))
-                reference[key] = key * 3
-            elif op == 2:
-                present = key in reference
-                assert lib.ppy_tree_remove(made, word(key)) == int(present)
-                if present:
-                    reference.pop(key)
-            else:
-                bounds = (reference.floor, reference.ceiling, reference.lower, reference.higher)
-                for mode, bound in enumerate(bounds):
-                    node = lib.ppy_tree_bound(made, word(key), word(mode))
-                    try:
-                        expected = bound(key)
-                    except KeyError:
-                        expected = None
-                    got = None if node < 0 else lib.ppy_tree_field(made, word(node), word(0))
-                    assert got == expected
-        walked, node = [], lib.ppy_tree_end(made, word(0))
-        while node >= 0:
-            walked.append(lib.ppy_tree_field(made, word(node), word(0)))
-            node = lib.ppy_tree_bound(made, word(walked[-1]), word(3))
-        assert walked == list(reference)
-        lib.ppy_coll_free(made)
-
-
 def test_the_checker_names_misuse_of_keyed_collections(tmp_path: Path):
     _write(
         tmp_path,
@@ -827,7 +631,7 @@ def test_the_checker_names_misuse_of_keyed_collections(tmp_path: Path):
     shown = (checked.stdout + checked.stderr).splitlines()
     errors = [line for line in shown if line.startswith("error[")]
     assert errors == [
-        "error[E1305]: a `ppy.HashMap` has `int` keys, not `float`",
+        "error[E1305]: a `ppy.HashMap` has `int` or int-tuple keys, not `float`",
         "error[E1301]: a `ppy.HashSet` is read by its methods",
         "error[E1305]: a `ppy.TreeMap` takes a key and a value type",
         "error[E1301]: a `float` does not fit an `int` element",

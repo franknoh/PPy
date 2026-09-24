@@ -32,6 +32,7 @@ from ppy_runtime.abi import STATUS_FALLBACK, STATUS_OK, NativeParam, NativeSigna
 
 from ...analysis import types as T
 from ...analysis.checker import FunctionAnalysis
+from ...analysis.collections import spelled as collection_spelled
 from ...analysis.effects import Effect
 from ...analysis.symbols import FunctionInfo
 
@@ -216,16 +217,17 @@ _COLLECTIONS = frozenset(
 
 
 def _collection_param(name: str, t: T.Type) -> NativeParam | None:
-    """A `ppy.Vec[int]` or another collection parameter: a handle native callers pass."""
+    """A `ppy.Vec[int]` or another collection parameter: a handle native callers pass.
+
+    Its element is the whole type written out (`ppy.Vec[ppy.Vec[int]]`), which
+    is what an argument is matched against.
+    """
     base = T.strip_literal(t)
     if not isinstance(base, T.Instance) or not base.args:
         return None
     if base.name not in _COLLECTIONS:
         return None
-    element = "int" if base.name in {"ppy.HashSet", "ppy.TreeSet"} else _scalar_name(base.args[-1])
-    if element not in {"int", "float"}:
-        return None
-    return NativeParam(name, "handle", element, class_name=base.name)
+    return NativeParam(name, "handle", collection_spelled(base), class_name=base.name)
 
 
 def _native_param(name: str, t: T.Type, layouts: ClassLayouts | None = None) -> NativeParam | None:
@@ -253,6 +255,8 @@ def _native_param(name: str, t: T.Type, layouts: ClassLayouts | None = None) -> 
 
 
 def _return_atoms(t: T.Type) -> tuple[str, ...] | None:
+    if _collection_param("", t) is not None:
+        return ("handle",)
     scalar = _scalar_name(t)
     if scalar is not None:
         return (scalar,)
@@ -372,6 +376,8 @@ def should_lower_native(info: FunctionInfo, analysis: FunctionAnalysis) -> tuple
         # The boundary hands back a value; a function with none to hand
         # back is native code's to call -- a thread's body, a helper.
         return False, "returns nothing, which has no Python boundary"
+    if _collection_param("", info.ret) is not None:
+        return False, "returns a collection, which native callers receive by handle"
     for param in info.params:
         native = _native_param(param.name, param.type)
         if native is not None and native.is_pointer:
@@ -473,4 +479,5 @@ def _releases_gil(analysis: FunctionAnalysis) -> bool:
 
 
 def _abi_name(scalar: str) -> str:
-    return {"int": "i64", "float": "double", "bool": "i8", "i8": "i8", "u8": "i8"}[scalar]
+    names = {"int": "i64", "float": "double", "bool": "i8", "i8": "i8", "u8": "i8"}
+    return names.get(scalar, "i8*")

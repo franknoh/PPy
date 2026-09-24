@@ -20,7 +20,15 @@ STATUS_SANITIZER_BASE = 2
 SANITIZERS = ("bounds", "overflow", "pointer", "alignment")
 
 #: `i8`/`u8` are byte-wide buffer elements; `bool` shares the width.
-_ABI_NAMES = {"int": "i64", "float": "double", "bool": "i8", "i8": "i8", "u8": "i8"}
+_ABI_NAMES = {
+    "int": "i64",
+    "float": "double",
+    "bool": "i8",
+    "i8": "i8",
+    "u8": "i8",
+    # A collection's handle, which only native callers pass or receive.
+    "handle": "i8*",
+}
 
 
 def _abi_name(scalar: str) -> str:

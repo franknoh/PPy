@@ -111,17 +111,21 @@ body itself. A `@jitclass` instance crosses into an `@njit` function through
 Numba's dispatcher and its own object layout, several times that per call.
 
 The native loop is where the work is, and there the two agree. The loop
-here takes the class as a parameter; see Limitations for why.
+here takes the class as a parameter.
 
 Intel Core Ultra 9 386H; Numba 0.67.0 on CPython 3.12.13, PPy on CPython
 3.14.5, from a checkout on a native filesystem.
 
 ## Limitations
 
-Constructing a `Vec3` inside a native loop is where PPy stops. A value
-class built in the loop keeps the function in Python (`ppy explain` says
-`boxed: Vec3 has no native lowering`), so the loop in the comparison takes
-the class as a parameter.
+A value class can be built inside a native loop: `Vec3(float(i), 1.0, 0.5)`
+is a struct of three doubles, with no object behind it. Two things keep a
+function in Python:
+
+- assigning a field in place (`v.x = 1.0`), since native code holds a value
+  class by value and the write would not reach the object Python sees
+- building one without naming every field, since native code does not
+  evaluate a dataclass's defaults
 
 <!-- outputs:start -->
 ## What it prints
