@@ -210,7 +210,7 @@
   </div>
   <div class="md-source__repository">
     franknoh/PPy
-    <span class="ppy-source-version" title="Documentation version">v0.3.6</span>
+    <span class="ppy-source-version" title="Documentation version">v0.3.7</span>
   </div>
 </a>
       </div>
@@ -417,7 +417,7 @@
   </div>
   <div class="md-source__repository">
     franknoh/PPy
-    <span class="ppy-source-version" title="Documentation version">v0.3.6</span>
+    <span class="ppy-source-version" title="Documentation version">v0.3.7</span>
   </div>
 </a>
     </div>
@@ -3882,10 +3882,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#037-unreleased" class="md-nav__link">
+  <a href="#037-2026-09-25" class="md-nav__link">
     <span class="md-ellipsis">
       
-        0.3.7 — unreleased
+        0.3.7 — 2026-09-25
       
     </span>
   </a>
@@ -4076,10 +4076,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#037-unreleased" class="md-nav__link">
+  <a href="#037-2026-09-25" class="md-nav__link">
     <span class="md-ellipsis">
       
-        0.3.7 — unreleased
+        0.3.7 — 2026-09-25
       
     </span>
   </a>
@@ -4256,7 +4256,7 @@
 
 
 <h1 id="changelog">Changelog<a class="headerlink" href="#changelog" title="Permanent link">&para;</a></h1>
-<h2 id="037-unreleased">0.3.7 — unreleased<a class="headerlink" href="#037-unreleased" title="Permanent link">&para;</a></h2>
+<h2 id="037-2026-09-25">0.3.7 — 2026-09-25<a class="headerlink" href="#037-2026-09-25" title="Permanent link">&para;</a></h2>
 <ul>
 <li>A standalone binary reads more than <code>int</code>. <code>ppy.input</code> and <code>ppy.scan</code> of
   <code>float</code>, of the fixed widths (<code>ppy.i8</code> through <code>ppy.u64</code>, <code>ppy.f32</code>,
@@ -4284,9 +4284,8 @@
   makes and uses them lowers to calls into a small C runtime under
   <code>ppy run</code>, in a standalone binary, and in emitted C and C++, and frees
   what it made before it returns. A native function may take one as a
-  parameter; native callers pass its handle. Keys are <code>int</code>, elements and
-  values <code>int</code> or <code>float</code>. <code>examples/47_collections</code> runs five problems
-  with them: 4.3 s under CPython, 0.39 s under <code>ppy run</code>.</li>
+  parameter; native callers pass its handle. <code>examples/47_collections</code>
+  runs five problems with them: 4.3 s under CPython, 0.39 s under <code>ppy run</code>.</li>
 <li>Collections hold anything with a native form: numbers, tuples of numbers,
   dataclasses (ordered with <code>order=True</code>), and other collections, so
   <code>Vec[Vec[int]]</code>, <code>HashMap[int, Vec[int]]</code>, <code>Heap[tuple[int, int]]</code>, and
