@@ -10,13 +10,13 @@
       
       
       
-        <link rel="canonical" href="https://ppy.franknoh.dev/dev/guide/gpu/">
+        <link rel="canonical" href="https://ppy.franknoh.dev/dev/guide/classes/">
       
       
-        <link rel="prev" href="../aio/">
+        <link rel="prev" href="../collections/">
       
       
-        <link rel="next" href="../tensors/">
+        <link rel="next" href="../native/">
       
       
         
@@ -27,7 +27,7 @@
     
     
       
-        <title>GPU kernels - PPy</title>
+        <title>Classes - PPy</title>
       
     
     
@@ -84,7 +84,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#gpu-kernels-ppycuda-and-ppyhip" class="md-skip">
+        <a href="#classes" class="md-skip">
           Skip to content
         </a>
       
@@ -123,7 +123,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              GPU kernels
+              Classes
             
           </span>
         </div>
@@ -770,10 +770,37 @@
                 
   
   
+    
   
   
-    <li class="md-nav__item">
-      <a href="../classes/" class="md-nav__link">
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Classes
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
         
   
   
@@ -789,6 +816,81 @@
   
 
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#object-classes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Object classes
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#generic-classes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Generic classes
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#memory" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Memory
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-python-boundary" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The Python boundary
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#limitations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Limitations
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
     </li>
   
 
@@ -966,37 +1068,10 @@
                 
   
   
-    
   
   
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
-      
-      
-        
-      
-      
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    GPU kernels
-  
-
-    
-  </span>
-  
-  
-
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
-      <a href="./" class="md-nav__link md-nav__link--active">
+    <li class="md-nav__item">
+      <a href="../gpu/" class="md-nav__link">
         
   
   
@@ -1012,131 +1087,6 @@
   
 
       </a>
-      
-        
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-    
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#kernel-vocabulary" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Kernel vocabulary
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#under-cpython" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Under CPython
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#how-the-compiler-lowers-a-kernel" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        How the compiler lowers a kernel
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#running-on-an-nvidia-device" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Running on an NVIDIA device
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#device-memory" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Device memory
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#built-artifacts" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Built artifacts
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#tile-kernels" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Tile kernels
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Tile kernels">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#tile-vocabulary" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Tile vocabulary
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#how-a-tile-kernel-runs-natively" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        How a tile kernel runs natively
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-      
     </li>
   
 
@@ -4028,10 +3978,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#kernel-vocabulary" class="md-nav__link">
+  <a href="#object-classes" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Kernel vocabulary
+        Object classes
       
     </span>
   </a>
@@ -4039,10 +3989,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#under-cpython" class="md-nav__link">
+  <a href="#generic-classes" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Under CPython
+        Generic classes
       
     </span>
   </a>
@@ -4050,10 +4000,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#how-the-compiler-lowers-a-kernel" class="md-nav__link">
+  <a href="#memory" class="md-nav__link">
     <span class="md-ellipsis">
       
-        How the compiler lowers a kernel
+        Memory
       
     </span>
   </a>
@@ -4061,10 +4011,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#running-on-an-nvidia-device" class="md-nav__link">
+  <a href="#the-python-boundary" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Running on an NVIDIA device
+        The Python boundary
       
     </span>
   </a>
@@ -4072,63 +4022,13 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#device-memory" class="md-nav__link">
+  <a href="#limitations" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Device memory
+        Limitations
       
     </span>
   </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#built-artifacts" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Built artifacts
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#tile-kernels" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Tile kernels
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Tile kernels">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#tile-vocabulary" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Tile vocabulary
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#how-a-tile-kernel-runs-natively" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        How a tile kernel runs natively
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
   
 </li>
       
@@ -4152,156 +4052,114 @@
   
 
 
-<h1 id="gpu-kernels-ppycuda-and-ppyhip">GPU kernels: <code>ppy.cuda</code> and <code>ppy.hip</code><a class="headerlink" href="#gpu-kernels-ppycuda-and-ppyhip" title="Permanent link">&para;</a></h1>
-<p>This page covers writing GPU kernels in PPy: thread kernels with <code>ppy.cuda</code>
-and <code>ppy.hip</code>, device memory, and tile kernels with <code>ppy.tile</code>.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ppy</span><span class="w"> </span><span class="kn">import</span> <span class="n">cuda</span><span class="p">,</span> <span class="n">native</span>
+<h1 id="classes">Classes<a class="headerlink" href="#classes" title="Permanent link">&para;</a></h1>
+<p>Native code holds an instance of a class in one of two ways, decided by the
+class:</p>
+<ul>
+<li>A <strong>value class</strong> is copied, like a number. It is a dataclass or plain class
+  whose fields are all numbers, and whose methods only read them. Native code
+  keeps it as a struct of its fields.</li>
+<li>An <strong>object class</strong> is shared, like any Python object. It has fields that
+  hold other objects or collections, or methods that change its fields.
+  Native code keeps a handle to it on the heap, counts references to it, and
+  frees it when the last one goes.</li>
+</ul>
+<p>You don't choose between them. <code>ppy explain</code> shows which one a class is by
+how its functions lower.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">dataclasses</span><span class="w"> </span><span class="kn">import</span> <span class="n">dataclass</span>
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>
 <a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>
-<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="nd">@cuda</span><span class="o">.</span><span class="n">kernel</span>
-<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="k">def</span><span class="w"> </span><span class="nf">saxpy</span><span class="p">(</span><span class="n">n</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">a</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="n">x</span><span class="p">:</span> <span class="n">native</span><span class="o">.</span><span class="n">const_ptr</span><span class="p">[</span><span class="nb">float</span><span class="p">],</span> <span class="n">y</span><span class="p">:</span> <span class="n">native</span><span class="o">.</span><span class="n">ptr</span><span class="p">[</span><span class="nb">float</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>    <span class="n">i</span> <span class="o">=</span> <span class="n">cuda</span><span class="o">.</span><span class="n">global_id</span><span class="p">()</span>
-<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>    <span class="k">if</span> <span class="n">i</span> <span class="o">&lt;</span> <span class="n">n</span><span class="p">:</span>
-<a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>        <span class="n">slot</span> <span class="o">=</span> <span class="n">native</span><span class="o">.</span><span class="n">offset</span><span class="p">(</span><span class="n">y</span><span class="p">,</span> <span class="n">i</span><span class="p">)</span>
-<a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>        <span class="n">native</span><span class="o">.</span><span class="n">store</span><span class="p">(</span><span class="n">slot</span><span class="p">,</span> <span class="n">a</span> <span class="o">*</span> <span class="n">native</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">native</span><span class="o">.</span><span class="n">offset</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">i</span><span class="p">))</span> <span class="o">+</span> <span class="n">native</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">slot</span><span class="p">))</span>
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="nd">@dataclass</span>
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="k">class</span><span class="w"> </span><span class="nc">Tree</span><span class="p">:</span>
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>    <span class="n">key</span><span class="p">:</span> <span class="nb">int</span>
+<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>    <span class="n">left</span><span class="p">:</span> <span class="s2">"Tree | None"</span> <span class="o">=</span> <span class="kc">None</span>
+<a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>    <span class="n">right</span><span class="p">:</span> <span class="s2">"Tree | None"</span> <span class="o">=</span> <span class="kc">None</span>
+<a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>
 <a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>
-<a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>
-<a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a><span class="k">def</span><span class="w"> </span><span class="nf">run</span><span class="p">(</span><span class="n">n</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">a</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="n">x</span><span class="p">:</span> <span class="n">native</span><span class="o">.</span><span class="n">const_ptr</span><span class="p">[</span><span class="nb">float</span><span class="p">],</span> <span class="n">y</span><span class="p">:</span> <span class="n">native</span><span class="o">.</span><span class="n">ptr</span><span class="p">[</span><span class="nb">float</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a>    <span class="n">cuda</span><span class="o">.</span><span class="n">launch</span><span class="p">(</span><span class="n">saxpy</span><span class="p">,</span> <span class="p">(</span><span class="n">n</span> <span class="o">+</span> <span class="mi">255</span><span class="p">)</span> <span class="o">//</span> <span class="mi">256</span><span class="p">,</span> <span class="mi">256</span><span class="p">,</span> <span class="n">n</span><span class="p">,</span> <span class="n">a</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">)</span>
+<a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a><span class="k">def</span><span class="w"> </span><span class="nf">insert</span><span class="p">(</span><span class="n">root</span><span class="p">:</span> <span class="n">Tree</span> <span class="o">|</span> <span class="kc">None</span><span class="p">,</span> <span class="n">key</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tree</span><span class="p">:</span>
+<a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>    <span class="k">if</span> <span class="n">root</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a>        <span class="k">return</span> <span class="n">Tree</span><span class="p">(</span><span class="n">key</span><span class="p">)</span>
+<a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a>    <span class="k">if</span> <span class="n">key</span> <span class="o">&lt;</span> <span class="n">root</span><span class="o">.</span><span class="n">key</span><span class="p">:</span>
+<a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a>        <span class="n">root</span><span class="o">.</span><span class="n">left</span> <span class="o">=</span> <span class="n">insert</span><span class="p">(</span><span class="n">root</span><span class="o">.</span><span class="n">left</span><span class="p">,</span> <span class="n">key</span><span class="p">)</span>
+<a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a>    <span class="k">elif</span> <span class="n">key</span> <span class="o">&gt;</span> <span class="n">root</span><span class="o">.</span><span class="n">key</span><span class="p">:</span>
+<a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a>        <span class="n">root</span><span class="o">.</span><span class="n">right</span> <span class="o">=</span> <span class="n">insert</span><span class="p">(</span><span class="n">root</span><span class="o">.</span><span class="n">right</span><span class="p">,</span> <span class="n">key</span><span class="p">)</span>
+<a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a>    <span class="k">return</span> <span class="n">root</span>
+<a id="__codelineno-0-19" name="__codelineno-0-19" href="#__codelineno-0-19"></a>
+<a id="__codelineno-0-20" name="__codelineno-0-20" href="#__codelineno-0-20"></a>
+<a id="__codelineno-0-21" name="__codelineno-0-21" href="#__codelineno-0-21"></a><span class="k">def</span><span class="w"> </span><span class="nf">height</span><span class="p">(</span><span class="n">root</span><span class="p">:</span> <span class="n">Tree</span> <span class="o">|</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+<a id="__codelineno-0-22" name="__codelineno-0-22" href="#__codelineno-0-22"></a>    <span class="k">if</span> <span class="n">root</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-0-23" name="__codelineno-0-23" href="#__codelineno-0-23"></a>        <span class="k">return</span> <span class="mi">0</span>
+<a id="__codelineno-0-24" name="__codelineno-0-24" href="#__codelineno-0-24"></a>    <span class="k">return</span> <span class="mi">1</span> <span class="o">+</span> <span class="nb">max</span><span class="p">(</span><span class="n">height</span><span class="p">(</span><span class="n">root</span><span class="o">.</span><span class="n">left</span><span class="p">),</span> <span class="n">height</span><span class="p">(</span><span class="n">root</span><span class="o">.</span><span class="n">right</span><span class="p">))</span>
 </code></pre></div>
-<p><code>@cuda.kernel</code> marks a kernel: a function of scalars and pointers that
-returns nothing and runs once per thread of a launch. <code>@cuda.device</code> marks a
-function a kernel calls.</p>
-<h2 id="kernel-vocabulary">Kernel vocabulary<a class="headerlink" href="#kernel-vocabulary" title="Permanent link">&para;</a></h2>
-<p>Inside a kernel you have:</p>
+<p><code>insert</code> and <code>height</code> both lower to native code: <code>Tree</code> is an object class,
+<code>Tree | None</code> is a handle that may be null, and <code>root is None</code> compares it
+with null.</p>
+<h2 id="object-classes">Object classes<a class="headerlink" href="#object-classes" title="Permanent link">&para;</a></h2>
+<p>An object class has no base class and no <code>__getattr__</code> or similar hook. Each
+field holds a value native code can represent:</p>
 <ul>
-<li><strong>Position.</strong> <code>cuda.thread_id()</code>, <code>block_id()</code>, <code>block_dim()</code>,
-  <code>grid_dim()</code>, and <code>global_id()</code> (the block's index times its size, plus the
-  thread's) say where a thread is. Each works along <code>"x"</code> unless told <code>"y"</code>
-  or <code>"z"</code>.</li>
-<li><strong>Barriers.</strong> <code>syncthreads()</code> waits for the block and <code>syncwarp()</code> for the
-  warp.</li>
-<li><strong>Memory.</strong> <code>shared[T, N]()</code> is <code>N</code> elements of <code>T</code> the block shares, and
-  <code>local[T, N]()</code> is this thread's own. Both are <code>native.ptr[T]</code>.</li>
-<li><strong>Shuffles.</strong> <code>shfl(v, lane)</code>, <code>shfl_up(v, d)</code>, <code>shfl_down(v, d)</code>, and
-  <code>shfl_xor(v, m)</code> trade a scalar across the warp. <code>warp_size()</code> gives the
-  warp's size.</li>
+<li>a number, a tuple of numbers, or a value class</li>
+<li>a collection: <code>Vec[int]</code>, <code>HashMap[int, Vec[int]]</code></li>
+<li>another object, or <code>None</code> where the field is <code>Node | None</code></li>
 </ul>
-<p><code>cuda.launch(kernel, grid, block, *args)</code> runs the kernel over <code>grid</code> blocks
-of <code>block</code> threads and waits. <code>grid</code> and <code>block</code> are each an <code>int</code> or a tuple
-of up to three.</p>
-<p><code>ppy.hip</code> is the same vocabulary spelled <code>hip</code>, with a 64-lane wavefront. A
-kernel marked by either is one kernel, and <code>ppy emit cuda</code> and <code>ppy emit hip</code>
-write it either way. <code>E1644</code> names a misuse.</p>
-<h2 id="under-cpython">Under CPython<a class="headerlink" href="#under-cpython" title="Permanent link">&para;</a></h2>
-<p>A launch runs the grid one block at a time and a block's threads together.
-Each thread is a Python thread that knows its position, so barriers and
-shuffles are real. This is the reference: exact and slow.</p>
-<h2 id="how-the-compiler-lowers-a-kernel">How the compiler lowers a kernel<a class="headerlink" href="#how-the-compiler-lowers-a-kernel" title="Permanent link">&para;</a></h2>
-<p>The compiler lowers a kernel to the gpu dialect of the IR
-(<a href="../../internals/ir/">The IR</a>). Inside device code <code>int</code> arithmetic wraps and
-nothing guards, as on the device.</p>
-<p>It refuses what has no device form:</p>
-<ul>
-<li>a list or a buffer parameter</li>
-<li>a returned value</li>
-<li>a call to a host function</li>
-</ul>
-<p>The CPU backends leave device code alone. A function that launches stays in
-Python until the launch runtime. <code>ppy emit cuda</code> and <code>ppy emit hip</code> write the
-kernels, the device functions, and the host functions with their launches as
-one CUDA or HIP C++ unit.</p>
-<h2 id="running-on-an-nvidia-device">Running on an NVIDIA device<a class="headerlink" href="#running-on-an-nvidia-device" title="Permanent link">&para;</a></h2>
-<p>Under <code>ppy run</code>, a kernel is compiled to PTX: the gpu dialect as LLVM IR for
-NVPTX, with libdevice for the math library. <code>ppy emit nvvm-ir</code> and
-<code>ppy emit ptx</code> show the two.</p>
-<p><code>cuda.launch</code> runs the kernel through the CUDA driver where one is present.
-Scalars pass by value. A <code>native</code> pointer's whole array is copied to the
-device and, when the pointer is mutable, back. So a launch means what the
-reference launch means.</p>
-<ul>
-<li><code>cuda.compiled(kernel)</code> says whether the kernel runs on the device here.</li>
-<li>Where the driver, a device, or the NVPTX backend is missing, the reference
-  launch runs and <code>W2008</code> says why.</li>
-<li><code>PPY_CUDA_ARCH</code> names the architecture the PTX is written for (<code>sm_70</code>
-  unless set; a driver compiles PTX forward).</li>
-</ul>
-<div class="admonition note">
-<p class="admonition-title">AMD cards</p>
-<p>An AMD card has no launch runtime in PPy. <code>ppy.cuda</code> and <code>ppy.tile</code>
-launch through the CUDA driver only, so on a ROCm machine <code>compiled</code> is
-<code>False</code> and the reference launch runs. HIP is <code>ppy emit hip</code>, the source
-for <code>hipcc</code>.</p>
-</div>
-<h2 id="device-memory">Device memory<a class="headerlink" href="#device-memory" title="Permanent link">&para;</a></h2>
-<p><code>cuda.device_alloc[T](n)</code> is <code>n</code> zeroed elements of <code>T</code> that live on the
-device between launches. It is a <code>native.ptr[T]</code> like <code>stack_alloc</code>'s, so the
-same loops fill and read it and <code>native.offset</code> keeps its kind.</p>
-<p>The host reads and writes through a mirror, and whichever side wrote last
-holds the truth:</p>
-<ul>
-<li>a launch takes the device address and copies nothing</li>
-<li>a host read after a launch brings the array back once</li>
-<li>a host write before a launch sends it once</li>
-</ul>
-<p>Without a device, and under <code>hip</code> (which has no launch runtime yet), there is
-only the mirror. Every path reads and writes it directly, so the program means
-the same thing everywhere.</p>
-<p>Under <code>ppy run</code> a function that allocates device memory stays in Python, as
-one that launches does. <code>ppy emit cuda</code> and <code>ppy emit hip</code> write it into the
-host function as a managed allocation (<code>cudaMallocManaged</code>), which the host
-reads and writes as it does the mirror, freed when the function returns.</p>
-<h2 id="built-artifacts">Built artifacts<a class="headerlink" href="#built-artifacts" title="Permanent link">&para;</a></h2>
-<p>A built artifact carries its kernels. <code>ppy build</code> writes each staged payload
-beside the manifest, and the launcher binds it without the compiler, as it
-does an <code>@xla.jit</code> function's StableHLO.</p>
-<p>Examples: <a href="../../howto/38_cuda/">CUDA</a>.</p>
-<h2 id="tile-kernels">Tile kernels<a class="headerlink" href="#tile-kernels" title="Permanent link">&para;</a></h2>
-<p><code>ppy.tile</code> is the other way to write a kernel. A program owns a tile of
-<code>BLOCK</code> lanes, rather than a thread owning one element, and the block's
-threads, shared memory, and shuffles are the compiler's to write.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ppy</span><span class="w"> </span><span class="kn">import</span> <span class="n">native</span><span class="p">,</span> <span class="n">tile</span>
+<p>Native code builds an instance by running the class's <code>__init__</code>, or for a
+dataclass by setting each field from the arguments and the defaults. A
+default natively has to be a constant, <code>None</code> included.</p>
+<p>Reading a field of <code>None</code> is Python's <code>AttributeError</code>. Under <code>ppy run</code> it
+falls back to Python, which raises it; a standalone binary stops.</p>
+<p>Methods lower like functions, with <code>self</code> as a handle. <code>len(obj)</code> calls
+<code>__len__</code>, and <code>if obj:</code> calls <code>__bool__</code> or <code>__len__</code> where the class has
+one and otherwise tests that <code>obj</code> is not <code>None</code>.</p>
+<h2 id="generic-classes">Generic classes<a class="headerlink" href="#generic-classes" title="Permanent link">&para;</a></h2>
+<p>A class can declare type parameters, and its fields and methods use them:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ppy</span><span class="w"> </span><span class="kn">import</span> <span class="n">Vec</span>
 <a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>
 <a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>
-<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="nd">@tile</span><span class="o">.</span><span class="n">kernel</span>
-<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="k">def</span><span class="w"> </span><span class="nf">block_max</span><span class="p">(</span><span class="n">x</span><span class="p">:</span> <span class="n">native</span><span class="o">.</span><span class="n">const_ptr</span><span class="p">[</span><span class="nb">float</span><span class="p">],</span> <span class="n">out</span><span class="p">:</span> <span class="n">native</span><span class="o">.</span><span class="n">ptr</span><span class="p">[</span><span class="nb">float</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>    <span class="n">pid</span> <span class="o">=</span> <span class="n">tile</span><span class="o">.</span><span class="n">program_id</span><span class="p">()</span>
-<a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a>    <span class="n">values</span> <span class="o">=</span> <span class="n">tile</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">pid</span> <span class="o">*</span> <span class="mi">64</span> <span class="o">+</span> <span class="n">tile</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="mi">64</span><span class="p">))</span>
-<a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>    <span class="n">tile</span><span class="o">.</span><span class="n">store</span><span class="p">(</span><span class="n">out</span><span class="p">,</span> <span class="n">pid</span><span class="p">,</span> <span class="n">tile</span><span class="o">.</span><span class="n">max</span><span class="p">(</span><span class="n">values</span><span class="p">))</span>
-<a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a>
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="k">class</span><span class="w"> </span><span class="nc">Stack</span><span class="p">[</span><span class="n">T</span><span class="p">]:</span>
+<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">items</span><span class="p">:</span> <span class="n">Vec</span><span class="p">[</span><span class="n">T</span><span class="p">]</span> <span class="o">=</span> <span class="n">Vec</span><span class="p">[</span><span class="n">T</span><span class="p">]()</span>
+<a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a>
+<a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">push</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">value</span><span class="p">:</span> <span class="n">T</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">items</span><span class="o">.</span><span class="n">push</span><span class="p">(</span><span class="n">value</span><span class="p">)</span>
 <a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a>
-<a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a><span class="k">def</span><span class="w"> </span><span class="nf">run</span><span class="p">(</span><span class="n">blocks</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">x</span><span class="p">:</span> <span class="n">native</span><span class="o">.</span><span class="n">const_ptr</span><span class="p">[</span><span class="nb">float</span><span class="p">],</span> <span class="n">out</span><span class="p">:</span> <span class="n">native</span><span class="o">.</span><span class="n">ptr</span><span class="p">[</span><span class="nb">float</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a>    <span class="n">tile</span><span class="o">.</span><span class="n">launch</span><span class="p">(</span><span class="n">block_max</span><span class="p">,</span> <span class="n">blocks</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">out</span><span class="p">)</span>
+<a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">pop</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">T</span><span class="p">:</span>
+<a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a>        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">items</span><span class="o">.</span><span class="n">pop</span><span class="p">()</span>
+<a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a>
+<a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a>    <span class="k">def</span><span class="w"> </span><span class="fm">__len__</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+<a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a>        <span class="k">return</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">items</span><span class="p">)</span>
 </code></pre></div>
-<h3 id="tile-vocabulary">Tile vocabulary<a class="headerlink" href="#tile-vocabulary" title="Permanent link">&para;</a></h3>
+<p><code>Stack[int]()</code> and <code>Stack[float]()</code> are two classes to the checker, which
+holds each method to its type argument: <code>push(2.5)</code> on a <code>Stack[int]</code> is
+<code>E1301</code>. Native code instantiates the class and its methods once per type
+argument, as a C++ template is instantiated. Write the type argument at
+construction: <code>Stack[int]()</code>.</p>
+<h2 id="memory">Memory<a class="headerlink" href="#memory" title="Permanent link">&para;</a></h2>
+<p>A handle counts its references. A name holding an object keeps one, a field
+or a collection holding it keeps one, and it is freed when the last goes,
+together with what it holds. The tests run the emitted C of object programs
+under AddressSanitizer with leak detection.</p>
+<p>Reference counting does not free cycles. A doubly linked list, or a tree
+whose nodes point back at their parents, is never freed natively: a
+standalone binary lets the process exit free it, and under <code>ppy run</code> it stays
+allocated. Singly linked structures, trees without parent links, and graphs
+kept as adjacency lists are freed as usual.</p>
+<h2 id="the-python-boundary">The Python boundary<a class="headerlink" href="#the-python-boundary" title="Permanent link">&para;</a></h2>
+<p>An object never crosses between Python and native code. A native function
+that takes or returns one is called by native code only. When Python code
+calls it, its Python body runs. The functions Python calls natively take and
+return numbers, and make their objects inside.</p>
+<h2 id="limitations">Limitations<a class="headerlink" href="#limitations" title="Permanent link">&para;</a></h2>
 <ul>
-<li><code>tile.arange(BLOCK)</code> names the kernel's block size and is the lane index.
-  There is one block size per kernel, a power of two of at least 32.</li>
-<li><code>tile.program_id()</code> and <code>tile.num_programs()</code> say where a program is.</li>
-<li><code>tile.load(p, offsets, mask, other)</code> gathers a tile of <code>int</code>, <code>float</code>, or
-  <code>bool</code> elements through a pointer. It reads nothing where <code>mask</code> is false
-  and gives <code>other</code> there.</li>
-<li><code>tile.store(p, offsets, value, mask)</code> scatters a tile. With a single offset
-  and a scalar it writes one element.</li>
-<li>Arithmetic (<code>+ - * / // %</code>), the comparisons, and <code>&amp; | ^ ~</code> work lane by
-  lane. A scalar beside a tile is broadcast.</li>
-<li><code>tile.where(mask, a, b)</code> chooses per lane.</li>
-<li><code>tile.sum</code>, <code>tile.max</code>, and <code>tile.min</code> reduce a tile to a scalar.</li>
-<li><code>tile.launch(kernel, programs, *args)</code> runs the kernel and waits: on the
-  device where the build staged the kernel, and through the reference launch
-  otherwise.</li>
+<li>A class with a base class, or a field native code cannot represent (a
+  <code>str</code>, say), keeps the functions that use it in Python.</li>
+<li>A dataclass built natively takes constant defaults only.</li>
+<li>A generic class's type arguments are written at construction; <code>Stack()</code>
+  without them stays in Python.</li>
+<li>Reading a field that holds a reference, off an object made in the same
+  expression (<code>make().child</code>), is not lowered.</li>
+<li>Reference cycles are not freed, as described above.</li>
 </ul>
-<h3 id="how-a-tile-kernel-runs-natively">How a tile kernel runs natively<a class="headerlink" href="#how-a-tile-kernel-runs-natively" title="Permanent link">&para;</a></h3>
-<p>Natively a program is a block of up to 256 threads. A tile is a vector of
-<code>BLOCK / threads</code> lanes per thread, strided across the block so a load is
-coalesced. A gather or scatter is that many lane loads or stores.</p>
-<p>A reduction runs in three steps: each thread's lanes, then a shuffle tree
-across the warp, then the warps through shared memory. Every thread ends with
-the same number.</p>
-<p><code>ppy emit cuda</code> and <code>ppy emit ptx</code> write a tile kernel like any other. The
-<code>tile.compiled</code> check says whether a launch runs on the device here. The
-<a href="../../howto/44_tile/">tile example</a> measures the two kernels against Triton
-and Taichi.</p>
+<p>Examples: <a href="../../howto/47_collections/">Collections</a>.</p>
 
 
 
@@ -4339,7 +4197,7 @@ and Taichi.</p>
       <nav class="md-footer__inner md-grid" aria-label="Footer" >
         
           
-          <a href="../aio/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Coroutines">
+          <a href="../collections/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Collections">
             <div class="md-footer__button md-icon">
               
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
@@ -4349,20 +4207,20 @@ and Taichi.</p>
                 Previous
               </span>
               <div class="md-ellipsis">
-                Coroutines
+                Collections
               </div>
             </div>
           </a>
         
         
           
-          <a href="../tensors/" class="md-footer__link md-footer__link--next" aria-label="Next: Common tensors">
+          <a href="../native/" class="md-footer__link md-footer__link--next" aria-label="Next: Native memory and FFI">
             <div class="md-footer__title">
               <span class="md-footer__direction">
                 Next
               </span>
               <div class="md-ellipsis">
-                Common tensors
+                Native memory and FFI
               </div>
             </div>
             <div class="md-footer__button md-icon">

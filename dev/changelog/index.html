@@ -619,6 +619,8 @@
       
         
       
+        
+      
     
     
     
@@ -744,6 +746,34 @@
     
   
     Collections
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../guide/classes/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Classes
   
 
     
@@ -4269,6 +4299,21 @@
   parameter (<code>def smallest[T: int | float](https://github.com/franknoh/PPy/blob/main/v: Vec[T], k: int) -&gt; Vec[T]</code>),
   one native instance per type, standalone builds included. A generic
   function's body may annotate locals with its type parameters.</li>
+<li>Classes in native code. A class whose methods change its fields, or whose
+  fields hold objects or collections, is an object class: native code holds
+  an instance by handle, with reference counting, so trees, linked nodes
+  (<code>left: "Node | None"</code>), and objects in collections lower. Methods lower
+  with <code>self</code> as a handle, <code>x is None</code> compares with the null handle, and
+  <code>len(obj)</code> and <code>if obj:</code> call <code>__len__</code> and <code>__bool__</code>. Reference cycles
+  are not freed.</li>
+<li>Generic classes: <code>class Stack[T]</code> with fields and methods over <code>T</code>. The
+  checker substitutes a receiver's type arguments into its fields and
+  methods, so <code>Stack[int]().push(2.5)</code> is <code>E1301</code>, and native code
+  instantiates the class and its methods per type argument.</li>
+<li>Standalone programs may define classes (no bases, <code>@dataclass</code> or none,
+  methods and annotated fields) and use <code>len</code> and truth tests on them.</li>
+<li>Emitted C reserves the C library's names, so a function called <code>remove</code>
+  no longer collides with <code>stdio.h</code>.</li>
 <li>Emitted C no longer moves a store above a load of the same slot when it
   writes a value straight into its destination.</li>
 <li>The standalone runtime's <code>ppy_rt_alloc</code> returns <code>int8_t *</code>, the type the
@@ -4774,7 +4819,7 @@ on real hardware. The entries below are in the order the work landed.</p>
   as they should, and the entry point bears the function's qualified name
   rather than <code>call_0</code>.</li>
 <li>The landing page's test and diagnostic-code counts come from the tree
-  through markers (<code>1260</code>, <code>78</code>), and the
+  through markers (<code>1264</code>, <code>78</code>), and the
   guard refuses those spelled as digits. The GPU guide says what a ROCm
   machine gets: no launch, <code>compiled</code> false, <code>ppy emit hip</code> for <code>hipcc</code>.</li>
 <li>The ROCm harness installs every group when the image's JAX allows it
