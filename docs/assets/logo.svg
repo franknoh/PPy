@@ -1,1 +1,9 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" rx="7" fill="#0d7560"/><path d="M10 26V8.5" stroke="#fff" stroke-width="3.2" stroke-linecap="round"/><circle cx="16.5" cy="14.5" r="6.2" fill="none" stroke="#fff" stroke-width="3.2"/></svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <title>PPy</title>
+  <rect x="2" y="2" width="60" height="60" rx="6" fill="#0b0d10" stroke="#23272e" stroke-width="2"/>
+  <g fill="none" stroke-width="4" stroke-linecap="square" stroke-linejoin="miter">
+    <path d="M11 45V18h9v11h-9" stroke="#4b8bbe"/>
+    <path d="M27 45V18h9v11h-9" stroke="#4b8bbe"/>
+    <path d="M43 27v9h9M52 27v19h-9" stroke="#ffd43b"/>
+  </g>
+</svg>
