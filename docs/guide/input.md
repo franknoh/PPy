@@ -6,6 +6,9 @@ PPy has three ways to read standard input, all sharing one grammar:
 - `ppy.scan` reads tokens.
 - `ppy.read_*` fill a buffer you already have.
 
+Both `ppy.input` and `ppy.scan` also read JSON into a dataclass, a pydantic
+model, or a `TypedDict` ([below](#json-into-a-schema)).
+
 ```python
 import ppy
 from ppy import Buffer
@@ -15,6 +18,7 @@ n = ppy.input[int]()  # one line, read as int(input()) reads it
 a, b = ppy.input[tuple[int, int]]()  # one line, exactly two fields
 names = ppy.input[list[str]]()  # one line, split into its fields
 row = ppy.input[Buffer[int]]()  # one line of integers, straight into a buffer
+small = ppy.input[ppy.i32]()  # read as int, then it must fit 32 bits
 
 word = ppy.scan[str]()  # one whitespace-delimited token, lines irrelevant
 k = ppy.scan[int]()  # one integer token
@@ -45,6 +49,12 @@ without changing what the program reads.
 - `ppy.input[Buffer[int]]()` reads one line of integers into a new buffer,
   as `array.array("q", map(int, input().split()))` does. It takes no count:
   the line decides. See the next section for how its fields are parsed.
+  `ppy.input[Buffer[float]]()` is the same for floats, as
+  `array.array("d", map(float, input().split()))`.
+- A fixed width, such as `ppy.input[ppy.i32]()`, reads the field as `int`
+  and then requires it to fit: a value outside the width is
+  `OverflowError`. This holds for a scalar, a tuple field, and a list
+  element. `ppy.f32` and `ppy.f64` read as `float`.
 
 A read takes no argument. A prompt is a `print` before it, the way any other
 output is written, so reading and printing stay separate.
@@ -78,6 +88,7 @@ spread over any number of lines read the same way.
   the input is `EOFError`.
 - `ppy.scan[float]()` is the next token as a float.
 - `ppy.scan[tuple[int, int]]()` is two tokens, wherever they fall.
+- `ppy.scan[Buffer[float]](n)` reads `n` float tokens into a new buffer.
 - `ppy.scan[Buffer[int]](n)` reads `n` integer tokens straight into a new
   buffer, fewer where the input ends. Reading goes into memory rather than
   through a Python object per field, which is what takes a million numbers
@@ -103,6 +114,61 @@ A token read stops before the whitespace that ends it, so a line read that
 follows starts there. After `ppy.scan[int]()` reads the `5` of `5\nabc`,
 `ppy.input[str]()` returns `""`, the rest of that line, and the next returns
 `abc`.
+
+## JSON into a schema
+
+Give `ppy.input` or `ppy.scan` a class you already have, and it reads JSON
+into it:
+
+```python
+from dataclasses import dataclass
+
+import ppy
+
+
+@dataclass
+class Item:
+    name: str
+    price: float
+
+
+@dataclass
+class Order:
+    id: int
+    items: list[Item]
+    note: str | None = None
+
+
+order = ppy.input[Order]()  # one line of JSON
+orders = ppy.input[list[Order]]()  # one line holding a JSON array
+pretty = ppy.scan[Order]()  # the next JSON value, over as many lines as it spans
+```
+
+The class can be a dataclass, a pydantic model, or a `TypedDict`, or a
+`list`, `tuple`, `dict`, or optional of one. `list[int]` is still a line of
+fields; a list of a schema class is a JSON array.
+
+A dataclass or a `TypedDict` is built field by field:
+
+- `int` takes a JSON integer, not `true` and not `1.5`.
+- `float` takes any JSON number.
+- `str`, `bool`, and `None` take their own kind.
+- Containers, unions, `Literal`, enums, and fixed widths such as `ppy.u8` are
+  read as declared.
+- A field with a default may be missing.
+- A key the class does not declare is ignored, as pydantic ignores it by
+  default.
+
+A mismatch is a `ValueError` that says where it is and what was there, such
+as `$.items[2].price: expected a number, got a string`. JSON that does not
+parse is the `json` module's `JSONDecodeError`, also a `ValueError`.
+
+A pydantic model, or anything that holds one, is validated by pydantic
+itself with its own rules, and its `ValidationError` is a `ValueError` too.
+
+`ppy.scan[Model]()` starts at the next line that is not blank and reads up
+to the line that closes the value's last bracket. The next read starts on
+the line after it.
 
 ## `ppy.read_ints` and `ppy.read_token`: buffers
 
@@ -148,10 +214,29 @@ for a pure one, and all of them work on every path.
 
 ## Native code and standalone binaries
 
-In native code, `ppy.input[int]()` and `ppy.scan[int]()` are calls into the
-runtime. In a standalone binary they are the scanner itself, and where Python
-would raise, the binary says what happened on standard error and stops.
-`ppy.input[Buffer[int]]()` has no standalone lowering yet.
+A standalone binary reads with the C runtime, the same scanner text. Where
+Python would raise, the binary names the same exception on standard error
+and stops, for example `ppy: ValueError: could not convert string to float`.
+
+| Read | In a standalone binary |
+|---|---|
+| `ppy.input[int]()`, `ppy.input[float]()` | yes |
+| `ppy.input[ppy.i32]()` and the other fixed widths | yes |
+| `ppy.input[tuple[int, float]]()` of `int`, `float`, and fixed widths | yes |
+| `ppy.input[Buffer[int]]()`, `ppy.input[Buffer[float]]()` | yes |
+| `ppy.input[list[int]]()`, `ppy.input[list[float]]()` | yes, as a buffer: reading and iterating work, growing it does not |
+| `ppy.scan[int]()`, `ppy.scan[float]()`, `ppy.scan[tuple[...]]()` of numbers | yes |
+| `ppy.scan[Buffer[int]](n)`, `ppy.scan[Buffer[float]](n)` | yes |
+| `ppy.input[str]()`, `ppy.scan[str]()`, `list[str]` | no: native code has no string type yet |
+| JSON into a schema class | no: it builds Python objects |
+
+A buffer or list read is bound to a name (`values = ppy.input[Buffer[int]]()`).
+A tuple read is unpacked or bound to a name. A native `print` writes a float
+the way `repr` does, with the shortest digits that read back as the same
+value.
+
+In `ppy run`, a function that reads keeps running as Python, since reading
+is an effect, and every form above works there.
 
 `E1305` names a misuse:
 
