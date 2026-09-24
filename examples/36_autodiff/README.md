@@ -1,11 +1,31 @@
 # Derivatives
 
-`ppy.grad(f)` is the gradient of `f` with respect to its first parameter,
-`ppy.value_and_grad(f, argnums=1)` the value and the gradient with respect
-to another, and both follow one rule table on every path, so the nine
-digits this program prints are the same nine everywhere.
+This example takes derivatives with `ppy.grad` and `ppy.value_and_grad`,
+which follow one rule table on every path, so the nine digits this program
+prints are the same nine everywhere. `ppy.grad(f)` is the gradient of `f`
+with respect to its first parameter. `ppy.value_and_grad(f, argnums=1)` is
+the value and the gradient with respect to another.
 
-## Reverse mode, twice
+## Run it
+
+```bash
+python  gradients.ppy
+ppy run gradients.ppy
+```
+
+<!-- outputs:start -->
+## What it prints
+
+**`python  gradients.ppy`**, **`ppy run gradients.ppy`**
+
+```text
+2.929684375 4.201088436
+-2.488585914 0.523598776 4.7e-17
+```
+
+<!-- outputs:end -->
+
+## Reverse mode on both paths
 
 ```python
 def f(x: float, y: float) -> float:
@@ -18,10 +38,12 @@ both = ppy.value_and_grad(f, argnums=1)
 
 Under CPython the derivative is made from `f`'s source the first time it is
 called: the body restated one operation at a time, then every operation's
-adjoint in reverse. Natively the `autodiff` transform does the same to the
-IR — reverse mode over the core and tensor dialects — and `slope(x, y)`
-compiles to a call to the derived function. There is no finite differencing
-and no second implementation to drift.
+adjoint in reverse.
+
+Natively the `autodiff` transform does the same to the IR, reverse mode over
+the core and tensor dialects, and `slope(x, y)` compiles to a call to the
+derived function. There is no finite differencing and no second
+implementation to drift.
 
 ## A derivative is an ordinary function
 
@@ -32,11 +54,9 @@ def newton(x: float) -> float:
     return x
 ```
 
-`dg` is used inside a loop like any callable; `newton` is native, and the
-root it finds is a root — the last column prints `g` at that root, zero to
-floating-point precision. What cannot be differentiated is refused: a
-branch or a loop inside `f` is `E1660`, a non-`float` signature `E1661`, an
-effect no derivative follows — I/O, a write, a thread — `E1662`.
+`dg` is used inside a loop like any callable. `newton` is native, and the
+root it finds is a root: the last column prints `g` at that root, zero to
+floating-point precision.
 
 ## Compared with JAX and PyTorch
 
@@ -46,7 +66,7 @@ are in [`compare/`](compare/): [`gradients_bench.ppy`](compare/gradients_bench.p
 [`gradients_jax.py`](compare/gradients_jax.py), [`gradients_torch.py`](compare/gradients_torch.py).
 Milliseconds for the whole batch, best of five, over five processes.
 
-**PPY** -- `ppy.grad(g)` is a function; `newton` calls it in a loop, and a
+**PPy**: `ppy.grad(g)` is a function. `newton` calls it in a loop, and a
 loop over the starting points calls `newton`. Everything is scalar and
 native; nothing is batched:
 
@@ -67,9 +87,9 @@ def newton_all(count: int) -> float:
     return total / count
 ```
 
-**JAX** -- `jax.grad` over `jnp` functions, and to run 100,000 solves it
-wants them batched: `vmap` under `jit`, the loop as `lax.fori_loop` so it
-traces, `jax_enable_x64` so the digits match:
+**JAX**: `jax.grad` over `jnp` functions. To run 100,000 solves it wants
+them batched: `vmap` under `jit`, the loop as `lax.fori_loop` so it traces,
+and `jax_enable_x64` so the digits match:
 
 ```python
 def newton(x):
@@ -82,10 +102,10 @@ def newton(x):
 newton_all = jax.jit(jax.vmap(newton))
 ```
 
-**PyTorch** -- `torch.func.grad` and `vmap`; the six steps stay a Python
-loop over a 100,000-element tensor in float64, with the thread count pinned
-to the performance cores', since its default of one per logical core spins
-on this hybrid CPU and the batch takes hundreds of milliseconds some runs:
+**PyTorch**: `torch.func.grad` and `vmap`. The six steps stay a Python loop
+over a 100,000-element tensor in float64. The thread count is pinned to the
+performance cores', since its default of one per logical core spins on this
+hybrid CPU and the batch takes hundreds of milliseconds some runs:
 
 ```python
 dg = grad(g)
@@ -101,40 +121,32 @@ newton_all = vmap(newton)
 ```
 
 <!-- compare:start -->
-| | PPY | JAX `vmap` + `jit` | PyTorch `torch.func` |
+| | PPy | JAX `vmap` + `jit` | PyTorch `torch.func` |
 |---|---:|---:|---:|
 | newton, 100k starts | 11.89 ± 0.07 | **1.23 ± 0.10** | 6.52 ± 1.04 |
 <!-- compare:end -->
 
-The derivative is the same nine digits in all three -- reverse mode over
-the same rule table. What differs is the shape of the program: JAX and
-PyTorch are fast here because the problem batches and XLA and ATen
-vectorize across the batch; a scalar `newton` in a Python loop would cost
-them tens of microseconds per call. PPY's scalar loop pays nothing per
-call and is not vectorized across the batch. Which one is faster depends
-on whether your problem comes as 100,000 independent solves or as one.
+The derivative is the same nine digits in all three: reverse mode over the
+same rule table. What differs is the shape of the program.
+
+JAX and PyTorch are fast here because the problem batches, and XLA and ATen
+vectorize across the batch. A scalar `newton` in a Python loop would cost
+them tens of microseconds per call. PPy's scalar loop pays nothing per call
+and is not vectorized across the batch.
+
+Which one is faster depends on whether your problem comes as 100,000
+independent solves or as one.
 
 Intel Core Ultra 9 386H; JAX 0.11.1 and PyTorch 2.14.0 (CPU) on CPython
-3.13.13, PPY on CPython 3.13.13, from a checkout on a native filesystem.
+3.13.13, PPy on CPython 3.13.13, from a checkout on a native filesystem.
 
-## Run it
+## Limitations
 
-```bash
-python  gradients.ppy
-ppy run gradients.ppy
-```
+What cannot be differentiated is refused:
 
-<!-- outputs:start -->
-## What it prints
-
-**`python  gradients.ppy`**, **`ppy run gradients.ppy`**
-
-```text
-2.929684375 4.201088436
--2.488585914 0.523598776 4.7e-17
-```
-
-<!-- outputs:end -->
+- a branch or a loop inside `f` is `E1660`
+- a non-`float` signature is `E1661`
+- an effect no derivative follows (I/O, a write, a thread) is `E1662`
 
 Read on: [Derivatives](../../docs/guide/autodiff.md) ·
 [The IR](../../docs/internals/ir.md)

@@ -2,8 +2,16 @@
 
 A function whose body is entirely curated tensor operations compiles into
 one C++ region that calls ATen directly: one Python round trip per call
-instead of one per operator. `layer` is a matmul, an add, and a ReLU; the
+instead of one per operator. `layer` is a matmul, an add, and a ReLU. The
 region runs them as PyTorch would, and autograd is unchanged.
+
+## Run it
+
+```bash
+python  torch_region.ppy
+ppy     torch_region.ppy
+ppy run torch_region.ppy
+```
 
 ## Through the dispatcher
 
@@ -15,20 +23,13 @@ def layer(x: torch.Tensor, weight: torch.Tensor, bias: torch.Tensor) -> torch.Te
 
 The region does not reimplement `matmul`. Every `at::` call inside it goes
 through PyTorch's dispatcher, so device selection, dtype promotion, and
-autograd behave as before — `residual(tracked, tracked).sum().backward()`
+autograd behave as before: `residual(tracked, tracked).sum().backward()`
 fills `tracked.grad`. What the region removes is the Python interpreter
 between operators.
 
-## What the guard refuses, and what the region costs
+## Built artifacts
 
-A tensor subclass, a `__torch_function__` override, or a device the region
-was not built for fails the guard, and the Python body runs. Building the
-region needs a C++ compiler and `ninja`; `toolchain_ready()` says what is
-missing. On an accelerator the region changes nothing measurable — kernel
-launch latency dominates the Python overhead it removes — so the program
-measures on the CPU, and on `cuda` too when one is present.
-
-A built artifact carries its regions: `ppy build` copies the extension
+A built artifact carries its regions. `ppy build` copies the extension
 beside the manifest, and the launcher loads it with no compiler in the
 process ([torchrun](../31_torchrun/README.md)).
 
@@ -40,10 +41,12 @@ The same `layer` on an 8×32 input, twenty thousand calls, in
 [`layer_compile.py`](compare/layer_compile.py). Milliseconds per call, to
 four places, best of five rounds, over five processes; one PyTorch thread.
 
-**PPY** is the function as written, and `ppy run` compiles it into one ATen
-region; **PyTorch eager** is the same function with no decorator, three
-dispatches from Python; **`torch.compile`** is the same function under the
-decorator, traced by Dynamo and written by Inductor:
+- **PPy** is the function as written, and `ppy run` compiles it into one
+  ATen region.
+- **PyTorch eager** is the same function with no decorator: three
+  dispatches from Python.
+- **`torch.compile`** is the same function under the decorator, traced by
+  Dynamo and written by Inductor.
 
 ```python
 @ppy.opt(3)
@@ -58,15 +61,15 @@ def layer(x, weight, bias):
 ```
 
 <!-- compare:start -->
-| | PPY ATen region | PyTorch eager | `torch.compile` |
+| | PPy ATen region | PyTorch eager | `torch.compile` |
 |---|---:|---:|---:|
 | layer, per call | **0.0019 ± 0.0000** | 0.0020 ± 0.0000 | 0.0087 ± 0.0002 |
 <!-- compare:end -->
 
 Three operators on a tensor this small cost about two microseconds either
-way: PyTorch's eager dispatch is cheap enough that the Python round trips
+way. PyTorch's eager dispatch is cheap enough that the Python round trips
 the region removes are within the noise of the ATen calls themselves. The
-region's value is not this number; it is that the function keeps its
+region's value is not this number. It is that the function keeps its
 source, its autograd, and its dispatcher, and that a built artifact carries
 it with no compiler in the process. `torch.compile` pays for its guards on
 every call, which on an 8×32 input is more than the work.
@@ -74,20 +77,22 @@ every call, which on an 8×32 input is more than the work.
 One layer of one shape is not the question anyone asks about
 `torch.compile`, and this table cannot answer it: the work is two
 microseconds, so every column is measuring its own overhead.
-[`46_gpt2`](../46_gpt2/README.md) asks it at model scale instead -- GPT-2
+[`46_gpt2`](../46_gpt2/README.md) asks it at model scale instead: GPT-2
 XL, forty-eight blocks, one region each, on a datacenter GPU.
 
-Intel Core Ultra 9 386H; PyTorch 2.14.0 (CPU) on CPython 3.13.13, PPY
+Intel Core Ultra 9 386H; PyTorch 2.14.0 (CPU) on CPython 3.13.13, PPy
 against the same PyTorch on CPython 3.14.5, from a checkout on a native
 filesystem.
 
-## Run it
+## Limitations
 
-```bash
-python  torch_region.ppy
-ppy     torch_region.ppy
-ppy run torch_region.ppy
-```
+- A tensor subclass, a `__torch_function__` override, or a device the
+  region was not built for fails the guard, and the Python body runs.
+- Building the region needs a C++ compiler and `ninja`. `toolchain_ready()`
+  says what is missing.
+- On an accelerator the region changes nothing measurable: kernel launch
+  latency dominates the Python overhead it removes. So the program measures
+  on the CPU, and on `cuda` too when one is present.
 
 <!-- outputs:start -->
 ## What it prints

@@ -89,7 +89,7 @@ MANIFEST: dict[str, Comparison] = {
             ("jax", "{JV} compare/fusion_jax.py"),
         ],
         {
-            "ppy": "PPY",
+            "ppy": "PPy",
             "numpy": "NumPy",
             "numexpr": "numexpr",
             "numba": "Numba `@njit`",
@@ -107,7 +107,7 @@ MANIFEST: dict[str, Comparison] = {
             ("jax", "{JV} compare/fused_jax.py"),
         ],
         {
-            "ppy": "PPY",
+            "ppy": "PPy",
             "numpy": "NumPy",
             "numexpr": "numexpr",
             "numba": "Numba `prange`",
@@ -123,7 +123,7 @@ MANIFEST: dict[str, Comparison] = {
             ("eager", "{JV} compare/layer_eager.py"),
             ("compile", "{JV} compare/layer_compile.py"),
         ],
-        {"ppy": "PPY ATen region", "eager": "PyTorch eager", "compile": "`torch.compile`"},
+        {"ppy": "PPy ATen region", "eager": "PyTorch eager", "compile": "`torch.compile`"},
         needs=("JV",),
     ),
     "12_buffers_and_jit": Comparison(
@@ -142,7 +142,7 @@ MANIFEST: dict[str, Comparison] = {
             ("c", "./compare/build/kernels_c"),
         ],
         {
-            "ppy": "PPY `ppy run`",
+            "ppy": "PPy `ppy run`",
             "numba": "Numba `@njit`",
             "cython": "Cython",
             "numpy": "NumPy",
@@ -166,7 +166,7 @@ MANIFEST: dict[str, Comparison] = {
             ("python", "{PY} compare/vectors_bench.ppy"),
             ("numba", "{CV} compare/vectors_numba.py"),
         ],
-        {"ppy": "PPY `ppy run`", "python": "CPython, the same file", "numba": "Numba `@jitclass`"},
+        {"ppy": "PPy `ppy run`", "python": "CPython, the same file", "numba": "Numba `@jitclass`"},
         needs=("CV",),
     ),
     "14_tuples": Comparison(
@@ -176,7 +176,7 @@ MANIFEST: dict[str, Comparison] = {
             ("python", "{PY} compare/pairs_bench.ppy"),
             ("numba", "{CV} compare/pairs_numba.py"),
         ],
-        {"ppy": "PPY `ppy run`", "python": "CPython, the same file", "numba": "Numba `@njit`"},
+        {"ppy": "PPy `ppy run`", "python": "CPython, the same file", "numba": "Numba `@njit`"},
         needs=("CV",),
     ),
     "15_algorithms": Comparison(
@@ -211,7 +211,7 @@ MANIFEST: dict[str, Comparison] = {
             ("compile", "{JV} compare/train_compile.py"),
         ],
         {
-            "ppy": "PPY `ppy run`",
+            "ppy": "PPy `ppy run`",
             "python": "CPython, the same file",
             "eager": "PyTorch, vectorized",
             "compile": "`torch.compile`",
@@ -228,7 +228,7 @@ MANIFEST: dict[str, Comparison] = {
             ("numpy", "{CV} compare/ranges_numpy.py"),
         ],
         {
-            "ppy": "PPY `ppy run`",
+            "ppy": "PPy `ppy run`",
             "numba": "Numba `prange`",
             "taichi": "Taichi",
             "mojo": "Mojo",
@@ -249,7 +249,7 @@ MANIFEST: dict[str, Comparison] = {
             ("jax", "{JV} compare/gradients_jax.py"),
             ("torch", "{JV} compare/gradients_torch.py"),
         ],
-        {"ppy": "PPY", "jax": "JAX `vmap` + `jit`", "torch": "PyTorch `torch.func`"},
+        {"ppy": "PPy", "jax": "JAX `vmap` + `jit`", "torch": "PyTorch `torch.func`"},
         needs=("JV",),
     ),
     "38_cuda": Comparison(
@@ -262,7 +262,7 @@ MANIFEST: dict[str, Comparison] = {
             ("cudac", "./compare/build/saxpy_cu"),
         ],
         {
-            "ppy": "PPY `cuda.launch`",
+            "ppy": "PPy `cuda.launch`",
             "cupy": "CuPy",
             "numba": "Numba CUDA",
             "mojo": "Mojo",
@@ -288,7 +288,7 @@ MANIFEST: dict[str, Comparison] = {
             ("triton", "{CV} compare/tiles_triton.py"),
             ("taichi", "{CV} compare/tiles_taichi.py"),
         ],
-        {"ppy": "PPY `tile.launch`", "triton": "Triton", "taichi": "Taichi"},
+        {"ppy": "PPy `tile.launch`", "triton": "Triton", "taichi": "Taichi"},
         rows={
             "saxpy": "saxpy, arrays on the device",
             "block_max": "block max, arrays on the device",
@@ -304,7 +304,7 @@ MANIFEST: dict[str, Comparison] = {
             ("asyncio", "{PY} compare/echo_asyncio.py"),
             ("uvloop", "{CV} compare/echo_uvloop.py"),
         ],
-        {"ppy": "PPY `ppy.aio`", "asyncio": "asyncio streams", "uvloop": "uvloop"},
+        {"ppy": "PPy `ppy.aio`", "asyncio": "asyncio streams", "uvloop": "uvloop"},
         needs=("CV",),
     ),
     "40_generics": Comparison(
@@ -314,7 +314,7 @@ MANIFEST: dict[str, Comparison] = {
             ("python", "{PY} compare/generic_bench.ppy"),
             ("numba", "{CV} compare/generic_numba.py"),
         ],
-        {"ppy": "PPY `ppy run`", "python": "CPython, the same file", "numba": "Numba `@njit`"},
+        {"ppy": "PPy `ppy run`", "python": "CPython, the same file", "numba": "Numba `@njit`"},
         needs=("CV",),
     ),
     "41_columnar": Comparison(
@@ -324,7 +324,7 @@ MANIFEST: dict[str, Comparison] = {
             ("pandas", "{CV} compare/frames_pandas.py"),
             ("polars", "{CV} compare/frames_polars.py"),
         ],
-        {"ppy": "PPY", "pandas": "pandas", "polars": "polars"},
+        {"ppy": "PPy", "pandas": "pandas", "polars": "polars"},
         needs=("CV",),
     ),
     "43_regex": Comparison(
@@ -334,7 +334,7 @@ MANIFEST: dict[str, Comparison] = {
             ("re", "{CV} compare/patterns_re.py"),
             ("rust", "./compare/target/release/patterns"),
         ],
-        {"ppy": "PPY `ppy run`", "re": "CPython `re`", "rust": "Rust `regex`"},
+        {"ppy": "PPy `ppy run`", "re": "CPython `re`", "rust": "Rust `regex`"},
         builds=["{CARGO} build -q --release --manifest-path compare/Cargo.toml"],
         needs=("CV", "CARGO"),
     ),
@@ -347,7 +347,7 @@ MANIFEST: dict[str, Comparison] = {
             ("reduce", "{TV} compare/gpt2_torch.py reduce-overhead"),
         ],
         {
-            "ppy": "PPY ATen regions",
+            "ppy": "PPy ATen regions",
             "eager": "PyTorch eager",
             "compile": "`torch.compile`",
             "reduce": "`torch.compile` reduce-overhead",

@@ -1,9 +1,17 @@
 # Narrowing
 
-Every form the checker narrows on, one function each. Flow typing is what
-lets a strict checker accept ordinary Python: after `if name is None:
-return 0`, `name` is a `str`; after `isinstance(value, str)` fails, `value`
-is an `int`.
+This example shows each form the checker narrows on, one function each.
+Flow typing is what lets a strict checker accept ordinary Python: after
+`if name is None: return 0`, `name` is a `str`; after
+`isinstance(value, str)` fails, `value` is an `int`.
+
+## Run it
+
+```bash
+python  narrowing.ppy
+ppy     narrowing.ppy
+ppy run narrowing.ppy
+```
 
 ## Guards, boolean operators, the walrus
 
@@ -20,11 +28,11 @@ def walrus_guard(values: list[int]) -> int:
     return count
 ```
 
-`and` narrows its right operand: `len(name)` is checked with `name: str`.
-`or` narrows the code after it: in `early_default`, the body after
-`if name is None or len(name) == 0: return -1` sees a non-empty `str`. A
-walrus binding is a local the checker tracks like any other. `by_class`
-narrows with `isinstance`.
+- `and` narrows its right operand: `len(name)` is checked with `name: str`.
+- `or` narrows the code after it. In `early_default`, the body after
+  `if name is None or len(name) == 0: return -1` sees a non-empty `str`.
+- A walrus binding is a local the checker tracks like any other.
+- `by_class` narrows with `isinstance`.
 
 ## `match`
 
@@ -40,19 +48,14 @@ def by_match(value: int | str | None) -> str:
             return f"str:{value.upper()}"
 ```
 
-A case sees the subject with the earlier cases subtracted: the `int()` case
-sees `int | str`, the wildcard sees only `str`, so `value.upper()` checks
-without a cast. A case with a guard rules nothing out for the cases after
-it, because a guard can fail for reasons the pattern does not express. All
-six functions are pure and native.
+A case sees the subject with the earlier cases subtracted. The `int()` case
+sees `int | str`, and the wildcard sees only `str`, so `value.upper()`
+checks without a cast.
 
-## Run it
+A case with a guard rules nothing out for the cases after it, because a
+guard can fail for reasons the pattern does not express.
 
-```bash
-python  narrowing.ppy
-ppy     narrowing.ppy
-ppy run narrowing.ppy
-```
+All six functions are pure and native.
 
 <!-- outputs:start -->
 ## What it prints

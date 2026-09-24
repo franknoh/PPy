@@ -1,8 +1,12 @@
 # Diagnostics
 
-Every diagnostic has a stable code (spec 29.1). `ppy explain E1301` prints
-the description; `--no-strict` downgrades the strict-mode errors that have a
-sound fallback, and never the rest.
+This page lists every code the checker, the converter, and the backends
+emit. Each diagnostic has a stable code (spec 29.1).
+
+- `E` codes are errors, `W` codes are warnings, and `R` codes are remarks.
+- `ppy explain E1301` prints the description of a code.
+- `--no-strict` downgrades the strict-mode errors that have a sound
+  fallback. It never downgrades the rest.
 
 ## Source and module structure
 
@@ -103,7 +107,7 @@ sound fallback, and never the rest.
 | `E1650` | A `ppy.parallel` loop is misused; the message says how. |
 | `E1660` | `ppy.grad` or `ppy.value_and_grad` is misused; the message says how. |
 | `E1661` | A function cannot be differentiated as typed: it must return `float`, and `argnums` names `float` parameters. |
-| `E1662` | A function with an effect no derivative follows -- I/O, a write, a thread -- is differentiated. |
+| `E1662` | A function with an effect no derivative follows (I/O, a write, a thread) is differentiated. |
 
 ## Directive requirements
 
@@ -137,9 +141,9 @@ sound fallback, and never the rest.
 | code | meaning |
 |---|---|
 | `R3001` | An optimization remark. |
-| `R3004` | A native-eligible function stays on the Python boundary; crossing costs more than it saves. |
 | `R3002` | The converter promoted a list parameter to a borrowed buffer. |
 | `R3003` | A list parameter is close to being a borrowed buffer but something blocks it. |
+| `R3004` | A native-eligible function stays on the Python boundary; crossing costs more than it saves. |
 
 ## Warnings
 
@@ -149,11 +153,11 @@ sound fallback, and never the rest.
 | `W2002` | A `bool` value takes part in arithmetic, which is legal but usually unintended. |
 | `W2003` | Unknown `Annotated` metadata was preserved but not interpreted. |
 | `W2004` | A directive had no effect for the selected backend. |
+| `W2005` | Conversion left both a .py and a .ppy source for the same module. |
+| `W2006` | Errors that only restated a type the analysis could not resolve were withheld; the count and the unresolved origins are reported once. |
 | `W2007` | A function marked `@ppy.xla.jit` cannot be taken by XLA; the reason is named. |
 | `W2008` | A kernel will not run on the device; the reason is named, and the reference runs. |
 | `W2009` | A function changed since the profile given to `--pgo` was recorded; its counts were ignored and it was built as without a profile. |
-| `W2005` | Conversion left both a .py and a .ppy source for the same module. |
-| `W2006` | Errors that only restated a type the analysis could not resolve were withheld; the count and the unresolved origins are reported once. |
 | `W2101` | The build cache index was damaged; it was quarantined and rebuilt, and compilation continued with cache misses. |
 
 ## Internal

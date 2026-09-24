@@ -2,9 +2,16 @@
 
 Between analysis and every backend sits one typed, SSA-form intermediate
 representation with an explicit control-flow graph. Analysis decides what a
-program means; the IR keeps that meaning in a form a backend can lower
-without reading Python again; dialects extend the IR; passes transform it;
-backends lower it. This page is the reference for the core; [Where a solver fits](solver.md)
+program means. The IR keeps that meaning in a form a backend can lower
+without reading Python again.
+
+The parts divide the work this way:
+
+- dialects extend the IR
+- passes transform it
+- backends lower it
+
+This page is the reference for the core. [Where a solver fits](solver.md)
 and the plugin pages say what the other dialects add.
 
 ## Shape
@@ -51,10 +58,11 @@ future<T>
 dialect.name<args>           a type a dialect owns; the core parses it, the dialect verifies it
 ```
 
-`ptr<T, stack>` is what `core.alloca` yields; a stack pointer may not be
-returned or stored, and the verifier says so. `generic` is the host's
-address space; the gpu dialect adds `global`, `shared`, `private`, and
-`constant`, and a plugin's dialect may add more.
+`ptr<T, stack>` is what `core.alloca` yields. A stack pointer may not be
+returned or stored, and the verifier says so.
+
+`generic` is the host's address space. The gpu dialect adds `global`,
+`shared`, `private`, and `constant`, and a plugin's dialect may add more.
 
 ## Core operations
 
@@ -75,335 +83,491 @@ address space; the gpu dialect adds `global`, `shared`, `private`, and
 | `core.call @f`, `call_extern {callee}`, `call_intrinsic {intrinsic}` | calls; a `core.call` is checked against the callee's signature. A failed call takes the caller's fallback, unless `capture_status`, which hands the status back as a trailing `i64` for a caller that has threads to join first. |
 | `core.guard %cond {kind}` | a runtime check the function fails on: `overflow`, `bounds`, `zero_division`, `range`, `contract`, `assert` |
 
-Overflow semantics live on the operation. `python` means the true value is
-what Python computes -- the backend guards and falls back; `checked` means
-overflow is a guard failure; `wrap` means two's-complement wrap like C;
-`proven` means a proof -- a corner check hoisted ahead of the loop, or the
-solver -- established that the value fits, so the backend emits the plain
-operation and may tell the optimizer it never wraps. `native`, selected before
-IR construction for unsafe standalone source, uses target-language machine
-arithmetic without overflow fallback; signed overflow is outside its portable
-domain. It does not replace the `wrap` guarantee used by unsafe LLVM builds.
+### Overflow modes
+
+Overflow semantics live on the operation:
+
+| mode | meaning |
+|---|---|
+| `python` | the true value is what Python computes. The backend guards and falls back. |
+| `checked` | overflow is a guard failure. |
+| `wrap` | two's-complement wrap, like C. |
+| `proven` | a proof (a corner check hoisted ahead of the loop, or the solver) established that the value fits, so the backend emits the plain operation and may tell the optimizer it never wraps. |
+| `native` | selected before IR construction for unsafe standalone source. Uses target-language machine arithmetic without overflow fallback; signed overflow is outside its portable domain. It does not replace the `wrap` guarantee used by unsafe LLVM builds. |
+
+### 32-bit standalone source
+
 For standalone C/C++ source, `--int-width 32` retypes the linked scalar graph
 from `i64`/`u64` to `i32`/`u32`, including signatures and local pointers,
 before shared optimization. The source backend spells that selected model
-as `int`/`unsigned int` and checks the target range at compile time. Fixed
-runtime and buffer ABIs are refused rather than retyped. The default model
-is unchanged. Source-only interval analysis may omit floor-division
-corrections when acyclic branch bounds prove floor equals truncation; it
-never changes an operation's overflow mode or assumes a wrapping result
-stays within its pre-overflow interval.
+as `int`/`unsigned int` and checks the target range at compile time.
+
+- Fixed runtime and buffer ABIs are refused rather than retyped.
+- The default model is unchanged.
+- Source-only interval analysis may omit floor-division corrections when
+  acyclic branch bounds prove floor equals truncation. It never changes an
+  operation's overflow mode or assumes a wrapping result stays within its
+  pre-overflow interval.
+
 Bounds checks are explicit `core.guard`s the frontend emits; a sanitizer
 pass adds more.
 
 ## The math dialect
 
 `math.sqrt`, `sin`, `cos`, `tan`, `exp`, `exp2`, `log`, `log2`, `log10`,
-`floor`, `ceil`, `trunc`, `abs`, and `pow`: elementary functions named once
-for every backend, pure, over a floating-point value or a vector of them.
-The frontend writes `math.sqrt %x : f64` for `math.sqrt(x)`; the LLVM
-backend lowers it to the intrinsic of that name, a C backend to libm, a GPU
-backend to its device library. A math function of a constant folds, and
-`floor(floor(x))` is `floor(x)`.
+`floor`, `ceil`, `trunc`, `abs`, and `pow` are elementary functions named
+once for every backend. They are pure, over a floating-point value or a
+vector of them.
+
+The frontend writes `math.sqrt %x : f64` for `math.sqrt(x)`. Each backend
+lowers it to its own form:
+
+- the LLVM backend: the intrinsic of that name
+- a C backend: libm
+- a GPU backend: its device library
+
+A math function of a constant folds, and `floor(floor(x))` is `floor(x)`.
 
 ## The regex dialect
 
 `regex.search %buf, %pos, %endpos {pattern = "...", flags = 0}` is what
 `PATTERN.search(buf, pos, endpos)` means for a pattern compiled from a bytes
-literal at module level; `regex.match` and `regex.fullmatch` are the anchored
-forms. The operation takes a `buffer<u8>` and yields whether there was a
-match, then the span of every group -- start and end of group 0, of group
-1, and so on -- with -1 for a group that took no part. The pattern is read
-by CPython's own parser, so its syntax and its meaning are `re`'s.
+literal at module level. `regex.match` and `regex.fullmatch` are the anchored
+forms.
 
-The `lower-regex` pass, which runs right after `lower-async`, compiles each
+The operation takes a `buffer<u8>` and yields whether there was a match, then
+the span of every group (start and end of group 0, of group 1, and so on),
+with -1 for a group that took no part. The pattern is read by CPython's own
+parser, so its syntax and its meaning are `re`'s.
+
+### Lowering
+
+The `lower-regex` pass runs right after `lower-async`. It compiles each
 distinct pattern into one private function of core operations and turns the
-operation into a call. The matcher backtracks the way CPython's does, on an
-explicit stack rather than by recursion: an entry records where to resume,
-the position, and every loop's count, so popping one puts the matcher back
-exactly. Alternatives are tried in order, a greedy repeat gives back one
-iteration at a time, a lazy one takes one more, a group keeps the position
-of its last iteration, and an iteration that took nothing is the last one
-tried. A repeat of one byte class scans the run instead of pushing an entry
-per byte. The stack holds 4096 entries; a match that would need more fails
-a `regex.stack.ok` guard, which sends the calling function to its fallback,
+operation into a call.
+
+The matcher backtracks the way CPython's does, on an explicit stack rather
+than by recursion. An entry records where to resume, the position, and every
+loop's count, so popping one puts the matcher back exactly. The matching
+rules:
+
+- Alternatives are tried in order.
+- A greedy repeat gives back one iteration at a time; a lazy one takes one
+  more.
+- A group keeps the position of its last iteration.
+- An iteration that took nothing is the last one tried.
+- A repeat of one byte class scans the run instead of pushing an entry per
+  byte.
+
+The stack holds 4096 entries. A match that would need more fails a
+`regex.stack.ok` guard, which sends the calling function to its fallback,
 where `re` answers. Every backend runs the matcher as it runs any other
 function; no backend needs a regex library.
 
+### Refused patterns
+
 Backreferences, lookaround, atomic groups and possessive repeats, and locale
-categories are refused when the pattern is analysed, and a function that uses
+categories are refused when the pattern is analysed. A function that uses
 one stays on Python with the reason. [Regular expressions](../guide/regex.md)
 is the surface.
 
 ## The simd dialect
 
-`vector<T, N>` is `N` scalars operated on at once, and the core dialect's
+`vector<T, N>` is `N` scalars operated on at once. The core dialect's
 arithmetic, comparisons, `select`, and `cast` already take vectors (a
 vector's integer arithmetic carries `wrap` or `proven`). The simd dialect
-says what the core cannot: `simd.splat %x : vector<T, N>`, `simd.load %p :
-vector<T, N>` and `simd.store %v, %p` through a pointer to the element,
-`simd.extract %v, %i : T` and `simd.insert %v, %x, %i`, `simd.shuffle %a,
-%b {mask = (...)}` over the lanes of both by a constant mask, and
-`simd.reduce_add`, `reduce_min`, `reduce_max` to a scalar. A reduction
-walks the lanes in order, first to last: an integer sum is the reduction
-intrinsic, a floating-point sum and every minimum and maximum a chain of
-lane operations, so every backend and the reference implementation give
-one number.
+says what the core cannot:
+
+| operation | meaning |
+|---|---|
+| `simd.splat %x : vector<T, N>` | one scalar in every lane |
+| `simd.load %p : vector<T, N>`, `simd.store %v, %p` | through a pointer to the element |
+| `simd.extract %v, %i : T`, `simd.insert %v, %x, %i` | one lane |
+| `simd.shuffle %a, %b {mask = (...)}` | over the lanes of both by a constant mask |
+| `simd.reduce_add`, `reduce_min`, `reduce_max` | to a scalar |
+
+A reduction walks the lanes in order, first to last. An integer sum is the
+reduction intrinsic; a floating-point sum and every minimum and maximum is a
+chain of lane operations. So every backend and the reference implementation
+give one number.
 
 ## The cpu dialect
 
-`cpu.prefetch %p {rw, locality}` asks for a cache line, `cpu.pause` is the
-spin-wait hint; a backend without the instruction drops the hint. A
-function compiled for a feature set carries `cpu.features = ("avx2", ...)`
-as an attribute, which the LLVM backend turns into the function's target
-features and the boundary into a check before binding.
+`cpu.prefetch %p {rw, locality}` asks for a cache line, and `cpu.pause` is
+the spin-wait hint. A backend without the instruction drops the hint.
+
+A function compiled for a feature set carries `cpu.features = ("avx2", ...)`
+as an attribute. The LLVM backend turns it into the function's target
+features, and the boundary into a check before binding.
 
 ## The atomic dialect
 
-`atomic.load`, `store`, `exchange`, `compare_exchange` (two results: the
-value found and whether it swapped, with a `success` and a `failure`
-order), `fetch_add`, `fetch_sub`, `fetch_and`, `fetch_or`, `fetch_xor`,
-and `fence`, each with its memory `order` -- `relaxed`, `acquire`,
-`release`, `acq_rel`, `seq_cst`, the vocabulary of C11 and LLVM -- so a
-backend lowers to the instruction of that order and never guesses. The
-verifier holds the orders a load and a store may carry and the failure
-order of a compare-exchange.
+The operations are `atomic.load`, `store`, `exchange`, `compare_exchange`,
+`fetch_add`, `fetch_sub`, `fetch_and`, `fetch_or`, `fetch_xor`, and `fence`.
+`compare_exchange` has two results (the value found and whether it swapped)
+and carries a `success` and a `failure` order.
+
+Each operation carries its memory `order`: `relaxed`, `acquire`, `release`,
+`acq_rel`, or `seq_cst`, the vocabulary of C11 and LLVM. A backend lowers to
+the instruction of that order and never guesses. The verifier holds the
+orders a load and a store may carry and the failure order of a
+compare-exchange.
 
 ## The concurrency dialect
 
 `concurrency.spawn @f(%args...) : i64` starts a thread running the IR
-function `@f` (which returns nothing, and takes exactly those arguments)
-and hands back its handle; `join %h : i64` waits and gives the status
-`@f` returned -- zero, or the fallback status a guard failed with.
-`mutex_lock`, `mutex_unlock`, `condition_wait`, `condition_notify`,
-`barrier`, and `thread_id` complete it. The synchronization objects are
-memory the program owns: a mutex one `i64` slot, a condition one slot
-counting notifications, a barrier two slots (arrivals, generation); every
-backend implements them over the atomic dialect and the pause hint the
-same way, so a program built for one runs exactly like one built for
-another. Threads are pthreads on the targets that have them; another is
-refused with the reason.
+function `@f` (which returns nothing, and takes exactly those arguments) and
+hands back its handle. `join %h : i64` waits and gives the status `@f`
+returned: zero, or the fallback status a guard failed with. `mutex_lock`,
+`mutex_unlock`, `condition_wait`, `condition_notify`, `barrier`, and
+`thread_id` complete it.
+
+The synchronization objects are memory the program owns:
+
+| object | memory |
+|---|---|
+| mutex | one `i64` slot |
+| condition | one slot counting notifications |
+| barrier | two slots (arrivals, generation) |
+
+Every backend implements them over the atomic dialect and the pause hint the
+same way, so a program built for one runs exactly like one built for another.
+Threads are pthreads on the targets that have them; another target is refused
+with the reason.
 
 ## The async dialect
 
 A function carrying `ppy.async = true` is a coroutine. Before the lowering
-it awaits: `async.create @f(%args) : future<T>` makes another coroutine
-(not yet running), `async.start %fut` runs one as a task, `async.await
-%fut : T` waits for a future, and `sleep`, `accept`, `connect`, `read`,
-and `write` are the runtime's operations that complete later, each a
-`future`; `listen`, `port`, and `close` are immediate. `lower-async`,
-first in the pipeline, makes each coroutine two functions. The starter
-keeps its name and parameters, takes a frame of `slots` words with
-`frame_new`, stores the arguments, and `spawn`s it through its resume
-function, returning the future; the resume function (`ppy.abi = "resume"`)
-takes the frame, reads its state, and jumps to the segment after the await
-that state names; a segment runs to its next await, records the state,
-`suspend`s on the awaited future, and returns; `result` reads what the
-awaited future carried, `complete` fulfils the frame's own future, and a
-guard becomes a branch to `fail`, since a running coroutine has no Python
-to fall back to. Stack slots become words of the frame, and a value read
-across an await is spilled to one. The LLVM and C backends lower the
-low-level operations to calls into the runtime (`ppy_runtime/aio/ppy_aio.c`);
-a future is an `i64` handle.
+it awaits with these operations:
+
+- `async.create @f(%args) : future<T>` makes another coroutine (not yet
+  running).
+- `async.start %fut` runs one as a task.
+- `async.await %fut : T` waits for a future.
+- `sleep`, `accept`, `connect`, `read`, and `write` are the runtime's
+  operations that complete later, each a `future`.
+- `listen`, `port`, and `close` are immediate.
+
+### Lowering
+
+`lower-async`, first in the pipeline, makes each coroutine two functions.
+
+The starter keeps its name and parameters. It takes a frame of `slots` words
+with `frame_new`, stores the arguments, and `spawn`s it through its resume
+function, returning the future.
+
+The resume function (`ppy.abi = "resume"`) takes the frame, reads its state,
+and jumps to the segment after the await that state names. A segment runs to
+its next await, records the state, `suspend`s on the awaited future, and
+returns. `result` reads what the awaited future carried, and `complete`
+fulfils the frame's own future. A guard becomes a branch to `fail`, since a
+running coroutine has no Python to fall back to.
+
+Stack slots become words of the frame, and a value read across an await is
+spilled to one. The LLVM and C backends lower the low-level operations to
+calls into the runtime (`ppy_runtime/aio/ppy_aio.c`); a future is an `i64`
+handle.
 
 ## The parallel dialect
 
-`parallel.for @body(%captures...) %begin, %end` runs `@body(captures...,
-begin, end)` -- a function that loops over its own chunk and returns
-nothing -- over the range; `parallel.reduce @body(%captures...) %begin,
-%end, %init {op, reassociate} : T` folds the chunks' results with `op`
-(`add`, `mul`, `min`, `max`) from `init`, `@body` accumulating its chunk
-from the accumulator it is handed; `parallel.map @body(%captures...)
-%begin, %end, %out` stores `@body(captures..., i)` at `out[i]`. The
-operations say nothing about how the range is split: `lower-parallel`
-decides that once per build from the configuration -- one chunk on the
-calling thread, or chunks spawned through the concurrency dialect and
-joined, with a floating-point reduction whose `reassociate` is false
-never split -- and the C backend spells what the pass left as OpenMP
-regions when that backend was selected. The frontend writes these for
-`parallel.range` loops ([Parallel loops](../guide/parallel.md)) and outlines each body into a
+Three operations run a function over a range:
+
+- `parallel.for @body(%captures...) %begin, %end` runs
+  `@body(captures..., begin, end)` over the range. `@body` loops over its own
+  chunk and returns nothing.
+- `parallel.reduce @body(%captures...) %begin, %end, %init {op, reassociate} : T`
+  folds the chunks' results with `op` (`add`, `mul`, `min`, `max`) from
+  `init`. `@body` accumulates its chunk from the accumulator it is handed.
+- `parallel.map @body(%captures...) %begin, %end, %out` stores
+  `@body(captures..., i)` at `out[i]`.
+
+The operations say nothing about how the range is split. `lower-parallel`
+decides that once per build from the configuration: one chunk on the calling
+thread, or chunks spawned through the concurrency dialect and joined. A
+floating-point reduction whose `reassociate` is false is never split. The C
+backend spells what the pass left as OpenMP regions when that backend was
+selected.
+
+The frontend writes these for `parallel.range` loops
+([Parallel loops](../guide/parallel.md)) and outlines each body into a
 private function marked `ppy.synthesized`.
 
 ## Shapes and layouts
 
-A tensor's shape is a tuple of dimensions, each an integer, a symbol
-(`N`), or an expression of them in parentheses -- `(N * M)`, `(N + 1)`,
-`ceil_div(N, 32)`, `max(N, M)` -- kept in a canonical form so two
-spellings of one size compare equal (`ir/shape.py`). Shape inference for
-broadcasting, matmul, reshape, transpose, slice, reduce, and concat lives
-there too, and every tensor operation's verifier holds its written result
-to what inference says. The layout dialect names how elements sit in
-memory: `layout.row_major`, `layout.col_major`, or `layout.strided<s0,
-s1, ..., offset, K, align, A>` with a stride per axis, elements before the
-first, and the alignment of the first. A tensor operation's meaning is on
-the elements; the layout is how a backend reaches them.
+A tensor's shape is a tuple of dimensions. Each is an integer, a symbol
+(`N`), or an expression of them in parentheses: `(N * M)`, `(N + 1)`,
+`ceil_div(N, 32)`, `max(N, M)`. They are kept in a canonical form so two
+spellings of one size compare equal (`ir/shape.py`).
+
+Shape inference for broadcasting, matmul, reshape, transpose, slice, reduce,
+and concat lives there too. Every tensor operation's verifier holds its
+written result to what inference says.
+
+The layout dialect names how elements sit in memory:
+
+- `layout.row_major`
+- `layout.col_major`
+- `layout.strided<s0, s1, ..., offset, K, align, A>`, with a stride per axis,
+  elements before the first, and the alignment of the first
+
+A tensor operation's meaning is on the elements; the layout is how a backend
+reaches them.
 
 ## The tensor dialect
 
 `tensor.tensor<f64, 4, 8>` is a 4-by-8 array of `f64`, row-major unless a
-trailing layout says otherwise. `tensor.load %buffer` and `tensor.store
-%t, %buffer` move a tensor to and from a buffer of its elements in
-row-major order, guarded by the buffer's length; `empty`, `fill %scalar`,
-`unary {op}` (the math dialect's functions, `neg`, and the special
-functions, over every element), `add`, `sub`, `mul`, `div`, `pow`, `min`,
-`max` (with broadcasting; a NaN wins `min` and `max`, as NumPy has it),
-`broadcast`, `reshape`, `transpose {perm}`, `slice {starts, stops,
-steps}`, `concat {axis}`, `reduce {axes, op, keepdims}`, `matmul`,
-`convert`, and `fused` -- a region over one element of each operand,
-ending in `tensor.yield`, with an optional `reduce` at its root -- are
-the values. `lower-tensor` makes memory of a tensor -- a
-view onto memory that exists already for `load`, `fill`, `broadcast`,
-`transpose`, `slice`, and a contiguous `reshape`; fresh memory, on the
-stack when small and static and the heap otherwise, freed where the
-function returns, for the rest -- and loops of the operations. A symbolic
-dimension is bound where a tensor naming it is loaded: `N` in a load of
-`tensor<f64, N, 3>` is the buffer's length over 3, guarded to divide
-exactly, and every extent, stride, and allocation over `N` is arithmetic
-on that value; a shape naming a symbol nothing has bound, or two unknown
-dimensions in one load, is refused with the reason. The linalg, fft, and
-sparse operations work on static shapes. A tensor that crosses a call is
-refused too: it travels as a buffer.
+trailing layout says otherwise.
+
+`tensor.load %buffer` and `tensor.store %t, %buffer` move a tensor to and
+from a buffer of its elements in row-major order, guarded by the buffer's
+length. The value operations are:
+
+- `empty`, `fill %scalar`
+- `unary {op}`: the math dialect's functions, `neg`, and the special
+  functions, over every element
+- `add`, `sub`, `mul`, `div`, `pow`, `min`, `max`, with broadcasting (a NaN
+  wins `min` and `max`, as NumPy has it)
+- `broadcast`, `reshape`, `transpose {perm}`, `slice {starts, stops, steps}`,
+  `concat {axis}`, `reduce {axes, op, keepdims}`, `matmul`, `convert`
+- `fused`: a region over one element of each operand, ending in
+  `tensor.yield`, with an optional `reduce` at its root
+
+### Lowering
+
+`lower-tensor` makes memory of a tensor, and loops of the operations:
+
+- a view onto memory that exists already, for `load`, `fill`, `broadcast`,
+  `transpose`, `slice`, and a contiguous `reshape`
+- fresh memory for the rest: on the stack when small and static and the
+  heap otherwise, freed where the function returns
+
+### Symbolic dimensions
+
+A symbolic dimension is bound where a tensor naming it is loaded. `N` in a
+load of `tensor<f64, N, 3>` is the buffer's length over 3, guarded to divide
+exactly, and every extent, stride, and allocation over `N` is arithmetic on
+that value.
+
+A shape naming a symbol nothing has bound, or two unknown dimensions in one
+load, is refused with the reason. The linalg, fft, and sparse operations work
+on static shapes. A tensor that crosses a call is refused too: it travels as
+a buffer.
 
 ## The linalg, fft, special, and sparse dialects
 
-`linalg.dot`, `matmul`, `solve`, `triangular_solve {lower, unit}`, and
-`cholesky` lower to loops (a singular or non-positive-definite matrix
-fails a guard); `linalg.qr`, `svd`, and `eig` call LAPACK where the build
-has it -- `dgeqrf`/`dorgqr`, `dgesvd`, `dgeev` on a column-major copy --
-and are refused with the reason where it does not. Complex values are
-real tensors whose last dimension is 2: `fft.fft`, `ifft`, `rfft`,
-`irfft {n}`, `fftn`, and `ifftn` lower to the definition of the transform
-in loops, the sum over every input for every output, until a build
-selects an FFT library. `special.erf`, `erfc`, `gamma`, `gammaln`,
-`ndtr`, `logit`, and the Bessel functions are scalar operations like the
-math dialect's, lowered to libm by both backends. `sparse.csr<T, I, rows,
-cols>` (and `csc`, `coo`) hold a matrix by its non-zeros with an explicit
-index type; `from_parts` borrows the program's buffers, `to_dense`,
-`matmul` by a dense matrix, and `reduce {axis}` give dense tensors,
-`transpose` of a CSR matrix is the CSC matrix of the same parts, `convert`
-changes the format, and `add` merges two matrices of one format into
-memory of its own.
+**linalg.** `linalg.dot`, `matmul`, `solve`, `triangular_solve {lower, unit}`,
+and `cholesky` lower to loops (a singular or non-positive-definite matrix
+fails a guard). `linalg.qr`, `svd`, and `eig` call LAPACK where the build has
+it (`dgeqrf`/`dorgqr`, `dgesvd`, `dgeev` on a column-major copy) and are
+refused with the reason where it does not.
+
+**fft.** Complex values are real tensors whose last dimension is 2. `fft.fft`,
+`ifft`, `rfft`, `irfft {n}`, `fftn`, and `ifftn` lower to the definition of
+the transform in loops, the sum over every input for every output, until a
+build selects an FFT library.
+
+**special.** `special.erf`, `erfc`, `gamma`, `gammaln`, `ndtr`, `logit`, and
+the Bessel functions are scalar operations like the math dialect's, lowered
+to libm by both backends.
+
+**sparse.** `sparse.csr<T, I, rows, cols>` (and `csc`, `coo`) hold a matrix
+by its non-zeros with an explicit index type. The operations:
+
+- `from_parts` borrows the program's buffers.
+- `to_dense`, `matmul` by a dense matrix, and `reduce {axis}` give dense
+  tensors.
+- `transpose` of a CSR matrix is the CSC matrix of the same parts.
+- `convert` changes the format.
+- `add` merges two matrices of one format into memory of its own.
 
 ## The columnar and arrow dialects
 
+### Columns and tables
+
 `columnar.column<f64>` is a column of `f64` with no nulls;
 `columnar.column<f64, nullable>` carries a validity bitmap. A column's
-length is a run-time fact, not part of its type. `columnar.table<a,
-column<i64>, b, column<f64, nullable>>` is a table of named columns. The
-operations are the ones pandas and PyArrow share: `from_parts %values,
-%validity, %length` and `store` move a column to and from Arrow's layout
-(values one per row -- one bit for `bool` -- and a bit-packed validity
-bitmap); `add`, `sub`, `mul`, `div`, the six comparisons, `and`, `or`,
-`xor`, `negate`, `abs`, `invert` give a null where an input is null, and
-`and_kleene`, `or_kleene` are the three-valued forms, where a false on
-one side of `and` (a true on one side of `or`) decides whatever the other
-side holds -- what PyArrow's `and_kleene` computes and pandas' `&` on an
-Arrow-backed Series means;
-`is_null`, `is_valid`, `fill_null`, `cast`, `select`, `fill %scalar, %n`
-(one value in every row); `map %out, %outv, %columns..., %scalars...
-{expression, model, gives}` evaluates a whole expression tree --
-`(add (mul a0 a1) (fill_null a0 s0))` -- row by row into memory in one
-loop, under Arrow's null model (`bits`: validity bitmaps in, one out) or
-NumPy's (`nan`: an `f64` null is a NaN, a `bool` column is a byte per
-row, and the answer is written the same way); `filter` by a bool
-column, `take` by positions (a null position is a null row), `concat`;
-`sort_indices` (ascending, nulls last, stable); `aggregate {function}` --
-`sum`, `mean`, `min`, `max`, `count`, `any`, `all` over the valid rows, a
-one-row column that is null when no row was valid; and over tables `make
-{names}`, `column_of {name}`, `project {names}`, `filter`, `take`,
-`concat`, `group_by {key, aggregates}` (an integer or bool key without
-nulls; `sum`, `count`, `min`, `max` per group), and an inner `join {key}`
-on one integer key. `lower-tensor` makes loops of them all: `filter`
-counts then copies, `sort_indices` is a bottom-up merge sort, `group_by`
-sorts by the key and folds each run, `join` is a sort-merge.
+length is a run-time fact and is not part of its type. `columnar.table<a,
+column<i64>, b, column<f64, nullable>>` is a table of named columns.
 
-`arrow.array<f64>` is an Arrow array as the C Data Interface hands it
-over: `arrow.import %p` reads an `ArrowArray` struct through a `ptr<u8>`
--- length, null count, offset, the validity and values buffers -- with no
-copy; `arrow.length`, `arrow.null_count`, and `arrow.offset` read the
-counts; `arrow.to_column` is that memory as a `columnar.column<T,
-nullable>`, the values borrowed at the array's offset and the validity
-bitmap re-based to bit zero (all ones when the array has none). A bool
-array sliced inside a byte is refused by the guard rather than copied
+### Column operations
+
+The operations are the ones pandas and PyArrow share:
+
+- `from_parts %values, %validity, %length` and `store` move a column to and
+  from Arrow's layout: values one per row (one bit for `bool`) and a
+  bit-packed validity bitmap.
+- `add`, `sub`, `mul`, `div`, the six comparisons, `and`, `or`, `xor`,
+  `negate`, `abs`, `invert` give a null where an input is null.
+- `and_kleene`, `or_kleene` are the three-valued forms, where a false on one
+  side of `and` (a true on one side of `or`) decides whatever the other side
+  holds. That is what PyArrow's `and_kleene` computes and pandas' `&` on an
+  Arrow-backed Series means.
+- `is_null`, `is_valid`, `fill_null`, `cast`, `select`, and `fill %scalar, %n`
+  (one value in every row).
+- `map %out, %outv, %columns..., %scalars... {expression, model, gives}`
+  evaluates a whole expression tree, such as
+  `(add (mul a0 a1) (fill_null a0 s0))`, row by row into memory in one loop.
+  It uses Arrow's null model (`bits`: validity bitmaps in, one out) or
+  NumPy's (`nan`: an `f64` null is a NaN, a `bool` column is a byte per row,
+  and the answer is written the same way).
+- `filter` by a bool column, `take` by positions (a null position is a null
+  row), `concat`.
+- `sort_indices` (ascending, nulls last, stable).
+- `aggregate {function}`: `sum`, `mean`, `min`, `max`, `count`, `any`, `all`
+  over the valid rows. The result is a one-row column that is null when no row
+  was valid.
+
+### Table operations
+
+Over tables: `make {names}`, `column_of {name}`, `project {names}`, `filter`,
+`take`, `concat`, `group_by {key, aggregates}` (an integer or bool key without
+nulls; `sum`, `count`, `min`, `max` per group), and an inner `join {key}` on
+one integer key.
+
+### Lowering
+
+`lower-tensor` makes loops of them all:
+
+- `filter` counts then copies.
+- `sort_indices` is a bottom-up merge sort.
+- `group_by` sorts by the key and folds each run.
+- `join` is a sort-merge.
+
+### Arrow arrays
+
+`arrow.array<f64>` is an Arrow array as the C Data Interface hands it over.
+
+- `arrow.import %p` reads an `ArrowArray` struct through a `ptr<u8>` (length,
+  null count, offset, the validity and values buffers) with no copy.
+- `arrow.length`, `arrow.null_count`, and `arrow.offset` read the counts.
+- `arrow.to_column` is that memory as a `columnar.column<T, nullable>`: the
+  values borrowed at the array's offset and the validity bitmap re-based to
+  bit zero (all ones when the array has none).
+
+A bool array sliced inside a byte is refused by the guard rather than copied
 wrongly.
 
 ## The gpu dialect
 
-One execution model for every GPU backend. A function is `host` -- the
-default -- `device`, or `kernel`, by its `gpu.kind` attribute: a kernel
-returns nothing, takes scalars and pointers into `global` or `constant`
-memory, and is launched from the host with `gpu.launch %gx, %gy, %gz, %bx,
-%by, %bz, %args... {callee = @k}`; a device function is called from a
-kernel or another device function. In device code a thread reads its place
-from `gpu.thread_id.x`, `block_id.y`, `block_dim.z`, `grid_dim.x` (each an
-`index`), waits for its block at `barrier` and its subgroup at
-`subgroup_barrier`, trades a scalar across the subgroup with
-`subgroup_shuffle.idx|up|down|xor %v, %lane`, and takes `shared_alloc
-{count = N} : ptr<T, shared>` or `private_alloc {count = N} : ptr<T,
-private>`; atomics are the atomic dialect's over those pointers. A host
-function takes `device_alloc %n : ptr<T, generic>`, memory on the device
-that the host reads and writes too, and hands it to a launch. The
-verifier holds the kinds: a device operation in a host function; a host one
-in device code -- a guard, a buffer, an intrinsic, a call to a host
-function, any other dialect; a kernel that returns or takes stack memory;
-a launch of anything but a kernel, or with anything but its parameters.
-`ppy.cuda` and `ppy.hip` lower to it ([GPU kernels](../guide/gpu.md)); `ppy emit cuda`
-and `ppy emit hip` write device code and the host's launches as CUDA or
-HIP C++ (the C backend with the spellings in `backend/c/gpu.py`; device
-memory is a managed allocation, `cudaMallocManaged`, freed with the host
-function however it leaves); the C,
-C++, and LLVM backends leave device code to them. `backend/nvvm` writes
-the same device code as LLVM IR for NVPTX (`ppy emit nvvm-ir`) -- a kernel
-a `ptx_kernel`, positions the `llvm.nvvm.read.ptx.sreg.*` registers,
-shared memory an `addrspace(3)` array, a shuffle `llvm.nvvm.shfl.sync.*`,
-the math library libdevice -- and as PTX (`ppy emit ptx`); the build
-stages each kernel's PTX, and `ppy_runtime.cuda` loads it through the
-CUDA driver when `ppy.cuda.launch` is asked to run it.
+The gpu dialect is one execution model for every GPU backend.
+
+### Function kinds
+
+A function is `host` (the default), `device`, or `kernel`, by its `gpu.kind`
+attribute.
+
+- A kernel returns nothing, takes scalars and pointers into `global` or
+  `constant` memory, and is launched from the host with
+  `gpu.launch %gx, %gy, %gz, %bx, %by, %bz, %args... {callee = @k}`.
+- A device function is called from a kernel or another device function.
+
+### Device operations
+
+In device code a thread:
+
+- reads its place from `gpu.thread_id.x`, `block_id.y`, `block_dim.z`,
+  `grid_dim.x` (each an `index`)
+- waits for its block at `barrier` and its subgroup at `subgroup_barrier`
+- trades a scalar across the subgroup with
+  `subgroup_shuffle.idx|up|down|xor %v, %lane`
+- takes `shared_alloc {count = N} : ptr<T, shared>` or
+  `private_alloc {count = N} : ptr<T, private>`
+
+Atomics are the atomic dialect's over those pointers. A host function takes
+`device_alloc %n : ptr<T, generic>`, memory on the device that the host reads
+and writes too, and hands it to a launch.
+
+### Verification
+
+The verifier holds the kinds. It refuses:
+
+- a device operation in a host function
+- a host one in device code: a guard, a buffer, an intrinsic, a call to a
+  host function, any other dialect
+- a kernel that returns or takes stack memory
+- a launch of anything but a kernel, or with anything but its parameters
+
+### Backends
+
+`ppy.cuda` and `ppy.hip` lower to it ([GPU kernels](../guide/gpu.md)).
+
+`ppy emit cuda` and `ppy emit hip` write device code and the host's launches
+as CUDA or HIP C++. This is the C backend with the spellings in
+`backend/c/gpu.py`. Device memory is a managed allocation
+(`cudaMallocManaged`), freed with the host function however it leaves. The
+C, C++, and LLVM backends leave device code to them.
+
+`backend/nvvm` writes the same device code as LLVM IR for NVPTX
+(`ppy emit nvvm-ir`):
+
+- a kernel is a `ptx_kernel`
+- positions are the `llvm.nvvm.read.ptx.sreg.*` registers
+- shared memory is an `addrspace(3)` array
+- a shuffle is `llvm.nvvm.shfl.sync.*`
+- the math library is libdevice
+
+It also writes PTX (`ppy emit ptx`). The build stages each kernel's PTX, and
+`ppy_runtime.cuda` loads it through the CUDA driver when `ppy.cuda.launch` is
+asked to run it.
 
 ## The StableHLO backend
 
 `ppy_compiler.backend.stablehlo.emit_module` writes a function of scalars
-and tensors -- one block, no memory, static shapes -- as an MLIR
-`func.func` over `tensor<...>` values: a scalar is a rank-0 tensor; `core`
-arithmetic, comparison, `select`, and `cast` are StableHLO's; the math
-functions are theirs, with `exp2`, `log2`, `log10`, and `trunc` spelled
-from what StableHLO has and `erf`/`erfc` as CHLO; `tensor.fill` and
-`broadcast` are `broadcast_in_dim`, `reshape`, `transpose`, `reduce`,
-`matmul` and `linalg.dot` are `dot_general`, `convert` is `convert`, and a
-`tensor.fused` region is its body over the broadcast shape. A buffer, a
-guard, a branch, or a symbolic shape is refused with the reason
+and tensors (one block, no memory, static shapes) as an MLIR `func.func`
+over `tensor<...>` values. The mapping:
+
+- A scalar is a rank-0 tensor.
+- `core` arithmetic, comparison, `select`, and `cast` are StableHLO's.
+- The math functions are theirs, with `exp2`, `log2`, `log10`, and `trunc`
+  spelled from what StableHLO has, and `erf`/`erfc` as CHLO.
+- `tensor.fill` and `broadcast` are `broadcast_in_dim`; `reshape`,
+  `transpose`, `reduce` are theirs.
+- `matmul` and `linalg.dot` are `dot_general`; `convert` is `convert`.
+- A `tensor.fused` region is its body over the broadcast shape.
+
+A buffer, a guard, a branch, or a symbolic shape is refused with the reason
 (`supports` says which). `ppy emit stablehlo` writes the text; the PJRT
 bridge in `ppy_runtime.xla` compiles and runs it.
 
 ## Effects and ownership on the IR
 
-A function carries its `effects` -- the lower-case names of the analysis's
-vocabulary ([Effects and purity](../guide/effects.md)), with a write through a buffer spelled as
-the `write_memory` it is -- and each parameter its `ownership`
-(`borrowed`, `mut`, `owned`) and `noalias`. Passes read the effects (an
-unused `core.call` to a callee with none but allocation and reads is dead),
-and the verifier holds the ownership: a `borrowed` or `mut` parameter is
-refused in a `core.ret` and as the value of a `core.store`, the same way a
-stack pointer is.
+A function carries its `effects`: the lower-case names of the analysis's
+vocabulary ([Effects and purity](../guide/effects.md)), with a write through a
+buffer spelled as the `write_memory` it is. Each parameter carries its
+`ownership` (`borrowed`, `mut`, `owned`) and `noalias`.
+
+Passes read the effects. For example, an unused `core.call` to a callee with
+none but allocation and reads is dead. The verifier holds the ownership: a
+`borrowed` or `mut` parameter is refused in a `core.ret` and as the value of
+a `core.store`, the same way a stack pointer is.
 
 ## Linking and the program
 
 Each module lowers on its own. A call into another module's native function
-is a declaration -- a function with no body, carrying the callee's symbol,
-marked `ppy.external` -- that the driver only lets a module make for a
-callee it has already lowered, so a declaration always has its definition
-somewhere in the program. `ppy_compiler.ir.linker.link` puts the modules
-together: definitions answer declarations, a generic instance two modules
-both made is kept once, a private symbol two modules both spell -- a
-string constant, a helper -- is renamed after its module and every
-reference follows, dialects are required at the newest version any module
-asked for, and libraries are the union. `whole_program` then optimizes the
-program as one unit: functions Python never binds and no address reaches
-become private, a small callee or one marked `@ppy.inline` is inlined
-(`@ppy.noinline` is not; nor is a coroutine, a kernel, or a resume
-function), the ordinary cleanups run, and `global-dce` drops the private
-functions and globals nothing reaches. `ppy build` compiles the program as
-one object; `ppy emit linked-ir` prints it.
+is a declaration: a function with no body, carrying the callee's symbol,
+marked `ppy.external`. The driver only lets a module make one for a callee it
+has already lowered, so a declaration always has its definition somewhere in
+the program.
+
+`ppy_compiler.ir.linker.link` puts the modules together:
+
+- Definitions answer declarations.
+- A generic instance two modules both made is kept once.
+- A private symbol two modules both spell (a string constant, a helper) is
+  renamed after its module, and every reference follows.
+- Dialects are required at the newest version any module asked for.
+- Libraries are the union.
+
+`whole_program` then optimizes the program as one unit:
+
+- Functions Python never binds and no address reaches become private.
+- A small callee or one marked `@ppy.inline` is inlined. `@ppy.noinline` is
+  not; nor is a coroutine, a kernel, or a resume function.
+- The ordinary cleanups run.
+- `global-dce` drops the private functions and globals nothing reaches.
+
+`ppy build` compiles the program as one object; `ppy emit linked-ir` prints
+it.
 
 ## Text and `.ppyir`
 
@@ -421,29 +585,39 @@ extern func @sin(f64) -> f64
 func @f(%x: i64 {ownership = "borrowed"}) -> i64 attrs {effects = ["pure"]} { ... }
 ```
 
-Printing is deterministic: values are named in definition order (a hint is
-kept unless an earlier value took it; the rest are numbered), attributes
-print sorted, and a module printed after being parsed prints the same
-text. An operation is one line, and the reader ends it at its newline: one
-with nothing after its name -- `gpu.barrier` -- does not take the next
-line's value or label as its own. A reader refuses a schema it does not
-have and a dialect it does not
-have or has only at an older version, with the reason, rather than
-guessing. The format is public from 0.2.0: schema 1 is what `ppy emit ir`
-and `ppy emit linked-ir` write and `ppy build` reads, and a change to its
-shape is a new schema number, never a silent one.
+Printing is deterministic:
+
+- Values are named in definition order. A hint is kept unless an earlier
+  value took it; the rest are numbered.
+- Attributes print sorted.
+- A module printed after being parsed prints the same text.
+
+An operation is one line, and the reader ends it at its newline. An
+operation with nothing after its name (`gpu.barrier`) does not take the next
+line's value or label as its own.
+
+A reader refuses a schema it does not have, and a dialect it does not have or
+has only at an older version, with the reason, rather than guessing. The
+format is public from 0.2.0: schema 1 is what `ppy emit ir` and
+`ppy emit linked-ir` write and `ppy build` reads. A change to its shape is a
+new schema number, never a silent one.
 
 ## Verification
 
 `verify(module)` returns every error with the function, block, and
 operation it sits on; `verify_or_raise` turns the list into one exception.
-The core checks structure (terminators, branch targets and arguments,
-dominance, unique names, symbols), then each operation against its
-dialect's `OpSpec` (arity, required attributes, types), then the dialect's
-own rule for that operation. A dialect adds its rules through `OpSpec.verify`,
-`Dialect.verify_type`, and `Dialect.verify_function` -- what a whole function
-may be, such as a kernel's signature and what its body holds; a new dialect
-never touches the verifier.
+The checks run in three layers:
+
+1. The core checks structure: terminators, branch targets and arguments,
+   dominance, unique names, symbols.
+2. Each operation is checked against its dialect's `OpSpec`: arity, required
+   attributes, types.
+3. The dialect's own rule for that operation runs.
+
+A dialect adds its rules through `OpSpec.verify`, `Dialect.verify_type`, and
+`Dialect.verify_function` (what a whole function may be, such as a kernel's
+signature and what its body holds). A new dialect never touches the
+verifier.
 
 ## Dialects
 
@@ -470,122 +644,178 @@ of one name from different classes are refused.
 ## Sanitizers
 
 `sanitize` (`ir/transforms/sanitize.py`) instruments a module before the
-optimizations run: `bounds` guards every `core.buffer_load` and
-`buffer_store` index; `overflow` turns every `wrap` or `proven` integer
-`add`, `sub`, `mul` into the checked form and guards the overflow flag;
-`pointer` guards every load and store through a non-stack pointer against
-null (`core.const 0 : ptr<T>` is the null pointer); `alignment` guards the
-address (`core.cast ptr -> i64`) against the element's size. A sanitizer
-guard carries a `sanitize:<kind>` label, and both backends return
-`STATUS_SANITIZER_BASE + kind` for it instead of the fallback status, so
-the boundary raises rather than re-running the Python. Coroutines' resume
+optimizations run. The kinds:
+
+| kind | what it guards |
+|---|---|
+| `bounds` | every `core.buffer_load` and `buffer_store` index |
+| `overflow` | turns every `wrap` or `proven` integer `add`, `sub`, `mul` into the checked form and guards the overflow flag |
+| `pointer` | every load and store through a non-stack pointer, against null (`core.const 0 : ptr<T>` is the null pointer) |
+| `alignment` | the address (`core.cast ptr -> i64`), against the element's size |
+
+A sanitizer guard carries a `sanitize:<kind>` label. Both backends return
+`STATUS_SANITIZER_BASE + kind` for it instead of the fallback status, so the
+boundary raises rather than re-running the Python. Coroutines' resume
 functions and device code are left alone: neither has a status to fail with.
 
 ## Profiles
 
-The prof dialect is two operations with no results: `prof.hit {counter =
-N}` adds one to counter `N` when its block runs, `prof.hit_if %c {counter
-= N}` adds one when `%c` holds. `instrument-profile`
-(`ir/transforms/profile.py`) places a `hit` at the start of every block of
-every host function and a `hit_if` on the condition of every
-`core.cond_br`, so the taken edge is counted without touching the graph,
-and leaves the legend -- counters to functions, blocks, and branches, with
-each function's graph digest -- on the module as `ppy.profile.map`. The
-LLVM backend writes the counters as one `i64` array per module and the
+The prof dialect is two operations with no results:
+
+- `prof.hit {counter = N}` adds one to counter `N` when its block runs.
+- `prof.hit_if %c {counter = N}` adds one when `%c` holds.
+
+### Instrumenting
+
+`instrument-profile` (`ir/transforms/profile.py`) places a `hit` at the start
+of every block of every host function and a `hit_if` on the condition of
+every `core.cond_br`, so the taken edge is counted without touching the
+graph. It leaves the legend (counters to functions, blocks, and branches,
+with each function's graph digest) on the module as `ppy.profile.map`.
+
+The LLVM backend writes the counters as one `i64` array per module and the
 legend as a string next to it (`__ppy_prof_counters_<module>`,
-`__ppy_prof_map_<module>`), each `hit` an atomic add, and `ppy run
---profile` reads both back through the engine when the program ends; the
-C backend keeps a file-static array. `annotate-profile` runs at the same
-point of the pipeline with a recorded profile: a function whose digest
-still matches gets `ppy.profile.calls` and `ppy.profile.hot` or
-`ppy.profile.cold`, each terminator `ppy.profile.count`, each `cond_br`
-`ppy.weights = [taken, not_taken]`, each back edge `ppy.profile.trips`;
-one whose digest moved is left alone and named in a remark. The inliner
-reads the hotness and the counts, the LLVM backend writes them as
-`function_entry_count` and `branch_weights` metadata and the `hot` and
-`cold` attributes. Both passes work right after canonicalization, so the
-graph a profile keys on is the graph a build sees.
+`__ppy_prof_map_<module>`), each `hit` an atomic add. `ppy run --profile`
+reads both back through the engine when the program ends. The C backend
+keeps a file-static array.
+
+### Annotating
+
+`annotate-profile` runs at the same point of the pipeline with a recorded
+profile. A function whose digest still matches gets:
+
+- `ppy.profile.calls` and `ppy.profile.hot` or `ppy.profile.cold`
+- on each terminator, `ppy.profile.count`
+- on each `cond_br`, `ppy.weights = [taken, not_taken]`
+- on each back edge, `ppy.profile.trips`
+
+A function whose digest moved is left alone and named in a remark.
+
+The inliner reads the hotness and the counts. The LLVM backend writes them as
+`function_entry_count` and `branch_weights` metadata and the `hot` and `cold`
+attributes. Both passes work right after canonicalization, so the graph a
+profile keys on is the graph a build sees.
 
 ## Passes and patterns
 
+### Patterns
+
 A **pattern** roots at one operation name and rewrites through the
-`Rewriter`, which is the only way anything changes: every replacement is
+`Rewriter`, which is the only way anything changes. Every replacement is
 recorded, and every operation a change touched is looked at again. The
 `GreedyRewriteDriver` applies a `PatternSet` until nothing applies; a
-pattern that never settles hits the iteration cap and is named in the
-error. A rewrite happens only where the types and the operation's own
-semantics allow it -- an integer `x * 0` is `0`, a float `x * 0.0` stays,
-`neg(neg(x))` folds under `python` and `wrap` but not `checked` overflow,
-and a folded constant that does not fit its type is left for the guard.
+pattern that never settles hits the iteration cap and is named in the error.
+
+A rewrite happens only where the types and the operation's own semantics
+allow it:
+
+- an integer `x * 0` is `0`, a float `x * 0.0` stays
+- `neg(neg(x))` folds under `python` and `wrap` but not `checked` overflow
+- a folded constant that does not fit its type is left for the guard
 
 Each dialect contributes its patterns through `register_patterns`, so
 `canonicalize` is the union of what every registered dialect knows.
 
+### Passes
+
 A **pass** transforms a module and declares the analyses it `requires`,
-`preserves`, and `invalidates`; the `PassContext` serves analyses from a
+`preserves`, and `invalidates`. The `PassContext` serves analyses from a
 cache that those declarations empty. With `verify_after_each` the manager
 verifies the module after every pass and names the pass that broke it.
-The shared passes are `canonicalize`, `constant-fold`, `simplify-cfg`
-(constant branches, one-target conditional branches, unreachable blocks,
-single-predecessor chains), `dce` (unused pure operations, dead blocks),
-`tensor-canonicalize` (the tensor dialect's own patterns: views that
-change nothing go away, two transposes or reshapes are one, arithmetic
-over `fill`s is a `fill`, `x * fill 1` is `x`), `tensor-fusion` (a chain
-of elementwise tensor operations whose intermediates have one reader, and
-a `reduce` at its root, become one `tensor.fused` -- a region computing
-one element from one element of each input -- so `lower-tensor` makes one
-loop of them with no temporaries), `lower-tensor`, `lower-regex`, and `lower-parallel`;
-`transforms.default_pipeline(level)` orders them and marks the
-stages -- `after-ir-generation`, `after-canonicalization`,
-`before-optimization`, `after-optimization`, `before-backend` -- where a
-plugin's `register_stage_pass` puts a pass of its own, and last the
-`backend` stage, where a backend's `register_passes` puts its own before
-its validation. `driver/ir_pipeline.py` runs that pipeline over every
-module of a project (`canonical_ir_modules`) and is the one road to every
-backend, builtin or installed ([Backends](backends.md)).
+
+The shared passes:
+
+| pass | what it does |
+|---|---|
+| `canonicalize` | the union of every dialect's patterns |
+| `constant-fold` | folds constants |
+| `simplify-cfg` | constant branches, one-target conditional branches, unreachable blocks, single-predecessor chains |
+| `dce` | unused pure operations, dead blocks |
+| `tensor-canonicalize` | the tensor dialect's own patterns: views that change nothing go away, two transposes or reshapes are one, arithmetic over `fill`s is a `fill`, `x * fill 1` is `x` |
+| `tensor-fusion` | a chain of elementwise tensor operations whose intermediates have one reader, and a `reduce` at its root, become one `tensor.fused` (a region computing one element from one element of each input), so `lower-tensor` makes one loop of them with no temporaries |
+| `lower-tensor` | tensors to memory and loops |
+| `lower-regex` | patterns to matcher functions |
+| `lower-parallel` | parallel operations to chunks |
+
+### Stages
+
+`transforms.default_pipeline(level)` orders the passes and marks the stages
+where a plugin's `register_stage_pass` puts a pass of its own:
+
+1. `after-ir-generation`
+2. `after-canonicalization`
+3. `before-optimization`
+4. `after-optimization`
+5. `before-backend`
+
+Last comes the `backend` stage, where a backend's `register_passes` puts its
+own before its validation. `driver/ir_pipeline.py` runs that pipeline over
+every module of a project (`canonical_ir_modules`) and is the one road to
+every backend, builtin or installed ([Backends](backends.md)).
 
 ## From Python to the IR
 
-`ppy_compiler.lowering.ast_to_ir` reads an analyzed function once and
-writes IR: parameters become entry-block arguments held in stack slots,
-Python control flow becomes blocks with arguments (`and`/`or` join through
-a block argument, loops have a header, a body, a latch, and an exit), and
-every place the program must be handed back to CPython -- a division by
-zero, an index out of range, a shift past the word, a byte that does not
-fit -- is a `core.guard`. Integer arithmetic carries `overflow = "python"`,
-or `wrap` when the safeguards are off, and `//` and `%` carry
-`rounding = "floor"`. What the native subset excludes is refused with the
-reason, and a caller of a refused function is refused with it.
+### The frontend
+
+`ppy_compiler.lowering.ast_to_ir` reads an analyzed function once and writes
+IR:
+
+- Parameters become entry-block arguments held in stack slots.
+- Python control flow becomes blocks with arguments. `and`/`or` join through
+  a block argument; loops have a header, a body, a latch, and an exit.
+- Every place the program must be handed back to CPython (a division by
+  zero, an index out of range, a shift past the word, a byte that does not
+  fit) is a `core.guard`.
+- Integer arithmetic carries `overflow = "python"`, or `wrap` when the
+  safeguards are off, and `//` and `%` carry `rounding = "floor"`.
+
+What the native subset excludes is refused with the reason, and a caller of a
+refused function is refused with it.
+
+### The LLVM backend
 
 `backend/llvm/from_ir` reads that IR and nothing else. It gives every
-function the native ABI the runtime binds -- machine atoms in, result
-slots out, an `i32` status back -- lowers `python` overflow to the
-`with.overflow` intrinsics and a branch to the function's fallback block,
-`floor` rounding to the sign-corrected sequence (or a shift for a
-power-of-two divisor), and block arguments to phis.
+function the native ABI the runtime binds: machine atoms in, result slots
+out, an `i32` status back. It lowers:
 
-`backend/c/emit` reads the same IR and writes C11 or C++17: the same
-ABI, `python` overflow through checking helpers (the compiler's
-`__builtin_*_overflow` where it has them, plain C otherwise), `floor`
-rounding as the sign-corrected sequence or, by a positive constant, as
-`(a % b + b) % b`. Control flow is rebuilt from the graph: the dominator
-tree and the loops give `while`, `if`/`else`, `break`, `continue`, and
-`return`, a block argument is a variable assigned on each edge into its
-block, and a stack slot that is only loaded and stored is a variable named
-after it. A value read once, in its own block, is written where it is read,
-with the parentheses C's precedence needs and no others; a parameter keeps
-its Python name. A graph the reconstruction cannot express -- a loop with
-two exits, a block reached from two places that dominate neither -- falls
-back, for that function alone, to blocks as labels and branches as
-`goto`s, so the text is always correct and usually plain. `ppy emit c` and
-`ppy emit cpp` print it (`--format` runs it through clang-format);
-`tests/test_c_backend.py` compiles it and calls it on the LLVM road's
-inputs, and holds the labels writer to the same answers.
+- `python` overflow to the `with.overflow` intrinsics and a branch to the
+  function's fallback block
+- `floor` rounding to the sign-corrected sequence (or a shift for a
+  power-of-two divisor)
+- block arguments to phis
 
-This is the LLVM backend's one road. 0.2.0 began with the direct
-AST-to-LLVM lowering beside it and a differential run comparing the two on
-every input; once the IR road covered everything the direct one did, the
-direct one was removed, and `tests/test_lowering.py` now holds the IR road
-to CPython's own answers on the same inputs, fallbacks included.
-`[tool.ppy.llvm] pipeline = "ast"` and `PPY_LOWERING=ast` are still read:
-a build asking for the removed road is told (`W2004`) and takes this one.
+### The C backend
+
+`backend/c/emit` reads the same IR and writes C11 or C++17 with the same ABI.
+
+- `python` overflow goes through checking helpers (the compiler's
+  `__builtin_*_overflow` where it has them, plain C otherwise).
+- `floor` rounding is the sign-corrected sequence or, by a positive constant,
+  `(a % b + b) % b`.
+
+Control flow is rebuilt from the graph. The dominator tree and the loops give
+`while`, `if`/`else`, `break`, `continue`, and `return`. A block argument is a
+variable assigned on each edge into its block, and a stack slot that is only
+loaded and stored is a variable named after it. A value read once, in its own
+block, is written where it is read, with the parentheses C's precedence needs
+and no others. A parameter keeps its Python name.
+
+Some graphs the reconstruction cannot express: a loop with two exits, or a
+block reached from two places that dominate neither. For that function alone
+the emitter falls back to blocks as labels and branches as `goto`s, so the
+text is always correct and usually plain.
+
+`ppy emit c` and `ppy emit cpp` print it (`--format` runs it through
+clang-format). `tests/test_c_backend.py` compiles it and calls it on the LLVM
+road's inputs, and holds the labels writer to the same answers.
+
+### History of the IR road
+
+This is the LLVM backend's one road. 0.2.0 began with the direct AST-to-LLVM
+lowering beside it and a differential run comparing the two on every input.
+Once the IR road covered everything the direct one did, the direct one was
+removed. `tests/test_lowering.py` now holds the IR road to CPython's own
+answers on the same inputs, fallbacks included.
+
+`[tool.ppy.llvm] pipeline = "ast"` and `PPY_LOWERING=ast` are still read: a
+build asking for the removed road is told (`W2004`) and takes this one.

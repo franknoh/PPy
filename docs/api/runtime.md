@@ -1,9 +1,10 @@
 # `ppy_runtime`
 
-Everything a built artifact needs at launch, and nothing more. This package
-never imports `ppy_compiler`: a compiled application depends on the
-interpreter, this runtime, its native library, and its manifest, and keeps
-working with the compiler uninstalled.
+`ppy_runtime` holds what a built artifact needs at launch, and nothing
+more. It never imports `ppy_compiler`.
+
+A compiled application depends on the interpreter, this runtime, its native
+library, and its manifest. It keeps working with the compiler uninstalled.
 
 ## Launching
 

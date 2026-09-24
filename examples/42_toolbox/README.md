@@ -1,66 +1,10 @@
 # The toolbox
 
-One small program, and every way of looking inside its build: the IR at each
-stage, the source backends, the optimization report, the sanitizers, and
-profile-guided optimization. The program is ordinary — a loop with a
-branch, an indexed read, a function nobody calls — so that the tools have
+One small program, run through each tool that looks inside its build: the IR
+at each stage, the source backends, the optimization report, the sanitizers,
+and profile-guided optimization. The program is ordinary (a loop with a
+branch, an indexed read, a function nobody calls), so the tools have
 something to say.
-
-## The IR at each stage
-
-```bash
-ppy inspect toolbox.ppy --stage analysis   # what the checker knows of each function
-ppy inspect toolbox.ppy --stage ir         # the frontend's module, before any pass
-ppy inspect toolbox.ppy --stage optimized  # what the backend receives
-ppy emit ir toolbox.ppy                    # the same module as .ppyir text
-ppy emit c toolbox.ppy                     # one C11 translation unit; `cpp` for C++17
-ppy emit llvm-ir toolbox.ppy               # what LLVM is handed
-```
-
-`analysis` says of each function whether it is native and whether it gets a
-Python boundary: `unused` is native but "native callers only", because a
-two-instruction body is not worth a boundary crossing. `emit c` writes a
-translation unit that compiles alone with any C11 compiler and answers what
-the LLVM road answers, guards and fallbacks included.
-
-## The report
-
-```bash
-ppy build toolbox.ppy --report-opt
-ppy build toolbox.ppy --report-opt-json report.json
-```
-
-Native or not and why, then every remark the passes left, by stable
-category — `block merged`, `dead code removed`, `function inlined`, `bounds
-guard removed` — so a tool can count them across versions.
-
-## Sanitizers
-
-```bash
-ppy run --sanitize bounds,overflow toolbox.ppy
-```
-
-A sanitizer instruments the IR with checks the program did not ask for:
-every buffer index, every wrapping or proven integer operation. A check that
-fails is not a fallback. The function returns a sanitizer status and the
-boundary raises `SanitizerFailure` naming the kind and the function.
-
-## Profile-guided optimization
-
-```bash
-ppy run --profile toolbox.ppy              # runs, then writes toolbox.ppyprof
-ppy build --pgo toolbox.ppyprof toolbox.ppy --report-opt
-ppy run --pgo toolbox.ppyprof toolbox.ppy
-```
-
-The profiling run counts every block and the taken edge of every branch,
-and records what each native function was called with (`list[400]`, fifty
-times). The guided build annotates what still matches: `compute` is hot,
-`unused` is cold and never inlined, the branch on `x % 4` carries the
-weights the run measured, and LLVM receives them as `!prof` metadata. The
-report lists the profile first. A function edited since the profile was
-recorded is named (`W2009`) and built as without one. A profile changes what
-is fast, never what is computed.
 
 ## Run it
 
@@ -340,6 +284,70 @@ module toolbox
 </details>
 
 <!-- outputs:end -->
+
+## The IR at each stage
+
+```bash
+ppy inspect toolbox.ppy --stage analysis   # what the checker knows of each function
+ppy inspect toolbox.ppy --stage ir         # the frontend's module, before any pass
+ppy inspect toolbox.ppy --stage optimized  # what the backend receives
+ppy emit ir toolbox.ppy                    # the same module as .ppyir text
+ppy emit c toolbox.ppy                     # one C11 translation unit; `cpp` for C++17
+ppy emit llvm-ir toolbox.ppy               # what LLVM is handed
+```
+
+- `analysis` says of each function whether it is native and whether it gets
+  a Python boundary. `unused` is native but "native callers only", because a
+  two-instruction body is not worth a boundary crossing.
+- `emit c` writes a translation unit that compiles alone with any C11
+  compiler. It answers what the LLVM road answers, guards and fallbacks
+  included.
+
+## The optimization report
+
+```bash
+ppy build toolbox.ppy --report-opt
+ppy build toolbox.ppy --report-opt-json report.json
+```
+
+The report first says whether each function is native, and why. Then it
+lists every remark the passes left, by stable category (`block merged`,
+`dead code removed`, `function inlined`, `bounds guard removed`), so a tool
+can count them across versions.
+
+## Sanitizers
+
+```bash
+ppy run --sanitize bounds,overflow toolbox.ppy
+```
+
+A sanitizer instruments the IR with checks the program did not ask for: every
+buffer index, every wrapping or proven integer operation. A check that fails
+is not a fallback. The function returns a sanitizer status, and the boundary
+raises `SanitizerFailure` naming the kind and the function.
+
+## Profile-guided optimization
+
+```bash
+ppy run --profile toolbox.ppy              # runs, then writes toolbox.ppyprof
+ppy build --pgo toolbox.ppyprof toolbox.ppy --report-opt
+ppy run --pgo toolbox.ppyprof toolbox.ppy
+```
+
+The profiling run counts every block and the taken edge of every branch. It
+also records what each native function was called with (`list[400]`, fifty
+times).
+
+The guided build annotates what still matches:
+
+- `compute` is hot.
+- `unused` is cold and never inlined.
+- The branch on `x % 4` carries the weights the run measured, and LLVM
+  receives them as `!prof` metadata.
+
+The report lists the profile first. A function edited since the profile was
+recorded is named (`W2009`) and built as without one. A profile changes what
+is fast, never what is computed.
 
 Read on: [CLI](../../docs/cli.md) · [The IR](../../docs/internals/ir.md)
 

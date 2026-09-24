@@ -1,9 +1,14 @@
 # Directives and markers
 
+PPy adds two kinds of annotation: directives, which are decorators on a
+function, and markers, which are type aliases. Both come from the `ppy`
+package.
+
 ## Directives
 
-All directives work bare (`@ppy.pure`) and called (`@ppy.pure()`), and are
-contracts the compiler verifies, not hints it trusts.
+Each directive works bare (`@ppy.pure`) and called (`@ppy.pure()`). A
+directive is a contract the compiler verifies. The compiler does not trust it
+as a hint.
 
 | directive | meaning |
 |---|---|
@@ -16,14 +21,14 @@ contracts the compiler verifies, not hints it trusts.
 | `@ppy.inline` / `@ppy.noinline` | force or forbid inlining into callers. |
 | `@ppy.fastmath` | permit floating-point reassociation in this function; without it, reduction order is preserved bit-for-bit. |
 | `@ppy.jax` | stage this function for build-time StableHLO export (a plain `@jax.jit` decorator marks it too). |
-| `@ppy.dynamic` / `with ppy.dynamic():` | an explicit boundary inside which dynamic features are allowed; every value it produces is `Dynamic`, and stays `Dynamic` through attribute hops and arithmetic until a `ppy.check[T]` clears it. |
-| `@ppy.reflective` | the function's annotations are runtime-visible state, exactly as written: `ppy convert`/`ppy migrate` will never add to or rely on rewriting them. |
+| `@ppy.dynamic` / `with ppy.dynamic():` | an explicit boundary inside which dynamic features are allowed. Each value it produces is `Dynamic`, and stays `Dynamic` through attribute hops and arithmetic until a `ppy.check[T]` clears it. |
+| `@ppy.reflective` | the function's annotations are runtime-visible state, as written: `ppy convert`/`ppy migrate` will not add to them or rely on rewriting them. |
 
-A typo in a directive name is `E1205`, with a suggestion.
+A typo in a directive name is `E1205`, reported with a suggestion.
 
 ## Markers
 
-Ordinary `Annotated` aliases from `ppy`:
+Markers are ordinary `Annotated` aliases from `ppy`:
 
 | marker | meaning |
 |---|---|
@@ -31,7 +36,7 @@ Ordinary `Annotated` aliases from `ppy`:
 | `f16 f32 f64` | floating-point width. |
 | `bf16` | bfloat16 element format, distinct from IEEE float16. |
 | `Tensor[dtype, shape]` | a common tensor contract, including dtype and dimensions; storage belongs to the selected backend. See [Common tensors](tensors.md). |
-| `Buffer[T]` | a borrowed writable buffer (`memoryview` over `array.array`) — zero-copy in and out of native code. `T` may be `int`, `float`, or `ppy.i8`/`ppy.u8` for one byte per element. |
+| `Buffer[T]` | a borrowed writable buffer (`memoryview` over `array.array`), zero-copy in and out of native code. `T` may be `int`, `float`, or `ppy.i8`/`ppy.u8` for one byte per element. |
 | `Array[T]`, `Vector[T]` | contiguous numeric containers with a known element type. |
 | `Range(lo, hi)` | an integer refinement the checker propagates. |
 | `Dynamic` | an explicit Python-dynamic boundary value. Entering is free; leaving is not: `Dynamic -> Dynamic` flows freely, but `Dynamic -> int` is `E1508` until a `ppy.check[T]` validates it. `Any` at runtime. |

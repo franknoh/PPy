@@ -135,22 +135,22 @@ def _page(folder: str) -> str:
         lines.append("")
     counterparts = _counterparts(directory)
     if counterparts:
-        lines.append("## The counterparts, side by side")
+        lines.append("## Counterpart programs")
         lines.append("")
         lines.append(
-            "The programs the comparison above was measured with, each written the way "
-            "its tool wants it; the PPY one is first."
+            "The programs the comparison above measured, each written the way its "
+            "tool expects. The PPy one is first."
         )
         lines.append("")
         for source in counterparts:
             body = source.read_text(encoding="utf-8").rstrip("\n")
-            lines.append(f'??? example "`{source.name}` -- {_TOOLS[source.suffix]}"')
+            lines.append(f'??? example "`{source.name}` ({_TOOLS[source.suffix]})"')
             lines.append("")
             lines.append(f"    ```{_FENCES[source.suffix]}")
             lines.extend("    " + line if line else "" for line in body.splitlines())
             lines.append("    ```")
             lines.append("")
-    lines.append(f"The folder in the repository: [`examples/{folder}`]({REPO}/examples/{folder}).")
+    lines.append(f"Source: [`examples/{folder}`]({REPO}/examples/{folder}).")
     lines.append("")
     return "\n".join(lines)
 
@@ -166,7 +166,7 @@ _FENCES = {
     ".cu": "cuda",
 }
 _TOOLS = {
-    ".ppy": "PPY",
+    ".ppy": "PPy",
     ".py": "Python",
     ".pyx": "Cython",
     ".mojo": "Mojo",
@@ -177,7 +177,7 @@ _TOOLS = {
 
 
 def _counterparts(directory: Path) -> list[Path]:
-    """The `compare/` programs, the PPY one first, then the rest by name."""
+    """The `compare/` programs, the PPy one first, then the rest by name."""
     compare = directory / "compare"
     if not compare.is_dir():
         return []
@@ -195,11 +195,11 @@ def _comparisons() -> str:
     lines = [
         "# Comparisons",
         "",
-        "Every example that measures itself against other tools, collected. Each section",
-        "is the example's own, with its table and what each port asked for; the",
-        "counterpart programs are on the example's page and in its `compare/` folder,",
-        "and `examples/compare.py` is the harness that held them to one answer before",
-        "timing them.",
+        "The examples that measure themselves against other tools, on one page. Each",
+        "section is copied from its example, with the table and what each port needed.",
+        "The counterpart programs are on the example's page and in its `compare/`",
+        "folder. `examples/compare.py` checked that they all print the same answer",
+        "before timing them.",
         "",
     ]
     for folder in FOLDERS:
@@ -218,27 +218,24 @@ def _index() -> str:
     lines = [
         "# Examples",
         "",
-        "One folder per program, and one thing each program shows. `examples/run_all.py`",
-        "runs every one of them on all three paths — plain CPython, the Python backend,",
-        "LLVM native — and diffs the output; a disagreement is a compiler bug. Where a",
-        "folder holds both `<name>.py` and `<name>.ppy`, the `.ppy` is exactly what",
-        "`ppy convert` wrote, and `examples/verify_conversions.py` regenerates it to prove it.",
+        "Each folder is one program that shows one thing. `examples/run_all.py` runs",
+        "all of them on the three paths (plain CPython, the Python backend, and LLVM",
+        "native) and diffs the output. A difference is a compiler bug.",
+        "",
+        "Where a folder holds both `<name>.py` and `<name>.ppy`, the `.ppy` is what",
+        "`ppy convert` wrote, and `examples/verify_conversions.py` regenerates it to",
+        "check that it still does.",
         "",
     ]
     for group, folders in GROUPS:
         lines.append(f"## {group}")
         lines.append("")
-        lines.append('<div class="grid cards" markdown>')
-        lines.append("")
+        lines.append("| Example | What it shows |")
+        lines.append("|---|---|")
         for folder in folders:
             title, summary, _ = _readme(folder)
-            lines.append(f"-   **[{title}]({folder}.md)**")
-            lines.append("")
-            lines.append("    ---")
-            lines.append("")
-            lines.append(f"    {summary}")
-            lines.append("")
-        lines.append("</div>")
+            summary = summary.replace("|", "\\|")
+            lines.append(f"| [{title}]({folder}.md) | {summary} |")
         lines.append("")
     return "\n".join(lines)
 
