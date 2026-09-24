@@ -20,6 +20,7 @@ from pathlib import Path
 
 from ppy_runtime.abi import NativeParam, NativeSignature
 from ppy_runtime.aio import available as aio_available
+from ppy_runtime.aio import compiler as collections_available
 
 from ..analysis import types as T
 from ..analysis.checker import FunctionAnalysis, ModuleAnalysis
@@ -137,6 +138,10 @@ class IRParameter:
     @property
     def is_object(self) -> bool:
         return self.native.is_object if self.native is not None else False
+
+    @property
+    def is_handle(self) -> bool:
+        return self.native.is_handle if self.native is not None else False
 
     @property
     def is_borrowed(self) -> bool:
@@ -830,6 +835,8 @@ def _param_type(parameter) -> IRType:  # type: ignore[no-untyped-def]
         return BufferType(_scalar_type(parameter.element))
     if parameter.is_pointer:
         return PtrType(_scalar_type(parameter.element), mutable=parameter.kind == "ptr")
+    if parameter.is_handle:
+        return _HANDLE
     if parameter.is_tuple:
         return TupleType(tuple(_scalar_type(e) for e in parameter.elements))
     if parameter.is_object:
@@ -930,6 +937,9 @@ class _FunctionLowering:
         self.objects: dict[str, Value] = {}
         #: Match locals: name -> (found slot, the spans' slots, the pattern).
         self.matches: dict[str, tuple[Value, Value, regex_dialect.Compiled]] = {}
+        #: Collections by local name: what they are, their element, the slot
+        #: holding the handle, and whether this function made it (and frees it).
+        self.collections: dict[str, _Collection] = {}
         self._loops: list[tuple[Block, Block]] = []
         #: Blocks after a `while True:` that nothing reaches.
         self._dead: set[int] = set()
@@ -996,6 +1006,12 @@ class _FunctionLowering:
                 slot = self._alloca(argument.type, parameter.name)
                 core.store(self.b, argument, slot)
                 self.slots[parameter.name] = slot
+                continue
+            if parameter.is_handle:
+                slot = self._alloca(argument.type, parameter.name)
+                core.store(self.b, argument, slot)
+                kind = parameter.class_name.removeprefix("ppy.")
+                self.collections[parameter.name] = _Collection(kind, parameter.element, slot, False)
                 continue
             if parameter.is_object:
                 self.objects[parameter.name] = argument
@@ -1086,6 +1102,10 @@ class _FunctionLowering:
                 self._assign(node)
             case ast.AnnAssign():
                 if node.value is not None:
+                    if isinstance(node.target, ast.Name) and self._make_collection(
+                        node.target.id, node.value
+                    ):
+                        return
                     if (
                         isinstance(node.target, ast.Name)
                         and self.frontend.standalone
@@ -1134,6 +1154,7 @@ class _FunctionLowering:
             or (isinstance(node.value, ast.Constant) and node.value.value is None)
         ) and not self.function.results:
             self._check_thread_failures()
+            self._release_collections()
             core.ret(self.b)
             return
         if node.value is None:
@@ -1150,9 +1171,12 @@ class _FunctionLowering:
             items = [
                 self._coerce_type(item, t) for item, t in zip(values, expected.items, strict=True)
             ]
+            self._release_collections()
             core.ret(self.b, core.tuple_make(self.b, *items))
             return
-        core.ret(self.b, self._coerce_type(self._expr(node.value), expected))
+        returned = self._coerce_type(self._expr(node.value), expected)
+        self._release_collections()
+        core.ret(self.b, returned)
 
     def _return_default(self) -> None:
         if self.b.block is not None and id(self.b.block) in self._dead:
@@ -1160,6 +1184,7 @@ class _FunctionLowering:
             return
         if self.info.ret == T.NONE and not self.function.results:
             self._check_thread_failures()
+            self._release_collections()
             core.ret(self.b)
             return
         raise Unsupported("control flow can fall off the end without returning a value")
@@ -1168,6 +1193,8 @@ class _FunctionLowering:
         if len(node.targets) != 1:
             raise Unsupported("chained assignment has no native lowering")
         target = node.targets[0]
+        if isinstance(target, ast.Name) and self._make_collection(target.id, node.value):
+            return
         if (
             self.frontend.standalone
             and isinstance(target, ast.Name)
@@ -1369,6 +1396,9 @@ class _FunctionLowering:
         if isinstance(target, ast.Attribute):
             raise Unsupported("a flattened value class cannot be written back")
         if isinstance(target, ast.Subscript):
+            if isinstance(target.value, ast.Name) and target.value.id in self.collections:
+                self._collection_item(target.value.id, target.slice, value)
+                return
             if isinstance(target.value, ast.Name) and target.value.id in self.buffers:
                 self._store_element(target.value.id, target.slice, value)
                 return
@@ -1392,7 +1422,7 @@ class _FunctionLowering:
         core.store(self.b, self._coerce_type(value, slot.type.pointee), slot)
 
     def _if(self, node: ast.If) -> None:
-        condition = self._truth(self._expr(node.test))
+        condition = self._test(node.test)
         then_block = self._block("then")
         else_block = self._block("else")
         merge = self._block("endif")
@@ -1425,9 +1455,7 @@ class _FunctionLowering:
         if forever:
             core.br(self.b, Successor(body))
         else:
-            core.cond_br(
-                self.b, self._truth(self._expr(node.test)), Successor(body), Successor(done)
-            )
+            core.cond_br(self.b, self._test(node.test), Successor(body), Successor(done))
         self.b.at_end(body)
         self._loops.append((header, done))
         self._body(node.body)
@@ -1446,6 +1474,9 @@ class _FunctionLowering:
             raise Unsupported("only `for NAME in range(...)` or over a list parameter is lowered")
         if isinstance(node.iter, ast.Name) and node.iter.id in self.buffers:
             self._for_buffer(node, node.iter.id)
+            return
+        if isinstance(node.iter, ast.Name) and node.iter.id in self.collections:
+            self._for_collection(node, node.iter.id)
             return
         explicit = _parallel_range(node.iter)
         if not (
@@ -1581,6 +1612,225 @@ class _FunctionLowering:
         position = core.load(self.b, index)
         loaded = core.buffer_load(self.b, buffer, position)
         core.store(self.b, self._coerce(loaded, _kind(carried)), slot)
+        self._loops.append((latch, done))
+        self._body(node.body)
+        self._loops.pop()
+        if self._open():
+            core.br(self.b, Successor(latch))
+        self.b.at_end(latch)
+        one = core.const(self.b, 1, I64)
+        core.store(self.b, core.add(self.b, core.load(self.b, index), one, overflow="wrap"), index)
+        core.br(self.b, Successor(header))
+        self.b.at_end(done)
+
+    # -- collections ----------------------------------------------------
+
+    def _collection_kind(self, spelled: ast.expr) -> str | None:
+        """`Vec` for `ppy.Vec` or a `Vec` imported from `ppy`; None for anything else."""
+        if (
+            isinstance(spelled, ast.Attribute)
+            and isinstance(spelled.value, ast.Name)
+            and spelled.value.id == "ppy"
+        ):
+            name = spelled.attr
+        elif isinstance(spelled, ast.Name):
+            binding = self.frontend.analysis.symbols.imports.get(spelled.id)
+            if binding is None or not binding.canonical.startswith("ppy."):
+                return None
+            name = binding.canonical.removeprefix("ppy.")
+        else:
+            return None
+        return name if name in _COLLECTION_KINDS else None
+
+    def _make_collection(self, name: str, value: ast.expr) -> bool:
+        """`q = ppy.Deque[int]()`: a new collection this function owns and frees."""
+        if not isinstance(value, ast.Call) or not isinstance(value.func, ast.Subscript):
+            return False
+        kind = self._collection_kind(value.func.value)
+        if kind is None:
+            return False
+        read = self._read_kind(value.func.slice)
+        if read is None:
+            raise Unsupported(f"a native `{kind}` holds `int` or `float`")
+        element = read[0]
+        if value.args:
+            count = self._coerce(self._expr(value.args[0]), "int")
+            zero = core.const(self.b, 0, I64)
+            core.guard(
+                self.b, core.cmp(self.b, "ge", count, zero), "range", f"a {kind} of negative size"
+            )
+        else:
+            count = core.const(self.b, 0, I64)
+        self._use_collections()
+        held = self.collections.get(name)
+        if held is not None and (held.kind, held.element) != (kind, element):
+            raise Unsupported(f"`{name}` keeps one collection type")
+        if held is None:
+            slot = self._alloca(_HANDLE, name)
+            entry = self._entry_builder()
+            empty = core.call_extern(entry, "ppy_coll_none", (), (_HANDLE,)).results[0]
+            core.store(entry, empty, slot)
+            held = _Collection(kind, element, slot, True)
+            self.collections[name] = held
+        elif held.owned:
+            core.call_extern(self.b, "ppy_coll_free", (core.load(self.b, held.slot),), ())
+        else:
+            raise Unsupported(f"`{name}` is a parameter; a new collection needs its own name")
+        handle = core.call_extern(self.b, "ppy_coll_new", (count,), (_HANDLE,)).results[0]
+        core.store(self.b, handle, held.slot)
+        return True
+
+    def _use_collections(self) -> None:
+        """Under `ppy run` the runtime is a shared library loaded beside the code.
+
+        Building it takes a C compiler; without one the function stays in
+        Python rather than calling functions nothing defines.
+        """
+        if not self.frontend.standalone and collections_available() is None:
+            raise Unsupported("native collections need a C compiler to build their runtime")
+        known = self.frontend.module.attributes.get("ppy.libraries", ())
+        assert isinstance(known, tuple)
+        if "ppy_collections" not in known:
+            self.frontend.module.attributes["ppy.libraries"] = (*known, "ppy_collections")
+
+    def _release_collections(self) -> None:
+        """Free what this function made before it returns: nothing outlives the call."""
+        for held in self.collections.values():
+            if held.owned:
+                core.call_extern(self.b, "ppy_coll_free", (core.load(self.b, held.slot),), ())
+
+    def _collection_len(self, name: str) -> Value:
+        handle = core.load(self.b, self.collections[name].slot)
+        return core.call_extern(self.b, "ppy_coll_len", (handle,), (I64,)).results[0]
+
+    def _guard_nonempty(self, name: str, what: str) -> Value:
+        """The handle, once the collection is known to hold something."""
+        held = self.collections[name]
+        length = self._collection_len(name)
+        zero = core.const(self.b, 0, I64)
+        core.guard(
+            self.b,
+            core.cmp(self.b, "gt", length, zero),
+            "bounds",
+            f"{what} of an empty {held.kind}",
+        )
+        return core.load(self.b, held.slot)
+
+    def _collection_item(self, name: str, index: ast.expr, value: Value | None = None) -> Value:
+        """`v[i]`, or `v[i] = value`: an index from 0 to `len - 1`, as the reference has it."""
+        held = self.collections[name]
+        if held.kind not in {"Vec", "Deque"}:
+            raise Unsupported(f"a {held.kind} has no index")
+        if isinstance(index, ast.Slice):
+            raise Unsupported(f"a {held.kind} is indexed by an int, not sliced")
+        position = self._coerce(self._expr(index), "int")
+        length = self._collection_len(name)
+        zero = core.const(self.b, 0, I64)
+        inside = core.bitwise(
+            self.b,
+            "and",
+            core.cmp(self.b, "ge", position, zero),
+            core.cmp(self.b, "lt", position, length),
+        )
+        core.guard(self.b, inside, "bounds", "index out of range")
+        handle = core.load(self.b, held.slot)
+        suffix = _COLLECTION_SUFFIX[held.element]
+        if value is None:
+            element = _scalar_type(held.element)
+            found = core.call_extern(
+                self.b, f"ppy_coll_get_{suffix}", (handle, position), (element,)
+            )
+            return found.results[0]
+        stored = self._coerce(value, held.element)
+        core.call_extern(self.b, f"ppy_coll_set_{suffix}", (handle, position, stored), ())
+        return stored
+
+    def _collection_method(self, name: str, attr: str, node: ast.Call) -> Value:
+        """A method of a collection, as a call into the runtime."""
+        held = self.collections[name]
+        if node.keywords:
+            raise Unsupported(f"`{held.kind}.{attr}` takes no keyword arguments")
+        suffix = _COLLECTION_SUFFIX[held.element]
+        element = _scalar_type(held.element)
+        heap = {"Heap": "min", "MaxHeap": "max"}.get(held.kind)
+        pushes = {
+            ("Vec", "push"): f"ppy_coll_push_back_{suffix}",
+            ("Deque", "push_back"): f"ppy_coll_push_back_{suffix}",
+            ("Deque", "push_front"): f"ppy_coll_push_front_{suffix}",
+        }
+        if heap is not None:
+            pushes[(held.kind, "push")] = f"ppy_heap_push_{heap}_{suffix}"
+        pushing = pushes.get((held.kind, attr))
+        if pushing is not None:
+            if len(node.args) != 1:
+                raise Unsupported(f"`{held.kind}.{attr}` takes one value")
+            value = self._coerce(self._expr(node.args[0]), held.element)
+            core.call_extern(self.b, pushing, (core.load(self.b, held.slot), value), ())
+            return core.const(self.b, 0, I64)
+        if node.args:
+            raise Unsupported(f"`{held.kind}.{attr}` takes no arguments")
+        if attr in {"clear", "sort", "reverse"} and (attr == "clear" or held.kind == "Vec"):
+            symbol = "ppy_coll_clear" if attr == "clear" else f"ppy_coll_{attr}_{suffix}"
+            core.call_extern(self.b, symbol, (core.load(self.b, held.slot),), ())
+            return core.const(self.b, 0, I64)
+        removals = {
+            ("Vec", "pop"): f"ppy_coll_pop_back_{suffix}",
+            ("Deque", "pop_back"): f"ppy_coll_pop_back_{suffix}",
+            ("Deque", "pop_front"): f"ppy_coll_pop_front_{suffix}",
+        }
+        if heap is not None:
+            removals[(held.kind, "pop")] = f"ppy_heap_pop_{heap}_{suffix}"
+        removing = removals.get((held.kind, attr))
+        if removing is not None:
+            handle = self._guard_nonempty(name, attr)
+            return core.call_extern(self.b, removing, (handle,), (element,)).results[0]
+        reads = {("Vec", "last"): -1, ("Deque", "front"): 0, ("Deque", "back"): -1}
+        if heap is not None:
+            reads[(held.kind, "peek")] = 0
+        if (held.kind, attr) in reads:
+            handle = self._guard_nonempty(name, attr)
+            if reads[(held.kind, attr)] == 0:
+                position = core.const(self.b, 0, I64)
+            else:
+                length = core.call_extern(self.b, "ppy_coll_len", (handle,), (I64,)).results[0]
+                position = core.sub(self.b, length, core.const(self.b, 1, I64), overflow="wrap")
+            found = core.call_extern(
+                self.b, f"ppy_coll_get_{suffix}", (handle, position), (element,)
+            )
+            return found.results[0]
+        raise Unsupported(f"`{held.kind}.{attr}` has no native lowering")
+
+    def _for_collection(self, node: ast.For, name: str) -> None:
+        """`for x in v`: the length read at every step, as iterating a list reads it."""
+        held = self.collections[name]
+        if held.kind not in {"Vec", "Deque"}:
+            raise Unsupported(f"a {held.kind} is read by `peek` and `pop`, not iterated")
+        target = node.target
+        assert isinstance(target, ast.Name)
+        carried = _scalar_type(held.element)
+        slot = self.slots.get(target.id)
+        if slot is None or slot.type != PtrType(carried, "stack"):
+            slot = self._alloca(carried, target.id)
+            self.slots[target.id] = slot
+        index = self._alloca(I64, f"{name}.i")
+        core.store(self.b, core.const(self.b, 0, I64), index)
+        header = self._block("each.head")
+        body = self._block("each.body")
+        latch = self._block("each.latch")
+        done = self._block("each.end")
+        core.br(self.b, Successor(header))
+        self.b.at_end(header)
+        current = core.load(self.b, index)
+        length = self._collection_len(name)
+        core.cond_br(
+            self.b, core.cmp(self.b, "lt", current, length), Successor(body), Successor(done)
+        )
+        self.b.at_end(body)
+        handle = core.load(self.b, held.slot)
+        suffix = _COLLECTION_SUFFIX[held.element]
+        position = core.load(self.b, index)
+        found = core.call_extern(self.b, f"ppy_coll_get_{suffix}", (handle, position), (carried,))
+        core.store(self.b, found.results[0], slot)
         self._loops.append((latch, done))
         self._body(node.body)
         self._loops.pop()
@@ -1737,6 +1987,8 @@ class _FunctionLowering:
                     return self._field(node.value.id, node.attr)
                 raise Unsupported("attribute access on this value has no native lowering")
             case ast.Subscript():
+                if isinstance(node.value, ast.Name) and node.value.id in self.collections:
+                    return self._collection_item(node.value.id, node.slice)
                 if isinstance(node.value, ast.Name) and node.value.id in self.tuples:
                     return self._tuple_element(node.value.id, node.slice)
                 if isinstance(node.value, ast.Name) and node.value.id in self.buffers:
@@ -1788,6 +2040,10 @@ class _FunctionLowering:
             raise Unsupported(f"`{name}` is a tuple, which has no single scalar value")
         if name in self.buffers:
             raise Unsupported(f"`{name}` is a buffer, which has no scalar value")
+        if name in self.collections:
+            raise Unsupported(
+                f"`{name}` is a collection, which has no scalar value; `len({name})` is its size"
+            )
         slot = self.slots.get(name)
         if slot is None:
             constant = self._module_constant(name)
@@ -1797,6 +2053,10 @@ class _FunctionLowering:
         return core.load(self.b, slot)
 
     def _unary(self, node: ast.UnaryOp) -> Value:
+        operand_name = node.operand.id if isinstance(node.operand, ast.Name) else ""
+        if isinstance(node.op, ast.Not) and operand_name in self.collections:
+            length = self._collection_len(operand_name)
+            return core.cmp(self.b, "eq", length, core.const(self.b, 0, I64))
         if isinstance(node.op, ast.USub) and isinstance(node.operand, ast.Constant):
             literal = node.operand.value
             if isinstance(literal, bool):
@@ -1831,7 +2091,7 @@ class _FunctionLowering:
         result = done.add_argument(BOOL, "boolop")
         is_and = isinstance(node.op, ast.And)
         for index, value_node in enumerate(node.values):
-            truth = self._truth(self._expr(value_node))
+            truth = self._test(value_node)
             if index == len(node.values) - 1:
                 core.br(self.b, Successor(done, [truth]))
                 break
@@ -1867,7 +2127,7 @@ class _FunctionLowering:
         return core.cmp(self.b, predicate, self._coerce(left, kind), self._coerce(right, kind))
 
     def _ifexp(self, node: ast.IfExp) -> Value:
-        condition = self._truth(self._expr(node.test))
+        condition = self._test(node.test)
         then_value = self._expr(node.body)
         else_value = self._expr(node.orelse)
         kind = self._unify(_kind(then_value.type), _kind(else_value.type))
@@ -1981,6 +2241,12 @@ class _FunctionLowering:
             and node.func.value.id in self.matches
         ):
             return self._match_method(node.func.value.id, node)
+        if (
+            isinstance(node.func, ast.Attribute)
+            and isinstance(node.func.value, ast.Name)
+            and node.func.value.id in self.collections
+        ):
+            return self._collection_method(node.func.value.id, node.func.attr, node)
         spec = self._regex_spec(node)
         if spec is not None:
             return self._regex_op(spec).results[0]
@@ -2032,6 +2298,8 @@ class _FunctionLowering:
                 return self._extern_call(info, options, node)
         if target == "len" and len(node.args) == 1:
             argument = node.args[0]
+            if isinstance(argument, ast.Name) and argument.id in self.collections:
+                return self._collection_len(argument.id)
             if isinstance(argument, ast.Name) and argument.id in self.tuples:
                 width = len(self.tuples[argument.id].type.pointee.items)  # type: ignore[attr-defined]
                 return self._int_constant(width)
@@ -3116,6 +3384,19 @@ class _FunctionLowering:
                     )
                 arguments.append(buffer)
                 continue
+            if parameter.is_handle:
+                held = self.collections.get(argument.id) if isinstance(argument, ast.Name) else None
+                if held is None:
+                    raise Unsupported(
+                        "a collection argument must be a collection this function holds"
+                    )
+                if f"ppy.{held.kind}" != parameter.class_name or held.element != parameter.element:
+                    raise Unsupported(
+                        f"`{qualname}` expects a `{parameter.class_name}[{parameter.element}]`, "
+                        f"and `{argument.id}` is a `ppy.{held.kind}[{held.element}]`"
+                    )
+                arguments.append(core.load(self.b, held.slot))
+                continue
             if parameter.is_object:
                 if not isinstance(argument, ast.Name) or argument.id not in self.objects:
                     raise Unsupported("a value class argument must be a flattened local")
@@ -3810,6 +4091,13 @@ class _FunctionLowering:
             return self._truth(value)
         raise Unsupported(f"cannot convert `{current}` to `{kind}`")
 
+    def _test(self, node: ast.expr) -> Value:
+        """An expression as a condition. A collection is true when it holds anything."""
+        if isinstance(node, ast.Name) and node.id in self.collections:
+            length = self._collection_len(node.id)
+            return core.cmp(self.b, "gt", length, core.const(self.b, 0, I64))
+        return self._truth(self._expr(node))
+
     def _truth(self, value: Value) -> Value:
         if value.type == BOOL:
             return value
@@ -4080,3 +4368,24 @@ def _line_buffer_read(node: ast.Call) -> str | None:
 
 #: How a standalone `print` writes each scalar: a float as Python's `repr` does.
 _PRINT_SHIMS = {I64: "ppy_rt_print_i64", F64: "ppy_rt_print_f64", BOOL: "ppy_rt_print_bool"}
+
+
+@dataclass(frozen=True, slots=True)
+class _Collection:
+    """A collection local: what it is, what it holds, and where its handle lives."""
+
+    kind: str
+    element: str
+    slot: Value
+    #: This function made it, so it frees it before returning; a parameter
+    #: is the caller's.
+    owned: bool
+
+
+#: A collection's runtime handle: the address of its header.
+_HANDLE = PtrType(I8)
+
+_COLLECTION_KINDS = frozenset({"Vec", "Deque", "Heap", "MaxHeap"})
+
+#: The runtime spelling of an element.
+_COLLECTION_SUFFIX = {"int": "i64", "float": "f64"}

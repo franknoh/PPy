@@ -25,7 +25,18 @@ __all__ = ["EXTERNAL", "AliasInfo", "analyze_aliases"]
 EXTERNAL = "<external>"
 
 #: Subscripted `ppy` calls that allocate what they hand back.
-_FRESH_PPY = frozenset({"ppy.buffer", "ppy.scan", "ppy.input"})
+_FRESH_PPY = frozenset(
+    {
+        "ppy.buffer",
+        "ppy.scan",
+        "ppy.input",
+        *(
+            f"{prefix}{name}"
+            for prefix in ("ppy.", "")
+            for name in ("Vec", "Deque", "Heap", "MaxHeap")
+        ),
+    }
+)
 
 #: Builtins whose result is a fresh container holding the argument's elements.
 _FRESH_FROM_ELEMENTS = frozenset(

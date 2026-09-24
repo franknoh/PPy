@@ -199,7 +199,23 @@ def _pointer_element(t: T.Type) -> tuple[str, str] | None:
     return ("ptr" if base.name == "ppy.native.ptr" else "const_ptr"), element
 
 
+def _collection_param(name: str, t: T.Type) -> NativeParam | None:
+    """A `ppy.Vec[int]` or another collection parameter: a handle native callers pass."""
+    base = T.strip_literal(t)
+    if not isinstance(base, T.Instance) or not base.args:
+        return None
+    if base.name not in {"ppy.Vec", "ppy.Deque", "ppy.Heap", "ppy.MaxHeap"}:
+        return None
+    element = _scalar_name(base.args[0])
+    if element not in {"int", "float"}:
+        return None
+    return NativeParam(name, "handle", element, class_name=base.name)
+
+
 def _native_param(name: str, t: T.Type, layouts: ClassLayouts | None = None) -> NativeParam | None:
+    collection = _collection_param(name, t)
+    if collection is not None:
+        return collection
     scalar = _scalar_name(t)
     if scalar is not None:
         return NativeParam(name, scalar)
@@ -251,9 +267,11 @@ def eligible(
     for name in sorted(written):
         declared = next((p.type for p in info.params if p.name == name), None)
         described = _buffer_element(declared) if declared is not None else None
+        handle = _collection_param(name, declared) if declared is not None else None
         # Writing through a borrowed buffer is visible to the caller, which is
-        # what borrowing means. Anything else would lose the write.
-        if described is None or described[0] != "view":
+        # what borrowing means, and so is writing through a collection's
+        # handle. Anything else would lose the write.
+        if handle is None and (described is None or described[0] != "view"):
             return False, f"mutates `{name}`, which is not a borrowed buffer"
     if analysis.foreign_writes:
         return False, "writes through a target the compiler cannot identify"
@@ -344,6 +362,8 @@ def should_lower_native(info: FunctionInfo, analysis: FunctionAnalysis) -> tuple
             # A machine address has no Python object to come from, whatever
             # the directives ask: the function is native code's to call.
             return False, "takes a native pointer, which has no Python boundary"
+        if native is not None and native.is_handle:
+            return False, "takes a collection, which native callers pass by handle"
     for name in _EXPOSURE_DIRECTIVES:
         if info.directive(name) is not None:
             return True, f"@ppy.{name} asks for the boundary"

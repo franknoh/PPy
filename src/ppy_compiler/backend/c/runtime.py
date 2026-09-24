@@ -12,6 +12,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from ppy_runtime import collections as _collections
 from ppy_runtime.scanner import FUNCTIONS, INTERNAL, STATEFUL
 
 __all__ = ["SHIMS", "Shim", "definition", "program_main", "support_source"]
@@ -76,6 +77,14 @@ SHIMS.update(
     {
         name: Shim(result, parameters, body, headers, needs=needs, stateful=name in STATEFUL)
         for name, (result, parameters, body, headers, needs) in FUNCTIONS.items()
+    }
+)
+
+# The collections: `ppy.Vec` and the rest, the text `ppy run` loads compiled.
+SHIMS.update(
+    {
+        name: Shim(result, parameters, body, _collections.HEADERS, needs=needs)
+        for name, (result, parameters, body, needs) in _collections.FUNCTIONS.items()
     }
 )
 

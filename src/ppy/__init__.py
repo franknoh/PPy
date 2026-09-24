@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING
 from ppy_runtime.version import VERSION as __version__
 
 from . import aio, atomic, concurrent, cpu, cuda, ffi, hip, simd, tile, xla
+from ._collections import Deque, Heap, MaxHeap, Vec
 from ._directives import (
     DIRECTIVE_ATTR,
     Directive,
@@ -89,12 +90,15 @@ __all__ = [
     "BufferSpec",
     "Contiguous",
     "DType",
+    "Deque",
     "Directive",
     "Dynamic",
     "FloatFormat",
     "FloatWidth",
+    "Heap",
     "IntWidth",
     "Length",
+    "MaxHeap",
     "Mut",
     "NoAlias",
     "Owned",
@@ -103,6 +107,7 @@ __all__ = [
     "Shape",
     "Tensor",
     "TensorSpec",
+    "Vec",
     "Vector",
     "VectorSpec",
     "__version__",

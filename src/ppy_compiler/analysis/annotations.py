@@ -14,6 +14,8 @@ from typing import Protocol
 from ..diagnostics import Diagnostic, DiagnosticBag, Severity
 from ..frontend.source import span_of
 from . import types as T
+from .collections import COLLECTIONS
+from .collections import instance as collection_instance
 from .refinements import Facts, IntRange, width_range
 
 __all__ = [
@@ -341,6 +343,9 @@ class AnnotationResolver:
             return Resolved(T.Instance(qualname, (element,), (qualname, "object")))
         if qualname == "ppy.simd.Vector":
             return self._simd_vector(args, expr)
+        if qualname in COLLECTIONS:
+            resolved = self._resolve(args[0]) if args else Resolved(T.UNKNOWN)
+            return Resolved(collection_instance(qualname, resolved.type))
         if qualname == "ppy.Buffer":
             resolved = self._resolve(args[0]) if args else Resolved(T.UNKNOWN)
             # `Buffer[ppy.i8]` is a byte per element, not a 64-bit int with a
