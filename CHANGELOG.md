@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.3.7 — unreleased
+## 0.3.7 — 2026-09-25
 
 - A standalone binary reads more than `int`. `ppy.input` and `ppy.scan` of
   `float`, of the fixed widths (`ppy.i8` through `ppy.u64`, `ppy.f32`,
@@ -28,9 +28,8 @@
   makes and uses them lowers to calls into a small C runtime under
   `ppy run`, in a standalone binary, and in emitted C and C++, and frees
   what it made before it returns. A native function may take one as a
-  parameter; native callers pass its handle. Keys are `int`, elements and
-  values `int` or `float`. `examples/47_collections` runs five problems
-  with them: 4.3 s under CPython, 0.39 s under `ppy run`.
+  parameter; native callers pass its handle. `examples/47_collections`
+  runs five problems with them: 4.3 s under CPython, 0.39 s under `ppy run`.
 - Collections hold anything with a native form: numbers, tuples of numbers,
   dataclasses (ordered with `order=True`), and other collections, so
   `Vec[Vec[int]]`, `HashMap[int, Vec[int]]`, `Heap[tuple[int, int]]`, and
