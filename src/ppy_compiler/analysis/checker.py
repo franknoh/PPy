@@ -524,6 +524,23 @@ _FRESH_SUBSCRIPTED = frozenset(
 )
 
 
+def _collection_root(node: ast.expr) -> ast.expr:
+    """The variable a write through a collection element lands in: `adj` for
+    `adj[u].push(v)` and for `grid[i][j] = x`. An element is held by its
+    collection, so writing it writes what that variable holds."""
+    while True:
+        if isinstance(node, ast.Subscript):
+            node = node.value
+        elif (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+            and node.func.attr in {"front", "back", "last", "peek", "value", "get"}
+        ):
+            node = node.func.value
+        else:
+            return node
+
+
 def _is_fresh_allocation(node: ast.expr) -> bool:
     """Does this expression produce an object nothing else can already hold?"""
     if isinstance(node, (ast.List, ast.Dict, ast.Set, ast.ListComp, ast.DictComp, ast.SetComp)):
@@ -1550,12 +1567,14 @@ class _Checker:
         elif isinstance(target, ast.Subscript):
             container = T.strip_literal(self._expr(target.value, env).type)
             self._expr(target.slice, env)
+            written = target.value
             if isinstance(container, T.Instance) and container.name in C.COLLECTIONS:
                 self._store_element(container, value, target)
+                written = _collection_root(target.value)
             self._effects = self._effects.add(
                 Effect.WRITE_OBJECT, raises=("IndexError", "KeyError", "TypeError")
             )
-            self._note_mutation(target.value, env)
+            self._note_mutation(written, env)
             container = _attribute_path(target.value) or (
                 target.value.id if isinstance(target.value, ast.Name) else None
             )
@@ -4739,11 +4758,18 @@ class _Checker:
             self._error("E1305", f"a `{canonical}` takes {wanted}", node)
             resolved = [T.UNKNOWN] * C.ARITY[canonical]
         keyed = canonical in C.KEYED
-        if keyed and resolved[0] not in (*C.KEYS, T.UNKNOWN):
-            self._error("E1305", f"a `{canonical}` has `int` keys, not `{resolved[0]}`", node)
+        if keyed and not self._collection_key(resolved[0]):
+            self._error(
+                "E1305", f"a `{canonical}` has `int` or int-tuple keys, not `{resolved[0]}`", node
+            )
         element = resolved[-1]
-        if not (keyed and len(resolved) == 1) and element not in (*C.ELEMENTS, T.UNKNOWN):
-            self._error("E1305", f"a `{canonical}` holds `int` or `float`, not `{element}`", node)
+        if not (keyed and len(resolved) == 1) and not self._collection_element(element):
+            self._error(
+                "E1305",
+                f"a `{canonical}` holds numbers, tuples of numbers, dataclasses, or "
+                f"collections, not `{element}`",
+                node,
+            )
         counted = canonical == "ppy.Vec"
         if node.keywords or len(node.args) > (1 if counted else 0):
             wanted = "how many zeros it starts with" if counted else "no arguments"
@@ -4757,6 +4783,30 @@ class _Checker:
         self._effects = self._effects | EffectSet.of(Effect.ALLOC, raises=("ValueError",))
         return Binding(C.instance(canonical, *resolved))
 
+    def _collection_element(self, t: T.Type) -> bool:
+        """What a collection may hold: a number, a tuple of them, a dataclass, a collection."""
+        base = T.strip_literal(t)
+        if base in (T.INT, T.FLOAT, T.BOOL, T.UNKNOWN) or C.is_collection(base):
+            return True
+        if isinstance(base, T.Tuple_) and not base.homogeneous and base.items:
+            return all(T.strip_literal(i) in (T.INT, T.FLOAT, T.BOOL) for i in base.items)
+        if isinstance(base, T.Instance):
+            info = self.project.classes.get(base.name)
+            return info is not None and info.is_dataclass
+        return False
+
+    def _collection_key(self, t: T.Type) -> bool:
+        """What a map or a set is keyed by: an `int`, or a tuple of them."""
+        base = T.strip_literal(t)
+        if base in (T.INT, T.UNKNOWN):
+            return True
+        return (
+            isinstance(base, T.Tuple_)
+            and not base.homogeneous
+            and bool(base.items)
+            and all(T.strip_literal(item) == T.INT for item in base.items)
+        )
+
     def _collection_call(  # pylint: disable=too-many-arguments,too-many-positional-arguments
         self,
         callee: T.Callable_,
@@ -4769,7 +4819,7 @@ class _Checker:
         self._effects = self._effects.add(raises=("IndexError", "KeyError"))
         if callee.qualname in C.MUTATORS and isinstance(node.func, ast.Attribute):
             self._effects = self._effects.add(Effect.WRITE_OBJECT)
-            self._note_mutation(node.func.value, env)
+            self._note_mutation(_collection_root(node.func.value), env)
         return self._call_signature(callee, node, args, keywords, bound=True)
 
     def _store_element(self, container: T.Instance, value: Binding, target: ast.Subscript) -> None:

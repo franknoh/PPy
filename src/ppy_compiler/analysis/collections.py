@@ -25,6 +25,7 @@ __all__ = [
     "instance",
     "is_collection",
     "method",
+    "spelled",
 ]
 
 #: Every collection, by the name the checker gives its type.
@@ -75,11 +76,27 @@ def is_collection(t: T.Type) -> bool:
     return isinstance(base, T.Instance) and base.name in COLLECTIONS
 
 
+def key_of(base: T.Instance) -> T.Type:
+    """A keyed collection's key type."""
+    return base.args[0] if base.args else T.INT
+
+
 def element_of(base: T.Instance) -> T.Type:
     """What iterating gives: the element, or for a keyed collection the key."""
     if base.name in KEYED:
-        return T.INT
+        return key_of(base)
     return base.args[0] if base.args else T.UNKNOWN
+
+
+def spelled(t: T.Type) -> str:
+    """A collection type written out, the way the native lowering writes it, so a
+    parameter and an argument can be matched by their spelling."""
+    base = T.strip_literal(t)
+    if isinstance(base, T.Tuple_):
+        return f"tuple[{', '.join(spelled(item) for item in base.items)}]"
+    if isinstance(base, T.Instance) and base.name in COLLECTIONS:
+        return f"{base.name}[{', '.join(spelled(argument) for argument in base.args)}]"
+    return str(base)
 
 
 def value_of(base: T.Instance) -> T.Type:
@@ -97,7 +114,8 @@ def _signatures(base: T.Instance) -> Signatures:
     name = base.name
     element = value_of(base)
     value = (T.Param("value", element),)
-    key = (T.Param("key", T.INT),)
+    key_type = key_of(base) if name in KEYED else T.INT
+    key = (T.Param("key", key_type),)
     node = (T.Param("node", T.INT),)
     nothing: tuple[T.Param, ...] = ()
     if name == "ppy.Vec":
@@ -159,9 +177,9 @@ def _signatures(base: T.Instance) -> Signatures:
         table["discard"] = (key, T.NONE)
     if name in _TREES:
         for bound in ("floor", "ceiling", "lower", "higher"):
-            table[bound] = (key, T.INT)
-        table["min"] = (nothing, T.INT)
-        table["max"] = (nothing, T.INT)
+            table[bound] = (key, key_type)
+        table["min"] = (nothing, key_type)
+        table["max"] = (nothing, key_type)
     return table
 
 

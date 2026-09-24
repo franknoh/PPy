@@ -1255,6 +1255,11 @@ class _FunctionEmitter:
         between = operations[operations.index(v.owner) + 1 : operations.index(user)]
         if not all(_pure(op) for op in between):
             return None
+        # Writing `v` into the slot where it is made moves the store up past
+        # these operations, so none of them may read the slot's old value.
+        target = user.operands[1]
+        if any(op.name == "core.load" and op.operands[0] is target for op in between):
+            return None
         self.skipped.add(id(user))
         self.scalars[id(v)] = slot
         declaration = self.slot_declarations.pop(id(user), None)

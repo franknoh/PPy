@@ -384,7 +384,15 @@ class _Analyzer:
             # `ppy.buffer[int](n)` and `ppy.scan[Buffer[int]](n)` make the
             # memory they return, so nothing else can already alias it.
             if isinstance(node.func, ast.Subscript) and ast.unparse(node.func.value) in _FRESH_PPY:
-                return self.fresh()
+                if ast.unparse(node.func.value).rpartition(".")[2] not in SHORT_NAMES:
+                    return self.fresh()
+                # A collection is named for where it is made, so a loop that makes
+                # one per pass reaches a fixed point. Its elements are made with it
+                # (`Vec[Vec[int]](n)`): reading one out yields memory made here.
+                site = f"@{node.lineno}:{node.col_offset}"
+                made = frozenset({site})
+                self.store_into(made, frozenset({f"{site}.elements"}))
+                return made
             return frozenset({EXTERNAL})
         if isinstance(node, ast.Subscript):
             base = self.eval(node.value, state)
