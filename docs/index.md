@@ -1,15 +1,21 @@
-# PPY
+---
+hide:
+  - navigation
+  - toc
+---
 
-**Python as the frontend. A compiler underneath.** A `.ppy` file *is* valid
-Python and runs under plain CPython with no compiler involved, and that run
-is the reference answer. The compiler reads the same file, proves what it
-can about it, lowers that through a canonical IR, and hands the result to a
-backend — the optimized Python backend, LLVM, C or C++ source, CUDA, PTX,
-StableHLO, or one an installed package brings. What it cannot prove it does
-not compile: the supported static subset is documented, a program that
-leaves it is told where, and a guard that fails falls back to the Python
-body. Plain CPython, the Python backend, and the LLVM backend must print the
-same answer, or it is a bug.
+<div class="ppy-home" markdown>
+
+# PPy
+
+<p class="ppy-lead">A compiler for the statically analyzable part of Python.
+It reads ordinary Python files and builds them into native code, C, CUDA,
+or StableHLO.</p>
+
+A `.ppy` file is valid Python. You can run it with `python` and no compiler
+installed, and that run is the reference answer. The compiler reads the same
+file, proves what it can about the types and effects, lowers it through a
+canonical IR, and hands it to a backend.
 
 ```python
 import ppy
@@ -38,82 +44,68 @@ echo 300000 | ppy run   collatz.ppy      # LLVM, Python's integers         41.7 
 echo 300000 | ppy build collatz.ppy -o dist && ./dist/collatz   # native    30.8 ms
 ```
 
-The same loop in C: `gcc -O3` 41.9 ms, `clang -O3` 32.8 ms. One machine, ten
-fresh processes each; the full table with Numba, Codon, PyPy, Cython, mypyc,
-and Nuitka is on the [performance page](reference/performance.md).
+The same loop in C takes 41.9 ms with `gcc -O3` and 32.8 ms with `clang -O3`.
+These are ten fresh processes each on one machine. The
+[performance page](reference/performance.md) has the full table, including
+Numba, Codon, PyPy, Cython, mypyc, and Nuitka.
 
-<div class="grid cards" markdown>
+## Install
 
--   **[Getting started](getting-started.md)**
+```bash
+uv add "ppy-lang[llvm]"      # or: pip install "ppy-lang[llvm]"
+uv run ppy doctor            # reports the compiler, LLVM, the C toolchain, plugin runtimes
+```
 
-    ---
+Then follow [Getting started](getting-started.md), which goes from this file
+to a native build in about ten minutes.
 
-    From install to a native kernel in ten minutes.
+## Highlights
 
--   **[Guide](guide/index.md)**
+- **Three paths, one answer.** `python f.ppy` runs plain CPython,
+  `ppy f.ppy` runs the optimized Python backend, and `ppy run f.ppy` runs
+  LLVM native code. All three must print the same output. A difference is a
+  compiler bug, and every example is checked for it.
+- **Falls back instead of guessing.** Code outside the supported subset is
+  reported with its location. A guard that fails at runtime, such as an
+  overflowing multiply, returns to the Python body and finishes there.
+- **Ahead-of-time builds.** `ppy build` produces a launcher and a library
+  that keep working after the compiler is uninstalled. `ppy build
+  --standalone` produces a native executable with no CPython inside.
+- **Seven backends off one IR:** LLVM, C11, C++17, CUDA, HIP, NVVM/PTX, and
+  StableHLO, across 19 IR dialects. Other packages can
+  [register their own backend](internals/backends.md).
+- **Collections without pointers.** [`Vec`, `Deque`, `Heap`, `LinkedList`,
+  `HashMap`, `HashSet`, `TreeMap`, and `TreeSet`](guide/collections.md)
+  compile to native code and give the same answers as their Python
+  reference classes.
+- **Eight library plugins:** NumPy, PyTorch, JAX/Flax, pydantic,
+  FastAPI/Uvicorn, SciPy, pandas, and PyArrow.
+- **A cheap call boundary.** A native call with two `int` arguments costs
+  47 ns, against 28 ns for a plain Python call, with no Python frames on the
+  native path.
+- **Tested.** @@TEST_FUNCTIONS@@ test functions on Python 3.12, 3.13, and
+  3.14, with 74% statement coverage. @@DIAGNOSTIC_CODES@@ diagnostic codes,
+  each documented in one place.
 
-    ---
+## Documentation
 
-    The subset, directives, native memory, SIMD, threads, parallel loops,
-    derivatives, coroutines, GPU kernels, XLA, generics, regular expressions.
+| | |
+|---|---|
+| [Getting started](getting-started.md) | Install, run a file three ways, check it, build it. |
+| [Guide](guide/index.md) | The language, one topic per page: the subset, directives, native memory, SIMD, threads, parallel loops, derivatives, coroutines, GPU kernels, XLA, generics, regular expressions. |
+| [Examples](howto/index.md) | @@EXAMPLE_FOLDERS@@ folders and @@EXAMPLE_PROGRAMS@@ programs with their commands and output. @@COMPARED_FOLDERS@@ of them are measured against Numba, Cython, NumPy, numexpr, JAX, PyTorch, CuPy, Triton, Taichi, Mojo, Codon, Rust, C, pandas, polars, asyncio, and uvloop; the results are collected on the [comparisons page](howto/comparisons.md). |
+| [Reference](reference/index.md) | The command line, diagnostics, configuration, performance, compatibility, and the Python API. |
+| [Internals](internals/index.md) | The pipeline, the IR and its dialects, the cache, the solver. |
 
--   **[Examples](howto/index.md)**
+## Limitations
 
-    ---
+PPy accepts Python's syntax and works with its ecosystem, but it does not
+support every dynamic behavior. `exec` and `eval`, monkey-patching, dynamic
+namespace mutation, and unrestricted runtime reflection are restricted, or
+isolated behind an explicit `ppy.dynamic` boundary. That is the trade for
+analysis and native code you can rely on.
 
-    @@EXAMPLE_FOLDERS@@ folders, @@EXAMPLE_PROGRAMS@@ programs — the code, the commands, and what they print;
-    @@COMPARED_FOLDERS@@ of them set beside Numba, Cython, NumPy, numexpr, JAX,
-    PyTorch, CuPy, Triton, Taichi, Mojo, Codon, Rust, C, pandas, polars, asyncio, and uvloop, collected on one [comparisons page](howto/comparisons.md).
-
--   **[CLI](cli.md)**
-
-    ---
-
-    `ppy check`, `run`, `build`, `emit`, `inspect`, `explain`, the
-    sanitizers, and profile-guided optimization.
-
--   **[API](api/index.md)**
-
-    ---
-
-    The `ppy` package, the runtime, the plugin interface, the canonical IR.
-
--   **[Internals](internals/index.md)**
-
-    ---
-
-    The pipeline, the IR and its dialects, the cache, the solver.
+To bring an existing Python project over, use `ppy migrate`
+([how a real project went](internals/migrating.md)).
 
 </div>
-
-## By the numbers
-
-| | |
-|---|---|
-| **3** execution paths that must agree, checked on every example | **@@TEST_FUNCTIONS@@** test functions on Python 3.12, 3.13, and 3.14, **74%** statement coverage |
-| **@@EXAMPLE_FOLDERS@@** example folders, **@@EXAMPLE_PROGRAMS@@** programs, every conversion regenerated to prove it; **@@COMPARED_FOLDERS@@** of the folders set beside other tools | **@@DIAGNOSTIC_CODES@@** diagnostic codes, each documented once |
-| **18** IR dialects, **7** backends off one IR: LLVM, C11, C++17, CUDA, HIP, NVVM/PTX, StableHLO | **8** library plugins: NumPy, PyTorch, JAX/Flax, pydantic, FastAPI/Uvicorn, SciPy, pandas, PyArrow |
-| **47 ns** for a native two-`int` call, against **28 ns** for a plain Python call | **0** Python frames on the native call path |
-
-## The three paths
-
-| | |
-|---|---|
-| `python f.ppy` | plain CPython, no compiler |
-| `ppy f.ppy` | the optimized Python backend |
-| `ppy run f.ppy` | LLVM native; the first run builds into the cache, every later one is the launcher alone |
-
-`ppy build` is the third path ahead of time — a launcher and a library that
-keep working with the compiler uninstalled — and `ppy build --standalone` is
-a native executable with no CPython inside. A guard that fails at runtime
-falls back to the Python body; it never answers differently.
-
-## What it is, and is not
-
-PPY is source-compatible with Python's syntax and ecosystem, not with every
-dynamic Python behavior: `exec`/`eval`, monkey-patching, dynamic namespace
-mutation, and unrestricted runtime reflection are deliberately restricted —
-or isolated behind an explicit `ppy.dynamic` boundary — in exchange for
-analysis, optimization, and native compilation that can be trusted. Running
-existing Python is a migration feature (`ppy migrate`), not the definition of
-the language.

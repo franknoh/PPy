@@ -32,6 +32,7 @@ from ppy_runtime.abi import STATUS_FALLBACK, STATUS_OK, NativeParam, NativeSigna
 
 from ...analysis import types as T
 from ...analysis.checker import FunctionAnalysis
+from ...analysis.collections import spelled as collection_spelled
 from ...analysis.effects import Effect
 from ...analysis.symbols import FunctionInfo
 
@@ -199,7 +200,53 @@ def _pointer_element(t: T.Type) -> tuple[str, str] | None:
     return ("ptr" if base.name == "ppy.native.ptr" else "const_ptr"), element
 
 
+#: The `ppy` collections, which cross between native functions as handles.
+_COLLECTIONS = frozenset(
+    {
+        "ppy.Vec",
+        "ppy.Deque",
+        "ppy.Heap",
+        "ppy.MaxHeap",
+        "ppy.LinkedList",
+        "ppy.HashMap",
+        "ppy.HashSet",
+        "ppy.TreeMap",
+        "ppy.TreeSet",
+    }
+)
+
+
+def _collection_param(
+    name: str, t: T.Type, layouts: ClassLayouts | None = None
+) -> NativeParam | None:
+    """A collection or an object parameter: a handle native callers pass.
+
+    A collection is a `ppy.Vec[int]` or another; an object is an instance of a
+    project class `layouts` marks as one (an empty layout), `Node` or `Node |
+    None`. Its element is the whole type written out (`ppy.Vec[ppy.Vec[int]]`),
+    which is what an argument is matched against.
+    """
+    base = T.strip_literal(t)
+    if isinstance(base, T.Union_):
+        members = [m for m in base.members if m != T.NONE]
+        if len(members) != 1 or len(members) == len(base.members):
+            return None
+        base = T.strip_literal(members[0])
+        if not isinstance(base, T.Instance) or base.name in _COLLECTIONS:
+            return None
+    if not isinstance(base, T.Instance):
+        return None
+    if base.name in _COLLECTIONS and base.args:
+        return NativeParam(name, "handle", collection_spelled(base), class_name=base.name)
+    if layouts is not None and layouts.get(base.name) == ():
+        return NativeParam(name, "handle", collection_spelled(base), class_name=base.name)
+    return None
+
+
 def _native_param(name: str, t: T.Type, layouts: ClassLayouts | None = None) -> NativeParam | None:
+    collection = _collection_param(name, t, layouts)
+    if collection is not None:
+        return collection
     scalar = _scalar_name(t)
     if scalar is not None:
         return NativeParam(name, scalar)
@@ -220,7 +267,9 @@ def _native_param(name: str, t: T.Type, layouts: ClassLayouts | None = None) -> 
     return None
 
 
-def _return_atoms(t: T.Type) -> tuple[str, ...] | None:
+def _return_atoms(t: T.Type, layouts: ClassLayouts | None = None) -> tuple[str, ...] | None:
+    if _collection_param("", t, layouts) is not None:
+        return ("handle",)
     scalar = _scalar_name(t)
     if scalar is not None:
         return (scalar,)
@@ -251,9 +300,11 @@ def eligible(
     for name in sorted(written):
         declared = next((p.type for p in info.params if p.name == name), None)
         described = _buffer_element(declared) if declared is not None else None
+        handle = _collection_param(name, declared, layouts) if declared is not None else None
         # Writing through a borrowed buffer is visible to the caller, which is
-        # what borrowing means. Anything else would lose the write.
-        if described is None or described[0] != "view":
+        # what borrowing means, and so is writing through a collection's
+        # handle. Anything else would lose the write.
+        if handle is None and (described is None or described[0] != "view"):
             return False, f"mutates `{name}`, which is not a borrowed buffer"
     if analysis.foreign_writes:
         return False, "writes through a target the compiler cannot identify"
@@ -292,7 +343,7 @@ def eligible(
             return False, "variadic parameters have no native ABI"
         if _native_param(param.name, param.type, layouts) is None:
             return False, f"parameter `{param.name}` is `{param.type}`, which has no native ABI"
-    if _return_atoms(info.ret) is None and not _returns_none(info.ret):
+    if _return_atoms(info.ret, layouts) is None and not _returns_none(info.ret):
         return False, f"returns `{info.ret}`, which has no native ABI"
     return True, ""
 
@@ -316,7 +367,9 @@ def can_lower_native(
     return eligible(info, analysis, layouts)
 
 
-def should_lower_native(info: FunctionInfo, analysis: FunctionAnalysis) -> tuple[bool, str]:
+def should_lower_native(
+    info: FunctionInfo, analysis: FunctionAnalysis, layouts: ClassLayouts | None = None
+) -> tuple[bool, str]:
     """Is native execution through the Python boundary expected to be faster?
 
     Eligibility and profitability are different questions: a two-instruction
@@ -338,17 +391,21 @@ def should_lower_native(info: FunctionInfo, analysis: FunctionAnalysis) -> tuple
         # The boundary hands back a value; a function with none to hand
         # back is native code's to call -- a thread's body, a helper.
         return False, "returns nothing, which has no Python boundary"
+    if _collection_param("", info.ret, layouts) is not None:
+        return False, "returns a collection or an object, which native callers receive by handle"
     for param in info.params:
-        native = _native_param(param.name, param.type)
+        native = _native_param(param.name, param.type, layouts)
         if native is not None and native.is_pointer:
             # A machine address has no Python object to come from, whatever
             # the directives ask: the function is native code's to call.
             return False, "takes a native pointer, which has no Python boundary"
+        if native is not None and native.is_handle:
+            return False, "takes a collection or an object, which native callers pass by handle"
     for name in _EXPOSURE_DIRECTIVES:
         if info.directive(name) is not None:
             return True, f"@ppy.{name} asks for the boundary"
     for param in info.params:
-        native = _native_param(param.name, param.type)
+        native = _native_param(param.name, param.type, layouts)
         if native is not None and native.is_buffer:
             # Buffer work scales with the data; the crossing is flat.
             return True, "takes a buffer"
@@ -372,6 +429,7 @@ _ALLOCATIONS = {
     "ppy.buffer[ppy.i8]": ("i8", False),
     "ppy.buffer[ppy.u8]": ("u8", False),
     "ppy.scan[Buffer[int]]": ("int", True),
+    "ppy.scan[Buffer[float]]": ("float", True),
 }
 
 
@@ -392,7 +450,7 @@ def _signature(
     parameters = tuple(
         _native_param(p.name, p.type, layouts) or NativeParam(p.name, "int") for p in info.params
     )
-    atoms = _return_atoms(info.ret) or ("int",)
+    atoms = _return_atoms(info.ret, layouts) or ("int",)
     returns = tuple(_abi_name(atom) for atom in atoms)
     future = ""
     if info.is_async:
@@ -436,4 +494,5 @@ def _releases_gil(analysis: FunctionAnalysis) -> bool:
 
 
 def _abi_name(scalar: str) -> str:
-    return {"int": "i64", "float": "double", "bool": "i8", "i8": "i8", "u8": "i8"}[scalar]
+    names = {"int": "i64", "float": "double", "bool": "i8", "i8": "i8", "u8": "i8"}
+    return names.get(scalar, "i8*")

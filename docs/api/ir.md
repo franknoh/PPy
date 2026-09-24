@@ -1,9 +1,15 @@
 # IR
 
-The typed canonical IR between analysis and every backend. `model` is the
-data structure, `types` the types, `dialect` the extension point, `verify`
-the rules, `printer`/`parser`/`codec` the text form. The format and the
-dialects are described in [The IR](../internals/ir.md).
+`ppy_compiler.ir` is the typed canonical IR that sits between analysis and
+the backends. Its modules:
+
+- `model`: the data structure
+- `types`: the types
+- `dialect`: the extension point
+- `verify`: the rules
+- `printer`, `parser`, `codec`: the text form
+
+[The IR](../internals/ir.md) describes the format and the dialects.
 
 ## Model
 

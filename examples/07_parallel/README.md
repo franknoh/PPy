@@ -1,9 +1,17 @@
 # Parallel fused kernels
 
-`@ppy.parallel` splits a fused NumPy loop across the worker pool. The
-output is bit-identical to the serial kernel and to NumPy, because an
-elementwise loop has no order to lose; a reduction does, and the compiler
-will not split one that reassociates unless the function says so.
+`@ppy.parallel` splits a fused NumPy loop across the worker pool, and the
+output is bit-identical to the serial kernel and to NumPy. An elementwise
+loop has no order to lose. A reduction does, and the compiler will not split
+one that reassociates unless the function says so.
+
+## Run it
+
+```bash
+python  parallel.ppy
+ppy     parallel.ppy
+ppy run parallel.ppy
+```
 
 ## The decorator asks, the analysis answers
 
@@ -15,12 +23,13 @@ def parallel(a: np.ndarray, b: np.ndarray) -> np.ndarray:
     return (a * b + a) * (b - a) + a * 0.5 - b * 0.25
 ```
 
-Eight million elements, five operations, one fused loop chunked across
-`[tool.ppy.parallel] threads` workers and joined. `serial` is the same
-expression without the decorator, and the program checks `np.array_equal`
-across serial, parallel, and NumPy — it prints `bit-identical: True` on
-every path. A loop the analysis cannot prove splittable stays serial and
-says why in an optimization remark.
+This is eight million elements and five operations in one fused loop,
+chunked across `[tool.ppy.parallel] threads` workers and joined. `serial`
+is the same expression without the decorator.
+
+The program checks `np.array_equal` across serial, parallel, and NumPy, and
+it prints `bit-identical: True` on every path. A loop the analysis cannot
+prove splittable stays serial and says why in an optimization remark.
 
 ## A sum keeps its order unless you let it go
 
@@ -40,10 +49,12 @@ Splitting a floating-point sum changes where the rounding happens, so
 `strict_total` is left in NumPy's order and equals NumPy's number exactly.
 `@ppy.fastmath` permits the reassociation: `relaxed_total` vectorizes and
 splits, and lands within 1e-3 of the strict answer on eight million squares.
-The choice is made per function, and the default is the exact one.
+You make the choice per function, and the default is the exact one.
+
+## `parallel.range` for other loops
 
 `parallel.range` is the spelling for a loop the program itself declares
-splittable — pointers, buffers, and reductions included
+splittable, including pointers, buffers, and reductions
 ([parallel range](../35_parallel_range/README.md)). `@ppy.parallel` stays the
 switch for fused NumPy loops like these.
 
@@ -55,8 +66,8 @@ The fused expression and the sum of squares over eight million doubles, in
 [`fused_numba.py`](compare/fused_numba.py), [`fused_jax.py`](compare/fused_jax.py).
 Milliseconds, best of five calls, over five processes.
 
-**PPY** -- the NumPy expression in a function, `@ppy.parallel` to split it;
-the serial row is the same expression fused into one loop with no
+**PPy** is the NumPy expression in a function, with `@ppy.parallel` to
+split it. The serial row is the same expression fused into one loop with no
 decorator, and `strict_total` is NumPy's sum in NumPy's order:
 
 ```python
@@ -67,9 +78,11 @@ def parallel(a: np.ndarray, b: np.ndarray) -> np.ndarray:
     return (a * b + a) * (b - a) + a * 0.5 - b * 0.25
 ```
 
-**NumPy** is the expression as written -- five operations, four 64 MB
-temporaries, one thread. **numexpr** is the expression as a string,
-compiled to its own virtual machine and evaluated in chunks across threads:
+**NumPy** is the expression as written: five operations, four 64 MB
+temporaries, one thread.
+
+**numexpr** is the expression as a string, compiled to its own virtual
+machine and evaluated in chunks across threads:
 
 ```python
 ne.evaluate("(x * y + x) * (y - x) + x * 0.5 - y * 0.25", local_dict={"x": x, "y": y})
@@ -97,7 +110,7 @@ def fused(a, b):
 ```
 
 <!-- compare:start -->
-| | PPY | NumPy | numexpr | Numba `prange` | JAX `jit` |
+| | PPy | NumPy | numexpr | Numba `prange` | JAX `jit` |
 |---|---:|---:|---:|---:|---:|
 | fused, serial | 12.09 ± 0.41 | — | — | — | — |
 | fused | 4.10 ± 0.18 | 56.26 ± 0.39 | 6.80 ± 0.31 | **3.37 ± 0.41** | 5.91 ± 0.46 |
@@ -105,29 +118,24 @@ def fused(a, b):
 | sum of squares, relaxed | 4.47 ± 0.21 | — | — | — | — |
 <!-- compare:end -->
 
-Fusing the expression is what removes NumPy's four temporaries: the serial
-fused loop reads the two inputs once and writes the output once, and
-splitting that loop across the cores is a memory-bandwidth problem that
-PPY, Numba, JAX, and numexpr solve the same way, within a couple of
-milliseconds of each other. The fused kernel also checks its own result in
-the same loop -- one add-reduction of non-finite elements the vectorizer
-keeps in a register, one guard after -- which is how it keeps NumPy's
-floating-point reporting without a second pass over 64 MB. The ordered sum
-is NumPy's order and NumPy's time; the relaxed one vectorizes on one
-thread, and JAX's reduction, reassociated across its pool, is the row that
-shows what the same permission buys with threads.
+Fusing the expression is what removes NumPy's four temporaries. The serial
+fused loop reads the two inputs once and writes the output once. Splitting
+that loop across the cores is a memory-bandwidth problem that PPy, Numba,
+JAX, and numexpr solve the same way, within a couple of milliseconds of each
+other.
+
+The fused kernel also checks its own result in the same loop: one
+add-reduction of non-finite elements the vectorizer keeps in a register,
+and one guard after. That is how it keeps NumPy's floating-point reporting
+without a second pass over 64 MB.
+
+The ordered sum is NumPy's order and NumPy's time. The relaxed one
+vectorizes on one thread. JAX's reduction, reassociated across its pool, is
+the row that shows what the same permission buys with threads.
 
 Intel Core Ultra 9 386H (16 threads), threads backend; NumPy 2.5.3, numexpr
 2.14.2, Numba 0.67.0 on CPython 3.12.13, JAX 0.11.1 on CPython 3.13.13,
-PPY on CPython 3.13.13, from a checkout on a native filesystem.
-
-## Run it
-
-```bash
-python  parallel.ppy
-ppy     parallel.ppy
-ppy run parallel.ppy
-```
+PPy on CPython 3.13.13, from a checkout on a native filesystem.
 
 <!-- outputs:start -->
 ## What it prints

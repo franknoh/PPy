@@ -1,0 +1,107 @@
+"""Graph and sequence problems written with ppy's collections."""
+
+from ppy import Deque, HashMap, Heap, LinkedList, TreeSet, Vec
+
+NODES = 200000
+EDGES = 4
+
+
+def target(node: int, k: int) -> int:
+    return (node * 7919 + k * 104729 + 13) % NODES
+
+
+def weight(node: int, k: int) -> int:
+    return (node * 31 + k * 17) % 97 + 1
+
+
+def shortest_paths(source: int) -> int:
+    dist = Vec[int](NODES)
+    for i in range(NODES):
+        dist[i] = -1
+    frontier = Heap[int]()
+    frontier.push(source)
+    dist[source] = 0
+    while frontier:
+        packed: int = frontier.pop()
+        node: int = packed % NODES
+        here: int = packed // NODES
+        if here > dist[node]:
+            continue
+        for k in range(EDGES):
+            other: int = target(node, k)
+            through: int = here + weight(node, k)
+            if dist[other] < 0 or through < dist[other]:
+                dist[other] = through
+                frontier.push(through * NODES + other)
+    total: int = 0
+    for d in dist:
+        total += d
+    return total
+
+
+def hops(source: int) -> int:
+    seen = Vec[int](NODES)
+    for i in range(NODES):
+        seen[i] = -1
+    queue = Deque[int]()
+    queue.push_back(source)
+    seen[source] = 0
+    farthest: int = 0
+    while queue:
+        node: int = queue.pop_front()
+        for k in range(EDGES):
+            other: int = target(node, k)
+            if seen[other] < 0:
+                seen[other] = seen[node] + 1
+                farthest = max(farthest, seen[other])
+                queue.push_back(other)
+    return farthest
+
+
+def josephus(people: int, step: int) -> int:
+    circle = LinkedList[int]()
+    for i in range(people):
+        circle.push_back(i)
+    node: int = circle.head()
+    while len(circle) > 1:
+        for _ in range(step - 1):
+            node = circle.next(node)
+            if node == -1:
+                node = circle.head()
+        following: int = circle.next(node)
+        circle.remove(node)
+        node = following if following != -1 else circle.head()
+    return circle.front()
+
+
+def repeats(count: int) -> int:
+    seen = HashMap[int, int]()
+    for i in range(count):
+        key: int = (i * i + 7 * i) % 65537
+        seen[key] = seen.get(key, 0) + 1
+    most: int = 0
+    for key in seen:
+        most = max(most, seen[key])
+    return len(seen) * 100 + most
+
+
+def closest_gaps(count: int) -> int:
+    marks = TreeSet[int]()
+    best: int = 1 << 40
+    for i in range(count):
+        value: int = (i * 2654435761) % 1000003
+        if marks:
+            if value >= marks.min():
+                best = min(best, value - marks.floor(value))
+            if value <= marks.max():
+                best = min(best, marks.ceiling(value) - value)
+        marks.add(value)
+    return best
+
+
+def main() -> None:
+    print(shortest_paths(0), hops(0))
+    print(josephus(100000, 7), repeats(2000000), closest_gaps(200000))
+
+
+main()

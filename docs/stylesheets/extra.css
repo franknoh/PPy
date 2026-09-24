@@ -1,4 +1,219 @@
-/* A long listing scrolls inside its own pane rather than pushing the page down. */
+/* A quiet theme: white header, one accent color, dark headings, readable measure. */
+
+:root {
+  --ppy-accent: #0d7560;
+  --ppy-accent-hover: #0a5c4b;
+  --ppy-ink: #16181d;
+  --ppy-muted: #5b616e;
+  --ppy-rule: #e3e5e8;
+  --ppy-code-bg: #f6f7f8;
+  --ppy-header-bg: #ffffff;
+}
+
+[data-md-color-scheme="default"] {
+  --md-primary-fg-color: var(--ppy-header-bg);
+  --md-primary-fg-color--light: var(--ppy-header-bg);
+  --md-primary-fg-color--dark: var(--ppy-header-bg);
+  --md-primary-bg-color: var(--ppy-ink);
+  --md-primary-bg-color--light: var(--ppy-muted);
+  --md-accent-fg-color: var(--ppy-accent-hover);
+  --md-typeset-a-color: var(--ppy-accent);
+  --md-default-fg-color: var(--ppy-ink);
+  --md-default-fg-color--light: var(--ppy-muted);
+  --md-code-bg-color: var(--ppy-code-bg);
+}
+
+[data-md-color-scheme="slate"] {
+  --ppy-accent: #5cc8ad;
+  --ppy-accent-hover: #86dac4;
+  --ppy-ink: #e6e7ea;
+  --ppy-muted: #9aa0ab;
+  --ppy-rule: #2a2e36;
+  --ppy-code-bg: #1a1d23;
+  --ppy-header-bg: #121418;
+  --md-hue: 220;
+  --md-default-bg-color: #121418;
+  --md-primary-fg-color: var(--ppy-header-bg);
+  --md-primary-fg-color--light: var(--ppy-header-bg);
+  --md-primary-fg-color--dark: var(--ppy-header-bg);
+  --md-primary-bg-color: var(--ppy-ink);
+  --md-primary-bg-color--light: var(--ppy-muted);
+  --md-accent-fg-color: var(--ppy-accent-hover);
+  --md-typeset-a-color: var(--ppy-accent);
+  --md-code-bg-color: var(--ppy-code-bg);
+}
+
+/* Header and tabs: same color as the page, separated by a hairline. */
+.md-header,
+.md-tabs {
+  background-color: var(--ppy-header-bg);
+  color: var(--ppy-ink);
+}
+.md-header {
+  box-shadow: none;
+  border-bottom: 1px solid var(--ppy-rule);
+}
+.md-header--shadow {
+  box-shadow: none;
+}
+.md-tabs {
+  border-bottom: 1px solid var(--ppy-rule);
+}
+.md-tabs__link {
+  font-size: 0.72rem;
+  opacity: 1;
+  color: var(--ppy-muted);
+}
+.md-tabs__link--active,
+.md-tabs__link:hover {
+  color: var(--ppy-ink);
+}
+.md-tabs__item--active .md-tabs__link {
+  color: var(--ppy-ink);
+  font-weight: 600;
+}
+.md-header__title {
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+.md-search__form {
+  background-color: var(--ppy-code-bg);
+  border: 1px solid var(--ppy-rule);
+  box-shadow: none;
+}
+.md-search__input,
+.md-search__input::placeholder,
+.md-search__icon {
+  color: var(--ppy-muted);
+}
+
+/* Body text. */
+.md-typeset {
+  font-size: 0.8rem;
+  line-height: 1.7;
+}
+.md-typeset h1,
+.md-typeset h2,
+.md-typeset h3,
+.md-typeset h4 {
+  color: var(--ppy-ink);
+  letter-spacing: -0.015em;
+}
+.md-typeset h1 {
+  font-weight: 700;
+  font-size: 1.9em;
+  margin-bottom: 0.8em;
+}
+.md-typeset h2 {
+  font-weight: 650;
+  font-size: 1.35em;
+  margin-top: 2em;
+  padding-top: 0.2em;
+}
+.md-typeset h3 {
+  font-weight: 600;
+  font-size: 1.1em;
+}
+.md-typeset a {
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, currentColor 35%, transparent);
+  text-underline-offset: 0.18em;
+}
+.md-typeset a:hover {
+  text-decoration-color: currentColor;
+}
+.md-typeset .headerlink,
+.md-typeset h1 a,
+.md-typeset h2 a,
+.md-typeset h3 a {
+  text-decoration: none;
+}
+
+/* Code. */
+.md-typeset code {
+  font-size: 0.86em;
+  border-radius: 4px;
+}
 .md-typeset pre > code {
   max-height: 40rem;
+  border: 1px solid var(--ppy-rule);
+  border-radius: 6px;
+}
+.md-typeset :not(pre) > code {
+  padding: 0.1em 0.3em;
+  background-color: var(--ppy-code-bg);
+}
+
+/* Tables: rules, no card shadow. */
+.md-typeset table:not([class]) {
+  border: 1px solid var(--ppy-rule);
+  border-radius: 6px;
+  box-shadow: none;
+  font-size: 0.72rem;
+}
+.md-typeset table:not([class]) th {
+  background-color: var(--ppy-code-bg);
+  color: var(--ppy-ink);
+  font-weight: 600;
+}
+.md-typeset table:not([class]) td,
+.md-typeset table:not([class]) th {
+  border-top: 1px solid var(--ppy-rule);
+  padding: 0.6em 1em;
+}
+
+/* Admonitions and collapsible blocks: a left rule, not a colored box. */
+.md-typeset .admonition,
+.md-typeset details {
+  border: 1px solid var(--ppy-rule);
+  border-left-width: 3px;
+  box-shadow: none;
+  font-size: 0.76rem;
+}
+
+/* Sidebars. */
+.md-nav {
+  font-size: 0.7rem;
+}
+.md-nav__title {
+  color: var(--ppy-ink);
+}
+.md-nav__item--section > .md-nav__link {
+  color: var(--ppy-ink);
+  font-weight: 600;
+}
+.md-nav__link--active {
+  font-weight: 600;
+}
+
+/* The home page: no sidebars, so hold the text to a readable measure. */
+.ppy-home {
+  max-width: 44rem;
+  margin: 0 auto;
+}
+.ppy-home h1 {
+  font-size: 2.4em;
+  margin-bottom: 0.3em;
+}
+.ppy-home .ppy-lead {
+  font-size: 1.1em;
+  line-height: 1.55;
+  color: var(--ppy-muted);
+  max-width: 34em;
+  margin-top: 0;
+}
+
+.md-footer,
+.md-footer-meta {
+  background-color: var(--ppy-header-bg);
+  color: var(--ppy-muted);
+  border-top: 1px solid var(--ppy-rule);
+}
+.md-footer__link,
+.md-footer-meta__inner,
+.md-copyright {
+  color: var(--ppy-muted);
+}
+.md-footer__title {
+  color: var(--ppy-ink);
 }

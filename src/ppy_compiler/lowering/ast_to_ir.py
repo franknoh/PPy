@@ -14,6 +14,7 @@ the caller records the function as running on CPython.
 from __future__ import annotations
 
 import ast
+import re
 from collections.abc import Callable
 from dataclasses import dataclass, field, replace
 from pathlib import Path
@@ -84,6 +85,7 @@ from ..ir.dialects import tensor as tensor_dialect
 from ..ir.transforms.autodiff import AutodiffError, differentiate
 from ..plugins.base import DialectOperationSpec, PluginError, PluginRegistry
 from .abi import signature_from_ir
+from .collections import HANDLE, CollectionLowering, Held
 
 __all__ = ["Frontend", "Lowered", "lower_function", "lower_module_to_ir"]
 
@@ -137,6 +139,10 @@ class IRParameter:
     @property
     def is_object(self) -> bool:
         return self.native.is_object if self.native is not None else False
+
+    @property
+    def is_handle(self) -> bool:
+        return self.native.is_handle if self.native is not None else False
 
     @property
     def is_borrowed(self) -> bool:
@@ -395,7 +401,7 @@ class Frontend:
                 self.externs[qualname] = (info, dict(extern.options))
                 lowered.rejected[qualname] = "a C binding has no body of its own"
                 continue
-            if info.type_params:
+            if info.type_params or self._generic_owner(info):
                 # Lowered per instantiation, when a native caller names one.
                 self.generics[qualname] = (info, analysis, node)
                 lowered.rejected[qualname] = (
@@ -436,7 +442,7 @@ class Frontend:
                 continue
             if proved:
                 lowered.proved[qualname] = tuple(proved)
-            exposed, why = should_lower_native(info, analysis)
+            exposed, why = should_lower_native(info, analysis, self.layouts)
             signature = self.declared[qualname][1]
             assert isinstance(signature, IRSignature)
             lowered.functions[qualname] = CanonicalFunction(
@@ -527,8 +533,8 @@ class Frontend:
         native = None
         if (
             all(p.native is not None and _param_type(p.native) == p.type for p in parameters)
-            and (_return_atoms(info.ret) is not None or info.ret == T.NONE)
-            and results == _result_types(info)
+            and (_return_atoms(info.ret, self.layouts) is not None or info.ret == T.NONE)
+            and results == _result_types(info, self.layouts)
         ):
             native = _signature(info, self.layouts, analysis)
         if self.cpu_compatible and native is None:
@@ -582,7 +588,11 @@ class Frontend:
         params = [(parameter.name, _param_type(parameter)) for parameter in signature.parameters]
         attributes: dict[str, Attribute] = {}
         kinds = self.parameter_attributes(info, signature)
-        results = signature.results if isinstance(signature, IRSignature) else _result_types(info)
+        results = (
+            signature.results
+            if isinstance(signature, IRSignature)
+            else _result_types(info, self.layouts)
+        )
         function = self.module.add_function(
             info.qualname.replace(".", "_"),
             params,
@@ -646,7 +656,9 @@ class Frontend:
             )
         else:
             results = (
-                signature.results if isinstance(signature, IRSignature) else _result_types(info)
+                signature.results
+                if isinstance(signature, IRSignature)
+                else _result_types(info, self.layouts)
             )
         for _name, type_ in params:
             self.require_type(type_)
@@ -741,8 +753,18 @@ class Frontend:
     def _drop(self, qualname: str) -> None:
         self.declared[qualname][0].body.blocks.clear()
 
+    def _generic_owner(self, info: FunctionInfo) -> bool:
+        """A method of a generic class: specialized with its class, as a generic is."""
+        if not info.owner:
+            return False
+        owner = self.analysis.symbols.classes.get(info.owner.rpartition(".")[2])
+        return owner is not None and bool(owner.type_params)
+
     def instantiate(
-        self, qualname: str, arguments: tuple[T.Type, ...]
+        self,
+        qualname: str,
+        arguments: tuple[T.Type, ...],
+        bindings: dict[T.TypeVar_, T.Type] | None = None,
     ) -> tuple[IRFunction, NativeSignature | IRSignature] | None:
         """The native function `qualname[arguments]`, made now if it is new.
 
@@ -756,13 +778,17 @@ class Frontend:
         if entry is None:
             return None
         info, analysis, node = entry
+        if bindings is not None:
+            # A method of a generic class: its class's arguments are its own.
+            arguments = tuple(bindings.values())
         key = (qualname, tuple(str(a) for a in arguments))
         found = self.instances.get(key)
         if found is not None:
             return found
         if key in self._instantiating:
             raise Unsupported(f"`{qualname}` instantiates itself with the same arguments")
-        bindings = dict(zip(info.type_params, arguments, strict=True))
+        if bindings is None:
+            bindings = dict(zip(info.type_params, arguments, strict=True))
         specialized = _specialized_info(info, bindings, key[1])
         if self.cpu_compatible:
             ok, reason = eligible(
@@ -784,7 +810,9 @@ class Frontend:
         self.instances[key] = (function, signature)
         self._instantiating.append(key)
         try:
-            _FunctionLowering(self, function, signature, specialized, {}).run(node)
+            lowering = _FunctionLowering(self, function, signature, specialized, {})
+            lowering.bindings = bindings
+            lowering.run(node)
         except Unsupported:
             del self.instances[key]
             del self.declared[specialized.qualname]
@@ -830,6 +858,8 @@ def _param_type(parameter) -> IRType:  # type: ignore[no-untyped-def]
         return BufferType(_scalar_type(parameter.element))
     if parameter.is_pointer:
         return PtrType(_scalar_type(parameter.element), mutable=parameter.kind == "ptr")
+    if parameter.is_handle:
+        return HANDLE
     if parameter.is_tuple:
         return TupleType(tuple(_scalar_type(e) for e in parameter.elements))
     if parameter.is_object:
@@ -837,10 +867,12 @@ def _param_type(parameter) -> IRType:  # type: ignore[no-untyped-def]
     return _scalar_type(parameter.kind)
 
 
-def _result_types(info: FunctionInfo) -> tuple[IRType, ...]:
-    atoms = _return_atoms(info.ret)
+def _result_types(info: FunctionInfo, layouts: ClassLayouts | None = None) -> tuple[IRType, ...]:
+    atoms = _return_atoms(info.ret, layouts)
     if atoms is None:
         return ()
+    if atoms == ("handle",):
+        return (HANDLE,)
     if len(atoms) == 1:
         return (_scalar_type(atoms[0]),)
     return (TupleType(tuple(_scalar_type(a) for a in atoms)),)
@@ -868,7 +900,7 @@ class _GuardSite:
         core.br(self.b, Successor(setup))
 
 
-class _FunctionLowering:
+class _FunctionLowering(CollectionLowering):
     """Lowers one function body."""
 
     def __init__(
@@ -930,6 +962,13 @@ class _FunctionLowering:
         self.objects: dict[str, Value] = {}
         #: Match locals: name -> (found slot, the spans' slots, the pattern).
         self.matches: dict[str, tuple[Value, Value, regex_dialect.Compiled]] = {}
+        #: Collections by local name: what they are, their element, the slot
+        #: holding the handle, and whether this function made it (and frees it).
+        self.collections: dict[str, Held] = {}
+        #: A generic instance's type arguments, by parameter: what `T` is here.
+        self.bindings: dict[T.TypeVar_, T.Type] = {}
+        #: Collections made for an argument, let go once the call returns.
+        self._temporaries: list[Value] = []
         self._loops: list[tuple[Block, Block]] = []
         #: Blocks after a `while True:` that nothing reaches.
         self._dead: set[int] = set()
@@ -996,6 +1035,13 @@ class _FunctionLowering:
                 slot = self._alloca(argument.type, parameter.name)
                 core.store(self.b, argument, slot)
                 self.slots[parameter.name] = slot
+                continue
+            if parameter.is_handle:
+                declared = next(p.type for p in self.info.params if p.name == parameter.name)
+                kind = self._reference_of_type(declared)
+                if kind is None:
+                    raise Unsupported(f"`{parameter.name}` is a collection with no native form")
+                self._bind_parameter(parameter.name, kind, argument)
                 continue
             if parameter.is_object:
                 self.objects[parameter.name] = argument
@@ -1086,12 +1132,27 @@ class _FunctionLowering:
                 self._assign(node)
             case ast.AnnAssign():
                 if node.value is not None:
+                    if isinstance(node.target, ast.Name) and self._make_collection(
+                        node.target.id, node.value, self._type_of(node.target)
+                    ):
+                        return
+                    if (
+                        isinstance(node.target, ast.Attribute)
+                        and self._object_of(node.target.value) is not None
+                    ):
+                        self._field_store(node.target, node.value)
+                        return
                     if (
                         isinstance(node.target, ast.Name)
                         and self.frontend.standalone
                         and self._standalone_buffer(node.target.id, node.value)
                     ):
                         return
+                    if self.frontend.standalone and _tuple_read(node.value):
+                        values = self._standalone_read(node.value)
+                        if values is not None:
+                            self._store_tuple(node.target, values)
+                            return
                     self._store(node.target, self._expr(node.value))
             case ast.AugAssign():
                 self._augassign(node)
@@ -1129,6 +1190,7 @@ class _FunctionLowering:
             or (isinstance(node.value, ast.Constant) and node.value.value is None)
         ) and not self.function.results:
             self._check_thread_failures()
+            self._release_collections()
             core.ret(self.b)
             return
         if node.value is None:
@@ -1145,9 +1207,19 @@ class _FunctionLowering:
             items = [
                 self._coerce_type(item, t) for item, t in zip(values, expected.items, strict=True)
             ]
+            self._release_collections()
             core.ret(self.b, core.tuple_make(self.b, *items))
             return
-        core.ret(self.b, self._coerce_type(self._expr(node.value), expected))
+        if expected == HANDLE:
+            handle, owned = self._handle(node.value)
+            if not owned:
+                self._retain(handle)
+            self._release_collections()
+            core.ret(self.b, handle)
+            return
+        returned = self._coerce_type(self._expr(node.value), expected)
+        self._release_collections()
+        core.ret(self.b, returned)
 
     def _return_default(self) -> None:
         if self.b.block is not None and id(self.b.block) in self._dead:
@@ -1155,6 +1227,7 @@ class _FunctionLowering:
             return
         if self.info.ret == T.NONE and not self.function.results:
             self._check_thread_failures()
+            self._release_collections()
             core.ret(self.b)
             return
         raise Unsupported("control flow can fall off the end without returning a value")
@@ -1163,6 +1236,14 @@ class _FunctionLowering:
         if len(node.targets) != 1:
             raise Unsupported("chained assignment has no native lowering")
         target = node.targets[0]
+        if isinstance(target, ast.Name) and self._make_collection(target.id, node.value):
+            return
+        if isinstance(target, ast.Subscript) and self._is_collection(target.value):
+            self._item(target.value, target.slice, node.value)
+            return
+        if isinstance(target, ast.Attribute) and self._object_of(target.value) is not None:
+            self._field_store(target, node.value)
+            return
         if (
             self.frontend.standalone
             and isinstance(target, ast.Name)
@@ -1182,14 +1263,31 @@ class _FunctionLowering:
         self._store(target, self._expr(node.value))
 
     def _standalone_buffer(self, name: str, value: ast.expr) -> bool:
-        """`xs = ppy.buffer[int](n)`: a zeroed allocation from the C support."""
-        if not isinstance(value, ast.Call) or len(value.args) != 1:
+        """`xs = ppy.buffer[int](n)`: a zeroed allocation from the C support.
+
+        `ppy.scan[Buffer[T]](n)` fills it with `n` tokens, and
+        `ppy.input[Buffer[T]]()` with the fields of one line, which the line
+        counts first.
+        """
+        if not isinstance(value, ast.Call):
             return False
-        described = _ALLOCATIONS.get(ast.unparse(value.func))
-        if described is None:
-            return False
-        element, reads = described
-        count = self._coerce(self._expr(value.args[0]), "int")
+        line = _line_buffer_read(value)
+        if line is not None:
+            element, reads = line, "ppy_rt_line_ints" if line == "int" else "ppy_rt_line_floats"
+            count = core.call_extern(
+                self.b, "ppy_rt_line_open", (core.const(self.b, -1, I64),), (I64,)
+            ).results[0]
+        else:
+            if len(value.args) != 1:
+                return False
+            described = _ALLOCATIONS.get(ast.unparse(value.func))
+            if described is None:
+                return False
+            element, scans = described
+            reads = (
+                ("ppy_rt_fill_ints" if element == "int" else "ppy_rt_fill_floats") if scans else ""
+            )
+            count = self._coerce(self._expr(value.args[0]), "int")
         element_type = _scalar_type(element)
         width = core.const(self.b, 1 if element in _NARROW else 8, I64)
         raw = core.call_extern(
@@ -1197,7 +1295,7 @@ class _FunctionLowering:
         ).results[0]
         data = core.cast(self.b, raw, PtrType(element_type)) if element_type != I8 else raw
         if reads:
-            core.call_extern(self.b, "ppy_rt_fill_ints", (data, count), (I64,))
+            core.call_extern(self.b, reads, (data, count), (I64,))
         buffer = self.b.create(
             "core.call_intrinsic",
             (data, count),
@@ -1208,6 +1306,76 @@ class _FunctionLowering:
         self.buffers[name] = buffer
         self.slots.pop(name, None)
         return True
+
+    def _standalone_read(self, node: ast.expr) -> list[Value] | None:
+        """`ppy.input[T]()` and `ppy.scan[T]()` of numbers, as runtime calls.
+
+        A scalar is one call. A tuple read from a line opens the line once,
+        requiring exactly its fields, and takes them one by one; a tuple
+        scanned is its fields scanned in order. A fixed width is read as
+        `int` and then held to its range, as the Python read holds it.
+        """
+        if not isinstance(node, ast.Call) or node.args or node.keywords:
+            return None
+        func = node.func
+        if not isinstance(func, ast.Subscript):
+            return None
+        what = ast.unparse(func.value)
+        if what not in {"ppy.input", "ppy.scan"}:
+            return None
+        spec = func.slice
+        if _tuple_read(node):
+            assert isinstance(spec, ast.Subscript)
+            parts = spec.slice.elts if isinstance(spec.slice, ast.Tuple) else [spec.slice]
+            kinds = [self._read_kind(part) for part in parts]
+            if not parts or len(parts) > _MAX_TUPLE_WIDTH or None in kinds:
+                raise Unsupported(
+                    f"`{ast.unparse(func)}` has no native lowering: a tuple read natively "
+                    "has int, float, or fixed-width fields"
+                )
+            if what == "ppy.input":
+                count = core.const(self.b, len(parts), I64)
+                core.call_extern(self.b, "ppy_rt_line_open", (count,), (I64,))
+                return [self._read_value("line", kind) for kind in kinds if kind is not None]
+            return [self._read_value("scan", kind) for kind in kinds if kind is not None]
+        kind = self._read_kind(spec)
+        if kind is None:
+            return None
+        return [self._read_value(what.rpartition(".")[2], kind)]
+
+    def _read_kind(self, spec: ast.expr) -> tuple[str, tuple[int, int] | None] | None:
+        """What one field reads as: `int` or `float`, and the range a width holds it to."""
+        name = ""
+        if isinstance(spec, ast.Name):
+            name = spec.id
+            binding = self.frontend.analysis.symbols.imports.get(spec.id)
+            if binding is not None and binding.canonical.startswith("ppy."):
+                name = binding.canonical.removeprefix("ppy.")
+            elif binding is not None:
+                return None
+        elif (
+            isinstance(spec, ast.Attribute)
+            and isinstance(spec.value, ast.Name)
+            and spec.value.id == "ppy"
+        ):
+            name = spec.attr
+        if name in {"int", "float"}:
+            return name, None
+        if name in _READ_FLOATS:
+            return "float", None
+        bounds = _READ_WIDTHS.get(name)
+        return ("int", bounds) if bounds is not None else None
+
+    def _read_value(self, source: str, kind: tuple[str, tuple[int, int] | None]) -> Value:
+        scalar, bounds = kind
+        result = I64 if scalar == "int" else F64
+        value = core.call_extern(self.b, f"ppy_rt_{source}_{scalar}", (), (result,)).results[0]
+        if bounds is not None:
+            low, high = (core.const(self.b, bound, I64) for bound in bounds)
+            value = core.call_extern(
+                self.b, "ppy_rt_check_width", (value, low, high), (I64,)
+            ).results[0]
+        return value
 
     def _store_tuple(self, target: ast.expr, values: list[Value]) -> None:
         if isinstance(target, ast.Name):
@@ -1230,6 +1398,8 @@ class _FunctionLowering:
     def _tuple_expr(self, node: ast.expr) -> list[Value] | None:
         if isinstance(node, ast.Call):
             func = node.func
+            if self.frontend.standalone and _tuple_read(node):
+                return self._standalone_read(node)
             if (
                 isinstance(func, ast.Attribute)
                 and isinstance(func.value, ast.Name)
@@ -1251,9 +1421,32 @@ class _FunctionLowering:
             packed = core.load(self.b, self.tuples[node.id])
             assert isinstance(packed.type, TupleType)
             return [core.tuple_extract(self.b, packed, i) for i in range(len(packed.type.items))]
+        if isinstance(node, (ast.Call, ast.Subscript)) and isinstance(
+            T.strip_literal(self._type_of(node)), T.Tuple_
+        ):
+            # A tuple a collection hands out, read whole and taken apart.
+            packed = self._expr(node)
+            if isinstance(packed.type, TupleType):
+                count = len(packed.type.items)
+                return [core.tuple_extract(self.b, packed, i) for i in range(count)]
         return None
 
     def _augassign(self, node: ast.AugAssign) -> None:
+        target = node.target
+        if isinstance(target, ast.Attribute) and self._object_of(target.value) is not None:
+            read = ast.Attribute(value=target.value, attr=target.attr, ctx=ast.Load())
+            combined = ast.BinOp(left=read, op=node.op, right=node.value)
+            ast.copy_location(read, target)
+            ast.copy_location(combined, node)
+            self._field_store(target, combined)
+            return
+        if isinstance(target, ast.Subscript) and self._is_collection(target.value):
+            read = ast.Subscript(value=target.value, slice=target.slice, ctx=ast.Load())
+            combined = ast.BinOp(left=read, op=node.op, right=node.value)
+            ast.copy_location(read, target)
+            ast.copy_location(combined, node)
+            self._item(target.value, target.slice, combined)
+            return
         if isinstance(node.target, ast.Subscript):
             if not (
                 isinstance(node.target.value, ast.Name) and node.target.value.id in self.buffers
@@ -1275,10 +1468,16 @@ class _FunctionLowering:
         if isinstance(target, ast.Attribute):
             raise Unsupported("a flattened value class cannot be written back")
         if isinstance(target, ast.Subscript):
+            if self._is_collection(target.value):
+                raise Unsupported("a collection element is assigned as a statement")
             if isinstance(target.value, ast.Name) and target.value.id in self.buffers:
                 self._store_element(target.value.id, target.slice, value)
                 return
             raise Unsupported("this subscript assignment has no native lowering")
+        if isinstance(value.type, TupleType):
+            count = len(value.type.items)
+            self._store_tuple(target, [core.tuple_extract(self.b, value, i) for i in range(count)])
+            return
         if not isinstance(target, ast.Name):
             raise Unsupported("assignment to a non-local has no native lowering")
         self.matches.pop(target.id, None)
@@ -1298,7 +1497,7 @@ class _FunctionLowering:
         core.store(self.b, self._coerce_type(value, slot.type.pointee), slot)
 
     def _if(self, node: ast.If) -> None:
-        condition = self._truth(self._expr(node.test))
+        condition = self._test(node.test)
         then_block = self._block("then")
         else_block = self._block("else")
         merge = self._block("endif")
@@ -1331,9 +1530,7 @@ class _FunctionLowering:
         if forever:
             core.br(self.b, Successor(body))
         else:
-            core.cond_br(
-                self.b, self._truth(self._expr(node.test)), Successor(body), Successor(done)
-            )
+            core.cond_br(self.b, self._test(node.test), Successor(body), Successor(done))
         self.b.at_end(body)
         self._loops.append((header, done))
         self._body(node.body)
@@ -1352,6 +1549,9 @@ class _FunctionLowering:
             raise Unsupported("only `for NAME in range(...)` or over a list parameter is lowered")
         if isinstance(node.iter, ast.Name) and node.iter.id in self.buffers:
             self._for_buffer(node, node.iter.id)
+            return
+        if self._is_collection(node.iter):
+            self._for_collection(node)
             return
         explicit = _parallel_range(node.iter)
         if not (
@@ -1640,9 +1840,19 @@ class _FunctionLowering:
                 return self._await(node)
             case ast.Attribute():
                 if isinstance(node.value, ast.Name) and node.value.id in self.objects:
-                    return self._field(node.value.id, node.attr)
+                    return self._struct_field(node.value.id, node.attr)
+                if self._object_of(node.value) is not None:
+                    return self._field_value(node)
+                record = self._record_value(node.value)
+                if record is not None:
+                    assert isinstance(record.type, StructType)
+                    if record.type.field_type(node.attr) is None:
+                        raise Unsupported(f"`{node.attr}` is not a native field")
+                    return core.struct_extract(self.b, record, node.attr)
                 raise Unsupported("attribute access on this value has no native lowering")
             case ast.Subscript():
+                if self._is_collection(node.value):
+                    return self._item(node.value, node.slice)
                 if isinstance(node.value, ast.Name) and node.value.id in self.tuples:
                     return self._tuple_element(node.value.id, node.slice)
                 if isinstance(node.value, ast.Name) and node.value.id in self.buffers:
@@ -1652,7 +1862,7 @@ class _FunctionLowering:
                 raise Unsupported("subscripting this value has no native lowering")
         raise Unsupported(f"`{type(node).__name__}` has no native lowering")
 
-    def _field(self, name: str, attr: str) -> Value:
+    def _struct_field(self, name: str, attr: str) -> Value:
         struct = self.objects[name]
         assert isinstance(struct.type, StructType)
         if struct.type.field_type(attr) is None:
@@ -1694,6 +1904,10 @@ class _FunctionLowering:
             raise Unsupported(f"`{name}` is a tuple, which has no single scalar value")
         if name in self.buffers:
             raise Unsupported(f"`{name}` is a buffer, which has no scalar value")
+        if name in self.collections:
+            raise Unsupported(
+                f"`{name}` is a collection, which has no scalar value; `len({name})` is its size"
+            )
         slot = self.slots.get(name)
         if slot is None:
             constant = self._module_constant(name)
@@ -1703,6 +1917,12 @@ class _FunctionLowering:
         return core.load(self.b, slot)
 
     def _unary(self, node: ast.UnaryOp) -> Value:
+        if isinstance(node.op, ast.Not) and self._is_collection(node.operand):
+            return self._truth_of(node.operand, empty=True)
+        if isinstance(node.op, ast.Not):
+            absent = self._object_truth(node.operand, empty=True)
+            if absent is not None:
+                return absent
         if isinstance(node.op, ast.USub) and isinstance(node.operand, ast.Constant):
             literal = node.operand.value
             if isinstance(literal, bool):
@@ -1737,7 +1957,7 @@ class _FunctionLowering:
         result = done.add_argument(BOOL, "boolop")
         is_and = isinstance(node.op, ast.And)
         for index, value_node in enumerate(node.values):
-            truth = self._truth(self._expr(value_node))
+            truth = self._test(value_node)
             if index == len(node.values) - 1:
                 core.br(self.b, Successor(done, [truth]))
                 break
@@ -1759,6 +1979,16 @@ class _FunctionLowering:
         folded = self._feature_membership(node)
         if folded is not None:
             return folded
+        same = self._identity(node)
+        if same is not None:
+            return same
+        operator = node.ops[0]
+        container = node.comparators[0]
+        if isinstance(operator, (ast.In, ast.NotIn)) and self._is_collection(container):
+            found = self._contains(container, node.left)
+            if isinstance(operator, ast.NotIn):
+                return core.bitwise(self.b, "xor", found, core.const(self.b, True, BOOL))
+            return found
         predicate = _COMPARISONS.get(type(node.ops[0]))
         if predicate is None:
             raise Unsupported("comparison operator has no native lowering")
@@ -1773,7 +2003,7 @@ class _FunctionLowering:
         return core.cmp(self.b, predicate, self._coerce(left, kind), self._coerce(right, kind))
 
     def _ifexp(self, node: ast.IfExp) -> Value:
-        condition = self._truth(self._expr(node.test))
+        condition = self._test(node.test)
         then_value = self._expr(node.body)
         else_value = self._expr(node.orelse)
         kind = self._unify(_kind(then_value.type), _kind(else_value.type))
@@ -1887,6 +2117,16 @@ class _FunctionLowering:
             and node.func.value.id in self.matches
         ):
             return self._match_method(node.func.value.id, node)
+        if isinstance(node.func, ast.Attribute) and self._object_of(node.func.value) is not None:
+            return self._object_method(node, discard_result)
+        if isinstance(node.func, ast.Attribute) and self._is_collection(node.func.value):
+            if discard_result and self._is_collection(node):
+                self._discard(node)
+                return core.const(self.b, 0, I64)
+            return self._collection_method(node.func.value, node.func.attr, node)
+        record = self._record_construction(node)
+        if record is not None:
+            return record
         spec = self._regex_spec(node)
         if spec is not None:
             return self._regex_op(spec).results[0]
@@ -1901,15 +2141,15 @@ class _FunctionLowering:
                 return self._standalone_print(node)
         if node.keywords:
             raise Unsupported("keyword arguments have no native ABI")
-        if self.frontend.standalone and target == "ppy.input[int]" and not node.args:
-            return core.call_extern(self.b, "ppy_rt_input_int", (), (I64,)).results[0]
-        if self.frontend.standalone and target == "ppy.scan[int]" and not node.args:
-            return core.call_extern(self.b, "ppy_rt_scan_int", (), (I64,)).results[0]
-        if self.frontend.standalone and target.startswith("ppy.input[Buffer"):
-            raise Unsupported(
-                "`ppy.input[Buffer[int]]()` has no standalone lowering yet; "
-                "`ppy.scan[Buffer[int]](n)` reads n tokens"
-            )
+        if self.frontend.standalone:
+            read = self._standalone_read(node)
+            if read is not None:
+                return read[0] if len(read) == 1 else core.tuple_make(self.b, *read)
+            if target.startswith(("ppy.input[", "ppy.scan[")) and "Buffer" in target:
+                raise Unsupported(
+                    "a buffer read is bound to a name in a standalone build: "
+                    "`values = ppy.input[Buffer[int]]()`"
+                )
         derivative = self._derivative_spec(node.func)
         if derivative is not None:
             values = self._derivative_call(derivative, node)
@@ -1938,6 +2178,11 @@ class _FunctionLowering:
                 return self._extern_call(info, options, node)
         if target == "len" and len(node.args) == 1:
             argument = node.args[0]
+            if self._is_collection(argument):
+                return self._length(argument)
+            measured = self._object_length(argument)
+            if measured is not None:
+                return measured
             if isinstance(argument, ast.Name) and argument.id in self.tuples:
                 width = len(self.tuples[argument.id].type.pointee.items)  # type: ignore[attr-defined]
                 return self._int_constant(width)
@@ -1959,7 +2204,7 @@ class _FunctionLowering:
                 )
         for qualname, (info, _analysis, _node) in self.frontend.generics.items():
             if qualname.rpartition(".")[2] == target:
-                return self._generic_call(qualname, info, node)
+                return self._generic_call(qualname, info, node, discard_result=discard_result)
         raise Unsupported(f"`{target}` has no native lowering")
 
     def _derivative_spec(self, func: ast.expr) -> tuple[str, tuple[int, ...], bool] | None:
@@ -1982,27 +2227,51 @@ class _FunctionLowering:
         call = core.call(self.b, function.name, tuple(arguments), function.results)
         return list(call.results)
 
-    def _generic_call(self, qualname: str, info: FunctionInfo, node: ast.Call) -> Value:
-        """Instantiate a generic on the argument types this body has in hand."""
+    def _generic_call(
+        self, qualname: str, info: FunctionInfo, node: ast.Call, *, discard_result: bool = False
+    ) -> Value:
+        """Instantiate a generic on the argument types this body has in hand.
+
+        A collection argument is typed by what the checker said of it, since
+        its handle says nothing of what it holds, and it is passed by handle.
+        """
         if len(node.args) != len(info.params):
             raise Unsupported(f"`{qualname}` called with the wrong number of arguments")
-        values = [self._expr(argument) for argument in node.args]
+        values: list[Value] = []
+        temporaries: list[Value] = []
         bindings: dict[T.TypeVar_, T.Type] = {}
-        for value, param in zip(values, info.params, strict=True):
-            if not T.infer(param.type, _analysis_type(value.type), bindings):
-                raise Unsupported(f"`{qualname}` cannot take a `{value.type}` for `{param.name}`")
+        for argument, param in zip(node.args, info.params, strict=True):
+            if self._is_collection(argument):
+                handle, owned = self._handle(argument)
+                if owned:
+                    temporaries.append(handle)
+                values.append(handle)
+                given = self._type_of(argument)
+            else:
+                values.append(self._expr(argument))
+                given = _analysis_type(values[-1].type)
+            if not T.infer(param.type, given, bindings):
+                raise Unsupported(f"`{qualname}` cannot take a `{given}` for `{param.name}`")
         arguments = tuple(bindings.get(v, v.bound or T.ANY) for v in info.type_params)
         instance = self.frontend.instantiate(qualname, arguments)
         if instance is None:
             raise Unsupported(f"`{qualname}` has no native lowering")
         function, signature = instance
-        if not function.results:
+        if not function.results and not discard_result:
             raise Unsupported(f"`{qualname}` returns nothing a caller can use")
         converted = [
-            self._coerce(value, parameter.kind)
+            value if parameter.is_handle else self._coerce(value, parameter.kind)
             for value, parameter in zip(values, signature.parameters, strict=True)
         ]
-        return core.call(self.b, function.name, tuple(converted), function.results).results[0]
+        found = core.call(self.b, function.name, tuple(converted), function.results)
+        for handle in temporaries:
+            self._release(handle)
+        if not function.results:
+            return core.const(self.b, 0, I64)
+        result = found.results[0]
+        if discard_result and result.type == HANDLE:
+            self._release(result)
+        return result
 
     def _native_op(self, operation: str, node: ast.Call) -> Value:
         """`ppy.native.load` and the rest, as the pointer operations they are."""
@@ -3022,10 +3291,28 @@ class _FunctionLowering:
                     )
                 arguments.append(buffer)
                 continue
+            if parameter.is_handle:
+                none = isinstance(argument, ast.Constant) and argument.value is None
+                kind = self._reference_of(argument)
+                if not none and (kind is None or kind.spelled != parameter.element):
+                    shown = kind.spelled if kind is not None else ast.unparse(argument)
+                    raise Unsupported(
+                        f"`{qualname}` expects a `{parameter.element}`, not `{shown}`"
+                    )
+                handle, owned = self._handle(argument)
+                if owned:
+                    self._temporaries.append(handle)
+                arguments.append(handle)
+                continue
             if parameter.is_object:
-                if not isinstance(argument, ast.Name) or argument.id not in self.objects:
-                    raise Unsupported("a value class argument must be a flattened local")
-                struct = self.objects[argument.id]
+                if isinstance(argument, ast.Name) and argument.id in self.objects:
+                    struct = self.objects[argument.id]
+                else:
+                    # A value class built here, or read out of a collection: a struct value.
+                    record = self._record_value(argument)
+                    if record is None:
+                        raise Unsupported("a value class argument must be a native value")
+                    struct = record
                 assert isinstance(struct.type, StructType)
                 for attr, _scalar in parameter.fields:
                     if struct.type.field_type(attr) is None:
@@ -3122,7 +3409,7 @@ class _FunctionLowering:
                 if isinstance(part, str):
                     self._standalone_print_text(part)
                 else:
-                    shim = "ppy_rt_print_bool" if part.type == BOOL else "ppy_rt_print_i64"
+                    shim = _PRINT_SHIMS[part.type]
                     core.call_extern(self.b, shim, (part,), ())
         self._standalone_print_text(end)
         if flush:
@@ -3146,8 +3433,8 @@ class _FunctionLowering:
                     parts.extend(self._standalone_print_parts(item))
             return parts
         value = self._expr(argument)
-        if value.type not in {I64, BOOL}:
-            raise Unsupported("only integers, booleans, and string literals print natively")
+        if value.type not in _PRINT_SHIMS:
+            raise Unsupported("only integers, floats, booleans, and string literals print natively")
         parts.append(value)
         return parts
 
@@ -3202,16 +3489,26 @@ class _FunctionLowering:
             started = self._call_arguments(signature, node.args, qualname)
             inner = function.results[0] if function.results else VOID
             return aio_dialect.create(self.b, function.name, tuple(started), inner)
+        waiting = len(self._temporaries)
         arguments = self._call_arguments(signature, node.args, qualname)
+        temporaries = self._temporaries[waiting:]
+        del self._temporaries[waiting:]
         if signature.returns_tuple:
             raise Unsupported("a tuple result cannot be forwarded between native calls yet")
         if not function.results and discard_result:
             core.call(self.b, function.name, tuple(arguments), ())
+            for handle in temporaries:
+                self._release(handle)
             # Statement calls discard this internal placeholder; it is not a None value.
             return core.const(self.b, 0, I64)
         if not function.results:
             raise Unsupported(f"`{qualname}` returns nothing a caller can use")
-        return core.call(self.b, function.name, tuple(arguments), function.results).results[0]
+        result = core.call(self.b, function.name, tuple(arguments), function.results).results[0]
+        for handle in temporaries:
+            self._release(handle)
+        if discard_result and result.type == HANDLE:
+            self._release(result)
+        return result
 
     # -- regular expressions -------------------------------------------------------
 
@@ -3716,6 +4013,15 @@ class _FunctionLowering:
             return self._truth(value)
         raise Unsupported(f"cannot convert `{current}` to `{kind}`")
 
+    def _test(self, node: ast.expr) -> Value:
+        """An expression as a condition. A collection is true when it holds anything."""
+        if self._is_collection(node):
+            return self._truth_of(node)
+        present = self._object_truth(node)
+        if present is not None:
+            return present
+        return self._truth(self._expr(node))
+
     def _truth(self, value: Value) -> Value:
         if value.type == BOOL:
             return value
@@ -3885,7 +4191,7 @@ def _specialized_info(
     info: FunctionInfo, bindings: dict[T.TypeVar_, T.Type], arguments: tuple[str, ...]
 ) -> FunctionInfo:
     """`info` with its type parameters replaced: what one instantiation is."""
-    spelled = "_".join(a.replace(".", "_").replace("[", "_").replace("]", "") for a in arguments)
+    spelled = "_".join(re.sub(r"\W+", "_", a).strip("_") for a in arguments)
     params = [replace(p, type=T.substitute(p.type, bindings)) for p in info.params]
     return replace(
         info,
@@ -3931,3 +4237,62 @@ _ELEMENTS: dict[str, IRType] = {
 def _element_type(annotation: ast.expr) -> IRType | None:
     """The element an `[T]` subscript on the native namespace names."""
     return _ELEMENTS.get(ast.unparse(annotation))
+
+
+#: The fixed widths a read holds an `int` to. A `u64` holds what a native
+#: `int` can: the machine word is signed.
+_READ_WIDTHS = {
+    "i8": (-(1 << 7), (1 << 7) - 1),
+    "i16": (-(1 << 15), (1 << 15) - 1),
+    "i32": (-(1 << 31), (1 << 31) - 1),
+    "i64": (-(1 << 63), (1 << 63) - 1),
+    "u8": (0, (1 << 8) - 1),
+    "u16": (0, (1 << 16) - 1),
+    "u32": (0, (1 << 32) - 1),
+    "u64": (0, (1 << 63) - 1),
+}
+
+#: Float widths a read hands out as a `float`, which is what they hold natively.
+_READ_FLOATS = frozenset({"f32", "f64"})
+
+
+def _tuple_read(node: ast.expr) -> bool:
+    """Is this `ppy.input[tuple[...]]()` or `ppy.scan[tuple[...]]()`?"""
+    if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Subscript):
+        return False
+    spec = node.func.slice
+    return (
+        ast.unparse(node.func.value) in {"ppy.input", "ppy.scan"}
+        and isinstance(spec, ast.Subscript)
+        and ast.unparse(spec.value) == "tuple"
+    )
+
+
+def _line_buffer_read(node: ast.Call) -> str | None:
+    """The element of `ppy.input[Buffer[int]]()` or `[Buffer[float]]()`, if it is one.
+
+    A `list[int]` or `list[float]` read from a line is the same memory: a
+    native list is a buffer, and anything that would grow it has no lowering.
+    """
+    func = node.func
+    if node.args or node.keywords or not isinstance(func, ast.Subscript):
+        return None
+    if ast.unparse(func.value) != "ppy.input":
+        return None
+    spec = func.slice
+    if not isinstance(spec, ast.Subscript) or ast.unparse(spec.value) not in {
+        "Buffer",
+        "ppy.Buffer",
+        "list",
+    }:
+        return None
+    element = ast.unparse(spec.slice)
+    return element if element in {"int", "float"} else None
+
+
+#: How a standalone `print` writes each scalar: a float as Python's `repr` does.
+_PRINT_SHIMS = {I64: "ppy_rt_print_i64", F64: "ppy_rt_print_f64", BOOL: "ppy_rt_print_bool"}
+
+
+#: The runtime spelling of an element.
+_COLLECTION_SUFFIX = {"int": "i64", "float": "f64"}

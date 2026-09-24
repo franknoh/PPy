@@ -1,6 +1,6 @@
-site_name: PPY
+site_name: PPy
 site_url: https://ppy.franknoh.dev/
-site_description: A statically analyzable language in Python's syntax, and a compiler whose three paths agree
+site_description: A compiler for a statically analyzable subset of Python
 repo_url: https://github.com/franknoh/PPy
 repo_name: franknoh/PPy
 edit_uri: edit/main/docs/
@@ -10,20 +10,25 @@ theme:
   name: material
   custom_dir: docs/overrides
   language: en
+  logo: assets/logo.svg
+  favicon: assets/logo.svg
   icon:
     repo: fontawesome/brands/github
+  font:
+    text: IBM Plex Sans
+    code: JetBrains Mono
   palette:
     - media: "(prefers-color-scheme: light)"
       scheme: default
-      primary: indigo
-      accent: deep purple
+      primary: custom
+      accent: custom
       toggle:
         icon: material/weather-night
         name: Switch to dark mode
     - media: "(prefers-color-scheme: dark)"
       scheme: slate
-      primary: indigo
-      accent: deep purple
+      primary: custom
+      accent: custom
       toggle:
         icon: material/weather-sunny
         name: Switch to light mode
@@ -93,12 +98,15 @@ markdown_extensions:
 
 nav:
   - Home: index.md
-  - Getting started: getting-started.md
-  - Installing: installing.md
+  - Learn:
+      - Getting started: getting-started.md
+      - Installing: installing.md
   - Guide:
       - guide/index.md
       - The subset: guide/subset.md
       - Directives and markers: guide/directives.md
+      - Collections: guide/collections.md
+      - Classes: guide/classes.md
       - Native memory and FFI: guide/native.md
       - Lanes and the machine: guide/simd-cpu.md
       - Atomics and threads: guide/concurrency.md
@@ -143,6 +151,7 @@ nav:
           - howto/40_generics.md
           - howto/42_toolbox.md
           - howto/43_regex.md
+          - howto/47_collections.md
       - Accelerators:
           - howto/38_cuda.md
           - howto/44_tile.md
@@ -167,20 +176,20 @@ nav:
           - howto/24_interop.md
           - howto/26_project.md
           - howto/30_migrate.md
-  - CLI: cli.md
-  - API:
-      - api/index.md
-      - ppy: api/ppy.md
-      - ppy_runtime: api/runtime.md
-      - Plugin API: api/plugins.md
-      - Backend API: api/backends.md
-      - IR: api/ir.md
   - Reference:
       - reference/index.md
+      - Command line: cli.md
       - Diagnostics: reference/diagnostics.md
       - Configuration: reference/config.md
       - Performance: reference/performance.md
       - Compatibility: reference/compatibility.md
+      - Python API:
+          - api/index.md
+          - ppy: api/ppy.md
+          - ppy_runtime: api/runtime.md
+          - Plugin API: api/plugins.md
+          - Backend API: api/backends.md
+          - IR: api/ir.md
   - Internals:
       - internals/index.md
       - Architecture: internals/architecture.md
@@ -191,5 +200,5 @@ nav:
       - Backends: internals/backends.md
       - Where a solver fits: internals/solver.md
       - Hardware validation: internals/hardware-validation.md
-  - Contributing: contributing.md
+      - Contributing: contributing.md
   - Changelog: changelog.md

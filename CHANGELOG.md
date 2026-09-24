@@ -1,5 +1,68 @@
 # Changelog
 
+## 0.3.7 — 2026-09-25
+
+- A standalone binary reads more than `int`. `ppy.input` and `ppy.scan` of
+  `float`, of the fixed widths (`ppy.i8` through `ppy.u64`, `ppy.f32`,
+  `ppy.f64`), and of tuples of them lower to the C runtime, and so do
+  `ppy.input[Buffer[int]]()`, `ppy.input[Buffer[float]]()`,
+  `ppy.input[list[int]]()`, `ppy.input[list[float]]()`, and
+  `ppy.scan[Buffer[float]](n)`. The float grammar is `float()`'s, and where
+  CPython raises the binary names the same exception and stops.
+- A standalone `print` writes a float the way `repr` does: the shortest
+  digits that read back as the same double.
+- `ppy.input[ppy.i32]()` and the other fixed widths read under CPython too,
+  where they used to be a `TypeError`: the value is read as `int` and must
+  fit, or the read raises `OverflowError`.
+- `ppy.input[Model]()` reads one line of JSON into a dataclass, a pydantic
+  model, or a `TypedDict`, and `ppy.input[list[Model]]()` a JSON array of
+  them. `ppy.scan[Model]()` reads the next JSON value over as many lines as
+  it spans. A dataclass or `TypedDict` is checked field by field and a
+  mismatch is a `ValueError` naming where (`$.items[2].price`); a pydantic
+  model is validated by pydantic.
+- Collections that compile: `ppy.Vec`, `ppy.Deque`, `ppy.Heap`,
+  `ppy.MaxHeap`, `ppy.LinkedList` (nodes named by integer ids),
+  `ppy.HashMap`, `ppy.HashSet` (insertion order), `ppy.TreeMap`, and
+  `ppy.TreeSet` (key order, with `floor`, `ceiling`, `lower`, `higher`).
+  Under CPython each is a Python class, the reference. A function that
+  makes and uses them lowers to calls into a small C runtime under
+  `ppy run`, in a standalone binary, and in emitted C and C++, and frees
+  what it made before it returns. A native function may take one as a
+  parameter; native callers pass its handle. `examples/47_collections`
+  runs five problems with them: 4.3 s under CPython, 0.39 s under `ppy run`.
+- Collections hold anything with a native form: numbers, tuples of numbers,
+  dataclasses (ordered with `order=True`), and other collections, so
+  `Vec[Vec[int]]`, `HashMap[int, Vec[int]]`, `Heap[tuple[int, int]]`, and
+  `Vec[Edge]` compile. Keys may be tuples of `int`. The runtime works on
+  words and the compiler writes the typed access per element type. Memory
+  is reference counted, so collections can be aliased, nested, returned
+  from native functions, and passed as temporaries; the emitted C of the
+  tests runs clean under AddressSanitizer with leak detection.
+- Generic functions take, make, and return collections of their type
+  parameter (`def smallest[T: int | float](v: Vec[T], k: int) -> Vec[T]`),
+  one native instance per type, standalone builds included. A generic
+  function's body may annotate locals with its type parameters.
+- Classes in native code. A class whose methods change its fields, or whose
+  fields hold objects or collections, is an object class: native code holds
+  an instance by handle, with reference counting, so trees, linked nodes
+  (`left: "Node | None"`), and objects in collections lower. Methods lower
+  with `self` as a handle, `x is None` compares with the null handle, and
+  `len(obj)` and `if obj:` call `__len__` and `__bool__`. Reference cycles
+  are not freed.
+- Generic classes: `class Stack[T]` with fields and methods over `T`. The
+  checker substitutes a receiver's type arguments into its fields and
+  methods, so `Stack[int]().push(2.5)` is `E1301`, and native code
+  instantiates the class and its methods per type argument.
+- Standalone programs may define classes (no bases, `@dataclass` or none,
+  methods and annotated fields) and use `len` and truth tests on them.
+- Emitted C reserves the C library's names, so a function called `remove`
+  no longer collides with `stdio.h`.
+- Emitted C no longer moves a store above a load of the same slot when it
+  writes a value straight into its destination.
+- The standalone runtime's `ppy_rt_alloc` returns `int8_t *`, the type the
+  IR gives it, so emitted C no longer warns about incompatible pointers
+  (an error from GCC 14 on).
+
 ## 0.3.6 — 2026-09-21
 
 - Unsafe standalone C/C++ source emits integer `ppy.input` and `ppy.scan`

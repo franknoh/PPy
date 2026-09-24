@@ -323,6 +323,355 @@ SCAN_INT = """{
     return slot;
 }"""
 
+#: The text of one integer field as Python's `int()` reads it: a sign, digits
+#: with single underscores between them. 0 is a number in `*out`, 1 is not an
+#: integer, 2 is one past 64 bits.
+INT_TEXT = """{
+    int64_t start = 0;
+    int negative = 0;
+    if (start < length && (text[start] == '-' || text[start] == '+')) {
+        negative = text[start] == '-';
+        start++;
+    }
+    int digits = 0;
+    int last_underscore = 1;
+    uint64_t magnitude = 0;
+    for (int64_t i = start; i < length; i++) {
+        int c = text[i];
+        if (c == '_') {
+            if (last_underscore) {
+                return 1;
+            }
+            last_underscore = 1;
+            continue;
+        }
+        if (c < '0' || c > '9') {
+            return 1;
+        }
+        uint64_t digit = (uint64_t)(c - '0');
+        if (magnitude > 922337203685477580ULL
+            || (magnitude == 922337203685477580ULL && digit > (uint64_t)(7 + negative))) {
+            return 2;
+        }
+        magnitude = magnitude * 10 + digit;
+        digits++;
+        last_underscore = 0;
+    }
+    if (digits == 0 || last_underscore) {
+        return 1;
+    }
+    *out = negative ? (int64_t)(0 - magnitude) : (int64_t)magnitude;
+    return 0;
+}"""
+
+#: The text of one float field as Python's `float()` reads it: a decimal with
+#: an optional exponent, single underscores between digits, or `inf`,
+#: `infinity`, `nan` in any case, each with an optional sign. Hexadecimal,
+#: which `strtod` would take, is not Python's. 1 for a float in `*out`.
+FLOAT_TEXT = """{
+    char clean[512];
+    int64_t used = 0;
+    if (length <= 0 || length >= (int64_t)sizeof clean) {
+        return 0;
+    }
+    int64_t at = 0;
+    int negative = 0;
+    if (text[at] == '-' || text[at] == '+') {
+        negative = text[at] == '-';
+        at++;
+    }
+    int64_t rest = length - at;
+    char lower[9];
+    if (rest == 3 || rest == 8) {
+        for (int64_t i = 0; i < rest; i++) {
+            int c = text[at + i];
+            lower[i] = (char)(c >= 'A' && c <= 'Z' ? c + 32 : c);
+        }
+        lower[rest] = 0;
+        if (strcmp(lower, "inf") == 0 || strcmp(lower, "infinity") == 0) {
+            *out = negative ? -HUGE_VAL : HUGE_VAL;
+            return 1;
+        }
+        if (strcmp(lower, "nan") == 0) {
+            *out = negative ? -NAN : NAN;
+            return 1;
+        }
+    }
+    int digits = 0;
+    int exponent_digits = 0;
+    int seen_point = 0;
+    int seen_exponent = 0;
+    if (negative) {
+        clean[used++] = '-';
+    }
+    for (int64_t i = at; i < length; i++) {
+        int c = text[i];
+        if (c >= '0' && c <= '9') {
+            if (seen_exponent) {
+                exponent_digits++;
+            } else {
+                digits++;
+            }
+            clean[used++] = (char)c;
+        } else if (c == '_') {
+            int before = i > at && text[i - 1] >= '0' && text[i - 1] <= '9';
+            int after = i + 1 < length && text[i + 1] >= '0' && text[i + 1] <= '9';
+            if (!before || !after) {
+                return 0;
+            }
+        } else if (c == '.' && !seen_point && !seen_exponent) {
+            seen_point = 1;
+            clean[used++] = '.';
+        } else if ((c == 'e' || c == 'E') && !seen_exponent && digits > 0) {
+            seen_exponent = 1;
+            clean[used++] = 'e';
+            if (i + 1 < length && (text[i + 1] == '-' || text[i + 1] == '+')) {
+                clean[used++] = (char)text[++i];
+            }
+        } else {
+            return 0;
+        }
+    }
+    if (digits == 0 || (seen_exponent && exponent_digits == 0)) {
+        return 0;
+    }
+    clean[used] = 0;
+    char *end = NULL;
+    *out = strtod(clean, &end);
+    return end == clean + used;
+}"""
+
+#: Where the fields of the line being read live: the line, and a cursor and
+#: its length. The one owner of that state, so a header refuses it.
+LINE_HOLD = """{
+    static int8_t room[1 << 16];
+    static int64_t bounds[2];
+    *where = bounds;
+    return room;
+}"""
+
+#: `ppy.input[tuple[...]]()` and `ppy.input[Buffer[T]]()`: read one line and
+#: count its fields. `expected` is how many a tuple needs, or -1 for a buffer,
+#: which takes what the line has.
+LINE_OPEN = """{
+    int64_t *bounds = NULL;
+    int8_t *line = ppy_rt_line_hold(&bounds);
+    int8_t more = 0;
+    int64_t length = ppy_rt_read_line(line, (int64_t)(1 << 16), 0, &more);
+    if (length < 0) {
+        ppy_rt_fail("ppy: EOFError: the input ended where a line was expected");
+    }
+    if (more) {
+        ppy_rt_fail("ppy: ValueError: a line of fields is longer than the room for it");
+    }
+    if (length > 0 && line[length - 1] == '\\r') {
+        length--;
+    }
+    bounds[0] = 0;
+    bounds[1] = length;
+    int64_t count = 0;
+    int64_t i = 0;
+    while (i < length) {
+        int c = line[i];
+        if (IS_SPACE) {
+            i++;
+            continue;
+        }
+        count++;
+        while (i < length) {
+            c = line[i];
+            if (IS_SPACE) {
+                break;
+            }
+            i++;
+        }
+    }
+    if (expected >= 0 && count != expected) {
+        char message[128];
+        snprintf(message, sizeof message,
+                 "ppy: ValueError: expected %lld field(s) on the line, got %lld",
+                 (long long)expected, (long long)count);
+        ppy_rt_fail(message);
+    }
+    return count;
+}""".replace("IS_SPACE", _IS_SPACE)
+
+#: The next field of the open line: its start, and its length in `*length`.
+LINE_FIELD = """{
+    int64_t *bounds = NULL;
+    int8_t *line = ppy_rt_line_hold(&bounds);
+    int64_t i = bounds[0];
+    int c = 0;
+    while (i < bounds[1]) {
+        c = line[i];
+        if (!IS_SPACE) {
+            break;
+        }
+        i++;
+    }
+    int64_t start = i;
+    while (i < bounds[1]) {
+        c = line[i];
+        if (IS_SPACE) {
+            break;
+        }
+        i++;
+    }
+    bounds[0] = i;
+    *length = i - start;
+    return line + start;
+}""".replace("IS_SPACE", _IS_SPACE)
+
+LINE_INT = """{
+    int64_t length = 0;
+    const int8_t *text = ppy_rt_line_field(&length);
+    int64_t value = 0;
+    int status = ppy_rt_int_text(text, length, &value);
+    if (status == 2) {
+        ppy_rt_fail("ppy: OverflowError: the integer does not fit in 64 bits");
+    }
+    if (status != 0) {
+        ppy_rt_fail("ppy: ValueError: invalid literal for int()");
+    }
+    return value;
+}"""
+
+LINE_FLOAT = """{
+    int64_t length = 0;
+    const int8_t *text = ppy_rt_line_field(&length);
+    double value = 0.0;
+    if (!ppy_rt_float_text(text, length, &value)) {
+        ppy_rt_fail("ppy: ValueError: could not convert string to float");
+    }
+    return value;
+}"""
+
+#: The fields of the open line, into a buffer made to hold them.
+LINE_INTS = """{
+    for (int64_t i = 0; i < count; i++) {
+        data[i] = ppy_rt_line_int();
+    }
+    return count;
+}"""
+
+LINE_FLOATS = """{
+    for (int64_t i = 0; i < count; i++) {
+        data[i] = ppy_rt_line_float();
+    }
+    return count;
+}"""
+
+#: `ppy.input[float]()` with no interpreter: the whole line, as `float(input())`.
+INPUT_FLOAT = """{
+    int64_t count = ppy_rt_line_open(-1);
+    if (count != 1) {
+        ppy_rt_fail("ppy: ValueError: could not convert string to float");
+    }
+    return ppy_rt_line_float();
+}"""
+
+#: `ppy.scan[float]()` with no interpreter: the next token as a float.
+SCAN_FLOAT = """{
+    int8_t token[512];
+    int8_t more = 0;
+    int64_t length = ppy_rt_read_token(token, (int64_t)sizeof token, 0, &more);
+    if (length == 0 && !more) {
+        ppy_rt_fail("ppy: EOFError: the input ended where a float was expected");
+    }
+    double value = 0.0;
+    if (more || !ppy_rt_float_text(token, length, &value)) {
+        ppy_rt_fail("ppy: ValueError: could not convert string to float");
+    }
+    return value;
+}"""
+
+#: `ppy.scan[Buffer[float]](n)` with no interpreter: exactly `count` floats.
+FILL_FLOATS = """{
+    for (int64_t i = 0; i < count; i++) {
+        data[i] = ppy_rt_scan_float();
+    }
+    return count;
+}"""
+
+#: A value read as `ppy.i32` and its kind: the declared width holds it, or
+#: the program stops as Python's read raises.
+CHECK_WIDTH = """{
+    if (value < low || value > high) {
+        ppy_rt_fail("ppy: OverflowError: the integer does not fit its declared width");
+    }
+    return value;
+}"""
+
+#: A float the way Python's `repr` writes it: the shortest digits that read
+#: back as the same double, fixed notation for exponents from -4 to 15 and
+#: scientific otherwise, and a `.0` on an integral value.
+PRINT_F64 = """{
+    if (value != value) {
+        fputs("nan", stdout);
+        return;
+    }
+    if (value > DBL_MAX || value < -DBL_MAX) {
+        fputs(value < 0 ? "-inf" : "inf", stdout);
+        return;
+    }
+    if (value == 0.0) {
+        /* Only the sign tells -0.0 from 0.0, and division shows it. */
+        fputs(1.0 / value < 0 ? "-0.0" : "0.0", stdout);
+        return;
+    }
+    char text[40];
+    for (int precision = 1; precision <= 17; precision++) {
+        snprintf(text, sizeof text, "%.*e", precision - 1, value);
+        if (strtod(text, NULL) == value) {
+            break;
+        }
+    }
+    char digits[24];
+    int count = 0;
+    char *at = text;
+    if (*at == '-') {
+        fputc('-', stdout);
+        at++;
+    }
+    while (*at && *at != 'e') {
+        if (*at != '.') {
+            digits[count++] = *at;
+        }
+        at++;
+    }
+    while (count > 1 && digits[count - 1] == '0') {
+        count--;
+    }
+    int exponent = atoi(at + 1);
+    if (exponent >= -4 && exponent < 16) {
+        if (exponent < 0) {
+            fputs("0.", stdout);
+            for (int i = 0; i < -exponent - 1; i++) {
+                fputc('0', stdout);
+            }
+            fwrite(digits, 1, (size_t)count, stdout);
+            return;
+        }
+        for (int i = 0; i <= exponent; i++) {
+            fputc(i < count ? digits[i] : '0', stdout);
+        }
+        fputc('.', stdout);
+        if (count > exponent + 1) {
+            fwrite(digits + exponent + 1, 1, (size_t)(count - exponent - 1), stdout);
+        } else {
+            fputc('0', stdout);
+        }
+        return;
+    }
+    fputc(digits[0], stdout);
+    if (count > 1) {
+        fputc('.', stdout);
+        fwrite(digits + 1, 1, (size_t)(count - 1), stdout);
+    }
+    printf("e%c%02d", exponent < 0 ? '-' : '+', exponent < 0 ? -exponent : exponent);
+}"""
+
+
 #: name -> (result, parameters, body, headers, needs). The order is the
 #: order a C file defines them in.
 FUNCTIONS: dict[str, tuple[str, tuple[str, ...], str, tuple[str, ...], tuple[str, ...]]] = {
@@ -397,10 +746,102 @@ FUNCTIONS: dict[str, tuple[str, tuple[str, ...], str, tuple[str, ...], tuple[str
         ("stdint.h",),
         ("ppy_rt_read_ints", "ppy_rt_fail"),
     ),
+    "ppy_rt_int_text": (
+        "int",
+        ("const int8_t *text", "int64_t length", "int64_t *out"),
+        INT_TEXT,
+        ("stdint.h",),
+        (),
+    ),
+    "ppy_rt_float_text": (
+        "int",
+        ("const int8_t *text", "int64_t length", "double *out"),
+        FLOAT_TEXT,
+        ("math.h", "stdint.h", "stdlib.h", "string.h"),
+        (),
+    ),
+    "ppy_rt_line_hold": ("int8_t *", ("int64_t **where",), LINE_HOLD, ("stdint.h",), ()),
+    "ppy_rt_line_open": (
+        "int64_t",
+        ("int64_t expected",),
+        LINE_OPEN,
+        ("stdint.h", "stdio.h"),
+        ("ppy_rt_line_hold", "ppy_rt_read_line", "ppy_rt_fail"),
+    ),
+    "ppy_rt_line_field": (
+        "const int8_t *",
+        ("int64_t *length",),
+        LINE_FIELD,
+        ("stdint.h",),
+        ("ppy_rt_line_hold",),
+    ),
+    "ppy_rt_line_int": (
+        "int64_t",
+        (),
+        LINE_INT,
+        ("stdint.h",),
+        ("ppy_rt_line_field", "ppy_rt_int_text", "ppy_rt_fail"),
+    ),
+    "ppy_rt_line_float": (
+        "double",
+        (),
+        LINE_FLOAT,
+        ("stdint.h",),
+        ("ppy_rt_line_field", "ppy_rt_float_text", "ppy_rt_fail"),
+    ),
+    "ppy_rt_line_ints": (
+        "int64_t",
+        ("int64_t *data", "int64_t count"),
+        LINE_INTS,
+        ("stdint.h",),
+        ("ppy_rt_line_int",),
+    ),
+    "ppy_rt_line_floats": (
+        "int64_t",
+        ("double *data", "int64_t count"),
+        LINE_FLOATS,
+        ("stdint.h",),
+        ("ppy_rt_line_float",),
+    ),
+    "ppy_rt_input_float": (
+        "double",
+        (),
+        INPUT_FLOAT,
+        ("stdint.h",),
+        ("ppy_rt_line_open", "ppy_rt_line_float", "ppy_rt_fail"),
+    ),
+    "ppy_rt_scan_float": (
+        "double",
+        (),
+        SCAN_FLOAT,
+        ("stdint.h",),
+        ("ppy_rt_read_token", "ppy_rt_float_text", "ppy_rt_fail"),
+    ),
+    "ppy_rt_fill_floats": (
+        "int64_t",
+        ("double *data", "int64_t count"),
+        FILL_FLOATS,
+        ("stdint.h",),
+        ("ppy_rt_scan_float",),
+    ),
+    "ppy_rt_check_width": (
+        "int64_t",
+        ("int64_t value", "int64_t low", "int64_t high"),
+        CHECK_WIDTH,
+        ("stdint.h",),
+        ("ppy_rt_fail",),
+    ),
+    "ppy_rt_print_f64": (
+        "void",
+        ("double value",),
+        PRINT_F64,
+        ("float.h", "stdio.h", "stdlib.h"),
+        (),
+    ),
 }
 
 #: The functions that own process state.
-STATEFUL = frozenset({"ppy_rt_next", "ppy_rt_input_int"})
+STATEFUL = frozenset({"ppy_rt_next", "ppy_rt_input_int", "ppy_rt_line_hold"})
 
 #: The functions only the scanner itself calls: private to whichever unit carries them.
 INTERNAL = frozenset({"ppy_rt_next"})

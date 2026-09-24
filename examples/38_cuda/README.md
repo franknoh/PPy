@@ -1,11 +1,30 @@
 # GPU kernels
 
 A saxpy and a block reduction with shared memory and a warp shuffle, written
-once in `ppy.cuda`: the reference launch under CPython, PTX through the CUDA
-driver under `ppy run` where a device is present, and CUDA or HIP source
-from `ppy emit`. The printed totals are identical.
+once in `ppy.cuda`. The same file runs three ways:
 
-## Kernels, device functions, and where a thread is
+- under CPython, through the reference launch
+- under `ppy run`, as PTX through the CUDA driver where a device is present
+- as CUDA or HIP source from `ppy emit`
+
+The printed totals are identical.
+
+## Run it
+
+```bash
+python  saxpy.ppy
+ppy run saxpy.ppy
+ppy emit cuda saxpy.ppy
+ppy emit hip saxpy.ppy
+ppy emit ptx saxpy.ppy
+ppy inspect saxpy.ppy --stage gpu
+```
+
+The outputs of each command are under [What it prints](#what-it-prints).
+
+## Writing a kernel
+
+### Kernels and device functions
 
 ```python
 @cuda.kernel
@@ -17,36 +36,55 @@ def saxpy(n: int, a: float, x: native.const_ptr[float], y: native.ptr[float]) ->
 ```
 
 `@cuda.kernel` marks a function of scalars and pointers that returns nothing
-and runs once per thread of a launch; `@cuda.device` marks `fma`, a function
-a kernel calls. `thread_id`, `block_id`, `block_dim`, and `global_id` say
-where a thread is. `cuda.launch(kernel, grid, block, *args)` runs the kernel
-over `grid` blocks of `block` threads and waits; a `native` pointer's whole
-array goes to the device and, when the pointer is mutable, comes back, so a
-launch means what the reference launch means. `x` and `y` are made with
-`cuda.device_alloc[float](n)` instead: memory that lives on the device
-between launches, filled and read through the same `native.store` and
-`native.load`, so the launch passes an address and copies nothing.
+and runs once per thread of a launch. `@cuda.device` marks `fma`, a function
+a kernel calls.
+
+### Where a thread is
+
+`thread_id`, `block_id`, `block_dim`, and `global_id` say where a thread is.
+
+### Launching and device memory
+
+`cuda.launch(kernel, grid, block, *args)` runs the kernel over `grid` blocks
+of `block` threads and waits. A `native` pointer's whole array goes to the
+device and, when the pointer is mutable, comes back, so a launch means what
+the reference launch means.
+
+`x` and `y` are made with `cuda.device_alloc[float](n)` instead. That is
+memory that lives on the device between launches, filled and read through
+the same `native.store` and `native.load`, so the launch passes an address
+and copies nothing.
 
 ## Shared memory, a barrier, a shuffle
 
 `block_max` parks each thread's value in `cuda.shared[float, 64]()`, waits
-at `syncthreads`, trades with its neighbour through `shfl_xor(mine, 1)`,
-and lets thread 0 finish the reduction. Under CPython the launch runs a
-block's threads together, each a Python thread that knows its position, so
-the barrier and the shuffle are real. Inside device code `int` arithmetic
-wraps and nothing guards, as on the device; the gpu dialect's verifier
-refuses what has no device form — a list or buffer parameter, a returned
-value, a call to a host function.
+at `syncthreads`, trades with its neighbour through `shfl_xor(mine, 1)`, and
+lets thread 0 finish the reduction. Its code is in
+[How each tool writes the block max](#how-each-tool-writes-the-block-max).
+
+Under CPython the launch runs a block's threads together, each a Python
+thread that knows its position, so the barrier and the shuffle are real.
+
+## Rules inside device code
+
+Inside device code `int` arithmetic wraps and nothing guards, as on the
+device. The gpu dialect's verifier refuses what has no device form:
+
+- a list or buffer parameter
+- a returned value
+- a call to a host function
 
 ## Where it ran
 
-`cuda.compiled(saxpy)` says whether PTX ran; without a driver, a device, or
-the NVPTX backend the reference launch runs and `W2008` says why. The line
+`cuda.compiled(saxpy)` says whether PTX ran. Without a driver, a device, or
+the NVPTX backend, the reference launch runs and `W2008` says why. The line
 that prints it starts with `# `, the mark for output that may differ by
-machine. `PPY_CUDA_ARCH` picks the architecture the PTX is written for
-(`sm_70` unless set). A built artifact carries its kernels: `ppy build`
-stages each PTX beside the manifest and the launcher binds it without the
-compiler.
+machine.
+
+- `PPY_CUDA_ARCH` picks the architecture the PTX is written for (`sm_70`
+  unless set).
+- A built artifact carries its kernels. `ppy build` stages each PTX beside
+  the manifest, and the launcher binds it without the compiler.
 
 ## Compared with CuPy, Numba, Mojo, and CUDA C
 
@@ -54,15 +92,18 @@ The same two kernels over sixteen million doubles, written as thread-level
 kernels the way each tool spells them, in [`compare/`](compare/):
 [`saxpy_bench.ppy`](compare/saxpy_bench.ppy), [`saxpy_cupy.py`](compare/saxpy_cupy.py),
 [`saxpy_numba.py`](compare/saxpy_numba.py), [`saxpy.mojo`](compare/saxpy.mojo),
-[`saxpy.cu`](compare/saxpy.cu). Milliseconds, best of warm launches with the
-device synchronized, over five processes. Tile-level tools -- Triton, Taichi
--- program a block as one vector and never write the shared-memory
-exchange, which is a different kernel; they are compared with PPY's tile
-kernels, not with these. The block max, as each tool spells it:
+[`saxpy.cu`](compare/saxpy.cu). Times are milliseconds, best of warm
+launches with the device synchronized, over five processes.
 
-**PPY** -- a Python function with `cuda.global_id()`, shared memory, a
-barrier, a shuffle; the same file runs on CPython through the reference
-launch:
+Tile-level tools such as Triton and Taichi program a block as one vector
+and never write the shared-memory exchange, which makes it a different
+kernel. They are compared with PPy's tile kernels instead of these.
+
+### How each tool writes the block max
+
+**PPy** uses a Python function with `cuda.global_id()`, shared memory, a
+barrier, and a shuffle. The same file runs on CPython through the reference
+launch.
 
 ```python
 @cuda.kernel
@@ -76,8 +117,8 @@ def block_max(x: native.const_ptr[float], out: native.ptr[float]) -> None:
     ...
 ```
 
-**Numba CUDA** reads the same way -- `@cuda.jit`, `cuda.grid(1)`,
-`cuda.shared.array`, `cuda.syncthreads()`, `cuda.shfl_xor_sync`:
+**Numba CUDA** reads the same way, with `@cuda.jit`, `cuda.grid(1)`,
+`cuda.shared.array`, `cuda.syncthreads()`, and `cuda.shfl_xor_sync`:
 
 ```python
 @cuda.jit
@@ -92,15 +133,20 @@ def block_max(x, out):
 ```
 
 **CuPy** writes saxpy in one line, an `ElementwiseKernel`, and the block max
-as CUDA C in a string handed to `RawKernel`. **CUDA C** is the kernel the
-others approximate, timed with events around the launch alone.
+as CUDA C in a string handed to `RawKernel`.
+
+**CUDA C** is the kernel the others approximate, timed with events around
+the launch alone.
 
 **Mojo** writes the kernel as a `def` with `global_idx`, `thread_idx`, a
 `stack_allocation` in `AddressSpace.SHARED`, `barrier()` from MAX's
-`max.gpu.sync`, and `shuffle_xor`, which has no `Float64` form, so the
-double crosses as its bits; arguments must be fixed-width (`Int64`, not
-`Int`), `out` is a reserved parameter name, and the launch is
-`DeviceContext.enqueue_function` with `grid_dim` and `block_dim`:
+`max.gpu.sync`, and `shuffle_xor`. Some details differ from the others:
+
+- `shuffle_xor` has no `Float64` form, so the double crosses as its bits.
+- Arguments must be fixed-width (`Int64`, not `Int`).
+- `out` is a reserved parameter name.
+- The launch is `DeviceContext.enqueue_function` with `grid_dim` and
+  `block_dim`.
 
 ```mojo
 def block_max(x: UnsafePointer[Float64, MutAnyOrigin], result: UnsafePointer[Float64, MutAnyOrigin]):
@@ -113,8 +159,10 @@ def block_max(x: UnsafePointer[Float64, MutAnyOrigin], result: UnsafePointer[Flo
     ...
 ```
 
+### Results
+
 <!-- compare:start -->
-| | PPY `cuda.launch` | CuPy | Numba CUDA | Mojo | CUDA C |
+| | PPy `cuda.launch` | CuPy | Numba CUDA | Mojo | CUDA C |
 |---|---:|---:|---:|---:|---:|
 | saxpy, arrays on the device | 0.77 ± 0.08 | 0.78 ± 0.08 | 0.72 ± 0.06 | 0.55 ± 0.05 | **0.50 ± 0.00** |
 | block max, arrays on the device | 2.03 ± 0.05 | 1.98 ± 0.02 | 2.02 ± 0.03 | 1.98 ± 0.02 | **1.88 ± 0.00** |
@@ -122,29 +170,20 @@ def block_max(x: UnsafePointer[Float64, MutAnyOrigin], result: UnsafePointer[Flo
 | block max, array copied in per launch | 15.66 ± 0.43 | 12.33 ± 0.34 | 14.11 ± 0.42 | **11.21 ± 0.33** | 11.26 ± 0.20 |
 <!-- compare:end -->
 
-With the arrays on the device, a launch is the kernel: the five run the
-same block max in the same time, and on saxpy the Python-hosted ones sit a
+With the arrays on the device, a launch is the kernel. The five tools run
+the same block max in the same time. On saxpy the Python-hosted ones sit a
 tenth of a millisecond above Mojo and CUDA C, the cost of a launch through
-the interpreter. The copying rows are the other memory model, a
-`native.stack_alloc` array sent in and brought back on every launch; there
-the driver reads the host array in place, and the traffic costs what it
-costs every tool. A program that launches more than once keeps its data on
-the device by allocating it there, with `cuda.device_alloc`.
+the interpreter.
+
+The copying rows use the other memory model: a `native.stack_alloc` array
+sent in and brought back on every launch. There the driver reads the host
+array in place, and the traffic costs what it costs every tool. A program
+that launches more than once keeps its data on the device by allocating it
+there, with `cuda.device_alloc`.
 
 NVIDIA GeForce RTX 5080 Laptop GPU, driver 610.71, CUDA 13.3; CuPy 14.2.0,
-Numba 0.67.0 on CPython 3.12.13; Mojo 1.0.0 with MAX 26.5; nvcc 13.3; PPY
+Numba 0.67.0 on CPython 3.12.13; Mojo 1.0.0 with MAX 26.5; nvcc 13.3; PPy
 on CPython 3.13.13.
-
-## Run it
-
-```bash
-python  saxpy.ppy
-ppy run saxpy.ppy
-ppy emit cuda saxpy.ppy
-ppy emit hip saxpy.ppy
-ppy emit ptx saxpy.ppy
-ppy inspect saxpy.ppy --stage gpu
-```
 
 <!-- outputs:start -->
 ## What it prints

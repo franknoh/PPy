@@ -1,11 +1,14 @@
 # `ppy`
 
-Importing `ppy` is cheap: it installs the `.ppy` import hook and exposes
+This page lists the signatures in the `ppy` package. The
+[guide](../guide/index.md) shows how to use them.
+
+Importing `ppy` is cheap. It installs the `.ppy` import hook and exposes
 directives and annotation markers. It never initializes LLVM, loads
-compiler services, or starts background processes. The namespaces a program
-writes against are each a reference implementation under CPython that
-answers the same as the compiled one. How to use them is in the
-[guide](../guide/index.md); this page is the signatures.
+compiler services, or starts background processes.
+
+Each namespace a program writes against is a reference implementation
+under CPython that gives the same answer as the compiled one.
 
 ## Directives
 
@@ -47,6 +50,22 @@ answers the same as the compiled one. How to use them is in the
       members:
         - buffer
 
+## Collections
+
+::: ppy._collections
+    options:
+      show_root_heading: false
+      members:
+        - Vec
+        - Deque
+        - Heap
+        - MaxHeap
+        - LinkedList
+        - HashMap
+        - HashSet
+        - TreeMap
+        - TreeSet
+
 ## The import hook
 
 ::: ppy._importer
@@ -55,12 +74,12 @@ answers the same as the compiled one. How to use them is in the
 
 ## `ppy.native`
 
-`ppy.native` is an object, not a module: the directive, and the namespace of
-typed native memory — `native.ptr[T]`, `native.const_ptr[T]`,
-`native.stack_alloc[T](n)`, `native.load`, `native.store`, `native.offset`,
-`native.cast[T]`, `native.sizeof[T]`, `native.extern(...)`,
-`native.export(...)`. [Native memory and FFI](../guide/native.md) describes
-each.
+`ppy.native` is an object rather than a module. It is both the directive
+and the namespace of typed native memory: `native.ptr[T]`,
+`native.const_ptr[T]`, `native.stack_alloc[T](n)`, `native.load`,
+`native.store`, `native.offset`, `native.cast[T]`, `native.sizeof[T]`,
+`native.extern(...)`, `native.export(...)`. [Native memory and
+FFI](../guide/native.md) describes each.
 
 ::: ppy._native_api
     options:

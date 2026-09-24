@@ -12,6 +12,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from ppy_runtime import collections as _collections
 from ppy_runtime.scanner import FUNCTIONS, INTERNAL, STATEFUL
 
 __all__ = ["SHIMS", "Shim", "definition", "program_main", "support_source"]
@@ -48,7 +49,7 @@ _ALLOC = """{
         fputs("ppy: out of memory\\n", stderr);
         exit(1);
     }
-    return (int64_t *)room;
+    return (int8_t *)room;
 }"""
 
 SHIMS: dict[str, Shim] = {
@@ -68,7 +69,7 @@ SHIMS: dict[str, Shim] = {
     "ppy_rt_print_nl": Shim("void", (), "{ fputc('\\n', stdout); }", ("stdio.h",)),
     "ppy_rt_flush_stdout": Shim("void", (), "{ fflush(stdout); }", ("stdio.h",)),
     "ppy_rt_alloc": Shim(
-        "int64_t *", ("int64_t count", "int64_t width"), _ALLOC, ("stdio.h", "stdlib.h")
+        "int8_t *", ("int64_t count", "int64_t width"), _ALLOC, ("stdio.h", "stdlib.h")
     ),
 }
 # The scanner, the same text `ppy._io` compiles for a program under CPython.
@@ -76,6 +77,14 @@ SHIMS.update(
     {
         name: Shim(result, parameters, body, headers, needs=needs, stateful=name in STATEFUL)
         for name, (result, parameters, body, headers, needs) in FUNCTIONS.items()
+    }
+)
+
+# The collections: `ppy.Vec` and the rest, the text `ppy run` loads compiled.
+SHIMS.update(
+    {
+        name: Shim(result, parameters, body, _collections.HEADERS, needs=needs)
+        for name, (result, parameters, body, needs) in _collections.FUNCTIONS.items()
     }
 )
 

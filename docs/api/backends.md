@@ -1,15 +1,20 @@
 # Backend API
 
-The backend interface, version 1 (`BACKEND_API_VERSION`). A backend
-consumes the canonical IR after the shared passes and answers with text,
-bytes, or built artifacts; it may hang passes at the `backend` stage, must
-refuse in `validate` what it cannot take, and says whether its toolchain
-is here. An external backend is a package with an entry point in the
-`ppy.backends` group; the compiler finds it without importing it and loads
-it when it is asked for. How the pieces fit, and a whole example package,
-is in [Backends](../internals/backends.md).
+This is the backend interface, version 1 (`BACKEND_API_VERSION`).
 
-What a backend package imports is this module and [`ppy_compiler.ir`](ir.md).
+A backend takes the canonical IR after the shared passes and returns text,
+bytes, or built artifacts. It:
+
+- may hang passes at the `backend` stage
+- must refuse in `validate` what it cannot take
+- says whether its toolchain is present
+
+An external backend is a package with an entry point in the `ppy.backends`
+group. The compiler finds it without importing it, and loads it when it is
+asked for. [Backends](../internals/backends.md) explains how the pieces fit
+and walks through a whole example package.
+
+A backend package imports this module and [`ppy_compiler.ir`](ir.md).
 
 ::: ppy_compiler.backend.base
 

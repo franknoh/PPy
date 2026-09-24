@@ -124,8 +124,8 @@ def _workspace(tmp_path: Path) -> Path:
 
 @requires_llvm
 def test_the_documented_limits_are_the_ones_explain_reports(workspace: Path):
-    """The two documented fallbacks, and the two shapes the examples use instead, by name."""
-    assert "llvm backend: boxed: `Vec3` has no native lowering" in _explain(workspace, "orbit")
+    """The documented fallbacks, and the shapes the examples use instead, by name."""
+    assert "llvm backend: native" in _explain(workspace, "orbit"), "a value class built in a loop"
     assert "llvm backend: native" in _explain(workspace, "travel"), "a value class as a parameter"
     assert "llvm backend: boxed: `Tuple` has no native lowering" in _explain(
         workspace, "walk_forwarding"

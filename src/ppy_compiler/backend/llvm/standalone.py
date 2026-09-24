@@ -14,6 +14,7 @@ import subprocess
 from pathlib import Path
 
 from ...diagnostics import Diagnostic, Severity
+from ...driver.ir_pipeline import value_class_layouts
 from ..c.runtime import program_main, support_source
 from . import prover_for
 from .jit import JitEngine, LlvmUnavailable, available
@@ -63,7 +64,10 @@ def _program(bundle, reporter, entry: Path, *, project_modules: bool = False):  
     infos = (
         dict(bundle.symbols.functions)
         if project_modules
-        else {info.qualname: info for info in symbols.functions.values()}
+        else {
+            **{info.qualname: info for info in symbols.functions.values()},
+            **{m.qualname: m for c in symbols.classes.values() for m in c.methods.values()},
+        }
     )
     if project_modules:
         # Imports execute even when none of their functions is called. Check
@@ -85,12 +89,19 @@ def _program(bundle, reporter, entry: Path, *, project_modules: bool = False):  
         function = analyses.get(qualname)
         if function is None:
             continue
-        for callee in sorted(function.calls):
+        callees = set(function.calls)
+        owner = infos[qualname].owner if qualname in infos else None
+        if owner is not None and owner in bundle.symbols.classes:
+            # A class used natively brings its methods: `len(stack)` and `if
+            # stack:` call `__len__` and `__bool__` without naming them.
+            callees |= {m.qualname for m in bundle.symbols.classes[owner].methods.values()}
+        for callee in sorted(callees):
             if callee in infos and callee not in reached_from:
                 reached_from[callee] = qualname
                 frontier.append(callee)
 
     functions = {}
+    layouts = value_class_layouts(bundle)
     for qualname in reachable:
         info = infos.get(qualname)
         function = analyses.get(qualname)
@@ -98,7 +109,10 @@ def _program(bundle, reporter, entry: Path, *, project_modules: bool = False):  
             return _fail(
                 reporter, _chain(reached_from, qualname, "is not a function of this module")
             )
-        ok, reason = eligible(info, function, allow_io=True)
+        # A generic, or a generic class's method, is lowered where it is
+        # instantiated, with its type arguments known.
+        generic = _generic(bundle, info)
+        ok, reason = (True, "") if generic else eligible(info, function, layouts, allow_io=True)
         if not ok:
             return _fail(reporter, _chain(reached_from, qualname, reason))
         functions[qualname] = (info, function, info.node)
@@ -131,6 +145,7 @@ def standalone_ir(  # type: ignore[no-untyped-def]
             backend_name="llvm",
             safeguards=config.llvm.safeguards or "hoisted",
             standalone=True,
+            layouts=value_class_layouts(bundle),
             prover=prover_for(config),
             root=bundle.project.root,
             native_arithmetic=config.llvm.safeguards == "off",
@@ -140,12 +155,15 @@ def standalone_ir(  # type: ignore[no-untyped-def]
     signatures = {
         qualname: (info, frontends[info.module].signature(info, analysis))
         for qualname, (info, analysis, _) in functions.items()
+        if not _generic(bundle, info)
     }
     modules = []
     for name, frontend in frontends.items():
         frontend.imports = signatures.get
         lowered = frontend.build({q: f for q, f in functions.items() if f[0].module == name})
         for qualname, reason in sorted(lowered.rejected.items()):
+            if qualname in frontend.generics:
+                continue  # A generic is lowered where a caller instantiates it.
             return _fail(reporter, _chain(reached_from, qualname, reason))
         modules.append(lowered.module)
     linked = link(modules, module_name)
@@ -206,10 +224,13 @@ def build_standalone(  # type: ignore[no-untyped-def]
         functions,
         safeguards=config.llvm.safeguards or "hoisted",
         standalone=True,
+        layouts=value_class_layouts(bundle),
         opt_level=opt_level if opt_level is not None else config.opt_level,
         prover=prover_for(config),
     )
     for qualname, reason in sorted(result.rejected.items()):
+        if _generic(bundle, functions[qualname][0]):
+            continue  # A generic is lowered where a caller instantiates it.
         return _fail(reporter, _chain(reached_from, qualname, reason))
     if entry_qualname not in result.functions:
         return _fail(reporter, f"`{entry_qualname}` did not lower")
@@ -264,6 +285,42 @@ def _binds_a_constant(statement, constants: dict) -> bool:  # type: ignore[no-un
     return False
 
 
+def _generic(bundle, info) -> bool:  # type: ignore[no-untyped-def]
+    """A generic function, or a method of a generic class: lowered per instantiation."""
+    owner = bundle.symbols.classes.get(info.owner) if info.owner else None
+    return bool(info.type_params) or (owner is not None and bool(owner.type_params))
+
+
+def _field_dataclass(statement) -> bool:  # type: ignore[no-untyped-def]
+    """A class a standalone program can hold: no bases, `@dataclass` or nothing,
+    and a body of methods, field annotations (with constant defaults), and a
+    docstring. Its instances are native values or native objects; nothing has
+    to run to define it."""
+    import ast
+
+    if not isinstance(statement, ast.ClassDef) or statement.bases or statement.keywords:
+        return False
+    decorated = [
+        ast.unparse(d.func if isinstance(d, ast.Call) else d) for d in statement.decorator_list
+    ]
+    if decorated not in ([], ["dataclass"], ["dataclasses.dataclass"]):
+        return False
+    for index, item in enumerate(statement.body):
+        docstring = (
+            index == 0
+            and isinstance(item, ast.Expr)
+            and isinstance(item.value, ast.Constant)
+            and isinstance(item.value.value, str)
+        )
+        field = isinstance(item, ast.AnnAssign) and (
+            item.value is None or isinstance(item.value, ast.Constant)
+        )
+        method = isinstance(item, ast.FunctionDef)
+        if not (docstring or field or method):
+            return False
+    return True
+
+
 def _module_shape(
     symbols, project_modules: set[str] | None = None, *, entry: bool = True
 ) -> str | None:  # type: ignore[no-untyped-def]
@@ -284,10 +341,16 @@ def _module_shape(
         # nothing has to run to bind the name.
         if _binds_a_constant(statement, symbols.constant_globals):
             continue
+        # A dataclass of fields is a layout for the compiler: a value class is a
+        # struct natively, and nothing has to run to define it.
+        if _field_dataclass(statement):
+            continue
         if isinstance(statement, (ast.Import, ast.ImportFrom)):
             names = getattr(statement, "module", None) or ""
             listed = [alias.name for alias in statement.names]
             if names == "ppy" or listed == ["ppy"]:
+                continue
+            if names == "dataclasses" and set(listed) <= {"dataclass"}:
                 continue
             if project_modules and all(
                 (binding := symbols.imports.get(alias.asname or alias.name.split(".")[0]))

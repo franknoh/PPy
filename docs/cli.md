@@ -1,10 +1,11 @@
 # CLI reference
 
-What any of it is for is in the [guide](guide/index.md).
+This page lists every `ppy` command and its options. The
+[guide](guide/index.md) explains what each feature is for.
 
 ## Global options
 
-Before the subcommand.
+These go before the subcommand.
 
 | option | effect |
 |---|---|
@@ -14,56 +15,71 @@ Before the subcommand.
 | `-O`, `--opt-level {0,1,2,3}` | override `[tool.ppy] opt-level` |
 | `--no-strict` | downgrade strict-mode errors where a sound fallback exists |
 
-`-O` overrides the project default, not a per-function `@ppy.opt(n)`, which is
-a contract on that function.
+`-O` overrides the project default. It does not override a per-function
+`@ppy.opt(n)`, which is a contract on that function.
 
-## Running a file
+## `ppy` and `ppy run`
+
+Run a file.
 
 ```bash
 ppy FILE.ppy [-- ARGS...]        # optimized Python backend
 ppy run FILE.ppy [-- ARGS...]    # compile through LLVM, then run
 ```
 
-Everything after `--` reaches the program as `sys.argv[1:]`. `ppy run`
-keeps Python-integer semantics by default, as `ppy build` does; `--unsafe`
-drops the overflow guards on data arithmetic (64-bit wrap, bounds checks
-stay), and `--safeguards {hoisted,inline,off}` names the guard mode outright.
-`--prover {off,z3}` asks the solver to prove overflow guards away where the
-analysis allows it, overriding `[tool.ppy.llvm] prover`; see [Where a solver fits](internals/solver.md).
+Everything after `--` reaches the program as `sys.argv[1:]`.
 
-The first `ppy run` of a program is a build into the cache followed by the
-launcher; the second is the launcher alone. Before importing the compiler,
-`ppy run` names the artifact by everything that could change it — the
-compiler's version and build, the interpreter, the configuration and flags,
-every source under the project root, the installed packages — and when a
-directory by that name holds a manifest, `ppy_runtime` runs it the way a
-built launcher would: no analysis, no LLVM, nothing the compiler imports.
-An edit anywhere in the project is a different name and a fresh build,
-whose per-module caches make it cheap. Three kinds of program stay on the
-in-process path every time, because the launcher cannot serve them: one
-that specializes at runtime (`@ppy.jit`, `@ppy.specialize`), one with a
-fused NumPy kernel, and one that imports JAX; each leaves a `needs-jit`
-note in its directory so the next run knows without analyzing. A program
-that imports torch is cached like any other: its ATen regions are compiled
-into the artifact and the launcher loads them from there.
+`ppy run` keeps Python-integer semantics by default, as `ppy build` does.
+Its options:
 
-## `ppy convert` — strict `.py` to `.ppy`
+| option | effect |
+|---|---|
+| `--unsafe` | drop the overflow guards on data arithmetic (64-bit wrap); bounds checks stay |
+| `--safeguards {hoisted,inline,off}` | name the guard mode outright |
+| `--prover {off,z3}` | ask the solver to prove overflow guards away where the analysis allows it; overrides `[tool.ppy.llvm] prover`. See [Where a solver fits](internals/solver.md) |
+| `--prebuilt MANIFEST` | run a built artifact (see [The launcher](#the-launcher)) |
+| `--sanitize KINDS` | see [Sanitizers](#sanitizers-sanitize) |
+| `--profile`, `--profile-out FILE`, `--pgo FILE` | see [Profile-guided optimization](#profile-guided-optimization-profile-pgo) |
+
+### How the run cache works
+
+The first `ppy run` of a program builds into the cache and then starts the
+launcher. The second run is the launcher alone.
+
+Before importing the compiler, `ppy run` names the artifact by everything
+that could change it:
+
+- the compiler's version and build
+- the interpreter
+- the configuration and flags
+- every source under the project root
+- the installed packages
+
+When a directory by that name holds a manifest, `ppy_runtime` runs it the
+way a built launcher would: no analysis, no LLVM, nothing the compiler
+imports. An edit anywhere in the project gives a different name and a
+fresh build. The per-module caches make that build cheap.
+
+Three kinds of program stay on the in-process path every time, because the
+launcher cannot serve them:
+
+- one that specializes at runtime (`@ppy.jit`, `@ppy.specialize`)
+- one with a fused NumPy kernel
+- one that imports JAX
+
+Each of these leaves a `needs-jit` note in its directory, so the next run
+knows without analyzing. A program that imports torch is cached like any
+other: its ATen regions are compiled into the artifact and the launcher
+loads them from there.
+
+## `ppy convert`
+
+Convert strict `.py` to `.ppy`.
 
 ```bash
 ppy convert PATH [--in-place] [--force] [--dry-run] [--format]
                  [--promote-buffers] [--hoist-classes {safe,aggressive,off}]
 ```
-
-Strict staticization: the input is expected to already be reasonably static,
-and the output must be valid strict PPY. After planning the annotations, the
-converter re-analyzes its own output in strict mode; whatever `ppy check`
-would reject tomorrow — a dynamic feature without its `ppy.dynamic` boundary,
-a parameter no annotation reaches, an unvouched decorator holding one back —
-`ppy convert` refuses to produce today, with the checker's own explanation of
-why and a pointer to `ppy migrate`.
-
-`PATH` is a file or a directory; a directory is analyzed as one call graph, so
-a function's types can come from call sites in other files.
 
 | option | effect |
 |---|---|
@@ -74,56 +90,93 @@ a function's types can come from call sites in other files.
 | `--promote-buffers` | declare read-only numeric list parameters as `Buffer[T]` and rewrite the values feeding them into `array.array` |
 | `--hoist-classes {safe,aggressive,off}` | which classes may move above their uses; `safe` (default) moves only provably inert definitions |
 
-There is deliberately no `--no-strict` here: a convert that can be asked not
-to be strict is two pipelines wearing one name. The permissive pipeline is
-`ppy migrate`.
+`PATH` is a file or a directory. A directory is analyzed as one call graph,
+so a function's types can come from call sites in other files.
 
-Conversion is atomic: an error anywhere means no file is written anywhere, so
-`--in-place` can never leave a tree half `.py` and half `.ppy`.
+### Strictness
 
-Without `--in-place` both `foo.py` and `foo.ppy` are left on disk, which a
-project may not contain — the module would be ambiguous — so the converter
-warns and `ppy check` then refuses.
+This is strict staticization. The input is expected to already be
+reasonably static, and the output must be valid strict PPy.
 
-In a converted module `import ppy` is placed before any sibling import, because
-that import is what installs the loader those modules need.
+After planning the annotations, the converter re-analyzes its own output in
+strict mode. It refuses to produce anything that `ppy check` would reject
+later, for example:
 
-## `ppy migrate` — permissive Python to PPY
+- a dynamic feature without its `ppy.dynamic` boundary
+- a parameter no annotation reaches
+- an unvouched decorator holding one back
+
+The refusal comes with the checker's own explanation of why and a pointer
+to `ppy migrate`.
+
+`ppy convert` has no `--no-strict` option on purpose. A convert that can be
+asked not to be strict would be two pipelines under one name. The
+permissive pipeline is `ppy migrate`.
+
+### Output files
+
+Conversion is atomic. An error anywhere means no file is written anywhere,
+so `--in-place` can never leave a tree half `.py` and half `.ppy`.
+
+Without `--in-place`, both `foo.py` and `foo.ppy` stay on disk. A project
+may not contain both, because the module would be ambiguous, so the
+converter warns and `ppy check` then refuses.
+
+In a converted module, `import ppy` is placed before any sibling import,
+because that import installs the loader those modules need.
+
+## `ppy migrate`
+
+Migrate permissive Python to PPy.
 
 ```bash
 ppy migrate PATH [--in-place] [--force] [--dry-run] [--diff] [--report FILE]
 ```
 
-The migration tool for normal existing Python. It shares every flag and every
-guarantee of `ppy convert` — deterministic output, atomic failure, one call
-graph per directory — but it writes work-in-progress code on purpose: dynamic
-features convert faithfully with an advisory (`E1504`) instead of an error,
-functions whose annotations could not be written stay untouched, and `ppy
-check` is the command that later insists on the remaining boundaries. The
-natural workflow is
+`ppy migrate` is the migration tool for ordinary existing Python. It shares
+the flags and guarantees of `ppy convert`: deterministic output, atomic
+failure, one call graph per directory. Options it adds:
+
+| option | effect |
+|---|---|
+| `--diff` | print a unified diff of what migration would write, and write nothing. The right first command on a project you have not migrated before |
+| `--report FILE` | write the full accounting as JSON. The summary block prints either way |
+
+Unlike `convert`, it writes work-in-progress code on purpose:
+
+- dynamic features convert faithfully with an advisory (`E1504`) instead of
+  an error
+- functions whose annotations could not be written stay untouched
+- `ppy check` is the command that later insists on the remaining boundaries
+
+The usual workflow:
 
 ```bash
 ppy migrate project/ --in-place   # rewrite what can be rewritten
 ppy check project/                # see what manual migration remains
 ```
 
-and iterating on the check findings until the project is strict PPY. On a
-real codebase, start with the kernels rather than the repository —
-[Migrating a real project](internals/migrating.md) says how to pick them and how to read what
-comes back.
+Then iterate on the check findings until the project is strict PPy. On a
+real codebase, start with the kernels rather than the whole repository.
+[Migrating a real project](internals/migrating.md) says how to pick them
+and how to read what comes back.
+
+### Rewrite passes
 
 Before staticizing, migration runs its rewrite passes
-(`ppy_compiler/migration/`), each of which proves its rewrite equivalent
-before making it:
+(`ppy_compiler/migration/`). Each pass proves its rewrite equivalent before
+making it.
 
 | pass | rewrite |
 |---|---|
-| `literal-attributes` | `setattr(o, "name", v)` → `o.name = v`; two-argument `getattr` → `o.name`; `delattr` → `del o.name` — constant, identifier-shaped names only, and only when the builtin still means the builtin |
+| `literal-attributes` | `setattr(o, "name", v)` → `o.name = v`; two-argument `getattr` → `o.name`; `delattr` → `del o.name`. Constant, identifier-shaped names only, and only when the builtin still means the builtin |
 | `static-imports` | `m = importlib.import_module("pkg.mod")` → `import pkg.mod as m`, under any spelling the lexical bindings resolve to importlib's importer (`il.import_module`, a `from importlib import import_module as imp` alias); an import that fed only rewritten calls is removed with them |
 | `module-namespace-writes` | `globals()["NAME"] = value` in the module body → `NAME = value` (function scope differs, and stays) |
 
-Afterwards the strict checker runs over the result once more — not to fail
-the migration, but to classify what remains:
+### Classification of what remains
+
+Afterwards the strict checker runs over the result once more. It does not
+fail the migration. It classifies what remains:
 
 | classification | meaning |
 |---|---|
@@ -133,34 +186,35 @@ the migration, but to classify what remains:
 | `UNSUPPORTED` | `eval`/`exec`-class constructs no rewrite recovers |
 | `OPTIMIZATION_OPPORTUNITY` | already valid, and one change away from a faster lowering |
 
-After writing, migration re-analyzes its own final output in strict mode --
-the same pass `ppy convert` gates on -- and classifies what the strict
-language still rejects. A strict failure is not a migration failure: the
+After writing, migration re-analyzes its own final output in strict mode
+(the same pass `ppy convert` gates on) and classifies what the strict
+language still rejects. A strict failure is not a migration failure. The
 files land either way, and the report carries the verdict as `strict_ready`
-and `strict_errors`, so
+and `strict_errors`. So this command alone gives an accurate account of how
+far the migration got:
 
 ```bash
 ppy migrate project/ --report migration.json
 ```
 
-is by itself an accurate account of how far the migration got.
+## `ppy check`
 
-`--report FILE` writes the full accounting as JSON; the summary block prints
-either way. `--diff` prints a unified diff of what migration would write and
-writes nothing, which is the right first command on a project you have not
-migrated before.
-
-## `ppy check` — static validation
+Static validation.
 
 ```bash
 ppy check [PATH] [--remarks]
 ```
 
-Types, effects, purity and native contracts, dynamic-feature policy. Exits
-non-zero on any error. `--remarks` also prints which functions lowered natively
-and which stayed boxed, with the reason.
+Checks types, effects, purity and native contracts, and the
+dynamic-feature policy. Exits non-zero on any error.
 
-## `ppy build` — compile without running
+| option | effect |
+|---|---|
+| `--remarks` | also print which functions lowered natively and which stayed boxed, with the reason |
+
+## `ppy build`
+
+Compile without running.
 
 ```bash
 ppy build TARGET [--unsafe] [--host-cpu] [--standalone]
@@ -172,42 +226,78 @@ ppy build --warm TARGET
 ppy build foo.ppyir                  # from the IR alone; see `ppy emit`
 ```
 
-`--backend` is `llvm` (the default), `python`, or the name of an installed
-backend ([Backends](internals/backends.md)); `ppy doctor` lists them.
-`--backend llvm` writes objects, `libppy_<project>.so`,
-`ppy-bindings.json`, a launcher, and -- when a function is
-`@ppy.native.export`ed -- a C header declaring the public symbols. A build
-keeps Python's integers bit-for-bit, exactly as `ppy run` does: overflow is
-guarded and falls back to arbitrary precision. `--unsafe` is the same flag
-it is on `run` -- data arithmetic wraps at 64 bits like every native
-compiler's output, while bounds checks stay -- and the launcher always runs
-with exactly the mode it was built with. It is a native executable that embeds the
-interpreter and is `ppy run` in a compiled coat: it enters the same CLI, the
-same pipeline, and the same guarded bindings, and only takes its machine code
-from the library built next to it instead of a JIT (`ppy run --prebuilt
-MANIFEST` is the spelled-out form, and takes the same runtime-only fast
-path — no analysis, manifest validation only). A manifest that names a library which has
-gone missing is an error, never a silent fall back to interpretation; a
-program with nothing native simply binds nothing, like `ppy run` would.
-`--host-cpu` compiles the object code for the machine doing the build
-rather than the portable baseline: faster where the code vectorizes (about
-a third on a matmul kernel), and the artifact then requires a CPU with the same
-instruction set, so it is off by default. `-o` puts the artifacts somewhere
-other than the cache. With the JAX plugin
-enabled and permitted, staged functions are exported here too.
+| option | effect |
+|---|---|
+| `--backend NAME` | `llvm` (the default), `python`, or the name of an installed backend ([Backends](internals/backends.md)); `ppy doctor` lists them. See [`--backend NAME`](#-backend-name) |
+| `-o DIR` | put the artifacts somewhere other than the cache |
+| `--unsafe` | the same flag as on `run`: data arithmetic wraps at 64 bits, bounds checks stay |
+| `--host-cpu` | compile for the build machine instead of the portable baseline |
+| `--standalone` | a fully native executable with no CPython inside. See [`--standalone`](#-standalone) |
+| `--target TRIPLE` | compile for another machine |
+| `--python-extension` | write one importable module |
+| `--library` | lay the exports out for a C consumer |
+| `--sanitize KINDS` | see [Sanitizers](#sanitizers-sanitize) |
+| `--pgo FILE` | see [Profile-guided optimization](#profile-guided-optimization-profile-pgo) |
+| `--report-opt`, `--report-opt-json FILE` | see [Optimization report](#optimization-report-report-opt) |
+| `--warm` | build ahead of time what `ppy run` and `import ppy` build on first use. See [`--warm`](#-warm) |
 
-The artifact is complete: the manifest carries the full native ABI and a
-program section, `generated/` holds the optimized Python the build wrote,
-and the compiled `METH_FASTCALL` boundary wrapper ships alongside the
-library — a launched artifact crosses the same fast boundary a JIT run
-does, not a ctypes one. The launcher loads `ppy_runtime`, binds, and executes — it does not
-discover a project, parse, analyze, or touch LLVM, and it keeps working with
-`ppy_compiler` uninstalled. What it does pay is starting the embedded
-interpreter and importing the runtime — about 35 ms before the program
-begins, against about 0.7 s for a cold `ppy run` that compiles first (a warm
-`ppy run` takes this same launcher path, from the cache).
-`examples/bench_startup.py` measures the categories separately, and
-`--standalone` below removes that 35 ms too.
+### What a build writes
+
+`--backend llvm` writes:
+
+- objects
+- `libppy_<project>.so`
+- `ppy-bindings.json`
+- a launcher
+- a C header declaring the public symbols, when a function is
+  `@ppy.native.export`ed
+
+A build keeps Python's integers bit-for-bit, the same as `ppy run`:
+overflow is guarded and falls back to arbitrary precision. `--unsafe` is
+the same flag it is on `run`. Data arithmetic wraps at 64 bits like other
+native compilers' output, while bounds checks stay. The launcher always
+runs with the mode it was built with.
+
+`--host-cpu` compiles the object code for the machine doing the build
+rather than the portable baseline. It is faster where the code vectorizes
+(about a third on a matmul kernel). The artifact then requires a CPU with
+the same instruction set, so the flag is off by default.
+
+With the JAX plugin enabled and permitted, staged functions are exported
+here too.
+
+The artifact is complete:
+
+- the manifest carries the full native ABI and a program section
+- `generated/` holds the optimized Python the build wrote
+- the compiled `METH_FASTCALL` boundary wrapper ships alongside the
+  library, so a launched artifact crosses the same fast boundary a JIT run
+  does, not a ctypes one
+
+### The launcher
+
+The launcher is a native executable that embeds the interpreter. It is
+`ppy run` in a compiled coat: it enters the same CLI, the same pipeline,
+and the same guarded bindings. The only difference is that it takes its
+machine code from the library built next to it instead of from a JIT.
+
+`ppy run --prebuilt MANIFEST` is the spelled-out form. It takes the same
+runtime-only fast path: no analysis, manifest validation only.
+
+The launcher loads `ppy_runtime`, binds, and executes. It does not discover
+a project, parse, analyze, or touch LLVM, and it keeps working with
+`ppy_compiler` uninstalled.
+
+- A manifest that names a library which has gone missing is an error. It
+  never silently falls back to interpretation.
+- A program with nothing native binds nothing, as `ppy run` would.
+
+What the launcher does pay for is starting the embedded interpreter and
+importing the runtime: about 35 ms before the program begins. A cold
+`ppy run` that compiles first takes about 0.7 s. A warm `ppy run` takes
+this same launcher path, from the cache. `examples/bench_startup.py`
+measures the categories separately, and `--standalone` (below) removes the
+35 ms too.
 
 ### `--backend NAME`
 
@@ -215,39 +305,55 @@ begins, against about 0.7 s for a cold `ppy run` that compiles first (a warm
 ppy build foo.ppy --backend toy -o out/
 ```
 
-An installed backend is loaded with its `[tool.ppy.backends.NAME]` table
-and asked for its toolchain; the modules go through the shared passes and
-the backend's own passes and validation; then its `build` writes into
-`-o` (or `<cache>/backends/NAME`) and what it wrote is listed, with any
-notes the backend adds. A `.ppyir` target builds through the chosen
-backend too: the file is canonical IR, so the backend's passes,
-validation, and build run over it without a frontend above them.
+For an installed backend, the build goes through these steps:
+
+1. The backend is loaded with its `[tool.ppy.backends.NAME]` table and
+   asked for its toolchain.
+2. The modules go through the shared passes, then the backend's own passes
+   and validation.
+3. Its `build` writes into `-o` (or `<cache>/backends/NAME`).
+4. What it wrote is listed, with any notes the backend adds.
+
+A `.ppyir` target builds through the chosen backend too. The file is
+canonical IR, so the backend's passes, validation, and build run over it
+without a frontend above them.
 
 `-O` reaches every backend, and `-o` names the directory a backend writes
-its artifacts into. The LLVM road's options are the LLVM road's, and every
-backend but `llvm` -- `python` and an installed one alike -- refuses them
-(`E1002`) rather than accepting and ignoring one: `--unsafe`,
-`--sanitize`, `--pgo`, `--prover`,
-`--host-cpu`, `--standalone`, `--python-extension`, `--library`,
-`--report-opt`, `--report-opt-json`, and `--target` -- what an installed
-backend builds for is `[tool.ppy.backends.NAME] target`, which reaches it
-through the backend context and the artifact's identity, where a compiler
-triple would not. `--warm` builds the artifact `ppy run` and `import ppy`
-take, which is the LLVM backend's, and is refused for any other backend.
+its artifacts into. The LLVM road's options belong to the LLVM road. Every
+backend except `llvm` (`python` and installed ones alike) refuses them with
+`E1002` rather than accepting and ignoring them:
 
-The diagnostics are `ppy emit`'s: `E1903` for a backend that cannot be
-used, `E1801` for a missing toolchain, `E1802` for IR it refuses, `E1904`
-for a pass of its that broke the IR. A builtin backend that only emits
-(`--backend c`) is refused with `E1802`.
+- `--unsafe`, `--sanitize`, `--pgo`, `--prover`
+- `--host-cpu`, `--standalone`, `--python-extension`, `--library`
+- `--report-opt`, `--report-opt-json`
+- `--target`. What an installed backend builds for is
+  `[tool.ppy.backends.NAME] target`, which reaches it through the backend
+  context and the artifact's identity, where a compiler triple would not.
+
+`--warm` builds the artifact that `ppy run` and `import ppy` take, which is
+the LLVM backend's, so it is refused for any other backend.
+
+The diagnostics are the same as `ppy emit`'s:
+
+| code | cause |
+|---|---|
+| `E1903` | a backend that cannot be used |
+| `E1801` | a missing toolchain |
+| `E1802` | IR the backend refuses; also a builtin backend that only emits (`--backend c`) |
+| `E1904` | a pass of the backend's that broke the IR |
 
 `--backend python` builds the same optimized Python that `ppy FILE.ppy`
-runs and publishes it to the project cache, where `import ppy` and `ppy
-run` read it. It takes `-O` and the analysis flags; it refuses the LLVM
-road's options above, `--warm` (that artifact is the LLVM backend's), a
-`.ppyir` target (it reads PPY source, not canonical IR), and `-o` (its
-modules go to the cache, which `[tool.ppy] cache-dir` and `PPY_CACHE_DIR`
-move). Whichever backend is named, no other backend's road runs: every
-option is either understood by the backend chosen or refused by name.
+runs and publishes it to the project cache, where `import ppy` and
+`ppy run` read it. It takes `-O` and the analysis flags. It refuses:
+
+- the LLVM road's options above
+- `--warm` (that artifact is the LLVM backend's)
+- a `.ppyir` target (it reads PPy source, not canonical IR)
+- `-o` (its modules go to the cache, which `[tool.ppy] cache-dir` and
+  `PPY_CACHE_DIR` move)
+
+Whichever backend you name, no other backend's road runs. Each option is
+either understood by the chosen backend or refused by name.
 
 ### `--target`, `--python-extension`, `--library`
 
@@ -257,32 +363,41 @@ ppy build foo.ppy --python-extension -o dist     # dist/foo.so: `import foo`
 ppy build lib.ppy --library -o dist              # dist/lib, dist/include, a .pc
 ```
 
-`--target TRIPLE` (or `[tool.ppy.llvm] target`) compiles for another
-machine: the objects carry that triple and data layout, the library is
-linked with a toolchain for it -- `<triple>-gcc` on the path, or clang
-with `--target` -- and the header is the same. The parts only the running
-interpreter can build, the CPython boundary wrapper and the launcher, are
-left out with a note; the manifest names its target and a runtime on a
-different machine refuses it rather than loading it. Everything the
-compiler knows about a machine sits in one `TargetInfo` (triple, CPU and
-features, pointer width, endianness, ABI, OS, object format, data
-layout); there is no `sys.platform` to trip over elsewhere. `ppy doctor`
-prints the host's.
+**`--target TRIPLE`** (or `[tool.ppy.llvm] target`) compiles for another
+machine. The objects carry that triple and data layout. The library is
+linked with a toolchain for it: `<triple>-gcc` on the path, or clang with
+`--target`. The header is the same.
 
-`--python-extension` writes one importable module -- `foo.so`, `foo.pyd`
-on Windows -- holding the module's native code, the generated
-`METH_FASTCALL` boundary, and the module's own optimized Python. `import
-foo` runs that Python, so every class, constant, and helper the module
-defines exists, and each native-eligible function is bound to its
-compiled code as it is defined, keeping its Python definition as the
+The parts only the running interpreter can build, the CPython boundary
+wrapper and the launcher, are left out with a note. The manifest names its
+target, and a runtime on a different machine refuses it rather than
+loading it.
+
+Everything the compiler knows about a machine sits in one `TargetInfo`:
+triple, CPU and features, pointer width, endianness, ABI, OS, object
+format, data layout. There is no `sys.platform` to trip over elsewhere.
+`ppy doctor` prints the host's.
+
+**`--python-extension`** writes one importable module (`foo.so`, or
+`foo.pyd` on Windows). It holds the module's native code, the generated
+`METH_FASTCALL` boundary, and the module's own optimized Python.
+
+`import foo` runs that Python, so each class, constant, and helper the
+module defines exists. Each native-eligible function is bound to its
+compiled code as it is defined, and keeps its Python definition as the
 fallback a refused guard runs. Nothing is bound by name at runtime and no
-manifest is read. The module still imports `ppy` for its markers, like
-the source did; it is built against the interpreter that builds it.
+manifest is read. The module still imports `ppy` for its markers, like the
+source did. It is built against the interpreter that builds it.
 
-`--library` lays the exports out for a C consumer: `lib/` with the shared
-library, `include/` with the header, `lib/pkgconfig/<name>.pc`, and the
-manifest describing the ABI. A module with no `@ppy.native.export` has
-nothing to package and says so (`E1805`).
+**`--library`** lays the exports out for a C consumer:
+
+- `lib/` with the shared library
+- `include/` with the header
+- `lib/pkgconfig/<name>.pc`
+- the manifest describing the ABI
+
+A module with no `@ppy.native.export` has nothing to package and says so
+(`E1805`).
 
 ### `--warm`
 
@@ -291,19 +406,25 @@ ppy build --warm train/kernels/        # every .ppy under it
 ppy build --warm train/reward.ppy
 ```
 
-Builds ahead of time exactly what `ppy run FILE` and `import ppy` build on
-their first use -- the artifact in the project cache, under the key an
-import of that module will look for -- and stops. It takes no flags that
-would change the artifact (`--unsafe`, `--host-cpu`, `--prover`, `-o`, and
-the rest are refused): an import takes none either, so the project
-configuration is the only thing that names the build, and what a flag built
-nothing would find. Its place is the step before a launch that starts many
-processes at once. Without it, every rank of a `torchrun` imports the
-kernel, finds no build, and builds one; the builds are identical and the
-first to finish is the one kept, so the result is right, but each rank
-paid for it. With it, every rank finds the build. A module that does not
-check clean is an error here (exit 1) rather than a note on each rank's
-stderr, and a module that needs the in-process JIT is reported and skipped.
+`--warm` builds ahead of time what `ppy run FILE` and `import ppy` build on
+their first use, and stops. The artifact goes into the project cache, under
+the key an import of that module will look for.
+
+It takes no flags that would change the artifact (`--unsafe`, `--host-cpu`,
+`--prover`, `-o`, and the rest are refused). An import takes none either,
+so the project configuration is the only thing that names the build. What a
+flag built, nothing would find.
+
+Use it before a launch that starts many processes at once. Without it,
+each rank of a `torchrun` imports the kernel, finds no build, and builds
+one. The builds are identical and the first to finish is kept, so the
+result is right, but each rank paid for it. With `--warm`, each rank finds
+the build.
+
+- A module that does not check clean is an error here (exit 1), rather than
+  a note on each rank's stderr.
+- A module that needs the in-process JIT is reported and skipped.
+
 The key covers every source under the project root, so run it after the
 last edit, not before.
 
@@ -313,35 +434,50 @@ last edit, not before.
 ppy build --standalone app.ppy
 ```
 
-Links a fully native executable with **no CPython inside** — `ldd` shows
-libc and nothing else, and startup is C startup (~a few ms). It asks less of
-the machine than the hybrid build does: a C compiler is enough, because
-there are no CPython headers to include and no libpython to embed. The reachable
-graph from `main` must be entirely native: functions the hybrid path could
-lower, plus `print` of integers, booleans, and string literals through C
-shims (floats wait until native formatting can reproduce Python's
-shortest-round-trip repr exactly), plus the memory the program makes for
-itself — `ppy.buffer[int](n)` is a zeroed native allocation here and
-`ppy.scan[Buffer[int]](n)` is that allocation with the input read straight
-into it, because there is no `array.array` to build. Anything else is `E1803` with the path
-that reaches it, never a workaround. There is no Python to fall back to, so
-a failed guard ends the process with a message on standard error instead of
-retrying in Python -- a standalone build keeps the guards, like every
-build, and never claims Python's integers it cannot provide; `--unsafe`
-asks for wrap semantics outright, with almost no guards left to fail.
-`ppy.input[int]()` and `ppy.scan[int]()` are the scanner itself, the same
-C the runtime's reader compiles, and where Python would raise -- the end
-of the input, a token that is not an integer -- the binary says so on
-standard error and stops.
+`--standalone` links a fully native executable with no CPython inside.
+`ldd` shows libc and nothing else, and startup is C startup (~a few ms).
+
+It asks less of the machine than the hybrid build does. A C compiler is
+enough, because there are no CPython headers to include and no libpython to
+embed.
+
+The reachable graph from `main` must be entirely native. That means:
+
+- functions the hybrid path could lower
+- `print` of integers, booleans, and string literals through C shims.
+  Floats wait until native formatting can reproduce Python's
+  shortest-round-trip repr exactly
+- the memory the program makes for itself. `ppy.buffer[int](n)` is a zeroed
+  native allocation here, and `ppy.scan[Buffer[int]](n)` is that allocation
+  with the input read straight into it, because there is no `array.array`
+  to build
+
+Anything else is `E1803` with the path that reaches it. There is no
+workaround.
+
+There is no Python to fall back to. A failed guard ends the process with a
+message on standard error instead of retrying in Python. A standalone build
+keeps the guards, like other builds, and never claims Python's integers it
+cannot provide. `--unsafe` asks for wrap semantics outright, with almost no
+guards left to fail.
+
+`ppy.input` and `ppy.scan` of numbers, tuples of numbers, and number
+buffers are the scanner itself, the same C the runtime's reader compiles.
+Where Python would raise (the end of the input, a token that is not a
+number, a value outside its declared width), the binary names the same
+exception on standard error and stops. [Reading input](guide/input.md#native-code-and-standalone-binaries)
+lists what reads natively.
 
 Five of the six problems in `examples/15_algorithms` build this way once
 their buffers come from `ppy.buffer` rather than `array.array`, and four of
 those beat their C reference. Substring search is the one that cannot: its
-text arrives as a token, and `ppy.read_token` has no standalone lowering yet.
-`examples/15_algorithms/standalone/` holds the five, timed against every
-other path by the benchmark beside them.
+text arrives as a token, and `ppy.read_token` has no standalone lowering
+yet. `examples/15_algorithms/standalone/` holds the five, timed against the
+other paths by the benchmark beside them.
 
-## `ppy emit` — a compiler stage as text
+## `ppy emit`
+
+Print a compiler stage as text.
 
 ```bash
 ppy emit ir foo.ppy                  # the canonical IR, to stdout
@@ -366,117 +502,202 @@ ppy emit stablehlo foo.ppy           # the @ppy.xla.jit functions as StableHLO f
 ppy emit toy foo.ppy                 # a format an installed backend registers; ppy doctor lists them
 ```
 
-One rule for every kind: a single file with no `-o` prints to standard
-output, `-o FILE` writes that file, and a directory target writes one file
-per module into the directory `-o` names (and refuses to guess without
-it). `ir` is the canonical IR after the shared passes ([The IR](internals/ir.md));
-`llvm-ir` is the optimized LLVM IR. The output is deterministic for one
-input and configuration. Any other kind is a format an installed backend
-registers ([Backends](internals/backends.md)): the backend is loaded, its
-toolchain checked, the modules run through the shared passes and the
-backend's own, validated by it, and written under the same rule -- text
-or, for a format the backend declares binary, bytes. A format may be
-written per module (the default) or per program. A per-module format
-writes one artifact for each: one module goes to standard output or `-o
-FILE`, and a target that resolves to several needs `-o DIR`, since two
-artifacts are not one file and are never concatenated into one. A
-per-program format is one artifact for every module together. `--header-only`,
-`--standalone`, and `--format` belong to the builtin kinds. A format no
-backend emits, a format two backends claim, or a backend that cannot be
-loaded is `E1903` with the reason and the formats there are; a backend
-whose toolchain is missing is `E1801`; IR the backend refuses is `E1802`,
-with what it cannot take and where; a backend pass that breaks the IR is
-`E1904`.
+| option | effect |
+|---|---|
+| `-o FILE` / `-o DIR` | write to a file, or one file per module into a directory |
+| `--header-only` | (`c`, `cpp`) every function `static inline` under an include guard |
+| `--standalone` | (`c`, `cpp`) the whole program from `main`, ending in a C `main` |
+| `--format` | (`c`, `cpp`, `cuda`, `hip`, `header`) run the text through `clang-format` |
+| `--unsafe` | (`c`, `cpp`) the build command's safeguard configuration. See [Unsafe standalone source](#unsafe-standalone-source) |
+| `--int-width {32,64}` | integer width for unsafe standalone C/C++ source. See [`--int-width 32`](#-int-width-32) |
 
-`c` and `cpp` are the C backend's reading of the same IR: a translation
-unit per module in the internal ABI the runtime binds (atoms in, result
-slots out, a status back), every `@native.export` behind its public C
-signature, the overflow helpers and runtime shims the unit actually uses,
-and nothing else -- so it compiles on its own with any C11 or C++17
-compiler, and answers exactly what the LLVM road answers, fallbacks
-included. `--header-only` makes every function `static inline` under an
-include guard, for a header a program includes from any number of
-translation units; a feature that needs state the process owns (reading
-standard input) is refused there with `E1804` and its name.
-`--standalone` takes a program the way `ppy build --standalone` does --
-`main` and everything it reaches, all of it native -- and ends the unit in
-a C `main`, so the text is a whole program. `header` is the declarations
-of a module's exports, the same text `ppy build` writes beside a library.
-The C is written to be read: loops are `while`, branches are `if`/`else`,
-a local keeps its Python name, and a value read once is written where it
-is read. `--format` (for `c`, `cpp`, `cuda`, `hip`, and `header`) runs the
-text through `clang-format`, with the project's `.clang-format` where it
-has one and LLVM style at four spaces and a hundred columns otherwise; a
+`--header-only`, `--standalone`, and `--format` belong to the builtin
+kinds.
+
+### Where the output goes
+
+One rule applies to every kind:
+
+- a single file with no `-o` prints to standard output
+- `-o FILE` writes that file
+- a directory target writes one file per module into the directory `-o`
+  names, and refuses to guess without it
+
+`ir` is the canonical IR after the shared passes ([The IR](internals/ir.md)).
+`llvm-ir` is the optimized LLVM IR. The output is deterministic for one
+input and configuration.
+
+### Formats from installed backends
+
+Any other kind is a format an installed backend registers
+([Backends](internals/backends.md)). The backend is loaded and its
+toolchain checked. The modules run through the shared passes and the
+backend's own, are validated by it, and are written under the same rule:
+text, or bytes for a format the backend declares binary.
+
+A format is written per module (the default) or per program:
+
+- A per-module format writes one artifact for each module. One module goes
+  to standard output or `-o FILE`. A target that resolves to several
+  modules needs `-o DIR`, since two artifacts are not one file and are
+  never concatenated into one.
+- A per-program format is one artifact for all the modules together.
+
+Errors:
+
+| code | cause |
+|---|---|
+| `E1903` | a format no backend emits, a format two backends claim, or a backend that cannot be loaded; with the reason and the formats there are |
+| `E1801` | a backend whose toolchain is missing |
+| `E1802` | IR the backend refuses, with what it cannot take and where |
+| `E1904` | a backend pass that breaks the IR |
+
+### C and C++
+
+`c` and `cpp` are the C backend's reading of the same IR. Each module
+becomes a translation unit in the internal ABI the runtime binds (atoms in,
+result slots out, a status back). The unit contains:
+
+- each `@native.export` behind its public C signature
+- the overflow helpers and runtime shims the unit uses, and nothing else
+
+So it compiles on its own with any C11 or C++17 compiler, and answers what
+the LLVM road answers, fallbacks included.
+
+`--header-only` makes every function `static inline` under an include
+guard, for a header a program includes from any number of translation
+units. A feature that needs state the process owns (reading standard input)
+is refused there with `E1804` and its name.
+
+`--standalone` takes a program the way `ppy build --standalone` does
+(`main` and everything it reaches, all of it native) and ends the unit in a
+C `main`, so the text is a whole program.
+
+`header` is the declarations of a module's exports, the same text
+`ppy build` writes beside a library.
+
+The C is written to be read:
+
+- loops are `while`, branches are `if`/`else`
+- a local keeps its Python name
+- a value read once is written where it is read
+
+`--format` (for `c`, `cpp`, `cuda`, `hip`, and `header`) runs the text
+through `clang-format`. It uses the project's `.clang-format` where there
+is one, and LLVM style at four spaces and a hundred columns otherwise. A
 missing `clang-format` is `E1802`.
 
-`--unsafe` applies only to `emit c` and `emit cpp`, using the build command's
-safeguard configuration. With `--standalone`, it emits readable source with
-direct scalar/void returns, one global `main`, source function names, and
-C++17 module namespaces (nested for packages). C qualifies names only when
-they collide. Project imports are linked after checking that every imported
-module has no executable initialization and every reachable function is native.
+### Unsafe standalone source
 
-Unsafe standalone source selects native C/C++ integer arithmetic in the IR,
-before presentation lowering. Addition, subtraction and multiplication use
-ordinary operators; signed overflow is outside the portable input domain.
-This differs from the guaranteed 64-bit wrap of `build/run --unsafe` and
-non-standalone unsafe emission. Division retains Python floor rounding.
-When integer bounds prove that truncation gives the same answer, division
-and remainder use plain `/` and `%`. The proof follows acyclic branches and
-local assignments, discarding bounds when arithmetic could overflow; loops
-retain the general correction. Expressions keep their required arithmetic
-width without redundant casts. Functions appear before their callers where
-possible, with prototypes for recursion and runtime callbacks. Local
-declarations move to their first write when every use stays in that scope.
-Adjacent canonical print operations fuse within a block into `printf`, with
-byte-exact literals, Python `True`/`False`, and `end`. Explicit
-`print(..., flush=True)` emits `fflush(stdout)` (in C++, `std::fflush(stdout)`);
-omitting `flush` or passing `flush=False` does not emit a flush.
-Integer `ppy.input` and `ppy.scan` use `scanf`: native whitespace/token parsing,
-not Python's line parsing or underscore syntax. Unsafe standalone source assumes
-every integer read succeeds and fits its machine type, and emits a plain
-`scanf(...);` without checking the return value. Malformed input, premature EOF,
-and out-of-range values are outside this mode's input contract; a failed read
-can leave the destination uninitialized.
-Safe standalone emission and builds retain the existing scanner and guards.
-Programs sharing a buffered scanner retain that scanner for all reads.
-The C++ spelling uses `<cstdint>`, `<cinttypes>`, `<cstdio>` and `std::` stdio;
-headers and helpers are included only when needed. Aggregate-returning and
-runtime-managed functions retain their internal ABI when required.
+`--unsafe` applies only to `emit c` and `emit cpp`, using the build
+command's safeguard configuration. With `--standalone`, it emits readable
+source with:
 
-`--int-width 32` selects 32-bit integers for unsafe standalone C/C++ source.
-Signed integers are spelled `int`, unsigned integers `unsigned int`, and
-stdio uses `%d`/`%u`. The generated unit asserts that the target's `int` has
-the required 32-bit range. This changes the IR types **before optimization**,
-including function parameters, return values, local slots, and arithmetic;
-it is not a spelling alias for 64-bit integers. All signed input and
-intermediate results must fit `[-2147483648, 2147483647]`. Out-of-range
-integer constants are rejected, and signed overflow follows native C/C++
-semantics. Python floor rounding is still preserved for negative operands.
+- direct scalar/void returns
+- one global `main`
+- source function names
+- C++17 module namespaces (nested for packages). C qualifies names only
+  when they collide.
 
-The 32-bit model currently accepts scalar programs with integer/bool output,
-literal strings, and scalar integer input. Buffers, aggregates, foreign
-functions, and runtime-managed operations have fixed ABIs and are rejected
-with a diagnostic directing you to `--int-width 64`. Fixed-width `i64`/`u64`
-values in the selected scalar program are narrowed too. The default remains
-64 bits; `--int-width 64` selects it explicitly. The flag requires
-`--standalone` and safeguards off (`--unsafe` or project configuration), and
-does not change `run`, `build`, or ordinary module emission.
+Project imports are linked after checking that every imported module has no
+executable initialization and every reachable function is native.
 
-`.ppyir` is the IR's on-disk form -- public from 0.2.0 at schema 1 -- and
-`ppy build foo.ppyir` builds one without the Python that produced it: the file
-carries its schema and dialect versions, every function's ABI, and its
-source locations, so the build is the passes, the LLVM backend, an object,
-a library, and a manifest whose entries the runtime binds. A file from
+**Arithmetic.** Unsafe standalone source selects native C/C++ integer
+arithmetic in the IR, before presentation lowering.
+
+- Addition, subtraction and multiplication use ordinary operators. Signed
+  overflow is outside the portable input domain. This differs from the
+  guaranteed 64-bit wrap of `build/run --unsafe` and non-standalone unsafe
+  emission.
+- Division retains Python floor rounding. When integer bounds prove that
+  truncation gives the same answer, division and remainder use plain `/`
+  and `%`. The proof follows acyclic branches and local assignments,
+  discarding bounds when arithmetic could overflow. Loops retain the
+  general correction.
+- Expressions keep their required arithmetic width without redundant
+  casts.
+
+**Layout.** Functions appear before their callers where possible, with
+prototypes for recursion and runtime callbacks. Local declarations move to
+their first write when every use stays in that scope.
+
+**Output.** Adjacent canonical print operations fuse within a block into
+`printf`, with byte-exact literals, Python `True`/`False`, and `end`.
+Explicit `print(..., flush=True)` emits `fflush(stdout)` (in C++,
+`std::fflush(stdout)`). Omitting `flush` or passing `flush=False` does not
+emit a flush.
+
+**Input.** Integer `ppy.input` and `ppy.scan` use `scanf`: native
+whitespace/token parsing, not Python's line parsing or underscore syntax.
+Unsafe standalone source assumes every integer read succeeds and fits its
+machine type, and emits a plain `scanf(...);` without checking the return
+value.
+
+!!! warning "Unchecked input"
+    Malformed input, premature EOF, and out-of-range values are outside
+    this mode's input contract. A failed read can leave the destination
+    uninitialized.
+
+Safe standalone emission and builds retain the existing scanner and
+guards. Programs sharing a buffered scanner retain that scanner for all
+reads.
+
+**Headers.** The C++ spelling uses `<cstdint>`, `<cinttypes>`, `<cstdio>`
+and `std::` stdio. Headers and helpers are included only when needed.
+Aggregate-returning and runtime-managed functions retain their internal ABI
+when required.
+
+### `--int-width 32`
+
+`--int-width 32` selects 32-bit integers for unsafe standalone C/C++
+source.
+
+- Signed integers are spelled `int`, unsigned integers `unsigned int`, and
+  stdio uses `%d`/`%u`.
+- The generated unit asserts that the target's `int` has the required
+  32-bit range.
+- This changes the IR types **before optimization**, including function
+  parameters, return values, local slots, and arithmetic. It is not a
+  spelling alias for 64-bit integers.
+- All signed input and intermediate results must fit
+  `[-2147483648, 2147483647]`. Out-of-range integer constants are rejected,
+  and signed overflow follows native C/C++ semantics.
+- Python floor rounding is still preserved for negative operands.
+
+The 32-bit model currently accepts scalar programs with integer/bool
+output, literal strings, and scalar integer input. Buffers, aggregates,
+foreign functions, and runtime-managed operations have fixed ABIs and are
+rejected with a diagnostic directing you to `--int-width 64`. Fixed-width
+`i64`/`u64` values in the selected scalar program are narrowed too.
+
+The default remains 64 bits, and `--int-width 64` selects it explicitly.
+The flag requires `--standalone` and safeguards off (`--unsafe` or project
+configuration). It does not change `run`, `build`, or ordinary module
+emission.
+
+### `.ppyir` files
+
+`.ppyir` is the IR's on-disk form, public from 0.2.0 at schema 1.
+`ppy build foo.ppyir` builds one without the Python that produced it. The
+file carries its schema and dialect versions, each function's ABI, and its
+source locations. The build is the passes, the LLVM backend, an object, a
+library, and a manifest whose entries the runtime binds. A file from
 another schema or a dialect this compiler lacks is refused with the reason.
-A package builds as one program: a call from one module
-into another's native function is a declaration the linker answers with the
-definition, the linked program is optimized as a whole -- what Python never
-binds is internalized, small callees are inlined across the seam, dead
-private code goes -- and one object comes out; `ppy emit linked-ir` shows
-that program.
 
-## `ppy bind` — bindings for foreign code
+A package builds as one program:
+
+- a call from one module into another's native function is a declaration
+  the linker answers with the definition
+- the linked program is optimized as a whole: what Python never binds is
+  internalized, small callees are inlined across the seam, dead private
+  code goes
+- one object comes out
+
+`ppy emit linked-ir` shows that program.
+
+## `ppy bind`
+
+Generate bindings for foreign code.
 
 ```bash
 ppy bind header foo.h                     # the bindings module, to stdout
@@ -484,122 +705,78 @@ ppy bind header foo.h -o foo.ppy          # ... to a file
 ppy bind header foo.h --library foo -I include/
 ```
 
-Clang reads the header -- the real parser, through libclang
-(`ppy-lang[bind]`), never a regular expression -- and the importer walks
-the declarations the header itself makes. A function becomes an
-`@ffi.bind` stub with typed parameters (`int` is `ppy.i32`, `long` the
-target's width, `double` `float`, `const T *` `native.const_ptr[T]`,
-`void *` a byte pointer); a typedef of a scalar an alias; an enum its
-constants and an `int` alias; a struct of scalars a dataclass; a `#define`
-of one number a typed constant. What has no PPY spelling yet -- a
-variadic function, a function pointer, an array or a struct passed by
-value, an opaque struct, a macro that is not one number -- is left out
-and listed by name at the end of the module. The module type-checks under
-`ppy check` and calls the library on every path, ctypes under CPython and
-directly in native code. A header Clang cannot read is refused with its
-line (`E1806`).
+Clang reads the header. This is the real parser, through libclang
+(`ppy-lang[bind]`), not a regular expression. The importer walks the
+declarations the header itself makes:
 
-## `ppy explain` — why it compiled that way
+| C declaration | becomes |
+|---|---|
+| a function | an `@ffi.bind` stub with typed parameters |
+| a typedef of a scalar | an alias |
+| an enum | its constants and an `int` alias |
+| a struct of scalars | a dataclass |
+| a `#define` of one number | a typed constant |
+
+Parameter types map as follows: `int` is `ppy.i32`, `long` the target's
+width, `double` `float`, `const T *` `native.const_ptr[T]`, `void *` a
+byte pointer.
+
+What has no PPy spelling yet is left out and listed by name at the end of
+the module:
+
+- a variadic function
+- a function pointer
+- an array or a struct passed by value
+- an opaque struct
+- a macro that is not one number
+
+The module type-checks under `ppy check` and calls the library on every
+path: ctypes under CPython, and directly in native code. A header Clang
+cannot read is refused with its line (`E1806`).
+
+## `ppy explain`
+
+Explain why a function compiled the way it did.
 
 ```bash
 ppy explain LOCATION
 ```
 
-`LOCATION` is a `FILE:LINE`, a function name or qualname, or a diagnostic code.
-For a function it reports the semantic type, effects, purity, the backend
-decision, the representation chosen for every parameter, and each library
-call's lowering with its guards.
+`LOCATION` is a `FILE:LINE`, a function name or qualname, or a diagnostic
+code. For a function it reports:
 
-## `ppy inspect` — generated artifacts
+- the semantic type, effects, and purity
+- the backend decision
+- the representation chosen for each parameter
+- each library call's lowering, with its guards
+
+## `ppy inspect`
+
+Print generated artifacts.
 
 ```bash
 ppy inspect TARGET [--backend {python,llvm}] [--ir]
 ppy inspect TARGET --stage {analysis,ir,canonical,optimized,tensor,columnar,gpu,stablehlo,llvm}
 ```
 
-The optimized Python by default, including plugin rewrites, so it is what to
-read when a result differs from plain CPython. `--ir` prints what the native
-path compiles: LLVM IR, then the C for the CPython-ABI wrappers, then the C++
-for any ATen region. `--stage` prints the program as one stage of the
-compiler holds it: `analysis` is what the checker knows of every function
-(type, effects, whether it is native, bound, a kernel, a coroutine, marked
-for XLA); `ir` the frontend's module before any pass; `canonical` after
-canonicalization; `tensor` after fusion and before the tensor dialect
-lowers to loops, `columnar` the same point for the modules holding
-columnar operations; `optimized` what a backend receives; `gpu` the device
-code alone; `stablehlo` and `llvm` what those backends write.
+By default it prints the optimized Python, including plugin rewrites. Read
+it when a result differs from plain CPython.
 
-## Sanitizers: `--sanitize`
+| option | effect |
+|---|---|
+| `--ir` | print what the native path compiles: LLVM IR, then the C for the CPython-ABI wrappers, then the C++ for any ATen region |
+| `--stage STAGE` | print the program as one stage of the compiler holds it (below) |
 
-```bash
-ppy run --sanitize bounds,overflow foo.ppy
-ppy build --sanitize pointer,alignment .
-```
-
-A sanitizer instruments the IR with checks the program did not ask for:
-`bounds` checks every buffer index, whether or not a proof or a hoist
-removed the frontend's guard; `overflow` checks every wrapping or proven
-`int` operation; `pointer` checks that a pointer read or written through is
-not null; `alignment` that it is aligned for what it points at. A failed
-check is not a fallback: the function returns a sanitizer status and the
-boundary raises `ppy_runtime.binding.SanitizerFailure` naming the kind and
-the function (a standalone program exits as it does for a guard).
-`[tool.ppy.llvm] sanitize = ["bounds"]` configures the same. `lifetime` and `alias` are
-refused with the reason: stack lifetime is held by the verifier, aliasing
-has no runtime check yet.
-
-## Optimization report: `--report-opt`
-
-`ppy build --report-opt` prints, per module, which functions became native
-and are bound to Python, which stay in Python and why, how many guards a
-proof removed, and every remark the passes left, filed under a stable
-category -- `function inlined`, `tensor ops fused`, `columnar ops fused`,
-`parallel loop emitted`, `GPU kernel emitted`, `StableHLO region emitted`,
-`bounds guard removed`, `overflow guard proven unnecessary`, `allocation
-stack-promoted`, `generic specialization emitted`, `sanitizer checks
-inserted`, `dead code removed` -- and what the build staged for XLA or a
-device. `--report-opt-json FILE` writes the same as JSON, keyed the same
-way, so a tool can count by category across versions. A build guided by a
-profile lists it first: the file, its runs, and every measured function's
-calls, hotness, and argument kinds.
-
-## Profile-guided optimization: `--profile`, `--pgo`
-
-```bash
-ppy run --profile foo.ppy            # runs, then writes foo.ppyprof
-ppy run --profile --profile-out p.ppyprof foo.ppy -- args
-ppy build --pgo foo.ppyprof foo.ppy
-ppy run --pgo foo.ppyprof foo.ppy
-```
-
-A profiling run is a JIT run with counters: every native function counts
-its blocks and the taken edge of every conditional branch, and the boundary
-records what kinds of value each native function was called with -- an
-`int`, an `ndarray[float64;4x3]`, a `DataFrame[a:int64,b:float64;1000
-rows]`, a `list[400]`. When the program ends the counters are read back
-through the engine and the profile is written as JSON: per function, its
-calls, every block's count, every branch's (taken, not taken), the loop
-trip counts these imply, the argument kinds, and which generic it is an
-instance of. A profile already at the path is merged, so several runs --
-or several inputs -- add up; `runs` says how many.
-
-A build with `--pgo` (or `[tool.ppy.llvm] pgo = "foo.ppyprof"`, relative
-to the project root) reads the counts back at the same point of the
-pipeline. A function whose graph still matches what was measured is
-annotated: it is `hot` (at least a twentieth of the most-called function's
-calls, and at least two), `cold` (never called), or neither; every
-conditional branch carries its weights, every loop's back edge its
-average trip count. The inliner inlines a hot callee at four times the
-usual budget, leaves a cold one alone, and leaves alone a call the
-profile never reached; LLVM receives the entry counts and branch weights
-as `!prof` metadata, which drive its block placement, its estimated trip
-counts, and its own unrolling and inlining heuristics, and `hot`/`cold`
-as function attributes. A function that changed since the profile was
-recorded is named by `W2009` and built as if there were no profile; a
-missing or foreign profile is refused (`E1002`). A profile changes what
-is fast, never what is computed: the program's output under `--pgo` is
-the program's output. The profile's content is part of every cache key
-and of the warm run directory's name, so a new profile is a new build.
+| stage | contents |
+|---|---|
+| `analysis` | what the checker knows of each function (type, effects, whether it is native, bound, a kernel, a coroutine, marked for XLA) |
+| `ir` | the frontend's module before any pass |
+| `canonical` | after canonicalization |
+| `tensor` | after fusion and before the tensor dialect lowers to loops |
+| `columnar` | the same point as `tensor`, for the modules holding columnar operations |
+| `optimized` | what a backend receives |
+| `gpu` | the device code alone |
+| `stablehlo`, `llvm` | what those backends write |
 
 ## `ppy test`
 
@@ -607,12 +784,10 @@ and of the warm run directory's name, so a new profile is a new build.
 ppy test [PATH] [--backend {differential,pytest}] [-- ARGS...]
 ```
 
-`differential` (default) runs each program on all three paths and compares
-stdout, stderr, and exit status.
-
-`pytest` runs an ordinary test suite with the `.ppy` import hook already
-installed and the project's source roots registered, so tests can import the
-modules under test. Arguments after `--` reach pytest.
+| backend | effect |
+|---|---|
+| `differential` (default) | run each program on all three paths and compare stdout, stderr, and exit status |
+| `pytest` | run an ordinary test suite with the `.ppy` import hook already installed and the project's source roots registered, so tests can import the modules under test. Arguments after `--` reach pytest |
 
 ```bash
 ppy test --backend pytest tests -- -k buffers -q
@@ -625,36 +800,50 @@ ppy lint [PATH] [--backend {auto,pyright,pylint,ruff,mypy}]
          [--all-rules] [--no-strict]
 ```
 
-External tools key off the `.py` extension, so the sources are mirrored into a
-staging tree, the tool runs there, and the paths in its output are mapped back
-to the `.ppy` files you have. `auto` picks the first installed backend. A type checker runs in its strict
-mode — `pyright` gets `typeCheckingMode = "strict"` — while a linter runs the
-project's own rule selection, because "every rule there is" is not the same
-kind of setting. `--all-rules` turns `ruff` up to `--select ALL` when that is
-what you want; `--no-strict` turns a type checker down.
+| option | effect |
+|---|---|
+| `--backend` | the tool to run; `auto` picks the first installed backend |
+| `--all-rules` | turn `ruff` up to `--select ALL` |
+| `--no-strict` | turn a type checker down |
+
+External tools key off the `.py` extension. So `ppy lint` mirrors the
+sources into a staging tree, runs the tool there, and maps the paths in its
+output back to your `.ppy` files.
+
+A type checker runs in its strict mode (`pyright` gets
+`typeCheckingMode = "strict"`). A linter runs the project's own rule
+selection, because "every rule there is" is a different kind of setting.
+Use `--all-rules` when that is what you want.
 
 ```bash
 ppy lint --backend pyright src
 ```
 
-The staging tree mirrors the project: every tool config at the root
+The staging tree mirrors the project. Each tool config at the root
 (`pyproject.toml`, `pyrightconfig.json`, `.pylintrc`, `ruff.toml`,
-`mypy.ini`, ...) and every plain `.py` module is copied in alongside the
-staged sources, so imports resolve and the project's own configuration —
-`extraPaths`, per-rule overrides, execution environments — keeps applying.
+`mypy.ini`, ...) and each plain `.py` module is copied in alongside the
+staged sources. Imports resolve, and the project's own configuration
+(`extraPaths`, per-rule overrides, execution environments) keeps applying.
 
-## `ppy fmt` — formatting
+## `ppy fmt`
+
+Format source.
 
 ```bash
 ppy fmt [PATH] [--check]
 ```
 
-The built-in pass runs first and settles what an external formatter has no
-opinion about: import grouping that keeps `ppy` ahead of a sibling module, and
-a signature wrapped after annotation. An installed `ruff` or `black` then
-applies the project's own style on top. `--check` writes nothing and exits
-non-zero if a file would change. An installed formatter that fails — bad
-config, crash, timeout — is an error (`E1802`), not a silent fallback.
+| option | effect |
+|---|---|
+| `--check` | write nothing and exit non-zero if a file would change |
+
+The built-in pass runs first. It settles what an external formatter has no
+opinion about: import grouping that keeps `ppy` ahead of a sibling module,
+and a signature wrapped after annotation. An installed `ruff` or `black`
+then applies the project's own style on top.
+
+An installed formatter that fails (bad config, crash, timeout) is an error
+(`E1802`), not a silent fallback.
 
 `ppy convert` uses the built-in normalizer only, so a converted file is
 byte-identical on every machine. Pass `--format`, or set
@@ -668,20 +857,36 @@ ppy cache clean
 ppy cache gc [--max-age-days N] [--max-bytes N]
 ```
 
-A cache key covers the source digest, compiler version, optimization level,
-directives, dependency hashes, and the fingerprints of the plugins the module
-actually imports. Nothing keys off modification time, with one exception: the
-record of the whole-project scan that `convert` and `migrate` make for `Final`
-and for annotation materialization is keyed by the compiler fingerprint and
-the project root, and each file's entry in it is trusted while the file's size
-and modification time still match. Hashing every file of the project is what
-that record exists to avoid.
+### Cache keys
 
-The native build is incremental per module. A rebuild with no source change
-recompiles nothing and never initializes LLVM; a rebuild after editing one
-module recompiles that module alone, and relinks only because its object
-changed. Editing a module invalidates the modules that depend on it, because a
-dependent's key includes the public summaries it compiled against.
+A cache key covers:
+
+- the source digest
+- the compiler version
+- the optimization level
+- directives
+- dependency hashes
+- the fingerprints of the plugins the module imports
+
+Nothing keys off modification time, with one exception. `convert` and
+`migrate` make a record of the whole-project scan for `Final` and for
+annotation materialization. That record is keyed by the compiler
+fingerprint and the project root, and each file's entry in it is trusted
+while the file's size and modification time still match. Avoiding hashing
+every file of the project is why that record exists.
+
+### Incremental builds
+
+The native build is incremental per module.
+
+- A rebuild with no source change recompiles nothing and never initializes
+  LLVM.
+- A rebuild after editing one module recompiles that module alone, and
+  relinks only because its object changed.
+- Editing a module invalidates the modules that depend on it, because a
+  dependent's key includes the public summaries it compiled against.
+
+### Cache contents
 
 | | |
 |---|---|
@@ -694,8 +899,8 @@ dependent's key includes the public summaries it compiled against.
 
 ## `ppy clean`
 
-Removes the whole cache directory. `ppy cache clean` empties it but leaves the
-directory; neither touches an output directory named with `build -o`.
+Removes the whole cache directory. `ppy cache clean` empties it but leaves
+the directory. Neither touches an output directory named with `build -o`.
 
 ## `ppy doctor`
 
@@ -703,13 +908,17 @@ directory; neither touches an output directory named with `build -o`.
 ppy doctor [--verbose]
 ```
 
-Versions, project root, cache location, effective configuration, whether the
-LLVM backend and native toolchain are usable, each plugin's fingerprint,
-and every backend -- builtin and installed -- with its toolchain status,
-the formats it emits, and its fingerprint; an installed backend that
-cannot be loaded is printed as `unusable` with the reason, and a name two
-distributions register is reported. Run it first when something compiles
-on one machine and not another.
+Run it first when something compiles on one machine and not another. It
+prints:
+
+- versions, project root, cache location, and the effective configuration
+- whether the LLVM backend and native toolchain are usable
+- each plugin's fingerprint
+- each backend, builtin and installed, with its toolchain status, the
+  formats it emits, and its fingerprint
+
+An installed backend that cannot be loaded is printed as `unusable` with
+the reason. A name that two distributions register is reported.
 
 ## `ppy lsp`
 
@@ -717,12 +926,128 @@ on one machine and not another.
 ppy lsp [--root DIR]
 ```
 
-LSP over stdio.
+Runs a language server (LSP) over stdio.
+
+## Shared build and run options
+
+### Sanitizers: `--sanitize`
+
+```bash
+ppy run --sanitize bounds,overflow foo.ppy
+ppy build --sanitize pointer,alignment .
+```
+
+A sanitizer instruments the IR with checks the program did not ask for.
+
+| kind | checks |
+|---|---|
+| `bounds` | every buffer index, whether or not a proof or a hoist removed the frontend's guard |
+| `overflow` | every wrapping or proven `int` operation |
+| `pointer` | that a pointer read or written through is not null |
+| `alignment` | that a pointer is aligned for what it points at |
+
+A failed check is not a fallback. The function returns a sanitizer status
+and the boundary raises `ppy_runtime.binding.SanitizerFailure` naming the
+kind and the function. A standalone program exits as it does for a guard.
+
+`[tool.ppy.llvm] sanitize = ["bounds"]` configures the same.
+
+`lifetime` and `alias` are refused with the reason: stack lifetime is held
+by the verifier, and aliasing has no runtime check yet.
+
+### Optimization report: `--report-opt`
+
+`ppy build --report-opt` prints, per module:
+
+- which functions became native and are bound to Python
+- which stay in Python, and why
+- how many guards a proof removed
+- each remark the passes left, filed under a stable category
+- what the build staged for XLA or a device
+
+The categories:
+
+- `function inlined`
+- `tensor ops fused`
+- `columnar ops fused`
+- `parallel loop emitted`
+- `GPU kernel emitted`
+- `StableHLO region emitted`
+- `bounds guard removed`
+- `overflow guard proven unnecessary`
+- `allocation stack-promoted`
+- `generic specialization emitted`
+- `sanitizer checks inserted`
+- `dead code removed`
+
+`--report-opt-json FILE` writes the same as JSON, keyed the same way, so a
+tool can count by category across versions. A build guided by a profile
+lists the profile first: the file, its runs, and each measured function's
+calls, hotness, and argument kinds.
+
+### Profile-guided optimization: `--profile`, `--pgo`
+
+```bash
+ppy run --profile foo.ppy            # runs, then writes foo.ppyprof
+ppy run --profile --profile-out p.ppyprof foo.ppy -- args
+ppy build --pgo foo.ppyprof foo.ppy
+ppy run --pgo foo.ppyprof foo.ppy
+```
+
+**Recording.** A profiling run is a JIT run with counters. Each native
+function counts its blocks and the taken edge of each conditional branch.
+The boundary records what kinds of value each native function was called
+with: an `int`, an `ndarray[float64;4x3]`, a
+`DataFrame[a:int64,b:float64;1000 rows]`, a `list[400]`.
+
+When the program ends, the counters are read back through the engine and
+the profile is written as JSON. Per function it holds:
+
+- its calls
+- each block's count
+- each branch's (taken, not taken)
+- the loop trip counts these imply
+- the argument kinds
+- which generic it is an instance of
+
+A profile already at the path is merged, so several runs (or several
+inputs) add up. `runs` says how many.
+
+**Using the profile.** A build with `--pgo` (or
+`[tool.ppy.llvm] pgo = "foo.ppyprof"`, relative to the project root) reads
+the counts back at the same point of the pipeline. A function whose graph
+still matches what was measured is annotated:
+
+- `hot`: at least a twentieth of the most-called function's calls, and at
+  least two
+- `cold`: never called
+- or neither
+
+Each conditional branch carries its weights, and each loop's back edge its
+average trip count.
+
+What the annotations change:
+
+- The inliner inlines a hot callee at four times the usual budget, leaves a
+  cold one alone, and leaves alone a call the profile never reached.
+- LLVM receives the entry counts and branch weights as `!prof` metadata,
+  which drive its block placement, its estimated trip counts, and its own
+  unrolling and inlining heuristics.
+- `hot`/`cold` become function attributes.
+
+A function that changed since the profile was recorded is named by `W2009`
+and built as if there were no profile. A missing or foreign profile is
+refused (`E1002`).
+
+A profile changes what is fast, not what is computed: the program's output
+under `--pgo` is the program's output. The profile's content is part of
+every cache key and of the warm run directory's name, so a new profile
+means a new build.
 
 ## Configuration
 
 CLI options override `[tool.ppy]` in `pyproject.toml` for one invocation.
-Every key, with defaults, is in [Configuration](reference/config.md).
+[Configuration](reference/config.md) lists every key, with defaults.
 
 ## Exit codes
 

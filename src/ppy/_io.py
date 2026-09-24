@@ -39,6 +39,8 @@ from typing import Any
 from typing import get_args as _get_args
 from typing import get_origin as _get_origin
 
+from . import _schema
+
 __all__ = ["input", "read_ints", "read_token", "reader_available", "scan"]
 
 #: Room a token or a line is read into at a time; a longer one continues.
@@ -432,6 +434,38 @@ def _input_line() -> str:
 _LINE_FIELDS = {int: int, float: float, str: str}
 
 
+def _fitted(read, low: int, high: int, name: str):  # type: ignore[no-untyped-def]
+    """A read of `int` held to a declared width, as storing it would hold it."""
+
+    def fitted(*args):  # type: ignore[no-untyped-def]
+        value = read(*args)
+        if not low <= value <= high:
+            raise OverflowError(f"{value} does not fit in ppy.{name}")
+        return value
+
+    return fitted
+
+
+def _field(spec, table: dict):  # type: ignore[no-untyped-def]
+    """How `table` reads one field of `spec`: a scalar, or a fixed width of one.
+
+    `ppy.i32` reads as `int` does and then must fit 32 signed bits; `ppy.f32`
+    and the other float widths read as `float`, which is what they hold under
+    CPython.
+    """
+    found = table.get(spec)
+    if found is not None:
+        return found
+    base = getattr(spec, "__origin__", None)
+    for item in getattr(spec, "__metadata__", ()):
+        if base is int and isinstance(getattr(item, "signed", None), bool):
+            name = f"{'i' if item.signed else 'u'}{item.bits}"
+            return _fitted(table[int], item.low, item.high, name)
+        if base is float and table.get(float) is not None:
+            return table[float]
+    return None
+
+
 def _buffer_element(spec) -> object | None:  # type: ignore[no-untyped-def]
     """`ppy.Buffer[T]`'s element type, or None if `spec` is not one."""
     for item in getattr(spec, "__metadata__", ()):
@@ -508,6 +542,36 @@ class _Fields:
         )  # type: ignore[misc]
 
 
+def _json_value() -> str:
+    """The next JSON value's lines: from the next line that is not blank to the
+    one that closes its last bracket. A JSON string holds no raw newline, so
+    counting brackets outside strings finds that line."""
+    first = _input_line_or_none()
+    while first is not None and not first.strip():
+        first = _input_line_or_none()
+    if first is None:
+        raise EOFError("the input ended where a JSON value was expected")
+    lines = [first]
+    depth = _schema.depth_after(first, 0)
+    while depth > 0:
+        more = _input_line_or_none()
+        if more is None:
+            raise EOFError("the input ended inside a JSON value")
+        lines.append(more)
+        depth = _schema.depth_after(more, depth)
+    return "\n".join(lines)
+
+
+def _input_line_or_none() -> str | None:
+    found = _source().line()
+    return None if found is None else found.removesuffix(b"\r").decode("utf-8")
+
+
+def _line_float_buffer() -> _array.array:
+    """`ppy.input[Buffer[float]]()`: what `array.array("d", map(float, input().split()))` gives."""
+    return _array.array("d", map(float, _input_line().split()))
+
+
 def _line_buffer() -> _array.array:
     """`ppy.input[Buffer[int]]()`: what `array.array("q", map(int, input().split()))` gives.
 
@@ -550,22 +614,29 @@ class _LineRead:
     def _plan(self, spec):  # type: ignore[no-untyped-def]
         element = _buffer_element(spec)
         if element is not None:
+            if element is float:
+                self._buffer = True
+                return _line_float_buffer
             if element is not int:
                 shown = getattr(element, "__name__", element)
                 raise TypeError(
-                    f"a line of integers reads into `Buffer[int]`, not `Buffer[{shown}]`"
+                    f"a line of numbers reads into `Buffer[int]` or `Buffer[float]`, "
+                    f"not `Buffer[{shown}]`"
                 )
             self._buffer = True
             return _line_buffer
         if spec is str:
             return _input_line
-        convert = _LINE_FIELDS.get(spec)
+        if _schema.is_schema(spec):
+            parse = _schema.reader(spec)
+            return lambda: parse(_input_line())
+        convert = _field(spec, _LINE_FIELDS)
         if convert is not None:
             return lambda: convert(_input_line())
         origin = _get_origin(spec)
         if origin is list:
             parts = _get_args(spec)
-            element = _LINE_FIELDS.get(parts[0]) if len(parts) == 1 else None
+            element = _field(parts[0], _LINE_FIELDS) if len(parts) == 1 else None
             if element is None:
                 raise TypeError(f"{self!r} reads a line as a list of int, float, or str")
             return lambda: [element(field) for field in _input_line().split()]
@@ -573,7 +644,7 @@ class _LineRead:
             parts = _get_args(spec)
             if not parts or Ellipsis in parts:
                 raise TypeError("a tuple to read needs a fixed number of typed fields")
-            converters = tuple(_LINE_FIELDS.get(part) for part in parts)
+            converters = tuple(_field(part, _LINE_FIELDS) for part in parts)
             if any(convert is None for convert in converters):
                 raise TypeError(f"{self!r} reads fields of int, float, or str")
             if all(part is int for part in parts):
@@ -610,10 +681,12 @@ class _TokenRead:
         if element is not None:
             if not isinstance(argument, int) or isinstance(argument, bool):
                 raise TypeError("reading a buffer needs how many values to read")
-            if element is not int:
-                raise TypeError("only `Buffer[int]` can be scanned for now")
+            if element is not int and element is not float:
+                raise TypeError("a buffer is scanned as `Buffer[int]` or `Buffer[float]`")
             if argument < 0:
                 raise ValueError(f"cannot read {argument} values")
+            if element is float:
+                return _array.array("d", [_scan_float() for _ in range(argument)])
             values = _array.array("q", bytes(8 * argument))
             got = read_ints(values) if argument else 0
             if got < argument:
@@ -626,9 +699,11 @@ class _TokenRead:
 
 
 def _scan_one(spec):  # type: ignore[no-untyped-def]
-    reader = _SCANNED.get(spec)
+    reader = _field(spec, _SCANNED)
     if reader is not None:
         return reader()
+    if _schema.is_schema(spec):
+        return _schema.reader(spec)(_json_value())
     if _get_origin(spec) is tuple:
         parts = _get_args(spec)
         if not parts or Ellipsis in parts:

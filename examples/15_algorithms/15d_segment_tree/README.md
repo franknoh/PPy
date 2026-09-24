@@ -1,49 +1,7 @@
-# 15d — Range sums
+# 15d: Range sums
 
-Input: `N M K`, then N numbers, then M+K commands — `1 b c` assigns, `2 b c`
+Input: `N M K`, then N numbers, then M+K commands: `1 b c` assigns, `2 b c`
 sums over [b, c). Output: the checksum of the answers.
-
-## Writes in the callee still count
-
-```python
-def run_commands(tree: Buffer[int], commands: Buffer[int], size: int, rounds: int) -> int:
-```
-
-`run_commands` never assigns into the tree itself; it calls `update`, and
-the write lands in the caller's memory either way. A function whose writes
-all happen inside a callee it handed a buffer to lowers like any other.
-`query` is `@ppy.pure` while `update` is not, and both are native.
-`range(size - 1, 0, -1)`, the descending build of the tree with a literal
-step, lowers as written.
-
-## Where the standalone margin comes from
-
-The standalone binary answers 400,000 commands in half the time of either C
-compiler, because reading them through `ppy.input` costs half of what
-`scanf` charges; the [folder README](../README.md) says what the subset
-costs.
-
-## Numbers
-
-Wall time of the whole process, measured from outside the way a judge does —
-input, interpreter startup and all. Mean ± standard deviation over 5 runs;
-`bench.py` reproduces it and `scripts/refresh.py` says when these have
-drifted. `ppy run` compiles before it runs, which is most of its time; it is
-the development path, not the one to submit. `ppy build` still starts an
-embedded CPython and imports the runtime, about 35 ms, before the program
-begins. Here `main` reads the 400 thousand command lines, one `ppy.input[tuple[int, int, int]]()` each, and that loop
-runs in the interpreter on every path but the standalone one, which scans
-the same input natively; the reads are most of the plain and `ppy build`
-rows.
-
-| path | wall |
-|---|---:|
-| plain CPython | 1571.7 ± 26.0 ms |
-| `ppy run` | 1288.3 ± 157.9 ms |
-| `ppy build --unsafe` | 1524.4 ± 24.2 ms |
-| `ppy build --standalone --unsafe` | **30.1 ± 0.8 ms** |
-| C (`gcc -O3`, `scanf`) | 50.8 ± 0.7 ms |
-| C (`clang -O3`, `scanf`) | 50.9 ± 0.9 ms |
 
 ## Run it
 
@@ -67,6 +25,54 @@ clang -O3 segment_tree.c -o segment_tree_clang && ./segment_tree_clang < input.t
 ```
 
 <!-- outputs:end -->
+
+## Writes in the callee still count
+
+```python
+def run_commands(tree: Buffer[int], commands: Buffer[int], size: int, rounds: int) -> int:
+```
+
+`run_commands` never assigns into the tree itself. It calls `update`, and
+the write lands in the caller's memory either way. A function whose writes
+all happen inside a callee it handed a buffer to lowers like any other.
+
+- `query` is `@ppy.pure` while `update` is not, and both are native.
+- `range(size - 1, 0, -1)`, the descending build of the tree with a literal
+  step, lowers as written.
+
+## Numbers
+
+Wall time of the whole process, measured from outside the way a judge does:
+input, interpreter startup and all. Mean ± standard deviation over 5 runs.
+`bench.py` reproduces it and `scripts/refresh.py` says when these have
+drifted.
+
+| path | wall |
+|---|---:|
+| plain CPython | 1571.7 ± 26.0 ms |
+| `ppy run` | 1288.3 ± 157.9 ms |
+| `ppy build --unsafe` | 1524.4 ± 24.2 ms |
+| `ppy build --standalone --unsafe` | **30.1 ± 0.8 ms** |
+| C (`gcc -O3`, `scanf`) | 50.8 ± 0.7 ms |
+| C (`clang -O3`, `scanf`) | 50.9 ± 0.9 ms |
+
+- `ppy run` compiles before it runs, which is most of its time. It is the
+  development path, not the one to submit.
+- `ppy build` still starts an embedded CPython and imports the runtime,
+  about 35 ms, before the program begins.
+- Here `main` reads the 400 thousand command lines, one
+  `ppy.input[tuple[int, int, int]]()` each. That loop runs in the
+  interpreter on every path but the standalone one, which scans the same
+  input natively. The reads are most of the plain and `ppy build` rows.
+
+## Where the standalone margin comes from
+
+The standalone binary answers 400,000 commands in half the time of either C
+compiler, because reading them through `ppy.input` costs half of what
+`scanf` charges. The [folder README](../README.md) says what the subset
+costs.
+
+## Where the code comes from
 
 Generated, not hand-written: `segment_tree.ppy` is exactly what
 `ppy convert segment_tree.py --promote-buffers` writes, and

@@ -74,6 +74,8 @@ def _element_storage(t: T.Type) -> T.Type:
             and base.args
         ):
             return base.args[0]
+        if base.name in {"ppy.Vec", "ppy.Deque"} and base.args:
+            return base.args[0]
         if base.name == "dict" and base.args:
             return base.args[0]
         if base.name in {"tuple", "list", "set", "frozenset", "dict", "Sequence", "Iterable"}:

@@ -5,6 +5,14 @@ three floats, and native code treats it that way: `distance2(a, b)` passes
 six doubles, not two object pointers, and `a.norm2()` is a native function
 whose `self` is three scalars.
 
+## Run it
+
+```bash
+python  value_classes.ppy
+ppy     value_classes.ppy
+ppy run value_classes.ppy
+```
+
 ## Flattened at the ABI, guarded on the class
 
 ```python
@@ -21,31 +29,32 @@ class Vec3:
 ```
 
 The generated boundary reads the fields, checks the class is exactly
-`Vec3`, and calls the native function with scalars. `distance2(Tracked(1.0,
-2.0, 3.0), b)` shows the guard: `Tracked` is a subclass, the exact-class
-check refuses it, and the Python body answers. A class too wide for the ABI
-stays boxed, and `ppy explain` says so. Eight float operations cost about
-50 ns per call from Python here, most of it the boundary; `steps` runs a
-200-iteration loop over a `Ray`'s two fields at about 200 ns per call, with
-the `Ray` never leaving registers.
+`Vec3`, and calls the native function with scalars.
+`distance2(Tracked(1.0, 2.0, 3.0), b)` shows the guard: `Tracked` is a
+subclass, the exact-class check refuses it, and the Python body answers. A
+class too wide for the ABI stays boxed, and `ppy explain` says so.
+
+Eight float operations cost about 50 ns per call from Python here, most of
+it the boundary. `steps` runs a 200-iteration loop over a `Ray`'s two fields
+at about 200 ns per call, with the `Ray` never leaving registers.
 
 ## Operators dispatch statically
 
 Inside native code `a + b` on a value class calls the class's own
 `__add__`, lowered like any other native function. There is no fallback to
-Python's dynamic dispatch and no `__radd__` search; a class without a native
+Python's dynamic dispatch and no `__radd__` search. A class without a native
 operator is refused with the reason.
 
 ## Compared with Numba's `@jitclass`
 
 A million `distance2` calls from Python, and a native loop over a `Ray`'s
 two fields, in [`compare/`](compare/):
-[`vectors_bench.ppy`](compare/vectors_bench.ppy) -- under `ppy run` and,
-the same file, under `python` -- and
+[`vectors_bench.ppy`](compare/vectors_bench.ppy) (under `ppy run` and, the
+same file, under `python`) and
 [`vectors_numba.py`](compare/vectors_numba.py). Milliseconds, best of five,
 over five processes.
 
-**PPY** is a `@dataclass` and functions over it; Numba's nearest thing is a
+**PPy** is a `@dataclass` and functions over it. Numba's nearest thing is a
 `@jitclass` with a typed field list, whose instances are Numba's own
 objects rather than Python ones:
 
@@ -86,34 +95,37 @@ def travel(ray, count):
 ```
 
 <!-- compare:start -->
-| | PPY `ppy run` | CPython, the same file | Numba `@jitclass` |
+| | PPy `ppy run` | CPython, the same file | Numba `@jitclass` |
 |---|---:|---:|---:|
 | distance2, a million calls from Python | **62.18 ± 0.47** | 63.13 ± 0.71 | 349.84 ± 7.47 |
 | travel, eight million steps over a Ray natively | 11.16 ± 0.19 | 262.98 ± 2.15 | **10.97 ± 0.17** |
 <!-- compare:end -->
 
-Inside a native loop the two are the same code: the `Ray` is two doubles
-in registers on both. The difference is the boundary. Eight float
-operations are too little work to see past it: a PPY value class is still
-a Python dataclass, the generated boundary reads its fields and passes
-scalars, and a million calls cost what CPython takes to run the body
-itself; a `@jitclass` instance crosses into an `@njit` function through
-Numba's dispatcher and its own object layout, several times that per
-call. The native loop is where the work is, and there the two agree. Constructing a `Vec3` inside a native loop is where PPY
-stops: a value class built in the loop keeps the function in Python (`ppy
-explain` says `boxed: Vec3 has no native lowering`), so the loop here
-takes the class as a parameter.
+Inside a native loop the two are the same code: the `Ray` is two doubles in
+registers on both. The difference is the boundary.
 
-Intel Core Ultra 9 386H; Numba 0.67.0 on CPython 3.12.13, PPY on CPython
+Eight float operations are too little work to see past it. A PPy value
+class is still a Python dataclass: the generated boundary reads its fields
+and passes scalars, and a million calls cost what CPython takes to run the
+body itself. A `@jitclass` instance crosses into an `@njit` function through
+Numba's dispatcher and its own object layout, several times that per call.
+
+The native loop is where the work is, and there the two agree. The loop
+here takes the class as a parameter.
+
+Intel Core Ultra 9 386H; Numba 0.67.0 on CPython 3.12.13, PPy on CPython
 3.14.5, from a checkout on a native filesystem.
 
-## Run it
+## Limitations
 
-```bash
-python  value_classes.ppy
-ppy     value_classes.ppy
-ppy run value_classes.ppy
-```
+A value class can be built inside a native loop: `Vec3(float(i), 1.0, 0.5)`
+is a struct of three doubles, with no object behind it. Two things keep a
+function in Python:
+
+- assigning a field in place (`v.x = 1.0`), since native code holds a value
+  class by value and the write would not reach the object Python sees
+- building one without naming every field, since native code does not
+  evaluate a dataclass's defaults
 
 <!-- outputs:start -->
 ## What it prints
