@@ -14,11 +14,11 @@ import subprocess
 from pathlib import Path
 
 from ...diagnostics import Diagnostic, Severity
+from ...driver.ir_pipeline import value_class_layouts
 from ..c.runtime import program_main, support_source
 from . import prover_for
 from .jit import JitEngine, LlvmUnavailable, available
 from .link import ToolchainError, _compiler, emit_object
-from ...driver.ir_pipeline import value_class_layouts
 from .lowering import LoweringResult, eligible
 
 __all__ = ["build_standalone", "standalone_ir"]
@@ -148,6 +148,8 @@ def standalone_ir(  # type: ignore[no-untyped-def]
         frontend.imports = signatures.get
         lowered = frontend.build({q: f for q, f in functions.items() if f[0].module == name})
         for qualname, reason in sorted(lowered.rejected.items()):
+            if functions[qualname][0].type_params:
+                continue  # A generic is lowered where a caller instantiates it.
             return _fail(reporter, _chain(reached_from, qualname, reason))
         modules.append(lowered.module)
     linked = link(modules, module_name)
@@ -213,6 +215,8 @@ def build_standalone(  # type: ignore[no-untyped-def]
         prover=prover_for(config),
     )
     for qualname, reason in sorted(result.rejected.items()):
+        if functions[qualname][0].type_params:
+            continue  # A generic is lowered where a caller instantiates it.
         return _fail(reporter, _chain(reached_from, qualname, reason))
     if entry_qualname not in result.functions:
         return _fail(reporter, f"`{entry_qualname}` did not lower")
@@ -273,7 +277,9 @@ def _field_dataclass(statement) -> bool:  # type: ignore[no-untyped-def]
 
     if not isinstance(statement, ast.ClassDef) or statement.bases or statement.keywords:
         return False
-    decorated = [ast.unparse(d.func if isinstance(d, ast.Call) else d) for d in statement.decorator_list]
+    decorated = [
+        ast.unparse(d.func if isinstance(d, ast.Call) else d) for d in statement.decorator_list
+    ]
     if decorated not in (["dataclass"], ["dataclasses.dataclass"]):
         return False
     for index, item in enumerate(statement.body):

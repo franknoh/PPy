@@ -14,6 +14,7 @@ the caller records the function as running on CPython.
 from __future__ import annotations
 
 import ast
+import re
 from collections.abc import Callable
 from dataclasses import dataclass, field, replace
 from pathlib import Path
@@ -789,7 +790,9 @@ class Frontend:
         self.instances[key] = (function, signature)
         self._instantiating.append(key)
         try:
-            _FunctionLowering(self, function, signature, specialized, {}).run(node)
+            lowering = _FunctionLowering(self, function, signature, specialized, {})
+            lowering.bindings = bindings
+            lowering.run(node)
         except Unsupported:
             del self.instances[key]
             del self.declared[specialized.qualname]
@@ -942,6 +945,8 @@ class _FunctionLowering(CollectionLowering):
         #: Collections by local name: what they are, their element, the slot
         #: holding the handle, and whether this function made it (and frees it).
         self.collections: dict[str, Held] = {}
+        #: A generic instance's type arguments, by parameter: what `T` is here.
+        self.bindings: dict[T.TypeVar_, T.Type] = {}
         #: Collections made for an argument, let go once the call returns.
         self._temporaries: list[Value] = []
         self._loops: list[tuple[Block, Block]] = []
@@ -2149,7 +2154,7 @@ class _FunctionLowering(CollectionLowering):
                 )
         for qualname, (info, _analysis, _node) in self.frontend.generics.items():
             if qualname.rpartition(".")[2] == target:
-                return self._generic_call(qualname, info, node)
+                return self._generic_call(qualname, info, node, discard_result=discard_result)
         raise Unsupported(f"`{target}` has no native lowering")
 
     def _derivative_spec(self, func: ast.expr) -> tuple[str, tuple[int, ...], bool] | None:
@@ -2172,27 +2177,51 @@ class _FunctionLowering(CollectionLowering):
         call = core.call(self.b, function.name, tuple(arguments), function.results)
         return list(call.results)
 
-    def _generic_call(self, qualname: str, info: FunctionInfo, node: ast.Call) -> Value:
-        """Instantiate a generic on the argument types this body has in hand."""
+    def _generic_call(
+        self, qualname: str, info: FunctionInfo, node: ast.Call, *, discard_result: bool = False
+    ) -> Value:
+        """Instantiate a generic on the argument types this body has in hand.
+
+        A collection argument is typed by what the checker said of it, since
+        its handle says nothing of what it holds, and it is passed by handle.
+        """
         if len(node.args) != len(info.params):
             raise Unsupported(f"`{qualname}` called with the wrong number of arguments")
-        values = [self._expr(argument) for argument in node.args]
+        values: list[Value] = []
+        temporaries: list[Value] = []
         bindings: dict[T.TypeVar_, T.Type] = {}
-        for value, param in zip(values, info.params, strict=True):
-            if not T.infer(param.type, _analysis_type(value.type), bindings):
-                raise Unsupported(f"`{qualname}` cannot take a `{value.type}` for `{param.name}`")
+        for argument, param in zip(node.args, info.params, strict=True):
+            if self._is_collection(argument):
+                handle, owned = self._handle(argument)
+                if owned:
+                    temporaries.append(handle)
+                values.append(handle)
+                given = self._type_of(argument)
+            else:
+                values.append(self._expr(argument))
+                given = _analysis_type(values[-1].type)
+            if not T.infer(param.type, given, bindings):
+                raise Unsupported(f"`{qualname}` cannot take a `{given}` for `{param.name}`")
         arguments = tuple(bindings.get(v, v.bound or T.ANY) for v in info.type_params)
         instance = self.frontend.instantiate(qualname, arguments)
         if instance is None:
             raise Unsupported(f"`{qualname}` has no native lowering")
         function, signature = instance
-        if not function.results:
+        if not function.results and not discard_result:
             raise Unsupported(f"`{qualname}` returns nothing a caller can use")
         converted = [
-            self._coerce(value, parameter.kind)
+            value if parameter.is_handle else self._coerce(value, parameter.kind)
             for value, parameter in zip(values, signature.parameters, strict=True)
         ]
-        return core.call(self.b, function.name, tuple(converted), function.results).results[0]
+        found = core.call(self.b, function.name, tuple(converted), function.results)
+        for handle in temporaries:
+            self._release(handle)
+        if not function.results:
+            return core.const(self.b, 0, I64)
+        result = found.results[0]
+        if discard_result and result.type == HANDLE:
+            self._release(result)
+        return result
 
     def _native_op(self, operation: str, node: ast.Call) -> Value:
         """`ppy.native.load` and the rest, as the pointer operations they are."""
@@ -3225,9 +3254,14 @@ class _FunctionLowering(CollectionLowering):
                 arguments.append(handle)
                 continue
             if parameter.is_object:
-                if not isinstance(argument, ast.Name) or argument.id not in self.objects:
-                    raise Unsupported("a value class argument must be a flattened local")
-                struct = self.objects[argument.id]
+                if isinstance(argument, ast.Name) and argument.id in self.objects:
+                    struct = self.objects[argument.id]
+                else:
+                    # A value class built here, or read out of a collection: a struct value.
+                    record = self._record_value(argument)
+                    if record is None:
+                        raise Unsupported("a value class argument must be a native value")
+                    struct = record
                 assert isinstance(struct.type, StructType)
                 for attr, _scalar in parameter.fields:
                     if struct.type.field_type(attr) is None:
@@ -4103,7 +4137,7 @@ def _specialized_info(
     info: FunctionInfo, bindings: dict[T.TypeVar_, T.Type], arguments: tuple[str, ...]
 ) -> FunctionInfo:
     """`info` with its type parameters replaced: what one instantiation is."""
-    spelled = "_".join(a.replace(".", "_").replace("[", "_").replace("]", "") for a in arguments)
+    spelled = "_".join(re.sub(r"\W+", "_", a).strip("_") for a in arguments)
     params = [replace(p, type=T.substitute(p.type, bindings)) for p in info.params]
     return replace(
         info,

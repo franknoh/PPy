@@ -22,7 +22,19 @@ from dataclasses import dataclass
 
 from ..analysis import types as T
 from ..backend.llvm.lowering import Unsupported
-from ..ir import BOOL, F64, I8, I64, IRType, PtrType, StructType, Successor, TupleType, Value
+from ..ir import (
+    BOOL,
+    F64,
+    I8,
+    I64,
+    Builder,
+    IRType,
+    PtrType,
+    StructType,
+    Successor,
+    TupleType,
+    Value,
+)
 from ..ir.dialects import core
 
 __all__ = ["HANDLE", "CollectionLowering", "Kind", "Shape", "kind_of", "shape_of"]
@@ -204,7 +216,7 @@ class CollectionLowering:
     """The collection half of lowering one function; mixed into `_FunctionLowering`."""
 
     # Supplied by the class this is mixed into.
-    b: object
+    b: Builder
     frontend: object
     collections: dict[str, Held]
 
@@ -223,7 +235,10 @@ class CollectionLowering:
         return records
 
     def _type_of(self, node: ast.expr) -> T.Type:
-        return self.frontend.analysis.type_of(node)  # type: ignore[attr-defined,no-any-return]
+        """What the checker said of `node`, with a generic instance's arguments in."""
+        found: T.Type = self.frontend.analysis.type_of(node)  # type: ignore[attr-defined]
+        bindings = getattr(self, "bindings", None)
+        return T.substitute(found, bindings) if bindings else found
 
     def _kind_of(self, node: ast.expr) -> Kind | None:
         """The collection an expression denotes, from what the checker said of it."""

@@ -1,21 +1,22 @@
-"""Collections that compile: `Vec`, `Deque`, `Heap`, and `MaxHeap`.
+"""Collections that compile: `Vec`, `Deque`, `Heap`, `MaxHeap`, `LinkedList`,
+`HashMap`, `HashSet`, `TreeMap`, and `TreeSet`.
 
 ```python
 from ppy import Deque, Heap, Vec
 
-dist = Vec[int](n)          # n zeros; grows with push
-dist.push(7)
+adjacent = Vec[Vec[int]](n)     # n empty rows
+adjacent[0].push(3)
 q = Deque[int]()
 q.push_back(0)
 start = q.pop_front()
-h = Heap[int]()
-h.push(5)
-smallest = h.pop()
+h = Heap[tuple[int, int]]()     # (distance, node), smallest first
+h.push((0, start))
 ```
 
-Each is a generic class over `int` or `float`. This module is the reference:
-it is what the types mean under CPython, and native code implements the same
-operations over machine memory, with no Python object per element.
+Each is a generic class. An element, or a map's value, is a number, a tuple of
+numbers, a dataclass, or another collection; a key is an `int` or a tuple of
+them. This module is the reference: it is what the types mean under CPython,
+and native code implements the same operations over machine memory.
 
 The rules are the same on every path, which is why some differ from a
 `list`'s:
@@ -56,6 +57,15 @@ T = TypeVar("T", int, float)
 #: always the same class, and it knows its element is `float`.
 _SPECIALIZED: dict[tuple[type, Any], type] = {}
 
+#: What each of those classes makes of a value it stores.
+_CASTS: dict[type, Callable[[Any], Any]] = {}
+
+
+def _stored(owner: object, value: Any) -> Any:
+    """`value` as `owner` stores it: `3` in a float collection is `3.0`."""
+    cast = _CASTS.get(type(owner))
+    return cast(value) if cast is not None else value
+
 
 def _scalar(spec: Any) -> type | None:
     """`int`, `float`, or `bool` for a scalar spec, fixed widths included."""
@@ -81,9 +91,15 @@ def _tuple_parts(spec: Any) -> tuple[Any, ...] | None:
 
 
 def _element_ok(spec: Any) -> bool:
-    """What a collection may hold: a scalar, a tuple of scalars, a dataclass, a collection."""
+    """What a collection may hold: a scalar, a tuple of scalars, a dataclass, a collection.
+
+    A generic function's type parameter (`Vec[T]` inside `def f[T](...)`) is
+    what the function is instantiated with, which CPython does not know: its
+    values are stored as they are given.
+    """
     return (
-        _scalar(spec) is not None
+        isinstance(spec, typing.TypeVar)
+        or _scalar(spec) is not None
         or _tuple_parts(spec) is not None
         or _is_record(spec)
         or _is_collection(spec)
@@ -92,24 +108,41 @@ def _element_ok(spec: Any) -> bool:
 
 def _key_ok(spec: Any) -> bool:
     """What a map or a set is keyed by: an `int`, or a tuple of them."""
-    if _scalar(spec) is int:
+    if _scalar(spec) is int or isinstance(spec, typing.TypeVar):
         return True
     parts = _tuple_parts(spec)
     return parts is not None and all(_scalar(part) is int for part in parts)
+
+
+def _as_int(value: Any) -> int:
+    return int(value)
+
+
+def _as_float(value: Any) -> float:
+    return float(value)
+
+
+def _as_bool(value: Any) -> bool:
+    return bool(value)
+
+
+_CONVERSIONS: dict[type, Callable[[Any], Any]] = {int: _as_int, float: _as_float, bool: _as_bool}
 
 
 def _caster(spec: Any) -> Callable[[Any], Any]:
     """What a value becomes when it is stored as `spec`: `3` in a float slot is `3.0`."""
     scalar = _scalar(spec)
     if scalar is not None:
-        return scalar
+        return _CONVERSIONS[scalar]
     parts = _tuple_parts(spec)
     if parts is not None:
         casts = tuple(_caster(part) for part in parts)
         return lambda value: tuple(cast(item) for cast, item in zip(casts, value, strict=True))
     if _is_record(spec):
         hints = typing.get_type_hints(spec)
-        floats = [item.name for item in dataclasses.fields(spec) if _scalar(hints[item.name]) is float]
+        floats = [
+            item.name for item in dataclasses.fields(spec) if _scalar(hints[item.name]) is float
+        ]
         return lambda value: _floats_of(value, floats)
     return lambda value: value
 
@@ -123,6 +156,8 @@ def _floats_of(value: Any, names: list[str]) -> Any:
 
 def _zero(spec: Any) -> Any:
     """What `Vec[T](n)` starts each slot with: `T`'s zero, and a new collection for each."""
+    if isinstance(spec, typing.TypeVar):
+        raise TypeError(f"a Vec of {spec} has no zero to start with; push instead")
     scalar = _scalar(spec)
     if scalar is not None:
         return scalar(0)
@@ -150,7 +185,6 @@ class _Elements:
 
     __slots__ = ()
     _element: ClassVar[Any] = int
-    _cast: ClassVar[Callable[[Any], Any]] = int
 
     def __class_getitem__(cls: type, element: Any) -> type:
         key = (cls, element)
@@ -164,13 +198,9 @@ class _Elements:
             made = type(
                 f"{cls.__name__}[{_spelled(element)}]",
                 (cls,),
-                {
-                    "__slots__": (),
-                    "_element": element,
-                    "_cast": staticmethod(_caster(element)),
-                    "__module__": cls.__module__,
-                },
+                {"__slots__": (), "_element": element, "__module__": cls.__module__},
             )
+            _CASTS[made] = _caster(element)
             _SPECIALIZED[key] = made
         return made
 
@@ -194,7 +224,7 @@ class Vec(_Elements):
 
     def push(self, value: T) -> None:
         """Add `value` at the end."""
-        self._items.append(self._cast(value))
+        self._items.append(_stored(self, value))
 
     def pop(self) -> T:
         """Remove the last element and return it."""
@@ -227,7 +257,7 @@ class Vec(_Elements):
         return self._items[_index(index, len(self._items))]
 
     def __setitem__(self, index: int, value: T) -> None:
-        self._items[_index(index, len(self._items))] = self._cast(value)
+        self._items[_index(index, len(self._items))] = _stored(self, value)
 
     def __iter__(self) -> Iterator[T]:
         items = self._items
@@ -251,11 +281,11 @@ class Deque(_Elements):
 
     def push_back(self, value: T) -> None:
         """Add `value` at the back."""
-        self._items.append(self._cast(value))
+        self._items.append(_stored(self, value))
 
     def push_front(self, value: T) -> None:
         """Add `value` at the front."""
-        self._items.appendleft(self._cast(value))
+        self._items.appendleft(_stored(self, value))
 
     def pop_back(self) -> T:
         """Remove the back element and return it."""
@@ -292,7 +322,7 @@ class Deque(_Elements):
         return self._items[_index(index, len(self._items))]
 
     def __setitem__(self, index: int, value: T) -> None:
-        self._items[_index(index, len(self._items))] = self._cast(value)
+        self._items[_index(index, len(self._items))] = _stored(self, value)
 
     def __iter__(self) -> Iterator[T]:
         items = self._items
@@ -321,7 +351,7 @@ class Heap(_Elements):
     def push(self, value: T) -> None:
         """Add `value`."""
         items = self._items
-        items.append(self._cast(value))
+        items.append(_stored(self, value))
         i = len(items) - 1
         while i > 0:
             parent = (i - 1) // 2
@@ -381,7 +411,6 @@ class _KeysAndValues:
 
     __slots__ = ()
     _key: ClassVar[Any] = int
-    _cast: ClassVar[Callable[[Any], Any]] = int
 
     def __class_getitem__(cls: type, types: Any) -> type:
         pair = typing.get_origin(types) is None and isinstance(types, tuple)
@@ -395,13 +424,9 @@ class _KeysAndValues:
             made = type(
                 f"{cls.__name__}[{_spelled(types)}]",
                 (cls,),
-                {
-                    "__slots__": (),
-                    "_key": key,
-                    "_cast": staticmethod(_caster(value) if value is not None else int),
-                    "__module__": cls.__module__,
-                },
+                {"__slots__": (), "_key": key, "__module__": cls.__module__},
             )
+            _CASTS[made] = _caster(value) if value is not None else _caster(int)
             _SPECIALIZED[(cls, types)] = made
         return made
 
@@ -443,7 +468,7 @@ class LinkedList(_Elements):
         self._size = 0
 
     def _node(self, value: T) -> int:
-        stored = self._cast(value)
+        stored = _stored(self, value)
         if self._free:
             node = self._free.pop()
             self._values[node] = stored
@@ -557,7 +582,7 @@ class LinkedList(_Elements):
 
     def set(self, node: int, value: T) -> None:
         """Replace what `node` holds."""
-        self._values[self._check(node)] = self._cast(value)
+        self._values[self._check(node)] = _stored(self, value)
 
     def clear(self) -> None:
         """Remove every element; ids start from 0 again."""
@@ -622,7 +647,7 @@ class HashMap(_KeysAndValues):
         return self._values[entry]
 
     def __setitem__(self, key: int, value: Any) -> None:
-        self._put(key, self._cast(value))
+        self._put(key, _stored(self, value))
 
     def __getitem__(self, key: int) -> Any:
         entry = self._find(key)
@@ -633,7 +658,7 @@ class HashMap(_KeysAndValues):
     def get(self, key: int, default: Any) -> Any:
         """The value of `key`, or `default` where there is none."""
         entry = self._find(key)
-        return self._values[entry] if entry >= 0 else self._cast(default)
+        return self._values[entry] if entry >= 0 else _stored(self, default)
 
     def pop(self, key: int) -> Any:
         """Remove `key` and return its value."""
@@ -722,7 +747,7 @@ class TreeMap(_KeysAndValues):
         return self._values.pop(position)
 
     def __setitem__(self, key: int, value: Any) -> None:
-        self._put(key, self._cast(value))
+        self._put(key, _stored(self, value))
 
     def __getitem__(self, key: int) -> Any:
         position = self._at(key)
@@ -733,7 +758,7 @@ class TreeMap(_KeysAndValues):
     def get(self, key: int, default: Any) -> Any:
         """The value of `key`, or `default` where there is none."""
         position = self._at(key)
-        return self._values[position] if position >= 0 else self._cast(default)
+        return self._values[position] if position >= 0 else _stored(self, default)
 
     def pop(self, key: int) -> Any:
         """Remove `key` and return its value."""

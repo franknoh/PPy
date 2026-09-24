@@ -770,8 +770,16 @@ class _Checker:
                 self._implicit_any(info, param.name)
             env.set(param.name, Binding(param.type, facts))
 
+        # A generic function's body may name its type parameters, as its
+        # signature does: `s: T = v[0]`.
+        outer_params = self.annotations.type_params
+        self.annotations.type_params = {
+            **outer_params,
+            **{variable.name: variable for variable in info.type_params},
+        }
         for stmt in info.node.body:
             self._stmt(stmt, env)
+        self.annotations.type_params = outer_params
 
         result = self._finish_function(info, env)
         (
@@ -4771,6 +4779,12 @@ class _Checker:
                 node,
             )
         counted = canonical == "ppy.Vec"
+        if counted and node.args and isinstance(resolved[-1], T.TypeVar_):
+            self._error(
+                "E1305",
+                f"a `Vec` of `{resolved[-1]}` has no zero to start with; push instead",
+                node,
+            )
         if node.keywords or len(node.args) > (1 if counted else 0):
             wanted = "how many zeros it starts with" if counted else "no arguments"
             self._error("E1305", f"`{canonical}[T]()` takes {wanted}", node)
@@ -4788,6 +4802,9 @@ class _Checker:
         base = T.strip_literal(t)
         if base in (T.INT, T.FLOAT, T.BOOL, T.UNKNOWN) or C.is_collection(base):
             return True
+        if isinstance(base, T.TypeVar_):
+            # A generic's parameter: each instantiation is checked as it is made.
+            return True
         if isinstance(base, T.Tuple_) and not base.homogeneous and base.items:
             return all(T.strip_literal(i) in (T.INT, T.FLOAT, T.BOOL) for i in base.items)
         if isinstance(base, T.Instance):
@@ -4798,7 +4815,7 @@ class _Checker:
     def _collection_key(self, t: T.Type) -> bool:
         """What a map or a set is keyed by: an `int`, or a tuple of them."""
         base = T.strip_literal(t)
-        if base in (T.INT, T.UNKNOWN):
+        if base in (T.INT, T.UNKNOWN) or isinstance(base, T.TypeVar_):
             return True
         return (
             isinstance(base, T.Tuple_)

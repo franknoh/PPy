@@ -31,6 +31,20 @@
   parameter; native callers pass its handle. Keys are `int`, elements and
   values `int` or `float`. `examples/47_collections` runs five problems
   with them: 4.3 s under CPython, 0.39 s under `ppy run`.
+- Collections hold anything with a native form: numbers, tuples of numbers,
+  dataclasses (ordered with `order=True`), and other collections, so
+  `Vec[Vec[int]]`, `HashMap[int, Vec[int]]`, `Heap[tuple[int, int]]`, and
+  `Vec[Edge]` compile. Keys may be tuples of `int`. The runtime works on
+  words and the compiler writes the typed access per element type. Memory
+  is reference counted, so collections can be aliased, nested, returned
+  from native functions, and passed as temporaries; the emitted C of the
+  tests runs clean under AddressSanitizer with leak detection.
+- Generic functions take, make, and return collections of their type
+  parameter (`def smallest[T: int | float](v: Vec[T], k: int) -> Vec[T]`),
+  one native instance per type, standalone builds included. A generic
+  function's body may annotate locals with its type parameters.
+- Emitted C no longer moves a store above a load of the same slot when it
+  writes a value straight into its destination.
 - The standalone runtime's `ppy_rt_alloc` returns `int8_t *`, the type the
   IR gives it, so emitted C no longer warns about incompatible pointers
   (an error from GCC 14 on).

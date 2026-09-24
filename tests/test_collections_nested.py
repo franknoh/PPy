@@ -2,7 +2,8 @@
 
 `Vec[Vec[int]]`, `HashMap[tuple[int, int], int]`, `Vec[Vec[Edge]]` with a
 dataclass `Edge`, collections returned from functions and passed as
-temporaries. Each program agrees on every path and goes native, and its
+temporaries, and generic functions that take, make, and return collections of
+their type parameter, one native instance per type. Each program agrees on every path and goes native, and its
 emitted C and C++ run under AddressSanitizer with leak detection, which is
 what holds the reference counting to account: no collection is used after
 it is freed, and none is left unfreed.
@@ -194,9 +195,67 @@ def main() -> None:
 main()
 """
 
+GENERIC = """
+from ppy import HashMap, Heap, Vec
+
+
+def merged[T: int | float](a: Vec[T], b: Vec[T]) -> Vec[T]:
+    out = Vec[T]()
+    for x in a:
+        out.push(x)
+    for x in b:
+        out.push(x)
+    out.sort()
+    return out
+
+
+def smallest[T: int | float](values: Vec[T], k: int) -> Vec[T]:
+    heap = Heap[T]()
+    for x in values:
+        heap.push(x)
+    taken = Vec[T]()
+    while heap and len(taken) < k:
+        taken.push(heap.pop())
+    return taken
+
+
+def group[K](keys: Vec[K]) -> HashMap[K, int]:
+    counts = HashMap[K, int]()
+    for key in keys:
+        counts[key] = counts.get(key, 0) + 1
+    return counts
+
+
+def run(n: int) -> float:
+    a = Vec[int]()
+    b = Vec[float]()
+    pairs = Vec[tuple[int, int]]()
+    for i in range(n):
+        a.push((i * 7) % 11)
+        b.push(i / 3)
+        pairs.push((i % 3, i % 2))
+    both = merged(a, a)
+    top = smallest(b, 3)
+    counted = group(pairs)
+    total: float = 0.0
+    for x in both:
+        total += x
+    for y in top:
+        total += y
+    return total + len(counted) * 100 + counted[(0, 0)]
+
+
+def main() -> None:
+    print(run(20))
+
+
+main()
+"""
+
 PROGRAMS = {
     "nested": (NESTED, "", "181 1072 32238 102", ["graph", "bfs", "dijkstra", "grid", "aliases"]),
     "ownership": (OWNERSHIP, "200\n", "2714", ["row", "total", "churn"]),
+    "generic": (GENERIC, "", "801.0", ["run"]),
 }
 
 

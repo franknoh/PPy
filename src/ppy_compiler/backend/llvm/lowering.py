@@ -31,8 +31,8 @@ from dataclasses import dataclass, field
 from ppy_runtime.abi import STATUS_FALLBACK, STATUS_OK, NativeParam, NativeSignature
 
 from ...analysis import types as T
-from ...analysis.collections import spelled as collection_spelled
 from ...analysis.checker import FunctionAnalysis
+from ...analysis.collections import spelled as collection_spelled
 from ...analysis.effects import Effect
 from ...analysis.symbols import FunctionInfo
 

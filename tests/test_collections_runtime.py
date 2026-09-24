@@ -79,9 +79,9 @@ def test_sequences_of_pairs_match_the_reference_deque_and_its_stable_sort():
             elif op == 1:
                 _put_pair(lib.ppy_seq_push_front(made), value)
                 reference.push_front(value)
-            elif op == 2 and len(reference):
+            elif op == 2 and reference:
                 assert _pair(lib.ppy_seq_pop_back(made)) == reference.pop_back()
-            elif op == 3 and len(reference):
+            elif op == 3 and reference:
                 assert _pair(lib.ppy_seq_pop_front(made)) == reference.pop_front()
         count = len(reference)
         assert [_pair(lib.ppy_seq_at(made, _word(i))) for i in range(count)] == list(reference)
@@ -104,7 +104,7 @@ def test_heaps_of_pairs_pop_in_the_reference_order(largest: bool):
         made = ctypes.c_void_p(lib.ppy_seq_new(_word(0), _word(2), _word(_PAIR_FLOATS), _word(0)))
         reference = (ppy.MaxHeap if largest else ppy.Heap)[tuple[int, float]]()
         for _ in range(300):
-            if rng.random() < 0.6 or not len(reference):
+            if rng.random() < 0.6 or not reference:
                 value = (rng.randrange(0, 4), float(rng.randrange(0, 4)))
                 _put_pair(lib.ppy_coll_scratch(made), value)
                 lib.ppy_heap_push(made, _word(int(largest)))
