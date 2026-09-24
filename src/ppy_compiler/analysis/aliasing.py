@@ -18,6 +18,8 @@ from __future__ import annotations
 import ast
 from dataclasses import dataclass, field
 
+from .collections import SHORT_NAMES
+
 __all__ = ["EXTERNAL", "AliasInfo", "analyze_aliases"]
 
 #: The root standing for every object this function did not create and was not
@@ -30,11 +32,7 @@ _FRESH_PPY = frozenset(
         "ppy.buffer",
         "ppy.scan",
         "ppy.input",
-        *(
-            f"{prefix}{name}"
-            for prefix in ("ppy.", "")
-            for name in ("Vec", "Deque", "Heap", "MaxHeap")
-        ),
+        *(f"{prefix}{name}" for prefix in ("ppy.", "") for name in SHORT_NAMES),
     }
 )
 

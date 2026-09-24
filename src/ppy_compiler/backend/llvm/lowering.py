@@ -199,14 +199,30 @@ def _pointer_element(t: T.Type) -> tuple[str, str] | None:
     return ("ptr" if base.name == "ppy.native.ptr" else "const_ptr"), element
 
 
+#: The `ppy` collections, which cross between native functions as handles.
+_COLLECTIONS = frozenset(
+    {
+        "ppy.Vec",
+        "ppy.Deque",
+        "ppy.Heap",
+        "ppy.MaxHeap",
+        "ppy.LinkedList",
+        "ppy.HashMap",
+        "ppy.HashSet",
+        "ppy.TreeMap",
+        "ppy.TreeSet",
+    }
+)
+
+
 def _collection_param(name: str, t: T.Type) -> NativeParam | None:
     """A `ppy.Vec[int]` or another collection parameter: a handle native callers pass."""
     base = T.strip_literal(t)
     if not isinstance(base, T.Instance) or not base.args:
         return None
-    if base.name not in {"ppy.Vec", "ppy.Deque", "ppy.Heap", "ppy.MaxHeap"}:
+    if base.name not in _COLLECTIONS:
         return None
-    element = _scalar_name(base.args[0])
+    element = "int" if base.name in {"ppy.HashSet", "ppy.TreeSet"} else _scalar_name(base.args[-1])
     if element not in {"int", "float"}:
         return None
     return NativeParam(name, "handle", element, class_name=base.name)

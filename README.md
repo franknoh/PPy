@@ -30,6 +30,8 @@ Documentation: **[ppy.franknoh.dev](https://ppy.franknoh.dev/)**
   a package installs.
 - 8 library plugins: NumPy, PyTorch, JAX/Flax, pydantic, FastAPI/Uvicorn,
   SciPy, pandas, and PyArrow.
+- Collections that compile, with no pointers: `ppy.Vec`, `Deque`, `Heap`,
+  `LinkedList`, `HashMap`, `HashSet`, `TreeMap`, and `TreeSet`.
 - A native call with two `int` arguments costs 47 ns, against 28 ns for a
   plain Python call. It is 65 ns with a borrowed buffer, and 86 ns when a
   guard fails and the Python body runs. No Python frames are on the native

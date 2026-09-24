@@ -12,7 +12,17 @@ from typing import TYPE_CHECKING
 from ppy_runtime.version import VERSION as __version__
 
 from . import aio, atomic, concurrent, cpu, cuda, ffi, hip, simd, tile, xla
-from ._collections import Deque, Heap, MaxHeap, Vec
+from ._collections import (
+    Deque,
+    HashMap,
+    HashSet,
+    Heap,
+    LinkedList,
+    MaxHeap,
+    TreeMap,
+    TreeSet,
+    Vec,
+)
 from ._directives import (
     DIRECTIVE_ATTR,
     Directive,
@@ -95,9 +105,12 @@ __all__ = [
     "Dynamic",
     "FloatFormat",
     "FloatWidth",
+    "HashMap",
+    "HashSet",
     "Heap",
     "IntWidth",
     "Length",
+    "LinkedList",
     "MaxHeap",
     "Mut",
     "NoAlias",
@@ -107,6 +120,8 @@ __all__ = [
     "Shape",
     "Tensor",
     "TensorSpec",
+    "TreeMap",
+    "TreeSet",
     "Vec",
     "Vector",
     "VectorSpec",

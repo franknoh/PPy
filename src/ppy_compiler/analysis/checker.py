@@ -519,11 +519,7 @@ _FRESH_SUBSCRIPTED = frozenset(
         "ppy.buffer",
         "ppy.scan",
         "ppy.input",
-        *(
-            f"{prefix}{name}"
-            for prefix in ("ppy.", "")
-            for name in ("Vec", "Deque", "Heap", "MaxHeap")
-        ),
+        *(f"{prefix}{name}" for prefix in ("ppy.", "") for name in C.SHORT_NAMES),
     }
 )
 
@@ -2920,14 +2916,15 @@ class _Checker:
                 return Binding(T.UNKNOWN)
             return Binding(B.element_type(base))
         if isinstance(base, T.Instance):
-            if base.name in C.INDEXED:
-                self._effects = self._effects.add(raises=("IndexError",))
+            if base.name in C.INDEXED | C.MAPS:
+                self._effects = self._effects.add(raises=("IndexError", "KeyError"))
                 if is_slice:
                     self._error("E1301", f"a `{base.name}` is indexed by an int, not sliced", node)
-                return Binding(base.args[0] if base.args else T.UNKNOWN)
+                return Binding(C.value_of(base))
             if base.name in C.COLLECTIONS:
-                self._error("E1301", f"a `{base.name}` is read by `peek` and `pop`", node)
-                return Binding(base.args[0] if base.args else T.UNKNOWN)
+                wanted = "`peek` and `pop`" if "Heap" in base.name else "its methods"
+                self._error("E1301", f"a `{base.name}` is read by {wanted}", node)
+                return Binding(C.value_of(base))
             if base.name in {"list", "Sequence", "Buffer", "memoryview", "array"}:
                 self._effects = self._effects.add(raises=("IndexError",))
                 return Binding(base if is_slice else B.element_type(base))
@@ -4733,14 +4730,20 @@ class _Checker:
         func = node.func
         assert isinstance(func, ast.Subscript)
         canonical = self.project.resolver(self.symbols).canonical(func.value)
-        if canonical not in C.COLLECTIONS:
+        if canonical is None or canonical not in C.COLLECTIONS:
             return None
-        resolved = self.annotations.resolve(func.slice)
-        element = T.strip_literal(resolved.type)
-        if element not in C.ELEMENTS and element != T.UNKNOWN:
-            self._error(
-                "E1305", f"a `{canonical}` holds `int` or `float`, not `{resolved.type}`", node
-            )
+        parts = func.slice.elts if isinstance(func.slice, ast.Tuple) else [func.slice]
+        resolved = [T.strip_literal(self.annotations.resolve(part).type) for part in parts]
+        if len(resolved) != C.ARITY[canonical]:
+            wanted = "a key and a value type" if C.ARITY[canonical] == 2 else "one element type"
+            self._error("E1305", f"a `{canonical}` takes {wanted}", node)
+            resolved = [T.UNKNOWN] * C.ARITY[canonical]
+        keyed = canonical in C.KEYED
+        if keyed and resolved[0] not in (*C.KEYS, T.UNKNOWN):
+            self._error("E1305", f"a `{canonical}` has `int` keys, not `{resolved[0]}`", node)
+        element = resolved[-1]
+        if not (keyed and len(resolved) == 1) and element not in (*C.ELEMENTS, T.UNKNOWN):
+            self._error("E1305", f"a `{canonical}` holds `int` or `float`, not `{element}`", node)
         counted = canonical == "ppy.Vec"
         if node.keywords or len(node.args) > (1 if counted else 0):
             wanted = "how many zeros it starts with" if counted else "no arguments"
@@ -4752,18 +4755,18 @@ class _Checker:
                     "E1301", f"a `Vec` starts with a count of zeros, not `{count.type}`", argument
                 )
         self._effects = self._effects | EffectSet.of(Effect.ALLOC, raises=("ValueError",))
-        return Binding(C.instance(canonical, element), resolved.facts)
+        return Binding(C.instance(canonical, *resolved))
 
     def _collection_call(  # pylint: disable=too-many-arguments,too-many-positional-arguments
         self,
         callee: T.Callable_,
         node: ast.Call,
         args: list[Binding],
-        keywords: dict[str, Binding],
+        keywords: dict[str | None, Binding],
         env: Env,
     ) -> Binding:
         """A method of a collection: its arguments checked, and a write where it changes it."""
-        self._effects = self._effects.add(raises=("IndexError",))
+        self._effects = self._effects.add(raises=("IndexError", "KeyError"))
         if callee.qualname in C.MUTATORS and isinstance(node.func, ast.Attribute):
             self._effects = self._effects.add(Effect.WRITE_OBJECT)
             self._note_mutation(node.func.value, env)
@@ -4771,10 +4774,10 @@ class _Checker:
 
     def _store_element(self, container: T.Instance, value: Binding, target: ast.Subscript) -> None:
         """`v[i] = x`: an indexed collection, and a value its element can hold."""
-        if container.name not in C.INDEXED:
+        if container.name not in C.INDEXED | C.MAPS:
             self._error("E1301", f"a `{container.name}` has no index to store at", target)
             return
-        element = container.args[0] if container.args else T.UNKNOWN
+        element = C.value_of(container)
         stored = T.strip_literal(value.type)
         if element == T.INT and stored == T.FLOAT:
             self._error("E1301", "a `float` does not fit an `int` element", target)
@@ -5124,9 +5127,12 @@ class _Checker:
             if isinstance(base, T.DynamicType):
                 return Binding(T.DYNAMIC)
             return Binding(T.DYNAMIC if self._dynamic_depth else T.UNKNOWN)
-        if isinstance(base, T.Instance) and base.name in C.COLLECTIONS - C.ITERABLE:
-            self._error("E1302", f"a `{base.name}` is read by `peek` and `pop`, not iterated", node)
-            return Binding(base.args[0] if base.args else T.UNKNOWN)
+        if isinstance(base, T.Instance) and base.name in C.COLLECTIONS:
+            if base.name not in C.ITERABLE:
+                self._error(
+                    "E1302", f"a `{base.name}` is read by `peek` and `pop`, not iterated", node
+                )
+            return Binding(C.element_of(base))
         element = B.element_type(base)
         if isinstance(element, T.UnknownType):
             if isinstance(base, T.Instance) and base.name == "range":

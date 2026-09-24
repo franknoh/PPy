@@ -50,6 +50,22 @@ under CPython that gives the same answer as the compiled one.
       members:
         - buffer
 
+## Collections
+
+::: ppy._collections
+    options:
+      show_root_heading: false
+      members:
+        - Vec
+        - Deque
+        - Heap
+        - MaxHeap
+        - LinkedList
+        - HashMap
+        - HashSet
+        - TreeMap
+        - TreeSet
+
 ## The import hook
 
 ::: ppy._importer

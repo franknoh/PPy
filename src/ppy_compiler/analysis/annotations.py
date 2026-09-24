@@ -344,8 +344,8 @@ class AnnotationResolver:
         if qualname == "ppy.simd.Vector":
             return self._simd_vector(args, expr)
         if qualname in COLLECTIONS:
-            resolved = self._resolve(args[0]) if args else Resolved(T.UNKNOWN)
-            return Resolved(collection_instance(qualname, resolved.type))
+            resolved = [self._resolve(argument).type for argument in args] or [T.UNKNOWN]
+            return Resolved(collection_instance(qualname, *resolved))
         if qualname == "ppy.Buffer":
             resolved = self._resolve(args[0]) if args else Resolved(T.UNKNOWN)
             # `Buffer[ppy.i8]` is a byte per element, not a 64-bit int with a
