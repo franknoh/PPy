@@ -190,7 +190,9 @@ def _typed_dict(cls: Any, value: Any, path: str) -> dict[str, Any]:
         if name not in value:
             raise ValueError(f"{path}: missing key `{name}` of {cls.__name__}")
     return {
-        name: build(hints[name], value[name], f"{path}.{name}") for name in hints if name in value
+        name: build(hint, value[name], f"{path}.{name}")
+        for name, hint in hints.items()
+        if name in value
     }
 
 
