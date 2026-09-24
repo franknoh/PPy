@@ -6,11 +6,20 @@ hide:
 
 <div class="ppy-home" markdown>
 
+<div class="ppy-hero" markdown>
+
 # PPy
 
-<p class="ppy-lead">A compiler for the statically analyzable part of Python.
-It reads ordinary Python files and builds them into native code, C, CUDA,
-or StableHLO.</p>
+<p class="ppy-hero__text">A compiler for the statically analyzable part of Python</p>
+
+<p class="ppy-hero__tagline">It reads ordinary Python files and builds them
+into native code, C, CUDA, or StableHLO.</p>
+
+[Get started](getting-started.md){ .md-button .md-button--primary }
+[Examples](howto/index.md){ .md-button }
+[Performance](reference/performance.md){ .md-button }
+
+</div>
 
 A `.ppy` file is valid Python. You can run it with `python` and no compiler
 installed, and that run is the reference answer. The compiler reads the same
@@ -61,6 +70,8 @@ to a native build in about ten minutes.
 
 ## Highlights
 
+<div class="grid cards" markdown>
+
 - **Three paths, one answer.** `python f.ppy` runs plain CPython,
   `ppy f.ppy` runs the optimized Python backend, and `ppy run f.ppy` runs
   LLVM native code. All three must print the same output. A difference is a
@@ -71,14 +82,14 @@ to a native build in about ten minutes.
 - **Ahead-of-time builds.** `ppy build` produces a launcher and a library
   that keep working after the compiler is uninstalled. `ppy build
   --standalone` produces a native executable with no CPython inside.
-- **Seven backends off one IR:** LLVM, C11, C++17, CUDA, HIP, NVVM/PTX, and
+- **Seven backends off one IR.** LLVM, C11, C++17, CUDA, HIP, NVVM/PTX, and
   StableHLO, across 19 IR dialects. Other packages can
   [register their own backend](internals/backends.md).
 - **Collections without pointers.** [`Vec`, `Deque`, `Heap`, `LinkedList`,
   `HashMap`, `HashSet`, `TreeMap`, and `TreeSet`](guide/collections.md)
   compile to native code and give the same answers as their Python
   reference classes.
-- **Eight library plugins:** NumPy, PyTorch, JAX/Flax, pydantic,
+- **Eight library plugins.** NumPy, PyTorch, JAX/Flax, pydantic,
   FastAPI/Uvicorn, SciPy, pandas, and PyArrow.
 - **A cheap call boundary.** A native call with two `int` arguments costs
   47 ns, against 28 ns for a plain Python call, with no Python frames on the
@@ -86,6 +97,8 @@ to a native build in about ten minutes.
 - **Tested.** @@TEST_FUNCTIONS@@ test functions on Python 3.12, 3.13, and
   3.14, with 74% statement coverage. @@DIAGNOSTIC_CODES@@ diagnostic codes,
   each documented in one place.
+
+</div>
 
 ## Documentation
 
