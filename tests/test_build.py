@@ -509,18 +509,15 @@ def test_standalone_scan_reads_exactly_n_integers_or_stops(tmp_path: Path):
 @requires_c_compiler
 def test_standalone_rejects_a_python_reachable_graph(tmp_path: Path):
     (tmp_path / "pyproject.toml").write_text("[tool.ppy]\n", encoding="utf-8")
-    (tmp_path / "floaty.ppy").write_text(
+    (tmp_path / "wordy.ppy").write_text(
         textwrap.dedent(
             """
             import ppy
 
 
-            def scaled(x: float) -> float:
-                return x * 2.0
-
-
             def main() -> None:
-                print(scaled(1.5))
+                word: str = ppy.input[str]()
+                print(word)
 
 
             main()
@@ -529,7 +526,7 @@ def test_standalone_rejects_a_python_reachable_graph(tmp_path: Path):
         encoding="utf-8",
     )
     built = subprocess.run(
-        [sys.executable, "-m", "ppy_compiler", "build", "--standalone", "floaty.ppy"],
+        [sys.executable, "-m", "ppy_compiler", "build", "--standalone", "wordy.ppy"],
         cwd=tmp_path,
         capture_output=True,
         text=True,
@@ -537,7 +534,7 @@ def test_standalone_rejects_a_python_reachable_graph(tmp_path: Path):
     )
     assert built.returncode != 0
     assert "E1803" in built.stderr
-    assert "floaty.main" in built.stderr
+    assert "wordy.main" in built.stderr
 
 
 def test_build_honours_an_explicit_output_directory(project: Path, tmp_path: Path):

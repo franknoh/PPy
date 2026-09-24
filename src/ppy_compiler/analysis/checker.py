@@ -4716,17 +4716,28 @@ class _Checker:
                 element = T.INT
                 if isinstance(base, T.Instance) and base.args:
                     element = T.strip_literal(base.args[0])
-                if element not in (T.INT, T.UNKNOWN):
+                if element not in (T.INT, T.FLOAT, T.UNKNOWN):
                     self._error(
                         "E1305",
-                        f"a line of integers reads into `Buffer[int]`, not `{resolved.type}`",
+                        f"a line of numbers reads into `Buffer[int]` or `Buffer[float]`, "
+                        f"not `{resolved.type}`",
                         node,
                     )
-            elif not _line_readable(base):
+            elif not _line_readable(base) and not self._schema_readable(base):
                 self._error(
                     "E1305",
                     f"`ppy.input[T]` reads a line as `int`, `float`, `str`, a tuple or a "
-                    f"list of them, or `Buffer[int]`, not `{resolved.type}`",
+                    f"list of them, `Buffer[int]`/`Buffer[float]`, or JSON into a dataclass, "
+                    f"a pydantic model, or a TypedDict, not `{resolved.type}`",
+                    node,
+                )
+        elif buffer and isinstance(base, T.Instance) and base.args:
+            element = T.strip_literal(base.args[0])
+            if element not in (T.INT, T.FLOAT, T.UNKNOWN):
+                self._error(
+                    "E1305",
+                    f"a buffer is scanned as `Buffer[int]` or `Buffer[float]`, "
+                    f"not `{resolved.type}`",
                     node,
                 )
         if node.keywords or (len(node.args) != 1 if counted else node.args):
@@ -4752,6 +4763,30 @@ class _Checker:
             Effect.IO, Effect.ALLOC, raises=("EOFError", "TypeError", "ValueError")
         )
         return Binding(resolved.type, resolved.facts)
+
+    def _schema_readable(self, t: T.Type) -> bool:
+        """A class a JSON value is built into, or a container or optional of one.
+
+        That is what `ppy.input[T]` reads as JSON: a dataclass, a pydantic
+        model, or a `TypedDict`, and `list[Order]` or `Order | None` of one.
+        """
+        base = T.strip_literal(t)
+        if isinstance(base, T.Union_):
+            return any(self._schema_readable(item) for item in base.members)
+        if isinstance(base, T.Tuple_):
+            return any(self._schema_readable(item) for item in base.items)
+        if not isinstance(base, T.Instance):
+            return False
+        cls = self.project.classes.get(base.name)
+        if cls is not None and (
+            cls.is_dataclass
+            or cls.is_pydantic
+            or any(name.rpartition(".")[2] == "TypedDict" for name in (*cls.base_names, *cls.mro))
+        ):
+            return True
+        return base.name in {"list", "dict", "Sequence", "Mapping"} and any(
+            self._schema_readable(item) for item in base.args
+        )
 
     def _checked_conversion(self, node: ast.Call, env: Env) -> Binding | None:
         """`ppy.check[T](value)` and `ppy.assume[T](value)`: crossings out of dynamic code.

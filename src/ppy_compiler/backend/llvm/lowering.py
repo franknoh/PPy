@@ -372,6 +372,7 @@ _ALLOCATIONS = {
     "ppy.buffer[ppy.i8]": ("i8", False),
     "ppy.buffer[ppy.u8]": ("u8", False),
     "ppy.scan[Buffer[int]]": ("int", True),
+    "ppy.scan[Buffer[float]]": ("float", True),
 }
 
 

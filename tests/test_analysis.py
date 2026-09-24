@@ -817,11 +817,58 @@ def test_a_typed_read_takes_a_count_for_a_buffer_and_nothing_otherwise(write, co
         def not_a_line_type() -> int:
             return len(ppy.input[dict[int, int]]())
 
-        def not_a_line_of_integers() -> int:
+        def a_line_of_floats() -> int:
             return len(ppy.input[Buffer[float]]())
+
+        def not_a_line_of_numbers() -> int:
+            return len(ppy.input[Buffer[str]]())
         """,
     )
     assert codes(path) == ["E1305", "E1305", "E1305", "E1301", "E1305", "E1305", "E1305"]
+
+
+def test_a_typed_read_builds_json_into_a_schema_class(write, codes):
+    path = write(
+        "schemas.ppy",
+        """
+        from dataclasses import dataclass
+        from typing import TypedDict
+
+        import ppy
+
+
+        @dataclass
+        class Point:
+            x: int
+            y: int
+
+
+        class Meta(TypedDict):
+            source: str
+
+
+        class Plain:
+            def __init__(self) -> None:
+                self.x = 1
+
+
+        def point() -> int:
+            return ppy.input[Point]().x
+
+        def points() -> int:
+            return len(ppy.input[list[Point]]())
+
+        def maybe() -> bool:
+            return ppy.input[Point | None]() is None
+
+        def meta() -> str:
+            return ppy.scan[Meta]()["source"]
+
+        def not_a_schema() -> int:
+            return ppy.input[Plain]().x
+        """,
+    )
+    assert [code for code in codes(path) if code.startswith("E")] == ["E1305"]
 
 
 def test_call_arity_and_argument_types_are_checked(write, codes):

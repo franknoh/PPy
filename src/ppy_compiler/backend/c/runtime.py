@@ -48,7 +48,7 @@ _ALLOC = """{
         fputs("ppy: out of memory\\n", stderr);
         exit(1);
     }
-    return (int64_t *)room;
+    return (int8_t *)room;
 }"""
 
 SHIMS: dict[str, Shim] = {
@@ -68,7 +68,7 @@ SHIMS: dict[str, Shim] = {
     "ppy_rt_print_nl": Shim("void", (), "{ fputc('\\n', stdout); }", ("stdio.h",)),
     "ppy_rt_flush_stdout": Shim("void", (), "{ fflush(stdout); }", ("stdio.h",)),
     "ppy_rt_alloc": Shim(
-        "int64_t *", ("int64_t count", "int64_t width"), _ALLOC, ("stdio.h", "stdlib.h")
+        "int8_t *", ("int64_t count", "int64_t width"), _ALLOC, ("stdio.h", "stdlib.h")
     ),
 }
 # The scanner, the same text `ppy._io` compiles for a program under CPython.

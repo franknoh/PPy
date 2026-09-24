@@ -4,6 +4,7 @@ the compiled scanner and the Python fallback agree on every byte (spec 28)."""
 from __future__ import annotations
 
 import array
+import json
 import os
 import re
 import subprocess
@@ -272,11 +273,31 @@ def test_a_buffer_of_the_wrong_width_is_refused():
                 "`ppy.scan[Buffer[int]](n)` reads n tokens"
             ),
         ),
+        ("1 2.5\n", "ppy.input[Buffer[float]]()", "array('d', [1.0, 2.5])"),
+        ("\n", "ppy.input[Buffer[float]]()", "array('d')"),
+        (
+            "1 x\n",
+            "ppy.input[Buffer[float]]()",
+            "ValueError could not convert string to float: 'x'",
+        ),
         (
             "1 2\n",
-            "ppy.input[Buffer[float]]()",
-            "TypeError a line of integers reads into `Buffer[int]`, not `Buffer[float]`",
+            "ppy.input[Buffer[str]]()",
+            (
+                "TypeError a line of numbers reads into `Buffer[int]` or `Buffer[float]`, "
+                "not `Buffer[str]`"
+            ),
         ),
+        ("2147483647\n", "ppy.input[ppy.i32]()", "2147483647"),
+        (
+            "2147483648\n",
+            "ppy.input[ppy.i32]()",
+            "OverflowError 2147483648 does not fit in ppy.i32",
+        ),
+        ("-1\n", "ppy.input[ppy.u8]()", "OverflowError -1 does not fit in ppy.u8"),
+        ("255 -128\n", "ppy.input[tuple[ppy.u8, ppy.i8]]()", "(255, -128)"),
+        ("1 70000\n", "ppy.input[list[ppy.u16]]()", "OverflowError 70000 does not fit in ppy.u16"),
+        ("2.5\n", "ppy.input[ppy.f32]()", "2.5"),
         (
             "1\n",
             "ppy.input[int]('n? ')",
@@ -453,6 +474,18 @@ def test_input_matches_the_builtin_on_the_edges():
             "ValueError the integer 99999999999999999999 does not fit in 64 bits",
         ),
         ("2.5 x\n", "ppy.scan[float]()", "2.5"),
+        ("200\n7\n", "ppy.scan[tuple[ppy.u8, ppy.i8]]()", "(200, 7)"),
+        (
+            "300 1\n",
+            "ppy.scan[tuple[ppy.u8, ppy.i8]]()",
+            "OverflowError 300 does not fit in ppy.u8",
+        ),
+        ("1.5\n2\n", "ppy.scan[Buffer[float]](2)", "array('d', [1.5, 2.0])"),
+        (
+            "1.5\n",
+            "ppy.scan[Buffer[float]](2)",
+            "EOFError the input ended where a token was expected",
+        ),
         ("1 0\n", "ppy.scan[tuple[bool, bool]]()", "(True, False)"),
         ("", "ppy.scan[int]()", "EOFError the input ended where an integer was expected"),
         ("   \n", "ppy.scan[str]()", "EOFError the input ended where a token was expected"),
@@ -669,3 +702,154 @@ def test_the_readers_are_declared_on_the_package():
         assert name in ppy.__all__, name
         assert getattr(ppy, name) is not None
     assert ppy.scan is ppy._io.scan and ppy.input is ppy._io.input
+
+
+# -- JSON into a schema ----------------------------------------------------------------
+
+_SCHEMAS = """
+    from dataclasses import dataclass, field
+    from enum import Enum
+    from typing import Literal, TypedDict
+
+    import ppy
+
+
+    class Kind(Enum):
+        BOOK = "book"
+        PEN = "pen"
+
+
+    @dataclass
+    class Item:
+        name: str
+        price: float
+        kind: Kind
+        count: ppy.u8 = 1
+
+
+    class Meta(TypedDict):
+        source: str
+        tags: list[str]
+
+
+    @dataclass
+    class Order:
+        id: int
+        items: list[Item]
+        meta: Meta
+        status: Literal["open", "paid"] = "open"
+        note: str | None = None
+        extra: dict[str, int] = field(default_factory=dict)
+
+"""
+
+
+def test_input_builds_one_line_of_json_into_a_dataclass():
+    output = _both(
+        '{"id": 1, "items": [{"name": "a", "price": 2, "kind": "book"}], '
+        '"meta": {"source": "web", "tags": ["x"]}, "unknown": 5}\n'
+        '[{"id": 2, "items": [], "meta": {"source": "app", "tags": []}, "status": "paid"}]\n',
+        _SCHEMAS
+        + """
+    print(ppy.input[Order]())
+    print(ppy.input[list[Order]]())
+    """,
+    )
+    assert output == (
+        "Order(id=1, items=[Item(name='a', price=2.0, kind=<Kind.BOOK: 'book'>, count=1)], "
+        "meta={'source': 'web', 'tags': ['x']}, status='open', note=None, extra={})\n"
+        "[Order(id=2, items=[], meta={'source': 'app', 'tags': []}, status='paid', "
+        "note=None, extra={})]"
+    )
+
+
+def test_scan_reads_a_json_value_over_as_many_lines_as_it_spans():
+    """Brackets inside strings do not count, and the next read starts after the value."""
+    output = _both(
+        '\n{\n  "id": 3,\n  "items": [],\n'
+        '  "meta": {"source": "} and ] in a string", "tags": ["[", "{"]}\n}\n7\n',
+        _SCHEMAS
+        + """
+    order = ppy.scan[Order]()
+    print(order.id, order.meta["source"], order.meta["tags"], ppy.input[int]())
+    """,
+    )
+    assert output == "3 } and ] in a string ['[', '{'] 7"
+
+
+def _order(**changes: object) -> str:
+    """One line of JSON: a valid order with `changes` over it (None removes a key)."""
+    order: dict[str, object] = {"id": 1, "items": [], "meta": {"source": "x", "tags": []}}
+    order.update(changes)
+    return json.dumps({key: value for key, value in order.items() if value is not None})
+
+
+def _item(**changes: object) -> dict[str, object]:
+    return {"name": "a", "price": 2, "kind": "pen", **changes}
+
+
+@pytest.mark.parametrize(
+    ("line", "expected"),
+    [
+        (
+            _order(status="gone"),
+            "ValueError $.status: expected one of ['open', 'paid'], got 'gone'",
+        ),
+        (_order(id=True), "ValueError $.id: expected an integer, got a boolean"),
+        (
+            _order(items=[_item(price="2")]),
+            "ValueError $.items[0].price: expected a number, got a string",
+        ),
+        (_order(items=[_item(kind="cup")]), "ValueError $.items[0].kind: 'cup' is not a Kind"),
+        (
+            _order(items=[_item(count=256)]),
+            "ValueError $.items[0].count: 256 does not fit in ppy.u8",
+        ),
+        (_order(meta={"tags": []}), "ValueError $.meta: missing key `source` of Meta"),
+        (_order(id=None), "ValueError $: missing field `id` of Order"),
+        ("[1, 2]", "ValueError $: expected an object for Order, got an array"),
+        (
+            '{"id": 1,',
+            (
+                "JSONDecodeError Expecting property name enclosed in double quotes: "
+                "line 1 column 10 (char 9)"
+            ),
+        ),
+    ],
+)
+def test_input_says_where_json_does_not_fit_the_schema(line, expected):
+    program = (
+        _SCHEMAS
+        + """
+    try:
+        print(ppy.input[Order]())
+    except ValueError as error:
+        print(type(error).__name__, error)
+    """
+    )
+    assert _both(line + "\n", program) == expected
+
+
+def test_a_pydantic_model_is_validated_by_pydantic():
+    pytest.importorskip("pydantic")
+    output = _both(
+        '{"x": "3", "y": 2}\n{"x": 1, "y": -1}\n',
+        """
+        from pydantic import BaseModel, Field
+
+        import ppy
+
+
+        class Point(BaseModel):
+            x: int
+            y: int = Field(ge=0)
+
+
+        print(ppy.input[Point]())
+        try:
+            ppy.input[Point]()
+        except ValueError as error:
+            print(type(error).__name__, error.errors()[0]["loc"])
+        """,
+    )
+    assert output == "x=3 y=2\nValidationError ('y',)"

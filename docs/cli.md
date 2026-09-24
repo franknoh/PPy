@@ -461,10 +461,12 @@ keeps the guards, like other builds, and never claims Python's integers it
 cannot provide. `--unsafe` asks for wrap semantics outright, with almost no
 guards left to fail.
 
-`ppy.input[int]()` and `ppy.scan[int]()` are the scanner itself, the same C
-the runtime's reader compiles. Where Python would raise (the end of the
-input, a token that is not an integer), the binary says so on standard
-error and stops.
+`ppy.input` and `ppy.scan` of numbers, tuples of numbers, and number
+buffers are the scanner itself, the same C the runtime's reader compiles.
+Where Python would raise (the end of the input, a token that is not a
+number, a value outside its declared width), the binary names the same
+exception on standard error and stops. [Reading input](guide/input.md#native-code-and-standalone-binaries)
+lists what reads natively.
 
 Five of the six problems in `examples/15_algorithms` build this way once
 their buffers come from `ppy.buffer` rather than `array.array`, and four of
