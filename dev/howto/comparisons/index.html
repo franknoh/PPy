@@ -4734,7 +4734,7 @@ and passes scalars, and a million calls cost what CPython takes to run the
 body itself. A <code>@jitclass</code> instance crosses into an <code>@njit</code> function through
 Numba's dispatcher and its own object layout, several times that per call.</p>
 <p>The native loop is where the work is, and there the two agree. The loop
-here takes the class as a parameter; see Limitations for why.</p>
+here takes the class as a parameter.</p>
 <p>Intel Core Ultra 9 386H; Numba 0.67.0 on CPython 3.12.13, PPy on CPython
 3.14.5, from a checkout on a native filesystem.</p>
 <h2 id="tuples-compared-with-numba">Tuples: Compared with Numba<a class="headerlink" href="#tuples-compared-with-numba" title="Permanent link">&para;</a></h2>

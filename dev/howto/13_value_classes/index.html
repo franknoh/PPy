@@ -4217,14 +4217,19 @@ and passes scalars, and a million calls cost what CPython takes to run the
 body itself. A <code>@jitclass</code> instance crosses into an <code>@njit</code> function through
 Numba's dispatcher and its own object layout, several times that per call.</p>
 <p>The native loop is where the work is, and there the two agree. The loop
-here takes the class as a parameter; see Limitations for why.</p>
+here takes the class as a parameter.</p>
 <p>Intel Core Ultra 9 386H; Numba 0.67.0 on CPython 3.12.13, PPy on CPython
 3.14.5, from a checkout on a native filesystem.</p>
 <h2 id="limitations">Limitations<a class="headerlink" href="#limitations" title="Permanent link">&para;</a></h2>
-<p>Constructing a <code>Vec3</code> inside a native loop is where PPy stops. A value
-class built in the loop keeps the function in Python (<code>ppy explain</code> says
-<code>boxed: Vec3 has no native lowering</code>), so the loop in the comparison takes
-the class as a parameter.</p>
+<p>A value class can be built inside a native loop: <code>Vec3(float(i), 1.0, 0.5)</code>
+is a struct of three doubles, with no object behind it. Two things keep a
+function in Python:</p>
+<ul>
+<li>assigning a field in place (<code>v.x = 1.0</code>), since native code holds a value
+  class by value and the write would not reach the object Python sees</li>
+<li>building one without naming every field, since native code does not
+  evaluate a dataclass's defaults</li>
+</ul>
 <!-- outputs:start -->
 <h2 id="what-it-prints">What it prints<a class="headerlink" href="#what-it-prints" title="Permanent link">&para;</a></h2>
 <p><strong><code>python  value_classes.ppy</code></strong></p>

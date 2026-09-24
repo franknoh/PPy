@@ -4257,6 +4257,20 @@
   parameter; native callers pass its handle. Keys are <code>int</code>, elements and
   values <code>int</code> or <code>float</code>. <code>examples/47_collections</code> runs five problems
   with them: 4.3 s under CPython, 0.39 s under <code>ppy run</code>.</li>
+<li>Collections hold anything with a native form: numbers, tuples of numbers,
+  dataclasses (ordered with <code>order=True</code>), and other collections, so
+  <code>Vec[Vec[int]]</code>, <code>HashMap[int, Vec[int]]</code>, <code>Heap[tuple[int, int]]</code>, and
+  <code>Vec[Edge]</code> compile. Keys may be tuples of <code>int</code>. The runtime works on
+  words and the compiler writes the typed access per element type. Memory
+  is reference counted, so collections can be aliased, nested, returned
+  from native functions, and passed as temporaries; the emitted C of the
+  tests runs clean under AddressSanitizer with leak detection.</li>
+<li>Generic functions take, make, and return collections of their type
+  parameter (<code>def smallest[T: int | float](https://github.com/franknoh/PPy/blob/main/v: Vec[T], k: int) -&gt; Vec[T]</code>),
+  one native instance per type, standalone builds included. A generic
+  function's body may annotate locals with its type parameters.</li>
+<li>Emitted C no longer moves a store above a load of the same slot when it
+  writes a value straight into its destination.</li>
 <li>The standalone runtime's <code>ppy_rt_alloc</code> returns <code>int8_t *</code>, the type the
   IR gives it, so emitted C no longer warns about incompatible pointers
   (an error from GCC 14 on).</li>
@@ -4760,7 +4774,7 @@ on real hardware. The entries below are in the order the work landed.</p>
   as they should, and the entry point bears the function's qualified name
   rather than <code>call_0</code>.</li>
 <li>The landing page's test and diagnostic-code counts come from the tree
-  through markers (<code>1256</code>, <code>78</code>), and the
+  through markers (<code>1260</code>, <code>78</code>), and the
   guard refuses those spelled as digits. The GPU guide says what a ROCm
   machine gets: no launch, <code>compiled</code> false, <code>ppy emit hip</code> for <code>hipcc</code>.</li>
 <li>The ROCm harness installs every group when the image's JAX allows it
