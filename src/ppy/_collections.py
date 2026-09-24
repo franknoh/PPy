@@ -166,8 +166,13 @@ def _zero(spec: Any) -> Any:
         return tuple(_zero(part) for part in parts)
     if _is_record(spec):
         hints = typing.get_type_hints(spec)
-        return spec(**{item.name: _zero(hints[item.name]) for item in dataclasses.fields(spec)})
-    return spec()
+        if all(_scalar(hints[item.name]) is not None for item in dataclasses.fields(spec)):
+            return spec(**{item.name: _zero(hints[item.name]) for item in dataclasses.fields(spec)})
+    if _is_collection(spec):
+        return spec()
+    raise TypeError(
+        f"a Vec of {getattr(spec, '__name__', spec)} has no zero to start with; push instead"
+    )
 
 
 def _spelled(types: Any) -> str:

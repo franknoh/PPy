@@ -119,6 +119,29 @@ def definitions(tree: ast.Module) -> Iterator[tuple[str, ast.FunctionDef | ast.A
 _INTERCEPTORS = frozenset({"__getattr__", "__getattribute__", "__setattr__", "__init_subclass__"})
 
 
+def _writes_self(info) -> bool:  # type: ignore[no-untyped-def]
+    """Does a method other than `__init__` assign to a field of `self`?"""
+    for name, method in info.methods.items():
+        arguments = method.node.args.args
+        if name == "__init__" or not arguments:
+            continue
+        receiver = arguments[0].arg
+        for node in ast.walk(method.node):
+            targets: list[ast.expr] = []
+            if isinstance(node, ast.Assign):
+                targets = list(node.targets)
+            elif isinstance(node, (ast.AugAssign, ast.AnnAssign)):
+                targets = [node.target]
+            for target in targets:
+                if (
+                    isinstance(target, ast.Attribute)
+                    and isinstance(target.value, ast.Name)
+                    and target.value.id == receiver
+                ):
+                    return True
+    return False
+
+
 def value_class_layouts(bundle) -> dict[str, tuple[tuple[str, str], ...]]:  # type: ignore[no-untyped-def]
     """Classes whose instances can be flattened into scalar arguments.
 
@@ -141,6 +164,10 @@ def value_class_layouts(bundle) -> dict[str, tuple[tuple[str, str], ...]]:  # ty
             continue
         if set(info.fields) & set(info.methods):
             continue
+        # A method that writes its receiver needs the object it was called on:
+        # a value class is copied, so such a class is held by handle instead.
+        if _writes_self(info):
+            continue
         fields: list[tuple[str, str]] = []
         for name, declared in info.fields.items():
             if name in info.class_vars:
@@ -152,6 +179,17 @@ def value_class_layouts(bundle) -> dict[str, tuple[tuple[str, str], ...]]:  # ty
             fields.append((name, base.name))
         if fields:
             layouts[qualname] = tuple(fields)
+    # An object class: a project class with no base and no field interceptor
+    # that is not a value class. Native code holds its instances by handle; an
+    # empty layout marks it, which the value-class readers already skip.
+    for qualname, info in bundle.symbols.classes.items():
+        if qualname in layouts or info.is_protocol or info.is_enum or info.is_pydantic:
+            continue
+        if tuple(entry for entry in info.mro if entry != "object") != (qualname,):
+            continue
+        if _INTERCEPTORS & set(info.methods) or set(info.fields) & set(info.methods):
+            continue
+        layouts[qualname] = ()
     return layouts
 
 

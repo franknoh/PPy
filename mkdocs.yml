@@ -106,6 +106,7 @@ nav:
       - The subset: guide/subset.md
       - Directives and markers: guide/directives.md
       - Collections: guide/collections.md
+      - Classes: guide/classes.md
       - Native memory and FFI: guide/native.md
       - Lanes and the machine: guide/simd-cpu.md
       - Atomics and threads: guide/concurrency.md

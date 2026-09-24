@@ -64,7 +64,10 @@ def _program(bundle, reporter, entry: Path, *, project_modules: bool = False):  
     infos = (
         dict(bundle.symbols.functions)
         if project_modules
-        else {info.qualname: info for info in symbols.functions.values()}
+        else {
+            **{info.qualname: info for info in symbols.functions.values()},
+            **{m.qualname: m for c in symbols.classes.values() for m in c.methods.values()},
+        }
     )
     if project_modules:
         # Imports execute even when none of their functions is called. Check
@@ -86,12 +89,19 @@ def _program(bundle, reporter, entry: Path, *, project_modules: bool = False):  
         function = analyses.get(qualname)
         if function is None:
             continue
-        for callee in sorted(function.calls):
+        callees = set(function.calls)
+        owner = infos[qualname].owner if qualname in infos else None
+        if owner is not None and owner in bundle.symbols.classes:
+            # A class used natively brings its methods: `len(stack)` and `if
+            # stack:` call `__len__` and `__bool__` without naming them.
+            callees |= {m.qualname for m in bundle.symbols.classes[owner].methods.values()}
+        for callee in sorted(callees):
             if callee in infos and callee not in reached_from:
                 reached_from[callee] = qualname
                 frontier.append(callee)
 
     functions = {}
+    layouts = value_class_layouts(bundle)
     for qualname in reachable:
         info = infos.get(qualname)
         function = analyses.get(qualname)
@@ -99,7 +109,10 @@ def _program(bundle, reporter, entry: Path, *, project_modules: bool = False):  
             return _fail(
                 reporter, _chain(reached_from, qualname, "is not a function of this module")
             )
-        ok, reason = eligible(info, function, allow_io=True)
+        # A generic, or a generic class's method, is lowered where it is
+        # instantiated, with its type arguments known.
+        generic = _generic(bundle, info)
+        ok, reason = (True, "") if generic else eligible(info, function, layouts, allow_io=True)
         if not ok:
             return _fail(reporter, _chain(reached_from, qualname, reason))
         functions[qualname] = (info, function, info.node)
@@ -142,13 +155,14 @@ def standalone_ir(  # type: ignore[no-untyped-def]
     signatures = {
         qualname: (info, frontends[info.module].signature(info, analysis))
         for qualname, (info, analysis, _) in functions.items()
+        if not _generic(bundle, info)
     }
     modules = []
     for name, frontend in frontends.items():
         frontend.imports = signatures.get
         lowered = frontend.build({q: f for q, f in functions.items() if f[0].module == name})
         for qualname, reason in sorted(lowered.rejected.items()):
-            if functions[qualname][0].type_params:
+            if qualname in frontend.generics:
                 continue  # A generic is lowered where a caller instantiates it.
             return _fail(reporter, _chain(reached_from, qualname, reason))
         modules.append(lowered.module)
@@ -215,7 +229,7 @@ def build_standalone(  # type: ignore[no-untyped-def]
         prover=prover_for(config),
     )
     for qualname, reason in sorted(result.rejected.items()):
-        if functions[qualname][0].type_params:
+        if _generic(bundle, functions[qualname][0]):
             continue  # A generic is lowered where a caller instantiates it.
         return _fail(reporter, _chain(reached_from, qualname, reason))
     if entry_qualname not in result.functions:
@@ -271,8 +285,17 @@ def _binds_a_constant(statement, constants: dict) -> bool:  # type: ignore[no-un
     return False
 
 
+def _generic(bundle, info) -> bool:  # type: ignore[no-untyped-def]
+    """A generic function, or a method of a generic class: lowered per instantiation."""
+    owner = bundle.symbols.classes.get(info.owner) if info.owner else None
+    return bool(info.type_params) or (owner is not None and bool(owner.type_params))
+
+
 def _field_dataclass(statement) -> bool:  # type: ignore[no-untyped-def]
-    """`@dataclass class Point: x: int; y: float`, fields and a docstring alone."""
+    """A class a standalone program can hold: no bases, `@dataclass` or nothing,
+    and a body of methods, field annotations (with constant defaults), and a
+    docstring. Its instances are native values or native objects; nothing has
+    to run to define it."""
     import ast
 
     if not isinstance(statement, ast.ClassDef) or statement.bases or statement.keywords:
@@ -280,7 +303,7 @@ def _field_dataclass(statement) -> bool:  # type: ignore[no-untyped-def]
     decorated = [
         ast.unparse(d.func if isinstance(d, ast.Call) else d) for d in statement.decorator_list
     ]
-    if decorated not in (["dataclass"], ["dataclasses.dataclass"]):
+    if decorated not in ([], ["dataclass"], ["dataclasses.dataclass"]):
         return False
     for index, item in enumerate(statement.body):
         docstring = (
@@ -289,8 +312,11 @@ def _field_dataclass(statement) -> bool:  # type: ignore[no-untyped-def]
             and isinstance(item.value, ast.Constant)
             and isinstance(item.value.value, str)
         )
-        field = isinstance(item, ast.AnnAssign) and item.value is None
-        if not (docstring or field):
+        field = isinstance(item, ast.AnnAssign) and (
+            item.value is None or isinstance(item.value, ast.Constant)
+        )
+        method = isinstance(item, ast.FunctionDef)
+        if not (docstring or field or method):
             return False
     return True
 

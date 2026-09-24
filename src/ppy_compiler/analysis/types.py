@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import builtins
 from collections.abc import Iterable, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
 __all__ = [
     "ANY",
@@ -330,10 +330,10 @@ def substitute(t: Type, bindings: dict[TypeVar_, Type]) -> Type:
     if isinstance(t, Union_):
         return union(*[substitute(m, bindings) for m in t.members])
     if isinstance(t, Callable_):
-        return Callable_(
-            tuple(substitute(p, bindings) for p in t.params),
-            substitute(t.ret, bindings),
-            t.qualname,
+        return replace(
+            t,
+            params=tuple(replace(p, type=substitute(p.type, bindings)) for p in t.params),
+            ret=substitute(t.ret, bindings),
         )
     if isinstance(t, ClassObject) and t.instance_type is not None:
         inner = substitute(t.instance_type, bindings)
@@ -360,7 +360,7 @@ def type_variables(t: Type) -> tuple[TypeVar_, ...]:
                 walk(m)
         elif isinstance(node, Callable_):
             for p in node.params:
-                walk(p)
+                walk(p.type)
             walk(node.ret)
 
     walk(t)
@@ -406,7 +406,7 @@ def infer(pattern: Type, actual: Type, bindings: dict[TypeVar_, Type]) -> bool:
     if isinstance(pattern, Callable_) and isinstance(actual, Callable_):
         ok = infer(pattern.ret, actual.ret, bindings)
         for p, a in zip(pattern.params, actual.params, strict=False):
-            ok = infer(p, a, bindings) and ok
+            ok = infer(p.type, a.type, bindings) and ok
         return ok
     return True
 

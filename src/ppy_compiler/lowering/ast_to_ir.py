@@ -85,7 +85,7 @@ from ..ir.dialects import tensor as tensor_dialect
 from ..ir.transforms.autodiff import AutodiffError, differentiate
 from ..plugins.base import DialectOperationSpec, PluginError, PluginRegistry
 from .abi import signature_from_ir
-from .collections import HANDLE, CollectionLowering, Held, kind_of
+from .collections import HANDLE, CollectionLowering, Held
 
 __all__ = ["Frontend", "Lowered", "lower_function", "lower_module_to_ir"]
 
@@ -401,7 +401,7 @@ class Frontend:
                 self.externs[qualname] = (info, dict(extern.options))
                 lowered.rejected[qualname] = "a C binding has no body of its own"
                 continue
-            if info.type_params:
+            if info.type_params or self._generic_owner(info):
                 # Lowered per instantiation, when a native caller names one.
                 self.generics[qualname] = (info, analysis, node)
                 lowered.rejected[qualname] = (
@@ -442,7 +442,7 @@ class Frontend:
                 continue
             if proved:
                 lowered.proved[qualname] = tuple(proved)
-            exposed, why = should_lower_native(info, analysis)
+            exposed, why = should_lower_native(info, analysis, self.layouts)
             signature = self.declared[qualname][1]
             assert isinstance(signature, IRSignature)
             lowered.functions[qualname] = CanonicalFunction(
@@ -533,8 +533,8 @@ class Frontend:
         native = None
         if (
             all(p.native is not None and _param_type(p.native) == p.type for p in parameters)
-            and (_return_atoms(info.ret) is not None or info.ret == T.NONE)
-            and results == _result_types(info)
+            and (_return_atoms(info.ret, self.layouts) is not None or info.ret == T.NONE)
+            and results == _result_types(info, self.layouts)
         ):
             native = _signature(info, self.layouts, analysis)
         if self.cpu_compatible and native is None:
@@ -588,7 +588,11 @@ class Frontend:
         params = [(parameter.name, _param_type(parameter)) for parameter in signature.parameters]
         attributes: dict[str, Attribute] = {}
         kinds = self.parameter_attributes(info, signature)
-        results = signature.results if isinstance(signature, IRSignature) else _result_types(info)
+        results = (
+            signature.results
+            if isinstance(signature, IRSignature)
+            else _result_types(info, self.layouts)
+        )
         function = self.module.add_function(
             info.qualname.replace(".", "_"),
             params,
@@ -652,7 +656,9 @@ class Frontend:
             )
         else:
             results = (
-                signature.results if isinstance(signature, IRSignature) else _result_types(info)
+                signature.results
+                if isinstance(signature, IRSignature)
+                else _result_types(info, self.layouts)
             )
         for _name, type_ in params:
             self.require_type(type_)
@@ -747,8 +753,18 @@ class Frontend:
     def _drop(self, qualname: str) -> None:
         self.declared[qualname][0].body.blocks.clear()
 
+    def _generic_owner(self, info: FunctionInfo) -> bool:
+        """A method of a generic class: specialized with its class, as a generic is."""
+        if not info.owner:
+            return False
+        owner = self.analysis.symbols.classes.get(info.owner.rpartition(".")[2])
+        return owner is not None and bool(owner.type_params)
+
     def instantiate(
-        self, qualname: str, arguments: tuple[T.Type, ...]
+        self,
+        qualname: str,
+        arguments: tuple[T.Type, ...],
+        bindings: dict[T.TypeVar_, T.Type] | None = None,
     ) -> tuple[IRFunction, NativeSignature | IRSignature] | None:
         """The native function `qualname[arguments]`, made now if it is new.
 
@@ -762,13 +778,17 @@ class Frontend:
         if entry is None:
             return None
         info, analysis, node = entry
+        if bindings is not None:
+            # A method of a generic class: its class's arguments are its own.
+            arguments = tuple(bindings.values())
         key = (qualname, tuple(str(a) for a in arguments))
         found = self.instances.get(key)
         if found is not None:
             return found
         if key in self._instantiating:
             raise Unsupported(f"`{qualname}` instantiates itself with the same arguments")
-        bindings = dict(zip(info.type_params, arguments, strict=True))
+        if bindings is None:
+            bindings = dict(zip(info.type_params, arguments, strict=True))
         specialized = _specialized_info(info, bindings, key[1])
         if self.cpu_compatible:
             ok, reason = eligible(
@@ -847,8 +867,8 @@ def _param_type(parameter) -> IRType:  # type: ignore[no-untyped-def]
     return _scalar_type(parameter.kind)
 
 
-def _result_types(info: FunctionInfo) -> tuple[IRType, ...]:
-    atoms = _return_atoms(info.ret)
+def _result_types(info: FunctionInfo, layouts: ClassLayouts | None = None) -> tuple[IRType, ...]:
+    atoms = _return_atoms(info.ret, layouts)
     if atoms is None:
         return ()
     if atoms == ("handle",):
@@ -1018,7 +1038,7 @@ class _FunctionLowering(CollectionLowering):
                 continue
             if parameter.is_handle:
                 declared = next(p.type for p in self.info.params if p.name == parameter.name)
-                kind = kind_of(declared, self._records())
+                kind = self._reference_of_type(declared)
                 if kind is None:
                     raise Unsupported(f"`{parameter.name}` is a collection with no native form")
                 self._bind_parameter(parameter.name, kind, argument)
@@ -1113,8 +1133,14 @@ class _FunctionLowering(CollectionLowering):
             case ast.AnnAssign():
                 if node.value is not None:
                     if isinstance(node.target, ast.Name) and self._make_collection(
-                        node.target.id, node.value
+                        node.target.id, node.value, self._type_of(node.target)
                     ):
+                        return
+                    if (
+                        isinstance(node.target, ast.Attribute)
+                        and self._object_of(node.target.value) is not None
+                    ):
+                        self._field_store(node.target, node.value)
                         return
                     if (
                         isinstance(node.target, ast.Name)
@@ -1214,6 +1240,9 @@ class _FunctionLowering(CollectionLowering):
             return
         if isinstance(target, ast.Subscript) and self._is_collection(target.value):
             self._item(target.value, target.slice, node.value)
+            return
+        if isinstance(target, ast.Attribute) and self._object_of(target.value) is not None:
+            self._field_store(target, node.value)
             return
         if (
             self.frontend.standalone
@@ -1404,6 +1433,13 @@ class _FunctionLowering(CollectionLowering):
 
     def _augassign(self, node: ast.AugAssign) -> None:
         target = node.target
+        if isinstance(target, ast.Attribute) and self._object_of(target.value) is not None:
+            read = ast.Attribute(value=target.value, attr=target.attr, ctx=ast.Load())
+            combined = ast.BinOp(left=read, op=node.op, right=node.value)
+            ast.copy_location(read, target)
+            ast.copy_location(combined, node)
+            self._field_store(target, combined)
+            return
         if isinstance(target, ast.Subscript) and self._is_collection(target.value):
             read = ast.Subscript(value=target.value, slice=target.slice, ctx=ast.Load())
             combined = ast.BinOp(left=read, op=node.op, right=node.value)
@@ -1804,7 +1840,9 @@ class _FunctionLowering(CollectionLowering):
                 return self._await(node)
             case ast.Attribute():
                 if isinstance(node.value, ast.Name) and node.value.id in self.objects:
-                    return self._field(node.value.id, node.attr)
+                    return self._struct_field(node.value.id, node.attr)
+                if self._object_of(node.value) is not None:
+                    return self._field_value(node)
                 record = self._record_value(node.value)
                 if record is not None:
                     assert isinstance(record.type, StructType)
@@ -1824,7 +1862,7 @@ class _FunctionLowering(CollectionLowering):
                 raise Unsupported("subscripting this value has no native lowering")
         raise Unsupported(f"`{type(node).__name__}` has no native lowering")
 
-    def _field(self, name: str, attr: str) -> Value:
+    def _struct_field(self, name: str, attr: str) -> Value:
         struct = self.objects[name]
         assert isinstance(struct.type, StructType)
         if struct.type.field_type(attr) is None:
@@ -1881,6 +1919,10 @@ class _FunctionLowering(CollectionLowering):
     def _unary(self, node: ast.UnaryOp) -> Value:
         if isinstance(node.op, ast.Not) and self._is_collection(node.operand):
             return self._truth_of(node.operand, empty=True)
+        if isinstance(node.op, ast.Not):
+            absent = self._object_truth(node.operand, empty=True)
+            if absent is not None:
+                return absent
         if isinstance(node.op, ast.USub) and isinstance(node.operand, ast.Constant):
             literal = node.operand.value
             if isinstance(literal, bool):
@@ -1937,6 +1979,9 @@ class _FunctionLowering(CollectionLowering):
         folded = self._feature_membership(node)
         if folded is not None:
             return folded
+        same = self._identity(node)
+        if same is not None:
+            return same
         operator = node.ops[0]
         container = node.comparators[0]
         if isinstance(operator, (ast.In, ast.NotIn)) and self._is_collection(container):
@@ -2072,11 +2117,13 @@ class _FunctionLowering(CollectionLowering):
             and node.func.value.id in self.matches
         ):
             return self._match_method(node.func.value.id, node)
+        if isinstance(node.func, ast.Attribute) and self._object_of(node.func.value) is not None:
+            return self._object_method(node, discard_result)
         if isinstance(node.func, ast.Attribute) and self._is_collection(node.func.value):
             if discard_result and self._is_collection(node):
                 self._discard(node)
                 return core.const(self.b, 0, I64)
-            return self._method(node.func.value, node.func.attr, node)
+            return self._collection_method(node.func.value, node.func.attr, node)
         record = self._record_construction(node)
         if record is not None:
             return record
@@ -2133,6 +2180,9 @@ class _FunctionLowering(CollectionLowering):
             argument = node.args[0]
             if self._is_collection(argument):
                 return self._length(argument)
+            measured = self._object_length(argument)
+            if measured is not None:
+                return measured
             if isinstance(argument, ast.Name) and argument.id in self.tuples:
                 width = len(self.tuples[argument.id].type.pointee.items)  # type: ignore[attr-defined]
                 return self._int_constant(width)
@@ -3242,8 +3292,9 @@ class _FunctionLowering(CollectionLowering):
                 arguments.append(buffer)
                 continue
             if parameter.is_handle:
-                kind = self._kind_of(argument)
-                if kind is None or kind.spelled != parameter.element:
+                none = isinstance(argument, ast.Constant) and argument.value is None
+                kind = self._reference_of(argument)
+                if not none and (kind is None or kind.spelled != parameter.element):
                     shown = kind.spelled if kind is not None else ast.unparse(argument)
                     raise Unsupported(
                         f"`{qualname}` expects a `{parameter.element}`, not `{shown}`"
@@ -3966,6 +4017,9 @@ class _FunctionLowering(CollectionLowering):
         """An expression as a condition. A collection is true when it holds anything."""
         if self._is_collection(node):
             return self._truth_of(node)
+        present = self._object_truth(node)
+        if present is not None:
+            return present
         return self._truth(self._expr(node))
 
     def _truth(self, value: Value) -> Value:

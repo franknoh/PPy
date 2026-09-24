@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import ast
 import hashlib
+from dataclasses import replace
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -524,6 +525,14 @@ _FRESH_SUBSCRIPTED = frozenset(
 )
 
 
+def _receiver_bindings(info: ClassInfo, base: T.Instance) -> dict[T.TypeVar_, T.Type]:
+    """What a generic class's parameters are for one instance: `T` is `int` in a
+    `Stack[int]`. An instance written without its arguments binds nothing."""
+    if not info.type_params or len(base.args) != len(info.type_params):
+        return {}
+    return dict(zip(info.type_params, base.args, strict=True))
+
+
 def _collection_root(node: ast.expr) -> ast.expr:
     """The variable a write through a collection element lands in: `adj` for
     `adj[u].push(v)` and for `grid[i][j] = x`. An element is held by its
@@ -624,6 +633,9 @@ class _Checker:
         self._external_writes = False
         self._aliases: AliasInfo | None = None
         self._bound_methods: set[int] = set()
+        #: For a method read off a generic class's instance, by the attribute
+        #: node: what the class's parameters are for that receiver.
+        self._receivers: dict[int, dict[T.TypeVar_, T.Type]] = {}
         self._module_seed: dict[str, Binding] | None = None
         #: Nodes that already produced a diagnostic, so a downstream pass does
         #: not report a second, less useful one about the same expression.
@@ -771,10 +783,12 @@ class _Checker:
             env.set(param.name, Binding(param.type, facts))
 
         # A generic function's body may name its type parameters, as its
-        # signature does: `s: T = v[0]`.
+        # signature does: `s: T = v[0]`; a method's body, its class's too.
         outer_params = self.annotations.type_params
+        owner = self.project.classes.get(info.owner) if info.owner else None
         self.annotations.type_params = {
             **outer_params,
+            **{variable.name: variable for variable in (owner.type_params if owner else ())},
             **{variable.name: variable for variable in info.type_params},
         }
         for stmt in info.node.body:
@@ -2090,6 +2104,10 @@ class _Checker:
         elif info.is_dataclass or info.is_pydantic:
             self._check_field_construction(info, node, args, keywords)
         facts = Facts(exact_class=cls.name)
+        explicit = cls.instance_type
+        if info.type_params and isinstance(explicit, T.Instance) and explicit.args:
+            # `Stack[int]()`: the arguments were written out with the class.
+            return Binding(explicit, facts)
         return Binding(info.instance(), facts)
 
     def _check_field_construction(
@@ -2222,13 +2240,15 @@ class _Checker:
             )
             if info.type_params:
                 return self._generic_call(info, node, args, keywords, bound=bound)
-            self._check_argument_types(info, node, args, keywords, bound=bound)
+            receiver = self._receivers.get(id(node.func), {})
+            self._check_argument_types(info, node, args, keywords, bound=bound, receiver=receiver)
             if info.dynamic:
                 self._native_blockers.append(f"`{info.name}` is a dynamic boundary")
+            result = T.substitute(info.ret, receiver) if receiver else info.ret
             if info.is_async:
                 # Calling a coroutine makes an awaitable of its result.
-                return Binding(_awaitable_of(info.ret))
-            return Binding(info.ret, info.ret_facts)
+                return Binding(_awaitable_of(result))
+            return Binding(result, info.ret_facts)
         for index, (param, argument) in enumerate(zip(signature.params, args, strict=False)):
             fits = T.is_assignable(argument.type, param.type)
             if not fits and signature.qualname in _LOOKUPS and index == 0:
@@ -2411,6 +2431,7 @@ class _Checker:
         keywords: dict[str | None, Binding],
         *,
         bound: bool = False,
+        receiver: dict[T.TypeVar_, T.Type] | None = None,
     ) -> None:
         offset = 1 if bound or (info.is_method and not info.is_static) else 0
         # Positional order, keywords by name, the receiver that is never
@@ -2419,6 +2440,8 @@ class _Checker:
         positional = args[: len(positional_values(node.args))]
         for reached in bind_call(info.params, positional, list(keywords.items()), offset=offset):
             param, argument = reached.param, reached.value
+            if receiver:
+                param = replace(param, type=T.substitute(param.type, receiver))
             if isinstance(param.type, T.UnknownType):
                 continue
             where = node
@@ -2516,31 +2539,33 @@ class _Checker:
         if isinstance(base, T.Instance):
             info = self.project.classes.get(base.name)
             if info is not None:
+                receiver = _receiver_bindings(info, base)
                 method = info.find_method(node.attr, self.project)
                 if method is not None:
                     self._effects = self._effects.add(Effect.READ_OBJECT)
+                    if receiver:
+                        self._receivers[id(node)] = receiver
                     if method.is_property:
-                        return Binding(method.ret, method.ret_facts)
+                        return Binding(T.substitute(method.ret, receiver), method.ret_facts)
                     if method.is_method and not method.is_static:
                         # Reached through an instance, the method has bound
                         # its receiver: what a caller sees -- and what a
                         # callback parameter receives -- starts at the next
                         # parameter. Calls bind against this same signature.
                         signature = method.signature()
-                        return Binding(
-                            T.Callable_(
-                                signature.params[1:],
-                                signature.ret,
-                                signature.qualname,
-                                is_async=signature.is_async,
-                                is_generator=signature.is_generator,
-                            )
+                        bound_method = T.Callable_(
+                            signature.params[1:],
+                            signature.ret,
+                            signature.qualname,
+                            is_async=signature.is_async,
+                            is_generator=signature.is_generator,
                         )
-                    return Binding(method.signature())
+                        return Binding(T.substitute(bound_method, receiver))
+                    return Binding(T.substitute(method.signature(), receiver))
                 found = info.lookup(node.attr, self.project)
                 if found is not None:
                     self._effects = self._effects.add(Effect.READ_OBJECT)
-                    return Binding(found[0], found[1])
+                    return Binding(T.substitute(found[0], receiver), found[1])
                 inherited_external = self._external_base_attribute(info, node.attr, owner.facts)
                 if inherited_external is not None:
                     return inherited_external
@@ -2920,6 +2945,9 @@ class _Checker:
 
     def _expr_Subscript(self, node: ast.Subscript, env: Env) -> Binding:
         owner = self._expr(node.value, env)
+        generic = self._generic_class(owner, node)
+        if generic is not None:
+            return generic
         index = self._expr(node.slice, env)
         narrowed = env.get(_attribute_path(node) or "")
         if narrowed is not None:
@@ -4748,6 +4776,31 @@ class _Checker:
         )
         return Binding(T.instance("Buffer", element.type))
 
+    def _generic_class(self, owner: Binding, node: ast.Subscript) -> Binding | None:
+        """`Stack[int]`: a generic class with its type arguments, as a class object."""
+        if not isinstance(owner.type, T.ClassObject):
+            return None
+        info = self.project.classes.get(owner.type.name)
+        if info is None or not info.type_params:
+            return None
+        parts = node.slice.elts if isinstance(node.slice, ast.Tuple) else [node.slice]
+        arguments = tuple(self.annotations.resolve(part).type for part in parts)
+        if len(arguments) != len(info.type_params):
+            self._error(
+                "E1301",
+                f"`{info.name}` takes {len(info.type_params)} type argument(s), "
+                f"not {len(arguments)}",
+                node,
+            )
+            return Binding(T.UNKNOWN)
+        for variable, argument in zip(info.type_params, arguments, strict=True):
+            bound = variable.bound
+            if bound is not None and not T.is_assignable(argument, bound):
+                self._error(
+                    "E1721", f"`{argument}` is not within `{variable}`'s bound `{bound}`", node
+                )
+        return Binding(T.ClassObject(info.qualname, info.instance(arguments)))
+
     def _typed_collection(self, node: ast.Call, env: Env) -> Binding | None:
         """`ppy.Vec[int]()`, `ppy.Deque[float]()`, `ppy.Heap[int]()`: a new, empty collection.
 
@@ -5127,6 +5180,8 @@ class _Checker:
                 if info.slots is not None:
                     self._error("E1202", f"`{info.name}` has no attribute `{target.attr}`", target)
                 return
+            expected = T.substitute(declared[0], _receiver_bindings(info, base))
+            declared = (expected, declared[1])
             if not isinstance(declared[0], T.Callable_) and not T.is_assignable(
                 value.type, declared[0]
             ):
@@ -5385,7 +5440,36 @@ class _Checker:
             if keyword.arg is None or id(keyword.value) not in keyword_bound:
                 self._mark_expanded_escape(keyword.value, env)
 
+    def _is_reference(self, node: ast.expr) -> bool:
+        """Is `node` a collection or an instance of a project class: something
+        native code holds by handle, which never crosses the Python boundary?"""
+        base = T.strip_literal(self.module.node_types.get(id(node), T.UNKNOWN))
+        if isinstance(base, T.Union_):
+            members = [m for m in base.members if m != T.NONE]
+            base = T.strip_literal(members[0]) if len(members) == 1 else base
+        if not isinstance(base, T.Instance):
+            return False
+        info = self.project.classes.get(base.name)
+        return C.is_collection(base) or (info is not None and not info.is_pydantic)
+
     def _note_mutation(self, node: ast.expr, env: Env) -> None:
+        if self._is_reference(node):
+            # A write through an object or a collection lands in what its root
+            # variable holds: a parameter's, or this function's own.
+            root = _collection_root(node)
+            while isinstance(root, ast.Attribute):
+                root = _collection_root(root.value)
+            if isinstance(root, ast.Name) and self._aliases is not None:
+                roots = self._roots(root, root.id)
+                params = self._aliases.param_roots(roots)
+                if params:
+                    self._mutated.update(params)
+                    for name in sorted(params):
+                        self._blockers.append(f"mutates parameter `{name}`")
+                    self._external_writes = True
+                else:
+                    self._local_writes.update(roots - {EXTERNAL})
+                return
         if isinstance(node, ast.Name):
             roots = self._roots(node, node.id)
             params = (
@@ -5419,6 +5503,7 @@ class _Checker:
         summary = self.module.functions.get(info.qualname) or self.analysis.function(info.qualname)
         written = summary.mutated_params | summary.delegated_writes if summary is not None else None
         reached_nodes: set[int] = set()
+        receiver = self._receivers.get(id(node.func), {})
         for reached in bind_ast_call(info, node):
             reached_nodes.add(id(reached.value))
             if written is not None:
@@ -5426,7 +5511,21 @@ class _Checker:
                     continue
             elif reached.param.facts.ownership == "borrowed":
                 continue
-            self._propagate_callee_write(reached.value, reached.param.type)
+            # A generic class's parameter is what this receiver says it is: a
+            # `Stack[int]`'s `push` takes an `int`, which no write can reach.
+            declared = (
+                T.substitute(reached.param.type, receiver) if receiver else reached.param.type
+            )
+            self._propagate_callee_write(reached.value, declared)
+        bound_receiver = (
+            isinstance(node.func, ast.Attribute) and info.is_method and not info.is_static
+        )
+        writes_receiver = written is None or bool(info.params and info.params[0].name in written)
+        if bound_receiver and info.params and writes_receiver:
+            receiver_node = node.func.value  # type: ignore[union-attr]
+            if self._is_reference(receiver_node):
+                # The method writes its receiver: what the call was made on.
+                self._propagate_callee_write(receiver_node, None)
 
         if written is not None and not written:
             return
@@ -5441,6 +5540,11 @@ class _Checker:
 
     def _propagate_callee_write(self, argument: ast.expr, declared: T.Type | None) -> None:
         if self._argument_is_safe(argument, declared):
+            return
+        if self._is_reference(argument):
+            # A callee writing an object or a collection writes what the argument
+            # holds, which is this function's own unless a parameter lent it.
+            self._note_mutation(argument, Env())
             return
         self._note_delegated_write(argument)
         self._external_writes = True

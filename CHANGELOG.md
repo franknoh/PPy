@@ -43,6 +43,21 @@
   parameter (`def smallest[T: int | float](v: Vec[T], k: int) -> Vec[T]`),
   one native instance per type, standalone builds included. A generic
   function's body may annotate locals with its type parameters.
+- Classes in native code. A class whose methods change its fields, or whose
+  fields hold objects or collections, is an object class: native code holds
+  an instance by handle, with reference counting, so trees, linked nodes
+  (`left: "Node | None"`), and objects in collections lower. Methods lower
+  with `self` as a handle, `x is None` compares with the null handle, and
+  `len(obj)` and `if obj:` call `__len__` and `__bool__`. Reference cycles
+  are not freed.
+- Generic classes: `class Stack[T]` with fields and methods over `T`. The
+  checker substitutes a receiver's type arguments into its fields and
+  methods, so `Stack[int]().push(2.5)` is `E1301`, and native code
+  instantiates the class and its methods per type argument.
+- Standalone programs may define classes (no bases, `@dataclass` or none,
+  methods and annotated fields) and use `len` and truth tests on them.
+- Emitted C reserves the C library's names, so a function called `remove`
+  no longer collides with `stdio.h`.
 - Emitted C no longer moves a store above a load of the same slot when it
   writes a value straight into its destination.
 - The standalone runtime's `ppy_rt_alloc` returns `int8_t *`, the type the
