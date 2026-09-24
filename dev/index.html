@@ -710,6 +710,8 @@
       
         
       
+        
+      
     
     
     
@@ -807,6 +809,34 @@
     
   
     Directives and markers
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="guide/collections/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Collections
   
 
     
@@ -1811,6 +1841,8 @@
       
         
       
+        
+      
     
     
     
@@ -2179,6 +2211,34 @@
     
   
     Regular expressions
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="howto/47_collections/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Collections
   
 
     
@@ -3996,12 +4056,16 @@ to a native build in about ten minutes.</p>
 <li><strong>Seven backends off one IR:</strong> LLVM, C11, C++17, CUDA, HIP, NVVM/PTX, and
   StableHLO, across 19 IR dialects. Other packages can
   <a href="internals/backends/">register their own backend</a>.</li>
+<li><strong>Collections without pointers.</strong> <a href="guide/collections/"><code>Vec</code>, <code>Deque</code>, <code>Heap</code>, <code>LinkedList</code>,
+  <code>HashMap</code>, <code>HashSet</code>, <code>TreeMap</code>, and <code>TreeSet</code></a>
+  compile to native code and give the same answers as their Python
+  reference classes.</li>
 <li><strong>Eight library plugins:</strong> NumPy, PyTorch, JAX/Flax, pydantic,
   FastAPI/Uvicorn, SciPy, pandas, and PyArrow.</li>
 <li><strong>A cheap call boundary.</strong> A native call with two <code>int</code> arguments costs
   47 ns, against 28 ns for a plain Python call, with no Python frames on the
   native path.</li>
-<li><strong>Tested.</strong> 1244 test functions on Python 3.12, 3.13, and
+<li><strong>Tested.</strong> 1256 test functions on Python 3.12, 3.13, and
   3.14, with 74% statement coverage. 78 diagnostic codes,
   each documented in one place.</li>
 </ul>
@@ -4024,7 +4088,7 @@ to a native build in about ten minutes.</p>
 </tr>
 <tr>
 <td><a href="howto/">Examples</a></td>
-<td>46 folders and 56 programs with their commands and output. 18 of them are measured against Numba, Cython, NumPy, numexpr, JAX, PyTorch, CuPy, Triton, Taichi, Mojo, Codon, Rust, C, pandas, polars, asyncio, and uvloop; the results are collected on the <a href="howto/comparisons/">comparisons page</a>.</td>
+<td>47 folders and 57 programs with their commands and output. 18 of them are measured against Numba, Cython, NumPy, numexpr, JAX, PyTorch, CuPy, Triton, Taichi, Mojo, Codon, Rust, C, pandas, polars, asyncio, and uvloop; the results are collected on the <a href="howto/comparisons/">comparisons page</a>.</td>
 </tr>
 <tr>
 <td><a href="reference/">Reference</a></td>

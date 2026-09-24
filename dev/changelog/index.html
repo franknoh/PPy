@@ -617,6 +617,8 @@
       
         
       
+        
+      
     
     
     
@@ -714,6 +716,34 @@
     
   
     Directives and markers
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../guide/collections/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Collections
   
 
     
@@ -1718,6 +1748,8 @@
       
         
       
+        
+      
     
     
     
@@ -2086,6 +2118,34 @@
     
   
     Regular expressions
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../howto/47_collections/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Collections
   
 
     
@@ -4186,6 +4246,17 @@
   it spans. A dataclass or <code>TypedDict</code> is checked field by field and a
   mismatch is a <code>ValueError</code> naming where (<code>$.items[2].price</code>); a pydantic
   model is validated by pydantic.</li>
+<li>Collections that compile: <code>ppy.Vec</code>, <code>ppy.Deque</code>, <code>ppy.Heap</code>,
+  <code>ppy.MaxHeap</code>, <code>ppy.LinkedList</code> (nodes named by integer ids),
+  <code>ppy.HashMap</code>, <code>ppy.HashSet</code> (insertion order), <code>ppy.TreeMap</code>, and
+  <code>ppy.TreeSet</code> (key order, with <code>floor</code>, <code>ceiling</code>, <code>lower</code>, <code>higher</code>).
+  Under CPython each is a Python class, the reference. A function that
+  makes and uses them lowers to calls into a small C runtime under
+  <code>ppy run</code>, in a standalone binary, and in emitted C and C++, and frees
+  what it made before it returns. A native function may take one as a
+  parameter; native callers pass its handle. Keys are <code>int</code>, elements and
+  values <code>int</code> or <code>float</code>. <code>examples/47_collections</code> runs five problems
+  with them: 4.3 s under CPython, 0.39 s under <code>ppy run</code>.</li>
 <li>The standalone runtime's <code>ppy_rt_alloc</code> returns <code>int8_t *</code>, the type the
   IR gives it, so emitted C no longer warns about incompatible pointers
   (an error from GCC 14 on).</li>
@@ -4689,7 +4760,7 @@ on real hardware. The entries below are in the order the work landed.</p>
   as they should, and the entry point bears the function's qualified name
   rather than <code>call_0</code>.</li>
 <li>The landing page's test and diagnostic-code counts come from the tree
-  through markers (<code>1244</code>, <code>78</code>), and the
+  through markers (<code>1256</code>, <code>78</code>), and the
   guard refuses those spelled as digits. The GPU guide says what a ROCm
   machine gets: no launch, <code>compiled</code> false, <code>ppy emit hip</code> for <code>hipcc</code>.</li>
 <li>The ROCm harness installs every group when the image's JAX allows it
