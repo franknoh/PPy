@@ -46,8 +46,8 @@
         
         
         <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=IBM+Plex+Sans:300,300i,400,400i,700,700i%7CJetBrains+Mono:400,400i,700,700i&display=fallback">
-        <style>:root{--md-text-font:"IBM Plex Sans";--md-code-font:"JetBrains Mono"}</style>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Inter:300,300i,400,400i,700,700i%7CJetBrains+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Inter";--md-code-font:"JetBrains Mono"}</style>
       
     
     
@@ -4030,10 +4030,15 @@
 
 
 <div class="ppy-home">
+<div class="ppy-hero">
 <h1 id="ppy">PPy<a class="headerlink" href="#ppy" title="Permanent link">&para;</a></h1>
-<p class="ppy-lead">A compiler for the statically analyzable part of Python.
-It reads ordinary Python files and builds them into native code, C, CUDA,
-or StableHLO.</p>
+<p class="ppy-hero__text">A compiler for the statically analyzable part of Python</p>
+<p class="ppy-hero__tagline">It reads ordinary Python files and builds them
+into native code, C, CUDA, or StableHLO.</p>
+<p><a class="md-button md-button--primary" href="getting-started/">Get started</a>
+<a class="md-button" href="howto/">Examples</a>
+<a class="md-button" href="reference/performance/">Performance</a></p>
+</div>
 <p>A <code>.ppy</code> file is valid Python. You can run it with <code>python</code> and no compiler
 installed, and that run is the reference answer. The compiler reads the same
 file, proves what it can about the types and effects, lowers it through a
@@ -4072,6 +4077,7 @@ Numba, Codon, PyPy, Cython, mypyc, and Nuitka.</p>
 <p>Then follow <a href="getting-started/">Getting started</a>, which goes from this file
 to a native build in about ten minutes.</p>
 <h2 id="highlights">Highlights<a class="headerlink" href="#highlights" title="Permanent link">&para;</a></h2>
+<div class="grid cards">
 <ul>
 <li><strong>Three paths, one answer.</strong> <code>python f.ppy</code> runs plain CPython,
   <code>ppy f.ppy</code> runs the optimized Python backend, and <code>ppy run f.ppy</code> runs
@@ -4083,14 +4089,14 @@ to a native build in about ten minutes.</p>
 <li><strong>Ahead-of-time builds.</strong> <code>ppy build</code> produces a launcher and a library
   that keep working after the compiler is uninstalled. <code>ppy build
   --standalone</code> produces a native executable with no CPython inside.</li>
-<li><strong>Seven backends off one IR:</strong> LLVM, C11, C++17, CUDA, HIP, NVVM/PTX, and
+<li><strong>Seven backends off one IR.</strong> LLVM, C11, C++17, CUDA, HIP, NVVM/PTX, and
   StableHLO, across 19 IR dialects. Other packages can
   <a href="internals/backends/">register their own backend</a>.</li>
 <li><strong>Collections without pointers.</strong> <a href="guide/collections/"><code>Vec</code>, <code>Deque</code>, <code>Heap</code>, <code>LinkedList</code>,
   <code>HashMap</code>, <code>HashSet</code>, <code>TreeMap</code>, and <code>TreeSet</code></a>
   compile to native code and give the same answers as their Python
   reference classes.</li>
-<li><strong>Eight library plugins:</strong> NumPy, PyTorch, JAX/Flax, pydantic,
+<li><strong>Eight library plugins.</strong> NumPy, PyTorch, JAX/Flax, pydantic,
   FastAPI/Uvicorn, SciPy, pandas, and PyArrow.</li>
 <li><strong>A cheap call boundary.</strong> A native call with two <code>int</code> arguments costs
   47 ns, against 28 ns for a plain Python call, with no Python frames on the
@@ -4099,6 +4105,7 @@ to a native build in about ten minutes.</p>
   3.14, with 74% statement coverage. 78 diagnostic codes,
   each documented in one place.</li>
 </ul>
+</div>
 <h2 id="documentation">Documentation<a class="headerlink" href="#documentation" title="Permanent link">&para;</a></h2>
 <table>
 <thead>
