@@ -6,7 +6,7 @@
       <meta charset="utf-8">
       <meta name="viewport" content="width=device-width,initial-scale=1">
       
-        <meta name="description" content="A statically analyzable language in Python's syntax, and a compiler whose three paths agree">
+        <meta name="description" content="A compiler for a statically analyzable subset of Python">
       
       
       
@@ -22,12 +22,12 @@
         
       
       
-      <link rel="icon" href="../../assets/images/favicon.png">
+      <link rel="icon" href="../../assets/logo.svg">
       <meta name="generator" content="mkdocs-ProperDocs 1.6.7, mkdocs-material-9.7.7">
     
     
       
-        <title>Comparisons - PPY</title>
+        <title>Comparisons - PPy</title>
       
     
     
@@ -48,8 +48,8 @@
         
         
         <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
-        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=IBM+Plex+Sans:300,300i,400,400i,700,700i%7CJetBrains+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"IBM Plex Sans";--md-code-font:"JetBrains Mono"}</style>
       
     
     
@@ -75,7 +75,7 @@
     
     
     
-    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="deep-purple">
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="custom" data-md-color-accent="custom">
   
     
     <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
@@ -104,10 +104,9 @@
 
 <header class="md-header md-header--shadow md-header--lifted" data-md-component="header">
   <nav class="md-header__inner md-grid" aria-label="Header">
-    <a href="../.." title="PPY" class="md-header__button md-logo" aria-label="PPY" data-md-component="logo">
+    <a href="../.." title="PPy" class="md-header__button md-logo" aria-label="PPy" data-md-component="logo">
       
-  
-  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+  <img src="../../assets/logo.svg" alt="logo">
 
     </a>
     <label class="md-header__button md-icon" for="__drawer">
@@ -118,7 +117,7 @@
       <div class="md-header__ellipsis">
         <div class="md-header__topic">
           <span class="md-ellipsis">
-            PPY
+            PPy
           </span>
         </div>
         <div class="md-header__topic" data-md-component="header-topic">
@@ -137,7 +136,7 @@
     
     
     
-    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="deep-purple"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="custom" data-md-color-accent="custom"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
     
       <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"/></svg>
@@ -147,7 +146,7 @@
     
     
     
-    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="deep-purple"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="custom" data-md-color-accent="custom"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
     
       <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"/></svg>
@@ -250,36 +249,20 @@
   
   
   
-    <li class="md-tabs__item">
-      <a href="../../getting-started/" class="md-tabs__link">
-        
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../getting-started/" class="md-tabs__link">
+          
   
   
     
   
-  Getting started
+  Learn
 
-      </a>
-    </li>
-  
-
-      
-        
-  
-  
-  
-  
-    <li class="md-tabs__item">
-      <a href="../../installing/" class="md-tabs__link">
-        
-  
-  
+        </a>
+      </li>
     
-  
-  Installing
-
-      </a>
-    </li>
   
 
       
@@ -322,47 +305,6 @@
     
   
   Examples
-
-        </a>
-      </li>
-    
-  
-
-      
-        
-  
-  
-  
-  
-    <li class="md-tabs__item">
-      <a href="../../cli/" class="md-tabs__link">
-        
-  
-  
-    
-  
-  CLI
-
-      </a>
-    </li>
-  
-
-      
-        
-  
-  
-  
-  
-    
-    
-      <li class="md-tabs__item">
-        <a href="../../api/" class="md-tabs__link">
-          
-  
-  
-    
-  
-  API
 
         </a>
       </li>
@@ -420,25 +362,6 @@
   
   
     <li class="md-tabs__item">
-      <a href="../../contributing/" class="md-tabs__link">
-        
-  
-  
-    
-  
-  Contributing
-
-      </a>
-    </li>
-  
-
-      
-        
-  
-  
-  
-  
-    <li class="md-tabs__item">
       <a href="../../changelog/" class="md-tabs__link">
         
   
@@ -480,13 +403,12 @@
 
 <nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
   <label class="md-nav__title" for="__drawer">
-    <a href="../.." title="PPY" class="md-nav__button md-logo" aria-label="PPY" data-md-component="logo">
+    <a href="../.." title="PPy" class="md-nav__button md-logo" aria-label="PPy" data-md-component="logo">
       
-  
-  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+  <img src="../../assets/logo.svg" alt="logo">
 
     </a>
-    PPY
+    PPy
   </label>
   
     <div class="md-nav__source">
@@ -537,6 +459,64 @@
   
   
   
+    
+    
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Learn
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Learn
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
     <li class="md-nav__item">
       <a href="../../getting-started/" class="md-nav__link">
         
@@ -557,9 +537,10 @@
     </li>
   
 
-    
-      
-      
+              
+            
+              
+                
   
   
   
@@ -581,6 +562,14 @@
   
 
       </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
     </li>
   
 
@@ -643,7 +632,7 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
         
           
           <div class="md-nav__link md-nav__container">
@@ -665,14 +654,14 @@
             </a>
             
               
-              <label class="md-nav__link " for="__nav_4" id="__nav_4_label" tabindex="0">
+              <label class="md-nav__link " for="__nav_3" id="__nav_3_label" tabindex="0">
                 <span class="md-nav__icon md-icon"></span>
               </label>
             
           </div>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_4">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -1182,7 +1171,7 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" checked>
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" checked>
         
           
           <div class="md-nav__link md-nav__container">
@@ -1204,14 +1193,14 @@
             </a>
             
               
-              <label class="md-nav__link " for="__nav_5" id="__nav_5_label" tabindex="">
+              <label class="md-nav__link " for="__nav_4" id="__nav_4_label" tabindex="">
                 <span class="md-nav__icon md-icon"></span>
               </label>
             
           </div>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="true">
-          <label class="md-nav__title" for="__nav_5">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_4">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -1452,6 +1441,34 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="GPU kernels: Compared with CuPy, Numba, Mojo, and CUDA C">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#how-each-tool-writes-the-block-max" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How each tool writes the block max
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#results" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Results
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -1506,6 +1523,56 @@
       
     </span>
   </a>
+  
+    <nav class="md-nav" aria-label="GPT-2 XL: one region per block: Compared with PyTorch eager and torch.compile at model scale">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#where-the-time-goes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Where the time goes
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#what-a-region-leaves-unfused" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What a region leaves unfused
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-reduce-overhead-column" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The reduce-overhead column
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#setup" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Setup
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -1591,10 +1658,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5_3" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_3" >
         
           
-          <label class="md-nav__link" for="__nav_5_3" id="__nav_5_3_label" tabindex="">
+          <label class="md-nav__link" for="__nav_4_3" id="__nav_4_3_label" tabindex="">
             
   
   
@@ -1612,8 +1679,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_5_3_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_5_3">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_3">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -2044,10 +2111,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5_4" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_4" >
         
           
-          <label class="md-nav__link" for="__nav_5_4" id="__nav_5_4_label" tabindex="">
+          <label class="md-nav__link" for="__nav_4_4" id="__nav_4_4_label" tabindex="">
             
   
   
@@ -2065,8 +2132,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_5_4_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_5_4">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_4">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -2453,10 +2520,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5_5" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_5" >
         
           
-          <label class="md-nav__link" for="__nav_5_5" id="__nav_5_5_label" tabindex="">
+          <label class="md-nav__link" for="__nav_4_5" id="__nav_4_5_label" tabindex="">
             
   
   
@@ -2474,8 +2541,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_5_5_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_5_5">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_5">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -2654,10 +2721,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5_6" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_6" >
         
           
-          <label class="md-nav__link" for="__nav_5_6" id="__nav_5_6_label" tabindex="">
+          <label class="md-nav__link" for="__nav_4_6" id="__nav_4_6_label" tabindex="">
             
   
   
@@ -2675,8 +2742,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_5_6_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_5_6">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_6">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -3065,10 +3132,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5_7" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_7" >
         
           
-          <label class="md-nav__link" for="__nav_5_7" id="__nav_5_7_label" tabindex="">
+          <label class="md-nav__link" for="__nav_4_7" id="__nav_4_7_label" tabindex="">
             
   
   
@@ -3086,8 +3153,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_5_7_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_5_7">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_7">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -3258,6 +3325,85 @@
   
   
   
+    
+    
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../reference/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_5" id="__nav_5_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+  
+  
     <li class="md-nav__item">
       <a href="../../cli/" class="md-nav__link">
         
@@ -3266,7 +3412,7 @@
   <span class="md-ellipsis">
     
   
-    CLI
+    Command line
   
 
     
@@ -3278,9 +3424,122 @@
     </li>
   
 
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/diagnostics/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
     
-      
-      
+  
+    Diagnostics
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/config/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/performance/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Performance
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/compatibility/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Compatibility
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
   
   
   
@@ -3315,7 +3574,7 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5_7" >
         
           
           <div class="md-nav__link md-nav__container">
@@ -3326,7 +3585,7 @@
   <span class="md-ellipsis">
     
   
-    API
+    Python API
   
 
     
@@ -3337,18 +3596,18 @@
             </a>
             
               
-              <label class="md-nav__link " for="__nav_7" id="__nav_7_label" tabindex="0">
+              <label class="md-nav__link " for="__nav_5_7" id="__nav_5_7_label" tabindex="0">
                 <span class="md-nav__icon md-icon"></span>
               </label>
             
           </div>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_7">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_5_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5_7">
             <span class="md-nav__icon md-icon"></span>
             
   
-    API
+    Python API
   
 
           </label>
@@ -3502,192 +3761,6 @@
     </li>
   
 
-    
-      
-      
-  
-  
-  
-  
-    
-    
-      
-        
-          
-        
-      
-        
-      
-        
-      
-        
-      
-        
-      
-    
-    
-    
-      
-      
-        
-      
-    
-    
-    <li class="md-nav__item md-nav__item--nested">
-      
-        
-        
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" >
-        
-          
-          <div class="md-nav__link md-nav__container">
-            <a href="../../reference/" class="md-nav__link ">
-              
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Reference
-  
-
-    
-  </span>
-  
-  
-
-            </a>
-            
-              
-              <label class="md-nav__link " for="__nav_8" id="__nav_8_label" tabindex="0">
-                <span class="md-nav__icon md-icon"></span>
-              </label>
-            
-          </div>
-        
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_8">
-            <span class="md-nav__icon md-icon"></span>
-            
-  
-    Reference
-  
-
-          </label>
-          <ul class="md-nav__list" data-md-scrollfix>
-            
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../reference/diagnostics/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Diagnostics
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../reference/config/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Configuration
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../reference/performance/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Performance
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../reference/compatibility/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Compatibility
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
               
             
           </ul>
@@ -3726,6 +3799,8 @@
       
         
       
+        
+      
     
     
     
@@ -3739,7 +3814,7 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
         
           
           <div class="md-nav__link md-nav__container">
@@ -3761,14 +3836,14 @@
             </a>
             
               
-              <label class="md-nav__link " for="__nav_9" id="__nav_9_label" tabindex="0">
+              <label class="md-nav__link " for="__nav_6" id="__nav_6_label" tabindex="0">
                 <span class="md-nav__icon md-icon"></span>
               </label>
             
           </div>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_9">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -4004,15 +4079,8 @@
 
               
             
-          </ul>
-        </nav>
-      
-    </li>
-  
-
-    
-      
-      
+              
+                
   
   
   
@@ -4034,6 +4102,14 @@
   
 
       </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
     </li>
   
 
@@ -4254,6 +4330,34 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="GPU kernels: Compared with CuPy, Numba, Mojo, and CUDA C">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#how-each-tool-writes-the-block-max" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How each tool writes the block max
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#results" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Results
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -4309,6 +4413,56 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="GPT-2 XL: one region per block: Compared with PyTorch eager and torch.compile at model scale">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#where-the-time-goes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Where the time goes
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#what-a-region-leaves-unfused" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What a region leaves unfused
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-reduce-overhead-column" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The reduce-overhead column
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#setup" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Setup
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -4351,20 +4505,20 @@
 
 
 <h1 id="comparisons">Comparisons<a class="headerlink" href="#comparisons" title="Permanent link">&para;</a></h1>
-<p>Every example that measures itself against other tools, collected. Each section
-is the example's own, with its table and what each port asked for; the
-counterpart programs are on the example's page and in its <code>compare/</code> folder,
-and <code>examples/compare.py</code> is the harness that held them to one answer before
-timing them.</p>
+<p>The examples that measure themselves against other tools, on one page. Each
+section is copied from its example, with the table and what each port needed.
+The counterpart programs are on the example's page and in its <code>compare/</code>
+folder. <code>examples/compare.py</code> checked that they all print the same answer
+before timing them.</p>
 <h2 id="numerics-compared-with-numba-codon-mojo-c-and-rust">Numerics: Compared with Numba, Codon, Mojo, C, and Rust<a class="headerlink" href="#numerics-compared-with-numba-codon-mojo-c-and-rust" title="Permanent link">&para;</a></h2>
 <p>From <a href="../11_numerics/">Numerics</a>.
 The same three functions, written for five other compilers, in
 <a href="https://github.com/franknoh/PPy/blob/main/examples/11_numerics/compare"><code>compare/</code></a>: <a href="https://github.com/franknoh/PPy/blob/main/examples/11_numerics/compare/semantics_numba.py"><code>semantics_numba.py</code></a>,
 <a href="https://github.com/franknoh/PPy/blob/main/examples/11_numerics/compare/semantics_codon.py"><code>semantics_codon.py</code></a>, <a href="https://github.com/franknoh/PPy/blob/main/examples/11_numerics/compare/semantics.mojo"><code>semantics.mojo</code></a>,
-<a href="https://github.com/franknoh/PPy/blob/main/examples/11_numerics/compare/semantics.c"><code>semantics.c</code></a>, and <a href="https://github.com/franknoh/PPy/blob/main/examples/11_numerics/compare/semantics.rs"><code>semantics.rs</code></a>.
-There is nothing to time here; the question is what each prints for
-<code>may_overflow(30)</code>, <code>floor_semantics(-7, 2)</code>, and <code>modulo_semantics(7, -2)</code>,
-and the answers Python gives are <code>265252859812191058636308480000000</code>, <code>-4</code>,
+<a href="https://github.com/franknoh/PPy/blob/main/examples/11_numerics/compare/semantics.c"><code>semantics.c</code></a>, and <a href="https://github.com/franknoh/PPy/blob/main/examples/11_numerics/compare/semantics.rs"><code>semantics.rs</code></a>.</p>
+<p>There is nothing to time here. The question is what each prints for
+<code>may_overflow(30)</code>, <code>floor_semantics(-7, 2)</code>, and <code>modulo_semantics(7, -2)</code>.
+The answers Python gives are <code>265252859812191058636308480000000</code>, <code>-4</code>,
 and <code>-1</code>.</p>
 <table>
 <thead>
@@ -4378,7 +4532,7 @@ and <code>-1</code>.</p>
 </thead>
 <tbody>
 <tr>
-<td><strong>Python, PPY on every path</strong></td>
+<td><strong>Python, PPy on every path</strong></td>
 <td>265252859812191058636308480000000</td>
 <td style="text-align: right;">-4</td>
 <td style="text-align: right;">-1</td>
@@ -4428,23 +4582,29 @@ and <code>-1</code>.</p>
 </tr>
 </tbody>
 </table>
-<p>Numba and Mojo keep Python's division and remainder and wrap the multiply
-silently; Codon, C, and Rust in release keep C's rounding and wrap; Rust in
-debug is the only other one that notices the overflow, and its answer is to
-stop. PPY's is to notice and continue in Python: the same function, the
-same source, the number Python prints. <code>--unsafe</code> on <code>ppy run</code> or <code>ppy build</code>
-buys the wrap-semantics row, and says so.</p>
+<ul>
+<li>Numba and Mojo keep Python's division and remainder and wrap the multiply
+  silently.</li>
+<li>Codon, C, and Rust in release keep C's rounding and wrap.</li>
+<li>Rust in debug is the only other one that notices the overflow, and its
+  answer is to stop.</li>
+</ul>
+<p>PPy notices and continues in Python: the same function, the same source,
+the number Python prints. <code>--unsafe</code> on <code>ppy run</code> or <code>ppy build</code> buys the
+wrap-semantics row, and says so.</p>
 <p>Numba 0.67.0 on CPython 3.12.13, Codon 0.19.6, Mojo 1.0.0, gcc 13.3, rustc
 1.95.0.</p>
+<!-- outputs:start -->
+
 <h2 id="value-classes-compared-with-numbas-jitclass">Value classes: Compared with Numba's <code>@jitclass</code><a class="headerlink" href="#value-classes-compared-with-numbas-jitclass" title="Permanent link">&para;</a></h2>
 <p>From <a href="../13_value_classes/">Value classes</a>.
 A million <code>distance2</code> calls from Python, and a native loop over a <code>Ray</code>'s
 two fields, in <a href="https://github.com/franknoh/PPy/blob/main/examples/13_value_classes/compare"><code>compare/</code></a>:
-<a href="https://github.com/franknoh/PPy/blob/main/examples/13_value_classes/compare/vectors_bench.ppy"><code>vectors_bench.ppy</code></a> -- under <code>ppy run</code> and,
-the same file, under <code>python</code> -- and
+<a href="https://github.com/franknoh/PPy/blob/main/examples/13_value_classes/compare/vectors_bench.ppy"><code>vectors_bench.ppy</code></a> (under <code>ppy run</code> and, the
+same file, under <code>python</code>) and
 <a href="https://github.com/franknoh/PPy/blob/main/examples/13_value_classes/compare/vectors_numba.py"><code>vectors_numba.py</code></a>. Milliseconds, best of five,
 over five processes.</p>
-<p><strong>PPY</strong> is a <code>@dataclass</code> and functions over it; Numba's nearest thing is a
+<p><strong>PPy</strong> is a <code>@dataclass</code> and functions over it. Numba's nearest thing is a
 <code>@jitclass</code> with a typed field list, whose instances are Numba's own
 objects rather than Python ones:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nd">@dataclass</span>
@@ -4484,7 +4644,7 @@ objects rather than Python ones:</p>
 <thead>
 <tr>
 <th></th>
-<th style="text-align: right;">PPY <code>ppy run</code></th>
+<th style="text-align: right;">PPy <code>ppy run</code></th>
 <th style="text-align: right;">CPython, the same file</th>
 <th style="text-align: right;">Numba <code>@jitclass</code></th>
 </tr>
@@ -4506,27 +4666,25 @@ objects rather than Python ones:</p>
 </table>
 <!-- compare:end -->
 
-<p>Inside a native loop the two are the same code: the <code>Ray</code> is two doubles
-in registers on both. The difference is the boundary. Eight float
-operations are too little work to see past it: a PPY value class is still
-a Python dataclass, the generated boundary reads its fields and passes
-scalars, and a million calls cost what CPython takes to run the body
-itself; a <code>@jitclass</code> instance crosses into an <code>@njit</code> function through
-Numba's dispatcher and its own object layout, several times that per
-call. The native loop is where the work is, and there the two agree. Constructing a <code>Vec3</code> inside a native loop is where PPY
-stops: a value class built in the loop keeps the function in Python (<code>ppy
-explain</code> says <code>boxed: Vec3 has no native lowering</code>), so the loop here
-takes the class as a parameter.</p>
-<p>Intel Core Ultra 9 386H; Numba 0.67.0 on CPython 3.12.13, PPY on CPython
+<p>Inside a native loop the two are the same code: the <code>Ray</code> is two doubles in
+registers on both. The difference is the boundary.</p>
+<p>Eight float operations are too little work to see past it. A PPy value
+class is still a Python dataclass: the generated boundary reads its fields
+and passes scalars, and a million calls cost what CPython takes to run the
+body itself. A <code>@jitclass</code> instance crosses into an <code>@njit</code> function through
+Numba's dispatcher and its own object layout, several times that per call.</p>
+<p>The native loop is where the work is, and there the two agree. The loop
+here takes the class as a parameter; see Limitations for why.</p>
+<p>Intel Core Ultra 9 386H; Numba 0.67.0 on CPython 3.12.13, PPy on CPython
 3.14.5, from a checkout on a native filesystem.</p>
 <h2 id="tuples-compared-with-numba">Tuples: Compared with Numba<a class="headerlink" href="#tuples-compared-with-numba" title="Permanent link">&para;</a></h2>
 <p>From <a href="../14_tuples/">Tuples</a>.
 A million <code>divmod_pair</code> calls from Python, and a native loop that unpacks a
 tuple parameter and walks eight million steps, in <a href="https://github.com/franknoh/PPy/blob/main/examples/14_tuples/compare"><code>compare/</code></a>:
-<a href="https://github.com/franknoh/PPy/blob/main/examples/14_tuples/compare/pairs_bench.ppy"><code>pairs_bench.ppy</code></a> -- under <code>ppy run</code> and, the
-same file, under <code>python</code> -- and <a href="https://github.com/franknoh/PPy/blob/main/examples/14_tuples/compare/pairs_numba.py"><code>pairs_numba.py</code></a>.
+<a href="https://github.com/franknoh/PPy/blob/main/examples/14_tuples/compare/pairs_bench.ppy"><code>pairs_bench.ppy</code></a> (under <code>ppy run</code> and, the
+same file, under <code>python</code>) and <a href="https://github.com/franknoh/PPy/blob/main/examples/14_tuples/compare/pairs_numba.py"><code>pairs_numba.py</code></a>.
 Milliseconds, best of five, over five processes.</p>
-<p>Tuples are native in both; PPY spells the types, Numba infers them at the
+<p>Tuples are native in both. PPy spells the types; Numba infers them at the
 first call:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="nd">@ppy</span><span class="o">.</span><span class="n">pure</span>
 <a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="nd">@ppy</span><span class="o">.</span><span class="n">opt</span><span class="p">(</span><span class="mi">3</span><span class="p">)</span>
@@ -4548,7 +4706,7 @@ first call:</p>
 <thead>
 <tr>
 <th></th>
-<th style="text-align: right;">PPY <code>ppy run</code></th>
+<th style="text-align: right;">PPy <code>ppy run</code></th>
 <th style="text-align: right;">CPython, the same file</th>
 <th style="text-align: right;">Numba <code>@njit</code></th>
 </tr>
@@ -4572,27 +4730,25 @@ first call:</p>
 
 <p>The loop is the same machine code on both: two doubles in registers,
 nothing allocated. The call from Python is where they differ, and the
-difference is the boundary: PPY's generated wrapper unpacks two ints and
-boxes a pair on the way out, Numba's dispatcher types the arguments on
-every call. What does not lower is a tuple handed from one native function
-to another: <code>midpoint(point, ...)</code> in a native loop keeps the loop in
-Python (<code>ppy explain</code> says <code>a tuple result cannot be forwarded between
-native calls yet</code>), so the loop here takes the tuple as a parameter and
-rebuilds it in place.</p>
-<p>Intel Core Ultra 9 386H; Numba 0.67.0 on CPython 3.12.13, PPY on CPython
+difference is the boundary. PPy's generated wrapper unpacks two ints and
+boxes a pair on the way out; Numba's dispatcher types the arguments on
+every call.</p>
+<p>The loop here takes the tuple as a parameter and rebuilds it in place; see
+Limitations for why.</p>
+<p>Intel Core Ultra 9 386H; Numba 0.67.0 on CPython 3.12.13, PPy on CPython
 3.14.5, from a checkout on a native filesystem.</p>
 <h2 id="buffers-and-jit-compared-with-numba-cython-numpy-and-c">Buffers and JIT: Compared with Numba, Cython, NumPy, and C<a class="headerlink" href="#buffers-and-jit-compared-with-numba-cython-numpy-and-c" title="Permanent link">&para;</a></h2>
 <p>From <a href="../12_buffers_and_jit/">Buffers and JIT</a>.
-The three kernels over 8,192 elements -- a sum, a dot product in order and
-reassociated, a modular digest -- each call timed as the mean of 2,000
+The three kernels over 8,192 elements: a sum, a dot product in order and
+reassociated, and a modular digest. Each call is timed as the mean of 2,000
 calls, best of five rounds, milliseconds per call over five processes. The
 programs are in <a href="https://github.com/franknoh/PPy/blob/main/examples/12_buffers_and_jit/compare"><code>compare/</code></a>: <a href="https://github.com/franknoh/PPy/blob/main/examples/12_buffers_and_jit/compare/kernels_bench.ppy"><code>kernels_bench.ppy</code></a>,
 <a href="https://github.com/franknoh/PPy/blob/main/examples/12_buffers_and_jit/compare/kernels_numba.py"><code>kernels_numba.py</code></a>, <a href="https://github.com/franknoh/PPy/blob/main/examples/12_buffers_and_jit/compare/kernels_cython.pyx"><code>kernels_cython.pyx</code></a>,
 <a href="https://github.com/franknoh/PPy/blob/main/examples/12_buffers_and_jit/compare/kernels_numpy.py"><code>kernels_numpy.py</code></a>, <a href="https://github.com/franknoh/PPy/blob/main/examples/12_buffers_and_jit/compare/kernels.c"><code>kernels.c</code></a>.
 At this size a call is a few microseconds, so the table is as much about the
 call boundary as about the loop.</p>
-<p><strong>PPY</strong> -- the loop as written, a <code>Buffer[float]</code> borrowed from an
-<code>array.array</code>, <code>@ppy.fastmath</code> where reassociation is allowed:</p>
+<p><strong>PPy</strong> is the loop as written, with a <code>Buffer[float]</code> borrowed from an
+<code>array.array</code> and <code>@ppy.fastmath</code> where reassociation is allowed:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="nd">@ppy</span><span class="o">.</span><span class="n">pure</span>
 <a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="nd">@ppy</span><span class="o">.</span><span class="n">opt</span><span class="p">(</span><span class="mi">3</span><span class="p">)</span>
 <a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="k">def</span><span class="w"> </span><span class="nf">dot</span><span class="p">(</span><span class="n">a</span><span class="p">:</span> <span class="n">Buffer</span><span class="p">[</span><span class="nb">float</span><span class="p">],</span> <span class="n">b</span><span class="p">:</span> <span class="n">Buffer</span><span class="p">[</span><span class="nb">float</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="nb">float</span><span class="p">:</span>
@@ -4601,9 +4757,9 @@ call boundary as about the loop.</p>
 <a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a>        <span class="n">result</span> <span class="o">+=</span> <span class="n">a</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">*</span> <span class="n">b</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
 <a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a>    <span class="k">return</span> <span class="n">result</span>
 </code></pre></div>
-<p><strong>Numba</strong> -- the same loop under <code>@njit</code>, no annotations, NumPy arrays,
-<code>fastmath=True</code> for the relaxed dot; its dispatcher types the arguments on
-every call:</p>
+<p><strong>Numba</strong> is the same loop under <code>@njit</code>, with no annotations, NumPy arrays,
+and <code>fastmath=True</code> for the relaxed dot. Its dispatcher types the arguments
+on every call:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="nd">@njit</span>
 <a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="k">def</span><span class="w"> </span><span class="nf">dot</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">):</span>
 <a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>    <span class="n">result</span> <span class="o">=</span> <span class="mf">0.0</span>
@@ -4611,8 +4767,8 @@ every call:</p>
 <a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a>        <span class="n">result</span> <span class="o">+=</span> <span class="n">a</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">*</span> <span class="n">b</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
 <a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a>    <span class="k">return</span> <span class="n">result</span>
 </code></pre></div>
-<p><strong>Cython</strong> -- typed memoryviews and <code>cdef</code> locals in a <code>.pyx</code>, built into an
-extension by <code>cythonize -i</code>; <code>boundscheck=False</code> is what makes it a C loop,
+<p><strong>Cython</strong> is typed memoryviews and <code>cdef</code> locals in a <code>.pyx</code>, built into an
+extension by <code>cythonize -i</code>. <code>boundscheck=False</code> is what makes it a C loop,
 and there is no relaxed dot to write:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="k">cpdef</span><span class="w"> </span><span class="kt">double</span> <span class="nf">dot</span><span class="p">(</span><span class="nb">double</span><span class="p">[::</span><span class="mf">1</span><span class="p">]</span> <span class="n">a</span><span class="p">,</span> <span class="nb">double</span><span class="p">[::</span><span class="mf">1</span><span class="p">]</span> <span class="n">b</span><span class="p">):</span>
 <a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>    <span class="k">cdef</span><span class="w"> </span><span class="kt">double</span> <span class="nv">result</span><span class="w"> </span><span class="o">=</span> <span class="mf">0.0</span>
@@ -4621,15 +4777,16 @@ and there is no relaxed dot to write:</p>
 <a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a>        <span class="n">result</span> <span class="o">+=</span> <span class="n">a</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">*</span> <span class="n">b</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
 <a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a>    <span class="k">return</span> <span class="n">result</span>
 </code></pre></div>
-<p><strong>NumPy</strong> -- no loop: <code>np.dot</code> is BLAS, <code>np.sum</code> pairwise, and
-<code>(counts % m).sum()</code> builds a temporary. <strong>C</strong> is the loop with no Python
-around it, timed inside the process: the floor.</p>
+<p><strong>NumPy</strong> has no loop: <code>np.dot</code> is BLAS, <code>np.sum</code> is pairwise, and
+<code>(counts % m).sum()</code> builds a temporary.</p>
+<p><strong>C</strong> is the loop with no Python around it, timed inside the process: the
+floor.</p>
 <!-- compare:start -->
 <table>
 <thead>
 <tr>
 <th></th>
-<th style="text-align: right;">PPY <code>ppy run</code></th>
+<th style="text-align: right;">PPy <code>ppy run</code></th>
 <th style="text-align: right;">Numba <code>@njit</code></th>
 <th style="text-align: right;">Cython</th>
 <th style="text-align: right;">NumPy</th>
@@ -4673,21 +4830,24 @@ around it, timed inside the process: the floor.</p>
 </table>
 <!-- compare:end -->
 
-<p>The ordered sums sit on the C loop in PPY, Numba, and Cython alike, a
-microsecond of call above it; the reassociated dot is where
-<code>@ppy.fastmath</code> and Numba's <code>fastmath=True</code> let the vectorizer in and
-Cython, with no such switch, stays scalar. NumPy's <code>dot</code> is BLAS and the
-fastest row, its <code>digest</code> pays for an 8,192-element temporary and is the
-slowest. The C <code>digest</code> is the loop's floor; what stands between it and
-the others is the price of a call through the interpreter.</p>
+<p>The ordered sums sit on the C loop in PPy, Numba, and Cython alike, a
+microsecond of call above it. The reassociated dot is where <code>@ppy.fastmath</code>
+and Numba's <code>fastmath=True</code> let the vectorizer in, and Cython, with no such
+switch, stays scalar.</p>
+<p>NumPy's <code>dot</code> is BLAS and the fastest row. Its <code>digest</code> pays for an
+8,192-element temporary and is the slowest. The C <code>digest</code> is the loop's
+floor; what stands between it and the others is the price of a call through
+the interpreter.</p>
 <p>Intel Core Ultra 9 386H; Numba 0.67.0, Cython 3.3.0, NumPy 2.5.3 on
-CPython 3.12.13, gcc 13.3, PPY on CPython 3.13.13, from a checkout on a
+CPython 3.12.13, gcc 13.3, PPy on CPython 3.13.13, from a checkout on a
 native filesystem.</p>
+<!-- outputs:start -->
+
 <h2 id="algorithms-the-eight-kernels-against-c">Algorithms: The eight kernels against C<a class="headerlink" href="#algorithms-the-eight-kernels-against-c" title="Permanent link">&para;</a></h2>
 <p>From <a href="../15_algorithms/">Algorithms</a>.
-Same machine, same session, kernel wall time — mean ± standard deviation
+Same machine, same session, kernel wall time: mean ± standard deviation
 over 7 runs, each a fresh process. Every row prints the same answer in every
-column:</p>
+column.</p>
 <table>
 <thead>
 <tr>
@@ -4766,31 +4926,41 @@ column:</p>
 </tr>
 </tbody>
 </table>
-<p>The native path is 9× to 160× faster than plain CPython on these eight, and
-all three paths print identical answers. Bold is the fastest cell in the
-row. <code>ppy run</code> keeps Python-integer semantics — overflow is guarded and
-falls back to arbitrary precision — and <code>ppy build --unsafe</code> is the wrap-semantics
-artifact, which is where collatz picks up its remaining 10 ms and knapsack
-its 1.4 ms; the other kernels are already guard-free in the loop and do not
-move. <code>--host-cpu</code> is within the noise on all eight.</p>
-<p>Guard hoisting (<code>[tool.ppy.llvm] safeguards</code>) is what closed most of the old
-gaps: a multiplied index like <code>i * n + k</code> proves its extreme cases once in a
-guard block ahead of the loop, and the body runs plain <code>mul nsw</code> with no
-side exits — which is what lets LLVM strength-reduce and vectorize. Against
-both compilers PPY wins sieve, edit distance, and union-find, and collatz
-once the artifact wraps; floyd beats gcc and loses to clang by a third of a
-millisecond; gcc and clang keep knapsack, matmul, and fermat, whose
-remaining guards live on data values no range can prove. gcc 13.3 and
-clang 22.1, both <code>-O3</code>, no <code>-march</code>. Writes go through borrowed buffers,
-so the caller sees them.</p>
+<p>Bold is the fastest cell in the row. The native path is 9× to 160× faster
+than plain CPython on these eight, and all three paths print identical
+answers.</p>
+<p>The two PPy columns differ in integer semantics:</p>
+<ul>
+<li><code>ppy run</code> keeps Python-integer semantics. Overflow is guarded and falls
+  back to arbitrary precision.</li>
+<li><code>ppy build --unsafe</code> is the wrap-semantics artifact. That is where collatz
+  picks up its remaining 10 ms and knapsack its 1.4 ms. The other kernels
+  are already guard-free in the loop and do not move.</li>
+</ul>
+<p><code>--host-cpu</code> is within the noise on all eight.</p>
+<p>Guard hoisting (<code>[tool.ppy.llvm] safeguards</code>) closed most of the old gaps.
+A multiplied index like <code>i * n + k</code> proves its extreme cases once in a
+guard block ahead of the loop. The body then runs plain <code>mul nsw</code> with no
+side exits, which lets LLVM strength-reduce and vectorize.</p>
+<p>Against both compilers:</p>
+<ul>
+<li>PPy wins sieve, edit distance, and union-find, and collatz once the
+  artifact wraps.</li>
+<li>floyd beats gcc and loses to clang by a third of a millisecond.</li>
+<li>gcc and clang keep knapsack, matmul, and fermat, whose remaining guards
+  live on data values no range can prove.</li>
+</ul>
+<p>gcc 13.3 and clang 22.1, both <code>-O3</code>, no <code>-march</code>. Writes go through borrowed
+buffers, so the caller sees them.</p>
 <h2 id="the-eight-kernels-against-numba-mojo-and-codon">The eight kernels against Numba, Mojo, and Codon<a class="headerlink" href="#the-eight-kernels-against-numba-mojo-and-codon" title="Permanent link">&para;</a></h2>
-<p>The same eight kernels ported to three tools that compile Python-shaped
+<p>The same eight kernels are ported to three tools that compile Python-shaped
 code, in <a href="https://github.com/franknoh/PPy/blob/main/examples/15_algorithms/compare"><code>compare/</code></a>: <a href="https://github.com/franknoh/PPy/blob/main/examples/15_algorithms/compare/algorithms_numba.py"><code>algorithms_numba.py</code></a>,
 <a href="https://github.com/franknoh/PPy/blob/main/examples/15_algorithms/compare/algorithms.mojo"><code>algorithms.mojo</code></a>, <a href="https://github.com/franknoh/PPy/blob/main/examples/15_algorithms/compare/algorithms_codon.py"><code>algorithms_codon.py</code></a>.
-Kernel wall time inside the program, milliseconds, mean and spread over
-seven fresh processes; Numba is timed after one warm call so its compile is
-not in the number. Collatz, as each of them spells it:</p>
-<p><strong>PPY</strong> -- annotated Python, and <code>ppy run</code> keeps Python's integers: the
+The table shows kernel wall time inside the program, in milliseconds, mean
+and spread over seven fresh processes. Numba is timed after one warm call,
+so its compile is not in the number.</p>
+<p>Here is Collatz as each of them spells it.</p>
+<p><strong>PPy</strong> is annotated Python, and <code>ppy run</code> keeps Python's integers: the
 multiply is overflow-checked and falls back to arbitrary precision.</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="k">def</span><span class="w"> </span><span class="nf">collatz_longest</span><span class="p">(</span><span class="n">limit</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
 <a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>    <span class="n">best</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">0</span>
@@ -4804,7 +4974,7 @@ multiply is overflow-checked and falls back to arbitrary precision.</p>
 <a id="__codelineno-7-10" name="__codelineno-7-10" href="#__codelineno-7-10"></a>    <span class="k">return</span> <span class="n">best</span>
 </code></pre></div>
 <p><strong>Numba</strong> is the same function with <code>@njit</code> in place of the annotations and
-a NumPy array in place of <code>array.array</code>; <strong>Codon</strong> is the same source with
+a NumPy array in place of <code>array.array</code>. <strong>Codon</strong> is the same source with
 <code>List[int]</code> annotations, run with <code>codon run -release</code>. Both wrap at 64 bits
 without a word.</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="nd">@njit</span>
@@ -4814,8 +4984,8 @@ without a word.</p>
 <a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a>        <span class="n">n</span> <span class="o">=</span> <span class="n">start</span>
 <a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a>        <span class="o">...</span>
 </code></pre></div>
-<p><strong>Mojo</strong> is typed by hand -- <code>Int</code> for every index, <code>Int64</code> for every
-element, <code>var</code> on every local -- and is the plain <code>List</code> version without
+<p><strong>Mojo</strong> is typed by hand: <code>Int</code> for every index, <code>Int64</code> for every
+element, <code>var</code> on every local. This is the plain <code>List</code> version without
 <code>UnsafePointer</code>:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="k">def</span><span class="w"> </span><span class="nf">collatz_longest</span><span class="p">(</span><span class="n">limit</span><span class="p">:</span><span class="w"> </span><span class="nb">Int</span><span class="p">)</span><span class="w"> </span><span class="o">-&gt;</span><span class="w"> </span><span class="nb">Int64</span><span class="p">:</span>
 <a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="w">    </span><span class="k">var</span><span class="w"> </span><span class="nv">best</span><span class="p">:</span><span class="w"> </span><span class="nb">Int64</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span>
@@ -4909,20 +5079,23 @@ element, <code>var</code> on every local -- and is the plain <code>List</code> v
 </table>
 <!-- compare:end -->
 
-<p><code>ppy build --unsafe</code> is the wrap-semantics column and the one to read
-against the other three; <code>ppy run</code> carries the overflow guards, which is
-where collatz pays its 10 ms. Numba leads on six of the eight by ten to
-thirty percent -- the same LLVM, a <code>for</code> over a NumPy array, and no guard
-of any kind. Mojo's plain <code>List</code> loop is the slowest on five kernels and
-the fastest on knapsack, where its bounds-free table indexing shows.
-Numba 0.67.0 on CPython 3.12.13, Mojo 1.0.0 (<code>-O3</code>), Codon 0.19.6, PPY on
+<p>Read <code>ppy build --unsafe</code> against the other three: it is the
+wrap-semantics column. <code>ppy run</code> carries the overflow guards, which is where
+collatz pays its 10 ms.</p>
+<ul>
+<li>Numba leads on six of the eight by ten to thirty percent. It uses the
+  same LLVM, a <code>for</code> over a NumPy array, and no guard of any kind.</li>
+<li>Mojo's plain <code>List</code> loop is the slowest on five kernels and the fastest
+  on knapsack, where its bounds-free table indexing shows.</li>
+</ul>
+<p>Numba 0.67.0 on CPython 3.12.13, Mojo 1.0.0 (<code>-O3</code>), Codon 0.19.6, PPy on
 CPython 3.13.13; Intel Core Ultra 9 386H.</p>
 <h2 id="the-six-problems">The six problems<a class="headerlink" href="#the-six-problems" title="Permanent link">&para;</a></h2>
-<p>Each subfolder is one competitive-programming problem — the shapes a judge
-sets — read from standard input and answered on stdout, with its own input
-and output format so nothing depends on an outside site being up. Nothing
-inside the programs is instrumented: the times below are wall time of the
-whole process, measured from outside, input and interpreter startup
+<p>Each subfolder is one competitive-programming problem, the shapes a judge
+sets. It reads from standard input and answers on stdout, with its own
+input and output format, so nothing depends on an outside site being up.
+Nothing inside the programs is instrumented. The times below are wall time
+of the whole process, measured from outside, input and interpreter startup
 included. The C reference reads the same input with <code>scanf</code>.</p>
 <table>
 <thead>
@@ -4995,42 +5168,32 @@ included. The C reference reads the same input with <code>scanf</code>.</p>
 </table>
 <p>Every cell is the mean of five runs, recorded in
 <a href="https://github.com/franknoh/PPy/blob/main/examples/15_algorithms/measurements.json"><code>measurements.json</code></a> with the machine it was measured
-on; <code>bench.py</code> reproduces it, <code>scripts/refresh.py</code> says when a number here
-has drifted, and both fail if the paths stop agreeing on the answer. Bold
-is faster than both C references. <code>ppy run</code> is left out because it compiles
-before it runs — a flat two seconds or so on every row, which is the
-development path rather than the one to submit.</p>
+on. <code>bench.py</code> reproduces it, and <code>scripts/refresh.py</code> says when a number
+here has drifted. Both fail if the paths stop agreeing on the answer. Bold
+is faster than both C references.</p>
+<p><code>ppy run</code> is left out because it compiles before it runs. That adds a flat
+two seconds or so to every row, and it is the development path rather than
+the one to submit.</p>
 <h2 id="ppy-build-unsafe-and-standalone-unsafe"><code>ppy build --unsafe</code> and <code>--standalone --unsafe</code><a class="headerlink" href="#ppy-build-unsafe-and-standalone-unsafe" title="Permanent link">&para;</a></h2>
 <ul>
-<li><strong><code>ppy build --unsafe</code></strong> is the hybrid: the kernels are native, but the glue around
-  them — <code>main</code>, the buffers, <code>print</code> of a Python <code>int</code> — is the optimized
-  Python the build wrote, so the binary embeds an interpreter and imports
-  the runtime before the program begins. That is ~35 ms, and on the smaller
-  problems it is most of what separates the column from C. Where <code>main</code>
-  reads its input line by line -- 1.2 million edge lines in 15b, 400
-  thousand command lines in 15d -- each <code>ppy.input[...]()</code> is a call into
-  the runtime from the interpreter, about a microsecond apiece, and those
-  reads are most of the plain and <code>ppy build --unsafe</code> columns there.</li>
+<li><strong><code>ppy build --unsafe</code></strong> is the hybrid. The kernels are native, but the
+  glue around them (<code>main</code>, the buffers, <code>print</code> of a Python <code>int</code>) is the
+  optimized Python the build wrote. So the binary embeds an interpreter and
+  imports the runtime before the program begins. That is ~35 ms, and on the
+  smaller problems it is most of what separates the column from C. Where
+  <code>main</code> reads its input line by line (1.2 million edge lines in 15b, 400
+  thousand command lines in 15d), each <code>ppy.input[...]()</code> is a call into
+  the runtime from the interpreter, about a microsecond apiece. Those reads
+  are most of the plain and <code>ppy build --unsafe</code> columns there.</li>
 <li><strong><code>--standalone</code></strong> is a binary with no CPython in it at all. <code>ldd</code> shows
-  libc and nothing else, <code>ppy.scan[int]()</code> lowers to the same buffered scan
-  of standard input that <code>scanf</code> does, and the whole N-Queens executable is
+  libc and nothing else, and <code>ppy.scan[int]()</code> lowers to the same buffered
+  scan of standard input that <code>scanf</code> does. The whole N-Queens executable is
   17.0 KB against the C one's 16.1 KB.</li>
 </ul>
 <p>Four of the five standalone rows beat both C references for one reason:
-<code>ppy.scan</code> reads into memory faster than <code>scanf</code> parses. N-Queens, which
-reads a single integer and then computes, stays behind — there is nothing
-there for a faster reader to win back. The column covers five of the six: a
-standalone build needs everything <code>main</code> reaches to be native, and
-substring search reads its text as a token, for which <code>ppy.read_token</code> has
-no standalone lowering yet. The standalone variants trade <code>try</code>/<code>except</code>
-and <code>array.array</code> for the subset and live in <a href="https://github.com/franknoh/PPy/blob/main/examples/15_algorithms/standalone"><code>standalone/</code></a>;
-<code>bench.py</code> builds them from there and holds them to the same answer as
-every other column.</p>
-<p>Five of the six problem solutions are written as ordinary Python and
-converted: <code>ppy convert &lt;name&gt;.py --promote-buffers</code> writes the <code>.ppy</code>
-beside it, and <code>examples/verify_conversions.py</code> checks that the committed
-file is exactly that. <a href="https://github.com/franknoh/PPy/blob/main/examples/15_algorithms/15c_kmp">15c</a> is hand-written, because the
-character buffer it wants has no plain-Python spelling that converts to it.</p>
+<code>ppy.scan</code> reads into memory faster than <code>scanf</code> parses. N-Queens reads a
+single integer and then computes, so there is nothing for a faster reader
+to win back, and it stays behind.</p>
 <h2 id="reading-input">Reading input<a class="headerlink" href="#reading-input" title="Permanent link">&para;</a></h2>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="n">n</span> <span class="o">=</span> <span class="n">ppy</span><span class="o">.</span><span class="n">input</span><span class="p">[</span><span class="nb">int</span><span class="p">]()</span>                 <span class="c1"># one line, as int(input()) reads it</span>
 <a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="n">a</span><span class="p">,</span> <span class="n">b</span> <span class="o">=</span> <span class="n">ppy</span><span class="o">.</span><span class="n">input</span><span class="p">[</span><span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">]]()</span>  <span class="c1"># one line, exactly two fields</span>
@@ -5038,16 +5201,19 @@ character buffer it wants has no plain-Python spelling that converts to it.</p>
 <a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="n">values</span> <span class="o">=</span> <span class="n">ppy</span><span class="o">.</span><span class="n">scan</span><span class="p">[</span><span class="n">Buffer</span><span class="p">[</span><span class="nb">int</span><span class="p">]](</span><span class="n">n</span><span class="p">)</span>    <span class="c1"># n integer tokens, whatever lines they are on</span>
 </code></pre></div>
 <p><code>ppy.input[T]()</code> reads one line the way the builtin <code>input()</code> does and
-types the result from <code>T</code>; <code>ppy.scan[T]()</code> reads tokens across lines. Both
+types the result from <code>T</code>. <code>ppy.scan[T]()</code> reads tokens across lines. Both
 buffer reads go straight into memory rather than building a Python object
-per field — 12.6 ms for 500k integers against 49.8 ms for
-<code>sys.stdin.read().split()</code> and 20.6 ms for C's <code>scanf</code>. The conversion
-writes the line reads for you: <code>int(input())</code> becomes <code>ppy.input[int]()</code>,
-<code>a, b = map(int, input().split())</code> the tuple read,
-<code>array.array("q", map(int, input().split()))</code> the buffer line read, and
-each reads the line the original read. A module that also touches
-<code>sys.stdin</code> keeps the <code>input</code> it has, since the typed reader owns the file
-descriptor.</p>
+per field: 12.6 ms for 500k integers against 49.8 ms for
+<code>sys.stdin.read().split()</code> and 20.6 ms for C's <code>scanf</code>.</p>
+<p>The conversion writes the line reads for you, and each reads the line the
+original read:</p>
+<ul>
+<li><code>int(input())</code> becomes <code>ppy.input[int]()</code>.</li>
+<li><code>a, b = map(int, input().split())</code> becomes the tuple read.</li>
+<li><code>array.array("q", map(int, input().split()))</code> becomes the buffer line read.</li>
+</ul>
+<p>A module that also touches <code>sys.stdin</code> keeps the <code>input</code> it has, since the
+typed reader owns the file descriptor.</p>
 <h2 id="parallel-ranges-compared-with-numba-taichi-mojo-and-numpy">Parallel ranges: Compared with Numba, Taichi, Mojo, and NumPy<a class="headerlink" href="#parallel-ranges-compared-with-numba-taichi-mojo-and-numpy" title="Permanent link">&para;</a></h2>
 <p>From <a href="../35_parallel_range/">Parallel ranges</a>.
 The same four kernels over eight million elements, each written the way its
@@ -5056,8 +5222,8 @@ tool wants it, in <a href="https://github.com/franknoh/PPy/blob/main/examples/35
 <a href="https://github.com/franknoh/PPy/blob/main/examples/35_parallel_range/compare/ranges_numba.py"><code>ranges_numba.py</code></a>, <a href="https://github.com/franknoh/PPy/blob/main/examples/35_parallel_range/compare/ranges_taichi.py"><code>ranges_taichi.py</code></a>,
 <a href="https://github.com/franknoh/PPy/blob/main/examples/35_parallel_range/compare/ranges.mojo"><code>ranges.mojo</code></a>, <a href="https://github.com/franknoh/PPy/blob/main/examples/35_parallel_range/compare/ranges_numpy.py"><code>ranges_numpy.py</code></a>.
 Milliseconds, best of five warm calls, over five processes.</p>
-<p><strong>PPY</strong> -- <code>parallel.range</code>, typed parameters, the same file on CPython;
-<code>dot</code> keeps a serial sum's order by design and <code>@ppy.fastmath</code> is the
+<p><strong>PPy</strong>: <code>parallel.range</code>, typed parameters, the same file on CPython.
+<code>dot</code> keeps a serial sum's order by design, and <code>@ppy.fastmath</code> is the
 relaxed one:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="k">def</span><span class="w"> </span><span class="nf">dot</span><span class="p">(</span><span class="n">a</span><span class="p">:</span> <span class="n">Buffer</span><span class="p">[</span><span class="nb">float</span><span class="p">],</span> <span class="n">b</span><span class="p">:</span> <span class="n">Buffer</span><span class="p">[</span><span class="nb">float</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="nb">float</span><span class="p">:</span>
 <a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a>    <span class="n">total</span> <span class="o">=</span> <span class="mf">0.0</span>
@@ -5065,9 +5231,9 @@ relaxed one:</p>
 <a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a>        <span class="n">total</span> <span class="o">+=</span> <span class="n">a</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">*</span> <span class="n">b</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
 <a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a>    <span class="k">return</span> <span class="n">total</span>
 </code></pre></div>
-<p><strong>Numba</strong> -- <code>@njit(parallel=True)</code> and <code>prange</code>; a <code>prange</code> sum
-reassociates on its own, so there is no ordered <code>dot</code> to write, and
-integers wrap silently:</p>
+<p><strong>Numba</strong>: <code>@njit(parallel=True)</code> and <code>prange</code>. A <code>prange</code> sum reassociates
+on its own, so there is no ordered <code>dot</code> to write, and integers wrap
+silently:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="nd">@njit</span><span class="p">(</span><span class="n">parallel</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 <a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="k">def</span><span class="w"> </span><span class="nf">dot</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">):</span>
 <a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a>    <span class="n">total</span> <span class="o">=</span> <span class="mf">0.0</span>
@@ -5075,10 +5241,11 @@ integers wrap silently:</p>
 <a id="__codelineno-12-5" name="__codelineno-12-5" href="#__codelineno-12-5"></a>        <span class="n">total</span> <span class="o">+=</span> <span class="n">a</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">*</span> <span class="n">b</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
 <a id="__codelineno-12-6" name="__codelineno-12-6" href="#__codelineno-12-6"></a>    <span class="k">return</span> <span class="n">total</span>
 </code></pre></div>
-<p><strong>Taichi</strong> -- arrays are <code>ti.field</code>s declared at module level, the outermost
-loop of a kernel is parallel by itself, and the defaults overflow in 32 bits
-and accumulate in <code>f32</code> silently; <code>ti.init(default_ip=ti.i64, default_fp=ti.f64)</code>
-is what makes the answers match:</p>
+<p><strong>Taichi</strong>: arrays are <code>ti.field</code>s declared at module level, and the
+outermost loop of a kernel is parallel by itself. The defaults overflow in
+32 bits and accumulate in <code>f32</code> silently;
+<code>ti.init(default_ip=ti.i64, default_fp=ti.f64)</code> is what makes the answers
+match:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="nd">@ti</span><span class="o">.</span><span class="n">kernel</span>
 <a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="k">def</span><span class="w"> </span><span class="nf">dot</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="n">ti</span><span class="o">.</span><span class="n">f64</span><span class="p">:</span>
 <a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a>    <span class="n">total</span> <span class="o">=</span> <span class="mf">0.0</span>
@@ -5086,17 +5253,18 @@ is what makes the answers match:</p>
 <a id="__codelineno-13-5" name="__codelineno-13-5" href="#__codelineno-13-5"></a>        <span class="n">total</span> <span class="o">+=</span> <span class="n">a_f</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">*</span> <span class="n">b_f</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
 <a id="__codelineno-13-6" name="__codelineno-13-6" href="#__codelineno-13-6"></a>    <span class="k">return</span> <span class="n">total</span>
 </code></pre></div>
-<p><strong>Mojo</strong> -- a different language: <code>List[Float64]</code>, <code>mut</code> parameters,
-<code>Int64(i)</code> where an index meets an element, <code>parallelize</code> from
+<p><strong>Mojo</strong>: a different language. It uses <code>List[Float64]</code>, <code>mut</code> parameters,
+<code>Int64(i)</code> where an index meets an element, and <code>parallelize</code> from
 <code>max.algorithm</code> taking a function of one index, so a reduction is partial
-sums per worker written by hand. <strong>NumPy</strong> has no loop to write and no way
-to keep one: <code>dot</code> is BLAS, <code>count_odd</code> builds two temporaries to count.</p>
+sums per worker written by hand.</p>
+<p><strong>NumPy</strong> has no loop to write and no way to keep one: <code>dot</code> is BLAS, and
+<code>count_odd</code> builds two temporaries to count.</p>
 <!-- compare:start -->
 <table>
 <thead>
 <tr>
 <th></th>
-<th style="text-align: right;">PPY <code>ppy run</code></th>
+<th style="text-align: right;">PPy <code>ppy run</code></th>
 <th style="text-align: right;">Numba <code>prange</code></th>
 <th style="text-align: right;">Taichi</th>
 <th style="text-align: right;">Mojo</th>
@@ -5149,14 +5317,15 @@ to keep one: <code>dot</code> is BLAS, <code>count_odd</code> builds two tempora
 <!-- compare:end -->
 
 <p>On the elementwise kernels the four compiled tools are within a few tenths
-of a millisecond, which is the memory bandwidth of the machine, and NumPy's
-temporaries are ten times behind. The reductions are where the models
-differ: PPY's ordered <code>dot</code> is the only one that promises a serial sum's
-answer, and it is a serial sum; its relaxed <code>dot</code>, Numba's and Taichi's are
-the same vectorized tree. The serial <code>fill</code> is the row that measures a plain
-loop with no threads, and Mojo's plain <code>List</code> loop is the slow one there.</p>
+of a millisecond, which is the memory bandwidth of the machine. NumPy's
+temporaries are ten times behind.</p>
+<p>The reductions are where the models differ. PPy's ordered <code>dot</code> is the only
+one that promises a serial sum's answer, and it is a serial sum. Its relaxed
+<code>dot</code>, Numba's and Taichi's are the same vectorized tree.</p>
+<p>The serial <code>fill</code> is the row that measures a plain loop with no threads, and
+Mojo's plain <code>List</code> loop is the slow one there.</p>
 <p>Intel Core Ultra 9 386H (16 threads), threads backend; Numba 0.67.0, Taichi
-1.7.4, NumPy 2.5.3 on CPython 3.12.13, Mojo 1.0.0, PPY on CPython 3.13.13,
+1.7.4, NumPy 2.5.3 on CPython 3.12.13, Mojo 1.0.0, PPy on CPython 3.13.13,
 from a checkout on a native filesystem.</p>
 <h2 id="derivatives-compared-with-jax-and-pytorch">Derivatives: Compared with JAX and PyTorch<a class="headerlink" href="#derivatives-compared-with-jax-and-pytorch" title="Permanent link">&para;</a></h2>
 <p>From <a href="../36_autodiff/">Derivatives</a>.
@@ -5165,7 +5334,7 @@ each, with the derivative from each framework's own autodiff. The programs
 are in <a href="https://github.com/franknoh/PPy/blob/main/examples/36_autodiff/compare"><code>compare/</code></a>: <a href="https://github.com/franknoh/PPy/blob/main/examples/36_autodiff/compare/gradients_bench.ppy"><code>gradients_bench.ppy</code></a>,
 <a href="https://github.com/franknoh/PPy/blob/main/examples/36_autodiff/compare/gradients_jax.py"><code>gradients_jax.py</code></a>, <a href="https://github.com/franknoh/PPy/blob/main/examples/36_autodiff/compare/gradients_torch.py"><code>gradients_torch.py</code></a>.
 Milliseconds for the whole batch, best of five, over five processes.</p>
-<p><strong>PPY</strong> -- <code>ppy.grad(g)</code> is a function; <code>newton</code> calls it in a loop, and a
+<p><strong>PPy</strong>: <code>ppy.grad(g)</code> is a function. <code>newton</code> calls it in a loop, and a
 loop over the starting points calls <code>newton</code>. Everything is scalar and
 native; nothing is batched:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="n">dg</span> <span class="o">=</span> <span class="n">ppy</span><span class="o">.</span><span class="n">grad</span><span class="p">(</span><span class="n">g</span><span class="p">)</span>
@@ -5183,9 +5352,9 @@ native; nothing is batched:</p>
 <a id="__codelineno-14-13" name="__codelineno-14-13" href="#__codelineno-14-13"></a>        <span class="n">total</span> <span class="o">+=</span> <span class="n">newton</span><span class="p">(</span><span class="mf">0.4</span> <span class="o">+</span> <span class="n">i</span> <span class="o">*</span> <span class="mf">1e-6</span><span class="p">)</span>
 <a id="__codelineno-14-14" name="__codelineno-14-14" href="#__codelineno-14-14"></a>    <span class="k">return</span> <span class="n">total</span> <span class="o">/</span> <span class="n">count</span>
 </code></pre></div>
-<p><strong>JAX</strong> -- <code>jax.grad</code> over <code>jnp</code> functions, and to run 100,000 solves it
-wants them batched: <code>vmap</code> under <code>jit</code>, the loop as <code>lax.fori_loop</code> so it
-traces, <code>jax_enable_x64</code> so the digits match:</p>
+<p><strong>JAX</strong>: <code>jax.grad</code> over <code>jnp</code> functions. To run 100,000 solves it wants
+them batched: <code>vmap</code> under <code>jit</code>, the loop as <code>lax.fori_loop</code> so it traces,
+and <code>jax_enable_x64</code> so the digits match:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="k">def</span><span class="w"> </span><span class="nf">newton</span><span class="p">(</span><span class="n">x</span><span class="p">):</span>
 <a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">step</span><span class="p">(</span><span class="n">_</span><span class="p">,</span> <span class="n">x</span><span class="p">):</span>
 <a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a>        <span class="k">return</span> <span class="n">x</span> <span class="o">-</span> <span class="n">g</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="o">/</span> <span class="n">dg</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
@@ -5195,10 +5364,10 @@ traces, <code>jax_enable_x64</code> so the digits match:</p>
 <a id="__codelineno-15-7" name="__codelineno-15-7" href="#__codelineno-15-7"></a>
 <a id="__codelineno-15-8" name="__codelineno-15-8" href="#__codelineno-15-8"></a><span class="n">newton_all</span> <span class="o">=</span> <span class="n">jax</span><span class="o">.</span><span class="n">jit</span><span class="p">(</span><span class="n">jax</span><span class="o">.</span><span class="n">vmap</span><span class="p">(</span><span class="n">newton</span><span class="p">))</span>
 </code></pre></div>
-<p><strong>PyTorch</strong> -- <code>torch.func.grad</code> and <code>vmap</code>; the six steps stay a Python
-loop over a 100,000-element tensor in float64, with the thread count pinned
-to the performance cores', since its default of one per logical core spins
-on this hybrid CPU and the batch takes hundreds of milliseconds some runs:</p>
+<p><strong>PyTorch</strong>: <code>torch.func.grad</code> and <code>vmap</code>. The six steps stay a Python loop
+over a 100,000-element tensor in float64. The thread count is pinned to the
+performance cores', since its default of one per logical core spins on this
+hybrid CPU and the batch takes hundreds of milliseconds some runs:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="n">dg</span> <span class="o">=</span> <span class="n">grad</span><span class="p">(</span><span class="n">g</span><span class="p">)</span>
 <a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a>
 <a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a>
@@ -5215,7 +5384,7 @@ on this hybrid CPU and the batch takes hundreds of milliseconds some runs:</p>
 <thead>
 <tr>
 <th></th>
-<th style="text-align: right;">PPY</th>
+<th style="text-align: right;">PPy</th>
 <th style="text-align: right;">JAX <code>vmap</code> + <code>jit</code></th>
 <th style="text-align: right;">PyTorch <code>torch.func</code></th>
 </tr>
@@ -5231,27 +5400,31 @@ on this hybrid CPU and the batch takes hundreds of milliseconds some runs:</p>
 </table>
 <!-- compare:end -->
 
-<p>The derivative is the same nine digits in all three -- reverse mode over
-the same rule table. What differs is the shape of the program: JAX and
-PyTorch are fast here because the problem batches and XLA and ATen
-vectorize across the batch; a scalar <code>newton</code> in a Python loop would cost
-them tens of microseconds per call. PPY's scalar loop pays nothing per
-call and is not vectorized across the batch. Which one is faster depends
-on whether your problem comes as 100,000 independent solves or as one.</p>
+<p>The derivative is the same nine digits in all three: reverse mode over the
+same rule table. What differs is the shape of the program.</p>
+<p>JAX and PyTorch are fast here because the problem batches, and XLA and ATen
+vectorize across the batch. A scalar <code>newton</code> in a Python loop would cost
+them tens of microseconds per call. PPy's scalar loop pays nothing per call
+and is not vectorized across the batch.</p>
+<p>Which one is faster depends on whether your problem comes as 100,000
+independent solves or as one.</p>
 <p>Intel Core Ultra 9 386H; JAX 0.11.1 and PyTorch 2.14.0 (CPU) on CPython
-3.13.13, PPY on CPython 3.13.13, from a checkout on a native filesystem.</p>
+3.13.13, PPy on CPython 3.13.13, from a checkout on a native filesystem.</p>
 <h2 id="coroutines-compared-with-asyncio-and-uvloop">Coroutines: Compared with asyncio and uvloop<a class="headerlink" href="#coroutines-compared-with-asyncio-and-uvloop" title="Permanent link">&para;</a></h2>
 <p>From <a href="../37_aio/">Coroutines</a>.
-Twenty thousand eight-byte round trips over one loopback connection --
-a client and an echo server in one process -- in <a href="https://github.com/franknoh/PPy/blob/main/examples/37_aio/compare"><code>compare/</code></a>:
+Twenty thousand eight-byte round trips over one loopback connection (a
+client and an echo server in one process), in <a href="https://github.com/franknoh/PPy/blob/main/examples/37_aio/compare"><code>compare/</code></a>:
 <a href="https://github.com/franknoh/PPy/blob/main/examples/37_aio/compare/echo_bench.ppy"><code>echo_bench.ppy</code></a>,
 <a href="https://github.com/franknoh/PPy/blob/main/examples/37_aio/compare/echo_asyncio.py"><code>echo_asyncio.py</code></a>,
 <a href="https://github.com/franknoh/PPy/blob/main/examples/37_aio/compare/echo_uvloop.py"><code>echo_uvloop.py</code></a>. Milliseconds for the whole run,
 over five processes.</p>
-<p><strong>PPY</strong> is the coroutines as the example writes them, lowered to state
-machines over the native loop; <strong>asyncio</strong> is the standard library's
-streams, as an echo server is usually written; <strong>uvloop</strong> is the same
-program on the libuv-backed loop:</p>
+<ul>
+<li><strong>PPy</strong> is the coroutines as the example writes them, lowered to state
+  machines over the native loop.</li>
+<li><strong>asyncio</strong> is the standard library's streams, as an echo server is
+  usually written.</li>
+<li><strong>uvloop</strong> is the same program on the libuv-backed loop.</li>
+</ul>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a><span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">serve</span><span class="p">(</span><span class="n">listening</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">rounds</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
 <a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a>    <span class="n">client</span> <span class="o">=</span> <span class="k">await</span> <span class="n">aio</span><span class="o">.</span><span class="n">accept</span><span class="p">(</span><span class="n">listening</span><span class="p">)</span>
 <a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a>    <span class="n">room</span> <span class="o">=</span> <span class="n">native</span><span class="o">.</span><span class="n">stack_alloc</span><span class="p">[</span><span class="n">ppy</span><span class="o">.</span><span class="n">u8</span><span class="p">](</span><span class="mi">8</span><span class="p">)</span>
@@ -5278,7 +5451,7 @@ program on the libuv-backed loop:</p>
 <thead>
 <tr>
 <th></th>
-<th style="text-align: right;">PPY <code>ppy.aio</code></th>
+<th style="text-align: right;">PPy <code>ppy.aio</code></th>
 <th style="text-align: right;">asyncio streams</th>
 <th style="text-align: right;">uvloop</th>
 </tr>
@@ -5295,28 +5468,34 @@ program on the libuv-backed loop:</p>
 <!-- compare:end -->
 
 <p>A round trip is four socket operations and four resumptions of a
-coroutine. Under asyncio each of those is a Python frame, a <code>Future</code>, and
-a trip through the event loop's callback queue; uvloop moves the loop and
-the transports into C and leaves the coroutines in Python; PPY's state
-machines resume in native code and call <code>read</code> and <code>write</code> directly, so
-what remains per round trip is the syscalls. The program pays for that in
-vocabulary: sockets are integers, bytes go through pointers, and an error
-is a negative errno, where asyncio's streams give you <code>bytes</code> and
-exceptions.</p>
-<p>Intel Core Ultra 9 386H; uvloop 0.22.1 on CPython 3.12.13, asyncio and PPY
+coroutine.</p>
+<ul>
+<li>Under asyncio each of those is a Python frame, a <code>Future</code>, and a trip
+  through the event loop's callback queue.</li>
+<li>uvloop moves the loop and the transports into C and leaves the coroutines
+  in Python.</li>
+<li>PPy's state machines resume in native code and call <code>read</code> and <code>write</code>
+  directly, so what remains per round trip is the syscalls.</li>
+</ul>
+<p>The program pays for that in vocabulary. Sockets are integers, bytes go
+through pointers, and an error is a negative errno, where asyncio's streams
+give you <code>bytes</code> and exceptions.</p>
+<p>Intel Core Ultra 9 386H; uvloop 0.22.1 on CPython 3.12.13, asyncio and PPy
 on CPython 3.14.5, from a checkout on a native filesystem.</p>
 <h2 id="generics-compared-with-numba">Generics: Compared with Numba<a class="headerlink" href="#generics-compared-with-numba" title="Permanent link">&para;</a></h2>
 <p>From <a href="../40_generics/">Generics</a>.
-<code>sweep</code> over eight million values, in <a href="https://github.com/franknoh/PPy/blob/main/examples/40_generics/compare"><code>compare/</code></a>:
-<a href="https://github.com/franknoh/PPy/blob/main/examples/40_generics/compare/generic_bench.ppy"><code>generic_bench.ppy</code></a> -- under <code>ppy run</code> and, the
-same file, under <code>python</code> -- and
-<a href="https://github.com/franknoh/PPy/blob/main/examples/40_generics/compare/generic_numba.py"><code>generic_numba.py</code></a>. Milliseconds, best of five,
-over five processes.</p>
-<p><strong>PPY</strong> is the generics as Python 3.12 spells them, with bounds, called
-from a plain function; <strong>Numba</strong> is the same three functions under
-<code>@njit</code>, generic by dispatch: each is compiled once per tuple of argument
-types it meets, which is the same instance-per-type-tuple rule without the
-declaration:</p>
+<code>sweep</code> over eight million values, in <a href="https://github.com/franknoh/PPy/blob/main/examples/40_generics/compare"><code>compare/</code></a>:</p>
+<ul>
+<li><a href="https://github.com/franknoh/PPy/blob/main/examples/40_generics/compare/generic_bench.ppy"><code>generic_bench.ppy</code></a>, under <code>ppy run</code> and,
+  the same file, under <code>python</code></li>
+<li><a href="https://github.com/franknoh/PPy/blob/main/examples/40_generics/compare/generic_numba.py"><code>generic_numba.py</code></a></li>
+</ul>
+<p>Times are milliseconds, best of five, over five processes.</p>
+<p><strong>PPy</strong> is the generics as Python 3.12 spells them, with bounds, called from
+a plain function. <strong>Numba</strong> is the same three functions under <code>@njit</code>,
+generic by dispatch: each is compiled once per tuple of argument types it
+meets. That is the same instance-per-type-tuple rule without the
+declaration.</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a><span class="k">def</span><span class="w"> </span><span class="nf">largest</span><span class="p">[</span><span class="n">T</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="nb">float</span><span class="p">](</span><span class="n">a</span><span class="p">:</span> <span class="n">T</span><span class="p">,</span> <span class="n">b</span><span class="p">:</span> <span class="n">T</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">T</span><span class="p">:</span>
 <a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a>    <span class="k">return</span> <span class="n">a</span> <span class="k">if</span> <span class="n">a</span> <span class="o">&gt;</span> <span class="n">b</span> <span class="k">else</span> <span class="n">b</span>
 <a id="__codelineno-19-3" name="__codelineno-19-3" href="#__codelineno-19-3"></a>
@@ -5338,7 +5517,7 @@ declaration:</p>
 <thead>
 <tr>
 <th></th>
-<th style="text-align: right;">PPY <code>ppy run</code></th>
+<th style="text-align: right;">PPy <code>ppy run</code></th>
 <th style="text-align: right;">CPython, the same file</th>
 <th style="text-align: right;">Numba <code>@njit</code></th>
 </tr>
@@ -5354,24 +5533,30 @@ declaration:</p>
 </table>
 <!-- compare:end -->
 
-<p>Both compile <code>largest</code> twice -- once for ints, once for floats -- and call
-the instances directly from the loop, and the loop is the same code
-either way. What PPY adds is at the source: the bound is written, so
-<code>largest("a", 1)</code> is refused before anything runs, and the file is still
-the file <code>python</code> runs. What Numba adds is nothing to write; the types are
-whatever arrives first.</p>
-<p>Intel Core Ultra 9 386H; Numba 0.67.0 on CPython 3.12.13, PPY on CPython
+<p>Both compile <code>largest</code> twice (once for ints, once for floats) and call the
+instances directly from the loop, and the loop is the same code either way.</p>
+<ul>
+<li>PPy adds a check at the source. The bound is written, so
+  <code>largest("a", 1)</code> is refused before anything runs, and the file is still
+  the file <code>python</code> runs.</li>
+<li>Numba asks you to write nothing. The types are whatever arrives first.</li>
+</ul>
+<p>Intel Core Ultra 9 386H; Numba 0.67.0 on CPython 3.12.13, PPy on CPython
 3.14.5, from a checkout on a native filesystem.</p>
+<!-- outputs:start -->
+
 <h2 id="regular-expressions-compared-with-cpythons-re-and-rusts-regex">Regular expressions: Compared with CPython's <code>re</code> and Rust's <code>regex</code><a class="headerlink" href="#regular-expressions-compared-with-cpythons-re-and-rusts-regex" title="Permanent link">&para;</a></h2>
 <p>From <a href="../43_regex/">Regular expressions</a>.
-Four passes over 400,000 generated lines (7.9 MB): count the words, find the
-longest, sum the <code>name = value</code> pairs, count the hex numbers. The programs
-are in <a href="https://github.com/franknoh/PPy/blob/main/examples/43_regex/compare"><code>compare/</code></a> -- <a href="https://github.com/franknoh/PPy/blob/main/examples/43_regex/compare/patterns_bench.ppy"><code>patterns_bench.ppy</code></a>,
-<a href="https://github.com/franknoh/PPy/blob/main/examples/43_regex/compare/patterns_re.py"><code>patterns_re.py</code></a>, <a href="https://github.com/franknoh/PPy/blob/main/examples/43_regex/compare/patterns.rs"><code>patterns.rs</code></a>
-with its <a href="https://github.com/franknoh/PPy/blob/main/examples/43_regex/compare/Cargo.toml"><code>Cargo.toml</code></a> -- and the site shows them
-whole. Milliseconds, best of five passes, mean and spread over five processes.</p>
-<p><strong>PPY</strong> -- a pattern compiled from a bytes literal, <code>search</code> from a position,
-<code>m.end()</code>; the same file runs on CPython:</p>
+The benchmark makes four passes over 400,000 generated lines (7.9 MB): count
+the words, find the longest, sum the <code>name = value</code> pairs, count the hex
+numbers. The programs are in <a href="https://github.com/franknoh/PPy/blob/main/examples/43_regex/compare"><code>compare/</code></a>:
+<a href="https://github.com/franknoh/PPy/blob/main/examples/43_regex/compare/patterns_bench.ppy"><code>patterns_bench.ppy</code></a>,
+<a href="https://github.com/franknoh/PPy/blob/main/examples/43_regex/compare/patterns_re.py"><code>patterns_re.py</code></a>, and
+<a href="https://github.com/franknoh/PPy/blob/main/examples/43_regex/compare/patterns.rs"><code>patterns.rs</code></a> with its
+<a href="https://github.com/franknoh/PPy/blob/main/examples/43_regex/compare/Cargo.toml"><code>Cargo.toml</code></a>. The site shows them whole. Times are in
+milliseconds, best of five passes, mean and spread over five processes.</p>
+<p><strong>PPy</strong>: a pattern compiled from a bytes literal, <code>search</code> from a position,
+<code>m.end()</code>. The same file runs on CPython.</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a><span class="k">def</span><span class="w"> </span><span class="nf">sum_values</span><span class="p">(</span><span class="n">text</span><span class="p">:</span> <span class="n">Buffer</span><span class="p">[</span><span class="n">ppy</span><span class="o">.</span><span class="n">u8</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
 <a id="__codelineno-21-2" name="__codelineno-21-2" href="#__codelineno-21-2"></a>    <span class="n">total</span> <span class="o">=</span> <span class="mi">0</span>
 <a id="__codelineno-21-3" name="__codelineno-21-3" href="#__codelineno-21-3"></a>    <span class="n">pos</span> <span class="o">=</span> <span class="mi">0</span>
@@ -5385,12 +5570,12 @@ whole. Milliseconds, best of five passes, mean and spread over five processes.</
 <a id="__codelineno-21-11" name="__codelineno-21-11" href="#__codelineno-21-11"></a>        <span class="n">total</span> <span class="o">+=</span> <span class="n">value</span>
 <a id="__codelineno-21-12" name="__codelineno-21-12" href="#__codelineno-21-12"></a>        <span class="n">pos</span> <span class="o">=</span> <span class="n">m</span><span class="o">.</span><span class="n">end</span><span class="p">()</span>
 </code></pre></div>
-<p><strong>CPython <code>re</code></strong> -- the idiomatic spelling, <code>finditer</code> and <code>int(m.group(2))</code>:</p>
+<p><strong>CPython <code>re</code></strong>: the idiomatic spelling, <code>finditer</code> and <code>int(m.group(2))</code>.</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a><span class="k">def</span><span class="w"> </span><span class="nf">sum_values</span><span class="p">(</span><span class="n">text</span><span class="p">:</span> <span class="nb">bytes</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
 <a id="__codelineno-22-2" name="__codelineno-22-2" href="#__codelineno-22-2"></a>    <span class="k">return</span> <span class="nb">sum</span><span class="p">(</span><span class="nb">int</span><span class="p">(</span><span class="n">m</span><span class="o">.</span><span class="n">group</span><span class="p">(</span><span class="mi">2</span><span class="p">))</span> <span class="k">for</span> <span class="n">m</span> <span class="ow">in</span> <span class="n">PAIR</span><span class="o">.</span><span class="n">finditer</span><span class="p">(</span><span class="n">text</span><span class="p">))</span>
 </code></pre></div>
-<p><strong>Rust <code>regex</code></strong> -- <code>captures_iter</code> over <code>&amp;[u8]</code>, the number parsed from the
-captured bytes, <code>cargo build --release</code>:</p>
+<p><strong>Rust <code>regex</code></strong>: <code>captures_iter</code> over <code>&amp;[u8]</code>, the number parsed from the
+captured bytes, built with <code>cargo build --release</code>.</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a><span class="k">fn</span><span class="w"> </span><span class="nf">sum_values</span><span class="p">(</span><span class="n">pair</span><span class="p">:</span><span class="w"> </span><span class="kp">&amp;</span><span class="nc">Regex</span><span class="p">,</span><span class="w"> </span><span class="n">text</span><span class="p">:</span><span class="w"> </span><span class="kp">&amp;</span><span class="p">[</span><span class="kt">u8</span><span class="p">])</span><span class="w"> </span><span class="p">-&gt;</span><span class="w"> </span><span class="kt">u64</span><span class="w"> </span><span class="p">{</span>
 <a id="__codelineno-23-2" name="__codelineno-23-2" href="#__codelineno-23-2"></a><span class="w">    </span><span class="n">pair</span><span class="p">.</span><span class="n">captures_iter</span><span class="p">(</span><span class="n">text</span><span class="p">)</span>
 <a id="__codelineno-23-3" name="__codelineno-23-3" href="#__codelineno-23-3"></a><span class="w">        </span><span class="p">.</span><span class="n">map</span><span class="p">(</span><span class="o">|</span><span class="n">c</span><span class="o">|</span><span class="w"> </span><span class="n">std</span><span class="p">::</span><span class="kt">str</span><span class="p">::</span><span class="n">from_utf8</span><span class="p">(</span><span class="o">&amp;</span><span class="n">c</span><span class="p">[</span><span class="mi">2</span><span class="p">]).</span><span class="n">unwrap</span><span class="p">().</span><span class="n">parse</span><span class="p">::</span><span class="o">&lt;</span><span class="kt">u64</span><span class="o">&gt;</span><span class="p">().</span><span class="n">unwrap</span><span class="p">())</span>
@@ -5402,7 +5587,7 @@ captured bytes, <code>cargo build --release</code>:</p>
 <thead>
 <tr>
 <th></th>
-<th style="text-align: right;">PPY <code>ppy run</code></th>
+<th style="text-align: right;">PPy <code>ppy run</code></th>
 <th style="text-align: right;">CPython <code>re</code></th>
 <th style="text-align: right;">Rust <code>regex</code></th>
 </tr>
@@ -5436,31 +5621,36 @@ captured bytes, <code>cargo build --release</code>:</p>
 </table>
 <!-- compare:end -->
 
-<p>PPY compiles each pattern into a function of core operations -- a
-backtracker in which a byte-class repeat scans its run instead of stepping
-byte by byte -- and a match is a few locals, not an object, so a search
-loop is a native loop. That is the whole distance to <code>re</code>, whose matcher is
-a bytecode interpreter allocating a match object per hit. Against Rust the
-pattern decides: <code>[A-Za-z]+</code> is a scan in both engines, <code>\w+\s*=\s*(\d+)</code>
-makes <code>regex</code> fall back to its slower capturing engine, and <code>0x[0-9a-f]+</code>
-under <code>(?i)</code> is where its lazy DFA wins outright -- a literal-prefix
-prefilter is the obvious next step for the PPY matcher there.</p>
+<p>PPy compiles each pattern into a function of core operations: a backtracker
+in which a byte-class repeat scans its run instead of stepping byte by byte.
+A match is a few locals rather than an object, so a search loop is a native
+loop. That is the whole distance to <code>re</code>, whose matcher is a bytecode
+interpreter allocating a match object per hit.</p>
+<p>Against Rust, the pattern decides:</p>
+<ul>
+<li><code>[A-Za-z]+</code> is a scan in both engines.</li>
+<li><code>\w+\s*=\s*(\d+)</code> makes <code>regex</code> fall back to its slower capturing engine.</li>
+<li><code>0x[0-9a-f]+</code> under <code>(?i)</code> is where its lazy DFA wins outright. A
+  literal-prefix prefilter is the obvious next step for the PPy matcher
+  there.</li>
+</ul>
 <p>Intel Core Ultra 9 386H; rustc 1.95.0 with regex 1.x, CPython 3.12.13 for
-<code>re</code>, PPY on CPython 3.13.13, from a checkout on a native filesystem.</p>
+<code>re</code>, PPy on CPython 3.13.13, from a checkout on a native filesystem.</p>
 <h2 id="gpu-kernels-compared-with-cupy-numba-mojo-and-cuda-c">GPU kernels: Compared with CuPy, Numba, Mojo, and CUDA C<a class="headerlink" href="#gpu-kernels-compared-with-cupy-numba-mojo-and-cuda-c" title="Permanent link">&para;</a></h2>
 <p>From <a href="../38_cuda/">GPU kernels</a>.
 The same two kernels over sixteen million doubles, written as thread-level
 kernels the way each tool spells them, in <a href="https://github.com/franknoh/PPy/blob/main/examples/38_cuda/compare"><code>compare/</code></a>:
 <a href="https://github.com/franknoh/PPy/blob/main/examples/38_cuda/compare/saxpy_bench.ppy"><code>saxpy_bench.ppy</code></a>, <a href="https://github.com/franknoh/PPy/blob/main/examples/38_cuda/compare/saxpy_cupy.py"><code>saxpy_cupy.py</code></a>,
 <a href="https://github.com/franknoh/PPy/blob/main/examples/38_cuda/compare/saxpy_numba.py"><code>saxpy_numba.py</code></a>, <a href="https://github.com/franknoh/PPy/blob/main/examples/38_cuda/compare/saxpy.mojo"><code>saxpy.mojo</code></a>,
-<a href="https://github.com/franknoh/PPy/blob/main/examples/38_cuda/compare/saxpy.cu"><code>saxpy.cu</code></a>. Milliseconds, best of warm launches with the
-device synchronized, over five processes. Tile-level tools -- Triton, Taichi
--- program a block as one vector and never write the shared-memory
-exchange, which is a different kernel; they are compared with PPY's tile
-kernels, not with these. The block max, as each tool spells it:</p>
-<p><strong>PPY</strong> -- a Python function with <code>cuda.global_id()</code>, shared memory, a
-barrier, a shuffle; the same file runs on CPython through the reference
-launch:</p>
+<a href="https://github.com/franknoh/PPy/blob/main/examples/38_cuda/compare/saxpy.cu"><code>saxpy.cu</code></a>. Times are milliseconds, best of warm
+launches with the device synchronized, over five processes.</p>
+<p>Tile-level tools such as Triton and Taichi program a block as one vector
+and never write the shared-memory exchange, which makes it a different
+kernel. They are compared with PPy's tile kernels instead of these.</p>
+<h3 id="how-each-tool-writes-the-block-max">How each tool writes the block max<a class="headerlink" href="#how-each-tool-writes-the-block-max" title="Permanent link">&para;</a></h3>
+<p><strong>PPy</strong> uses a Python function with <code>cuda.global_id()</code>, shared memory, a
+barrier, and a shuffle. The same file runs on CPython through the reference
+launch.</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a><span class="nd">@cuda</span><span class="o">.</span><span class="n">kernel</span>
 <a id="__codelineno-24-2" name="__codelineno-24-2" href="#__codelineno-24-2"></a><span class="k">def</span><span class="w"> </span><span class="nf">block_max</span><span class="p">(</span><span class="n">x</span><span class="p">:</span> <span class="n">native</span><span class="o">.</span><span class="n">const_ptr</span><span class="p">[</span><span class="nb">float</span><span class="p">],</span> <span class="n">out</span><span class="p">:</span> <span class="n">native</span><span class="o">.</span><span class="n">ptr</span><span class="p">[</span><span class="nb">float</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
 <a id="__codelineno-24-3" name="__codelineno-24-3" href="#__codelineno-24-3"></a>    <span class="n">parked</span> <span class="o">=</span> <span class="n">cuda</span><span class="o">.</span><span class="n">shared</span><span class="p">[</span><span class="nb">float</span><span class="p">,</span> <span class="mi">64</span><span class="p">]()</span>
@@ -5471,8 +5661,8 @@ launch:</p>
 <a id="__codelineno-24-8" name="__codelineno-24-8" href="#__codelineno-24-8"></a>    <span class="n">other</span> <span class="o">=</span> <span class="n">cuda</span><span class="o">.</span><span class="n">shfl_xor</span><span class="p">(</span><span class="n">mine</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
 <a id="__codelineno-24-9" name="__codelineno-24-9" href="#__codelineno-24-9"></a>    <span class="o">...</span>
 </code></pre></div>
-<p><strong>Numba CUDA</strong> reads the same way -- <code>@cuda.jit</code>, <code>cuda.grid(1)</code>,
-<code>cuda.shared.array</code>, <code>cuda.syncthreads()</code>, <code>cuda.shfl_xor_sync</code>:</p>
+<p><strong>Numba CUDA</strong> reads the same way, with <code>@cuda.jit</code>, <code>cuda.grid(1)</code>,
+<code>cuda.shared.array</code>, <code>cuda.syncthreads()</code>, and <code>cuda.shfl_xor_sync</code>:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-25-1" name="__codelineno-25-1" href="#__codelineno-25-1"></a><span class="nd">@cuda</span><span class="o">.</span><span class="n">jit</span>
 <a id="__codelineno-25-2" name="__codelineno-25-2" href="#__codelineno-25-2"></a><span class="k">def</span><span class="w"> </span><span class="nf">block_max</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">out</span><span class="p">):</span>
 <a id="__codelineno-25-3" name="__codelineno-25-3" href="#__codelineno-25-3"></a>    <span class="n">parked</span> <span class="o">=</span> <span class="n">cuda</span><span class="o">.</span><span class="n">shared</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="mi">64</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float64</span><span class="p">)</span>
@@ -5484,14 +5674,19 @@ launch:</p>
 <a id="__codelineno-25-9" name="__codelineno-25-9" href="#__codelineno-25-9"></a>    <span class="o">...</span>
 </code></pre></div>
 <p><strong>CuPy</strong> writes saxpy in one line, an <code>ElementwiseKernel</code>, and the block max
-as CUDA C in a string handed to <code>RawKernel</code>. <strong>CUDA C</strong> is the kernel the
-others approximate, timed with events around the launch alone.</p>
+as CUDA C in a string handed to <code>RawKernel</code>.</p>
+<p><strong>CUDA C</strong> is the kernel the others approximate, timed with events around
+the launch alone.</p>
 <p><strong>Mojo</strong> writes the kernel as a <code>def</code> with <code>global_idx</code>, <code>thread_idx</code>, a
 <code>stack_allocation</code> in <code>AddressSpace.SHARED</code>, <code>barrier()</code> from MAX's
-<code>max.gpu.sync</code>, and <code>shuffle_xor</code>, which has no <code>Float64</code> form, so the
-double crosses as its bits; arguments must be fixed-width (<code>Int64</code>, not
-<code>Int</code>), <code>out</code> is a reserved parameter name, and the launch is
-<code>DeviceContext.enqueue_function</code> with <code>grid_dim</code> and <code>block_dim</code>:</p>
+<code>max.gpu.sync</code>, and <code>shuffle_xor</code>. Some details differ from the others:</p>
+<ul>
+<li><code>shuffle_xor</code> has no <code>Float64</code> form, so the double crosses as its bits.</li>
+<li>Arguments must be fixed-width (<code>Int64</code>, not <code>Int</code>).</li>
+<li><code>out</code> is a reserved parameter name.</li>
+<li>The launch is <code>DeviceContext.enqueue_function</code> with <code>grid_dim</code> and
+  <code>block_dim</code>.</li>
+</ul>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-26-1" name="__codelineno-26-1" href="#__codelineno-26-1"></a><span class="k">def</span><span class="w"> </span><span class="nf">block_max</span><span class="p">(</span><span class="n">x</span><span class="p">:</span><span class="w"> </span><span class="n">UnsafePointer</span><span class="p">[</span><span class="nb">Float64</span><span class="p">,</span><span class="w"> </span><span class="n">MutAnyOrigin</span><span class="p">],</span><span class="w"> </span><span class="n">result</span><span class="p">:</span><span class="w"> </span><span class="n">UnsafePointer</span><span class="p">[</span><span class="nb">Float64</span><span class="p">,</span><span class="w"> </span><span class="n">MutAnyOrigin</span><span class="p">]):</span>
 <a id="__codelineno-26-2" name="__codelineno-26-2" href="#__codelineno-26-2"></a><span class="w">    </span><span class="k">var</span><span class="w"> </span><span class="nv">parked</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">stack_allocation</span><span class="p">[</span><span class="mi">64</span><span class="p">,</span><span class="w"> </span><span class="nb">Float64</span><span class="p">,</span><span class="w"> </span><span class="n">address_space</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">AddressSpace</span><span class="o">.</span><span class="n">SHARED</span><span class="p">]()</span>
 <a id="__codelineno-26-3" name="__codelineno-26-3" href="#__codelineno-26-3"></a><span class="w">    </span><span class="k">var</span><span class="w"> </span><span class="nv">tid</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">Int</span><span class="p">(</span><span class="n">thread_idx</span><span class="o">.</span><span class="n">x</span><span class="p">)</span>
@@ -5501,12 +5696,13 @@ double crosses as its bits; arguments must be fixed-width (<code>Int64</code>, n
 <a id="__codelineno-26-7" name="__codelineno-26-7" href="#__codelineno-26-7"></a><span class="w">    </span><span class="k">var</span><span class="w"> </span><span class="nv">other</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">bitcast</span><span class="p">[</span><span class="nb">DType</span><span class="o">.</span><span class="n">float64</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">](</span><span class="n">shuffle_xor</span><span class="p">(</span><span class="n">mine</span><span class="o">.</span><span class="n">to_bits</span><span class="p">[</span><span class="nb">DType</span><span class="o">.</span><span class="n">uint64</span><span class="p">](),</span><span class="w"> </span><span class="mi">1</span><span class="p">))</span>
 <a id="__codelineno-26-8" name="__codelineno-26-8" href="#__codelineno-26-8"></a><span class="w">    </span><span class="o">...</span>
 </code></pre></div>
+<h3 id="results">Results<a class="headerlink" href="#results" title="Permanent link">&para;</a></h3>
 <!-- compare:start -->
 <table>
 <thead>
 <tr>
 <th></th>
-<th style="text-align: right;">PPY <code>cuda.launch</code></th>
+<th style="text-align: right;">PPy <code>cuda.launch</code></th>
 <th style="text-align: right;">CuPy</th>
 <th style="text-align: right;">Numba CUDA</th>
 <th style="text-align: right;">Mojo</th>
@@ -5550,47 +5746,51 @@ double crosses as its bits; arguments must be fixed-width (<code>Int64</code>, n
 </table>
 <!-- compare:end -->
 
-<p>With the arrays on the device, a launch is the kernel: the five run the
-same block max in the same time, and on saxpy the Python-hosted ones sit a
+<p>With the arrays on the device, a launch is the kernel. The five tools run
+the same block max in the same time. On saxpy the Python-hosted ones sit a
 tenth of a millisecond above Mojo and CUDA C, the cost of a launch through
-the interpreter. The copying rows are the other memory model, a
-<code>native.stack_alloc</code> array sent in and brought back on every launch; there
-the driver reads the host array in place, and the traffic costs what it
-costs every tool. A program that launches more than once keeps its data on
-the device by allocating it there, with <code>cuda.device_alloc</code>.</p>
+the interpreter.</p>
+<p>The copying rows use the other memory model: a <code>native.stack_alloc</code> array
+sent in and brought back on every launch. There the driver reads the host
+array in place, and the traffic costs what it costs every tool. A program
+that launches more than once keeps its data on the device by allocating it
+there, with <code>cuda.device_alloc</code>.</p>
 <p>NVIDIA GeForce RTX 5080 Laptop GPU, driver 610.71, CUDA 13.3; CuPy 14.2.0,
-Numba 0.67.0 on CPython 3.12.13; Mojo 1.0.0 with MAX 26.5; nvcc 13.3; PPY
+Numba 0.67.0 on CPython 3.12.13; Mojo 1.0.0 with MAX 26.5; nvcc 13.3; PPy
 on CPython 3.13.13.</p>
+<!-- outputs:start -->
+
 <h2 id="tile-kernels-compared-with-triton-and-taichi">Tile kernels: Compared with Triton and Taichi<a class="headerlink" href="#tile-kernels-compared-with-triton-and-taichi" title="Permanent link">&para;</a></h2>
 <p>From <a href="../44_tile/">Tile kernels</a>.
-The same two kernels over sixteen million doubles, as programs over tiles
-in the three tools that have them, in <a href="https://github.com/franknoh/PPy/blob/main/examples/44_tile/compare"><code>compare/</code></a>:
-<a href="https://github.com/franknoh/PPy/blob/main/examples/44_tile/compare/tiles_bench.ppy"><code>tiles_bench.ppy</code></a>, <a href="https://github.com/franknoh/PPy/blob/main/examples/44_tile/compare/tiles_triton.py"><code>tiles_triton.py</code></a>,
-<a href="https://github.com/franknoh/PPy/blob/main/examples/44_tile/compare/tiles_taichi.py"><code>tiles_taichi.py</code></a>. Milliseconds, best of warm
-launches with the device synchronized, over five processes. The
-thread-level ports of the same kernels -- CuPy, Numba, Mojo, CUDA C -- are
-the <a href="../38_cuda/">CUDA example</a>'s comparison. The block max, as
-each spells it:</p>
-<p><strong>PPY</strong> -- a program loads its tile and reduces it; the same file runs on
-CPython:</p>
+The same two kernels over sixteen million doubles, written as programs over
+tiles in the three tools that have them. They are in <a href="https://github.com/franknoh/PPy/blob/main/examples/44_tile/compare"><code>compare/</code></a>:
+<a href="https://github.com/franknoh/PPy/blob/main/examples/44_tile/compare/tiles_bench.ppy"><code>tiles_bench.ppy</code></a>,
+<a href="https://github.com/franknoh/PPy/blob/main/examples/44_tile/compare/tiles_triton.py"><code>tiles_triton.py</code></a>,
+<a href="https://github.com/franknoh/PPy/blob/main/examples/44_tile/compare/tiles_taichi.py"><code>tiles_taichi.py</code></a>. Times are in milliseconds, best
+of warm launches with the device synchronized, over five processes. The
+thread-level ports of the same kernels (CuPy, Numba, Mojo, CUDA C) are in the
+<a href="../38_cuda/">CUDA example</a>'s comparison.</p>
+<p>Here is the block max as each tool spells it.</p>
+<p><strong>PPy</strong>: a program loads its tile and reduces it. The same file runs on
+CPython.</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-27-1" name="__codelineno-27-1" href="#__codelineno-27-1"></a><span class="nd">@tile</span><span class="o">.</span><span class="n">kernel</span>
 <a id="__codelineno-27-2" name="__codelineno-27-2" href="#__codelineno-27-2"></a><span class="k">def</span><span class="w"> </span><span class="nf">block_max</span><span class="p">(</span><span class="n">x</span><span class="p">:</span> <span class="n">native</span><span class="o">.</span><span class="n">const_ptr</span><span class="p">[</span><span class="nb">float</span><span class="p">],</span> <span class="n">out</span><span class="p">:</span> <span class="n">native</span><span class="o">.</span><span class="n">ptr</span><span class="p">[</span><span class="nb">float</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
 <a id="__codelineno-27-3" name="__codelineno-27-3" href="#__codelineno-27-3"></a>    <span class="n">pid</span> <span class="o">=</span> <span class="n">tile</span><span class="o">.</span><span class="n">program_id</span><span class="p">()</span>
 <a id="__codelineno-27-4" name="__codelineno-27-4" href="#__codelineno-27-4"></a>    <span class="n">values</span> <span class="o">=</span> <span class="n">tile</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">pid</span> <span class="o">*</span> <span class="mi">64</span> <span class="o">+</span> <span class="n">tile</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="mi">64</span><span class="p">))</span>
 <a id="__codelineno-27-5" name="__codelineno-27-5" href="#__codelineno-27-5"></a>    <span class="n">tile</span><span class="o">.</span><span class="n">store</span><span class="p">(</span><span class="n">out</span><span class="p">,</span> <span class="n">pid</span><span class="p">,</span> <span class="n">tile</span><span class="o">.</span><span class="n">max</span><span class="p">(</span><span class="n">values</span><span class="p">))</span>
 </code></pre></div>
-<p><strong>Triton</strong> -- the same shape, <code>tl.program_id</code>, <code>tl.arange</code>, <code>tl.load</code>,
-<code>tl.max</code>; it is launched over CuPy memory through a six-line <code>data_ptr()</code>
-wrapper, and its compiler tiles the work across a warp group:</p>
+<p><strong>Triton</strong>: the same shape, with <code>tl.program_id</code>, <code>tl.arange</code>, <code>tl.load</code>,
+<code>tl.max</code>. It is launched over CuPy memory through a six-line <code>data_ptr()</code>
+wrapper, and its compiler tiles the work across a warp group.</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-28-1" name="__codelineno-28-1" href="#__codelineno-28-1"></a><span class="nd">@triton</span><span class="o">.</span><span class="n">jit</span>
 <a id="__codelineno-28-2" name="__codelineno-28-2" href="#__codelineno-28-2"></a><span class="k">def</span><span class="w"> </span><span class="nf">block_max</span><span class="p">(</span><span class="n">x_ptr</span><span class="p">,</span> <span class="n">out_ptr</span><span class="p">,</span> <span class="n">BLOCK</span><span class="p">:</span> <span class="n">tl</span><span class="o">.</span><span class="n">constexpr</span><span class="p">):</span>
 <a id="__codelineno-28-3" name="__codelineno-28-3" href="#__codelineno-28-3"></a>    <span class="n">offsets</span> <span class="o">=</span> <span class="n">tl</span><span class="o">.</span><span class="n">program_id</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span> <span class="o">*</span> <span class="n">BLOCK</span> <span class="o">+</span> <span class="n">tl</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">BLOCK</span><span class="p">)</span>
 <a id="__codelineno-28-4" name="__codelineno-28-4" href="#__codelineno-28-4"></a>    <span class="n">tl</span><span class="o">.</span><span class="n">store</span><span class="p">(</span><span class="n">out_ptr</span> <span class="o">+</span> <span class="n">tl</span><span class="o">.</span><span class="n">program_id</span><span class="p">(</span><span class="mi">0</span><span class="p">),</span> <span class="n">tl</span><span class="o">.</span><span class="n">max</span><span class="p">(</span><span class="n">tl</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">x_ptr</span> <span class="o">+</span> <span class="n">offsets</span><span class="p">),</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">))</span>
 </code></pre></div>
-<p><strong>Taichi</strong> -- no program either: arrays are <code>ti.field</code>s, the outer loop of a
-kernel is parallel over the blocks and the max of each is an inner serial
-loop; <code>ti.init(arch=ti.cuda, default_fp=ti.f64)</code> makes the answers match,
-and on WSL the driver goes on the library path by hand:</p>
+<p><strong>Taichi</strong>: no program either. Arrays are <code>ti.field</code>s, the outer loop of a
+kernel is parallel over the blocks, and the max of each block is an inner
+serial loop. <code>ti.init(arch=ti.cuda, default_fp=ti.f64)</code> makes the answers
+match, and on WSL the driver goes on the library path by hand.</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-29-1" name="__codelineno-29-1" href="#__codelineno-29-1"></a><span class="nd">@ti</span><span class="o">.</span><span class="n">kernel</span>
 <a id="__codelineno-29-2" name="__codelineno-29-2" href="#__codelineno-29-2"></a><span class="k">def</span><span class="w"> </span><span class="nf">block_max</span><span class="p">():</span>
 <a id="__codelineno-29-3" name="__codelineno-29-3" href="#__codelineno-29-3"></a>    <span class="k">for</span> <span class="n">b</span> <span class="ow">in</span> <span class="n">out</span><span class="p">:</span>
@@ -5605,7 +5805,7 @@ and on WSL the driver goes on the library path by hand:</p>
 <thead>
 <tr>
 <th></th>
-<th style="text-align: right;">PPY <code>tile.launch</code></th>
+<th style="text-align: right;">PPy <code>tile.launch</code></th>
 <th style="text-align: right;">Triton</th>
 <th style="text-align: right;">Taichi</th>
 </tr>
@@ -5639,17 +5839,21 @@ and on WSL the driver goes on the library path by hand:</p>
 </table>
 <!-- compare:end -->
 
-<p>On saxpy the three are the memory bandwidth of the device. On the block
-max they are three lowerings of one idea: PPY gives the 64-lane tile a
-block of 64 threads and reduces it with a shuffle tree, Triton gives it a
-warp group and its own reduction, and Taichi one thread per block that
-loops over the 64 -- no exchange at all, which is why it is the fastest
-here and why it would not be on a wider tile. The copying rows are the
-other memory model, an array sent in and brought back on every launch;
-PPY's driver reads the host array in place, Triton goes through CuPy's
-<code>asarray</code>, and Taichi's <code>from_numpy</code> copies twice.</p>
+<p>On saxpy, the three run at the memory bandwidth of the device.</p>
+<p>On the block max they are three lowerings of one idea:</p>
+<ul>
+<li>PPy gives the 64-lane tile a block of 64 threads and reduces it with a
+  shuffle tree.</li>
+<li>Triton gives it a warp group and its own reduction.</li>
+<li>Taichi gives each block one thread that loops over the 64, with no exchange
+  at all. That is why it is the fastest here, and why it would not be on a
+  wider tile.</li>
+</ul>
+<p>The copying rows are the other memory model: an array sent in and brought
+back on every launch. PPy's driver reads the host array in place, Triton goes
+through CuPy's <code>asarray</code>, and Taichi's <code>from_numpy</code> copies twice.</p>
 <p>NVIDIA GeForce RTX 5080 Laptop GPU, driver 610.71, CUDA 13.3; Triton 3.8.0,
-Taichi 1.7.4 on CPython 3.12.13; PPY on CPython 3.13.13.</p>
+Taichi 1.7.4 on CPython 3.12.13; PPy on CPython 3.13.13.</p>
 <h2 id="numpy-fusion-compared-with-numpy-numexpr-numba-and-jax">NumPy fusion: Compared with NumPy, numexpr, Numba, and JAX<a class="headerlink" href="#numpy-fusion-compared-with-numpy-numexpr-numba-and-jax" title="Permanent link">&para;</a></h2>
 <p>From <a href="../05_numpy/">NumPy fusion</a>.
 The two expressions over eight million doubles, in <a href="https://github.com/franknoh/PPy/blob/main/examples/05_numpy/compare"><code>compare/</code></a>:
@@ -5659,18 +5863,18 @@ The two expressions over eight million doubles, in <a href="https://github.com/f
 <a href="https://github.com/franknoh/PPy/blob/main/examples/05_numpy/compare/fusion_numba.py"><code>fusion_numba.py</code></a>,
 <a href="https://github.com/franknoh/PPy/blob/main/examples/05_numpy/compare/fusion_jax.py"><code>fusion_jax.py</code></a>. Milliseconds, best of five calls,
 over five processes.</p>
-<p><strong>PPY</strong> is the NumPy expression as written, in a function:</p>
+<p><strong>PPy</strong> is the NumPy expression as written, in a function:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-30-1" name="__codelineno-30-1" href="#__codelineno-30-1"></a><span class="nd">@ppy</span><span class="o">.</span><span class="n">pure</span>
 <a id="__codelineno-30-2" name="__codelineno-30-2" href="#__codelineno-30-2"></a><span class="k">def</span><span class="w"> </span><span class="nf">blend</span><span class="p">(</span><span class="n">a</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">b</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
 <a id="__codelineno-30-3" name="__codelineno-30-3" href="#__codelineno-30-3"></a>    <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">sin</span><span class="p">(</span><span class="n">a</span><span class="p">)</span> <span class="o">*</span> <span class="mf">2.0</span> <span class="o">+</span> <span class="n">np</span><span class="o">.</span><span class="n">cos</span><span class="p">(</span><span class="n">b</span><span class="p">)</span>
 </code></pre></div>
 <p><strong>NumPy</strong> is the same line with no function around it: three calls, two 64
-MB temporaries. <strong>numexpr</strong> takes the expression as a string and evaluates
-it in chunks across threads:</p>
+MB temporaries.</p>
+<p><strong>numexpr</strong> takes the expression as a string and evaluates it in chunks
+across threads:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-31-1" name="__codelineno-31-1" href="#__codelineno-31-1"></a><span class="n">ne</span><span class="o">.</span><span class="n">evaluate</span><span class="p">(</span><span class="s2">"sin(a) * 2.0 + cos(b)"</span><span class="p">,</span> <span class="n">local_dict</span><span class="o">=</span><span class="p">{</span><span class="s2">"a"</span><span class="p">:</span> <span class="n">a</span><span class="p">,</span> <span class="s2">"b"</span><span class="p">:</span> <span class="n">b</span><span class="p">})</span>
 </code></pre></div>
-<p><strong>Numba</strong> is an explicit loop under <code>@njit</code> writing into <code>np.empty_like</code>;
-<strong>JAX</strong> is the expression under <code>jax.jit</code> on the CPU, with <code>jax_enable_x64</code>:</p>
+<p><strong>Numba</strong> is an explicit loop under <code>@njit</code> writing into <code>np.empty_like</code>:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-32-1" name="__codelineno-32-1" href="#__codelineno-32-1"></a><span class="nd">@njit</span>
 <a id="__codelineno-32-2" name="__codelineno-32-2" href="#__codelineno-32-2"></a><span class="k">def</span><span class="w"> </span><span class="nf">blend</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">):</span>
 <a id="__codelineno-32-3" name="__codelineno-32-3" href="#__codelineno-32-3"></a>    <span class="n">out</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">empty_like</span><span class="p">(</span><span class="n">a</span><span class="p">)</span>
@@ -5678,6 +5882,8 @@ it in chunks across threads:</p>
 <a id="__codelineno-32-5" name="__codelineno-32-5" href="#__codelineno-32-5"></a>        <span class="n">out</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">math</span><span class="o">.</span><span class="n">sin</span><span class="p">(</span><span class="n">a</span><span class="p">[</span><span class="n">i</span><span class="p">])</span> <span class="o">*</span> <span class="mf">2.0</span> <span class="o">+</span> <span class="n">math</span><span class="o">.</span><span class="n">cos</span><span class="p">(</span><span class="n">b</span><span class="p">[</span><span class="n">i</span><span class="p">])</span>
 <a id="__codelineno-32-6" name="__codelineno-32-6" href="#__codelineno-32-6"></a>    <span class="k">return</span> <span class="n">out</span>
 </code></pre></div>
+<p><strong>JAX</strong> is the expression under <code>jax.jit</code> on the CPU, with
+<code>jax_enable_x64</code>:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-33-1" name="__codelineno-33-1" href="#__codelineno-33-1"></a><span class="nd">@jax</span><span class="o">.</span><span class="n">jit</span>
 <a id="__codelineno-33-2" name="__codelineno-33-2" href="#__codelineno-33-2"></a><span class="k">def</span><span class="w"> </span><span class="nf">blend</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">):</span>
 <a id="__codelineno-33-3" name="__codelineno-33-3" href="#__codelineno-33-3"></a>    <span class="k">return</span> <span class="n">jnp</span><span class="o">.</span><span class="n">sin</span><span class="p">(</span><span class="n">a</span><span class="p">)</span> <span class="o">*</span> <span class="mf">2.0</span> <span class="o">+</span> <span class="n">jnp</span><span class="o">.</span><span class="n">cos</span><span class="p">(</span><span class="n">b</span><span class="p">)</span>
@@ -5687,7 +5893,7 @@ it in chunks across threads:</p>
 <thead>
 <tr>
 <th></th>
-<th style="text-align: right;">PPY</th>
+<th style="text-align: right;">PPy</th>
 <th style="text-align: right;">NumPy</th>
 <th style="text-align: right;">numexpr</th>
 <th style="text-align: right;">Numba <code>@njit</code></th>
@@ -5715,18 +5921,21 @@ it in chunks across threads:</p>
 </table>
 <!-- compare:end -->
 
-<p><code>blend</code> is two transcendentals per element, and on one thread that is
-what the time is: PPY, NumPy, and Numba each call <code>sin</code> and <code>cos</code> once per
+<p><code>blend</code> is two transcendentals per element, and on one thread that is what
+the time is. PPy, NumPy, and Numba each call <code>sin</code> and <code>cos</code> once per
 element, and fusing away NumPy's two temporaries takes off the fifth of the
 time that was memory traffic. numexpr and JAX evaluate <code>sin</code> and <code>cos</code>
 across vector lanes and across threads, which is where their rows come
-from. <code>normalize</code> is a reduction in NumPy's own order followed by a
-division pass, on every tool that keeps the order; PPY's sum is NumPy's
-sum, so the row is NumPy's time, and <code>@ppy.fastmath</code> is the permission to
-reassociate it (<a href="../07_parallel/">Parallel</a> shows what that buys).</p>
-<p>Intel Core Ultra 9 386H (16 threads); Numba 0.67.0, numexpr 2.14.2, NumPy 2.5.3 on CPython 3.12.13, JAX 0.11.1 on
-CPython 3.13.13, PPY on CPython 3.14.5, from a checkout on a native
-filesystem.</p>
+from.</p>
+<p><code>normalize</code> is a reduction in NumPy's own order followed by a division
+pass, on every tool that keeps the order. PPy's sum is NumPy's sum, so the
+row is NumPy's time. <code>@ppy.fastmath</code> is the permission to reassociate it
+(<a href="../07_parallel/">Parallel</a> shows what that buys).</p>
+<p>Intel Core Ultra 9 386H (16 threads); Numba 0.67.0, numexpr 2.14.2, NumPy
+2.5.3 on CPython 3.12.13, JAX 0.11.1 on CPython 3.13.13, PPy on CPython
+3.14.5, from a checkout on a native filesystem.</p>
+<!-- outputs:start -->
+
 <h2 id="parallel-fused-kernels-compared-with-numpy-numexpr-numba-and-jax">Parallel fused kernels: Compared with NumPy, numexpr, Numba, and JAX<a class="headerlink" href="#parallel-fused-kernels-compared-with-numpy-numexpr-numba-and-jax" title="Permanent link">&para;</a></h2>
 <p>From <a href="../07_parallel/">Parallel fused kernels</a>.
 The fused expression and the sum of squares over eight million doubles, in
@@ -5734,8 +5943,8 @@ The fused expression and the sum of squares over eight million doubles, in
 <a href="https://github.com/franknoh/PPy/blob/main/examples/07_parallel/compare/fused_numpy.py"><code>fused_numpy.py</code></a>, <a href="https://github.com/franknoh/PPy/blob/main/examples/07_parallel/compare/fused_numexpr.py"><code>fused_numexpr.py</code></a>,
 <a href="https://github.com/franknoh/PPy/blob/main/examples/07_parallel/compare/fused_numba.py"><code>fused_numba.py</code></a>, <a href="https://github.com/franknoh/PPy/blob/main/examples/07_parallel/compare/fused_jax.py"><code>fused_jax.py</code></a>.
 Milliseconds, best of five calls, over five processes.</p>
-<p><strong>PPY</strong> -- the NumPy expression in a function, <code>@ppy.parallel</code> to split it;
-the serial row is the same expression fused into one loop with no
+<p><strong>PPy</strong> is the NumPy expression in a function, with <code>@ppy.parallel</code> to
+split it. The serial row is the same expression fused into one loop with no
 decorator, and <code>strict_total</code> is NumPy's sum in NumPy's order:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-34-1" name="__codelineno-34-1" href="#__codelineno-34-1"></a><span class="nd">@ppy</span><span class="o">.</span><span class="n">pure</span>
 <a id="__codelineno-34-2" name="__codelineno-34-2" href="#__codelineno-34-2"></a><span class="nd">@ppy</span><span class="o">.</span><span class="n">parallel</span>
@@ -5743,9 +5952,10 @@ decorator, and <code>strict_total</code> is NumPy's sum in NumPy's order:</p>
 <a id="__codelineno-34-4" name="__codelineno-34-4" href="#__codelineno-34-4"></a><span class="k">def</span><span class="w"> </span><span class="nf">parallel</span><span class="p">(</span><span class="n">a</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">b</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
 <a id="__codelineno-34-5" name="__codelineno-34-5" href="#__codelineno-34-5"></a>    <span class="k">return</span> <span class="p">(</span><span class="n">a</span> <span class="o">*</span> <span class="n">b</span> <span class="o">+</span> <span class="n">a</span><span class="p">)</span> <span class="o">*</span> <span class="p">(</span><span class="n">b</span> <span class="o">-</span> <span class="n">a</span><span class="p">)</span> <span class="o">+</span> <span class="n">a</span> <span class="o">*</span> <span class="mf">0.5</span> <span class="o">-</span> <span class="n">b</span> <span class="o">*</span> <span class="mf">0.25</span>
 </code></pre></div>
-<p><strong>NumPy</strong> is the expression as written -- five operations, four 64 MB
-temporaries, one thread. <strong>numexpr</strong> is the expression as a string,
-compiled to its own virtual machine and evaluated in chunks across threads:</p>
+<p><strong>NumPy</strong> is the expression as written: five operations, four 64 MB
+temporaries, one thread.</p>
+<p><strong>numexpr</strong> is the expression as a string, compiled to its own virtual
+machine and evaluated in chunks across threads:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-35-1" name="__codelineno-35-1" href="#__codelineno-35-1"></a><span class="n">ne</span><span class="o">.</span><span class="n">evaluate</span><span class="p">(</span><span class="s2">"(x * y + x) * (y - x) + x * 0.5 - y * 0.25"</span><span class="p">,</span> <span class="n">local_dict</span><span class="o">=</span><span class="p">{</span><span class="s2">"x"</span><span class="p">:</span> <span class="n">x</span><span class="p">,</span> <span class="s2">"y"</span><span class="p">:</span> <span class="n">y</span><span class="p">})</span>
 </code></pre></div>
 <p><strong>Numba</strong> is an explicit loop under <code>@njit(parallel=True)</code> writing into
@@ -5768,7 +5978,7 @@ on its thread pool, with <code>jax_enable_x64</code>:</p>
 <thead>
 <tr>
 <th></th>
-<th style="text-align: right;">PPY</th>
+<th style="text-align: right;">PPy</th>
 <th style="text-align: right;">NumPy</th>
 <th style="text-align: right;">numexpr</th>
 <th style="text-align: right;">Numba <code>prange</code></th>
@@ -5812,20 +6022,23 @@ on its thread pool, with <code>jax_enable_x64</code>:</p>
 </table>
 <!-- compare:end -->
 
-<p>Fusing the expression is what removes NumPy's four temporaries: the serial
-fused loop reads the two inputs once and writes the output once, and
-splitting that loop across the cores is a memory-bandwidth problem that
-PPY, Numba, JAX, and numexpr solve the same way, within a couple of
-milliseconds of each other. The fused kernel also checks its own result in
-the same loop -- one add-reduction of non-finite elements the vectorizer
-keeps in a register, one guard after -- which is how it keeps NumPy's
-floating-point reporting without a second pass over 64 MB. The ordered sum
-is NumPy's order and NumPy's time; the relaxed one vectorizes on one
-thread, and JAX's reduction, reassociated across its pool, is the row that
-shows what the same permission buys with threads.</p>
+<p>Fusing the expression is what removes NumPy's four temporaries. The serial
+fused loop reads the two inputs once and writes the output once. Splitting
+that loop across the cores is a memory-bandwidth problem that PPy, Numba,
+JAX, and numexpr solve the same way, within a couple of milliseconds of each
+other.</p>
+<p>The fused kernel also checks its own result in the same loop: one
+add-reduction of non-finite elements the vectorizer keeps in a register,
+and one guard after. That is how it keeps NumPy's floating-point reporting
+without a second pass over 64 MB.</p>
+<p>The ordered sum is NumPy's order and NumPy's time. The relaxed one
+vectorizes on one thread. JAX's reduction, reassociated across its pool, is
+the row that shows what the same permission buys with threads.</p>
 <p>Intel Core Ultra 9 386H (16 threads), threads backend; NumPy 2.5.3, numexpr
 2.14.2, Numba 0.67.0 on CPython 3.12.13, JAX 0.11.1 on CPython 3.13.13,
-PPY on CPython 3.13.13, from a checkout on a native filesystem.</p>
+PPy on CPython 3.13.13, from a checkout on a native filesystem.</p>
+<!-- outputs:start -->
+
 <h2 id="pytorch-aten-regions-compared-with-pytorch-eager-and-torchcompile">PyTorch ATen regions: Compared with PyTorch eager and <code>torch.compile</code><a class="headerlink" href="#pytorch-aten-regions-compared-with-pytorch-eager-and-torchcompile" title="Permanent link">&para;</a></h2>
 <p>From <a href="../09_torch/">PyTorch ATen regions</a>.
 The same <code>layer</code> on an 8×32 input, twenty thousand calls, in
@@ -5833,10 +6046,14 @@ The same <code>layer</code> on an 8×32 input, twenty thousand calls, in
 <a href="https://github.com/franknoh/PPy/blob/main/examples/09_torch/compare/layer_eager.py"><code>layer_eager.py</code></a>,
 <a href="https://github.com/franknoh/PPy/blob/main/examples/09_torch/compare/layer_compile.py"><code>layer_compile.py</code></a>. Milliseconds per call, to
 four places, best of five rounds, over five processes; one PyTorch thread.</p>
-<p><strong>PPY</strong> is the function as written, and <code>ppy run</code> compiles it into one ATen
-region; <strong>PyTorch eager</strong> is the same function with no decorator, three
-dispatches from Python; <strong><code>torch.compile</code></strong> is the same function under the
-decorator, traced by Dynamo and written by Inductor:</p>
+<ul>
+<li><strong>PPy</strong> is the function as written, and <code>ppy run</code> compiles it into one
+  ATen region.</li>
+<li><strong>PyTorch eager</strong> is the same function with no decorator: three
+  dispatches from Python.</li>
+<li><strong><code>torch.compile</code></strong> is the same function under the decorator, traced by
+  Dynamo and written by Inductor.</li>
+</ul>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-38-1" name="__codelineno-38-1" href="#__codelineno-38-1"></a><span class="nd">@ppy</span><span class="o">.</span><span class="n">opt</span><span class="p">(</span><span class="mi">3</span><span class="p">)</span>
 <a id="__codelineno-38-2" name="__codelineno-38-2" href="#__codelineno-38-2"></a><span class="k">def</span><span class="w"> </span><span class="nf">layer</span><span class="p">(</span><span class="n">x</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span> <span class="n">weight</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span> <span class="n">bias</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">:</span>
 <a id="__codelineno-38-3" name="__codelineno-38-3" href="#__codelineno-38-3"></a>    <span class="k">return</span> <span class="n">torch</span><span class="o">.</span><span class="n">relu</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">matmul</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">weight</span><span class="p">),</span> <span class="n">bias</span><span class="p">))</span>
@@ -5850,7 +6067,7 @@ decorator, traced by Dynamo and written by Inductor:</p>
 <thead>
 <tr>
 <th></th>
-<th style="text-align: right;">PPY ATen region</th>
+<th style="text-align: right;">PPy ATen region</th>
 <th style="text-align: right;">PyTorch eager</th>
 <th style="text-align: right;"><code>torch.compile</code></th>
 </tr>
@@ -5867,18 +6084,18 @@ decorator, traced by Dynamo and written by Inductor:</p>
 <!-- compare:end -->
 
 <p>Three operators on a tensor this small cost about two microseconds either
-way: PyTorch's eager dispatch is cheap enough that the Python round trips
+way. PyTorch's eager dispatch is cheap enough that the Python round trips
 the region removes are within the noise of the ATen calls themselves. The
-region's value is not this number; it is that the function keeps its
+region's value is not this number. It is that the function keeps its
 source, its autograd, and its dispatcher, and that a built artifact carries
 it with no compiler in the process. <code>torch.compile</code> pays for its guards on
 every call, which on an 8×32 input is more than the work.</p>
 <p>One layer of one shape is not the question anyone asks about
 <code>torch.compile</code>, and this table cannot answer it: the work is two
 microseconds, so every column is measuring its own overhead.
-<a href="../46_gpt2/"><code>46_gpt2</code></a> asks it at model scale instead -- GPT-2
+<a href="../46_gpt2/"><code>46_gpt2</code></a> asks it at model scale instead: GPT-2
 XL, forty-eight blocks, one region each, on a datacenter GPU.</p>
-<p>Intel Core Ultra 9 386H; PyTorch 2.14.0 (CPU) on CPython 3.13.13, PPY
+<p>Intel Core Ultra 9 386H; PyTorch 2.14.0 (CPU) on CPython 3.13.13, PPy
 against the same PyTorch on CPython 3.14.5, from a checkout on a native
 filesystem.</p>
 <h2 id="gpt-2-xl-one-region-per-block-compared-with-pytorch-eager-and-torchcompile-at-model-scale">GPT-2 XL: one region per block: Compared with PyTorch eager and <code>torch.compile</code> at model scale<a class="headerlink" href="#gpt-2-xl-one-region-per-block-compared-with-pytorch-eager-and-torchcompile-at-model-scale" title="Permanent link">&para;</a></h2>
@@ -5888,7 +6105,7 @@ filesystem.</p>
 <thead>
 <tr>
 <th></th>
-<th style="text-align: right;">PPY ATen regions</th>
+<th style="text-align: right;">PPy ATen regions</th>
 <th style="text-align: right;">PyTorch eager</th>
 <th style="text-align: right;"><code>torch.compile</code></th>
 <th style="text-align: right;"><code>torch.compile</code> reduce-overhead</th>
@@ -5942,71 +6159,83 @@ filesystem.</p>
 <!-- compare:end -->
 
 <p>Milliseconds per pass of the whole model, bfloat16, best of ten in each of
-five processes; the decode row is a 128-token prompt and then 128 tokens one
-at a time out of the cache, timed without the prefill. Every column is the
-same forty-eight blocks on the same weights, and all four agree on the
-answer to three decimals -- which is what the agreement is checked on,
-because the greedy token is not stable under any of this: on weights drawn
-from a generator the top two logits of a position are usually a tie, and
-fusing a reduction differently flips it. The decode loop feeds the next
-token of a fixed sequence rather than the model's own argmax, for the same
-reason: sampling would send the four columns down four different sequences.</p>
-<p>The rows are one axis: how much of the wall clock is the Python between
-operators. At <code>b1 s32</code> the GEMMs are small and reading the weights is about
-three milliseconds, so the rest is dispatch -- and removing it is worth 18%
-to the region and 31% to <code>torch.compile</code>. At <code>b8 s512</code> the same forty-eight
-blocks are 95 ms of cuBLAS and the Python is a rounding error; the first
-three columns are the same number, and they should be. The training step is
-the same story with a backward pass on it.</p>
-<p>Decode is that axis at its far end. One token through forty-eight blocks is
-6144 region calls for 128 tokens, and almost no arithmetic per call: the
+five processes. The decode row is a 128-token prompt and then 128 tokens one
+at a time out of the cache, timed without the prefill.</p>
+<p>Every column is the same forty-eight blocks on the same weights, and all four
+agree on the answer to three decimals. That is what the agreement is checked
+on, because the greedy token is not stable under any of this: on weights
+drawn from a generator the top two logits of a position are usually a tie,
+and fusing a reduction differently flips it. For the same reason the decode
+loop feeds the next token of a fixed sequence rather than the model's own
+argmax. Sampling would send the four columns down four different sequences.</p>
+<h3 id="where-the-time-goes">Where the time goes<a class="headerlink" href="#where-the-time-goes" title="Permanent link">&para;</a></h3>
+<p>The rows vary one thing: how much of the wall clock is the Python between
+operators.</p>
+<ul>
+<li>At <code>b1 s32</code> the GEMMs are small and reading the weights is about three
+  milliseconds, so the rest is dispatch. Removing it is worth 18% to the
+  region and 31% to <code>torch.compile</code>.</li>
+<li>At <code>b8 s512</code> the same forty-eight blocks are 95 ms of cuBLAS and the Python
+  is a rounding error. The first three columns are the same number, and they
+  should be.</li>
+<li>The training step is the same story with a backward pass on it.</li>
+</ul>
+<p>Decode is the far end of that axis. One token through forty-eight blocks is
+6144 region calls for 128 tokens, with almost no arithmetic per call. The
 region takes 19% off eager, <code>torch.compile</code> 29%, and the two are within 14%
 of each other. It is the row where removing the interpreter is worth the
 most, and it is still the row where a fusing compiler wins.</p>
-<p>That is the honest shape of it. A region is not a fusing compiler: it
-removes the interpreter between the operators and leaves the kernels where
-they were, so where Inductor's own win is also interpreter overhead the two
-land close, and where Inductor could fuse -- the two <code>layer_norm</code>s, the
-<code>gelu</code>, the residual adds -- there is not enough of it in a model that is
-98% GEMM for the fusion to show at this size. What the columns do not show
-is what each cost to get: the region is one C++ translation unit, 19 s to
-build once and cached on disk for every process after; <code>torch.compile</code>
-spends about 18 s on the first shape's forward graph in every new process,
-and several minutes to reach all five shapes and the backward with a cold
-Inductor cache.</p>
-<p><code>reduce-overhead</code> -- the CUDA-graphs mode -- is slower here in every row
-than plain <code>torch.compile</code>, and slower than eager too. Reproducibly so, the
-same numbers in its own process with a single shape rather than five, and
-with no warning from Inductor that it declined to capture.</p>
+<h3 id="what-a-region-leaves-unfused">What a region leaves unfused<a class="headerlink" href="#what-a-region-leaves-unfused" title="Permanent link">&para;</a></h3>
+<p>A region removes the interpreter between the operators and leaves the kernels
+where they were. Where Inductor's own win is also interpreter overhead, the
+two land close. Inductor could fuse the two <code>layer_norm</code>s, the <code>gelu</code>, and
+the residual adds, but there is not enough of that in a model that is 98%
+GEMM for the fusion to show at this size.</p>
+<p>The columns do not show what each cost to get. The region is one C++
+translation unit, 19 s to build once and cached on disk for every process
+after. <code>torch.compile</code> spends about 18 s on the first shape's forward graph
+in every new process, and several minutes to reach all five shapes and the
+backward with a cold Inductor cache.</p>
+<h3 id="the-reduce-overhead-column">The reduce-overhead column<a class="headerlink" href="#the-reduce-overhead-column" title="Permanent link">&para;</a></h3>
+<p><code>reduce-overhead</code> (the CUDA-graphs mode) is slower here in every row than
+plain <code>torch.compile</code>, and slower than eager too. It reproduces: the same
+numbers in its own process with a single shape rather than five, and no
+warning from Inductor that it declined to capture.</p>
 <p>It also does not run a KV cache as written. A cache is a tensor the caller
-keeps across invocations, which is exactly the memory CUDA graphs reuse, and
-the decode loop fails outright -- <em>accessing tensor output of CUDAGraphs
-that has been overwritten by a subsequent run</em> -- until the counterpart
-announces each invocation with <code>cudagraph_mark_step_begin()</code> <strong>and</strong> sets
-<code>cudagraph_trees_generation_cloning = "user_visible"</code>, which are the two
-things its own error message asks for. The cloning that second switch turns
-on is part of what the last column costs. The training step needed the same
-care for the same reason: gradients are set to <code>None</code> before each backward
-rather than accumulated, which is what an optimizer does anyway.</p>
-<p>The PPY column is <code>ppy &lt;file&gt;</code> -- the staged Python that loads the compiled
-regions -- not <code>ppy run</code>. Compiling the driver natively has nothing to do
+keeps across invocations, which is the memory CUDA graphs reuse. The decode
+loop fails outright (<em>accessing tensor output of CUDAGraphs that has been
+overwritten by a subsequent run</em>) until the counterpart announces each
+invocation with <code>cudagraph_mark_step_begin()</code> <strong>and</strong> sets
+<code>cudagraph_trees_generation_cloning = "user_visible"</code>, the two things its own
+error message asks for. The cloning that second switch turns on is part of
+what the last column costs.</p>
+<p>The training step needed the same care for the same reason: gradients are
+set to <code>None</code> before each backward rather than accumulated, which is what an
+optimizer does anyway.</p>
+<h3 id="setup">Setup<a class="headerlink" href="#setup" title="Permanent link">&para;</a></h3>
+<p>The PPy column is <code>ppy &lt;file&gt;</code> (the staged Python that loads the compiled
+regions), not <code>ppy run</code>. Compiling the driver natively has nothing to do
 here: outside the regions the program is forty-eight calls and a loop.</p>
 <p>NVIDIA GeForce RTX 4090 24 GB, driver 580.126.20, CUDA 13.0; PyTorch
-2.14.0+cu130 on CPython 3.13.15, on a rented Pod. Not the machine the other
-tables come from: <code>scripts/compare_docs.py</code> skips this comparison unless
-<code>PPY_TORCH_CUDA_PYTHON</code> names a PyTorch with a device, so the bench runner
-leaves it alone, and <code>scripts/cloud/runpod_bench.py</code> is what re-measures it.</p>
+2.14.0+cu130 on CPython 3.13.15, on a rented Pod. This is not the machine the
+other tables come from: <code>scripts/compare_docs.py</code> skips this comparison
+unless <code>PPY_TORCH_CUDA_PYTHON</code> names a PyTorch with a device, so the bench
+runner leaves it alone, and <code>scripts/cloud/runpod_bench.py</code> is what
+re-measures it.</p>
 <h2 id="training-a-torch-mlp-compared-with-pytorch-as-it-is-usually-written">Training a torch MLP: Compared with PyTorch as it is usually written<a class="headerlink" href="#training-a-torch-mlp-compared-with-pytorch-as-it-is-usually-written" title="Permanent link">&para;</a></h2>
 <p>From <a href="../21_training_torch/">Training a torch MLP</a>.
-The standardization of 20,000×16 rows, and one forward pass of the step's
-operators, in <a href="https://github.com/franknoh/PPy/blob/main/examples/21_training_torch/compare"><code>compare/</code></a>:
-<a href="https://github.com/franknoh/PPy/blob/main/examples/21_training_torch/compare/train_bench.ppy"><code>train_bench.ppy</code></a> -- under <code>ppy run</code> and, the
-same file, under <code>python</code> -- <a href="https://github.com/franknoh/PPy/blob/main/examples/21_training_torch/compare/train_eager.py"><code>train_eager.py</code></a>, and
-<a href="https://github.com/franknoh/PPy/blob/main/examples/21_training_torch/compare/train_compile.py"><code>train_compile.py</code></a>. Milliseconds, best of five
-(the forward pass best of two hundred), over five processes; eight PyTorch
-threads.</p>
-<p><strong>PPY</strong> standardizes in the loop the script was written with, over
-<code>Buffer[float]</code>; <strong>PyTorch</strong> is how the same preprocessing is written for
+The benchmark covers the standardization of 20,000×16 rows and one forward
+pass of the step's operators. The programs are in <a href="https://github.com/franknoh/PPy/blob/main/examples/21_training_torch/compare"><code>compare/</code></a>:</p>
+<ul>
+<li><a href="https://github.com/franknoh/PPy/blob/main/examples/21_training_torch/compare/train_bench.ppy"><code>train_bench.ppy</code></a>, under <code>ppy run</code> and, the
+  same file, under <code>python</code></li>
+<li><a href="https://github.com/franknoh/PPy/blob/main/examples/21_training_torch/compare/train_eager.py"><code>train_eager.py</code></a></li>
+<li><a href="https://github.com/franknoh/PPy/blob/main/examples/21_training_torch/compare/train_compile.py"><code>train_compile.py</code></a></li>
+</ul>
+<p>Milliseconds, best of five (the forward pass best of two hundred), over
+five processes; eight PyTorch threads.</p>
+<p><strong>PPy</strong> standardizes in the loop the script was written with, over
+<code>Buffer[float]</code>. <strong>PyTorch</strong> is how the same preprocessing is written for
 PyTorch, vectorized over the batch, with <code>roll</code> for the interaction term:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-40-1" name="__codelineno-40-1" href="#__codelineno-40-1"></a><span class="k">def</span><span class="w"> </span><span class="nf">standardize</span><span class="p">(</span><span class="n">raw</span><span class="p">:</span> <span class="n">Buffer</span><span class="p">[</span><span class="nb">float</span><span class="p">],</span> <span class="n">out</span><span class="p">:</span> <span class="n">Buffer</span><span class="p">[</span><span class="nb">float</span><span class="p">],</span> <span class="n">rows</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">cols</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">float</span><span class="p">:</span>
 <a id="__codelineno-40-2" name="__codelineno-40-2" href="#__codelineno-40-2"></a>    <span class="n">total</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.0</span>
@@ -6028,14 +6257,14 @@ PyTorch, vectorized over the batch, with <code>roll</code> for the interaction t
 <a id="__codelineno-41-7" name="__codelineno-41-7" href="#__codelineno-41-7"></a>    <span class="k">return</span> <span class="n">out</span><span class="p">,</span> <span class="nb">float</span><span class="p">(</span><span class="n">out</span><span class="o">.</span><span class="n">sum</span><span class="p">())</span>
 </code></pre></div>
 <p><code>forward_loss</code> is the same six operators on every side: one ATen region
-under PPY, eager under PyTorch, and under <code>torch.compile</code> in the third
+under PPy, eager under PyTorch, and under <code>torch.compile</code> in the third
 column.</p>
 <!-- compare:start -->
 <table>
 <thead>
 <tr>
 <th></th>
-<th style="text-align: right;">PPY <code>ppy run</code></th>
+<th style="text-align: right;">PPy <code>ppy run</code></th>
 <th style="text-align: right;">CPython, the same file</th>
 <th style="text-align: right;">PyTorch, vectorized</th>
 <th style="text-align: right;"><code>torch.compile</code></th>
@@ -6060,14 +6289,17 @@ column.</p>
 </table>
 <!-- compare:end -->
 
-<p>The loop as the script wrote it, compiled, is level with the vectorized
-rewrite: both are one pass over the rows, and the rewrite costs seven
-tensor temporaries the loop never makes. Under <code>python</code> the same loop is
-the cost the conversion removed. The forward pass is PyTorch's on every
-side -- the matmul over 20,000 rows is the time, and the Python round
-trips between six operators are not -- so the region neither gains nor
-loses there, and <code>torch.compile</code>'s guards are a few microseconds on top.</p>
-<p>Intel Core Ultra 9 386H; PyTorch 2.14.0 (CPU) on CPython 3.13.13, PPY
+<ul>
+<li><strong>Standardize.</strong> The loop as the script wrote it, compiled, is level with
+  the vectorized rewrite. Both are one pass over the rows, and the rewrite
+  costs seven tensor temporaries the loop never makes. Under <code>python</code> the
+  same loop is the cost the conversion removed.</li>
+<li><strong>Forward pass.</strong> This is PyTorch's on every side: the matmul over 20,000
+  rows is the time, and the Python round trips between six operators are
+  not. The region neither gains nor loses there, and <code>torch.compile</code>'s
+  guards are a few microseconds on top.</li>
+</ul>
+<p>Intel Core Ultra 9 386H; PyTorch 2.14.0 (CPU) on CPython 3.13.13, PPy
 against the same PyTorch on CPython 3.14.5, from a checkout on a native
 filesystem.</p>
 <h2 id="columnar-expressions-compared-with-pandas-and-polars">Columnar expressions: Compared with pandas and polars<a class="headerlink" href="#columnar-expressions-compared-with-pandas-and-polars" title="Permanent link">&para;</a></h2>
@@ -6076,13 +6308,15 @@ The two expressions over eight million rows, a NaN in every seventh row of
 <code>s</code> and every eleventh of <code>t</code>, in <a href="https://github.com/franknoh/PPy/blob/main/examples/41_columnar/compare"><code>compare/</code></a>:
 <a href="https://github.com/franknoh/PPy/blob/main/examples/41_columnar/compare/frames_bench.ppy"><code>frames_bench.ppy</code></a>,
 <a href="https://github.com/franknoh/PPy/blob/main/examples/41_columnar/compare/frames_pandas.py"><code>frames_pandas.py</code></a>,
-<a href="https://github.com/franknoh/PPy/blob/main/examples/41_columnar/compare/frames_polars.py"><code>frames_polars.py</code></a>. Milliseconds, best of five
-calls, over five processes.</p>
-<p><strong>PPY</strong> is the pandas expression in a function; <strong>pandas</strong> is the same
-expression with no function around it, one pass and one temporary per
-operator (numexpr under it, where installed); <strong>polars</strong> is the expression
-rewritten in its own vocabulary, with the NaNs as nulls, planned and run
-across threads:</p>
+<a href="https://github.com/franknoh/PPy/blob/main/examples/41_columnar/compare/frames_polars.py"><code>frames_polars.py</code></a>. Times are milliseconds, best
+of five calls, over five processes.</p>
+<ul>
+<li><strong>PPy</strong> is the pandas expression in a function.</li>
+<li><strong>pandas</strong> is the same expression with no function around it, one pass
+  and one temporary per operator (numexpr under it, where installed).</li>
+<li><strong>polars</strong> is the expression rewritten in its own vocabulary, with the
+  NaNs as nulls, planned and run across threads.</li>
+</ul>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-42-1" name="__codelineno-42-1" href="#__codelineno-42-1"></a><span class="nd">@ppy</span><span class="o">.</span><span class="n">pure</span>
 <a id="__codelineno-42-2" name="__codelineno-42-2" href="#__codelineno-42-2"></a><span class="k">def</span><span class="w"> </span><span class="nf">blend</span><span class="p">(</span><span class="n">s</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">,</span> <span class="n">t</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">pd</span><span class="o">.</span><span class="n">Series</span><span class="p">:</span>
 <a id="__codelineno-42-3" name="__codelineno-42-3" href="#__codelineno-42-3"></a>    <span class="k">return</span> <span class="n">s</span> <span class="o">*</span> <span class="n">t</span> <span class="o">+</span> <span class="n">s</span><span class="o">.</span><span class="n">fillna</span><span class="p">(</span><span class="mf">0.0</span><span class="p">)</span>
@@ -6096,7 +6330,7 @@ across threads:</p>
 <thead>
 <tr>
 <th></th>
-<th style="text-align: right;">PPY</th>
+<th style="text-align: right;">PPy</th>
 <th style="text-align: right;">pandas</th>
 <th style="text-align: right;">polars</th>
 </tr>
@@ -6119,15 +6353,17 @@ across threads:</p>
 <!-- compare:end -->
 
 <p>The fused loop reads <code>s</code> and <code>t</code> once and writes the answer once, on one
-thread, into the array the result Series wraps; pandas makes a temporary
-per operator, three passes over 64 MB each, and numexpr under it splits
-the arithmetic across threads to make that up. polars plans the expression
-and runs it across every core, which is what its row is. The point of the
-PPY column is the source: it is the pandas line, unchanged, with pandas'
-own NaN convention, where the polars column is a different program.</p>
+thread, into the array the result Series wraps. pandas makes a temporary per
+operator, three passes over 64 MB each, and numexpr under it splits the
+arithmetic across threads to make that up. polars plans the expression and
+runs it across every core, which is what its row is.</p>
+<p>The point of the PPy column is the source: it is the pandas line,
+unchanged, with pandas' own NaN convention. The polars column is a
+different program.</p>
 <p>Intel Core Ultra 9 386H (16 threads); pandas 3.0.5 with numexpr 2.14.2,
-polars 1.44.2 on CPython 3.12.13, PPY with pandas 3.0.5 on CPython 3.14.5,
+polars 1.44.2 on CPython 3.12.13, PPy with pandas 3.0.5 on CPython 3.14.5,
 from a checkout on a native filesystem.</p>
+<!-- outputs:start -->
 
 
 

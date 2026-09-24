@@ -6,7 +6,7 @@
       <meta charset="utf-8">
       <meta name="viewport" content="width=device-width,initial-scale=1">
       
-        <meta name="description" content="A statically analyzable language in Python's syntax, and a compiler whose three paths agree">
+        <meta name="description" content="A compiler for a statically analyzable subset of Python">
       
       
       
@@ -22,12 +22,12 @@
         
       
       
-      <link rel="icon" href="../../assets/images/favicon.png">
+      <link rel="icon" href="../../assets/logo.svg">
       <meta name="generator" content="mkdocs-ProperDocs 1.6.7, mkdocs-material-9.7.7">
     
     
       
-        <title>The IR - PPY</title>
+        <title>The IR - PPy</title>
       
     
     
@@ -48,8 +48,8 @@
         
         
         <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
-        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=IBM+Plex+Sans:300,300i,400,400i,700,700i%7CJetBrains+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"IBM Plex Sans";--md-code-font:"JetBrains Mono"}</style>
       
     
     
@@ -75,7 +75,7 @@
     
     
     
-    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="deep-purple">
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="custom" data-md-color-accent="custom">
   
     
     <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
@@ -104,10 +104,9 @@
 
 <header class="md-header md-header--shadow md-header--lifted" data-md-component="header">
   <nav class="md-header__inner md-grid" aria-label="Header">
-    <a href="../.." title="PPY" class="md-header__button md-logo" aria-label="PPY" data-md-component="logo">
+    <a href="../.." title="PPy" class="md-header__button md-logo" aria-label="PPy" data-md-component="logo">
       
-  
-  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+  <img src="../../assets/logo.svg" alt="logo">
 
     </a>
     <label class="md-header__button md-icon" for="__drawer">
@@ -118,7 +117,7 @@
       <div class="md-header__ellipsis">
         <div class="md-header__topic">
           <span class="md-ellipsis">
-            PPY
+            PPy
           </span>
         </div>
         <div class="md-header__topic" data-md-component="header-topic">
@@ -137,7 +136,7 @@
     
     
     
-    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="deep-purple"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="custom" data-md-color-accent="custom"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
     
       <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"/></svg>
@@ -147,7 +146,7 @@
     
     
     
-    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="deep-purple"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="custom" data-md-color-accent="custom"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
     
       <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"/></svg>
@@ -250,36 +249,20 @@
   
   
   
-    <li class="md-tabs__item">
-      <a href="../../getting-started/" class="md-tabs__link">
-        
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../getting-started/" class="md-tabs__link">
+          
   
   
     
   
-  Getting started
+  Learn
 
-      </a>
-    </li>
-  
-
-      
-        
-  
-  
-  
-  
-    <li class="md-tabs__item">
-      <a href="../../installing/" class="md-tabs__link">
-        
-  
-  
+        </a>
+      </li>
     
-  
-  Installing
-
-      </a>
-    </li>
   
 
       
@@ -320,47 +303,6 @@
     
   
   Examples
-
-        </a>
-      </li>
-    
-  
-
-      
-        
-  
-  
-  
-  
-    <li class="md-tabs__item">
-      <a href="../../cli/" class="md-tabs__link">
-        
-  
-  
-    
-  
-  CLI
-
-      </a>
-    </li>
-  
-
-      
-        
-  
-  
-  
-  
-    
-    
-      <li class="md-tabs__item">
-        <a href="../../api/" class="md-tabs__link">
-          
-  
-  
-    
-  
-  API
 
         </a>
       </li>
@@ -420,25 +362,6 @@
   
   
     <li class="md-tabs__item">
-      <a href="../../contributing/" class="md-tabs__link">
-        
-  
-  
-    
-  
-  Contributing
-
-      </a>
-    </li>
-  
-
-      
-        
-  
-  
-  
-  
-    <li class="md-tabs__item">
       <a href="../../changelog/" class="md-tabs__link">
         
   
@@ -480,13 +403,12 @@
 
 <nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
   <label class="md-nav__title" for="__drawer">
-    <a href="../.." title="PPY" class="md-nav__button md-logo" aria-label="PPY" data-md-component="logo">
+    <a href="../.." title="PPy" class="md-nav__button md-logo" aria-label="PPy" data-md-component="logo">
       
-  
-  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+  <img src="../../assets/logo.svg" alt="logo">
 
     </a>
-    PPY
+    PPy
   </label>
   
     <div class="md-nav__source">
@@ -537,6 +459,64 @@
   
   
   
+    
+    
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Learn
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Learn
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
     <li class="md-nav__item">
       <a href="../../getting-started/" class="md-nav__link">
         
@@ -557,9 +537,10 @@
     </li>
   
 
-    
-      
-      
+              
+            
+              
+                
   
   
   
@@ -581,6 +562,14 @@
   
 
       </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
     </li>
   
 
@@ -643,7 +632,7 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
         
           
           <div class="md-nav__link md-nav__container">
@@ -665,14 +654,14 @@
             </a>
             
               
-              <label class="md-nav__link " for="__nav_4" id="__nav_4_label" tabindex="0">
+              <label class="md-nav__link " for="__nav_3" id="__nav_3_label" tabindex="0">
                 <span class="md-nav__icon md-icon"></span>
               </label>
             
           </div>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_4">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -1177,7 +1166,7 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
         
           
           <div class="md-nav__link md-nav__container">
@@ -1199,14 +1188,14 @@
             </a>
             
               
-              <label class="md-nav__link " for="__nav_5" id="__nav_5_label" tabindex="0">
+              <label class="md-nav__link " for="__nav_4" id="__nav_4_label" tabindex="0">
                 <span class="md-nav__icon md-icon"></span>
               </label>
             
           </div>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_5">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -1294,10 +1283,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5_3" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_3" >
         
           
-          <label class="md-nav__link" for="__nav_5_3" id="__nav_5_3_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_4_3" id="__nav_4_3_label" tabindex="0">
             
   
   
@@ -1315,8 +1304,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_5_3_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_5_3">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_3">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -1744,10 +1733,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5_4" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_4" >
         
           
-          <label class="md-nav__link" for="__nav_5_4" id="__nav_5_4_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_4_4" id="__nav_4_4_label" tabindex="0">
             
   
   
@@ -1765,8 +1754,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_5_4_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_5_4">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_4">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -2150,10 +2139,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5_5" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_5" >
         
           
-          <label class="md-nav__link" for="__nav_5_5" id="__nav_5_5_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_4_5" id="__nav_4_5_label" tabindex="0">
             
   
   
@@ -2171,8 +2160,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_5_5_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_5_5">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_5">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -2348,10 +2337,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5_6" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_6" >
         
           
-          <label class="md-nav__link" for="__nav_5_6" id="__nav_5_6_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_4_6" id="__nav_4_6_label" tabindex="0">
             
   
   
@@ -2369,8 +2358,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_5_6_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_5_6">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_6">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -2756,10 +2745,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5_7" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_7" >
         
           
-          <label class="md-nav__link" for="__nav_5_7" id="__nav_5_7_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_4_7" id="__nav_4_7_label" tabindex="0">
             
   
   
@@ -2777,8 +2766,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_5_7_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_5_7">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_7">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -2949,6 +2938,85 @@
   
   
   
+    
+    
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../reference/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_5" id="__nav_5_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+  
+  
     <li class="md-nav__item">
       <a href="../../cli/" class="md-nav__link">
         
@@ -2957,7 +3025,7 @@
   <span class="md-ellipsis">
     
   
-    CLI
+    Command line
   
 
     
@@ -2969,9 +3037,122 @@
     </li>
   
 
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/diagnostics/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
     
-      
-      
+  
+    Diagnostics
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/config/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/performance/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Performance
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/compatibility/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Compatibility
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
   
   
   
@@ -3006,7 +3187,7 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5_7" >
         
           
           <div class="md-nav__link md-nav__container">
@@ -3017,7 +3198,7 @@
   <span class="md-ellipsis">
     
   
-    API
+    Python API
   
 
     
@@ -3028,18 +3209,18 @@
             </a>
             
               
-              <label class="md-nav__link " for="__nav_7" id="__nav_7_label" tabindex="0">
+              <label class="md-nav__link " for="__nav_5_7" id="__nav_5_7_label" tabindex="0">
                 <span class="md-nav__icon md-icon"></span>
               </label>
             
           </div>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_7">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_5_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5_7">
             <span class="md-nav__icon md-icon"></span>
             
   
-    API
+    Python API
   
 
           </label>
@@ -3193,192 +3374,6 @@
     </li>
   
 
-    
-      
-      
-  
-  
-  
-  
-    
-    
-      
-        
-          
-        
-      
-        
-      
-        
-      
-        
-      
-        
-      
-    
-    
-    
-      
-      
-        
-      
-    
-    
-    <li class="md-nav__item md-nav__item--nested">
-      
-        
-        
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" >
-        
-          
-          <div class="md-nav__link md-nav__container">
-            <a href="../../reference/" class="md-nav__link ">
-              
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Reference
-  
-
-    
-  </span>
-  
-  
-
-            </a>
-            
-              
-              <label class="md-nav__link " for="__nav_8" id="__nav_8_label" tabindex="0">
-                <span class="md-nav__icon md-icon"></span>
-              </label>
-            
-          </div>
-        
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_8">
-            <span class="md-nav__icon md-icon"></span>
-            
-  
-    Reference
-  
-
-          </label>
-          <ul class="md-nav__list" data-md-scrollfix>
-            
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../reference/diagnostics/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Diagnostics
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../reference/config/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Configuration
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../reference/performance/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Performance
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../reference/compatibility/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Compatibility
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
               
             
           </ul>
@@ -3419,6 +3414,8 @@
       
         
       
+        
+      
     
     
     
@@ -3435,7 +3432,7 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9" checked>
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" checked>
         
           
           <div class="md-nav__link md-nav__container">
@@ -3457,14 +3454,14 @@
             </a>
             
               
-              <label class="md-nav__link " for="__nav_9" id="__nav_9_label" tabindex="">
+              <label class="md-nav__link " for="__nav_6" id="__nav_6_label" tabindex="">
                 <span class="md-nav__icon md-icon"></span>
               </label>
             
           </div>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="true">
-          <label class="md-nav__title" for="__nav_9">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_6">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -3601,6 +3598,34 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Core operations">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#overflow-modes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Overflow modes
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#32-bit-standalone-source" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        32-bit standalone source
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -3622,6 +3647,34 @@
       
     </span>
   </a>
+  
+    <nav class="md-nav" aria-label="The regex dialect">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#lowering" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Lowering
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#refused-patterns" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Refused patterns
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -3678,6 +3731,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="The async dialect">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#lowering_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Lowering
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -3711,6 +3781,34 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="The tensor dialect">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#lowering_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Lowering
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#symbolic-dimensions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Symbolic dimensions
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -3733,6 +3831,67 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="The columnar and arrow dialects">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#columns-and-tables" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Columns and tables
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#column-operations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Column operations
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#table-operations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Table operations
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lowering_3" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Lowering
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#arrow-arrays" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Arrow arrays
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -3743,6 +3902,56 @@
       
     </span>
   </a>
+  
+    <nav class="md-nav" aria-label="The gpu dialect">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#function-kinds" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Function kinds
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#device-operations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Device operations
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#verification" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Verification
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#backends" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Backends
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -3791,7 +4000,7 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#verification" class="md-nav__link">
+  <a href="#verification_1" class="md-nav__link">
     <span class="md-ellipsis">
       
         Verification
@@ -3832,6 +4041,34 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Profiles">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#instrumenting" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Instrumenting
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#annotating" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Annotating
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -3843,6 +4080,45 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Passes and patterns">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#patterns" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Patterns
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#passes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Passes
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#stages" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Stages
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -3853,6 +4129,56 @@
       
     </span>
   </a>
+  
+    <nav class="md-nav" aria-label="From Python to the IR">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-frontend" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The frontend
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-llvm-backend" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The LLVM backend
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-c-backend" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The C backend
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#history-of-the-ir-road" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        History of the IR road
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -4033,15 +4359,8 @@
 
               
             
-          </ul>
-        </nav>
-      
-    </li>
-  
-
-    
-      
-      
+              
+                
   
   
   
@@ -4063,6 +4382,14 @@
   
 
       </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
     </li>
   
 
@@ -4151,6 +4478,34 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Core operations">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#overflow-modes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Overflow modes
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#32-bit-standalone-source" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        32-bit standalone source
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -4172,6 +4527,34 @@
       
     </span>
   </a>
+  
+    <nav class="md-nav" aria-label="The regex dialect">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#lowering" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Lowering
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#refused-patterns" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Refused patterns
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -4228,6 +4611,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="The async dialect">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#lowering_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Lowering
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -4261,6 +4661,34 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="The tensor dialect">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#lowering_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Lowering
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#symbolic-dimensions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Symbolic dimensions
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -4283,6 +4711,67 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="The columnar and arrow dialects">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#columns-and-tables" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Columns and tables
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#column-operations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Column operations
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#table-operations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Table operations
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lowering_3" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Lowering
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#arrow-arrays" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Arrow arrays
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -4293,6 +4782,56 @@
       
     </span>
   </a>
+  
+    <nav class="md-nav" aria-label="The gpu dialect">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#function-kinds" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Function kinds
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#device-operations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Device operations
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#verification" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Verification
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#backends" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Backends
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -4341,7 +4880,7 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#verification" class="md-nav__link">
+  <a href="#verification_1" class="md-nav__link">
     <span class="md-ellipsis">
       
         Verification
@@ -4382,6 +4921,34 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Profiles">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#instrumenting" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Instrumenting
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#annotating" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Annotating
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -4393,6 +4960,45 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Passes and patterns">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#patterns" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Patterns
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#passes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Passes
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#stages" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Stages
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -4403,6 +5009,56 @@
       
     </span>
   </a>
+  
+    <nav class="md-nav" aria-label="From Python to the IR">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-frontend" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The frontend
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-llvm-backend" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The LLVM backend
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-c-backend" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The C backend
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#history-of-the-ir-road" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        History of the IR road
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -4429,9 +5085,15 @@
 <h1 id="the-ir">The IR<a class="headerlink" href="#the-ir" title="Permanent link">&para;</a></h1>
 <p>Between analysis and every backend sits one typed, SSA-form intermediate
 representation with an explicit control-flow graph. Analysis decides what a
-program means; the IR keeps that meaning in a form a backend can lower
-without reading Python again; dialects extend the IR; passes transform it;
-backends lower it. This page is the reference for the core; <a href="../solver/">Where a solver fits</a>
+program means. The IR keeps that meaning in a form a backend can lower
+without reading Python again.</p>
+<p>The parts divide the work this way:</p>
+<ul>
+<li>dialects extend the IR</li>
+<li>passes transform it</li>
+<li>backends lower it</li>
+</ul>
+<p>This page is the reference for the core. <a href="../solver/">Where a solver fits</a>
 and the plugin pages say what the other dialects add.</p>
 <h2 id="shape">Shape<a class="headerlink" href="#shape" title="Permanent link">&para;</a></h2>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>func @abs(%x: i64) -&gt; i64 {
@@ -4472,10 +5134,10 @@ and the plugin pages say what the other dialects add.</p>
 <a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a>future&lt;T&gt;
 <a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>dialect.name&lt;args&gt;           a type a dialect owns; the core parses it, the dialect verifies it
 </code></pre></div>
-<p><code>ptr&lt;T, stack&gt;</code> is what <code>core.alloca</code> yields; a stack pointer may not be
-returned or stored, and the verifier says so. <code>generic</code> is the host's
-address space; the gpu dialect adds <code>global</code>, <code>shared</code>, <code>private</code>, and
-<code>constant</code>, and a plugin's dialect may add more.</p>
+<p><code>ptr&lt;T, stack&gt;</code> is what <code>core.alloca</code> yields. A stack pointer may not be
+returned or stored, and the verifier says so.</p>
+<p><code>generic</code> is the host's address space. The gpu dialect adds <code>global</code>,
+<code>shared</code>, <code>private</code>, and <code>constant</code>, and a plugin's dialect may add more.</p>
 <h2 id="core-operations">Core operations<a class="headerlink" href="#core-operations" title="Permanent link">&para;</a></h2>
 <table>
 <thead>
@@ -4543,300 +5205,474 @@ address space; the gpu dialect adds <code>global</code>, <code>shared</code>, <c
 </tr>
 </tbody>
 </table>
-<p>Overflow semantics live on the operation. <code>python</code> means the true value is
-what Python computes -- the backend guards and falls back; <code>checked</code> means
-overflow is a guard failure; <code>wrap</code> means two's-complement wrap like C;
-<code>proven</code> means a proof -- a corner check hoisted ahead of the loop, or the
-solver -- established that the value fits, so the backend emits the plain
-operation and may tell the optimizer it never wraps. <code>native</code>, selected before
-IR construction for unsafe standalone source, uses target-language machine
-arithmetic without overflow fallback; signed overflow is outside its portable
-domain. It does not replace the <code>wrap</code> guarantee used by unsafe LLVM builds.
-For standalone C/C++ source, <code>--int-width 32</code> retypes the linked scalar graph
+<h3 id="overflow-modes">Overflow modes<a class="headerlink" href="#overflow-modes" title="Permanent link">&para;</a></h3>
+<p>Overflow semantics live on the operation:</p>
+<table>
+<thead>
+<tr>
+<th>mode</th>
+<th>meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>python</code></td>
+<td>the true value is what Python computes. The backend guards and falls back.</td>
+</tr>
+<tr>
+<td><code>checked</code></td>
+<td>overflow is a guard failure.</td>
+</tr>
+<tr>
+<td><code>wrap</code></td>
+<td>two's-complement wrap, like C.</td>
+</tr>
+<tr>
+<td><code>proven</code></td>
+<td>a proof (a corner check hoisted ahead of the loop, or the solver) established that the value fits, so the backend emits the plain operation and may tell the optimizer it never wraps.</td>
+</tr>
+<tr>
+<td><code>native</code></td>
+<td>selected before IR construction for unsafe standalone source. Uses target-language machine arithmetic without overflow fallback; signed overflow is outside its portable domain. It does not replace the <code>wrap</code> guarantee used by unsafe LLVM builds.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="32-bit-standalone-source">32-bit standalone source<a class="headerlink" href="#32-bit-standalone-source" title="Permanent link">&para;</a></h3>
+<p>For standalone C/C++ source, <code>--int-width 32</code> retypes the linked scalar graph
 from <code>i64</code>/<code>u64</code> to <code>i32</code>/<code>u32</code>, including signatures and local pointers,
 before shared optimization. The source backend spells that selected model
-as <code>int</code>/<code>unsigned int</code> and checks the target range at compile time. Fixed
-runtime and buffer ABIs are refused rather than retyped. The default model
-is unchanged. Source-only interval analysis may omit floor-division
-corrections when acyclic branch bounds prove floor equals truncation; it
-never changes an operation's overflow mode or assumes a wrapping result
-stays within its pre-overflow interval.
-Bounds checks are explicit <code>core.guard</code>s the frontend emits; a sanitizer
+as <code>int</code>/<code>unsigned int</code> and checks the target range at compile time.</p>
+<ul>
+<li>Fixed runtime and buffer ABIs are refused rather than retyped.</li>
+<li>The default model is unchanged.</li>
+<li>Source-only interval analysis may omit floor-division corrections when
+  acyclic branch bounds prove floor equals truncation. It never changes an
+  operation's overflow mode or assumes a wrapping result stays within its
+  pre-overflow interval.</li>
+</ul>
+<p>Bounds checks are explicit <code>core.guard</code>s the frontend emits; a sanitizer
 pass adds more.</p>
 <h2 id="the-math-dialect">The math dialect<a class="headerlink" href="#the-math-dialect" title="Permanent link">&para;</a></h2>
 <p><code>math.sqrt</code>, <code>sin</code>, <code>cos</code>, <code>tan</code>, <code>exp</code>, <code>exp2</code>, <code>log</code>, <code>log2</code>, <code>log10</code>,
-<code>floor</code>, <code>ceil</code>, <code>trunc</code>, <code>abs</code>, and <code>pow</code>: elementary functions named once
-for every backend, pure, over a floating-point value or a vector of them.
-The frontend writes <code>math.sqrt %x : f64</code> for <code>math.sqrt(x)</code>; the LLVM
-backend lowers it to the intrinsic of that name, a C backend to libm, a GPU
-backend to its device library. A math function of a constant folds, and
-<code>floor(floor(x))</code> is <code>floor(x)</code>.</p>
+<code>floor</code>, <code>ceil</code>, <code>trunc</code>, <code>abs</code>, and <code>pow</code> are elementary functions named
+once for every backend. They are pure, over a floating-point value or a
+vector of them.</p>
+<p>The frontend writes <code>math.sqrt %x : f64</code> for <code>math.sqrt(x)</code>. Each backend
+lowers it to its own form:</p>
+<ul>
+<li>the LLVM backend: the intrinsic of that name</li>
+<li>a C backend: libm</li>
+<li>a GPU backend: its device library</li>
+</ul>
+<p>A math function of a constant folds, and <code>floor(floor(x))</code> is <code>floor(x)</code>.</p>
 <h2 id="the-regex-dialect">The regex dialect<a class="headerlink" href="#the-regex-dialect" title="Permanent link">&para;</a></h2>
 <p><code>regex.search %buf, %pos, %endpos {pattern = "...", flags = 0}</code> is what
 <code>PATTERN.search(buf, pos, endpos)</code> means for a pattern compiled from a bytes
-literal at module level; <code>regex.match</code> and <code>regex.fullmatch</code> are the anchored
-forms. The operation takes a <code>buffer&lt;u8&gt;</code> and yields whether there was a
-match, then the span of every group -- start and end of group 0, of group
-1, and so on -- with -1 for a group that took no part. The pattern is read
-by CPython's own parser, so its syntax and its meaning are <code>re</code>'s.</p>
-<p>The <code>lower-regex</code> pass, which runs right after <code>lower-async</code>, compiles each
+literal at module level. <code>regex.match</code> and <code>regex.fullmatch</code> are the anchored
+forms.</p>
+<p>The operation takes a <code>buffer&lt;u8&gt;</code> and yields whether there was a match, then
+the span of every group (start and end of group 0, of group 1, and so on),
+with -1 for a group that took no part. The pattern is read by CPython's own
+parser, so its syntax and its meaning are <code>re</code>'s.</p>
+<h3 id="lowering">Lowering<a class="headerlink" href="#lowering" title="Permanent link">&para;</a></h3>
+<p>The <code>lower-regex</code> pass runs right after <code>lower-async</code>. It compiles each
 distinct pattern into one private function of core operations and turns the
-operation into a call. The matcher backtracks the way CPython's does, on an
-explicit stack rather than by recursion: an entry records where to resume,
-the position, and every loop's count, so popping one puts the matcher back
-exactly. Alternatives are tried in order, a greedy repeat gives back one
-iteration at a time, a lazy one takes one more, a group keeps the position
-of its last iteration, and an iteration that took nothing is the last one
-tried. A repeat of one byte class scans the run instead of pushing an entry
-per byte. The stack holds 4096 entries; a match that would need more fails
-a <code>regex.stack.ok</code> guard, which sends the calling function to its fallback,
+operation into a call.</p>
+<p>The matcher backtracks the way CPython's does, on an explicit stack rather
+than by recursion. An entry records where to resume, the position, and every
+loop's count, so popping one puts the matcher back exactly. The matching
+rules:</p>
+<ul>
+<li>Alternatives are tried in order.</li>
+<li>A greedy repeat gives back one iteration at a time; a lazy one takes one
+  more.</li>
+<li>A group keeps the position of its last iteration.</li>
+<li>An iteration that took nothing is the last one tried.</li>
+<li>A repeat of one byte class scans the run instead of pushing an entry per
+  byte.</li>
+</ul>
+<p>The stack holds 4096 entries. A match that would need more fails a
+<code>regex.stack.ok</code> guard, which sends the calling function to its fallback,
 where <code>re</code> answers. Every backend runs the matcher as it runs any other
 function; no backend needs a regex library.</p>
+<h3 id="refused-patterns">Refused patterns<a class="headerlink" href="#refused-patterns" title="Permanent link">&para;</a></h3>
 <p>Backreferences, lookaround, atomic groups and possessive repeats, and locale
-categories are refused when the pattern is analysed, and a function that uses
+categories are refused when the pattern is analysed. A function that uses
 one stays on Python with the reason. <a href="../../guide/regex/">Regular expressions</a>
 is the surface.</p>
 <h2 id="the-simd-dialect">The simd dialect<a class="headerlink" href="#the-simd-dialect" title="Permanent link">&para;</a></h2>
-<p><code>vector&lt;T, N&gt;</code> is <code>N</code> scalars operated on at once, and the core dialect's
+<p><code>vector&lt;T, N&gt;</code> is <code>N</code> scalars operated on at once. The core dialect's
 arithmetic, comparisons, <code>select</code>, and <code>cast</code> already take vectors (a
 vector's integer arithmetic carries <code>wrap</code> or <code>proven</code>). The simd dialect
-says what the core cannot: <code>simd.splat %x : vector&lt;T, N&gt;</code>, <code>simd.load %p :
-vector&lt;T, N&gt;</code> and <code>simd.store %v, %p</code> through a pointer to the element,
-<code>simd.extract %v, %i : T</code> and <code>simd.insert %v, %x, %i</code>, <code>simd.shuffle %a,
-%b {mask = (...)}</code> over the lanes of both by a constant mask, and
-<code>simd.reduce_add</code>, <code>reduce_min</code>, <code>reduce_max</code> to a scalar. A reduction
-walks the lanes in order, first to last: an integer sum is the reduction
-intrinsic, a floating-point sum and every minimum and maximum a chain of
-lane operations, so every backend and the reference implementation give
-one number.</p>
+says what the core cannot:</p>
+<table>
+<thead>
+<tr>
+<th>operation</th>
+<th>meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>simd.splat %x : vector&lt;T, N&gt;</code></td>
+<td>one scalar in every lane</td>
+</tr>
+<tr>
+<td><code>simd.load %p : vector&lt;T, N&gt;</code>, <code>simd.store %v, %p</code></td>
+<td>through a pointer to the element</td>
+</tr>
+<tr>
+<td><code>simd.extract %v, %i : T</code>, <code>simd.insert %v, %x, %i</code></td>
+<td>one lane</td>
+</tr>
+<tr>
+<td><code>simd.shuffle %a, %b {mask = (...)}</code></td>
+<td>over the lanes of both by a constant mask</td>
+</tr>
+<tr>
+<td><code>simd.reduce_add</code>, <code>reduce_min</code>, <code>reduce_max</code></td>
+<td>to a scalar</td>
+</tr>
+</tbody>
+</table>
+<p>A reduction walks the lanes in order, first to last. An integer sum is the
+reduction intrinsic; a floating-point sum and every minimum and maximum is a
+chain of lane operations. So every backend and the reference implementation
+give one number.</p>
 <h2 id="the-cpu-dialect">The cpu dialect<a class="headerlink" href="#the-cpu-dialect" title="Permanent link">&para;</a></h2>
-<p><code>cpu.prefetch %p {rw, locality}</code> asks for a cache line, <code>cpu.pause</code> is the
-spin-wait hint; a backend without the instruction drops the hint. A
-function compiled for a feature set carries <code>cpu.features = ("avx2", ...)</code>
-as an attribute, which the LLVM backend turns into the function's target
-features and the boundary into a check before binding.</p>
+<p><code>cpu.prefetch %p {rw, locality}</code> asks for a cache line, and <code>cpu.pause</code> is
+the spin-wait hint. A backend without the instruction drops the hint.</p>
+<p>A function compiled for a feature set carries <code>cpu.features = ("avx2", ...)</code>
+as an attribute. The LLVM backend turns it into the function's target
+features, and the boundary into a check before binding.</p>
 <h2 id="the-atomic-dialect">The atomic dialect<a class="headerlink" href="#the-atomic-dialect" title="Permanent link">&para;</a></h2>
-<p><code>atomic.load</code>, <code>store</code>, <code>exchange</code>, <code>compare_exchange</code> (two results: the
-value found and whether it swapped, with a <code>success</code> and a <code>failure</code>
-order), <code>fetch_add</code>, <code>fetch_sub</code>, <code>fetch_and</code>, <code>fetch_or</code>, <code>fetch_xor</code>,
-and <code>fence</code>, each with its memory <code>order</code> -- <code>relaxed</code>, <code>acquire</code>,
-<code>release</code>, <code>acq_rel</code>, <code>seq_cst</code>, the vocabulary of C11 and LLVM -- so a
-backend lowers to the instruction of that order and never guesses. The
-verifier holds the orders a load and a store may carry and the failure
-order of a compare-exchange.</p>
+<p>The operations are <code>atomic.load</code>, <code>store</code>, <code>exchange</code>, <code>compare_exchange</code>,
+<code>fetch_add</code>, <code>fetch_sub</code>, <code>fetch_and</code>, <code>fetch_or</code>, <code>fetch_xor</code>, and <code>fence</code>.
+<code>compare_exchange</code> has two results (the value found and whether it swapped)
+and carries a <code>success</code> and a <code>failure</code> order.</p>
+<p>Each operation carries its memory <code>order</code>: <code>relaxed</code>, <code>acquire</code>, <code>release</code>,
+<code>acq_rel</code>, or <code>seq_cst</code>, the vocabulary of C11 and LLVM. A backend lowers to
+the instruction of that order and never guesses. The verifier holds the
+orders a load and a store may carry and the failure order of a
+compare-exchange.</p>
 <h2 id="the-concurrency-dialect">The concurrency dialect<a class="headerlink" href="#the-concurrency-dialect" title="Permanent link">&para;</a></h2>
 <p><code>concurrency.spawn @f(%args...) : i64</code> starts a thread running the IR
-function <code>@f</code> (which returns nothing, and takes exactly those arguments)
-and hands back its handle; <code>join %h : i64</code> waits and gives the status
-<code>@f</code> returned -- zero, or the fallback status a guard failed with.
-<code>mutex_lock</code>, <code>mutex_unlock</code>, <code>condition_wait</code>, <code>condition_notify</code>,
-<code>barrier</code>, and <code>thread_id</code> complete it. The synchronization objects are
-memory the program owns: a mutex one <code>i64</code> slot, a condition one slot
-counting notifications, a barrier two slots (arrivals, generation); every
-backend implements them over the atomic dialect and the pause hint the
-same way, so a program built for one runs exactly like one built for
-another. Threads are pthreads on the targets that have them; another is
-refused with the reason.</p>
+function <code>@f</code> (which returns nothing, and takes exactly those arguments) and
+hands back its handle. <code>join %h : i64</code> waits and gives the status <code>@f</code>
+returned: zero, or the fallback status a guard failed with. <code>mutex_lock</code>,
+<code>mutex_unlock</code>, <code>condition_wait</code>, <code>condition_notify</code>, <code>barrier</code>, and
+<code>thread_id</code> complete it.</p>
+<p>The synchronization objects are memory the program owns:</p>
+<table>
+<thead>
+<tr>
+<th>object</th>
+<th>memory</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>mutex</td>
+<td>one <code>i64</code> slot</td>
+</tr>
+<tr>
+<td>condition</td>
+<td>one slot counting notifications</td>
+</tr>
+<tr>
+<td>barrier</td>
+<td>two slots (arrivals, generation)</td>
+</tr>
+</tbody>
+</table>
+<p>Every backend implements them over the atomic dialect and the pause hint the
+same way, so a program built for one runs exactly like one built for another.
+Threads are pthreads on the targets that have them; another target is refused
+with the reason.</p>
 <h2 id="the-async-dialect">The async dialect<a class="headerlink" href="#the-async-dialect" title="Permanent link">&para;</a></h2>
 <p>A function carrying <code>ppy.async = true</code> is a coroutine. Before the lowering
-it awaits: <code>async.create @f(%args) : future&lt;T&gt;</code> makes another coroutine
-(not yet running), <code>async.start %fut</code> runs one as a task, <code>async.await
-%fut : T</code> waits for a future, and <code>sleep</code>, <code>accept</code>, <code>connect</code>, <code>read</code>,
-and <code>write</code> are the runtime's operations that complete later, each a
-<code>future</code>; <code>listen</code>, <code>port</code>, and <code>close</code> are immediate. <code>lower-async</code>,
-first in the pipeline, makes each coroutine two functions. The starter
-keeps its name and parameters, takes a frame of <code>slots</code> words with
-<code>frame_new</code>, stores the arguments, and <code>spawn</code>s it through its resume
-function, returning the future; the resume function (<code>ppy.abi = "resume"</code>)
-takes the frame, reads its state, and jumps to the segment after the await
-that state names; a segment runs to its next await, records the state,
-<code>suspend</code>s on the awaited future, and returns; <code>result</code> reads what the
-awaited future carried, <code>complete</code> fulfils the frame's own future, and a
-guard becomes a branch to <code>fail</code>, since a running coroutine has no Python
-to fall back to. Stack slots become words of the frame, and a value read
-across an await is spilled to one. The LLVM and C backends lower the
-low-level operations to calls into the runtime (<code>ppy_runtime/aio/ppy_aio.c</code>);
-a future is an <code>i64</code> handle.</p>
+it awaits with these operations:</p>
+<ul>
+<li><code>async.create @f(%args) : future&lt;T&gt;</code> makes another coroutine (not yet
+  running).</li>
+<li><code>async.start %fut</code> runs one as a task.</li>
+<li><code>async.await %fut : T</code> waits for a future.</li>
+<li><code>sleep</code>, <code>accept</code>, <code>connect</code>, <code>read</code>, and <code>write</code> are the runtime's
+  operations that complete later, each a <code>future</code>.</li>
+<li><code>listen</code>, <code>port</code>, and <code>close</code> are immediate.</li>
+</ul>
+<h3 id="lowering_1">Lowering<a class="headerlink" href="#lowering_1" title="Permanent link">&para;</a></h3>
+<p><code>lower-async</code>, first in the pipeline, makes each coroutine two functions.</p>
+<p>The starter keeps its name and parameters. It takes a frame of <code>slots</code> words
+with <code>frame_new</code>, stores the arguments, and <code>spawn</code>s it through its resume
+function, returning the future.</p>
+<p>The resume function (<code>ppy.abi = "resume"</code>) takes the frame, reads its state,
+and jumps to the segment after the await that state names. A segment runs to
+its next await, records the state, <code>suspend</code>s on the awaited future, and
+returns. <code>result</code> reads what the awaited future carried, and <code>complete</code>
+fulfils the frame's own future. A guard becomes a branch to <code>fail</code>, since a
+running coroutine has no Python to fall back to.</p>
+<p>Stack slots become words of the frame, and a value read across an await is
+spilled to one. The LLVM and C backends lower the low-level operations to
+calls into the runtime (<code>ppy_runtime/aio/ppy_aio.c</code>); a future is an <code>i64</code>
+handle.</p>
 <h2 id="the-parallel-dialect">The parallel dialect<a class="headerlink" href="#the-parallel-dialect" title="Permanent link">&para;</a></h2>
-<p><code>parallel.for @body(%captures...) %begin, %end</code> runs <code>@body(captures...,
-begin, end)</code> -- a function that loops over its own chunk and returns
-nothing -- over the range; <code>parallel.reduce @body(%captures...) %begin,
-%end, %init {op, reassociate} : T</code> folds the chunks' results with <code>op</code>
-(<code>add</code>, <code>mul</code>, <code>min</code>, <code>max</code>) from <code>init</code>, <code>@body</code> accumulating its chunk
-from the accumulator it is handed; <code>parallel.map @body(%captures...)
-%begin, %end, %out</code> stores <code>@body(captures..., i)</code> at <code>out[i]</code>. The
-operations say nothing about how the range is split: <code>lower-parallel</code>
-decides that once per build from the configuration -- one chunk on the
-calling thread, or chunks spawned through the concurrency dialect and
-joined, with a floating-point reduction whose <code>reassociate</code> is false
-never split -- and the C backend spells what the pass left as OpenMP
-regions when that backend was selected. The frontend writes these for
-<code>parallel.range</code> loops (<a href="../../guide/parallel/">Parallel loops</a>) and outlines each body into a
+<p>Three operations run a function over a range:</p>
+<ul>
+<li><code>parallel.for @body(%captures...) %begin, %end</code> runs
+  <code>@body(captures..., begin, end)</code> over the range. <code>@body</code> loops over its own
+  chunk and returns nothing.</li>
+<li><code>parallel.reduce @body(%captures...) %begin, %end, %init {op, reassociate} : T</code>
+  folds the chunks' results with <code>op</code> (<code>add</code>, <code>mul</code>, <code>min</code>, <code>max</code>) from
+  <code>init</code>. <code>@body</code> accumulates its chunk from the accumulator it is handed.</li>
+<li><code>parallel.map @body(%captures...) %begin, %end, %out</code> stores
+  <code>@body(captures..., i)</code> at <code>out[i]</code>.</li>
+</ul>
+<p>The operations say nothing about how the range is split. <code>lower-parallel</code>
+decides that once per build from the configuration: one chunk on the calling
+thread, or chunks spawned through the concurrency dialect and joined. A
+floating-point reduction whose <code>reassociate</code> is false is never split. The C
+backend spells what the pass left as OpenMP regions when that backend was
+selected.</p>
+<p>The frontend writes these for <code>parallel.range</code> loops
+(<a href="../../guide/parallel/">Parallel loops</a>) and outlines each body into a
 private function marked <code>ppy.synthesized</code>.</p>
 <h2 id="shapes-and-layouts">Shapes and layouts<a class="headerlink" href="#shapes-and-layouts" title="Permanent link">&para;</a></h2>
-<p>A tensor's shape is a tuple of dimensions, each an integer, a symbol
-(<code>N</code>), or an expression of them in parentheses -- <code>(N * M)</code>, <code>(N + 1)</code>,
-<code>ceil_div(N, 32)</code>, <code>max(N, M)</code> -- kept in a canonical form so two
-spellings of one size compare equal (<code>ir/shape.py</code>). Shape inference for
-broadcasting, matmul, reshape, transpose, slice, reduce, and concat lives
-there too, and every tensor operation's verifier holds its written result
-to what inference says. The layout dialect names how elements sit in
-memory: <code>layout.row_major</code>, <code>layout.col_major</code>, or <code>layout.strided&lt;s0,
-s1, ..., offset, K, align, A&gt;</code> with a stride per axis, elements before the
-first, and the alignment of the first. A tensor operation's meaning is on
-the elements; the layout is how a backend reaches them.</p>
+<p>A tensor's shape is a tuple of dimensions. Each is an integer, a symbol
+(<code>N</code>), or an expression of them in parentheses: <code>(N * M)</code>, <code>(N + 1)</code>,
+<code>ceil_div(N, 32)</code>, <code>max(N, M)</code>. They are kept in a canonical form so two
+spellings of one size compare equal (<code>ir/shape.py</code>).</p>
+<p>Shape inference for broadcasting, matmul, reshape, transpose, slice, reduce,
+and concat lives there too. Every tensor operation's verifier holds its
+written result to what inference says.</p>
+<p>The layout dialect names how elements sit in memory:</p>
+<ul>
+<li><code>layout.row_major</code></li>
+<li><code>layout.col_major</code></li>
+<li><code>layout.strided&lt;s0, s1, ..., offset, K, align, A&gt;</code>, with a stride per axis,
+  elements before the first, and the alignment of the first</li>
+</ul>
+<p>A tensor operation's meaning is on the elements; the layout is how a backend
+reaches them.</p>
 <h2 id="the-tensor-dialect">The tensor dialect<a class="headerlink" href="#the-tensor-dialect" title="Permanent link">&para;</a></h2>
 <p><code>tensor.tensor&lt;f64, 4, 8&gt;</code> is a 4-by-8 array of <code>f64</code>, row-major unless a
-trailing layout says otherwise. <code>tensor.load %buffer</code> and <code>tensor.store
-%t, %buffer</code> move a tensor to and from a buffer of its elements in
-row-major order, guarded by the buffer's length; <code>empty</code>, <code>fill %scalar</code>,
-<code>unary {op}</code> (the math dialect's functions, <code>neg</code>, and the special
-functions, over every element), <code>add</code>, <code>sub</code>, <code>mul</code>, <code>div</code>, <code>pow</code>, <code>min</code>,
-<code>max</code> (with broadcasting; a NaN wins <code>min</code> and <code>max</code>, as NumPy has it),
-<code>broadcast</code>, <code>reshape</code>, <code>transpose {perm}</code>, <code>slice {starts, stops,
-steps}</code>, <code>concat {axis}</code>, <code>reduce {axes, op, keepdims}</code>, <code>matmul</code>,
-<code>convert</code>, and <code>fused</code> -- a region over one element of each operand,
-ending in <code>tensor.yield</code>, with an optional <code>reduce</code> at its root -- are
-the values. <code>lower-tensor</code> makes memory of a tensor -- a
-view onto memory that exists already for <code>load</code>, <code>fill</code>, <code>broadcast</code>,
-<code>transpose</code>, <code>slice</code>, and a contiguous <code>reshape</code>; fresh memory, on the
-stack when small and static and the heap otherwise, freed where the
-function returns, for the rest -- and loops of the operations. A symbolic
-dimension is bound where a tensor naming it is loaded: <code>N</code> in a load of
-<code>tensor&lt;f64, N, 3&gt;</code> is the buffer's length over 3, guarded to divide
-exactly, and every extent, stride, and allocation over <code>N</code> is arithmetic
-on that value; a shape naming a symbol nothing has bound, or two unknown
-dimensions in one load, is refused with the reason. The linalg, fft, and
-sparse operations work on static shapes. A tensor that crosses a call is
-refused too: it travels as a buffer.</p>
+trailing layout says otherwise.</p>
+<p><code>tensor.load %buffer</code> and <code>tensor.store %t, %buffer</code> move a tensor to and
+from a buffer of its elements in row-major order, guarded by the buffer's
+length. The value operations are:</p>
+<ul>
+<li><code>empty</code>, <code>fill %scalar</code></li>
+<li><code>unary {op}</code>: the math dialect's functions, <code>neg</code>, and the special
+  functions, over every element</li>
+<li><code>add</code>, <code>sub</code>, <code>mul</code>, <code>div</code>, <code>pow</code>, <code>min</code>, <code>max</code>, with broadcasting (a NaN
+  wins <code>min</code> and <code>max</code>, as NumPy has it)</li>
+<li><code>broadcast</code>, <code>reshape</code>, <code>transpose {perm}</code>, <code>slice {starts, stops, steps}</code>,
+  <code>concat {axis}</code>, <code>reduce {axes, op, keepdims}</code>, <code>matmul</code>, <code>convert</code></li>
+<li><code>fused</code>: a region over one element of each operand, ending in
+  <code>tensor.yield</code>, with an optional <code>reduce</code> at its root</li>
+</ul>
+<h3 id="lowering_2">Lowering<a class="headerlink" href="#lowering_2" title="Permanent link">&para;</a></h3>
+<p><code>lower-tensor</code> makes memory of a tensor, and loops of the operations:</p>
+<ul>
+<li>a view onto memory that exists already, for <code>load</code>, <code>fill</code>, <code>broadcast</code>,
+  <code>transpose</code>, <code>slice</code>, and a contiguous <code>reshape</code></li>
+<li>fresh memory for the rest: on the stack when small and static and the
+  heap otherwise, freed where the function returns</li>
+</ul>
+<h3 id="symbolic-dimensions">Symbolic dimensions<a class="headerlink" href="#symbolic-dimensions" title="Permanent link">&para;</a></h3>
+<p>A symbolic dimension is bound where a tensor naming it is loaded. <code>N</code> in a
+load of <code>tensor&lt;f64, N, 3&gt;</code> is the buffer's length over 3, guarded to divide
+exactly, and every extent, stride, and allocation over <code>N</code> is arithmetic on
+that value.</p>
+<p>A shape naming a symbol nothing has bound, or two unknown dimensions in one
+load, is refused with the reason. The linalg, fft, and sparse operations work
+on static shapes. A tensor that crosses a call is refused too: it travels as
+a buffer.</p>
 <h2 id="the-linalg-fft-special-and-sparse-dialects">The linalg, fft, special, and sparse dialects<a class="headerlink" href="#the-linalg-fft-special-and-sparse-dialects" title="Permanent link">&para;</a></h2>
-<p><code>linalg.dot</code>, <code>matmul</code>, <code>solve</code>, <code>triangular_solve {lower, unit}</code>, and
-<code>cholesky</code> lower to loops (a singular or non-positive-definite matrix
-fails a guard); <code>linalg.qr</code>, <code>svd</code>, and <code>eig</code> call LAPACK where the build
-has it -- <code>dgeqrf</code>/<code>dorgqr</code>, <code>dgesvd</code>, <code>dgeev</code> on a column-major copy --
-and are refused with the reason where it does not. Complex values are
-real tensors whose last dimension is 2: <code>fft.fft</code>, <code>ifft</code>, <code>rfft</code>,
-<code>irfft {n}</code>, <code>fftn</code>, and <code>ifftn</code> lower to the definition of the transform
-in loops, the sum over every input for every output, until a build
-selects an FFT library. <code>special.erf</code>, <code>erfc</code>, <code>gamma</code>, <code>gammaln</code>,
-<code>ndtr</code>, <code>logit</code>, and the Bessel functions are scalar operations like the
-math dialect's, lowered to libm by both backends. <code>sparse.csr&lt;T, I, rows,
-cols&gt;</code> (and <code>csc</code>, <code>coo</code>) hold a matrix by its non-zeros with an explicit
-index type; <code>from_parts</code> borrows the program's buffers, <code>to_dense</code>,
-<code>matmul</code> by a dense matrix, and <code>reduce {axis}</code> give dense tensors,
-<code>transpose</code> of a CSR matrix is the CSC matrix of the same parts, <code>convert</code>
-changes the format, and <code>add</code> merges two matrices of one format into
-memory of its own.</p>
+<p><strong>linalg.</strong> <code>linalg.dot</code>, <code>matmul</code>, <code>solve</code>, <code>triangular_solve {lower, unit}</code>,
+and <code>cholesky</code> lower to loops (a singular or non-positive-definite matrix
+fails a guard). <code>linalg.qr</code>, <code>svd</code>, and <code>eig</code> call LAPACK where the build has
+it (<code>dgeqrf</code>/<code>dorgqr</code>, <code>dgesvd</code>, <code>dgeev</code> on a column-major copy) and are
+refused with the reason where it does not.</p>
+<p><strong>fft.</strong> Complex values are real tensors whose last dimension is 2. <code>fft.fft</code>,
+<code>ifft</code>, <code>rfft</code>, <code>irfft {n}</code>, <code>fftn</code>, and <code>ifftn</code> lower to the definition of
+the transform in loops, the sum over every input for every output, until a
+build selects an FFT library.</p>
+<p><strong>special.</strong> <code>special.erf</code>, <code>erfc</code>, <code>gamma</code>, <code>gammaln</code>, <code>ndtr</code>, <code>logit</code>, and
+the Bessel functions are scalar operations like the math dialect's, lowered
+to libm by both backends.</p>
+<p><strong>sparse.</strong> <code>sparse.csr&lt;T, I, rows, cols&gt;</code> (and <code>csc</code>, <code>coo</code>) hold a matrix
+by its non-zeros with an explicit index type. The operations:</p>
+<ul>
+<li><code>from_parts</code> borrows the program's buffers.</li>
+<li><code>to_dense</code>, <code>matmul</code> by a dense matrix, and <code>reduce {axis}</code> give dense
+  tensors.</li>
+<li><code>transpose</code> of a CSR matrix is the CSC matrix of the same parts.</li>
+<li><code>convert</code> changes the format.</li>
+<li><code>add</code> merges two matrices of one format into memory of its own.</li>
+</ul>
 <h2 id="the-columnar-and-arrow-dialects">The columnar and arrow dialects<a class="headerlink" href="#the-columnar-and-arrow-dialects" title="Permanent link">&para;</a></h2>
+<h3 id="columns-and-tables">Columns and tables<a class="headerlink" href="#columns-and-tables" title="Permanent link">&para;</a></h3>
 <p><code>columnar.column&lt;f64&gt;</code> is a column of <code>f64</code> with no nulls;
 <code>columnar.column&lt;f64, nullable&gt;</code> carries a validity bitmap. A column's
-length is a run-time fact, not part of its type. <code>columnar.table&lt;a,
-column&lt;i64&gt;, b, column&lt;f64, nullable&gt;&gt;</code> is a table of named columns. The
-operations are the ones pandas and PyArrow share: <code>from_parts %values,
-%validity, %length</code> and <code>store</code> move a column to and from Arrow's layout
-(values one per row -- one bit for <code>bool</code> -- and a bit-packed validity
-bitmap); <code>add</code>, <code>sub</code>, <code>mul</code>, <code>div</code>, the six comparisons, <code>and</code>, <code>or</code>,
-<code>xor</code>, <code>negate</code>, <code>abs</code>, <code>invert</code> give a null where an input is null, and
-<code>and_kleene</code>, <code>or_kleene</code> are the three-valued forms, where a false on
-one side of <code>and</code> (a true on one side of <code>or</code>) decides whatever the other
-side holds -- what PyArrow's <code>and_kleene</code> computes and pandas' <code>&amp;</code> on an
-Arrow-backed Series means;
-<code>is_null</code>, <code>is_valid</code>, <code>fill_null</code>, <code>cast</code>, <code>select</code>, <code>fill %scalar, %n</code>
-(one value in every row); <code>map %out, %outv, %columns..., %scalars...
-{expression, model, gives}</code> evaluates a whole expression tree --
-<code>(add (mul a0 a1) (fill_null a0 s0))</code> -- row by row into memory in one
-loop, under Arrow's null model (<code>bits</code>: validity bitmaps in, one out) or
-NumPy's (<code>nan</code>: an <code>f64</code> null is a NaN, a <code>bool</code> column is a byte per
-row, and the answer is written the same way); <code>filter</code> by a bool
-column, <code>take</code> by positions (a null position is a null row), <code>concat</code>;
-<code>sort_indices</code> (ascending, nulls last, stable); <code>aggregate {function}</code> --
-<code>sum</code>, <code>mean</code>, <code>min</code>, <code>max</code>, <code>count</code>, <code>any</code>, <code>all</code> over the valid rows, a
-one-row column that is null when no row was valid; and over tables <code>make
-{names}</code>, <code>column_of {name}</code>, <code>project {names}</code>, <code>filter</code>, <code>take</code>,
-<code>concat</code>, <code>group_by {key, aggregates}</code> (an integer or bool key without
-nulls; <code>sum</code>, <code>count</code>, <code>min</code>, <code>max</code> per group), and an inner <code>join {key}</code>
-on one integer key. <code>lower-tensor</code> makes loops of them all: <code>filter</code>
-counts then copies, <code>sort_indices</code> is a bottom-up merge sort, <code>group_by</code>
-sorts by the key and folds each run, <code>join</code> is a sort-merge.</p>
-<p><code>arrow.array&lt;f64&gt;</code> is an Arrow array as the C Data Interface hands it
-over: <code>arrow.import %p</code> reads an <code>ArrowArray</code> struct through a <code>ptr&lt;u8&gt;</code>
--- length, null count, offset, the validity and values buffers -- with no
-copy; <code>arrow.length</code>, <code>arrow.null_count</code>, and <code>arrow.offset</code> read the
-counts; <code>arrow.to_column</code> is that memory as a <code>columnar.column&lt;T,
-nullable&gt;</code>, the values borrowed at the array's offset and the validity
-bitmap re-based to bit zero (all ones when the array has none). A bool
-array sliced inside a byte is refused by the guard rather than copied
+length is a run-time fact and is not part of its type. <code>columnar.table&lt;a,
+column&lt;i64&gt;, b, column&lt;f64, nullable&gt;&gt;</code> is a table of named columns.</p>
+<h3 id="column-operations">Column operations<a class="headerlink" href="#column-operations" title="Permanent link">&para;</a></h3>
+<p>The operations are the ones pandas and PyArrow share:</p>
+<ul>
+<li><code>from_parts %values, %validity, %length</code> and <code>store</code> move a column to and
+  from Arrow's layout: values one per row (one bit for <code>bool</code>) and a
+  bit-packed validity bitmap.</li>
+<li><code>add</code>, <code>sub</code>, <code>mul</code>, <code>div</code>, the six comparisons, <code>and</code>, <code>or</code>, <code>xor</code>,
+  <code>negate</code>, <code>abs</code>, <code>invert</code> give a null where an input is null.</li>
+<li><code>and_kleene</code>, <code>or_kleene</code> are the three-valued forms, where a false on one
+  side of <code>and</code> (a true on one side of <code>or</code>) decides whatever the other side
+  holds. That is what PyArrow's <code>and_kleene</code> computes and pandas' <code>&amp;</code> on an
+  Arrow-backed Series means.</li>
+<li><code>is_null</code>, <code>is_valid</code>, <code>fill_null</code>, <code>cast</code>, <code>select</code>, and <code>fill %scalar, %n</code>
+  (one value in every row).</li>
+<li><code>map %out, %outv, %columns..., %scalars... {expression, model, gives}</code>
+  evaluates a whole expression tree, such as
+  <code>(add (mul a0 a1) (fill_null a0 s0))</code>, row by row into memory in one loop.
+  It uses Arrow's null model (<code>bits</code>: validity bitmaps in, one out) or
+  NumPy's (<code>nan</code>: an <code>f64</code> null is a NaN, a <code>bool</code> column is a byte per row,
+  and the answer is written the same way).</li>
+<li><code>filter</code> by a bool column, <code>take</code> by positions (a null position is a null
+  row), <code>concat</code>.</li>
+<li><code>sort_indices</code> (ascending, nulls last, stable).</li>
+<li><code>aggregate {function}</code>: <code>sum</code>, <code>mean</code>, <code>min</code>, <code>max</code>, <code>count</code>, <code>any</code>, <code>all</code>
+  over the valid rows. The result is a one-row column that is null when no row
+  was valid.</li>
+</ul>
+<h3 id="table-operations">Table operations<a class="headerlink" href="#table-operations" title="Permanent link">&para;</a></h3>
+<p>Over tables: <code>make {names}</code>, <code>column_of {name}</code>, <code>project {names}</code>, <code>filter</code>,
+<code>take</code>, <code>concat</code>, <code>group_by {key, aggregates}</code> (an integer or bool key without
+nulls; <code>sum</code>, <code>count</code>, <code>min</code>, <code>max</code> per group), and an inner <code>join {key}</code> on
+one integer key.</p>
+<h3 id="lowering_3">Lowering<a class="headerlink" href="#lowering_3" title="Permanent link">&para;</a></h3>
+<p><code>lower-tensor</code> makes loops of them all:</p>
+<ul>
+<li><code>filter</code> counts then copies.</li>
+<li><code>sort_indices</code> is a bottom-up merge sort.</li>
+<li><code>group_by</code> sorts by the key and folds each run.</li>
+<li><code>join</code> is a sort-merge.</li>
+</ul>
+<h3 id="arrow-arrays">Arrow arrays<a class="headerlink" href="#arrow-arrays" title="Permanent link">&para;</a></h3>
+<p><code>arrow.array&lt;f64&gt;</code> is an Arrow array as the C Data Interface hands it over.</p>
+<ul>
+<li><code>arrow.import %p</code> reads an <code>ArrowArray</code> struct through a <code>ptr&lt;u8&gt;</code> (length,
+  null count, offset, the validity and values buffers) with no copy.</li>
+<li><code>arrow.length</code>, <code>arrow.null_count</code>, and <code>arrow.offset</code> read the counts.</li>
+<li><code>arrow.to_column</code> is that memory as a <code>columnar.column&lt;T, nullable&gt;</code>: the
+  values borrowed at the array's offset and the validity bitmap re-based to
+  bit zero (all ones when the array has none).</li>
+</ul>
+<p>A bool array sliced inside a byte is refused by the guard rather than copied
 wrongly.</p>
 <h2 id="the-gpu-dialect">The gpu dialect<a class="headerlink" href="#the-gpu-dialect" title="Permanent link">&para;</a></h2>
-<p>One execution model for every GPU backend. A function is <code>host</code> -- the
-default -- <code>device</code>, or <code>kernel</code>, by its <code>gpu.kind</code> attribute: a kernel
-returns nothing, takes scalars and pointers into <code>global</code> or <code>constant</code>
-memory, and is launched from the host with <code>gpu.launch %gx, %gy, %gz, %bx,
-%by, %bz, %args... {callee = @k}</code>; a device function is called from a
-kernel or another device function. In device code a thread reads its place
-from <code>gpu.thread_id.x</code>, <code>block_id.y</code>, <code>block_dim.z</code>, <code>grid_dim.x</code> (each an
-<code>index</code>), waits for its block at <code>barrier</code> and its subgroup at
-<code>subgroup_barrier</code>, trades a scalar across the subgroup with
-<code>subgroup_shuffle.idx|up|down|xor %v, %lane</code>, and takes <code>shared_alloc
-{count = N} : ptr&lt;T, shared&gt;</code> or <code>private_alloc {count = N} : ptr&lt;T,
-private&gt;</code>; atomics are the atomic dialect's over those pointers. A host
-function takes <code>device_alloc %n : ptr&lt;T, generic&gt;</code>, memory on the device
-that the host reads and writes too, and hands it to a launch. The
-verifier holds the kinds: a device operation in a host function; a host one
-in device code -- a guard, a buffer, an intrinsic, a call to a host
-function, any other dialect; a kernel that returns or takes stack memory;
-a launch of anything but a kernel, or with anything but its parameters.
-<code>ppy.cuda</code> and <code>ppy.hip</code> lower to it (<a href="../../guide/gpu/">GPU kernels</a>); <code>ppy emit cuda</code>
-and <code>ppy emit hip</code> write device code and the host's launches as CUDA or
-HIP C++ (the C backend with the spellings in <code>backend/c/gpu.py</code>; device
-memory is a managed allocation, <code>cudaMallocManaged</code>, freed with the host
-function however it leaves); the C,
-C++, and LLVM backends leave device code to them. <code>backend/nvvm</code> writes
-the same device code as LLVM IR for NVPTX (<code>ppy emit nvvm-ir</code>) -- a kernel
-a <code>ptx_kernel</code>, positions the <code>llvm.nvvm.read.ptx.sreg.*</code> registers,
-shared memory an <code>addrspace(3)</code> array, a shuffle <code>llvm.nvvm.shfl.sync.*</code>,
-the math library libdevice -- and as PTX (<code>ppy emit ptx</code>); the build
-stages each kernel's PTX, and <code>ppy_runtime.cuda</code> loads it through the
-CUDA driver when <code>ppy.cuda.launch</code> is asked to run it.</p>
+<p>The gpu dialect is one execution model for every GPU backend.</p>
+<h3 id="function-kinds">Function kinds<a class="headerlink" href="#function-kinds" title="Permanent link">&para;</a></h3>
+<p>A function is <code>host</code> (the default), <code>device</code>, or <code>kernel</code>, by its <code>gpu.kind</code>
+attribute.</p>
+<ul>
+<li>A kernel returns nothing, takes scalars and pointers into <code>global</code> or
+  <code>constant</code> memory, and is launched from the host with
+  <code>gpu.launch %gx, %gy, %gz, %bx, %by, %bz, %args... {callee = @k}</code>.</li>
+<li>A device function is called from a kernel or another device function.</li>
+</ul>
+<h3 id="device-operations">Device operations<a class="headerlink" href="#device-operations" title="Permanent link">&para;</a></h3>
+<p>In device code a thread:</p>
+<ul>
+<li>reads its place from <code>gpu.thread_id.x</code>, <code>block_id.y</code>, <code>block_dim.z</code>,
+  <code>grid_dim.x</code> (each an <code>index</code>)</li>
+<li>waits for its block at <code>barrier</code> and its subgroup at <code>subgroup_barrier</code></li>
+<li>trades a scalar across the subgroup with
+  <code>subgroup_shuffle.idx|up|down|xor %v, %lane</code></li>
+<li>takes <code>shared_alloc {count = N} : ptr&lt;T, shared&gt;</code> or
+  <code>private_alloc {count = N} : ptr&lt;T, private&gt;</code></li>
+</ul>
+<p>Atomics are the atomic dialect's over those pointers. A host function takes
+<code>device_alloc %n : ptr&lt;T, generic&gt;</code>, memory on the device that the host reads
+and writes too, and hands it to a launch.</p>
+<h3 id="verification">Verification<a class="headerlink" href="#verification" title="Permanent link">&para;</a></h3>
+<p>The verifier holds the kinds. It refuses:</p>
+<ul>
+<li>a device operation in a host function</li>
+<li>a host one in device code: a guard, a buffer, an intrinsic, a call to a
+  host function, any other dialect</li>
+<li>a kernel that returns or takes stack memory</li>
+<li>a launch of anything but a kernel, or with anything but its parameters</li>
+</ul>
+<h3 id="backends">Backends<a class="headerlink" href="#backends" title="Permanent link">&para;</a></h3>
+<p><code>ppy.cuda</code> and <code>ppy.hip</code> lower to it (<a href="../../guide/gpu/">GPU kernels</a>).</p>
+<p><code>ppy emit cuda</code> and <code>ppy emit hip</code> write device code and the host's launches
+as CUDA or HIP C++. This is the C backend with the spellings in
+<code>backend/c/gpu.py</code>. Device memory is a managed allocation
+(<code>cudaMallocManaged</code>), freed with the host function however it leaves. The
+C, C++, and LLVM backends leave device code to them.</p>
+<p><code>backend/nvvm</code> writes the same device code as LLVM IR for NVPTX
+(<code>ppy emit nvvm-ir</code>):</p>
+<ul>
+<li>a kernel is a <code>ptx_kernel</code></li>
+<li>positions are the <code>llvm.nvvm.read.ptx.sreg.*</code> registers</li>
+<li>shared memory is an <code>addrspace(3)</code> array</li>
+<li>a shuffle is <code>llvm.nvvm.shfl.sync.*</code></li>
+<li>the math library is libdevice</li>
+</ul>
+<p>It also writes PTX (<code>ppy emit ptx</code>). The build stages each kernel's PTX, and
+<code>ppy_runtime.cuda</code> loads it through the CUDA driver when <code>ppy.cuda.launch</code> is
+asked to run it.</p>
 <h2 id="the-stablehlo-backend">The StableHLO backend<a class="headerlink" href="#the-stablehlo-backend" title="Permanent link">&para;</a></h2>
 <p><code>ppy_compiler.backend.stablehlo.emit_module</code> writes a function of scalars
-and tensors -- one block, no memory, static shapes -- as an MLIR
-<code>func.func</code> over <code>tensor&lt;...&gt;</code> values: a scalar is a rank-0 tensor; <code>core</code>
-arithmetic, comparison, <code>select</code>, and <code>cast</code> are StableHLO's; the math
-functions are theirs, with <code>exp2</code>, <code>log2</code>, <code>log10</code>, and <code>trunc</code> spelled
-from what StableHLO has and <code>erf</code>/<code>erfc</code> as CHLO; <code>tensor.fill</code> and
-<code>broadcast</code> are <code>broadcast_in_dim</code>, <code>reshape</code>, <code>transpose</code>, <code>reduce</code>,
-<code>matmul</code> and <code>linalg.dot</code> are <code>dot_general</code>, <code>convert</code> is <code>convert</code>, and a
-<code>tensor.fused</code> region is its body over the broadcast shape. A buffer, a
-guard, a branch, or a symbolic shape is refused with the reason
+and tensors (one block, no memory, static shapes) as an MLIR <code>func.func</code>
+over <code>tensor&lt;...&gt;</code> values. The mapping:</p>
+<ul>
+<li>A scalar is a rank-0 tensor.</li>
+<li><code>core</code> arithmetic, comparison, <code>select</code>, and <code>cast</code> are StableHLO's.</li>
+<li>The math functions are theirs, with <code>exp2</code>, <code>log2</code>, <code>log10</code>, and <code>trunc</code>
+  spelled from what StableHLO has, and <code>erf</code>/<code>erfc</code> as CHLO.</li>
+<li><code>tensor.fill</code> and <code>broadcast</code> are <code>broadcast_in_dim</code>; <code>reshape</code>,
+  <code>transpose</code>, <code>reduce</code> are theirs.</li>
+<li><code>matmul</code> and <code>linalg.dot</code> are <code>dot_general</code>; <code>convert</code> is <code>convert</code>.</li>
+<li>A <code>tensor.fused</code> region is its body over the broadcast shape.</li>
+</ul>
+<p>A buffer, a guard, a branch, or a symbolic shape is refused with the reason
 (<code>supports</code> says which). <code>ppy emit stablehlo</code> writes the text; the PJRT
 bridge in <code>ppy_runtime.xla</code> compiles and runs it.</p>
 <h2 id="effects-and-ownership-on-the-ir">Effects and ownership on the IR<a class="headerlink" href="#effects-and-ownership-on-the-ir" title="Permanent link">&para;</a></h2>
-<p>A function carries its <code>effects</code> -- the lower-case names of the analysis's
-vocabulary (<a href="../../guide/effects/">Effects and purity</a>), with a write through a buffer spelled as
-the <code>write_memory</code> it is -- and each parameter its <code>ownership</code>
-(<code>borrowed</code>, <code>mut</code>, <code>owned</code>) and <code>noalias</code>. Passes read the effects (an
-unused <code>core.call</code> to a callee with none but allocation and reads is dead),
-and the verifier holds the ownership: a <code>borrowed</code> or <code>mut</code> parameter is
-refused in a <code>core.ret</code> and as the value of a <code>core.store</code>, the same way a
-stack pointer is.</p>
+<p>A function carries its <code>effects</code>: the lower-case names of the analysis's
+vocabulary (<a href="../../guide/effects/">Effects and purity</a>), with a write through a
+buffer spelled as the <code>write_memory</code> it is. Each parameter carries its
+<code>ownership</code> (<code>borrowed</code>, <code>mut</code>, <code>owned</code>) and <code>noalias</code>.</p>
+<p>Passes read the effects. For example, an unused <code>core.call</code> to a callee with
+none but allocation and reads is dead. The verifier holds the ownership: a
+<code>borrowed</code> or <code>mut</code> parameter is refused in a <code>core.ret</code> and as the value of
+a <code>core.store</code>, the same way a stack pointer is.</p>
 <h2 id="linking-and-the-program">Linking and the program<a class="headerlink" href="#linking-and-the-program" title="Permanent link">&para;</a></h2>
 <p>Each module lowers on its own. A call into another module's native function
-is a declaration -- a function with no body, carrying the callee's symbol,
-marked <code>ppy.external</code> -- that the driver only lets a module make for a
-callee it has already lowered, so a declaration always has its definition
-somewhere in the program. <code>ppy_compiler.ir.linker.link</code> puts the modules
-together: definitions answer declarations, a generic instance two modules
-both made is kept once, a private symbol two modules both spell -- a
-string constant, a helper -- is renamed after its module and every
-reference follows, dialects are required at the newest version any module
-asked for, and libraries are the union. <code>whole_program</code> then optimizes the
-program as one unit: functions Python never binds and no address reaches
-become private, a small callee or one marked <code>@ppy.inline</code> is inlined
-(<code>@ppy.noinline</code> is not; nor is a coroutine, a kernel, or a resume
-function), the ordinary cleanups run, and <code>global-dce</code> drops the private
-functions and globals nothing reaches. <code>ppy build</code> compiles the program as
-one object; <code>ppy emit linked-ir</code> prints it.</p>
+is a declaration: a function with no body, carrying the callee's symbol,
+marked <code>ppy.external</code>. The driver only lets a module make one for a callee it
+has already lowered, so a declaration always has its definition somewhere in
+the program.</p>
+<p><code>ppy_compiler.ir.linker.link</code> puts the modules together:</p>
+<ul>
+<li>Definitions answer declarations.</li>
+<li>A generic instance two modules both made is kept once.</li>
+<li>A private symbol two modules both spell (a string constant, a helper) is
+  renamed after its module, and every reference follows.</li>
+<li>Dialects are required at the newest version any module asked for.</li>
+<li>Libraries are the union.</li>
+</ul>
+<p><code>whole_program</code> then optimizes the program as one unit:</p>
+<ul>
+<li>Functions Python never binds and no address reaches become private.</li>
+<li>A small callee or one marked <code>@ppy.inline</code> is inlined. <code>@ppy.noinline</code> is
+  not; nor is a coroutine, a kernel, or a resume function.</li>
+<li>The ordinary cleanups run.</li>
+<li><code>global-dce</code> drops the private functions and globals nothing reaches.</li>
+</ul>
+<p><code>ppy build</code> compiles the program as one object; <code>ppy emit linked-ir</code> prints
+it.</p>
 <h2 id="text-and-ppyir">Text and <code>.ppyir</code><a class="headerlink" href="#text-and-ppyir" title="Permanent link">&para;</a></h2>
 <p><code>ppy_compiler.ir.encode</code> prints a module; <code>decode</code> reads it back. The text
 is the on-disk format:</p>
@@ -4849,27 +5685,36 @@ is the on-disk format:</p>
 <a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a>extern func @sin(f64) -&gt; f64
 <a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a>func @f(%x: i64 {ownership = "borrowed"}) -&gt; i64 attrs {effects = ["pure"]} { ... }
 </code></pre></div>
-<p>Printing is deterministic: values are named in definition order (a hint is
-kept unless an earlier value took it; the rest are numbered), attributes
-print sorted, and a module printed after being parsed prints the same
-text. An operation is one line, and the reader ends it at its newline: one
-with nothing after its name -- <code>gpu.barrier</code> -- does not take the next
-line's value or label as its own. A reader refuses a schema it does not
-have and a dialect it does not
-have or has only at an older version, with the reason, rather than
-guessing. The format is public from 0.2.0: schema 1 is what <code>ppy emit ir</code>
-and <code>ppy emit linked-ir</code> write and <code>ppy build</code> reads, and a change to its
-shape is a new schema number, never a silent one.</p>
-<h2 id="verification">Verification<a class="headerlink" href="#verification" title="Permanent link">&para;</a></h2>
+<p>Printing is deterministic:</p>
+<ul>
+<li>Values are named in definition order. A hint is kept unless an earlier
+  value took it; the rest are numbered.</li>
+<li>Attributes print sorted.</li>
+<li>A module printed after being parsed prints the same text.</li>
+</ul>
+<p>An operation is one line, and the reader ends it at its newline. An
+operation with nothing after its name (<code>gpu.barrier</code>) does not take the next
+line's value or label as its own.</p>
+<p>A reader refuses a schema it does not have, and a dialect it does not have or
+has only at an older version, with the reason, rather than guessing. The
+format is public from 0.2.0: schema 1 is what <code>ppy emit ir</code> and
+<code>ppy emit linked-ir</code> write and <code>ppy build</code> reads. A change to its shape is a
+new schema number, never a silent one.</p>
+<h2 id="verification_1">Verification<a class="headerlink" href="#verification_1" title="Permanent link">&para;</a></h2>
 <p><code>verify(module)</code> returns every error with the function, block, and
 operation it sits on; <code>verify_or_raise</code> turns the list into one exception.
-The core checks structure (terminators, branch targets and arguments,
-dominance, unique names, symbols), then each operation against its
-dialect's <code>OpSpec</code> (arity, required attributes, types), then the dialect's
-own rule for that operation. A dialect adds its rules through <code>OpSpec.verify</code>,
-<code>Dialect.verify_type</code>, and <code>Dialect.verify_function</code> -- what a whole function
-may be, such as a kernel's signature and what its body holds; a new dialect
-never touches the verifier.</p>
+The checks run in three layers:</p>
+<ol>
+<li>The core checks structure: terminators, branch targets and arguments,
+   dominance, unique names, symbols.</li>
+<li>Each operation is checked against its dialect's <code>OpSpec</code>: arity, required
+   attributes, types.</li>
+<li>The dialect's own rule for that operation runs.</li>
+</ol>
+<p>A dialect adds its rules through <code>OpSpec.verify</code>, <code>Dialect.verify_type</code>, and
+<code>Dialect.verify_function</code> (what a whole function may be, such as a kernel's
+signature and what its body holds). A new dialect never touches the
+verifier.</p>
 <h2 id="dialects">Dialects<a class="headerlink" href="#dialects" title="Permanent link">&para;</a></h2>
 <p>A dialect is a namespace of operations and types with a version:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="k">class</span><span class="w"> </span><span class="nc">Dialect</span><span class="p">:</span>
@@ -4889,114 +5734,206 @@ dialects; a plugin registers its own through the plugin API. Two dialects
 of one name from different classes are refused.</p>
 <h2 id="sanitizers">Sanitizers<a class="headerlink" href="#sanitizers" title="Permanent link">&para;</a></h2>
 <p><code>sanitize</code> (<code>ir/transforms/sanitize.py</code>) instruments a module before the
-optimizations run: <code>bounds</code> guards every <code>core.buffer_load</code> and
-<code>buffer_store</code> index; <code>overflow</code> turns every <code>wrap</code> or <code>proven</code> integer
-<code>add</code>, <code>sub</code>, <code>mul</code> into the checked form and guards the overflow flag;
-<code>pointer</code> guards every load and store through a non-stack pointer against
-null (<code>core.const 0 : ptr&lt;T&gt;</code> is the null pointer); <code>alignment</code> guards the
-address (<code>core.cast ptr -&gt; i64</code>) against the element's size. A sanitizer
-guard carries a <code>sanitize:&lt;kind&gt;</code> label, and both backends return
-<code>STATUS_SANITIZER_BASE + kind</code> for it instead of the fallback status, so
-the boundary raises rather than re-running the Python. Coroutines' resume
+optimizations run. The kinds:</p>
+<table>
+<thead>
+<tr>
+<th>kind</th>
+<th>what it guards</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>bounds</code></td>
+<td>every <code>core.buffer_load</code> and <code>buffer_store</code> index</td>
+</tr>
+<tr>
+<td><code>overflow</code></td>
+<td>turns every <code>wrap</code> or <code>proven</code> integer <code>add</code>, <code>sub</code>, <code>mul</code> into the checked form and guards the overflow flag</td>
+</tr>
+<tr>
+<td><code>pointer</code></td>
+<td>every load and store through a non-stack pointer, against null (<code>core.const 0 : ptr&lt;T&gt;</code> is the null pointer)</td>
+</tr>
+<tr>
+<td><code>alignment</code></td>
+<td>the address (<code>core.cast ptr -&gt; i64</code>), against the element's size</td>
+</tr>
+</tbody>
+</table>
+<p>A sanitizer guard carries a <code>sanitize:&lt;kind&gt;</code> label. Both backends return
+<code>STATUS_SANITIZER_BASE + kind</code> for it instead of the fallback status, so the
+boundary raises rather than re-running the Python. Coroutines' resume
 functions and device code are left alone: neither has a status to fail with.</p>
 <h2 id="profiles">Profiles<a class="headerlink" href="#profiles" title="Permanent link">&para;</a></h2>
-<p>The prof dialect is two operations with no results: <code>prof.hit {counter =
-N}</code> adds one to counter <code>N</code> when its block runs, <code>prof.hit_if %c {counter
-= N}</code> adds one when <code>%c</code> holds. <code>instrument-profile</code>
-(<code>ir/transforms/profile.py</code>) places a <code>hit</code> at the start of every block of
-every host function and a <code>hit_if</code> on the condition of every
-<code>core.cond_br</code>, so the taken edge is counted without touching the graph,
-and leaves the legend -- counters to functions, blocks, and branches, with
-each function's graph digest -- on the module as <code>ppy.profile.map</code>. The
-LLVM backend writes the counters as one <code>i64</code> array per module and the
+<p>The prof dialect is two operations with no results:</p>
+<ul>
+<li><code>prof.hit {counter = N}</code> adds one to counter <code>N</code> when its block runs.</li>
+<li><code>prof.hit_if %c {counter = N}</code> adds one when <code>%c</code> holds.</li>
+</ul>
+<h3 id="instrumenting">Instrumenting<a class="headerlink" href="#instrumenting" title="Permanent link">&para;</a></h3>
+<p><code>instrument-profile</code> (<code>ir/transforms/profile.py</code>) places a <code>hit</code> at the start
+of every block of every host function and a <code>hit_if</code> on the condition of
+every <code>core.cond_br</code>, so the taken edge is counted without touching the
+graph. It leaves the legend (counters to functions, blocks, and branches,
+with each function's graph digest) on the module as <code>ppy.profile.map</code>.</p>
+<p>The LLVM backend writes the counters as one <code>i64</code> array per module and the
 legend as a string next to it (<code>__ppy_prof_counters_&lt;module&gt;</code>,
-<code>__ppy_prof_map_&lt;module&gt;</code>), each <code>hit</code> an atomic add, and <code>ppy run
---profile</code> reads both back through the engine when the program ends; the
-C backend keeps a file-static array. <code>annotate-profile</code> runs at the same
-point of the pipeline with a recorded profile: a function whose digest
-still matches gets <code>ppy.profile.calls</code> and <code>ppy.profile.hot</code> or
-<code>ppy.profile.cold</code>, each terminator <code>ppy.profile.count</code>, each <code>cond_br</code>
-<code>ppy.weights = [taken, not_taken]</code>, each back edge <code>ppy.profile.trips</code>;
-one whose digest moved is left alone and named in a remark. The inliner
-reads the hotness and the counts, the LLVM backend writes them as
-<code>function_entry_count</code> and <code>branch_weights</code> metadata and the <code>hot</code> and
-<code>cold</code> attributes. Both passes work right after canonicalization, so the
-graph a profile keys on is the graph a build sees.</p>
+<code>__ppy_prof_map_&lt;module&gt;</code>), each <code>hit</code> an atomic add. <code>ppy run --profile</code>
+reads both back through the engine when the program ends. The C backend
+keeps a file-static array.</p>
+<h3 id="annotating">Annotating<a class="headerlink" href="#annotating" title="Permanent link">&para;</a></h3>
+<p><code>annotate-profile</code> runs at the same point of the pipeline with a recorded
+profile. A function whose digest still matches gets:</p>
+<ul>
+<li><code>ppy.profile.calls</code> and <code>ppy.profile.hot</code> or <code>ppy.profile.cold</code></li>
+<li>on each terminator, <code>ppy.profile.count</code></li>
+<li>on each <code>cond_br</code>, <code>ppy.weights = [taken, not_taken]</code></li>
+<li>on each back edge, <code>ppy.profile.trips</code></li>
+</ul>
+<p>A function whose digest moved is left alone and named in a remark.</p>
+<p>The inliner reads the hotness and the counts. The LLVM backend writes them as
+<code>function_entry_count</code> and <code>branch_weights</code> metadata and the <code>hot</code> and <code>cold</code>
+attributes. Both passes work right after canonicalization, so the graph a
+profile keys on is the graph a build sees.</p>
 <h2 id="passes-and-patterns">Passes and patterns<a class="headerlink" href="#passes-and-patterns" title="Permanent link">&para;</a></h2>
+<h3 id="patterns">Patterns<a class="headerlink" href="#patterns" title="Permanent link">&para;</a></h3>
 <p>A <strong>pattern</strong> roots at one operation name and rewrites through the
-<code>Rewriter</code>, which is the only way anything changes: every replacement is
+<code>Rewriter</code>, which is the only way anything changes. Every replacement is
 recorded, and every operation a change touched is looked at again. The
 <code>GreedyRewriteDriver</code> applies a <code>PatternSet</code> until nothing applies; a
-pattern that never settles hits the iteration cap and is named in the
-error. A rewrite happens only where the types and the operation's own
-semantics allow it -- an integer <code>x * 0</code> is <code>0</code>, a float <code>x * 0.0</code> stays,
-<code>neg(neg(x))</code> folds under <code>python</code> and <code>wrap</code> but not <code>checked</code> overflow,
-and a folded constant that does not fit its type is left for the guard.</p>
+pattern that never settles hits the iteration cap and is named in the error.</p>
+<p>A rewrite happens only where the types and the operation's own semantics
+allow it:</p>
+<ul>
+<li>an integer <code>x * 0</code> is <code>0</code>, a float <code>x * 0.0</code> stays</li>
+<li><code>neg(neg(x))</code> folds under <code>python</code> and <code>wrap</code> but not <code>checked</code> overflow</li>
+<li>a folded constant that does not fit its type is left for the guard</li>
+</ul>
 <p>Each dialect contributes its patterns through <code>register_patterns</code>, so
 <code>canonicalize</code> is the union of what every registered dialect knows.</p>
+<h3 id="passes">Passes<a class="headerlink" href="#passes" title="Permanent link">&para;</a></h3>
 <p>A <strong>pass</strong> transforms a module and declares the analyses it <code>requires</code>,
-<code>preserves</code>, and <code>invalidates</code>; the <code>PassContext</code> serves analyses from a
+<code>preserves</code>, and <code>invalidates</code>. The <code>PassContext</code> serves analyses from a
 cache that those declarations empty. With <code>verify_after_each</code> the manager
-verifies the module after every pass and names the pass that broke it.
-The shared passes are <code>canonicalize</code>, <code>constant-fold</code>, <code>simplify-cfg</code>
-(constant branches, one-target conditional branches, unreachable blocks,
-single-predecessor chains), <code>dce</code> (unused pure operations, dead blocks),
-<code>tensor-canonicalize</code> (the tensor dialect's own patterns: views that
-change nothing go away, two transposes or reshapes are one, arithmetic
-over <code>fill</code>s is a <code>fill</code>, <code>x * fill 1</code> is <code>x</code>), <code>tensor-fusion</code> (a chain
-of elementwise tensor operations whose intermediates have one reader, and
-a <code>reduce</code> at its root, become one <code>tensor.fused</code> -- a region computing
-one element from one element of each input -- so <code>lower-tensor</code> makes one
-loop of them with no temporaries), <code>lower-tensor</code>, <code>lower-regex</code>, and <code>lower-parallel</code>;
-<code>transforms.default_pipeline(level)</code> orders them and marks the
-stages -- <code>after-ir-generation</code>, <code>after-canonicalization</code>,
-<code>before-optimization</code>, <code>after-optimization</code>, <code>before-backend</code> -- where a
-plugin's <code>register_stage_pass</code> puts a pass of its own, and last the
-<code>backend</code> stage, where a backend's <code>register_passes</code> puts its own before
-its validation. <code>driver/ir_pipeline.py</code> runs that pipeline over every
-module of a project (<code>canonical_ir_modules</code>) and is the one road to every
-backend, builtin or installed (<a href="../backends/">Backends</a>).</p>
+verifies the module after every pass and names the pass that broke it.</p>
+<p>The shared passes:</p>
+<table>
+<thead>
+<tr>
+<th>pass</th>
+<th>what it does</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>canonicalize</code></td>
+<td>the union of every dialect's patterns</td>
+</tr>
+<tr>
+<td><code>constant-fold</code></td>
+<td>folds constants</td>
+</tr>
+<tr>
+<td><code>simplify-cfg</code></td>
+<td>constant branches, one-target conditional branches, unreachable blocks, single-predecessor chains</td>
+</tr>
+<tr>
+<td><code>dce</code></td>
+<td>unused pure operations, dead blocks</td>
+</tr>
+<tr>
+<td><code>tensor-canonicalize</code></td>
+<td>the tensor dialect's own patterns: views that change nothing go away, two transposes or reshapes are one, arithmetic over <code>fill</code>s is a <code>fill</code>, <code>x * fill 1</code> is <code>x</code></td>
+</tr>
+<tr>
+<td><code>tensor-fusion</code></td>
+<td>a chain of elementwise tensor operations whose intermediates have one reader, and a <code>reduce</code> at its root, become one <code>tensor.fused</code> (a region computing one element from one element of each input), so <code>lower-tensor</code> makes one loop of them with no temporaries</td>
+</tr>
+<tr>
+<td><code>lower-tensor</code></td>
+<td>tensors to memory and loops</td>
+</tr>
+<tr>
+<td><code>lower-regex</code></td>
+<td>patterns to matcher functions</td>
+</tr>
+<tr>
+<td><code>lower-parallel</code></td>
+<td>parallel operations to chunks</td>
+</tr>
+</tbody>
+</table>
+<h3 id="stages">Stages<a class="headerlink" href="#stages" title="Permanent link">&para;</a></h3>
+<p><code>transforms.default_pipeline(level)</code> orders the passes and marks the stages
+where a plugin's <code>register_stage_pass</code> puts a pass of its own:</p>
+<ol>
+<li><code>after-ir-generation</code></li>
+<li><code>after-canonicalization</code></li>
+<li><code>before-optimization</code></li>
+<li><code>after-optimization</code></li>
+<li><code>before-backend</code></li>
+</ol>
+<p>Last comes the <code>backend</code> stage, where a backend's <code>register_passes</code> puts its
+own before its validation. <code>driver/ir_pipeline.py</code> runs that pipeline over
+every module of a project (<code>canonical_ir_modules</code>) and is the one road to
+every backend, builtin or installed (<a href="../backends/">Backends</a>).</p>
 <h2 id="from-python-to-the-ir">From Python to the IR<a class="headerlink" href="#from-python-to-the-ir" title="Permanent link">&para;</a></h2>
-<p><code>ppy_compiler.lowering.ast_to_ir</code> reads an analyzed function once and
-writes IR: parameters become entry-block arguments held in stack slots,
-Python control flow becomes blocks with arguments (<code>and</code>/<code>or</code> join through
-a block argument, loops have a header, a body, a latch, and an exit), and
-every place the program must be handed back to CPython -- a division by
-zero, an index out of range, a shift past the word, a byte that does not
-fit -- is a <code>core.guard</code>. Integer arithmetic carries <code>overflow = "python"</code>,
-or <code>wrap</code> when the safeguards are off, and <code>//</code> and <code>%</code> carry
-<code>rounding = "floor"</code>. What the native subset excludes is refused with the
-reason, and a caller of a refused function is refused with it.</p>
+<h3 id="the-frontend">The frontend<a class="headerlink" href="#the-frontend" title="Permanent link">&para;</a></h3>
+<p><code>ppy_compiler.lowering.ast_to_ir</code> reads an analyzed function once and writes
+IR:</p>
+<ul>
+<li>Parameters become entry-block arguments held in stack slots.</li>
+<li>Python control flow becomes blocks with arguments. <code>and</code>/<code>or</code> join through
+  a block argument; loops have a header, a body, a latch, and an exit.</li>
+<li>Every place the program must be handed back to CPython (a division by
+  zero, an index out of range, a shift past the word, a byte that does not
+  fit) is a <code>core.guard</code>.</li>
+<li>Integer arithmetic carries <code>overflow = "python"</code>, or <code>wrap</code> when the
+  safeguards are off, and <code>//</code> and <code>%</code> carry <code>rounding = "floor"</code>.</li>
+</ul>
+<p>What the native subset excludes is refused with the reason, and a caller of a
+refused function is refused with it.</p>
+<h3 id="the-llvm-backend">The LLVM backend<a class="headerlink" href="#the-llvm-backend" title="Permanent link">&para;</a></h3>
 <p><code>backend/llvm/from_ir</code> reads that IR and nothing else. It gives every
-function the native ABI the runtime binds -- machine atoms in, result
-slots out, an <code>i32</code> status back -- lowers <code>python</code> overflow to the
-<code>with.overflow</code> intrinsics and a branch to the function's fallback block,
-<code>floor</code> rounding to the sign-corrected sequence (or a shift for a
-power-of-two divisor), and block arguments to phis.</p>
-<p><code>backend/c/emit</code> reads the same IR and writes C11 or C++17: the same
-ABI, <code>python</code> overflow through checking helpers (the compiler's
-<code>__builtin_*_overflow</code> where it has them, plain C otherwise), <code>floor</code>
-rounding as the sign-corrected sequence or, by a positive constant, as
-<code>(a % b + b) % b</code>. Control flow is rebuilt from the graph: the dominator
-tree and the loops give <code>while</code>, <code>if</code>/<code>else</code>, <code>break</code>, <code>continue</code>, and
-<code>return</code>, a block argument is a variable assigned on each edge into its
-block, and a stack slot that is only loaded and stored is a variable named
-after it. A value read once, in its own block, is written where it is read,
-with the parentheses C's precedence needs and no others; a parameter keeps
-its Python name. A graph the reconstruction cannot express -- a loop with
-two exits, a block reached from two places that dominate neither -- falls
-back, for that function alone, to blocks as labels and branches as
-<code>goto</code>s, so the text is always correct and usually plain. <code>ppy emit c</code> and
-<code>ppy emit cpp</code> print it (<code>--format</code> runs it through clang-format);
-<code>tests/test_c_backend.py</code> compiles it and calls it on the LLVM road's
-inputs, and holds the labels writer to the same answers.</p>
-<p>This is the LLVM backend's one road. 0.2.0 began with the direct
-AST-to-LLVM lowering beside it and a differential run comparing the two on
-every input; once the IR road covered everything the direct one did, the
-direct one was removed, and <code>tests/test_lowering.py</code> now holds the IR road
-to CPython's own answers on the same inputs, fallbacks included.
-<code>[tool.ppy.llvm] pipeline = "ast"</code> and <code>PPY_LOWERING=ast</code> are still read:
-a build asking for the removed road is told (<code>W2004</code>) and takes this one.</p>
+function the native ABI the runtime binds: machine atoms in, result slots
+out, an <code>i32</code> status back. It lowers:</p>
+<ul>
+<li><code>python</code> overflow to the <code>with.overflow</code> intrinsics and a branch to the
+  function's fallback block</li>
+<li><code>floor</code> rounding to the sign-corrected sequence (or a shift for a
+  power-of-two divisor)</li>
+<li>block arguments to phis</li>
+</ul>
+<h3 id="the-c-backend">The C backend<a class="headerlink" href="#the-c-backend" title="Permanent link">&para;</a></h3>
+<p><code>backend/c/emit</code> reads the same IR and writes C11 or C++17 with the same ABI.</p>
+<ul>
+<li><code>python</code> overflow goes through checking helpers (the compiler's
+  <code>__builtin_*_overflow</code> where it has them, plain C otherwise).</li>
+<li><code>floor</code> rounding is the sign-corrected sequence or, by a positive constant,
+  <code>(a % b + b) % b</code>.</li>
+</ul>
+<p>Control flow is rebuilt from the graph. The dominator tree and the loops give
+<code>while</code>, <code>if</code>/<code>else</code>, <code>break</code>, <code>continue</code>, and <code>return</code>. A block argument is a
+variable assigned on each edge into its block, and a stack slot that is only
+loaded and stored is a variable named after it. A value read once, in its own
+block, is written where it is read, with the parentheses C's precedence needs
+and no others. A parameter keeps its Python name.</p>
+<p>Some graphs the reconstruction cannot express: a loop with two exits, or a
+block reached from two places that dominate neither. For that function alone
+the emitter falls back to blocks as labels and branches as <code>goto</code>s, so the
+text is always correct and usually plain.</p>
+<p><code>ppy emit c</code> and <code>ppy emit cpp</code> print it (<code>--format</code> runs it through
+clang-format). <code>tests/test_c_backend.py</code> compiles it and calls it on the LLVM
+road's inputs, and holds the labels writer to the same answers.</p>
+<h3 id="history-of-the-ir-road">History of the IR road<a class="headerlink" href="#history-of-the-ir-road" title="Permanent link">&para;</a></h3>
+<p>This is the LLVM backend's one road. 0.2.0 began with the direct AST-to-LLVM
+lowering beside it and a differential run comparing the two on every input.
+Once the IR road covered everything the direct one did, the direct one was
+removed. <code>tests/test_lowering.py</code> now holds the IR road to CPython's own
+answers on the same inputs, fallbacks included.</p>
+<p><code>[tool.ppy.llvm] pipeline = "ast"</code> and <code>PPY_LOWERING=ast</code> are still read: a
+build asking for the removed road is told (<code>W2004</code>) and takes this one.</p>
 
 
 
