@@ -15,7 +15,7 @@ theme:
   icon:
     repo: fontawesome/brands/github
   font:
-    text: IBM Plex Sans
+    text: Inter
     code: JetBrains Mono
   palette:
     - media: "(prefers-color-scheme: light)"
