@@ -20,6 +20,17 @@
   it spans. A dataclass or `TypedDict` is checked field by field and a
   mismatch is a `ValueError` naming where (`$.items[2].price`); a pydantic
   model is validated by pydantic.
+- Collections that compile: `ppy.Vec`, `ppy.Deque`, `ppy.Heap`,
+  `ppy.MaxHeap`, `ppy.LinkedList` (nodes named by integer ids),
+  `ppy.HashMap`, `ppy.HashSet` (insertion order), `ppy.TreeMap`, and
+  `ppy.TreeSet` (key order, with `floor`, `ceiling`, `lower`, `higher`).
+  Under CPython each is a Python class, the reference. A function that
+  makes and uses them lowers to calls into a small C runtime under
+  `ppy run`, in a standalone binary, and in emitted C and C++, and frees
+  what it made before it returns. A native function may take one as a
+  parameter; native callers pass its handle. Keys are `int`, elements and
+  values `int` or `float`. `examples/47_collections` runs five problems
+  with them: 4.3 s under CPython, 0.39 s under `ppy run`.
 - The standalone runtime's `ppy_rt_alloc` returns `int8_t *`, the type the
   IR gives it, so emitted C no longer warns about incompatible pointers
   (an error from GCC 14 on).

@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING
 from ..diagnostics import Diagnostic, DiagnosticBag, Severity
 from ..frontend.source import span_of
 from . import builtins as B
+from . import collections as C
 from . import stdlib
 from . import types as T
 from .aliasing import EXTERNAL, AliasInfo, analyze_aliases
@@ -511,6 +512,18 @@ def _awaitable_of(result: T.Type) -> T.Type:
     return T.Instance("Awaitable", (result,), ("Awaitable", "object"))
 
 
+#: Subscripted calls that make what they hand back: the allocations and reads
+#: of `ppy`, and its collections, however the name was imported.
+_FRESH_SUBSCRIPTED = frozenset(
+    {
+        "ppy.buffer",
+        "ppy.scan",
+        "ppy.input",
+        *(f"{prefix}{name}" for prefix in ("ppy.", "") for name in C.SHORT_NAMES),
+    }
+)
+
+
 def _is_fresh_allocation(node: ast.expr) -> bool:
     """Does this expression produce an object nothing else can already hold?"""
     if isinstance(node, (ast.List, ast.Dict, ast.Set, ast.ListComp, ast.DictComp, ast.SetComp)):
@@ -521,7 +534,7 @@ def _is_fresh_allocation(node: ast.expr) -> bool:
     # they hand back, so nothing else can already be holding it.
     if isinstance(node, ast.Call) and isinstance(node.func, ast.Subscript):
         spelled = ast.unparse(node.func.value)
-        return spelled in {"ppy.buffer", "ppy.scan", "ppy.input"}
+        return spelled in _FRESH_SUBSCRIPTED
     return False
 
 
@@ -1535,8 +1548,10 @@ class _Checker:
                 _forget_attributes(env, path)
                 env.set(path, Binding(declared_type or value.type, value.facts))
         elif isinstance(target, ast.Subscript):
-            self._expr(target.value, env)
+            container = T.strip_literal(self._expr(target.value, env).type)
             self._expr(target.slice, env)
+            if isinstance(container, T.Instance) and container.name in C.COLLECTIONS:
+                self._store_element(container, value, target)
             self._effects = self._effects.add(
                 Effect.WRITE_OBJECT, raises=("IndexError", "KeyError", "TypeError")
             )
@@ -1875,6 +1890,9 @@ class _Checker:
             allocated = self._typed_buffer(node, env)
             if allocated is not None:
                 return allocated
+            made = self._typed_collection(node, env)
+            if made is not None:
+                return made
         imported = self._constant_import(node)
         if imported is not None:
             return imported
@@ -1933,6 +1951,8 @@ class _Checker:
                     )
                 self._native_blockers.append(f"`{callee.type.qualname}` has no native lowering")
                 return Binding(callee.type.ret)
+            if callee.type.qualname.startswith(tuple(f"{c}." for c in C.COLLECTIONS)):
+                return self._collection_call(callee.type, node, args, keywords, env)
             if callee.type.qualname in _MUTATING_METHODS:
                 self._effects = self._effects.add(
                     Effect.WRITE_OBJECT, raises=("IndexError", "KeyError")
@@ -2533,7 +2553,8 @@ class _Checker:
         if method is not None:
             self._effects = self._effects.add(Effect.READ_OBJECT)
             return Binding(method)
-        if self.strict and T.is_exact_builtin(base) and not self._dynamic_depth:
+        exact = T.is_exact_builtin(base) or C.is_collection(base)
+        if self.strict and exact and not self._dynamic_depth:
             self._error("E1202", f"`{base}` has no attribute `{node.attr}`", node)
             return Binding(T.UNKNOWN)
         self._effects = self._effects.add(Effect.READ_OBJECT)
@@ -2752,6 +2773,8 @@ class _Checker:
         found = table.get((name, attr))
         if found is not None:
             return found
+        if name in C.COLLECTIONS and isinstance(base, T.Instance):
+            return C.method(base, attr)
         if name == "str":
             return self._str_method(attr)
         if name in {"bytes", "bytearray"}:
@@ -2893,6 +2916,15 @@ class _Checker:
                 return Binding(T.UNKNOWN)
             return Binding(B.element_type(base))
         if isinstance(base, T.Instance):
+            if base.name in C.INDEXED | C.MAPS:
+                self._effects = self._effects.add(raises=("IndexError", "KeyError"))
+                if is_slice:
+                    self._error("E1301", f"a `{base.name}` is indexed by an int, not sliced", node)
+                return Binding(C.value_of(base))
+            if base.name in C.COLLECTIONS:
+                wanted = "`peek` and `pop`" if "Heap" in base.name else "its methods"
+                self._error("E1301", f"a `{base.name}` is read by {wanted}", node)
+                return Binding(C.value_of(base))
             if base.name in {"list", "Sequence", "Buffer", "memoryview", "array"}:
                 self._effects = self._effects.add(raises=("IndexError",))
                 return Binding(base if is_slice else B.element_type(base))
@@ -4689,6 +4721,67 @@ class _Checker:
         )
         return Binding(T.instance("Buffer", element.type))
 
+    def _typed_collection(self, node: ast.Call, env: Env) -> Binding | None:
+        """`ppy.Vec[int]()`, `ppy.Deque[float]()`, `ppy.Heap[int]()`: a new, empty collection.
+
+        A `Vec` may start with a count of zeros. The element is `int` or
+        `float`, which is what native memory holds eight bytes of.
+        """
+        func = node.func
+        assert isinstance(func, ast.Subscript)
+        canonical = self.project.resolver(self.symbols).canonical(func.value)
+        if canonical is None or canonical not in C.COLLECTIONS:
+            return None
+        parts = func.slice.elts if isinstance(func.slice, ast.Tuple) else [func.slice]
+        resolved = [T.strip_literal(self.annotations.resolve(part).type) for part in parts]
+        if len(resolved) != C.ARITY[canonical]:
+            wanted = "a key and a value type" if C.ARITY[canonical] == 2 else "one element type"
+            self._error("E1305", f"a `{canonical}` takes {wanted}", node)
+            resolved = [T.UNKNOWN] * C.ARITY[canonical]
+        keyed = canonical in C.KEYED
+        if keyed and resolved[0] not in (*C.KEYS, T.UNKNOWN):
+            self._error("E1305", f"a `{canonical}` has `int` keys, not `{resolved[0]}`", node)
+        element = resolved[-1]
+        if not (keyed and len(resolved) == 1) and element not in (*C.ELEMENTS, T.UNKNOWN):
+            self._error("E1305", f"a `{canonical}` holds `int` or `float`, not `{element}`", node)
+        counted = canonical == "ppy.Vec"
+        if node.keywords or len(node.args) > (1 if counted else 0):
+            wanted = "how many zeros it starts with" if counted else "no arguments"
+            self._error("E1305", f"`{canonical}[T]()` takes {wanted}", node)
+        for argument in node.args:
+            count = self._expr(argument, env)
+            if T.strip_literal(count.type) not in (T.INT, T.UNKNOWN):
+                self._error(
+                    "E1301", f"a `Vec` starts with a count of zeros, not `{count.type}`", argument
+                )
+        self._effects = self._effects | EffectSet.of(Effect.ALLOC, raises=("ValueError",))
+        return Binding(C.instance(canonical, *resolved))
+
+    def _collection_call(  # pylint: disable=too-many-arguments,too-many-positional-arguments
+        self,
+        callee: T.Callable_,
+        node: ast.Call,
+        args: list[Binding],
+        keywords: dict[str | None, Binding],
+        env: Env,
+    ) -> Binding:
+        """A method of a collection: its arguments checked, and a write where it changes it."""
+        self._effects = self._effects.add(raises=("IndexError", "KeyError"))
+        if callee.qualname in C.MUTATORS and isinstance(node.func, ast.Attribute):
+            self._effects = self._effects.add(Effect.WRITE_OBJECT)
+            self._note_mutation(node.func.value, env)
+        return self._call_signature(callee, node, args, keywords, bound=True)
+
+    def _store_element(self, container: T.Instance, value: Binding, target: ast.Subscript) -> None:
+        """`v[i] = x`: an indexed collection, and a value its element can hold."""
+        if container.name not in C.INDEXED | C.MAPS:
+            self._error("E1301", f"a `{container.name}` has no index to store at", target)
+            return
+        element = C.value_of(container)
+        stored = T.strip_literal(value.type)
+        if element == T.INT and stored == T.FLOAT:
+            self._error("E1301", "a `float` does not fit an `int` element", target)
+
     def _typed_input(self, node: ast.Call, env: Env) -> Binding | None:
         """`ppy.input[T]()` and `ppy.scan[T](...)`: a read typed by what was asked for.
 
@@ -5034,6 +5127,12 @@ class _Checker:
             if isinstance(base, T.DynamicType):
                 return Binding(T.DYNAMIC)
             return Binding(T.DYNAMIC if self._dynamic_depth else T.UNKNOWN)
+        if isinstance(base, T.Instance) and base.name in C.COLLECTIONS:
+            if base.name not in C.ITERABLE:
+                self._error(
+                    "E1302", f"a `{base.name}` is read by `peek` and `pop`, not iterated", node
+                )
+            return Binding(C.element_of(base))
         element = B.element_type(base)
         if isinstance(element, T.UnknownType):
             if isinstance(base, T.Instance) and base.name == "range":

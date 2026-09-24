@@ -889,6 +889,13 @@ def compile_and_run(  # type: ignore[no-untyped-def]
                 if runtime is not None:
                     engine.load_library(str(runtime))
                 continue
+            if library == "ppy_collections":
+                from ppy_runtime.collections import library_path as collections_path
+
+                runtime = collections_path()
+                if runtime is not None:
+                    engine.load_library(str(runtime))
+                continue
             engine.load_library(library)
         if native.functions or native.fused:
             engine.add(native.ir)

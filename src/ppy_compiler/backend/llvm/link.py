@@ -164,6 +164,10 @@ def link_shared_library(
             from ppy_runtime.aio import source_path
 
             command.append(str(source_path()))
+        elif library == "ppy_collections":
+            from ppy_runtime.collections import source_path as collections_source
+
+            command.append(str(collections_source()))
         else:
             command.append(f"-l{library}")
     completed = subprocess.run(command, capture_output=True, text=True, check=False)

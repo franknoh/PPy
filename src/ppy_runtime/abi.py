@@ -52,6 +52,11 @@ class NativeParam:
         return self.kind == "object"
 
     @property
+    def is_handle(self) -> bool:
+        """A `ppy.Vec` or another collection: its runtime handle, no Python boundary."""
+        return self.kind == "handle"
+
+    @property
     def is_borrowed(self) -> bool:
         """A `ppy.Buffer[T]` is borrowed in place; a list is copied out.
 
@@ -70,6 +75,8 @@ class NativeParam:
             return (f"{_abi_name(self.element)}*", "i64")
         if self.is_pointer:
             return (f"{_abi_name(self.element)}*",)
+        if self.is_handle:
+            return ("i8*",)
         if self.is_tuple:
             return tuple(_abi_name(element) for element in self.elements)
         if self.is_object:
@@ -82,6 +89,8 @@ class NativeParam:
             return f"{_abi_name(self.element)}*{borrow} {self.name}, i64 {self.name}_len"
         if self.is_pointer:
             return f"{_abi_name(self.element)}* {self.name}"
+        if self.is_handle:
+            return f"{self.class_name}[{self.element}] {self.name}"
         if self.is_tuple:
             return ", ".join(
                 f"{_abi_name(element)} {self.name}{index}"

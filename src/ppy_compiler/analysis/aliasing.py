@@ -18,6 +18,8 @@ from __future__ import annotations
 import ast
 from dataclasses import dataclass, field
 
+from .collections import SHORT_NAMES
+
 __all__ = ["EXTERNAL", "AliasInfo", "analyze_aliases"]
 
 #: The root standing for every object this function did not create and was not
@@ -25,7 +27,14 @@ __all__ = ["EXTERNAL", "AliasInfo", "analyze_aliases"]
 EXTERNAL = "<external>"
 
 #: Subscripted `ppy` calls that allocate what they hand back.
-_FRESH_PPY = frozenset({"ppy.buffer", "ppy.scan", "ppy.input"})
+_FRESH_PPY = frozenset(
+    {
+        "ppy.buffer",
+        "ppy.scan",
+        "ppy.input",
+        *(f"{prefix}{name}" for prefix in ("ppy.", "") for name in SHORT_NAMES),
+    }
+)
 
 #: Builtins whose result is a fresh container holding the argument's elements.
 _FRESH_FROM_ELEMENTS = frozenset(
