@@ -5453,10 +5453,12 @@ message on standard error instead of retrying in Python. A standalone build
 keeps the guards, like other builds, and never claims Python's integers it
 cannot provide. <code>--unsafe</code> asks for wrap semantics outright, with almost no
 guards left to fail.</p>
-<p><code>ppy.input[int]()</code> and <code>ppy.scan[int]()</code> are the scanner itself, the same C
-the runtime's reader compiles. Where Python would raise (the end of the
-input, a token that is not an integer), the binary says so on standard
-error and stops.</p>
+<p><code>ppy.input</code> and <code>ppy.scan</code> of numbers, tuples of numbers, and number
+buffers are the scanner itself, the same C the runtime's reader compiles.
+Where Python would raise (the end of the input, a token that is not a
+number, a value outside its declared width), the binary names the same
+exception on standard error and stops. <a href="../guide/input/#native-code-and-standalone-binaries">Reading input</a>
+lists what reads natively.</p>
 <p>Five of the six problems in <code>examples/15_algorithms</code> build this way once
 their buffers come from <code>ppy.buffer</code> rather than <code>array.array</code>, and four of
 those beat their C reference. Substring search is the one that cannot: its

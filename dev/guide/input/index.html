@@ -1176,6 +1176,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#json-into-a-schema" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        JSON into a schema
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#ppyread_ints-and-ppyread_token-buffers" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4011,6 +4022,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#json-into-a-schema" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        JSON into a schema
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#ppyread_ints-and-ppyread_token-buffers" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4081,6 +4103,8 @@
 <li><code>ppy.scan</code> reads tokens.</li>
 <li><code>ppy.read_*</code> fill a buffer you already have.</li>
 </ul>
+<p>Both <code>ppy.input</code> and <code>ppy.scan</code> also read JSON into a dataclass, a pydantic
+model, or a <code>TypedDict</code> (<a href="#json-into-a-schema">below</a>).</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">ppy</span>
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ppy</span><span class="w"> </span><span class="kn">import</span> <span class="n">Buffer</span>
 <a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>
@@ -4089,10 +4113,11 @@
 <a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="n">a</span><span class="p">,</span> <span class="n">b</span> <span class="o">=</span> <span class="n">ppy</span><span class="o">.</span><span class="n">input</span><span class="p">[</span><span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">]]()</span>  <span class="c1"># one line, exactly two fields</span>
 <a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="n">names</span> <span class="o">=</span> <span class="n">ppy</span><span class="o">.</span><span class="n">input</span><span class="p">[</span><span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]]()</span>  <span class="c1"># one line, split into its fields</span>
 <a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="n">row</span> <span class="o">=</span> <span class="n">ppy</span><span class="o">.</span><span class="n">input</span><span class="p">[</span><span class="n">Buffer</span><span class="p">[</span><span class="nb">int</span><span class="p">]]()</span>  <span class="c1"># one line of integers, straight into a buffer</span>
-<a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>
-<a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a><span class="n">word</span> <span class="o">=</span> <span class="n">ppy</span><span class="o">.</span><span class="n">scan</span><span class="p">[</span><span class="nb">str</span><span class="p">]()</span>  <span class="c1"># one whitespace-delimited token, lines irrelevant</span>
-<a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a><span class="n">k</span> <span class="o">=</span> <span class="n">ppy</span><span class="o">.</span><span class="n">scan</span><span class="p">[</span><span class="nb">int</span><span class="p">]()</span>  <span class="c1"># one integer token</span>
-<a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a><span class="n">values</span> <span class="o">=</span> <span class="n">ppy</span><span class="o">.</span><span class="n">scan</span><span class="p">[</span><span class="n">Buffer</span><span class="p">[</span><span class="nb">int</span><span class="p">]](</span><span class="n">n</span><span class="p">)</span>  <span class="c1"># n integer tokens, straight into a buffer</span>
+<a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="n">small</span> <span class="o">=</span> <span class="n">ppy</span><span class="o">.</span><span class="n">input</span><span class="p">[</span><span class="n">ppy</span><span class="o">.</span><span class="n">i32</span><span class="p">]()</span>  <span class="c1"># read as int, then it must fit 32 bits</span>
+<a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>
+<a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a><span class="n">word</span> <span class="o">=</span> <span class="n">ppy</span><span class="o">.</span><span class="n">scan</span><span class="p">[</span><span class="nb">str</span><span class="p">]()</span>  <span class="c1"># one whitespace-delimited token, lines irrelevant</span>
+<a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a><span class="n">k</span> <span class="o">=</span> <span class="n">ppy</span><span class="o">.</span><span class="n">scan</span><span class="p">[</span><span class="nb">int</span><span class="p">]()</span>  <span class="c1"># one integer token</span>
+<a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a><span class="n">values</span> <span class="o">=</span> <span class="n">ppy</span><span class="o">.</span><span class="n">scan</span><span class="p">[</span><span class="n">Buffer</span><span class="p">[</span><span class="nb">int</span><span class="p">]](</span><span class="n">n</span><span class="p">)</span>  <span class="c1"># n integer tokens, straight into a buffer</span>
 </code></pre></div>
 <h2 id="ppyinput-lines"><code>ppy.input</code>: lines<a class="headerlink" href="#ppyinput-lines" title="Permanent link">&para;</a></h2>
 <p><code>ppy.input[T]()</code> reads one line and means what the builtin <code>input()</code> means.
@@ -4116,7 +4141,13 @@ without changing what the program reads.</p>
   for an empty line. <code>list[float]</code> and <code>list[str]</code> work the same way.</li>
 <li><code>ppy.input[Buffer[int]]()</code> reads one line of integers into a new buffer,
   as <code>array.array("q", map(int, input().split()))</code> does. It takes no count:
-  the line decides. See the next section for how its fields are parsed.</li>
+  the line decides. See the next section for how its fields are parsed.
+  <code>ppy.input[Buffer[float]]()</code> is the same for floats, as
+  <code>array.array("d", map(float, input().split()))</code>.</li>
+<li>A fixed width, such as <code>ppy.input[ppy.i32]()</code>, reads the field as <code>int</code>
+  and then requires it to fit: a value outside the width is
+  <code>OverflowError</code>. This holds for a scalar, a tuple field, and a list
+  element. <code>ppy.f32</code> and <code>ppy.f64</code> read as <code>float</code>.</li>
 </ul>
 <p>A read takes no argument. A prompt is a <code>print</code> before it, the way any other
 output is written, so reading and printing stay separate.</p>
@@ -4145,6 +4176,7 @@ spread over any number of lines read the same way.</p>
   the input is <code>EOFError</code>.</li>
 <li><code>ppy.scan[float]()</code> is the next token as a float.</li>
 <li><code>ppy.scan[tuple[int, int]]()</code> is two tokens, wherever they fall.</li>
+<li><code>ppy.scan[Buffer[float]](n)</code> reads <code>n</code> float tokens into a new buffer.</li>
 <li><code>ppy.scan[Buffer[int]](n)</code> reads <code>n</code> integer tokens straight into a new
   buffer, fewer where the input ends. Reading goes into memory rather than
   through a Python object per field, which is what takes a million numbers
@@ -4167,6 +4199,53 @@ partial read: it fills what it can and says how many it got.</p>
 follows starts there. After <code>ppy.scan[int]()</code> reads the <code>5</code> of <code>5\nabc</code>,
 <code>ppy.input[str]()</code> returns <code>""</code>, the rest of that line, and the next returns
 <code>abc</code>.</p>
+<h2 id="json-into-a-schema">JSON into a schema<a class="headerlink" href="#json-into-a-schema" title="Permanent link">&para;</a></h2>
+<p>Give <code>ppy.input</code> or <code>ppy.scan</code> a class you already have, and it reads JSON
+into it:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">dataclasses</span><span class="w"> </span><span class="kn">import</span> <span class="n">dataclass</span>
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="kn">import</span><span class="w"> </span><span class="nn">ppy</span>
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>
+<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>
+<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="nd">@dataclass</span>
+<a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="k">class</span><span class="w"> </span><span class="nc">Item</span><span class="p">:</span>
+<a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>    <span class="n">name</span><span class="p">:</span> <span class="nb">str</span>
+<a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a>    <span class="n">price</span><span class="p">:</span> <span class="nb">float</span>
+<a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a>
+<a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a>
+<a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a><span class="nd">@dataclass</span>
+<a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a><span class="k">class</span><span class="w"> </span><span class="nc">Order</span><span class="p">:</span>
+<a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a>    <span class="nb">id</span><span class="p">:</span> <span class="nb">int</span>
+<a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a>    <span class="n">items</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">Item</span><span class="p">]</span>
+<a id="__codelineno-1-16" name="__codelineno-1-16" href="#__codelineno-1-16"></a>    <span class="n">note</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
+<a id="__codelineno-1-17" name="__codelineno-1-17" href="#__codelineno-1-17"></a>
+<a id="__codelineno-1-18" name="__codelineno-1-18" href="#__codelineno-1-18"></a>
+<a id="__codelineno-1-19" name="__codelineno-1-19" href="#__codelineno-1-19"></a><span class="n">order</span> <span class="o">=</span> <span class="n">ppy</span><span class="o">.</span><span class="n">input</span><span class="p">[</span><span class="n">Order</span><span class="p">]()</span>  <span class="c1"># one line of JSON</span>
+<a id="__codelineno-1-20" name="__codelineno-1-20" href="#__codelineno-1-20"></a><span class="n">orders</span> <span class="o">=</span> <span class="n">ppy</span><span class="o">.</span><span class="n">input</span><span class="p">[</span><span class="nb">list</span><span class="p">[</span><span class="n">Order</span><span class="p">]]()</span>  <span class="c1"># one line holding a JSON array</span>
+<a id="__codelineno-1-21" name="__codelineno-1-21" href="#__codelineno-1-21"></a><span class="n">pretty</span> <span class="o">=</span> <span class="n">ppy</span><span class="o">.</span><span class="n">scan</span><span class="p">[</span><span class="n">Order</span><span class="p">]()</span>  <span class="c1"># the next JSON value, over as many lines as it spans</span>
+</code></pre></div>
+<p>The class can be a dataclass, a pydantic model, or a <code>TypedDict</code>, or a
+<code>list</code>, <code>tuple</code>, <code>dict</code>, or optional of one. <code>list[int]</code> is still a line of
+fields; a list of a schema class is a JSON array.</p>
+<p>A dataclass or a <code>TypedDict</code> is built field by field:</p>
+<ul>
+<li><code>int</code> takes a JSON integer, not <code>true</code> and not <code>1.5</code>.</li>
+<li><code>float</code> takes any JSON number.</li>
+<li><code>str</code>, <code>bool</code>, and <code>None</code> take their own kind.</li>
+<li>Containers, unions, <code>Literal</code>, enums, and fixed widths such as <code>ppy.u8</code> are
+  read as declared.</li>
+<li>A field with a default may be missing.</li>
+<li>A key the class does not declare is ignored, as pydantic ignores it by
+  default.</li>
+</ul>
+<p>A mismatch is a <code>ValueError</code> that says where it is and what was there, such
+as <code>$.items[2].price: expected a number, got a string</code>. JSON that does not
+parse is the <code>json</code> module's <code>JSONDecodeError</code>, also a <code>ValueError</code>.</p>
+<p>A pydantic model, or anything that holds one, is validated by pydantic
+itself with its own rules, and its <code>ValidationError</code> is a <code>ValueError</code> too.</p>
+<p><code>ppy.scan[Model]()</code> starts at the next line that is not blank and reads up
+to the line that closes the value's last bracket. The next read starts on
+the line after it.</p>
 <h2 id="ppyread_ints-and-ppyread_token-buffers"><code>ppy.read_ints</code> and <code>ppy.read_token</code>: buffers<a class="headerlink" href="#ppyread_ints-and-ppyread_token-buffers" title="Permanent link">&para;</a></h2>
 <p>The scanner's low-level forms fill a buffer the caller made.</p>
 <ul>
@@ -4202,10 +4281,61 @@ rewrites a module's <code>input</code> idioms only where the module never touche
 <code>sys.stdin</code>.</p>
 </div>
 <h2 id="native-code-and-standalone-binaries">Native code and standalone binaries<a class="headerlink" href="#native-code-and-standalone-binaries" title="Permanent link">&para;</a></h2>
-<p>In native code, <code>ppy.input[int]()</code> and <code>ppy.scan[int]()</code> are calls into the
-runtime. In a standalone binary they are the scanner itself, and where Python
-would raise, the binary says what happened on standard error and stops.
-<code>ppy.input[Buffer[int]]()</code> has no standalone lowering yet.</p>
+<p>A standalone binary reads with the C runtime, the same scanner text. Where
+Python would raise, the binary names the same exception on standard error
+and stops, for example <code>ppy: ValueError: could not convert string to float</code>.</p>
+<table>
+<thead>
+<tr>
+<th>Read</th>
+<th>In a standalone binary</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>ppy.input[int]()</code>, <code>ppy.input[float]()</code></td>
+<td>yes</td>
+</tr>
+<tr>
+<td><code>ppy.input[ppy.i32]()</code> and the other fixed widths</td>
+<td>yes</td>
+</tr>
+<tr>
+<td><code>ppy.input[tuple[int, float]]()</code> of <code>int</code>, <code>float</code>, and fixed widths</td>
+<td>yes</td>
+</tr>
+<tr>
+<td><code>ppy.input[Buffer[int]]()</code>, <code>ppy.input[Buffer[float]]()</code></td>
+<td>yes</td>
+</tr>
+<tr>
+<td><code>ppy.input[list[int]]()</code>, <code>ppy.input[list[float]]()</code></td>
+<td>yes, as a buffer: reading and iterating work, growing it does not</td>
+</tr>
+<tr>
+<td><code>ppy.scan[int]()</code>, <code>ppy.scan[float]()</code>, <code>ppy.scan[tuple[...]]()</code> of numbers</td>
+<td>yes</td>
+</tr>
+<tr>
+<td><code>ppy.scan[Buffer[int]](n)</code>, <code>ppy.scan[Buffer[float]](n)</code></td>
+<td>yes</td>
+</tr>
+<tr>
+<td><code>ppy.input[str]()</code>, <code>ppy.scan[str]()</code>, <code>list[str]</code></td>
+<td>no: native code has no string type yet</td>
+</tr>
+<tr>
+<td>JSON into a schema class</td>
+<td>no: it builds Python objects</td>
+</tr>
+</tbody>
+</table>
+<p>A buffer or list read is bound to a name (<code>values = ppy.input[Buffer[int]]()</code>).
+A tuple read is unpacked or bound to a name. A native <code>print</code> writes a float
+the way <code>repr</code> does, with the shortest digits that read back as the same
+value.</p>
+<p>In <code>ppy run</code>, a function that reads keeps running as Python, since reading
+is an effect, and every form above works there.</p>
 <p><code>E1305</code> names a misuse:</p>
 <ul>
 <li>an argument to a scalar read</li>
