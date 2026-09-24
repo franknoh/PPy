@@ -227,6 +227,8 @@ class ClassInfo:
     is_enum: bool = False
     is_pydantic: bool = False
     is_protocol: bool = False
+    #: A generic class's type parameters: `T` in `class Stack[T]`.
+    type_params: tuple[T.TypeVar_, ...] = ()
 
     def instance(self, args: tuple[T.Type, ...] = ()) -> T.Instance:
         return T.Instance(self.qualname, args, self.mro or (self.qualname, "object"))
@@ -959,7 +961,12 @@ class ProjectSymbols:
     def _resolve_signatures(self, symbols: ModuleSymbols) -> None:
         annotations = self.annotation_resolver(symbols)
         for info in symbols.classes.values():
+            info.type_params = tuple(self._type_params(info, annotations).values())
+        for info in symbols.classes.values():
+            # A generic class's fields and methods may name its parameters.
+            annotations.type_params = {v.name: v for v in info.type_params}
             self._resolve_class_fields(symbols, info, annotations)
+            annotations.type_params = {}
         for info in list(symbols.functions.values()):
             self._resolve_function(symbols, info, annotations)
         for info in symbols.classes.values():
@@ -1045,8 +1052,12 @@ class ProjectSymbols:
     ) -> None:
         if info.params:
             return
-        annotations.type_params = self._type_params(info, annotations)
-        info.type_params = tuple(annotations.type_params.values())
+        own = self._type_params(info, annotations)
+        info.type_params = tuple(own.values())
+        # A method sees its class's type parameters as well as its own; only
+        # its own make it a generic function.
+        outer = {v.name: v for v in owner.type_params} if owner is not None else {}
+        annotations.type_params = {**outer, **own}
         args = info.node.args
         entries: list[tuple[ast.arg, str, ast.expr | None]] = [
             (arg, "positional_only", None) for arg in args.posonlyargs
@@ -1097,8 +1108,10 @@ class ProjectSymbols:
         annotations.type_params = {}
 
     @staticmethod
-    def _type_params(info: FunctionInfo, annotations: AnnotationResolver) -> dict[str, T.TypeVar_]:
-        """The type parameters a `def f[T: Bound]` declares, bounds resolved."""
+    def _type_params(
+        info: FunctionInfo | ClassInfo, annotations: AnnotationResolver
+    ) -> dict[str, T.TypeVar_]:
+        """The type parameters a `def f[T: Bound]` or a `class C[T]` declares, bounds resolved."""
         declared = getattr(info.node, "type_params", None) or ()
         found: dict[str, T.TypeVar_] = {}
         for entry in declared:
@@ -1133,7 +1146,9 @@ class ProjectSymbols:
                     kind=kind,
                     annotated=True,
                 )
-            return ParamInfo(arg.arg, owner.instance(), kind=kind, annotated=True)
+            # `self` in `class Stack[T]` is a `Stack[T]`: its fields and methods
+            # are the class's, with the class's own parameters.
+            return ParamInfo(arg.arg, owner.instance(owner.type_params), kind=kind, annotated=True)
         return ParamInfo(arg.arg, T.UNKNOWN, kind=kind, annotated=False)
 
     def _resolve_module_globals(

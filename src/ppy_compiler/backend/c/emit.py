@@ -229,7 +229,14 @@ _KEYWORDS = frozenset(
     pow fmod hypot round erf erfc tgamma lgamma isnan isinf NAN INFINITY NULL
     int8_t int16_t int32_t int64_t uint8_t uint16_t uint32_t uint64_t intptr_t uintptr_t size_t
     INT_MIN INT_MAX UINT_MAX CHAR_BIT
-    INT64_MIN INT64_MAX UINT64_MAX INT64_C UINT64_C PRId64 PRIu64 SCNd64 SCNu64""".split()  # noqa: SIM905
+    INT64_MIN INT64_MAX UINT64_MAX INT64_C UINT64_C PRId64 PRIu64 SCNd64 SCNu64
+    remove rename tmpfile tmpnam fopen freopen fclose fread fwrite fgetc fputc getc putc getchar
+    putchar gets fgets sprintf snprintf vsnprintf fprintf sscanf fscanf perror feof ferror rewind
+    fseek ftell clearerr setbuf setvbuf ungetc EOF FILE BUFSIZ atoi atol atoll atof strtol strtoul
+    strtoll strtoull strtod strtof qsort bsearch rand srand abs labs llabs div ldiv system getenv
+    atexit memcmp memchr strlen strcpy strncpy strcat strncat strcmp strncmp strchr strrchr strstr
+    strtok strerror time clock signal raise assert errno fmin fmax asin acos atan atan2 sinh cosh
+    tanh asinh acosh atanh cbrt modf frexp ldexp isfinite signbit copysign nan""".split()  # noqa: SIM905
 )
 _IDENTIFIER = re.compile(r"^[A-Za-z_]\w*$")
 _NUMBER = re.compile(r"^(\d[\w.+-]*|\.\d+)$")

@@ -21,6 +21,7 @@ import ast
 from dataclasses import dataclass
 
 from ..analysis import types as T
+from ..analysis.symbols import ClassInfo
 from ..backend.llvm.lowering import Unsupported
 from ..ir import (
     BOOL,
@@ -65,7 +66,7 @@ _BOUNDS = {"floor": 0, "ceiling": 1, "lower": 2, "higher": 3}
 class Shape:
     """What one element or value is, word by word."""
 
-    #: "int", "float", "bool", "tuple", "record", or "collection".
+    #: "int", "float", "bool", "tuple", "record", "collection", or "object".
     kind: str
     #: A tuple's items, or a record's fields: scalar kinds.
     parts: tuple[str, ...] = ()
@@ -76,6 +77,8 @@ class Shape:
     #: A record whose instances compare, field by field (`order=True`).
     ordered: bool = False
     collection: Kind | None = None
+    #: An object's class arguments: `(int,)` for a `Stack[int]`.
+    class_args: tuple[T.Type, ...] = ()
 
     @property
     def words(self) -> int:
@@ -88,7 +91,12 @@ class Shape:
 
     @property
     def handles(self) -> int:
-        return 1 if self.kind == "collection" else 0
+        return 1 if self.kind in {"collection", "object"} else 0
+
+    @property
+    def reference(self) -> bool:
+        """Held by handle: a collection, or an instance of an object class."""
+        return self.kind in {"collection", "object"}
 
     @property
     def comparable(self) -> bool:
@@ -112,6 +120,11 @@ class Shape:
             fields = tuple(zip(self.names, (_SCALARS[p] for p in self.parts), strict=True))
             return StructType(self.record.replace(".", "_"), fields)
         return HANDLE
+
+    @property
+    def spelled(self) -> str:
+        """An object's type written out, as a parameter's element spells it."""
+        return str(T.Instance(self.record, self.class_args, (self.record, "object")))
 
 
 @dataclass(frozen=True, slots=True)
@@ -141,8 +154,8 @@ def spelled(kind: Kind) -> str:
     def shape(item: Shape) -> str:
         if item.kind == "tuple":
             return f"tuple[{', '.join(item.parts)}]"
-        if item.kind == "record":
-            return item.record
+        if item.kind in {"record", "object"}:
+            return item.spelled if item.kind == "object" else item.record
         if item.kind == "collection":
             assert item.collection is not None
             return spelled(item.collection)
@@ -157,8 +170,17 @@ Records = dict[str, tuple[tuple[tuple[str, str], ...], bool]]
 
 
 def shape_of(t: T.Type, records: Records) -> Shape | None:
-    """The shape of a value of type `t`, or None where it has none."""
+    """The shape of a value of type `t`, or None where it has none.
+
+    `Node | None` is a `Node`: an object's handle may be null, which is `None`.
+    """
     base = T.strip_literal(t)
+    if isinstance(base, T.Union_):
+        members = [T.strip_literal(m) for m in base.members if m != T.NONE]
+        if len(members) != 1 or len(members) == len(base.members):
+            return None
+        found = shape_of(members[0], records)
+        return found if found is not None and found.kind == "object" else None
     if base in (T.INT, T.FLOAT, T.BOOL):
         return Shape(str(base))
     if isinstance(base, T.Tuple_) and not base.homogeneous and base.items:
@@ -175,6 +197,8 @@ def shape_of(t: T.Type, records: Records) -> Shape | None:
     if found is None:
         return None
     fields, ordered = found
+    if not fields:
+        return Shape("object", record=base.name, class_args=base.args)
     return Shape(
         "record",
         tuple(kind for _, kind in fields),
@@ -206,10 +230,20 @@ def kind_of(t: T.Type, records: Records) -> Kind | None:
 
 @dataclass(slots=True)
 class Held:
-    """A collection local: its type and the slot holding its handle."""
+    """A collection or object local: its type and the slot holding its handle."""
 
-    kind: Kind
+    kind: Kind | Shape
     slot: Value
+
+
+@dataclass(frozen=True, slots=True)
+class Layout:
+    """An object class's fields, in words: where each starts and what it is."""
+
+    fields: dict[str, tuple[int, Shape]]
+    words: int
+    floats: int
+    handles: int
 
 
 class CollectionLowering:
@@ -243,11 +277,262 @@ class CollectionLowering:
     def _kind_of(self, node: ast.expr) -> Kind | None:
         """The collection an expression denotes, from what the checker said of it."""
         if isinstance(node, ast.Name) and node.id in self.collections:
-            return self.collections[node.id].kind
+            held = self.collections[node.id].kind
+            return held if isinstance(held, Kind) else None
         return kind_of(self._type_of(node), self._records())
 
     def _is_collection(self, node: ast.expr) -> bool:
         return self._kind_of(node) is not None
+
+    def _object_of(self, node: ast.expr) -> Shape | None:
+        """The object class an expression's value is an instance of, if any."""
+        if isinstance(node, ast.Name) and node.id in self.collections:
+            held = self.collections[node.id].kind
+            return held if isinstance(held, Shape) else None
+        found = shape_of(self._type_of(node), self._records())
+        return found if found is not None and found.kind == "object" else None
+
+    def _reference_of(self, node: ast.expr) -> Kind | Shape | None:
+        """A collection or an object: what native code holds `node` by handle as."""
+        return self._kind_of(node) or self._object_of(node)
+
+    def _reference_of_type(self, t: T.Type) -> Kind | Shape | None:
+        found = shape_of(t, self._records())
+        if found is None or not found.reference:
+            return None
+        return found.collection if found.kind == "collection" else found
+
+    # -- objects ------------------------------------------------------------
+
+    def _class_info(self, shape: Shape) -> ClassInfo:
+        classes = self.frontend.analysis.symbols.classes  # type: ignore[attr-defined]
+        info = classes.get(shape.record.rpartition(".")[2])
+        if info is None or info.qualname != shape.record:
+            raise Unsupported(f"`{shape.record}` is defined in another module")
+        return info
+
+    def _layout(self, shape: Shape) -> Layout:
+        """Where each field of an object class sits, with its class arguments in."""
+        cache: dict[tuple[str, tuple[T.Type, ...]], Layout] = self.frontend.__dict__.setdefault(
+            "_object_layouts", {}
+        )
+        key = (shape.record, shape.class_args)
+        found = cache.get(key)
+        if found is not None:
+            return found
+        info = self._class_info(shape)
+        bindings = dict(zip(info.type_params, shape.class_args, strict=False))
+        fields: dict[str, tuple[int, Shape]] = {}
+        offset = floats = handles = 0
+        for name, declared in info.fields.items():
+            if name in info.class_vars:
+                continue
+            field_shape = shape_of(T.substitute(declared, bindings), self._records())
+            if field_shape is None:
+                raise Unsupported(f"field `{name}` of `{info.name}` has no native form")
+            fields[name] = (offset, field_shape)
+            floats |= field_shape.floats << offset
+            handles |= field_shape.handles << offset
+            offset += field_shape.words
+        if offset > 64:
+            raise Unsupported(f"`{info.name}` has more than 64 words of fields")
+        found = Layout(fields, max(offset, 1), floats, handles)
+        cache[key] = found
+        return found
+
+    def _field(self, shape: Shape, name: str) -> tuple[int, Shape]:
+        found = self._layout(shape).fields.get(name)
+        if found is None:
+            raise Unsupported(f"`{shape.record}` has no native field `{name}`")
+        return found
+
+    def _field_address(self, handle: Value, offset: int) -> Value:
+        """Where a field starts: the object's one record, `offset` words in."""
+        record = self._rt("ppy_seq_at", (handle, self._word(0)), HANDLE)
+        if not offset:
+            return record
+        words = core.ptr_offset(self.b, core.cast(self.b, record, PtrType(I64)), self._word(offset))
+        return core.cast(self.b, words, HANDLE)
+
+    def _present(self, handle: Value) -> Value:
+        """Whether a handle is an object: `None` is the null handle."""
+        address = core.cast(self.b, handle, I64)
+        return core.cmp(self.b, "ne", address, self._word(0))
+
+    def _instance(self, shape: Shape, node: ast.Call) -> Value:
+        """`Node(5)`, `Stack[int]()`: a new object, its fields set, an owned handle."""
+        self._use_collections()
+        layout = self._layout(shape)
+        made = self._rt(
+            "ppy_seq_new",
+            (
+                self._word(1),
+                self._word(layout.words),
+                self._word(layout.floats),
+                self._word(layout.handles),
+            ),
+            HANDLE,
+        )
+        info = self._class_info(shape)
+        if "__init__" in info.methods:
+            self._method_call(shape, "__init__", made, node.args, node.keywords, discard=True)
+            return made
+        if not info.is_dataclass:
+            if node.args or node.keywords:
+                raise Unsupported(f"`{info.name}` takes no arguments without an `__init__`")
+            return made
+        given: dict[str, ast.expr] = {}
+        names = list(layout.fields)
+        if len(node.args) > len(names):
+            raise Unsupported(f"`{info.name}` takes {len(names)} fields")
+        given.update(zip(names, node.args, strict=False))
+        for keyword in node.keywords:
+            if keyword.arg is None or keyword.arg in given:
+                raise Unsupported(f"`{info.name}` is built from each field once")
+            given[keyword.arg] = keyword.value
+        defaults = _field_defaults(info.node)
+        for name, (offset, field_shape) in layout.fields.items():
+            value = given.get(name, defaults.get(name))
+            if value is None:
+                raise Unsupported(f"`{info.name}` needs `{name}`, whose default is not a constant")
+            self._store_into(self._field_address(made, offset), field_shape, value, fresh=True)
+        return made
+
+    def _method(self, shape: Shape, attr: str) -> tuple[object, object, str]:
+        """The native function behind a method, instantiated for a generic class."""
+        info = self._class_info(shape)
+        method = info.methods.get(attr)
+        if method is None:
+            raise Unsupported(f"`{info.name}` has no method `{attr}`")
+        frontend = self.frontend
+        if info.type_params:
+            bindings = dict(zip(info.type_params, shape.class_args, strict=True))
+            found = frontend.instantiate(method.qualname, (), bindings)  # type: ignore[attr-defined]
+        else:
+            found = frontend.declared.get(method.qualname)  # type: ignore[attr-defined]
+        if found is None:
+            raise Unsupported(f"`{info.name}.{attr}` has no native lowering")
+        function, signature = found
+        return function, signature, method.qualname
+
+    def _method_call(  # pylint: disable=too-many-arguments,too-many-positional-arguments
+        self,
+        shape: Shape,
+        attr: str,
+        receiver: Value,
+        arguments: list[ast.expr],
+        keywords: list[ast.keyword],
+        *,
+        discard: bool = False,
+    ) -> Value:
+        """`obj.method(args)`: the method's native function, called with the handle first."""
+        if keywords:
+            raise Unsupported(f"`{attr}` takes positional arguments natively")
+        function, signature, qualname = self._method(shape, attr)
+        rest = _Parameters(tuple(signature.parameters[1:]))  # type: ignore[attr-defined]
+        waiting = len(self._temporaries)  # type: ignore[attr-defined]
+        values = self._call_arguments(rest, arguments, qualname)  # type: ignore[attr-defined]
+        temporaries = self._temporaries[waiting:]  # type: ignore[attr-defined]
+        del self._temporaries[waiting:]  # type: ignore[attr-defined]
+        results = function.results  # type: ignore[attr-defined]
+        called = core.call(self.b, function.name, (receiver, *values), results)  # type: ignore[attr-defined]
+        for handle in temporaries:
+            self._release(handle)
+        if not results:
+            if not discard:
+                raise Unsupported(f"`{attr}` returns nothing a caller can use")
+            return self._word(0)
+        result = called.results[0]
+        if discard and result.type == HANDLE:
+            self._release(result)
+        return result
+
+    def _object_method(self, node: ast.Call, discard: bool) -> Value:
+        """A method called on an object expression."""
+        assert isinstance(node.func, ast.Attribute)
+        shape = self._object_of(node.func.value)
+        assert shape is not None
+        handle, owned = self._handle(node.func.value)
+        self._require(self._present(handle), f"`None` has no attribute `{node.func.attr}`")
+        result = self._method_call(
+            shape, node.func.attr, handle, node.args, node.keywords, discard=discard
+        )
+        self._done_with(handle, owned)
+        return result
+
+    def _field_value(self, node: ast.Attribute) -> Value:
+        """`obj.field`, read in place: a field holding a reference lends it."""
+        shape = self._object_of(node.value)
+        assert shape is not None
+        offset, field_shape = self._field(shape, node.attr)
+        handle, owned = self._handle(node.value)
+        self._require(self._present(handle), f"`None` has no attribute `{node.attr}`")
+        value = self._read(self._field_address(handle, offset), field_shape)
+        if owned:
+            if field_shape.reference:
+                raise Unsupported("a field read from a temporary object outlives it")
+            self._release(handle)
+        return value
+
+    def _field_store(self, target: ast.Attribute, value: ast.expr) -> None:
+        """`obj.field = value`: a reference stored takes one, the old one is let go."""
+        shape = self._object_of(target.value)
+        assert shape is not None
+        offset, field_shape = self._field(shape, target.attr)
+        handle, owned = self._handle(target.value)
+        self._require(self._present(handle), f"`None` has no attribute `{target.attr}`")
+        self._store_into(self._field_address(handle, offset), field_shape, value, fresh=False)
+        self._done_with(handle, owned)
+
+    def _identity(self, node: ast.Compare) -> Value | None:
+        """`x is None`, `x is not y`: handles compared as addresses."""
+        operator = node.ops[0]
+        if not isinstance(operator, (ast.Is, ast.IsNot)):
+            return None
+        left, right = node.left, node.comparators[0]
+        sides = (left, right)
+        nones = [isinstance(s, ast.Constant) and s.value is None for s in sides]
+        if not all(
+            n or self._reference_of(s) is not None for s, n in zip(sides, nones, strict=True)
+        ):
+            return None
+        addresses = []
+        for side in sides:
+            handle, owned = self._handle(side)
+            addresses.append(core.cast(self.b, handle, I64))
+            self._done_with(handle, owned)
+        predicate = "eq" if isinstance(operator, ast.Is) else "ne"
+        return core.cmp(self.b, predicate, addresses[0], addresses[1])
+
+    def _object_truth(self, node: ast.expr, empty: bool = False) -> Value | None:
+        """An object as a condition: `__bool__` or `__len__` where the class has one,
+        and otherwise whether it is there at all."""
+        shape = self._object_of(node)
+        if shape is None:
+            return None
+        info = self._class_info(shape)
+        handle, owned = self._handle(node)
+        if "__bool__" in info.methods or "__len__" in info.methods:
+            attr = "__bool__" if "__bool__" in info.methods else "__len__"
+            self._require(self._present(handle), "`None` has no length")
+            found = self._method_call(shape, attr, handle, [], [])
+            truth = self._truth(found)  # type: ignore[attr-defined]
+        else:
+            truth = self._present(handle)
+        self._done_with(handle, owned)
+        if empty:
+            return core.bitwise(self.b, "xor", truth, core.const(self.b, True, BOOL))
+        return truth
+
+    def _object_length(self, node: ast.expr) -> Value | None:
+        shape = self._object_of(node)
+        if shape is None:
+            return None
+        handle, owned = self._handle(node)
+        self._require(self._present(handle), "`None` has no length")
+        found = self._method_call(shape, "__len__", handle, [], [])
+        self._done_with(handle, owned)
+        return found
 
     # -- value classes ---------------------------------------------------
 
@@ -258,7 +543,12 @@ class CollectionLowering:
         if not isinstance(called, T.ClassObject) or not isinstance(made, T.Instance):
             return None
         found = self._records().get(made.name)
-        if found is None:
+        if found is None or not found[0]:
+            return None
+        info = self.frontend.analysis.symbols.classes.get(made.name.rpartition(".")[2])  # type: ignore[attr-defined]
+        if info is None or not info.is_dataclass or "__init__" in info.methods:
+            # A class with its own `__init__` takes that `__init__`'s arguments,
+            # which native code does not run for a value class.
             return None
         fields, _ = found
         given: dict[str, ast.expr] = {}
@@ -286,7 +576,7 @@ class CollectionLowering:
     def _record_value(self, node: ast.expr) -> Value | None:
         """A value-class expression's struct, where it has one natively."""
         made = T.strip_literal(self._type_of(node))
-        if not isinstance(made, T.Instance) or made.name not in self._records():
+        if not isinstance(made, T.Instance) or not self._records().get(made.name, ((), False))[0]:
             return None
         value = self._expr(node)  # type: ignore[attr-defined]
         return value if isinstance(value.type, StructType) else None
@@ -381,18 +671,23 @@ class CollectionLowering:
             return None
         return kind
 
-    def _make_collection(self, name: str, value: ast.expr) -> bool:
-        """`q = ppy.Deque[int]()`, or any binding of a name to a collection."""
-        kind = self._kind_of(value) if not isinstance(value, ast.Name) else None
+    def _make_collection(self, name: str, value: ast.expr, declared: T.Type | None = None) -> bool:
+        """`q = ppy.Deque[int]()`, `root = Node(1)`, `root = None`: any binding of a
+        name to a collection or an object."""
+        kind = self._reference_of(value) if not isinstance(value, ast.Name) else None
         if isinstance(value, ast.Name) and value.id in self.collections:
             kind = self.collections[value.id].kind
+        if kind is None and declared is not None:
+            kind = self._reference_of_type(declared)
+        if kind is None and name in self.collections:
+            kind = self.collections[name].kind
         if kind is None:
             return False
         handle, owned = self._handle(value)
         self._bind(name, kind, handle, owned)
         return True
 
-    def _bind(self, name: str, kind: Kind, handle: Value, owned: bool) -> None:
+    def _bind(self, name: str, kind: Kind | Shape, handle: Value, owned: bool) -> None:
         """`name` now holds `handle`: one reference taken, the old one let go."""
         held = self.collections.get(name)
         if held is not None and held.kind != kind:
@@ -411,7 +706,7 @@ class CollectionLowering:
         core.store(self.b, handle, held.slot)
         self._release(old)
 
-    def _bind_parameter(self, name: str, kind: Kind, argument: Value) -> None:
+    def _bind_parameter(self, name: str, kind: Kind | Shape, argument: Value) -> None:
         """A collection parameter: the caller's, held for the call like any local."""
         slot = self._alloca(HANDLE, name)  # type: ignore[attr-defined]
         core.store(self.b, argument, slot)
@@ -432,11 +727,28 @@ class CollectionLowering:
         one taken out of another, one a callee returned); the use that ends
         it keeps it or lets it go. A borrowed handle is read in place.
         """
+        if isinstance(node, ast.Constant) and node.value is None:
+            return self._rt("ppy_coll_none", (), HANDLE), True
         if isinstance(node, ast.Name):
             held = self.collections.get(node.id)
             if held is None:
                 raise Unsupported(f"`{node.id}` is not a native collection")
             return core.load(self.b, held.slot), False
+        if isinstance(node, ast.Attribute) and self._object_of(node.value) is not None:
+            return self._field_value(node), False
+        if isinstance(node, ast.Call) and not isinstance(node.func, ast.Subscript | ast.Attribute):
+            made = self._object_of(node)
+            called = T.strip_literal(self._type_of(node.func))
+            if made is not None and isinstance(called, T.ClassObject):
+                return self._instance(made, node), True
+        if (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Subscript)
+            and isinstance(T.strip_literal(self._type_of(node.func)), T.ClassObject)
+        ):
+            made = self._object_of(node)
+            if made is not None:
+                return self._instance(made, node), True
         kind = self._constructed(node)
         if kind is not None:
             assert isinstance(node, ast.Call)
@@ -450,7 +762,7 @@ class CollectionLowering:
             return value, False
         if isinstance(node, ast.Call):
             if isinstance(node.func, ast.Attribute) and self._is_collection(node.func.value):
-                found = self._method(node.func.value, node.func.attr, node)
+                found = self._collection_method(node.func.value, node.func.attr, node)
                 return found, _OWNED_RESULTS.get(node.func.attr, False)
             return self._expr(node), True  # type: ignore[attr-defined]
         raise Unsupported(f"`{ast.unparse(node)}` has no native collection form")
@@ -458,7 +770,7 @@ class CollectionLowering:
     def _receiver(self, node: ast.expr) -> tuple[Kind, Value, bool]:
         """The collection a method, an index, a loop, or `len` works on."""
         kind = self._kind_of(node)
-        if kind is None:
+        if kind is None or not isinstance(kind, Kind):
             raise Unsupported(f"`{ast.unparse(node)}` is not a native collection")
         handle, owned = self._handle(node)
         return kind, handle, owned
@@ -477,7 +789,7 @@ class CollectionLowering:
 
     def _read(self, address: Value, shape: Shape) -> Value:
         """The element at `address`, as the IR value of its shape."""
-        if shape.kind == "collection":
+        if shape.reference:
             return core.load(self.b, core.cast(self.b, address, _pointer(address, HANDLE)))
         items = [self._read_word(address, i, kind) for i, kind in enumerate(_kinds(shape))]
         if shape.kind == "tuple":
@@ -500,7 +812,7 @@ class CollectionLowering:
 
     def _write(self, address: Value, shape: Shape, value: Value) -> None:
         """`value` into the element at `address`, word by word."""
-        if shape.kind == "collection":
+        if shape.reference:
             core.store(self.b, value, core.cast(self.b, address, _pointer(address, HANDLE)))
             return
         if shape.kind == "tuple":
@@ -520,7 +832,7 @@ class CollectionLowering:
     def _value(self, node: ast.expr, shape: Shape) -> tuple[Value, bool]:
         """An expression as an element of `shape`: its IR value, and whether it is
         an owned handle (a collection element only)."""
-        if shape.kind == "collection":
+        if shape.reference:
             return self._handle(node)
         if shape.kind == "tuple":
             items = self._tuple_expr(node)  # type: ignore[attr-defined]
@@ -547,7 +859,7 @@ class CollectionLowering:
         """An element written where one may already be: a collection stored takes a
         reference, and the one it replaces (unless the slot is `fresh`) is let go."""
         value, owned = self._value(node, shape)
-        if shape.kind != "collection":
+        if not shape.reference:
             self._write(address, shape, value)
             return
         if not owned:
@@ -622,12 +934,12 @@ class CollectionLowering:
             return self._word(0)
         found = self._read(address, shape)
         if owned:
-            if shape.kind == "collection":
+            if shape.reference:
                 raise Unsupported("an element read from a temporary collection outlives it")
             self._release(handle)
         return found
 
-    def _method(self, receiver: ast.expr, attr: str, node: ast.Call) -> Value:
+    def _collection_method(self, receiver: ast.expr, attr: str, node: ast.Call) -> Value:
         """A method of a collection, as calls into the runtime."""
         kind, handle, owned = self._receiver(receiver)
         if node.keywords:
@@ -900,11 +1212,12 @@ class CollectionLowering:
 
     def _bind_element(self, target: ast.expr, shape: Shape, value: Value) -> None:
         """A loop target, or a name, bound to an element read in place."""
-        if shape.kind == "collection":
+        if shape.reference:
             if not isinstance(target, ast.Name):
                 raise Unsupported("a collection element is bound to a name")
-            assert shape.collection is not None
-            self._bind(target.id, shape.collection, value, owned=False)
+            held = shape.collection if shape.kind == "collection" else shape
+            assert held is not None
+            self._bind(target.id, held, value, owned=False)
             return
         if shape.kind == "tuple":
             items = [core.tuple_extract(self.b, value, i) for i in range(shape.words)]
@@ -935,3 +1248,24 @@ def _pointer(address: Value, pointee: IRType) -> PtrType:
     """A pointer to `pointee` in the same memory as `address`: a stack buffer stays one."""
     assert isinstance(address.type, PtrType)
     return PtrType(pointee, address.type.address_space)
+
+
+@dataclass(frozen=True, slots=True)
+class _Parameters:
+    """A signature's parameters after the receiver, for matching call arguments."""
+
+    parameters: tuple[object, ...]
+
+
+def _field_defaults(node: ast.ClassDef) -> dict[str, ast.expr]:
+    """A dataclass's fields with a constant default (`None` included): the rest
+    have to be given when native code builds one."""
+    found: dict[str, ast.expr] = {}
+    for item in node.body:
+        if (
+            isinstance(item, ast.AnnAssign)
+            and isinstance(item.target, ast.Name)
+            and isinstance(item.value, ast.Constant)
+        ):
+            found[item.target.id] = item.value
+    return found

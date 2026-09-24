@@ -1631,7 +1631,8 @@ def test_a_class_with_a_non_scalar_field_stays_boxed(write, analyze):
         """,
     )
     bundle = analyze(path, backend="llvm")
-    assert "boxed.Holder" not in _layouts(bundle)
+    # No value layout: a `str` field has no scalar slot to flatten into.
+    assert not _layouts(bundle).get("boxed.Holder")
     assert "boxed.size_of" in _collect(bundle)["boxed"].rejected
 
 

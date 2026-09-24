@@ -286,7 +286,7 @@ natively, so it runs as Python when called from Python.
   made so far are not freed.
 - A standalone binary reports a failed guard with a generic message rather
   than the exception's text.
-- User classes, and generic classes such as `class Stack[T]`, have no native
-  form yet.
+- A collection holds a user class's instances natively when the class is a
+  value class or an object class; see [Classes](classes.md).
 
 Examples: [Collections](../howto/47_collections.md).
