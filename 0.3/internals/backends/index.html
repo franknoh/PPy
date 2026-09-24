@@ -6,7 +6,7 @@
       <meta charset="utf-8">
       <meta name="viewport" content="width=device-width,initial-scale=1">
       
-        <meta name="description" content="A statically analyzable language in Python's syntax, and a compiler whose three paths agree">
+        <meta name="description" content="A compiler for a statically analyzable subset of Python">
       
       
       
@@ -22,12 +22,12 @@
         
       
       
-      <link rel="icon" href="../../assets/images/favicon.png">
+      <link rel="icon" href="../../assets/logo.svg">
       <meta name="generator" content="mkdocs-ProperDocs 1.6.7, mkdocs-material-9.7.7">
     
     
       
-        <title>Backends - PPY</title>
+        <title>Backends - PPy</title>
       
     
     
@@ -48,8 +48,8 @@
         
         
         <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
-        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=IBM+Plex+Sans:300,300i,400,400i,700,700i%7CJetBrains+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"IBM Plex Sans";--md-code-font:"JetBrains Mono"}</style>
       
     
     
@@ -75,7 +75,7 @@
     
     
     
-    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="deep-purple">
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="custom" data-md-color-accent="custom">
   
     
     <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
@@ -104,10 +104,9 @@
 
 <header class="md-header md-header--shadow md-header--lifted" data-md-component="header">
   <nav class="md-header__inner md-grid" aria-label="Header">
-    <a href="../.." title="PPY" class="md-header__button md-logo" aria-label="PPY" data-md-component="logo">
+    <a href="../.." title="PPy" class="md-header__button md-logo" aria-label="PPy" data-md-component="logo">
       
-  
-  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+  <img src="../../assets/logo.svg" alt="logo">
 
     </a>
     <label class="md-header__button md-icon" for="__drawer">
@@ -118,7 +117,7 @@
       <div class="md-header__ellipsis">
         <div class="md-header__topic">
           <span class="md-ellipsis">
-            PPY
+            PPy
           </span>
         </div>
         <div class="md-header__topic" data-md-component="header-topic">
@@ -137,7 +136,7 @@
     
     
     
-    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="deep-purple"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="custom" data-md-color-accent="custom"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
     
       <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"/></svg>
@@ -147,7 +146,7 @@
     
     
     
-    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="deep-purple"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="custom" data-md-color-accent="custom"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
     
       <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"/></svg>
@@ -213,7 +212,7 @@
   </div>
   <div class="md-source__repository">
     franknoh/PPy
-    <span class="ppy-source-version" title="Documentation version">v0.3.6</span>
+    <span class="ppy-source-version" title="Documentation version">v0.3.7</span>
   </div>
 </a>
       </div>
@@ -250,36 +249,20 @@
   
   
   
-    <li class="md-tabs__item">
-      <a href="../../getting-started/" class="md-tabs__link">
-        
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../getting-started/" class="md-tabs__link">
+          
   
   
     
   
-  Getting started
+  Learn
 
-      </a>
-    </li>
-  
-
-      
-        
-  
-  
-  
-  
-    <li class="md-tabs__item">
-      <a href="../../installing/" class="md-tabs__link">
-        
-  
-  
+        </a>
+      </li>
     
-  
-  Installing
-
-      </a>
-    </li>
   
 
       
@@ -320,47 +303,6 @@
     
   
   Examples
-
-        </a>
-      </li>
-    
-  
-
-      
-        
-  
-  
-  
-  
-    <li class="md-tabs__item">
-      <a href="../../cli/" class="md-tabs__link">
-        
-  
-  
-    
-  
-  CLI
-
-      </a>
-    </li>
-  
-
-      
-        
-  
-  
-  
-  
-    
-    
-      <li class="md-tabs__item">
-        <a href="../../api/" class="md-tabs__link">
-          
-  
-  
-    
-  
-  API
 
         </a>
       </li>
@@ -420,25 +362,6 @@
   
   
     <li class="md-tabs__item">
-      <a href="../../contributing/" class="md-tabs__link">
-        
-  
-  
-    
-  
-  Contributing
-
-      </a>
-    </li>
-  
-
-      
-        
-  
-  
-  
-  
-    <li class="md-tabs__item">
       <a href="../../changelog/" class="md-tabs__link">
         
   
@@ -480,13 +403,12 @@
 
 <nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
   <label class="md-nav__title" for="__drawer">
-    <a href="../.." title="PPY" class="md-nav__button md-logo" aria-label="PPY" data-md-component="logo">
+    <a href="../.." title="PPy" class="md-nav__button md-logo" aria-label="PPy" data-md-component="logo">
       
-  
-  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+  <img src="../../assets/logo.svg" alt="logo">
 
     </a>
-    PPY
+    PPy
   </label>
   
     <div class="md-nav__source">
@@ -497,7 +419,7 @@
   </div>
   <div class="md-source__repository">
     franknoh/PPy
-    <span class="ppy-source-version" title="Documentation version">v0.3.6</span>
+    <span class="ppy-source-version" title="Documentation version">v0.3.7</span>
   </div>
 </a>
     </div>
@@ -537,6 +459,64 @@
   
   
   
+    
+    
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Learn
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Learn
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
     <li class="md-nav__item">
       <a href="../../getting-started/" class="md-nav__link">
         
@@ -557,9 +537,10 @@
     </li>
   
 
-    
-      
-      
+              
+            
+              
+                
   
   
   
@@ -584,6 +565,14 @@
     </li>
   
 
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
     
       
       
@@ -596,6 +585,10 @@
       
         
           
+        
+      
+        
+      
         
       
         
@@ -643,7 +636,7 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
         
           
           <div class="md-nav__link md-nav__container">
@@ -665,14 +658,14 @@
             </a>
             
               
-              <label class="md-nav__link " for="__nav_4" id="__nav_4_label" tabindex="0">
+              <label class="md-nav__link " for="__nav_3" id="__nav_3_label" tabindex="0">
                 <span class="md-nav__icon md-icon"></span>
               </label>
             
           </div>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_4">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -727,6 +720,62 @@
     
   
     Directives and markers
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guide/collections/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Collections
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guide/classes/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Classes
   
 
     
@@ -1177,7 +1226,7 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
         
           
           <div class="md-nav__link md-nav__container">
@@ -1199,14 +1248,14 @@
             </a>
             
               
-              <label class="md-nav__link " for="__nav_5" id="__nav_5_label" tabindex="0">
+              <label class="md-nav__link " for="__nav_4" id="__nav_4_label" tabindex="0">
                 <span class="md-nav__icon md-icon"></span>
               </label>
             
           </div>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_5">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -1294,10 +1343,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5_3" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_3" >
         
           
-          <label class="md-nav__link" for="__nav_5_3" id="__nav_5_3_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_4_3" id="__nav_4_3_label" tabindex="0">
             
   
   
@@ -1315,8 +1364,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_5_3_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_5_3">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_3">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -1731,6 +1780,8 @@
       
         
       
+        
+      
     
     
     
@@ -1744,10 +1795,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5_4" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_4" >
         
           
-          <label class="md-nav__link" for="__nav_5_4" id="__nav_5_4_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_4_4" id="__nav_4_4_label" tabindex="0">
             
   
   
@@ -1765,8 +1816,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_5_4_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_5_4">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_4">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -2112,6 +2163,34 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../howto/47_collections/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Collections
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -2150,10 +2229,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5_5" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_5" >
         
           
-          <label class="md-nav__link" for="__nav_5_5" id="__nav_5_5_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_4_5" id="__nav_4_5_label" tabindex="0">
             
   
   
@@ -2171,8 +2250,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_5_5_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_5_5">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_5">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -2348,10 +2427,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5_6" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_6" >
         
           
-          <label class="md-nav__link" for="__nav_5_6" id="__nav_5_6_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_4_6" id="__nav_4_6_label" tabindex="0">
             
   
   
@@ -2369,8 +2448,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_5_6_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_5_6">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_6">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -2756,10 +2835,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5_7" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_7" >
         
           
-          <label class="md-nav__link" for="__nav_5_7" id="__nav_5_7_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_4_7" id="__nav_4_7_label" tabindex="0">
             
   
   
@@ -2777,8 +2856,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_5_7_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_5_7">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_7">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -2949,6 +3028,85 @@
   
   
   
+    
+    
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../reference/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_5" id="__nav_5_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+  
+  
     <li class="md-nav__item">
       <a href="../../cli/" class="md-nav__link">
         
@@ -2957,7 +3115,7 @@
   <span class="md-ellipsis">
     
   
-    CLI
+    Command line
   
 
     
@@ -2969,9 +3127,122 @@
     </li>
   
 
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/diagnostics/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
     
-      
-      
+  
+    Diagnostics
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/config/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/performance/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Performance
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/compatibility/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Compatibility
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
   
   
   
@@ -3006,7 +3277,7 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5_7" >
         
           
           <div class="md-nav__link md-nav__container">
@@ -3017,7 +3288,7 @@
   <span class="md-ellipsis">
     
   
-    API
+    Python API
   
 
     
@@ -3028,18 +3299,18 @@
             </a>
             
               
-              <label class="md-nav__link " for="__nav_7" id="__nav_7_label" tabindex="0">
+              <label class="md-nav__link " for="__nav_5_7" id="__nav_5_7_label" tabindex="0">
                 <span class="md-nav__icon md-icon"></span>
               </label>
             
           </div>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_7">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_5_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5_7">
             <span class="md-nav__icon md-icon"></span>
             
   
-    API
+    Python API
   
 
           </label>
@@ -3193,192 +3464,6 @@
     </li>
   
 
-    
-      
-      
-  
-  
-  
-  
-    
-    
-      
-        
-          
-        
-      
-        
-      
-        
-      
-        
-      
-        
-      
-    
-    
-    
-      
-      
-        
-      
-    
-    
-    <li class="md-nav__item md-nav__item--nested">
-      
-        
-        
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" >
-        
-          
-          <div class="md-nav__link md-nav__container">
-            <a href="../../reference/" class="md-nav__link ">
-              
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Reference
-  
-
-    
-  </span>
-  
-  
-
-            </a>
-            
-              
-              <label class="md-nav__link " for="__nav_8" id="__nav_8_label" tabindex="0">
-                <span class="md-nav__icon md-icon"></span>
-              </label>
-            
-          </div>
-        
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_8">
-            <span class="md-nav__icon md-icon"></span>
-            
-  
-    Reference
-  
-
-          </label>
-          <ul class="md-nav__list" data-md-scrollfix>
-            
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../reference/diagnostics/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Diagnostics
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../reference/config/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Configuration
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../reference/performance/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Performance
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../reference/compatibility/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Compatibility
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
               
             
           </ul>
@@ -3419,6 +3504,8 @@
       
         
       
+        
+      
     
     
     
@@ -3435,7 +3522,7 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9" checked>
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" checked>
         
           
           <div class="md-nav__link md-nav__container">
@@ -3457,14 +3544,14 @@
             </a>
             
               
-              <label class="md-nav__link " for="__nav_9" id="__nav_9_label" tabindex="">
+              <label class="md-nav__link " for="__nav_6" id="__nav_6_label" tabindex="">
                 <span class="md-nav__icon md-icon"></span>
               </label>
             
           </div>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="true">
-          <label class="md-nav__title" for="__nav_9">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_6">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -3691,6 +3778,34 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Where a backend stands">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#above-the-boundary" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Above the boundary
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#below-the-boundary" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Below the boundary
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -3713,6 +3828,45 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="The interface">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-api-version" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The API version
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#toolchain-checks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Toolchain checks
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#backendcontext" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        BackendContext
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -3724,6 +3878,45 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Discovery and loading">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#load-errors" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Load errors
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#declaring-formats" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Declaring formats
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#builtin-backends" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Builtin backends
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -3734,6 +3927,34 @@
       
     </span>
   </a>
+  
+    <nav class="md-nav" aria-label="Passes, validation, order">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-backend-stage" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The backend stage
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#verification-and-validation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Verification and validation
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -3757,6 +3978,34 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Emit scope">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#module-scope" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Module scope
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#program-scope" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Program scope
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -3768,6 +4017,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="The cache key">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#why-the-distribution-version-is-in-the-key" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why the distribution version is in the key
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -3778,6 +4044,34 @@
       
     </span>
   </a>
+  
+    <nav class="md-nav" aria-label="Building">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#building-from-ppyir" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Building from .ppyir
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#llvm-only-options" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LLVM-only options
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -3793,10 +4087,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#what-is-not-there" class="md-nav__link">
+  <a href="#limitations" class="md-nav__link">
     <span class="md-ellipsis">
       
-        What is not there
+        Limitations
       
     </span>
   </a>
@@ -3868,15 +4162,8 @@
 
               
             
-          </ul>
-        </nav>
-      
-    </li>
-  
-
-    
-      
-      
+              
+                
   
   
   
@@ -3898,6 +4185,14 @@
   
 
       </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
     </li>
   
 
@@ -3964,6 +4259,34 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Where a backend stands">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#above-the-boundary" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Above the boundary
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#below-the-boundary" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Below the boundary
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -3986,6 +4309,45 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="The interface">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-api-version" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The API version
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#toolchain-checks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Toolchain checks
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#backendcontext" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        BackendContext
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -3997,6 +4359,45 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Discovery and loading">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#load-errors" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Load errors
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#declaring-formats" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Declaring formats
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#builtin-backends" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Builtin backends
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -4007,6 +4408,34 @@
       
     </span>
   </a>
+  
+    <nav class="md-nav" aria-label="Passes, validation, order">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-backend-stage" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The backend stage
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#verification-and-validation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Verification and validation
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -4030,6 +4459,34 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Emit scope">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#module-scope" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Module scope
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#program-scope" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Program scope
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -4041,6 +4498,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="The cache key">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#why-the-distribution-version-is-in-the-key" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why the distribution version is in the key
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -4051,6 +4525,34 @@
       
     </span>
   </a>
+  
+    <nav class="md-nav" aria-label="Building">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#building-from-ppyir" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Building from .ppyir
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#llvm-only-options" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LLVM-only options
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -4066,10 +4568,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#what-is-not-there" class="md-nav__link">
+  <a href="#limitations" class="md-nav__link">
     <span class="md-ellipsis">
       
-        What is not there
+        Limitations
       
     </span>
   </a>
@@ -4098,10 +4600,10 @@
 
 <h1 id="backends">Backends<a class="headerlink" href="#backends" title="Permanent link">&para;</a></h1>
 <p>A backend turns the canonical IR into something else: LLVM IR and objects,
-C, PTX, StableHLO, or -- from a package of its own -- code for an
-accelerator the compiler has never heard of. This page is the contract
-between the compiler and a backend, builtin or installed, and what it
-takes to write one. The interface itself is documented from the source in
+C, PTX, StableHLO, or (from a package of its own) code for an accelerator the
+compiler has never heard of. This page is the contract between the compiler
+and a backend, builtin or installed, and covers what it takes to write one.
+The interface itself is documented from the source in
 <a href="../../api/backends/">Backend API</a>.</p>
 <h2 id="where-a-backend-stands">Where a backend stands<a class="headerlink" href="#where-a-backend-stands" title="Permanent link">&para;</a></h2>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>source → frontend → analysis → typed AST → canonical IR
@@ -4114,27 +4616,33 @@ takes to write one. The interface itself is documented from the source in
 <a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>                                               ▼
 <a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>                                     emit, or build
 </code></pre></div>
-<p>Everything above the boundary is one road, <code>driver/ir_pipeline.py</code>:
-<code>canonical_ir_modules(bundle)</code> is the canonical IR of every module in a
-project after the shared passes, <code>optimize_shared_ir(module, level)</code> those
-passes over one module. The LLVM backend, the C backend, the device
-backends, <code>ppy emit ir</code>, <code>ppy inspect --stage</code>, and an external backend
-all take what those two hand back; none of them re-reads the Python AST or
-the checker's tables, and none of them may. A backend that needs to know
-something about the program reads it off the IR -- the types, the
-attributes (<code>ppy.qualname</code>, <code>ppy.export</code>, the effects), the locations --
-which is why the frontend writes all of it there.</p>
+<h3 id="above-the-boundary">Above the boundary<a class="headerlink" href="#above-the-boundary" title="Permanent link">&para;</a></h3>
+<p>Everything above the boundary is one road, <code>driver/ir_pipeline.py</code>:</p>
+<ul>
+<li><code>canonical_ir_modules(bundle)</code> is the canonical IR of every module in a
+  project after the shared passes.</li>
+<li><code>optimize_shared_ir(module, level)</code> runs those passes over one module.</li>
+</ul>
+<p>The LLVM backend, the C backend, the device backends, <code>ppy emit ir</code>,
+<code>ppy inspect --stage</code>, and an external backend all take what those two hand
+back. None of them re-reads the Python AST or the checker's tables, and none
+of them may. A backend that needs to know something about the program reads
+it off the IR: the types, the attributes (<code>ppy.qualname</code>, <code>ppy.export</code>, the
+effects), the locations. That is why the frontend writes all of it there.</p>
+<h3 id="below-the-boundary">Below the boundary<a class="headerlink" href="#below-the-boundary" title="Permanent link">&para;</a></h3>
 <p>Below the boundary the backend is on its own: its passes, its validation,
 its emission. Nothing it does reaches back up.</p>
 <h2 id="plugins-and-backends">Plugins and backends<a class="headerlink" href="#plugins-and-backends" title="Permanent link">&para;</a></h2>
-<p>They are two extensions, kept apart. A <a href="../plugins/">plugin</a> models a
-library: it types the calls and attributes of the modules it claims,
-declares their effects, says how each recognized operation lowers as a
-backend-neutral spec, and may register dialects, patterns, lowerings, and
-passes for the IR. A backend makes code from the IR. A plugin never emits;
-a backend never types a call. An accelerator vendor may ship both -- a
-plugin for its library's operations, a backend for its device -- as two
-entry points in two groups.</p>
+<p>They are two extensions, kept apart.</p>
+<ul>
+<li>A <a href="../plugins/">plugin</a> models a library. It types the calls and attributes
+  of the modules it claims, declares their effects, says how each recognized
+  operation lowers as a backend-neutral spec, and may register dialects,
+  patterns, lowerings, and passes for the IR. A plugin never emits.</li>
+<li>A backend makes code from the IR. A backend never types a call.</li>
+</ul>
+<p>An accelerator vendor may ship both (a plugin for its library's operations, a
+backend for its device) as two entry points in two groups.</p>
 <h2 id="the-interface">The interface<a class="headerlink" href="#the-interface" title="Permanent link">&para;</a></h2>
 <p>A backend is a class extending <code>ppy_compiler.backend.Backend</code>, with a
 <code>name</code>, an <code>api_version</code>, and these methods, every one with a default:</p>
@@ -4180,75 +4688,104 @@ entry points in two groups.</p>
 </tr>
 </tbody>
 </table>
+<h3 id="the-api-version">The API version<a class="headerlink" href="#the-api-version" title="Permanent link">&para;</a></h3>
 <p><code>BACKEND_API_VERSION</code> numbers the interface, independently of the
-compiler's version, and an external backend declares the version it
-implements <strong>as a literal of its own</strong>:</p>
+compiler's version. An external backend declares the version it implements
+<strong>as a literal of its own</strong>:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="k">class</span><span class="w"> </span><span class="nc">MyBackend</span><span class="p">(</span><span class="n">Backend</span><span class="p">):</span>
 <a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>    <span class="n">api_version</span> <span class="o">=</span> <span class="mi">1</span>
 </code></pre></div>
-<p>Not <code>api_version = BACKEND_API_VERSION</code>: a package that spells the constant
-is rewritten by every compiler it is imported into, so a backend written
-against version 1 would call itself version 2 the moment a version-2
-compiler imported it, and the number would catch nothing. The base class
-declares no version at all, and a backend that declares none is refused
-with what to write instead -- an inherited version is not a declared one.
-A backend declaring a version this compiler does not speak is refused with
-both numbers. A backend package with a base class of its own may declare
-once there for all of them.</p>
+<p>Do not write <code>api_version = BACKEND_API_VERSION</code>. A package that spells the
+constant is rewritten by every compiler it is imported into. A backend
+written against version 1 would call itself version 2 the moment a version-2
+compiler imported it, and the number would catch nothing.</p>
+<ul>
+<li>The base class declares no version at all. A backend that declares none is
+  refused with what to write instead: an inherited version is not a declared
+  one.</li>
+<li>A backend declaring a version this compiler does not speak is refused with
+  both numbers.</li>
+<li>A backend package with a base class of its own may declare once there for
+  all of them.</li>
+</ul>
 <p>The compiler's own backends ship with the interface and are upgraded with
 it, so they track the constant; nothing installed should.</p>
-<p>An <code>EmitFormat</code> checks <code>toolchain_status()</code> before analysis by default.
-A format that only writes source can declare <code>requires_toolchain=False</code>
-to emit without an installed SDK. This applies to both module and program
-scope; validation and passes still run. <code>ppy build</code> always checks the
-backend's toolchain, regardless of its formats' emission requirements.
-Packages using this field must require <code>ppy-lang&gt;=0.3.2</code>; existing backend
-API version 1 implementations continue to load with the default behavior.</p>
-<p>The <code>BackendContext</code> a backend receives with the IR carries the project
-root and configuration, the backend's own table from <code>pyproject.toml</code>
-(<code>backend_config</code>), the optimization level, the <code>target</code> that table names,
-the dialect registry the IR was verified against, the plugin fingerprints,
-the entry file for a build of one, the artifact identity per module (the
-cache key below), and <code>note()</code> for remarks the driver prints.</p>
+<h3 id="toolchain-checks">Toolchain checks<a class="headerlink" href="#toolchain-checks" title="Permanent link">&para;</a></h3>
+<p>An <code>EmitFormat</code> checks <code>toolchain_status()</code> before analysis by default. A
+format that only writes source can declare <code>requires_toolchain=False</code> to emit
+without an installed SDK.</p>
+<ul>
+<li>This applies to both module and program scope; validation and passes still
+  run.</li>
+<li><code>ppy build</code> always checks the backend's toolchain, regardless of its
+  formats' emission requirements.</li>
+<li>Packages using this field must require <code>ppy-lang&gt;=0.3.2</code>. Existing backend
+  API version 1 implementations continue to load with the default behavior.</li>
+</ul>
+<h3 id="backendcontext"><code>BackendContext</code><a class="headerlink" href="#backendcontext" title="Permanent link">&para;</a></h3>
+<p>The <code>BackendContext</code> a backend receives with the IR carries:</p>
+<ul>
+<li>the project root and configuration</li>
+<li>the backend's own table from <code>pyproject.toml</code> (<code>backend_config</code>)</li>
+<li>the optimization level</li>
+<li>the <code>target</code> that table names</li>
+<li>the dialect registry the IR was verified against</li>
+<li>the plugin fingerprints</li>
+<li>the entry file for a build of one</li>
+<li>the artifact identity per module (the cache key below)</li>
+<li><code>note()</code> for remarks the driver prints</li>
+</ul>
 <h2 id="discovery-and-loading">Discovery and loading<a class="headerlink" href="#discovery-and-loading" title="Permanent link">&para;</a></h2>
 <p>An external backend is a distribution with an entry point in the
 <code>ppy.backends</code> group, the same way a plugin is one in <code>ppy.plugins</code>:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="k">[project.entry-points.</span><span class="s2">"ppy.backends"</span><span class="k">]</span>
 <a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="n">toy</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">"ppy_toy:create_backend"</span>
 </code></pre></div>
-<p>Discovery (<code>available_backends()</code>) reads the entry points without
-importing anything; the package is imported when its backend is selected
--- by <code>ppy build --backend toy</code>, by <code>ppy emit</code> asking for a format the
-builtin backends do not have, or by <code>ppy doctor</code> -- and its factory is
-called with the backend's table from <code>[tool.ppy.backends.toy]</code>. What can
-go wrong is reported as what it is, <code>E1903</code>: no backend of that name (the
-message lists the ones there are), a name two distributions register (the
-name is unusable until one is gone; it is never settled by which came
-first), a package that fails to import or a factory that raises (the
-error is the message), a factory answering something that is not a
-<code>Backend</code>, or an interface version other than this compiler's. One broken
-package never breaks the others: <code>ppy doctor</code> prints it as <code>unusable</code>
-with the reason and goes on. A backend registering a builtin's name is
-reported and ignored; the builtin is used.</p>
+<p>Discovery (<code>available_backends()</code>) reads the entry points without importing
+anything. The package is imported when its backend is selected:</p>
+<ul>
+<li>by <code>ppy build --backend toy</code></li>
+<li>by <code>ppy emit</code> asking for a format the builtin backends do not have</li>
+<li>by <code>ppy doctor</code></li>
+</ul>
+<p>Its factory is then called with the backend's table from
+<code>[tool.ppy.backends.toy]</code>.</p>
+<h3 id="load-errors">Load errors<a class="headerlink" href="#load-errors" title="Permanent link">&para;</a></h3>
+<p>What can go wrong is reported as what it is, <code>E1903</code>:</p>
+<ul>
+<li>no backend of that name (the message lists the ones there are)</li>
+<li>a name two distributions register (the name is unusable until one is gone;
+  it is never settled by which came first)</li>
+<li>a package that fails to import or a factory that raises (the error is the
+  message)</li>
+<li>a factory answering something that is not a <code>Backend</code></li>
+<li>an interface version other than this compiler's</li>
+</ul>
+<p>One broken package never breaks the others: <code>ppy doctor</code> prints it as
+<code>unusable</code> with the reason and goes on. A backend registering a builtin's
+name is reported and ignored; the builtin is used.</p>
+<h3 id="declaring-formats">Declaring formats<a class="headerlink" href="#declaring-formats" title="Permanent link">&para;</a></h3>
 <p><code>ppy emit &lt;format&gt;</code> has to know which backend owns a format before it can
-load one. A distribution may say so in a second, optional entry-point
-group, <code>ppy.backend-formats</code>, whose entry names are formats and whose
-values are the backend's name; discovery reads it without importing
-anything, and the one backend it names is then imported and asked. A
-format no distribution declares is still found, by loading the installed
-backends and asking each -- correct, but it imports every accelerator SDK
-on the machine to answer one question, so declaring the group is worth it.
-The group is a hint and never the authority: the backend it names is asked
+load one. A distribution may say so in a second, optional entry-point group,
+<code>ppy.backend-formats</code>, whose entry names are formats and whose values are the
+backend's name. Discovery reads it without importing anything, and the one
+backend it names is then imported and asked.</p>
+<p>A format no distribution declares is still found, by loading the installed
+backends and asking each. That is correct, but it imports every accelerator
+SDK on the machine to answer one question, so declaring the group is worth
+it.</p>
+<p>The group is a hint and never the authority. The backend it names is asked
 all the same, and a format it does not actually emit is an error. Two
 distributions declaring one format leaves neither owning it.</p>
-<p>The builtin backends -- <code>llvm</code>, <code>python</code>, <code>c</code>, <code>nvvm</code>, <code>stablehlo</code>, and
-<code>ir</code> for the canonical IR itself -- stand in the same registry, with their
-formats, fingerprints, and toolchain status behind the same interface.
-Their emission and builds run on the driver's own roads (several of their
-formats are whole-program or flag-shaped: <code>--standalone</code>, <code>--header-only</code>,
-<code>linked-ir</code>, and the LLVM road keeps a lowering cache), so <code>emit</code> and
-<code>build</code> are not what the driver calls on them; an installed backend is
-called through the interface and nothing else.</p>
+<h3 id="builtin-backends">Builtin backends<a class="headerlink" href="#builtin-backends" title="Permanent link">&para;</a></h3>
+<p>The builtin backends (<code>llvm</code>, <code>python</code>, <code>c</code>, <code>nvvm</code>, <code>stablehlo</code>, and <code>ir</code>
+for the canonical IR itself) stand in the same registry, with their formats,
+fingerprints, and toolchain status behind the same interface.</p>
+<p>Their emission and builds run on the driver's own roads. Several of their
+formats are whole-program or flag-shaped (<code>--standalone</code>, <code>--header-only</code>,
+<code>linked-ir</code>), and the LLVM road keeps a lowering cache. So <code>emit</code> and <code>build</code>
+are not what the driver calls on them. An installed backend is called
+through the interface and nothing else.</p>
 <h2 id="passes-validation-order">Passes, validation, order<a class="headerlink" href="#passes-validation-order" title="Permanent link">&para;</a></h2>
 <p>For one module, in order:</p>
 <ol>
@@ -4260,94 +4797,127 @@ called through the interface and nothing else.</p>
 <li>the backend's <code>validate</code>;</li>
 <li>the backend's <code>emit</code> or <code>build</code>.</li>
 </ol>
-<p>A backend reaches the <code>backend</code> stage and no other. What it is handed is a
-<code>BackendPassRegistrar</code>, not the <code>PassManager</code>: the stages before <code>backend</code>
-are the shared pipeline's and the plugins', and a pass of one backend's
-running among them would be deciding for every other backend what the
-canonical IR is. A backend that asks for another stage is refused by name
-(<code>E1802</code>), rather than quietly shaping the IR everything else receives.</p>
-<p>The module is verified before the first pass and after the last, and when
-a plugin or a backend contributed a pass, after every pass, so the one
-that leaves the IR invalid is named -- <code>E1902</code> for a plugin's, <code>E1904</code> for
-a backend's -- rather than handed on. <code>validate</code> is the backend's last
-word before it writes anything: a backend must refuse there what it
-cannot take, with the operation, type, or function named and the location
-when the IR has one (<code>E1802</code>), and never emit it wrongly. There is no
-fallback on the <code>ppy build --backend</code> and <code>ppy emit</code> roads; a program a
-backend cannot take is an error, not a quieter artifact.</p>
+<h3 id="the-backend-stage">The <code>backend</code> stage<a class="headerlink" href="#the-backend-stage" title="Permanent link">&para;</a></h3>
+<p>A backend reaches the <code>backend</code> stage and no other. It is handed a
+<code>BackendPassRegistrar</code> and not the <code>PassManager</code>. The stages before <code>backend</code>
+are the shared pipeline's and the plugins'. A pass of one backend's running
+among them would be deciding for every other backend what the canonical IR
+is. A backend that asks for another stage is refused by name (<code>E1802</code>),
+rather than quietly shaping the IR everything else receives.</p>
+<h3 id="verification-and-validation">Verification and validation<a class="headerlink" href="#verification-and-validation" title="Permanent link">&para;</a></h3>
+<p>The module is verified before the first pass and after the last. When a
+plugin or a backend contributed a pass, it is also verified after every pass,
+so the one that leaves the IR invalid is named rather than handed on:
+<code>E1902</code> for a plugin's, <code>E1904</code> for a backend's.</p>
+<p><code>validate</code> is the backend's last word before it writes anything. A backend
+must refuse there what it cannot take, with the operation, type, or function
+named and the location when the IR has one (<code>E1802</code>), and never emit it
+wrongly.</p>
+<p>There is no fallback on the <code>ppy build --backend</code> and <code>ppy emit</code> roads. A
+program a backend cannot take is an error; the backend does not produce a
+quieter artifact.</p>
 <h2 id="configuration">Configuration<a class="headerlink" href="#configuration" title="Permanent link">&para;</a></h2>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="k">[tool.ppy.backends.toy]</span>
 <a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="n">target</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">"rngd"</span>
 <a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="n">sdk-version</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">"1.4"</span>
 </code></pre></div>
-<p>A backend's table is handed to that backend and to no other; a table for a
+<p>A backend's table is handed to that backend and to no other. A table for a
 backend that is not installed is not an error, so a <code>pyproject.toml</code> can
-carry settings for a backend a colleague has. <code>target</code> is the one key the
-driver reads itself, into <code>BackendContext.target</code> and the cache key; the
-rest means what the backend says it means. <code>ppy build --target</code> is the
-LLVM road's triple and is refused for a backend of its own, which builds
-for what this <code>target</code> names.</p>
+carry settings for a backend a colleague has.</p>
+<p><code>target</code> is the one key the driver reads itself, into
+<code>BackendContext.target</code> and the cache key. The rest means what the backend
+says it means. <code>ppy build --target</code> is the LLVM road's triple and is refused
+for a backend of its own, which builds for what this <code>target</code> names.</p>
 <h2 id="emit-scope">Emit scope<a class="headerlink" href="#emit-scope" title="Permanent link">&para;</a></h2>
 <p>An <code>EmitFormat</code> says whether it is written per module or per program:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="n">EmitFormat</span><span class="p">(</span><span class="s2">"toy"</span><span class="p">,</span> <span class="s2">".toy"</span><span class="p">)</span>  <span class="c1"># scope="module", the default</span>
 <a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="n">EmitFormat</span><span class="p">(</span><span class="s2">"toy-image"</span><span class="p">,</span> <span class="s2">".img"</span><span class="p">,</span> <span class="n">binary</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">scope</span><span class="o">=</span><span class="s2">"program"</span><span class="p">)</span>
 </code></pre></div>
+<h3 id="module-scope">Module scope<a class="headerlink" href="#module-scope" title="Permanent link">&para;</a></h3>
 <p>A <strong>module-scoped</strong> format is asked for once per module, through <code>emit</code>,
-and one artifact comes back for each. One module goes to standard output
-or to <code>-o FILE</code>; a target that resolves to more than one needs <code>-o DIR</code>,
-and one file per module is written into it, named for the module with the
-format's suffix. Two artifacts are never written end to end into one file:
-two object files, two firmware images, or two device programs do not
-become one by concatenation, and the ambiguity is refused (<code>E1002</code>) with
-the names of the files <code>-o DIR</code> would write.</p>
-<p>A <strong>program-scoped</strong> format is asked for once, through <code>emit_program</code>,
-with every module at once, and answers the single artifact. That is the
-one for a linked image, a package, or an archive -- a whole-program
-artifact is the backend's to make from every module, not something the
-driver can assemble from per-module answers.</p>
+and one artifact comes back for each.</p>
+<ul>
+<li>One module goes to standard output or to <code>-o FILE</code>.</li>
+<li>A target that resolves to more than one module needs <code>-o DIR</code>, and one file
+  per module is written into it, named for the module with the format's
+  suffix.</li>
+</ul>
+<p>Two artifacts are never written end to end into one file. Two object files,
+two firmware images, or two device programs do not become one by
+concatenation, and the ambiguity is refused (<code>E1002</code>) with the names of the
+files <code>-o DIR</code> would write.</p>
+<h3 id="program-scope">Program scope<a class="headerlink" href="#program-scope" title="Permanent link">&para;</a></h3>
+<p>A <strong>program-scoped</strong> format is asked for once, through <code>emit_program</code>, with
+every module at once, and answers the single artifact. Use it for a linked
+image, a package, or an archive. A whole-program artifact is the backend's to
+make from every module; the driver cannot assemble one from per-module
+answers.</p>
 <p>Either way the answer's type must match the format: text for a text
 format, <code>bytes</code> for one declared <code>binary</code>, or the backend is refused
 (<code>E1802</code>).</p>
 <h2 id="the-cache-key">The cache key<a class="headerlink" href="#the-cache-key" title="Permanent link">&para;</a></h2>
 <p>The identity the driver computes for one module's artifact from a backend
 (<code>BackendContext.identity[module]</code>, <code>driver.pipeline.backend_identity</code>) is
-the module's key -- its source digest, the compiler version and
-fingerprint, its dependencies' public ABI, the directives, the
-optimization level, the project options, and the plugin fingerprints --
-with the backend's name, the distribution it came from and that
-distribution's version, the interface version it declares, the backend's
-<code>fingerprint()</code>, the digest of its configuration table, its <code>target</code>, and
-the IR schema version. A new SDK under the backend, a changed setting,
-another target: each is a different key, and an old artifact is never
-reused for it.</p>
-<p>The distribution's version is in the key whether or not the backend's
-author put it in <code>fingerprint()</code>. Two releases of one package carry the
-same module and class names and the same interface version and can
-generate entirely different code, so <code>ppy-toy 0.1</code> and <code>ppy-toy 0.2</code>
-address different artifacts by construction; <code>fingerprint()</code> is for what
-the package version does not cover -- the SDK under it, a firmware
-revision, the version of a code generator it calls. The builtin LLVM road's
-keys carry the same kind of thing -- the <code>llvmlite</code> under the objects is
-part of them -- so a cached object does not outlive the LLVM that made it.</p>
+the module's key combined with the backend's identity:</p>
+<table>
+<thead>
+<tr>
+<th>part</th>
+<th>contents</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>the module's key</td>
+<td>its source digest, the compiler version and fingerprint, its dependencies' public ABI, the directives, the optimization level, the project options, the plugin fingerprints</td>
+</tr>
+<tr>
+<td>the backend</td>
+<td>its name, the distribution it came from and that distribution's version, the interface version it declares, its <code>fingerprint()</code>, the digest of its configuration table, its <code>target</code>, the IR schema version</td>
+</tr>
+</tbody>
+</table>
+<p>A new SDK under the backend, a changed setting, another target: each is a
+different key, and an old artifact is never reused for it.</p>
+<h3 id="why-the-distribution-version-is-in-the-key">Why the distribution version is in the key<a class="headerlink" href="#why-the-distribution-version-is-in-the-key" title="Permanent link">&para;</a></h3>
+<p>The distribution's version is in the key whether or not the backend's author
+put it in <code>fingerprint()</code>. Two releases of one package carry the same module
+and class names and the same interface version and can generate entirely
+different code. So <code>ppy-toy 0.1</code> and <code>ppy-toy 0.2</code> address different
+artifacts by construction.</p>
+<p><code>fingerprint()</code> is for what the package version does not cover: the SDK under
+it, a firmware revision, the version of a code generator it calls. The
+builtin LLVM road's keys carry the same kind of thing (the <code>llvmlite</code> under
+the objects is part of them), so a cached object does not outlive the LLVM
+that made it.</p>
 <h2 id="building">Building<a class="headerlink" href="#building" title="Permanent link">&para;</a></h2>
-<p><code>ppy build TARGET --backend NAME</code> loads the backend with its table, checks
-its toolchain, runs the shared passes and the backend's, validates, and
-calls <code>build</code> with every module and a directory to write into -- <code>-o</code>, or
-<code>&lt;cache&gt;/backends/NAME</code>. <code>BuildResult.outputs</code> is what the driver lists.</p>
+<p><code>ppy build TARGET --backend NAME</code>:</p>
+<ol>
+<li>loads the backend with its table</li>
+<li>checks its toolchain</li>
+<li>runs the shared passes and the backend's</li>
+<li>validates</li>
+<li>calls <code>build</code> with every module and a directory to write into: <code>-o</code>, or
+   <code>&lt;cache&gt;/backends/NAME</code></li>
+</ol>
+<p><code>BuildResult.outputs</code> is what the driver lists.</p>
+<h3 id="building-from-ppyir">Building from <code>.ppyir</code><a class="headerlink" href="#building-from-ppyir" title="Permanent link">&para;</a></h3>
 <p><code>ppy build TARGET.ppyir --backend NAME</code> is the same below the boundary
-without the frontend above it: the file is canonical IR that has already
-been through the shared passes, so the backend's own passes run over it,
-then its validation, then its <code>build</code>. Its artifact identity is the
-module's encoded bytes with everything that identifies the compiler and
-the backend, since there is no source bundle behind it.</p>
-<p>The LLVM road's options are the LLVM road's: <code>--unsafe</code>, <code>--sanitize</code>,
-<code>--pgo</code>, <code>--prover</code>, <code>--host-cpu</code>, <code>--standalone</code>, <code>--python-extension</code>,
-<code>--library</code>, <code>--report-opt</code>, <code>--report-opt-json</code>, and <code>--target</code> are
-refused for another backend (<code>E1002</code>) rather than accepted and ignored,
-each saying what it does and, for <code>--target</code>, where to name a target that
-does reach the backend. <code>--warm</code> builds the artifact <code>ppy run</code> and
-<code>import ppy</code> take, which is the LLVM backend's, and is refused for any
-other backend. <code>-o</code> and <code>-O</code> reach every backend.</p>
+without the frontend above it. The file is canonical IR that has already been
+through the shared passes, so the backend's own passes run over it, then its
+validation, then its <code>build</code>. Its artifact identity is the module's encoded
+bytes with everything that identifies the compiler and the backend, since
+there is no source bundle behind it.</p>
+<h3 id="llvm-only-options">LLVM-only options<a class="headerlink" href="#llvm-only-options" title="Permanent link">&para;</a></h3>
+<p>The LLVM road's options belong to the LLVM road. These are refused for
+another backend (<code>E1002</code>) rather than accepted and ignored:</p>
+<p><code>--unsafe</code>, <code>--sanitize</code>, <code>--pgo</code>, <code>--prover</code>, <code>--host-cpu</code>, <code>--standalone</code>,
+<code>--python-extension</code>, <code>--library</code>, <code>--report-opt</code>, <code>--report-opt-json</code>,
+<code>--target</code></p>
+<p>Each refusal says what the option does and, for <code>--target</code>, where to name a
+target that does reach the backend. <code>--warm</code> builds the artifact <code>ppy run</code> and
+<code>import ppy</code> take, which is the LLVM backend's, and is refused for any other
+backend. <code>-o</code> and <code>-O</code> reach every backend.</p>
 <h2 id="a-minimal-backend">A minimal backend<a class="headerlink" href="#a-minimal-backend" title="Permanent link">&para;</a></h2>
 <p><code>ppy_toy/__init__.py</code>, the whole package:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
@@ -4437,17 +5007,20 @@ other backend. <code>-o</code> and <code>-O</code> reach every backend.</p>
 <a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a>ppy<span class="w"> </span>build<span class="w"> </span>foo.ppy<span class="w"> </span>--backend<span class="w"> </span>toy<span class="w"> </span>-o<span class="w"> </span>out/<span class="w"> </span><span class="c1"># what build() wrote, listed</span>
 <a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a>ppy<span class="w"> </span>doctor<span class="w">                              </span><span class="c1"># toy  available, toy sdk 0 [ppy-toy 0.1 (ppy_toy:create_backend)]</span>
 </code></pre></div>
-<p>Everything the package imports is <code>ppy_compiler.backend</code> and
-<code>ppy_compiler.ir</code>; nothing under <code>backend/llvm</code> or the driver.</p>
-<h2 id="what-is-not-there">What is not there<a class="headerlink" href="#what-is-not-there" title="Permanent link">&para;</a></h2>
-<p>A module-scoped format receives modules one at a time, each through the
-shared passes on its own; a program-scoped format and <code>build</code> receive them
-together, and may link them with <code>ppy_compiler.ir.linker.link</code>, which is
-what <code>ppy emit linked-ir</code> uses. The <code>ppy run</code> road -- the JIT, the guarded bindings, the
-fallback to Python -- is the LLVM backend's and is not opened to an
-installed backend: a backend builds and emits; running what it built is
-its own runtime's business. The Python backend and the LLVM backend keep
-their <code>--backend</code> spellings and their behavior.</p>
+<p>The package imports only <code>ppy_compiler.backend</code> and <code>ppy_compiler.ir</code>;
+nothing under <code>backend/llvm</code> or the driver.</p>
+<h2 id="limitations">Limitations<a class="headerlink" href="#limitations" title="Permanent link">&para;</a></h2>
+<ul>
+<li>A module-scoped format receives modules one at a time, each through the
+  shared passes on its own. A program-scoped format and <code>build</code> receive them
+  together, and may link them with <code>ppy_compiler.ir.linker.link</code>, which is
+  what <code>ppy emit linked-ir</code> uses.</li>
+<li>The <code>ppy run</code> road (the JIT, the guarded bindings, the fallback to Python)
+  is the LLVM backend's and is not opened to an installed backend. A backend
+  builds and emits; running what it built is its own runtime's business.</li>
+<li>The Python backend and the LLVM backend keep their <code>--backend</code> spellings
+  and their behavior.</li>
+</ul>
 
 
 

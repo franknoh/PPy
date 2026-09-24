@@ -6,7 +6,7 @@
       <meta charset="utf-8">
       <meta name="viewport" content="width=device-width,initial-scale=1">
       
-        <meta name="description" content="A statically analyzable language in Python's syntax, and a compiler whose three paths agree">
+        <meta name="description" content="A compiler for a statically analyzable subset of Python">
       
       
       
@@ -22,12 +22,12 @@
         
       
       
-      <link rel="icon" href="../../assets/images/favicon.png">
+      <link rel="icon" href="../../assets/logo.svg">
       <meta name="generator" content="mkdocs-ProperDocs 1.6.7, mkdocs-material-9.7.7">
     
     
       
-        <title>Where a solver fits - PPY</title>
+        <title>Where a solver fits - PPy</title>
       
     
     
@@ -48,8 +48,8 @@
         
         
         <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
-        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=IBM+Plex+Sans:300,300i,400,400i,700,700i%7CJetBrains+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"IBM Plex Sans";--md-code-font:"JetBrains Mono"}</style>
       
     
     
@@ -75,7 +75,7 @@
     
     
     
-    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="deep-purple">
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="custom" data-md-color-accent="custom">
   
     
     <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
@@ -104,10 +104,9 @@
 
 <header class="md-header md-header--shadow md-header--lifted" data-md-component="header">
   <nav class="md-header__inner md-grid" aria-label="Header">
-    <a href="../.." title="PPY" class="md-header__button md-logo" aria-label="PPY" data-md-component="logo">
+    <a href="../.." title="PPy" class="md-header__button md-logo" aria-label="PPy" data-md-component="logo">
       
-  
-  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+  <img src="../../assets/logo.svg" alt="logo">
 
     </a>
     <label class="md-header__button md-icon" for="__drawer">
@@ -118,7 +117,7 @@
       <div class="md-header__ellipsis">
         <div class="md-header__topic">
           <span class="md-ellipsis">
-            PPY
+            PPy
           </span>
         </div>
         <div class="md-header__topic" data-md-component="header-topic">
@@ -137,7 +136,7 @@
     
     
     
-    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="deep-purple"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="custom" data-md-color-accent="custom"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
     
       <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"/></svg>
@@ -147,7 +146,7 @@
     
     
     
-    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="deep-purple"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="custom" data-md-color-accent="custom"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
     
       <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"/></svg>
@@ -213,7 +212,7 @@
   </div>
   <div class="md-source__repository">
     franknoh/PPy
-    <span class="ppy-source-version" title="Documentation version">v0.3.6</span>
+    <span class="ppy-source-version" title="Documentation version">v0.3.7</span>
   </div>
 </a>
       </div>
@@ -250,36 +249,20 @@
   
   
   
-    <li class="md-tabs__item">
-      <a href="../../getting-started/" class="md-tabs__link">
-        
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../getting-started/" class="md-tabs__link">
+          
   
   
     
   
-  Getting started
+  Learn
 
-      </a>
-    </li>
-  
-
-      
-        
-  
-  
-  
-  
-    <li class="md-tabs__item">
-      <a href="../../installing/" class="md-tabs__link">
-        
-  
-  
+        </a>
+      </li>
     
-  
-  Installing
-
-      </a>
-    </li>
   
 
       
@@ -320,47 +303,6 @@
     
   
   Examples
-
-        </a>
-      </li>
-    
-  
-
-      
-        
-  
-  
-  
-  
-    <li class="md-tabs__item">
-      <a href="../../cli/" class="md-tabs__link">
-        
-  
-  
-    
-  
-  CLI
-
-      </a>
-    </li>
-  
-
-      
-        
-  
-  
-  
-  
-    
-    
-      <li class="md-tabs__item">
-        <a href="../../api/" class="md-tabs__link">
-          
-  
-  
-    
-  
-  API
 
         </a>
       </li>
@@ -420,25 +362,6 @@
   
   
     <li class="md-tabs__item">
-      <a href="../../contributing/" class="md-tabs__link">
-        
-  
-  
-    
-  
-  Contributing
-
-      </a>
-    </li>
-  
-
-      
-        
-  
-  
-  
-  
-    <li class="md-tabs__item">
       <a href="../../changelog/" class="md-tabs__link">
         
   
@@ -480,13 +403,12 @@
 
 <nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
   <label class="md-nav__title" for="__drawer">
-    <a href="../.." title="PPY" class="md-nav__button md-logo" aria-label="PPY" data-md-component="logo">
+    <a href="../.." title="PPy" class="md-nav__button md-logo" aria-label="PPy" data-md-component="logo">
       
-  
-  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+  <img src="../../assets/logo.svg" alt="logo">
 
     </a>
-    PPY
+    PPy
   </label>
   
     <div class="md-nav__source">
@@ -497,7 +419,7 @@
   </div>
   <div class="md-source__repository">
     franknoh/PPy
-    <span class="ppy-source-version" title="Documentation version">v0.3.6</span>
+    <span class="ppy-source-version" title="Documentation version">v0.3.7</span>
   </div>
 </a>
     </div>
@@ -537,6 +459,64 @@
   
   
   
+    
+    
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Learn
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Learn
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
     <li class="md-nav__item">
       <a href="../../getting-started/" class="md-nav__link">
         
@@ -557,9 +537,10 @@
     </li>
   
 
-    
-      
-      
+              
+            
+              
+                
   
   
   
@@ -584,6 +565,14 @@
     </li>
   
 
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
     
       
       
@@ -596,6 +585,10 @@
       
         
           
+        
+      
+        
+      
         
       
         
@@ -643,7 +636,7 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
         
           
           <div class="md-nav__link md-nav__container">
@@ -665,14 +658,14 @@
             </a>
             
               
-              <label class="md-nav__link " for="__nav_4" id="__nav_4_label" tabindex="0">
+              <label class="md-nav__link " for="__nav_3" id="__nav_3_label" tabindex="0">
                 <span class="md-nav__icon md-icon"></span>
               </label>
             
           </div>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_4">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -727,6 +720,62 @@
     
   
     Directives and markers
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guide/collections/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Collections
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guide/classes/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Classes
   
 
     
@@ -1177,7 +1226,7 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
         
           
           <div class="md-nav__link md-nav__container">
@@ -1199,14 +1248,14 @@
             </a>
             
               
-              <label class="md-nav__link " for="__nav_5" id="__nav_5_label" tabindex="0">
+              <label class="md-nav__link " for="__nav_4" id="__nav_4_label" tabindex="0">
                 <span class="md-nav__icon md-icon"></span>
               </label>
             
           </div>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_5">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -1294,10 +1343,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5_3" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_3" >
         
           
-          <label class="md-nav__link" for="__nav_5_3" id="__nav_5_3_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_4_3" id="__nav_4_3_label" tabindex="0">
             
   
   
@@ -1315,8 +1364,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_5_3_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_5_3">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_3">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -1731,6 +1780,8 @@
       
         
       
+        
+      
     
     
     
@@ -1744,10 +1795,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5_4" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_4" >
         
           
-          <label class="md-nav__link" for="__nav_5_4" id="__nav_5_4_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_4_4" id="__nav_4_4_label" tabindex="0">
             
   
   
@@ -1765,8 +1816,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_5_4_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_5_4">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_4">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -2112,6 +2163,34 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../howto/47_collections/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Collections
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -2150,10 +2229,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5_5" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_5" >
         
           
-          <label class="md-nav__link" for="__nav_5_5" id="__nav_5_5_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_4_5" id="__nav_4_5_label" tabindex="0">
             
   
   
@@ -2171,8 +2250,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_5_5_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_5_5">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_5">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -2348,10 +2427,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5_6" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_6" >
         
           
-          <label class="md-nav__link" for="__nav_5_6" id="__nav_5_6_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_4_6" id="__nav_4_6_label" tabindex="0">
             
   
   
@@ -2369,8 +2448,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_5_6_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_5_6">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_6">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -2756,10 +2835,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5_7" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_7" >
         
           
-          <label class="md-nav__link" for="__nav_5_7" id="__nav_5_7_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_4_7" id="__nav_4_7_label" tabindex="0">
             
   
   
@@ -2777,8 +2856,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_5_7_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_5_7">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_7">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -2949,6 +3028,85 @@
   
   
   
+    
+    
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../reference/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_5" id="__nav_5_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+  
+  
     <li class="md-nav__item">
       <a href="../../cli/" class="md-nav__link">
         
@@ -2957,7 +3115,7 @@
   <span class="md-ellipsis">
     
   
-    CLI
+    Command line
   
 
     
@@ -2969,9 +3127,122 @@
     </li>
   
 
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/diagnostics/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
     
-      
-      
+  
+    Diagnostics
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/config/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/performance/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Performance
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/compatibility/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Compatibility
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
   
   
   
@@ -3006,7 +3277,7 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5_7" >
         
           
           <div class="md-nav__link md-nav__container">
@@ -3017,7 +3288,7 @@
   <span class="md-ellipsis">
     
   
-    API
+    Python API
   
 
     
@@ -3028,18 +3299,18 @@
             </a>
             
               
-              <label class="md-nav__link " for="__nav_7" id="__nav_7_label" tabindex="0">
+              <label class="md-nav__link " for="__nav_5_7" id="__nav_5_7_label" tabindex="0">
                 <span class="md-nav__icon md-icon"></span>
               </label>
             
           </div>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_7">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_5_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5_7">
             <span class="md-nav__icon md-icon"></span>
             
   
-    API
+    Python API
   
 
           </label>
@@ -3193,192 +3464,6 @@
     </li>
   
 
-    
-      
-      
-  
-  
-  
-  
-    
-    
-      
-        
-          
-        
-      
-        
-      
-        
-      
-        
-      
-        
-      
-    
-    
-    
-      
-      
-        
-      
-    
-    
-    <li class="md-nav__item md-nav__item--nested">
-      
-        
-        
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" >
-        
-          
-          <div class="md-nav__link md-nav__container">
-            <a href="../../reference/" class="md-nav__link ">
-              
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Reference
-  
-
-    
-  </span>
-  
-  
-
-            </a>
-            
-              
-              <label class="md-nav__link " for="__nav_8" id="__nav_8_label" tabindex="0">
-                <span class="md-nav__icon md-icon"></span>
-              </label>
-            
-          </div>
-        
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_8">
-            <span class="md-nav__icon md-icon"></span>
-            
-  
-    Reference
-  
-
-          </label>
-          <ul class="md-nav__list" data-md-scrollfix>
-            
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../reference/diagnostics/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Diagnostics
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../reference/config/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Configuration
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../reference/performance/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Performance
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../reference/compatibility/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Compatibility
-  
-
-    
-  </span>
-  
-  
-
-      </a>
-    </li>
-  
-
               
             
           </ul>
@@ -3419,6 +3504,8 @@
       
         
       
+        
+      
     
     
     
@@ -3435,7 +3522,7 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9" checked>
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" checked>
         
           
           <div class="md-nav__link md-nav__container">
@@ -3457,14 +3544,14 @@
             </a>
             
               
-              <label class="md-nav__link " for="__nav_9" id="__nav_9_label" tabindex="">
+              <label class="md-nav__link " for="__nav_6" id="__nav_6_label" tabindex="">
                 <span class="md-nav__icon md-icon"></span>
               </label>
             
           </div>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="true">
-          <label class="md-nav__title" for="__nav_9">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_6">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -3711,13 +3798,30 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#the-short-answer" class="md-nav__link">
+  <a href="#summary" class="md-nav__link">
     <span class="md-ellipsis">
       
-        The short answer
+        Summary
       
     </span>
   </a>
+  
+    <nav class="md-nav" aria-label="Summary">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#where-it-is-not-used" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Where it is not used
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -3756,6 +3860,28 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#the-encoding" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The encoding
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#where-the-hypotheses-come-from" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Where the hypotheses come from
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#cost-and-where-it-runs" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3771,6 +3897,17 @@
     <span class="md-ellipsis">
       
         What is built
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#results" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Results
       
     </span>
   </a>
@@ -3852,15 +3989,8 @@
 
               
             
-          </ul>
-        </nav>
-      
-    </li>
-  
-
-    
-      
-      
+              
+                
   
   
   
@@ -3882,6 +4012,14 @@
   
 
       </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
     </li>
   
 
@@ -3940,13 +4078,30 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#the-short-answer" class="md-nav__link">
+  <a href="#summary" class="md-nav__link">
     <span class="md-ellipsis">
       
-        The short answer
+        Summary
       
     </span>
   </a>
+  
+    <nav class="md-nav" aria-label="Summary">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#where-it-is-not-used" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Where it is not used
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -3985,6 +4140,28 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#the-encoding" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The encoding
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#where-the-hypotheses-come-from" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Where the hypotheses come from
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#cost-and-where-it-runs" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4000,6 +4177,17 @@
     <span class="md-ellipsis">
       
         What is built
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#results" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Results
       
     </span>
   </a>
@@ -4065,73 +4253,108 @@
 
 
 <h1 id="where-a-solver-fits">Where a solver fits<a class="headerlink" href="#where-a-solver-fits" title="Permanent link">&para;</a></h1>
-<p>Where an SMT solver (Z3) earns its place in PPY, where it does not, and what
-is built. The first cut of section 1 is in: <code>llvm.prover = "z3"</code> or
-<code>--prover z3</code>, with <code>ppy-lang[solver]</code> installed. Section 2 is still a plan.</p>
-<h2 id="the-short-answer">The short answer<a class="headerlink" href="#the-short-answer" title="Permanent link">&para;</a></h2>
-<p>Two places, and only two:</p>
+<p>This page covers where an SMT solver (Z3) earns its place in PPy, where it
+does not, and what is built. The first cut of section 1 is in: set
+<code>llvm.prover = "z3"</code> or pass <code>--prover z3</code>, with <code>ppy-lang[solver]</code>
+installed. Section 2 is still a plan.</p>
+<h2 id="summary">Summary<a class="headerlink" href="#summary" title="Permanent link">&para;</a></h2>
+<p>A solver is used in two places, and only two:</p>
 <ol>
 <li><strong>Discharging overflow guards in native loops.</strong> The LLVM path runs
-   integer arithmetic on 64-bit machine words and guards every operation
-   that could overflow with a branch back to CPython, because a Python <code>int</code>
-   is unbounded and the three paths must agree bit for bit. A guard the
-   compiler can <em>prove</em> never fires can be dropped, and a loop with no guard
-   in its body is a loop LLVM can vectorize. Interval arithmetic already
-   proves the convex cases; a solver proves the relational ones.</li>
+   integer arithmetic on 64-bit machine words. It guards every operation that
+   could overflow with a branch back to CPython, because a Python <code>int</code> is
+   unbounded and the three paths must agree bit for bit. A guard the compiler
+   can prove never fires can be dropped, and a loop with no guard in its body
+   is a loop LLVM can vectorize. Interval arithmetic already proves the convex
+   cases; a solver proves the relational ones.</li>
 <li><strong>Translation validation of the optimizer.</strong> Every rewrite the optimizer
    makes to an integer expression can be checked against the original for
    equivalence, offline, over the example corpus. A counterexample is a bug
    in a pass, found before a user finds it.</li>
 </ol>
-<p>Not a place: type inference. The checker's inference is a monotone fixpoint
-over finite lattices -- types, effects, integer ranges -- which is fast,
-predictable, and gives an answer of the kind the rest of the compiler
-consumes. A solver gives <em>satisfiable</em> or <em>not</em>, per query, at a cost per
-query that no per-expression pipeline can afford. Also not a place: the
-runtime. <code>ppy_runtime</code> never imports the compiler, and a guard decided at
-run time is decided by a compare instruction, not by a solver.</p>
+<h3 id="where-it-is-not-used">Where it is not used<a class="headerlink" href="#where-it-is-not-used" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Type inference.</strong> The checker's inference is a monotone fixpoint over
+  finite lattices (types, effects, integer ranges). It is fast and
+  predictable, and gives an answer of the kind the rest of the compiler
+  consumes. A solver gives <em>satisfiable</em> or <em>not</em>, per query, at a cost per
+  query that no per-expression pipeline can afford.</li>
+<li><strong>The runtime.</strong> <code>ppy_runtime</code> never imports the compiler. A guard decided
+  at run time is decided by a compare instruction.</li>
+</ul>
 <h2 id="1-overflow-guards">1. Overflow guards<a class="headerlink" href="#1-overflow-guards" title="Permanent link">&para;</a></h2>
 <h3 id="what-the-native-path-does-today">What the native path does today<a class="headerlink" href="#what-the-native-path-does-today" title="Permanent link">&para;</a></h3>
 <p><code>backend/llvm/lowering.py</code> lowers <code>+</code>, <code>-</code>, <code>*</code> on <code>int</code> through the
 <code>llvm.*.with.overflow</code> intrinsics and branches to the function's fallback
-block when the flag is set. That is <code>safeguards = "inline"</code>. The default for
-<code>ppy run</code>, <code>hoisted</code>, does better when it can: if both operands carry a
-proven range -- from an annotation such as <code>Annotated[int, ppy.Range(0,
-1000)]</code> or <code>pydantic.Field(ge=0, le=1000)</code>, from a <code>range()</code> induction, from
-a constant -- and the chain contains a multiplication, the extreme corners
-are checked once in a guard block ahead of the loop and the body runs the
-plain instruction with <code>nsw</code>. <code>off</code> drops the guards and wraps, which is
-what <code>ppy build</code> chooses.</p>
-<p>The limits are exactly the limits of interval arithmetic:</p>
+block when the flag is set. The <code>safeguards</code> setting picks how guards are
+placed:</p>
+<table>
+<thead>
+<tr>
+<th><code>safeguards</code></th>
+<th>behavior</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>inline</code></td>
+<td>every operation is guarded as above</td>
+</tr>
+<tr>
+<td><code>hoisted</code></td>
+<td>the default for <code>ppy run</code>. If both operands carry a proven range and the chain contains a multiplication, the extreme corners are checked once in a guard block ahead of the loop, and the body runs the plain instruction with <code>nsw</code>. Otherwise it guards as <code>inline</code> does.</td>
+</tr>
+<tr>
+<td><code>off</code></td>
+<td>drops the guards and wraps; this is what <code>ppy build</code> chooses</td>
+</tr>
+</tbody>
+</table>
+<p>A proven range comes from an annotation such as
+<code>Annotated[int, ppy.Range(0, 1000)]</code> or <code>pydantic.Field(ge=0, le=1000)</code>, from
+a <code>range()</code> induction, or from a constant.</p>
+<p>The limits are the limits of interval arithmetic:</p>
 <ul>
-<li>a chain with no multiplication is left to LLVM, which folds guarded
-  additions of an induction variable and nothing else;</li>
-<li>an operand with no range in hand -- one bounded by a <em>comparison</em> rather
-  than an annotation, such as <code>if n &gt; 10**6: return</code> above the loop, or by
-  another variable, <code>i &lt; n</code> with <code>n &lt;= len(a)</code> -- has no corners to check;</li>
-<li>a range that is convex but wide, <code>[0, 2**40]</code> times <code>[0, 2**40]</code>, overflows
+<li>A chain with no multiplication is left to LLVM, which folds guarded
+  additions of an induction variable and nothing else.</li>
+<li>An operand with no range in hand has no corners to check. That covers one
+  bounded by a comparison rather than an annotation, such as
+  <code>if n &gt; 10**6: return</code> above the loop, or by another variable, <code>i &lt; n</code> with
+  <code>n &lt;= len(a)</code>.</li>
+<li>A range that is convex but wide, <code>[0, 2**40]</code> times <code>[0, 2**40]</code>, overflows
   at the corners and stays guarded even when the loop never reaches them
   because of a relation between the two.</li>
 </ul>
 <h3 id="what-a-solver-adds">What a solver adds<a class="headerlink" href="#what-a-solver-adds" title="Permanent link">&para;</a></h3>
-<p>An <em>obligation</em> per arithmetic chain: hypotheses <code>H</code> over mathematical
-integers -- every range fact on the operands, every dominating comparison
-the flow analysis narrowed on, <code>len(...) &gt;= 0</code>, the induction bounds of the
-enclosing loops -- and the goal that the chain's value, computed as a
-mathematical integer, lies in <code>[-2**63, 2**63)</code>. Ask the solver whether
-<code>H and not goal</code> is satisfiable. Unsatisfiable means no input the hypotheses
-allow overflows, and the chain lowers to plain <code>nsw</code> instructions with no
-guard. Anything else -- satisfiable, unknown, timeout -- keeps the guards it
-has today. The default is the sound one.</p>
-<p>The theory is linear integer arithmetic with multiplication where it occurs
-(Z3's nonlinear support is incomplete but reliable on the small products a
-loop body has), <em>not</em> bit-vectors: the question is whether the true value
-fits a word, and bit-vectors would assume the wrap being ruled out. <code>//</code>
-and <code>%</code> are encoded with Python's floor semantics; shifts with a bounded
-shift count. Anything the encoder does not understand -- a call, a
-subscript with unknown bounds, a float -- makes the obligation unprovable,
-which keeps the guard.</p>
-<p>Where the hypotheses come from is already in the tree:</p>
+<p>The solver works on an <em>obligation</em> per arithmetic chain:</p>
+<ul>
+<li><strong>Hypotheses <code>H</code></strong> over mathematical integers: every range fact on the
+  operands, every dominating comparison the flow analysis narrowed on,
+  <code>len(...) &gt;= 0</code>, the induction bounds of the enclosing loops.</li>
+<li><strong>The goal:</strong> the chain's value, computed as a mathematical integer, lies
+  in <code>[-2**63, 2**63)</code>.</li>
+</ul>
+<p>The compiler asks the solver whether <code>H and not goal</code> is satisfiable.</p>
+<ul>
+<li>Unsatisfiable means no input the hypotheses allow overflows, and the chain
+  lowers to plain <code>nsw</code> instructions with no guard.</li>
+<li>Anything else (satisfiable, unknown, timeout) keeps the guards it has
+  today. The default is the sound one.</li>
+</ul>
+<h3 id="the-encoding">The encoding<a class="headerlink" href="#the-encoding" title="Permanent link">&para;</a></h3>
+<p>The theory is linear integer arithmetic with multiplication where it occurs.
+Z3's nonlinear support is incomplete but reliable on the small products a
+loop body has. The encoding does not use bit-vectors: the question is whether
+the true value fits a word, and bit-vectors would assume the wrap being ruled
+out.</p>
+<ul>
+<li><code>//</code> and <code>%</code> are encoded with Python's floor semantics.</li>
+<li>Shifts are encoded with a bounded shift count.</li>
+<li>Anything the encoder does not understand (a call, a subscript with unknown
+  bounds, a float) makes the obligation unprovable, which keeps the guard.</li>
+</ul>
+<h3 id="where-the-hypotheses-come-from">Where the hypotheses come from<a class="headerlink" href="#where-the-hypotheses-come-from" title="Permanent link">&para;</a></h3>
+<p>The sources are already in the tree:</p>
 <table>
 <thead>
 <tr>
@@ -4158,54 +4381,61 @@ which keeps the guard.</p>
 </tr>
 </tbody>
 </table>
-<p>The third row is the one addition to the analysis: today a comparison
-against another variable narrows nothing, because an interval cannot hold
-a relation. Keeping <code>(name, op, name)</code> triples alongside the interval is
-cheap and is what turns <code>i &lt; n and n &lt;= len(a)</code> into a proof.</p>
+<p>The third row is the one addition to the analysis. Today a comparison against
+another variable narrows nothing, because an interval cannot hold a relation.
+Keeping <code>(name, op, name)</code> triples alongside the interval is cheap and is what
+turns <code>i &lt; n and n &lt;= len(a)</code> into a proof.</p>
 <h3 id="cost-and-where-it-runs">Cost and where it runs<a class="headerlink" href="#cost-and-where-it-runs" title="Permanent link">&para;</a></h3>
-<p>Only at lowering, only for chains the interval rules did not already settle,
-with a per-obligation timeout and the answer remembered for the process;
-the lowered module is cached under a key that names the prover and its
-version, so <code>ppy run</code> pays it once per cache miss. <code>ppy check</code> never runs
-it. A project with the prover off behaves exactly as before; one that asks
-for the prover without the solver installed gets an error, not a silently
-slower build.</p>
+<p>The prover runs only at lowering, and only for chains the interval rules did
+not already settle. It has a per-obligation timeout, and the answer is
+remembered for the process. The lowered module is cached under a key that
+names the prover and its version, so <code>ppy run</code> pays it once per cache miss.</p>
+<ul>
+<li><code>ppy check</code> never runs it.</li>
+<li>A project with the prover off behaves exactly as before.</li>
+<li>A project that asks for the prover without the solver installed gets an
+  error, instead of a silently slower build.</li>
+</ul>
 <h3 id="what-is-built">What is built<a class="headerlink" href="#what-is-built" title="Permanent link">&para;</a></h3>
 <ul>
-<li><code>backend/llvm/obligations.py</code>: a chain as a statement about integers --
-  variables with the ranges the analysis recorded, constants, <code>+ - *</code> --
-  with the relations its variables carry as hypotheses. Printable,
-  digestible, testable without Z3, and settled by interval arithmetic
-  first: a chain of declared ranges that fits by intervals asks no solver.</li>
-<li><code>backend/llvm/prover.py</code>: the Z3 encoding, in integer arithmetic, behind
-  a lazy import and a per-obligation timeout; answers are remembered per
-  process. <code>ppy-lang[solver]</code> installs the solver; <code>ppy doctor</code> says
+<li><strong><code>backend/llvm/obligations.py</code></strong>: a chain as a statement about integers
+  (variables with the ranges the analysis recorded, constants, <code>+ - *</code>) with
+  the relations its variables carry as hypotheses. It is printable,
+  digestible, testable without Z3, and settled by interval arithmetic first:
+  a chain of declared ranges that fits by intervals asks no solver.</li>
+<li><strong><code>backend/llvm/prover.py</code></strong>: the Z3 encoding, in integer arithmetic,
+  behind a lazy import and a per-obligation timeout. Answers are remembered
+  per process. <code>ppy-lang[solver]</code> installs the solver; <code>ppy doctor</code> says
   whether it is there.</li>
-<li>Lowering asks the prover before it emits a guard. Every load is its own
-  variable, so two loads of one name are two symbols; an induction
-  variable carries <code>start &lt;= i &lt;= stop - 1</code> from the <code>range()</code> that drives
-  it, as terms, so <code>i * k</code> with <code>n &lt;= 100000</code> and <code>k</code> in <code>[-50, 50]</code> is a
-  proof by relation, not by interval. A proven chain lowers to the plain
+<li><strong>Lowering asks the prover before it emits a guard.</strong> Every load is its own
+  variable, so two loads of one name are two symbols. An induction variable
+  carries <code>start &lt;= i &lt;= stop - 1</code> from the <code>range()</code> that drives it, as
+  terms, so <code>i * k</code> with <code>n &lt;= 100000</code> and <code>k</code> in <code>[-50, 50]</code> is a proof by
+  relation rather than by interval. A proven chain lowers to the plain
   instruction with <code>nsw</code>; an unproven one is emitted exactly as before.</li>
-<li>A function whose guards a proof may leave out checks each parameter's
-  declared range once on entry, and a call outside it takes the fallback.
-  <code>Range(lo, hi)</code> is a refinement the checker propagates, not a check the
-  runtime makes, and a proof that rests on it must be a proof about every
-  call that runs natively.</li>
-<li>The artifact is keyed by the prover and its version, the warm <code>ppy run</code>
-  directory too. <code>NativeModule.proved</code> lists, per function, the chains a
-  proof freed.</li>
+<li><strong>Entry checks.</strong> A function whose guards a proof may leave out checks each
+  parameter's declared range once on entry, and a call outside it takes the
+  fallback. <code>Range(lo, hi)</code> is a refinement the checker propagates and the
+  runtime does not check, so a proof that rests on it must be a proof about
+  every call that runs natively.</li>
+<li><strong>Cache keys.</strong> The artifact is keyed by the prover and its version, the
+  warm <code>ppy run</code> directory too. <code>NativeModule.proved</code> lists, per function,
+  the chains a proof freed.</li>
 </ul>
-<p>On the two kernels in <code>tests/test_native.py</code> -- a sum of squares with
-<code>n &lt;= 1000</code>, a weighted sum with <code>n &lt;= 100000</code> and <code>k</code> in <code>[-50, 50]</code> --
-the body keeps only the accumulator's guard, which nothing bounds, and the
-loop's entry guard block loses its corner checks: eight fallback branches
-become two, and the three paths agree, on a call inside the declared ranges
-and on one outside them.</p>
+<h3 id="results">Results<a class="headerlink" href="#results" title="Permanent link">&para;</a></h3>
+<p><code>tests/test_native.py</code> has two kernels:</p>
+<ul>
+<li>a sum of squares with <code>n &lt;= 1000</code></li>
+<li>a weighted sum with <code>n &lt;= 100000</code> and <code>k</code> in <code>[-50, 50]</code></li>
+</ul>
+<p>On both, the body keeps only the accumulator's guard, which nothing bounds,
+and the loop's entry guard block loses its corner checks. Eight fallback
+branches become two. The three paths agree, on a call inside the declared
+ranges and on one outside them.</p>
 <h3 id="what-is-next">What is next<a class="headerlink" href="#what-is-next" title="Permanent link">&para;</a></h3>
 <ol>
 <li><code>ppy explain</code> says, per chain, <em>guarded</em>, <em>hoisted</em>, or <em>proven</em>, and
-   what the proof rested on -- today <code>NativeModule.proved</code> holds it.</li>
+   what the proof rested on. Today <code>NativeModule.proved</code> holds it.</li>
 <li>Relation facts in <code>analysis/refinements.py</code>, kept from comparisons, so
    that <code>i &lt; n and n &lt;= len(a)</code> reaches the prover.</li>
 <li>Terms for buffer elements whose storage width bounds them: an <code>i8</code>
@@ -4215,24 +4445,32 @@ and on one outside them.</p>
 </ol>
 <h2 id="2-translation-validation">2. Translation validation<a class="headerlink" href="#2-translation-validation" title="Permanent link">&para;</a></h2>
 <p>Every pass in <code>opt/passes.py</code> that rewrites integer and boolean expressions
--- <code>ConstantFold</code>, <code>Peephole</code>, <code>CommonSubexpression</code>, <code>CopyPropagation</code>,
-<code>LoopInvariantMotion</code>, <code>InlineSmallFunctions</code>, <code>LoopUnroll</code> -- claims to
-preserve behavior. The claim is testable: encode the function body before
-and after the pass over the integer fragment, bounded loops unrolled to a
-small depth, and ask whether any input distinguishes them.</p>
+claims to preserve behavior:</p>
+<ul>
+<li><code>ConstantFold</code></li>
+<li><code>Peephole</code></li>
+<li><code>CommonSubexpression</code></li>
+<li><code>CopyPropagation</code></li>
+<li><code>LoopInvariantMotion</code></li>
+<li><code>InlineSmallFunctions</code></li>
+<li><code>LoopUnroll</code></li>
+</ul>
+<p>The claim is testable. Encode the function body before and after the pass
+over the integer fragment, with bounded loops unrolled to a small depth, and
+ask whether any input distinguishes them.</p>
 <p>This runs nowhere near a user's build. It is <code>scripts/validate_passes.py</code>,
 run over the examples and the tests' fixtures, gated on the solver being
-importable, and a weekly CI job. What it catches is a wrong rewrite; what
-it costs is a script. The encoder is the same one as above, which is why
-the two applications are one plan.</p>
+importable, and a weekly CI job. What it catches is a wrong rewrite; what it
+costs is a script. The encoder is the same one as above, which is why the two
+applications are one plan.</p>
 <h2 id="what-stays-as-it-is">What stays as it is<a class="headerlink" href="#what-stays-as-it-is" title="Permanent link">&para;</a></h2>
 <ul>
 <li>Type inference, effect inference, and the interval lattice.</li>
-<li>The guard mechanism itself: a proof removes a guard, it does not replace
-  one with a different check.</li>
+<li>The guard mechanism itself: a proof removes a guard and does not replace
+  it with a different check.</li>
 <li>The runtime, which has no reason to know a solver exists.</li>
 <li>Determinism: a cached proof is keyed by the obligation and the solver
-  version, so a build is the same build on every machine that has the same
+  version. A build is the same build on every machine that has the same
   cache, and a machine without the solver produces the guarded code, which
   is correct and only slower.</li>
 </ul>
