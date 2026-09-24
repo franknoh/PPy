@@ -1,8 +1,16 @@
 # Generics
 
-Type parameters the way Python 3.12 spells them, inferred at each call and
-checked against their bounds; native code monomorphizes, one instance per
-tuple of type arguments.
+Generic functions use the Python 3.12 type-parameter syntax, and PPy infers
+the type arguments at each call and checks them against their bounds. Native
+code monomorphizes: one instance per tuple of type arguments.
+
+## Run it
+
+```bash
+python  generic.ppy
+ppy run generic.ppy
+ppy emit ir generic.ppy
+```
 
 ## Bounds lend what they promise
 
@@ -15,12 +23,15 @@ def label[T: Named](thing: T) -> str:
     return "at " + thing.name()
 ```
 
-`largest(1, 2)` is an `int` and `largest(1.5, 2.5)` a `float`: the call
-infers `T`, checks it against `int | float` (`E1721` otherwise), and has the
-declared return type with `T` substituted. An unbounded `T` has no
-operators at all. A bound that is a `Protocol` lends its methods, so `label`
-may call `name()`, and `Point`, whose members cover `Named`'s, is an
-instance of it without declaring so.
+`largest(1, 2)` is an `int` and `largest(1.5, 2.5)` a `float`. The call
+infers `T`, checks it against the bound `int | float` (`E1721` otherwise),
+and gets the declared return type with `T` substituted.
+
+- An unbounded `T` has no operators at all.
+- A bound that is a `Protocol` lends its methods, so `label` may call
+  `name()`.
+- `Point`, whose members cover `Named`'s, is an instance of `Named` without
+  declaring so.
 
 ## One instance per tuple of type arguments
 
@@ -33,28 +44,36 @@ def sweep(n: int) -> float:
 ```
 
 `sweep` is native and calls `clamp` with floats and `largest` with ints.
-Each generic is lowered once per tuple of type arguments under a name that
-spells them — `ppy emit ir` shows the instances, marked `ppy.generic` — and
-the calls inside `sweep` go straight to those instances. The generics keep
-their Python bodies for every other caller. `[tool.ppy.generics]` bounds the
-process (`max-specializations` per generic, `max-depth` of a type
-argument), and a generic that calls itself with its own parameter wrapped in
-a type is refused outright (`E1723`) because its specializations would never
-end.
+Each generic is lowered once per tuple of type arguments, under a name that
+spells them. `ppy emit ir` shows the instances, marked `ppy.generic`. The
+calls inside `sweep` go straight to those instances, and the generics keep
+their Python bodies for every other caller.
+
+## Limits on specialization
+
+`[tool.ppy.generics]` bounds the process:
+
+- `max-specializations`: instances per generic.
+- `max-depth`: depth of a type argument.
+
+A generic that calls itself with its own parameter wrapped in a type is
+refused outright (`E1723`), because its specializations would never end.
 
 ## Compared with Numba
 
 `sweep` over eight million values, in [`compare/`](compare/):
-[`generic_bench.ppy`](compare/generic_bench.ppy) -- under `ppy run` and, the
-same file, under `python` -- and
-[`generic_numba.py`](compare/generic_numba.py). Milliseconds, best of five,
-over five processes.
 
-**PPY** is the generics as Python 3.12 spells them, with bounds, called
-from a plain function; **Numba** is the same three functions under
-`@njit`, generic by dispatch: each is compiled once per tuple of argument
-types it meets, which is the same instance-per-type-tuple rule without the
-declaration:
+- [`generic_bench.ppy`](compare/generic_bench.ppy), under `ppy run` and,
+  the same file, under `python`
+- [`generic_numba.py`](compare/generic_numba.py)
+
+Times are milliseconds, best of five, over five processes.
+
+**PPy** is the generics as Python 3.12 spells them, with bounds, called from
+a plain function. **Numba** is the same three functions under `@njit`,
+generic by dispatch: each is compiled once per tuple of argument types it
+meets. That is the same instance-per-type-tuple rule without the
+declaration.
 
 ```python
 def largest[T: int | float](a: T, b: T) -> T:
@@ -77,28 +96,21 @@ def clamp(x, lo, hi):
 ```
 
 <!-- compare:start -->
-| | PPY `ppy run` | CPython, the same file | Numba `@njit` |
+| | PPy `ppy run` | CPython, the same file | Numba `@njit` |
 |---|---:|---:|---:|
 | sweep, eight million clamps and comparisons | 5.87 ± 0.03 | 428.92 ± 9.67 | **5.09 ± 0.06** |
 <!-- compare:end -->
 
-Both compile `largest` twice -- once for ints, once for floats -- and call
-the instances directly from the loop, and the loop is the same code
-either way. What PPY adds is at the source: the bound is written, so
-`largest("a", 1)` is refused before anything runs, and the file is still
-the file `python` runs. What Numba adds is nothing to write; the types are
-whatever arrives first.
+Both compile `largest` twice (once for ints, once for floats) and call the
+instances directly from the loop, and the loop is the same code either way.
 
-Intel Core Ultra 9 386H; Numba 0.67.0 on CPython 3.12.13, PPY on CPython
+- PPy adds a check at the source. The bound is written, so
+  `largest("a", 1)` is refused before anything runs, and the file is still
+  the file `python` runs.
+- Numba asks you to write nothing. The types are whatever arrives first.
+
+Intel Core Ultra 9 386H; Numba 0.67.0 on CPython 3.12.13, PPy on CPython
 3.14.5, from a checkout on a native filesystem.
-
-## Run it
-
-```bash
-python  generic.ppy
-ppy run generic.ppy
-ppy emit ir generic.ppy
-```
 
 <!-- outputs:start -->
 ## What it prints

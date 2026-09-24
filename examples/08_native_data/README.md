@@ -1,9 +1,19 @@
 # Native data
 
-Which Python values cross the boundary as machine values, and which stay
-boxed. Scalars, fixed-size tuples, and all-scalar classes are handed over
-flat; a `list[float]` is copied into a buffer on the way in; everything else
-stays on the Python side. `ppy explain` says which is which, and why.
+This example shows which Python values cross the boundary as machine
+values, and which stay boxed. `ppy explain` says which is which, and why:
+
+- Scalars, fixed-size tuples, and all-scalar classes are handed over flat.
+- A `list[float]` is copied into a buffer on the way in.
+- Everything else stays on the Python side.
+
+## Run it
+
+```bash
+python  native_data.ppy
+ppy     native_data.ppy
+ppy run native_data.ppy
+```
 
 ## Tuples
 
@@ -19,29 +29,24 @@ def centroid(a: tuple[float, float], b: tuple[float, float]) -> tuple[float, flo
 ```
 
 A `tuple[f64, f64, f64]` is three doubles in the ABI. Returning a tuple is
-two result slots, not a heap object; `centroid` allocates nothing on the
+two result slots, not a heap object, so `centroid` allocates nothing on the
 native path. `Array[int, 3]` is the same idea for a small fixed container.
 
 ## Lists
 
 `dot` takes two `list[float]` and `total` a `list[i64]`. Native code cannot
 walk a Python list, so a homogeneous list is copied into a contiguous
-buffer at the call, which is why a borrowed
+buffer at the call. That is why a borrowed
 [`Buffer[T]`](../12_buffers_and_jit/README.md) is the faster spelling.
-`total([10**30, 1])` shows the guard on the element: the first value does
+
+`total([10**30, 1])` shows the guard on the element. The first value does
 not fit an `i64`, the boundary refuses, and the Python body prints the exact
 sum.
 
+To see the representation chosen for every parameter:
+
 ```bash
 ppy explain native_data.ppy:dot     # the representation chosen for every parameter
-```
-
-## Run it
-
-```bash
-python  native_data.ppy
-ppy     native_data.ppy
-ppy run native_data.ppy
 ```
 
 <!-- outputs:start -->

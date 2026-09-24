@@ -1,13 +1,21 @@
 # Effects and contracts
 
-What `@ppy.pure` refuses, and how a value from a dynamic boundary gets back
-into typed code.
+This example shows what `@ppy.pure` refuses, and how a value from a dynamic
+boundary gets back into typed code.
+
+## Run it
+
+```bash
+python  effects.ppy
+ppy     effects.ppy
+ppy run effects.ppy
+```
 
 ## Effects are a set
 
-Every function carries an inferred effect set — I/O, global writes,
-randomness, time, mutation of arguments, each tracked on its own. A
-`@ppy.pure` decorator is a claim against that set, and the checker either
+Every function carries an inferred effect set. I/O, global writes,
+randomness, time, and mutation of arguments are each tracked on their own.
+A `@ppy.pure` decorator is a claim against that set, and the checker either
 proves it or names the effect that breaks it.
 
 ```python
@@ -20,13 +28,19 @@ def clamp(x: Annotated[int, ppy.Range(0, 255)]) -> Annotated[int, ppy.Range(0, 2
     return x
 ```
 
-`ppy.Range(0, 255)` is a refinement the checker propagates: inside `clamp`
+`ppy.Range(0, 255)` is a refinement the checker propagates. Inside `clamp`
 the arithmetic on `x` needs no overflow guard, and a caller passing `300` is
-told so at check time. `scale` builds a new list and is pure — local
-allocation is fine, mutating an argument is not. `mix` is float arithmetic
-on `f32`, pure by construction. `log_and_total` prints, so it carries `io`;
-with `@ppy.pure` on it the checker answers `E1601` with the effect named.
-The rule is interprocedural: a pure function that calls something with
+told so at check time.
+
+The other functions in the file:
+
+- `scale` builds a new list and is pure. Local allocation is fine; mutating
+  an argument is not.
+- `mix` is float arithmetic on `f32`, pure by construction.
+- `log_and_total` prints, so it carries `io`. With `@ppy.pure` on it the
+  checker answers `E1601` with the effect named.
+
+The rule is interprocedural. A pure function that calls something with
 unknown effects is `E1602`, and a callee that mutates the caller's argument
 charges the write to the caller.
 
@@ -41,17 +55,11 @@ def evaluate(source: str) -> int:
 
 `eval` is rejected in strict code (`E1501`). Inside a `ppy.dynamic` boundary
 it is allowed, but what comes out is `Dynamic`, and `Dynamic` does not fit a
-declared `-> int`. `ppy.check[int]` validates the value at run time — raising
-`TypeError` if it is not an `int` — and hands back a typed one. The boundary
-suspends the dynamic-feature rules; it does not suspend the types.
+declared `-> int`.
 
-## Run it
-
-```bash
-python  effects.ppy
-ppy     effects.ppy
-ppy run effects.ppy
-```
+`ppy.check[int]` validates the value at run time and hands back a typed one.
+If the value is not an `int`, it raises `TypeError`. The boundary suspends
+the dynamic-feature rules; it does not suspend the types.
 
 <!-- outputs:start -->
 ## What it prints

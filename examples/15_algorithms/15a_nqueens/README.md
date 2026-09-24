@@ -1,72 +1,6 @@
-# 15a — N-Queens
+# 15a: N-Queens
 
 Input: `N`. Output: how many ways N queens fit on an N×N board.
-
-## A bitmask solver
-
-```python
-def solve(full: int, columns: int, diagonal: int, antidiagonal: int) -> int:
-```
-
-Recursion lowers natively, and so do the operators a bitmask solution is
-made of: `~`, unary `-`, the shifts, and the masks. There is almost no input
-to read, so the wall clock is startup plus compute, which makes this the
-clearest look at what an embedded interpreter costs and what disappears
-when `--standalone` leaves it out.
-
-## Numbers
-
-Wall time of the whole process, measured from outside the way a judge does —
-input, interpreter startup and all. Mean ± standard deviation over 5 runs;
-`bench.py` reproduces it and `scripts/refresh.py` says when these have
-drifted. `ppy run` compiles before it runs, which is most of its time; it is
-the development path, not the one to submit. `ppy build` still starts an
-embedded CPython and imports the runtime, about 35 ms, before the program
-begins.
-
-| path | wall |
-|---|---:|
-| plain CPython | 142.0 ± 12.5 ms |
-| `ppy run` | 123.6 ± 144.1 ms |
-| `ppy build --unsafe` | 48.7 ± 14.9 ms |
-| `ppy build --standalone --unsafe` | 5.7 ± 0.2 ms |
-| C (`gcc -O3`, `scanf`) | **4.8 ± 0.1 ms** |
-| C (`clang -O3`, `scanf`) | 5.4 ± 0.1 ms |
-
-## Without CPython at all
-
-Written so that everything `main` reaches is native, the same solver
-builds standalone and there is no interpreter under it:
-
-```python
-def main() -> None:
-    n: int = ppy.input[int]()
-    print(solve((1 << n) - 1, 0, 0, 0))
-```
-
-```bash
-cd ../standalone
-ppy build --standalone nqueens.ppy -o native
-ldd native/nqueens      # linux-vdso, libc, ld-linux -- and nothing else
-```
-
-It comes out of a binary the size of the C one:
-
-| path | binary |
-|---|---:|
-| `ppy build --unsafe` (hybrid) | 16.3 KB + the runtime it imports |
-| `ppy build --standalone --unsafe` | 17.0 KB |
-| C (`gcc -O3`, `scanf`) | 16.1 KB |
-
-`ppy.input[int]()` lowers to the same buffered scan of standard input that
-`scanf` does, and the ~35 ms of interpreter startup is simply not there —
-which still leaves C slightly ahead here, because this problem reads one
-integer and then computes, so there is nothing for the faster reader to win
-back. What standalone costs is the subset: no exceptions, no `array.array`,
-no Python objects on the path from `main`, which is why the
-`try`/`except EOFError` of the committed solution has to go.
-[`standalone/`](../standalone/) holds that variant and the four others
-written the same way.
 
 ## Run it
 
@@ -90,6 +24,79 @@ clang -O3 nqueens.c -o nqueens_clang && ./nqueens_clang < input.txt
 ```
 
 <!-- outputs:end -->
+
+## A bitmask solver
+
+```python
+def solve(full: int, columns: int, diagonal: int, antidiagonal: int) -> int:
+```
+
+Recursion lowers natively, and so do the operators a bitmask solution is
+made of: `~`, unary `-`, the shifts, and the masks. There is almost no input
+to read, so the wall clock is startup plus compute. That makes this the
+clearest look at what an embedded interpreter costs and what disappears
+when `--standalone` leaves it out.
+
+## Numbers
+
+Wall time of the whole process, measured from outside the way a judge does:
+input, interpreter startup and all. Mean ± standard deviation over 5 runs.
+`bench.py` reproduces it and `scripts/refresh.py` says when these have
+drifted.
+
+| path | wall |
+|---|---:|
+| plain CPython | 142.0 ± 12.5 ms |
+| `ppy run` | 123.6 ± 144.1 ms |
+| `ppy build --unsafe` | 48.7 ± 14.9 ms |
+| `ppy build --standalone --unsafe` | 5.7 ± 0.2 ms |
+| C (`gcc -O3`, `scanf`) | **4.8 ± 0.1 ms** |
+| C (`clang -O3`, `scanf`) | 5.4 ± 0.1 ms |
+
+- `ppy run` compiles before it runs, which is most of its time. It is the
+  development path, not the one to submit.
+- `ppy build` still starts an embedded CPython and imports the runtime,
+  about 35 ms, before the program begins.
+
+## Without CPython at all
+
+Written so that everything `main` reaches is native, the same solver
+builds standalone and there is no interpreter under it:
+
+```python
+def main() -> None:
+    n: int = ppy.input[int]()
+    print(solve((1 << n) - 1, 0, 0, 0))
+```
+
+```bash
+cd ../standalone
+ppy build --standalone nqueens.ppy -o native
+ldd native/nqueens      # linux-vdso, libc, ld-linux -- and nothing else
+```
+
+The binary comes out the size of the C one:
+
+| path | binary |
+|---|---:|
+| `ppy build --unsafe` (hybrid) | 16.3 KB + the runtime it imports |
+| `ppy build --standalone --unsafe` | 17.0 KB |
+| C (`gcc -O3`, `scanf`) | 16.1 KB |
+
+`ppy.input[int]()` lowers to the same buffered scan of standard input that
+`scanf` does, and the ~35 ms of interpreter startup is not there. C still
+stays slightly ahead here: this problem reads one integer and then
+computes, so there is nothing for the faster reader to win back.
+
+## Limitations
+
+What standalone costs is the subset: no exceptions, no `array.array`, no
+Python objects on the path from `main`. That is why the
+`try`/`except EOFError` of the committed solution has to go.
+[`standalone/`](../standalone/) holds that variant and the four others
+written the same way.
+
+## Where the code comes from
 
 Generated, not hand-written: `nqueens.ppy` is exactly what
 `ppy convert nqueens.py --promote-buffers` writes, and

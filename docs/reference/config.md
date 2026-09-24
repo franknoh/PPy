@@ -1,8 +1,12 @@
 # Configuration
 
-Everything lives under `[tool.ppy]` in `pyproject.toml`. Every key has a
-default; an empty table is a valid project. The project root is found by
-walking up to the nearest `pyproject.toml`, `ppy.toml`, or `.git`.
+PPy reads its configuration from `[tool.ppy]` in `pyproject.toml`. Each key
+has a default, so an empty table is a valid project.
+
+The project root is found by walking up to the nearest `pyproject.toml`,
+`ppy.toml`, or `.git`.
+
+## Example
 
 ```toml
 [tool.ppy]
@@ -56,37 +60,78 @@ target = "rngd"                   # the one key the driver reads; the rest is th
 sdk-version = "1.4"
 ```
 
+## Keys
+
+Keys below the top level are written relative to `[tool.ppy]`: `llvm.jit`
+is `jit` in `[tool.ppy.llvm]`.
+
+### Project
+
+Tables: `[tool.ppy]`.
+
 | key | default | meaning |
 |---|---|---|
 | `python` | `>=3.12,<3.15` | the CPython versions the project promises to run on. |
 | `strict` | `true` | implicit `Any` and unsound constructs are errors; `--no-strict` downgrades the ones with a sound fallback. |
 | `opt-level` | `2` | project default, overridden per run by `-O` and per function by `@ppy.opt(n)`. |
-| `llvm.safeguards` | per command | `hoisted` proves the extreme cases once in a guard block ahead of the loop; `inline` keeps every per-operation guard in the body; `off` drops the overflow guards on data arithmetic — 64-bit wrap semantics — while keeping every bounds check. Unset, both `ppy run` and `ppy build` use `hoisted` (Python integers, bit for bit); `--unsafe` on either is `off` for that invocation. |
-| `llvm.prover` | `off` | `z3` proves overflow guards away where the ranges the analysis established allow it: a chain of `+`, `-`, `*` over values with declared ranges and `range()` bounds that provably fits a 64-bit word is emitted without its guard, and the function checks its parameters' declared ranges once on entry so that a call outside them takes the fallback. Needs `ppy-lang[solver]`; without the solver the setting is an error. Never runs in `ppy check`. |
-| `backends.<name>.*` | unset | an installed backend's own table ([Backends](../internals/backends.md)), handed to that backend and to no other; `target` also goes into the artifact's cache key. A table for a backend that is not installed is not an error. |
-| `plugins.<name>.enabled` | builtin: `true`; external: unset | a builtin plugin (`numpy`, `torch`, `jax`, `uvicorn`, `pydantic`, `scipy`, `pandas`, `pyarrow`) runs unless disabled; an installed external plugin runs only when its section exists and does not disable it. |
-| `generics.max-specializations` | `64` | how many distinct type-argument tuples one generic may be called with before `E1722`. |
-| `generics.max-depth` | `8` | how deeply a type argument may nest before `E1722`. |
-| `llvm.pipeline` | `ir` | the road through the LLVM backend: the canonical IR ([The IR](../internals/ir.md)) and its passes. `ast`, the direct AST-to-LLVM lowering 0.2.0 started with, was removed once the IR road covered everything it did; a project (or `PPY_LOWERING=ast`) still naming it is told so (`W2004`) and builds on the IR road. |
-| `llvm.sanitize` | `[]` | sanitizers to instrument every build with: `bounds`, `overflow`, `pointer`, `alignment`; `--sanitize` overrides for one run. |
-| `llvm.pgo` | unset | a `.ppyprof` from `ppy run --profile`, relative to the project root, that guides every build; `--pgo FILE` overrides for one run. |
-| `llvm.target` | `native` | the machine `ppy build` compiles for: `native` is this one; a triple (`aarch64-linux-gnu`, `x86_64-pc-windows-msvc`) is a cross build, and `ppy build --target` overrides it for one invocation. See `ppy build --target` in [the CLI page](../cli.md). |
-| `llvm.host-cpu` | `false` | compile object code for the CPU doing the build rather than the portable baseline: faster where the code vectorizes, and the artifact then needs a machine with the same instruction set. JIT code always targets the host, which is free because it never leaves the machine. |
-| `cache-dir` | `.ppy-cache` | the content-addressed store; relative to the root. The `PPY_CACHE_DIR` environment variable overrides it with a per-project tree underneath — the escape hatch for a repo on a slow filesystem, such as a Windows-mounted drive under WSL. |
+| `cache-dir` | `.ppy-cache` | the content-addressed store; relative to the root. The `PPY_CACHE_DIR` environment variable overrides it with a per-project tree underneath. Use it for a repo on a slow filesystem, such as a Windows-mounted drive under WSL. |
 | `native-import` | `true` | whether `import ppy` may serve a `.ppy` module from its native build when the compiler is installed; `false` loads every `.ppy` as source. `PPY_IMPORT=python` does the same for one process. |
 | `dynamic-boundaries` | `explicit` | `explicit` requires `ppy.dynamic` around dynamic features; `deny` forbids them outright (`E1505`). |
 | `build-execution` | `deny` | whether build-time stages may execute project code (JAX StableHLO export, pydantic schema builds). |
 | `source-roots` | `["src", "."]` | where modules are resolved from, in order. |
+
+### LLVM backend
+
+Tables: `[tool.ppy.llvm]`.
+
+| key | default | meaning |
+|---|---|---|
+| `llvm.target` | `native` | the machine `ppy build` compiles for. `native` is this one; a triple (`aarch64-linux-gnu`, `x86_64-pc-windows-msvc`) is a cross build, and `ppy build --target` overrides it for one invocation. See `ppy build --target` in [the CLI page](../cli.md). |
+| `llvm.host-cpu` | `false` | compile object code for the CPU doing the build rather than the portable baseline. Faster where the code vectorizes, and the artifact then needs a machine with the same instruction set. JIT code always targets the host, which is free because it never leaves the machine. |
 | `llvm.jit` | `true` | keep compiled code in-process via MCJIT; `false` always links a shared library. |
+| `llvm.safeguards` | per command | `hoisted` proves the extreme cases once in a guard block ahead of the loop. `inline` keeps every per-operation guard in the body. `off` drops the overflow guards on data arithmetic (64-bit wrap semantics) while keeping every bounds check. Unset, both `ppy run` and `ppy build` use `hoisted` (Python integers, bit for bit); `--unsafe` on either is `off` for that invocation. |
+| `llvm.prover` | `off` | `z3` proves overflow guards away where the ranges the analysis established allow it. A chain of `+`, `-`, `*` over values with declared ranges and `range()` bounds that provably fits a 64-bit word is emitted without its guard, and the function checks its parameters' declared ranges once on entry so that a call outside them takes the fallback. Needs `ppy-lang[solver]`; without the solver the setting is an error. Never runs in `ppy check`. |
+| `llvm.pipeline` | `ir` | the road through the LLVM backend: the canonical IR ([The IR](../internals/ir.md)) and its passes. `ast`, the direct AST-to-LLVM lowering 0.2.0 started with, was removed once the IR road covered everything it did. A project (or `PPY_LOWERING=ast`) still naming it is told so (`W2004`) and builds on the IR road. |
+| `llvm.sanitize` | `[]` | sanitizers to instrument every build with: `bounds`, `overflow`, `pointer`, `alignment`; `--sanitize` overrides for one run. |
+| `llvm.pgo` | unset | a `.ppyprof` from `ppy run --profile`, relative to the project root, that guides every build; `--pgo FILE` overrides for one run. |
+
+### Parallel loops
+
+Tables: `[tool.ppy.parallel]`.
+
+| key | default | meaning |
+|---|---|---|
 | `parallel.threads` | `auto` | worker pool size; `auto` uses every core, honouring `OMP_NUM_THREADS` when set. |
-| `parallel.backend` | `threads` | how a `parallel.range` loop is lowered: `threads` splits it across the worker count, `serial` runs it on the calling thread, `simd` hands the serial loop to the vectorizer, `openmp` spells it as OpenMP regions in `ppy emit c` (a native build cannot use it). Every choice gives the same answer. |
+| `parallel.backend` | `threads` | how a `parallel.range` loop is lowered: `threads` splits it across the worker count, `serial` runs it on the calling thread, `simd` hands the serial loop to the vectorizer, `openmp` spells it as OpenMP regions in `ppy emit c` (a native build cannot use it). All choices give the same answer. |
+
+### Conversion and formatting
+
+Tables: `[tool.ppy.inference]`, `[tool.ppy.convert]`, `[tool.ppy.format]`, `[tool.ppy.diagnostics]`.
+
+| key | default | meaning |
+|---|---|---|
 | `inference.write-local-annotations` | `true` | conversion annotates module globals and empty containers, not just signatures. |
 | `convert.format` | `false` | same as passing `--format` to every `ppy convert` (and `ppy migrate`, which shares the engine). |
 | `convert.hoist-classes` | `safe` | which classes conversion may reorder: only provably inert definitions, any (`aggressive`), or none (`off`). |
 | `format.backend` | `auto` | which formatter runs after the built-in pass; `auto` reads the project's own ruff/black configuration, `none` is built-in only. |
 | `diagnostics.optimization-remarks` | `false` | emit `R3001` remarks for applied optimizations. |
 
-CLI flags win over the file for one invocation; the file wins over defaults.
-The effective configuration participates in cache keys where it changes the
+### Plugins, backends, and generics
+
+Tables: `[tool.ppy.plugins.<name>]`, `[tool.ppy.backends.<name>]`, `[tool.ppy.generics]`.
+
+| key | default | meaning |
+|---|---|---|
+| `plugins.<name>.enabled` | builtin: `true`; external: unset | a builtin plugin (`numpy`, `torch`, `jax`, `uvicorn`, `pydantic`, `scipy`, `pandas`, `pyarrow`) runs unless disabled. An installed external plugin runs only when its section exists and does not disable it. |
+| `backends.<name>.*` | unset | an installed backend's own table ([Backends](../internals/backends.md)), handed to that backend and to no other; `target` also goes into the artifact's cache key. A table for a backend that is not installed is not an error. |
+| `generics.max-specializations` | `64` | how many distinct type-argument tuples one generic may be called with before `E1722`. |
+| `generics.max-depth` | `8` | how deeply a type argument may nest before `E1722`. |
+
+## Precedence
+
+CLI flags win over the file for one invocation, and the file wins over the
+defaults.
+
+The effective configuration takes part in cache keys where it changes the
 artifact (opt level, directives, plugin options), so flipping a knob never
 serves a stale build.

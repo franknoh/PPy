@@ -1,9 +1,19 @@
 # Tuples
 
 A tuple of known length and scalar elements is passed and returned unboxed.
-`tuple[float, float]` is two doubles in the ABI; passed to a native function
+`tuple[float, float]` is two doubles in the ABI. Passed to a native function
 it is two arguments, returned it is two result slots, and the boundary boxes
 the pair back into a Python tuple only on the way out.
+
+## Run it
+
+```bash
+python  tuples.ppy
+ppy     tuples.ppy
+ppy run tuples.ppy
+```
+
+## Pairs without a heap object
 
 ```python
 @ppy.pure
@@ -12,21 +22,25 @@ def divmod_pair(a: int, b: int) -> tuple[int, int]:
     return (a // b, a % b)
 ```
 
-`midpoint` allocates nothing on the native path; `divmod_pair` returns a
-quotient and a remainder without a heap object between them. The rule is
-exact: a homogeneous `tuple[int, ...]` has no known length and stays boxed,
-and so does a tuple wider than the ABI allows. `divmod_pair(-17, 5)` is
-`(-4, 3)`: floor division and a divisor-signed remainder, as Python's.
+`midpoint` allocates nothing on the native path. `divmod_pair` returns a
+quotient and a remainder without a heap object between them.
+`divmod_pair(-17, 5)` is `(-4, 3)`: floor division and a divisor-signed
+remainder, as Python's.
+
+The rule is exact. These stay boxed:
+
+- a homogeneous `tuple[int, ...]`, which has no known length
+- a tuple wider than the ABI allows
 
 ## Compared with Numba
 
 A million `divmod_pair` calls from Python, and a native loop that unpacks a
 tuple parameter and walks eight million steps, in [`compare/`](compare/):
-[`pairs_bench.ppy`](compare/pairs_bench.ppy) -- under `ppy run` and, the
-same file, under `python` -- and [`pairs_numba.py`](compare/pairs_numba.py).
+[`pairs_bench.ppy`](compare/pairs_bench.ppy) (under `ppy run` and, the
+same file, under `python`) and [`pairs_numba.py`](compare/pairs_numba.py).
 Milliseconds, best of five, over five processes.
 
-Tuples are native in both; PPY spells the types, Numba infers them at the
+Tuples are native in both. PPy spells the types; Numba infers them at the
 first call:
 
 ```python
@@ -49,7 +63,7 @@ def walk(start, count):
 ```
 
 <!-- compare:start -->
-| | PPY `ppy run` | CPython, the same file | Numba `@njit` |
+| | PPy `ppy run` | CPython, the same file | Numba `@njit` |
 |---|---:|---:|---:|
 | divmod_pair, a million calls from Python | **32.78 ± 1.40** | 47.86 ± 0.33 | 107.03 ± 5.77 |
 | walk, eight million steps from a tuple natively | 11.26 ± 0.12 | 316.30 ± 2.14 | **11.25 ± 0.19** |
@@ -57,24 +71,23 @@ def walk(start, count):
 
 The loop is the same machine code on both: two doubles in registers,
 nothing allocated. The call from Python is where they differ, and the
-difference is the boundary: PPY's generated wrapper unpacks two ints and
-boxes a pair on the way out, Numba's dispatcher types the arguments on
-every call. What does not lower is a tuple handed from one native function
-to another: `midpoint(point, ...)` in a native loop keeps the loop in
-Python (`ppy explain` says `a tuple result cannot be forwarded between
-native calls yet`), so the loop here takes the tuple as a parameter and
-rebuilds it in place.
+difference is the boundary. PPy's generated wrapper unpacks two ints and
+boxes a pair on the way out; Numba's dispatcher types the arguments on
+every call.
 
-Intel Core Ultra 9 386H; Numba 0.67.0 on CPython 3.12.13, PPY on CPython
+The loop here takes the tuple as a parameter and rebuilds it in place; see
+Limitations for why.
+
+Intel Core Ultra 9 386H; Numba 0.67.0 on CPython 3.12.13, PPy on CPython
 3.14.5, from a checkout on a native filesystem.
 
-## Run it
+## Limitations
 
-```bash
-python  tuples.ppy
-ppy     tuples.ppy
-ppy run tuples.ppy
-```
+A tuple handed from one native function to another does not lower yet.
+`midpoint(point, ...)` in a native loop keeps the loop in Python
+(`ppy explain` says `a tuple result cannot be forwarded between native calls
+yet`), so the loop in the comparison takes the tuple as a parameter and
+rebuilds it in place.
 
 <!-- outputs:start -->
 ## What it prints

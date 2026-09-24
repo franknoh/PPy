@@ -1,27 +1,33 @@
 # Examples
 
-Each folder holds one example and a `README.md` explaining it. Code carries no
-comments; the explanation lives in the markdown, and every README ends with
-the commands to run and what each one prints (`record_outputs.py` keeps the
-second in step with the first).
+Each folder holds one example and a `README.md` that explains it. The code
+carries no comments; the explanation lives in the Markdown. Every README ends
+with the commands to run and what each one prints, and `record_outputs.py`
+keeps the printed output in step with the commands.
 
-Where a folder holds both `<name>.py` and `<name>.ppy`, the `.ppy` is **exactly**
-what `ppy convert <name>.py` writes — `ppy migrate` for the folder whose README
-says so. `verify_conversions.py` regenerates every one of them and fails on any
-difference, so a hand edit to a file that claims to be generated is caught
-rather than believed.
+## Generated and hand-written sources
+
+Where a folder holds both `<name>.py` and `<name>.ppy`, the `.ppy` is what
+`ppy convert <name>.py` writes (`ppy migrate` for the folder whose README
+says so). `verify_conversions.py` regenerates each of them and fails on any
+difference, so a hand edit to a file that claims to be generated is caught.
+
+## Comparisons with other tools
 
 18 folders carry a `compare/` directory: the same work written for
-other tools -- Numba, Cython, NumPy, numexpr, JAX, PyTorch, CuPy, Triton,
-Taichi, Mojo, Codon, Rust, C, CUDA C, pandas, polars, asyncio, uvloop -- each
-the way its tool wants it, and a section of the README that puts the code
-side by side with the timings, or, in `11_numerics`, with what each prints,
-and says what each port asked for.
-`compare.py` is the harness: it runs every program several times, refuses to
-print a table until every one of them prints the same answers, and reports
-the mean and spread. The site collects those sections on one page.
+other tools, each the way its tool wants it. The tools are Numba, Cython,
+NumPy, numexpr, JAX, PyTorch, CuPy, Triton, Taichi, Mojo, Codon, Rust, C,
+CUDA C, pandas, polars, asyncio, and uvloop.
 
-| | |
+A section of each of those READMEs puts the code side by side with the
+timings (or, in `11_numerics`, with what each prints) and says what each port
+asked for. `compare.py` is the harness: it runs every program several times,
+refuses to print a table until all of them print the same answers, and
+reports the mean and spread. The site collects those sections on one page.
+
+## The examples
+
+| Example | What it shows |
 |---|---|
 | `01_basics` | fixed-width markers, purity, per-function opt levels |
 | `02_arbitrary_precision` | machine words, and the fallback when they overflow |
@@ -52,7 +58,7 @@ the mean and spread. The site collects those sections on one page.
 | `27_uvicorn` | serving over Uvicorn: a raw ASGI app, and a converted FastAPI service |
 | `28_threads` | a native region releasing the GIL |
 | `29_flax` | a Flax/optax training loop, converted and strict-checked |
-| `30_migrate` | a deliberately dynamic legacy script rewritten by `ppy migrate` into strict PPY |
+| `30_migrate` | a deliberately dynamic legacy script rewritten by `ppy migrate` into strict PPy |
 | `31_torchrun` | a trainer under `torchrun` and `accelerate launch`: `import ppy` serves its kernels natively on every rank |
 | `32_native_memory` | typed pointers, stack memory, a `libm` binding, and a function exported as a C symbol |
 | `33_simd_and_cpu` | vector lanes with `ppy.simd`, and the machine as a facade with `ppy.cpu` |
@@ -70,6 +76,7 @@ the mean and spread. The site collects those sections on one page.
 | `45_multi_gpu_jax` | a data-parallel JAX MLP over a mesh of every accelerator, held to a single-device run; validated on real GPUs by `scripts/cloud` |
 | `46_gpt2` | GPT-2 XL with every transformer block compiled to one ATen region; against PyTorch eager and `torch.compile` on a rented RTX 4090 |
 
+
 A folder of related problems keeps them in numbered subfolders, and every
 runner reaches them: `15_algorithms/15a_nqueens` and its five siblings are
 separate programs with their own README, C reference, and measurements.
@@ -82,10 +89,11 @@ python verify_conversions.py  # every .ppy regenerated from its .py, and linted
 python lint_all.py            # pylint over every file, source and converted
 ```
 
-`verify_conversions.py` also checks that each folder's README says whether its
-`.ppy` is generated or hand-written, and that the claim matches what is on disk.
-It fails if a conversion introduces a pylint finding the source did not have.
+`verify_conversions.py` also checks that each folder's README says whether
+its `.ppy` is generated or hand-written, and that the claim matches what is
+on disk. It fails if a conversion introduces a pylint finding the source did
+not have.
 
-`run_all.py` normalizes what is *measured* rather than computed — wall clock,
-speedup ratios, float deltas, column padding — and skips lines an example marks
-with `# ` as path-specific, so it compares answers and not benchmarks.
+`run_all.py` normalizes what is measured rather than computed (wall clock,
+speedup ratios, float deltas, column padding) and skips lines an example
+marks with `# ` as path-specific. So it compares answers, not benchmarks.

@@ -1,58 +1,8 @@
 # Native memory
 
 Typed pointers, memory a function owns, a C function bound from `libm`, and
-a function exported as a C symbol — each with a reference implementation
+a function exported as a C symbol. Each has a reference implementation
 under plain CPython.
-
-## Pointers
-
-```python
-@ppy.native
-def fill(p: native.ptr[float], n: int, scale: float) -> float:
-    total = 0.0
-    for i in range(n):
-        q = native.offset(p, i)
-        native.store(q, scale * i)
-        total += native.load(q)
-    return total
-```
-
-`native.ptr[T]` and `native.const_ptr[T]` are typed pointers; `load`,
-`store`, and `offset` read, write, and move. A store through a `const_ptr`
-is `E1631`. `native.cast[U](p)` reads the same memory as another element
-type — `bytes_of(native.cast[ppy.u8](memory), 8)` sums the first eight
-bytes of the four doubles `fill` wrote. `sizeof` and `alignof` are
-constants the checker knows.
-
-## Memory the function owns
-
-`native.stack_alloc[int](8)` is eight zeroed words on the function's own
-stack. Native code needs a constant count, and the pointer cannot be
-returned or stored where it outlives the call: the IR's verifier refuses a
-`core.ret` or a `core.store` of a stack pointer, the same way it refuses a
-borrowed parameter.
-
-## Into C, and out of it
-
-```python
-libm = ffi.library("m")
-
-
-@ffi.bind(libm, symbol="hypot", pure=True)
-def c_hypot(x: float, y: float) -> float: ...
-
-
-@native.export(name="ppy_norm")
-def norm(p: native.const_ptr[float], n: int) -> float:
-```
-
-`@ffi.bind` makes a stub a C function: ctypes under CPython, a direct call
-in native code, and `ppy emit ir` shows the `core.call_extern` with
-`ppy.libraries = ("m",)` on the module. `@native.export` makes `norm` a
-public symbol in the library `ppy build` writes, declared in the header
-beside it. A C caller has no Python to fall back to, so a failed guard
-traps. `ppy bind header foo.h` writes a module of such bindings from a C
-header.
 
 ## Run it
 
@@ -285,6 +235,60 @@ func @native_memory_bytes_of(%p: ptr<u8, generic, const>, %n: i64) -> i64 attrs 
 </details>
 
 <!-- outputs:end -->
+
+## Pointers
+
+```python
+@ppy.native
+def fill(p: native.ptr[float], n: int, scale: float) -> float:
+    total = 0.0
+    for i in range(n):
+        q = native.offset(p, i)
+        native.store(q, scale * i)
+        total += native.load(q)
+    return total
+```
+
+- `native.ptr[T]` and `native.const_ptr[T]` are typed pointers.
+- `load`, `store`, and `offset` read, write, and move.
+- A store through a `const_ptr` is `E1631`.
+- `native.cast[U](p)` reads the same memory as another element type.
+  `bytes_of(native.cast[ppy.u8](memory), 8)` sums the first eight bytes of
+  the four doubles `fill` wrote.
+- `sizeof` and `alignof` are constants the checker knows.
+
+## Memory the function owns
+
+`native.stack_alloc[int](8)` is eight zeroed words on the function's own
+stack. Native code needs a constant count.
+
+The pointer cannot be returned or stored where it outlives the call. The
+IR's verifier refuses a `core.ret` or a `core.store` of a stack pointer, the
+same way it refuses a borrowed parameter.
+
+## Calling C and exporting to C
+
+```python
+libm = ffi.library("m")
+
+
+@ffi.bind(libm, symbol="hypot", pure=True)
+def c_hypot(x: float, y: float) -> float: ...
+
+
+@native.export(name="ppy_norm")
+def norm(p: native.const_ptr[float], n: int) -> float:
+```
+
+`@ffi.bind` makes a stub a C function: ctypes under CPython, a direct call
+in native code. `ppy emit ir` shows the `core.call_extern` with
+`ppy.libraries = ("m",)` on the module.
+
+`@native.export` makes `norm` a public symbol in the library `ppy build`
+writes, declared in the header beside it. A C caller has no Python to fall
+back to, so a failed guard traps.
+
+`ppy bind header foo.h` writes a module of such bindings from a C header.
 
 Read on: [Native memory and FFI](../../docs/guide/native.md) ·
 [Lanes and the machine](../33_simd_and_cpu/README.md)
