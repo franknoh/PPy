@@ -916,10 +916,16 @@ class CollectionLowering:
 
     def _constructed(self, node: ast.expr) -> Kind | None:
         """The collection `node` makes, if it is `ppy.Vec[...](...)` or one like it."""
-        if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Subscript):
+        if not isinstance(node, ast.Call):
+            return None
+        if isinstance(node.func, ast.Subscript):
+            spelled_name = ast.unparse(node.func.value).rpartition(".")[2]
+        elif isinstance(node.func, (ast.Name, ast.Attribute)):
+            # `Vec()`, its type taken from where it goes.
+            spelled_name = ast.unparse(node.func).rpartition(".")[2]
+        else:
             return None
         kind = self._kind_of(node)
-        spelled_name = ast.unparse(node.func.value).rpartition(".")[2]
         if kind is None or kind.name != spelled_name:
             return None
         return kind
