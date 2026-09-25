@@ -2117,6 +2117,9 @@ class _FunctionLowering(CollectionLowering):
             and node.func.value.id in self.matches
         ):
             return self._match_method(node.func.value.id, node)
+        called_super = self._super_call(node, discard_result)
+        if called_super is not None:
+            return called_super
         if isinstance(node.func, ast.Attribute) and self._object_of(node.func.value) is not None:
             return self._object_method(node, discard_result)
         if isinstance(node.func, ast.Attribute) and self._is_collection(node.func.value):
@@ -2176,6 +2179,10 @@ class _FunctionLowering(CollectionLowering):
         for qualname, (info, options) in self.frontend.externs.items():
             if qualname.rpartition(".")[2] == target:
                 return self._extern_call(info, options, node)
+        if target == "isinstance":
+            checked = self._is_instance(node)
+            if checked is not None:
+                return checked
         if target == "len" and len(node.args) == 1:
             argument = node.args[0]
             if self._is_collection(argument):
@@ -3294,7 +3301,7 @@ class _FunctionLowering(CollectionLowering):
             if parameter.is_handle:
                 none = isinstance(argument, ast.Constant) and argument.value is None
                 kind = self._reference_of(argument)
-                if not none and (kind is None or kind.spelled != parameter.element):
+                if not none and (kind is None or not self._accepts(parameter, kind)):
                     shown = kind.spelled if kind is not None else ast.unparse(argument)
                     raise Unsupported(
                         f"`{qualname}` expects a `{parameter.element}`, not `{shown}`"

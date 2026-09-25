@@ -153,10 +153,16 @@ def value_class_layouts(bundle) -> dict[str, tuple[tuple[str, str], ...]]:  # ty
 
     scalars = {"int", "float", "bool"}
     layouts: dict[str, tuple[tuple[str, str], ...]] = {}
-    for qualname, info in bundle.symbols.classes.items():
+    classes = bundle.symbols.classes
+    # A class another class derives from may be handed a subclass's instance,
+    # which a copy of the base's fields would cut short: it is an object.
+    derived_from = {entry for info in classes.values() for entry in info.mro[1:]}
+    for qualname, info in classes.items():
         if info.is_protocol or info.is_enum or info.is_pydantic:
             continue
         if tuple(entry for entry in info.mro if entry != "object") != (qualname,):
+            continue
+        if qualname in derived_from:
             continue
         # Reading a field must be a plain attribute read: anything that can
         # intercept it could observe the flattening.
@@ -182,15 +188,45 @@ def value_class_layouts(bundle) -> dict[str, tuple[tuple[str, str], ...]]:  # ty
     # An object class: a project class with no base and no field interceptor
     # that is not a value class. Native code holds its instances by handle; an
     # empty layout marks it, which the value-class readers already skip.
-    for qualname, info in bundle.symbols.classes.items():
+    for qualname, info in classes.items():
         if qualname in layouts or info.is_protocol or info.is_enum or info.is_pydantic:
             continue
-        if tuple(entry for entry in info.mro if entry != "object") != (qualname,):
+        chain = object_chain(info, classes)
+        if chain is None:
             continue
-        if _INTERCEPTORS & set(info.methods) or set(info.fields) & set(info.methods):
+        fields = {name for entry in chain for name in entry.fields}
+        methods = {name for entry in chain for name in entry.methods}
+        if _INTERCEPTORS & methods or fields & methods:
             continue
         layouts[qualname] = ()
     return layouts
+
+
+def object_chain(info, classes):  # type: ignore[no-untyped-def]
+    """The classes an object class is made of, its root first, or None.
+
+    Native code holds an instance of a class and of each of its bases as one
+    record: the root's fields, then each subclass's own. That takes single
+    inheritance from classes of the same module, none of them generic.
+    """
+    chain = []
+    for entry in info.mro:
+        if entry == "object":
+            continue
+        found = classes.get(entry)
+        if found is None or found.module != info.module:
+            return None
+        if found.is_protocol or found.is_enum or found.is_pydantic:
+            return None
+        bases = [name for name in found.base_names if name != "object"]
+        if len(bases) > 1 or (bases and found.type_params):
+            return None
+        chain.append(found)
+    if len(chain) > 1 and any(entry.type_params for entry in chain):
+        return None
+    if [entry.qualname for entry in chain][:1] != [info.qualname]:
+        return None
+    return list(reversed(chain))
 
 
 def canonical_ir_modules(  # type: ignore[no-untyped-def]

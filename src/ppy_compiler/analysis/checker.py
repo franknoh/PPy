@@ -4861,8 +4861,9 @@ class _Checker:
         if isinstance(base, T.Tuple_) and not base.homogeneous and base.items:
             return all(T.strip_literal(i) in (T.INT, T.FLOAT, T.BOOL) for i in base.items)
         if isinstance(base, T.Instance):
-            info = self.project.classes.get(base.name)
-            return info is not None and info.is_dataclass
+            # A project class: a dataclass of numbers is held as a value, and
+            # any other class as an object, by handle.
+            return self.project.classes.get(base.name) is not None
         return False
 
     def _collection_key(self, t: T.Type) -> bool:
@@ -5459,6 +5460,13 @@ class _Checker:
             root = _collection_root(node)
             while isinstance(root, ast.Attribute):
                 root = _collection_root(root.value)
+            receiver = self._super_receiver(root)
+            if receiver is not None:
+                # `super().method()` works on the method's own receiver.
+                self._mutated.add(receiver)
+                self._blockers.append(f"mutates parameter `{receiver}`")
+                self._external_writes = True
+                return
             if isinstance(root, ast.Name) and self._aliases is not None:
                 roots = self._roots(root, root.id)
                 params = self._aliases.param_roots(roots)
@@ -5491,6 +5499,20 @@ class _Checker:
         self._foreign_writes = True
         self._external_writes = True
         self._blockers.append(f"mutates `{ast.unparse(node)}`")
+
+    def _super_receiver(self, node: ast.expr) -> str | None:
+        """The receiver `super()` stands for in a method: its first parameter."""
+        if not (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Name)
+            and node.func.id == "super"
+            and not node.args
+        ):
+            return None
+        current = self._current
+        if current is None or current.owner is None or not current.params:
+            return None
+        return current.params[0].name
 
     def _note_callee_writes(self, info: FunctionInfo, node: ast.Call) -> None:
         """A callee that mutates writes through whatever it was handed.

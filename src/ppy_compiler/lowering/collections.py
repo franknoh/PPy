@@ -18,11 +18,13 @@ its own.
 from __future__ import annotations
 
 import ast
+import hashlib
 from dataclasses import dataclass
 
 from ..analysis import types as T
 from ..analysis.symbols import ClassInfo
 from ..backend.llvm.lowering import Unsupported
+from ..driver.ir_pipeline import object_chain
 from ..ir import (
     BOOL,
     F64,
@@ -285,12 +287,34 @@ class CollectionLowering:
         return self._kind_of(node) is not None
 
     def _object_of(self, node: ast.expr) -> Shape | None:
-        """The object class an expression's value is an instance of, if any."""
+        """The object class an expression's value is an instance of, if any.
+
+        A name is what the checker says it is at that point, which narrows it
+        (`isinstance(shape, Square)`); a name the checker says nothing of is
+        what it was bound as.
+        """
+        found = shape_of(self._type_of(node), self._records())
+        if found is not None and found.kind == "object":
+            if isinstance(node, ast.Name) and node.id in self.collections:
+                held = self.collections[node.id].kind
+                if not isinstance(held, Shape):
+                    return None
+            return found
         if isinstance(node, ast.Name) and node.id in self.collections:
             held = self.collections[node.id].kind
             return held if isinstance(held, Shape) else None
-        found = shape_of(self._type_of(node), self._records())
-        return found if found is not None and found.kind == "object" else None
+        return None
+
+    def _accepts(self, parameter: object, kind: Kind | Shape) -> bool:
+        """Whether a handle parameter takes `kind`: the same type, or an object of a
+        class deriving from the parameter's."""
+        element = parameter.element  # type: ignore[attr-defined]
+        if kind.spelled == element:
+            return True
+        if not isinstance(kind, Shape) or kind.kind != "object":
+            return False
+        wanted = parameter.class_name  # type: ignore[attr-defined]
+        return bool(wanted) and self._subclass_of(kind.record, wanted) and not kind.class_args
 
     def _reference_of(self, node: ast.expr) -> Kind | Shape | None:
         """A collection or an object: what native code holds `node` by handle as."""
@@ -305,11 +329,43 @@ class CollectionLowering:
     # -- objects ------------------------------------------------------------
 
     def _class_info(self, shape: Shape) -> ClassInfo:
-        classes = self.frontend.analysis.symbols.classes  # type: ignore[attr-defined]
-        info = classes.get(shape.record.rpartition(".")[2])
-        if info is None or info.qualname != shape.record:
-            raise Unsupported(f"`{shape.record}` is defined in another module")
+        return self._class_named(shape.record)
+
+    def _class_named(self, qualname: str) -> ClassInfo:
+        info = self._module_classes().get(qualname)
+        if info is None:
+            raise Unsupported(f"`{qualname}` is defined in another module")
         return info
+
+    def _module_classes(self) -> dict[str, ClassInfo]:
+        """This module's classes, by qualified name."""
+        classes = self.frontend.analysis.symbols.classes  # type: ignore[attr-defined]
+        return {info.qualname: info for info in classes.values()}
+
+    def _chain(self, shape: Shape) -> list[ClassInfo]:
+        """An object class and its bases, the root first: the order of its fields."""
+        info = self._class_info(shape)
+        chain = object_chain(info, self._module_classes())
+        if chain is None:
+            raise Unsupported(f"`{info.name}` derives from a class native code cannot hold")
+        return chain
+
+    def _subclasses(self, qualname: str) -> list[ClassInfo]:
+        """The classes of this module an instance of `qualname` may be: it and those
+        deriving from it."""
+        return [
+            info
+            for info in self._module_classes().values()
+            if qualname in info.mro and object_chain(info, self._module_classes()) is not None
+        ]
+
+    def _resolve(self, info: ClassInfo, attr: str) -> ClassInfo | None:
+        """The class whose `attr` an instance of `info` runs: the first along its bases."""
+        chain = object_chain(info, self._module_classes()) or [info]
+        for entry in reversed(chain):
+            if attr in entry.methods:
+                return entry
+        return None
 
     def _layout(self, shape: Shape) -> Layout:
         """Where each field of an object class sits, with its class arguments in."""
@@ -324,16 +380,17 @@ class CollectionLowering:
         bindings = dict(zip(info.type_params, shape.class_args, strict=False))
         fields: dict[str, tuple[int, Shape]] = {}
         offset = floats = handles = 0
-        for name, declared in info.fields.items():
-            if name in info.class_vars:
-                continue
-            field_shape = shape_of(T.substitute(declared, bindings), self._records())
-            if field_shape is None:
-                raise Unsupported(f"field `{name}` of `{info.name}` has no native form")
-            fields[name] = (offset, field_shape)
-            floats |= field_shape.floats << offset
-            handles |= field_shape.handles << offset
-            offset += field_shape.words
+        for owner in self._chain(shape):
+            for name, declared in owner.fields.items():
+                if name in owner.class_vars or name in fields:
+                    continue
+                field_shape = shape_of(T.substitute(declared, bindings), self._records())
+                if field_shape is None:
+                    raise Unsupported(f"field `{name}` of `{owner.name}` has no native form")
+                fields[name] = (offset, field_shape)
+                floats |= field_shape.floats << offset
+                handles |= field_shape.handles << offset
+                offset += field_shape.words
         if offset > 64:
             raise Unsupported(f"`{info.name}` has more than 64 words of fields")
         found = Layout(fields, max(offset, 1), floats, handles)
@@ -373,8 +430,9 @@ class CollectionLowering:
             ),
             HANDLE,
         )
+        self._set_tag(made, shape.record)
         info = self._class_info(shape)
-        if "__init__" in info.methods:
+        if self._resolve(info, "__init__") is not None:
             self._method_call(shape, "__init__", made, node.args, node.keywords, discard=True)
             return made
         if not info.is_dataclass:
@@ -390,20 +448,50 @@ class CollectionLowering:
             if keyword.arg is None or keyword.arg in given:
                 raise Unsupported(f"`{info.name}` is built from each field once")
             given[keyword.arg] = keyword.value
-        defaults = _field_defaults(info.node)
+        defaults: dict[str, ast.expr] = {}
+        for owner in self._chain(shape):
+            defaults.update(_field_defaults(owner.node))
+        factories: dict[str, ast.expr] = {}
+        for owner in self._chain(shape):
+            factories.update(_field_factories(owner.node))
         for name, (offset, field_shape) in layout.fields.items():
             value = given.get(name, defaults.get(name))
+            address = self._field_address(made, offset)
+            if value is None and name in factories:
+                self._write(address, field_shape, self._made_by(factories[name], field_shape))
+                continue
             if value is None:
                 raise Unsupported(f"`{info.name}` needs `{name}`, whose default is not a constant")
-            self._store_into(self._field_address(made, offset), field_shape, value, fresh=True)
+            self._store_into(address, field_shape, value, fresh=True)
         return made
+
+    def _made_by(self, factory: ast.expr, shape: Shape) -> Value:
+        """What `field(default_factory=...)` makes for one instance: a new
+        collection, or a new object of a class that takes no arguments."""
+        if shape.kind == "collection":
+            assert shape.collection is not None
+            spelled_name = ast.unparse(
+                factory.value if isinstance(factory, ast.Subscript) else factory
+            ).rpartition(".")[2]
+            if spelled_name != shape.collection.name:
+                raise Unsupported(f"`{ast.unparse(factory)}` does not make the field's collection")
+            return self._new(shape.collection)
+        if shape.kind == "object":
+            named = ast.unparse(factory)
+            if named != shape.record.rpartition(".")[2]:
+                raise Unsupported(f"`{named}` does not make the field's class")
+            call = ast.Call(func=factory, args=[], keywords=[])
+            ast.copy_location(call, factory)
+            return self._instance(shape, call)
+        raise Unsupported(f"`{ast.unparse(factory)}` has no native form as a default")
 
     def _method(self, shape: Shape, attr: str) -> tuple[object, object, str]:
         """The native function behind a method, instantiated for a generic class."""
-        info = self._class_info(shape)
-        method = info.methods.get(attr)
-        if method is None:
-            raise Unsupported(f"`{info.name}` has no method `{attr}`")
+        owner = self._resolve(self._class_info(shape), attr)
+        if owner is None:
+            raise Unsupported(f"`{shape.record}` has no method `{attr}`")
+        info = owner
+        method = info.methods[attr]
         frontend = self.frontend
         if info.type_params:
             bindings = dict(zip(info.type_params, shape.class_args, strict=True))
@@ -424,8 +512,13 @@ class CollectionLowering:
         keywords: list[ast.keyword],
         *,
         discard: bool = False,
+        exact: bool = False,
     ) -> Value:
-        """`obj.method(args)`: the method's native function, called with the handle first."""
+        """`obj.method(args)`: the method's native function, called with the handle first.
+
+        Where a subclass overrides the method, the call goes by the class the
+        object was made as, which its tag says.
+        """
         if keywords:
             raise Unsupported(f"`{attr}` takes positional arguments natively")
         function, signature, qualname = self._method(shape, attr)
@@ -435,7 +528,11 @@ class CollectionLowering:
         temporaries = self._temporaries[waiting:]  # type: ignore[attr-defined]
         del self._temporaries[waiting:]  # type: ignore[attr-defined]
         results = function.results  # type: ignore[attr-defined]
-        called = core.call(self.b, function.name, (receiver, *values), results)  # type: ignore[attr-defined]
+        overrides = [] if exact else self._overrides(shape, attr)
+        if overrides:
+            called = self._dispatch(shape, attr, receiver, values, overrides, function)
+        else:
+            called = core.call(self.b, function.name, (receiver, *values), results)  # type: ignore[attr-defined]
         for handle in temporaries:
             self._release(handle)
         if not results:
@@ -446,6 +543,162 @@ class CollectionLowering:
         if discard and result.type == HANDLE:
             self._release(result)
         return result
+
+    def _overrides(self, shape: Shape, attr: str) -> list[tuple[ClassInfo, list[int]]]:
+        """Where `attr` runs differently for some class an instance of `shape` may
+        be: each implementation other than the static one, with the tags of the
+        classes that run it. Empty when every such class runs the same one."""
+        if attr == "__init__":
+            return []
+        static = self._resolve(self._class_info(shape), attr)
+        grouped: dict[str, tuple[ClassInfo, list[int]]] = {}
+        for info in self._subclasses(shape.record):
+            owner = self._resolve(info, attr)
+            if owner is None or owner is static:
+                continue
+            grouped.setdefault(owner.qualname, (owner, []))[1].append(class_tag(info.qualname))
+        return list(grouped.values())
+
+    def _dispatch(  # pylint: disable=too-many-arguments,too-many-positional-arguments
+        self,
+        shape: Shape,
+        attr: str,
+        receiver: Value,
+        values: list[Value],
+        overrides: list[tuple[ClassInfo, list[int]]],
+        function: object,
+    ) -> object:
+        """A call that goes by the object's tag: each override where it matches,
+        the static method otherwise."""
+        results = function.results  # type: ignore[attr-defined]
+        slot = self._alloca(results[0], f"{attr}.result") if results else None  # type: ignore[attr-defined]
+        tag = self._tag(receiver)
+        done = self._block(f"{attr}.done")  # type: ignore[attr-defined]
+        for owner, tags in overrides:
+            other = Shape("object", record=owner.qualname, class_args=shape.class_args)
+            implementation, _signature, _ = self._method(other, attr)
+            if [t for _, t in implementation.params[1:]] != [  # type: ignore[attr-defined]
+                t for _, t in function.params[1:]  # type: ignore[attr-defined]
+            ] or implementation.results != results:  # type: ignore[attr-defined]
+                raise Unsupported(f"`{owner.name}.{attr}` overrides with another signature")
+            matched = core.cmp(self.b, "eq", tag, self._word(tags[0]))
+            for more in tags[1:]:
+                matched = core.bitwise(
+                    self.b, "or", matched, core.cmp(self.b, "eq", tag, self._word(more))
+                )
+            here = self._block(f"{attr}.{owner.name}")  # type: ignore[attr-defined]
+            after = self._block(f"{attr}.next")  # type: ignore[attr-defined]
+            core.cond_br(self.b, matched, Successor(here), Successor(after))
+            self.b.at_end(here)  # type: ignore[attr-defined]
+            made = core.call(self.b, implementation.name, (receiver, *values), results)  # type: ignore[attr-defined]
+            if slot is not None:
+                core.store(self.b, made.results[0], slot)
+            core.br(self.b, Successor(done))
+            self.b.at_end(after)  # type: ignore[attr-defined]
+        made = core.call(self.b, function.name, (receiver, *values), results)  # type: ignore[attr-defined]
+        if slot is not None:
+            core.store(self.b, made.results[0], slot)
+        core.br(self.b, Successor(done))
+        self.b.at_end(done)  # type: ignore[attr-defined]
+        return _Called((core.load(self.b, slot),) if slot is not None else ())
+
+    def _set_tag(self, handle: Value, qualname: str) -> None:
+        """The class an object was made as, in its header's spare word."""
+        words = core.cast(self.b, handle, PtrType(I64))
+        address = core.ptr_offset(self.b, words, self._word(_TAG))
+        core.store(self.b, self._word(class_tag(qualname)), address)
+
+    def _tag(self, handle: Value) -> Value:
+        words = core.cast(self.b, handle, PtrType(I64))
+        return core.load(self.b, core.ptr_offset(self.b, words, self._word(_TAG)))
+
+    def _is_instance(self, node: ast.Call) -> Value | None:
+        """`isinstance(obj, Cls)`: the object is there and was made as `Cls` or a
+        class deriving from it."""
+        if len(node.args) != 2 or node.keywords:
+            return None
+        shape = self._object_of(node.args[0])
+        if shape is None:
+            return None
+        classes = node.args[1].elts if isinstance(node.args[1], ast.Tuple) else [node.args[1]]
+        wanted: list[str] = []
+        for spelled_class in classes:
+            called = T.strip_literal(self._type_of(spelled_class))
+            if not isinstance(called, T.ClassObject):
+                raise Unsupported("`isinstance` natively takes classes of this module")
+            wanted.append(called.name)
+        handle, owned = self._handle(node.args[0])
+        present = self._present(handle)
+        if any(self._subclass_of(shape.record, name) for name in wanted):
+            truth = present
+        else:
+            tags = sorted(
+                {class_tag(info.qualname) for name in wanted for info in self._subclasses(name)}
+            )
+            if not tags:
+                self._done_with(handle, owned)
+                return core.const(self.b, False, BOOL)
+            # A null handle has no tag to read: read it only where there is one.
+            slot = self._alloca(BOOL, "isinstance")  # type: ignore[attr-defined]
+            core.store(self.b, core.const(self.b, False, BOOL), slot)
+            there = self._block("isinstance.there")  # type: ignore[attr-defined]
+            done = self._block("isinstance.done")  # type: ignore[attr-defined]
+            core.cond_br(self.b, present, Successor(there), Successor(done))
+            self.b.at_end(there)  # type: ignore[attr-defined]
+            tag = self._tag(handle)
+            matched = core.cmp(self.b, "eq", tag, self._word(tags[0]))
+            for more in tags[1:]:
+                matched = core.bitwise(
+                    self.b, "or", matched, core.cmp(self.b, "eq", tag, self._word(more))
+                )
+            core.store(self.b, matched, slot)
+            core.br(self.b, Successor(done))
+            self.b.at_end(done)  # type: ignore[attr-defined]
+            truth = core.load(self.b, slot)
+        self._done_with(handle, owned)
+        return truth
+
+    def _subclass_of(self, qualname: str, base: str) -> bool:
+        info = self._module_classes().get(qualname)
+        return info is not None and base in info.mro
+
+    def _super_call(self, node: ast.Call, discard: bool) -> Value | None:
+        """`super().method(args)` in a method: the next class's method along the
+        bases, called directly on `self`."""
+        func = node.func
+        if not (
+            isinstance(func, ast.Attribute)
+            and isinstance(func.value, ast.Call)
+            and isinstance(func.value.func, ast.Name)
+            and func.value.func.id == "super"
+            and not func.value.args
+        ):
+            return None
+        info = getattr(self, "info", None)
+        owner_name = info.owner if info is not None else None
+        receiver_name = info.params[0].name if info is not None and info.params else None
+        if not owner_name or receiver_name is None or receiver_name not in self.collections:
+            raise Unsupported("`super()` natively calls from a method of an object class")
+        held = self.collections[receiver_name].kind
+        assert isinstance(held, Shape)
+        current = self._class_named(owner_name)
+        chain = object_chain(current, self._module_classes())
+        if chain is None or len(chain) < 2:
+            raise Unsupported(f"`{current.name}` has no base for `super()` to call")
+        found = None
+        for entry in reversed(chain[:-1]):
+            if func.attr in entry.methods:
+                found = entry
+                break
+        handle = core.load(self.b, self.collections[receiver_name].slot)
+        if found is None:
+            if func.attr == "__init__" and not node.args and not node.keywords:
+                return self._word(0)
+            raise Unsupported(f"no base of `{current.name}` has `{func.attr}`")
+        base = Shape("object", record=found.qualname, class_args=held.class_args)
+        return self._method_call(
+            base, func.attr, handle, node.args, node.keywords, discard=discard, exact=True
+        )
 
     def _object_method(self, node: ast.Call, discard: bool) -> Value:
         """A method called on an object expression."""
@@ -690,7 +943,7 @@ class CollectionLowering:
     def _bind(self, name: str, kind: Kind | Shape, handle: Value, owned: bool) -> None:
         """`name` now holds `handle`: one reference taken, the old one let go."""
         held = self.collections.get(name)
-        if held is not None and held.kind != kind:
+        if held is not None and held.kind != kind and not _related(held.kind, kind):
             raise Unsupported(f"`{name}` keeps one collection type")
         if held is None:
             slot = self._alloca(HANDLE, name)  # type: ignore[attr-defined]
@@ -1230,6 +1483,16 @@ class CollectionLowering:
 _OWNED_RESULTS = {"pop": True, "pop_front": True, "pop_back": True, "remove": True}
 
 
+def _related(held: Kind | Shape, kind: Kind | Shape) -> bool:
+    """Two object classes: a name holds either by the same handle, and what the
+    checker says of each use decides which class it is read as."""
+    return (
+        isinstance(held, Shape)
+        and isinstance(kind, Shape)
+        and held.kind == kind.kind == "object"
+    )
+
+
 def _kinds(shape: Shape) -> tuple[str, ...]:
     return shape.parts if shape.kind in {"tuple", "record"} else (shape.kind,)
 
@@ -1251,6 +1514,24 @@ def _pointer(address: Value, pointee: IRType) -> PtrType:
 
 
 @dataclass(frozen=True, slots=True)
+class _Called:
+    """What `_dispatch` hands back in place of a call: its results."""
+
+    results: tuple[Value, ...]
+
+
+#: The header word an object's class tag is kept in: family word b, which a
+#: sequence (an object's record lives in a one-element sequence) leaves unused.
+_TAG = 4
+
+
+def class_tag(qualname: str) -> int:
+    """A class's tag: the same number wherever the class is compiled."""
+    digest = hashlib.sha256(qualname.encode()).digest()
+    return int.from_bytes(digest[:7], "little") | 1
+
+
+@dataclass(frozen=True, slots=True)
 class _Parameters:
     """A signature's parameters after the receiver, for matching call arguments."""
 
@@ -1258,14 +1539,39 @@ class _Parameters:
 
 
 def _field_defaults(node: ast.ClassDef) -> dict[str, ast.expr]:
-    """A dataclass's fields with a constant default (`None` included): the rest
-    have to be given when native code builds one."""
+    """A dataclass's fields with a constant default (`None` included), written
+    out or as `field(default=...)`: the rest have to be given, or made by a
+    factory, when native code builds one."""
     found: dict[str, ast.expr] = {}
     for item in node.body:
-        if (
-            isinstance(item, ast.AnnAssign)
-            and isinstance(item.target, ast.Name)
-            and isinstance(item.value, ast.Constant)
-        ):
+        if not isinstance(item, ast.AnnAssign) or not isinstance(item.target, ast.Name):
+            continue
+        if isinstance(item.value, ast.Constant):
             found[item.target.id] = item.value
+        default = _field_keyword(item.value, "default")
+        if isinstance(default, ast.Constant):
+            found[item.target.id] = default
     return found
+
+
+def _field_factories(node: ast.ClassDef) -> dict[str, ast.expr]:
+    """A dataclass's fields made per instance: `field(default_factory=Vec[int])`."""
+    found: dict[str, ast.expr] = {}
+    for item in node.body:
+        if isinstance(item, ast.AnnAssign) and isinstance(item.target, ast.Name):
+            factory = _field_keyword(item.value, "default_factory")
+            if factory is not None:
+                found[item.target.id] = factory
+    return found
+
+
+def _field_keyword(value: ast.expr | None, keyword: str) -> ast.expr | None:
+    """`field(keyword=...)`'s value, where `value` is a call of `dataclasses.field`."""
+    if not isinstance(value, ast.Call) or value.args:
+        return None
+    if ast.unparse(value.func) not in {"field", "dataclasses.field"}:
+        return None
+    for item in value.keywords:
+        if item.arg == keyword:
+            return item.value
+    return None
