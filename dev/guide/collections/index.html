@@ -2050,6 +2050,8 @@
       
         
       
+        
+      
     
     
     
@@ -2446,6 +2448,34 @@
     
   
     Collections
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../howto/49_inheritance/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Inheritance
   
 
     
@@ -4447,7 +4477,9 @@ them and times each path.</p>
 </tbody>
 </table>
 <p>Make one by subscripting the class and calling it: <code>Vec[int]()</code>,
-<code>HashMap[int, float]()</code>. <code>Vec[T](n)</code> starts with <code>n</code> zeros of <code>T</code>: <code>0</code>,
+<code>HashMap[int, float]()</code>. Where the target says the type, the subscript may
+be left out: <code>v: Vec[int] = Vec()</code>. A collection of floats keeps it, as
+<a href="../classes/#generic-classes">Classes</a> explains. <code>Vec[T](n)</code> starts with <code>n</code> zeros of <code>T</code>: <code>0</code>,
 <code>0.0</code>, <code>False</code>, a tuple of zeros, a dataclass of zero fields, or a new empty
 collection in each slot.</p>
 <h2 id="what-a-collection-holds">What a collection holds<a class="headerlink" href="#what-a-collection-holds" title="Permanent link">&para;</a></h2>
@@ -4458,6 +4490,7 @@ collection in each slot.</p>
 <li>a tuple of numbers: <code>Vec[tuple[int, float]]</code></li>
 <li>a dataclass whose fields are numbers: <code>Vec[Point]</code></li>
 <li>another collection: <code>Vec[Vec[int]]</code>, <code>HashMap[int, Vec[int]]</code></li>
+<li>an instance of an object class: <code>Vec[Shape]</code>, which may hold subclasses</li>
 </ul>
 <p>A key of a map or a set is an <code>int</code> or a tuple of them:
 <code>HashMap[tuple[int, int], int]</code> for a grid, <code>TreeSet[tuple[int, int]]</code> for
@@ -4499,8 +4532,12 @@ it is refused. A collection has no order either.</p>
 <h3 id="aliases">Aliases<a class="headerlink" href="#aliases" title="Permanent link">&para;</a></h3>
 <p>A collection element read into a name is the same collection, not a copy,
 as it is in Python: after <code>row = grid[0]</code>, <code>row.push(1)</code> changes
-<code>grid[0]</code>. A dataclass element is a value: it is read and written whole,
-and setting a field of one in place keeps the function in Python.</p>
+<code>grid[0]</code>, and the same holds for an object element. A dataclass element of
+numbers is a value, held in the collection's own words. <code>points[i].x = 3</code>
+and <code>table[k].y += 0.5</code> write the field where the element is held. A
+function that also keeps a copy of such an element in a name, a loop target,
+or a parameter stays in Python, since CPython's copy would be the same object
+and see the write.</p>
 <h2 id="generic-functions">Generic functions<a class="headerlink" href="#generic-functions" title="Permanent link">&para;</a></h2>
 <p>A generic function can take, make, and return collections of its type
 parameter. Native code makes one instance per type it is called with, as a
@@ -4800,8 +4837,6 @@ natively, so it runs as Python when called from Python.</p>
 <ul>
 <li>Keys are <code>int</code> or tuples of <code>int</code>.</li>
 <li><code>get(key, default)</code> natively takes a map whose values are numbers.</li>
-<li>A dataclass element is read and written whole; setting a field of one in
-  place keeps the function in Python.</li>
 <li>A collection holds a user class's instances natively when the class is a
   value class or an object class; see <a href="../classes/">Classes</a>.</li>
 </ul>

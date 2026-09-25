@@ -844,6 +844,28 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#inheritance" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Inheritance
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#operators" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Operators
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#generic-classes" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1889,6 +1911,8 @@
       
         
       
+        
+      
     
     
     
@@ -2285,6 +2309,34 @@
     
   
     Collections
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../howto/49_inheritance/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Inheritance
   
 
     
@@ -3989,6 +4041,28 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#inheritance" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Inheritance
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#operators" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Operators
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#generic-classes" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4060,9 +4134,10 @@ class:</p>
   whose fields are all numbers, and whose methods only read them. Native code
   keeps it as a struct of its fields.</li>
 <li>An <strong>object class</strong> is shared, like any Python object. It has fields that
-  hold other objects or collections, or methods that change its fields.
-  Native code keeps a handle to it on the heap, counts references to it, and
-  frees it when the last one goes.</li>
+  hold other objects or collections, methods that change its fields or
+  return a new instance, a base class, or subclasses. Native code keeps a
+  handle to it on the heap, counts references to it, and frees it when the
+  last one goes.</li>
 </ul>
 <p>You don't choose between them. <code>ppy explain</code> shows which one a class is by
 how its functions lower.</p>
@@ -4095,8 +4170,9 @@ how its functions lower.</p>
 <code>Tree | None</code> is a handle that may be null, and <code>root is None</code> compares it
 with null.</p>
 <h2 id="object-classes">Object classes<a class="headerlink" href="#object-classes" title="Permanent link">&para;</a></h2>
-<p>An object class has no base class and no <code>__getattr__</code> or similar hook. Each
-field holds a value native code can represent:</p>
+<p>An object class has at most one base, itself an object class of the same
+module, and no <code>__getattr__</code> or similar hook. Each field holds a value
+native code can represent:</p>
 <ul>
 <li>a number, a tuple of numbers, or a value class</li>
 <li>a collection: <code>Vec[int]</code>, <code>HashMap[int, Vec[int]]</code></li>
@@ -4104,35 +4180,143 @@ field holds a value native code can represent:</p>
 </ul>
 <p>Native code builds an instance by running the class's <code>__init__</code>, or for a
 dataclass by setting each field from the arguments and the defaults. A
-default natively has to be a constant, <code>None</code> included.</p>
+default is a constant (<code>None</code> included), <code>field(default=&lt;constant&gt;)</code>, or
+<code>field(default_factory=...)</code> naming a collection (<code>Vec[int]</code>,
+<code>HashMap[int, int]</code>) or a class built with no arguments, which is made anew
+for each instance.</p>
 <p>Reading a field of <code>None</code> is Python's <code>AttributeError</code>. Under <code>ppy run</code> it
 falls back to Python, which raises it; a standalone binary stops.</p>
 <p>Methods lower like functions, with <code>self</code> as a handle. <code>len(obj)</code> calls
 <code>__len__</code>, and <code>if obj:</code> calls <code>__bool__</code> or <code>__len__</code> where the class has
 one and otherwise tests that <code>obj</code> is not <code>None</code>.</p>
-<h2 id="generic-classes">Generic classes<a class="headerlink" href="#generic-classes" title="Permanent link">&para;</a></h2>
-<p>A class can declare type parameters, and its fields and methods use them:</p>
+<h2 id="inheritance">Inheritance<a class="headerlink" href="#inheritance" title="Permanent link">&para;</a></h2>
+<p>A class may derive from one object class of the same module. Its instance is
+one record: the root class's fields first, then each subclass's own, so a
+<code>Square</code> is a <code>Shape</code> with more words after it.</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ppy</span><span class="w"> </span><span class="kn">import</span> <span class="n">Vec</span>
 <a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>
 <a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>
-<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="k">class</span><span class="w"> </span><span class="nc">Stack</span><span class="p">[</span><span class="n">T</span><span class="p">]:</span>
-<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">items</span><span class="p">:</span> <span class="n">Vec</span><span class="p">[</span><span class="n">T</span><span class="p">]</span> <span class="o">=</span> <span class="n">Vec</span><span class="p">[</span><span class="n">T</span><span class="p">]()</span>
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="k">class</span><span class="w"> </span><span class="nc">Shape</span><span class="p">:</span>
+<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">scale</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">scale</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="n">scale</span>
 <a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a>
-<a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">push</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">value</span><span class="p">:</span> <span class="n">T</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">items</span><span class="o">.</span><span class="n">push</span><span class="p">(</span><span class="n">value</span><span class="p">)</span>
+<a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">area</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+<a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a>        <span class="k">return</span> <span class="mi">0</span>
 <a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a>
-<a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">pop</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">T</span><span class="p">:</span>
-<a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a>        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">items</span><span class="o">.</span><span class="n">pop</span><span class="p">()</span>
+<a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">describe</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+<a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a>        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">area</span><span class="p">()</span> <span class="o">*</span> <span class="mi">10</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">scale</span>
 <a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a>
-<a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a>    <span class="k">def</span><span class="w"> </span><span class="fm">__len__</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
-<a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a>        <span class="k">return</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">items</span><span class="p">)</span>
+<a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a>
+<a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a><span class="k">class</span><span class="w"> </span><span class="nc">Square</span><span class="p">(</span><span class="n">Shape</span><span class="p">):</span>
+<a id="__codelineno-1-16" name="__codelineno-1-16" href="#__codelineno-1-16"></a>    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">scale</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">side</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-1-17" name="__codelineno-1-17" href="#__codelineno-1-17"></a>        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">scale</span><span class="p">)</span>
+<a id="__codelineno-1-18" name="__codelineno-1-18" href="#__codelineno-1-18"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">side</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="n">side</span>
+<a id="__codelineno-1-19" name="__codelineno-1-19" href="#__codelineno-1-19"></a>
+<a id="__codelineno-1-20" name="__codelineno-1-20" href="#__codelineno-1-20"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">area</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+<a id="__codelineno-1-21" name="__codelineno-1-21" href="#__codelineno-1-21"></a>        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">side</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">side</span>
+<a id="__codelineno-1-22" name="__codelineno-1-22" href="#__codelineno-1-22"></a>
+<a id="__codelineno-1-23" name="__codelineno-1-23" href="#__codelineno-1-23"></a>
+<a id="__codelineno-1-24" name="__codelineno-1-24" href="#__codelineno-1-24"></a><span class="k">def</span><span class="w"> </span><span class="nf">total</span><span class="p">(</span><span class="n">shapes</span><span class="p">:</span> <span class="n">Vec</span><span class="p">[</span><span class="n">Shape</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+<a id="__codelineno-1-25" name="__codelineno-1-25" href="#__codelineno-1-25"></a>    <span class="n">acc</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">0</span>
+<a id="__codelineno-1-26" name="__codelineno-1-26" href="#__codelineno-1-26"></a>    <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="n">shapes</span><span class="p">:</span>
+<a id="__codelineno-1-27" name="__codelineno-1-27" href="#__codelineno-1-27"></a>        <span class="n">acc</span> <span class="o">+=</span> <span class="n">s</span><span class="o">.</span><span class="n">describe</span><span class="p">()</span>
+<a id="__codelineno-1-28" name="__codelineno-1-28" href="#__codelineno-1-28"></a>        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">s</span><span class="p">,</span> <span class="n">Square</span><span class="p">):</span>
+<a id="__codelineno-1-29" name="__codelineno-1-29" href="#__codelineno-1-29"></a>            <span class="n">acc</span> <span class="o">+=</span> <span class="n">s</span><span class="o">.</span><span class="n">side</span>
+<a id="__codelineno-1-30" name="__codelineno-1-30" href="#__codelineno-1-30"></a>    <span class="k">return</span> <span class="n">acc</span>
+</code></pre></div>
+<ul>
+<li>A method a subclass does not define is its base's.</li>
+<li>A call to a method some subclass overrides goes by the class the object was
+  made as. Each object carries a tag for its class in its header, and the
+  call compares the tag and calls that class's method. The overriding method
+  takes and returns the same types as the one it overrides; one that does
+  not keeps the caller in Python.</li>
+<li><code>super().__init__(...)</code> and <code>super().method(...)</code> call the next class's
+  method along the bases, directly.</li>
+<li>A parameter, a field, or an element typed <code>Shape</code> takes a <code>Square</code>.</li>
+<li><code>isinstance(obj, Cls)</code>, or with a tuple of classes, reads the tag. The
+  checker narrows on it as usual, so <code>s.side</code> after <code>isinstance(s, Square)</code>
+  reads the <code>Square</code>'s field.</li>
+</ul>
+<p>A class that others derive from is an object class even when its fields are
+all numbers, since a copy of its fields would cut a subclass's short.</p>
+<h2 id="operators">Operators<a class="headerlink" href="#operators" title="Permanent link">&para;</a></h2>
+<p>An object class's operator methods lower as calls:</p>
+<table>
+<thead>
+<tr>
+<th>written</th>
+<th>calls</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>a + b</code>, <code>a - b</code>, <code>a * k</code>, and the other arithmetic operators</td>
+<td><code>__add__</code>, <code>__sub__</code>, <code>__mul__</code>, ..., or the right operand's <code>__radd__</code>, ...</td>
+</tr>
+<tr>
+<td><code>-a</code>, <code>+a</code>, <code>~a</code></td>
+<td><code>__neg__</code>, <code>__pos__</code>, <code>__invert__</code></td>
+</tr>
+<tr>
+<td><code>a == b</code>, <code>a != b</code></td>
+<td><code>__eq__</code>, <code>__ne__</code> (or <code>not __eq__</code>); a class with neither compares identity</td>
+</tr>
+<tr>
+<td><code>a &lt; b</code>, <code>a &lt;= b</code>, <code>a &gt; b</code>, <code>a &gt;= b</code></td>
+<td><code>__lt__</code>, ..., or the reflected method of the right operand</td>
+</tr>
+<tr>
+<td><code>obj[key]</code>, <code>obj[key] = value</code></td>
+<td><code>__getitem__</code>, <code>__setitem__</code></td>
+</tr>
+<tr>
+<td><code>x in obj</code></td>
+<td><code>__contains__</code></td>
+</tr>
+<tr>
+<td><code>len(obj)</code>, <code>if obj:</code></td>
+<td><code>__len__</code>, <code>__bool__</code></td>
+</tr>
+</tbody>
+</table>
+<p>A method that returns a new instance, as <code>__add__</code> usually does, makes the
+class an object class: each result is a new object, freed when its last
+reference goes.</p>
+<h2 id="generic-classes">Generic classes<a class="headerlink" href="#generic-classes" title="Permanent link">&para;</a></h2>
+<p>A class can declare type parameters, and its fields and methods use them:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ppy</span><span class="w"> </span><span class="kn">import</span> <span class="n">Vec</span>
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>
+<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="k">class</span><span class="w"> </span><span class="nc">Stack</span><span class="p">[</span><span class="n">T</span><span class="p">]:</span>
+<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">items</span><span class="p">:</span> <span class="n">Vec</span><span class="p">[</span><span class="n">T</span><span class="p">]</span> <span class="o">=</span> <span class="n">Vec</span><span class="p">[</span><span class="n">T</span><span class="p">]()</span>
+<a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a>
+<a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">push</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">value</span><span class="p">:</span> <span class="n">T</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">items</span><span class="o">.</span><span class="n">push</span><span class="p">(</span><span class="n">value</span><span class="p">)</span>
+<a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a>
+<a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">pop</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">T</span><span class="p">:</span>
+<a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a>        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">items</span><span class="o">.</span><span class="n">pop</span><span class="p">()</span>
+<a id="__codelineno-2-13" name="__codelineno-2-13" href="#__codelineno-2-13"></a>
+<a id="__codelineno-2-14" name="__codelineno-2-14" href="#__codelineno-2-14"></a>    <span class="k">def</span><span class="w"> </span><span class="fm">__len__</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+<a id="__codelineno-2-15" name="__codelineno-2-15" href="#__codelineno-2-15"></a>        <span class="k">return</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">items</span><span class="p">)</span>
 </code></pre></div>
 <p><code>Stack[int]()</code> and <code>Stack[float]()</code> are two classes to the checker, which
 holds each method to its type argument: <code>push(2.5)</code> on a <code>Stack[int]</code> is
 <code>E1301</code>. Native code instantiates the class and its methods once per type
-argument, as a C++ template is instantiated. Write the type argument at
-construction: <code>Stack[int]()</code>.</p>
+argument, as a C++ template is instantiated.</p>
+<p>The type arguments may be left out where the checker can tell them:</p>
+<ul>
+<li>from where the instance goes: <code>s: Stack[int] = Stack()</code>, a return from a
+  function declared <code>-&gt; Stack[int]</code>, or an assignment to a field declared
+  <code>Stack[int]</code></li>
+<li>from the constructor's arguments: <code>Pair(1, 2.5)</code> is a <code>Pair[int, float]</code>
+  when <code>__init__</code> (or the dataclass fields) takes an <code>A</code> and a <code>B</code></li>
+</ul>
+<p>The collections work the same way: <code>v: Vec[int] = Vec()</code> and
+<code>m: HashMap[int, int] = HashMap()</code>. A collection that stores floats is the
+exception, since CPython runs <code>Vec()</code> without knowing its type and would
+keep a stored <code>3</code> an <code>int</code>: write <code>Vec[float]()</code>.</p>
 <h2 id="memory">Memory<a class="headerlink" href="#memory" title="Permanent link">&para;</a></h2>
 <p>A handle counts its references. A name holding an object keeps one, a field
 or a collection holding it keeps one, and it is freed when the last goes,
@@ -4159,15 +4343,16 @@ calls it, its Python body runs. The functions Python calls natively take and
 return numbers, and make their objects inside.</p>
 <h2 id="limitations">Limitations<a class="headerlink" href="#limitations" title="Permanent link">&para;</a></h2>
 <ul>
-<li>A class with a base class, or a field native code cannot represent (a
-  <code>str</code>, say), keeps the functions that use it in Python.</li>
-<li>A dataclass built natively takes constant defaults only.</li>
-<li>A generic class's type arguments are written at construction; <code>Stack()</code>
-  without them stays in Python.</li>
-<li>Reading a field that holds a reference, off an object made in the same
-  expression (<code>make().child</code>), is not lowered.</li>
+<li>A class with more than one base, a base from another module or a
+  library, or a field native code cannot represent (a <code>str</code>, say), keeps the
+  functions that use it in Python.</li>
+<li>A generic class with a base, or a base that is generic, is not lowered.</li>
+<li>A dataclass object compared with <code>==</code> keeps the function in Python unless
+  the class defines <code>__eq__</code>, since the generated one compares fields.</li>
+<li>A generic class whose type arguments nothing tells stays in Python.</li>
 </ul>
-<p>Examples: <a href="../../howto/47_collections/">Collections</a>.</p>
+<p>Examples: <a href="../../howto/49_inheritance/">Inheritance</a>,
+<a href="../../howto/47_collections/">Collections</a>.</p>
 
 
 
