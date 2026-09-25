@@ -5027,10 +5027,10 @@ class _Checker:
         keyed = canonical in C.KEYED
         tree = canonical in {"ppy.TreeMap", "ppy.TreeSet"}
         if keyed and not self._collection_key(resolved[0], tree=tree):
-            classes = "a class with `__lt__`" if tree else "a hashable class"
+            classes = "an instance of a class with `__lt__`" if tree else "a hashable instance"
             self._error(
                 "E1305",
-                f"a `{canonical}` has `int`, `str`, int-tuple, or {classes} keys, "
+                f"a `{canonical}` key is an `int`, a `str`, a tuple of `int`, or {classes}, "
                 f"not `{resolved[0]}`",
                 node,
             )

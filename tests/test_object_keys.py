@@ -432,7 +432,85 @@ def test_the_reference_classes_take_the_same_keys(tmp_path: Path):
         def __eq__(self, other: object) -> bool:
             return self is other
 
-    with pytest.raises(TypeError, match="hashable class"):
+    with pytest.raises(TypeError, match="hashable instance"):
         ppy.HashMap[Unhashable, int]()
     with pytest.raises(TypeError, match="__lt__"):
         ppy.TreeSet[Unhashable]()
+
+
+def test_the_checker_takes_the_keys_python_can_hash_or_order(write, codes):
+    """A hash map's key is a class Python can hash: one with `__hash__`, one with
+    neither `__eq__` nor `__hash__` (identity), a frozen dataclass. `__eq__`
+    alone, or a plain dataclass, makes it unhashable, as Python says. A tree's
+    key is a class with `__lt__`, or a dataclass with `order=True`."""
+    path = write(
+        "keys.ppy",
+        """
+        from dataclasses import dataclass
+
+        from ppy import HashMap, HashSet, TreeMap, TreeSet
+
+
+        class Hashed:
+            def __eq__(self, other: object) -> bool:
+                return self is other
+
+            def __hash__(self) -> int:
+                return 1
+
+
+        class Plain:
+            pass
+
+
+        @dataclass(frozen=True)
+        class Frozen:
+            x: int
+
+
+        class Ranked:
+            def __lt__(self, other: "Ranked") -> bool:
+                return False
+
+
+        @dataclass(order=True)
+        class Ordered:
+            x: int
+
+
+        def fine() -> int:
+            a = HashMap[Hashed, int]()
+            b = HashSet[Plain]()
+            c = HashMap[Frozen, int]()
+            d = TreeMap[Ranked, int]()
+            e = TreeSet[Ordered]()
+            return len(a) + len(b) + len(c) + len(d) + len(e)
+        """,
+    )
+    assert "E1305" not in codes(path)
+    refused = write(
+        "refused.ppy",
+        """
+        from dataclasses import dataclass
+
+        from ppy import HashMap, TreeSet
+
+
+        class Equal:
+            def __eq__(self, other: object) -> bool:
+                return self is other
+
+
+        @dataclass
+        class Mutable:
+            x: int
+
+
+        def refused() -> int:
+            a = HashMap[Equal, int]()
+            b = HashMap[Mutable, int]()
+            c = TreeSet[Mutable]()
+            return len(a) + len(b) + len(c)
+        """,
+    )
+    assert codes(refused).count("E1305") == 3

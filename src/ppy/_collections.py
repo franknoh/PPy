@@ -641,9 +641,10 @@ class _KeysAndValues:
         if made is None:
             tree = issubclass(cls, TreeMap)
             if not _key_ok(key, tree):
-                classes = "a class with __lt__" if tree else "a hashable class"
+                classes = "an instance of a class with __lt__" if tree else "a hashable instance"
                 raise TypeError(
-                    f"a {cls.__name__} has int, str, int-tuple, or {classes} keys, not {key!r}"
+                    f"a {cls.__name__} key is an int, a str, a tuple of int, or {classes}, "
+                    f"not {key!r}"
                 )
             if value is not None and not _element_ok(value):
                 raise TypeError(f"a {cls.__name__} cannot hold {value!r} values")

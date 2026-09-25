@@ -1129,6 +1129,7 @@ class CollectionLowering:
             made = self._rt("ppy_seq_new", (count or self._word(0), words, floats, handles), HANDLE)
             if count is not None and value is not None and value.kind in {"collection", "str"}:
                 self._fill_new(made, count, value)
+            self._install_methods(made, kind)
             return made
         if kind.family == "list":
             return self._rt("ppy_list_new", (words, floats, handles), HANDLE)
