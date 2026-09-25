@@ -575,13 +575,14 @@ LINE_OPEN_INTS = """{
         int64_t value = 0;
         int status = ppy_rt_int_text(text, length, &value);
         if (status == 1) {
-            ppy_rt_fail_text("ValueError: invalid literal for int() with base 10: ", text, length, 1);
+            ppy_rt_fail_text(INVALID_INT, text, length, 1);
         }
         wide |= status == 2;
     }
     if (count != expected) {
         char message[128];
-        snprintf(message, sizeof message, "ValueError: expected %lld field(s) on the line, got %lld",
+        snprintf(message, sizeof message,
+                 "ValueError: expected %lld field(s) on the line, got %lld",
                  (long long)expected, (long long)count);
         ppy_rt_fail(message);
     }
@@ -590,7 +591,7 @@ LINE_OPEN_INTS = """{
     }
     bounds[0] = 0;
     return count;
-}"""
+}""".replace("INVALID_INT", '"ValueError: invalid literal for int() with base 10: "')
 
 #: The next field of the open line: its start, and its length in `*length`.
 LINE_FIELD = """{
