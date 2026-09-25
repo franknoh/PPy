@@ -299,7 +299,7 @@ def test_emit_c_cpp_and_header_follow_the_emit_rules(tmp_path: Path):
     assert program.returncode == 0, program.stderr
     assert "static int64_t ppy_rt_input_int(void)" in program.stdout
     assert program.stdout.rstrip().endswith(
-        'int main(void) {\n    int64_t out = 0;\n    int32_t status = ppy_reader_main(&out);\n    if (status != 0) {\n        fputs("ppy: a native guard failed and there is no Python to fall back to\\n", stderr);\n        return 70;\n    }\n    return 0;\n}'
+        'int main(void) {\n    int64_t out = 0;\n    int32_t status = ppy_reader_main(&out);\n    if (status != 0) {\n        fputs("RuntimeError: a native guard failed with no Python to fall back to\\n", stderr);\n        return 1;\n    }\n    return 0;\n}'
     )
     if c_compiler() is not None:
         (tmp_path / "reader.c").write_text(program.stdout, encoding="utf-8")

@@ -288,7 +288,7 @@ class StringLowering:
         inside = core.bitwise(
             b, "and", core.cmp(b, "ge", position, zero), core.cmp(b, "lt", position, length)
         )
-        self._require(inside, "string index out of range")  # type: ignore[attr-defined]
+        self._require(inside, "string index out of range", "IndexError: string index out of range")  # type: ignore[attr-defined]
         return position
 
     def _string_item(self, node: ast.Subscript) -> Value:
@@ -317,7 +317,9 @@ class StringLowering:
         ):
             step = self._coerce(self._expr(bounds.step), "int")  # type: ignore[attr-defined]
             nonzero = core.cmp(self.b, "ne", step, self._word(0))  # type: ignore[attr-defined]
-            self._require(nonzero, "slice step cannot be zero")  # type: ignore[attr-defined]
+            self._require(
+                nonzero, "slice step cannot be zero", "ValueError: slice step cannot be zero"
+            )  # type: ignore[attr-defined]
         arguments = (handle, values[0], values[1], step, self._word(given))  # type: ignore[attr-defined]
         return self._rt("ppy_str_slice", arguments, HANDLE)  # type: ignore[attr-defined]
 
@@ -501,7 +503,12 @@ class StringLowering:
         if name == "ord" and len(arguments) == 1 and self._string_of(arguments[0]) is not None:
             handle, owned = self._handle(arguments[0])  # type: ignore[attr-defined]
             one = core.cmp(b, "eq", self._rt("ppy_str_len", (handle,)), self._word(1))  # type: ignore[attr-defined]
-            self._require(one, "ord() expected a character")  # type: ignore[attr-defined]
+            self._require(  # type: ignore[attr-defined]
+                one,
+                "ord() expected a character",
+                "TypeError: ord() expected a character, but string of length {0} found",
+                (self._rt("ppy_str_len", (handle,)),),  # type: ignore[attr-defined]
+            )
             code = self._rt("ppy_str_ord", (handle,))  # type: ignore[attr-defined]
             self._done_with(handle, owned)  # type: ignore[attr-defined]
             return code
@@ -520,7 +527,11 @@ class StringLowering:
             fine = core.bitwise(
                 b, "and", valid, core.bitwise(b, "xor", surrogate, core.const(b, True, BOOL))
             )
-            self._require(fine, "chr() arg not in range(0x110000)")  # type: ignore[attr-defined]
+            self._require(
+                fine,
+                "chr() arg not in range(0x110000)",
+                "ValueError: chr() arg not in range(0x110000)",
+            )  # type: ignore[attr-defined]
             self._use_collections()  # type: ignore[attr-defined]
             made = self._rt("ppy_str_chr", (code,), HANDLE)  # type: ignore[attr-defined]
             return self._keep_or_drop(made, discard)
@@ -592,17 +603,30 @@ class StringLowering:
                     b, "and", core.cmp(b, "ge", base, word(2)), core.cmp(b, "le", base, word(36))
                 )
                 valid = core.bitwise(b, "or", core.cmp(b, "eq", base, word(0)), ranged)
-                self._require(valid, "int() base must be >= 2 and <= 36, or 0")  # type: ignore[attr-defined]
+                self._require(
+                    valid,
+                    "int() base must be >= 2 and <= 36, or 0",
+                    "ValueError: int() base must be >= 2 and <= 36, or 0",
+                )  # type: ignore[attr-defined]
             slot = self._alloca(I64, "parsed")  # type: ignore[attr-defined]
             status = self._rt("ppy_str_to_int", (handle, base, slot))  # type: ignore[attr-defined]
-            self._require(core.cmp(b, "eq", status, word(0)), "invalid literal for int()")  # type: ignore[attr-defined]
+            self._require(  # type: ignore[attr-defined]
+                core.cmp(b, "eq", status, word(0)),
+                "invalid literal for int()",
+                "ValueError: invalid literal for int() with base {0}",
+                (base,),
+            )
         else:
             if len(arguments) != 1:
                 raise Unsupported("`float` takes one argument")
             slot = self._alloca(F64, "parsed")  # type: ignore[attr-defined]
             status = self._rt("ppy_str_to_float", (handle, slot))  # type: ignore[attr-defined]
             converted = core.cmp(b, "ne", status, word(0))
-            self._require(converted, "could not convert string to float")  # type: ignore[attr-defined]
+            self._require(
+                converted,
+                "could not convert string to float",
+                "ValueError: could not convert string to float",
+            )  # type: ignore[attr-defined]
         value = core.load(b, slot)
         self._done_with(handle, owned)  # type: ignore[attr-defined]
         return value
@@ -672,7 +696,9 @@ class StringLowering:
             right = word(int(attr.startswith("r")))
             result = rt("ppy_str_find", (receiver, sub, start, end, given, right))
             if attr.endswith("index"):
-                require(self._found(result), "substring not found")  # type: ignore[attr-defined]
+                require(
+                    self._found(result), "substring not found", "ValueError: substring not found"
+                )  # type: ignore[attr-defined]
         elif attr == "count" and 1 <= len(arguments) <= 3:
             sub = text(0)
             start, end, given = self._optional_ints(arguments[1:])
@@ -701,7 +727,11 @@ class StringLowering:
                 value, value_owned = self._string_argument(sep_node, attr)
                 taken.append((value, value_owned))
                 sep = value
-                require(core.cmp(b, "gt", rt("ppy_str_bytes", (sep,)), word(0)), "empty separator")
+                require(
+                    core.cmp(b, "gt", rt("ppy_str_bytes", (sep,)), word(0)),
+                    "empty separator",
+                    "ValueError: empty separator",
+                )
             limit = word(-1)
             if limit_node is not None:
                 limit = self._coerce(self._expr(limit_node), "int")  # type: ignore[attr-defined]
@@ -727,7 +757,11 @@ class StringLowering:
             if len(arguments) == 2:
                 filler = text(1)
                 one = core.cmp(b, "eq", rt("ppy_str_len", (filler,)), word(1))
-                require(one, "the fill character must be exactly one character long")
+                require(
+                    one,
+                    "the fill character must be exactly one character long",
+                    "TypeError: The fill character must be exactly one character long",
+                )
                 fill = rt("ppy_str_ord", (filler,))
             result = rt("ppy_str_pad", (receiver, width, fill, word(_PADS[attr])), HANDLE)
         elif attr == "format":
@@ -789,7 +823,11 @@ class StringLowering:
             return word(0)
         if attr == "pop" and len(arguments) <= 1:
             length = rt("ppy_coll_len", (handle,))
-            self._require(core.cmp(b, "gt", length, word(0)), "pop from empty list")  # type: ignore[attr-defined]
+            self._require(
+                core.cmp(b, "gt", length, word(0)),
+                "pop from empty list",
+                "IndexError: pop from empty list",
+            )  # type: ignore[attr-defined]
             if not arguments:
                 return self._read(rt("ppy_seq_pop_back", (handle,), HANDLE), STR)  # type: ignore[attr-defined]
             given = self._coerce(self._expr(arguments[0]), "int")  # type: ignore[attr-defined]
@@ -797,7 +835,7 @@ class StringLowering:
             inside = core.bitwise(
                 b, "and", core.cmp(b, "ge", position, word(0)), core.cmp(b, "lt", position, length)
             )
-            self._require(inside, "pop index out of range")  # type: ignore[attr-defined]
+            self._require(inside, "pop index out of range", "IndexError: pop index out of range")  # type: ignore[attr-defined]
             return rt("ppy_str_list_remove", (handle, position), HANDLE)
         if attr == "insert" and len(arguments) == 2:
             position = self._coerce(self._expr(arguments[0]), "int")  # type: ignore[attr-defined]
@@ -815,7 +853,11 @@ class StringLowering:
             found = rt(symbol, (handle, needle))
             self._done_with(needle, owned)  # type: ignore[attr-defined]
             if attr == "index":
-                self._require(self._found(found), "the string is not in the list")  # type: ignore[attr-defined]
+                self._require(
+                    self._found(found),
+                    "the string is not in the list",
+                    "ValueError: the string is not in list",
+                )  # type: ignore[attr-defined]
             return found
         return None
 
@@ -992,7 +1034,7 @@ class StringLowering:
             receiver, owned = self._handle(value.func.value)  # type: ignore[attr-defined]
             sep, sep_owned = self._string_argument(value.args[0], value.func.attr)
             nonempty = core.cmp(b, "gt", rt("ppy_str_bytes", (sep,)), word(0))
-            self._require(nonempty, "empty separator")  # type: ignore[attr-defined]
+            self._require(nonempty, "empty separator", "ValueError: empty separator")  # type: ignore[attr-defined]
             parts = self._alloca(TupleType((HANDLE, HANDLE, HANDLE)), "parts")  # type: ignore[attr-defined]
             address = core.cast(b, parts, PtrType(HANDLE, "stack"))
             right = word(int(value.func.attr == "rpartition"))
@@ -1008,7 +1050,12 @@ class StringLowering:
         handle, owned = self._handle(value)  # type: ignore[attr-defined]
         length = rt("ppy_coll_len", (handle,))
         matches = core.cmp(b, "eq", length, word(len(names)))
-        self._require(matches, "wrong number of values to unpack")  # type: ignore[attr-defined]
+        self._require(
+            matches,
+            "wrong number of values to unpack",
+            "ValueError: wrong number of values to unpack (expected {0}, got {1})",
+            (word(len(names)), length),
+        )  # type: ignore[attr-defined]
         items = [
             self._read(rt("ppy_seq_at", (handle, word(i)), HANDLE), STR)  # type: ignore[attr-defined]
             for i in range(len(names))

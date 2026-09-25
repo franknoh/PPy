@@ -782,13 +782,13 @@ class TreeMap(_KeysAndValues):
     def min(self) -> int:
         """The smallest key."""
         if not self._keys:
-            raise IndexError(f"min of an empty {type(self).__name__}")
+            raise IndexError(f"min of an empty {type(self).__name__.partition('[')[0]}")
         return self._keys[0]
 
     def max(self) -> int:
         """The largest key."""
         if not self._keys:
-            raise IndexError(f"max of an empty {type(self).__name__}")
+            raise IndexError(f"max of an empty {type(self).__name__.partition('[')[0]}")
         return self._keys[-1]
 
     def floor(self, key: int) -> int:

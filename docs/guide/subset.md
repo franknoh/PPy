@@ -34,7 +34,12 @@ The compiler analyzes the whole project as one call graph. Inside it:
   models.
 
 Strict mode is the default. `--no-strict` downgrades only the errors that have
-a sound fallback.
+a sound fallback: an unannotated parameter (`E1201`), an unknown attribute
+(`E1202`), an unvouched decorator (`E1204`), iterating something that is not
+iterable (`E1302`), and a call with no known signature (`E1306`). Each is
+still reported, as a `W2010` warning that names the code it replaces, and the
+code involved runs on CPython. Type mismatches (`E1301`) and the rest stay
+errors.
 
 ## Compatibility policy
 

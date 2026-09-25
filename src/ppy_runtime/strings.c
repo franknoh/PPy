@@ -7,6 +7,7 @@
      [3] length in code points     [4] hash, 0 until asked
      [5] 1 when every byte is ASCII
      [6] 1 while the bytes sit in the header's own block, just after it
+     [16] to [20] the handle's place on its thread's heap (collections.c)
 
    A one-character ASCII string is not allocated: `ppy_str_char` hands out
    one of 128 static strings whose count of references never reaches zero,
@@ -79,17 +80,20 @@ int8_t *ppy_str_make(int64_t bytes) {
 
 /* The one-character string of ASCII byte `c`: static, never freed. */
 int8_t *ppy_str_char(int64_t c) {
-    static int64_t table[128][18];
+    /* Laid out as a string made by `ppy_coll_make` is, bytes after the
+       twenty-one header words, and on no heap: the collector reads a
+       string it meets, and never frees one it did not make. */
+    static int64_t table[128][22];
     int64_t *header = table[c & 127];
     if (header[11] == 0) {
         header[1] = 1;
-        header[2] = (int64_t)(intptr_t)(header + 17);
+        header[2] = (int64_t)(intptr_t)(header + 21);
         header[3] = 1;
         header[5] = 1;
         header[8] = 1;
         header[12] = 4;
         header[0] = 1;
-        ((uint8_t *)(header + 17))[0] = (uint8_t)c;
+        ((uint8_t *)(header + 21))[0] = (uint8_t)c;
         header[11] = INT64_MAX / 2;
     }
     return (int8_t *)header;

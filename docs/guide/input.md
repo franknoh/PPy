@@ -215,8 +215,10 @@ for a pure one, and all of them work on every path.
 ## Native code and standalone binaries
 
 A standalone binary reads with the C runtime, the same scanner text. Where
-Python would raise, the binary names the same exception on standard error
-and stops, for example `ppy: ValueError: could not convert string to float`.
+Python would raise, the binary prints the line CPython's traceback ends
+with, such as `ValueError: could not convert string to float: 'abc'`, on
+standard error and exits with status 1. The one difference is a number past
+64 bits: Python reads it, and the binary stops with `OverflowError`.
 
 | Read | In a standalone binary |
 |---|---|
