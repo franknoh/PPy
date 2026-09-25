@@ -1041,7 +1041,8 @@ class CollectionLowering:
             else:
                 entry = self._rt(f"ppy_{kind.family}_find", (handle, key))
                 spelled, words = self._key_report(kind, key)
-                self._require(self._found(entry), "key not found", f"KeyError: {spelled}" if spelled else "KeyError", words)
+                raises = f"KeyError: {spelled}" if spelled else "KeyError"
+                self._require(self._found(entry), "key not found", raises, words)
             self._keys_done()
             address = self._rt(f"ppy_{kind.family}_value_at", (handle, entry), HANDLE)
         else:
@@ -1245,7 +1246,8 @@ class CollectionLowering:
         if attr in {"pop", "remove"}:
             removed = self._rt(f"ppy_{family}_remove", (handle, key))
             spelled, words = self._key_report(kind, key)
-            self._require(self._found(removed), "key not found", f"KeyError: {spelled}" if spelled else "KeyError", words)
+            raises = f"KeyError: {spelled}" if spelled else "KeyError"
+            self._require(self._found(removed), "key not found", raises, words)
             if attr == "pop" and shape is not None:
                 return self._read(
                     self._rt(f"ppy_{family}_value_at", (handle, removed), HANDLE), shape
