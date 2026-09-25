@@ -22,6 +22,7 @@ import hashlib
 from dataclasses import dataclass
 
 from ..analysis import types as T
+from ..analysis.checker import receiver_bindings
 from ..analysis.symbols import ClassInfo, dataclass_keyword
 from ..backend.llvm.lowering import Unsupported
 from ..driver.ir_pipeline import object_chain
@@ -342,7 +343,14 @@ class CollectionLowering:
         if not isinstance(kind, Shape) or kind.kind != "object":
             return False
         wanted = parameter.class_name  # type: ignore[attr-defined]
-        return bool(wanted) and self._subclass_of(kind.record, wanted) and not kind.class_args
+        if not wanted or not self._subclass_of(kind.record, wanted):
+            return False
+        # The object as the parameter's class sees it: a `Counted[int]` or an
+        # `IntStack` is a `Stack[int]`.
+        every = self._bindings(kind)
+        base = self._class_named(wanted)
+        arguments = tuple(every.get(param, param) for param in base.type_params)
+        return Shape("object", record=wanted, class_args=arguments).spelled == element
 
     def _reference_of(self, node: ast.expr) -> Kind | Shape | None:
         """A collection, a string, or an object: what native code holds `node` by handle as."""
@@ -387,6 +395,42 @@ class CollectionLowering:
             if qualname in info.mro and object_chain(info, self._module_classes()) is not None
         ]
 
+    def _bindings(self, shape: Shape) -> dict[T.TypeVar_, T.Type]:
+        """What every type parameter along an object's class and its bases is:
+        `Stack`'s `T` is `int` in a `Counted[int]`, where `Counted[T](Stack[T])`,
+        and in an `IntStack(Stack[int])`."""
+        info = self._class_info(shape)
+        return receiver_bindings(
+            info, T.Instance(info.qualname, shape.class_args), self._module_classes()
+        )
+
+    def _as_subclass(self, shape: Shape, sub: ClassInfo) -> Shape | None:
+        """An instance of `shape`'s class that is a `sub`, with `sub`'s own class
+        arguments worked out from `shape`'s: `Counted[int]` for a `Stack[int]`
+        that is a `Counted`. None where `sub` cannot be one (an `IntStack` is no
+        `Stack[float]`); unsupported where its arguments are not all told."""
+        if not sub.type_params and not shape.class_args:
+            return Shape("object", record=sub.qualname)
+        info = self._class_info(shape)
+        spelled = receiver_bindings(
+            sub, T.Instance(sub.qualname, tuple(sub.type_params)), self._module_classes()
+        )
+        told: dict[T.TypeVar_, T.Type] = {}
+        for param, actual in zip(info.type_params, shape.class_args, strict=False):
+            said = spelled.get(param, param)
+            if isinstance(said, T.TypeVar_) and said in sub.type_params:
+                if told.setdefault(said, actual) != actual:
+                    return None
+            elif said != actual:
+                return None
+        if any(param not in told for param in sub.type_params):
+            raise Unsupported(f"`{sub.name}`'s type arguments do not follow from `{info.name}`'s")
+        return Shape(
+            "object",
+            record=sub.qualname,
+            class_args=tuple(told[param] for param in sub.type_params),
+        )
+
     def _resolve(self, info: ClassInfo, attr: str) -> ClassInfo | None:
         """The class whose `attr` an instance of `info` runs: the first along its bases."""
         chain = object_chain(info, self._module_classes()) or [info]
@@ -405,7 +449,7 @@ class CollectionLowering:
         if found is not None:
             return found
         info = self._class_info(shape)
-        bindings = dict(zip(info.type_params, shape.class_args, strict=False))
+        bindings = self._bindings(shape)
         fields: dict[str, tuple[int, Shape]] = {}
         offset = floats = handles = 0
         for owner in self._chain(shape):
@@ -524,7 +568,12 @@ class CollectionLowering:
         method = info.methods[attr]
         frontend = self.frontend
         if info.type_params:
-            bindings = dict(zip(info.type_params, shape.class_args, strict=True))
+            # The method's own class's parameters, as the object's class and
+            # the bases between them bind them.
+            every = self._bindings(shape)
+            if any(param not in every for param in info.type_params):
+                raise Unsupported(f"`{info.name}`'s type arguments are not known here")
+            bindings = {param: every[param] for param in info.type_params}
             found = frontend.instantiate(method.qualname, (), bindings)  # type: ignore[attr-defined]
         else:
             found = frontend.declared.get(method.qualname)  # type: ignore[attr-defined]
@@ -605,7 +654,9 @@ class CollectionLowering:
         tag = self._tag(receiver)
         done = self._block(f"{attr}.done")  # type: ignore[attr-defined]
         for owner, tags in overrides:
-            other = Shape("object", record=owner.qualname, class_args=shape.class_args)
+            other = self._as_subclass(shape, owner)
+            if other is None:
+                continue
             implementation, _signature, _ = self._method(other, attr)
             if (
                 [t for _, t in implementation.params[1:]]
@@ -730,7 +781,11 @@ class CollectionLowering:
             if func.attr == "__init__" and not node.args and not node.keywords:
                 return self._word(0)
             raise Unsupported(f"no base of `{current.name}` has `{func.attr}`")
-        base = Shape("object", record=found.qualname, class_args=held.class_args)
+        # The base's own arguments, as this class gives them: `Stack[int]` for
+        # a `Counted[int]` or an `IntStack`.
+        every = self._bindings(held)
+        arguments = tuple(every.get(param, param) for param in found.type_params)
+        base = Shape("object", record=found.qualname, class_args=arguments)
         return self._method_call(
             base, func.attr, handle, node.args, node.keywords, discard=discard, exact=True
         )

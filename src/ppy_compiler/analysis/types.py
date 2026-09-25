@@ -657,6 +657,12 @@ def _instance_assignable(source: Instance, target: Instance) -> bool:
         return True
     if target.name not in source.resolved_mro:
         return False
+    if source.name != target.name and source.name in GENERIC_BASES:
+        # A project class held as one of its bases: `Counted[int]` as a
+        # `Stack[int]`, `IntStack` as a `Stack[int]`, by what it gives the base.
+        lifted = upcast(source, target.name)
+        if lifted is not None:
+            source = lifted
     if not target.args or not source.args:
         # Unparameterized on either side is the gradual form: `dict` is
         # `dict[Any, Any]`.
@@ -669,6 +675,51 @@ def _instance_assignable(source: Instance, target: Instance) -> bool:
     if covariant:
         return all(is_assignable(a, b) for a, b in zip(source.args, target.args, strict=False))
     return all(_same_argument(a, b) for a, b in zip(source.args, target.args, strict=False))
+
+
+#: The project's classes as their generic bases see them: qualname -> (the
+#: class's own type parameters, each base's qualname -> the arguments the class
+#: gives it, in those parameters). Symbol resolution writes every class of a
+#: project it resolves, so what an earlier analysis left does not stay.
+GENERIC_BASES: dict[str, tuple[tuple[TypeVar_, ...], dict[str, tuple[Type, ...]]]] = {}
+
+
+def upcast(source: Instance, base: str) -> Instance | None:
+    """`source` as an instance of its base class `base`, with the arguments the
+    classes between them give it: a `Counted[int]` is a `Stack[int]` where
+    `class Counted[T](Stack[T])`. None where the path is not recorded."""
+    bindings: dict[TypeVar_, Type] = {}
+    current = source
+    seen: set[str] = set()
+    while current.name != base:
+        if current.name in seen:
+            return None
+        seen.add(current.name)
+        entry = GENERIC_BASES.get(current.name)
+        if entry is None:
+            return None
+        params, bases = entry
+        if params and len(params) == len(current.args):
+            bindings = dict(zip(params, current.args, strict=True))
+        else:
+            bindings = {}
+        step = next(
+            ((name, args) for name, args in bases.items() if _reaches(name, base, set())), None
+        )
+        if step is None:
+            return None
+        name, args = step
+        current = Instance(name, tuple(substitute(a, bindings) for a in args))
+    return Instance(base, current.args, source.mro)
+
+
+def _reaches(name: str, base: str, seen: set[str]) -> bool:
+    if name == base:
+        return True
+    if name in seen:
+        return False
+    seen.add(name)
+    return any(_reaches(parent, base, seen) for parent in GENERIC_BASES.get(name, ((), {}))[1])
 
 
 def _same_argument(source: Type, target: Type) -> bool:
