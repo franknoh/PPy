@@ -210,7 +210,7 @@
   </div>
   <div class="md-source__repository">
     franknoh/PPy
-    <span class="ppy-source-version" title="Documentation version">v0.4.0a1</span>
+    <span class="ppy-source-version" title="Documentation version">v0.4.0</span>
   </div>
 </a>
       </div>
@@ -419,7 +419,7 @@
   </div>
   <div class="md-source__repository">
     franknoh/PPy
-    <span class="ppy-source-version" title="Documentation version">v0.4.0a1</span>
+    <span class="ppy-source-version" title="Documentation version">v0.4.0</span>
   </div>
 </a>
     </div>
@@ -4182,10 +4182,11 @@ to a native build in about ten minutes.</p>
 <li><strong>Seven backends off one IR.</strong> LLVM, C11, C++17, CUDA, HIP, NVVM/PTX, and
   StableHLO, across 19 IR dialects. Other packages can
   <a href="internals/backends/">register their own backend</a>.</li>
-<li><strong>Collections without pointers.</strong> <a href="guide/collections/"><code>Vec</code>, <code>Deque</code>, <code>Heap</code>, <code>LinkedList</code>,
-  <code>HashMap</code>, <code>HashSet</code>, <code>TreeMap</code>, and <code>TreeSet</code></a>
-  compile to native code and give the same answers as their Python
-  reference classes.</li>
+<li><strong>Strings, classes, and collections.</strong> <a href="guide/strings/"><code>str</code></a>,
+  <a href="guide/classes/">classes with inheritance</a>, and
+  <a href="guide/collections/"><code>Vec</code>, <code>HashMap</code>, <code>TreeMap</code>, and six more</a>
+  compile to native code, reference counted with cycles collected, and
+  give the same answers as CPython.</li>
 <li><strong>Eight library plugins.</strong> NumPy, PyTorch, JAX/Flax, pydantic,
   FastAPI/Uvicorn, SciPy, pandas, and PyArrow.</li>
 <li><strong>A cheap call boundary.</strong> A native call with two <code>int</code> arguments costs

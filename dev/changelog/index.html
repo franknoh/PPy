@@ -210,7 +210,7 @@
   </div>
   <div class="md-source__repository">
     franknoh/PPy
-    <span class="ppy-source-version" title="Documentation version">v0.4.0a1</span>
+    <span class="ppy-source-version" title="Documentation version">v0.4.0</span>
   </div>
 </a>
       </div>
@@ -417,7 +417,7 @@
   </div>
   <div class="md-source__repository">
     franknoh/PPy
-    <span class="ppy-source-version" title="Documentation version">v0.4.0a1</span>
+    <span class="ppy-source-version" title="Documentation version">v0.4.0</span>
   </div>
 </a>
     </div>
@@ -3972,13 +3972,85 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#040-unreleased" class="md-nav__link">
+  <a href="#040-2026-09-25" class="md-nav__link">
     <span class="md-ellipsis">
       
-        0.4.0 — unreleased
+        0.4.0 — 2026-09-25
       
     </span>
   </a>
+  
+    <nav class="md-nav" aria-label="0.4.0 — 2026-09-25">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#strings" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Strings
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#classes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Classes
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#collections" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Collections
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#memory-and-errors" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Memory and errors
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-checker" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The checker
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-documentation-site" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The documentation site
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -4177,13 +4249,85 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#040-unreleased" class="md-nav__link">
+  <a href="#040-2026-09-25" class="md-nav__link">
     <span class="md-ellipsis">
       
-        0.4.0 — unreleased
+        0.4.0 — 2026-09-25
       
     </span>
   </a>
+  
+    <nav class="md-nav" aria-label="0.4.0 — 2026-09-25">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#strings" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Strings
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#classes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Classes
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#collections" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Collections
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#memory-and-errors" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Memory and errors
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-checker" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The checker
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-documentation-site" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The documentation site
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -4368,7 +4512,206 @@
 
 
 <h1 id="changelog">Changelog<a class="headerlink" href="#changelog" title="Permanent link">&para;</a></h1>
-<h2 id="040-unreleased">0.4.0 — unreleased<a class="headerlink" href="#040-unreleased" title="Permanent link">&para;</a></h2>
+<h2 id="040-2026-09-25">0.4.0 — 2026-09-25<a class="headerlink" href="#040-2026-09-25" title="Permanent link">&para;</a></h2>
+<p>The release where ordinary Python data goes native. Text, class
+hierarchies, and the common container operations compile now. They used to
+send a function back to CPython. Memory is reclaimed the way CPython
+reclaims it, cycles included, and a standalone binary that fails says what
+CPython would have said.</p>
+<h3 id="strings">Strings<a class="headerlink" href="#strings" title="Permanent link">&para;</a></h3>
+<ul>
+<li><code>str</code> lowers to native code under <code>ppy run</code>, in a standalone binary, and
+  in emitted C and C++, and gives CPython's answer on every path. A string
+  is a reference-counted handle into a new C runtime,
+  <code>ppy_runtime/strings.c</code>. It holds its UTF-8 bytes, its length in code
+  points, whether it is all ASCII (so an ASCII index is one step), and its
+  hash once a map asks for it. <code>s += t</code> appends in place when nothing else
+  holds <code>s</code>, as CPython does. The 128 one-character ASCII strings are static,
+  so <code>for c in s</code> and <code>s[i]</code> over ASCII text allocate nothing.</li>
+<li>Native operations:</li>
+<li>literals, <code>+</code>, <code>*</code>, <code>+=</code>, <code>*=</code>, and the six comparisons by code point;</li>
+<li><code>s[i]</code>, <code>s[a:b]</code>, and <code>s[a:b:c]</code>, with negative indices and steps;</li>
+<li><code>in</code>, <code>for c in s</code>, <code>len</code>, <code>if s:</code>, <code>ord</code>, <code>chr</code>, and <code>min</code>/<code>max</code> of
+    strings;</li>
+<li><code>str(x)</code>, <code>repr(x)</code>, and <code>format(x, spec)</code> of an <code>int</code>, <code>float</code>, <code>bool</code>,
+    or <code>str</code>. A float is written as <code>repr</code> writes it.</li>
+<li><code>int(s)</code>, <code>int(s, base)</code>, and <code>float(s)</code>, with the grammar CPython
+    reads, underscores and <code>inf</code> included.</li>
+<li>f-strings lower with fields of numbers, bools, and strings, <code>!r</code>, <code>!s</code>,
+  and <code>!a</code>. A spec may use fill and alignment, a sign, <code>z</code>, <code>#</code>, <code>0</code>, a
+  width, <code>,</code> or <code>_</code> grouping, a precision, and the types <code>d b o x X e E f F g
+  G % s</code>.</li>
+<li>String methods lower:</li>
+<li>search: <code>find</code>, <code>rfind</code>, <code>index</code>, <code>rindex</code>, <code>count</code> (with <code>start</code> and
+    <code>end</code>), <code>startswith</code>, <code>endswith</code>;</li>
+<li>editing: <code>replace</code>, <code>strip</code>/<code>lstrip</code>/<code>rstrip</code>, <code>removeprefix</code>,
+    <code>removesuffix</code>, <code>zfill</code>, <code>ljust</code>/<code>rjust</code>/<code>center</code>;</li>
+<li>splitting and joining: <code>split</code>/<code>rsplit</code> (with <code>maxsplit</code>), <code>splitlines</code>
+    (every line boundary Python has, and <code>keepends</code>), <code>join</code>, and
+    <code>partition</code>/<code>rpartition</code>;</li>
+<li>case: <code>lower</code>, <code>upper</code>, <code>capitalize</code>, <code>title</code>, <code>swapcase</code>;</li>
+<li>tests: <code>isdigit</code>, <code>isalpha</code>, <code>isalnum</code>, <code>isupper</code>, <code>islower</code>,
+    <code>isspace</code>, <code>isdecimal</code>, <code>isnumeric</code>.</li>
+<li>Case and category answers for text outside ASCII need Python's Unicode
+  tables. Those check first and fall back to CPython.</li>
+<li><code>split</code>, <code>rsplit</code>, and <code>splitlines</code> return a <code>list[str]</code> that lives
+  natively as a sequence of string handles. It can be indexed from either
+  end, iterated, and unpacked (<code>key, value = line.split("=")</code>). It has
+  <code>append</code>, <code>insert</code>, <code>pop</code>, <code>sort</code>, <code>reverse</code>, <code>clear</code>, <code>index</code>, <code>count</code>,
+  <code>in</code>, <code>len</code>, and <code>print</code>.</li>
+<li>Strings are collection elements (<code>Vec[str]</code>, <code>Deque[str]</code>, <code>Heap[str]</code>)
+  and keys (<code>HashMap[str, int]</code>, <code>HashSet[str]</code>, <code>TreeMap[str, float]</code>,
+  <code>TreeSet[str]</code>). Maps hash a key by its text and trees order keys by it.
+  A string field makes a class an object class.</li>
+<li>A native function with <code>str</code> parameters or a <code>str</code> result is called
+  natively from Python. UTF-8 goes in without a copy, and a new Python
+  string comes out.</li>
+<li>In standalone binaries, <code>ppy.input[str]()</code> and <code>input()</code> read a line,
+  <code>ppy.scan[str]()</code> reads a token, and <code>print</code> writes strings and lists of
+  strings. Input that is not UTF-8 raises <code>UnicodeDecodeError</code>, as CPython
+  does.</li>
+<li>New example <code>48_strings</code>: a 200,000-line log, parsed, counted by path,
+  ordered, and run-length encoded with native strings. It takes 2.05 s
+  under CPython and 1.16 s as a standalone binary.</li>
+</ul>
+<h3 id="classes">Classes<a class="headerlink" href="#classes" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Classes may derive from one class of the same module and still compile.
+  An instance is one native record, its bases' fields first. A method a
+  subclass overrides is called by the class the object was made as, which
+  a tag in the object's header records; <code>super().__init__(...)</code> and
+  <code>super().method(...)</code> call the base's method; <code>isinstance(obj, Cls)</code>
+  reads the tag; and a parameter, field, or collection element typed
+  <code>Base</code> takes a <code>Derived</code>. <code>Vec[Shape]</code> may hold <code>Square</code>s.</li>
+<li>Object classes' operator methods lower: <code>a + b</code> and the other arithmetic
+  operators with their reflected forms, unary <code>-</code>, <code>+</code>, <code>~</code>, <code>==</code>, <code>!=</code>,
+  <code>&lt;</code>, <code>&lt;=</code>, <code>&gt;</code>, <code>&gt;=</code> with reflection, <code>obj[key]</code>, <code>obj[key] = value</code>,
+  and <code>x in obj</code>. A class whose methods return a new instance of it is
+  held by handle, and each result is freed with its last reference.
+  <code>obj[key]</code> on a project class is typed by its <code>__getitem__</code>.</li>
+<li><code>points[i].x = 3</code> and <code>table[k].y += 0.5</code> write a field of a dataclass
+  element in place, natively; a function that also keeps a copy of such an
+  element stays in Python, where the copy is the same object.</li>
+<li>A reference field or element read off a temporary (<code>make().child</code>,
+  <code>rows(n)[i]</code>) compiles.</li>
+<li><code>field(default=...)</code> and <code>field(default_factory=Vec[int])</code> (or another
+  collection, or a class built with no arguments) build natively, and
+  standalone programs may use them.</li>
+<li>A generic class's type arguments may be left out where the checker can
+  tell them: from the target (<code>s: Stack[int] = Stack()</code>, a declared return
+  or field type) or from the constructor's arguments (<code>Pair(1, 2.5)</code> is a
+  <code>Pair[int, float]</code>). The collections take theirs from the target: <code>v:
+  Vec[int] = Vec()</code>. A collection that stores floats is still written
+  <code>Vec[float]()</code>, which the checker says (<code>E1305</code>).</li>
+<li><code>ppy run</code> no longer crashes with <code>KeyError: 'i8*'</code> when a module's
+  lowering comes from the cache and one of its functions returns an
+  object.</li>
+<li>New example <code>49_inheritance</code>: an expression tree of subclasses and a 2D
+  vector with operators, 5.5 s under CPython and 0.61 s as a standalone
+  binary.</li>
+</ul>
+<h3 id="collections">Collections<a class="headerlink" href="#collections" title="Permanent link">&para;</a></h3>
+<ul>
+<li><code>Vec</code> gains <code>extend</code>, <code>insert</code>, <code>pop(i)</code>, <code>remove</code>, <code>index</code>, <code>count</code>,
+  <code>copy</code>, slicing (<code>v[a:b]</code>, <code>v[a:b:step]</code>, a new <code>Vec</code>, clamped and
+  counted from the end as a list's slice is), <code>==</code>, <code>+</code>, <code>x in v</code>, and
+  <code>sort(reverse=True)</code> and <code>sort(key=...)</code> with a lambda or a function's
+  name. All of them are native.</li>
+<li><code>Deque</code> gains <code>extend</code>, <code>extendleft</code>, <code>rotate</code>, <code>insert</code>, <code>remove</code>,
+  <code>index</code>, <code>count</code>, <code>copy</code>, <code>==</code>, <code>+</code>, and <code>in</code>.</li>
+<li><code>LinkedList</code> gains <code>extend</code>, <code>==</code>, <code>in</code>, and <code>reversed()</code>.</li>
+<li><code>HashMap</code> and <code>TreeMap</code> gain:</li>
+<li><code>keys()</code>, <code>values()</code>, and <code>items()</code> (so <code>for k, v in m.items()</code> is native);</li>
+<li><code>setdefault</code>, and <code>pop(key, default)</code>;</li>
+<li><code>update</code>, <code>copy</code>, and <code>==</code>;</li>
+<li><code>get(key, default)</code> for any value type, collections included.</li>
+<li><code>HashSet</code> and <code>TreeSet</code> gain:</li>
+<li><code>|</code>, <code>&amp;</code>, <code>-</code>, <code>^</code> and <code>union</code>, <code>intersection</code>, <code>difference</code>, <code>symmetric_difference</code>;</li>
+<li><code>issubset</code>, <code>issuperset</code>, and <code>isdisjoint</code>;</li>
+<li><code>update</code>, <code>copy</code>, and <code>==</code>.</li>
+<li><code>TreeMap</code> and <code>TreeSet</code> gain <code>between(low, high)</code> (keys from <code>low</code> up to
+  <code>high</code>, in order) and <code>pop_min</code>/<code>pop_max</code>.</li>
+<li><code>Heap</code> and <code>MaxHeap</code> gain <code>pushpop</code>, <code>replace</code>, <code>to_sorted()</code> (a new
+  <code>Vec</code>, the heap unchanged), and <code>copy</code>.</li>
+<li>Every collection but the maps starts from an iterable: <code>Vec[int](https://github.com/franknoh/PPy/blob/main/[3, 1,
+  2])</code>, <code>HashSet[int](https://github.com/franknoh/PPy/blob/main/range(10))</code>, <code>Heap[int](https://github.com/franknoh/PPy/blob/main/items)</code> (heapified in linear
+  time).</li>
+<li><code>enumerate</code>, <code>zip</code>, <code>reversed</code>, <code>sorted</code>, <code>min</code>, <code>max</code>, and <code>sum</code> over a
+  collection or a map's views are native. <code>sum</code> of floats adds as CPython
+  does, with the rounding error compensated.</li>
+<li>A native function that takes or returns collections of numbers, tuples,
+  and other collections is called natively from Python. Arguments are
+  copied into native memory and results copied out. Identity is kept, and
+  writes through an argument (even through an element of it) reach the
+  caller's objects. A function that returns nothing and fills what it was
+  passed crosses too.</li>
+<li>A write through an element of a parameter (<code>for row in rows:
+  row.push(0)</code>) now counts as a write to that parameter.</li>
+<li>Standalone binaries report the new checks with CPython's messages, such
+  as <code>ValueError: 8 is not in the Vec</code>.</li>
+</ul>
+<h3 id="memory-and-errors">Memory and errors<a class="headerlink" href="#memory-and-errors" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Reference cycles are freed in native code. A doubly linked list, a tree
+  whose nodes point at their parents, or objects that hold each other were
+  never freed before; a collector now finds them the way CPython's <code>gc</code>
+  does, by counting the references each object gets from outside the
+  others, and frees what only holds itself. It runs on its own as objects
+  accumulate, before a standalone binary exits, and where the program
+  calls <code>gc.collect()</code>, which now lowers to native code (as a statement:
+  CPython's count is of its own objects).</li>
+<li>A native call that fails a guard under <code>ppy run</code> and falls back to
+  Python no longer leaves the collections and objects it made allocated;
+  they are freed the next time native code makes one.</li>
+<li>A standalone binary, and emitted C and C++, print the line CPython's
+  traceback would end with where a check fails, values included:
+  <code>KeyError: (3, -3)</code>, <code>IndexError: index 7 is out of range for length 2</code>,
+  <code>IndexError: pop from an empty Deque</code>, <code>AttributeError: 'NoneType'
+  object has no attribute 'value'</code>, <code>ZeroDivisionError: division by zero</code>
+  (worded as the Python that built it words it), <code>ValueError: negative
+  shift count</code>. They exit with status 1, as CPython does, where they used
+  to print a generic message and exit with 70. Where only native code can
+  fail, an integer past 64 bits, the message is <code>OverflowError: the result
+  does not fit in a 64-bit integer</code>.</li>
+<li>Standalone input errors are CPython's word for word: <code>ValueError:
+  invalid literal for int() with base 10: 'abc'</code>, <code>ValueError: could not
+  convert string to float: '1 2'</code>, <code>EOFError: EOF when reading a line</code>,
+  <code>OverflowError: 40000 does not fit in ppy.i16</code>. <code>ppy.input[tuple[int,
+  int]]()</code> reports a field that is not an integer before a wrong number of
+  fields, as <code>map(int, input().split())</code> does.</li>
+<li>A negative index into a buffer counts from the end in a standalone
+  binary, as it does in Python.</li>
+<li><code>if obj:</code> on <code>Node | None</code> where the class defines <code>__len__</code> or
+  <code>__bool__</code> is false for <code>None</code> natively, as in Python, instead of
+  falling back.</li>
+<li>A standalone module may <code>import gc</code>.</li>
+<li>Editing the C runtimes in a development tree invalidates cached native
+  artifacts.</li>
+</ul>
+<h3 id="the-checker">The checker<a class="headerlink" href="#the-checker" title="Permanent link">&para;</a></h3>
+<ul>
+<li><code>--no-strict</code> now downgrades findings instead of dropping them. These are
+  now reported as <code>W2010</code> warnings that name the code they replace; they
+  used to disappear without a word:</li>
+<li>an unannotated parameter (<code>E1201</code>),</li>
+<li>an unknown attribute (<code>E1202</code>),</li>
+<li>an unvouched decorator (<code>E1204</code>),</li>
+<li>iterating a non-iterable (<code>E1302</code>),</li>
+<li>a call with no known signature (<code>E1306</code>).</li>
+</ul>
+<p>Type mismatches stay errors in either mode.</p>
+<h3 id="the-documentation-site">The documentation site<a class="headerlink" href="#the-documentation-site" title="Permanent link">&para;</a></h3>
+<ul>
+<li>The site is redesigned:</li>
+<li>Inter for text, near-white and near-black neutrals, and Python's blue
+    and yellow as the only accents;</li>
+<li>GitHub's light and dark syntax colors;</li>
+<li>a landing page with a hero and a grid of highlights;</li>
+<li>a new PPy logo.</li>
+<li>Every page is rewritten in a plainer voice.</li>
+<li>The CI's required checks now report under their own names on a
+  prose-only change, so a docs-only pull request into <code>main</code> can merge.</li>
+</ul>
 <h2 id="037-2026-09-25">0.3.7 — 2026-09-25<a class="headerlink" href="#037-2026-09-25" title="Permanent link">&para;</a></h2>
 <ul>
 <li>A standalone binary reads more than <code>int</code>. <code>ppy.input</code> and <code>ppy.scan</code> of
