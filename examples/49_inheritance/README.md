@@ -18,7 +18,7 @@ ppy build --standalone shapes.ppy -o dist && ./dist/shapes
 **`python  shapes.ppy`**, **`ppy run shapes.ppy`**, **`ppy build --standalone shapes.ppy -o dist && ./dist/shapes`**
 
 ```text
-240837 1001001
+240837 1001002584
 ```
 
 <!-- outputs:end -->
@@ -34,8 +34,9 @@ ppy build --standalone shapes.ppy -o dist && ./dist/shapes
   `count_sums` asks `isinstance(e, Mul)` before `isinstance(e, Add)`, since
   a `Mul` is also an `Add`.
 - `V2` defines `__add__`, `__sub__`, `__mul__`, and `__lt__`. `orbit` steps
-  a body around a center two million times with `position + velocity * dt`
-  and keeps the farthest point with `<`.
+  a body around a center two million times with `position + velocity * dt`,
+  keeps the farthest point with `<`, and counts how often it moved. It prints
+  the farthest squared distance in millionths, times 1,000, plus that count.
 
 ## How it runs natively
 

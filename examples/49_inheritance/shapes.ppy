@@ -116,6 +116,7 @@ def orbit(steps: int) -> int:
     position = V2(1.0, 0.0)
     velocity = V2(0.0, 1.0)
     farthest = V2(0.0, 0.0)
+    records: int = 0
     dt: float = 0.001
     for _ in range(steps):
         r2: float = position.x * position.x + position.y * position.y
@@ -124,7 +125,8 @@ def orbit(steps: int) -> int:
         position = position + velocity * dt
         if farthest < position:
             farthest = position
-    return int((farthest.x * farthest.x + farthest.y * farthest.y) * 1000000)
+            records += 1
+    return int((farthest.x * farthest.x + farthest.y * farthest.y) * 1000000) * 1000 + records
 
 
 def main() -> None:
