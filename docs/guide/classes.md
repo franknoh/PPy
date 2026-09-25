@@ -52,7 +52,7 @@ An object class has at most one base, itself an object class of the same
 module, and no `__getattr__` or similar hook. Each field holds a value
 native code can represent:
 
-- a number, a tuple of numbers, or a value class
+- a number, a string, a tuple of numbers, or a value class
 - a collection: `Vec[int]`, `HashMap[int, Vec[int]]`
 - another object, or `None` where the field is `Node | None`
 
@@ -216,8 +216,8 @@ return numbers, and make their objects inside.
 ## Limitations
 
 - A class with more than one base, a base from another module or a
-  library, or a field native code cannot represent (a `str`, say), keeps the
-  functions that use it in Python.
+  library, or a field native code cannot represent (a `dict`, say), keeps
+  the functions that use it in Python.
 - A generic class with a base, or a base that is generic, is not lowered.
 - A dataclass object compared with `==` keeps the function in Python unless
   the class defines `__eq__`, since the generated one compares fields.

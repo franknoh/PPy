@@ -856,7 +856,7 @@ def _generated_native_sources(bundle) -> dict[str, str]:  # type: ignore[no-unty
     from ..backend.llvm.wrapper import generate
 
     for name, module in _collect(bundle).items():
-        signatures = {function: lowered.signature for function, lowered in module.functions.items()}
+        signatures = {function: lowered.python for function, lowered in module.functions.items()}
         if signatures:
             found[f"{name} (CPython ABI wrappers, C)"] = generate(name, signatures).source
 

@@ -33,8 +33,8 @@ haystack = array.array("b", bytes(4000064))
 size = ppy.read_token(haystack)
 ```
 
-A Python `str` has no native representation, so text that has to be fast
-comes in as bytes. `ppy.read_token` fills a `Buffer[ppy.i8]` without
+Reading four million characters as a `str` would build a Python string
+first, so text this large comes in as bytes. `ppy.read_token` fills a `Buffer[ppy.i8]` without
 building a Python string, one byte per element. Four million characters
 cost four megabytes rather than the thirty-two a 64-bit element would.
 

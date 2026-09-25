@@ -19,7 +19,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 
-from ppy_runtime.abi import NativeParam, NativeSignature
+from ppy_runtime.abi import TEXT, NativeParam, NativeSignature
 from ppy_runtime.aio import available as aio_available
 
 from ..analysis import types as T
@@ -88,6 +88,7 @@ from ..plugins.base import DialectOperationSpec, PluginError, PluginRegistry
 from .abi import signature_from_ir
 from .collection_api import CollectionApiLowering
 from .collections import HANDLE, Held
+from .strings import StringLowering
 
 __all__ = ["Frontend", "Lowered", "lower_function", "lower_module_to_ir"]
 
@@ -211,6 +212,9 @@ class CanonicalFunction:
     signature: IRSignature
     exposed: bool = True
     exposure_reason: str = ""
+    #: The entry Python calls when it is not the function itself: a thunk that
+    #: takes and gives strings as UTF-8 bytes around the function's handles.
+    boundary: NativeSignature | None = None
 
 
 @dataclass(slots=True)
@@ -450,8 +454,9 @@ class Frontend:
             exposed, why = should_lower_native(info, analysis, self.layouts)
             signature = self.declared[qualname][1]
             assert isinstance(signature, IRSignature)
+            boundary = self._text_boundary(info, signature) if exposed else None
             lowered.functions[qualname] = CanonicalFunction(
-                info, signature, exposed=exposed, exposure_reason=why
+                info, signature, exposed=exposed, exposure_reason=why, boundary=boundary
             )
         self._reject_callers_of_rejected(lowered)
         for qualname in lowered.rejected:
@@ -588,6 +593,87 @@ class Frontend:
                 described["noalias"] = True
             kinds.append(described)
         return kinds
+
+    def _text_boundary(self, info: FunctionInfo, signature: IRSignature) -> NativeSignature | None:
+        """A thunk for Python to call a function that takes or gives strings.
+
+        Native callers pass a string's handle. Python passes the string's
+        UTF-8 bytes: the thunk makes a handle of each, calls the function, lets
+        them go, and hands a returned string back as a copy of its bytes the
+        boundary frees. A failed guard inside is the thunk's fallback.
+        """
+        native = signature.native
+        if native is None or self.standalone or not self.cpu_compatible:
+            return None
+        texts = [p.is_handle and p.element == "str" for p in native.parameters]
+        if any(p.is_handle and not text for p, text in zip(native.parameters, texts, strict=True)):
+            return None
+        returns_text = T.strip_literal(info.ret) == T.STR
+        if not any(texts) and not returns_text:
+            return None
+        function = self.declared[info.qualname][0]
+        text = BufferType(U8)
+        thunk = self.module.add_function(
+            f"{function.name}.py",
+            [
+                (p.name, text if is_text else _param_type(p))
+                for p, is_text in zip(native.parameters, texts, strict=True)
+            ],
+            (text,) if returns_text else function.results,
+            attributes={
+                "ppy.symbol": f"{native.symbol}_py",
+                "ppy.qualname": info.qualname,
+                "ppy.abi": "ppy",
+                "ppy.releases_gil": native.releases_gil,
+                "effects": function.attributes.get("effects", ()),
+            },
+        )
+        entry = thunk.add_entry_block()
+        b = Builder(entry)
+        arguments: list[Value] = []
+        made: list[Value] = []
+        for argument, is_text in zip(entry.arguments, texts, strict=True):
+            if not is_text:
+                arguments.append(argument)
+                continue
+            data = core.buffer_data(b, argument)
+            length = core.cast(b, core.buffer_len(b, argument), I64)
+            handle = core.call_extern(b, "ppy_str_new", (data, length), (HANDLE,)).results[0]
+            made.append(handle)
+            arguments.append(handle)
+        called = core.call(
+            b, function.name, tuple(arguments), function.results, capture_status=True
+        )
+        *results, status = called.results
+        for handle in made:
+            core.call_extern(b, "ppy_coll_release", (handle,), ())
+        core.guard(b, core.cmp(b, "eq", status, core.const(b, 0, I64)), "contract", "fell back")
+        if returns_text:
+            handle = results[0]
+            data = core.call_extern(b, "ppy_str_export", (handle,), (PtrType(U8),)).results[0]
+            length = core.call_extern(b, "ppy_str_bytes", (handle,), (I64,)).results[0]
+            core.call_extern(b, "ppy_coll_release", (handle,), ())
+            exported = b.create(
+                "core.call_intrinsic",
+                (data, length),
+                (text,),
+                {"intrinsic": "ppy.buffer_from_parts"},
+            ).result
+            core.ret(b, exported)
+        elif results:
+            core.ret(b, results[0])
+        else:
+            core.ret(b)
+        parameters = tuple(
+            NativeParam(p.name, TEXT) if is_text else p
+            for p, is_text in zip(native.parameters, texts, strict=True)
+        )
+        return replace(
+            native,
+            symbol=f"{native.symbol}_py",
+            parameters=parameters,
+            returns=(TEXT,) if returns_text else native.returns,
+        )
 
     def declare(self, info: FunctionInfo, signature: NativeSignature | IRSignature) -> IRFunction:
         params = [(parameter.name, _param_type(parameter)) for parameter in signature.parameters]
@@ -905,7 +991,7 @@ class _GuardSite:
         core.br(self.b, Successor(setup))
 
 
-class _FunctionLowering(CollectionApiLowering):
+class _FunctionLowering(CollectionApiLowering, StringLowering):
     """Lowers one function body."""
 
     def __init__(
@@ -1268,6 +1354,8 @@ class _FunctionLowering(CollectionApiLowering):
         target = node.targets[0]
         if isinstance(target, ast.Name) and self._make_collection(target.id, node.value):
             return
+        if self._unpack_strings(target, node.value):
+            return
         if isinstance(target, ast.Subscript) and self._is_collection(target.value):
             self._item(target.value, target.slice, node.value)
             return
@@ -1514,6 +1602,8 @@ class _FunctionLowering(CollectionApiLowering):
             return
         if not isinstance(node.target, ast.Name):
             raise Unsupported("augmented assignment to a non-local has no native lowering")
+        if self._augment_string(node.target.id, node):
+            return
         current = self._load(node.target.id)
         if self.prover is not None and current.type == I64:
             self._term_for_load(current, node.target)
@@ -1608,6 +1698,8 @@ class _FunctionLowering(CollectionApiLowering):
             raise Unsupported("only `for NAME in range(...)` or over a list parameter is lowered")
         if isinstance(node.iter, ast.Name) and node.iter.id in self.buffers:
             self._for_buffer(node, node.iter.id)
+            return
+        if self._for_string(node):
             return
         explicit = _parallel_range(node.iter)
         if not (
@@ -1999,7 +2091,9 @@ class _FunctionLowering(CollectionApiLowering):
         if isinstance(node.op, ast.Not) and self._is_collection(node.operand):
             return self._truth_of(node.operand, empty=True)
         if isinstance(node.op, ast.Not):
-            absent = self._object_truth(node.operand, empty=True)
+            absent = self._string_truth(node.operand, empty=True)
+            if absent is None:
+                absent = self._object_truth(node.operand, empty=True)
             if absent is not None:
                 return absent
         if isinstance(node.op, ast.USub) and isinstance(node.operand, ast.Constant):
@@ -2061,6 +2155,9 @@ class _FunctionLowering(CollectionApiLowering):
         same = self._identity(node)
         if same is not None:
             return same
+        text = self._string_compare(node)
+        if text is not None:
+            return text
         equal = self._collection_equality(node)
         if equal is not None:
             return equal
@@ -2215,6 +2312,15 @@ class _FunctionLowering(CollectionApiLowering):
             return self._object_method(node, discard_result)
         if target == "gc.collect" and self._resolves_to(node.func, "gc.collect"):
             return self._collect(node, discard_result)
+        text = self._string_call(node, discard_result)
+        if text is not None:
+            return text
+        if self.frontend.standalone:
+            read = self._read_string(node)
+            if read is not None:
+                if discard_result:
+                    self._release(read)
+                return read
         if isinstance(node.func, ast.Attribute) and self._is_collection(node.func.value):
             if discard_result and self._reference_of(node) is not None:
                 self._discard(node)
@@ -2345,7 +2451,7 @@ class _FunctionLowering(CollectionApiLowering):
         temporaries: list[Value] = []
         bindings: dict[T.TypeVar_, T.Type] = {}
         for argument, param in zip(node.args, info.params, strict=True):
-            if self._is_collection(argument):
+            if self._is_collection(argument) or self._string_of(argument) is not None:
                 handle, owned = self._handle(argument)
                 if owned:
                     temporaries.append(handle)
@@ -3512,18 +3618,42 @@ class _FunctionLowering(CollectionApiLowering):
             for part in parts:
                 if isinstance(part, str):
                     self._standalone_print_text(part)
+                elif isinstance(part, tuple):
+                    self._print_string(part[0])
                 else:
                     shim = _PRINT_SHIMS[part.type]
                     core.call_extern(self.b, shim, (part,), ())
+        for parts in arguments:
+            for part in parts:
+                if isinstance(part, tuple) and part[1]:
+                    self._release(part[0])
         self._standalone_print_text(end)
         if flush:
             core.call_extern(self.b, "ppy_rt_flush_stdout", (), ())
         return core.const(self.b, 0, I64)
 
-    def _standalone_print_parts(self, argument: ast.expr) -> list[str | Value]:
-        parts: list[str | Value] = []
+    def _standalone_print_parts(self, argument: ast.expr) -> list[str | Value | tuple[Value, bool]]:
+        """What one argument prints as: literal text, a scalar, or a string's
+        handle and whether it is to be let go once printed."""
+        parts: list[str | Value | tuple[Value, bool]] = []
         if isinstance(argument, ast.Constant) and isinstance(argument.value, str):
             parts.append(argument.value)
+            return parts
+        plain = isinstance(argument, ast.JoinedStr) and all(
+            not isinstance(item, ast.FormattedValue)
+            or (
+                item.conversion == -1
+                and item.format_spec is None
+                and self._string_of(item.value) is None
+            )
+            for item in argument.values
+        )
+        if self._string_of(argument) is not None and not plain:
+            parts.append(self._handle(argument))
+            return parts
+        listed = self._printed_list(argument)
+        if listed is not None:
+            parts.append(listed)
             return parts
         if isinstance(argument, ast.JoinedStr):
             for item in argument.values:
@@ -4147,6 +4277,9 @@ class _FunctionLowering(CollectionApiLowering):
         """An expression as a condition. A collection is true when it holds anything."""
         if self._is_collection(node):
             return self._truth_of(node)
+        text = self._string_truth(node)
+        if text is not None:
+            return text
         present = self._object_truth(node)
         if present is not None:
             return present

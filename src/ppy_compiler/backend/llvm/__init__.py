@@ -246,7 +246,13 @@ def _module_from_cache(name: str, reused, candidates, layouts=None) -> NativeMod
         # Profitability is a pure function of today's source, so a cached
         # module answers it fresh rather than trusting yesterday's verdict.
         exposed, why = should_lower_native(info, _analysis, layouts)
-        functions[qualname] = LoweredFunction(info, signature, exposed=exposed, exposure_reason=why)
+        functions[qualname] = LoweredFunction(
+            info,
+            signature,
+            exposed=exposed,
+            exposure_reason=why,
+            boundary=reused.boundaries.get(qualname),
+        )
         sources[qualname] = (info, node)
     return NativeModule(
         name=name,
@@ -565,7 +571,7 @@ def compile_project(  # type: ignore[no-untyped-def]
                 artifacts.objects.append(emitted)
         for lowered in native.functions.values():
             if lowered.exposed:
-                signatures[lowered.signature.qualname] = lowered.signature
+                signatures[lowered.signature.qualname] = lowered.python
         for symbol, loop in native.fused.items():
             fused[symbol] = (len(loop.arrays), len(loop.scalars))
 
@@ -930,7 +936,7 @@ def compile_and_run(  # type: ignore[no-untyped-def]
                 specializer.register(info, node)
         wrappers = build_wrappers(
             name,
-            {q: lowered.signature for q, lowered in native.functions.items()},
+            {q: lowered.python for q, lowered in native.functions.items()},
             bundle.project.config.cache_path,
             notify=reporter.note,
         )
@@ -957,15 +963,17 @@ def compile_and_run(  # type: ignore[no-untyped-def]
                         )
                     )
                 continue
-            address = engine.address(lowered.signature.symbol)
+            address = engine.address(lowered.python.symbol)
             if not address:
                 continue
             binder.add(
                 name,
                 _binding_name(lowered.info),
-                lowered.signature,
+                lowered.python,
                 address,
-                specializer=specializer,
+                # A specialization is compiled with the function's own ABI,
+                # which a thunk's entry does not share.
+                specializer=specializer if lowered.boundary is None else None,
                 info=lowered.info,
                 wrappers=wrappers,
                 qualname=qualname,

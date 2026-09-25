@@ -1,0 +1,86 @@
+"""Text processing with native strings: a log parsed, counted, and reported."""
+
+import ppy
+from ppy import HashMap, TreeMap, Vec
+
+LINES = 200000
+
+
+def make_log(count: int) -> Vec[str]:
+    names = ["INFO", "WARN", "ERROR", "DEBUG"]
+    paths = ["/api/users", "/api/orders", "/static/app.js", "/health", "/api/search"]
+    lines = Vec[str]()
+    for i in range(count):
+        level = names[(i * 7) % 4]
+        path = paths[(i * 13) % 5]
+        took = (i * 37) % 900 + 0.25
+        lines.push(f"2026-09-{i % 28 + 1:02d} {level:<5} {path} took={took:.2f}ms user=u{i % 997}")
+    return lines
+
+
+def slowest_paths(lines: Vec[str]) -> str:
+    total = HashMap[str, float]()
+    count = HashMap[str, int]()
+    for line in lines:
+        fields = line.split()
+        path = fields[2]
+        took = float(fields[3].removeprefix("took=").removesuffix("ms"))
+        total[path] = total.get(path, 0.0) + took
+        count[path] = count.get(path, 0) + 1
+    order = TreeMap[str, float]()
+    for path in total:
+        order[path] = total[path] / count[path]
+    shown = ""
+    for path in order:
+        shown += f"{path:<16}{order[path]:>9.2f} ms  x{count[path]:,}\n"
+    return shown.rstrip()
+
+
+def levels(lines: Vec[str]) -> str:
+    seen = HashMap[str, int]()
+    for line in lines:
+        level = line[11:16].strip()
+        seen[level] = seen.get(level, 0) + 1
+    parts = Vec[str]()
+    for level in seen:
+        parts.push(f"{level}={seen[level]}")
+    return " ".join(["levels:", parts[0], parts[1], parts[2], parts[3]])
+
+
+def compress(text: str) -> str:
+    """Run-length encoding, one character at a time: `aaab` is `a3b1`."""
+    if not text:
+        return ""
+    out = ""
+    last = text[0]
+    run = 0
+    for c in text:
+        if c == last:
+            run += 1
+        else:
+            out += last + str(run)
+            last = c
+            run = 1
+    return out + last + str(run)
+
+
+def checksum(lines: Vec[str]) -> int:
+    total = 0
+    for line in lines:
+        packed = compress(line.upper())
+        for c in packed:
+            total = (total * 31 + ord(c)) % 1000000007
+    return total
+
+
+@ppy.native
+def report(count: int) -> str:
+    lines = make_log(count)
+    return f"{slowest_paths(lines)}\n{levels(lines)}\n{compress('aaabccddddd')} {checksum(lines)}"
+
+
+def main() -> None:
+    print(report(LINES))
+
+
+main()

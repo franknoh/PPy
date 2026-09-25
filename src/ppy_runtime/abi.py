@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-__all__ = ["STATUS_FALLBACK", "STATUS_OK", "NativeParam", "NativeSignature"]
+__all__ = ["STATUS_FALLBACK", "STATUS_OK", "TEXT", "NativeParam", "NativeSignature"]
 
 STATUS_OK = 0
 STATUS_FALLBACK = 1
@@ -30,6 +30,10 @@ _ABI_NAMES = {
     # copies a collection into one and out of one.
     "handle": "i8*",
 }
+
+#: A string at the Python boundary: its UTF-8 bytes and how many. As a
+#: result, the bytes are a copy the boundary frees once it has read them.
+TEXT = "text"
 
 
 def _abi_name(scalar: str) -> str:
@@ -69,6 +73,11 @@ class NativeParam:
         return self.kind == "handle"
 
     @property
+    def is_text(self) -> bool:
+        """A `str` crossing from Python: its UTF-8 bytes and their count."""
+        return self.kind == TEXT
+
+    @property
     def is_borrowed(self) -> bool:
         """A `ppy.Buffer[T]` is borrowed in place; a list is copied out.
 
@@ -89,6 +98,8 @@ class NativeParam:
             return (f"{_abi_name(self.element)}*",)
         if self.is_handle:
             return ("i8*",)
+        if self.is_text:
+            return ("i8*", "i64")
         if self.is_tuple:
             return tuple(_abi_name(element) for element in self.elements)
         if self.is_object:
@@ -102,7 +113,11 @@ class NativeParam:
         if self.is_pointer:
             return f"{_abi_name(self.element)}* {self.name}"
         if self.is_handle:
+            if self.element == "str":
+                return f"str {self.name}"
             return f"{self.element} {self.name}"
+        if self.is_text:
+            return f"i8* {self.name}, i64 {self.name}_len"
         if self.is_tuple:
             return ", ".join(
                 f"{_abi_name(element)} {self.name}{index}"

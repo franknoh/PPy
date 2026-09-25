@@ -63,14 +63,16 @@ An element, or a map's value, is one of:
 
 - a number: `int`, `float`, `bool`, or a fixed width such as `ppy.i32`,
   held as an `int`
+- a string: `Vec[str]`, `HashMap[int, str]`
 - a tuple of numbers: `Vec[tuple[int, float]]`
 - a dataclass whose fields are numbers: `Vec[Point]`
 - another collection: `Vec[Vec[int]]`, `HashMap[int, Vec[int]]`
 - an instance of an object class: `Vec[Shape]`, which may hold subclasses
 
-A key of a map or a set is an `int` or a tuple of them:
-`HashMap[tuple[int, int], int]` for a grid, `TreeSet[tuple[int, int]]` for
-pairs in order.
+A key of a map or a set is an `int`, a `str`, or a tuple of `int`:
+`HashMap[str, int]` for counting words, `HashMap[tuple[int, int], int]` for
+a grid, `TreeSet[tuple[int, int]]` for pairs in order. A string key hashes
+and orders by its text. See [Strings](strings.md).
 
 ```python
 from dataclasses import dataclass
@@ -362,7 +364,8 @@ what the checker refuses; one whose element type differs at run time
 
 ## Limitations
 
-- Keys are `int` or tuples of `int`.
+- Keys are `int`, `str`, or tuples of `int`; a tuple with a string in it
+  is not a key.
 - A collection holds a user class's instances natively when the class is a
   value class or an object class; see [Classes](classes.md).
 - Python calls a function natively when its collections hold numbers,

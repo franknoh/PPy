@@ -216,8 +216,8 @@ def test_explicit_backend_reports_plain_function_failure_and_normal_path_falls_b
         """
         def good(n: int) -> int:
             return n + 1
-        def bad(text: str) -> str:
-            return text
+        def bad(counts: dict[str, int]) -> int:
+            return len(counts)
     """,
     )
     modules = canonical_ir_modules(bundle)

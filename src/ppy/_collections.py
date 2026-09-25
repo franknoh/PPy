@@ -104,7 +104,8 @@ def _tuple_parts(spec: Any) -> tuple[Any, ...] | None:
 
 
 def _element_ok(spec: Any) -> bool:
-    """What a collection may hold: a scalar, a tuple of scalars, a dataclass, a collection.
+    """What a collection may hold: a scalar, a string, a tuple of scalars, a
+    dataclass, a collection.
 
     A generic function's type parameter (`Vec[T]` inside `def f[T](...)`) is
     what the function is instantiated with, which CPython does not know: its
@@ -112,6 +113,7 @@ def _element_ok(spec: Any) -> bool:
     """
     return (
         isinstance(spec, typing.TypeVar)
+        or spec is str
         or _scalar(spec) is not None
         or _tuple_parts(spec) is not None
         or _is_record(spec)
@@ -121,8 +123,8 @@ def _element_ok(spec: Any) -> bool:
 
 
 def _key_ok(spec: Any) -> bool:
-    """What a map or a set is keyed by: an `int`, or a tuple of them."""
-    if _scalar(spec) is int or isinstance(spec, typing.TypeVar):
+    """What a map or a set is keyed by: an `int` or a `str`, or a tuple of `int`."""
+    if _scalar(spec) is int or spec is str or isinstance(spec, typing.TypeVar):
         return True
     parts = _tuple_parts(spec)
     return parts is not None and all(_scalar(part) is int for part in parts)
@@ -172,6 +174,8 @@ def _zero(spec: Any) -> Any:
     """What `Vec[T](n)` starts each slot with: `T`'s zero, and a new collection for each."""
     if isinstance(spec, typing.TypeVar):
         raise TypeError(f"a Vec of {spec} has no zero to start with; push instead")
+    if spec is str:
+        return ""
     scalar = _scalar(spec)
     if scalar is not None:
         return scalar(0)
@@ -631,7 +635,7 @@ class _KeysAndValues:
         made = _SPECIALIZED.get((cls, types))
         if made is None:
             if not _key_ok(key):
-                raise TypeError(f"a {cls.__name__} has int or int-tuple keys, not {key!r}")
+                raise TypeError(f"a {cls.__name__} has int, str, or int-tuple keys, not {key!r}")
             if value is not None and not _element_ok(value):
                 raise TypeError(f"a {cls.__name__} cannot hold {value!r} values")
             made = type(
