@@ -1,5 +1,7 @@
 # Changelog
 
+## 0.5.0 — unreleased
+
 ## 0.4.1 — 2026-09-25
 
 Objects order, hash, and compare themselves inside collections, and generic
