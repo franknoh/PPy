@@ -1,6 +1,6 @@
 /* The collections runtime: every `ppy` collection over words.
 
-   A collection is a handle, the address of a sixteen-word header:
+   A collection is a handle, the address of a twenty-one-word header:
 
      [0] length          [1] capacity (records)   [2] records
      [3] family word a   [4] family word b        [5] family word c
@@ -8,6 +8,9 @@
      [8] value words     [9] float mask           [10] handle mask
      [11] references     [12] family              [13] key words
      [14] scratch        [15] record stride (words)
+     [16] previous on the heap list               [17] next on the heap list
+     [18] the heap that holds it                  [19] collector: references
+     [20] collector: state
 
    An element or a value is `value words` eight-byte words: an int64_t or a
    double each (a set bit in the float mask), or a collection handle (a set
@@ -26,12 +29,21 @@
                                     [priority][next free]         c: made d: version
                                                                   e: generator
 
+   An object of a class is a sequence of one record, its fields.
+
+   Every handle is on a list of the handles its thread made (see
+   `ppy_coll_heap`): the collector walks it to find cycles reference counts
+   cannot free, and the handles a failed call left behind are freed from it.
+   The links are stored hidden (`ppy_coll_hide`), so that a leak checker
+   still sees a handle nothing else points at as leaked.
+
    Nothing is checked here: the caller guards an index, an empty pop, a
    missing key, which is what lets a failed check fall back to Python under
    `ppy run` and stop a standalone binary. */
 
 void ppy_coll_fail(void) {
-    fputs("ppy: MemoryError: a collection could not grow\n", stderr);
+    fflush(stdout);
+    fputs("MemoryError\n", stderr);
     exit(1);
 }
 
@@ -39,27 +51,115 @@ int8_t *ppy_coll_none(void) {
     return NULL;
 }
 
-int8_t *ppy_coll_make(int64_t family, int64_t keys, int64_t words, int64_t floats,
-                      int64_t handles, int64_t stride, int64_t capacity) {
-    int64_t *header = (int64_t *)calloc(16, sizeof(int64_t));
-    int64_t room = capacity > 0 ? capacity : 1;
-    int64_t *records = (int64_t *)calloc((size_t)(room * (stride > 0 ? stride : 1)), 8);
-    int64_t spare = 2 * (words > keys ? (words > 0 ? words : 1) : keys);
-    int64_t *scratch = (int64_t *)calloc((size_t)spare, 8);
-    if (header == NULL || records == NULL || scratch == NULL) {
-        ppy_coll_fail();
+/* A pointer as a word a leak checker does not read as one, and back. */
+int64_t ppy_coll_hide(const void *pointer) {
+    if (pointer == NULL) {
+        return 0;
     }
-    header[1] = room;
-    header[2] = (int64_t)(intptr_t)records;
-    header[8] = words;
-    header[9] = floats;
-    header[10] = handles;
-    header[11] = 1;
-    header[12] = family;
-    header[13] = keys;
-    header[14] = (int64_t)(intptr_t)scratch;
-    header[15] = stride;
-    return (int8_t *)header;
+    return (int64_t)((uint64_t)(uintptr_t)pointer ^ 0x5bd1e9955bd1e995ULL);
+}
+
+int64_t *ppy_coll_seen(int64_t word) {
+    if (word == 0) {
+        return NULL;
+    }
+    return (int64_t *)(uintptr_t)((uint64_t)word ^ 0x5bd1e9955bd1e995ULL);
+}
+
+/* This thread's heap: what it made and what the collector knows of it.
+
+     [0] handles that may hold handles (hidden)   [1] handles that cannot
+     [2] handles live                             [3] holders made since the
+                                                      last collection
+     [4] holders live after the last collection   [5] a call failed since
+     [6] collecting now                           [7] holders live
+
+   A holder is a handle whose values include handles: only holders can be
+   in a cycle, so only they are walked. */
+int64_t *ppy_coll_heap(void) {
+#ifdef __cplusplus
+    static thread_local int64_t heap[8];
+#else
+    static _Thread_local int64_t heap[8];
+#endif
+    return heap;
+}
+
+void ppy_coll_track(int64_t *header) {
+    int64_t *heap = ppy_coll_heap();
+    int64_t list = header[10] != 0 ? 0 : 1;
+    int64_t *first = ppy_coll_seen(heap[list]);
+    header[16] = 0;
+    header[17] = heap[list];
+    header[18] = ppy_coll_hide(heap);
+    if (first != NULL) {
+        first[16] = ppy_coll_hide(header);
+    }
+    heap[list] = ppy_coll_hide(header);
+    heap[2]++;
+    if (list == 0) {
+        heap[3]++;
+        heap[7]++;
+    }
+}
+
+void ppy_coll_untrack(int64_t *header) {
+    int64_t *heap = ppy_coll_seen(header[18]);
+    int64_t list = header[10] != 0 ? 0 : 1;
+    int64_t *before = ppy_coll_seen(header[16]);
+    int64_t *after = ppy_coll_seen(header[17]);
+    if (before != NULL) {
+        before[17] = header[17];
+    } else {
+        heap[list] = header[17];
+    }
+    if (after != NULL) {
+        after[16] = header[16];
+    }
+    heap[2]--;
+    if (list == 0) {
+        heap[7]--;
+    }
+}
+
+/* The memory of a handle, without letting go of what it holds. */
+void ppy_coll_free(int8_t *handle) {
+    int64_t *header = (int64_t *)handle;
+    ppy_coll_untrack(header);
+    if (header[12] == 2) {
+        free((void *)(intptr_t)header[4]);
+    }
+    free((void *)(intptr_t)header[2]);
+    free((void *)(intptr_t)header[14]);
+    free(header);
+}
+
+/* A native call failed and fell back: none of the handles this thread made
+   is reachable any more, since no handle outlives the call that made it.
+   The failed frames return without making anything, so the first handle
+   made after that frees them all. */
+void ppy_coll_failed(void) {
+    ppy_coll_heap()[5] = 1;
+}
+
+void ppy_coll_sweep(void) {
+    int64_t *heap = ppy_coll_heap();
+    heap[5] = 0;
+    for (int64_t list = 0; list < 2; list++) {
+        int64_t *header = ppy_coll_seen(heap[list]);
+        while (header != NULL) {
+            int64_t *after = ppy_coll_seen(header[17]);
+            ppy_coll_free((int8_t *)header);
+            header = after;
+        }
+    }
+    heap[3] = 0;
+    heap[4] = 0;
+}
+
+/* How many handles this thread holds: what the tests count leaks by. */
+int64_t ppy_coll_live_handles(void) {
+    return ppy_coll_heap()[2];
 }
 
 int64_t *ppy_coll_record(int8_t *handle, int64_t index) {
@@ -156,12 +256,102 @@ void ppy_coll_release(int8_t *handle) {
             }
         }
     }
-    if (header[12] == 2) {
-        free((void *)(intptr_t)header[4]);
+    ppy_coll_free(handle);
+}
+
+/* The collector: trial deletion over this thread's holders, as CPython's
+   `gc` does it. Each holder's references, less those from other holders,
+   are the ones from outside: a name, a native frame, a holder of another
+   thread. What those reach is kept; what is left is only held by itself, a
+   cycle, and is freed. Returns how many handles it freed. */
+int64_t ppy_coll_collect(void) {
+    int64_t *heap = ppy_coll_heap();
+    if (heap[6]) {
+        return 0;
     }
-    free((void *)(intptr_t)header[2]);
-    free((void *)(intptr_t)header[14]);
-    free(header);
+    heap[6] = 1;
+    int64_t count = 0;
+    for (int64_t *h = ppy_coll_seen(heap[0]); h != NULL; h = ppy_coll_seen(h[17])) {
+        h[19] = h[11];
+        h[20] = 1;
+        count++;
+    }
+    int64_t **stack = (int64_t **)malloc((size_t)(count > 0 ? count : 1) * sizeof(int64_t *));
+    if (stack == NULL) {
+        ppy_coll_fail();
+    }
+    for (int64_t *h = ppy_coll_seen(heap[0]); h != NULL; h = ppy_coll_seen(h[17])) {
+        int64_t records = h[12] == 0 ? h[0] : h[1];
+        for (int64_t i = 0; i < records; i++) {
+            int64_t *value = ppy_coll_live((int8_t *)h, i);
+            for (int64_t w = 0; value != NULL && w < h[8]; w++) {
+                int64_t *child = (int64_t *)(intptr_t)value[w];
+                if (((h[10] >> w) & 1) && child != NULL && child[20] == 1) {
+                    child[19]--;
+                }
+            }
+        }
+    }
+    int64_t top = 0;
+    for (int64_t *h = ppy_coll_seen(heap[0]); h != NULL; h = ppy_coll_seen(h[17])) {
+        if (h[20] == 1 && h[19] > 0) {
+            h[20] = 2;
+            stack[top++] = h;
+        }
+    }
+    while (top > 0) {
+        int64_t *h = stack[--top];
+        int64_t records = h[12] == 0 ? h[0] : h[1];
+        for (int64_t i = 0; i < records; i++) {
+            int64_t *value = ppy_coll_live((int8_t *)h, i);
+            for (int64_t w = 0; value != NULL && w < h[8]; w++) {
+                int64_t *child = (int64_t *)(intptr_t)value[w];
+                if (((h[10] >> w) & 1) && child != NULL && child[20] == 1) {
+                    child[20] = 2;
+                    stack[top++] = child;
+                }
+            }
+        }
+    }
+    int64_t garbage = 0;
+    for (int64_t *h = ppy_coll_seen(heap[0]); h != NULL; h = ppy_coll_seen(h[17])) {
+        if (h[20] == 1) {
+            h[20] = 3;
+            stack[garbage++] = h;
+        } else {
+            h[20] = 0;
+        }
+    }
+    /* Break every cycle first: a value that is garbage loses the reference
+       without being freed yet, anything else is let go of as usual (it is
+       reachable, or holds no handles, so nothing garbage is freed twice). */
+    for (int64_t g = 0; g < garbage; g++) {
+        int64_t *h = stack[g];
+        int64_t records = h[12] == 0 ? h[0] : h[1];
+        for (int64_t i = 0; i < records; i++) {
+            int64_t *value = ppy_coll_live((int8_t *)h, i);
+            for (int64_t w = 0; value != NULL && w < h[8]; w++) {
+                int64_t *child = (int64_t *)(intptr_t)value[w];
+                if (!((h[10] >> w) & 1) || child == NULL) {
+                    continue;
+                }
+                value[w] = 0;
+                if (child[20] == 3) {
+                    child[11]--;
+                } else {
+                    ppy_coll_release((int8_t *)child);
+                }
+            }
+        }
+    }
+    for (int64_t g = 0; g < garbage; g++) {
+        ppy_coll_free((int8_t *)stack[g]);
+    }
+    free(stack);
+    heap[3] = 0;
+    heap[4] = heap[7];
+    heap[6] = 0;
+    return garbage;
 }
 
 /* Let go of the collections the values hold, where the values are handles. */
@@ -179,6 +369,37 @@ void ppy_coll_release_values(int8_t *handle) {
             }
         }
     }
+}
+
+int8_t *ppy_coll_make(int64_t family, int64_t keys, int64_t words, int64_t floats,
+                      int64_t handles, int64_t stride, int64_t capacity) {
+    int64_t *heap = ppy_coll_heap();
+    if (heap[5]) {
+        ppy_coll_sweep();
+    }
+    if (handles != 0 && heap[3] >= 700 + heap[4] && !heap[6]) {
+        ppy_coll_collect();
+    }
+    int64_t *header = (int64_t *)calloc(21, sizeof(int64_t));
+    int64_t room = capacity > 0 ? capacity : 1;
+    int64_t *records = (int64_t *)calloc((size_t)(room * (stride > 0 ? stride : 1)), 8);
+    int64_t spare = 2 * (words > keys ? (words > 0 ? words : 1) : keys);
+    int64_t *scratch = (int64_t *)calloc((size_t)spare, 8);
+    if (header == NULL || records == NULL || scratch == NULL) {
+        ppy_coll_fail();
+    }
+    header[1] = room;
+    header[2] = (int64_t)(intptr_t)records;
+    header[8] = words;
+    header[9] = floats;
+    header[10] = handles;
+    header[11] = 1;
+    header[12] = family;
+    header[13] = keys;
+    header[14] = (int64_t)(intptr_t)scratch;
+    header[15] = stride;
+    ppy_coll_track(header);
+    return (int8_t *)header;
 }
 
 /* Python's `<` over tuples of numbers: the first words that differ decide. */
