@@ -76,9 +76,7 @@ def _spec_ok(spec: str, kind: str) -> bool:
     if kind in {"int", "bool"}:
         if kind_type in _FLOAT_TYPES:
             kind = "float"
-        elif kind_type and kind_type not in _INT_TYPES:
-            return False
-        elif found["precision"] is not None or found["z"]:
+        elif kind_type and kind_type not in _INT_TYPES or found["precision"] is not None or found["z"]:
             return False
     if kind == "float":
         if kind_type and kind_type not in _FLOAT_TYPES:
@@ -617,7 +615,7 @@ class StringLowering:
             raise Unsupported(f"`str.{method}` takes a string natively")
         return self._handle(node)  # type: ignore[attr-defined]
 
-    def _string_method(self, node: ast.Call) -> Value:  # noqa: PLR0912, PLR0915 - one branch per method
+    def _string_method(self, node: ast.Call) -> Value:
         """`s.method(...)`: a handle the caller owns, a number, or a truth."""
         assert isinstance(node.func, ast.Attribute)
         attr = node.func.attr
@@ -841,7 +839,8 @@ class StringLowering:
             listed, owned = self._handle(node)  # type: ignore[attr-defined]
             done = rt("ppy_str_add_list_repr", (builder, listed))
             self._require(  # type: ignore[attr-defined]
-                core.cmp(self.b, "ne", done, word(0)), "`repr` of text outside ASCII"  # type: ignore[attr-defined]
+                core.cmp(self.b, "ne", done, word(0)),
+                "`repr` of text outside ASCII",  # type: ignore[attr-defined]
             )
             self._done_with(listed, owned)  # type: ignore[attr-defined]
             return

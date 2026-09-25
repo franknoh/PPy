@@ -636,7 +636,9 @@ class Frontend:
             handle = core.call_extern(b, "ppy_str_new", (data, length), (HANDLE,)).results[0]
             made.append(handle)
             arguments.append(handle)
-        called = core.call(b, function.name, tuple(arguments), function.results, capture_status=True)
+        called = core.call(
+            b, function.name, tuple(arguments), function.results, capture_status=True
+        )
         *results, status = called.results
         for handle in made:
             core.call_extern(b, "ppy_coll_release", (handle,), ())
@@ -3526,9 +3528,7 @@ class _FunctionLowering(CollectionLowering, StringLowering):
             core.call_extern(self.b, "ppy_rt_flush_stdout", (), ())
         return core.const(self.b, 0, I64)
 
-    def _standalone_print_parts(
-        self, argument: ast.expr
-    ) -> list[str | Value | tuple[Value, bool]]:
+    def _standalone_print_parts(self, argument: ast.expr) -> list[str | Value | tuple[Value, bool]]:
         """What one argument prints as: literal text, a scalar, or a string's
         handle and whether it is to be let go once printed."""
         parts: list[str | Value | tuple[Value, bool]] = []

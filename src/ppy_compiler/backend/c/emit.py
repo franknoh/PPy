@@ -874,7 +874,9 @@ class _ModuleEmitter:
                 if order.get(needed, -1) > order[name]
             }
             lines.extend(
-                SHIMS[name].prototype(name, storage) + ";" for name in self.unit.shims if name in later
+                SHIMS[name].prototype(name, storage) + ";"
+                for name in self.unit.shims
+                if name in later
             )
             lines.extend(definition(name, storage) for name in self.unit.shims)
         if self.unit.externs:

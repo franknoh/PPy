@@ -4821,7 +4821,9 @@ class _Checker:
         keyed = canonical in C.KEYED
         if keyed and not self._collection_key(resolved[0]):
             self._error(
-                "E1305", f"a `{canonical}` has `int`, `str`, or int-tuple keys, not `{resolved[0]}`", node
+                "E1305",
+                f"a `{canonical}` has `int`, `str`, or int-tuple keys, not `{resolved[0]}`",
+                node,
             )
         element = resolved[-1]
         if not (keyed and len(resolved) == 1) and not self._collection_element(element):
