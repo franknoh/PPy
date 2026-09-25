@@ -3767,6 +3767,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label=" NativeSignature">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#ppy_runtime.abi.NativeSignature.crosses_collections" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-attribute"></code>&nbsp;crosses_collections
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
         
       </ul>
@@ -4994,6 +5011,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label=" NativeSignature">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#ppy_runtime.abi.NativeSignature.crosses_collections" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-attribute"></code>&nbsp;crosses_collections
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
         
       </ul>
@@ -6020,7 +6054,7 @@ years later.</p>
 
 
 <h3 id="ppy_runtime.abi.NativeParam" class="doc doc-heading">
-<code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>              <code class="highlight language-python"><span class="n">NativeParam</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">kind</span><span class="p">,</span> <span class="n">element</span><span class="o">=</span><span class="s1">''</span><span class="p">,</span> <span class="n">elements</span><span class="o">=</span><span class="p">(),</span> <span class="n">fields</span><span class="o">=</span><span class="p">(),</span> <span class="n">class_name</span><span class="o">=</span><span class="s1">''</span><span class="p">)</span></code>
+<code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>              <code class="highlight language-python"><span class="n">NativeParam</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">kind</span><span class="p">,</span> <span class="n">element</span><span class="o">=</span><span class="s1">''</span><span class="p">,</span> <span class="n">elements</span><span class="o">=</span><span class="p">(),</span> <span class="n">fields</span><span class="o">=</span><span class="p">(),</span> <span class="n">class_name</span><span class="o">=</span><span class="s1">''</span><span class="p">,</span> <span class="n">written</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span></code>
 
   <span class="doc doc-labels">
       <small class="doc doc-label doc-label-dataclass"><code>dataclass</code></small>
@@ -6091,7 +6125,7 @@ years later.</p>
 
     <div class="doc doc-contents ">
 
-        <p>A <code>ppy.Vec</code> or another collection: its runtime handle, no Python boundary.</p>
+        <p>A <code>ppy.Vec</code> or another collection, or an object: its runtime handle.</p>
 
     </div>
 
@@ -6137,7 +6171,7 @@ point at. A buffer-protocol object already has one (spec 6.4, 13.8).</p>
 
 
 <h3 id="ppy_runtime.abi.NativeSignature" class="doc doc-heading">
-<code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>              <code class="highlight language-python"><span class="n">NativeSignature</span><span class="p">(</span><span class="n">qualname</span><span class="p">,</span> <span class="n">symbol</span><span class="p">,</span> <span class="n">parameters</span><span class="p">,</span> <span class="n">returns</span><span class="p">,</span> <span class="n">releases_gil</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">cpu_features</span><span class="o">=</span><span class="p">(),</span> <span class="n">future</span><span class="o">=</span><span class="s1">''</span><span class="p">)</span></code>
+<code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>              <code class="highlight language-python"><span class="n">NativeSignature</span><span class="p">(</span><span class="n">qualname</span><span class="p">,</span> <span class="n">symbol</span><span class="p">,</span> <span class="n">parameters</span><span class="p">,</span> <span class="n">returns</span><span class="p">,</span> <span class="n">releases_gil</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">cpu_features</span><span class="o">=</span><span class="p">(),</span> <span class="n">future</span><span class="o">=</span><span class="s1">''</span><span class="p">,</span> <span class="n">returned</span><span class="o">=</span><span class="s1">''</span><span class="p">)</span></code>
 
   <span class="doc doc-labels">
       <small class="doc doc-label doc-label-dataclass"><code>dataclass</code></small>
@@ -6169,6 +6203,28 @@ point at. A buffer-protocol object already has one (spec 6.4, 13.8).</p>
 
 
 
+
+<div class="doc doc-object doc-attribute">
+
+
+
+<h4 id="ppy_runtime.abi.NativeSignature.crosses_collections" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-attribute"></code>            <code class="highlight language-python"><span class="n">crosses_collections</span></code>
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-property"><code>property</code></small>
+  </span>
+
+<a href="#ppy_runtime.abi.NativeSignature.crosses_collections" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Whether a collection crosses the boundary, in or out.</p>
+
+    </div>
+
+</div>
 
 
 

@@ -866,6 +866,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#walking-a-collection" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Walking a collection
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#methods" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4230,6 +4241,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#walking-a-collection" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Walking a collection
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#methods" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4482,6 +4504,10 @@ be left out: <code>v: Vec[int] = Vec()</code>. A collection of floats keeps it, 
 <a href="../classes/#generic-classes">Classes</a> explains. <code>Vec[T](n)</code> starts with <code>n</code> zeros of <code>T</code>: <code>0</code>,
 <code>0.0</code>, <code>False</code>, a tuple of zeros, a dataclass of zero fields, or a new empty
 collection in each slot.</p>
+<p>Every type but the maps also starts from an iterable: <code>Vec[int]([3, 1, 2])</code>,
+<code>Deque[int](range(5))</code>, <code>HashSet[int](other)</code>. A display, a <code>range</code>, or
+another collection is what native code fills one from. <code>Heap[T](items)</code>
+arranges its elements in linear time, as <code>heapq.heapify</code> does.</p>
 <h2 id="what-a-collection-holds">What a collection holds<a class="headerlink" href="#what-a-collection-holds" title="Permanent link">&para;</a></h2>
 <p>An element, or a map's value, is one of:</p>
 <ul>
@@ -4557,8 +4583,50 @@ C++ template is instantiated:</p>
 <p><code>smallest(Vec[int]...)</code> and <code>smallest(Vec[float]...)</code> are two native
 functions. Under CPython the type parameter is not known, so <code>Vec[T]</code>
 stores values as they are given, and <code>Vec[T](n)</code> has no zero to start with.</p>
-<p>A value is converted to the element type when it is stored, so
-<code>Vec[float]</code> holds <code>3.0</code> after <code>push(3)</code>, as native memory of doubles would.</p>
+<h2 id="walking-a-collection">Walking a collection<a class="headerlink" href="#walking-a-collection" title="Permanent link">&para;</a></h2>
+<p>A <code>for</code> loop walks a collection, and so do these, natively:</p>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>for k, v in m.items()</code>, <code>m.keys()</code>, <code>m.values()</code></td>
+<td>a map's entries, keys, or values, in its order</td>
+</tr>
+<tr>
+<td><code>enumerate(c)</code>, <code>enumerate(c, 1)</code></td>
+<td>with a count</td>
+</tr>
+<tr>
+<td><code>zip(a, b)</code></td>
+<td>two or more in step, stopping at the shortest</td>
+</tr>
+<tr>
+<td><code>reversed(c)</code></td>
+<td>last to first; a heap has no order to reverse</td>
+</tr>
+<tr>
+<td><code>sorted(c)</code>, <code>sorted(c, reverse=True)</code></td>
+<td>a sorted copy, walked</td>
+</tr>
+<tr>
+<td><code>t.between(low, high)</code></td>
+<td>a tree's keys from <code>low</code> up to, and not including, <code>high</code></td>
+</tr>
+<tr>
+<td><code>min(c)</code>, <code>max(c)</code>, <code>sum(c)</code></td>
+<td>over a collection or any of the walks above</td>
+</tr>
+</tbody>
+</table>
+<p><code>sum</code> of floats adds as CPython does, with the rounding error carried and
+added at the end, so <code>sum(Vec[float]([1e16, 1.0, -1e16]))</code> is <code>1.0</code>.</p>
+<p>A collection a walk reads is held until the walk ends, so the loop body may
+rebind the name it came from.</p>
 <h2 id="methods">Methods<a class="headerlink" href="#methods" title="Permanent link">&para;</a></h2>
 <h3 id="vect"><code>Vec[T]</code><a class="headerlink" href="#vect" title="Permanent link">&para;</a></h3>
 <table>
@@ -4574,8 +4642,8 @@ stores values as they are given, and <code>Vec[T](n)</code> has no zero to start
 <td>add <code>x</code> at the end</td>
 </tr>
 <tr>
-<td><code>v.pop()</code></td>
-<td>remove and return the last element</td>
+<td><code>v.pop()</code>, <code>v.pop(i)</code></td>
+<td>remove and return the last element, or the one at <code>i</code></td>
 </tr>
 <tr>
 <td><code>v.last()</code></td>
@@ -4586,15 +4654,38 @@ stores values as they are given, and <code>Vec[T](n)</code> has no zero to start
 <td>read or write index <code>i</code></td>
 </tr>
 <tr>
-<td><code>v.sort()</code>, <code>v.reverse()</code></td>
+<td><code>v[a:b]</code>, <code>v[a:b:step]</code></td>
+<td>a new <code>Vec</code>, sliced as a list is</td>
+</tr>
+<tr>
+<td><code>v.insert(i, x)</code></td>
+<td>put <code>x</code> before index <code>i</code>, from 0 to <code>len(v)</code></td>
+</tr>
+<tr>
+<td><code>v.extend(items)</code></td>
+<td>add each of <code>items</code> at the end</td>
+</tr>
+<tr>
+<td><code>v.remove(x)</code>, <code>v.index(x)</code>, <code>v.count(x)</code></td>
+<td>by equality, as a list does</td>
+</tr>
+<tr>
+<td><code>x in v</code>, <code>v == w</code>, <code>v + w</code>, <code>v.copy()</code></td>
+<td>a copy shares the collections it holds</td>
+</tr>
+<tr>
+<td><code>v.sort()</code>, <code>v.sort(reverse=True)</code>, <code>v.sort(key=f)</code></td>
 <td>in place; the sort is stable</td>
 </tr>
 <tr>
-<td><code>v.clear()</code>, <code>len(v)</code>, <code>for x in v</code></td>
+<td><code>v.reverse()</code>, <code>v.clear()</code>, <code>len(v)</code>, <code>for x in v</code></td>
 <td></td>
 </tr>
 </tbody>
 </table>
+<p><code>sort</code>'s <code>key</code> is a lambda or a function's name. Native code calls it once
+per element, as <code>list.sort</code> does, and sorts by what it returns: a number, a
+tuple of numbers, or an ordered dataclass.</p>
 <h3 id="dequet"><code>Deque[T]</code><a class="headerlink" href="#dequet" title="Permanent link">&para;</a></h3>
 <table>
 <thead>
@@ -4619,6 +4710,22 @@ stores values as they are given, and <code>Vec[T](n)</code> has no zero to start
 <tr>
 <td><code>d[i]</code>, <code>d[i] = x</code></td>
 <td>read or write index <code>i</code>, counted from the front</td>
+</tr>
+<tr>
+<td><code>d.extend(items)</code>, <code>d.extendleft(items)</code></td>
+<td>add at either end; <code>extendleft</code> reverses them</td>
+</tr>
+<tr>
+<td><code>d.rotate(n)</code></td>
+<td>move the last <code>n</code> elements to the front</td>
+</tr>
+<tr>
+<td><code>d.insert(i, x)</code>, <code>d.remove(x)</code>, <code>d.index(x)</code>, <code>d.count(x)</code></td>
+<td>as for a <code>Vec</code></td>
+</tr>
+<tr>
+<td><code>x in d</code>, <code>d == e</code>, <code>d + e</code>, <code>d.copy()</code></td>
+<td></td>
 </tr>
 <tr>
 <td><code>d.clear()</code>, <code>len(d)</code>, <code>for x in d</code></td>
@@ -4648,7 +4755,19 @@ stores values as they are given, and <code>Vec[T](n)</code> has no zero to start
 <td>the element <code>pop</code> would return</td>
 </tr>
 <tr>
-<td><code>h.clear()</code>, <code>len(h)</code></td>
+<td><code>h.pushpop(x)</code></td>
+<td>push <code>x</code>, then pop; <code>x</code> itself when it would come out first</td>
+</tr>
+<tr>
+<td><code>h.replace(x)</code></td>
+<td>pop, then push <code>x</code>; the heap must not be empty</td>
+</tr>
+<tr>
+<td><code>h.to_sorted()</code></td>
+<td>a new <code>Vec</code> in the order <code>pop</code> would give, the heap left as it was</td>
+</tr>
+<tr>
+<td><code>h.copy()</code>, <code>h.clear()</code>, <code>len(h)</code></td>
 <td></td>
 </tr>
 </tbody>
@@ -4699,6 +4818,14 @@ node use that id. <code>-1</code> means no node.</p>
 <td>read or replace what <code>node</code> holds</td>
 </tr>
 <tr>
+<td><code>l.extend(items)</code></td>
+<td>add each of <code>items</code> at the back</td>
+</tr>
+<tr>
+<td><code>x in l</code>, <code>l == m</code>, <code>reversed(l)</code></td>
+<td></td>
+</tr>
+<tr>
 <td><code>l.clear()</code>, <code>len(l)</code>, <code>for x in l</code></td>
 <td></td>
 </tr>
@@ -4724,15 +4851,35 @@ node is the next one handed out. <code>clear</code> starts the ids from 0 again.
 <td>the value, or <code>default</code></td>
 </tr>
 <tr>
-<td><code>m.pop(key)</code></td>
-<td>remove <code>key</code> and return its value</td>
+<td><code>m.setdefault(key, default)</code></td>
+<td>the value, first set to <code>default</code> where there is none</td>
+</tr>
+<tr>
+<td><code>m.pop(key)</code>, <code>m.pop(key, default)</code></td>
+<td>remove <code>key</code> and return its value, or <code>default</code></td>
+</tr>
+<tr>
+<td><code>m.keys()</code>, <code>m.values()</code>, <code>m.items()</code></td>
+<td>walked in insertion order</td>
+</tr>
+<tr>
+<td><code>c.update(other)</code></td>
+<td>every entry of <code>other</code>, in its order</td>
 </tr>
 <tr>
 <td><code>s.add(key)</code>, <code>s.remove(key)</code>, <code>s.discard(key)</code></td>
 <td>the set's methods; <code>remove</code> raises <code>KeyError</code> for a missing key</td>
 </tr>
 <tr>
-<td><code>key in c</code>, <code>key not in c</code></td>
+<td><code>a \| b</code>, <code>a &amp; b</code>, <code>a - b</code>, <code>a ^ b</code></td>
+<td>a new set; also <code>union</code>, <code>intersection</code>, <code>difference</code>, <code>symmetric_difference</code></td>
+</tr>
+<tr>
+<td><code>a.issubset(b)</code>, <code>a.issuperset(b)</code>, <code>a.isdisjoint(b)</code></td>
+<td></td>
+</tr>
+<tr>
+<td><code>key in c</code>, <code>c == d</code>, <code>c.copy()</code></td>
 <td></td>
 </tr>
 <tr>
@@ -4741,6 +4888,8 @@ node is the next one handed out. <code>clear</code> starts the ids from 0 again.
 </tr>
 </tbody>
 </table>
+<p>A set operation keeps the left set's keys in their order and then the right
+set's, the order a <code>dict</code> built the same way would have.</p>
 <h3 id="treemapk-v-and-treesetk"><code>TreeMap[K, V]</code> and <code>TreeSet[K]</code><a class="headerlink" href="#treemapk-v-and-treesetk" title="Permanent link">&para;</a></h3>
 <p>These have the same methods as the hash types, iterate in ascending key
 order, and add:</p>
@@ -4772,6 +4921,14 @@ order, and add:</p>
 <td><code>t.higher(key)</code></td>
 <td>the smallest key above <code>key</code></td>
 </tr>
+<tr>
+<td><code>t.between(low, high)</code></td>
+<td>the keys from <code>low</code> up to, and not including, <code>high</code></td>
+</tr>
+<tr>
+<td><code>t.pop_min()</code>, <code>t.pop_max()</code></td>
+<td>remove the smallest or largest key; a <code>TreeMap</code> returns <code>(key, value)</code></td>
+</tr>
 </tbody>
 </table>
 <p><code>floor</code> and the others raise <code>KeyError</code> when there is no such key, and <code>min</code>
@@ -4790,6 +4947,10 @@ containers:</p>
   ran. If the body removed that node, the walk ends there.</li>
 <li>Adding or removing a key while iterating a map or a set raises
   <code>RuntimeError</code>, as <code>dict</code> does. Replacing a value does not.</li>
+<li>Equality compares contents, and a collection is never equal to one of
+  another kind: a <code>Vec</code> is not a <code>Deque</code>, as a <code>list</code> is not a <code>deque</code>.</li>
+<li>A slice may count from the end and is clamped to the length, as a list's
+  slice is; only indexing one element refuses a negative index.</li>
 </ul>
 <h2 id="in-native-code">In native code<a class="headerlink" href="#in-native-code" title="Permanent link">&para;</a></h2>
 <p>A collection is a handle into a small C runtime
@@ -4830,15 +4991,35 @@ says <code>OverflowError: the result does not fit in a 64-bit integer</code>.</p
 <h3 id="functions-that-take-or-return-collections">Functions that take or return collections<a class="headerlink" href="#functions-that-take-or-return-collections" title="Permanent link">&para;</a></h3>
 <p>A native function can take a collection as a parameter, as <code>farthest</code> above
 takes <code>adjacent</code>, and can return one. Native callers pass and receive the
-handle, and writes through a parameter land in the caller's collection.
-Such a function has no Python boundary: Python code cannot call it
-natively, so it runs as Python when called from Python.</p>
+handle, and writes through a parameter land in the caller's collection.</p>
+<p>Python calls such a function natively too. Each argument is copied into
+native memory, collections inside it included, and a returned collection is
+copied out into the reference classes. The copy keeps identity: an object
+passed twice is one handle, and a returned argument, or a collection taken
+out of one, is the caller's own object. When the function writes through a
+parameter, even through an element of it (<code>for row in rows: row.push(0)</code>),
+the caller's objects are brought up to date after the call. A function that
+returns nothing and fills what it was passed crosses the same way.</p>
+<p>The copy is one pass over each argument and one over the result, so the
+crossing pays off when the function does more than one pass of work over
+what it is given. An argument of another type, a plain <code>list</code> for a <code>Vec</code> say, is
+what the checker refuses; one whose element type differs at run time
+(<code>Vec[float]</code> for <code>Vec[int]</code>) runs the Python body.</p>
 <h2 id="limitations">Limitations<a class="headerlink" href="#limitations" title="Permanent link">&para;</a></h2>
 <ul>
 <li>Keys are <code>int</code> or tuples of <code>int</code>.</li>
-<li><code>get(key, default)</code> natively takes a map whose values are numbers.</li>
 <li>A collection holds a user class's instances natively when the class is a
   value class or an object class; see <a href="../classes/">Classes</a>.</li>
+<li>Python calls a function natively when its collections hold numbers,
+  tuples of numbers, and collections of those. A dataclass or object
+  element, or a <code>LinkedList</code> (whose node ids are the history of its
+  insertions), keeps the call on the Python body; native callers are not
+  affected.</li>
+<li><code>index</code>, <code>count</code>, <code>remove</code>, <code>in</code>, and <code>==</code> over floats hand a NaN back to
+  Python: CPython counts the same NaN object as equal to itself, and native
+  memory has no objects to tell apart.</li>
+<li><code>pop_min</code> and <code>pop_max</code> of a <code>TreeMap</code> return a tuple natively when its
+  keys and values are numbers.</li>
 </ul>
 <p>Examples: <a href="../../howto/47_collections/">Collections</a>.</p>
 
