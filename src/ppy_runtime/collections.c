@@ -1,6 +1,6 @@
 /* The collections runtime: every `ppy` collection over words.
 
-   A collection is a handle, the address of a twenty-one-word header:
+   A collection is a handle, the address of a twenty-five-word header:
 
      [0] length          [1] capacity (records)   [2] records
      [3] family word a   [4] family word b        [5] family word c
@@ -13,6 +13,8 @@
      [16] previous on the heap list               [17] next on the heap list
      [18] the heap that holds it                  [19] collector: references
      [20] collector: state
+     [21] the elements' or keys' `__lt__`, compiled   [22] the keys' `__hash__`
+     [23] the keys' `__eq__`                         [24] which key words are objects
 
    An element or a value is `value words` eight-byte words: an int64_t or a
    double each (a set bit in the float mask), or a collection handle (a set
@@ -246,7 +248,11 @@ int64_t ppy_coll_key_text(int8_t *handle) {
 
 /* The key words a map or a set holds a reference to: its strings and its objects. */
 int64_t ppy_coll_held_keys(int8_t *handle) {
-    return ppy_coll_key_text(handle) | ((int64_t *)handle)[24];
+    int64_t *header = (int64_t *)handle;
+    if (header[12] != 2 && header[12] != 3) {
+        return 0; /* only maps and sets have keys; a string's header is shorter */
+    }
+    return ppy_coll_key_text(handle) | header[24];
 }
 
 /* Take (1) or drop (-1) a reference to each string or object word of a key. */
@@ -458,12 +464,12 @@ int8_t *ppy_coll_make(int64_t family, int64_t keys, int64_t words, int64_t float
         /* A string keeps its bytes right after its header, in one block, and
            says so in word 6 until it outgrows them (strings.c). */
         int64_t room = capacity > 0 ? capacity : 1;
-        int64_t *text = (int64_t *)calloc((size_t)(21 + room), sizeof(int64_t));
+        int64_t *text = (int64_t *)calloc((size_t)(25 + room), sizeof(int64_t));
         if (text == NULL) {
             ppy_coll_fail();
         }
         text[1] = room;
-        text[2] = (int64_t)(intptr_t)(text + 21);
+        text[2] = (int64_t)(intptr_t)(text + 25);
         text[6] = 1;
         text[8] = words;
         text[11] = 1;

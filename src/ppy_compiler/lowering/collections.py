@@ -22,7 +22,7 @@ import hashlib
 from dataclasses import dataclass
 
 from ..analysis import types as T
-from ..analysis.symbols import ClassInfo
+from ..analysis.symbols import ClassInfo, dataclass_keyword
 from ..backend.llvm.lowering import Unsupported
 from ..driver.ir_pipeline import object_chain
 from ..ir import (
@@ -1149,6 +1149,16 @@ class CollectionLowering:
         back; a class without them is ordered by nothing and hashed by identity."""
         keyed = kind.family in {"map", "tree"}
         element = kind.key if keyed else kind.value
+        if kind.family == "map" and element is not None and element.kind == "record":
+            # A value class is copied, so it has no identity to hash by: only a
+            # dataclass that hashes its fields (`frozen=True`) is a key natively.
+            node = self._class_named(element.record).node
+            frozen = dataclass_keyword(node, "frozen") is True
+            if not (frozen or dataclass_keyword(node, "unsafe_hash") is True):
+                raise Unsupported(f"`{element.record}` is hashed by identity, which a value has not")
+            if any(part == "float" for part in element.parts):
+                # `0.0 == -0.0` and NaN: equal floats are not always equal words.
+                raise Unsupported(f"`{element.record}` hashes a float, whose words do not decide `==`")
         if element is None or element.kind != "object":
             return
         if kind.family == "tree" or kind.name in {"Vec", "Heap", "MaxHeap"}:
@@ -1947,7 +1957,14 @@ _BINARY_DUNDERS = {
 }
 
 #: The methods whose collection result the caller owns: taken out, not read in place.
-_OWNED_RESULTS = {"pop": True, "pop_front": True, "pop_back": True, "remove": True}
+_OWNED_RESULTS = {
+    "pop": True,
+    "pop_front": True,
+    "pop_back": True,
+    "remove": True,
+    "pop_min": True,
+    "pop_max": True,
+}
 
 
 def _copies_before_writes(function: ast.AST, record: str, type_of) -> bool:  # type: ignore[no-untyped-def]

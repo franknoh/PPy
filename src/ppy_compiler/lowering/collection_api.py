@@ -411,6 +411,8 @@ class CollectionApiLowering(CollectionLowering):
         self.b.at_end(done)  # type: ignore[attr-defined]
         for source in plan.sources:
             self._let_go(source.slot)
+        # `between`'s bounds, made before the loop, are read until it ends.
+        self._keys_done()
 
     def _bind_item(self, target: ast.expr, parts: list[tuple[Shape, Value]]) -> None:
         """A loop target bound to one step: an element, or a key and its value."""
@@ -461,6 +463,7 @@ class CollectionApiLowering(CollectionLowering):
     def _add_node(self, kind: Kind, handle: Value, node: ast.expr, front: bool = False) -> None:
         if kind.family in {"map", "tree"}:
             self._rt("ppy_coll_put_key", (handle, self._key(kind, node)))
+            self._keys_done()
             return
         assert kind.value is not None
         self._store_into(self._room(kind, handle, front), kind.value, node, fresh=True)
@@ -748,6 +751,8 @@ class CollectionApiLowering(CollectionLowering):
                 "tree": self._keyed_method,
             }[kind.family]
             found = method(kind, handle, attr, node.args)
+        # The keys made for the calls just emitted go now, in the block that made them.
+        self._keys_done()
         if found is None:
             raise Unsupported(f"`{kind.name}.{attr}` has no native lowering")
         self._done_with(handle, owned)
@@ -912,6 +917,10 @@ class CollectionApiLowering(CollectionLowering):
                 if shape.reference or key_shape.kind not in {"int", "float", "bool"}:
                     raise Unsupported(f"`{attr}` of this map has no native tuple form")
                 value = self._read(self._rt("ppy_tree_value_at", (handle, node), HANDLE), shape)
+            if key_shape.reference:
+                # The tree lets go of the key it removes; what is handed out is
+                # the caller's, as a popped element is.
+                self._retain(key)
             self._rt("ppy_tree_remove", (handle, key_address))
             return key if value is None else core.tuple_make(self.b, key, value)
         if shape is None:
