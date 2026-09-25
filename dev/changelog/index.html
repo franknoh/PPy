@@ -210,7 +210,7 @@
   </div>
   <div class="md-source__repository">
     franknoh/PPy
-    <span class="ppy-source-version" title="Documentation version">v0.5.0a1</span>
+    <span class="ppy-source-version" title="Documentation version">v0.4.1</span>
   </div>
 </a>
       </div>
@@ -417,7 +417,7 @@
   </div>
   <div class="md-source__repository">
     franknoh/PPy
-    <span class="ppy-source-version" title="Documentation version">v0.5.0a1</span>
+    <span class="ppy-source-version" title="Documentation version">v0.4.1</span>
   </div>
 </a>
     </div>
@@ -3972,10 +3972,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#050-unreleased" class="md-nav__link">
+  <a href="#041-2026-09-25" class="md-nav__link">
     <span class="md-ellipsis">
       
-        0.5.0 — unreleased
+        0.4.1 — 2026-09-25
       
     </span>
   </a>
@@ -4260,10 +4260,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#050-unreleased" class="md-nav__link">
+  <a href="#041-2026-09-25" class="md-nav__link">
     <span class="md-ellipsis">
       
-        0.5.0 — unreleased
+        0.4.1 — 2026-09-25
       
     </span>
   </a>
@@ -4534,7 +4534,45 @@
 
 
 <h1 id="changelog">Changelog<a class="headerlink" href="#changelog" title="Permanent link">&para;</a></h1>
-<h2 id="050-unreleased">0.5.0 — unreleased<a class="headerlink" href="#050-unreleased" title="Permanent link">&para;</a></h2>
+<h2 id="041-2026-09-25">0.4.1 — 2026-09-25<a class="headerlink" href="#041-2026-09-25" title="Permanent link">&para;</a></h2>
+<p>Objects order, hash, and compare themselves inside collections, and generic
+classes take part in inheritance. Both were left out of 0.4.0.</p>
+<ul>
+<li>Objects are collection elements and keys by their class's own methods.</li>
+<li><code>Heap[Task]</code>, <code>Vec[Task].sort()</code>, <code>sorted(...)</code>, <code>TreeMap[Task, V]</code>, and
+    <code>TreeSet[Task]</code> order by <code>__lt__</code>.</li>
+<li><code>HashMap[Point, V]</code> and <code>HashSet[Point]</code> hash and compare by <code>__hash__</code>
+    and <code>__eq__</code>, or by identity where the class defines neither.</li>
+<li>Native code calls the compiled methods from inside the collection. A
+    guard that fails in one hands the call back to Python, and a standalone
+    binary prints what CPython raises.</li>
+<li><code>__eq__(self, other: object)</code> works as Python's typing spells it.</li>
+<li>A method a subclass overrides keeps the collection in Python.</li>
+<li>The checker takes a class as a key where Python could use it as one: a
+  hashable class for a hash map or set, a class with <code>__lt__</code> (or
+  <code>@dataclass(order=True)</code>) for a tree. <code>__eq__</code> without <code>__hash__</code>, or a
+  plain <code>@dataclass</code>, is <code>E1305</code>, as Python would refuse it.</li>
+<li>A tree's two keys are the same key when neither is less than the other, in
+  the reference classes as in native code.</li>
+<li>A class that defines <code>__lt__</code>, <code>__hash__</code>, or <code>__eq__</code> is an object class,
+  held by handle, not copied as a value class.</li>
+<li>Fixed: <code>TreeSet[str].pop_min()</code>/<code>pop_max()</code> natively returned a string the
+  tree had already freed.</li>
+<li>Fixed: a string or object made only to look a key up was freed in the
+  wrong place when the lookup ran inside a loop.</li>
+<li>Generic classes may have bases, and classes may derive from generic ones:
+  <code>class Counted[T](https://github.com/franknoh/PPy/blob/main/Stack[T])</code>, <code>class IntStack(Stack[int])</code>,
+  <code>class Pair[A, B](https://github.com/franknoh/PPy/blob/main/Box[A])</code>.</li>
+<li>The checker binds each base's type parameters from what the class gives
+    it, through every level. An <code>IntStack().pop()</code> is an <code>int</code>, and
+    <code>super()</code> is the base with those arguments.</li>
+<li>A <code>Counted[int]</code> or an <code>IntStack</code> goes where a <code>Stack[int]</code> is expected.</li>
+<li>Native code lays such objects out, instantiates each inherited method,
+    and dispatches overrides by the same bindings, in <code>ppy run</code>, standalone
+    binaries, and emitted C and C++.</li>
+<li>A call through a base whose subclass has parameters the base does not
+    decide stays in Python.</li>
+</ul>
 <h2 id="040-2026-09-25">0.4.0 — 2026-09-25<a class="headerlink" href="#040-2026-09-25" title="Permanent link">&para;</a></h2>
 <p>The release where ordinary Python data goes native. Text, class
 hierarchies, and the common container operations compile now. They used to
