@@ -1,5 +1,7 @@
 # Changelog
 
+## 0.5.0 — unreleased
+
 ## 0.4.0 — 2026-09-25
 
 The release where ordinary Python data goes native. Text, class
