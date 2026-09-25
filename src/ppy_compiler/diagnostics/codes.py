@@ -97,6 +97,10 @@ CODES: dict[str, str] = {
         "A function changed since the profile given to `--pgo` was recorded; its counts were "
         "ignored and it was built as without a profile."
     ),
+    "W2010": (
+        "Under `--no-strict`, a strict-mode error with a sound fallback (`E1201`, `E1202`, "
+        "`E1204`, `E1302`, `E1306`); the message names the code it is under strict mode."
+    ),
     "R3003": "A list parameter is close to being a borrowed buffer but something blocks it.",
     "W2101": (
         "The build cache index was damaged; it was quarantined and rebuilt, "
