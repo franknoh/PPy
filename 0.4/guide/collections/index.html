@@ -212,7 +212,7 @@
   </div>
   <div class="md-source__repository">
     franknoh/PPy
-    <span class="ppy-source-version" title="Documentation version">v0.4.0</span>
+    <span class="ppy-source-version" title="Documentation version">v0.4.1</span>
   </div>
 </a>
       </div>
@@ -419,7 +419,7 @@
   </div>
   <div class="md-source__repository">
     franknoh/PPy
-    <span class="ppy-source-version" title="Documentation version">v0.4.0</span>
+    <span class="ppy-source-version" title="Documentation version">v0.4.1</span>
   </div>
 </a>
     </div>
@@ -4579,34 +4579,88 @@ arranges its elements in linear time, as <code>heapq.heapify</code> does.</p>
 <li>another collection: <code>Vec[Vec[int]]</code>, <code>HashMap[int, Vec[int]]</code></li>
 <li>an instance of an object class: <code>Vec[Shape]</code>, which may hold subclasses</li>
 </ul>
-<p>A key of a map or a set is an <code>int</code>, a <code>str</code>, or a tuple of <code>int</code>:
-<code>HashMap[str, int]</code> for counting words, <code>HashMap[tuple[int, int], int]</code> for
-a grid, <code>TreeSet[tuple[int, int]]</code> for pairs in order. A string key hashes
-and orders by its text. See <a href="../strings/">Strings</a>.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">dataclasses</span><span class="w"> </span><span class="kn">import</span> <span class="n">dataclass</span>
+<p>A key of a map or a set is an <code>int</code>, a <code>str</code>, a tuple of <code>int</code>, or an
+instance of a class: <code>HashMap[str, int]</code> for counting words,
+<code>HashMap[tuple[int, int], int]</code> for a grid, <code>TreeSet[tuple[int, int]]</code> for
+pairs in order. A string key hashes and orders by its text. See
+<a href="../strings/">Strings</a>.</p>
+<p>A class is a key where Python could use it as one. A <code>HashMap</code> or <code>HashSet</code>
+takes a class it can hash: one that defines <code>__hash__</code> (with <code>__eq__</code>, or
+alone, which compares by identity), one that defines neither (identity
+again), or a <code>@dataclass(frozen=True)</code>. <code>__eq__</code> without <code>__hash__</code>, or a
+plain <code>@dataclass</code>, is unhashable, and the checker says so (<code>E1305</code>). A
+<code>TreeMap</code> or <code>TreeSet</code> takes a class with <code>__lt__</code>, or a
+<code>@dataclass(order=True)</code>.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ppy</span><span class="w"> </span><span class="kn">import</span> <span class="n">HashMap</span><span class="p">,</span> <span class="n">Heap</span>
 <a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>
-<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ppy</span><span class="w"> </span><span class="kn">import</span> <span class="n">HashMap</span><span class="p">,</span> <span class="n">Heap</span><span class="p">,</span> <span class="n">Vec</span>
-<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>
-<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>
-<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="nd">@dataclass</span><span class="p">(</span><span class="n">order</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
-<a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="k">class</span><span class="w"> </span><span class="nc">Edge</span><span class="p">:</span>
-<a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>    <span class="n">cost</span><span class="p">:</span> <span class="nb">int</span>
-<a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a>    <span class="n">to</span><span class="p">:</span> <span class="nb">int</span>
-<a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a>
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="k">class</span><span class="w"> </span><span class="nc">Cell</span><span class="p">:</span>
+<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">row</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">col</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">row</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="n">row</span>
+<a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">col</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="n">col</span>
+<a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>
+<a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a>    <span class="k">def</span><span class="w"> </span><span class="fm">__eq__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">:</span> <span class="nb">object</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+<a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a>        <span class="k">return</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">other</span><span class="p">,</span> <span class="n">Cell</span><span class="p">)</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">row</span> <span class="o">==</span> <span class="n">other</span><span class="o">.</span><span class="n">row</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">col</span> <span class="o">==</span> <span class="n">other</span><span class="o">.</span><span class="n">col</span>
 <a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a>
-<a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a><span class="k">def</span><span class="w"> </span><span class="nf">cheapest</span><span class="p">(</span><span class="n">edges</span><span class="p">:</span> <span class="n">Vec</span><span class="p">[</span><span class="n">Vec</span><span class="p">[</span><span class="n">Edge</span><span class="p">]])</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
-<a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a>    <span class="n">best</span> <span class="o">=</span> <span class="n">HashMap</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">]()</span>
-<a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a>    <span class="n">frontier</span> <span class="o">=</span> <span class="n">Heap</span><span class="p">[</span><span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">]]()</span>
-<a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a>    <span class="n">frontier</span><span class="o">.</span><span class="n">push</span><span class="p">((</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">))</span>
-<a id="__codelineno-1-16" name="__codelineno-1-16" href="#__codelineno-1-16"></a>    <span class="k">while</span> <span class="n">frontier</span><span class="p">:</span>
-<a id="__codelineno-1-17" name="__codelineno-1-17" href="#__codelineno-1-17"></a>        <span class="n">cost</span><span class="p">,</span> <span class="n">node</span> <span class="o">=</span> <span class="n">frontier</span><span class="o">.</span><span class="n">pop</span><span class="p">()</span>
-<a id="__codelineno-1-18" name="__codelineno-1-18" href="#__codelineno-1-18"></a>        <span class="k">if</span> <span class="n">node</span> <span class="ow">in</span> <span class="n">best</span><span class="p">:</span>
-<a id="__codelineno-1-19" name="__codelineno-1-19" href="#__codelineno-1-19"></a>            <span class="k">continue</span>
-<a id="__codelineno-1-20" name="__codelineno-1-20" href="#__codelineno-1-20"></a>        <span class="n">best</span><span class="p">[</span><span class="n">node</span><span class="p">]</span> <span class="o">=</span> <span class="n">cost</span>
-<a id="__codelineno-1-21" name="__codelineno-1-21" href="#__codelineno-1-21"></a>        <span class="k">for</span> <span class="n">edge</span> <span class="ow">in</span> <span class="n">edges</span><span class="p">[</span><span class="n">node</span><span class="p">]:</span>
-<a id="__codelineno-1-22" name="__codelineno-1-22" href="#__codelineno-1-22"></a>            <span class="k">if</span> <span class="n">edge</span><span class="o">.</span><span class="n">to</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">best</span><span class="p">:</span>
-<a id="__codelineno-1-23" name="__codelineno-1-23" href="#__codelineno-1-23"></a>                <span class="n">frontier</span><span class="o">.</span><span class="n">push</span><span class="p">((</span><span class="n">cost</span> <span class="o">+</span> <span class="n">edge</span><span class="o">.</span><span class="n">cost</span><span class="p">,</span> <span class="n">edge</span><span class="o">.</span><span class="n">to</span><span class="p">))</span>
-<a id="__codelineno-1-24" name="__codelineno-1-24" href="#__codelineno-1-24"></a>    <span class="k">return</span> <span class="nb">len</span><span class="p">(</span><span class="n">best</span><span class="p">)</span>
+<a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a>    <span class="k">def</span><span class="w"> </span><span class="fm">__hash__</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+<a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a>        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">row</span> <span class="o">*</span> <span class="mi">1000</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">col</span>
+<a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a>
+<a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a>
+<a id="__codelineno-1-16" name="__codelineno-1-16" href="#__codelineno-1-16"></a><span class="k">class</span><span class="w"> </span><span class="nc">Visit</span><span class="p">:</span>
+<a id="__codelineno-1-17" name="__codelineno-1-17" href="#__codelineno-1-17"></a>    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">cost</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">cell</span><span class="p">:</span> <span class="n">Cell</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-1-18" name="__codelineno-1-18" href="#__codelineno-1-18"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">cost</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="n">cost</span>
+<a id="__codelineno-1-19" name="__codelineno-1-19" href="#__codelineno-1-19"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">cell</span><span class="p">:</span> <span class="n">Cell</span> <span class="o">=</span> <span class="n">cell</span>
+<a id="__codelineno-1-20" name="__codelineno-1-20" href="#__codelineno-1-20"></a>
+<a id="__codelineno-1-21" name="__codelineno-1-21" href="#__codelineno-1-21"></a>    <span class="k">def</span><span class="w"> </span><span class="fm">__lt__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">:</span> <span class="s2">"Visit"</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+<a id="__codelineno-1-22" name="__codelineno-1-22" href="#__codelineno-1-22"></a>        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">cost</span> <span class="o">&lt;</span> <span class="n">other</span><span class="o">.</span><span class="n">cost</span>
+<a id="__codelineno-1-23" name="__codelineno-1-23" href="#__codelineno-1-23"></a>
+<a id="__codelineno-1-24" name="__codelineno-1-24" href="#__codelineno-1-24"></a>
+<a id="__codelineno-1-25" name="__codelineno-1-25" href="#__codelineno-1-25"></a><span class="k">def</span><span class="w"> </span><span class="nf">cheapest</span><span class="p">(</span><span class="n">size</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+<a id="__codelineno-1-26" name="__codelineno-1-26" href="#__codelineno-1-26"></a>    <span class="n">best</span> <span class="o">=</span> <span class="n">HashMap</span><span class="p">[</span><span class="n">Cell</span><span class="p">,</span> <span class="nb">int</span><span class="p">]()</span>
+<a id="__codelineno-1-27" name="__codelineno-1-27" href="#__codelineno-1-27"></a>    <span class="n">frontier</span> <span class="o">=</span> <span class="n">Heap</span><span class="p">[</span><span class="n">Visit</span><span class="p">]()</span>
+<a id="__codelineno-1-28" name="__codelineno-1-28" href="#__codelineno-1-28"></a>    <span class="n">frontier</span><span class="o">.</span><span class="n">push</span><span class="p">(</span><span class="n">Visit</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">Cell</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">)))</span>
+<a id="__codelineno-1-29" name="__codelineno-1-29" href="#__codelineno-1-29"></a>    <span class="k">while</span> <span class="n">frontier</span><span class="p">:</span>
+<a id="__codelineno-1-30" name="__codelineno-1-30" href="#__codelineno-1-30"></a>        <span class="n">visit</span> <span class="o">=</span> <span class="n">frontier</span><span class="o">.</span><span class="n">pop</span><span class="p">()</span>
+<a id="__codelineno-1-31" name="__codelineno-1-31" href="#__codelineno-1-31"></a>        <span class="k">if</span> <span class="n">visit</span><span class="o">.</span><span class="n">cell</span> <span class="ow">in</span> <span class="n">best</span><span class="p">:</span>
+<a id="__codelineno-1-32" name="__codelineno-1-32" href="#__codelineno-1-32"></a>            <span class="k">continue</span>
+<a id="__codelineno-1-33" name="__codelineno-1-33" href="#__codelineno-1-33"></a>        <span class="n">best</span><span class="p">[</span><span class="n">visit</span><span class="o">.</span><span class="n">cell</span><span class="p">]</span> <span class="o">=</span> <span class="n">visit</span><span class="o">.</span><span class="n">cost</span>
+<a id="__codelineno-1-34" name="__codelineno-1-34" href="#__codelineno-1-34"></a>        <span class="n">row</span><span class="p">,</span> <span class="n">col</span> <span class="o">=</span> <span class="n">visit</span><span class="o">.</span><span class="n">cell</span><span class="o">.</span><span class="n">row</span><span class="p">,</span> <span class="n">visit</span><span class="o">.</span><span class="n">cell</span><span class="o">.</span><span class="n">col</span>
+<a id="__codelineno-1-35" name="__codelineno-1-35" href="#__codelineno-1-35"></a>        <span class="k">if</span> <span class="n">col</span> <span class="o">+</span> <span class="mi">1</span> <span class="o">&lt;</span> <span class="n">size</span><span class="p">:</span>
+<a id="__codelineno-1-36" name="__codelineno-1-36" href="#__codelineno-1-36"></a>            <span class="n">frontier</span><span class="o">.</span><span class="n">push</span><span class="p">(</span><span class="n">Visit</span><span class="p">(</span><span class="n">visit</span><span class="o">.</span><span class="n">cost</span> <span class="o">+</span> <span class="p">(</span><span class="n">row</span> <span class="o">*</span> <span class="mi">7</span> <span class="o">+</span> <span class="n">col</span><span class="p">)</span> <span class="o">%</span> <span class="mi">10</span><span class="p">,</span> <span class="n">Cell</span><span class="p">(</span><span class="n">row</span><span class="p">,</span> <span class="n">col</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)))</span>
+<a id="__codelineno-1-37" name="__codelineno-1-37" href="#__codelineno-1-37"></a>        <span class="k">if</span> <span class="n">row</span> <span class="o">+</span> <span class="mi">1</span> <span class="o">&lt;</span> <span class="n">size</span><span class="p">:</span>
+<a id="__codelineno-1-38" name="__codelineno-1-38" href="#__codelineno-1-38"></a>            <span class="n">frontier</span><span class="o">.</span><span class="n">push</span><span class="p">(</span><span class="n">Visit</span><span class="p">(</span><span class="n">visit</span><span class="o">.</span><span class="n">cost</span> <span class="o">+</span> <span class="p">(</span><span class="n">row</span> <span class="o">+</span> <span class="n">col</span> <span class="o">*</span> <span class="mi">3</span><span class="p">)</span> <span class="o">%</span> <span class="mi">10</span><span class="p">,</span> <span class="n">Cell</span><span class="p">(</span><span class="n">row</span> <span class="o">+</span> <span class="mi">1</span><span class="p">,</span> <span class="n">col</span><span class="p">)))</span>
+<a id="__codelineno-1-39" name="__codelineno-1-39" href="#__codelineno-1-39"></a>    <span class="k">return</span> <span class="n">best</span><span class="p">[</span><span class="n">Cell</span><span class="p">(</span><span class="n">size</span> <span class="o">-</span> <span class="mi">1</span><span class="p">,</span> <span class="n">size</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)]</span>
+</code></pre></div>
+<p>Native code calls the class's compiled methods from inside the collection,
+so <code>cheapest</code> goes native with its heap and its map. A method a subclass
+overrides keeps the collection in Python, since the runtime cannot tell
+which one an object needs, and so does a method native code cannot compile.
+Write <code>__eq__</code>'s argument as <code>other: object</code>, as Python's typing wants, or
+as the class.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">dataclasses</span><span class="w"> </span><span class="kn">import</span> <span class="n">dataclass</span>
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ppy</span><span class="w"> </span><span class="kn">import</span> <span class="n">HashMap</span><span class="p">,</span> <span class="n">Heap</span><span class="p">,</span> <span class="n">Vec</span>
+<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>
+<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>
+<a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="nd">@dataclass</span><span class="p">(</span><span class="n">order</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="k">class</span><span class="w"> </span><span class="nc">Edge</span><span class="p">:</span>
+<a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a>    <span class="n">cost</span><span class="p">:</span> <span class="nb">int</span>
+<a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a>    <span class="n">to</span><span class="p">:</span> <span class="nb">int</span>
+<a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a>
+<a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a>
+<a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a><span class="k">def</span><span class="w"> </span><span class="nf">cheapest</span><span class="p">(</span><span class="n">edges</span><span class="p">:</span> <span class="n">Vec</span><span class="p">[</span><span class="n">Vec</span><span class="p">[</span><span class="n">Edge</span><span class="p">]])</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+<a id="__codelineno-2-13" name="__codelineno-2-13" href="#__codelineno-2-13"></a>    <span class="n">best</span> <span class="o">=</span> <span class="n">HashMap</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">]()</span>
+<a id="__codelineno-2-14" name="__codelineno-2-14" href="#__codelineno-2-14"></a>    <span class="n">frontier</span> <span class="o">=</span> <span class="n">Heap</span><span class="p">[</span><span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">]]()</span>
+<a id="__codelineno-2-15" name="__codelineno-2-15" href="#__codelineno-2-15"></a>    <span class="n">frontier</span><span class="o">.</span><span class="n">push</span><span class="p">((</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">))</span>
+<a id="__codelineno-2-16" name="__codelineno-2-16" href="#__codelineno-2-16"></a>    <span class="k">while</span> <span class="n">frontier</span><span class="p">:</span>
+<a id="__codelineno-2-17" name="__codelineno-2-17" href="#__codelineno-2-17"></a>        <span class="n">cost</span><span class="p">,</span> <span class="n">node</span> <span class="o">=</span> <span class="n">frontier</span><span class="o">.</span><span class="n">pop</span><span class="p">()</span>
+<a id="__codelineno-2-18" name="__codelineno-2-18" href="#__codelineno-2-18"></a>        <span class="k">if</span> <span class="n">node</span> <span class="ow">in</span> <span class="n">best</span><span class="p">:</span>
+<a id="__codelineno-2-19" name="__codelineno-2-19" href="#__codelineno-2-19"></a>            <span class="k">continue</span>
+<a id="__codelineno-2-20" name="__codelineno-2-20" href="#__codelineno-2-20"></a>        <span class="n">best</span><span class="p">[</span><span class="n">node</span><span class="p">]</span> <span class="o">=</span> <span class="n">cost</span>
+<a id="__codelineno-2-21" name="__codelineno-2-21" href="#__codelineno-2-21"></a>        <span class="k">for</span> <span class="n">edge</span> <span class="ow">in</span> <span class="n">edges</span><span class="p">[</span><span class="n">node</span><span class="p">]:</span>
+<a id="__codelineno-2-22" name="__codelineno-2-22" href="#__codelineno-2-22"></a>            <span class="k">if</span> <span class="n">edge</span><span class="o">.</span><span class="n">to</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">best</span><span class="p">:</span>
+<a id="__codelineno-2-23" name="__codelineno-2-23" href="#__codelineno-2-23"></a>                <span class="n">frontier</span><span class="o">.</span><span class="n">push</span><span class="p">((</span><span class="n">cost</span> <span class="o">+</span> <span class="n">edge</span><span class="o">.</span><span class="n">cost</span><span class="p">,</span> <span class="n">edge</span><span class="o">.</span><span class="n">to</span><span class="p">))</span>
+<a id="__codelineno-2-24" name="__codelineno-2-24" href="#__codelineno-2-24"></a>    <span class="k">return</span> <span class="nb">len</span><span class="p">(</span><span class="n">best</span><span class="p">)</span>
 </code></pre></div>
 <p>A value is converted to the element type when it is stored, so
 <code>Vec[float]</code> holds <code>3.0</code> after <code>push(3)</code>, as native memory of doubles would,
@@ -4615,8 +4669,13 @@ and a dataclass with a <code>float</code> field holds a float there.</p>
 <p><code>sort</code>, a heap, and a tree compare elements or keys with <code>&lt;</code>, as Python
 does. Numbers compare as numbers and tuples compare item by item. A
 dataclass compares field by field when it is declared
-<code>@dataclass(order=True)</code>; without that it has no order, and sorting or heaping
-it is refused. A collection has no order either.</p>
+<code>@dataclass(order=True)</code>, and an object by its class's <code>__lt__</code>; without
+either it has no order, and sorting or heaping it is refused. A collection
+has no order either.</p>
+<p>A tree's two keys are the same key when neither is less than the other, as
+in any ordered map. For numbers, strings, and tuples that is <code>==</code>; for a
+class it is what its <code>__lt__</code> says, so <code>Task(4, "a")</code> and <code>Task(4, "b")</code> are
+one key when <code>__lt__</code> compares costs.</p>
 <h3 id="aliases">Aliases<a class="headerlink" href="#aliases" title="Permanent link">&para;</a></h3>
 <p>A collection element read into a name is the same collection, not a copy,
 as it is in Python: after <code>row = grid[0]</code>, <code>row.push(1)</code> changes
@@ -4630,17 +4689,17 @@ and see the write.</p>
 <p>A generic function can take, make, and return collections of its type
 parameter. Native code makes one instance per type it is called with, as a
 C++ template is instantiated:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ppy</span><span class="w"> </span><span class="kn">import</span> <span class="n">Heap</span><span class="p">,</span> <span class="n">Vec</span>
-<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>
-<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>
-<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="k">def</span><span class="w"> </span><span class="nf">smallest</span><span class="p">[</span><span class="n">T</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="nb">float</span><span class="p">](</span><span class="n">values</span><span class="p">:</span> <span class="n">Vec</span><span class="p">[</span><span class="n">T</span><span class="p">],</span> <span class="n">count</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Vec</span><span class="p">[</span><span class="n">T</span><span class="p">]:</span>
-<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>    <span class="n">heap</span> <span class="o">=</span> <span class="n">Heap</span><span class="p">[</span><span class="n">T</span><span class="p">]()</span>
-<a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>    <span class="k">for</span> <span class="n">value</span> <span class="ow">in</span> <span class="n">values</span><span class="p">:</span>
-<a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a>        <span class="n">heap</span><span class="o">.</span><span class="n">push</span><span class="p">(</span><span class="n">value</span><span class="p">)</span>
-<a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a>    <span class="n">taken</span> <span class="o">=</span> <span class="n">Vec</span><span class="p">[</span><span class="n">T</span><span class="p">]()</span>
-<a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a>    <span class="k">while</span> <span class="n">heap</span> <span class="ow">and</span> <span class="nb">len</span><span class="p">(</span><span class="n">taken</span><span class="p">)</span> <span class="o">&lt;</span> <span class="n">count</span><span class="p">:</span>
-<a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a>        <span class="n">taken</span><span class="o">.</span><span class="n">push</span><span class="p">(</span><span class="n">heap</span><span class="o">.</span><span class="n">pop</span><span class="p">())</span>
-<a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a>    <span class="k">return</span> <span class="n">taken</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ppy</span><span class="w"> </span><span class="kn">import</span> <span class="n">Heap</span><span class="p">,</span> <span class="n">Vec</span>
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>
+<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="k">def</span><span class="w"> </span><span class="nf">smallest</span><span class="p">[</span><span class="n">T</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="nb">float</span><span class="p">](</span><span class="n">values</span><span class="p">:</span> <span class="n">Vec</span><span class="p">[</span><span class="n">T</span><span class="p">],</span> <span class="n">count</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Vec</span><span class="p">[</span><span class="n">T</span><span class="p">]:</span>
+<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>    <span class="n">heap</span> <span class="o">=</span> <span class="n">Heap</span><span class="p">[</span><span class="n">T</span><span class="p">]()</span>
+<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>    <span class="k">for</span> <span class="n">value</span> <span class="ow">in</span> <span class="n">values</span><span class="p">:</span>
+<a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a>        <span class="n">heap</span><span class="o">.</span><span class="n">push</span><span class="p">(</span><span class="n">value</span><span class="p">)</span>
+<a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a>    <span class="n">taken</span> <span class="o">=</span> <span class="n">Vec</span><span class="p">[</span><span class="n">T</span><span class="p">]()</span>
+<a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a>    <span class="k">while</span> <span class="n">heap</span> <span class="ow">and</span> <span class="nb">len</span><span class="p">(</span><span class="n">taken</span><span class="p">)</span> <span class="o">&lt;</span> <span class="n">count</span><span class="p">:</span>
+<a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a>        <span class="n">taken</span><span class="o">.</span><span class="n">push</span><span class="p">(</span><span class="n">heap</span><span class="o">.</span><span class="n">pop</span><span class="p">())</span>
+<a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a>    <span class="k">return</span> <span class="n">taken</span>
 </code></pre></div>
 <p><code>smallest(Vec[int]...)</code> and <code>smallest(Vec[float]...)</code> are two native
 functions. Under CPython the type parameter is not known, so <code>Vec[T]</code>
@@ -5069,8 +5128,13 @@ what the checker refuses; one whose element type differs at run time
 (<code>Vec[float]</code> for <code>Vec[int]</code>) runs the Python body.</p>
 <h2 id="limitations">Limitations<a class="headerlink" href="#limitations" title="Permanent link">&para;</a></h2>
 <ul>
-<li>Keys are <code>int</code>, <code>str</code>, or tuples of <code>int</code>; a tuple with a string in it
-  is not a key.</li>
+<li>A tuple with a string or an object in it is not a key.</li>
+<li>A class's keys natively hash and compare by its own <code>__hash__</code> and
+  <code>__eq__</code>, or by identity: a value class (a class of numbers only, copied
+  as a value) has no identity, so it is a key natively only as a
+  <code>@dataclass(frozen=True)</code> of integers.</li>
+<li><code>min</code> and <code>max</code> over objects, and <code>sort(key=...)</code> with an object as the
+  key, stay in Python.</li>
 <li>A collection holds a user class's instances natively when the class is a
   value class or an object class; see <a href="../classes/">Classes</a>.</li>
 <li>Python calls a function natively when its collections hold numbers,
