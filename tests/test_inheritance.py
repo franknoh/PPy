@@ -660,8 +660,12 @@ def test_the_checker_infers_type_arguments(tmp_path: Path):
     assert errors[:4] == [
         "error[E1301]: `add` parameter `value` expects `int`, got `Literal[2.5]`",
         "error[E1301]: `add` parameter `value` expects `int`, got `Literal[2.5]`",
-        "error[E1305]: `Vec()` takes its type from where it goes, and nothing says it here: "
-        "write `Vec[int]()`, or annotate the target",
-        "error[E1305]: a `Vec` of floats is made with its type written out, `Vec[float]()`, "
-        "so CPython stores `3` as `3.0` too",
+        (
+            "error[E1305]: `Vec()` takes its type from where it goes, and nothing says it "
+            "here: write `Vec[int]()`, or annotate the target"
+        ),
+        (
+            "error[E1305]: a `Vec` of floats is made with its type written out, "
+            "`Vec[float]()`, so CPython stores `3` as `3.0` too"
+        ),
     ]

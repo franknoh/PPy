@@ -1901,13 +1901,16 @@ def _copies_before_writes(function: ast.AST, record: str, type_of) -> bool:  # t
                     writes.append((node, loops))
         if isinstance(node, ast.AugAssign) and element_write(node.target):
             writes.append((node, loops))
-        if isinstance(node, ast.For) and isinstance(node.target, ast.Name):
-            if named(type_of(node.target)):
-                copies.append((node, inner))
-        if isinstance(node, ast.arguments):
-            for argument in node.args:
-                if argument.annotation is not None and named(type_of(argument)):
-                    copies.append((node, []))
+        if (
+            isinstance(node, ast.For)
+            and isinstance(node.target, ast.Name)
+            and named(type_of(node.target))
+        ):
+            copies.append((node, inner))
+        if isinstance(node, ast.arguments) and any(
+            argument.annotation is not None and named(type_of(argument)) for argument in node.args
+        ):
+            copies.append((node, []))
         for child in ast.iter_child_nodes(node):
             visit(child, inner)
 
