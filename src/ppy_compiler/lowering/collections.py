@@ -1206,7 +1206,9 @@ class CollectionLowering:
         except Unsupported:
             # `def __eq__(self, other: object)`: `other` is one of the keys.
             owner = self._resolve(info, attr)
-            method = owner.methods[attr]  # type: ignore[union-attr]
+            if owner is None:
+                raise
+            method = owner.methods[attr]
             if attr != "__eq__" or len(method.params) != 2 or shape.class_args:
                 raise
             found = self.frontend.narrowed(  # type: ignore[attr-defined]
