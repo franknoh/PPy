@@ -4372,8 +4372,10 @@ rewrites a module's <code>input</code> idioms only where the module never touche
 </div>
 <h2 id="native-code-and-standalone-binaries">Native code and standalone binaries<a class="headerlink" href="#native-code-and-standalone-binaries" title="Permanent link">&para;</a></h2>
 <p>A standalone binary reads with the C runtime, the same scanner text. Where
-Python would raise, the binary names the same exception on standard error
-and stops, for example <code>ppy: ValueError: could not convert string to float</code>.</p>
+Python would raise, the binary prints the line CPython's traceback ends
+with, such as <code>ValueError: could not convert string to float: 'abc'</code>, on
+standard error and exits with status 1. The one difference is a number past
+64 bits: Python reads it, and the binary stops with <code>OverflowError</code>.</p>
 <table>
 <thead>
 <tr>

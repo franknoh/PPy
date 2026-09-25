@@ -4138,11 +4138,20 @@ construction: <code>Stack[int]()</code>.</p>
 or a collection holding it keeps one, and it is freed when the last goes,
 together with what it holds. The tests run the emitted C of object programs
 under AddressSanitizer with leak detection.</p>
-<p>Reference counting does not free cycles. A doubly linked list, or a tree
-whose nodes point back at their parents, is never freed natively: a
-standalone binary lets the process exit free it, and under <code>ppy run</code> it stays
-allocated. Singly linked structures, trees without parent links, and graphs
-kept as adjacency lists are freed as usual.</p>
+<p>Reference counting alone does not free a cycle: a doubly linked list, or a
+tree whose nodes point back at their parents. A collector does. Every
+object and collection is on a list of what its thread made. When the
+objects made since the last collection that can hold others number 700 more
+than those that survived it, the collector counts the references each one
+gets from the others on the list. What still has a reference from
+outside (a name, a native frame) is kept, with everything it reaches. What
+is left is held only by itself, and is freed. This is the method CPython's
+<code>gc</code> uses.</p>
+<p><code>gc.collect()</code> in native code runs the collector at once. CPython's count
+is of its own objects, so native code does not return it: the call lowers as
+a statement, and <code>n = gc.collect()</code> keeps the function in Python. A
+standalone binary also collects once before it exits, which is why its
+leak check passes.</p>
 <h2 id="the-python-boundary">The Python boundary<a class="headerlink" href="#the-python-boundary" title="Permanent link">&para;</a></h2>
 <p>An object never crosses between Python and native code. A native function
 that takes or returns one is called by native code only. When Python code
@@ -4157,7 +4166,6 @@ return numbers, and make their objects inside.</p>
   without them stays in Python.</li>
 <li>Reading a field that holds a reference, off an object made in the same
   expression (<code>make().child</code>), is not lowered.</li>
-<li>Reference cycles are not freed, as described above.</li>
 </ul>
 <p>Examples: <a href="../../howto/47_collections/">Collections</a>.</p>
 

@@ -5538,8 +5538,10 @@ embed.</p>
 </ul>
 <p>Anything else is <code>E1803</code> with the path that reaches it. There is no
 workaround.</p>
-<p>There is no Python to fall back to. A failed guard ends the process with a
-message on standard error instead of retrying in Python. A standalone build
+<p>There is no Python to fall back to. A failed guard prints the line CPython's
+traceback would end with (<code>IndexError: list index out of range</code>) on standard
+error and exits with status 1, as CPython does, instead of retrying in
+Python. A standalone build
 keeps the guards, like other builds, and never claims Python's integers it
 cannot provide. <code>--unsafe</code> asks for wrap semantics outright, with almost no
 guards left to fail.</p>
