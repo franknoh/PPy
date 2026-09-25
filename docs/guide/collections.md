@@ -56,13 +56,15 @@ An element, or a map's value, is one of:
 
 - a number: `int`, `float`, `bool`, or a fixed width such as `ppy.i32`,
   held as an `int`
+- a string: `Vec[str]`, `HashMap[int, str]`
 - a tuple of numbers: `Vec[tuple[int, float]]`
 - a dataclass whose fields are numbers: `Vec[Point]`
 - another collection: `Vec[Vec[int]]`, `HashMap[int, Vec[int]]`
 
-A key of a map or a set is an `int` or a tuple of them:
-`HashMap[tuple[int, int], int]` for a grid, `TreeSet[tuple[int, int]]` for
-pairs in order.
+A key of a map or a set is an `int`, a `str`, or a tuple of `int`:
+`HashMap[str, int]` for counting words, `HashMap[tuple[int, int], int]` for
+a grid, `TreeSet[tuple[int, int]]` for pairs in order. A string key hashes
+and orders by its text. See [Strings](strings.md).
 
 ```python
 from dataclasses import dataclass
@@ -278,7 +280,8 @@ natively, so it runs as Python when called from Python.
 
 ## Limitations
 
-- Keys are `int` or tuples of `int`.
+- Keys are `int`, `str`, or tuples of `int`; a tuple with a string in it
+  is not a key.
 - `get(key, default)` natively takes a map whose values are numbers.
 - A dataclass element is read and written whole; setting a field of one in
   place keeps the function in Python.

@@ -105,6 +105,7 @@ nav:
       - guide/index.md
       - The subset: guide/subset.md
       - Directives and markers: guide/directives.md
+      - Strings: guide/strings.md
       - Collections: guide/collections.md
       - Classes: guide/classes.md
       - Native memory and FFI: guide/native.md
@@ -152,6 +153,7 @@ nav:
           - howto/42_toolbox.md
           - howto/43_regex.md
           - howto/47_collections.md
+          - howto/48_strings.md
       - Accelerators:
           - howto/38_cuda.md
           - howto/44_tile.md

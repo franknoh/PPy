@@ -47,7 +47,7 @@ reports the mean and spread. The site collects those sections on one page.
 | `16_dynamic` | explicit dynamic boundaries |
 | `17_containers` | element inference, aliasing, local mutation |
 | `18_errors` | exception behavior as part of the contract |
-| `19_strings` | string work stays on CPython, and says so |
+| `19_strings` | string functions go native, and one that returns a `dict` says why it stays |
 | `20_inventory` | untyped Python that converts cleanly |
 | `21_training_torch` | a torch MLP: native preprocessing plus an ATen region; against PyTorch as usually written |
 | `22_training_jax` | the same with JAX |
@@ -76,6 +76,7 @@ reports the mean and spread. The site collects those sections on one page.
 | `45_multi_gpu_jax` | a data-parallel JAX MLP over a mesh of every accelerator, held to a single-device run; validated on real GPUs by `scripts/cloud` |
 | `46_gpt2` | GPT-2 XL with every transformer block compiled to one ATen region; against PyTorch eager and `torch.compile` on a rented RTX 4090 |
 | `47_collections` | `Vec`, `Deque`, `Heap`, `LinkedList`, `HashMap`, `TreeSet` in native code, no pointers |
+| `48_strings` | a 200,000-line log parsed, counted, and reported with native `str`, faster than CPython |
 
 
 A folder of related problems keeps them in numbered subfolders, and every

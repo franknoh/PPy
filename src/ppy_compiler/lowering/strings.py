@@ -76,7 +76,12 @@ def _spec_ok(spec: str, kind: str) -> bool:
     if kind in {"int", "bool"}:
         if kind_type in _FLOAT_TYPES:
             kind = "float"
-        elif kind_type and kind_type not in _INT_TYPES or found["precision"] is not None or found["z"]:
+        elif (
+            kind_type
+            and kind_type not in _INT_TYPES
+            or found["precision"] is not None
+            or found["z"]
+        ):
             return False
     if kind == "float":
         if kind_type and kind_type not in _FLOAT_TYPES:

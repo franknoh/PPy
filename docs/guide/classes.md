@@ -50,7 +50,7 @@ with null.
 An object class has no base class and no `__getattr__` or similar hook. Each
 field holds a value native code can represent:
 
-- a number, a tuple of numbers, or a value class
+- a number, a string, a tuple of numbers, or a value class
 - a collection: `Vec[int]`, `HashMap[int, Vec[int]]`
 - another object, or `None` where the field is `Node | None`
 
@@ -116,7 +116,7 @@ return numbers, and make their objects inside.
 ## Limitations
 
 - A class with a base class, or a field native code cannot represent (a
-  `str`, say), keeps the functions that use it in Python.
+  `dict`, say), keeps the functions that use it in Python.
 - A dataclass built natively takes constant defaults only.
 - A generic class's type arguments are written at construction; `Stack()`
   without them stays in Python.

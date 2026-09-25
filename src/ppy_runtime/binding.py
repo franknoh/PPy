@@ -13,7 +13,14 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 
 from . import _cpu
-from .abi import SANITIZERS, STATUS_OK, STATUS_SANITIZER_BASE, NativeParam, NativeSignature
+from .abi import (
+    SANITIZERS,
+    STATUS_OK,
+    STATUS_SANITIZER_BASE,
+    TEXT,
+    NativeParam,
+    NativeSignature,
+)
 
 __all__ = ["NativeBinding", "adopt", "bind", "observation_wanted", "value_class_types"]
 
@@ -193,10 +200,19 @@ def bind(
         if parameter.is_buffer:
             argument_types.append(ctypes.POINTER(_ELEMENT_CTYPES[parameter.element]))
             argument_types.append(ctypes.c_int64)
+        elif parameter.is_text:
+            argument_types.extend((ctypes.c_char_p, ctypes.c_int64))
         else:
             argument_types.extend(_CTYPES[atom] for atom in parameter.abi)
 
-    result_types = [_CTYPES[atom] for atom in signature.returns]
+    # A string result is two out slots: the address of a UTF-8 copy the
+    # native code made, and its length.
+    text_result = signature.returns == (TEXT,)
+    result_types = (
+        [ctypes.c_void_p, ctypes.c_int64]
+        if text_result
+        else [_CTYPES[atom] for atom in signature.returns]
+    )
     prototype = ctypes.CFUNCTYPE(
         ctypes.c_int32, *argument_types, *[ctypes.POINTER(t) for t in result_types]
     )
@@ -207,7 +223,7 @@ def bind(
         _expander_for(p, (lambda: namespace) if namespace is not None else None)
         for p in signature.parameters
     ]
-    finalizers = [_result_for(atom) for atom in signature.returns]
+    finalizers = [_result_for(atom) for atom in signature.returns if atom != TEXT]
     if signature.future:
         from .aio import NativeFuture, runtime_for
 
@@ -295,6 +311,8 @@ def bind(
             return fallback(*args)
         binding.calls += 1
         binding.specialized_calls += int(entry is not None)
+        if text_result:
+            return _text_result(slots[0].value, slots[1].value)
         if returns_tuple:
             return tuple(
                 finish(slot.value) for finish, slot in zip(finalizers, slots, strict=False)
@@ -310,10 +328,39 @@ def bind(
     return binding
 
 
+def _text_result(address: int | None, length: int) -> str:
+    """A string the native code returned: its UTF-8 copy read, then freed."""
+    try:
+        return ctypes.string_at(address or 0, length).decode("utf-8") if length else ""
+    finally:
+        _LIBC.free(ctypes.c_void_p(address))
+
+
+_LIBC = ctypes.CDLL(None)
+_LIBC.free.argtypes = (ctypes.c_void_p,)
+_LIBC.free.restype = None
+
+
 def _expander_for(
     parameter: NativeParam, namespace: Callable[[], dict] | None = None
 ) -> Callable[[object, list, list], None]:
     """Build the guard-and-convert step for one source-level parameter."""
+    if parameter.is_text:
+
+        def expand_text(value: object, atoms: list, borrowed: list) -> None:
+            """A `str` as its UTF-8 bytes; one with a lone surrogate has none."""
+            if type(value) is not str:
+                raise GuardFailed
+            try:
+                data = value.encode("utf-8")
+            except UnicodeEncodeError as exc:
+                raise GuardFailed from exc
+            borrowed.append(data)
+            atoms.append(data)
+            atoms.append(len(data))
+
+        return expand_text
+
     if parameter.is_borrowed:
         element_type = _ELEMENT_CTYPES[parameter.element]
         pointer_type = ctypes.POINTER(element_type)

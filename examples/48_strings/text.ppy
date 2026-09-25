@@ -1,5 +1,6 @@
 """Text processing with native strings: a log parsed, counted, and reported."""
 
+import ppy
 from ppy import HashMap, TreeMap, Vec
 
 LINES = 200000
@@ -72,6 +73,7 @@ def checksum(lines: Vec[str]) -> int:
     return total
 
 
+@ppy.native
 def report(count: int) -> str:
     lines = make_log(count)
     return f"{slowest_paths(lines)}\n{levels(lines)}\n{compress('aaabccddddd')} {checksum(lines)}"
