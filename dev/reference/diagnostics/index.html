@@ -4304,7 +4304,8 @@ emit. Each diagnostic has a stable code (spec 29.1).</p>
 <li><code>E</code> codes are errors, <code>W</code> codes are warnings, and <code>R</code> codes are remarks.</li>
 <li><code>ppy explain E1301</code> prints the description of a code.</li>
 <li><code>--no-strict</code> downgrades the strict-mode errors that have a sound
-  fallback. It never downgrades the rest.</li>
+  fallback to <code>W2010</code> warnings, which name the code they replace. It never
+  downgrades the rest.</li>
 </ul>
 <h2 id="source-and-module-structure">Source and module structure<a class="headerlink" href="#source-and-module-structure" title="Permanent link">&para;</a></h2>
 <table>
@@ -4772,6 +4773,10 @@ emit. Each diagnostic has a stable code (spec 29.1).</p>
 <tr>
 <td><code>W2009</code></td>
 <td>A function changed since the profile given to <code>--pgo</code> was recorded; its counts were ignored and it was built as without a profile.</td>
+</tr>
+<tr>
+<td><code>W2010</code></td>
+<td>Under <code>--no-strict</code>, a strict-mode error with a sound fallback (<code>E1201</code>, <code>E1202</code>, <code>E1204</code>, <code>E1302</code>, <code>E1306</code>). The message names the code it is under strict mode.</td>
 </tr>
 <tr>
 <td><code>W2101</code></td>

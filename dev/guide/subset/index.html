@@ -4144,7 +4144,12 @@ disagree about what a class body runs.
 </li>
 </ul>
 <p>Strict mode is the default. <code>--no-strict</code> downgrades only the errors that have
-a sound fallback.</p>
+a sound fallback: an unannotated parameter (<code>E1201</code>), an unknown attribute
+(<code>E1202</code>), an unvouched decorator (<code>E1204</code>), iterating something that is not
+iterable (<code>E1302</code>), and a call with no known signature (<code>E1306</code>). Each is
+still reported, as a <code>W2010</code> warning that names the code it replaces, and the
+code involved runs on CPython. Type mismatches (<code>E1301</code>) and the rest stay
+errors.</p>
 <h2 id="compatibility-policy">Compatibility policy<a class="headerlink" href="#compatibility-policy" title="Permanent link">&para;</a></h2>
 <p>PPy makes three separate compatibility claims and holds each to a different
 standard:</p>
