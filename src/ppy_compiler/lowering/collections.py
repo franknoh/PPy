@@ -117,6 +117,11 @@ class Shape:
         return 1 if self.kind == "str" else 0
 
     @property
+    def leaves(self) -> int:
+        """The handle words that are strings, which hold no handles themselves."""
+        return self.text
+
+    @property
     def integral(self) -> bool:
         """Whether it can be a key: an `int`, or a tuple of them."""
         kinds = self.parts if self.kind == "tuple" else (self.kind,)
@@ -387,13 +392,15 @@ class CollectionLowering:
         """`Node(5)`, `Stack[int]()`: a new object, its fields set, an owned handle."""
         self._use_collections()
         layout = self._layout(shape)
+        # String fields are leaves, as `_new` says of string elements.
+        leaves = sum(field.leaves << offset for offset, field in layout.fields.values())
         made = self._rt(
             "ppy_seq_new",
             (
                 self._word(1),
                 self._word(layout.words),
                 self._word(layout.floats),
-                self._word(layout.handles),
+                self._word(layout.handles | (leaves << 32)),
             ),
             HANDLE,
         )
@@ -698,7 +705,11 @@ class CollectionLowering:
         value = kind.value
         words = self._word(kind.words)
         floats = self._word(value.floats if value is not None else 0)
-        handles = self._word(value.handles if value is not None else 0)
+        # The runtime takes the handle words, and above bit 32 which of them
+        # are strings: those can be in no cycle, so the collector skips them.
+        handles = self._word(
+            (value.handles | (value.leaves << 32)) if value is not None else 0
+        )
         keys = self._word(kind.key.words if kind.key is not None else 0)
         if kind.family == "seq":
             made = self._rt("ppy_seq_new", (count or self._word(0), words, floats, handles), HANDLE)

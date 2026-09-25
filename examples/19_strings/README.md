@@ -1,10 +1,9 @@
 # Strings
 
-String code checks in strict mode and is proven pure, but it stays on
-CPython, and the compiler says so. String methods are fully typed
-(`name.split(" ")` is a `list[str]`, `part[0].upper()` a `str`). A Python
-string has no native representation, though, so these functions run as
-ordinary Python on every path.
+Three small string functions, checked in strict mode and proven pure. Two
+of them go native: `initials` splits and uppercases, and `is_palindrome`
+indexes a string from both ends. The third returns a `dict`, which has no
+native form, so it runs as Python, and `ppy explain` says why.
 
 ## Run it
 
@@ -27,38 +26,35 @@ True False
 
 <!-- outputs:end -->
 
-## Typed, checked, not lowered
+## Which functions lower
 
-```python
-@ppy.pure
-def is_palindrome(text: str) -> bool:
-    cleaned: str = text.lower().replace(" ", "")
-    left: int = 0
-    right: int = len(cleaned) - 1
-    while left < right:
-        if cleaned[left] != cleaned[right]:
-            return False
-        left += 1
-        right -= 1
-    return True
+```bash
+ppy explain strings.initials        # llvm backend: native
+ppy explain strings.is_palindrome   # llvm backend: native
+ppy explain strings.word_count      # llvm backend: boxed: returns `dict[str, int]`, which has no native ABI
 ```
 
-The loop is native-shaped, but `cleaned[left]` indexes a `str`. The checker
-proves the function pure, and it stays on the Python side.
-`ppy explain strings.ppy:is_palindrome` reports the first construct that
-blocked lowering.
+`is_palindrome` indexes `cleaned[left]` and `cleaned[right]`. Natively a
+string knows its length in code points and whether it is all ASCII, so an
+index into ASCII text is one step, and the one-character strings the
+comparison reads are static and never allocated.
 
-## Fast text goes through bytes
+`word_count` would lower with a `HashMap[str, int]` in place of the `dict`;
+the [Strings example](../48_strings/README.md) counts that way.
 
-Text that needs to be fast goes through a byte buffer instead.
-`Buffer[ppy.u8]` is one byte per character and lowers, which is how
+## Very large text
+
+Text of millions of characters can still come in as bytes:
+`Buffer[ppy.u8]` is one byte per character and is read without building a
+Python string, which is how
 [substring search](../15_algorithms/15c_kmp/README.md) scans four million
-characters natively.
+characters.
 
 ## Where the code comes from
 
 `strings.ppy` is hand-written; there is no `.py` source and no conversion step.
 
-Read on: [Reading input](../../docs/guide/input.md) ·
+Read on: [Strings](../../docs/guide/strings.md) ·
+[Reading input](../../docs/guide/input.md) ·
 [Native lowering](../../docs/guide/native-lowering.md) ·
 [Algorithms: substring search](../15_algorithms/15c_kmp/README.md)

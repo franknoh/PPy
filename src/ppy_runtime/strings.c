@@ -884,7 +884,7 @@ int8_t *ppy_str_pad(int8_t *handle, int64_t width, int64_t fill, int64_t mode) {
 
 /* A new, empty list of strings: a sequence of one handle word each. */
 int8_t *ppy_str_list(void) {
-    return ppy_seq_new(0, 1, 0, 1);
+    return ppy_seq_new(0, 1, 0, 1 | ((int64_t)1 << 32));
 }
 
 /* `piece` onto the end of a list, which takes its reference. */

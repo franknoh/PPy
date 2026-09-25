@@ -6,8 +6,9 @@
      [3] family word a   [4] family word b        [5] family word c
      [6] family word d   [7] family word e
      [8] value words     [9] float mask           [10] handle mask
-     [11] references     [12] family              [13] key words, and above
-                                                       bit 32 which of them are strings
+     [11] references     [12] family              [13] key words; bits 32-47
+                                                       which of them are strings,
+                                                       bits 48-63 which value words
      [14] scratch        [15] record stride (words)
      [16] previous on the heap list               [17] next on the heap list
      [18] the heap that holds it                  [19] collector: references
@@ -36,6 +37,11 @@
    holds a reference to each key it keeps. A value word that is a handle is
    ordered, where it is ordered at all, as a string: nothing else a handle
    points at has an order.
+
+   A value word that is a string is a leaf (bits 48-63 of word 13): a
+   string holds no handles, so it cannot be in a cycle, and a collection
+   whose handles are all leaves is not one the collector walks. `handles`
+   as `ppy_coll_make` takes it carries the leaves above bit 32.
 
    An object of a class is a sequence of one record, its fields.
 
@@ -93,9 +99,16 @@ int64_t *ppy_coll_heap(void) {
     return heap;
 }
 
+/* Whether a handle's values may reach another holder: handles that are not
+   strings. */
+int64_t ppy_coll_holds(const int64_t *header) {
+    int64_t leaves = (int64_t)((uint64_t)header[13] >> 48);
+    return (header[10] & ~leaves) != 0;
+}
+
 void ppy_coll_track(int64_t *header) {
     int64_t *heap = ppy_coll_heap();
-    int64_t list = header[10] != 0 ? 0 : 1;
+    int64_t list = ppy_coll_holds(header) ? 0 : 1;
     int64_t *first = ppy_coll_seen(heap[list]);
     header[16] = 0;
     header[17] = heap[list];
@@ -113,7 +126,7 @@ void ppy_coll_track(int64_t *header) {
 
 void ppy_coll_untrack(int64_t *header) {
     int64_t *heap = ppy_coll_seen(header[18]);
-    int64_t list = header[10] != 0 ? 0 : 1;
+    int64_t list = ppy_coll_holds(header) ? 0 : 1;
     int64_t *before = ppy_coll_seen(header[16]);
     int64_t *after = ppy_coll_seen(header[17]);
     if (before != NULL) {
@@ -227,7 +240,7 @@ void ppy_coll_text_keys(int8_t *handle, int64_t mask) {
 }
 
 int64_t ppy_coll_key_text(int8_t *handle) {
-    return (int64_t)((uint64_t)((int64_t *)handle)[13] >> 32);
+    return (int64_t)(((uint64_t)((int64_t *)handle)[13] >> 32) & 0xFFFF);
 }
 
 /* Take (1) or drop (-1) a reference to each string word of a key. */
@@ -430,7 +443,9 @@ int8_t *ppy_coll_make(int64_t family, int64_t keys, int64_t words, int64_t float
     if (heap[5]) {
         ppy_coll_sweep();
     }
-    if (handles != 0 && heap[3] >= 700 + heap[4] && !heap[6]) {
+    int64_t leaves = (int64_t)((uint64_t)handles >> 32);
+    handles &= 0xFFFFFFFF;
+    if ((handles & ~leaves) != 0 && heap[3] >= 700 + heap[4] && !heap[6]) {
         ppy_coll_collect();
     }
     if (family == 4) {
@@ -466,7 +481,7 @@ int8_t *ppy_coll_make(int64_t family, int64_t keys, int64_t words, int64_t float
     header[10] = handles;
     header[11] = 1;
     header[12] = family;
-    header[13] = keys;
+    header[13] = keys | (int64_t)((uint64_t)leaves << 48);
     header[14] = (int64_t)(intptr_t)scratch;
     header[15] = stride;
     ppy_coll_track(header);
