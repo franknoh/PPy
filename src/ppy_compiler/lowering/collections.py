@@ -700,6 +700,117 @@ class CollectionLowering:
             base, func.attr, handle, node.args, node.keywords, discard=discard, exact=True
         )
 
+    # -- operators on objects ------------------------------------------------
+
+    def _has_method(self, shape: Shape, attr: str) -> bool:
+        return self._resolve(self._class_info(shape), attr) is not None
+
+    def _dunder(
+        self, shape: Shape, attr: str, receiver: ast.expr, arguments: list[ast.expr]
+    ) -> Value:
+        """`receiver.attr(arguments)` for an operator: the object must be there."""
+        handle, owned = self._handle(receiver)
+        self._require(self._present(handle), f"`None` has no `{attr}`")
+        found = self._method_call(shape, attr, handle, arguments, [])
+        self._done_with(handle, owned)
+        return found
+
+    def _object_compare(self, node: ast.Compare) -> Value | None:
+        """`a == b`, `a < b`, ... where `a` or `b` is an object whose class says
+        what they mean: the method, or the reflected one, as Python tries them."""
+        operator = type(node.ops[0])
+        left, right = node.left, node.comparators[0]
+        left_shape, right_shape = self._object_of(left), self._object_of(right)
+        if left_shape is None and right_shape is None:
+            return None
+        if operator in (ast.Is, ast.IsNot, ast.In, ast.NotIn):
+            return None
+        forward, reflected = _COMPARE_DUNDERS[operator]
+        if left_shape is not None and self._has_method(left_shape, forward):
+            return self._dunder(left_shape, forward, left, [right])
+        if right_shape is not None and self._has_method(right_shape, reflected):
+            return self._dunder(right_shape, reflected, right, [left])
+        if operator in (ast.Eq, ast.NotEq):
+            if left_shape is not None and self._has_method(left_shape, "__eq__"):
+                found = self._dunder(left_shape, "__eq__", left, [right])
+                truth = self._truth(found)  # type: ignore[attr-defined]
+                return core.bitwise(self.b, "xor", truth, core.const(self.b, True, BOOL))
+            if self._dataclass_equality(left_shape or right_shape):
+                raise Unsupported("a dataclass's generated `==` compares fields, natively not yet")
+            # An object with no `__eq__` of its own is equal only to itself.
+            sides = []
+            for side in (left, right):
+                handle, owned = self._handle(side)
+                sides.append(core.cast(self.b, handle, I64))
+                self._done_with(handle, owned)
+            predicate = "eq" if operator is ast.Eq else "ne"
+            return core.cmp(self.b, predicate, sides[0], sides[1])
+        raise Unsupported(f"`{ast.unparse(node)}` compares objects whose class does not say how")
+
+    def _dataclass_equality(self, shape: Shape | None) -> bool:
+        """A dataclass object compares its fields: `eq=True`, the default."""
+        if shape is None:
+            return False
+        return any(owner.is_dataclass for owner in self._chain(shape))
+
+    def _object_binary(self, node: ast.BinOp) -> Value | None:
+        """`a + b` and the other arithmetic operators through the class's methods."""
+        names = _BINARY_DUNDERS.get(type(node.op))
+        if names is None:
+            return None
+        forward, reflected = names
+        left_shape, right_shape = self._object_of(node.left), self._object_of(node.right)
+        if left_shape is not None and self._has_method(left_shape, forward):
+            return self._dunder(left_shape, forward, node.left, [node.right])
+        if right_shape is not None and self._has_method(right_shape, reflected):
+            return self._dunder(right_shape, reflected, node.right, [node.left])
+        if left_shape is not None or right_shape is not None:
+            raise Unsupported(f"`{ast.unparse(node)}`: the class has no `{forward}`")
+        return None
+
+    def _object_unary(self, node: ast.UnaryOp) -> Value | None:
+        attr = {ast.USub: "__neg__", ast.UAdd: "__pos__", ast.Invert: "__invert__"}.get(
+            type(node.op)
+        )
+        shape = self._object_of(node.operand)
+        if attr is None or shape is None:
+            return None
+        if not self._has_method(shape, attr):
+            raise Unsupported(f"`{ast.unparse(node)}`: the class has no `{attr}`")
+        return self._dunder(shape, attr, node.operand, [])
+
+    def _object_item(self, node: ast.Subscript) -> Value | None:
+        """`obj[key]`: the class's `__getitem__`."""
+        shape = self._object_of(node.value)
+        if shape is None:
+            return None
+        if isinstance(node.slice, ast.Slice) or not self._has_method(shape, "__getitem__"):
+            raise Unsupported(f"`{ast.unparse(node)}` has no native lowering")
+        return self._dunder(shape, "__getitem__", node.value, [node.slice])
+
+    def _object_store_item(self, target: ast.Subscript, value: ast.expr) -> bool:
+        """`obj[key] = value`: the class's `__setitem__`."""
+        shape = self._object_of(target.value)
+        if shape is None:
+            return False
+        if isinstance(target.slice, ast.Slice) or not self._has_method(shape, "__setitem__"):
+            raise Unsupported(f"`{ast.unparse(target)} = ...` has no native lowering")
+        handle, owned = self._handle(target.value)
+        self._require(self._present(handle), "`None` has no `__setitem__`")
+        self._method_call(shape, "__setitem__", handle, [target.slice, value], [], discard=True)
+        self._done_with(handle, owned)
+        return True
+
+    def _object_contains(self, container: ast.expr, item: ast.expr) -> Value | None:
+        """`item in obj`: the class's `__contains__`."""
+        shape = self._object_of(container)
+        if shape is None:
+            return None
+        if not self._has_method(shape, "__contains__"):
+            raise Unsupported(f"`in` asks `{shape.record}`, which has no `__contains__`")
+        found = self._dunder(shape, "__contains__", container, [item])
+        return self._truth(found)  # type: ignore[attr-defined]
+
     def _object_method(self, node: ast.Call, discard: bool) -> Value:
         """A method called on an object expression."""
         assert isinstance(node.func, ast.Attribute)
@@ -726,6 +837,32 @@ class CollectionLowering:
                 raise Unsupported("a field read from a temporary object outlives it")
             self._release(handle)
         return value
+
+    def _field_handle(self, node: ast.Attribute) -> tuple[Value, bool]:
+        """A reference field as a handle: lent where its object is held, and
+        taken (owned) where its object is a temporary that goes now."""
+        shape = self._object_of(node.value)
+        assert shape is not None
+        offset, field_shape = self._field(shape, node.attr)
+        handle, owned = self._handle(node.value)
+        self._require(self._present(handle), f"`None` has no attribute `{node.attr}`")
+        value = self._read(self._field_address(handle, offset), field_shape)
+        if owned:
+            self._retain(value)
+            self._release(handle)
+        return value, owned
+
+    def _element_handle(self, node: ast.Subscript) -> tuple[Value, bool]:
+        """A reference element as a handle, taken where its collection is a temporary."""
+        kind, handle, owned = self._receiver(node.value)
+        shape = kind.value
+        if isinstance(node.slice, ast.Slice) or shape is None:
+            raise Unsupported(f"a {kind.name} has no index")
+        value = self._read(self._element_address(kind, handle, node.slice, write=False), shape)
+        if owned:
+            self._retain(value)
+            self._release(handle)
+        return value, owned
 
     def _field_store(self, target: ast.Attribute, value: ast.expr) -> None:
         """`obj.field = value`: a reference stored takes one, the old one is let go."""
@@ -994,7 +1131,7 @@ class CollectionLowering:
                 raise Unsupported(f"`{node.id}` is not a native collection")
             return core.load(self.b, held.slot), False
         if isinstance(node, ast.Attribute) and self._object_of(node.value) is not None:
-            return self._field_value(node), False
+            return self._field_handle(node)
         if isinstance(node, ast.Call) and not isinstance(node.func, ast.Subscript | ast.Attribute):
             made = self._object_of(node)
             called = T.strip_literal(self._type_of(node.func))
@@ -1016,9 +1153,12 @@ class CollectionLowering:
                 count = self._coerce(self._expr(node.args[0]), "int")  # type: ignore[attr-defined]
                 self._require(core.cmp(self.b, "ge", count, self._word(0)), "a negative size")
             return self._new(kind, count), True
+        if isinstance(node, ast.Subscript) and self._object_of(node.value) is not None:
+            return self._expr(node), True  # type: ignore[attr-defined]
         if isinstance(node, ast.Subscript):
-            value = self._item(node.value, node.slice)
-            return value, False
+            return self._element_handle(node)
+        if isinstance(node, (ast.BinOp, ast.UnaryOp, ast.IfExp)):
+            return self._expr(node), True  # type: ignore[attr-defined]
         if isinstance(node, ast.Call):
             if isinstance(node.func, ast.Attribute) and self._is_collection(node.func.value):
                 found = self._collection_method(node.func.value, node.func.attr, node)
@@ -1159,6 +1299,105 @@ class CollectionLowering:
         found = self._rt(f"ppy_{kind.family}_find", (handle, self._key(kind, key)))
         self._done_with(handle, owned)
         return self._found(found)
+
+    def _record_place(self, target: ast.Attribute) -> tuple[Shape, int] | None:
+        """`points[i].x`, `table[k].x`, `obj.pos.x`: a field of a value-class
+        element or field, where it is held. Its record's shape and the field's
+        word, or None where `target` is not one."""
+        holder = target.value
+        shape: Shape | None
+        if isinstance(holder, ast.Subscript) and self._is_collection(holder.value):
+            kind = self._kind_of(holder.value)
+            shape = kind.value if kind is not None else None
+        elif isinstance(holder, ast.Attribute):
+            owner = self._object_of(holder.value)
+            if owner is None:
+                return None
+            shape = self._field(owner, holder.attr)[1]
+        else:
+            return None
+        if shape is None or shape.kind != "record" or target.attr not in shape.names:
+            return None
+        return shape, shape.names.index(target.attr)
+
+    def _record_address(self, holder: ast.expr) -> Value:
+        """Where a value-class element or field is held."""
+        if isinstance(holder, ast.Subscript):
+            kind, handle, owned = self._receiver(holder.value)
+            if owned:
+                raise Unsupported("a field written in a temporary collection's element is lost")
+            return self._element_address(kind, handle, holder.slice, write=False)
+        assert isinstance(holder, ast.Attribute)
+        shape = self._object_of(holder.value)
+        assert shape is not None
+        offset, _ = self._field(shape, holder.attr)
+        handle, owned = self._handle(holder.value)
+        if owned:
+            raise Unsupported("a field written in a temporary object is lost")
+        self._require(self._present(handle), f"`None` has no attribute `{holder.attr}`")
+        return self._field_address(handle, offset)
+
+    def _record_field_read(self, target: ast.Attribute) -> Value:
+        found = self._record_place(target)
+        assert found is not None
+        shape, word = found
+        return self._read_word(self._record_address(target.value), word, shape.parts[word])
+
+    def _record_field_store(self, target: ast.Attribute, value: Value) -> None:
+        """`points[i].x = v`: the one word of the element, written where it is held."""
+        found = self._record_place(target)
+        assert found is not None
+        shape, word = found
+        self._check_record_writes(shape.record)
+        address = self._record_address(target.value)
+        kind = shape.parts[word]
+        stored = F64 if kind == "float" else I64
+        pointer = core.cast(self.b, address, _pointer(address, stored))
+        if word:
+            pointer = core.ptr_offset(self.b, pointer, self._word(word))
+        coerced = self._coerce(value, "float" if kind == "float" else "int")  # type: ignore[attr-defined]
+        core.store(self.b, coerced, pointer)
+
+    def _check_record_writes(self, record: str) -> None:
+        """A value class is copied where CPython shares: a copy read out of a
+        collection before a field of the element is written in place would
+        miss the write. A function that does both, in that order or in one
+        loop, stays in Python."""
+        checked: set[str] = self.__dict__.setdefault("_record_writes_checked", set())
+        if record in checked:
+            return
+        checked.add(record)
+        info = getattr(self, "info", None)
+        if info is None:
+            return
+        if _copies_before_writes(info.node, record, self._type_of):
+            raise Unsupported(
+                f"a `{record.rpartition('.')[2]}` is copied out and written in place in one "
+                "function, which CPython would share"
+            )
+
+    def _element_address(self, kind: Kind, handle: Value, index: ast.expr, *, write: bool) -> Value:
+        """Where `v[i]` or `m[key]` is held; with `write`, a map makes the entry."""
+        if kind.name in {"Vec", "Deque"}:
+            position = self._coerce(self._expr(index), "int")  # type: ignore[attr-defined]
+            length = self._rt("ppy_coll_len", (handle,))
+            inside = core.bitwise(
+                self.b,
+                "and",
+                core.cmp(self.b, "ge", position, self._word(0)),
+                core.cmp(self.b, "lt", position, length),
+            )
+            self._require(inside, "index out of range")
+            return self._rt("ppy_seq_at", (handle, position), HANDLE)
+        if kind.name in {"HashMap", "TreeMap"}:
+            key = self._key(kind, index)
+            if write:
+                entry = self._rt(f"ppy_{kind.family}_put", (handle, key))
+            else:
+                entry = self._rt(f"ppy_{kind.family}_find", (handle, key))
+                self._require(self._found(entry), "key not found")
+            return self._rt(f"ppy_{kind.family}_value_at", (handle, entry), HANDLE)
+        raise Unsupported(f"a {kind.name} has no index")
 
     def _item(self, container: ast.expr, index: ast.expr, value: ast.expr | None = None) -> Value:
         """`v[i]` (0 to `len - 1`) or a map's `m[key]`, read; or with `value`, written."""
@@ -1485,8 +1724,92 @@ class CollectionLowering:
         self._store(target, value)  # type: ignore[attr-defined]
 
 
+#: A comparison's method, and the one Python tries on the right operand when
+#: the left has none: `a > b` is `b < a`.
+_COMPARE_DUNDERS = {
+    ast.Eq: ("__eq__", "__eq__"),
+    ast.NotEq: ("__ne__", "__ne__"),
+    ast.Lt: ("__lt__", "__gt__"),
+    ast.Gt: ("__gt__", "__lt__"),
+    ast.LtE: ("__le__", "__ge__"),
+    ast.GtE: ("__ge__", "__le__"),
+}
+
+#: An arithmetic operator's method, and its reflected form.
+_BINARY_DUNDERS = {
+    ast.Add: ("__add__", "__radd__"),
+    ast.Sub: ("__sub__", "__rsub__"),
+    ast.Mult: ("__mul__", "__rmul__"),
+    ast.Div: ("__truediv__", "__rtruediv__"),
+    ast.FloorDiv: ("__floordiv__", "__rfloordiv__"),
+    ast.Mod: ("__mod__", "__rmod__"),
+    ast.MatMult: ("__matmul__", "__rmatmul__"),
+    ast.BitAnd: ("__and__", "__rand__"),
+    ast.BitOr: ("__or__", "__ror__"),
+    ast.BitXor: ("__xor__", "__rxor__"),
+    ast.LShift: ("__lshift__", "__rlshift__"),
+    ast.RShift: ("__rshift__", "__rrshift__"),
+    ast.Pow: ("__pow__", "__rpow__"),
+}
+
 #: The methods whose collection result the caller owns: taken out, not read in place.
 _OWNED_RESULTS = {"pop": True, "pop_front": True, "pop_back": True, "remove": True}
+
+
+def _copies_before_writes(function: ast.AST, record: str, type_of) -> bool:  # type: ignore[no-untyped-def]
+    """Does `function` hold a copy of a `record` value (a name bound to one that
+    is not built on the spot, a loop target, a parameter) where a later
+    in-place field write, or one in the same loop, could change what CPython's
+    shared object says?"""
+    copies: list[tuple[ast.AST, list[ast.AST]]] = []
+    writes: list[tuple[ast.AST, list[ast.AST]]] = []
+
+    def named(t: T.Type) -> bool:
+        base = T.strip_literal(t)
+        return isinstance(base, T.Instance) and base.name == record
+
+    def element_write(target: ast.expr) -> bool:
+        return (
+            isinstance(target, ast.Attribute)
+            and isinstance(target.value, (ast.Subscript, ast.Attribute))
+            and named(type_of(target.value))
+        )
+
+    def visit(node: ast.AST, loops: list[ast.AST]) -> None:
+        inner = [*loops, node] if isinstance(node, (ast.For, ast.While)) else loops
+        if isinstance(node, (ast.Assign, ast.AnnAssign)):
+            targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+            value = node.value
+            for target in targets:
+                if isinstance(target, ast.Name) and named(type_of(target)):
+                    built = isinstance(value, ast.Call) and not isinstance(value.func, ast.Attribute)
+                    if not built:
+                        copies.append((node, loops))
+                if element_write(target):
+                    writes.append((node, loops))
+        if isinstance(node, ast.AugAssign) and element_write(node.target):
+            writes.append((node, loops))
+        if isinstance(node, ast.For) and isinstance(node.target, ast.Name):
+            if named(type_of(node.target)):
+                copies.append((node, inner))
+        if isinstance(node, ast.arguments):
+            for argument in node.args:
+                if argument.annotation is not None and named(type_of(argument)):
+                    copies.append((node, []))
+        for child in ast.iter_child_nodes(node):
+            visit(child, inner)
+
+    visit(function, [])
+    for copy, copy_loops in copies:
+        for write, write_loops in writes:
+            if (write.lineno, write.col_offset) > (  # type: ignore[attr-defined]
+                getattr(copy, "lineno", 0),
+                getattr(copy, "col_offset", 0),
+            ):
+                return True
+            if any(loop in write_loops for loop in copy_loops):
+                return True
+    return False
 
 
 def _related(held: Kind | Shape, kind: Kind | Shape) -> bool:
