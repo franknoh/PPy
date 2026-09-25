@@ -1,5 +1,7 @@
 # Changelog
 
+## 0.4.0 — unreleased
+
 ## 0.3.7 — 2026-09-25
 
 - A standalone binary reads more than `int`. `ppy.input` and `ppy.scan` of
