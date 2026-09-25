@@ -26,7 +26,8 @@ _ABI_NAMES = {
     "bool": "i8",
     "i8": "i8",
     "u8": "i8",
-    # A collection's handle, which only native callers pass or receive.
+    # A collection's handle: native callers pass it, and the Python boundary
+    # copies a collection into one and out of one.
     "handle": "i8*",
 }
 
@@ -45,6 +46,9 @@ class NativeParam:
     elements: tuple[str, ...] = ()
     fields: tuple[tuple[str, str], ...] = ()
     class_name: str = ""
+    #: A collection the function writes through: the boundary copies its
+    #: contents back into the caller's object after the call.
+    written: bool = False
 
     @property
     def is_buffer(self) -> bool:
@@ -61,7 +65,7 @@ class NativeParam:
 
     @property
     def is_handle(self) -> bool:
-        """A `ppy.Vec` or another collection: its runtime handle, no Python boundary."""
+        """A `ppy.Vec` or another collection, or an object: its runtime handle."""
         return self.kind == "handle"
 
     @property
@@ -98,7 +102,7 @@ class NativeParam:
         if self.is_pointer:
             return f"{_abi_name(self.element)}* {self.name}"
         if self.is_handle:
-            return f"{self.class_name}[{self.element}] {self.name}"
+            return f"{self.element} {self.name}"
         if self.is_tuple:
             return ", ".join(
                 f"{_abi_name(element)} {self.name}{index}"
@@ -128,6 +132,14 @@ class NativeSignature:
     #: A coroutine: the boundary hands back a future the runtime completes,
     #: carrying this kind -- `int`, `float`, `bool`, or `none`.
     future: str = ""
+    #: A returned collection's type, spelled (`ppy.Vec[int]`), for the boundary
+    #: to build the Python object from the handle.
+    returned: str = ""
+
+    @property
+    def crosses_collections(self) -> bool:
+        """Whether a collection crosses the boundary, in or out."""
+        return bool(self.returned) or any(p.is_handle for p in self.parameters)
 
     @property
     def ret(self) -> str:

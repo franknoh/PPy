@@ -336,6 +336,7 @@ def write_manifest(
                             "elements": list(parameter.elements),
                             "fields": [list(pair) for pair in parameter.fields],
                             "class_name": parameter.class_name,
+                            "written": parameter.written,
                         }
                         for parameter in signature.parameters
                     ],
@@ -343,6 +344,7 @@ def write_manifest(
                     "releases_gil": signature.releases_gil,
                     "cpu_features": list(signature.cpu_features),
                     "future": signature.future,
+                    "returned": signature.returned,
                 },
             }
             for signature in sorted(entries.values(), key=lambda s: s.qualname)
