@@ -1270,8 +1270,13 @@ class _FunctionLowering(CollectionLowering):
         if isinstance(target, ast.Subscript) and self._is_collection(target.value):
             self._item(target.value, target.slice, node.value)
             return
+        if isinstance(target, ast.Subscript) and self._object_store_item(target, node.value):
+            return
         if isinstance(target, ast.Attribute) and self._object_of(target.value) is not None:
             self._field_store(target, node.value)
+            return
+        if isinstance(target, ast.Attribute) and self._record_place(target) is not None:
+            self._record_field_store(target, self._expr(node.value))
             return
         if (
             self.frontend.standalone
@@ -1476,12 +1481,26 @@ class _FunctionLowering(CollectionLowering):
             ast.copy_location(combined, node)
             self._field_store(target, combined)
             return
+        if isinstance(target, ast.Attribute) and self._record_place(target) is not None:
+            current = self._record_field_read(target)
+            value = self._expr(node.value)
+            self._record_field_store(target, self._binary(current, value, type(node.op)))
+            return
         if isinstance(target, ast.Subscript) and self._is_collection(target.value):
             read = ast.Subscript(value=target.value, slice=target.slice, ctx=ast.Load())
             combined = ast.BinOp(left=read, op=node.op, right=node.value)
             ast.copy_location(read, target)
             ast.copy_location(combined, node)
             self._item(target.value, target.slice, combined)
+            return
+        if isinstance(target, ast.Subscript) and self._object_of(target.value) is not None:
+            if not isinstance(target.value, ast.Name) or not _simple(target.slice):
+                raise Unsupported("an augmented `obj[key]` takes a name and a plain key")
+            read = ast.Subscript(value=target.value, slice=target.slice, ctx=ast.Load())
+            combined = ast.BinOp(left=read, op=node.op, right=node.value)
+            ast.copy_location(read, target)
+            ast.copy_location(combined, node)
+            self._object_store_item(target, combined)
             return
         if isinstance(node.target, ast.Subscript):
             if not (
@@ -1875,8 +1894,14 @@ class _FunctionLowering(CollectionLowering):
                         self._term_for_load(loaded, node)
                 return loaded
             case ast.BinOp():
+                operated = self._object_binary(node)
+                if operated is not None:
+                    return operated
                 return self._binary(self._expr(node.left), self._expr(node.right), type(node.op))
             case ast.UnaryOp():
+                operated = self._object_unary(node)
+                if operated is not None:
+                    return operated
                 return self._unary(node)
             case ast.BoolOp():
                 return self._boolop(node)
@@ -1903,6 +1928,9 @@ class _FunctionLowering(CollectionLowering):
             case ast.Subscript():
                 if self._is_collection(node.value):
                     return self._item(node.value, node.slice)
+                indexed = self._object_item(node)
+                if indexed is not None:
+                    return indexed
                 if isinstance(node.value, ast.Name) and node.value.id in self.tuples:
                     return self._tuple_element(node.value.id, node.slice)
                 if isinstance(node.value, ast.Name) and node.value.id in self.buffers:
@@ -2039,6 +2067,15 @@ class _FunctionLowering(CollectionLowering):
             if isinstance(operator, ast.NotIn):
                 return core.bitwise(self.b, "xor", found, core.const(self.b, True, BOOL))
             return found
+        if isinstance(operator, (ast.In, ast.NotIn)):
+            found = self._object_contains(container, node.left)
+            if found is not None:
+                if isinstance(operator, ast.NotIn):
+                    return core.bitwise(self.b, "xor", found, core.const(self.b, True, BOOL))
+                return found
+        compared = self._object_compare(node)
+        if compared is not None:
+            return compared
         predicate = _COMPARISONS.get(type(node.ops[0]))
         if predicate is None:
             raise Unsupported("comparison operator has no native lowering")
@@ -2167,6 +2204,9 @@ class _FunctionLowering(CollectionLowering):
             and node.func.value.id in self.matches
         ):
             return self._match_method(node.func.value.id, node)
+        called_super = self._super_call(node, discard_result)
+        if called_super is not None:
+            return called_super
         if isinstance(node.func, ast.Attribute) and self._object_of(node.func.value) is not None:
             return self._object_method(node, discard_result)
         if target == "gc.collect" and self._resolves_to(node.func, "gc.collect"):
@@ -2228,6 +2268,10 @@ class _FunctionLowering(CollectionLowering):
         for qualname, (info, options) in self.frontend.externs.items():
             if qualname.rpartition(".")[2] == target:
                 return self._extern_call(info, options, node)
+        if target == "isinstance":
+            checked = self._is_instance(node)
+            if checked is not None:
+                return checked
         if target == "len" and len(node.args) == 1:
             argument = node.args[0]
             if self._is_collection(argument):
@@ -3346,7 +3390,7 @@ class _FunctionLowering(CollectionLowering):
             if parameter.is_handle:
                 none = isinstance(argument, ast.Constant) and argument.value is None
                 kind = self._reference_of(argument)
-                if not none and (kind is None or kind.spelled != parameter.element):
+                if not none and (kind is None or not self._accepts(parameter, kind)):
                     shown = kind.spelled if kind is not None else ast.unparse(argument)
                     raise Unsupported(
                         f"`{qualname}` expects a `{parameter.element}`, not `{shown}`"
@@ -4374,3 +4418,8 @@ _PRINT_SHIMS = {I64: "ppy_rt_print_i64", F64: "ppy_rt_print_f64", BOOL: "ppy_rt_
 
 #: The runtime spelling of an element.
 _COLLECTION_SUFFIX = {"int": "i64", "float": "f64"}
+
+
+def _simple(node: ast.expr) -> bool:
+    """A key evaluated twice gives the same value and does nothing else."""
+    return isinstance(node, (ast.Name, ast.Constant))

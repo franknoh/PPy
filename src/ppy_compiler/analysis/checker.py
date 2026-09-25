@@ -525,6 +525,24 @@ _FRESH_SUBSCRIPTED = frozenset(
 )
 
 
+def _holds_float(t: T.Type) -> bool:
+    """Whether a collection argument stores a `float` word: a float, or a tuple
+    with one. A class or a collection is held by what it is."""
+    base = T.strip_literal(t)
+    if base == T.FLOAT:
+        return True
+    return isinstance(base, T.Tuple_) and any(_holds_float(item) for item in base.items)
+
+
+def _one_member(t: T.Type) -> T.Type:
+    """`Node | None` as `Node`: what an optional expected type expects."""
+    base = T.strip_literal(t)
+    if isinstance(base, T.Union_):
+        members = [m for m in base.members if m != T.NONE]
+        return T.strip_literal(members[0]) if len(members) == 1 else base
+    return base
+
+
 def _receiver_bindings(info: ClassInfo, base: T.Instance) -> dict[T.TypeVar_, T.Type]:
     """What a generic class's parameters are for one instance: `T` is `int` in a
     `Stack[int]`. An instance written without its arguments binds nothing."""
@@ -636,6 +654,10 @@ class _Checker:
         #: For a method read off a generic class's instance, by the attribute
         #: node: what the class's parameters are for that receiver.
         self._receivers: dict[int, dict[T.TypeVar_, T.Type]] = {}
+        #: What a value is going where it goes: the declared type of the
+        #: variable, field, or return it is bound to. A generic class or a
+        #: collection made without its type arguments takes them from here.
+        self._expected: dict[int, T.Type] = {}
         self._module_seed: dict[str, Binding] | None = None
         #: Nodes that already produced a diagnostic, so a downstream pass does
         #: not report a second, less useful one about the same expression.
@@ -1032,9 +1054,39 @@ class _Checker:
     def _stmt_Assign(self, node: ast.Assign, env: Env) -> None:
         if self._bind_type_alias(node.targets, node.value, env):
             return
-        value = self._expr(node.value, env)
+        expected = self._target_type(node.targets[0], env) if len(node.targets) == 1 else None
+        value = self._expr_expecting(node.value, env, expected)
         for target in node.targets:
             self._bind_target(target, value, env, source=node.value)
+
+    def _expr_expecting(self, node: ast.expr, env: Env, expected: T.Type | None) -> Binding:
+        """`node`, going where a value of `expected` is wanted."""
+        if expected is None or not isinstance(node, ast.Call):
+            return self._expr(node, env)
+        self._expected[id(node)] = expected
+        try:
+            return self._expr(node, env)
+        finally:
+            self._expected.pop(id(node), None)
+
+    def _target_type(self, target: ast.expr, env: Env) -> T.Type | None:
+        """The declared type of what an assignment binds: a field of a project
+        class, or a name bound before."""
+        if isinstance(target, ast.Name):
+            bound = env.get(target.id)
+            return bound.type if bound is not None else None
+        if isinstance(target, ast.Attribute):
+            owner = T.strip_literal(self.module.node_types.get(id(target.value), T.UNKNOWN))
+            if not isinstance(owner, T.Instance) and isinstance(target.value, ast.Name):
+                bound = env.get(target.value.id)
+                owner = T.strip_literal(bound.type) if bound is not None else owner
+            if isinstance(owner, T.Instance):
+                info = self.project.classes.get(owner.name)
+                if info is not None:
+                    declared = info.lookup(target.attr, self.project)
+                    if declared is not None and not isinstance(declared[0], T.Callable_):
+                        return T.substitute(declared[0], _receiver_bindings(info, owner))
+        return None
 
     def _stmt_TypeAlias(self, node: ast.TypeAlias, env: Env) -> None:
         """`type X = ...` names a type; its right-hand side is not a value."""
@@ -1057,7 +1109,7 @@ class _Checker:
         resolved = self.annotations.resolve(node.annotation)
         declared = Binding(resolved.type, resolved.facts)
         if node.value is not None:
-            value = self._expr(node.value, env)
+            value = self._expr_expecting(node.value, env, resolved.type)
             if _display_fits(node.value, value.type, resolved.type):
                 # A list, set, or dict written out in place has no type of
                 # its own yet: `[stmt]` beside `list[ast.AST]` is a list of
@@ -1112,7 +1164,9 @@ class _Checker:
             self._returns.append(Binding(T.NONE))
             self._provisional_returns.append(False)
         else:
-            value = self._expr(node.value, env)
+            current = self._current
+            returned = current.ret if current is not None and current.ret_annotated else None
+            value = self._expr_expecting(node.value, env, returned)
             self._returns.append(value)
             self._provisional_returns.append(self._is_provisional(node.value, value, env))
             if isinstance(node.value, ast.Name):
@@ -1935,6 +1989,9 @@ class _Checker:
             made = self._typed_collection(node, env)
             if made is not None:
                 return made
+        made = self._bare_collection(node, env)
+        if made is not None:
+            return made
         imported = self._constant_import(node)
         if imported is not None:
             return imported
@@ -2109,7 +2166,51 @@ class _Checker:
         if info.type_params and isinstance(explicit, T.Instance) and explicit.args:
             # `Stack[int]()`: the arguments were written out with the class.
             return Binding(explicit, facts)
+        if info.type_params:
+            inferred = self._inferred_arguments(info, node, args, keywords)
+            if inferred is not None:
+                return Binding(info.instance(inferred), facts)
         return Binding(info.instance(), facts)
+
+    def _inferred_arguments(
+        self,
+        info: ClassInfo,
+        node: ast.Call,
+        args: list[Binding],
+        keywords: dict[str | None, Binding],
+    ) -> tuple[T.Type, ...] | None:
+        """A generic class's type arguments, where the call does not write them:
+        from where the new instance goes (`s: Stack[int] = Stack()`), or else
+        from what its constructor is given (`Pair(1, 2.5)` is a `Pair[int, float]`)."""
+        expected = _one_member(self._expected.get(id(node), T.UNKNOWN))
+        if (
+            isinstance(expected, T.Instance)
+            and expected.name == info.qualname
+            and len(expected.args) == len(info.type_params)
+        ):
+            return expected.args
+        init = info.find_method("__init__", self.project)
+        if init is not None:
+            params = [(p.name, p.type) for p in init.params[1:]]
+        elif info.is_dataclass:
+            params = list(self._constructor(info)[0].items())
+        else:
+            return None
+        bindings: dict[T.TypeVar_, T.Type] = {}
+        given = [
+            (declared, argument.type)
+            for (_name, declared), argument in zip(params, args, strict=False)
+        ]
+        named = dict(params)
+        for name, argument in keywords.items():
+            if name is not None and name in named:
+                given.append((named[name], argument.type))
+        for declared, actual in given:
+            if not T.infer(declared, T.strip_literal(actual), bindings):
+                return None
+        if any(variable not in bindings for variable in info.type_params):
+            return None
+        return tuple(bindings[variable] for variable in info.type_params)
 
     def _check_field_construction(
         self,
@@ -2995,6 +3096,13 @@ class _Checker:
             indexed = self._plugin_subscript(base, node, is_slice)
             if indexed is not None:
                 return indexed
+            info = self.project.classes.get(base.name)
+            method = info.find_method("__getitem__", self.project) if info is not None else None
+            if info is not None and method is not None:
+                # `grid[i]` on a project class: its `__getitem__`.
+                self._calls.add(method.qualname)
+                self._effects = self._effects | method.effects
+                return Binding(T.substitute(method.ret, _receiver_bindings(info, base)))
         if isinstance(base, (T.AnyType, T.UnknownType)):
             if isinstance(base, T.DynamicType):
                 return Binding(T.DYNAMIC)
@@ -4801,6 +4909,54 @@ class _Checker:
                 )
         return Binding(T.ClassObject(info.qualname, info.instance(arguments)))
 
+    def _bare_collection(self, node: ast.Call, env: Env) -> Binding | None:
+        """`Vec()`, `HashMap()`: a collection whose type arguments come from where
+        it goes, `v: Vec[int] = Vec()`."""
+        if not isinstance(node.func, (ast.Name, ast.Attribute)):
+            return None
+        canonical = self.project.resolver(self.symbols).canonical(node.func)
+        if canonical is None or canonical not in C.COLLECTIONS:
+            return None
+        expected = _one_member(self._expected.get(id(node), T.UNKNOWN))
+        spelled_name = canonical.removeprefix("ppy.")
+        if not (
+            isinstance(expected, T.Instance)
+            and expected.name == canonical
+            and len(expected.args) == C.ARITY[canonical]
+        ):
+            example = "[int, int]" if C.ARITY[canonical] == 2 else "[int]"
+            self._error(
+                "E1305",
+                f"`{spelled_name}()` takes its type from where it goes, and nothing "
+                f"says it here: write `{spelled_name}{example}()`, or annotate the target",
+                node,
+            )
+            return Binding(C.instance(canonical))
+        self._expr(node.func, env)
+        if any(self._stores_float(argument) for argument in expected.args):
+            # CPython runs `Vec()` without its arguments, so it cannot make a
+            # stored `3` the `3.0` native memory of doubles holds.
+            self._error(
+                "E1305",
+                f"a `{spelled_name}` of floats is made with its type written out, "
+                f"`{spelled_name}[{', '.join(str(a) for a in expected.args)}]()`, so "
+                "CPython stores `3` as `3.0` too",
+                node,
+            )
+        return self._collection_made(canonical, list(expected.args), node, env)
+
+    def _stores_float(self, t: T.Type) -> bool:
+        """Whether storing into a collection of `t` makes an `int` a `float`: a
+        float, a tuple with one, or a dataclass with a float field."""
+        if _holds_float(t):
+            return True
+        base = T.strip_literal(t)
+        if isinstance(base, T.Instance):
+            info = self.project.classes.get(base.name)
+            if info is not None and info.is_dataclass:
+                return any(_holds_float(field) for field in info.fields.values())
+        return False
+
     def _typed_collection(self, node: ast.Call, env: Env) -> Binding | None:
         """`ppy.Vec[int]()`, `ppy.Deque[float]()`, `ppy.Heap[int]()`: a new, empty collection.
 
@@ -4814,6 +4970,12 @@ class _Checker:
             return None
         parts = func.slice.elts if isinstance(func.slice, ast.Tuple) else [func.slice]
         resolved = [T.strip_literal(self.annotations.resolve(part).type) for part in parts]
+        return self._collection_made(canonical, resolved, node, env)
+
+    def _collection_made(
+        self, canonical: str, resolved: list[T.Type], node: ast.Call, env: Env
+    ) -> Binding:
+        """A new collection of `canonical` with type arguments `resolved`."""
         if len(resolved) != C.ARITY[canonical]:
             wanted = "a key and a value type" if C.ARITY[canonical] == 2 else "one element type"
             self._error("E1305", f"a `{canonical}` takes {wanted}", node)
@@ -4861,8 +5023,9 @@ class _Checker:
         if isinstance(base, T.Tuple_) and not base.homogeneous and base.items:
             return all(T.strip_literal(i) in (T.INT, T.FLOAT, T.BOOL) for i in base.items)
         if isinstance(base, T.Instance):
-            info = self.project.classes.get(base.name)
-            return info is not None and info.is_dataclass
+            # A project class: a dataclass of numbers is held as a value, and
+            # any other class as an object, by handle.
+            return self.project.classes.get(base.name) is not None
         return False
 
     def _collection_key(self, t: T.Type) -> bool:
@@ -5457,6 +5620,13 @@ class _Checker:
             root = _collection_root(node)
             while isinstance(root, ast.Attribute):
                 root = _collection_root(root.value)
+            receiver = self._super_receiver(root)
+            if receiver is not None:
+                # `super().method()` works on the method's own receiver.
+                self._mutated.add(receiver)
+                self._blockers.append(f"mutates parameter `{receiver}`")
+                self._external_writes = True
+                return
             if isinstance(root, ast.Name) and self._aliases is not None:
                 roots = self._roots(root, root.id)
                 params = self._aliases.param_roots(roots)
@@ -5489,6 +5659,20 @@ class _Checker:
         self._foreign_writes = True
         self._external_writes = True
         self._blockers.append(f"mutates `{ast.unparse(node)}`")
+
+    def _super_receiver(self, node: ast.expr) -> str | None:
+        """The receiver `super()` stands for in a method: its first parameter."""
+        if not (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Name)
+            and node.func.id == "super"
+            and not node.args
+        ):
+            return None
+        current = self._current
+        if current is None or current.owner is None or not current.params:
+            return None
+        return current.params[0].name
 
     def _note_callee_writes(self, info: FunctionInfo, node: ast.Call) -> None:
         """A callee that mutates writes through whatever it was handed.

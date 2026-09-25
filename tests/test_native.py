@@ -1654,9 +1654,10 @@ def test_a_subclassed_value_class_is_not_flattened(write, analyze):
         """,
     )
     layouts = _layouts(analyze(path, backend="llvm"))
-    assert "derived.Base" in layouts
-    # A subclass may add state or override attribute access, so it is left alone.
-    assert "derived.Derived" not in layouts
+    # A `Base` may be handed a `Derived`, which a copy of `Base`'s fields would
+    # cut short: both are objects, held by handle, and neither is flattened.
+    assert layouts["derived.Base"] == ()
+    assert layouts["derived.Derived"] == ()
 
 
 def test_writing_a_field_keeps_the_function_boxed(write, analyze):
