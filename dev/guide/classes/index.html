@@ -904,6 +904,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Generic classes">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#generic-bases" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Generic bases
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -4131,6 +4148,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Generic classes">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#generic-bases" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Generic bases
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -4378,6 +4412,38 @@ argument, as a C++ template is instantiated.</p>
 <code>m: HashMap[int, int] = HashMap()</code>. A collection that stores floats is the
 exception, since CPython runs <code>Vec()</code> without knowing its type and would
 keep a stored <code>3</code> an <code>int</code>: write <code>Vec[float]()</code>.</p>
+<h3 id="generic-bases">Generic bases<a class="headerlink" href="#generic-bases" title="Permanent link">&para;</a></h3>
+<p>A generic class may derive from another, and a class may derive from a
+generic one with its arguments given:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="k">class</span><span class="w"> </span><span class="nc">Counted</span><span class="p">[</span><span class="n">T</span><span class="p">](</span><span class="n">Stack</span><span class="p">[</span><span class="n">T</span><span class="p">]):</span>
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">()</span>
+<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">pushes</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">0</span>
+<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>
+<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">push</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">value</span><span class="p">:</span> <span class="n">T</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">pushes</span> <span class="o">+=</span> <span class="mi">1</span>
+<a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a>        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="n">push</span><span class="p">(</span><span class="n">value</span><span class="p">)</span>
+<a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a>
+<a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a>
+<a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a><span class="k">class</span><span class="w"> </span><span class="nc">IntStack</span><span class="p">(</span><span class="n">Stack</span><span class="p">[</span><span class="nb">int</span><span class="p">]):</span>
+<a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">total</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+<a id="__codelineno-3-13" name="__codelineno-3-13" href="#__codelineno-3-13"></a>        <span class="n">s</span> <span class="o">=</span> <span class="mi">0</span>
+<a id="__codelineno-3-14" name="__codelineno-3-14" href="#__codelineno-3-14"></a>        <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">items</span><span class="p">:</span>
+<a id="__codelineno-3-15" name="__codelineno-3-15" href="#__codelineno-3-15"></a>            <span class="n">s</span> <span class="o">+=</span> <span class="n">v</span>
+<a id="__codelineno-3-16" name="__codelineno-3-16" href="#__codelineno-3-16"></a>        <span class="k">return</span> <span class="n">s</span>
+</code></pre></div>
+<p>The checker follows what each class gives its base: in a <code>Counted[int]</code>,
+<code>Stack</code>'s <code>T</code> is <code>int</code> as well, so <code>pop()</code> returns an <code>int</code>; in an
+<code>IntStack</code> it is <code>int</code> with nothing written at the use. <code>super()</code> is the
+base with those arguments. A <code>Counted[int]</code> or an <code>IntStack</code> goes where a
+<code>Stack[int]</code> is expected, and one given to a <code>Stack[int]</code> parameter runs its
+own <code>push</code>.</p>
+<p>Native code lays the object out and instantiates each inherited method by
+the same bindings. A call through a <code>Stack[int]</code> dispatches to a
+subclass's override by the object's class, with the subclass's own
+arguments worked out from the base's. Where they cannot be, as for a
+<code>class Tagged[T, U](Stack[T])</code> whose <code>U</code> the <code>Stack[int]</code> says nothing of,
+the function that makes such a call stays in Python.</p>
 <h2 id="memory">Memory<a class="headerlink" href="#memory" title="Permanent link">&para;</a></h2>
 <p>A handle counts its references. A name holding an object keeps one, a field
 or a collection holding it keeps one, and it is freed when the last goes,
@@ -4407,7 +4473,8 @@ return numbers, and make their objects inside.</p>
 <li>A class with more than one base, a base from another module or a
   library, or a field native code cannot represent (a <code>dict</code>, say), keeps
   the functions that use it in Python.</li>
-<li>A generic class with a base, or a base that is generic, is not lowered.</li>
+<li>A call through a generic base whose subclass has type parameters the
+  base's arguments do not decide stays in Python, as above.</li>
 <li>A dataclass object compared with <code>==</code> keeps the function in Python unless
   the class defines <code>__eq__</code>, since the generated one compares fields.</li>
 <li>A generic class whose type arguments nothing tells stays in Python.</li>
