@@ -295,14 +295,14 @@ class StringLowering:
         """`s[i]` and `s[a:b:c]`: new strings."""
         handle, owned = self._handle(node.value)  # type: ignore[attr-defined]
         if isinstance(node.slice, ast.Slice):
-            made = self._slice(handle, node.slice)
+            made = self._string_slice(handle, node.slice)
         else:
             position = self._index(handle, node.slice)
             made = self._rt("ppy_str_at", (handle, position), HANDLE)  # type: ignore[attr-defined]
         self._done_with(handle, owned)  # type: ignore[attr-defined]
         return made
 
-    def _slice(self, handle: Value, bounds: ast.Slice) -> Value:
+    def _string_slice(self, handle: Value, bounds: ast.Slice) -> Value:
         given = 0
         values = []
         for bit, part in ((1, bounds.lower), (2, bounds.upper)):

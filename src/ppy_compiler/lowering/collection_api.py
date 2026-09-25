@@ -729,6 +729,16 @@ class CollectionApiLowering(CollectionLowering):
     def _collection_method(self, receiver: ast.expr, attr: str, node: ast.Call) -> Value:
         """A method of a collection: the ones here first, then one element at a time."""
         kind, handle, owned = self._receiver(receiver)
+        if kind.name == "List":
+            # `list[str]`, the list string methods hand out, has its own methods.
+            if node.keywords:
+                raise Unsupported(f"`List.{attr}` takes no keyword arguments")
+            found = self._string_list_method(kind, handle, attr, node.args)  # type: ignore[attr-defined]
+            self._keys_done()
+            if found is None:
+                raise Unsupported(f"`List.{attr}` has no native lowering")
+            self._done_with(handle, owned)
+            return found
         found = self._whole_method(kind, handle, attr, node)
         if found is None and not node.keywords:
             method = {
@@ -1156,7 +1166,11 @@ class CollectionApiLowering(CollectionLowering):
                 if operation == "min"
                 else (best_address, candidate_address)
             )
-            widths = (self._word(shape.words), self._word(shape.floats))
+            widths = (
+                self._word(shape.words),
+                self._word(shape.floats),
+                self._word(shape.handles),
+            )
             beats = self._rt("ppy_coll_before", (*ordered, *widths))
             first = core.bitwise(
                 self.b, "xor", core.load(self.b, seen), core.const(self.b, True, BOOL)
