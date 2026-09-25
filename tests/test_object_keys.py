@@ -428,7 +428,7 @@ def test_the_reference_classes_take_the_same_keys(tmp_path: Path):
     tree[Ranked(1)] = 20
     assert len(tree) == 1 and tree[Ranked(1)] == 20
 
-    class Unhashable:
+    class Unhashable:  # noqa: PLW1641 - unhashable on purpose
         def __eq__(self, other: object) -> bool:
             return self is other
 

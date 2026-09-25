@@ -396,6 +396,8 @@ class Frontend:
         self._pending: dict[str, tuple[FunctionInfo, FunctionAnalysis, ast.FunctionDef]] = {}
         self._defined: dict[str, list[str]] = {}
         self._failed: dict[str, str] = {}
+        #: Every function `build` was given, for a method lowered again narrowed.
+        self.sources: dict[str, tuple[FunctionInfo, FunctionAnalysis, ast.FunctionDef]] = {}
 
     def build(
         self, functions: dict[str, tuple[FunctionInfo, FunctionAnalysis, ast.FunctionDef]]
