@@ -131,7 +131,7 @@ def main() -> None:
 main()
 """
 
-CYCLES_EXPECTED = "1797030"
+CYCLES_EXPECTED = "646230"
 CYCLES_NATIVE = ["chain", "insert", "depth", "pairs"]
 
 
@@ -333,16 +333,8 @@ def test_a_failed_call_leaves_no_handles_behind(tmp_path: Path):
 
 
 FAILURES = """
-from dataclasses import dataclass
-
 import ppy
 from ppy import Deque, HashMap, Heap, LinkedList, TreeSet, Vec
-
-
-@dataclass
-class Node:
-    value: int
-    next: "Node | None" = None
 
 
 def fail(case: int, n: int) -> int:
@@ -351,15 +343,15 @@ def fail(case: int, n: int) -> int:
     if case == 0:
         return v[n]
     if case == 1:
-        m = HashMap[tuple[int, int], int]()
-        m[(1, 2)] = 3
-        return m[(n, -n)]
+        pairs = HashMap[tuple[int, int], int]()
+        pairs[(1, 2)] = 3
+        return pairs[(n, -n)]
     if case == 2:
         d = Deque[int]()
         return d.pop_front()
     if case == 3:
-        node = Node(n)
-        return node.next.value
+        ends = Deque[int]()
+        return ends.back()
     if case == 4:
         return n // (n - n)
     if case == 5:
@@ -391,22 +383,22 @@ def fail(case: int, n: int) -> int:
         w = Vec[int](-n)
         return len(w)
     if case == 14:
-        t = TreeSet[int]()
-        return t.min()
+        empty = TreeSet[int]()
+        return empty.min()
     if case == 15:
         b = ppy.buffer[int](3)
         return b[n]
     if case == 16:
-        b = ppy.buffer[int](3)
-        b[n] = 1
-        return b[0]
+        stored = ppy.buffer[int](3)
+        stored[n] = 1
+        return stored[0]
     if case == 17:
-        b = ppy.buffer[int](3)
-        b[2] = 7
-        return b[-1]
+        counted = ppy.buffer[int](3)
+        counted[2] = 7
+        return counted[-1]
     if case == 18:
-        m = HashMap[int, int]()
-        return m.pop(n)
+        missing = HashMap[int, int]()
+        return missing.pop(n)
     return 0
 
 

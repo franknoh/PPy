@@ -355,6 +355,13 @@ def _module_shape(
                 continue
             if names == "dataclasses" and set(listed) <= {"dataclass"}:
                 continue
+            # `gc.collect()` is the collections runtime's collector natively.
+            if (
+                isinstance(statement, ast.Import)
+                and listed == ["gc"]
+                and not statement.names[0].asname
+            ):
+                continue
             if project_modules and all(
                 (binding := symbols.imports.get(alias.asname or alias.name.split(".")[0]))
                 is not None
