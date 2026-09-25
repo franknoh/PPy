@@ -5452,6 +5452,10 @@ class _Checker:
             base = T.strip_literal(members[0]) if len(members) == 1 else base
         if not isinstance(base, T.Instance):
             return False
+        if base.name == "list" and len(base.args) == 1 and T.strip_literal(base.args[0]) == T.STR:
+            # A list of strings is a handle natively too, passed between
+            # native functions and never across the boundary.
+            return True
         info = self.project.classes.get(base.name)
         return C.is_collection(base) or (info is not None and not info.is_pydantic)
 
