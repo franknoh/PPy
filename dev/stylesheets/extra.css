@@ -16,6 +16,8 @@
   --ppy-code-block-bg: hsl(0 0% 97%);
   --ppy-code-bg: hsl(0 0% 95%);
   --ppy-radius: 0.25rem;
+  /* Python's yellow is too pale on white for the one yellow word; this is its darker edge. */
+  --ppy-hero-yellow: hsl(46 100% 50%);
 }
 
 [data-md-color-scheme="slate"] {
@@ -33,6 +35,7 @@
   --ppy-code-block-bg: hsl(0 0% 5%);
   --ppy-code-bg: hsl(0 0% 10%);
   --md-hue: 216;
+  --ppy-hero-yellow: var(--ppy-yellow);
 }
 
 [data-md-color-scheme="default"],
@@ -273,6 +276,9 @@
   margin: 0;
   color: var(--ppy-blue);
 }
+.md-typeset .ppy-hero h1 .ppy-y {
+  color: var(--ppy-hero-yellow);
+}
 .md-typeset .ppy-hero h1 .headerlink {
   display: none;
 }
@@ -336,38 +342,40 @@
   color: var(--ppy-text-1);
 }
 
-/* Syntax colors: blue for the language, amber for literals, grays for the rest. */
+/* Syntax colors: GitHub's light and dark themes, as VitePress uses them. */
 [data-md-color-scheme="default"] {
-  --md-code-hl-keyword-color: hsl(207 60% 38%);
-  --md-code-hl-builtin-color: hsl(207 60% 38%);
-  --md-code-hl-string-color: hsl(36 85% 32%);
-  --md-code-hl-number-color: hsl(36 85% 32%);
-  --md-code-hl-constant-color: hsl(36 85% 32%);
-  --md-code-hl-special-color: hsl(36 85% 32%);
-  --md-code-hl-function-color: hsl(0 0% 8%);
-  --md-code-hl-name-color: hsl(0 0% 12%);
-  --md-code-hl-variable-color: hsl(0 0% 12%);
-  --md-code-hl-operator-color: hsl(216 6% 40%);
-  --md-code-hl-punctuation-color: hsl(216 6% 40%);
-  --md-code-hl-comment-color: hsl(216 6% 52%);
-  --md-code-hl-generic-color: hsl(216 6% 40%);
+  --ppy-hl-decorator: #8250df;
+  --md-code-hl-keyword-color: #cf222e;
+  --md-code-hl-operator-color: #cf222e;
+  --md-code-hl-string-color: #0a3069;
+  --md-code-hl-special-color: #0a3069;
+  --md-code-hl-number-color: #0550ae;
+  --md-code-hl-constant-color: #0550ae;
+  --md-code-hl-function-color: #8250df;
+  --md-code-hl-variable-color: #953800;
+  --md-code-hl-name-color: #1f2328;
+  --md-code-hl-punctuation-color: #1f2328;
+  --md-code-hl-generic-color: #1f2328;
+  --md-code-hl-comment-color: #6e7781;
 }
 [data-md-color-scheme="slate"] {
-  --md-code-hl-keyword-color: hsl(207 70% 68%);
-  --md-code-hl-builtin-color: hsl(207 70% 68%);
-  --md-code-hl-string-color: hsl(47 100% 64%);
-  --md-code-hl-number-color: hsl(47 100% 64%);
-  --md-code-hl-constant-color: hsl(47 100% 64%);
-  --md-code-hl-special-color: hsl(47 100% 64%);
-  --md-code-hl-function-color: hsl(216 10% 94%);
-  --md-code-hl-name-color: hsl(216 10% 86%);
-  --md-code-hl-variable-color: hsl(216 10% 86%);
-  --md-code-hl-operator-color: hsl(216 6% 60%);
-  --md-code-hl-punctuation-color: hsl(216 6% 60%);
-  --md-code-hl-comment-color: hsl(216 6% 46%);
-  --md-code-hl-generic-color: hsl(216 6% 60%);
+  --ppy-hl-decorator: #d2a8ff;
+  --md-code-hl-keyword-color: #ff7b72;
+  --md-code-hl-operator-color: #ff7b72;
+  --md-code-hl-string-color: #a5d6ff;
+  --md-code-hl-special-color: #a5d6ff;
+  --md-code-hl-number-color: #79c0ff;
+  --md-code-hl-constant-color: #79c0ff;
+  --md-code-hl-function-color: #d2a8ff;
+  --md-code-hl-variable-color: #ffa657;
+  --md-code-hl-name-color: #e6edf3;
+  --md-code-hl-punctuation-color: #e6edf3;
+  --md-code-hl-generic-color: #e6edf3;
+  --md-code-hl-comment-color: #8b949e;
 }
-.md-typeset .highlight .nf,
-.md-typeset .highlight .nc {
-  font-weight: 600;
+.md-typeset .highlight .nd {
+  color: var(--ppy-hl-decorator);
+}
+.md-typeset .highlight .kc {
+  color: var(--md-code-hl-constant-color);
 }
