@@ -100,11 +100,21 @@ or a collection holding it keeps one, and it is freed when the last goes,
 together with what it holds. The tests run the emitted C of object programs
 under AddressSanitizer with leak detection.
 
-Reference counting does not free cycles. A doubly linked list, or a tree
-whose nodes point back at their parents, is never freed natively: a
-standalone binary lets the process exit free it, and under `ppy run` it stays
-allocated. Singly linked structures, trees without parent links, and graphs
-kept as adjacency lists are freed as usual.
+Reference counting alone does not free a cycle: a doubly linked list, or a
+tree whose nodes point back at their parents. A collector does. Every
+object and collection is on a list of what its thread made. When the
+objects made since the last collection that can hold others number 700 more
+than those that survived it, the collector counts the references each one
+gets from the others on the list. What still has a reference from
+outside (a name, a native frame) is kept, with everything it reaches. What
+is left is held only by itself, and is freed. This is the method CPython's
+`gc` uses.
+
+`gc.collect()` in native code runs the collector at once. CPython's count
+is of its own objects, so native code does not return it: the call lowers as
+a statement, and `n = gc.collect()` keeps the function in Python. A
+standalone binary also collects once before it exits, which is why its
+leak check passes.
 
 ## The Python boundary
 
@@ -122,6 +132,5 @@ return numbers, and make their objects inside.
   without them stays in Python.
 - Reading a field that holds a reference, off an object made in the same
   expression (`make().child`), is not lowered.
-- Reference cycles are not freed, as described above.
 
 Examples: [Collections](../howto/47_collections.md).

@@ -61,6 +61,9 @@ FAMILY = {
 #: `floor`, `ceiling`, `lower`, `higher`, as `ppy_tree_bound` numbers them.
 _BOUNDS = {"floor": 0, "ceiling": 1, "lower": 2, "higher": 3}
 
+#: How the reference says a bound is missing: `KeyError('no key at most 5')`.
+_BOUND_WORDS = {"floor": "at most", "ceiling": "at least", "lower": "below", "higher": "above"}
+
 
 @dataclass(frozen=True, slots=True)
 class Shape:
@@ -453,7 +456,11 @@ class CollectionLowering:
         shape = self._object_of(node.func.value)
         assert shape is not None
         handle, owned = self._handle(node.func.value)
-        self._require(self._present(handle), f"`None` has no attribute `{node.func.attr}`")
+        self._require(
+            self._present(handle),
+            f"`None` has no attribute `{node.func.attr}`",
+            f"AttributeError: 'NoneType' object has no attribute '{node.func.attr}'",
+        )
         result = self._method_call(
             shape, node.func.attr, handle, node.args, node.keywords, discard=discard
         )
@@ -466,7 +473,11 @@ class CollectionLowering:
         assert shape is not None
         offset, field_shape = self._field(shape, node.attr)
         handle, owned = self._handle(node.value)
-        self._require(self._present(handle), f"`None` has no attribute `{node.attr}`")
+        self._require(
+            self._present(handle),
+            f"`None` has no attribute `{node.attr}`",
+            f"AttributeError: 'NoneType' object has no attribute '{node.attr}'",
+        )
         value = self._read(self._field_address(handle, offset), field_shape)
         if owned:
             if field_shape.reference:
@@ -480,7 +491,11 @@ class CollectionLowering:
         assert shape is not None
         offset, field_shape = self._field(shape, target.attr)
         handle, owned = self._handle(target.value)
-        self._require(self._present(handle), f"`None` has no attribute `{target.attr}`")
+        self._require(
+            self._present(handle),
+            f"`None` has no attribute `{target.attr}`",
+            f"AttributeError: 'NoneType' object has no attribute '{target.attr}'",
+        )
         self._store_into(self._field_address(handle, offset), field_shape, value, fresh=False)
         self._done_with(handle, owned)
 
@@ -513,10 +528,17 @@ class CollectionLowering:
         info = self._class_info(shape)
         handle, owned = self._handle(node)
         if "__bool__" in info.methods or "__len__" in info.methods:
+            # `None` is false, as in Python; only an object is asked.
             attr = "__bool__" if "__bool__" in info.methods else "__len__"
-            self._require(self._present(handle), "`None` has no length")
+            present = self._present(handle)
+            asked = self._block("truth.asked")  # type: ignore[attr-defined]
+            done = self._block("truth.end")  # type: ignore[attr-defined]
+            truth = done.add_argument(BOOL, "truth")
+            core.cond_br(self.b, present, Successor(asked), Successor(done, [present]))
+            self.b.at_end(asked)  # type: ignore[attr-defined]
             found = self._method_call(shape, attr, handle, [], [])
-            truth = self._truth(found)  # type: ignore[attr-defined]
+            core.br(self.b, Successor(done, [self._truth(found)]))  # type: ignore[attr-defined]
+            self.b.at_end(done)  # type: ignore[attr-defined]
         else:
             truth = self._present(handle)
         self._done_with(handle, owned)
@@ -529,7 +551,11 @@ class CollectionLowering:
         if shape is None:
             return None
         handle, owned = self._handle(node)
-        self._require(self._present(handle), "`None` has no length")
+        self._require(
+            self._present(handle),
+            "`None` has no length",
+            "TypeError: object of type 'NoneType' has no len()",
+        )
         found = self._method_call(shape, "__len__", handle, [], [])
         self._done_with(handle, owned)
         return found
@@ -613,9 +639,29 @@ class CollectionLowering:
     def _release(self, handle: Value) -> None:
         self._rt("ppy_coll_release", (handle,), None)
 
-    def _require(self, condition: Value, message: str) -> None:
-        """A check CPython would raise for: native code falls back, a binary stops."""
-        core.guard(self.b, condition, "bounds", message)
+    def _require(
+        self, condition: Value, message: str, raises: str = "", values: tuple[Value, ...] = ()
+    ) -> None:
+        """A check CPython would raise for: native code falls back, a binary stops.
+
+        `raises` is what CPython's traceback ends with there, `{0}` and on
+        standing for `values`; a standalone binary prints it.
+        """
+        if not self.frontend.standalone:  # type: ignore[attr-defined]
+            values = ()
+        core.guard(self.b, condition, "bounds", message, raises=raises, values=values)
+
+    def _key_report(self, kind: Kind, address: Value) -> tuple[str, tuple[Value, ...]]:
+        """A key as `str()` spells it, `5` or `(1, 2)`, and the words it reads."""
+        key = kind.key
+        assert key is not None
+        count = len(_kinds(key))
+        values = tuple(self._read_word(address, i, "int") for i in range(count))
+        if key.kind != "tuple":
+            return "{0}", values
+        if count == 1:
+            return "({0},)", values
+        return "(" + ", ".join(f"{{{i}}}" for i in range(count)) + ")", values
 
     def _found(self, index: Value) -> Value:
         return core.cmp(self.b, "ge", index, self._word(0))
@@ -755,7 +801,12 @@ class CollectionLowering:
             count = None
             if node.args:
                 count = self._coerce(self._expr(node.args[0]), "int")  # type: ignore[attr-defined]
-                self._require(core.cmp(self.b, "ge", count, self._word(0)), "a negative size")
+                self._require(
+                    core.cmp(self.b, "ge", count, self._word(0)),
+                    "a negative size",
+                    "ValueError: a Vec cannot start with {0} elements",
+                    (count,),
+                )
             return self._new(kind, count), True
         if isinstance(node, ast.Subscript):
             value = self._item(node.value, node.slice)
@@ -916,7 +967,12 @@ class CollectionLowering:
                 core.cmp(self.b, "ge", position, self._word(0)),
                 core.cmp(self.b, "lt", position, length),
             )
-            self._require(inside, "index out of range")
+            self._require(
+                inside,
+                "index out of range",
+                "IndexError: index {0} is out of range for length {1}",
+                (position, length),
+            )
             address = self._rt("ppy_seq_at", (handle, position), HANDLE)
         elif kind.name in {"HashMap", "TreeMap"}:
             key = self._key(kind, index)
@@ -924,7 +980,8 @@ class CollectionLowering:
                 entry = self._rt(f"ppy_{kind.family}_put", (handle, key))
             else:
                 entry = self._rt(f"ppy_{kind.family}_find", (handle, key))
-                self._require(self._found(entry), "key not found")
+                spelled, words = self._key_report(kind, key)
+                self._require(self._found(entry), "key not found", f"KeyError: {spelled}", words)
             address = self._rt(f"ppy_{kind.family}_value_at", (handle, entry), HANDLE)
         else:
             raise Unsupported(f"a {kind.name} has no index")
@@ -958,8 +1015,12 @@ class CollectionLowering:
 
     def _nonempty(self, kind: Kind, handle: Value, what: str) -> None:
         length = self._rt("ppy_coll_len", (handle,))
+        # The reference's words: a removal is "from", a look is "of" or "at".
+        joined = "from" if what.startswith("pop") else "at" if what == "peek" else "of"
         self._require(
-            core.cmp(self.b, "gt", length, self._word(0)), f"{what} of an empty {kind.name}"
+            core.cmp(self.b, "gt", length, self._word(0)),
+            f"{what} of an empty {kind.name}",
+            f"IndexError: {what} {joined} an empty {kind.name}",
         )
 
     def _sequence_method(
@@ -1044,7 +1105,12 @@ class CollectionLowering:
             return None
         node = self._coerce(self._expr(arguments[0]), "int")  # type: ignore[attr-defined]
         valid = self._rt("ppy_list_valid", (handle, node))
-        self._require(core.cmp(self.b, "ne", valid, self._word(0)), "a node not in the list")
+        self._require(
+            core.cmp(self.b, "ne", valid, self._word(0)),
+            "a node not in the list",
+            "IndexError: node {0} is not in the list",
+            (node,),
+        )
         if attr in {"insert_after", "insert_before"}:
             other = self._rt(
                 "ppy_list_step", (handle, node, self._word(1 if attr == "insert_after" else 0))
@@ -1087,7 +1153,13 @@ class CollectionLowering:
         key = self._key(kind, arguments[0])
         if attr in _BOUNDS and family == "tree":
             node = self._rt("ppy_tree_bound", (handle, key, self._word(_BOUNDS[attr])))
-            self._require(self._found(node), f"no key for `{attr}`")
+            spelled, words = self._key_report(kind, key)
+            self._require(
+                self._found(node),
+                f"no key for `{attr}`",
+                f"KeyError: 'no key {_BOUND_WORDS[attr]} {spelled}'",
+                words,
+            )
             return self._read(self._rt("ppy_tree_key_at", (handle, node), HANDLE), key_shape)
         if attr == "add":
             self._rt(f"ppy_{family}_put", (handle, key))
@@ -1105,7 +1177,8 @@ class CollectionLowering:
             return core.select(self.b, present, value, default)
         if attr in {"pop", "remove"}:
             removed = self._rt(f"ppy_{family}_remove", (handle, key))
-            self._require(self._found(removed), "key not found")
+            spelled, words = self._key_report(kind, key)
+            self._require(self._found(removed), "key not found", f"KeyError: {spelled}", words)
             if attr == "pop" and shape is not None:
                 return self._read(
                     self._rt(f"ppy_{family}_value_at", (handle, removed), HANDLE), shape
@@ -1155,7 +1228,9 @@ class CollectionLowering:
         if version is not None:
             now = self._rt("ppy_coll_field", (current, self._word(6)))
             self._require(
-                core.cmp(self.b, "eq", now, version), f"{kind.name} changed during iteration"
+                core.cmp(self.b, "eq", now, version),
+                f"{kind.name} changed during iteration",
+                f"RuntimeError: {kind.name} changed during iteration",
             )
         at = core.load(self.b, cursor)
         if family == "seq":

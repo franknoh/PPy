@@ -41,18 +41,54 @@ _ALLOC = """{
     if (count < 0) {
         /* CPython raises ValueError here; a standalone binary has no
          * exception, so it says what happened and stops. */
-        fputs("ppy: a buffer cannot hold fewer than no elements\\n", stderr);
+        fflush(stdout);
+        fputs("ValueError: a buffer cannot hold fewer than no elements\\n", stderr);
         exit(1);
     }
     void *room = calloc(count > 0 ? (size_t)count : 1, (size_t)width);
     if (room == NULL) {
-        fputs("ppy: out of memory\\n", stderr);
+        fflush(stdout);
+        fputs("MemoryError\\n", stderr);
         exit(1);
     }
     return (int8_t *)room;
 }"""
 
+#: A failed guard in a program with no Python under it: the line CPython's
+#: traceback would end with, `{0}` and on filled in, and CPython's status.
+_RAISE = """{
+    int64_t values[4];
+    values[0] = a;
+    values[1] = b;
+    values[2] = c;
+    values[3] = d;
+    fflush(stdout);
+    for (const char *at = text; *at != '\\0'; at++) {
+        if (at[0] == '{' && at[1] >= '0' && at[1] < '0' + count && at[2] == '}') {
+            fprintf(stderr, "%" PRId64, values[at[1] - '0']);
+            at += 2;
+            continue;
+        }
+        fputc(*at, stderr);
+    }
+    fputc('\\n', stderr);
+    exit(1);
+}"""
+
 SHIMS: dict[str, Shim] = {
+    "ppy_rt_raise": Shim(
+        "void",
+        (
+            "const char *text",
+            "int64_t count",
+            "int64_t a",
+            "int64_t b",
+            "int64_t c",
+            "int64_t d",
+        ),
+        _RAISE,
+        ("inttypes.h", "stdio.h", "stdlib.h"),
+    ),
     "ppy_rt_print_i64": Shim(
         "void", ("int64_t value",), '{ printf("%" PRId64, value); }', ("inttypes.h", "stdio.h")
     ),
@@ -98,6 +134,10 @@ _COMMENTS = {
         "/* Where Python would raise, a standalone binary says what happened and\n"
         " * stops: there is no exception to raise and no caller to catch it. */\n"
     ),
+    "ppy_rt_raise": (
+        "/* A failed guard, where there is no Python to fall back to: the line\n"
+        " * CPython's traceback would end with, and CPython's exit status. */\n"
+    ),
     "ppy_rt_alloc": (
         "/* A buffer a standalone program makes for itself. There is no interpreter\n"
         " * to own it, and a program that exits is the only lifetime that matters. */\n"
@@ -120,18 +160,23 @@ def support_source() -> str:
     return "\n".join(lines).rstrip("\n") + "\n"
 
 
-def program_main(symbol: str, fputs: str = "fputs") -> str:
+def program_main(symbol: str, fputs: str = "fputs", *, collect: bool = False) -> str:
     """A `main` that runs the program's entry and fails where a guard fails.
 
-    There is no Python to fall back to, so a status other than success is
-    the process's exit, said once on standard error.
+    A guard that knows what CPython would raise says so and exits where it
+    fails (`ppy_rt_raise`). One that does not reaches here with a status,
+    which is said once on standard error and ends the process with
+    CPython's status for an uncaught exception.
     """
+    # The cycles still waiting for a collection are freed before the process
+    # ends, so a leak checker sees only what nothing can free.
+    collected = "    ppy_coll_collect();\n" if collect else ""
     return f"""int main(void) {{
     int64_t out = 0;
     int32_t status = {symbol}(&out);
-    if (status != 0) {{
-        {fputs}("ppy: a native guard failed and there is no Python to fall back to\\n", stderr);
-        return 70;
+{collected}    if (status != 0) {{
+        {fputs}("RuntimeError: a native guard failed with no Python to fall back to\\n", stderr);
+        return 1;
     }}
     return 0;
 }}
