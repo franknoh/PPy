@@ -22,7 +22,8 @@ import hashlib
 from dataclasses import dataclass
 
 from ..analysis import types as T
-from ..analysis.symbols import ClassInfo
+from ..analysis.checker import receiver_bindings
+from ..analysis.symbols import ClassInfo, dataclass_keyword
 from ..backend.llvm.lowering import Unsupported
 from ..driver.ir_pipeline import object_chain
 from ..ir import (
@@ -342,7 +343,14 @@ class CollectionLowering:
         if not isinstance(kind, Shape) or kind.kind != "object":
             return False
         wanted = parameter.class_name  # type: ignore[attr-defined]
-        return bool(wanted) and self._subclass_of(kind.record, wanted) and not kind.class_args
+        if not wanted or not self._subclass_of(kind.record, wanted):
+            return False
+        # The object as the parameter's class sees it: a `Counted[int]` or an
+        # `IntStack` is a `Stack[int]`.
+        every = self._bindings(kind)
+        base = self._class_named(wanted)
+        arguments = tuple(every.get(param, param) for param in base.type_params)
+        return Shape("object", record=wanted, class_args=arguments).spelled == element
 
     def _reference_of(self, node: ast.expr) -> Kind | Shape | None:
         """A collection, a string, or an object: what native code holds `node` by handle as."""
@@ -387,6 +395,42 @@ class CollectionLowering:
             if qualname in info.mro and object_chain(info, self._module_classes()) is not None
         ]
 
+    def _bindings(self, shape: Shape) -> dict[T.TypeVar_, T.Type]:
+        """What every type parameter along an object's class and its bases is:
+        `Stack`'s `T` is `int` in a `Counted[int]`, where `Counted[T](Stack[T])`,
+        and in an `IntStack(Stack[int])`."""
+        info = self._class_info(shape)
+        return receiver_bindings(
+            info, T.Instance(info.qualname, shape.class_args), self._module_classes()
+        )
+
+    def _as_subclass(self, shape: Shape, sub: ClassInfo) -> Shape | None:
+        """An instance of `shape`'s class that is a `sub`, with `sub`'s own class
+        arguments worked out from `shape`'s: `Counted[int]` for a `Stack[int]`
+        that is a `Counted`. None where `sub` cannot be one (an `IntStack` is no
+        `Stack[float]`); unsupported where its arguments are not all told."""
+        if not sub.type_params and not shape.class_args:
+            return Shape("object", record=sub.qualname)
+        info = self._class_info(shape)
+        spelled = receiver_bindings(
+            sub, T.Instance(sub.qualname, tuple(sub.type_params)), self._module_classes()
+        )
+        told: dict[T.TypeVar_, T.Type] = {}
+        for param, actual in zip(info.type_params, shape.class_args, strict=False):
+            said = spelled.get(param, param)
+            if isinstance(said, T.TypeVar_) and said in sub.type_params:
+                if told.setdefault(said, actual) != actual:
+                    return None
+            elif said != actual:
+                return None
+        if any(param not in told for param in sub.type_params):
+            raise Unsupported(f"`{sub.name}`'s type arguments do not follow from `{info.name}`'s")
+        return Shape(
+            "object",
+            record=sub.qualname,
+            class_args=tuple(told[param] for param in sub.type_params),
+        )
+
     def _resolve(self, info: ClassInfo, attr: str) -> ClassInfo | None:
         """The class whose `attr` an instance of `info` runs: the first along its bases."""
         chain = object_chain(info, self._module_classes()) or [info]
@@ -405,7 +449,7 @@ class CollectionLowering:
         if found is not None:
             return found
         info = self._class_info(shape)
-        bindings = dict(zip(info.type_params, shape.class_args, strict=False))
+        bindings = self._bindings(shape)
         fields: dict[str, tuple[int, Shape]] = {}
         offset = floats = handles = 0
         for owner in self._chain(shape):
@@ -524,7 +568,12 @@ class CollectionLowering:
         method = info.methods[attr]
         frontend = self.frontend
         if info.type_params:
-            bindings = dict(zip(info.type_params, shape.class_args, strict=True))
+            # The method's own class's parameters, as the object's class and
+            # the bases between them bind them.
+            every = self._bindings(shape)
+            if any(param not in every for param in info.type_params):
+                raise Unsupported(f"`{info.name}`'s type arguments are not known here")
+            bindings = {param: every[param] for param in info.type_params}
             found = frontend.instantiate(method.qualname, (), bindings)  # type: ignore[attr-defined]
         else:
             found = frontend.declared.get(method.qualname)  # type: ignore[attr-defined]
@@ -605,7 +654,9 @@ class CollectionLowering:
         tag = self._tag(receiver)
         done = self._block(f"{attr}.done")  # type: ignore[attr-defined]
         for owner, tags in overrides:
-            other = Shape("object", record=owner.qualname, class_args=shape.class_args)
+            other = self._as_subclass(shape, owner)
+            if other is None:
+                continue
             implementation, _signature, _ = self._method(other, attr)
             if (
                 [t for _, t in implementation.params[1:]]
@@ -730,7 +781,11 @@ class CollectionLowering:
             if func.attr == "__init__" and not node.args and not node.keywords:
                 return self._word(0)
             raise Unsupported(f"no base of `{current.name}` has `{func.attr}`")
-        base = Shape("object", record=found.qualname, class_args=held.class_args)
+        # The base's own arguments, as this class gives them: `Stack[int]` for
+        # a `Counted[int]` or an `IntStack`.
+        every = self._bindings(held)
+        arguments = tuple(every.get(param, param) for param in found.type_params)
+        base = Shape("object", record=found.qualname, class_args=arguments)
         return self._method_call(
             base, func.attr, handle, node.args, node.keywords, discard=discard, exact=True
         )
@@ -1047,6 +1102,16 @@ class CollectionLowering:
         """One call into the collections runtime."""
         results = (result,) if result is not None else ()
         found = core.call_extern(self.b, symbol, arguments, results)
+        if symbol.startswith(_CALLS_BACK) and self._calls_back():
+            # A method the runtime called back may have failed a guard; the
+            # runtime can only say so, and this is where the code falls back.
+            ok = core.call_extern(self.b, "ppy_coll_callback_ok", (), (I64,)).results[0]
+            core.guard(
+                self.b,
+                core.cmp(self.b, "ne", ok, self._word(0)),
+                "contract",
+                "a method the collection called back failed a guard",
+            )
         return found.results[0] if results else core.const(self.b, 0, I64)
 
     def _word(self, value: int) -> Value:
@@ -1090,8 +1155,8 @@ class CollectionLowering:
         key = kind.key
         assert key is not None
         count = len(_kinds(key))
-        if key.kind == "str":
-            # A string's text is not a word the message can carry.
+        if key.kind in {"str", "object"}:
+            # A string's text, or an object's repr, is not a word the message can carry.
             return "", ()
         values = tuple(self._read_word(address, i, "int") for i in range(count))
         if key.kind != "tuple":
@@ -1119,6 +1184,7 @@ class CollectionLowering:
             made = self._rt("ppy_seq_new", (count or self._word(0), words, floats, handles), HANDLE)
             if count is not None and value is not None and value.kind in {"collection", "str"}:
                 self._fill_new(made, count, value)
+            self._install_methods(made, kind)
             return made
         if kind.family == "list":
             return self._rt("ppy_list_new", (words, floats, handles), HANDLE)
@@ -1127,7 +1193,117 @@ class CollectionLowering:
         assert kind.key is not None
         if kind.key.text:
             self._rt("ppy_coll_text_keys", (made, self._word(kind.key.text)), None)
+        self._install_methods(made, kind)
         return made
+
+    # -- the program's own order and hash ---------------------------------------
+
+    def _install_methods(self, made: Value, kind: Kind) -> None:
+        """A collection of objects orders, hashes, and compares them as their class
+        says: `__lt__` for a sort, a heap, and a tree's keys; `__hash__` and
+        `__eq__` for a hash map's keys. The runtime calls the compiled methods
+        back; a class without them is ordered by nothing and hashed by identity."""
+        keyed = kind.family in {"map", "tree"}
+        element = kind.key if keyed else kind.value
+        if kind.family == "map" and element is not None and element.kind == "record":
+            # A value class is copied, so it has no identity to hash by: only a
+            # dataclass that hashes its fields (`frozen=True`) is a key natively.
+            node = self._class_named(element.record).node
+            frozen = dataclass_keyword(node, "frozen") is True
+            if not (frozen or dataclass_keyword(node, "unsafe_hash") is True):
+                raise Unsupported(
+                    f"`{element.record}` is hashed by identity, which a value has not"
+                )
+            if any(part == "float" for part in element.parts):
+                # `0.0 == -0.0` and NaN: equal floats are not always equal words.
+                raise Unsupported(
+                    f"`{element.record}` hashes a float, whose words do not decide `==`"
+                )
+        if element is None or element.kind != "object":
+            return
+        if kind.family == "tree" or kind.name in {"Vec", "Heap", "MaxHeap"}:
+            less = self._callback(element, "__lt__", 2)
+            if less is not None:
+                self._rt("ppy_coll_order_by", (made, less), None)
+            elif kind.family == "tree" or kind.name != "Vec":
+                raise Unsupported(
+                    f"a {kind.name} orders by `__lt__`, which `{element.record}` has not"
+                )
+        if keyed:
+            hashed = equal = None
+            if kind.family == "map":
+                # A `__hash__` without `__eq__` compares by identity; an `__eq__`
+                # without `__hash__` is unhashable, which the checker refuses.
+                hashed = self._callback(element, "__hash__", 1)
+                equal = self._callback(element, "__eq__", 2)
+                if equal is not None and hashed is None:
+                    raise Unsupported(f"`{element.record}` defines `__eq__` and no `__hash__`")
+            nothing = self._word(0)
+            self._rt(
+                "ppy_coll_hash_by",
+                (made, hashed or nothing, equal or nothing, self._word(1)),
+                None,
+            )
+
+    def _callback(self, shape: Shape, attr: str, arity: int) -> Value | None:
+        """The address of `attr`'s compiled method, which the runtime calls with
+        handles, or None where the class does not define it.
+
+        A method a subclass overrides would need the object's class to choose
+        it, which a callback cannot: that stays in Python."""
+        info = self._class_info(shape)
+        if self._resolve(info, attr) is None:
+            return None
+        if self._overrides(shape, attr):
+            raise Unsupported(f"`{attr}` is overridden below `{shape.record}`")
+        try:
+            function, signature, _qualname = self._method(shape, attr)
+        except Unsupported:
+            # `def __eq__(self, other: object)`: `other` is one of the keys.
+            owner = self._resolve(info, attr)
+            if owner is None:
+                raise
+            method = owner.methods[attr]
+            if attr != "__eq__" or len(method.params) != 2 or shape.class_args:
+                raise
+            found = self.frontend.narrowed(  # type: ignore[attr-defined]
+                method.qualname, method.params[1].name, T.instance(shape.record)
+            )
+            if found is None:
+                raise
+            function, signature = found
+        parameters = signature.parameters  # type: ignore[attr-defined]
+        returns = signature.returns  # type: ignore[attr-defined]
+        if len(parameters) != arity or not all(p.is_handle for p in parameters):
+            raise Unsupported(f"`{shape.record}.{attr}` takes its own class natively")
+        if returns not in {("i8",), ("i64",)}:
+            raise Unsupported(f"`{shape.record}.{attr}` answers a `bool` or an `int` natively")
+        return core.callback(self.b, function.name)  # type: ignore[attr-defined]
+
+    def _orders(self, shape: Shape) -> bool:
+        """Whether `<` orders `shape` natively: the runtime's words, or an object
+        whose class has `__lt__`, which the collection calls back."""
+        if shape.comparable:
+            return True
+        return (
+            shape.kind == "object" and self._resolve(self._class_info(shape), "__lt__") is not None
+        )
+
+    def _calls_back(self) -> bool:
+        """Whether some class of the module orders, hashes, or compares its
+        instances itself, which the runtime may call: then each call that may
+        is followed by asking whether one failed."""
+        cached = getattr(self.frontend, "_calls_back", None)
+        if cached is None:
+            classes = self.frontend.analysis.symbols.classes  # type: ignore[attr-defined]
+            cached = any(
+                fields == () and _COMPARES & set(info.methods)
+                for qualname, fields in self.frontend.layouts.items()  # type: ignore[attr-defined]
+                for info in [classes.get(qualname) or classes.get(qualname.rpartition(".")[2])]
+                if info is not None
+            )
+            self.frontend._calls_back = cached  # type: ignore[attr-defined]
+        return cached
 
     def _fill_new(self, made: Value, count: Value, value: Shape) -> None:
         """`Vec[Vec[int]](n)`: each of the `n` slots its own new, empty collection
@@ -1638,7 +1814,7 @@ class CollectionLowering:
             self._store_into(address, shape, arguments[0], fresh=True)
             return self._word(0)
         if heap is not None and attr == "push":
-            if not shape.comparable:
+            if not self._orders(shape):
                 raise Unsupported(f"a {kind.name} orders its elements, and these have no order")
             self._store_into(
                 self._rt("ppy_coll_scratch", (handle,), HANDLE), shape, arguments[0], fresh=True
@@ -1647,7 +1823,7 @@ class CollectionLowering:
         if attr == "clear":
             return self._rt("ppy_seq_clear", (handle,), None)
         if attr == "sort" and kind.name == "Vec":
-            if not shape.comparable:
+            if not self._orders(shape):
                 raise Unsupported("these elements have no order to sort by")
             return self._rt("ppy_seq_sort", (handle,), None)
         if attr == "reverse" and kind.name == "Vec":
@@ -1847,7 +2023,14 @@ _BINARY_DUNDERS = {
 }
 
 #: The methods whose collection result the caller owns: taken out, not read in place.
-_OWNED_RESULTS = {"pop": True, "pop_front": True, "pop_back": True, "remove": True}
+_OWNED_RESULTS = {
+    "pop": True,
+    "pop_front": True,
+    "pop_back": True,
+    "remove": True,
+    "pop_min": True,
+    "pop_max": True,
+}
 
 
 def _copies_before_writes(function: ast.AST, record: str, type_of) -> bool:  # type: ignore[no-untyped-def]
@@ -1921,6 +2104,23 @@ def _related(held: Kind | Shape, kind: Kind | Shape) -> bool:
 
 def _kinds(shape: Shape) -> tuple[str, ...]:
     return shape.parts if shape.kind in {"tuple", "record"} else (shape.kind,)
+
+
+#: The runtime calls that may call a class's `__lt__`, `__hash__`, or `__eq__`.
+_CALLS_BACK = (
+    "ppy_heap_",
+    "ppy_tree_",
+    "ppy_map_",
+    "ppy_set_",
+    "ppy_seq_sort",
+    "ppy_coll_find_key",
+    "ppy_coll_put_key",
+    "ppy_coll_update",
+    "ppy_coll_equal",
+)
+
+#: The methods of a class the runtime calls back.
+_COMPARES = frozenset({"__lt__", "__hash__", "__eq__"})
 
 
 def _ordered(node: ast.ClassDef) -> bool:

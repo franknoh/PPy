@@ -34,7 +34,7 @@ from .effects import Effect, EffectSet
 from .env import Binding, Env
 from .refinements import Facts, IntRange, width_range
 from .results import FunctionAnalysis, LoweringNote, ModuleAnalysis, ProjectAnalysis
-from .symbols import ClassInfo, FunctionInfo, ModuleSymbols, ProjectSymbols
+from .symbols import ClassInfo, FunctionInfo, ModuleSymbols, ProjectSymbols, dataclass_keyword
 
 if TYPE_CHECKING:
     from ..plugins.base import CallResult, PluginRegistry
@@ -543,12 +543,34 @@ def _one_member(t: T.Type) -> T.Type:
     return base
 
 
-def _receiver_bindings(info: ClassInfo, base: T.Instance) -> dict[T.TypeVar_, T.Type]:
+def receiver_bindings(
+    info: ClassInfo, base: T.Instance, classes: dict[str, ClassInfo] | None = None
+) -> dict[T.TypeVar_, T.Type]:
     """What a generic class's parameters are for one instance: `T` is `int` in a
-    `Stack[int]`. An instance written without its arguments binds nothing."""
-    if not info.type_params or len(base.args) != len(info.type_params):
-        return {}
-    return dict(zip(info.type_params, base.args, strict=True))
+    `Stack[int]`. An instance written without its arguments binds nothing.
+
+    With `classes`, its generic bases' parameters are bound too, from what the
+    class gives them: in a `Counted[int]`, where `class Counted[T](Stack[T])`,
+    `Stack`'s `T` is `int` as well, and in an `IntStack(Stack[int])` it is
+    `int` with no argument written at all."""
+    found: dict[T.TypeVar_, T.Type] = {}
+    if info.type_params and len(base.args) == len(info.type_params):
+        found.update(zip(info.type_params, base.args, strict=True))
+    pending = [info]
+    seen: set[str] = set()
+    while classes is not None and pending:
+        current = pending.pop()
+        if current.qualname in seen:
+            continue
+        seen.add(current.qualname)
+        for name, args in current.base_args.items():
+            parent = classes.get(name)
+            if parent is None or len(parent.type_params) != len(args):
+                continue
+            for param, arg in zip(parent.type_params, args, strict=True):
+                found[param] = T.substitute(arg, found)
+            pending.append(parent)
+    return found
 
 
 def _collection_root(node: ast.expr) -> ast.expr:
@@ -1088,7 +1110,9 @@ class _Checker:
                 if info is not None:
                     declared = info.lookup(target.attr, self.project)
                     if declared is not None and not isinstance(declared[0], T.Callable_):
-                        return T.substitute(declared[0], _receiver_bindings(info, owner))
+                        return T.substitute(
+                            declared[0], receiver_bindings(info, owner, self.project.classes)
+                        )
         return None
 
     def _stmt_TypeAlias(self, node: ast.TypeAlias, env: Env) -> None:
@@ -1820,11 +1844,15 @@ class _Checker:
         if owner is None:
             return None
         for base in owner.base_names:
-            resolved = self.project.classes.get(base) or self.project.classes.get(
-                f"{owner.module}.{base}"
+            spelled = base.partition("[")[0]
+            resolved = self.project.classes.get(spelled) or self.project.classes.get(
+                f"{owner.module}.{spelled}"
             )
             if resolved is not None:
-                return resolved.instance()
+                # `class Counted[T](Stack[T])`: `super()` is a `Stack[T]`, in
+                # this class's `T`.
+                given = owner.base_args.get(resolved.qualname)
+                return resolved.instance(given) if given else resolved.instance()
         return None
 
     def _expr_BinOp(self, node: ast.BinOp, env: Env) -> Binding:
@@ -2653,7 +2681,7 @@ class _Checker:
         if isinstance(base, T.Instance):
             info = self.project.classes.get(base.name)
             if info is not None:
-                receiver = _receiver_bindings(info, base)
+                receiver = receiver_bindings(info, base, self.project.classes)
                 method = info.find_method(node.attr, self.project)
                 if method is not None:
                     self._effects = self._effects.add(Effect.READ_OBJECT)
@@ -3118,7 +3146,9 @@ class _Checker:
                 # `grid[i]` on a project class: its `__getitem__`.
                 self._calls.add(method.qualname)
                 self._effects = self._effects | method.effects
-                return Binding(T.substitute(method.ret, _receiver_bindings(info, base)))
+                return Binding(
+                    T.substitute(method.ret, receiver_bindings(info, base, self.project.classes))
+                )
         if isinstance(base, (T.AnyType, T.UnknownType)):
             if isinstance(base, T.DynamicType):
                 return Binding(T.DYNAMIC)
@@ -5025,10 +5055,13 @@ class _Checker:
             self._error("E1305", f"a `{canonical}` takes {wanted}", node)
             resolved = [T.UNKNOWN] * C.ARITY[canonical]
         keyed = canonical in C.KEYED
-        if keyed and not self._collection_key(resolved[0]):
+        tree = canonical in {"ppy.TreeMap", "ppy.TreeSet"}
+        if keyed and not self._collection_key(resolved[0], tree=tree):
+            classes = "an instance of a class with `__lt__`" if tree else "a hashable instance"
             self._error(
                 "E1305",
-                f"a `{canonical}` has `int`, `str`, or int-tuple keys, not `{resolved[0]}`",
+                f"a `{canonical}` key is an `int`, a `str`, a tuple of `int`, or {classes}, "
+                f"not `{resolved[0]}`",
                 node,
             )
         element = resolved[-1]
@@ -5108,17 +5141,46 @@ class _Checker:
             return self.project.classes.get(base.name) is not None
         return False
 
-    def _collection_key(self, t: T.Type) -> bool:
-        """What a map or a set is keyed by: an `int` or a `str`, or a tuple of `int`."""
+    def _collection_key(self, t: T.Type, *, tree: bool = False) -> bool:
+        """What a map or a set is keyed by: an `int` or a `str`, a tuple of `int`,
+        or an instance of a project class that a tree can order (`__lt__`) or a
+        hash map can hash (as Python decides whether it is hashable)."""
         base = T.strip_literal(t)
         if base in (T.INT, T.STR, T.UNKNOWN) or isinstance(base, T.TypeVar_):
             return True
+        if isinstance(base, T.Instance):
+            info = self.project.classes.get(base.name)
+            return info is not None and self._keyed_class(info, tree=tree)
         return (
             isinstance(base, T.Tuple_)
             and not base.homogeneous
             and bool(base.items)
             and all(T.strip_literal(item) == T.INT for item in base.items)
         )
+
+    def _keyed_class(self, info: ClassInfo, *, tree: bool) -> bool:
+        """Whether a tree orders instances of `info`, or a hash map hashes them."""
+        chain = [self.project.classes.get(name) for name in info.mro if name != "object"]
+        found = [entry for entry in chain if entry is not None]
+        if tree:
+            return any(
+                "__lt__" in entry.methods
+                or (entry.is_dataclass and dataclass_keyword(entry.node, "order") is True)
+                for entry in found
+            )
+        for entry in found:
+            # The first class along the MRO that says anything decides, as
+            # `type.__hash__` is looked up: `__eq__` without `__hash__` is None.
+            if "__hash__" in entry.methods:
+                return True
+            if "__eq__" in entry.methods:
+                return False
+            if entry.is_dataclass:
+                if dataclass_keyword(entry.node, "unsafe_hash") is True:
+                    return True
+                if dataclass_keyword(entry.node, "eq") is not False:
+                    return dataclass_keyword(entry.node, "frozen") is True
+        return True
 
     def _collection_call(  # pylint: disable=too-many-arguments,too-many-positional-arguments
         self,
@@ -5431,7 +5493,9 @@ class _Checker:
                 if info.slots is not None:
                     self._error("E1202", f"`{info.name}` has no attribute `{target.attr}`", target)
                 return
-            expected = T.substitute(declared[0], _receiver_bindings(info, base))
+            expected = T.substitute(
+                declared[0], receiver_bindings(info, base, self.project.classes)
+            )
             declared = (expected, declared[1])
             if not isinstance(declared[0], T.Callable_) and not T.is_assignable(
                 value.type, declared[0]

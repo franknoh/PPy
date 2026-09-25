@@ -1,5 +1,45 @@
 # Changelog
 
+## 0.4.1 — 2026-09-25
+
+Objects order, hash, and compare themselves inside collections, and generic
+classes take part in inheritance. Both were left out of 0.4.0.
+
+- Objects are collection elements and keys by their class's own methods.
+  - `Heap[Task]`, `Vec[Task].sort()`, `sorted(...)`, `TreeMap[Task, V]`, and
+    `TreeSet[Task]` order by `__lt__`.
+  - `HashMap[Point, V]` and `HashSet[Point]` hash and compare by `__hash__`
+    and `__eq__`, or by identity where the class defines neither.
+  - Native code calls the compiled methods from inside the collection. A
+    guard that fails in one hands the call back to Python, and a standalone
+    binary prints what CPython raises.
+  - `__eq__(self, other: object)` works as Python's typing spells it.
+  - A method a subclass overrides keeps the collection in Python.
+- The checker takes a class as a key where Python could use it as one: a
+  hashable class for a hash map or set, a class with `__lt__` (or
+  `@dataclass(order=True)`) for a tree. `__eq__` without `__hash__`, or a
+  plain `@dataclass`, is `E1305`, as Python would refuse it.
+- A tree's two keys are the same key when neither is less than the other, in
+  the reference classes as in native code.
+- A class that defines `__lt__`, `__hash__`, or `__eq__` is an object class,
+  held by handle, not copied as a value class.
+- Fixed: `TreeSet[str].pop_min()`/`pop_max()` natively returned a string the
+  tree had already freed.
+- Fixed: a string or object made only to look a key up was freed in the
+  wrong place when the lookup ran inside a loop.
+- Generic classes may have bases, and classes may derive from generic ones:
+  `class Counted[T](Stack[T])`, `class IntStack(Stack[int])`,
+  `class Pair[A, B](Box[A])`.
+  - The checker binds each base's type parameters from what the class gives
+    it, through every level. An `IntStack().pop()` is an `int`, and
+    `super()` is the base with those arguments.
+  - A `Counted[int]` or an `IntStack` goes where a `Stack[int]` is expected.
+  - Native code lays such objects out, instantiates each inherited method,
+    and dispatches overrides by the same bindings, in `ppy run`, standalone
+    binaries, and emitted C and C++.
+  - A call through a base whose subclass has parameters the base does not
+    decide stays in Python.
+
 ## 0.4.0 — 2026-09-25
 
 The release where ordinary Python data goes native. Text, class

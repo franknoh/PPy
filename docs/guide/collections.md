@@ -69,10 +69,68 @@ An element, or a map's value, is one of:
 - another collection: `Vec[Vec[int]]`, `HashMap[int, Vec[int]]`
 - an instance of an object class: `Vec[Shape]`, which may hold subclasses
 
-A key of a map or a set is an `int`, a `str`, or a tuple of `int`:
-`HashMap[str, int]` for counting words, `HashMap[tuple[int, int], int]` for
-a grid, `TreeSet[tuple[int, int]]` for pairs in order. A string key hashes
-and orders by its text. See [Strings](strings.md).
+A key of a map or a set is an `int`, a `str`, a tuple of `int`, or an
+instance of a class: `HashMap[str, int]` for counting words,
+`HashMap[tuple[int, int], int]` for a grid, `TreeSet[tuple[int, int]]` for
+pairs in order. A string key hashes and orders by its text. See
+[Strings](strings.md).
+
+A class is a key where Python could use it as one. A `HashMap` or `HashSet`
+takes a class it can hash: one that defines `__hash__` (with `__eq__`, or
+alone, which compares by identity), one that defines neither (identity
+again), or a `@dataclass(frozen=True)`. `__eq__` without `__hash__`, or a
+plain `@dataclass`, is unhashable, and the checker says so (`E1305`). A
+`TreeMap` or `TreeSet` takes a class with `__lt__`, or a
+`@dataclass(order=True)`.
+
+```python
+from ppy import HashMap, Heap
+
+
+class Cell:
+    def __init__(self, row: int, col: int) -> None:
+        self.row: int = row
+        self.col: int = col
+
+    def __eq__(self, other: object) -> bool:
+        return isinstance(other, Cell) and self.row == other.row and self.col == other.col
+
+    def __hash__(self) -> int:
+        return self.row * 1000 + self.col
+
+
+class Visit:
+    def __init__(self, cost: int, cell: Cell) -> None:
+        self.cost: int = cost
+        self.cell: Cell = cell
+
+    def __lt__(self, other: "Visit") -> bool:
+        return self.cost < other.cost
+
+
+def cheapest(size: int) -> int:
+    best = HashMap[Cell, int]()
+    frontier = Heap[Visit]()
+    frontier.push(Visit(0, Cell(0, 0)))
+    while frontier:
+        visit = frontier.pop()
+        if visit.cell in best:
+            continue
+        best[visit.cell] = visit.cost
+        row, col = visit.cell.row, visit.cell.col
+        if col + 1 < size:
+            frontier.push(Visit(visit.cost + (row * 7 + col) % 10, Cell(row, col + 1)))
+        if row + 1 < size:
+            frontier.push(Visit(visit.cost + (row + col * 3) % 10, Cell(row + 1, col)))
+    return best[Cell(size - 1, size - 1)]
+```
+
+Native code calls the class's compiled methods from inside the collection,
+so `cheapest` goes native with its heap and its map. A method a subclass
+overrides keeps the collection in Python, since the runtime cannot tell
+which one an object needs, and so does a method native code cannot compile.
+Write `__eq__`'s argument as `other: object`, as Python's typing wants, or
+as the class.
 
 ```python
 from dataclasses import dataclass
@@ -110,8 +168,14 @@ and a dataclass with a `float` field holds a float there.
 `sort`, a heap, and a tree compare elements or keys with `<`, as Python
 does. Numbers compare as numbers and tuples compare item by item. A
 dataclass compares field by field when it is declared
-`@dataclass(order=True)`; without that it has no order, and sorting or heaping
-it is refused. A collection has no order either.
+`@dataclass(order=True)`, and an object by its class's `__lt__`; without
+either it has no order, and sorting or heaping it is refused. A collection
+has no order either.
+
+A tree's two keys are the same key when neither is less than the other, as
+in any ordered map. For numbers, strings, and tuples that is `==`; for a
+class it is what its `__lt__` says, so `Task(4, "a")` and `Task(4, "b")` are
+one key when `__lt__` compares costs.
 
 ### Aliases
 
@@ -364,8 +428,13 @@ what the checker refuses; one whose element type differs at run time
 
 ## Limitations
 
-- Keys are `int`, `str`, or tuples of `int`; a tuple with a string in it
-  is not a key.
+- A tuple with a string or an object in it is not a key.
+- A class's keys natively hash and compare by its own `__hash__` and
+  `__eq__`, or by identity: a value class (a class of numbers only, copied
+  as a value) has no identity, so it is a key natively only as a
+  `@dataclass(frozen=True)` of integers.
+- `min` and `max` over objects, and `sort(key=...)` with an object as the
+  key, stay in Python.
 - A collection holds a user class's instances natively when the class is a
   value class or an object class; see [Classes](classes.md).
 - Python calls a function natively when its collections hold numbers,

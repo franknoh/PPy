@@ -45,6 +45,7 @@ __all__ = [
     "NativeParam",
     "NativeSignature",
     "Unsupported",
+    "called_back_only",
     "eligible",
 ]
 
@@ -365,6 +366,18 @@ def eligible(
     if _return_atoms(info.ret, layouts) is None and not _returns_none(info.ret):
         return False, f"returns `{info.ret}`, which has no native ABI"
     return True, ""
+
+
+def called_back_only(info: FunctionInfo) -> bool:
+    """`def __eq__(self, other: object)` of a class: `other` has no native ABI, and
+    what calls it natively is a collection comparing two of its own keys, which
+    lowers the method again with `other` an instance of the class."""
+    return (
+        info.name == "__eq__"
+        and bool(info.owner)
+        and len(info.params) == 2
+        and T.strip_literal(info.params[1].type) == T.OBJECT
+    )
 
 
 def _returns_none(t: T.Type) -> bool:

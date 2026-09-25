@@ -122,10 +122,15 @@ def _element_ok(spec: Any) -> bool:
     )
 
 
-def _key_ok(spec: Any) -> bool:
-    """What a map or a set is keyed by: an `int` or a `str`, or a tuple of `int`."""
+def _key_ok(spec: Any, tree: bool) -> bool:
+    """What a map or a set is keyed by: an `int` or a `str`, a tuple of `int`, or
+    a class whose instances a tree can order (`__lt__`) or a hash map can hash."""
     if _scalar(spec) is int or spec is str or isinstance(spec, typing.TypeVar):
         return True
+    if isinstance(spec, type) and spec.__module__ != "builtins":
+        if tree:
+            return spec.__lt__ is not object.__lt__
+        return spec.__hash__ is not None
     parts = _tuple_parts(spec)
     return parts is not None and all(_scalar(part) is int for part in parts)
 
@@ -634,8 +639,13 @@ class _KeysAndValues:
         key, value = types if pair else (types, None)
         made = _SPECIALIZED.get((cls, types))
         if made is None:
-            if not _key_ok(key):
-                raise TypeError(f"a {cls.__name__} has int, str, or int-tuple keys, not {key!r}")
+            tree = issubclass(cls, TreeMap)
+            if not _key_ok(key, tree):
+                classes = "an instance of a class with __lt__" if tree else "a hashable instance"
+                raise TypeError(
+                    f"a {cls.__name__} key is an int, a str, a tuple of int, or {classes}, "
+                    f"not {key!r}"
+                )
             if value is not None and not _element_ok(value):
                 raise TypeError(f"a {cls.__name__} cannot hold {value!r} values")
             made = type(
@@ -1123,8 +1133,12 @@ class HashSet(HashMap, _SetAlgebra):
 
 
 class TreeMap(_KeysAndValues):
-    """A map from `int` keys kept in order: the smallest, the largest, and the
-    nearest key above or below any value."""
+    """A map from keys kept in order: the smallest, the largest, and the
+    nearest key above or below any value.
+
+    Order is `<` alone: two keys are the same key when neither is less than
+    the other, as in any ordered map, which for numbers, strings, and tuples
+    is `==`."""
 
     __slots__ = ("_keys", "_values", "_version")
 
@@ -1135,12 +1149,12 @@ class TreeMap(_KeysAndValues):
 
     def _at(self, key: int) -> int:
         position = bisect.bisect_left(self._keys, key)
-        found = position < len(self._keys) and self._keys[position] == key
+        found = position < len(self._keys) and not key < self._keys[position]
         return position if found else -1
 
     def _put(self, key: int, value: Any) -> None:
         position = bisect.bisect_left(self._keys, key)
-        if position < len(self._keys) and self._keys[position] == key:
+        if position < len(self._keys) and not key < self._keys[position]:
             self._values[position] = value
             return
         self._keys.insert(position, key)

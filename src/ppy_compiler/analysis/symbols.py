@@ -229,6 +229,10 @@ class ClassInfo:
     is_protocol: bool = False
     #: A generic class's type parameters: `T` in `class Stack[T]`.
     type_params: tuple[T.TypeVar_, ...] = ()
+    #: The type arguments each generic base is given, by the base's qualname:
+    #: `(int,)` for `Stack` in `class IntStack(Stack[int])`, `(T,)` in
+    #: `class Counted[T](Stack[T])`, where `T` is this class's own.
+    base_args: dict[str, tuple[T.Type, ...]] = field(default_factory=dict)
 
     def instance(self, args: tuple[T.Type, ...] = ()) -> T.Instance:
         return T.Instance(self.qualname, args, self.mro or (self.qualname, "object"))
@@ -926,7 +930,8 @@ class ProjectSymbols:
         order = [info.qualname]
         resolver = self.resolver(symbols)
         for base in info.node.bases:
-            qualname = resolver.canonical(base)
+            # `Stack[int]` is `Stack`, given arguments.
+            qualname = resolver.canonical(base.value if isinstance(base, ast.Subscript) else base)
             if qualname is None:
                 continue
             parent = self.classes.get(qualname)
@@ -966,6 +971,12 @@ class ProjectSymbols:
             # A generic class's fields and methods may name its parameters.
             annotations.type_params = {v.name: v for v in info.type_params}
             self._resolve_class_fields(symbols, info, annotations)
+            for base in info.node.bases:
+                if isinstance(base, ast.Subscript):
+                    given = T.strip_literal(annotations.resolve(base).type)
+                    if isinstance(given, T.Instance) and given.args:
+                        info.base_args[given.name] = given.args
+            T.GENERIC_BASES[info.qualname] = (info.type_params, dict(info.base_args))
             annotations.type_params = {}
         for info in list(symbols.functions.values()):
             self._resolve_function(symbols, info, annotations)
@@ -1205,6 +1216,17 @@ def _with_field_bounds(facts: Facts, value: ast.expr) -> Facts:
     if low is None and high is None:
         return facts
     return facts.with_(int_range=IntRange(low, high))
+
+
+def dataclass_keyword(node: ast.ClassDef, option: str) -> object:
+    """What `@dataclass(option=...)` sets `option` to, as a constant, or None."""
+    for decorator in node.decorator_list:
+        if not isinstance(decorator, ast.Call):
+            continue
+        for keyword in decorator.keywords:
+            if keyword.arg == option and isinstance(keyword.value, ast.Constant):
+                return keyword.value.value
+    return None
 
 
 def _dataclass_option(node: ast.ClassDef, option: str) -> bool:

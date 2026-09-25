@@ -19,7 +19,7 @@ from ..c.runtime import program_main, support_source
 from . import prover_for
 from .jit import JitEngine, LlvmUnavailable, available
 from .link import ToolchainError, _compiler, emit_object
-from .lowering import LoweringResult, eligible
+from .lowering import LoweringResult, called_back_only, eligible
 
 __all__ = ["build_standalone", "standalone_ir"]
 
@@ -172,7 +172,7 @@ def standalone_ir(  # type: ignore[no-untyped-def]
         frontend.imports = signatures.get
         lowered = frontend.build({q: f for q, f in functions.items() if f[0].module == name})
         for qualname, reason in sorted(lowered.rejected.items()):
-            if qualname in frontend.generics:
+            if qualname in frontend.generics or called_back_only(functions[qualname][0]):
                 continue  # A generic is lowered where a caller instantiates it.
             return _fail(reporter, _chain(reached_from, qualname, reason))
         modules.append(lowered.module)
@@ -299,14 +299,20 @@ def _binds_a_constant(statement, constants: dict) -> bool:  # type: ignore[no-un
 
 
 def _generic(bundle, info) -> bool:  # type: ignore[no-untyped-def]
-    """A generic function, or a method of a generic class: lowered per instantiation."""
+    """A generic function, or a method of a generic class: lowered per instantiation,
+    or an `__eq__(self, other: object)`, lowered with `other` an instance of its
+    class where a collection calls it back."""
     owner = bundle.symbols.classes.get(info.owner) if info.owner else None
-    return bool(info.type_params) or (owner is not None and bool(owner.type_params))
+    return (
+        bool(info.type_params)
+        or (owner is not None and bool(owner.type_params))
+        or called_back_only(info)
+    )
 
 
 def _field_dataclass(statement, classes: frozenset[str] = frozenset()) -> bool:  # type: ignore[no-untyped-def]
     """A class a standalone program can hold: at most one base, a class defined
-    before it in the module, `@dataclass` or nothing, and a body of methods,
+    before it in the module (generic or not), `@dataclass` or nothing, and a body of methods,
     field annotations (with constant defaults or `field(...)`), and a
     docstring. Its instances are native values or native objects; nothing has
     to run to define it."""
@@ -314,8 +320,10 @@ def _field_dataclass(statement, classes: frozenset[str] = frozenset()) -> bool: 
 
     if not isinstance(statement, ast.ClassDef) or statement.keywords:
         return False
-    if len(statement.bases) > 1 or any(
-        not isinstance(base, ast.Name) or base.id not in classes for base in statement.bases
+    # A generic base is named with its arguments: `Stack[int]`, `Stack[T]`.
+    named = [base.value if isinstance(base, ast.Subscript) else base for base in statement.bases]
+    if len(named) > 1 or any(
+        not isinstance(base, ast.Name) or base.id not in classes for base in named
     ):
         return False
     decorated = [

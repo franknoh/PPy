@@ -8,9 +8,10 @@ class:
   keeps it as a struct of its fields.
 - An **object class** is shared, like any Python object. It has fields that
   hold other objects or collections, methods that change its fields or
-  return a new instance, a base class, or subclasses. Native code keeps a
-  handle to it on the heap, counts references to it, and frees it when the
-  last one goes.
+  return a new instance, its own `__lt__`, `__hash__`, or `__eq__` (which
+  a collection calls with the object), a base class, or subclasses. Native
+  code keeps a handle to it on the heap, counts references to it, and frees
+  it when the last one goes.
 
 You don't choose between them. `ppy explain` shows which one a class is by
 how its functions lower.
@@ -183,6 +184,44 @@ The collections work the same way: `v: Vec[int] = Vec()` and
 exception, since CPython runs `Vec()` without knowing its type and would
 keep a stored `3` an `int`: write `Vec[float]()`.
 
+### Generic bases
+
+A generic class may derive from another, and a class may derive from a
+generic one with its arguments given:
+
+```python
+class Counted[T](Stack[T]):
+    def __init__(self) -> None:
+        super().__init__()
+        self.pushes: int = 0
+
+    def push(self, value: T) -> None:
+        self.pushes += 1
+        super().push(value)
+
+
+class IntStack(Stack[int]):
+    def total(self) -> int:
+        s = 0
+        for v in self.items:
+            s += v
+        return s
+```
+
+The checker follows what each class gives its base: in a `Counted[int]`,
+`Stack`'s `T` is `int` as well, so `pop()` returns an `int`; in an
+`IntStack` it is `int` with nothing written at the use. `super()` is the
+base with those arguments. A `Counted[int]` or an `IntStack` goes where a
+`Stack[int]` is expected, and one given to a `Stack[int]` parameter runs its
+own `push`.
+
+Native code lays the object out and instantiates each inherited method by
+the same bindings. A call through a `Stack[int]` dispatches to a
+subclass's override by the object's class, with the subclass's own
+arguments worked out from the base's. Where they cannot be, as for a
+`class Tagged[T, U](Stack[T])` whose `U` the `Stack[int]` says nothing of,
+the function that makes such a call stays in Python.
+
 ## Memory
 
 A handle counts its references. A name holding an object keeps one, a field
@@ -218,7 +257,8 @@ return numbers, and make their objects inside.
 - A class with more than one base, a base from another module or a
   library, or a field native code cannot represent (a `dict`, say), keeps
   the functions that use it in Python.
-- A generic class with a base, or a base that is generic, is not lowered.
+- A call through a generic base whose subclass has type parameters the
+  base's arguments do not decide stays in Python, as above.
 - A dataclass object compared with `==` keeps the function in Python unless
   the class defines `__eq__`, since the generated one compares fields.
 - A generic class whose type arguments nothing tells stays in Python.
