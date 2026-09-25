@@ -81,6 +81,15 @@ def _is_record(spec: Any) -> bool:
     return isinstance(spec, type) and dataclasses.is_dataclass(spec)
 
 
+def _is_class(spec: Any) -> bool:
+    """A class of the program's own: its instances are held as they are given."""
+    return (
+        isinstance(spec, type)
+        and spec.__module__ not in ("builtins", "typing", "collections")
+        and not _is_collection(spec)
+    )
+
+
 def _tuple_parts(spec: Any) -> tuple[Any, ...] | None:
     if typing.get_origin(spec) is not tuple:
         return None
@@ -104,6 +113,7 @@ def _element_ok(spec: Any) -> bool:
         or _scalar(spec) is not None
         or _tuple_parts(spec) is not None
         or _is_record(spec)
+        or _is_class(spec)
         or _is_collection(spec)
     )
 

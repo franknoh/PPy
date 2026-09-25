@@ -38,6 +38,7 @@ GROUPS = [
             "43_regex",
             "47_collections",
             "48_strings",
+            "49_inheritance",
         ],
     ),
     ("Accelerators", ["38_cuda", "44_tile", "39_xla", "45_multi_gpu_jax"]),

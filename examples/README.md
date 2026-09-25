@@ -76,7 +76,8 @@ reports the mean and spread. The site collects those sections on one page.
 | `45_multi_gpu_jax` | a data-parallel JAX MLP over a mesh of every accelerator, held to a single-device run; validated on real GPUs by `scripts/cloud` |
 | `46_gpt2` | GPT-2 XL with every transformer block compiled to one ATen region; against PyTorch eager and `torch.compile` on a rented RTX 4090 |
 | `47_collections` | `Vec`, `Deque`, `Heap`, `LinkedList`, `HashMap`, `TreeSet` in native code, no pointers |
-| `48_strings` | a 200,000-line log parsed, counted, and reported with native `str`, faster than CPython |
+| `48_strings` | a 200,000-line log parsed, counted, and reported with native `str` |
+| `49_inheritance` | an expression tree of subclasses and a vector class with operators, dispatched natively |
 
 
 A folder of related problems keeps them in numbered subfolders, and every
