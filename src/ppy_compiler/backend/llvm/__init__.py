@@ -128,7 +128,7 @@ def _collect(bundle, opt_level: int | None = None) -> dict[str, NativeModule]:  
 
         reused = _cached_lowering(bundle, module.name, opt_level)
         if reused is not None:
-            modules[module.name] = _module_from_cache(module.name, reused, candidates)
+            modules[module.name] = _module_from_cache(module.name, reused, candidates, layouts)
             _offer(available, modules[module.name])
             continue
 
@@ -228,7 +228,7 @@ def _store_lowering(bundle, name: str, opt_level: int | None, native: NativeModu
         bundle.project.store.mark_root(key, f"lowered:{name}")
 
 
-def _module_from_cache(name: str, reused, candidates) -> NativeModule:  # type: ignore[no-untyped-def]
+def _module_from_cache(name: str, reused, candidates, layouts=None) -> NativeModule:  # type: ignore[no-untyped-def]
     """Rebuild a `NativeModule` from cached ABI decisions plus live symbols.
 
     The `FunctionInfo` and the AST are taken from this run's analysis rather
@@ -245,7 +245,7 @@ def _module_from_cache(name: str, reused, candidates) -> NativeModule:  # type: 
         info, _analysis, node = entry
         # Profitability is a pure function of today's source, so a cached
         # module answers it fresh rather than trusting yesterday's verdict.
-        exposed, why = should_lower_native(info, _analysis)
+        exposed, why = should_lower_native(info, _analysis, layouts)
         functions[qualname] = LoweredFunction(info, signature, exposed=exposed, exposure_reason=why)
         sources[qualname] = (info, node)
     return NativeModule(

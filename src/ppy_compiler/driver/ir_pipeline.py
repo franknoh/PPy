@@ -119,6 +119,19 @@ def definitions(tree: ast.Module) -> Iterator[tuple[str, ast.FunctionDef | ast.A
 _INTERCEPTORS = frozenset({"__getattr__", "__getattribute__", "__setattr__", "__init_subclass__"})
 
 
+def _returns_own_class(info) -> bool:  # type: ignore[no-untyped-def]
+    """Does a method of the class return an instance of it?"""
+    from ..analysis import types as T
+
+    for method in info.methods.values():
+        returned = T.strip_literal(method.ret)
+        if isinstance(returned, T.Union_):
+            returned = next((m for m in returned.members if m != T.NONE), returned)
+        if isinstance(returned, T.Instance) and returned.name == info.qualname:
+            return True
+    return False
+
+
 def _writes_self(info) -> bool:  # type: ignore[no-untyped-def]
     """Does a method other than `__init__` assign to a field of `self`?"""
     for name, method in info.methods.items():
@@ -173,6 +186,10 @@ def value_class_layouts(bundle) -> dict[str, tuple[tuple[str, str], ...]]:  # ty
         # A method that writes its receiver needs the object it was called on:
         # a value class is copied, so such a class is held by handle instead.
         if _writes_self(info):
+            continue
+        # A method that makes and returns an instance (`__add__`) hands back
+        # something native code can only return by handle.
+        if _returns_own_class(info):
             continue
         fields: list[tuple[str, str]] = []
         for name, declared in info.fields.items():
