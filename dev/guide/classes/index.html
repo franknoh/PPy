@@ -4195,9 +4195,10 @@ class:</p>
   keeps it as a struct of its fields.</li>
 <li>An <strong>object class</strong> is shared, like any Python object. It has fields that
   hold other objects or collections, methods that change its fields or
-  return a new instance, a base class, or subclasses. Native code keeps a
-  handle to it on the heap, counts references to it, and frees it when the
-  last one goes.</li>
+  return a new instance, its own <code>__lt__</code>, <code>__hash__</code>, or <code>__eq__</code> (which
+  a collection calls with the object), a base class, or subclasses. Native
+  code keeps a handle to it on the heap, counts references to it, and frees
+  it when the last one goes.</li>
 </ul>
 <p>You don't choose between them. <code>ppy explain</code> shows which one a class is by
 how its functions lower.</p>

@@ -11417,8 +11417,11 @@ out again. <code>-1</code> stands for no node: the <code>next</code> of the last
 
 
 
-        <p>A map from <code>int</code> keys kept in order: the smallest, the largest, and the
+        <p>A map from keys kept in order: the smallest, the largest, and the
 nearest key above or below any value.</p>
+<p>Order is <code>&lt;</code> alone: two keys are the same key when neither is less than
+the other, as in any ordered map, which for numbers, strings, and tuples
+is <code>==</code>.</p>
 
 
 
