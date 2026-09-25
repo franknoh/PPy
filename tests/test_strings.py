@@ -212,6 +212,78 @@ def main() -> None:
 main()
 """
 
+CLASSES = r"""
+from dataclasses import dataclass, field
+
+from ppy import HashMap, Vec
+
+
+@dataclass
+class Animal:
+    name: str
+    legs: int = 4
+
+    def describe(self) -> str:
+        return f"{self.name} walks on {self.legs}"
+
+
+@dataclass
+class Bird(Animal):
+    song: str = "tweet"
+
+    def describe(self) -> str:
+        return f"{self.name} sings {self.song!r} on {self.legs}"
+
+
+class Label:
+    def __init__(self, text: str) -> None:
+        self.text: str = text
+        self.parts: Vec[str] = Vec[str]()
+
+    def add(self, part: str) -> None:
+        self.parts.push(part)
+        self.text += "/" + part
+
+    def __len__(self) -> int:
+        return len(self.text)
+
+    def __eq__(self, other: "Label") -> bool:
+        return self.text == other.text
+
+
+def zoo(n: int) -> str:
+    animals = Vec[Animal]()
+    for i in range(n):
+        if i % 2:
+            animals.push(Bird(f"b{i}", 2, "la" * i))
+        else:
+            animals.push(Animal(f"a{i}"))
+    out = ""
+    for a in animals:
+        out += a.describe() + "; "
+    return out
+
+
+def labels(n: int) -> int:
+    first = Label("root")
+    second = Label("root")
+    for i in range(n):
+        first.add(str(i))
+        second.add(str(i))
+    names = HashMap[str, int]()
+    for part in first.parts:
+        names[part] = len(part)
+    return len(first) * 10 + int(first == second) + len(names)
+
+
+def main() -> None:
+    print(zoo(4))
+    print(labels(12))
+
+
+main()
+"""
+
 PROGRAMS = {
     "methods": (
         METHODS,
@@ -232,6 +304,8 @@ PROGRAMS = {
     # Reading input is native in a standalone build; under `ppy run` it is IO.
     "reading": (READING, "3\nThe cat saw\nthe DOG\n\nalpha\n  beta gamma\n", []),
     "lists": (LISTS, "", ["build", "run"]),
+    # String fields, a subclass that adds one, and a class whose fields hold them.
+    "classes": (CLASSES, "", ["zoo", "labels"]),
 }
 
 
