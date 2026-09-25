@@ -1617,11 +1617,11 @@ def test_a_class_with_a_non_scalar_field_stays_boxed(write, analyze):
 
 
         class Holder:
-            name: str
+            names: dict[str, int]
             size: int
 
-            def __init__(self, name: str, size: int) -> None:
-                self.name = name
+            def __init__(self, names: dict[str, int], size: int) -> None:
+                self.names = names
                 self.size = size
 
 
@@ -1631,7 +1631,7 @@ def test_a_class_with_a_non_scalar_field_stays_boxed(write, analyze):
         """,
     )
     bundle = analyze(path, backend="llvm")
-    # No value layout: a `str` field has no scalar slot to flatten into.
+    # No value layout: a `dict` field has no scalar slot to flatten into.
     assert not _layouts(bundle).get("boxed.Holder")
     assert "boxed.size_of" in _collect(bundle)["boxed"].rejected
 
@@ -1946,14 +1946,14 @@ CALLS_A_BOXED_HELPER = """
 
 
     @ppy.pure
-    def helper(text: str) -> int:
-        return len(text.split(","))
+    def helper(counts: dict[str, int]) -> int:
+        return len(counts)
 
 
     @ppy.pure
     @ppy.opt(3)
     def caller(n: int) -> int:
-        return helper("a,b") + n
+        return helper({"a": 1, "b": 2}) + n
     """
 
 

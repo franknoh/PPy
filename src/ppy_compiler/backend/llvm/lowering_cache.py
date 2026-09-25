@@ -155,7 +155,7 @@ def encode(module) -> str:  # type: ignore[no-untyped-def]
             "boundaries": {
                 q: _signature(f.boundary)
                 for q, f in module.functions.items()
-                if f.boundary is not None
+                if getattr(f, "boundary", None) is not None
             },
             "rejected": dict(module.rejected),
             "fused": {symbol: _loop(loop) for symbol, loop in module.fused.items()},

@@ -538,13 +538,15 @@ def test_explicit_backend_reports_an_undecorated_function_that_cannot_lower(
 ):
     _install_backend(tmp_path, monkeypatch, DUMMY)
     path = _project(tmp_path)
-    path.write_text(valid_function + "def bad(value: str) -> str:\n    return value\n")
+    path.write_text(
+        valid_function + "def bad(value: dict[str, int]) -> int:\n    return len(value)\n"
+    )
     for command in [("emit", "dummy", path.name), ("build", path.name, "--backend", "dummy")]:
         result = _ppy(path.parent, *command)
         assert result.returncode == 2, result.stderr
         assert "E1802" in result.stderr
         assert "kernel.bad" in result.stderr and "kernel.ppy:" in result.stderr
-        assert "str" in result.stderr
+        assert "dict" in result.stderr
         assert "Traceback" not in result.stderr
 
 
