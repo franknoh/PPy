@@ -13,7 +13,7 @@
         <link rel="canonical" href="https://ppy.franknoh.dev/dev/guide/collections/">
       
       
-        <link rel="prev" href="../directives/">
+        <link rel="prev" href="../strings/">
       
       
         <link rel="next" href="../classes/">
@@ -625,6 +625,8 @@
       
         
       
+        
+      
     
     
     
@@ -725,6 +727,34 @@
     
   
     Directives and markers
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../strings/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Strings
   
 
     
@@ -2063,6 +2093,8 @@
       
         
       
+        
+      
     
     
     
@@ -2459,6 +2491,34 @@
     
   
     Collections
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../howto/48_strings/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Strings
   
 
     
@@ -4513,14 +4573,16 @@ arranges its elements in linear time, as <code>heapq.heapify</code> does.</p>
 <ul>
 <li>a number: <code>int</code>, <code>float</code>, <code>bool</code>, or a fixed width such as <code>ppy.i32</code>,
   held as an <code>int</code></li>
+<li>a string: <code>Vec[str]</code>, <code>HashMap[int, str]</code></li>
 <li>a tuple of numbers: <code>Vec[tuple[int, float]]</code></li>
 <li>a dataclass whose fields are numbers: <code>Vec[Point]</code></li>
 <li>another collection: <code>Vec[Vec[int]]</code>, <code>HashMap[int, Vec[int]]</code></li>
 <li>an instance of an object class: <code>Vec[Shape]</code>, which may hold subclasses</li>
 </ul>
-<p>A key of a map or a set is an <code>int</code> or a tuple of them:
-<code>HashMap[tuple[int, int], int]</code> for a grid, <code>TreeSet[tuple[int, int]]</code> for
-pairs in order.</p>
+<p>A key of a map or a set is an <code>int</code>, a <code>str</code>, or a tuple of <code>int</code>:
+<code>HashMap[str, int]</code> for counting words, <code>HashMap[tuple[int, int], int]</code> for
+a grid, <code>TreeSet[tuple[int, int]]</code> for pairs in order. A string key hashes
+and orders by its text. See <a href="../strings/">Strings</a>.</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">dataclasses</span><span class="w"> </span><span class="kn">import</span> <span class="n">dataclass</span>
 <a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>
 <a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ppy</span><span class="w"> </span><span class="kn">import</span> <span class="n">HashMap</span><span class="p">,</span> <span class="n">Heap</span><span class="p">,</span> <span class="n">Vec</span>
@@ -5007,7 +5069,8 @@ what the checker refuses; one whose element type differs at run time
 (<code>Vec[float]</code> for <code>Vec[int]</code>) runs the Python body.</p>
 <h2 id="limitations">Limitations<a class="headerlink" href="#limitations" title="Permanent link">&para;</a></h2>
 <ul>
-<li>Keys are <code>int</code> or tuples of <code>int</code>.</li>
+<li>Keys are <code>int</code>, <code>str</code>, or tuples of <code>int</code>; a tuple with a string in it
+  is not a key.</li>
 <li>A collection holds a user class's instances natively when the class is a
   value class or an object class; see <a href="../classes/">Classes</a>.</li>
 <li>Python calls a function natively when its collections hold numbers,
@@ -5059,7 +5122,7 @@ what the checker refuses; one whose element type differs at run time
       <nav class="md-footer__inner md-grid" aria-label="Footer" >
         
           
-          <a href="../directives/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Directives and markers">
+          <a href="../strings/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Strings">
             <div class="md-footer__button md-icon">
               
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
@@ -5069,7 +5132,7 @@ what the checker refuses; one whose element type differs at run time
                 Previous
               </span>
               <div class="md-ellipsis">
-                Directives and markers
+                Strings
               </div>
             </div>
           </a>

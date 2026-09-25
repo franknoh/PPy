@@ -37,6 +37,7 @@ GROUPS = [
             "42_toolbox",
             "43_regex",
             "47_collections",
+            "48_strings",
             "49_inheritance",
         ],
     ),

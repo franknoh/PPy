@@ -623,6 +623,8 @@
       
         
       
+        
+      
     
     
     
@@ -720,6 +722,34 @@
     
   
     Directives and markers
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guide/strings/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Strings
   
 
     
@@ -1810,10 +1840,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#typed-checked-not-lowered" class="md-nav__link">
+  <a href="#which-functions-lower" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Typed, checked, not lowered
+        Which functions lower
       
     </span>
   </a>
@@ -1821,10 +1851,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#fast-text-goes-through-bytes" class="md-nav__link">
+  <a href="#very-large-text" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Fast text goes through bytes
+        Very large text
       
     </span>
   </a>
@@ -1878,6 +1908,8 @@
   
     
     
+      
+        
       
         
       
@@ -2306,6 +2338,34 @@
     
   
     Collections
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../48_strings/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Strings
   
 
     
@@ -4058,10 +4118,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#typed-checked-not-lowered" class="md-nav__link">
+  <a href="#which-functions-lower" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Typed, checked, not lowered
+        Which functions lower
       
     </span>
   </a>
@@ -4069,10 +4129,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#fast-text-goes-through-bytes" class="md-nav__link">
+  <a href="#very-large-text" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Fast text goes through bytes
+        Very large text
       
     </span>
   </a>
@@ -4122,11 +4182,10 @@
 
 
 <h1 id="strings">Strings<a class="headerlink" href="#strings" title="Permanent link">&para;</a></h1>
-<p>String code checks in strict mode and is proven pure, but it stays on
-CPython, and the compiler says so. String methods are fully typed
-(<code>name.split(" ")</code> is a <code>list[str]</code>, <code>part[0].upper()</code> a <code>str</code>). A Python
-string has no native representation, though, so these functions run as
-ordinary Python on every path.</p>
+<p>Three small string functions, checked in strict mode and proven pure. Two
+of them go native: <code>initials</code> splits and uppercases, and <code>is_palindrome</code>
+indexes a string from both ends. The third returns a <code>dict</code>, which has no
+native form, so it runs as Python, and <code>ppy explain</code> says why.</p>
 <h2 id="run-it">Run it<a class="headerlink" href="#run-it" title="Permanent link">&para;</a></h2>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>python<span class="w">  </span>strings.ppy
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>ppy<span class="w">     </span>strings.ppy
@@ -4141,31 +4200,27 @@ ordinary Python on every path.</p>
 </code></pre></div>
 <!-- outputs:end -->
 
-<h2 id="typed-checked-not-lowered">Typed, checked, not lowered<a class="headerlink" href="#typed-checked-not-lowered" title="Permanent link">&para;</a></h2>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="nd">@ppy</span><span class="o">.</span><span class="n">pure</span>
-<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="k">def</span><span class="w"> </span><span class="nf">is_palindrome</span><span class="p">(</span><span class="n">text</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
-<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>    <span class="n">cleaned</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="n">text</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">" "</span><span class="p">,</span> <span class="s2">""</span><span class="p">)</span>
-<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>    <span class="n">left</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">0</span>
-<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>    <span class="n">right</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">cleaned</span><span class="p">)</span> <span class="o">-</span> <span class="mi">1</span>
-<a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>    <span class="k">while</span> <span class="n">left</span> <span class="o">&lt;</span> <span class="n">right</span><span class="p">:</span>
-<a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a>        <span class="k">if</span> <span class="n">cleaned</span><span class="p">[</span><span class="n">left</span><span class="p">]</span> <span class="o">!=</span> <span class="n">cleaned</span><span class="p">[</span><span class="n">right</span><span class="p">]:</span>
-<a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a>            <span class="k">return</span> <span class="kc">False</span>
-<a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a>        <span class="n">left</span> <span class="o">+=</span> <span class="mi">1</span>
-<a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a>        <span class="n">right</span> <span class="o">-=</span> <span class="mi">1</span>
-<a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a>    <span class="k">return</span> <span class="kc">True</span>
+<h2 id="which-functions-lower">Which functions lower<a class="headerlink" href="#which-functions-lower" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>ppy<span class="w"> </span>explain<span class="w"> </span>strings.initials<span class="w">        </span><span class="c1"># llvm backend: native</span>
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>ppy<span class="w"> </span>explain<span class="w"> </span>strings.is_palindrome<span class="w">   </span><span class="c1"># llvm backend: native</span>
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>ppy<span class="w"> </span>explain<span class="w"> </span>strings.word_count<span class="w">      </span><span class="c1"># llvm backend: boxed: returns `dict[str, int]`, which has no native ABI</span>
 </code></pre></div>
-<p>The loop is native-shaped, but <code>cleaned[left]</code> indexes a <code>str</code>. The checker
-proves the function pure, and it stays on the Python side.
-<code>ppy explain strings.ppy:is_palindrome</code> reports the first construct that
-blocked lowering.</p>
-<h2 id="fast-text-goes-through-bytes">Fast text goes through bytes<a class="headerlink" href="#fast-text-goes-through-bytes" title="Permanent link">&para;</a></h2>
-<p>Text that needs to be fast goes through a byte buffer instead.
-<code>Buffer[ppy.u8]</code> is one byte per character and lowers, which is how
+<p><code>is_palindrome</code> indexes <code>cleaned[left]</code> and <code>cleaned[right]</code>. Natively a
+string knows its length in code points and whether it is all ASCII, so an
+index into ASCII text is one step, and the one-character strings the
+comparison reads are static and never allocated.</p>
+<p><code>word_count</code> would lower with a <code>HashMap[str, int]</code> in place of the <code>dict</code>;
+the <a href="../48_strings/">Strings example</a> counts that way.</p>
+<h2 id="very-large-text">Very large text<a class="headerlink" href="#very-large-text" title="Permanent link">&para;</a></h2>
+<p>Text of millions of characters can still come in as bytes:
+<code>Buffer[ppy.u8]</code> is one byte per character and is read without building a
+Python string, which is how
 <a href="https://github.com/franknoh/PPy/blob/main/examples/15_algorithms/15c_kmp/README.md">substring search</a> scans four million
-characters natively.</p>
+characters.</p>
 <h2 id="where-the-code-comes-from">Where the code comes from<a class="headerlink" href="#where-the-code-comes-from" title="Permanent link">&para;</a></h2>
 <p><code>strings.ppy</code> is hand-written; there is no <code>.py</code> source and no conversion step.</p>
-<p>Read on: <a href="../../guide/input/">Reading input</a> ·
+<p>Read on: <a href="../../guide/strings/">Strings</a> ·
+<a href="../../guide/input/">Reading input</a> ·
 <a href="../../guide/native-lowering/">Native lowering</a> ·
 <a href="https://github.com/franknoh/PPy/blob/main/examples/15_algorithms/15c_kmp/README.md">Algorithms: substring search</a></p>
 <h2 id="19_stringsstringsppy"><code>19_strings/strings.ppy</code><a class="headerlink" href="#19_stringsstringsppy" title="Permanent link">&para;</a></h2>

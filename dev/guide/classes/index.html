@@ -625,6 +625,8 @@
       
         
       
+        
+      
     
     
     
@@ -725,6 +727,34 @@
     
   
     Directives and markers
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../strings/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Strings
   
 
     
@@ -1913,6 +1943,8 @@
       
         
       
+        
+      
     
     
     
@@ -2309,6 +2341,34 @@
     
   
     Collections
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../howto/48_strings/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Strings
   
 
     
@@ -4174,7 +4234,7 @@ with null.</p>
 module, and no <code>__getattr__</code> or similar hook. Each field holds a value
 native code can represent:</p>
 <ul>
-<li>a number, a tuple of numbers, or a value class</li>
+<li>a number, a string, a tuple of numbers, or a value class</li>
 <li>a collection: <code>Vec[int]</code>, <code>HashMap[int, Vec[int]]</code></li>
 <li>another object, or <code>None</code> where the field is <code>Node | None</code></li>
 </ul>
@@ -4344,8 +4404,8 @@ return numbers, and make their objects inside.</p>
 <h2 id="limitations">Limitations<a class="headerlink" href="#limitations" title="Permanent link">&para;</a></h2>
 <ul>
 <li>A class with more than one base, a base from another module or a
-  library, or a field native code cannot represent (a <code>str</code>, say), keeps the
-  functions that use it in Python.</li>
+  library, or a field native code cannot represent (a <code>dict</code>, say), keeps
+  the functions that use it in Python.</li>
 <li>A generic class with a base, or a base that is generic, is not lowered.</li>
 <li>A dataclass object compared with <code>==</code> keeps the function in Python unless
   the class defines <code>__eq__</code>, since the generated one compares fields.</li>

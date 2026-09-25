@@ -10,13 +10,13 @@
       
       
       
-        <link rel="canonical" href="https://ppy.franknoh.dev/dev/guide/tensors/">
+        <link rel="canonical" href="https://ppy.franknoh.dev/dev/guide/strings/">
       
       
-        <link rel="prev" href="../gpu/">
+        <link rel="prev" href="../directives/">
       
       
-        <link rel="next" href="../xla/">
+        <link rel="next" href="../collections/">
       
       
         
@@ -27,7 +27,7 @@
     
     
       
-        <title>Common tensors - PPy</title>
+        <title>Strings - PPy</title>
       
     
     
@@ -84,7 +84,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#common-tensors" class="md-skip">
+        <a href="#strings" class="md-skip">
           Skip to content
         </a>
       
@@ -123,7 +123,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Common tensors
+              Strings
             
           </span>
         </div>
@@ -744,10 +744,37 @@
                 
   
   
+    
   
   
-    <li class="md-nav__item">
-      <a href="../strings/" class="md-nav__link">
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Strings
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
         
   
   
@@ -763,6 +790,142 @@
   
 
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#what-a-string-is-natively" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What a string is natively
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-lowers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What lowers
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="What lowers">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#format-specs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Format specs
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#methods" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Methods
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#lists-of-strings" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Lists of strings
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#strings-in-collections-and-classes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Strings in collections and classes
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#at-the-python-boundary" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        At the Python boundary
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#reading-and-printing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Reading and printing
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#where-it-falls-back" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Where it falls back
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#limitations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Limitations
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
     </li>
   
 
@@ -1024,37 +1187,10 @@
                 
   
   
-    
   
   
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
-      
-      
-        
-      
-      
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Common tensors
-  
-
-    
-  </span>
-  
-  
-
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
-      <a href="./" class="md-nav__link md-nav__link--active">
+    <li class="md-nav__item">
+      <a href="../tensors/" class="md-nav__link">
         
   
   
@@ -1070,81 +1206,6 @@
   
 
       </a>
-      
-        
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-    
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#element-types-and-shapes" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Element types and shapes
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#checking-a-value-at-run-time" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Checking a value at run time
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#writing-through-an-argument" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Writing through an argument
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#storage-and-backends" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Storage and backends
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#cpu-paths" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        CPU paths
-      
-    </span>
-  </a>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-      
     </li>
   
 
@@ -4068,10 +4129,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#element-types-and-shapes" class="md-nav__link">
+  <a href="#what-a-string-is-natively" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Element types and shapes
+        What a string is natively
       
     </span>
   </a>
@@ -4079,10 +4140,49 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#checking-a-value-at-run-time" class="md-nav__link">
+  <a href="#what-lowers" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Checking a value at run time
+        What lowers
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="What lowers">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#format-specs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Format specs
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#methods" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Methods
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#lists-of-strings" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Lists of strings
       
     </span>
   </a>
@@ -4090,10 +4190,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#writing-through-an-argument" class="md-nav__link">
+  <a href="#strings-in-collections-and-classes" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Writing through an argument
+        Strings in collections and classes
       
     </span>
   </a>
@@ -4101,10 +4201,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#storage-and-backends" class="md-nav__link">
+  <a href="#at-the-python-boundary" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Storage and backends
+        At the Python boundary
       
     </span>
   </a>
@@ -4112,10 +4212,32 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#cpu-paths" class="md-nav__link">
+  <a href="#reading-and-printing" class="md-nav__link">
     <span class="md-ellipsis">
       
-        CPU paths
+        Reading and printing
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#where-it-falls-back" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Where it falls back
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#limitations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Limitations
       
     </span>
   </a>
@@ -4142,84 +4264,206 @@
   
 
 
-<h1 id="common-tensors">Common tensors<a class="headerlink" href="#common-tensors" title="Permanent link">&para;</a></h1>
-<p><code>ppy.Tensor[dtype, shape]</code> describes a tensor independently of the library
-that owns its storage. PPy carries its element type and dimensions through
-type checking, function calls, and canonical IR.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">ppy</span>
+<h1 id="strings">Strings<a class="headerlink" href="#strings" title="Permanent link">&para;</a></h1>
+<p>A <code>str</code> lowers to native code. A function that builds, splits, searches, or
+formats text goes native under <code>ppy run</code>, in a standalone binary, and in
+emitted C and C++, and gives CPython's answer on every path.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ppy</span><span class="w"> </span><span class="kn">import</span> <span class="n">HashMap</span>
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>
 <a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>
-<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="k">def</span><span class="w"> </span><span class="nf">identity</span><span class="p">(</span><span class="n">x</span><span class="p">:</span> <span class="n">ppy</span><span class="o">.</span><span class="n">Tensor</span><span class="p">[</span><span class="n">ppy</span><span class="o">.</span><span class="n">bf16</span><span class="p">,</span> <span class="p">(</span><span class="mi">3840</span><span class="p">,)])</span> <span class="o">-&gt;</span> <span class="n">ppy</span><span class="o">.</span><span class="n">Tensor</span><span class="p">[</span><span class="n">ppy</span><span class="o">.</span><span class="n">bf16</span><span class="p">,</span> <span class="p">(</span><span class="mi">3840</span><span class="p">,)]:</span>
-<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>    <span class="k">return</span> <span class="n">x</span>
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="k">def</span><span class="w"> </span><span class="nf">busiest</span><span class="p">(</span><span class="n">log</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>    <span class="n">hits</span> <span class="o">=</span> <span class="n">HashMap</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">int</span><span class="p">]()</span>
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>    <span class="k">for</span> <span class="n">line</span> <span class="ow">in</span> <span class="n">log</span><span class="o">.</span><span class="n">splitlines</span><span class="p">():</span>
+<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>        <span class="n">path</span> <span class="o">=</span> <span class="n">line</span><span class="o">.</span><span class="n">split</span><span class="p">()[</span><span class="mi">1</span><span class="p">]</span>
+<a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>        <span class="n">hits</span><span class="p">[</span><span class="n">path</span><span class="p">]</span> <span class="o">=</span> <span class="n">hits</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">path</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span> <span class="o">+</span> <span class="mi">1</span>
+<a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>    <span class="n">best</span><span class="p">,</span> <span class="n">most</span> <span class="o">=</span> <span class="s2">""</span><span class="p">,</span> <span class="mi">0</span>
+<a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>    <span class="k">for</span> <span class="n">path</span> <span class="ow">in</span> <span class="n">hits</span><span class="p">:</span>
+<a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>        <span class="k">if</span> <span class="n">hits</span><span class="p">[</span><span class="n">path</span><span class="p">]</span> <span class="o">&gt;</span> <span class="n">most</span><span class="p">:</span>
+<a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>            <span class="n">best</span><span class="p">,</span> <span class="n">most</span> <span class="o">=</span> <span class="n">path</span><span class="p">,</span> <span class="n">hits</span><span class="p">[</span><span class="n">path</span><span class="p">]</span>
+<a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a>    <span class="k">return</span> <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">best</span><span class="si">:</span><span class="s2">&lt;12</span><span class="si">}{</span><span class="n">most</span><span class="si">:</span><span class="s2">&gt;6,</span><span class="si">}</span><span class="s2">"</span>
 </code></pre></div>
-<p>The annotation does not allocate memory, wrap an array, or import a GPU
-framework.</p>
-<h2 id="element-types-and-shapes">Element types and shapes<a class="headerlink" href="#element-types-and-shapes" title="Permanent link">&para;</a></h2>
-<p><code>ppy.bf16</code> names bfloat16. It stays distinct from <code>ppy.f16</code>, which names IEEE
-float16, even though both occupy 16 bits.</p>
-<p>The shape is a tuple. The comma in <code>(3840,)</code> makes it a one-dimensional
-shape. Dimensions can be nonnegative integers or symbolic names, and <code>()</code>
-describes a scalar tensor.</p>
-<p>The existing <code>Shape</code> and <code>DType</code> refinements offer the same contract:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Annotated</span>
-<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="kn">import</span><span class="w"> </span><span class="nn">ppy</span>
-<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>
-<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="n">Matrix</span> <span class="o">=</span> <span class="n">ppy</span><span class="o">.</span><span class="n">Tensor</span><span class="p">[</span><span class="n">ppy</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="p">(</span><span class="s2">"N"</span><span class="p">,</span> <span class="mi">4</span><span class="p">)]</span>
-<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="n">Scalar</span> <span class="o">=</span> <span class="n">ppy</span><span class="o">.</span><span class="n">Tensor</span><span class="p">[</span><span class="n">ppy</span><span class="o">.</span><span class="n">bf16</span><span class="p">,</span> <span class="p">()]</span>
-<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="n">Vector</span> <span class="o">=</span> <span class="n">Annotated</span><span class="p">[</span><span class="n">ppy</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span> <span class="n">ppy</span><span class="o">.</span><span class="n">DType</span><span class="p">(</span><span class="s2">"bfloat16"</span><span class="p">),</span> <span class="n">ppy</span><span class="o">.</span><span class="n">Shape</span><span class="p">(</span><span class="mi">3840</span><span class="p">)]</span>
-</code></pre></div>
-<p>A bare <code>ppy.Tensor</code> leaves dtype and shape unspecified. Canonical lowering
-requires those facts to be known from the annotation or analysis.</p>
-<h2 id="checking-a-value-at-run-time">Checking a value at run time<a class="headerlink" href="#checking-a-value-at-run-time" title="Permanent link">&para;</a></h2>
-<p><code>ppy.check[TensorType](value)</code> validates the object's <code>shape</code> and <code>dtype</code>
-metadata without importing its framework. Repeated symbolic names within one
-shape must have the same size.</p>
-<p>Ownership markers describe a relationship between caller and callee, so
-<code>ppy.check</code> cannot establish <code>Mut</code> or <code>Owned</code> from one object's metadata.</p>
-<h2 id="writing-through-an-argument">Writing through an argument<a class="headerlink" href="#writing-through-an-argument" title="Permanent link">&para;</a></h2>
-<p><code>ppy.Mut[ppy.Tensor[...]]</code> permits writes for the duration of a call. A
-plugin declares which arguments it reads, writes, or retains.</p>
+<p>The <a href="../../howto/48_strings/">Strings example</a> parses and reports on a
+200,000-line log and times each path.</p>
+<h2 id="what-a-string-is-natively">What a string is natively<a class="headerlink" href="#what-a-string-is-natively" title="Permanent link">&para;</a></h2>
+<p>A string is a handle into the C runtime (<code>ppy_runtime/strings.c</code>), counted
+the way a <a href="../collections/">collection</a> is and freed when the last reference
+goes. It holds:</p>
 <ul>
-<li>A borrowed argument may not be kept after the call.</li>
-<li>A read-only borrow cannot be passed to an operation that writes through it.</li>
+<li>its UTF-8 bytes, with a NUL after them</li>
+<li>its length in code points, kept, so <code>len(s)</code> reads one word</li>
+<li>whether every byte is ASCII, so an index into an ASCII string is one step
+  and an index into any other walks the bytes</li>
+<li>its hash, worked out the first time a map asks</li>
 </ul>
-<p>For a device plugin implementing the common tensor and borrowing APIs, a
-broadcast into preallocated output can have this form:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">ppy</span>
-<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="kn">import</span><span class="w"> </span><span class="nn">ppy_furiosa</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">fx</span>
-<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>
-<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>
-<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="k">def</span><span class="w"> </span><span class="nf">broadcast</span><span class="p">(</span>
-<a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>    <span class="n">x</span><span class="p">:</span> <span class="n">ppy</span><span class="o">.</span><span class="n">Tensor</span><span class="p">[</span><span class="n">ppy</span><span class="o">.</span><span class="n">bf16</span><span class="p">,</span> <span class="p">(</span><span class="mi">3840</span><span class="p">,)],</span>
-<a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a>    <span class="n">out</span><span class="p">:</span> <span class="n">ppy</span><span class="o">.</span><span class="n">Mut</span><span class="p">[</span><span class="n">ppy</span><span class="o">.</span><span class="n">Tensor</span><span class="p">[</span><span class="n">ppy</span><span class="o">.</span><span class="n">bf16</span><span class="p">,</span> <span class="p">(</span><span class="mi">256</span><span class="p">,</span> <span class="mi">3840</span><span class="p">)]],</span>
-<a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a>    <span class="n">value</span> <span class="o">=</span> <span class="n">fx</span><span class="o">.</span><span class="n">broadcast</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">copies</span><span class="o">=</span><span class="mi">256</span><span class="p">)</span>
-<a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a>    <span class="n">fx</span><span class="o">.</span><span class="n">store</span><span class="p">(</span><span class="n">out</span><span class="p">,</span> <span class="n">value</span><span class="p">)</span>
-</code></pre></div>
-<p>The plugin must describe <code>store</code> as a write and declare its output argument
-as a mutable borrow. PPy preserves the write even though the call returns no
-value.</p>
-<div class="admonition note">
-<p class="admonition-title">Note</p>
-<p>An existing plugin needs to adopt these contracts before accepting this
-example. Installing PPy alone does not update a device plugin.</p>
-</div>
-<h2 id="storage-and-backends">Storage and backends<a class="headerlink" href="#storage-and-backends" title="Permanent link">&para;</a></h2>
-<p>Without a selected device backend, a common tensor uses the shared tensor IR
-type. A backend extension can choose a physical representation from the same
-analyzed type and facts. Address spaces, device memory placement, and
-device-specific execution settings belong to that extension.</p>
-<p>Enabling several plugins does not let registration order choose the storage
-of a common tensor. The selected backend determines which extension can
-provide its representation. If multiple extensions claim it for that backend,
-compilation reports the ambiguity.</p>
-<h2 id="cpu-paths">CPU paths<a class="headerlink" href="#cpu-paths" title="Permanent link">&para;</a></h2>
-<p>Common tensor annotations do not create a CPU native ABI. A CPU path that
-cannot represent a tensor keeps its Python fallback. An explicit external
-backend request reports a located lowering error when its representation or
-operation is unsupported.</p>
-<p>See the <a href="../../api/plugins/">plugin API</a> for argument contracts and type
-lowering hooks.</p>
+<p>A string is immutable. <code>s += t</code> appends in place when nothing else holds
+<code>s</code>, as CPython does, and makes a new string otherwise. The 128
+one-character ASCII strings are static and never allocated, so <code>for c in s</code>
+and <code>s[i]</code> over ASCII text allocate nothing.</p>
+<p>Indices, lengths, and slices count code points, as Python's do. Comparing
+two strings compares their bytes, which in UTF-8 orders them the way
+Python orders code points.</p>
+<h2 id="what-lowers">What lowers<a class="headerlink" href="#what-lowers" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>literals, <code>+</code>, <code>*</code> by an <code>int</code>, <code>+=</code>, <code>*=</code></td>
+<td></td>
+</tr>
+<tr>
+<td><code>==</code>, <code>!=</code>, <code>&lt;</code>, <code>&lt;=</code>, <code>&gt;</code>, <code>&gt;=</code></td>
+<td>by code point</td>
+</tr>
+<tr>
+<td><code>s[i]</code>, <code>s[a:b]</code>, <code>s[a:b:c]</code></td>
+<td>negative indices and steps as Python has them</td>
+</tr>
+<tr>
+<td><code>sub in s</code>, <code>s in names</code>, <code>c in ("a", "b")</code></td>
+<td></td>
+</tr>
+<tr>
+<td><code>for c in s</code>, <code>len(s)</code>, <code>if s:</code></td>
+<td></td>
+</tr>
+<tr>
+<td><code>ord</code>, <code>chr</code>, <code>min</code> and <code>max</code> of strings</td>
+<td></td>
+</tr>
+<tr>
+<td><code>str(x)</code>, <code>repr(x)</code>, <code>format(x, spec)</code></td>
+<td>of an <code>int</code>, <code>float</code>, <code>bool</code>, or <code>str</code></td>
+</tr>
+<tr>
+<td><code>int(s)</code>, <code>int(s, base)</code>, <code>float(s)</code></td>
+<td>the grammar CPython reads, underscores and <code>inf</code> included</td>
+</tr>
+<tr>
+<td>f-strings</td>
+<td>fields of numbers, bools, and strings, with <code>!r</code>, <code>!s</code>, <code>!a</code></td>
+</tr>
+</tbody>
+</table>
+<p>A float is written the way <code>repr</code> writes it: the shortest digits that read
+back as the same double.</p>
+<h3 id="format-specs">Format specs<a class="headerlink" href="#format-specs" title="Permanent link">&para;</a></h3>
+<p>An f-string field or <code>format</code> takes fill and alignment (<code>&lt;</code>, <code>&gt;</code>, <code>^</code>, <code>=</code>),
+a sign, <code>z</code>, <code>#</code>, <code>0</code>, a width, grouping with <code>,</code> or <code>_</code>, a precision, and
+the types <code>d</code>, <code>b</code>, <code>o</code>, <code>x</code>, <code>X</code>, <code>e</code>, <code>E</code>, <code>f</code>, <code>F</code>, <code>g</code>, <code>G</code>, <code>%</code>, and
+<code>s</code>. A spec with a nested field (<code>{x:{width}}</code>) stays in Python.</p>
+<h3 id="methods">Methods<a class="headerlink" href="#methods" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>find</code>, <code>rfind</code>, <code>index</code>, <code>rindex</code>, <code>count</code></td>
+<td>with <code>start</code> and <code>end</code></td>
+</tr>
+<tr>
+<td><code>startswith</code>, <code>endswith</code></td>
+<td>with <code>start</code> and <code>end</code>; a tuple of prefixes stays in Python</td>
+</tr>
+<tr>
+<td><code>replace</code></td>
+<td>with a count</td>
+</tr>
+<tr>
+<td><code>strip</code>, <code>lstrip</code>, <code>rstrip</code></td>
+<td>on whitespace or on the characters given</td>
+</tr>
+<tr>
+<td><code>split</code>, <code>rsplit</code></td>
+<td>on whitespace or a separator, with <code>maxsplit</code></td>
+</tr>
+<tr>
+<td><code>splitlines</code></td>
+<td>every line boundary Python has, with <code>keepends</code></td>
+</tr>
+<tr>
+<td><code>join</code></td>
+<td>of a list of strings, a <code>Vec[str]</code>, or a literal list or tuple</td>
+</tr>
+<tr>
+<td><code>partition</code>, <code>rpartition</code></td>
+<td>unpacked into three names</td>
+</tr>
+<tr>
+<td><code>removeprefix</code>, <code>removesuffix</code>, <code>zfill</code></td>
+<td></td>
+</tr>
+<tr>
+<td><code>ljust</code>, <code>rjust</code>, <code>center</code></td>
+<td>with a fill character</td>
+</tr>
+<tr>
+<td><code>lower</code>, <code>upper</code>, <code>capitalize</code>, <code>title</code>, <code>swapcase</code></td>
+<td></td>
+</tr>
+<tr>
+<td><code>isdigit</code>, <code>isalpha</code>, <code>isalnum</code>, <code>isupper</code>, <code>islower</code>, <code>isspace</code>, <code>isdecimal</code>, <code>isnumeric</code></td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<h2 id="lists-of-strings">Lists of strings<a class="headerlink" href="#lists-of-strings" title="Permanent link">&para;</a></h2>
+<p><code>split</code>, <code>rsplit</code>, and <code>splitlines</code> hand back a <code>list[str]</code>, and a function
+may make one from a literal (<code>["a", "b"]</code>). Natively it is a sequence of
+string handles. It indexes from either end, iterates, unpacks
+(<code>key, value = line.split("=")</code>), and has <code>append</code>, <code>insert</code>, <code>pop</code>,
+<code>sort</code>, <code>reverse</code>, <code>clear</code>, <code>index</code>, <code>count</code>, <code>in</code>, <code>len</code>, and <code>print</code>.</p>
+<h2 id="strings-in-collections-and-classes">Strings in collections and classes<a class="headerlink" href="#strings-in-collections-and-classes" title="Permanent link">&para;</a></h2>
+<p>A string is an element (<code>Vec[str]</code>, <code>Deque[str]</code>, <code>Heap[str]</code>) and a key
+(<code>HashMap[str, int]</code>, <code>HashSet[str]</code>, <code>TreeMap[str, float]</code>,
+<code>TreeSet[str]</code>). A map hashes a key by its text and a tree orders keys by
+it, and each holds a reference to every key it keeps. A heap and <code>sort</code>
+order strings as <code>&lt;</code> does.</p>
+<p>A string is a field of a dataclass or of an object class, which makes the
+class an object class: native code holds it by handle. See
+<a href="../classes/">Classes</a>.</p>
+<h2 id="at-the-python-boundary">At the Python boundary<a class="headerlink" href="#at-the-python-boundary" title="Permanent link">&para;</a></h2>
+<p>A native function with <code>str</code> parameters or a <code>str</code> result is called from
+Python under <code>ppy run</code>. The boundary hands the string's UTF-8 bytes in,
+without a copy, and a returned string back out as a new Python string.
+A string with a lone surrogate has no UTF-8, and a call with one runs as
+Python.</p>
+<p>A <code>list[str]</code> parameter or result is passed by handle between native
+functions and does not cross the boundary. A function Python calls with
+one runs its Python body.</p>
+<h2 id="reading-and-printing">Reading and printing<a class="headerlink" href="#reading-and-printing" title="Permanent link">&para;</a></h2>
+<p>In a standalone binary, <code>ppy.input[str]()</code> and <code>input()</code> read one line
+without its newline, <code>ppy.scan[str]()</code> reads the next whitespace-delimited
+token, and <code>print</code> writes strings and lists of strings. A line that is not
+UTF-8 is <code>UnicodeDecodeError</code>, as CPython reads it.</p>
+<h2 id="where-it-falls-back">Where it falls back<a class="headerlink" href="#where-it-falls-back" title="Permanent link">&para;</a></h2>
+<p>Some answers need Python's Unicode tables. These check first and fall back:
+under <code>ppy run</code> the call runs as Python, and a standalone binary stops.</p>
+<ul>
+<li>the case methods and <code>is...</code> methods of text outside ASCII (<code>isspace</code> is
+  native for all text)</li>
+<li><code>repr</code> of text outside ASCII, which decides what is printable</li>
+<li><code>int(s)</code> of digits outside ASCII</li>
+</ul>
+<p>Everything CPython raises for (an index out of range, <code>int("x")</code>, an empty
+separator, <code>ord</code> of two characters) is a guard of the same kind.</p>
+<h2 id="limitations">Limitations<a class="headerlink" href="#limitations" title="Permanent link">&para;</a></h2>
+<ul>
+<li><code>str.format</code>, <code>%</code> formatting, <code>encode</code>, <code>translate</code>, <code>expandtabs</code>, and
+  <code>casefold</code> stay in Python. An f-string does what <code>str.format</code> does.</li>
+<li>A <code>dict</code> or <code>set</code> of strings stays in Python; <code>HashMap[str, V]</code> and
+  <code>HashSet[str]</code> are the native ones.</li>
+<li>The case of text outside ASCII falls back, as above.</li>
+</ul>
+<p>Examples: <a href="../../howto/48_strings/">Strings</a>.</p>
 
 
 
@@ -4257,7 +4501,7 @@ lowering hooks.</p>
       <nav class="md-footer__inner md-grid" aria-label="Footer" >
         
           
-          <a href="../gpu/" class="md-footer__link md-footer__link--prev" aria-label="Previous: GPU kernels">
+          <a href="../directives/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Directives and markers">
             <div class="md-footer__button md-icon">
               
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
@@ -4267,20 +4511,20 @@ lowering hooks.</p>
                 Previous
               </span>
               <div class="md-ellipsis">
-                GPU kernels
+                Directives and markers
               </div>
             </div>
           </a>
         
         
           
-          <a href="../xla/" class="md-footer__link md-footer__link--next" aria-label="Next: XLA">
+          <a href="../collections/" class="md-footer__link md-footer__link--next" aria-label="Next: Collections">
             <div class="md-footer__title">
               <span class="md-footer__direction">
                 Next
               </span>
               <div class="md-ellipsis">
-                XLA
+                Collections
               </div>
             </div>
             <div class="md-footer__button md-icon">
