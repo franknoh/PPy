@@ -237,6 +237,25 @@ def bound_python(code: str, line_map: dict[int, int], native_keys: frozenset[str
     return ast.unparse(tree) + "\n"
 
 
+def _link_arguments(libraries: tuple[str, ...]) -> list[str]:
+    """What the extension links: the runtimes this package carries are
+    compiled in from their source, as the shared library links them; the
+    rest by name."""
+    found: list[str] = []
+    for library in libraries:
+        if library == "ppy_aio":
+            from ppy_runtime.aio import source_path as aio_source
+
+            found.append(str(aio_source()))
+        elif library == "ppy_collections":
+            from ppy_runtime.collections import source_path as collections_source
+
+            found.append(str(collections_source()))
+        else:
+            found.append(f"-l{library}")
+    return found
+
+
 def build_python_extension(
     name: str,
     signatures: dict[str, NativeSignature],
@@ -279,7 +298,7 @@ def build_python_extension(
         *[str(o) for o in objects],
         "-o",
         str(library),
-        *[f"-l{lib}" for lib in libraries],
+        *_link_arguments(libraries),
     ]
     completed = subprocess.run(command, capture_output=True, text=True, check=False)
     if completed.returncode != 0:

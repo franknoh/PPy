@@ -1,5 +1,208 @@
 # Changelog
 
+## 0.4.0 — 2026-09-25
+
+The release where ordinary Python data goes native. Text, class
+hierarchies, and the common container operations compile now. They used to
+send a function back to CPython. Memory is reclaimed the way CPython
+reclaims it, cycles included, and a standalone binary that fails says what
+CPython would have said.
+
+### Strings
+
+- `str` lowers to native code under `ppy run`, in a standalone binary, and
+  in emitted C and C++, and gives CPython's answer on every path. A string
+  is a reference-counted handle into a new C runtime,
+  `ppy_runtime/strings.c`. It holds its UTF-8 bytes, its length in code
+  points, whether it is all ASCII (so an ASCII index is one step), and its
+  hash once a map asks for it. `s += t` appends in place when nothing else
+  holds `s`, as CPython does. The 128 one-character ASCII strings are static,
+  so `for c in s` and `s[i]` over ASCII text allocate nothing.
+- Native operations:
+  - literals, `+`, `*`, `+=`, `*=`, and the six comparisons by code point;
+  - `s[i]`, `s[a:b]`, and `s[a:b:c]`, with negative indices and steps;
+  - `in`, `for c in s`, `len`, `if s:`, `ord`, `chr`, and `min`/`max` of
+    strings;
+  - `str(x)`, `repr(x)`, and `format(x, spec)` of an `int`, `float`, `bool`,
+    or `str`. A float is written as `repr` writes it.
+  - `int(s)`, `int(s, base)`, and `float(s)`, with the grammar CPython
+    reads, underscores and `inf` included.
+- f-strings lower with fields of numbers, bools, and strings, `!r`, `!s`,
+  and `!a`. A spec may use fill and alignment, a sign, `z`, `#`, `0`, a
+  width, `,` or `_` grouping, a precision, and the types `d b o x X e E f F g
+  G % s`.
+- String methods lower:
+  - search: `find`, `rfind`, `index`, `rindex`, `count` (with `start` and
+    `end`), `startswith`, `endswith`;
+  - editing: `replace`, `strip`/`lstrip`/`rstrip`, `removeprefix`,
+    `removesuffix`, `zfill`, `ljust`/`rjust`/`center`;
+  - splitting and joining: `split`/`rsplit` (with `maxsplit`), `splitlines`
+    (every line boundary Python has, and `keepends`), `join`, and
+    `partition`/`rpartition`;
+  - case: `lower`, `upper`, `capitalize`, `title`, `swapcase`;
+  - tests: `isdigit`, `isalpha`, `isalnum`, `isupper`, `islower`,
+    `isspace`, `isdecimal`, `isnumeric`.
+- Case and category answers for text outside ASCII need Python's Unicode
+  tables. Those check first and fall back to CPython.
+- `split`, `rsplit`, and `splitlines` return a `list[str]` that lives
+  natively as a sequence of string handles. It can be indexed from either
+  end, iterated, and unpacked (`key, value = line.split("=")`). It has
+  `append`, `insert`, `pop`, `sort`, `reverse`, `clear`, `index`, `count`,
+  `in`, `len`, and `print`.
+- Strings are collection elements (`Vec[str]`, `Deque[str]`, `Heap[str]`)
+  and keys (`HashMap[str, int]`, `HashSet[str]`, `TreeMap[str, float]`,
+  `TreeSet[str]`). Maps hash a key by its text and trees order keys by it.
+  A string field makes a class an object class.
+- A native function with `str` parameters or a `str` result is called
+  natively from Python. UTF-8 goes in without a copy, and a new Python
+  string comes out.
+- In standalone binaries, `ppy.input[str]()` and `input()` read a line,
+  `ppy.scan[str]()` reads a token, and `print` writes strings and lists of
+  strings. Input that is not UTF-8 raises `UnicodeDecodeError`, as CPython
+  does.
+- New example `48_strings`: a 200,000-line log, parsed, counted by path,
+  ordered, and run-length encoded with native strings. It takes 2.05 s
+  under CPython and 1.16 s as a standalone binary.
+
+### Classes
+
+- Classes may derive from one class of the same module and still compile.
+  An instance is one native record, its bases' fields first. A method a
+  subclass overrides is called by the class the object was made as, which
+  a tag in the object's header records; `super().__init__(...)` and
+  `super().method(...)` call the base's method; `isinstance(obj, Cls)`
+  reads the tag; and a parameter, field, or collection element typed
+  `Base` takes a `Derived`. `Vec[Shape]` may hold `Square`s.
+- Object classes' operator methods lower: `a + b` and the other arithmetic
+  operators with their reflected forms, unary `-`, `+`, `~`, `==`, `!=`,
+  `<`, `<=`, `>`, `>=` with reflection, `obj[key]`, `obj[key] = value`,
+  and `x in obj`. A class whose methods return a new instance of it is
+  held by handle, and each result is freed with its last reference.
+  `obj[key]` on a project class is typed by its `__getitem__`.
+- `points[i].x = 3` and `table[k].y += 0.5` write a field of a dataclass
+  element in place, natively; a function that also keeps a copy of such an
+  element stays in Python, where the copy is the same object.
+- A reference field or element read off a temporary (`make().child`,
+  `rows(n)[i]`) compiles.
+- `field(default=...)` and `field(default_factory=Vec[int])` (or another
+  collection, or a class built with no arguments) build natively, and
+  standalone programs may use them.
+- A generic class's type arguments may be left out where the checker can
+  tell them: from the target (`s: Stack[int] = Stack()`, a declared return
+  or field type) or from the constructor's arguments (`Pair(1, 2.5)` is a
+  `Pair[int, float]`). The collections take theirs from the target: `v:
+  Vec[int] = Vec()`. A collection that stores floats is still written
+  `Vec[float]()`, which the checker says (`E1305`).
+- `ppy run` no longer crashes with `KeyError: 'i8*'` when a module's
+  lowering comes from the cache and one of its functions returns an
+  object.
+- New example `49_inheritance`: an expression tree of subclasses and a 2D
+  vector with operators, 5.5 s under CPython and 0.61 s as a standalone
+  binary.
+
+### Collections
+
+- `Vec` gains `extend`, `insert`, `pop(i)`, `remove`, `index`, `count`,
+  `copy`, slicing (`v[a:b]`, `v[a:b:step]`, a new `Vec`, clamped and
+  counted from the end as a list's slice is), `==`, `+`, `x in v`, and
+  `sort(reverse=True)` and `sort(key=...)` with a lambda or a function's
+  name. All of them are native.
+- `Deque` gains `extend`, `extendleft`, `rotate`, `insert`, `remove`,
+  `index`, `count`, `copy`, `==`, `+`, and `in`.
+- `LinkedList` gains `extend`, `==`, `in`, and `reversed()`.
+- `HashMap` and `TreeMap` gain:
+  - `keys()`, `values()`, and `items()` (so `for k, v in m.items()` is native);
+  - `setdefault`, and `pop(key, default)`;
+  - `update`, `copy`, and `==`;
+  - `get(key, default)` for any value type, collections included.
+- `HashSet` and `TreeSet` gain:
+  - `|`, `&`, `-`, `^` and `union`, `intersection`, `difference`, `symmetric_difference`;
+  - `issubset`, `issuperset`, and `isdisjoint`;
+  - `update`, `copy`, and `==`.
+- `TreeMap` and `TreeSet` gain `between(low, high)` (keys from `low` up to
+  `high`, in order) and `pop_min`/`pop_max`.
+- `Heap` and `MaxHeap` gain `pushpop`, `replace`, `to_sorted()` (a new
+  `Vec`, the heap unchanged), and `copy`.
+- Every collection but the maps starts from an iterable: `Vec[int]([3, 1,
+  2])`, `HashSet[int](range(10))`, `Heap[int](items)` (heapified in linear
+  time).
+- `enumerate`, `zip`, `reversed`, `sorted`, `min`, `max`, and `sum` over a
+  collection or a map's views are native. `sum` of floats adds as CPython
+  does, with the rounding error compensated.
+- A native function that takes or returns collections of numbers, tuples,
+  and other collections is called natively from Python. Arguments are
+  copied into native memory and results copied out. Identity is kept, and
+  writes through an argument (even through an element of it) reach the
+  caller's objects. A function that returns nothing and fills what it was
+  passed crosses too.
+- A write through an element of a parameter (`for row in rows:
+  row.push(0)`) now counts as a write to that parameter.
+- Standalone binaries report the new checks with CPython's messages, such
+  as `ValueError: 8 is not in the Vec`.
+
+### Memory and errors
+
+- Reference cycles are freed in native code. A doubly linked list, a tree
+  whose nodes point at their parents, or objects that hold each other were
+  never freed before; a collector now finds them the way CPython's `gc`
+  does, by counting the references each object gets from outside the
+  others, and frees what only holds itself. It runs on its own as objects
+  accumulate, before a standalone binary exits, and where the program
+  calls `gc.collect()`, which now lowers to native code (as a statement:
+  CPython's count is of its own objects).
+- A native call that fails a guard under `ppy run` and falls back to
+  Python no longer leaves the collections and objects it made allocated;
+  they are freed the next time native code makes one.
+- A standalone binary, and emitted C and C++, print the line CPython's
+  traceback would end with where a check fails, values included:
+  `KeyError: (3, -3)`, `IndexError: index 7 is out of range for length 2`,
+  `IndexError: pop from an empty Deque`, `AttributeError: 'NoneType'
+  object has no attribute 'value'`, `ZeroDivisionError: division by zero`
+  (worded as the Python that built it words it), `ValueError: negative
+  shift count`. They exit with status 1, as CPython does, where they used
+  to print a generic message and exit with 70. Where only native code can
+  fail, an integer past 64 bits, the message is `OverflowError: the result
+  does not fit in a 64-bit integer`.
+- Standalone input errors are CPython's word for word: `ValueError:
+  invalid literal for int() with base 10: 'abc'`, `ValueError: could not
+  convert string to float: '1 2'`, `EOFError: EOF when reading a line`,
+  `OverflowError: 40000 does not fit in ppy.i16`. `ppy.input[tuple[int,
+  int]]()` reports a field that is not an integer before a wrong number of
+  fields, as `map(int, input().split())` does.
+- A negative index into a buffer counts from the end in a standalone
+  binary, as it does in Python.
+- `if obj:` on `Node | None` where the class defines `__len__` or
+  `__bool__` is false for `None` natively, as in Python, instead of
+  falling back.
+- A standalone module may `import gc`.
+- Editing the C runtimes in a development tree invalidates cached native
+  artifacts.
+
+### The checker
+
+- `--no-strict` now downgrades findings instead of dropping them. These are
+  now reported as `W2010` warnings that name the code they replace; they
+  used to disappear without a word:
+  - an unannotated parameter (`E1201`),
+  - an unknown attribute (`E1202`),
+  - an unvouched decorator (`E1204`),
+  - iterating a non-iterable (`E1302`),
+  - a call with no known signature (`E1306`).
+
+  Type mismatches stay errors in either mode.
+
+### The documentation site
+
+- The site is redesigned:
+  - Inter for text, near-white and near-black neutrals, and Python's blue
+    and yellow as the only accents;
+  - GitHub's light and dark syntax colors;
+  - a landing page with a hero and a grid of highlights;
+  - a new PPy logo.
+- Every page is rewritten in a plainer voice.
+- The CI's required checks now report under their own names on a
+  prose-only change, so a docs-only pull request into `main` can merge.
+
 ## 0.3.7 — 2026-09-25
 
 - A standalone binary reads more than `int`. `ppy.input` and `ppy.scan` of

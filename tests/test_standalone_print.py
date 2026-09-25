@@ -153,14 +153,9 @@ def test_standalone_print_evaluates_arguments_before_writing(write, backend):
         ("print(1, sep=ppy.input[str]())", "standalone print `sep` must be a string literal"),
         ("print(1, flush=bool(1))", "standalone print `flush` must be a boolean literal"),
         ("print(1, flush=1)", "standalone print `flush` must be a boolean literal"),
-        (
-            'print(f"{1:04d}")',
-            "standalone print does not support f-string format specs or conversions",
-        ),
-        (
-            'print(f"{1!r}")',
-            "standalone print does not support f-string format specs or conversions",
-        ),
+        # A spec with a field of its own is Python's; a literal spec is native.
+        ('print(f"{1:{4}}")', "a format spec with fields has no native lowering"),
+        ('print(f"{1:q}")', "the format spec `q` has no native lowering"),
         ("identity(x=42)", "keyword arguments have no native ABI"),
     ],
 )

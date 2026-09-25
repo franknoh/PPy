@@ -41,18 +41,54 @@ _ALLOC = """{
     if (count < 0) {
         /* CPython raises ValueError here; a standalone binary has no
          * exception, so it says what happened and stops. */
-        fputs("ppy: a buffer cannot hold fewer than no elements\\n", stderr);
+        fflush(stdout);
+        fputs("ValueError: a buffer cannot hold fewer than no elements\\n", stderr);
         exit(1);
     }
     void *room = calloc(count > 0 ? (size_t)count : 1, (size_t)width);
     if (room == NULL) {
-        fputs("ppy: out of memory\\n", stderr);
+        fflush(stdout);
+        fputs("MemoryError\\n", stderr);
         exit(1);
     }
     return (int8_t *)room;
 }"""
 
+#: A failed guard in a program with no Python under it: the line CPython's
+#: traceback would end with, `{0}` and on filled in, and CPython's status.
+_RAISE = """{
+    int64_t values[4];
+    values[0] = a;
+    values[1] = b;
+    values[2] = c;
+    values[3] = d;
+    fflush(stdout);
+    for (const char *at = text; *at != '\\0'; at++) {
+        if (at[0] == '{' && at[1] >= '0' && at[1] < '0' + count && at[2] == '}') {
+            fprintf(stderr, "%" PRId64, values[at[1] - '0']);
+            at += 2;
+            continue;
+        }
+        fputc(*at, stderr);
+    }
+    fputc('\\n', stderr);
+    exit(1);
+}"""
+
 SHIMS: dict[str, Shim] = {
+    "ppy_rt_raise": Shim(
+        "void",
+        (
+            "const char *text",
+            "int64_t count",
+            "int64_t a",
+            "int64_t b",
+            "int64_t c",
+            "int64_t d",
+        ),
+        _RAISE,
+        ("inttypes.h", "stdio.h", "stdlib.h"),
+    ),
     "ppy_rt_print_i64": Shim(
         "void", ("int64_t value",), '{ printf("%" PRId64, value); }', ("inttypes.h", "stdio.h")
     ),
@@ -88,6 +124,83 @@ SHIMS.update(
     }
 )
 
+#: `ppy.input[str]()` and `input()` with no interpreter: one line, its newline
+#: (and a carriage return before it) removed, read in pieces however long.
+_INPUT_STR = """{
+    int8_t chunk[4096];
+    int8_t more = 0;
+    int64_t length = ppy_rt_read_line(chunk, (int64_t)sizeof chunk, 0, &more);
+    if (length < 0) {
+        ppy_rt_fail("ppy: EOFError: EOF when reading a line");
+    }
+    int8_t *made = ppy_str_builder(length);
+    ppy_str_add_bytes(made, chunk, length);
+    while (more) {
+        length = ppy_rt_read_line(chunk, (int64_t)sizeof chunk, 1, &more);
+        if (length <= 0) {
+            break;
+        }
+        ppy_str_add_bytes(made, chunk, length);
+    }
+    int64_t *header = (int64_t *)made;
+    if (header[0] > 0 && ppy_str_raw(made)[header[0] - 1] == '\\r') {
+        header[0]--;
+        header[3]--;
+    }
+    if (!ppy_str_valid(ppy_str_raw(made), header[0])) {
+        ppy_rt_fail("ppy: UnicodeDecodeError: the line is not UTF-8");
+    }
+    return ppy_str_finish(made);
+}"""
+
+#: `ppy.scan[str]()` with no interpreter: the next whitespace-delimited token.
+_SCAN_STR = """{
+    int8_t chunk[4096];
+    int8_t more = 0;
+    int64_t length = ppy_rt_read_token(chunk, (int64_t)sizeof chunk, 0, &more);
+    if (length <= 0 && !more) {
+        ppy_rt_fail("ppy: EOFError: the input ended where a token was expected");
+    }
+    int8_t *made = ppy_str_builder(length);
+    ppy_str_add_bytes(made, chunk, length);
+    while (more) {
+        length = ppy_rt_read_token(chunk, (int64_t)sizeof chunk, 1, &more);
+        ppy_str_add_bytes(made, chunk, length);
+    }
+    if (!ppy_str_valid(ppy_str_raw(made), ((int64_t *)made)[0])) {
+        ppy_rt_fail("ppy: UnicodeDecodeError: the token is not UTF-8");
+    }
+    return ppy_str_finish(made);
+}"""
+
+_STRING_READ_NEEDS = (
+    "ppy_rt_fail",
+    "ppy_str_builder",
+    "ppy_str_add_bytes",
+    "ppy_str_raw",
+    "ppy_str_valid",
+    "ppy_str_finish",
+)
+
+SHIMS.update(
+    {
+        "ppy_rt_input_str": Shim(
+            "int8_t *",
+            (),
+            _INPUT_STR,
+            ("stdint.h",),
+            needs=("ppy_rt_read_line", *_STRING_READ_NEEDS),
+        ),
+        "ppy_rt_scan_str": Shim(
+            "int8_t *",
+            (),
+            _SCAN_STR,
+            ("stdint.h",),
+            needs=("ppy_rt_read_token", *_STRING_READ_NEEDS),
+        ),
+    }
+)
+
 _COMMENTS = {
     "ppy_rt_next": (
         "/* The buffered byte source behind `ppy.input` and `ppy.scan` with no\n"
@@ -97,6 +210,10 @@ _COMMENTS = {
     "ppy_rt_fail": (
         "/* Where Python would raise, a standalone binary says what happened and\n"
         " * stops: there is no exception to raise and no caller to catch it. */\n"
+    ),
+    "ppy_rt_raise": (
+        "/* A failed guard, where there is no Python to fall back to: the line\n"
+        " * CPython's traceback would end with, and CPython's exit status. */\n"
     ),
     "ppy_rt_alloc": (
         "/* A buffer a standalone program makes for itself. There is no interpreter\n"
@@ -116,22 +233,30 @@ def support_source() -> str:
     """The whole support library as one C file, for a standalone build."""
     headers = sorted({h for shim in SHIMS.values() for h in shim.headers} | {"stdint.h"})
     lines = [f"#include <{h}>" for h in headers] + [""]
+    # The collections and the strings call each other, so they are declared first.
+    lines.extend(_collections.prototype(name) for name in _collections.FUNCTIONS)
+    lines.append("")
     lines.extend(definition(name) for name in SHIMS)
     return "\n".join(lines).rstrip("\n") + "\n"
 
 
-def program_main(symbol: str, fputs: str = "fputs") -> str:
+def program_main(symbol: str, fputs: str = "fputs", *, collect: bool = False) -> str:
     """A `main` that runs the program's entry and fails where a guard fails.
 
-    There is no Python to fall back to, so a status other than success is
-    the process's exit, said once on standard error.
+    A guard that knows what CPython would raise says so and exits where it
+    fails (`ppy_rt_raise`). One that does not reaches here with a status,
+    which is said once on standard error and ends the process with
+    CPython's status for an uncaught exception.
     """
+    # The cycles still waiting for a collection are freed before the process
+    # ends, so a leak checker sees only what nothing can free.
+    collected = "    ppy_coll_collect();\n" if collect else ""
     return f"""int main(void) {{
     int64_t out = 0;
     int32_t status = {symbol}(&out);
-    if (status != 0) {{
-        {fputs}("ppy: a native guard failed and there is no Python to fall back to\\n", stderr);
-        return 70;
+{collected}    if (status != 0) {{
+        {fputs}("RuntimeError: a native guard failed with no Python to fall back to\\n", stderr);
+        return 1;
     }}
     return 0;
 }}

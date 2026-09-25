@@ -28,6 +28,10 @@ The rules are the same on every path, which is why some differ from a
   a loop that pushes sees what it pushed.
 * A heap has no iteration order to depend on: it is read by `peek` and `pop`
   alone.
+* A slice is a list's slice: its bounds may count from the end and are
+  clamped to the length, and it is a new collection of the same type.
+* Equality compares contents, as a `list`, a `dict`, or a `set` does, and
+  only between collections of the same kind.
 """
 
 from __future__ import annotations
@@ -36,7 +40,7 @@ import bisect
 import dataclasses
 import typing
 from collections import deque
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Iterable, Iterator
 from typing import Any, ClassVar, TypeVar
 
 __all__ = [
@@ -81,6 +85,15 @@ def _is_record(spec: Any) -> bool:
     return isinstance(spec, type) and dataclasses.is_dataclass(spec)
 
 
+def _is_class(spec: Any) -> bool:
+    """A class of the program's own: its instances are held as they are given."""
+    return (
+        isinstance(spec, type)
+        and spec.__module__ not in ("builtins", "typing", "collections")
+        and not _is_collection(spec)
+    )
+
+
 def _tuple_parts(spec: Any) -> tuple[Any, ...] | None:
     if typing.get_origin(spec) is not tuple:
         return None
@@ -91,7 +104,8 @@ def _tuple_parts(spec: Any) -> tuple[Any, ...] | None:
 
 
 def _element_ok(spec: Any) -> bool:
-    """What a collection may hold: a scalar, a tuple of scalars, a dataclass, a collection.
+    """What a collection may hold: a scalar, a string, a tuple of scalars, a
+    dataclass, a collection.
 
     A generic function's type parameter (`Vec[T]` inside `def f[T](...)`) is
     what the function is instantiated with, which CPython does not know: its
@@ -99,16 +113,18 @@ def _element_ok(spec: Any) -> bool:
     """
     return (
         isinstance(spec, typing.TypeVar)
+        or spec is str
         or _scalar(spec) is not None
         or _tuple_parts(spec) is not None
         or _is_record(spec)
+        or _is_class(spec)
         or _is_collection(spec)
     )
 
 
 def _key_ok(spec: Any) -> bool:
-    """What a map or a set is keyed by: an `int`, or a tuple of them."""
-    if _scalar(spec) is int or isinstance(spec, typing.TypeVar):
+    """What a map or a set is keyed by: an `int` or a `str`, or a tuple of `int`."""
+    if _scalar(spec) is int or spec is str or isinstance(spec, typing.TypeVar):
         return True
     parts = _tuple_parts(spec)
     return parts is not None and all(_scalar(part) is int for part in parts)
@@ -158,6 +174,8 @@ def _zero(spec: Any) -> Any:
     """What `Vec[T](n)` starts each slot with: `T`'s zero, and a new collection for each."""
     if isinstance(spec, typing.TypeVar):
         raise TypeError(f"a Vec of {spec} has no zero to start with; push instead")
+    if spec is str:
+        return ""
     scalar = _scalar(spec)
     if scalar is not None:
         return scalar(0)
@@ -173,6 +191,17 @@ def _zero(spec: Any) -> Any:
     raise TypeError(
         f"a Vec of {getattr(spec, '__name__', spec)} has no zero to start with; push instead"
     )
+
+
+#: What `pop(key, default)` is told when no default was given.
+_MISSING: Any = object()
+
+
+def _count_or_items(argument: Any) -> tuple[int, list[Any] | None]:
+    """A constructor's argument: how many zeros to start with, or what to start with."""
+    if isinstance(argument, int):
+        return argument, None
+    return 0, list(argument)
 
 
 def _spelled(types: Any) -> str:
@@ -222,20 +251,27 @@ class Vec(_Elements):
     __slots__ = ("_items",)
     _items: list[T]
 
-    def __init__(self, count: int = 0) -> None:
-        if count < 0:
-            raise ValueError(f"a Vec cannot start with {count} elements")
-        self._items = [_zero(self._element) for _ in range(count)]
+    def __init__(self, count: int | Iterable[T] = 0) -> None:
+        """`Vec[T](n)` starts with `n` zeros of `T`; `Vec[T](items)` with `items`."""
+        number, given = _count_or_items(count)
+        if given is not None:
+            self._items = [_stored(self, value) for value in given]
+            return
+        if number < 0:
+            raise ValueError(f"a Vec cannot start with {number} elements")
+        self._items = [_zero(self._element) for _ in range(number)]
 
     def push(self, value: T) -> None:
         """Add `value` at the end."""
         self._items.append(_stored(self, value))
 
-    def pop(self) -> T:
-        """Remove the last element and return it."""
+    def pop(self, index: int | None = None) -> T:
+        """Remove the last element, or the one at `index`, and return it."""
         if not self._items:
             raise IndexError("pop from an empty Vec")
-        return self._items.pop()
+        if index is None:
+            return self._items.pop()
+        return self._items.pop(_index(index, len(self._items)))
 
     def last(self) -> T:
         """The last element, left in place."""
@@ -247,22 +283,81 @@ class Vec(_Elements):
         """Remove every element."""
         self._items.clear()
 
-    def sort(self) -> None:
-        """Sort in ascending order."""
-        self._items.sort()
+    def sort(self, *, key: Callable[[T], Any] | None = None, reverse: bool = False) -> None:
+        """Sort in ascending order, or by `key`, or descending; the sort is stable."""
+        self._items.sort(key=key, reverse=reverse)
 
     def reverse(self) -> None:
         """Reverse the order in place."""
         self._items.reverse()
 
+    def extend(self, values: Iterable[T]) -> None:
+        """Add each of `values` at the end, in order."""
+        self._items.extend([_stored(self, value) for value in list(values)])
+
+    def insert(self, index: int, value: T) -> None:
+        """Put `value` before position `index`, which runs from 0 to the length."""
+        if not 0 <= index <= len(self._items):
+            raise IndexError(f"insert at {index} is out of range for length {len(self._items)}")
+        self._items.insert(index, _stored(self, value))
+
+    def remove(self, value: T) -> None:
+        """Remove the first element equal to `value`."""
+        self._items.pop(self.index(value))
+
+    def index(self, value: T) -> int:
+        """Where the first element equal to `value` is."""
+        for position, item in enumerate(self._items):
+            if _equal(item, value):
+                return position
+        raise ValueError(f"{value!r} is not in the Vec")
+
+    def count(self, value: T) -> int:
+        """How many elements equal `value`."""
+        return sum(1 for item in self._items if _equal(item, value))
+
+    def copy(self) -> Vec[T]:
+        """A new Vec of the same elements; a collection element is shared, not copied."""
+        made = type(self)()
+        made._items = list(self._items)
+        return made
+
     def __len__(self) -> int:
         return len(self._items)
 
-    def __getitem__(self, index: int) -> T:
+    @typing.overload
+    def __getitem__(self, index: int) -> T: ...
+
+    @typing.overload
+    def __getitem__(self, index: slice) -> Vec[T]: ...
+
+    def __getitem__(self, index: int | slice) -> T | Vec[T]:
+        if isinstance(index, slice):
+            made = type(self)()
+            made._items = self._items[index]
+            return made
         return self._items[_index(index, len(self._items))]
 
     def __setitem__(self, index: int, value: T) -> None:
         self._items[_index(index, len(self._items))] = _stored(self, value)
+
+    def __contains__(self, value: object) -> bool:
+        return any(_equal(item, value) for item in self._items)
+
+    def __eq__(self, other: object) -> bool:
+        # Another kind of object is never equal, as a list is not a deque.
+        if not isinstance(other, Vec):
+            return False
+        return self._items == other._items
+
+    __hash__ = None  # type: ignore[assignment]
+
+    def __add__(self, other: Vec[T]) -> Vec[T]:
+        if not isinstance(other, Vec):
+            return NotImplemented
+        made = type(self)()
+        made._items = self._items + [_stored(made, value) for value in other._items]
+        return made
 
     def __iter__(self) -> Iterator[T]:
         items = self._items
@@ -271,8 +366,25 @@ class Vec(_Elements):
             yield items[i]
             i += 1
 
+    def __reversed__(self) -> Iterator[T]:
+        return _backwards(self._items)
+
     def __repr__(self) -> str:
         return f"Vec({self._items!r})"
+
+
+def _equal(item: Any, value: Any) -> bool:
+    """`==` as a `list` asks it of its elements: the same object is equal to itself first."""
+    return item is value or item == value
+
+
+def _backwards(items: Any) -> Iterator[Any]:
+    """From the last element to the first, as `reversed` walks a list: the
+    length is read at every step, and a walk that finds itself past the end stops."""
+    i = len(items) - 1
+    while 0 <= i < len(items):
+        yield items[i]
+        i -= 1
 
 
 class Deque(_Elements):
@@ -281,8 +393,8 @@ class Deque(_Elements):
     __slots__ = ("_items",)
     _items: deque[T]
 
-    def __init__(self) -> None:
-        self._items = deque()
+    def __init__(self, values: Iterable[T] = ()) -> None:
+        self._items = deque(_stored(self, value) for value in values)
 
     def push_back(self, value: T) -> None:
         """Add `value` at the back."""
@@ -320,6 +432,45 @@ class Deque(_Elements):
         """Remove every element."""
         self._items.clear()
 
+    def extend(self, values: Iterable[T]) -> None:
+        """Add each of `values` at the back, in order."""
+        self._items.extend([_stored(self, value) for value in list(values)])
+
+    def extendleft(self, values: Iterable[T]) -> None:
+        """Add each of `values` at the front, one after another, which reverses them."""
+        self._items.extendleft([_stored(self, value) for value in list(values)])
+
+    def rotate(self, steps: int = 1) -> None:
+        """Move the last `steps` elements to the front (the first, where negative)."""
+        self._items.rotate(steps)
+
+    def insert(self, index: int, value: T) -> None:
+        """Put `value` before position `index`, which runs from 0 to the length."""
+        if not 0 <= index <= len(self._items):
+            raise IndexError(f"insert at {index} is out of range for length {len(self._items)}")
+        self._items.insert(index, _stored(self, value))
+
+    def remove(self, value: T) -> None:
+        """Remove the first element equal to `value`."""
+        del self._items[self.index(value)]
+
+    def index(self, value: T) -> int:
+        """Where the first element equal to `value` is."""
+        for position, item in enumerate(self._items):
+            if _equal(item, value):
+                return position
+        raise ValueError(f"{value!r} is not in the Deque")
+
+    def count(self, value: T) -> int:
+        """How many elements equal `value`."""
+        return sum(1 for item in self._items if _equal(item, value))
+
+    def copy(self) -> Deque[T]:
+        """A new Deque of the same elements; a collection element is shared."""
+        made = type(self)()
+        made._items = deque(self._items)
+        return made
+
     def __len__(self) -> int:
         return len(self._items)
 
@@ -329,12 +480,33 @@ class Deque(_Elements):
     def __setitem__(self, index: int, value: T) -> None:
         self._items[_index(index, len(self._items))] = _stored(self, value)
 
+    def __contains__(self, value: object) -> bool:
+        return any(_equal(item, value) for item in self._items)
+
+    def __eq__(self, other: object) -> bool:
+        # Another kind of object is never equal, as a list is not a deque.
+        if not isinstance(other, Deque):
+            return False
+        return list(self._items) == list(other._items)
+
+    __hash__ = None  # type: ignore[assignment]
+
+    def __add__(self, other: Deque[T]) -> Deque[T]:
+        if not isinstance(other, Deque):
+            return NotImplemented
+        made = type(self)()
+        made._items = deque([*self._items, *(_stored(made, value) for value in other._items)])
+        return made
+
     def __iter__(self) -> Iterator[T]:
         items = self._items
         i = 0
         while i < len(items):
             yield items[i]
             i += 1
+
+    def __reversed__(self) -> Iterator[T]:
+        return _backwards(self._items)
 
     def __repr__(self) -> str:
         return f"Deque({list(self._items)!r})"
@@ -347,11 +519,30 @@ class Heap(_Elements):
     _items: list[Any]
     _max: ClassVar[bool] = False
 
-    def __init__(self) -> None:
-        self._items = []
+    def __init__(self, values: Iterable[T] = ()) -> None:
+        """An empty heap, or one holding `values`, arranged in linear time."""
+        self._items = [_stored(self, value) for value in values]
+        for i in reversed(range(len(self._items) // 2)):
+            self._sift(i, self._items[i])
 
     def _before(self, a: Any, b: Any) -> bool:
         return b < a if self._max else a < b
+
+    def _sift(self, i: int, value: Any) -> None:
+        """`value` into the hole at `i`, moved down past every child that comes first."""
+        items = self._items
+        n = len(items)
+        while True:
+            child = 2 * i + 1
+            if child >= n:
+                break
+            if child + 1 < n and self._before(items[child + 1], items[child]):
+                child += 1
+            if not self._before(items[child], value):
+                break
+            items[i] = items[child]
+            i = child
+        items[i] = value
 
     def push(self, value: T) -> None:
         """Add `value`."""
@@ -373,19 +564,40 @@ class Heap(_Elements):
         top = items[0]
         last = items.pop()
         if items:
-            items[0] = last
-            i, n = 0, len(items)
-            while True:
-                child = 2 * i + 1
-                if child >= n:
-                    break
-                if child + 1 < n and self._before(items[child + 1], items[child]):
-                    child += 1
-                if not self._before(items[child], items[i]):
-                    break
-                items[i], items[child] = items[child], items[i]
-                i = child
+            self._sift(0, last)
         return top
+
+    def pushpop(self, value: T) -> T:
+        """Push `value`, then pop: whichever comes out first, `value` itself if it does."""
+        value = _stored(self, value)
+        items = self._items
+        if not items or not self._before(items[0], value):
+            return value
+        top = items[0]
+        self._sift(0, value)
+        return top
+
+    def replace(self, value: T) -> T:
+        """Pop, then push `value`: the element that came out first before `value` went in."""
+        items = self._items
+        if not items:
+            raise IndexError(f"replace in an empty {type(self).__name__.partition('[')[0]}")
+        top = items[0]
+        self._sift(0, _stored(self, value))
+        return top
+
+    def to_sorted(self) -> Vec[T]:
+        """The elements sorted, ascending (descending for a `MaxHeap`), as a new Vec;
+        the heap is left as it was."""
+        made = Vec[self._element]()  # type: ignore[name-defined,misc]
+        made._items = sorted(self._items, reverse=self._max)
+        return made
+
+    def copy(self) -> Heap[T]:
+        """A new heap of the same elements."""
+        made = type(self)()
+        made._items = list(self._items)
+        return made
 
     def peek(self) -> T:
         """The smallest element (the largest, for a `MaxHeap`), left in place."""
@@ -423,7 +635,7 @@ class _KeysAndValues:
         made = _SPECIALIZED.get((cls, types))
         if made is None:
             if not _key_ok(key):
-                raise TypeError(f"a {cls.__name__} has int or int-tuple keys, not {key!r}")
+                raise TypeError(f"a {cls.__name__} has int, str, or int-tuple keys, not {key!r}")
             if value is not None and not _element_ok(value):
                 raise TypeError(f"a {cls.__name__} cannot hold {value!r} values")
             made = type(
@@ -435,9 +647,179 @@ class _KeysAndValues:
             _SPECIALIZED[(cls, types)] = made
         return made
 
+    # What each map and set supplies to the methods below.
+    def _walk(self, backwards: bool = False) -> Iterator[tuple[Any, Any]]:
+        raise NotImplementedError
+
+    def _put(self, key: Any, value: Any) -> None:
+        raise NotImplementedError
+
+    def _take(self, key: Any) -> Any:
+        raise NotImplementedError
+
+    def _value_of(self, key: Any) -> tuple[bool, Any]:
+        raise NotImplementedError
+
+    def __len__(self) -> int:
+        raise NotImplementedError
+
+    def _is_set(self) -> bool:
+        return isinstance(self, (HashSet, TreeSet))
+
+    def __iter__(self) -> Iterator[Any]:
+        for key, _value in self._walk():
+            yield key
+
+    def __reversed__(self) -> Iterator[Any]:
+        for key, _value in self._walk(backwards=True):
+            yield key
+
+    def __contains__(self, key: object) -> bool:
+        return self._value_of(key)[0]
+
+    def keys(self) -> Iterator[Any]:
+        """The keys, as iterating does."""
+        return iter(self)
+
+    def values(self) -> Iterator[Any]:
+        """The values, in the order of their keys."""
+        for _key, value in self._walk():
+            yield value
+
+    def items(self) -> Iterator[tuple[Any, Any]]:
+        """`(key, value)` pairs, in the order of the keys."""
+        return self._walk()
+
+    def get(self, key: Any, default: Any) -> Any:
+        """The value of `key`, or `default` where there is none."""
+        found, value = self._value_of(key)
+        return value if found else _stored(self, default)
+
+    def setdefault(self, key: Any, default: Any) -> Any:
+        """The value of `key`, first set to `default` where there is none."""
+        found, value = self._value_of(key)
+        if found:
+            return value
+        stored = _stored(self, default)
+        self._put(key, stored)
+        return stored
+
+    def pop(self, key: Any, default: Any = _MISSING) -> Any:
+        """Remove `key` and return its value, or return `default` where there is none."""
+        if default is not _MISSING and not self._value_of(key)[0]:
+            return _stored(self, default)
+        return self._take(key)
+
+    def update(self, other: Any) -> None:
+        """Every entry of `other` put in this one, in `other`'s order."""
+        if self._is_set():
+            for key in list(other):
+                self._put(key, 0)
+            return
+        for key, value in list(other.items()):
+            self._put(key, _stored(self, value))
+
+    def copy(self) -> Any:
+        """A new map or set of the same entries; a collection value is shared."""
+        made = type(self)()
+        for key, value in self._walk():
+            made._put(key, value)
+        return made
+
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, _KeysAndValues) or self._is_set() != other._is_set():
+            return False
+        if len(self) != len(other):
+            return False
+        for key, value in self._walk():
+            found, theirs = other._value_of(key)
+            if not found or (not self._is_set() and not _equal(theirs, value)):
+                return False
+        return True
+
+    __hash__ = None  # type: ignore[assignment]
+
 
 def _changed(kind: str) -> RuntimeError:
     return RuntimeError(f"{kind.partition('[')[0]} changed during iteration")
+
+
+class _SetAlgebra:
+    """`|`, `&`, `-`, `^`, and the questions sets answer about each other.
+
+    A result is a new set of the left operand's type. A `HashSet` keeps the
+    left operand's order and then the right's; a `TreeSet` its key order.
+    """
+
+    __slots__ = ()
+
+    def _put(self, key: Any, value: Any) -> None:
+        raise NotImplementedError
+
+    def __iter__(self) -> Iterator[Any]:
+        raise NotImplementedError
+
+    def __contains__(self, key: object) -> bool:
+        raise NotImplementedError
+
+    def __len__(self) -> int:
+        raise NotImplementedError
+
+    def _combined(self, other: Any, left: bool, both: bool, right: bool) -> Any:
+        # Two sets of one kind combine, `HashSet[int]` or a bare `HashSet()`
+        # alike; a hash set and a tree set do not.
+        kind = TreeSet if isinstance(self, TreeSet) else HashSet
+        if not isinstance(other, kind) or isinstance(other, TreeSet) != (kind is TreeSet):
+            return NotImplemented
+        made = type(self)()
+        for key in list(self):
+            if (key in other and both) or (key not in other and left):
+                made._put(key, 0)
+        if right:
+            for key in list(other):
+                if key not in self:
+                    made._put(key, 0)
+        return made
+
+    def __or__(self, other: Any) -> Any:
+        return self._combined(other, left=True, both=True, right=True)
+
+    def __and__(self, other: Any) -> Any:
+        return self._combined(other, left=False, both=True, right=False)
+
+    def __sub__(self, other: Any) -> Any:
+        return self._combined(other, left=True, both=False, right=False)
+
+    def __xor__(self, other: Any) -> Any:
+        return self._combined(other, left=True, both=False, right=True)
+
+    def union(self, other: Any) -> Any:
+        """The keys in either: `a | b`."""
+        return self | other
+
+    def intersection(self, other: Any) -> Any:
+        """The keys in both: `a & b`."""
+        return self & other
+
+    def difference(self, other: Any) -> Any:
+        """The keys in this set and not `other`: `a - b`."""
+        return self - other
+
+    def symmetric_difference(self, other: Any) -> Any:
+        """The keys in exactly one: `a ^ b`."""
+        return self ^ other
+
+    def issubset(self, other: Any) -> bool:
+        """Whether every key of this set is in `other`."""
+        return all(key in other for key in list(self))
+
+    def issuperset(self, other: Any) -> bool:
+        """Whether every key of `other` is in this set."""
+        return all(key in self for key in list(other))
+
+    def isdisjoint(self, other: Any) -> bool:
+        """Whether no key is in both."""
+        return not any(key in other for key in list(self))
 
 
 class LinkedList(_Elements):
@@ -452,7 +834,7 @@ class LinkedList(_Elements):
 
     __slots__ = ("_alive", "_free", "_head", "_next", "_prev", "_size", "_tail", "_values")
 
-    def __init__(self) -> None:
+    def __init__(self, values: Iterable[T] = ()) -> None:
         self._values: list[Any] = []
         self._alive: list[bool] = []
         self._prev: list[int] = []
@@ -461,6 +843,7 @@ class LinkedList(_Elements):
         self._head = -1
         self._tail = -1
         self._size = 0
+        self.extend(values)
 
     def _reset(self) -> None:
         self._values = []
@@ -593,14 +976,36 @@ class LinkedList(_Elements):
         """Remove every element; ids start from 0 again."""
         self._reset()
 
+    def extend(self, values: Iterable[T]) -> None:
+        """Add each of `values` at the back, in order."""
+        for value in list(values):
+            self.push_back(value)
+
     def __len__(self) -> int:
         return self._size
+
+    def __contains__(self, value: object) -> bool:
+        return any(_equal(item, value) for item in self)
+
+    def __eq__(self, other: object) -> bool:
+        # Another kind of object is never equal, as a list is not a deque.
+        if not isinstance(other, LinkedList):
+            return False
+        return list(self) == list(other)
+
+    __hash__ = None  # type: ignore[assignment]
 
     def __iter__(self) -> Iterator[T]:
         node = self._head
         while node != -1:
             yield self._values[node]
             node = self._next[node]
+
+    def __reversed__(self) -> Iterator[T]:
+        node = self._tail
+        while node != -1:
+            yield self._values[node]
+            node = self._prev[node]
 
     def __repr__(self) -> str:
         return f"LinkedList({list(self)!r})"
@@ -660,46 +1065,45 @@ class HashMap(_KeysAndValues):
             raise KeyError(key)
         return self._values[entry]
 
-    def get(self, key: int, default: Any) -> Any:
-        """The value of `key`, or `default` where there is none."""
+    def _value_of(self, key: Any) -> tuple[bool, Any]:
         entry = self._find(key)
-        return self._values[entry] if entry >= 0 else _stored(self, default)
-
-    def pop(self, key: int) -> Any:
-        """Remove `key` and return its value."""
-        return self._take(key)
+        return (True, self._values[entry]) if entry >= 0 else (False, None)
 
     def clear(self) -> None:
         """Remove every entry."""
         self._reset()
         self._version += 1
 
-    def __contains__(self, key: int) -> bool:
-        return self._find(key) >= 0
-
     def __len__(self) -> int:
         return self._size
 
-    def __iter__(self) -> Iterator[int]:
+    def _walk(self, backwards: bool = False) -> Iterator[tuple[Any, Any]]:
+        """Entries in insertion order, or the reverse; adding or removing a key
+        while walking is a `RuntimeError`, as it is for a `dict`."""
         version = self._version
-        entry = 0
+        entry = len(self._keys) - 1 if backwards else 0
         while True:
             if self._version != version:
                 raise _changed(type(self).__name__)
-            if entry >= len(self._keys):
+            if not 0 <= entry < len(self._keys):
                 return
             if self._alive[entry]:
-                yield self._keys[entry]
-            entry += 1
+                yield self._keys[entry], self._values[entry]
+            entry += -1 if backwards else 1
 
     def __repr__(self) -> str:
         return f"HashMap({ {key: self[key] for key in self}!r})"
 
 
-class HashSet(HashMap):
+class HashSet(HashMap, _SetAlgebra):
     """A hash set of `int`, in insertion order."""
 
     __slots__ = ()
+
+    def __init__(self, keys: Iterable[Any] = ()) -> None:
+        super().__init__()
+        for key in keys:
+            self._put(key, 0)
 
     def add(self, key: int) -> None:
         """Add `key`; nothing changes if it is there."""
@@ -760,14 +1164,9 @@ class TreeMap(_KeysAndValues):
             raise KeyError(key)
         return self._values[position]
 
-    def get(self, key: int, default: Any) -> Any:
-        """The value of `key`, or `default` where there is none."""
+    def _value_of(self, key: Any) -> tuple[bool, Any]:
         position = self._at(key)
-        return self._values[position] if position >= 0 else _stored(self, default)
-
-    def pop(self, key: int) -> Any:
-        """Remove `key` and return its value."""
-        return self._take(key)
+        return (True, self._values[position]) if position >= 0 else (False, None)
 
     def clear(self) -> None:
         """Remove every entry."""
@@ -775,16 +1174,56 @@ class TreeMap(_KeysAndValues):
         self._values.clear()
         self._version += 1
 
+    def _walk(self, backwards: bool = False) -> Iterator[tuple[Any, Any]]:
+        """Entries in key order, or the reverse, each found from the one before;
+        adding or removing a key while walking is a `RuntimeError`."""
+        version = self._version
+        position = len(self._keys) - 1 if backwards else 0
+        while True:
+            if self._version != version:
+                raise _changed(type(self).__name__)
+            if not 0 <= position < len(self._keys):
+                return
+            yield self._keys[position], self._values[position]
+            position += -1 if backwards else 1
+
+    def between(self, low: Any, high: Any) -> Iterator[Any]:
+        """The keys from `low` up to, and not including, `high`, in order."""
+        version = self._version
+        position = bisect.bisect_left(self._keys, low)
+        while True:
+            if self._version != version:
+                raise _changed(type(self).__name__)
+            if position >= len(self._keys) or not self._keys[position] < high:
+                return
+            yield self._keys[position]
+            position += 1
+
+    def pop_min(self) -> Any:
+        """Remove the smallest key and return it, with its value for a `TreeMap`."""
+        return self._pop_end(0)
+
+    def pop_max(self) -> Any:
+        """Remove the largest key and return it, with its value for a `TreeMap`."""
+        return self._pop_end(-1)
+
+    def _pop_end(self, position: int) -> Any:
+        if not self._keys:
+            raise IndexError(f"pop from an empty {type(self).__name__.partition('[')[0]}")
+        key = self._keys[position]
+        value = self._take(key)
+        return key if self._is_set() else (key, value)
+
     def min(self) -> int:
         """The smallest key."""
         if not self._keys:
-            raise IndexError(f"min of an empty {type(self).__name__}")
+            raise IndexError(f"min of an empty {type(self).__name__.partition('[')[0]}")
         return self._keys[0]
 
     def max(self) -> int:
         """The largest key."""
         if not self._keys:
-            raise IndexError(f"max of an empty {type(self).__name__}")
+            raise IndexError(f"max of an empty {type(self).__name__.partition('[')[0]}")
         return self._keys[-1]
 
     def floor(self, key: int) -> int:
@@ -815,31 +1254,22 @@ class TreeMap(_KeysAndValues):
             raise KeyError(f"no key above {key}")
         return self._keys[position]
 
-    def __contains__(self, key: int) -> bool:
-        return self._at(key) >= 0
-
     def __len__(self) -> int:
         return len(self._keys)
-
-    def __iter__(self) -> Iterator[int]:
-        version = self._version
-        position = 0
-        while True:
-            if self._version != version:
-                raise _changed(type(self).__name__)
-            if position >= len(self._keys):
-                return
-            yield self._keys[position]
-            position += 1
 
     def __repr__(self) -> str:
         return f"TreeMap({dict(zip(self._keys, self._values, strict=True))!r})"
 
 
-class TreeSet(TreeMap):
+class TreeSet(TreeMap, _SetAlgebra):
     """A set of `int` kept in order."""
 
     __slots__ = ()
+
+    def __init__(self, keys: Iterable[Any] = ()) -> None:
+        super().__init__()
+        for key in keys:
+            self._put(key, 0)
 
     def add(self, key: int) -> None:
         """Add `key`; nothing changes if it is there."""

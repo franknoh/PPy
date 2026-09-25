@@ -18,7 +18,7 @@ __all__ = ["COMPILER_VERSION", "compiler_fingerprint"]
 #: The released version. The packaging build reads this literal;
 #: `ppy_runtime.version` carries the runtime's copy, `ppy.__version__` reads
 #: that, and a test holds them together.
-COMPILER_VERSION = "0.3.7"
+COMPILER_VERSION = "0.4.0"
 
 
 @functools.cache
@@ -46,6 +46,15 @@ def compiler_fingerprint() -> str:
     digest = hashlib.sha256()
     for relative, size, mtime in sorted(_sources(package)):
         digest.update(f"{relative}:{size}:{mtime}".encode())
+    # The C runtimes a built artifact compiles in (`ppy_runtime/*.c`) are
+    # part of what it was built from, as much as the compiler is.
+    with contextlib.suppress(OSError), os.scandir(package.parent / "ppy_runtime") as entries:
+        for entry in sorted(entries, key=lambda e: e.name):
+            if entry.name.endswith(".c"):
+                stat = entry.stat()
+                digest.update(
+                    f"ppy_runtime/{entry.name}:{stat.st_size}:{stat.st_mtime_ns}".encode()
+                )
     return digest.hexdigest()[:16]
 
 

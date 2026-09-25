@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 
+from . import collections as C
 from . import types as T
 from .effects import Effect, EffectSet
 from .refinements import Facts, IntRange
@@ -74,8 +75,8 @@ def _element_storage(t: T.Type) -> T.Type:
             and base.args
         ):
             return base.args[0]
-        if base.name in {"ppy.Vec", "ppy.Deque"} and base.args:
-            return base.args[0]
+        if base.name in C.ITERABLE and base.args:
+            return C.element_of(base)
         if base.name == "dict" and base.args:
             return base.args[0]
         if base.name in {"tuple", "list", "set", "frozenset", "dict", "Sequence", "Iterable"}:
@@ -224,6 +225,10 @@ def _zip(args: Sequence[Arg]) -> BuiltinResult:
 
 def _sorted(args: Sequence[Arg]) -> BuiltinResult:
     element = _element_of(args[0].type) if args else T.UNKNOWN
+    if args and C.is_collection(args[0].type):
+        # A `ppy` collection's elements compare as the runtime compares them:
+        # numbers, tuples, and ordered dataclasses, with no hook to call.
+        return BuiltinResult(T.list_of(element), Facts(), _ALLOC)
     return BuiltinResult(T.list_of(element), Facts(), _ALLOC | EffectSet.of(Effect.PYTHON_CALLBACK))
 
 
@@ -281,6 +286,10 @@ def _input(args: Sequence[Arg]) -> BuiltinResult:
 
 
 def _repr(args: Sequence[Arg]) -> BuiltinResult:
+    # A number's or a string's repr is the builtin's own; anything else may
+    # run a `__repr__` of its class.
+    if args and T.strip_literal(args[0].type) in (T.INT, T.FLOAT, T.BOOL, T.STR):
+        return BuiltinResult(T.STR, Facts(), _ALLOC)
     return BuiltinResult(T.STR, Facts(), _ALLOC | EffectSet.of(Effect.PYTHON_CALLBACK))
 
 

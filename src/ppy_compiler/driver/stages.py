@@ -68,8 +68,10 @@ def stage_texts(bundle, stage: str) -> dict[str, str]:  # type: ignore[no-untype
 
 def _analysis_texts(bundle) -> dict[str, str]:  # type: ignore[no-untyped-def]
     from ..backend.llvm.lowering import eligible, should_lower_native
+    from .ir_pipeline import value_class_layouts
 
     texts: dict[str, str] = {}
+    layouts = value_class_layouts(bundle)
     for name, analysis in bundle.analysis.modules.items():
         symbols = bundle.symbols.modules.get(name)
         if symbols is None:
@@ -79,8 +81,10 @@ def _analysis_texts(bundle) -> dict[str, str]:  # type: ignore[no-untyped-def]
             function_analysis = analysis.functions.get(info.qualname)
             if function_analysis is None:
                 continue
-            ok, reason = eligible(info, function_analysis, allow_async=True, allow_launch=True)
-            exposed, why = should_lower_native(info, function_analysis)
+            ok, reason = eligible(
+                info, function_analysis, layouts, allow_async=True, allow_launch=True
+            )
+            exposed, why = should_lower_native(info, function_analysis, layouts)
             lines.append(f"  {info.qualname}: {info.signature()}")
             lines.append(f"    effects: {function_analysis.effects}")
             lines.append(f"    native: {'eligible' if ok else 'stays in Python: ' + reason}")

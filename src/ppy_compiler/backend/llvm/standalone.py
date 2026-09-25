@@ -93,8 +93,18 @@ def _program(bundle, reporter, entry: Path, *, project_modules: bool = False):  
         owner = infos[qualname].owner if qualname in infos else None
         if owner is not None and owner in bundle.symbols.classes:
             # A class used natively brings its methods: `len(stack)` and `if
-            # stack:` call `__len__` and `__bool__` without naming them.
-            callees |= {m.qualname for m in bundle.symbols.classes[owner].methods.values()}
+            # stack:` call `__len__` and `__bool__` without naming them. A call
+            # may go to a subclass's override, and `super()` to a base's.
+            related = {
+                c.qualname
+                for c in bundle.symbols.classes.values()
+                if owner in c.mro or c.qualname in bundle.symbols.classes[owner].mro
+            }
+            callees |= {
+                m.qualname
+                for name in related
+                for m in bundle.symbols.classes[name].methods.values()
+            }
         for callee in sorted(callees):
             if callee in infos and callee not in reached_from:
                 reached_from[callee] = qualname
@@ -246,9 +256,12 @@ def build_standalone(  # type: ignore[no-untyped-def]
     support.write_text(support_source(), encoding="utf-8")
     main_c = build_directory / f"{module_name}_main.c"
     symbol = result.functions[entry_qualname].signature.symbol
+    collect = "ppy_collections" in tuple(getattr(result, "libraries", ()))
     main_c.write_text(
-        f"#include <stdint.h>\n#include <stdio.h>\n\nint32_t {symbol}(int64_t *out);\n\n"
-        + program_main(symbol),
+        f"#include <stdint.h>\n#include <stdio.h>\n\nint32_t {symbol}(int64_t *out);\n"
+        + ("int64_t ppy_coll_collect(void);\n" if collect else "")
+        + "\n"
+        + program_main(symbol, collect=collect),
         encoding="utf-8",
     )
     destination = build_directory / entry.stem
@@ -291,14 +304,19 @@ def _generic(bundle, info) -> bool:  # type: ignore[no-untyped-def]
     return bool(info.type_params) or (owner is not None and bool(owner.type_params))
 
 
-def _field_dataclass(statement) -> bool:  # type: ignore[no-untyped-def]
-    """A class a standalone program can hold: no bases, `@dataclass` or nothing,
-    and a body of methods, field annotations (with constant defaults), and a
+def _field_dataclass(statement, classes: frozenset[str] = frozenset()) -> bool:  # type: ignore[no-untyped-def]
+    """A class a standalone program can hold: at most one base, a class defined
+    before it in the module, `@dataclass` or nothing, and a body of methods,
+    field annotations (with constant defaults or `field(...)`), and a
     docstring. Its instances are native values or native objects; nothing has
     to run to define it."""
     import ast
 
-    if not isinstance(statement, ast.ClassDef) or statement.bases or statement.keywords:
+    if not isinstance(statement, ast.ClassDef) or statement.keywords:
+        return False
+    if len(statement.bases) > 1 or any(
+        not isinstance(base, ast.Name) or base.id not in classes for base in statement.bases
+    ):
         return False
     decorated = [
         ast.unparse(d.func if isinstance(d, ast.Call) else d) for d in statement.decorator_list
@@ -313,11 +331,31 @@ def _field_dataclass(statement) -> bool:  # type: ignore[no-untyped-def]
             and isinstance(item.value.value, str)
         )
         field = isinstance(item, ast.AnnAssign) and (
-            item.value is None or isinstance(item.value, ast.Constant)
+            item.value is None or isinstance(item.value, ast.Constant) or _field_call(item.value)
         )
         method = isinstance(item, ast.FunctionDef)
         if not (docstring or field or method):
             return False
+    return True
+
+
+def _field_call(value) -> bool:  # type: ignore[no-untyped-def]
+    """`field(default=<constant>)` or `field(default_factory=<a class>)`: a default
+    native code makes when it builds the instance."""
+    import ast
+
+    if not isinstance(value, ast.Call) or value.args:
+        return False
+    if ast.unparse(value.func) not in {"field", "dataclasses.field"}:
+        return False
+    for keyword in value.keywords:
+        if keyword.arg == "default" and isinstance(keyword.value, ast.Constant):
+            continue
+        if keyword.arg == "default_factory" and isinstance(
+            keyword.value, (ast.Name, ast.Attribute, ast.Subscript)
+        ):
+            continue
+        return False
     return True
 
 
@@ -326,6 +364,7 @@ def _module_shape(
 ) -> str | None:  # type: ignore[no-untyped-def]
     import ast
 
+    defined: set[str] = set()
     for index, statement in enumerate(symbols.module.tree.body):
         if isinstance(statement, (ast.FunctionDef, ast.AsyncFunctionDef)):
             continue
@@ -343,14 +382,22 @@ def _module_shape(
             continue
         # A dataclass of fields is a layout for the compiler: a value class is a
         # struct natively, and nothing has to run to define it.
-        if _field_dataclass(statement):
+        if _field_dataclass(statement, frozenset(defined)):
+            defined.add(statement.name)
             continue
         if isinstance(statement, (ast.Import, ast.ImportFrom)):
             names = getattr(statement, "module", None) or ""
             listed = [alias.name for alias in statement.names]
             if names == "ppy" or listed == ["ppy"]:
                 continue
-            if names == "dataclasses" and set(listed) <= {"dataclass"}:
+            if names == "dataclasses" and set(listed) <= {"dataclass", "field"}:
+                continue
+            # `gc.collect()` is the collections runtime's collector natively.
+            if (
+                isinstance(statement, ast.Import)
+                and listed == ["gc"]
+                and not statement.names[0].asname
+            ):
                 continue
             if project_modules and all(
                 (binding := symbols.imports.get(alias.asname or alias.name.split(".")[0]))

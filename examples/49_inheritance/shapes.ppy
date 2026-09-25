@@ -1,0 +1,136 @@
+"""An expression tree and 2D vectors: class hierarchies and operator methods."""
+
+from dataclasses import dataclass
+
+from ppy import Vec
+
+TREES = 2000
+DEPTH = 10
+
+
+@dataclass
+class Expr:
+    """A node of an arithmetic expression; subclasses say what it computes."""
+
+    weight: int = 1
+
+    def eval(self) -> int:
+        return 0
+
+    def size(self) -> int:
+        return self.weight
+
+
+@dataclass
+class Num(Expr):
+    value: int = 0
+
+    def eval(self) -> int:
+        return self.value
+
+
+@dataclass
+class Add(Expr):
+    left: Expr | None = None
+    right: Expr | None = None
+
+    def eval(self) -> int:
+        total: int = 0
+        if self.left is not None:
+            total += self.left.eval()
+        if self.right is not None:
+            total += self.right.eval()
+        return total % 1000003
+
+    def size(self) -> int:
+        n: int = self.weight
+        if self.left is not None:
+            n += self.left.size()
+        if self.right is not None:
+            n += self.right.size()
+        return n
+
+
+@dataclass
+class Mul(Add):
+    def eval(self) -> int:
+        a: int = 1
+        if self.left is not None:
+            a = self.left.eval()
+        b: int = 1
+        if self.right is not None:
+            b = self.right.eval()
+        return (a * b) % 1000003
+
+
+def build(depth: int, seed: int) -> Expr:
+    if depth == 0:
+        return Num(1, seed % 10)
+    if seed % 2 == 0:
+        return Add(1, build(depth - 1, seed * 3 + 1), build(depth - 1, seed + 7))
+    return Mul(2, build(depth - 1, seed + 5), build(depth - 1, seed * 7 + 2))
+
+
+def count_sums(e: Expr | None) -> int:
+    """How many `Add` nodes that are not also `Mul` nodes the tree holds."""
+    if e is None:
+        return 0
+    if isinstance(e, Mul):
+        return count_sums(e.left) + count_sums(e.right)
+    if isinstance(e, Add):
+        return 1 + count_sums(e.left) + count_sums(e.right)
+    return 0
+
+
+def trees() -> int:
+    forest = Vec[Expr]()
+    for i in range(TREES):
+        forest.push(build(DEPTH, i))
+    acc: int = 0
+    for tree in forest:
+        acc = (acc * 31 + tree.eval() + tree.size() + count_sums(tree)) % 1000003
+    return acc
+
+
+class V2:
+    """A 2D vector with arithmetic and an order by length."""
+
+    def __init__(self, x: float, y: float) -> None:
+        self.x: float = x
+        self.y: float = y
+
+    def __add__(self, other: "V2") -> "V2":
+        return V2(self.x + other.x, self.y + other.y)
+
+    def __sub__(self, other: "V2") -> "V2":
+        return V2(self.x - other.x, self.y - other.y)
+
+    def __mul__(self, k: float) -> "V2":
+        return V2(self.x * k, self.y * k)
+
+    def __lt__(self, other: "V2") -> bool:
+        return self.x * self.x + self.y * self.y < other.x * other.x + other.y * other.y
+
+
+def orbit(steps: int) -> int:
+    position = V2(1.0, 0.0)
+    velocity = V2(0.0, 1.0)
+    farthest = V2(0.0, 0.0)
+    records: int = 0
+    dt: float = 0.001
+    for _ in range(steps):
+        r2: float = position.x * position.x + position.y * position.y
+        pull = position * (-1.0 / (r2 * r2**0.5))
+        velocity = velocity + pull * dt
+        position = position + velocity * dt
+        if farthest < position:
+            farthest = position
+            records += 1
+    return int((farthest.x * farthest.x + farthest.y * farthest.y) * 1000000) * 1000 + records
+
+
+def main() -> None:
+    print(trees(), orbit(2000000))
+
+
+main()

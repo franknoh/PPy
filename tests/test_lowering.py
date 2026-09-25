@@ -264,8 +264,8 @@ def test_what_the_subset_excludes_is_refused_with_the_reason(write, analyze):
     path = write(
         "kernels.ppy",
         """
-        def words(text: str) -> int:
-            return len(text)
+        def words(counts: dict[str, int]) -> int:
+            return len(counts)
 
 
         def chained(a: int, b: int, c: int) -> bool:

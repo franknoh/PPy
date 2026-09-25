@@ -516,8 +516,8 @@ def test_standalone_rejects_a_python_reachable_graph(tmp_path: Path):
 
 
             def main() -> None:
-                word: str = ppy.input[str]()
-                print(word)
+                counts: dict[str, int] = {ppy.input[str](): 1}
+                print(len(counts))
 
 
             main()
@@ -976,11 +976,11 @@ def test_a_program_with_nothing_native_still_has_an_artifact(tmp_path: Path):
         import sys
 
 
-        def greet(name: str) -> str:
-            return f"hello, {name}"
+        def greet(names: dict[str, int]) -> str:
+            return "hello, " + ", ".join(names)
 
 
-        print(greet(sys.argv[1] if len(sys.argv) > 1 else "world"))
+        print(greet({sys.argv[1] if len(sys.argv) > 1 else "world": 1}))
         """,
     )
     assert _run(tmp_path, "hello.ppy", "--", "there").stdout.strip() == "hello, there"

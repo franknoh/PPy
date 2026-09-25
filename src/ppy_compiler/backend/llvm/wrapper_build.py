@@ -115,8 +115,13 @@ def build_wrappers(
     """Generate, compile, and import the Python-ABI wrappers for a module."""
     # A coroutine hands back a future the Python side wraps; no C wrapper for it.
     signatures = {name: s for name, s in signatures.items() if not s.future}
+    # A collection crosses through the Python-level binding, which copies it.
+    crossing = {name for name, s in signatures.items() if s.crosses_collections}
+    signatures = {name: s for name, s in signatures.items() if name not in crossing}
     if not signatures:
-        return BuiltWrappers(reason="no native function to wrap")
+        # Every function here crosses through the Python-level binding: there
+        # is nothing slower about that to warn of.
+        return BuiltWrappers(reason="" if crossing else "no native function to wrap")
     ready, detail = wrapper_toolchain()
     if not ready:
         if notify is not None:

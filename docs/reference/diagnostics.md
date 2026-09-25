@@ -6,7 +6,8 @@ emit. Each diagnostic has a stable code (spec 29.1).
 - `E` codes are errors, `W` codes are warnings, and `R` codes are remarks.
 - `ppy explain E1301` prints the description of a code.
 - `--no-strict` downgrades the strict-mode errors that have a sound
-  fallback. It never downgrades the rest.
+  fallback to `W2010` warnings, which name the code they replace. It never
+  downgrades the rest.
 
 ## Source and module structure
 
@@ -158,6 +159,7 @@ emit. Each diagnostic has a stable code (spec 29.1).
 | `W2007` | A function marked `@ppy.xla.jit` cannot be taken by XLA; the reason is named. |
 | `W2008` | A kernel will not run on the device; the reason is named, and the reference runs. |
 | `W2009` | A function changed since the profile given to `--pgo` was recorded; its counts were ignored and it was built as without a profile. |
+| `W2010` | Under `--no-strict`, a strict-mode error with a sound fallback (`E1201`, `E1202`, `E1204`, `E1302`, `E1306`). The message names the code it is under strict mode. |
 | `W2101` | The build cache index was damaged; it was quarantined and rebuilt, and compilation continued with cache misses. |
 
 ## Internal

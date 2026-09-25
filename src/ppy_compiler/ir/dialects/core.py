@@ -62,6 +62,9 @@ PREDICATES = ("eq", "ne", "lt", "le", "gt", "ge")
 ADDRESS_SPACES = frozenset({"generic", "stack"})
 GUARD_KINDS = ("overflow", "bounds", "zero_division", "range", "contract", "assert")
 
+#: How many values a guard's raised text may report.
+RAISED_VALUES = 4
+
 
 class CoreDialect(Dialect):
     name = "core"
@@ -185,7 +188,6 @@ class CoreDialect(Dialect):
             OpSpec(
                 "core.guard",
                 verify=_verify_guard,
-                operands=1,
                 results=0,
                 required_attributes=("kind",),
             )
@@ -550,8 +552,17 @@ def _verify_call_extern(op: Operation, checker: Checker) -> None:
 
 
 def _verify_guard(op: Operation, checker: Checker) -> None:
+    if not op.operands:
+        checker.error(op, "a guard takes its condition")
+        return
     if op.operands[0].type != BOOL:
         checker.error(op, f"a guard condition is bool, not {op.operands[0].type}")
+    # What the raised text reports: whole numbers, `{0}` and on in `raises`.
+    for value in op.operands[1:]:
+        if not isinstance(value.type, IntType):
+            checker.error(op, f"a guard reports integers, not {value.type}")
+    if len(op.operands) > 1 + RAISED_VALUES:
+        checker.error(op, f"a guard reports at most {RAISED_VALUES} values")
     kind = op.attributes.get("kind")
     if kind not in GUARD_KINDS:
         checker.error(op, f"guard kind {kind!r} is not one of {GUARD_KINDS}")
@@ -791,13 +802,29 @@ def call_intrinsic(
     )
 
 
-def guard(b: Builder, condition: Value, kind: str, message: str = "", label: str = "") -> Operation:
+def guard(
+    b: Builder,
+    condition: Value,
+    kind: str,
+    message: str = "",
+    label: str = "",
+    raises: str = "",
+    values: tuple[Value, ...] = (),
+) -> Operation:
+    """Continue when `condition` holds; otherwise fall back to Python.
+
+    `raises` is the last line CPython prints for the same failure
+    (`KeyError: {0}`), with `{0}` and on standing for `values`: where there
+    is no Python to fall back to, a standalone binary says it and stops.
+    """
     attributes: dict[str, Attribute] = {"kind": kind}
     if message:
         attributes["message"] = message
     if label:
         attributes["label"] = label
-    return b.create("core.guard", (condition,), (), attributes)
+    if raises:
+        attributes["raises"] = raises
+    return b.create("core.guard", (condition, *values[:RAISED_VALUES]), (), attributes)
 
 
 def checked(b: Builder, op: str, lhs: Value, rhs: Value) -> tuple[Value, Value]:

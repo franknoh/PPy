@@ -37,7 +37,9 @@ from ...ir import (
     VectorType,
     VoidType,
 )
+from ...ir.dialects.core import RAISED_VALUES
 from ...ir.dialects.gpu import kind_of
+from ...ir.raising import overflow_text, raised_text
 from ...ir.transforms.profile import PROFILE_MAP
 from ...target import TargetInfo, host_target
 from .aio_lowering import lower_async
@@ -115,6 +117,15 @@ class _ModuleEmitter:
         self._data_layout = None
         self.functions: dict[str, object] = {}
         self.strings: dict[str, object] = {}
+        #: A standalone program: a failed guard prints what CPython would
+        #: raise and exits, since there is no Python to fall back to.
+        self.standalone = bool(module.attributes.get("ppy.standalone"))
+        #: Its raised texts as constants, by text.
+        self.raised: dict[str, object] = {}
+        #: Whether a failed call leaves handles for the collections runtime to free.
+        self.collections = "ppy_collections" in tuple(
+            module.attributes.get("ppy.libraries", ())  # type: ignore[arg-type]
+        )
         #: The counter array of an instrumented module, for `prof.hit`.
         self.profile_counters = None
 
@@ -301,15 +312,53 @@ class _FunctionEmitter:
             builder.position_before(self.entry.instructions[-1])
         return builder.alloca(llvm_type, name=name)
 
-    def fail_if(self, condition, label: str) -> None:  # type: ignore[no-untyped-def]
+    def fail_if(self, condition, label: str, raises: str = "") -> None:  # type: ignore[no-untyped-def]
         keep = self.llvm.append_basic_block(label)
-        self.builder.cbranch(condition, self.fallback, keep)
+        self.builder.cbranch(condition, self._failure(raises), keep)
         self.builder.position_at_end(keep)
 
-    def continue_if(self, condition, label: str) -> None:  # type: ignore[no-untyped-def]
+    def continue_if(self, condition, label: str, raises: str = "", values=()) -> None:  # type: ignore[no-untyped-def]
         keep = self.llvm.append_basic_block(label)
-        self.builder.cbranch(condition, keep, self.fallback)
+        self.builder.cbranch(condition, keep, self._failure(raises, values))
         self.builder.position_at_end(keep)
+
+    def _failure(self, raises: str, values=()):  # type: ignore[no-untyped-def]
+        """Where a failed check goes: the fallback, or in a standalone
+        program a block that says what CPython would raise and exits."""
+        if not raises or not self.owner.standalone or self.resume:
+            return self.fallback
+        ir = self.ir
+        word = ir.IntType(64)
+        block = self.llvm.append_basic_block("raise")
+        with self.builder.goto_block(block):
+            text = self.owner.raised.get(raises)
+            if text is None:
+                data = bytearray(raises.encode("utf-8") + b"\0")
+                array_type = ir.ArrayType(ir.IntType(8), len(data))
+                text = ir.GlobalVariable(
+                    self.owner.llvm, array_type, name=f"ppy.raised.{len(self.owner.raised)}"
+                )
+                text.global_constant = True
+                text.linkage = "private"
+                text.initializer = ir.Constant(array_type, data)
+                self.owner.raised[raises] = text
+            shown = [self.builder.sext(v, word) if v.type.width < 64 else v for v in values]
+            shown += [ir.Constant(word, 0)] * (RAISED_VALUES - len(shown))
+            raise_ = self.owner.llvm.globals.get("ppy_rt_raise") or ir.Function(
+                self.owner.llvm,
+                ir.FunctionType(ir.VoidType(), [ir.IntType(8).as_pointer(), word, *[word] * 4]),
+                name="ppy_rt_raise",
+            )
+            self.builder.call(
+                raise_,
+                [
+                    self.builder.bitcast(text, ir.IntType(8).as_pointer()),
+                    ir.Constant(word, len(values)),
+                    *shown,
+                ],
+            )
+            self.builder.unreachable()
+        return block
 
     def _sanitizer_check(self, condition, label: str) -> None:  # type: ignore[no-untyped-def]
         """A sanitizer's check: failing it returns the sanitizer status, never falls back."""
@@ -364,6 +413,12 @@ class _FunctionEmitter:
                 )
                 self.builder.ret_void()
             else:
+                if self.owner.collections and not self.owner.standalone:
+                    # What this call made is garbage now; the runtime frees it.
+                    failed = self.owner.llvm.globals.get("ppy_coll_failed") or ir.Function(
+                        self.owner.llvm, ir.FunctionType(ir.VoidType(), []), name="ppy_coll_failed"
+                    )
+                    self.builder.call(failed, [])
                 self.builder.ret(ir.Constant(ir.IntType(32), STATUS_FALLBACK))
         for phis in self.phis.values():
             for phi in phis:
@@ -543,7 +598,12 @@ class _FunctionEmitter:
                 if label.startswith("sanitize:"):
                     self._sanitizer_check(self.value(op.operands[0]), label)
                 else:
-                    self.continue_if(self.value(op.operands[0]), label)
+                    self.continue_if(
+                        self.value(op.operands[0]),
+                        label,
+                        raised_text(op),
+                        [self.value(v) for v in op.operands[1:]],
+                    )
             case _:
                 raise EmitError(f"{op.name} has no LLVM lowering")
 
@@ -612,7 +672,7 @@ class _FunctionEmitter:
         )
         packed = self.builder.call(function, [left, right])
         result = self.builder.extract_value(packed, 0)
-        self.fail_if(self.builder.extract_value(packed, 1), "arith.ok")
+        self.fail_if(self.builder.extract_value(packed, 1), "arith.ok", overflow_text(width))
         return result
 
     def _neg(self, op: Operation) -> None:
@@ -657,7 +717,7 @@ class _FunctionEmitter:
             overflows = b.and_(
                 b.icmp_signed("==", left, minimum), b.icmp_signed("==", right, minus_one)
             )
-            self.fail_if(overflows, "div.ok")
+            self.fail_if(overflows, "div.ok", overflow_text(word.width))
         if rounding == "trunc":
             self.set(op.result, b.sdiv(left, right) if name == "div" else b.srem(left, right))
             return
@@ -690,7 +750,9 @@ class _FunctionEmitter:
         shifted = b.shl(left, right)
         if op.attributes.get("overflow", "wrap") not in {"wrap", "native"}:
             restored = b.ashr(shifted, right) if signed else b.lshr(shifted, right)
-            self.fail_if(b.icmp_signed("!=", restored, left), "shl.ok")
+            self.fail_if(
+                b.icmp_signed("!=", restored, left), "shl.ok", overflow_text(left.type.width)
+            )
         self.set(op.result, shifted)
 
     def _cmp(self, op: Operation) -> None:

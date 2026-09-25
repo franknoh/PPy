@@ -25,6 +25,8 @@ __all__ = ["EXTERNAL", "AliasInfo", "analyze_aliases"]
 #: The root standing for every object this function did not create and was not
 #: handed as a parameter: globals, attribute reads, results of unknown calls.
 EXTERNAL = "<external>"
+#: Suffixed to a parameter's name: an object held inside that parameter.
+ELEMENT = "<element>"
 
 #: Subscripted `ppy` calls that allocate what they hand back.
 _FRESH_PPY = frozenset(
@@ -121,7 +123,9 @@ class AliasInfo:
         return frozenset({EXTERNAL})
 
     def param_roots(self, roots: frozenset[str]) -> frozenset[str]:
-        return roots & self.params
+        """The parameters these objects are, or are held inside."""
+        inside = {root.removesuffix(ELEMENT) for root in roots if root.endswith(ELEMENT)}
+        return (roots | inside) & self.params
 
     def only_local(self, roots: frozenset[str]) -> bool:
         """Do these roots name only objects this function created?"""
@@ -329,6 +333,11 @@ class _Analyzer:
                 # What a parameter or external container holds came from
                 # outside this function.
                 found.add(EXTERNAL)
+            if root in self.params or root.endswith(ELEMENT):
+                # And it is inside the parameter: a write through it is a
+                # write the caller sees in what it passed. It is not the
+                # parameter itself, which returning it would be.
+                found.add(root.removesuffix(ELEMENT) + ELEMENT)
             found.update(self.holds.get(root, ()))
         return frozenset(found) if found else frozenset({EXTERNAL})
 

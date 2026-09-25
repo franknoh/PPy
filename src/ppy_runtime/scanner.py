@@ -230,7 +230,55 @@ PARSE_INTS = """{
 
 #: What a standalone binary does where Python would raise: say so and stop.
 _STANDALONE_FAIL = """{
+    fflush(stdout);
     fputs(message, stderr);
+    fputc('\\n', stderr);
+    exit(1);
+}"""
+
+#: The same, where CPython's message ends with the text it could not read:
+#: `repr(text)` when `quoted` is 1 (`invalid literal for int() with base 10:
+#: '1x'`), the text as it is when 0, the text and " does not fit in 64 bits"
+#: when 2. `repr` escapes what `str.isprintable` refuses: the ASCII controls
+#: and, of what a line of UTF-8 may carry, U+0080 to U+00A0 and U+00AD.
+_STANDALONE_FAIL_TEXT = """{
+    fflush(stdout);
+    fputs(head, stderr);
+    if (quoted != 1) {
+        fwrite(text, 1, (size_t)length, stderr);
+        fputs(quoted == 2 ? " does not fit in 64 bits\\n" : "\\n", stderr);
+        exit(1);
+    }
+    int single = 0;
+    int twin = 0;
+    for (int64_t i = 0; i < length; i++) {
+        single |= text[i] == '\\'';
+        twin |= text[i] == '"';
+    }
+    int quote = single && !twin ? '"' : '\\'';
+    fputc(quote, stderr);
+    for (int64_t i = 0; i < length; i++) {
+        int c = (unsigned char)text[i];
+        int next = i + 1 < length ? (unsigned char)text[i + 1] : 0;
+        if (c == '\\\\' || c == quote) {
+            fputc('\\\\', stderr);
+            fputc(c, stderr);
+        } else if (c == '\\t') {
+            fputs("\\\\t", stderr);
+        } else if (c == '\\n') {
+            fputs("\\\\n", stderr);
+        } else if (c == '\\r') {
+            fputs("\\\\r", stderr);
+        } else if (c < 0x20 || c == 0x7f) {
+            fprintf(stderr, "\\\\x%02x", c);
+        } else if (c == 0xc2 && ((next >= 0x80 && next <= 0xa0) || next == 0xad)) {
+            fprintf(stderr, "\\\\x%02x", next);
+            i++;
+        } else {
+            fputc(c, stderr);
+        }
+    }
+    fputc(quote, stderr);
     fputc('\\n', stderr);
     exit(1);
 }"""
@@ -238,15 +286,16 @@ _STANDALONE_FAIL = """{
 #: `ppy.input[int]()` with no interpreter: one line, read as Python's `int()`
 #: reads it -- surrounding whitespace, a sign, digits with single underscores
 #: between them -- or an error that ends the program.
-INPUT_INT = """{
+INPUT_INT = (
+    """{
     static int8_t line[1 << 16];
     int8_t more = 0;
     int64_t length = ppy_rt_read_line(line, (int64_t)sizeof line, 0, &more);
     if (length < 0) {
-        ppy_rt_fail("ppy: EOFError: the input ended where a line was expected");
+        ppy_rt_fail("EOFError: EOF when reading a line");
     }
     if (more) {
-        ppy_rt_fail("ppy: ValueError: a line read as an integer is longer than the room for it");
+        ppy_rt_fail("ValueError: a line read as an integer is longer than the room for it");
     }
     int64_t start = 0;
     int64_t end = length;
@@ -268,30 +317,46 @@ INPUT_INT = """{
         int c = line[i];
         if (c == '_') {
             if (last_underscore) {
-                ppy_rt_fail("ppy: ValueError: invalid literal for int()");
+                ppy_rt_fail_text(INVALID_INT, line, length, 1);
             }
             last_underscore = 1;
             continue;
         }
         if (c < '0' || c > '9') {
-            ppy_rt_fail("ppy: ValueError: invalid literal for int()");
+            ppy_rt_fail_text(INVALID_INT, line, length, 1);
         }
         uint64_t digit = (uint64_t)(c - '0');
         if (magnitude > 922337203685477580ULL
             || (magnitude == 922337203685477580ULL && digit > (uint64_t)(7 + negative))) {
-            ppy_rt_fail("ppy: OverflowError: the integer does not fit in 64 bits");
+            ppy_rt_fail("OverflowError: the integer does not fit in 64 bits");
         }
         magnitude = magnitude * 10 + digit;
         digits++;
         last_underscore = 0;
     }
     if (digits == 0 || last_underscore) {
-        ppy_rt_fail("ppy: ValueError: invalid literal for int()");
+        ppy_rt_fail_text(INVALID_INT, line, length, 1);
     }
     return negative ? (int64_t)(0 - magnitude) : (int64_t)magnitude;
-}""".replace("IS_SPACE_AT(start)", _IS_SPACE.replace("c ==", "line[start] ==")).replace(
-    "IS_SPACE_AT(end - 1)", _IS_SPACE.replace("c ==", "line[end - 1] ==")
+}""".replace("IS_SPACE_AT(start)", _IS_SPACE.replace("c ==", "line[start] =="))
+    .replace("IS_SPACE_AT(end - 1)", _IS_SPACE.replace("c ==", "line[end - 1] =="))
+    .replace("INVALID_INT", '"ValueError: invalid literal for int() with base 10: "')
 )
+
+#: A token `ppy.scan` could not read as an integer, as `ppy._io` says it: one
+#: of digits only is past 64 bits, anything else is not an integer.
+_BAD_TOKEN = """
+        int64_t length = 0;
+        int number = 1;
+        while (length < (int64_t)sizeof bad && bad[length] != 0) {
+            int c = bad[length];
+            number &= (c >= '0' && c <= '9') || (length == 0 && (c == '-' || c == '+'));
+            length++;
+        }
+        if (number && length > 1 - (bad[0] >= '0' && bad[0] <= '9')) {
+            ppy_rt_fail_text("ValueError: the integer ", bad, length, 2);
+        }
+        ppy_rt_fail_text("ValueError: expected an integer, got ", bad, length, 1);"""
 
 #: `ppy.scan[Buffer[int]](n)` with no interpreter: exactly `count` integers
 #: into `data`, or an error that ends the program -- where a token is not an
@@ -300,28 +365,29 @@ INPUT_INT = """{
 FILL_INTS = """{
     int8_t bad[64];
     int64_t got = ppy_rt_read_ints(data, count, bad, (int64_t)sizeof bad);
-    if (got < 0) {
-        ppy_rt_fail("ppy: ValueError: expected an integer token");
+    if (got < 0) {BAD_TOKEN
     }
     if (got < count) {
-        ppy_rt_fail("ppy: EOFError: the input ended before every integer was read");
+        char message[128];
+        snprintf(message, sizeof message, "EOFError: the input ended after %lld of %lld integers",
+                 (long long)got, (long long)count);
+        ppy_rt_fail(message);
     }
     return got;
-}"""
+}""".replace("BAD_TOKEN", _BAD_TOKEN)
 
 #: `ppy.scan[int]()` with no interpreter.
 SCAN_INT = """{
     int64_t slot = 0;
     int8_t bad[64];
     int64_t got = ppy_rt_read_ints(&slot, 1, bad, (int64_t)sizeof bad);
-    if (got < 0) {
-        ppy_rt_fail("ppy: ValueError: expected an integer token");
+    if (got < 0) {BAD_TOKEN
     }
     if (got == 0) {
-        ppy_rt_fail("ppy: EOFError: the input ended where an integer was expected");
+        ppy_rt_fail("EOFError: the input ended where an integer was expected");
     }
     return slot;
-}"""
+}""".replace("BAD_TOKEN", _BAD_TOKEN)
 
 #: The text of one integer field as Python's `int()` reads it: a sign, digits
 #: with single underscores between them. 0 is a number in `*out`, 1 is not an
@@ -459,10 +525,10 @@ LINE_OPEN = """{
     int8_t more = 0;
     int64_t length = ppy_rt_read_line(line, (int64_t)(1 << 16), 0, &more);
     if (length < 0) {
-        ppy_rt_fail("ppy: EOFError: the input ended where a line was expected");
+        ppy_rt_fail("EOFError: EOF when reading a line");
     }
     if (more) {
-        ppy_rt_fail("ppy: ValueError: a line of fields is longer than the room for it");
+        ppy_rt_fail("ValueError: a line of fields is longer than the room for it");
     }
     if (length > 0 && line[length - 1] == '\\r') {
         length--;
@@ -489,12 +555,43 @@ LINE_OPEN = """{
     if (expected >= 0 && count != expected) {
         char message[128];
         snprintf(message, sizeof message,
-                 "ppy: ValueError: expected %lld field(s) on the line, got %lld",
+                 "ValueError: expected %lld field(s) on the line, got %lld",
                  (long long)expected, (long long)count);
         ppy_rt_fail(message);
     }
     return count;
 }""".replace("IS_SPACE", _IS_SPACE)
+
+#: `ppy.input[tuple[int, ...]]()`: every field read as `int()` before the
+#: count is checked, as `a, b = map(int, input().split())` reads them.
+LINE_OPEN_INTS = """{
+    int64_t count = ppy_rt_line_open(-1);
+    int64_t *bounds = NULL;
+    ppy_rt_line_hold(&bounds);
+    int wide = 0;
+    for (int64_t i = 0; i < count; i++) {
+        int64_t length = 0;
+        const int8_t *text = ppy_rt_line_field(&length);
+        int64_t value = 0;
+        int status = ppy_rt_int_text(text, length, &value);
+        if (status == 1) {
+            ppy_rt_fail_text(INVALID_INT, text, length, 1);
+        }
+        wide |= status == 2;
+    }
+    if (count != expected) {
+        char message[128];
+        snprintf(message, sizeof message,
+                 "ValueError: expected %lld field(s) on the line, got %lld",
+                 (long long)expected, (long long)count);
+        ppy_rt_fail(message);
+    }
+    if (wide) {
+        ppy_rt_fail("OverflowError: the integer does not fit in 64 bits");
+    }
+    bounds[0] = 0;
+    return count;
+}""".replace("INVALID_INT", '"ValueError: invalid literal for int() with base 10: "')
 
 #: The next field of the open line: its start, and its length in `*length`.
 LINE_FIELD = """{
@@ -528,10 +625,10 @@ LINE_INT = """{
     int64_t value = 0;
     int status = ppy_rt_int_text(text, length, &value);
     if (status == 2) {
-        ppy_rt_fail("ppy: OverflowError: the integer does not fit in 64 bits");
+        ppy_rt_fail("OverflowError: the integer does not fit in 64 bits");
     }
     if (status != 0) {
-        ppy_rt_fail("ppy: ValueError: invalid literal for int()");
+        ppy_rt_fail_text("ValueError: invalid literal for int() with base 10: ", text, length, 1);
     }
     return value;
 }"""
@@ -541,7 +638,7 @@ LINE_FLOAT = """{
     const int8_t *text = ppy_rt_line_field(&length);
     double value = 0.0;
     if (!ppy_rt_float_text(text, length, &value)) {
-        ppy_rt_fail("ppy: ValueError: could not convert string to float");
+        ppy_rt_fail_text("ValueError: could not convert string to float: ", text, length, 1);
     }
     return value;
 }"""
@@ -564,10 +661,16 @@ LINE_FLOATS = """{
 #: `ppy.input[float]()` with no interpreter: the whole line, as `float(input())`.
 INPUT_FLOAT = """{
     int64_t count = ppy_rt_line_open(-1);
-    if (count != 1) {
-        ppy_rt_fail("ppy: ValueError: could not convert string to float");
+    int64_t *bounds = NULL;
+    int8_t *line = ppy_rt_line_hold(&bounds);
+    int64_t whole = bounds[1];
+    double value = 0.0;
+    int64_t length = 0;
+    const int8_t *text = count == 1 ? ppy_rt_line_field(&length) : line;
+    if (count != 1 || !ppy_rt_float_text(text, length, &value)) {
+        ppy_rt_fail_text("ValueError: could not convert string to float: ", line, whole, 1);
     }
-    return ppy_rt_line_float();
+    return value;
 }"""
 
 #: `ppy.scan[float]()` with no interpreter: the next token as a float.
@@ -576,11 +679,11 @@ SCAN_FLOAT = """{
     int8_t more = 0;
     int64_t length = ppy_rt_read_token(token, (int64_t)sizeof token, 0, &more);
     if (length == 0 && !more) {
-        ppy_rt_fail("ppy: EOFError: the input ended where a float was expected");
+        ppy_rt_fail("EOFError: the input ended where a token was expected");
     }
     double value = 0.0;
     if (more || !ppy_rt_float_text(token, length, &value)) {
-        ppy_rt_fail("ppy: ValueError: could not convert string to float");
+        ppy_rt_fail_text("ValueError: could not convert string to float: ", token, length, 1);
     }
     return value;
 }"""
@@ -597,7 +700,17 @@ FILL_FLOATS = """{
 #: the program stops as Python's read raises.
 CHECK_WIDTH = """{
     if (value < low || value > high) {
-        ppy_rt_fail("ppy: OverflowError: the integer does not fit its declared width");
+        /* The width is the bit length of the bound; a u64 read natively
+           stops at 2**63 - 1, which is still `ppy.u64`. */
+        int bits = 0;
+        while (bits < 63 && (high >> bits) != 0) {
+            bits++;
+        }
+        bits = low < 0 ? bits + 1 : bits == 63 ? 64 : bits;
+        char message[96];
+        snprintf(message, sizeof message, "OverflowError: %lld does not fit in ppy.%c%d",
+                 (long long)value, low < 0 ? 'i' : 'u', bits);
+        ppy_rt_fail(message);
     }
     return value;
 }"""
@@ -725,26 +838,33 @@ FUNCTIONS: dict[str, tuple[str, tuple[str, ...], str, tuple[str, ...], tuple[str
         ("stdio.h", "stdlib.h"),
         (),
     ),
+    "ppy_rt_fail_text": (
+        "void",
+        ("const char *head", "const int8_t *text", "int64_t length", "int8_t quoted"),
+        _STANDALONE_FAIL_TEXT,
+        ("stdint.h", "stdio.h", "stdlib.h"),
+        (),
+    ),
     "ppy_rt_input_int": (
         "int64_t",
         (),
         INPUT_INT,
         ("stdint.h",),
-        ("ppy_rt_read_line", "ppy_rt_fail"),
+        ("ppy_rt_read_line", "ppy_rt_fail", "ppy_rt_fail_text"),
     ),
     "ppy_rt_fill_ints": (
         "int64_t",
         ("int64_t *data", "int64_t count"),
         FILL_INTS,
-        ("stdint.h",),
-        ("ppy_rt_read_ints", "ppy_rt_fail"),
+        ("stdint.h", "stdio.h"),
+        ("ppy_rt_read_ints", "ppy_rt_fail", "ppy_rt_fail_text"),
     ),
     "ppy_rt_scan_int": (
         "int64_t",
         (),
         SCAN_INT,
         ("stdint.h",),
-        ("ppy_rt_read_ints", "ppy_rt_fail"),
+        ("ppy_rt_read_ints", "ppy_rt_fail", "ppy_rt_fail_text"),
     ),
     "ppy_rt_int_text": (
         "int",
@@ -775,19 +895,33 @@ FUNCTIONS: dict[str, tuple[str, tuple[str, ...], str, tuple[str, ...], tuple[str
         ("stdint.h",),
         ("ppy_rt_line_hold",),
     ),
+    "ppy_rt_line_open_ints": (
+        "int64_t",
+        ("int64_t expected",),
+        LINE_OPEN_INTS,
+        ("stdint.h", "stdio.h"),
+        (
+            "ppy_rt_line_open",
+            "ppy_rt_line_hold",
+            "ppy_rt_line_field",
+            "ppy_rt_int_text",
+            "ppy_rt_fail",
+            "ppy_rt_fail_text",
+        ),
+    ),
     "ppy_rt_line_int": (
         "int64_t",
         (),
         LINE_INT,
         ("stdint.h",),
-        ("ppy_rt_line_field", "ppy_rt_int_text", "ppy_rt_fail"),
+        ("ppy_rt_line_field", "ppy_rt_int_text", "ppy_rt_fail", "ppy_rt_fail_text"),
     ),
     "ppy_rt_line_float": (
         "double",
         (),
         LINE_FLOAT,
         ("stdint.h",),
-        ("ppy_rt_line_field", "ppy_rt_float_text", "ppy_rt_fail"),
+        ("ppy_rt_line_field", "ppy_rt_float_text", "ppy_rt_fail_text"),
     ),
     "ppy_rt_line_ints": (
         "int64_t",
@@ -808,14 +942,20 @@ FUNCTIONS: dict[str, tuple[str, tuple[str, ...], str, tuple[str, ...], tuple[str
         (),
         INPUT_FLOAT,
         ("stdint.h",),
-        ("ppy_rt_line_open", "ppy_rt_line_float", "ppy_rt_fail"),
+        (
+            "ppy_rt_line_open",
+            "ppy_rt_line_hold",
+            "ppy_rt_line_field",
+            "ppy_rt_float_text",
+            "ppy_rt_fail_text",
+        ),
     ),
     "ppy_rt_scan_float": (
         "double",
         (),
         SCAN_FLOAT,
         ("stdint.h",),
-        ("ppy_rt_read_token", "ppy_rt_float_text", "ppy_rt_fail"),
+        ("ppy_rt_read_token", "ppy_rt_float_text", "ppy_rt_fail", "ppy_rt_fail_text"),
     ),
     "ppy_rt_fill_floats": (
         "int64_t",
@@ -828,7 +968,7 @@ FUNCTIONS: dict[str, tuple[str, tuple[str, ...], str, tuple[str, ...], tuple[str
         "int64_t",
         ("int64_t value", "int64_t low", "int64_t high"),
         CHECK_WIDTH,
-        ("stdint.h",),
+        ("stdint.h", "stdio.h"),
         ("ppy_rt_fail",),
     ),
     "ppy_rt_print_f64": (

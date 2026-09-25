@@ -95,7 +95,9 @@ def _agree(program: Path, binary: Path) -> None:
         assert python.returncode != 0 and f"{raised}:" in python.stderr, (text, python.stderr)
         native = _native(binary, text)
         assert native.returncode == 1, (text, native.stdout)
-        assert native.stderr.startswith(f"ppy: {raised}:"), (text, native.stderr)
+        # The line CPython's traceback ends with, word for word.
+        said = python.stderr.strip().splitlines()[-1]
+        assert native.stderr.strip() == said, (text, native.stderr)
 
 
 @requires_standalone
