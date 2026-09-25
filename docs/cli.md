@@ -13,7 +13,7 @@ These go before the subcommand.
 | `-q`, `--quiet` | only errors |
 | `--color {auto,always,never}` | ANSI colour in diagnostics |
 | `-O`, `--opt-level {0,1,2,3}` | override `[tool.ppy] opt-level` |
-| `--no-strict` | downgrade strict-mode errors where a sound fallback exists |
+| `--no-strict` | report strict-mode errors that have a sound fallback as `W2010` warnings |
 
 `-O` overrides the project default. It does not override a per-function
 `@ppy.opt(n)`, which is a contract on that function.

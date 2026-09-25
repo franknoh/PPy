@@ -2225,6 +2225,33 @@ def test_an_unresolved_type_is_reported_once_not_everywhere_it_flowed(write, ana
     assert "not shown" in summaries[0].message
 
 
+def test_no_strict_downgrades_findings_with_a_fallback_and_keeps_mismatches(write, analyze):
+    """`--no-strict` reports what strict mode errors on, as `W2010`, instead of dropping it.
+
+    Only findings whose code falls back to CPython are downgraded; a type
+    mismatch stays an error in either mode.
+    """
+    path = write(
+        "loose.ppy",
+        """
+        def f(x: int) -> int:
+            return x + 1
+
+        def g(y) -> int:
+            return f("a") + y
+        """,
+    )
+    strict = {d.code for d in analyze(path).diagnostics.sorted()}
+    assert {"E1201", "E1301"} <= strict
+    loose = analyze(path, strict=False).diagnostics.sorted()
+    codes = {d.code for d in loose}
+    assert "E1201" not in codes and "E1301" in codes
+    downgraded = [d for d in loose if d.code == "W2010"]
+    assert len(downgraded) == 1
+    assert downgraded[0].severity.name == "WARNING"
+    assert "(E1201 under strict mode)" in downgraded[0].message
+
+
 def test_a_field_is_every_type_its_class_assigns_to_it(write, analyze):
     """`self.buffer = None` in `__init__` and a real value later is `T | None`.
 
