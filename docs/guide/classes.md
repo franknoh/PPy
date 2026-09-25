@@ -7,9 +7,10 @@ class:
   whose fields are all numbers, and whose methods only read them. Native code
   keeps it as a struct of its fields.
 - An **object class** is shared, like any Python object. It has fields that
-  hold other objects or collections, or methods that change its fields.
-  Native code keeps a handle to it on the heap, counts references to it, and
-  frees it when the last one goes.
+  hold other objects or collections, methods that change its fields or
+  return a new instance, a base class, or subclasses. Native code keeps a
+  handle to it on the heap, counts references to it, and frees it when the
+  last one goes.
 
 You don't choose between them. `ppy explain` shows which one a class is by
 how its functions lower.
@@ -47,8 +48,9 @@ with null.
 
 ## Object classes
 
-An object class has no base class and no `__getattr__` or similar hook. Each
-field holds a value native code can represent:
+An object class has at most one base, itself an object class of the same
+module, and no `__getattr__` or similar hook. Each field holds a value
+native code can represent:
 
 - a number, a tuple of numbers, or a value class
 - a collection: `Vec[int]`, `HashMap[int, Vec[int]]`
@@ -56,7 +58,10 @@ field holds a value native code can represent:
 
 Native code builds an instance by running the class's `__init__`, or for a
 dataclass by setting each field from the arguments and the defaults. A
-default natively has to be a constant, `None` included.
+default is a constant (`None` included), `field(default=<constant>)`, or
+`field(default_factory=...)` naming a collection (`Vec[int]`,
+`HashMap[int, int]`) or a class built with no arguments, which is made anew
+for each instance.
 
 Reading a field of `None` is Python's `AttributeError`. Under `ppy run` it
 falls back to Python, which raises it; a standalone binary stops.
@@ -64,6 +69,79 @@ falls back to Python, which raises it; a standalone binary stops.
 Methods lower like functions, with `self` as a handle. `len(obj)` calls
 `__len__`, and `if obj:` calls `__bool__` or `__len__` where the class has
 one and otherwise tests that `obj` is not `None`.
+
+## Inheritance
+
+A class may derive from one object class of the same module. Its instance is
+one record: the root class's fields first, then each subclass's own, so a
+`Square` is a `Shape` with more words after it.
+
+```python
+from ppy import Vec
+
+
+class Shape:
+    def __init__(self, scale: int) -> None:
+        self.scale: int = scale
+
+    def area(self) -> int:
+        return 0
+
+    def describe(self) -> int:
+        return self.area() * 10 + self.scale
+
+
+class Square(Shape):
+    def __init__(self, scale: int, side: int) -> None:
+        super().__init__(scale)
+        self.side: int = side
+
+    def area(self) -> int:
+        return self.side * self.side
+
+
+def total(shapes: Vec[Shape]) -> int:
+    acc: int = 0
+    for s in shapes:
+        acc += s.describe()
+        if isinstance(s, Square):
+            acc += s.side
+    return acc
+```
+
+- A method a subclass does not define is its base's.
+- A call to a method some subclass overrides goes by the class the object was
+  made as. Each object carries a tag for its class in its header, and the
+  call compares the tag and calls that class's method. The overriding method
+  takes and returns the same types as the one it overrides; one that does
+  not keeps the caller in Python.
+- `super().__init__(...)` and `super().method(...)` call the next class's
+  method along the bases, directly.
+- A parameter, a field, or an element typed `Shape` takes a `Square`.
+- `isinstance(obj, Cls)`, or with a tuple of classes, reads the tag. The
+  checker narrows on it as usual, so `s.side` after `isinstance(s, Square)`
+  reads the `Square`'s field.
+
+A class that others derive from is an object class even when its fields are
+all numbers, since a copy of its fields would cut a subclass's short.
+
+## Operators
+
+An object class's operator methods lower as calls:
+
+| written | calls |
+|---|---|
+| `a + b`, `a - b`, `a * k`, and the other arithmetic operators | `__add__`, `__sub__`, `__mul__`, ..., or the right operand's `__radd__`, ... |
+| `-a`, `+a`, `~a` | `__neg__`, `__pos__`, `__invert__` |
+| `a == b`, `a != b` | `__eq__`, `__ne__` (or `not __eq__`); a class with neither compares identity |
+| `a < b`, `a <= b`, `a > b`, `a >= b` | `__lt__`, ..., or the reflected method of the right operand |
+| `obj[key]`, `obj[key] = value` | `__getitem__`, `__setitem__` |
+| `x in obj` | `__contains__` |
+| `len(obj)`, `if obj:` | `__len__`, `__bool__` |
+
+A method that returns a new instance, as `__add__` usually does, makes the
+class an object class: each result is a new object, freed when its last
+reference goes.
 
 ## Generic classes
 
@@ -90,8 +168,20 @@ class Stack[T]:
 `Stack[int]()` and `Stack[float]()` are two classes to the checker, which
 holds each method to its type argument: `push(2.5)` on a `Stack[int]` is
 `E1301`. Native code instantiates the class and its methods once per type
-argument, as a C++ template is instantiated. Write the type argument at
-construction: `Stack[int]()`.
+argument, as a C++ template is instantiated.
+
+The type arguments may be left out where the checker can tell them:
+
+- from where the instance goes: `s: Stack[int] = Stack()`, a return from a
+  function declared `-> Stack[int]`, or an assignment to a field declared
+  `Stack[int]`
+- from the constructor's arguments: `Pair(1, 2.5)` is a `Pair[int, float]`
+  when `__init__` (or the dataclass fields) takes an `A` and a `B`
+
+The collections work the same way: `v: Vec[int] = Vec()` and
+`m: HashMap[int, int] = HashMap()`. A collection that stores floats is the
+exception, since CPython runs `Vec()` without knowing its type and would
+keep a stored `3` an `int`: write `Vec[float]()`.
 
 ## Memory
 
@@ -115,13 +205,14 @@ return numbers, and make their objects inside.
 
 ## Limitations
 
-- A class with a base class, or a field native code cannot represent (a
-  `str`, say), keeps the functions that use it in Python.
-- A dataclass built natively takes constant defaults only.
-- A generic class's type arguments are written at construction; `Stack()`
-  without them stays in Python.
-- Reading a field that holds a reference, off an object made in the same
-  expression (`make().child`), is not lowered.
+- A class with more than one base, a base from another module or a
+  library, or a field native code cannot represent (a `str`, say), keeps the
+  functions that use it in Python.
+- A generic class with a base, or a base that is generic, is not lowered.
+- A dataclass object compared with `==` keeps the function in Python unless
+  the class defines `__eq__`, since the generated one compares fields.
+- A generic class whose type arguments nothing tells stays in Python.
 - Reference cycles are not freed, as described above.
 
-Examples: [Collections](../howto/47_collections.md).
+Examples: [Inheritance](../howto/49_inheritance.md),
+[Collections](../howto/47_collections.md).

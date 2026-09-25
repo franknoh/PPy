@@ -46,7 +46,9 @@ them and times each path.
 | `TreeSet[K]` | a set in key order |
 
 Make one by subscripting the class and calling it: `Vec[int]()`,
-`HashMap[int, float]()`. `Vec[T](n)` starts with `n` zeros of `T`: `0`,
+`HashMap[int, float]()`. Where the target says the type, the subscript may
+be left out: `v: Vec[int] = Vec()`. A collection of floats keeps it, as
+[Classes](classes.md#generic-classes) explains. `Vec[T](n)` starts with `n` zeros of `T`: `0`,
 `0.0`, `False`, a tuple of zeros, a dataclass of zero fields, or a new empty
 collection in each slot.
 
@@ -59,6 +61,7 @@ An element, or a map's value, is one of:
 - a tuple of numbers: `Vec[tuple[int, float]]`
 - a dataclass whose fields are numbers: `Vec[Point]`
 - another collection: `Vec[Vec[int]]`, `HashMap[int, Vec[int]]`
+- an instance of an object class: `Vec[Shape]`, which may hold subclasses
 
 A key of a map or a set is an `int` or a tuple of them:
 `HashMap[tuple[int, int], int]` for a grid, `TreeSet[tuple[int, int]]` for
@@ -107,8 +110,12 @@ it is refused. A collection has no order either.
 
 A collection element read into a name is the same collection, not a copy,
 as it is in Python: after `row = grid[0]`, `row.push(1)` changes
-`grid[0]`. A dataclass element is a value: it is read and written whole,
-and setting a field of one in place keeps the function in Python.
+`grid[0]`, and the same holds for an object element. A dataclass element of
+numbers is a value, held in the collection's own words. `points[i].x = 3`
+and `table[k].y += 0.5` write the field where the element is held. A
+function that also keeps a copy of such an element in a name, a loop target,
+or a parameter stays in Python, since CPython's copy would be the same object
+and see the write.
 
 ## Generic functions
 
@@ -280,8 +287,6 @@ natively, so it runs as Python when called from Python.
 
 - Keys are `int` or tuples of `int`.
 - `get(key, default)` natively takes a map whose values are numbers.
-- A dataclass element is read and written whole; setting a field of one in
-  place keeps the function in Python.
 - When a guard falls back under `ppy run`, the collections the native call
   made so far are not freed.
 - A standalone binary reports a failed guard with a generic message rather

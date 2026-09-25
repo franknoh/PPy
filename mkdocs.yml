@@ -152,6 +152,7 @@ nav:
           - howto/42_toolbox.md
           - howto/43_regex.md
           - howto/47_collections.md
+          - howto/49_inheritance.md
       - Accelerators:
           - howto/38_cuda.md
           - howto/44_tile.md

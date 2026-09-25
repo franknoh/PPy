@@ -112,7 +112,7 @@ class V2:
         return self.x * self.x + self.y * self.y < other.x * other.x + other.y * other.y
 
 
-def orbit(steps: int) -> float:
+def orbit(steps: int) -> int:
     position = V2(1.0, 0.0)
     velocity = V2(0.0, 1.0)
     farthest = V2(0.0, 0.0)
@@ -124,7 +124,7 @@ def orbit(steps: int) -> float:
         position = position + velocity * dt
         if farthest < position:
             farthest = position
-    return round(farthest.x * farthest.x + farthest.y * farthest.y, 6)
+    return int((farthest.x * farthest.x + farthest.y * farthest.y) * 1000000)
 
 
 def main() -> None:
