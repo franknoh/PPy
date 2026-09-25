@@ -85,10 +85,11 @@ to a native build in about ten minutes.
 - **Seven backends off one IR.** LLVM, C11, C++17, CUDA, HIP, NVVM/PTX, and
   StableHLO, across 19 IR dialects. Other packages can
   [register their own backend](internals/backends.md).
-- **Collections without pointers.** [`Vec`, `Deque`, `Heap`, `LinkedList`,
-  `HashMap`, `HashSet`, `TreeMap`, and `TreeSet`](guide/collections.md)
-  compile to native code and give the same answers as their Python
-  reference classes.
+- **Strings, classes, and collections.** [`str`](guide/strings.md),
+  [classes with inheritance](guide/classes.md), and
+  [`Vec`, `HashMap`, `TreeMap`, and six more](guide/collections.md)
+  compile to native code, reference counted with cycles collected, and
+  give the same answers as CPython.
 - **Eight library plugins.** NumPy, PyTorch, JAX/Flax, pydantic,
   FastAPI/Uvicorn, SciPy, pandas, and PyArrow.
 - **A cheap call boundary.** A native call with two `int` arguments costs
