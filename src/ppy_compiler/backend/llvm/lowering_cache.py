@@ -76,6 +76,7 @@ def _param(p: NativeParam) -> dict:
         "elements": list(p.elements),
         "fields": [list(f) for f in p.fields],
         "class_name": p.class_name,
+        "written": p.written,
     }
 
 
@@ -87,6 +88,7 @@ def _read_param(raw: dict) -> NativeParam:
         elements=tuple(raw["elements"]),
         fields=tuple(tuple(f) for f in raw["fields"]),
         class_name=raw["class_name"],
+        written=bool(raw.get("written", False)),
     )
 
 
@@ -99,6 +101,7 @@ def _signature(s: NativeSignature) -> dict:
         "releases_gil": s.releases_gil,
         "cpu_features": list(s.cpu_features),
         "future": s.future,
+        "returned": s.returned,
     }
 
 
@@ -111,6 +114,7 @@ def _read_signature(raw: dict) -> NativeSignature:
         releases_gil=raw["releases_gil"],
         cpu_features=tuple(raw.get("cpu_features", ())),
         future=str(raw.get("future", "")),
+        returned=str(raw.get("returned", "")),
     )
 
 

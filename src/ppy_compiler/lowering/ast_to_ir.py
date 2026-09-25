@@ -86,7 +86,8 @@ from ..ir.raising import OVERFLOW, empty_extreme, negative_shift, zero_division
 from ..ir.transforms.autodiff import AutodiffError, differentiate
 from ..plugins.base import DialectOperationSpec, PluginError, PluginRegistry
 from .abi import signature_from_ir
-from .collections import HANDLE, CollectionLowering, Held
+from .collection_api import CollectionApiLowering
+from .collections import HANDLE, Held
 from .strings import StringLowering
 
 __all__ = ["Frontend", "Lowered", "lower_function", "lower_module_to_ir"]
@@ -990,7 +991,7 @@ class _GuardSite:
         core.br(self.b, Successor(setup))
 
 
-class _FunctionLowering(CollectionLowering, StringLowering):
+class _FunctionLowering(CollectionApiLowering, StringLowering):
     """Lowers one function body."""
 
     def __init__(
@@ -1690,15 +1691,15 @@ class _FunctionLowering(CollectionLowering, StringLowering):
             self.b.at_end(dead)
 
     def _for(self, node: ast.For) -> None:
+        if self._is_walk(node.iter):
+            self._for_collection(node)
+            return
         if node.orelse or not isinstance(node.target, ast.Name):
             raise Unsupported("only `for NAME in range(...)` or over a list parameter is lowered")
         if isinstance(node.iter, ast.Name) and node.iter.id in self.buffers:
             self._for_buffer(node, node.iter.id)
             return
         if self._for_string(node):
-            return
-        if self._is_collection(node.iter):
-            self._for_collection(node)
             return
         explicit = _parallel_range(node.iter)
         if not (
@@ -2157,6 +2158,9 @@ class _FunctionLowering(CollectionLowering, StringLowering):
         text = self._string_compare(node)
         if text is not None:
             return text
+        equal = self._collection_equality(node)
+        if equal is not None:
+            return equal
         operator = node.ops[0]
         container = node.comparators[0]
         if isinstance(operator, (ast.In, ast.NotIn)) and self._is_collection(container):
@@ -2318,7 +2322,7 @@ class _FunctionLowering(CollectionLowering, StringLowering):
                     self._release(read)
                 return read
         if isinstance(node.func, ast.Attribute) and self._is_collection(node.func.value):
-            if discard_result and self._is_collection(node):
+            if discard_result and self._reference_of(node) is not None:
                 self._discard(node)
                 return core.const(self.b, 0, I64)
             return self._collection_method(node.func.value, node.func.attr, node)
@@ -2388,6 +2392,10 @@ class _FunctionLowering(CollectionLowering, StringLowering):
             if isinstance(argument, ast.Name) and argument.id in self.tuples:
                 width = len(self.tuples[argument.id].type.pointee.items)  # type: ignore[attr-defined]
                 return self._int_constant(width)
+        if target in {"sum", "min", "max"}:
+            reduced = self._reduction(target, node)
+            if reduced is not None:
+                return reduced
         if target in {"len", "sum", "min", "max"} and len(node.args) == 1:
             argument = node.args[0]
             if isinstance(argument, ast.Name) and argument.id in self.buffers:

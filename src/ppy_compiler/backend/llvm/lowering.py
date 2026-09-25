@@ -26,9 +26,11 @@ may not mutate it (spec 13.2, 13.3, 13.5).
 from __future__ import annotations
 
 import ast
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
 from ppy_runtime.abi import STATUS_FALLBACK, STATUS_OK, NativeParam, NativeSignature
+from ppy_runtime.collection_boundary import RETURNS_NOTHING
+from ppy_runtime.collection_boundary import parse as crossing_spec
 
 from ...analysis import types as T
 from ...analysis.checker import FunctionAnalysis
@@ -395,7 +397,6 @@ def should_lower_native(
     boundary, so a helper this keeps off it is still called directly by any
     native caller.
     """
-    del analysis
     if info.is_async:
         # The future is the boundary value; a coroutine is called to be run.
         return True, "a coroutine's future crosses the boundary"
@@ -404,21 +405,26 @@ def should_lower_native(
             # Device code has no CPU form to bind; a launch runs it, and under
             # CPython its own definition is the reference.
             return False, "device code runs where it is launched"
-    if _returns_none(info.ret):
+    fills = any(
+        _crosses(native) and native is not None and native.name in analysis.mutated_params
+        for native in (_native_param(p.name, p.type, layouts) for p in info.params)
+    )
+    if _returns_none(info.ret) and not fills:
         # The boundary hands back a value; a function with none to hand
-        # back is native code's to call -- a thread's body, a helper.
+        # back is native code's to call -- a thread's body, a helper --
+        # unless what it does is fill a collection the caller passed.
         return False, "returns nothing, which has no Python boundary"
     returned = _collection_param("", info.ret, layouts)
-    if returned is not None and returned.element != "str":
-        return False, "returns a collection or an object, which native callers receive by handle"
+    if returned is not None and returned.element != "str" and not _crosses(returned):
+        return False, "returns an object, which native callers receive by handle"
     for param in info.params:
         native = _native_param(param.name, param.type, layouts)
         if native is not None and native.is_pointer:
             # A machine address has no Python object to come from, whatever
             # the directives ask: the function is native code's to call.
             return False, "takes a native pointer, which has no Python boundary"
-        if native is not None and native.is_handle and native.element != "str":
-            return False, "takes a collection or an object, which native callers pass by handle"
+        if native is not None and native.is_handle and native.element != "str" and not _crosses(native):
+            return False, "takes an object, which native callers pass by handle"
     for name in _EXPOSURE_DIRECTIVES:
         if info.directive(name) is not None:
             return True, f"@ppy.{name} asks for the boundary"
@@ -465,9 +471,12 @@ def _signature(
     layouts: ClassLayouts | None = None,
     analysis: FunctionAnalysis | None = None,
 ) -> NativeSignature:
+    written = analysis.mutated_params | analysis.delegated_writes if analysis is not None else set()
     parameters = tuple(
-        _native_param(p.name, p.type, layouts) or NativeParam(p.name, "int") for p in info.params
+        _written(_native_param(p.name, p.type, layouts) or NativeParam(p.name, "int"), written)
+        for p in info.params
     )
+    returned = _collection_param("", info.ret, layouts)
     atoms = _return_atoms(info.ret, layouts) or ("int",)
     returns = tuple(_abi_name(atom) for atom in atoms)
     future = ""
@@ -484,7 +493,33 @@ def _signature(
         releases_gil=_releases_gil(analysis) if analysis is not None else False,
         cpu_features=_cpu_features(info),
         future=future,
+        returned=_returned(info, returned, parameters),
     )
+
+
+def _returned(
+    info: FunctionInfo, returned: NativeParam | None, parameters: tuple[NativeParam, ...]
+) -> str:
+    """What the boundary builds from the result: a collection's type, or `None`
+    for a function that returns nothing and takes a collection."""
+    if returned is not None:
+        return returned.element
+    if _returns_none(info.ret) and any(p.is_handle for p in parameters):
+        return RETURNS_NOTHING
+    return ""
+
+
+def _written(parameter: NativeParam, written: set[str]) -> NativeParam:
+    """A collection parameter the function writes through, marked for the boundary."""
+    if parameter.is_handle and parameter.name in written:
+        return replace(parameter, written=True)
+    return parameter
+
+
+def _crosses(parameter: NativeParam | None) -> bool:
+    """Whether a handle has a Python form at the boundary: a collection of numbers,
+    tuples of numbers, and collections of those, not an object."""
+    return parameter is not None and crossing_spec(parameter.element) is not None
 
 
 def _cpu_features(info: FunctionInfo) -> tuple[str, ...]:

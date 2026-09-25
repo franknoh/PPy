@@ -31,6 +31,8 @@ _CTYPES = {
     "i64": ctypes.c_int64,
     "double": ctypes.c_double,
     "i8": ctypes.c_int8,
+    # A collection's handle, which the boundary makes and reads.
+    "i8*": ctypes.c_void_p,
 }
 
 _ELEMENT_CTYPES = {
@@ -218,6 +220,9 @@ def bind(
     )
     native = prototype(address)
 
+    if signature.crosses_collections:
+        return _bind_collections(signature, native, result_types, fallback, owner)
+
     namespace = getattr(fallback, "__globals__", None)
     expanders = [
         _expander_for(p, (lambda: namespace) if namespace is not None else None)
@@ -339,6 +344,104 @@ def _text_result(address: int | None, length: int) -> str:
 _LIBC = ctypes.CDLL(None)
 _LIBC.free.argtypes = (ctypes.c_void_p,)
 _LIBC.free.restype = None
+
+
+def _bind_collections(  # type: ignore[no-untyped-def]
+    signature: NativeSignature, native, result_types: list, fallback, owner
+) -> NativeBinding:
+    """The boundary of a function a collection crosses: each argument copied into
+    native memory, the result copied out, and a written argument copied back.
+
+    Anything that does not match its declared type, or a runtime that cannot be
+    loaded, runs the Python body, as a failed guard does.
+    """
+    from . import collection_boundary as crossing  # pylint: disable=import-outside-toplevel
+
+    unbound = NativeBinding(
+        signature=signature, wrapper=fallback, fallback=fallback, fast_entry=None, owner=owner
+    )
+    library = owner if isinstance(owner, ctypes.CDLL) else None
+    rt = crossing.runtime(library)
+    if rt is None:
+        return unbound
+    specs = [crossing.parse(p.element) if p.is_handle else None for p in signature.parameters]
+    parameters = signature.parameters
+    if any(p.is_handle and spec is None for p, spec in zip(parameters, specs, strict=True)):
+        return unbound
+    nothing = signature.returned == crossing.RETURNS_NOTHING
+    returned = crossing.parse(signature.returned) if signature.returned and not nothing else None
+    if signature.returned and not nothing and returned is None:
+        return unbound
+    expanders = [None if p.is_handle else _expander_for(p, None) for p in signature.parameters]
+    written = [p.is_handle and p.written for p in signature.parameters]
+    binding = NativeBinding(
+        signature=signature, wrapper=lambda *a: None, fallback=fallback, owner=owner
+    )
+
+    def wrapper(*args: object) -> object:
+        if len(args) != len(expanders):
+            return fallback(*args)
+        boundary = crossing.Boundary(rt)
+        try:
+            answered, answer = _cross(boundary, args)
+        finally:
+            # Every handle the crossing made is let go of before any Python
+            # runs: a fallback that calls native code again must not find
+            # them on the thread's list, which a failed call's sweep frees.
+            boundary.close()
+        if answered:
+            binding.calls += 1
+            return answer
+        binding.fallbacks += 1
+        return fallback(*args)
+
+    def _cross(boundary, args: tuple) -> tuple[bool, object]:  # type: ignore[no-untyped-def]
+        """The native call and its conversions: whether it answered, and what."""
+        atoms: list[object] = []
+        borrowed: list[object] = []
+        try:
+            for expand, spec, value in zip(expanders, specs, args, strict=True):
+                if spec is not None:
+                    atoms.append(boundary.argument(value, spec))
+                else:
+                    assert expand is not None
+                    expand(value, atoms, borrowed)
+        except (GuardFailed, crossing.Refused):
+            return False, None
+        slots = [result_type() for result_type in result_types]
+        status = native(*atoms, *[ctypes.byref(slot) for slot in slots])
+        if status != STATUS_OK:
+            if status >= STATUS_SANITIZER_BASE:
+                kind = SANITIZERS[min(status - STATUS_SANITIZER_BASE, len(SANITIZERS) - 1)]
+                raise SanitizerFailure(
+                    f"sanitizer: a {kind} check failed in `{signature.qualname}`"
+                )
+            return False, None
+        boundary.sync(
+            [
+                (value, spec)
+                for value, spec, wrote in zip(args, specs, written, strict=True)
+                if wrote and spec is not None
+            ]
+        )
+        if returned is not None:
+            return True, boundary.result(slots[0].value, returned)
+        if nothing or not slots:
+            return True, None
+        if len(slots) > 1:
+            return True, tuple(
+                _result_for(atom)(slot.value)
+                for atom, slot in zip(signature.returns, slots, strict=True)
+            )
+        return True, _result_for(signature.returns[0])(slots[0].value)
+
+    wrapper.__name__ = signature.qualname.rpartition(".")[2]
+    wrapper.__qualname__ = signature.qualname
+    wrapper.__doc__ = getattr(fallback, "__doc__", None)
+    wrapper.__ppy_native__ = signature  # type: ignore[attr-defined]
+    wrapper.__ppy_fallback__ = fallback  # type: ignore[attr-defined]
+    binding.wrapper = wrapper
+    return binding
 
 
 def _expander_for(

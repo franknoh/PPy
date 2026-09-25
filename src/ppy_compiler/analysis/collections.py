@@ -2,8 +2,9 @@
 
 A collection is a `T.Instance` named for its class, with its element as the
 one argument (`ppy.Vec[int]`), or its key and value as two
-(`ppy.HashMap[int, float]`). Elements and values are `int` or `float`, keys
-are `int`. Methods are typed here, each with the qualified name the native
+(`ppy.HashMap[int, float]`). Elements and values are numbers, tuples of
+numbers, dataclasses, and collections; keys are `int` or tuples of them.
+Methods are typed here, each with the qualified name the native
 lowering dispatches on (`ppy.Vec.push`), and the ones that change the
 collection are listed so the checker records the write on the receiver,
 which is what keeps a function that fills its own collection eligible for
@@ -16,15 +17,22 @@ from . import types as T
 
 __all__ = [
     "COLLECTIONS",
+    "CONCATENATED",
+    "FILLED",
     "INDEXED",
     "ITERABLE",
+    "ITERABLE_PARAMETERS",
     "KEYED",
+    "KEY_PARAMETER",
     "MAPS",
     "MUTATORS",
+    "SETS",
+    "SET_OPERATORS",
     "SHORT_NAMES",
     "instance",
     "is_collection",
     "method",
+    "sort_key",
     "spelled",
 ]
 
@@ -110,6 +118,33 @@ def value_of(base: T.Instance) -> T.Type:
 Signatures = dict[str, tuple[tuple[T.Param, ...], T.Type]]
 
 
+#: The parameters that take any iterable of the element (`extend`, a
+#: constructor): the checker holds what they iterate to the element itself.
+ITERABLE_PARAMETERS = frozenset({"values"})
+
+#: `sort`'s `key`: a function of one element, typed from the collection.
+KEY_PARAMETER = "key"
+
+
+def sort_key(element: T.Type) -> T.Callable_:
+    """What `sort(key=...)` takes: a function of one element."""
+    return T.Callable_((T.Param("item", element),), T.ANY)
+
+
+def _sequence_extras(base: T.Instance, element: T.Type) -> Signatures:
+    """What a `Vec` and a `Deque` share beyond pushing and popping."""
+    value: tuple[T.Param, ...] = (T.Param("value", element),)
+    iterable: tuple[T.Param, ...] = (T.Param("values", T.ANY),)
+    extras: Signatures = {}
+    extras["extend"] = (iterable, T.NONE)
+    extras["insert"] = ((T.Param("index", T.INT), *value), T.NONE)
+    extras["remove"] = (value, T.NONE)
+    extras["index"] = (value, T.INT)
+    extras["count"] = (value, T.INT)
+    extras["copy"] = ((), base)
+    return extras
+
+
 def _signatures(base: T.Instance) -> Signatures:
     name = base.name
     element = value_of(base)
@@ -121,12 +156,19 @@ def _signatures(base: T.Instance) -> Signatures:
     if name == "ppy.Vec":
         found: Signatures = {
             "push": (value, T.NONE),
-            "pop": (nothing, element),
+            "pop": ((T.Param("index", T.INT, has_default=True),), element),
             "last": (nothing, element),
             "clear": (nothing, T.NONE),
-            "sort": (nothing, T.NONE),
+            "sort": (
+                (
+                    T.Param(KEY_PARAMETER, sort_key(element), True, "keyword_only"),
+                    T.Param("reverse", T.BOOL, True, "keyword_only"),
+                ),
+                T.NONE,
+            ),
             "reverse": (nothing, T.NONE),
         }
+        found.update(_sequence_extras(base, element))
         return found
     if name == "ppy.Deque":
         found: Signatures = {
@@ -137,7 +179,10 @@ def _signatures(base: T.Instance) -> Signatures:
             "front": (nothing, element),
             "back": (nothing, element),
             "clear": (nothing, T.NONE),
+            "extendleft": ((T.Param("values", T.ANY),), T.NONE),
+            "rotate": ((T.Param("steps", T.INT, has_default=True),), T.NONE),
         }
+        found.update(_sequence_extras(base, element))
         return found
     if name in _HEAPS:
         found: Signatures = {
@@ -145,6 +190,10 @@ def _signatures(base: T.Instance) -> Signatures:
             "pop": (nothing, element),
             "peek": (nothing, element),
             "clear": (nothing, T.NONE),
+            "pushpop": (value, element),
+            "replace": (value, element),
+            "to_sorted": (nothing, instance("ppy.Vec", element)),
+            "copy": (nothing, base),
         }
         return found
     if name == "ppy.LinkedList":
@@ -165,22 +214,71 @@ def _signatures(base: T.Instance) -> Signatures:
             "value": (node, element),
             "set": ((*node, *value), T.NONE),
             "clear": (nothing, T.NONE),
+            "extend": ((T.Param("values", T.ANY),), T.NONE),
         }
         return found
-    table: Signatures = {"clear": (nothing, T.NONE)}
+    other = (T.Param("other", base),)
+    table: Signatures = {
+        "clear": (nothing, T.NONE),
+        "update": (other, T.NONE),
+        "copy": (nothing, base),
+    }
     if name in MAPS:
         table["get"] = ((*key, T.Param("default", element)), element)
-        table["pop"] = (key, element)
+        table["pop"] = ((*key, T.Param("default", element, has_default=True)), element)
+        table["setdefault"] = ((*key, T.Param("default", element)), element)
+        table["keys"] = (nothing, T.instance("Iterator", key_type))
+        table["values"] = (nothing, T.instance("Iterator", element))
+        table["items"] = (nothing, T.instance("Iterator", T.Tuple_((key_type, element))))
     else:
         table["add"] = (key, T.NONE)
         table["remove"] = (key, T.NONE)
         table["discard"] = (key, T.NONE)
+        for combined in ("union", "intersection", "difference", "symmetric_difference"):
+            table[combined] = (other, base)
+        for relation in ("issubset", "issuperset", "isdisjoint"):
+            table[relation] = (other, T.BOOL)
     if name in _TREES:
         for bound in ("floor", "ceiling", "lower", "higher"):
             table[bound] = (key, key_type)
         table["min"] = (nothing, key_type)
         table["max"] = (nothing, key_type)
+        table["between"] = (
+            (T.Param("low", key_type), T.Param("high", key_type)),
+            T.instance("Iterator", key_type),
+        )
+        end = key_type if name == "ppy.TreeSet" else T.Tuple_((key_type, element))
+        table["pop_min"] = (nothing, end)
+        table["pop_max"] = (nothing, end)
     return table
+
+
+#: `a | b`, `a & b`, `a - b`, `a ^ b` of two sets of one type, by operator name.
+SET_OPERATORS = {
+    "BitOr": "union",
+    "BitAnd": "intersection",
+    "Sub": "difference",
+    "BitXor": "symmetric_difference",
+}
+
+#: The sets, which those operators combine.
+SETS = frozenset({"ppy.HashSet", "ppy.TreeSet"})
+
+#: The collections `+` joins: two of one type make a third.
+CONCATENATED = frozenset({"ppy.Vec", "ppy.Deque"})
+
+#: The collections a constructor fills from an iterable.
+FILLED = frozenset(
+    {
+        "ppy.Vec",
+        "ppy.Deque",
+        "ppy.Heap",
+        "ppy.MaxHeap",
+        "ppy.LinkedList",
+        "ppy.HashSet",
+        "ppy.TreeSet",
+    }
+)
 
 
 #: The methods that change the collection they are called on.
@@ -201,6 +299,16 @@ _CHANGING = frozenset(
         "set",
         "add",
         "discard",
+        "extend",
+        "extendleft",
+        "insert",
+        "rotate",
+        "pushpop",
+        "replace",
+        "setdefault",
+        "update",
+        "pop_min",
+        "pop_max",
     }
 )
 MUTATORS = frozenset(f"{name}.{attr}" for name in COLLECTIONS for attr in _CHANGING)

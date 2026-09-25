@@ -52,6 +52,11 @@ be left out: `v: Vec[int] = Vec()`. A collection of floats keeps it, as
 `0.0`, `False`, a tuple of zeros, a dataclass of zero fields, or a new empty
 collection in each slot.
 
+Every type but the maps also starts from an iterable: `Vec[int]([3, 1, 2])`,
+`Deque[int](range(5))`, `HashSet[int](other)`. A display, a `range`, or
+another collection is what native code fills one from. `Heap[T](items)`
+arranges its elements in linear time, as `heapq.heapify` does.
+
 ## What a collection holds
 
 An element, or a map's value, is one of:
@@ -143,8 +148,25 @@ def smallest[T: int | float](values: Vec[T], count: int) -> Vec[T]:
 functions. Under CPython the type parameter is not known, so `Vec[T]`
 stores values as they are given, and `Vec[T](n)` has no zero to start with.
 
-A value is converted to the element type when it is stored, so
-`Vec[float]` holds `3.0` after `push(3)`, as native memory of doubles would.
+## Walking a collection
+
+A `for` loop walks a collection, and so do these, natively:
+
+| | |
+|---|---|
+| `for k, v in m.items()`, `m.keys()`, `m.values()` | a map's entries, keys, or values, in its order |
+| `enumerate(c)`, `enumerate(c, 1)` | with a count |
+| `zip(a, b)` | two or more in step, stopping at the shortest |
+| `reversed(c)` | last to first; a heap has no order to reverse |
+| `sorted(c)`, `sorted(c, reverse=True)` | a sorted copy, walked |
+| `t.between(low, high)` | a tree's keys from `low` up to, and not including, `high` |
+| `min(c)`, `max(c)`, `sum(c)` | over a collection or any of the walks above |
+
+`sum` of floats adds as CPython does, with the rounding error carried and
+added at the end, so `sum(Vec[float]([1e16, 1.0, -1e16]))` is `1.0`.
+
+A collection a walk reads is held until the walk ends, so the loop body may
+rebind the name it came from.
 
 ## Methods
 
@@ -153,11 +175,20 @@ A value is converted to the element type when it is stored, so
 | | |
 |---|---|
 | `v.push(x)` | add `x` at the end |
-| `v.pop()` | remove and return the last element |
+| `v.pop()`, `v.pop(i)` | remove and return the last element, or the one at `i` |
 | `v.last()` | the last element |
 | `v[i]`, `v[i] = x` | read or write index `i` |
-| `v.sort()`, `v.reverse()` | in place; the sort is stable |
-| `v.clear()`, `len(v)`, `for x in v` | |
+| `v[a:b]`, `v[a:b:step]` | a new `Vec`, sliced as a list is |
+| `v.insert(i, x)` | put `x` before index `i`, from 0 to `len(v)` |
+| `v.extend(items)` | add each of `items` at the end |
+| `v.remove(x)`, `v.index(x)`, `v.count(x)` | by equality, as a list does |
+| `x in v`, `v == w`, `v + w`, `v.copy()` | a copy shares the collections it holds |
+| `v.sort()`, `v.sort(reverse=True)`, `v.sort(key=f)` | in place; the sort is stable |
+| `v.reverse()`, `v.clear()`, `len(v)`, `for x in v` | |
+
+`sort`'s `key` is a lambda or a function's name. Native code calls it once
+per element, as `list.sort` does, and sorts by what it returns: a number, a
+tuple of numbers, or an ordered dataclass.
 
 ### `Deque[T]`
 
@@ -167,6 +198,10 @@ A value is converted to the element type when it is stored, so
 | `d.pop_back()`, `d.pop_front()` | remove and return from either end |
 | `d.front()`, `d.back()` | the elements at the ends |
 | `d[i]`, `d[i] = x` | read or write index `i`, counted from the front |
+| `d.extend(items)`, `d.extendleft(items)` | add at either end; `extendleft` reverses them |
+| `d.rotate(n)` | move the last `n` elements to the front |
+| `d.insert(i, x)`, `d.remove(x)`, `d.index(x)`, `d.count(x)` | as for a `Vec` |
+| `x in d`, `d == e`, `d + e`, `d.copy()` | |
 | `d.clear()`, `len(d)`, `for x in d` | |
 
 ### `Heap[T]` and `MaxHeap[T]`
@@ -176,7 +211,10 @@ A value is converted to the element type when it is stored, so
 | `h.push(x)` | add `x` |
 | `h.pop()` | remove and return the smallest (`Heap`) or largest (`MaxHeap`) |
 | `h.peek()` | the element `pop` would return |
-| `h.clear()`, `len(h)` | |
+| `h.pushpop(x)` | push `x`, then pop; `x` itself when it would come out first |
+| `h.replace(x)` | pop, then push `x`; the heap must not be empty |
+| `h.to_sorted()` | a new `Vec` in the order `pop` would give, the heap left as it was |
+| `h.copy()`, `h.clear()`, `len(h)` | |
 
 A heap has no iteration order and no index. To keep a value with its
 priority, pack both into one integer, such as `priority * N + node`.
@@ -196,6 +234,8 @@ node use that id. `-1` means no node.
 | `l.head()`, `l.tail()` | the ids at the ends, or `-1` |
 | `l.next(node)`, `l.prev(node)` | the neighboring ids, or `-1` |
 | `l.value(node)`, `l.set(node, x)` | read or replace what `node` holds |
+| `l.extend(items)` | add each of `items` at the back |
+| `x in l`, `l == m`, `reversed(l)` | |
 | `l.clear()`, `len(l)`, `for x in l` | |
 
 Ids are handed out in order from 0, and the id of the most recently removed
@@ -207,10 +247,18 @@ node is the next one handed out. `clear` starts the ids from 0 again.
 |---|---|
 | `m[key]`, `m[key] = value` | read or write; reading a missing key raises `KeyError` |
 | `m.get(key, default)` | the value, or `default` |
-| `m.pop(key)` | remove `key` and return its value |
+| `m.setdefault(key, default)` | the value, first set to `default` where there is none |
+| `m.pop(key)`, `m.pop(key, default)` | remove `key` and return its value, or `default` |
+| `m.keys()`, `m.values()`, `m.items()` | walked in insertion order |
+| `c.update(other)` | every entry of `other`, in its order |
 | `s.add(key)`, `s.remove(key)`, `s.discard(key)` | the set's methods; `remove` raises `KeyError` for a missing key |
-| `key in c`, `key not in c` | |
+| `a \| b`, `a & b`, `a - b`, `a ^ b` | a new set; also `union`, `intersection`, `difference`, `symmetric_difference` |
+| `a.issubset(b)`, `a.issuperset(b)`, `a.isdisjoint(b)` | |
+| `key in c`, `c == d`, `c.copy()` | |
 | `c.clear()`, `len(c)`, `for key in c` | keys in insertion order |
+
+A set operation keeps the left set's keys in their order and then the right
+set's, the order a `dict` built the same way would have.
 
 ### `TreeMap[K, V]` and `TreeSet[K]`
 
@@ -224,6 +272,8 @@ order, and add:
 | `t.ceiling(key)` | the smallest key at least `key` |
 | `t.lower(key)` | the largest key below `key` |
 | `t.higher(key)` | the smallest key above `key` |
+| `t.between(low, high)` | the keys from `low` up to, and not including, `high` |
+| `t.pop_min()`, `t.pop_max()` | remove the smallest or largest key; a `TreeMap` returns `(key, value)` |
 
 `floor` and the others raise `KeyError` when there is no such key, and `min`
 and `max` raise `IndexError` on an empty tree.
@@ -243,6 +293,10 @@ containers:
   ran. If the body removed that node, the walk ends there.
 - Adding or removing a key while iterating a map or a set raises
   `RuntimeError`, as `dict` does. Replacing a value does not.
+- Equality compares contents, and a collection is never equal to one of
+  another kind: a `Vec` is not a `Deque`, as a `list` is not a `deque`.
+- A slice may count from the end and is clamped to the length, as a list's
+  slice is; only indexing one element refuses a negative index.
 
 ## In native code
 
@@ -292,15 +346,37 @@ says `OverflowError: the result does not fit in a 64-bit integer`.
 A native function can take a collection as a parameter, as `farthest` above
 takes `adjacent`, and can return one. Native callers pass and receive the
 handle, and writes through a parameter land in the caller's collection.
-Such a function has no Python boundary: Python code cannot call it
-natively, so it runs as Python when called from Python.
+
+Python calls such a function natively too. Each argument is copied into
+native memory, collections inside it included, and a returned collection is
+copied out into the reference classes. The copy keeps identity: an object
+passed twice is one handle, and a returned argument, or a collection taken
+out of one, is the caller's own object. When the function writes through a
+parameter, even through an element of it (`for row in rows: row.push(0)`),
+the caller's objects are brought up to date after the call. A function that
+returns nothing and fills what it was passed crosses the same way.
+
+The copy is one pass over each argument and one over the result, so the
+crossing pays off when the function does more than one pass of work over
+what it is given. An argument of another type, a plain `list` for a `Vec` say, is
+what the checker refuses; one whose element type differs at run time
+(`Vec[float]` for `Vec[int]`) runs the Python body.
 
 ## Limitations
 
 - Keys are `int`, `str`, or tuples of `int`; a tuple with a string in it
   is not a key.
-- `get(key, default)` natively takes a map whose values are numbers.
 - A collection holds a user class's instances natively when the class is a
   value class or an object class; see [Classes](classes.md).
+- Python calls a function natively when its collections hold numbers,
+  tuples of numbers, and collections of those. A dataclass or object
+  element, or a `LinkedList` (whose node ids are the history of its
+  insertions), keeps the call on the Python body; native callers are not
+  affected.
+- `index`, `count`, `remove`, `in`, and `==` over floats hand a NaN back to
+  Python: CPython counts the same NaN object as equal to itself, and native
+  memory has no objects to tell apart.
+- `pop_min` and `pop_max` of a `TreeMap` return a tuple natively when its
+  keys and values are numbers.
 
 Examples: [Collections](../howto/47_collections.md).
