@@ -423,7 +423,8 @@ def should_lower_native(
             # A machine address has no Python object to come from, whatever
             # the directives ask: the function is native code's to call.
             return False, "takes a native pointer, which has no Python boundary"
-        if native is not None and native.is_handle and native.element != "str" and not _crosses(native):
+        crosses = native is not None and (native.element == "str" or _crosses(native))
+        if native is not None and native.is_handle and not crosses:
             return False, "takes an object, which native callers pass by handle"
     for name in _EXPOSURE_DIRECTIVES:
         if info.directive(name) is not None:
