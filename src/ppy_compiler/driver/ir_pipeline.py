@@ -232,7 +232,8 @@ def object_chain(info, classes):  # type: ignore[no-untyped-def]
 
     Native code holds an instance of a class and of each of its bases as one
     record: the root's fields, then each subclass's own. That takes single
-    inheritance from classes of the same module, none of them generic.
+    inheritance from classes of the same module; a base may be generic
+    (`class Counted[T](Stack[T])`), its arguments given where it is named.
     """
     chain = []
     for entry in info.mro:
@@ -244,11 +245,9 @@ def object_chain(info, classes):  # type: ignore[no-untyped-def]
         if found.is_protocol or found.is_enum or found.is_pydantic:
             return None
         bases = [name for name in found.base_names if name != "object"]
-        if len(bases) > 1 or (bases and found.type_params):
+        if len(bases) > 1:
             return None
         chain.append(found)
-    if len(chain) > 1 and any(entry.type_params for entry in chain):
-        return None
     if [entry.qualname for entry in chain][:1] != [info.qualname]:
         return None
     return list(reversed(chain))

@@ -313,7 +313,7 @@ def _generic(bundle, info) -> bool:  # type: ignore[no-untyped-def]
 
 def _field_dataclass(statement, classes: frozenset[str] = frozenset()) -> bool:  # type: ignore[no-untyped-def]
     """A class a standalone program can hold: at most one base, a class defined
-    before it in the module, `@dataclass` or nothing, and a body of methods,
+    before it in the module (generic or not), `@dataclass` or nothing, and a body of methods,
     field annotations (with constant defaults or `field(...)`), and a
     docstring. Its instances are native values or native objects; nothing has
     to run to define it."""
@@ -321,8 +321,10 @@ def _field_dataclass(statement, classes: frozenset[str] = frozenset()) -> bool: 
 
     if not isinstance(statement, ast.ClassDef) or statement.keywords:
         return False
-    if len(statement.bases) > 1 or any(
-        not isinstance(base, ast.Name) or base.id not in classes for base in statement.bases
+    # A generic base is named with its arguments: `Stack[int]`, `Stack[T]`.
+    named = [base.value if isinstance(base, ast.Subscript) else base for base in statement.bases]
+    if len(named) > 1 or any(
+        not isinstance(base, ast.Name) or base.id not in classes for base in named
     ):
         return False
     decorated = [

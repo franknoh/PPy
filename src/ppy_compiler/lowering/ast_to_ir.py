@@ -935,9 +935,7 @@ class Frontend:
         params = [replace(p, type=taken_as) if p.name == parameter else p for p in info.params]
         specialized = replace(info, qualname=f"{info.qualname}__{spelled}", params=params)
         if self.cpu_compatible:
-            ok, reason = eligible(
-                specialized, analysis, self.layouts, allow_io=self.standalone
-            )
+            ok, reason = eligible(specialized, analysis, self.layouts, allow_io=self.standalone)
             if not ok:
                 raise Unsupported(f"`{qualname}` has no native lowering: {reason}")
         signature = self.signature(specialized, analysis)
