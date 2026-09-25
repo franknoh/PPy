@@ -8,7 +8,7 @@ hide:
 
 <div class="ppy-hero" markdown>
 
-# PPy
+# PP<span class="ppy-y">y</span>
 
 <p class="ppy-hero__text">A compiler for the statically analyzable part of Python</p>
 
