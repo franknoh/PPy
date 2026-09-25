@@ -19,8 +19,7 @@ from ..c.runtime import program_main, support_source
 from . import prover_for
 from .jit import JitEngine, LlvmUnavailable, available
 from .link import ToolchainError, _compiler, emit_object
-from .lowering import called_back_only
-from .lowering import LoweringResult, eligible
+from .lowering import LoweringResult, called_back_only, eligible
 
 __all__ = ["build_standalone", "standalone_ir"]
 

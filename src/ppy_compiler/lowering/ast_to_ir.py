@@ -396,6 +396,8 @@ class Frontend:
         self._pending: dict[str, tuple[FunctionInfo, FunctionAnalysis, ast.FunctionDef]] = {}
         self._defined: dict[str, list[str]] = {}
         self._failed: dict[str, str] = {}
+        #: Every function `build` was given, for a method lowered again narrowed.
+        self.sources: dict[str, tuple[FunctionInfo, FunctionAnalysis, ast.FunctionDef]] = {}
 
     def build(
         self, functions: dict[str, tuple[FunctionInfo, FunctionAnalysis, ast.FunctionDef]]
@@ -935,9 +937,7 @@ class Frontend:
         params = [replace(p, type=taken_as) if p.name == parameter else p for p in info.params]
         specialized = replace(info, qualname=f"{info.qualname}__{spelled}", params=params)
         if self.cpu_compatible:
-            ok, reason = eligible(
-                specialized, analysis, self.layouts, allow_io=self.standalone
-            )
+            ok, reason = eligible(specialized, analysis, self.layouts, allow_io=self.standalone)
             if not ok:
                 raise Unsupported(f"`{qualname}` has no native lowering: {reason}")
         signature = self.signature(specialized, analysis)

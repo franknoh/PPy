@@ -40,12 +40,12 @@ from ...analysis.symbols import FunctionInfo
 
 __all__ = [
     "STATUS_FALLBACK",
-    "called_back_only",
     "STATUS_OK",
     "LoweredFunction",
     "NativeParam",
     "NativeSignature",
     "Unsupported",
+    "called_back_only",
     "eligible",
 ]
 

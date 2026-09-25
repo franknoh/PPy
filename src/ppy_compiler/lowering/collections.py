@@ -1156,10 +1156,14 @@ class CollectionLowering:
             node = self._class_named(element.record).node
             frozen = dataclass_keyword(node, "frozen") is True
             if not (frozen or dataclass_keyword(node, "unsafe_hash") is True):
-                raise Unsupported(f"`{element.record}` is hashed by identity, which a value has not")
+                raise Unsupported(
+                    f"`{element.record}` is hashed by identity, which a value has not"
+                )
             if any(part == "float" for part in element.parts):
                 # `0.0 == -0.0` and NaN: equal floats are not always equal words.
-                raise Unsupported(f"`{element.record}` hashes a float, whose words do not decide `==`")
+                raise Unsupported(
+                    f"`{element.record}` hashes a float, whose words do not decide `==`"
+                )
         if element is None or element.kind != "object":
             return
         if kind.family == "tree" or kind.name in {"Vec", "Heap", "MaxHeap"}:
@@ -1167,7 +1171,9 @@ class CollectionLowering:
             if less is not None:
                 self._rt("ppy_coll_order_by", (made, less), None)
             elif kind.family == "tree" or kind.name != "Vec":
-                raise Unsupported(f"a {kind.name} orders by `__lt__`, which `{element.record}` has not")
+                raise Unsupported(
+                    f"a {kind.name} orders by `__lt__`, which `{element.record}` has not"
+                )
         if keyed:
             hashed = equal = None
             if kind.family == "map":
@@ -1222,7 +1228,9 @@ class CollectionLowering:
         whose class has `__lt__`, which the collection calls back."""
         if shape.comparable:
             return True
-        return shape.kind == "object" and self._resolve(self._class_info(shape), "__lt__") is not None
+        return (
+            shape.kind == "object" and self._resolve(self._class_info(shape), "__lt__") is not None
+        )
 
     def _calls_back(self) -> bool:
         """Whether some class of the module orders, hashes, or compares its
