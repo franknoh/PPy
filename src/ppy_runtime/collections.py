@@ -1,8 +1,10 @@
-"""The collections runtime: `collections.c`, and the ways a program reaches it.
+"""The collections runtime: `collections.c` and `strings.c`, and the ways a
+program reaches them.
 
-The C text is written once, as an ordinary C file, and read here into one
+The C text is written once, as ordinary C files, and read here into one
 entry per function: its result, its parameters, its body, and the other
-runtime functions it calls. A standalone binary and emitted C carry the
+runtime functions it calls. A string is a collection too (family 4), so the
+two files are one runtime. A standalone binary and emitted C carry the
 functions they call as shims; `ppy run` loads them from a shared library
 compiled from the same text on first use; an ahead-of-time library build
 compiles the file in.
@@ -21,11 +23,11 @@ from pathlib import Path
 
 __all__ = ["FUNCTIONS", "HEADERS", "library_path", "library_source", "source_path"]
 
-#: The file, beside this module.
-SOURCE = Path(__file__).with_name("collections.c")
+#: The files, beside this module, in the order they are compiled.
+SOURCES = (Path(__file__).with_name("collections.c"), Path(__file__).with_name("strings.c"))
 
 #: What every function needs from the C library.
-HEADERS = ("stdint.h", "stdio.h", "stdlib.h", "string.h")
+HEADERS = ("float.h", "math.h", "stdint.h", "stdio.h", "stdlib.h", "string.h")
 
 #: name -> (result, parameters, body, needs).
 Definitions = dict[str, tuple[str, tuple[str, ...], str, tuple[str, ...]]]
@@ -54,13 +56,26 @@ def _parse(text: str) -> Definitions:
     return found
 
 
-FUNCTIONS: Definitions = _parse(SOURCE.read_text(encoding="utf-8"))
+def _text() -> str:
+    return "\n".join(source.read_text(encoding="utf-8") for source in SOURCES)
+
+
+FUNCTIONS: Definitions = _parse(_text())
+
+
+def prototype(name: str) -> str:
+    """One function's declaration, so the files may call each other in any order."""
+    result, parameters, _body, _needs = FUNCTIONS[name]
+    spelled = result if result.endswith("*") else f"{result} "
+    return f"{spelled}{name}({', '.join(parameters) or 'void'});"
 
 
 def library_source() -> str:
     """The whole runtime as one C file."""
     lines = [f"#include <{header}>" for header in HEADERS] + [""]
-    lines.append(SOURCE.read_text(encoding="utf-8"))
+    lines.extend(prototype(name) for name in FUNCTIONS)
+    lines.append("")
+    lines.append(_text())
     return "\n".join(lines)
 
 
@@ -68,6 +83,9 @@ def _cache_directory() -> Path:
     root = os.environ.get("XDG_CACHE_HOME") or str(Path.home() / ".cache")
     return Path(root) / "ppy" / "collections"
 
+
+#: Bumped when the flags `library_path` builds with change.
+_FLAGS_TAG = "f1"
 
 _lock = threading.Lock()
 #: The compiled runtime once built, and whether building it was tried.
@@ -101,10 +119,23 @@ def library_path() -> Path | None:
         if cc is None:
             return None
         source = source_path()
-        target = source.with_suffix(".so")
+        # Named for the flags too, so a library built otherwise is not reused.
+        target = source.with_name(f"{source.stem}-{_FLAGS_TAG}.so")
         if not target.is_file():
             draft = target.with_name(f"{target.name}.{os.getpid()}.part")
-            command = [cc, "-std=c11", "-O2", "-shared", "-fPIC", "-o", str(draft), str(source)]
+            command = [
+                cc,
+                "-std=c11",
+                "-O2",
+                "-shared",
+                "-fPIC",
+                # Calls between the runtime's own functions may inline: nothing
+                # interposes them, and a string's accessors are one load each.
+                "-fno-semantic-interposition",
+                "-o",
+                str(draft),
+                str(source),
+            ]
             done = subprocess.run(command, capture_output=True, text=True, check=False)
             if done.returncode != 0:
                 draft.unlink(missing_ok=True)

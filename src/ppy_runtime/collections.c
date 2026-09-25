@@ -6,7 +6,8 @@
      [3] family word a   [4] family word b        [5] family word c
      [6] family word d   [7] family word e
      [8] value words     [9] float mask           [10] handle mask
-     [11] references     [12] family              [13] key words
+     [11] references     [12] family              [13] key words, and above
+                                                       bit 32 which of them are strings
      [14] scratch        [15] record stride (words)
 
    An element or a value is `value words` eight-byte words: an int64_t or a
@@ -25,6 +26,13 @@
      3 tree map and set             [key][value][left][right]     a: root b: free
                                     [priority][next free]         c: made d: version
                                                                   e: generator
+     4 string                       see strings.c
+
+   A key word that is a string (a bit of word 13 above bit 32) holds a
+   string handle: keys hash and compare by the text, and the collection
+   holds a reference to each key it keeps. A value word that is a handle is
+   ordered, where it is ordered at all, as a string: nothing else a handle
+   points at has an order.
 
    Nothing is checked here: the caller guards an index, an empty pop, a
    missing key, which is what lets a failed check fall back to Python under
@@ -41,6 +49,23 @@ int8_t *ppy_coll_none(void) {
 
 int8_t *ppy_coll_make(int64_t family, int64_t keys, int64_t words, int64_t floats,
                       int64_t handles, int64_t stride, int64_t capacity) {
+    if (family == 4) {
+        /* A string keeps its bytes right after its header, in one block, and
+           says so in word 6 until it outgrows them (strings.c). */
+        int64_t room = capacity > 0 ? capacity : 1;
+        int64_t *text = (int64_t *)calloc((size_t)(16 + room), sizeof(int64_t));
+        if (text == NULL) {
+            ppy_coll_fail();
+        }
+        text[1] = room;
+        text[2] = (int64_t)(intptr_t)(text + 16);
+        text[6] = 1;
+        text[8] = words;
+        text[11] = 1;
+        text[12] = 4;
+        text[15] = stride;
+        return (int8_t *)text;
+    }
     int64_t *header = (int64_t *)calloc(16, sizeof(int64_t));
     int64_t room = capacity > 0 ? capacity : 1;
     int64_t *records = (int64_t *)calloc((size_t)(room * (stride > 0 ? stride : 1)), 8);
@@ -110,6 +135,44 @@ void ppy_coll_retain(int8_t *handle) {
     }
 }
 
+/* Mark the key words in `mask` as strings. */
+void ppy_coll_text_keys(int8_t *handle, int64_t mask) {
+    ((int64_t *)handle)[13] |= mask << 32;
+}
+
+int64_t ppy_coll_key_text(int8_t *handle) {
+    return (int64_t)((uint64_t)((int64_t *)handle)[13] >> 32);
+}
+
+/* Take (1) or drop (-1) a reference to each string word of a key. */
+void ppy_coll_hold_key(int8_t *handle, int64_t *key, int64_t delta) {
+    int64_t text = ppy_coll_key_text(handle);
+    for (int64_t w = 0; text != 0 && w < 32; w++) {
+        if ((text >> w) & 1) {
+            if (delta > 0) {
+                ppy_coll_retain((int8_t *)(intptr_t)key[w]);
+            } else {
+                ppy_coll_release((int8_t *)(intptr_t)key[w]);
+            }
+        }
+    }
+}
+
+/* Let go of the strings the live keys hold. */
+void ppy_coll_release_keys(int8_t *handle) {
+    int64_t *header = (int64_t *)handle;
+    int64_t keys = header[13] & 0xFFFFFFFF;
+    if (ppy_coll_key_text(handle) == 0 || (header[12] != 2 && header[12] != 3)) {
+        return;
+    }
+    for (int64_t i = 0; i < header[1]; i++) {
+        int64_t *value = ppy_coll_live(handle, i);
+        if (value != NULL) {
+            ppy_coll_hold_key(handle, value - keys, -1);
+        }
+    }
+}
+
 /* Is record `index` in use: a sequence's are the first `length` from its
    start, the others carry a flag. */
 int64_t *ppy_coll_live(int8_t *handle, int64_t index) {
@@ -127,7 +190,7 @@ int64_t *ppy_coll_live(int8_t *handle, int64_t index) {
     }
     int64_t *record = ppy_coll_record(handle, index);
     int64_t words = header[8];
-    int64_t keys = header[13];
+    int64_t keys = (header[13] & 0xFFFFFFFF);
     if (family == 1) {
         return record[words + 2] ? record : NULL;
     }
@@ -145,6 +208,14 @@ void ppy_coll_release(int8_t *handle) {
     if (--header[11] > 0) {
         return;
     }
+    if (header[12] == 4) {
+        if (!header[6]) {
+            free((void *)(intptr_t)header[2]);
+        }
+        free(header);
+        return;
+    }
+    ppy_coll_release_keys(handle);
     if (header[10] != 0) {
         int64_t count = header[12] == 0 ? header[0] : header[1];
         for (int64_t i = 0; i < count; i++) {
@@ -167,6 +238,7 @@ void ppy_coll_release(int8_t *handle) {
 /* Let go of the collections the values hold, where the values are handles. */
 void ppy_coll_release_values(int8_t *handle) {
     int64_t *header = (int64_t *)handle;
+    ppy_coll_release_keys(handle);
     if (header[10] == 0) {
         return;
     }
@@ -182,8 +254,16 @@ void ppy_coll_release_values(int8_t *handle) {
 }
 
 /* Python's `<` over tuples of numbers: the first words that differ decide. */
-int64_t ppy_coll_less(const int64_t *a, const int64_t *b, int64_t words, int64_t floats) {
+int64_t ppy_coll_less(const int64_t *a, const int64_t *b, int64_t words, int64_t floats,
+                      int64_t handles) {
     for (int64_t w = 0; w < words; w++) {
+        if ((handles >> w) & 1) {
+            int64_t order = ppy_str_order((int8_t *)(intptr_t)a[w], (int8_t *)(intptr_t)b[w]);
+            if (order == 0) {
+                continue;
+            }
+            return order < 0;
+        }
         if ((floats >> w) & 1) {
             double x, y;
             memcpy(&x, &a[w], 8);
@@ -289,7 +369,8 @@ void ppy_seq_sort(int8_t *handle) {
             int64_t high = low + 2 * width < n ? low + 2 * width : n;
             int64_t i = low, j = middle, k = low;
             while (i < middle && j < high) {
-                int take = (int)ppy_coll_less(items + j * words, items + i * words, words, header[9]);
+                int take = (int)ppy_coll_less(items + j * words, items + i * words, words, header[9],
+                                                 header[10]);
                 int64_t from = take ? j++ : i++;
                 memcpy(spare + (k++) * words, items + from * words, (size_t)(words * 8));
             }
@@ -314,7 +395,8 @@ void ppy_seq_sort(int8_t *handle) {
 /* The heap's order: `a` comes out before `b`. */
 int64_t ppy_heap_before(int8_t *handle, const int64_t *a, const int64_t *b, int64_t max) {
     int64_t *header = (int64_t *)handle;
-    return max ? ppy_coll_less(b, a, header[8], header[9]) : ppy_coll_less(a, b, header[8], header[9]);
+    return max ? ppy_coll_less(b, a, header[8], header[9], header[10])
+               : ppy_coll_less(a, b, header[8], header[9], header[10]);
 }
 
 /* The value in the scratch words, sifted up into place. */
@@ -341,7 +423,7 @@ int8_t *ppy_heap_pop(int8_t *handle, int64_t max) {
     int64_t *header = (int64_t *)handle;
     int64_t words = header[8];
     int64_t *top = (int64_t *)(intptr_t)header[14];
-    int64_t *last = top + (words > header[13] ? words : header[13]);
+    int64_t *last = top + (words > (header[13] & 0xFFFFFFFF) ? words : (header[13] & 0xFFFFFFFF));
     memcpy(top, ppy_coll_record(handle, 0), (size_t)(words * 8));
     header[0]--;
     int64_t n = header[0];
@@ -477,15 +559,9 @@ void ppy_list_clear(int8_t *handle) {
 
 /* -- HashMap and HashSet: entries in insertion order, an index over them -- */
 
-int64_t ppy_map_hash(const int64_t *key, int64_t keys, int64_t mask) {
-    uint64_t h = 0x9E3779B97F4A7C15ULL;
-    for (int64_t w = 0; w < keys; w++) {
-        uint64_t z = (uint64_t)key[w] + h;
-        z = (z ^ (z >> 30)) * 0xBF58476D1CE4E5B9ULL;
-        z = (z ^ (z >> 27)) * 0x94D049BB133111EBULL;
-        h = z ^ (z >> 31);
-    }
-    return (int64_t)(h & (uint64_t)mask);
+int64_t ppy_map_hash(int8_t *handle, const int64_t *key, int64_t mask) {
+    int64_t keys = ((int64_t *)handle)[13] & 0xFFFFFFFF;
+    return ppy_str_key_hash(key, keys, ppy_coll_key_text(handle)) & mask;
 }
 
 void ppy_map_reindex(int8_t *handle, int64_t size) {
@@ -498,12 +574,12 @@ void ppy_map_reindex(int8_t *handle, int64_t size) {
     for (int64_t i = 0; i < size; i++) {
         index[i] = -1;
     }
-    int64_t keys = header[13];
+    int64_t keys = (header[13] & 0xFFFFFFFF);
     int64_t alive = keys + header[8];
     for (int64_t e = 0; e < header[3]; e++) {
         int64_t *record = ppy_coll_record(handle, e);
         if (record[alive]) {
-            int64_t i = ppy_map_hash(record, keys, size - 1);
+            int64_t i = ppy_map_hash(handle, record, size - 1);
             while (index[i] != -1) {
                 i = (i + 1) & (size - 1);
             }
@@ -525,12 +601,13 @@ int64_t ppy_map_slot(int8_t *handle, const int8_t *key) {
     int64_t *header = (int64_t *)handle;
     const int64_t *wanted = (const int64_t *)key;
     int64_t *index = (int64_t *)(intptr_t)header[4];
-    int64_t keys = header[13];
+    int64_t keys = (header[13] & 0xFFFFFFFF);
     int64_t mask = header[5] - 1;
-    int64_t i = ppy_map_hash(wanted, keys, mask);
+    int64_t text = ppy_coll_key_text(handle);
+    int64_t i = ppy_map_hash(handle, wanted, mask);
     while (index[i] != -1) {
         int64_t e = index[i];
-        if (e >= 0 && memcmp(ppy_coll_record(handle, e), wanted, (size_t)(keys * 8)) == 0) {
+        if (e >= 0 && ppy_str_key_order(ppy_coll_record(handle, e), wanted, keys, text) == 0) {
             return i;
         }
         i = (i + 1) & mask;
@@ -551,7 +628,7 @@ int64_t ppy_map_put(int8_t *handle, const int8_t *key) {
     if (found >= 0) {
         return found;
     }
-    int64_t keys = header[13];
+    int64_t keys = (header[13] & 0xFFFFFFFF);
     int64_t stride = header[15];
     int64_t alive = keys + header[8];
     if (header[3] == header[1]) {
@@ -573,10 +650,11 @@ int64_t ppy_map_put(int8_t *handle, const int8_t *key) {
     int64_t *record = ppy_coll_record(handle, e);
     memset(record, 0, (size_t)(stride * 8));
     memcpy(record, key, (size_t)(keys * 8));
+    ppy_coll_hold_key(handle, record, 1);
     record[alive] = 1;
     int64_t *index = (int64_t *)(intptr_t)header[4];
     int64_t mask = header[5] - 1;
-    int64_t i = ppy_map_hash(record, keys, mask);
+    int64_t i = ppy_map_hash(handle, record, mask);
     while (index[i] >= 0) {
         i = (i + 1) & mask;
     }
@@ -587,7 +665,7 @@ int64_t ppy_map_put(int8_t *handle, const int8_t *key) {
 }
 
 int8_t *ppy_map_value_at(int8_t *handle, int64_t entry) {
-    return (int8_t *)(ppy_coll_record(handle, entry) + ((int64_t *)handle)[13]);
+    return (int8_t *)(ppy_coll_record(handle, entry) + (((int64_t *)handle)[13] & 0xFFFFFFFF));
 }
 
 int8_t *ppy_map_key_at(int8_t *handle, int64_t entry) {
@@ -596,7 +674,7 @@ int8_t *ppy_map_key_at(int8_t *handle, int64_t entry) {
 
 int64_t ppy_map_alive(int8_t *handle, int64_t entry) {
     int64_t *header = (int64_t *)handle;
-    return ppy_coll_record(handle, entry)[header[13] + header[8]];
+    return ppy_coll_record(handle, entry)[(header[13] & 0xFFFFFFFF) + header[8]];
 }
 
 /* `key` out; the entry, whose value stays readable until the next insertion,
@@ -610,7 +688,8 @@ int64_t ppy_map_remove(int8_t *handle, const int8_t *key) {
     int64_t *index = (int64_t *)(intptr_t)header[4];
     int64_t e = index[at];
     index[at] = -2;
-    ppy_coll_record(handle, e)[header[13] + header[8]] = 0;
+    ppy_coll_record(handle, e)[(header[13] & 0xFFFFFFFF) + header[8]] = 0;
+    ppy_coll_hold_key(handle, ppy_coll_record(handle, e), -1);
     header[0]--;
     header[6]++;
     return e;
@@ -636,30 +715,25 @@ int8_t *ppy_tree_new(int64_t keys, int64_t words, int64_t floats, int64_t handle
     return handle;
 }
 
-int64_t ppy_tree_order(const int64_t *a, const int64_t *b, int64_t keys) {
-    for (int64_t w = 0; w < keys; w++) {
-        if (a[w] != b[w]) {
-            return a[w] < b[w] ? -1 : 1;
-        }
-    }
-    return 0;
+int64_t ppy_tree_order(int8_t *handle, const int64_t *a, const int64_t *b) {
+    int64_t keys = ((int64_t *)handle)[13] & 0xFFFFFFFF;
+    return ppy_str_key_order(a, b, keys, ppy_coll_key_text(handle));
 }
 
 /* The link words of a node: 0 left, 1 right, 2 priority, 3 next free. */
 int64_t *ppy_tree_link(int8_t *handle, int64_t node, int64_t field) {
     int64_t *header = (int64_t *)handle;
-    return ppy_coll_record(handle, node) + header[13] + header[8] + field;
+    return ppy_coll_record(handle, node) + (header[13] & 0xFFFFFFFF) + header[8] + field;
 }
 
 void ppy_tree_split(int8_t *handle, int64_t node, const int64_t *key, int64_t *low,
                     int64_t *high) {
-    int64_t *header = (int64_t *)handle;
     if (node == -1) {
         *low = -1;
         *high = -1;
         return;
     }
-    if (ppy_tree_order(ppy_coll_record(handle, node), key, header[13]) < 0) {
+    if (ppy_tree_order(handle, ppy_coll_record(handle, node), key) < 0) {
         ppy_tree_split(handle, *ppy_tree_link(handle, node, 1), key,
                        ppy_tree_link(handle, node, 1), high);
         *low = node;
@@ -690,7 +764,7 @@ int64_t ppy_tree_erase(int8_t *handle, int64_t node, const int64_t *key) {
     if (node == -1) {
         return -1;
     }
-    int64_t order = ppy_tree_order(key, ppy_coll_record(handle, node), header[13]);
+    int64_t order = ppy_tree_order(handle, key, ppy_coll_record(handle, node));
     if (order == 0) {
         int64_t joined = ppy_tree_merge(handle, *ppy_tree_link(handle, node, 0),
                                         *ppy_tree_link(handle, node, 1));
@@ -709,7 +783,7 @@ int64_t ppy_tree_find(int8_t *handle, const int8_t *key) {
     const int64_t *wanted = (const int64_t *)key;
     int64_t node = header[3];
     while (node != -1) {
-        int64_t order = ppy_tree_order(wanted, ppy_coll_record(handle, node), header[13]);
+        int64_t order = ppy_tree_order(handle, wanted, ppy_coll_record(handle, node));
         if (order == 0) {
             return node;
         }
@@ -741,7 +815,8 @@ int64_t ppy_tree_put(int8_t *handle, const int8_t *key) {
     header[7] = (int64_t)x;
     int64_t *record = ppy_coll_record(handle, node);
     memset(record, 0, (size_t)(header[15] * 8));
-    memcpy(record, key, (size_t)(header[13] * 8));
+    memcpy(record, key, (size_t)((header[13] & 0xFFFFFFFF) * 8));
+    ppy_coll_hold_key(handle, record, 1);
     *ppy_tree_link(handle, node, 0) = -1;
     *ppy_tree_link(handle, node, 1) = -1;
     *ppy_tree_link(handle, node, 2) = (int64_t)(x >> 1);
@@ -763,6 +838,7 @@ int64_t ppy_tree_remove(int8_t *handle, const int8_t *key) {
         return -1;
     }
     header[3] = ppy_tree_erase(handle, header[3], (const int64_t *)key);
+    ppy_coll_hold_key(handle, ppy_coll_record(handle, node), -1);
     header[0]--;
     header[6]++;
     return node;
@@ -775,7 +851,7 @@ int64_t ppy_tree_bound(int8_t *handle, const int8_t *key, int64_t mode) {
     int64_t node = header[3];
     int64_t best = -1;
     while (node != -1) {
-        int64_t order = ppy_tree_order(ppy_coll_record(handle, node), wanted, header[13]);
+        int64_t order = ppy_tree_order(handle, ppy_coll_record(handle, node), wanted);
         int take = mode == 0 ? order <= 0 : mode == 1 ? order >= 0 : mode == 2 ? order < 0 : order > 0;
         if (take) {
             best = node;
@@ -801,7 +877,7 @@ int8_t *ppy_tree_key_at(int8_t *handle, int64_t node) {
 }
 
 int8_t *ppy_tree_value_at(int8_t *handle, int64_t node) {
-    return (int8_t *)(ppy_coll_record(handle, node) + ((int64_t *)handle)[13]);
+    return (int8_t *)(ppy_coll_record(handle, node) + (((int64_t *)handle)[13] & 0xFFFFFFFF));
 }
 
 void ppy_tree_clear(int8_t *handle) {
