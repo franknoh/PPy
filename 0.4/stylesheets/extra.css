@@ -1,0 +1,381 @@
+/* Neutral grays, square corners, and Python's blue and yellow as the only colors. */
+
+:root {
+  --ppy-blue: hsl(207 51% 44%); /* #3776ab */
+  --ppy-blue-hover: hsl(207 55% 36%);
+  --ppy-yellow: hsl(47 100% 62%); /* #ffd43b */
+  --ppy-blue-soft: hsl(207 51% 44% / 0.1);
+  --ppy-bg: hsl(0 0% 100%);
+  --ppy-bg-alt: hsl(0 0% 98%);
+  --ppy-bg-soft: hsl(0 0% 96%);
+  --ppy-text-1: hsl(0 0% 6%);
+  --ppy-text-2: hsl(216 6% 36%);
+  --ppy-text-3: hsl(216 6% 52%);
+  --ppy-divider: hsl(0 0% 88%);
+  --ppy-border: hsl(0 0% 84%);
+  --ppy-code-block-bg: hsl(0 0% 97%);
+  --ppy-code-bg: hsl(0 0% 95%);
+  --ppy-radius: 0.25rem;
+  /* Python's yellow is too pale on white for the one yellow word; this is its darker edge. */
+  --ppy-hero-yellow: hsl(46 100% 50%);
+}
+
+[data-md-color-scheme="slate"] {
+  --ppy-blue: hsl(207 60% 62%);
+  --ppy-blue-hover: hsl(207 70% 72%);
+  --ppy-blue-soft: hsl(207 60% 62% / 0.14);
+  --ppy-bg: hsl(0 0% 3%);
+  --ppy-bg-alt: hsl(0 0% 5%);
+  --ppy-bg-soft: hsl(0 0% 7%);
+  --ppy-text-1: hsl(216 10% 88%);
+  --ppy-text-2: hsl(216 6% 60%);
+  --ppy-text-3: hsl(216 6% 46%);
+  --ppy-divider: hsl(0 0% 13%);
+  --ppy-border: hsl(0 0% 17%);
+  --ppy-code-block-bg: hsl(0 0% 5%);
+  --ppy-code-bg: hsl(0 0% 10%);
+  --md-hue: 216;
+  --ppy-hero-yellow: var(--ppy-yellow);
+}
+
+[data-md-color-scheme="default"],
+[data-md-color-scheme="slate"] {
+  --md-default-bg-color: var(--ppy-bg);
+  --md-default-fg-color: var(--ppy-text-1);
+  --md-default-fg-color--light: var(--ppy-text-2);
+  --md-default-fg-color--lighter: var(--ppy-text-3);
+  --md-default-fg-color--lightest: var(--ppy-divider);
+  --md-primary-fg-color: var(--ppy-bg);
+  --md-primary-fg-color--light: var(--ppy-bg);
+  --md-primary-fg-color--dark: var(--ppy-bg);
+  --md-primary-bg-color: var(--ppy-text-1);
+  --md-primary-bg-color--light: var(--ppy-text-2);
+  --md-accent-fg-color: var(--ppy-blue-hover);
+  --md-accent-fg-color--transparent: var(--ppy-blue-soft);
+  --md-typeset-a-color: var(--ppy-blue);
+  --md-code-bg-color: var(--ppy-code-block-bg);
+  --md-code-fg-color: var(--ppy-text-1);
+  --md-footer-bg-color: var(--ppy-bg);
+  --md-footer-bg-color--dark: var(--ppy-bg);
+  --md-footer-fg-color: var(--ppy-text-2);
+  --md-footer-fg-color--light: var(--ppy-text-2);
+  --md-footer-fg-color--lighter: var(--ppy-text-3);
+}
+
+::selection {
+  background-color: hsl(47 100% 62% / 0.45);
+}
+
+/* Header and tabs: the page's own background, a hairline under each. */
+.md-header,
+.md-tabs {
+  background-color: var(--ppy-bg);
+  color: var(--ppy-text-1);
+}
+.md-header,
+.md-header--shadow {
+  box-shadow: none;
+  border-bottom: 1px solid var(--ppy-divider);
+}
+.md-header__title {
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.md-header__button.md-logo img {
+  height: 1.5rem;
+}
+.md-tabs {
+  border-bottom: 1px solid var(--ppy-divider);
+}
+.md-tabs__link {
+  font-size: 0.7rem;
+  font-weight: 500;
+  opacity: 1;
+  color: var(--ppy-text-2);
+}
+.md-tabs__link:hover,
+.md-tabs__item--active .md-tabs__link {
+  color: var(--ppy-text-1);
+}
+.md-tabs__item--active .md-tabs__link {
+  box-shadow: inset 0 -2px 0 var(--ppy-yellow);
+}
+.md-search__form {
+  background-color: var(--ppy-bg-soft);
+  border: 1px solid var(--ppy-divider);
+  border-radius: var(--ppy-radius);
+  box-shadow: none;
+}
+.md-search__form:hover {
+  background-color: var(--ppy-bg-soft);
+  border-color: var(--ppy-border);
+}
+.md-search__input,
+.md-search__input::placeholder,
+.md-search__icon {
+  color: var(--ppy-text-2);
+}
+
+/* Text. */
+.md-typeset {
+  font-size: 0.8rem;
+  line-height: 1.7;
+  font-feature-settings: "cv11", "ss01";
+}
+.md-typeset h1,
+.md-typeset h2,
+.md-typeset h3,
+.md-typeset h4 {
+  color: var(--ppy-text-1);
+  font-weight: 600;
+  letter-spacing: -0.015em;
+}
+.md-typeset h1 {
+  font-size: 1.85em;
+  margin-bottom: 0.8em;
+}
+.md-typeset h2 {
+  font-size: 1.3em;
+  margin-top: 2.2em;
+  padding-top: 1.2em;
+  border-top: 1px solid var(--ppy-divider);
+}
+.md-typeset h3 {
+  font-size: 1.08em;
+}
+.md-typeset a {
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-decoration-color: color-mix(in srgb, currentColor 35%, transparent);
+  text-underline-offset: 3px;
+}
+.md-typeset a:hover {
+  text-decoration-color: currentColor;
+}
+.md-typeset .headerlink,
+.md-typeset h1 a,
+.md-typeset h2 a,
+.md-typeset h3 a,
+.md-typeset .md-button {
+  text-decoration: none;
+}
+
+/* Code. */
+.md-typeset code {
+  font-size: 0.86em;
+  border-radius: var(--ppy-radius);
+}
+.md-typeset :not(pre) > code {
+  padding: 0.1em 0.35em;
+  background-color: var(--ppy-code-bg);
+}
+.md-typeset pre > code {
+  max-height: 40rem;
+  border: 1px solid var(--ppy-divider);
+  border-radius: var(--ppy-radius);
+}
+.md-typeset .tabbed-set {
+  border-radius: var(--ppy-radius);
+}
+
+/* Tables: a hairline frame and small upper-case headings. */
+.md-typeset table:not([class]) {
+  border: 1px solid var(--ppy-divider);
+  border-radius: var(--ppy-radius);
+  box-shadow: none;
+  font-size: 0.72rem;
+}
+.md-typeset table:not([class]) th {
+  background-color: var(--ppy-bg-alt);
+  color: var(--ppy-text-2);
+  font-weight: 600;
+  font-size: 0.64rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.md-typeset table:not([class]) td,
+.md-typeset table:not([class]) th {
+  border-top: 1px solid var(--ppy-divider);
+  padding: 0.6em 1em;
+}
+.md-typeset table:not([class]) tr:hover {
+  background-color: transparent;
+  box-shadow: none;
+}
+
+/* Admonitions and collapsible blocks. */
+.md-typeset .admonition,
+.md-typeset details {
+  border: 1px solid var(--ppy-divider);
+  border-left: 3px solid var(--ppy-blue);
+  border-radius: var(--ppy-radius);
+  box-shadow: none;
+  font-size: 0.76rem;
+  background-color: var(--ppy-bg-alt);
+}
+
+/* Buttons. */
+.md-typeset .md-button {
+  border: 1px solid var(--ppy-border);
+  border-radius: var(--ppy-radius);
+  color: var(--ppy-text-1);
+  font-weight: 600;
+  font-size: 0.72rem;
+  padding: 0.55em 1.3em;
+}
+.md-typeset .md-button:hover,
+.md-typeset .md-button:focus {
+  background-color: var(--ppy-bg-soft);
+  border-color: var(--ppy-text-3);
+  color: var(--ppy-text-1);
+}
+.md-typeset .md-button--primary,
+.md-typeset .md-button--primary:hover,
+.md-typeset .md-button--primary:focus {
+  background-color: var(--ppy-blue);
+  border-color: transparent;
+  color: hsl(0 0% 98%);
+}
+[data-md-color-scheme="slate"] .md-typeset .md-button--primary {
+  color: hsl(0 0% 4%);
+}
+.md-typeset .md-button--primary:hover {
+  background-color: var(--ppy-blue-hover);
+}
+
+/* Sidebars: section names small and upper case. */
+.md-nav {
+  font-size: 0.7rem;
+}
+.md-nav__title {
+  color: var(--ppy-text-1);
+}
+.md-nav--primary .md-nav__item--section > .md-nav__link {
+  color: var(--ppy-text-2);
+  font-weight: 600;
+  font-size: 0.62rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.md-nav__link--active {
+  font-weight: 600;
+}
+
+/* The home page: a hero, a grid of features, and a readable measure. */
+.ppy-home {
+  max-width: 56rem;
+  margin: 0 auto;
+}
+.ppy-hero {
+  padding: 2.4rem 0 1.2rem;
+}
+.md-typeset .ppy-hero h1 {
+  font-size: 3.2em;
+  line-height: 1.1;
+  letter-spacing: -0.03em;
+  margin: 0;
+  color: var(--ppy-blue);
+}
+.md-typeset .ppy-hero h1 .ppy-y {
+  color: var(--ppy-hero-yellow);
+}
+.md-typeset .ppy-hero h1 .headerlink {
+  display: none;
+}
+.md-typeset .ppy-hero .ppy-hero__text {
+  font-size: 2.1em;
+  line-height: 1.2;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  margin: 0.1em 0 0.5em;
+  max-width: 22em;
+}
+.md-typeset .ppy-hero .ppy-hero__tagline {
+  font-size: 1.1em;
+  line-height: 1.55;
+  color: var(--ppy-text-2);
+  max-width: 36em;
+  margin: 0 0 1.6em;
+}
+.md-typeset .ppy-hero .md-button {
+  margin: 0 0.4em 0.5em 0;
+}
+.md-typeset .grid.cards {
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 12rem), 1fr));
+  grid-gap: 0.8rem;
+}
+.md-typeset .grid.cards > ul > li,
+.md-typeset .grid.cards > ul > li:hover {
+  border: 1px solid var(--ppy-divider);
+  border-radius: var(--ppy-radius);
+  background-color: var(--ppy-bg-alt);
+  box-shadow: none;
+  padding: 1rem 1.1rem;
+  font-size: 0.74rem;
+  line-height: 1.6;
+  color: var(--ppy-text-2);
+}
+.md-typeset .grid.cards > ul > li:hover {
+  border-color: var(--ppy-border);
+}
+.md-typeset .grid.cards > ul > li strong:first-child {
+  display: block;
+  color: var(--ppy-text-1);
+  font-size: 1.08em;
+  letter-spacing: -0.01em;
+  margin-bottom: 0.35em;
+}
+
+/* Footer. */
+.md-footer,
+.md-footer-meta {
+  background-color: var(--ppy-bg);
+  color: var(--ppy-text-2);
+  border-top: 1px solid var(--ppy-divider);
+}
+.md-footer__link,
+.md-footer-meta__inner,
+.md-copyright {
+  color: var(--ppy-text-2);
+}
+.md-footer__title {
+  color: var(--ppy-text-1);
+}
+
+/* Syntax colors: GitHub's light and dark themes, as VitePress uses them. */
+[data-md-color-scheme="default"] {
+  --ppy-hl-decorator: #8250df;
+  --md-code-hl-keyword-color: #cf222e;
+  --md-code-hl-operator-color: #cf222e;
+  --md-code-hl-string-color: #0a3069;
+  --md-code-hl-special-color: #0a3069;
+  --md-code-hl-number-color: #0550ae;
+  --md-code-hl-constant-color: #0550ae;
+  --md-code-hl-function-color: #8250df;
+  --md-code-hl-variable-color: #953800;
+  --md-code-hl-name-color: #1f2328;
+  --md-code-hl-punctuation-color: #1f2328;
+  --md-code-hl-generic-color: #1f2328;
+  --md-code-hl-comment-color: #6e7781;
+}
+[data-md-color-scheme="slate"] {
+  --ppy-hl-decorator: #d2a8ff;
+  --md-code-hl-keyword-color: #ff7b72;
+  --md-code-hl-operator-color: #ff7b72;
+  --md-code-hl-string-color: #a5d6ff;
+  --md-code-hl-special-color: #a5d6ff;
+  --md-code-hl-number-color: #79c0ff;
+  --md-code-hl-constant-color: #79c0ff;
+  --md-code-hl-function-color: #d2a8ff;
+  --md-code-hl-variable-color: #ffa657;
+  --md-code-hl-name-color: #e6edf3;
+  --md-code-hl-punctuation-color: #e6edf3;
+  --md-code-hl-generic-color: #e6edf3;
+  --md-code-hl-comment-color: #8b949e;
+}
+.md-typeset .highlight .nd {
+  color: var(--ppy-hl-decorator);
+}
+.md-typeset .highlight .kc {
+  color: var(--md-code-hl-constant-color);
+}
