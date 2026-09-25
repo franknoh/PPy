@@ -629,6 +629,43 @@ class _ModuleEmitter:
         self.unit.aggregates[name] = f"typedef struct {name} {{\n{body}}} {name};\n"
         return name
 
+    def callback(self, callee_name: str) -> str:
+        """`int64_t f(int64_t, ...)`, the C face of a native function the runtime
+        calls back: each word is the argument it stands for, the result comes
+        back as a word, and a failed guard answers 0 after telling the runtime
+        so. Made once per function."""
+        target = self.module.functions.get(callee_name)
+        if target is None:
+            raise EmitError(f"callback of @{callee_name}, which was not emitted")
+        symbol = self.symbol_of(target)
+        name = f"ppy_callback_{_ident(callee_name)}"
+        if name in self.unit.trampolines:
+            return name
+        words = ", ".join(f"int64_t a{i}" for i in range(len(target.params))) or "void"
+        arguments = []
+        for i, (_param, t) in enumerate(target.params):
+            spelled = self.c_type(t)
+            if spelled.endswith("*"):
+                arguments.append(f"({spelled})(intptr_t)a{i}")
+            else:
+                arguments.append(f"({spelled})a{i}")
+        if target.name in self.direct:
+            call = f"{symbol}({', '.join(arguments)})"
+            body = f"    return (int64_t){call};\n"
+        else:
+            atom = self.atoms(target.results[0])[0] if target.results else "int64_t"
+            call = f"{symbol}({', '.join([*arguments, '&out'])})"
+            body = (
+                f"    {_declare(atom, 'out')} = 0;\n"
+                f"    if ({call} != {STATUS_OK}) {{\n"
+                "        ppy_coll_callback_failed();\n"
+                "        return 0;\n"
+                "    }\n"
+                "    return (int64_t)out;\n"
+            )
+        self.unit.trampolines[name] = f"static int64_t {name}({words}) {{\n{body}}}\n"
+        return name
+
     def atoms(self, t: IRType) -> list[str]:
         """The C types a value of `t` crosses the boundary as."""
         if isinstance(t, BoolType):
@@ -2653,6 +2690,11 @@ class _FunctionEmitter:
         if name == "ppy.buffer_from_parts":
             data, length = (self.bare(v) for v in op.operands)
             self.define_buffer(op.results[0], data, length)
+            return
+        if name == "ppy.callback":
+            callee_name = op.attributes["callee"].name  # type: ignore[union-attr]
+            trampoline = self.owner.callback(callee_name)
+            self.define(op.results[0], f"(int64_t)(intptr_t)&{trampoline}")
             return
         if name == "ppy.string_data":
             if self.owner.readable:

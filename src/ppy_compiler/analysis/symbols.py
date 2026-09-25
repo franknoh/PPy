@@ -1207,6 +1207,17 @@ def _with_field_bounds(facts: Facts, value: ast.expr) -> Facts:
     return facts.with_(int_range=IntRange(low, high))
 
 
+def dataclass_keyword(node: ast.ClassDef, option: str) -> object:
+    """What `@dataclass(option=...)` sets `option` to, as a constant, or None."""
+    for decorator in node.decorator_list:
+        if not isinstance(decorator, ast.Call):
+            continue
+        for keyword in decorator.keywords:
+            if keyword.arg == option and isinstance(keyword.value, ast.Constant):
+                return keyword.value.value
+    return None
+
+
 def _dataclass_option(node: ast.ClassDef, option: str) -> bool:
     """`@dataclass(kw_only=True)`: is `option` set to a true constant?"""
     for decorator in node.decorator_list:

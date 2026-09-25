@@ -19,6 +19,7 @@ from ..c.runtime import program_main, support_source
 from . import prover_for
 from .jit import JitEngine, LlvmUnavailable, available
 from .link import ToolchainError, _compiler, emit_object
+from .lowering import called_back_only
 from .lowering import LoweringResult, eligible
 
 __all__ = ["build_standalone", "standalone_ir"]
@@ -172,7 +173,7 @@ def standalone_ir(  # type: ignore[no-untyped-def]
         frontend.imports = signatures.get
         lowered = frontend.build({q: f for q, f in functions.items() if f[0].module == name})
         for qualname, reason in sorted(lowered.rejected.items()):
-            if qualname in frontend.generics:
+            if qualname in frontend.generics or called_back_only(functions[qualname][0]):
                 continue  # A generic is lowered where a caller instantiates it.
             return _fail(reporter, _chain(reached_from, qualname, reason))
         modules.append(lowered.module)
@@ -299,9 +300,15 @@ def _binds_a_constant(statement, constants: dict) -> bool:  # type: ignore[no-un
 
 
 def _generic(bundle, info) -> bool:  # type: ignore[no-untyped-def]
-    """A generic function, or a method of a generic class: lowered per instantiation."""
+    """A generic function, or a method of a generic class: lowered per instantiation,
+    or an `__eq__(self, other: object)`, lowered with `other` an instance of its
+    class where a collection calls it back."""
     owner = bundle.symbols.classes.get(info.owner) if info.owner else None
-    return bool(info.type_params) or (owner is not None and bool(owner.type_params))
+    return (
+        bool(info.type_params)
+        or (owner is not None and bool(owner.type_params))
+        or called_back_only(info)
+    )
 
 
 def _field_dataclass(statement, classes: frozenset[str] = frozenset()) -> bool:  # type: ignore[no-untyped-def]

@@ -403,6 +403,7 @@ class Frontend:
         lowered = Lowered(self.module)
         candidates: dict[str, tuple[FunctionInfo, FunctionAnalysis, ast.FunctionDef]] = {}
         self.generics: dict[str, tuple[FunctionInfo, FunctionAnalysis, ast.FunctionDef]] = {}
+        self.sources = functions
         for qualname, (info, analysis, node) in functions.items():
             extern = info.directive("native.extern")
             if extern is not None:
@@ -911,6 +912,44 @@ class Frontend:
             raise
         finally:
             self._instantiating.pop()
+        return self.instances[key]
+
+    def narrowed(
+        self, qualname: str, parameter: str, taken_as: T.Type
+    ) -> tuple[IRFunction, NativeSignature | IRSignature] | None:
+        """The function `qualname` with `parameter` taken as `taken_as`, made now if new.
+
+        `__eq__(self, other: object)` is how Python spells an equality, and a
+        collection only ever compares its own keys: called back by the runtime,
+        `other` is an instance of the class, and the body is lowered knowing so.
+        """
+        entry = self.sources.get(qualname)
+        if entry is None:
+            return None
+        info, analysis, node = entry
+        key = (qualname, (f"{parameter}={taken_as}",))
+        found = self.instances.get(key)
+        if found is not None:
+            return found
+        spelled = re.sub(r"\W+", "_", str(taken_as)).strip("_")
+        params = [replace(p, type=taken_as) if p.name == parameter else p for p in info.params]
+        specialized = replace(info, qualname=f"{info.qualname}__{spelled}", params=params)
+        if self.cpu_compatible:
+            ok, reason = eligible(
+                specialized, analysis, self.layouts, allow_io=self.standalone
+            )
+            if not ok:
+                raise Unsupported(f"`{qualname}` has no native lowering: {reason}")
+        signature = self.signature(specialized, analysis)
+        function = self.declare(specialized, signature)
+        self.instances[key] = (function, signature)
+        try:
+            _FunctionLowering(self, function, signature, specialized, {}).run(node)
+        except Unsupported:
+            del self.instances[key]
+            del self.declared[specialized.qualname]
+            del self.module.functions[function.name]
+            raise
         return self.instances[key]
 
     def _reject_callers_of_rejected(self, lowered: Lowered) -> None:

@@ -802,6 +802,16 @@ def call_intrinsic(
     )
 
 
+def callback(b: Builder, callee: str) -> Value:
+    """The address of `@callee`'s C-ABI face, as a word the runtime calls:
+    `int64_t f(int64_t, ...)`, one word per parameter and the result as a word;
+    a failed guard answers 0 and tells the runtime (`ppy_coll_callback_failed`)."""
+    created = b.create(
+        "core.call_intrinsic", (), (I64,), {"intrinsic": "ppy.callback", "callee": SymbolRef(callee)}
+    )
+    return created.results[0]
+
+
 def guard(
     b: Builder,
     condition: Value,

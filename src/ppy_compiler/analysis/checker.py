@@ -34,7 +34,7 @@ from .effects import Effect, EffectSet
 from .env import Binding, Env
 from .refinements import Facts, IntRange, width_range
 from .results import FunctionAnalysis, LoweringNote, ModuleAnalysis, ProjectAnalysis
-from .symbols import ClassInfo, FunctionInfo, ModuleSymbols, ProjectSymbols
+from .symbols import ClassInfo, FunctionInfo, ModuleSymbols, ProjectSymbols, dataclass_keyword
 
 if TYPE_CHECKING:
     from ..plugins.base import CallResult, PluginRegistry
@@ -5025,10 +5025,13 @@ class _Checker:
             self._error("E1305", f"a `{canonical}` takes {wanted}", node)
             resolved = [T.UNKNOWN] * C.ARITY[canonical]
         keyed = canonical in C.KEYED
-        if keyed and not self._collection_key(resolved[0]):
+        tree = canonical in {"ppy.TreeMap", "ppy.TreeSet"}
+        if keyed and not self._collection_key(resolved[0], tree=tree):
+            classes = "a class with `__lt__`" if tree else "a hashable class"
             self._error(
                 "E1305",
-                f"a `{canonical}` has `int`, `str`, or int-tuple keys, not `{resolved[0]}`",
+                f"a `{canonical}` has `int`, `str`, int-tuple, or {classes} keys, "
+                f"not `{resolved[0]}`",
                 node,
             )
         element = resolved[-1]
@@ -5108,17 +5111,46 @@ class _Checker:
             return self.project.classes.get(base.name) is not None
         return False
 
-    def _collection_key(self, t: T.Type) -> bool:
-        """What a map or a set is keyed by: an `int` or a `str`, or a tuple of `int`."""
+    def _collection_key(self, t: T.Type, *, tree: bool = False) -> bool:
+        """What a map or a set is keyed by: an `int` or a `str`, a tuple of `int`,
+        or an instance of a project class that a tree can order (`__lt__`) or a
+        hash map can hash (as Python decides whether it is hashable)."""
         base = T.strip_literal(t)
         if base in (T.INT, T.STR, T.UNKNOWN) or isinstance(base, T.TypeVar_):
             return True
+        if isinstance(base, T.Instance):
+            info = self.project.classes.get(base.name)
+            return info is not None and self._keyed_class(info, tree=tree)
         return (
             isinstance(base, T.Tuple_)
             and not base.homogeneous
             and bool(base.items)
             and all(T.strip_literal(item) == T.INT for item in base.items)
         )
+
+    def _keyed_class(self, info: ClassInfo, *, tree: bool) -> bool:
+        """Whether a tree orders instances of `info`, or a hash map hashes them."""
+        chain = [self.project.classes.get(name) for name in info.mro if name != "object"]
+        found = [entry for entry in chain if entry is not None]
+        if tree:
+            return any(
+                "__lt__" in entry.methods
+                or (entry.is_dataclass and dataclass_keyword(entry.node, "order") is True)
+                for entry in found
+            )
+        for entry in found:
+            # The first class along the MRO that says anything decides, as
+            # `type.__hash__` is looked up: `__eq__` without `__hash__` is None.
+            if "__hash__" in entry.methods:
+                return True
+            if "__eq__" in entry.methods:
+                return False
+            if entry.is_dataclass:
+                if dataclass_keyword(entry.node, "unsafe_hash") is True:
+                    return True
+                if dataclass_keyword(entry.node, "eq") is not False:
+                    return dataclass_keyword(entry.node, "frozen") is True
+        return True
 
     def _collection_call(  # pylint: disable=too-many-arguments,too-many-positional-arguments
         self,

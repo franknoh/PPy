@@ -87,14 +87,15 @@ int64_t *ppy_coll_seen(int64_t word) {
                                                       last collection
      [4] holders live after the last collection   [5] a call failed since
      [6] collecting now                           [7] holders live
+     [8] a method called back failed a guard
 
    A holder is a handle whose values include handles: only holders can be
    in a cycle, so only they are walked. */
 int64_t *ppy_coll_heap(void) {
 #ifdef __cplusplus
-    static thread_local int64_t heap[8];
+    static thread_local int64_t heap[9];
 #else
-    static _Thread_local int64_t heap[8];
+    static _Thread_local int64_t heap[9];
 #endif
     return heap;
 }
@@ -243,9 +244,14 @@ int64_t ppy_coll_key_text(int8_t *handle) {
     return (int64_t)(((uint64_t)((int64_t *)handle)[13] >> 32) & 0xFFFF);
 }
 
-/* Take (1) or drop (-1) a reference to each string word of a key. */
+/* The key words a map or a set holds a reference to: its strings and its objects. */
+int64_t ppy_coll_held_keys(int8_t *handle) {
+    return ppy_coll_key_text(handle) | ((int64_t *)handle)[24];
+}
+
+/* Take (1) or drop (-1) a reference to each string or object word of a key. */
 void ppy_coll_hold_key(int8_t *handle, int64_t *key, int64_t delta) {
-    int64_t text = ppy_coll_key_text(handle);
+    int64_t text = ppy_coll_held_keys(handle);
     for (int64_t w = 0; text != 0 && w < 32; w++) {
         if ((text >> w) & 1) {
             if (delta > 0) {
@@ -261,7 +267,7 @@ void ppy_coll_hold_key(int8_t *handle, int64_t *key, int64_t delta) {
 void ppy_coll_release_keys(int8_t *handle) {
     int64_t *header = (int64_t *)handle;
     int64_t keys = header[13] & 0xFFFFFFFF;
-    if (ppy_coll_key_text(handle) == 0 || (header[12] != 2 && header[12] != 3)) {
+    if (ppy_coll_held_keys(handle) == 0 || (header[12] != 2 && header[12] != 3)) {
         return;
     }
     for (int64_t i = 0; i < header[1]; i++) {
@@ -466,7 +472,7 @@ int8_t *ppy_coll_make(int64_t family, int64_t keys, int64_t words, int64_t float
         ppy_coll_track(text);
         return (int8_t *)text;
     }
-    int64_t *header = (int64_t *)calloc(21, sizeof(int64_t));
+    int64_t *header = (int64_t *)calloc(25, sizeof(int64_t));
     int64_t room = capacity > 0 ? capacity : 1;
     int64_t *records = (int64_t *)calloc((size_t)(room * (stride > 0 ? stride : 1)), 8);
     int64_t spare = 2 * (words > keys ? (words > 0 ? words : 1) : keys);
@@ -604,8 +610,7 @@ void ppy_seq_sort(int8_t *handle) {
             int64_t high = low + 2 * width < n ? low + 2 * width : n;
             int64_t i = low, j = middle, k = low;
             while (i < middle && j < high) {
-                int take = (int)ppy_coll_less(items + j * words, items + i * words, words, header[9],
-                                                 header[10]);
+                int take = (int)ppy_coll_ordered(handle, items + j * words, items + i * words);
                 int64_t from = take ? j++ : i++;
                 memcpy(spare + (k++) * words, items + from * words, (size_t)(words * 8));
             }
@@ -629,9 +634,7 @@ void ppy_seq_sort(int8_t *handle) {
 
 /* The heap's order: `a` comes out before `b`. */
 int64_t ppy_heap_before(int8_t *handle, const int64_t *a, const int64_t *b, int64_t max) {
-    int64_t *header = (int64_t *)handle;
-    return max ? ppy_coll_less(b, a, header[8], header[9], header[10])
-               : ppy_coll_less(a, b, header[8], header[9], header[10]);
+    return max ? ppy_coll_ordered(handle, b, a) : ppy_coll_ordered(handle, a, b);
 }
 
 /* The value in the scratch words, sifted up into place. */
@@ -795,7 +798,15 @@ void ppy_list_clear(int8_t *handle) {
 /* -- HashMap and HashSet: entries in insertion order, an index over them -- */
 
 int64_t ppy_map_hash(int8_t *handle, const int64_t *key, int64_t mask) {
-    int64_t keys = ((int64_t *)handle)[13] & 0xFFFFFFFF;
+    int64_t *header = (int64_t *)handle;
+    if (header[22] != 0) {
+        uint64_t h = (uint64_t)((int64_t (*)(int64_t))(intptr_t)header[22])(key[0]);
+        h ^= h >> 33;
+        h *= 0xff51afd7ed558ccdULL;
+        h ^= h >> 33;
+        return (int64_t)(h & (uint64_t)mask);
+    }
+    int64_t keys = header[13] & 0xFFFFFFFF;
     return ppy_str_key_hash(key, keys, ppy_coll_key_text(handle)) & mask;
 }
 
@@ -842,7 +853,7 @@ int64_t ppy_map_slot(int8_t *handle, const int8_t *key) {
     int64_t i = ppy_map_hash(handle, wanted, mask);
     while (index[i] != -1) {
         int64_t e = index[i];
-        if (e >= 0 && ppy_str_key_order(ppy_coll_record(handle, e), wanted, keys, text) == 0) {
+        if (e >= 0 && ppy_coll_same_key(handle, ppy_coll_record(handle, e), wanted, keys, text)) {
             return i;
         }
         i = (i + 1) & mask;
@@ -951,7 +962,12 @@ int8_t *ppy_tree_new(int64_t keys, int64_t words, int64_t floats, int64_t handle
 }
 
 int64_t ppy_tree_order(int8_t *handle, const int64_t *a, const int64_t *b) {
-    int64_t keys = ((int64_t *)handle)[13] & 0xFFFFFFFF;
+    int64_t *header = (int64_t *)handle;
+    if (header[21] != 0) {
+        int64_t (*less)(int64_t, int64_t) = (int64_t (*)(int64_t, int64_t))(intptr_t)header[21];
+        return less(a[0], b[0]) ? -1 : less(b[0], a[0]) ? 1 : 0;
+    }
+    int64_t keys = header[13] & 0xFFFFFFFF;
     return ppy_str_key_order(a, b, keys, ppy_coll_key_text(handle));
 }
 
@@ -1346,7 +1362,8 @@ int8_t *ppy_coll_copy(int8_t *handle) {
     }
     int64_t count = header[12] == 0 ? header[0] : header[1];
     int64_t keys = header[13] & 0xFFFFFFFF;
-    for (int64_t i = 0; (header[10] != 0 || ppy_coll_key_text(handle) != 0) && i < count; i++) {
+    ppy_coll_inherit(made, handle);
+    for (int64_t i = 0; (header[10] != 0 || ppy_coll_held_keys(handle) != 0) && i < count; i++) {
         int64_t *value = ppy_coll_live(made, i);
         if (value != NULL) {
             ppy_coll_retain_words(made, (const int8_t *)value);
@@ -1442,6 +1459,7 @@ int8_t *ppy_seq_slice(int8_t *handle, int64_t start, int64_t stop, int64_t step,
         count = (stop - start - 1) / step + 1;
     }
     int8_t *made = ppy_seq_new(0, header[8], header[9], header[10]);
+    ppy_coll_inherit(made, handle);
     for (int64_t i = 0, at = start; i < count; i++, at += step) {
         int64_t *to = (int64_t *)ppy_seq_push_back(made);
         memcpy(to, ppy_seq_at(handle, at), (size_t)(header[8] * 8));
@@ -1512,9 +1530,15 @@ void ppy_seq_sort_by(int8_t *handle, int64_t compare, int64_t descending) {
             while (i < middle && j < high) {
                 const int64_t *left = items + i * words;
                 const int64_t *right = items + j * words;
-                int take = descending
+                int take;
+                if (header[21] != 0 && compare == words) {
+                    take = descending ? (int)ppy_coll_ordered(handle, left, right)
+                                      : (int)ppy_coll_ordered(handle, right, left);
+                } else {
+                    take = descending
                                ? (int)ppy_coll_less(left, right, compare, header[9], header[10])
                                : (int)ppy_coll_less(right, left, compare, header[9], header[10]);
+                }
                 int64_t from = take ? j++ : i++;
                 memcpy(spare + (k++) * words, items + from * words, (size_t)(words * 8));
             }
@@ -1689,6 +1713,7 @@ int8_t *ppy_set_combine(int8_t *a, int8_t *b, int64_t op) {
     int64_t keys = header[13] & 0xFFFFFFFF;
     int8_t *made = header[12] == 2 ? ppy_map_new(keys, 0, 0, 0) : ppy_tree_new(keys, 0, 0, 0);
     ppy_coll_text_keys(made, ppy_coll_key_text(a));
+    ppy_coll_inherit(made, a);
     for (int64_t e = ppy_coll_step(a, -1); e >= 0; e = ppy_coll_step(a, e)) {
         const int8_t *key = (const int8_t *)ppy_coll_record(a, e);
         int64_t in_b = ppy_coll_find_key(b, key) >= 0;
@@ -1765,4 +1790,68 @@ void ppy_coll_copy_out(int8_t *handle, int8_t *keys, int8_t *values) {
             memcpy(values + n * words * 8, ppy_coll_value_words(handle, at), (size_t)(words * 8));
         }
     }
+}
+
+/* -- the program's own `__lt__`, `__hash__`, and `__eq__` ----------------------- */
+
+/* A collection of objects orders, hashes, and compares them with their class's
+   methods, compiled, whose addresses are in header words 21 (`__lt__`), 22
+   (`__hash__`), and 23 (`__eq__`); word 24 marks the key words that are
+   objects, which a map or a set holds a reference to. A method that fails a
+   guard answers 0 and says so here; the caller asks after each call into the
+   runtime and falls back. */
+void ppy_coll_order_by(int8_t *handle, int64_t less) {
+    /* The callback installed here calls ppy_coll_callback_failed() when its
+       method fails a guard, so that function goes wherever this one does. */
+    ((int64_t *)handle)[21] = less;
+}
+
+void ppy_coll_hash_by(int8_t *handle, int64_t hash, int64_t equal, int64_t objects) {
+    /* As ppy_coll_order_by(): the callbacks call ppy_coll_callback_failed(). */
+    int64_t *header = (int64_t *)handle;
+    header[22] = hash;
+    header[23] = equal;
+    header[24] = objects;
+}
+
+/* A collection made from another keeps its methods. */
+void ppy_coll_inherit(int8_t *made, int8_t *from) {
+    int64_t *to = (int64_t *)made;
+    const int64_t *source = (const int64_t *)from;
+    for (int64_t w = 21; w <= 24; w++) {
+        to[w] = source[w];
+    }
+}
+
+void ppy_coll_callback_failed(void) {
+    ppy_coll_heap()[8] = 1;
+}
+
+/* Whether every method called back since the last ask answered; asking clears it. */
+int64_t ppy_coll_callback_ok(void) {
+    int64_t *heap = ppy_coll_heap();
+    int64_t ok = heap[8] == 0;
+    heap[8] = 0;
+    return ok;
+}
+
+/* Whether element `a` goes before `b`: the class's `__lt__`, or `<` on the words. */
+int64_t ppy_coll_ordered(int8_t *handle, const int64_t *a, const int64_t *b) {
+    int64_t *header = (int64_t *)handle;
+    if (header[21] != 0) {
+        return ((int64_t (*)(int64_t, int64_t))(intptr_t)header[21])(a[0], b[0]) != 0;
+    }
+    return ppy_coll_less(a, b, header[8], header[9], header[10]);
+}
+
+/* Whether two keys are one: the class's `__eq__`, or the words (an object
+   without `__eq__` is itself only). */
+int64_t ppy_coll_same_key(int8_t *handle, const int64_t *a, const int64_t *b, int64_t keys,
+                          int64_t text) {
+    int64_t *header = (int64_t *)handle;
+    if (header[23] != 0) {
+        return a[0] == b[0] ||
+               ((int64_t (*)(int64_t, int64_t))(intptr_t)header[23])(a[0], b[0]) != 0;
+    }
+    return ppy_str_key_order(a, b, keys, text) == 0;
 }

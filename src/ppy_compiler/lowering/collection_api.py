@@ -161,7 +161,7 @@ class CollectionApiLowering(CollectionLowering):
         if inner is None:
             raise Unsupported("`sorted` sorts a collection natively")
         shape = self._part(inner, "values" if inner.mode == "values" else "keys")
-        if inner.mode == "items" or not shape.comparable:
+        if inner.mode == "items" or not self._orders(shape):
             raise Unsupported("these elements have no order to sort by")
         kind = Kind("Vec", shape)
         made = self._new(kind)
@@ -603,7 +603,7 @@ class CollectionApiLowering(CollectionLowering):
         heap = {"Heap": 0, "MaxHeap": 1}.get(kind.name)
         if heap is not None:
             assert kind.value is not None
-            if not kind.value.comparable:
+            if not self._orders(kind.value):
                 raise Unsupported(f"a {kind.name} orders its elements, and these have no order")
         made = self._new(kind)
         self._fill(kind, made, node.args[0])
@@ -991,7 +991,7 @@ class CollectionApiLowering(CollectionLowering):
             descending = core.cast(self.b, self._test(options["reverse"]), I64)  # type: ignore[attr-defined]
         key = options.get("key")
         if key is None or (isinstance(key, ast.Constant) and key.value is None):
-            if not shape.comparable:
+            if not self._orders(shape):
                 raise Unsupported("these elements have no order to sort by")
             self._rt("ppy_seq_sort_by", (handle, self._word(shape.words), descending), None)
             return self._word(0)
