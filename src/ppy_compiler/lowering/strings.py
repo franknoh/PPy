@@ -250,8 +250,18 @@ class StringLowering:
         read = ast.Name(id=name, ctx=ast.Load())
         ast.copy_location(read, node)
         if isinstance(node.op, ast.Add):
-            made = self._concat([read, node.value])
-        elif isinstance(node.op, ast.Mult):
+            if self._string_of(node.value) is None:
+                raise Unsupported("`+=` of a string and something else")
+            # The local's own reference goes to `ppy_str_extend`, which appends
+            # in place when nothing else holds the string, and the result
+            # takes the slot.
+            part, owned = self._handle(node.value)  # type: ignore[attr-defined]
+            current = core.load(self.b, held.slot)  # type: ignore[attr-defined]
+            made = self._rt("ppy_str_extend", (current, part), HANDLE)  # type: ignore[attr-defined]
+            core.store(self.b, made, held.slot)  # type: ignore[attr-defined]
+            self._done_with(part, owned)  # type: ignore[attr-defined]
+            return True
+        if isinstance(node.op, ast.Mult):
             combined = ast.BinOp(left=read, op=node.op, right=node.value)
             ast.copy_location(combined, node)
             made = self._string_binop(combined)

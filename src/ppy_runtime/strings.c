@@ -8,6 +8,11 @@
      [5] 1 when every byte is ASCII
      [6] 1 while the bytes sit in the header's own block, just after it
 
+   A one-character ASCII string is not allocated: `ppy_str_char` hands out
+   one of 128 static strings whose count of references never reaches zero,
+   as CPython keeps its own. A builder keeps its count of code points and
+   its ASCII flag as it grows, so finishing one does not read it again.
+
    The bytes are UTF-8 with a NUL after the last. A string is immutable once
    `ppy_str_seal` has counted its code points; a builder is a string being
    written, sealed when it is done. Every function here that makes a string
@@ -72,6 +77,24 @@ int8_t *ppy_str_make(int64_t bytes) {
     return handle;
 }
 
+/* The one-character string of ASCII byte `c`: static, never freed. */
+int8_t *ppy_str_char(int64_t c) {
+    static int64_t table[128][18];
+    int64_t *header = table[c & 127];
+    if (header[11] == 0) {
+        header[1] = 1;
+        header[2] = (int64_t)(intptr_t)(header + 17);
+        header[3] = 1;
+        header[5] = 1;
+        header[8] = 1;
+        header[12] = 4;
+        header[0] = 1;
+        ((uint8_t *)(header + 17))[0] = (uint8_t)c;
+        header[11] = INT64_MAX / 2;
+    }
+    return (int8_t *)header;
+}
+
 /* Count the code points, mark ASCII, end with a NUL: the string is done. */
 void ppy_str_seal(int8_t *handle) {
     int64_t *header = (int64_t *)handle;
@@ -93,6 +116,9 @@ void ppy_str_seal(int8_t *handle) {
 }
 
 int8_t *ppy_str_new(const int8_t *data, int64_t bytes) {
+    if (bytes == 1 && (uint8_t)data[0] < 0x80) {
+        return ppy_str_char(data[0]);
+    }
     int8_t *handle = ppy_str_make(bytes);
     if (bytes > 0) {
         memcpy(ppy_str_raw(handle), data, (size_t)bytes);
@@ -107,8 +133,12 @@ int8_t *ppy_str_empty(void) {
 
 /* -- builders ----------------------------------------------------------- */
 
+/* An empty string to write into: its count of code points kept as it grows. */
 int8_t *ppy_str_builder(int64_t hint) {
     int8_t *handle = ppy_str_make(0);
+    int64_t *header = (int64_t *)handle;
+    header[3] = 0;
+    header[5] = 1;
     ppy_str_reserve(handle, hint > 0 ? hint : 0);
     return handle;
 }
@@ -119,7 +149,16 @@ void ppy_str_add_bytes(int8_t *builder, const int8_t *data, int64_t bytes) {
         return;
     }
     ppy_str_reserve(builder, header[0] + bytes);
-    memmove(ppy_str_raw(builder) + header[0], data, (size_t)bytes);
+    uint8_t *into = ppy_str_raw(builder) + header[0];
+    memmove(into, data, (size_t)bytes);
+    for (int64_t i = 0; i < bytes; i++) {
+        if (into[i] >= 0x80) {
+            header[5] = 0;
+        }
+        if ((into[i] & 0xC0) != 0x80) {
+            header[3]++;
+        }
+    }
     header[0] += bytes;
 }
 
@@ -129,11 +168,41 @@ void ppy_str_add(int8_t *builder, int8_t *part) {
     ppy_str_reserve(builder, header[0] + bytes);
     memmove(ppy_str_raw(builder) + header[0], ppy_str_raw(part), (size_t)bytes);
     header[0] += bytes;
+    header[3] += ppy_str_len(part);
+    header[5] &= ppy_str_ascii(part);
 }
 
+/* The builder done: its NUL written, and the one-character strings the
+   static ones. */
 int8_t *ppy_str_finish(int8_t *builder) {
-    ppy_str_seal(builder);
+    int64_t *header = (int64_t *)builder;
+    uint8_t *data = ppy_str_raw(builder);
+    if (header[0] == 1 && data[0] < 0x80) {
+        int8_t *one = ppy_str_char(data[0]);
+        ppy_coll_release(builder);
+        return one;
+    }
+    data[header[0]] = 0;
+    header[4] = 0;
     return builder;
+}
+
+/* `s += part` where the caller's reference to `s` is the only one: the
+   bytes go on the end of `s` itself, as CPython appends in place. Takes the
+   caller's reference to `s` and hands back one to the result. */
+int8_t *ppy_str_extend(int8_t *handle, int8_t *part) {
+    int64_t *header = (int64_t *)handle;
+    if (header[11] != 1) {
+        int8_t *made = ppy_str_builder(header[0] + ppy_str_bytes(part));
+        ppy_str_add(made, handle);
+        ppy_str_add(made, part);
+        ppy_coll_release(handle);
+        return ppy_str_finish(made);
+    }
+    ppy_str_add(handle, part);
+    ppy_str_raw(handle)[header[0]] = 0;
+    header[4] = 0;
+    return handle;
 }
 
 /* -- UTF-8 -------------------------------------------------------------- */
@@ -238,7 +307,22 @@ int64_t ppy_str_index_of(int8_t *handle, int64_t at) {
 
 /* A new string of bytes `from` to `to`, which bound code points. */
 int8_t *ppy_str_span(int8_t *handle, int64_t from, int64_t to) {
-    return ppy_str_new((const int8_t *)(ppy_str_raw(handle) + from), to > from ? to - from : 0);
+    int64_t bytes = to > from ? to - from : 0;
+    const uint8_t *data = ppy_str_raw(handle) + from;
+    if (bytes == 1 && data[0] < 0x80) {
+        return ppy_str_char(data[0]);
+    }
+    if (!ppy_str_ascii(handle)) {
+        return ppy_str_new((const int8_t *)data, bytes);
+    }
+    /* A piece of ASCII is ASCII, and its length is its count. */
+    int8_t *made = ppy_str_make(bytes);
+    int64_t *header = (int64_t *)made;
+    memcpy(ppy_str_raw(made), data, (size_t)bytes);
+    ppy_str_raw(made)[bytes] = 0;
+    header[3] = bytes;
+    header[5] = 1;
+    return made;
 }
 
 /* `s[index]`, for 0 <= index < len(s). */

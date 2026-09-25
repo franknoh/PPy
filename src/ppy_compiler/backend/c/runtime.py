@@ -109,6 +109,7 @@ _INPUT_STR = """{
     int64_t *header = (int64_t *)made;
     if (header[0] > 0 && ppy_str_raw(made)[header[0] - 1] == '\\r') {
         header[0]--;
+        header[3]--;
     }
     if (!ppy_str_valid(ppy_str_raw(made), header[0])) {
         ppy_rt_fail("ppy: UnicodeDecodeError: the line is not UTF-8");
