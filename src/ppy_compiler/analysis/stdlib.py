@@ -423,6 +423,9 @@ _FUNCTIONS: dict[str, tuple[T.Type, EffectSet]] = {
     ),
     "socket.gethostbyname": _fn("socket.gethostbyname", T.STR, _NETWORK),
     "urllib.request.urlopen": _fn("urllib.request.urlopen", T.ANY, _NETWORK | _ALLOC),
+    # A collection frees memory nothing can reach; native code runs its own
+    # collector for its own handles, so the call stays in native code.
+    "gc.collect": _fn("gc.collect", T.INT, EffectSet.of(Effect.WRITE_MEMORY)),
     "time.time": _fn("time.time", T.FLOAT, _TIME),
     "time.perf_counter": _fn("time.perf_counter", T.FLOAT, _TIME),
     "time.perf_counter_ns": _fn("time.perf_counter_ns", T.INT, _TIME),

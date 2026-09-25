@@ -256,9 +256,12 @@ def build_standalone(  # type: ignore[no-untyped-def]
     support.write_text(support_source(), encoding="utf-8")
     main_c = build_directory / f"{module_name}_main.c"
     symbol = result.functions[entry_qualname].signature.symbol
+    collect = "ppy_collections" in tuple(getattr(result, "libraries", ()))
     main_c.write_text(
-        f"#include <stdint.h>\n#include <stdio.h>\n\nint32_t {symbol}(int64_t *out);\n\n"
-        + program_main(symbol),
+        f"#include <stdint.h>\n#include <stdio.h>\n\nint32_t {symbol}(int64_t *out);\n"
+        + ("int64_t ppy_coll_collect(void);\n" if collect else "")
+        + "\n"
+        + program_main(symbol, collect=collect),
         encoding="utf-8",
     )
     destination = build_directory / entry.stem
@@ -388,6 +391,13 @@ def _module_shape(
             if names == "ppy" or listed == ["ppy"]:
                 continue
             if names == "dataclasses" and set(listed) <= {"dataclass", "field"}:
+                continue
+            # `gc.collect()` is the collections runtime's collector natively.
+            if (
+                isinstance(statement, ast.Import)
+                and listed == ["gc"]
+                and not statement.names[0].asname
+            ):
                 continue
             if project_modules and all(
                 (binding := symbols.imports.get(alias.asname or alias.name.split(".")[0]))

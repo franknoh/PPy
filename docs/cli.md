@@ -455,8 +455,10 @@ The reachable graph from `main` must be entirely native. That means:
 Anything else is `E1803` with the path that reaches it. There is no
 workaround.
 
-There is no Python to fall back to. A failed guard ends the process with a
-message on standard error instead of retrying in Python. A standalone build
+There is no Python to fall back to. A failed guard prints the line CPython's
+traceback would end with (`IndexError: list index out of range`) on standard
+error and exits with status 1, as CPython does, instead of retrying in
+Python. A standalone build
 keeps the guards, like other builds, and never claims Python's integers it
 cannot provide. `--unsafe` asks for wrap semantics outright, with almost no
 guards left to fail.

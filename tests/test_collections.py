@@ -257,7 +257,10 @@ def test_a_standalone_binary_holds_collections(tmp_path: Path):
     assert native.returncode == 0, native.stderr
     assert native.stdout == expected.stdout
     empty = subprocess.run([binary], input="0\n", capture_output=True, text=True, check=False)
-    assert empty.returncode == 70, "an empty pop has no Python to fall back to"
+    python = _run(tmp_path, program.name, text="0\n")
+    # No Python to fall back to: the binary says what CPython says, and stops as it does.
+    assert empty.returncode == python.returncode == 1
+    assert empty.stderr.strip() == python.stderr.strip().splitlines()[-1]
 
 
 @requires_llvm

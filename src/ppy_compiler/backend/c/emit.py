@@ -60,7 +60,9 @@ from ...ir import (
     Value,
     VectorType,
 )
+from ...ir.dialects.core import RAISED_VALUES
 from ...ir.dialects.gpu import kind_of
+from ...ir.raising import overflow_text, raised_text
 from ...target import TargetInfo, host_target
 from .aio import declare as declare_async
 from .aio import emit_async
@@ -453,6 +455,13 @@ class _ModuleEmitter:
         self.target = target
         self.unit = _Unit()
         self.readable = readable and entry is not None
+        #: A standalone program: a failed guard prints what CPython would
+        #: raise and exits, since there is no Python to fall back to.
+        self.standalone = bool(module.attributes.get("ppy.standalone")) and entry is not None
+        #: Whether a failed call leaves handles for the collections runtime to free.
+        self.collections = "ppy_collections" in tuple(
+            module.attributes.get("ppy.libraries", ())  # type: ignore[arg-type]
+        )
         self.int32 = self.readable and module.attributes.get("ppy.source_int_width") == 32
         if self.int32:
             self.unit.headers.add("limits.h")
@@ -709,7 +718,11 @@ class _ModuleEmitter:
                 raise HeaderOnlyError("a program's `main` is a definition a header cannot carry")
             if not self.readable:
                 self.unit.headers.add("stdio.h")
-                self.unit.exports.append(program_main(_ident(self.entry), self.std("fputs")))
+                if self.collections:
+                    self.shim("ppy_coll_collect")
+                self.unit.exports.append(
+                    program_main(_ident(self.entry), self.std("fputs"), collect=self.collections)
+                )
         return self.assemble()
 
     def parameter_atoms(self, function: IRFunction) -> list[tuple[str, str]]:
@@ -1398,22 +1411,47 @@ class _FunctionEmitter:
         assert a is not None and b is not None
         return _infix("||" if producer.name == "core.and" else "&&", a, b)
 
-    def fail_unless(self, condition: str, label: str, *, failed: str | None = None) -> None:
+    def fail_unless(
+        self,
+        condition: str,
+        label: str,
+        *,
+        failed: str | None = None,
+        raises: str = "",
+        values: tuple[str, ...] = (),
+    ) -> None:
         """Leave the function the way a failed guard does, unless `condition`
-        holds; `failed` spells its negation where the caller knows a better one."""
-        if not self.structured:
-            self.body.append(f"    if (!({condition})) goto fallback; /* {label} */")
-            return
-        self.line(f"if ({failed or _negate(condition)}) {self.failure()} /* {label} */")
+        holds; `failed` spells its negation where the caller knows a better one.
 
-    def guard(self, v: Value, label: str) -> None:
+        In a standalone program, `raises` is what the failure says instead.
+        """
+        raised = self.raised(raises, values)
+        if not self.structured:
+            leave = raised or "goto fallback;"
+            self.body.append(f"    if (!({condition})) {leave} /* {label} */")
+            return
+        self.line(f"if ({failed or _negate(condition)}) {raised or self.failure()} /* {label} */")
+
+    def guard(self, v: Value, label: str, raises: str = "", values: tuple[Value, ...] = ()) -> None:
         condition = self.bare(v)
         if condition == "true":
             return
+        shown = tuple(self.bare(value) for value in values)
         if condition == "false" and self.structured:
-            self.line(f"{self.failure()} /* {label} */")
+            self.line(f"{self.raised(raises, shown) or self.failure()} /* {label} */")
             return
-        self.fail_unless(condition, label, failed=self.negated(v))
+        self.fail_unless(condition, label, failed=self.negated(v), raises=raises, values=shown)
+
+    def raised(self, raises: str, values: tuple[str, ...]) -> str:
+        """In a standalone program, the statement that says what CPython would
+        raise and exits; elsewhere nothing, and the failure falls back."""
+        if not raises or not self.owner.standalone or self.resume:
+            return ""
+        self.owner.shim("ppy_rt_raise")
+        padded = [f"(int64_t)({value})" for value in values]
+        padded += ["0"] * (RAISED_VALUES - len(padded))
+        text = string_literal(raises.encode("utf-8"))
+        return f"ppy_rt_raise({text}, {len(values)}, {', '.join(padded)});"
 
     def failure(self) -> str:
         """The statement a failed guard runs: the fallback status, or a failed frame."""
@@ -1425,6 +1463,10 @@ class _FunctionEmitter:
                 return "return 1;"
             self.owner.unit.headers.add("stdlib.h")
             return f"{self.owner.std('exit')}(1);"
+        if self.owner.collections and not self.owner.standalone:
+            # What this call made is garbage now; the runtime frees it.
+            self.owner.shim("ppy_coll_failed")
+            return f"{{ ppy_coll_failed(); return {STATUS_FALLBACK}; }}"
         return f"return {STATUS_FALLBACK};"
 
     # -- the function ------------------------------------------------------------
@@ -2143,7 +2185,7 @@ class _FunctionEmitter:
                         condition = self.bare(op.operands[0])
                         self.body.append(f"    if (!({condition})) return {status}; /* {label} */")
                 else:
-                    self.guard(op.operands[0], label)
+                    self.guard(op.operands[0], label, raised_text(op), tuple(op.operands[1:]))
             case _:
                 raise EmitError(f"{op.name} has no C lowering")
 
@@ -2249,7 +2291,11 @@ class _FunctionEmitter:
             return
         result = self.sink(op.result) or self.variable(op.result)
         helper = self.owner.helper(name, t)
-        self.fail_unless(f"!{helper}({a[0]}, {b[0]}, &{result})", "arith.ok")
+        self.fail_unless(
+            f"!{helper}({a[0]}, {b[0]}, &{result})",
+            "arith.ok",
+            raises=overflow_text(t.width if isinstance(t, IntType) else 64),
+        )
 
     def machine_typed(self, value: Value) -> bool:
         """Whether the emitted expression already evaluates at its IR width."""
@@ -2323,7 +2369,11 @@ class _FunctionEmitter:
             return
         result = self.sink(op.result) or self.variable(op.result)
         helper = self.owner.helper("sub", t)
-        self.fail_unless(f"!{helper}(0, {x[0]}, &{result})", "arith.ok")
+        self.fail_unless(
+            f"!{helper}(0, {x[0]}, &{result})",
+            "arith.ok",
+            raises=overflow_text(t.width if isinstance(t, IntType) else 64),
+        )
 
     def divmod(self, op: Operation, name: str) -> None:
         t = op.result.type
@@ -2349,7 +2399,7 @@ class _FunctionEmitter:
             minimum = (f"INT{width}_MIN", _ATOM)
             held = _infix("&&", _infix("==", a, minimum), _infix("==", b, minus_one))
             failed = _infix("||", _infix("!=", a, minimum), _infix("!=", b, minus_one))
-            self.fail_unless(failed[0], "div.ok", failed=held[0])
+            self.fail_unless(failed[0], "div.ok", failed=held[0], raises=overflow_text(width))
         if op.attributes.get("rounding", "floor") == "trunc" or id(op) in self.truncating:
             self.fold(op.result, _infix(symbol, a, b), reads=reads)
             return
@@ -2397,7 +2447,12 @@ class _FunctionEmitter:
             return
         shifted = (self.define(op.result, self.cast_text(wide, t)[0]), _ATOM)
         back = _infix(">>", shifted, b)
-        self.fail_unless(_infix("==", back, a)[0], "shl.ok", failed=_infix("!=", back, a)[0])
+        self.fail_unless(
+            _infix("==", back, a)[0],
+            "shl.ok",
+            failed=_infix("!=", back, a)[0],
+            raises=overflow_text(t.width if isinstance(t, IntType) else 64),
+        )
 
     def cmp(self, op: Operation) -> None:
         (a, b), reads = self.operands(op)

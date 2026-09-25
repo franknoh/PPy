@@ -264,7 +264,9 @@ References are counted. A name holding a collection keeps one reference,
 and so does a collection holding another; a collection is freed when the
 last reference goes, together with the collections it holds. Rebinding a
 name, returning from a function, and removing an element all let go of what
-they held, so a program frees what it made without saying so. The tests run
+they held, so a program frees what it made without saying so. A collector
+frees the cycles counting cannot, such as a collection that holds itself
+through another ([Classes](classes.md#memory) describes it). The tests run
 the emitted C under AddressSanitizer with leak detection.
 
 ### Guards
@@ -272,8 +274,16 @@ the emitted C under AddressSanitizer with leak detection.
 A check that CPython would raise for is a guard: an index out of range, a
 pop from an empty collection, a missing key, a map changed while it is
 walked. Under `ppy run`, a failed guard hands the call back to Python, which
-runs it again and raises the same exception. A standalone binary stops with
-exit status 70.
+runs it again and raises the same exception. The collections the native call
+made are freed the next time native code makes one: no handle outlives the
+call that made it, so after a failed call nothing is reachable.
+
+A standalone binary, and emitted C or C++, has no Python to hand the call
+to. It prints the line CPython's traceback would end with, with the same
+values (`KeyError: (3, -3)`, `IndexError: index 7 is out of range for
+length 2`), and exits with status 1, as CPython does for an uncaught
+exception. Where only native code can fail, an integer past 64 bits, it
+says `OverflowError: the result does not fit in a 64-bit integer`.
 
 ### Functions that take or return collections
 
@@ -287,10 +297,6 @@ natively, so it runs as Python when called from Python.
 
 - Keys are `int` or tuples of `int`.
 - `get(key, default)` natively takes a map whose values are numbers.
-- When a guard falls back under `ppy run`, the collections the native call
-  made so far are not freed.
-- A standalone binary reports a failed guard with a generic message rather
-  than the exception's text.
 - A collection holds a user class's instances natively when the class is a
   value class or an object class; see [Classes](classes.md).
 
