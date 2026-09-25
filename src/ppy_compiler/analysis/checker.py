@@ -1344,7 +1344,7 @@ class _Checker:
         known semantics, a plugin's word, or an explicit dynamic boundary
         (spec: strict decorator semantics).
         """
-        if not self.strict or not node.decorator_list:
+        if not node.decorator_list:
             return
         resolver = self.project.resolver(self.symbols)
         names = [resolver.decorator_identity(d) for d in node.decorator_list]
@@ -1354,7 +1354,8 @@ class _Checker:
             if self._decorator_vouched(decorator, name, env, resolver):
                 continue
             spelled = ast.unparse(decorator.func if isinstance(decorator, ast.Call) else decorator)
-            self._dynamic_feature(
+            report = self._dynamic_feature if self.strict else self._strictly
+            report(
                 "E1204",
                 f"decorator `@{spelled}` applies a transform nobody vouches for",
                 decorator,
@@ -2477,13 +2478,12 @@ class _Checker:
         self._native_blockers.append(f"`{name}` has no native lowering")
         if self._dynamic_depth:
             return Binding(T.ANY)
-        if self.strict:
-            self._error(
-                "E1306",
-                f"the signature of `{name}` is unknown, so this call cannot be typed",
-                node,
-                help="add a stub or plugin for it, or move the call inside a ppy.dynamic boundary",
-            )
+        self._strictly(
+            "E1306",
+            f"the signature of `{name}` is unknown, so this call cannot be typed",
+            node,
+            help="add a stub or plugin for it, or move the call inside a ppy.dynamic boundary",
+        )
         return Binding(T.UNKNOWN)
 
     def _expr_Attribute(self, node: ast.Attribute, env: Env) -> Binding:
@@ -2582,8 +2582,8 @@ class _Checker:
             method = self._builtin_method(base, node.attr)
             if method is not None:
                 return Binding(method)
-            if info is not None and self.strict and not self._dynamic_depth:
-                self._error("E1202", f"`{info.name}` has no attribute `{node.attr}`", node)
+            if info is not None and not self._dynamic_depth:
+                self._strictly("E1202", f"`{info.name}` has no attribute `{node.attr}`", node)
                 return Binding(T.UNKNOWN)
         known = (
             stdlib.instance_attribute(base.name, node.attr)
@@ -2606,8 +2606,8 @@ class _Checker:
             self._effects = self._effects.add(Effect.READ_OBJECT)
             return Binding(method)
         exact = T.is_exact_builtin(base) or C.is_collection(base)
-        if self.strict and exact and not self._dynamic_depth:
-            self._error("E1202", f"`{base}` has no attribute `{node.attr}`", node)
+        if exact and not self._dynamic_depth:
+            self._strictly("E1202", f"`{base}` has no attribute `{node.attr}`", node)
             return Binding(T.UNKNOWN)
         self._effects = self._effects.add(Effect.READ_OBJECT)
         return Binding(T.DYNAMIC if self._dynamic_depth else T.UNKNOWN)
@@ -5234,9 +5234,7 @@ class _Checker:
         return False
 
     def _implicit_any(self, info: FunctionInfo, name: str) -> None:
-        if not self.strict:
-            return
-        self._error_at(
+        self._strictly(
             "E1201",
             f"parameter `{name}` has no annotation and no inferable type",
             info.node,
@@ -5259,8 +5257,8 @@ class _Checker:
         if isinstance(element, T.UnknownType):
             if isinstance(base, T.Instance) and base.name == "range":
                 return Binding(T.INT, self._range_facts(node))
-            if self.strict and T.is_exact_builtin(base):
-                self._error("E1302", f"`{iterable.type}` is not iterable", node)
+            if T.is_exact_builtin(base):
+                self._strictly("E1302", f"`{iterable.type}` is not iterable", node)
             return Binding(T.UNKNOWN)
         if isinstance(base, T.Instance) and base.name == "range":
             return Binding(T.INT, self._range_facts(node))
@@ -5884,6 +5882,29 @@ class _Checker:
 
     def _error_at(self, code: str, message: str, node: ast.AST, help: str | None = None) -> None:
         self._error(code, message, node, help)
+
+    def _strictly(self, code: str, message: str, node: ast.AST, help: str | None = None) -> None:
+        """An error under strict mode; under `--no-strict`, the same finding as `W2010`.
+
+        These are the findings with a sound fallback -- the value is treated as
+        unknown and the code runs on CPython -- which is what lets the mode
+        downgrade them instead of dropping them.
+        """
+        if self.strict:
+            self._error(code, message, node, help)
+            return
+        if "<unknown>" in message:
+            self.cascaded += 1
+            return
+        self.diagnostics.add(
+            Diagnostic(
+                "W2010",
+                Severity.WARNING,
+                f"{message} ({code} under strict mode)",
+                span_of(self.path, node),
+                help=help,
+            )
+        )
 
     def _warn(self, code: str, message: str, node: ast.AST) -> None:
         self.diagnostics.add(Diagnostic(code, Severity.WARNING, message, span_of(self.path, node)))
