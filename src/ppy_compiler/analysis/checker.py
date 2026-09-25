@@ -561,7 +561,7 @@ def _collection_root(node: ast.expr) -> ast.expr:
         elif (
             isinstance(node, ast.Call)
             and isinstance(node.func, ast.Attribute)
-            and node.func.attr in {"front", "back", "last", "peek", "value", "get"}
+            and node.func.attr in {"front", "back", "last", "peek", "value", "get", "setdefault"}
         ):
             node = node.func.value
         else:
@@ -638,6 +638,9 @@ class _Checker:
         self._provisional_locals: set[str] = set()
         self._blockers: list[str] = []
         self._native_blockers: list[str] = []
+        #: What the next lambda's parameters are, where its use says: a
+        #: collection's `sort(key=...)` hands it an element.
+        self._lambda_parameters: tuple[T.Type, ...] | None = None
         #: `ppy.grad(f)` calls whose `f` is checked for effects once its body is.
         self._derivative_checks: list[tuple[str, str, ast.AST]] = []
         self._escaping: set[str] = set()
@@ -2007,9 +2010,19 @@ class _Checker:
         ]
         keywords: dict[str | None, Binding] = {}
         for keyword in node.keywords:
+            self._lambda_parameters = self._sort_key_context(callee, keyword)
             value = self._expr(keyword.value, env)
+            self._lambda_parameters = None
             if keyword.arg is not None:
                 keywords[keyword.arg] = value
+            # A sort key named by a function is called by the sort: native
+            # code that sorts calls it, and a standalone build needs it.
+            if (
+                keyword.arg == C.KEY_PARAMETER
+                and isinstance(value.type, T.Callable_)
+                and value.type.qualname in self.project.functions
+            ):
+                self._calls.add(value.type.qualname)
         if isinstance(node.func, ast.Name) and node.func.id not in env:
             result = B.call_builtin(node.func.id, [(a.type, a.facts) for a in args])
             if result is not None:
@@ -3074,6 +3087,9 @@ class _Checker:
         if isinstance(base, T.Instance):
             if base.name in C.INDEXED | C.MAPS:
                 self._effects = self._effects.add(raises=("IndexError", "KeyError"))
+                if is_slice and base.name == "ppy.Vec":
+                    self._effects = self._effects.add(Effect.ALLOC, raises=("ValueError",))
+                    return Binding(base)
                 if is_slice:
                     self._error("E1301", f"a `{base.name}` is indexed by an int, not sliced", node)
                 return Binding(C.value_of(base))
@@ -3172,14 +3188,39 @@ class _Checker:
         self._bind_target(node.target, value, env)
         return value
 
+    def _sort_key_context(self, callee: Binding, keyword: ast.keyword) -> tuple[T.Type, ...] | None:
+        """A collection's `sort(key=lambda x: ...)`: the lambda's parameter is an element."""
+        wanted = callee.type
+        if keyword.arg != C.KEY_PARAMETER or not isinstance(keyword.value, ast.Lambda):
+            return None
+        if not isinstance(wanted, T.Callable_) or not wanted.qualname.startswith("ppy."):
+            return None
+        parameter = next((p for p in wanted.params if p.name == C.KEY_PARAMETER), None)
+        if parameter is None or not isinstance(parameter.type, T.Callable_):
+            return None
+        return tuple(p.type for p in parameter.type.params)
+
     def _expr_Lambda(self, node: ast.Lambda, env: Env) -> Binding:
+        known = self._lambda_parameters
+        self._lambda_parameters = None
+        simple = not (node.args.posonlyargs or node.args.kwonlyargs or node.args.vararg)
+        typed = known is not None and simple and len(known) == len(node.args.args)
         inner = env.fork()
-        for arg in node.args.args:
-            inner.set(arg.arg, Binding(T.UNKNOWN))
+        types = known if typed and known is not None else (T.UNKNOWN,) * len(node.args.args)
+        for arg, given in zip(node.args.args, types, strict=True):
+            inner.set(arg.arg, Binding(given))
         body = self._expr(node.body, inner)
-        self._native_blockers.append("contains a lambda")
+        if not typed:
+            # A sort key is lowered where it is used; any other lambda is a
+            # function value, which native code has no form for.
+            self._native_blockers.append("contains a lambda")
         return Binding(
-            T.Callable_(tuple(T.Param(a.arg, T.UNKNOWN) for a in node.args.args), body.type)
+            T.Callable_(
+                tuple(
+                    T.Param(a.arg, given) for a, given in zip(node.args.args, types, strict=True)
+                ),
+                body.type,
+            )
         )
 
     def _expr_Await(self, node: ast.Await, env: Env) -> Binding:
@@ -3321,6 +3362,9 @@ class _Checker:
                 element = B.element_type(left_base)
             return Binding(T.instance(left_base.name, T.strip_literal(element)))  # type: ignore[union-attr]
 
+        joined = self._collection_operator(left_base, right_base, op, node)
+        if joined is not None:
+            return joined
         overloaded = self._operator_method(left_base, right_base, op, node)
         if overloaded is not None:
             return overloaded
@@ -4994,23 +5038,56 @@ class _Checker:
                 node,
             )
         counted = canonical == "ppy.Vec"
-        if counted and node.args and isinstance(resolved[-1], T.TypeVar_):
-            self._error(
-                "E1305",
-                f"a `Vec` of `{resolved[-1]}` has no zero to start with; push instead",
-                node,
-            )
-        if node.keywords or len(node.args) > (1 if counted else 0):
-            wanted = "how many zeros it starts with" if counted else "no arguments"
+        filled = canonical in C.FILLED
+        if node.keywords or len(node.args) > (1 if filled else 0):
+            wanted = "what it starts with" if filled else "no arguments"
             self._error("E1305", f"`{canonical}[T]()` takes {wanted}", node)
         for argument in node.args:
-            count = self._expr(argument, env)
-            if T.strip_literal(count.type) not in (T.INT, T.UNKNOWN):
-                self._error(
-                    "E1301", f"a `Vec` starts with a count of zeros, not `{count.type}`", argument
-                )
+            given = self._expr(argument, env)
+            if counted and T.strip_literal(given.type) in (T.INT, T.BOOL):
+                if isinstance(resolved[-1], T.TypeVar_):
+                    self._error(
+                        "E1305",
+                        f"a `Vec` of `{resolved[-1]}` has no zero to start with; push instead",
+                        node,
+                    )
+                continue
+            if filled:
+                self._iterable_of(resolved[-1], given, argument, f"a `{canonical}`")
         self._effects = self._effects | EffectSet.of(Effect.ALLOC, raises=("ValueError",))
         return Binding(C.instance(canonical, *resolved))
+
+    def _collection_operator(
+        self, left: T.Type, right: T.Type, op: type[ast.operator], node: ast.AST
+    ) -> Binding | None:
+        """`v + w` of two `Vec`s or `Deque`s, and `a | b`, `a & b`, `a - b`, `a ^ b`
+        of two sets: operands of one type, and a new collection of it."""
+        if not C.is_collection(left):
+            return None
+        assert isinstance(left, T.Instance)
+        joins = op is ast.Add and left.name in C.CONCATENATED
+        combines = op.__name__ in C.SET_OPERATORS and left.name in C.SETS
+        if not (joins or combines):
+            return None
+        if not (C.is_collection(right) and T.is_assignable(right, left)):
+            self._error("E1302", f"`{left}` combines with another `{left}`, not `{right}`", node)
+        self._effects = self._effects.add(Effect.ALLOC)
+        return Binding(left)
+
+    def _iterable_of(self, element: T.Type, given: Binding, node: ast.AST, what: str) -> None:
+        """An argument a collection fills itself from: anything whose elements it can hold."""
+        base = T.strip_literal(given.type)
+        if isinstance(base, (T.AnyType, T.UnknownType)):
+            return
+        if isinstance(base, T.Instance) and base.name in C.COLLECTIONS - C.ITERABLE:
+            self._error("E1302", f"a `{base.name}` is read by `peek` and `pop`, not iterated", node)
+            return
+        found = B.element_type(base)
+        if isinstance(found, T.UnknownType):
+            self._error("E1302", f"{what} takes an iterable, not `{given.type}`", node)
+            return
+        if not T.is_assignable(found, element) and not isinstance(element, T.TypeVar_):
+            self._error("E1301", f"{what} holds `{element}`, not `{found}`", node)
 
     def _collection_element(self, t: T.Type) -> bool:
         """What a collection may hold: a number, a tuple of them, a dataclass, a collection."""
@@ -5049,10 +5126,18 @@ class _Checker:
         env: Env,
     ) -> Binding:
         """A method of a collection: its arguments checked, and a write where it changes it."""
-        self._effects = self._effects.add(raises=("IndexError", "KeyError"))
+        self._effects = self._effects.add(raises=("IndexError", "KeyError", "ValueError"))
         if callee.qualname in C.MUTATORS and isinstance(node.func, ast.Attribute):
             self._effects = self._effects.add(Effect.WRITE_OBJECT)
             self._note_mutation(_collection_root(node.func.value), env)
+        attr = callee.qualname.rpartition(".")[2]
+        if attr in {"copy", "to_sorted", *C.SET_OPERATORS.values()}:
+            self._effects = self._effects.add(Effect.ALLOC)
+        for parameter, given in zip(callee.params, args, strict=False):
+            if parameter.name in C.ITERABLE_PARAMETERS and isinstance(node.func, ast.Attribute):
+                receiver = T.strip_literal(self._expr(node.func.value, env).type)
+                if isinstance(receiver, T.Instance):
+                    self._iterable_of(C.value_of(receiver), given, node, f"`{attr}`")
         return self._call_signature(callee, node, args, keywords, bound=True)
 
     def _store_element(self, container: T.Instance, value: Binding, target: ast.Subscript) -> None:

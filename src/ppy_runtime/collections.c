@@ -1034,3 +1034,636 @@ void ppy_tree_clear(int8_t *handle) {
     header[5] = 0;
     header[6]++;
 }
+
+/* -- whole collections: equality, search, copies, and bulk moves ---------------
+
+   Equality is Python's: a double compares as a double, so 0.0 equals -0.0,
+   and a collection value compares by what it holds. CPython compares an
+   element with itself as equal before asking `==`, which a NaN notices: the
+   same NaN object is equal to itself and a different one is not. Native
+   memory has no objects to tell apart, so a comparison that meets a NaN
+   answers -1, and the caller hands the question back to Python. */
+
+/* A map's or a set's entry for `key`, whichever family it is: its record's
+   index, or -1. */
+int64_t ppy_coll_find_key(int8_t *handle, const int8_t *key) {
+    return ((int64_t *)handle)[12] == 2 ? ppy_map_find(handle, key) : ppy_tree_find(handle, key);
+}
+
+/* The value words of entry `entry` of a map, whichever family it is. */
+int64_t *ppy_coll_value_words(int8_t *handle, int64_t entry) {
+    return ppy_coll_record(handle, entry) + ((int64_t *)handle)[13];
+}
+
+/* The position after `at` in walking order (-1 at the end), and the first
+   position (`at` -1): a sequence counts, a list follows links, a map skips
+   removed entries, and a tree finds the next key. */
+int64_t ppy_coll_step(int8_t *handle, int64_t at) {
+    int64_t *header = (int64_t *)handle;
+    int64_t family = header[12];
+    if (family == 0) {
+        return at + 1 < header[0] ? at + 1 : -1;
+    }
+    if (family == 1) {
+        return at < 0 ? header[3] : ppy_list_after(handle, at);
+    }
+    if (family == 2) {
+        for (int64_t e = at + 1; e < header[3]; e++) {
+            if (ppy_map_alive(handle, e)) {
+                return e;
+            }
+        }
+        return -1;
+    }
+    if (at < 0) {
+        return ppy_tree_end(handle, 0);
+    }
+    return ppy_tree_bound(handle, (const int8_t *)ppy_coll_record(handle, at), 3);
+}
+
+/* Where a walk's current element or key starts: `at` from `ppy_coll_step`. */
+int64_t *ppy_coll_at(int8_t *handle, int64_t at) {
+    if (((int64_t *)handle)[12] == 0) {
+        return (int64_t *)ppy_seq_at(handle, at);
+    }
+    return ppy_coll_record(handle, at);
+}
+
+/* Equality in one function, so that it may call itself for a collection
+   inside a collection: the value words `x` and `y` (`words` long, with their
+   masks) where `x` is given, and otherwise the collections `a` and `b` whole.
+   1 equal, 0 not, -1 undecided (a NaN). */
+int64_t ppy_coll_compare(const int64_t *x, const int64_t *y, int64_t words, int64_t floats,
+                         int64_t handles, int8_t *a, int8_t *b) {
+    if (x != NULL) {
+        for (int64_t w = 0; w < words; w++) {
+            if ((floats >> w) & 1) {
+                double p, q;
+                memcpy(&p, &x[w], 8);
+                memcpy(&q, &y[w], 8);
+                if (p != p || q != q) {
+                    return -1;
+                }
+                if (p != q) {
+                    return 0;
+                }
+            } else if ((handles >> w) & 1) {
+                int64_t inner = ppy_coll_compare(NULL, NULL, 0, 0, 0, (int8_t *)(intptr_t)x[w],
+                                                 (int8_t *)(intptr_t)y[w]);
+                if (inner != 1) {
+                    return inner;
+                }
+            } else if (x[w] != y[w]) {
+                return 0;
+            }
+        }
+        return 1;
+    }
+    if (a == b) {
+        return 1;
+    }
+    if (a == NULL || b == NULL) {
+        return 0;
+    }
+    int64_t *ha = (int64_t *)a;
+    int64_t *hb = (int64_t *)b;
+    if (ha[0] != hb[0]) {
+        return 0;
+    }
+    if (ha[12] <= 1) {
+        int64_t i = ppy_coll_step(a, -1);
+        int64_t j = ppy_coll_step(b, -1);
+        while (i >= 0 && j >= 0) {
+            int64_t same = ppy_coll_compare(ppy_coll_at(a, i), ppy_coll_at(b, j), ha[8], ha[9],
+                                            ha[10], NULL, NULL);
+            if (same != 1) {
+                return same;
+            }
+            i = ppy_coll_step(a, i);
+            j = ppy_coll_step(b, j);
+        }
+        return 1;
+    }
+    for (int64_t e = ppy_coll_step(a, -1); e >= 0; e = ppy_coll_step(a, e)) {
+        int64_t other = ppy_coll_find_key(b, (const int8_t *)ppy_coll_record(a, e));
+        if (other < 0) {
+            return 0;
+        }
+        int64_t same = ppy_coll_compare(ppy_coll_value_words(a, e), ppy_coll_value_words(b, other),
+                                        ha[8], ha[9], ha[10], NULL, NULL);
+        if (same != 1) {
+            return same;
+        }
+    }
+    return 1;
+}
+
+int64_t ppy_coll_equal(int8_t *a, int8_t *b) {
+    return ppy_coll_compare(NULL, NULL, 0, 0, 0, a, b);
+}
+
+int64_t ppy_coll_same(const int64_t *x, const int64_t *y, int64_t words, int64_t floats,
+                      int64_t handles) {
+    return ppy_coll_compare(x, y, words, floats, handles, NULL, NULL);
+}
+
+/* The first position from `start` (in walking order) holding `value`, or -1
+   where there is none, or -2 where a NaN left it undecided. */
+int64_t ppy_coll_find_value(int8_t *handle, const int8_t *value, int64_t start) {
+    int64_t *header = (int64_t *)handle;
+    int64_t index = 0;
+    for (int64_t at = ppy_coll_step(handle, -1); at >= 0; at = ppy_coll_step(handle, at), index++) {
+        if (index < start) {
+            continue;
+        }
+        int64_t same = ppy_coll_same(ppy_coll_at(handle, at), (const int64_t *)value, header[8],
+                                     header[9], header[10]);
+        if (same != 0) {
+            return same == 1 ? index : -2;
+        }
+    }
+    return -1;
+}
+
+/* How many elements hold `value`, or -1 where a NaN left it undecided. */
+int64_t ppy_coll_count_value(int8_t *handle, const int8_t *value) {
+    int64_t *header = (int64_t *)handle;
+    int64_t count = 0;
+    for (int64_t at = ppy_coll_step(handle, -1); at >= 0; at = ppy_coll_step(handle, at)) {
+        int64_t same = ppy_coll_same(ppy_coll_at(handle, at), (const int64_t *)value, header[8],
+                                     header[9], header[10]);
+        if (same < 0) {
+            return -1;
+        }
+        count += same;
+    }
+    return count;
+}
+
+/* Take a reference to each collection the value words hold. */
+void ppy_coll_retain_words(int8_t *handle, const int8_t *value) {
+    int64_t *header = (int64_t *)handle;
+    const int64_t *words = (const int64_t *)value;
+    for (int64_t w = 0; w < header[8]; w++) {
+        if ((header[10] >> w) & 1) {
+            ppy_coll_retain((int8_t *)(intptr_t)words[w]);
+        }
+    }
+}
+
+/* Let go of each collection the value words hold. */
+void ppy_coll_release_words(int8_t *handle, const int8_t *value) {
+    int64_t *header = (int64_t *)handle;
+    const int64_t *words = (const int64_t *)value;
+    for (int64_t w = 0; w < header[8]; w++) {
+        if ((header[10] >> w) & 1) {
+            ppy_coll_release((int8_t *)(intptr_t)words[w]);
+        }
+    }
+}
+
+/* Python's `<` over two values' words, from native code: `a` before `b`. */
+int64_t ppy_coll_before(const int8_t *a, const int8_t *b, int64_t words, int64_t floats) {
+    return ppy_coll_less((const int64_t *)a, (const int64_t *)b, words, floats);
+}
+
+/* A new collection of the same type and contents; the collections it holds
+   are shared, each with one more reference. */
+int8_t *ppy_coll_copy(int8_t *handle) {
+    int64_t *header = (int64_t *)handle;
+    int64_t stride = header[15] > 0 ? header[15] : 1;
+    int8_t *made = ppy_coll_make(header[12], header[13], header[8], header[9], header[10],
+                                 header[15], header[1]);
+    int64_t *copy = (int64_t *)made;
+    memcpy((void *)(intptr_t)copy[2], (void *)(intptr_t)header[2],
+           (size_t)(header[1] * stride * 8));
+    copy[0] = header[0];
+    for (int64_t w = 3; w <= 7; w++) {
+        copy[w] = header[w];
+    }
+    if (header[12] == 2) {
+        int64_t *index = (int64_t *)malloc((size_t)header[5] * sizeof(int64_t));
+        if (index == NULL) {
+            ppy_coll_fail();
+        }
+        memcpy(index, (void *)(intptr_t)header[4], (size_t)header[5] * sizeof(int64_t));
+        copy[4] = (int64_t)(intptr_t)index;
+    }
+    if (header[10] != 0) {
+        int64_t count = header[12] == 0 ? header[0] : header[1];
+        for (int64_t i = 0; i < count; i++) {
+            int64_t *value = ppy_coll_live(made, i);
+            if (value != NULL) {
+                ppy_coll_retain_words(made, (const int8_t *)value);
+            }
+        }
+    }
+    return made;
+}
+
+/* -- sequences, beyond the ends ----------------------------------------------- */
+
+/* Room for one element before position `index` (0 to the length), the rest
+   moved up by one: the new slot, all zero. */
+int8_t *ppy_seq_insert(int8_t *handle, int64_t index) {
+    int64_t *header = (int64_t *)handle;
+    int64_t words = header[8];
+    ppy_seq_push_back(handle);
+    for (int64_t i = header[0] - 1; i > index; i--) {
+        memcpy(ppy_seq_at(handle, i), ppy_seq_at(handle, i - 1), (size_t)(words * 8));
+    }
+    int8_t *slot = ppy_seq_at(handle, index);
+    memset(slot, 0, (size_t)(words * 8));
+    return slot;
+}
+
+/* The element at `index` out, the rest moved down by one: its words, in the
+   scratch words, which are what this returns. */
+int8_t *ppy_seq_erase(int8_t *handle, int64_t index) {
+    int64_t *header = (int64_t *)handle;
+    int64_t words = header[8];
+    int64_t *taken = (int64_t *)(intptr_t)header[14];
+    memcpy(taken, ppy_seq_at(handle, index), (size_t)(words * 8));
+    for (int64_t i = index; i + 1 < header[0]; i++) {
+        memcpy(ppy_seq_at(handle, i), ppy_seq_at(handle, i + 1), (size_t)(words * 8));
+    }
+    header[0]--;
+    return (int8_t *)taken;
+}
+
+/* Every element of `other` (a sequence or a list) at the end, each collection
+   one more reference; `other` may be the collection itself. */
+void ppy_seq_extend(int8_t *handle, int8_t *other) {
+    int64_t *header = (int64_t *)handle;
+    int64_t words = header[8];
+    int64_t count = ((int64_t *)other)[0];
+    int64_t at = ppy_coll_step(other, -1);
+    for (int64_t n = 0; n < count && at >= 0; n++) {
+        int64_t *from = ppy_coll_at(other, at);
+        at = ppy_coll_step(other, at);
+        int64_t *to = (int64_t *)ppy_seq_push_back(handle);
+        from = other == handle ? ppy_coll_at(other, n) : from;
+        memcpy(to, from, (size_t)(words * 8));
+        ppy_coll_retain_words(handle, (const int8_t *)to);
+    }
+}
+
+/* A list's slice, `start:stop:step` with each bound given or not (`given`
+   bit 0 the start, bit 1 the stop): a new sequence, its collections shared. */
+int8_t *ppy_seq_slice(int8_t *handle, int64_t start, int64_t stop, int64_t step, int64_t given) {
+    int64_t *header = (int64_t *)handle;
+    int64_t n = header[0];
+    if (step < -INT64_MAX) {
+        step = -INT64_MAX;
+    }
+    if (!(given & 1)) {
+        start = step < 0 ? INT64_MAX : 0;
+    }
+    if (!(given & 2)) {
+        stop = step < 0 ? INT64_MIN : INT64_MAX;
+    }
+    if (start < 0) {
+        start += n;
+        if (start < 0) {
+            start = step < 0 ? -1 : 0;
+        }
+    } else if (start >= n) {
+        start = step < 0 ? n - 1 : n;
+    }
+    if (stop < 0) {
+        stop = stop < -n ? -1 : stop + n;
+        if (stop < 0) {
+            stop = step < 0 ? -1 : 0;
+        }
+    } else if (stop >= n) {
+        stop = step < 0 ? n - 1 : n;
+    }
+    int64_t count = 0;
+    if (step < 0 && stop < start) {
+        count = (start - stop - 1) / (-step) + 1;
+    } else if (step > 0 && start < stop) {
+        count = (stop - start - 1) / step + 1;
+    }
+    int8_t *made = ppy_seq_new(0, header[8], header[9], header[10]);
+    for (int64_t i = 0, at = start; i < count; i++, at += step) {
+        int64_t *to = (int64_t *)ppy_seq_push_back(made);
+        memcpy(to, ppy_seq_at(handle, at), (size_t)(header[8] * 8));
+        ppy_coll_retain_words(made, (const int8_t *)to);
+    }
+    return made;
+}
+
+/* `a + b`: a new sequence of `a`'s elements and then `b`'s. */
+int8_t *ppy_seq_concat(int8_t *a, int8_t *b) {
+    int8_t *made = ppy_coll_copy(a);
+    ppy_seq_extend(made, b);
+    return made;
+}
+
+/* Deque's `rotate`: the last `steps` elements to the front (`steps` < 0, the
+   first to the back). */
+void ppy_seq_rotate(int8_t *handle, int64_t steps) {
+    int64_t *header = (int64_t *)handle;
+    int64_t n = header[0];
+    if (n <= 1) {
+        return;
+    }
+    int64_t shift = steps % n;
+    if (shift < 0) {
+        shift += n;
+    }
+    if (shift == 0) {
+        return;
+    }
+    int64_t words = header[8];
+    int64_t *items = (int64_t *)calloc((size_t)(n * words), 8);
+    if (items == NULL) {
+        ppy_coll_fail();
+    }
+    for (int64_t i = 0; i < n; i++) {
+        memcpy(items + ((i + shift) % n) * words, ppy_seq_at(handle, i), (size_t)(words * 8));
+    }
+    free((void *)(intptr_t)header[2]);
+    header[1] = n;
+    header[2] = (int64_t)(intptr_t)items;
+    header[3] = 0;
+}
+
+/* A stable merge sort on the first `compare` words of each element, smallest
+   first or (`descending`) largest first; equal elements keep their order
+   either way, as `list.sort(reverse=True)` keeps them. */
+void ppy_seq_sort_by(int8_t *handle, int64_t compare, int64_t descending) {
+    int64_t *header = (int64_t *)handle;
+    int64_t n = header[0];
+    int64_t words = header[8];
+    if (n < 2) {
+        return;
+    }
+    int64_t *items = (int64_t *)calloc((size_t)(n * words), 8);
+    int64_t *spare = (int64_t *)calloc((size_t)(n * words), 8);
+    if (items == NULL || spare == NULL) {
+        ppy_coll_fail();
+    }
+    for (int64_t i = 0; i < n; i++) {
+        memcpy(items + i * words, ppy_seq_at(handle, i), (size_t)(words * 8));
+    }
+    for (int64_t width = 1; width < n; width *= 2) {
+        for (int64_t low = 0; low < n; low += 2 * width) {
+            int64_t middle = low + width < n ? low + width : n;
+            int64_t high = low + 2 * width < n ? low + 2 * width : n;
+            int64_t i = low, j = middle, k = low;
+            while (i < middle && j < high) {
+                const int64_t *left = items + i * words;
+                const int64_t *right = items + j * words;
+                int take = descending ? (int)ppy_coll_less(left, right, compare, header[9])
+                                      : (int)ppy_coll_less(right, left, compare, header[9]);
+                int64_t from = take ? j++ : i++;
+                memcpy(spare + (k++) * words, items + from * words, (size_t)(words * 8));
+            }
+            while (i < middle) {
+                memcpy(spare + (k++) * words, items + (i++) * words, (size_t)(words * 8));
+            }
+            while (j < high) {
+                memcpy(spare + (k++) * words, items + (j++) * words, (size_t)(words * 8));
+            }
+        }
+        int64_t *swap = items;
+        items = spare;
+        spare = swap;
+    }
+    free((void *)(intptr_t)header[2]);
+    free(spare);
+    header[1] = n;
+    header[2] = (int64_t)(intptr_t)items;
+    header[3] = 0;
+}
+
+/* The elements put in the order `order` gives: its element `i` carries, at
+   word `word`, the position the element `i` comes from. */
+void ppy_seq_permute(int8_t *handle, int8_t *order, int64_t word) {
+    int64_t *header = (int64_t *)handle;
+    int64_t n = header[0];
+    int64_t words = header[8];
+    if (n < 2) {
+        return;
+    }
+    int64_t *items = (int64_t *)calloc((size_t)(n * words), 8);
+    if (items == NULL) {
+        ppy_coll_fail();
+    }
+    for (int64_t i = 0; i < n; i++) {
+        int64_t from = ((int64_t *)ppy_seq_at(order, i))[word];
+        memcpy(items + i * words, ppy_seq_at(handle, from), (size_t)(words * 8));
+    }
+    free((void *)(intptr_t)header[2]);
+    header[1] = n;
+    header[2] = (int64_t)(intptr_t)items;
+    header[3] = 0;
+}
+
+/* -- heaps, beyond one push and one pop ----------------------------------------- */
+
+/* `value` moved down from position `i`, past every child that comes out
+   before it. */
+void ppy_heap_sift(int8_t *handle, int64_t i, const int64_t *value, int64_t max) {
+    int64_t *header = (int64_t *)handle;
+    int64_t words = header[8];
+    int64_t n = header[0];
+    while (1) {
+        int64_t child = 2 * i + 1;
+        if (child >= n) {
+            break;
+        }
+        if (child + 1 < n
+            && ppy_heap_before(handle, ppy_coll_record(handle, child + 1),
+                               ppy_coll_record(handle, child), max)) {
+            child++;
+        }
+        if (!ppy_heap_before(handle, ppy_coll_record(handle, child), value, max)) {
+            break;
+        }
+        memcpy(ppy_coll_record(handle, i), ppy_coll_record(handle, child), (size_t)(words * 8));
+        i = child;
+    }
+    memcpy(ppy_coll_record(handle, i), value, (size_t)(words * 8));
+}
+
+/* `pushpop` (`replace` 0) or `replace` (1) with the value in the scratch
+   words: the element that comes out, in the scratch words. `pushpop` hands
+   the value straight back when it would come out first. */
+int8_t *ppy_heap_exchange(int8_t *handle, int64_t max, int64_t replace) {
+    int64_t *header = (int64_t *)handle;
+    int64_t words = header[8];
+    int64_t *value = (int64_t *)(intptr_t)header[14];
+    int64_t *out = value + words;
+    if (!replace
+        && (header[0] == 0 || !ppy_heap_before(handle, ppy_coll_record(handle, 0), value, max))) {
+        return (int8_t *)value;
+    }
+    memcpy(out, ppy_coll_record(handle, 0), (size_t)(words * 8));
+    ppy_heap_sift(handle, 0, value, max);
+    return (int8_t *)out;
+}
+
+/* The elements arranged into a heap, from the last parent up, as `heapq.heapify`. */
+void ppy_heap_heapify(int8_t *handle, int64_t max) {
+    int64_t *header = (int64_t *)handle;
+    int64_t words = header[8];
+    int64_t *value = (int64_t *)(intptr_t)header[14];
+    if (header[3] != 0) {
+        ppy_seq_rotate(handle, 0);
+    }
+    for (int64_t i = header[0] / 2 - 1; i >= 0; i--) {
+        memcpy(value, ppy_coll_record(handle, i), (size_t)(words * 8));
+        ppy_heap_sift(handle, i, value, max);
+    }
+}
+
+/* -- lists, maps, and trees, walked and combined ---------------------------------- */
+
+/* The node before `node` while walking backwards, or -1. */
+int64_t ppy_list_before(int8_t *handle, int64_t node) {
+    if (!ppy_list_valid(handle, node)) {
+        return -1;
+    }
+    return ppy_list_step(handle, node, 0);
+}
+
+/* The last live entry below `at`, or -1: a map walked backwards. */
+int64_t ppy_map_back(int8_t *handle, int64_t at) {
+    for (int64_t e = at - 1; e >= 0; e--) {
+        if (ppy_map_alive(handle, e)) {
+            return e;
+        }
+    }
+    return -1;
+}
+
+/* Whether node `node` exists and its key is below `key`. */
+int64_t ppy_tree_below(int8_t *handle, int64_t node, const int8_t *key) {
+    if (node < 0) {
+        return 0;
+    }
+    int64_t *header = (int64_t *)handle;
+    return ppy_tree_order(ppy_coll_record(handle, node), (const int64_t *)key, header[13]) < 0;
+}
+
+/* An entry for `key` in a map or a set of either family: its index. */
+int64_t ppy_coll_put_key(int8_t *handle, const int8_t *key) {
+    return ((int64_t *)handle)[12] == 2 ? ppy_map_put(handle, key) : ppy_tree_put(handle, key);
+}
+
+/* Every entry of `other` put in `handle`, in `other`'s order: a value
+   replaced lets go of what it held, a value stored takes a reference. */
+void ppy_coll_update(int8_t *handle, int8_t *other) {
+    int64_t *header = (int64_t *)handle;
+    int64_t words = header[8];
+    int64_t count = ((int64_t *)other)[0];
+    int64_t *keys = (int64_t *)calloc((size_t)(count * header[13] + 1), 8);
+    int64_t *values = (int64_t *)calloc((size_t)(count * words + 1), 8);
+    if (keys == NULL || values == NULL) {
+        ppy_coll_fail();
+    }
+    int64_t n = 0;
+    for (int64_t e = ppy_coll_step(other, -1); e >= 0; e = ppy_coll_step(other, e), n++) {
+        memcpy(keys + n * header[13], ppy_coll_record(other, e), (size_t)(header[13] * 8));
+        memcpy(values + n * words, ppy_coll_value_words(other, e), (size_t)(words * 8));
+        ppy_coll_retain_words(handle, (const int8_t *)(values + n * words));
+    }
+    for (int64_t i = 0; i < n; i++) {
+        const int8_t *key = (const int8_t *)(keys + i * header[13]);
+        int64_t found = ppy_coll_find_key(handle, key);
+        if (found >= 0) {
+            ppy_coll_release_words(handle, (const int8_t *)ppy_coll_value_words(handle, found));
+        } else {
+            found = ppy_coll_put_key(handle, key);
+        }
+        memcpy(ppy_coll_value_words(handle, found), values + i * words, (size_t)(words * 8));
+    }
+    free(keys);
+    free(values);
+}
+
+/* `a | b` (0), `a & b` (1), `a - b` (2), `a ^ b` (3): a new set of `a`'s
+   family, `a`'s keys first in `a`'s order and then `b`'s. */
+int8_t *ppy_set_combine(int8_t *a, int8_t *b, int64_t op) {
+    int64_t *header = (int64_t *)a;
+    int64_t keys = header[13];
+    int8_t *made = header[12] == 2 ? ppy_map_new(keys, 0, 0, 0) : ppy_tree_new(keys, 0, 0, 0);
+    for (int64_t e = ppy_coll_step(a, -1); e >= 0; e = ppy_coll_step(a, e)) {
+        const int8_t *key = (const int8_t *)ppy_coll_record(a, e);
+        int64_t in_b = ppy_coll_find_key(b, key) >= 0;
+        if ((in_b && (op == 0 || op == 1)) || (!in_b && op != 1)) {
+            ppy_coll_put_key(made, key);
+        }
+    }
+    if (op == 0 || op == 3) {
+        for (int64_t e = ppy_coll_step(b, -1); e >= 0; e = ppy_coll_step(b, e)) {
+            const int8_t *key = (const int8_t *)ppy_coll_record(b, e);
+            if (ppy_coll_find_key(a, key) < 0) {
+                ppy_coll_put_key(made, key);
+            }
+        }
+    }
+    return made;
+}
+
+/* `a.issubset(b)` (0), `a.issuperset(b)` (1), `a.isdisjoint(b)` (2). */
+int64_t ppy_set_relation(int8_t *a, int8_t *b, int64_t op) {
+    int8_t *walked = op == 1 ? b : a;
+    int8_t *asked = op == 1 ? a : b;
+    for (int64_t e = ppy_coll_step(walked, -1); e >= 0; e = ppy_coll_step(walked, e)) {
+        int64_t found = ppy_coll_find_key(asked, (const int8_t *)ppy_coll_record(walked, e)) >= 0;
+        if (op == 2 ? found : !found) {
+            return 0;
+        }
+    }
+    return 1;
+}
+
+/* -- the Python boundary: whole collections in one call --------------------------- */
+
+/* `count` elements, `words` each, appended to a sequence from `values`. */
+void ppy_seq_push_many(int8_t *handle, const int8_t *values, int64_t count) {
+    int64_t *header = (int64_t *)handle;
+    int64_t words = header[8];
+    for (int64_t i = 0; i < count; i++) {
+        memcpy(ppy_seq_push_back(handle), values + i * words * 8, (size_t)(words * 8));
+    }
+}
+
+/* `count` entries put in a map or a set of either family: keys from `keys`
+   and values from `values`, `key words` and `value words` each. */
+void ppy_coll_put_many(int8_t *handle, const int8_t *keys, const int8_t *values, int64_t count) {
+    int64_t *header = (int64_t *)handle;
+    int64_t key_words = header[13];
+    int64_t words = header[8];
+    for (int64_t i = 0; i < count; i++) {
+        int64_t entry = ppy_coll_put_key(handle, keys + i * key_words * 8);
+        if (words > 0) {
+            memcpy(ppy_coll_value_words(handle, entry), values + i * words * 8,
+                   (size_t)(words * 8));
+        }
+    }
+}
+
+/* Every element (or key and value) in walking order, copied out: keys into
+   `keys` and elements or values into `values`, `key words` and `value words`
+   each. The count is the collection's length. */
+void ppy_coll_copy_out(int8_t *handle, int8_t *keys, int8_t *values) {
+    int64_t *header = (int64_t *)handle;
+    int64_t key_words = header[13];
+    int64_t words = header[8];
+    int64_t family = header[12];
+    int64_t n = 0;
+    for (int64_t at = ppy_coll_step(handle, -1); at >= 0; at = ppy_coll_step(handle, at), n++) {
+        if (family <= 1) {
+            memcpy(values + n * words * 8, ppy_coll_at(handle, at), (size_t)(words * 8));
+            continue;
+        }
+        memcpy(keys + n * key_words * 8, ppy_coll_record(handle, at), (size_t)(key_words * 8));
+        if (words > 0) {
+            memcpy(values + n * words * 8, ppy_coll_value_words(handle, at), (size_t)(words * 8));
+        }
+    }
+}

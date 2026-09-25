@@ -360,7 +360,7 @@ def test_the_checker_names_each_misuse(tmp_path: Path):
         "error[E1302]: a `ppy.Heap` is read by `peek` and `pop`, not iterated",
         "error[E1301]: argument 1 expects `int`, got `Literal[1.5]`",
         "error[E1301]: a `float` does not fit an `int` element",
-        "error[E1305]: `ppy.Deque[T]()` takes no arguments",
+        "error[E1302]: a `ppy.Deque` takes an iterable, not `Literal[3]`",
         "error[E1202]: `ppy.Deque[int]` has no attribute `missing`",
     ]
 
