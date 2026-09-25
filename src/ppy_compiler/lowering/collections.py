@@ -792,8 +792,7 @@ class CollectionLowering:
                 self._require(core.cmp(self.b, "ge", count, self._word(0)), "a negative size")
             return self._new(kind, count), True
         if isinstance(node, ast.Subscript):
-            value = self._item(node.value, node.slice)
-            return value, False
+            return self._item_handle(node.value, node.slice)
         if isinstance(node, ast.Call):
             if isinstance(node.func, ast.Attribute) and self._is_collection(node.func.value):
                 found = self._collection_method(node.func.value, node.func.attr, node)
@@ -945,8 +944,20 @@ class CollectionLowering:
         self._done_with(handle, owned)
         return self._found(found)
 
+    def _item_handle(self, container: ast.expr, index: ast.expr) -> tuple[Value, bool]:
+        """A reference element as a handle: borrowed from a collection a name
+        holds, or, out of a temporary one (`line.split()[1]`), owned, since
+        the collection goes before the element does."""
+        self.__dict__["_taking"] = True
+        try:
+            value = self._item(container, index)
+        finally:
+            taken = self.__dict__.pop("_taking", None) == "taken"
+        return value, taken
+
     def _item(self, container: ast.expr, index: ast.expr, value: ast.expr | None = None) -> Value:
         """`v[i]` (0 to `len - 1`) or a map's `m[key]`, read; or with `value`, written."""
+        taking = self.__dict__.pop("_taking", None) is True
         kind, handle, owned = self._receiver(container)
         shape = kind.value
         if isinstance(index, ast.Slice) or shape is None:
@@ -983,7 +994,10 @@ class CollectionLowering:
         found = self._read(address, shape)
         if owned:
             if shape.reference:
-                raise Unsupported("an element read from a temporary collection outlives it")
+                if not taking:
+                    raise Unsupported("an element read from a temporary collection outlives it")
+                self._retain(found)
+                self.__dict__["_taking"] = "taken"
             self._release(handle)
         return found
 

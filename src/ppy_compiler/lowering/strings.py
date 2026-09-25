@@ -959,6 +959,25 @@ class StringLowering:
         rt = self._rt  # type: ignore[attr-defined]
         word = self._word  # type: ignore[attr-defined]
         if (
+            isinstance(value, ast.Tuple)
+            and len(value.elts) == len(names)
+            and any(self._string_of(item) is not None for item in value.elts)
+        ):
+            # `best, most = path, count`: every value first, as Python takes
+            # them, and then each name bound.
+            taken: list[tuple[bool, Value]] = []
+            for item in value.elts:
+                if self._string_of(item) is not None:
+                    taken.append((True, self._owned_string(item)))
+                else:
+                    taken.append((False, self._expr(item)))  # type: ignore[attr-defined]
+            for name, (text, item) in zip(names, taken, strict=True):
+                if text:
+                    self._bind(name.id, STR, item, True)  # type: ignore[attr-defined]
+                else:
+                    self._store(name, item)  # type: ignore[attr-defined]
+            return True
+        if (
             isinstance(value, ast.Call)
             and isinstance(value.func, ast.Attribute)
             and value.func.attr in {"partition", "rpartition"}
