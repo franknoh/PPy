@@ -8,9 +8,10 @@ class:
   keeps it as a struct of its fields.
 - An **object class** is shared, like any Python object. It has fields that
   hold other objects or collections, methods that change its fields or
-  return a new instance, a base class, or subclasses. Native code keeps a
-  handle to it on the heap, counts references to it, and frees it when the
-  last one goes.
+  return a new instance, its own `__lt__`, `__hash__`, or `__eq__` (which
+  a collection calls with the object), a base class, or subclasses. Native
+  code keeps a handle to it on the heap, counts references to it, and frees
+  it when the last one goes.
 
 You don't choose between them. `ppy explain` shows which one a class is by
 how its functions lower.

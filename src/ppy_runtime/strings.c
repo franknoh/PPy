@@ -81,19 +81,19 @@ int8_t *ppy_str_make(int64_t bytes) {
 /* The one-character string of ASCII byte `c`: static, never freed. */
 int8_t *ppy_str_char(int64_t c) {
     /* Laid out as a string made by `ppy_coll_make` is, bytes after the
-       twenty-one header words, and on no heap: the collector reads a
+       twenty-five header words, and on no heap: the collector reads a
        string it meets, and never frees one it did not make. */
-    static int64_t table[128][22];
+    static int64_t table[128][26];
     int64_t *header = table[c & 127];
     if (header[11] == 0) {
         header[1] = 1;
-        header[2] = (int64_t)(intptr_t)(header + 21);
+        header[2] = (int64_t)(intptr_t)(header + 25);
         header[3] = 1;
         header[5] = 1;
         header[8] = 1;
         header[12] = 4;
         header[0] = 1;
-        ((uint8_t *)(header + 21))[0] = (uint8_t)c;
+        ((uint8_t *)(header + 25))[0] = (uint8_t)c;
         header[11] = INT64_MAX / 2;
     }
     return (int8_t *)header;

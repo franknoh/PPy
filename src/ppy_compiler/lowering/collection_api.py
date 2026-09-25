@@ -161,7 +161,7 @@ class CollectionApiLowering(CollectionLowering):
         if inner is None:
             raise Unsupported("`sorted` sorts a collection natively")
         shape = self._part(inner, "values" if inner.mode == "values" else "keys")
-        if inner.mode == "items" or not shape.comparable:
+        if inner.mode == "items" or not self._orders(shape):
             raise Unsupported("these elements have no order to sort by")
         kind = Kind("Vec", shape)
         made = self._new(kind)
@@ -411,6 +411,8 @@ class CollectionApiLowering(CollectionLowering):
         self.b.at_end(done)  # type: ignore[attr-defined]
         for source in plan.sources:
             self._let_go(source.slot)
+        # `between`'s bounds, made before the loop, are read until it ends.
+        self._keys_done()
 
     def _bind_item(self, target: ast.expr, parts: list[tuple[Shape, Value]]) -> None:
         """A loop target bound to one step: an element, or a key and its value."""
@@ -461,6 +463,7 @@ class CollectionApiLowering(CollectionLowering):
     def _add_node(self, kind: Kind, handle: Value, node: ast.expr, front: bool = False) -> None:
         if kind.family in {"map", "tree"}:
             self._rt("ppy_coll_put_key", (handle, self._key(kind, node)))
+            self._keys_done()
             return
         assert kind.value is not None
         self._store_into(self._room(kind, handle, front), kind.value, node, fresh=True)
@@ -603,7 +606,7 @@ class CollectionApiLowering(CollectionLowering):
         heap = {"Heap": 0, "MaxHeap": 1}.get(kind.name)
         if heap is not None:
             assert kind.value is not None
-            if not kind.value.comparable:
+            if not self._orders(kind.value):
                 raise Unsupported(f"a {kind.name} orders its elements, and these have no order")
         made = self._new(kind)
         self._fill(kind, made, node.args[0])
@@ -748,6 +751,8 @@ class CollectionApiLowering(CollectionLowering):
                 "tree": self._keyed_method,
             }[kind.family]
             found = method(kind, handle, attr, node.args)
+        # The keys made for the calls just emitted go now, in the block that made them.
+        self._keys_done()
         if found is None:
             raise Unsupported(f"`{kind.name}.{attr}` has no native lowering")
         self._done_with(handle, owned)
@@ -912,6 +917,10 @@ class CollectionApiLowering(CollectionLowering):
                 if shape.reference or key_shape.kind not in {"int", "float", "bool"}:
                     raise Unsupported(f"`{attr}` of this map has no native tuple form")
                 value = self._read(self._rt("ppy_tree_value_at", (handle, node), HANDLE), shape)
+            if key_shape.reference:
+                # The tree lets go of the key it removes; what is handed out is
+                # the caller's, as a popped element is.
+                self._retain(key)
             self._rt("ppy_tree_remove", (handle, key_address))
             return key if value is None else core.tuple_make(self.b, key, value)
         if shape is None:
@@ -991,7 +1000,7 @@ class CollectionApiLowering(CollectionLowering):
             descending = core.cast(self.b, self._test(options["reverse"]), I64)  # type: ignore[attr-defined]
         key = options.get("key")
         if key is None or (isinstance(key, ast.Constant) and key.value is None):
-            if not shape.comparable:
+            if not self._orders(shape):
                 raise Unsupported("these elements have no order to sort by")
             self._rt("ppy_seq_sort_by", (handle, self._word(shape.words), descending), None)
             return self._word(0)

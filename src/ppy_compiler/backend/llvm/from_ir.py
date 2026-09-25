@@ -923,6 +923,11 @@ class _FunctionEmitter:
             variable = self.owner.strings[str(op.attributes["symbol"])]
             self.set(op.results[0], b.bitcast(variable, ir.IntType(8).as_pointer()))
             return
+        if name == "ppy.callback":
+            callee_name = op.attributes["callee"].name  # type: ignore[union-attr]
+            trampoline = _callback(self.owner, callee_name)
+            self.set(op.results[0], b.ptrtoint(trampoline, ir.IntType(64)))
+            return
         if name in {"llvm.smin.i64", "llvm.smax.i64"}:
             word = ir.IntType(64)
             function = self.intrinsic(name, word, [word, word])
@@ -963,3 +968,55 @@ def _power_of_two(value) -> int | None:  # type: ignore[no-untyped-def]
     if not isinstance(constant, int) or constant <= 0 or constant & (constant - 1):
         return None
     return constant.bit_length() - 1
+
+
+def _callback(owner, callee_name: str):  # type: ignore[no-untyped-def]
+    """`i64 f(i64, ...)`, the C-ABI face of a native function the runtime calls
+    back: each word is the argument it stands for, the result comes back as a
+    word, and a failed guard answers 0 after telling the runtime so.
+
+    Made once per function; `ppy.callback` hands out its address.
+    """
+    ir = owner.ir
+    name = f"ppy_callback_{callee_name}"
+    existing = owner.llvm.globals.get(name)
+    if existing is not None:
+        return existing
+    callee = owner.functions.get(callee_name)
+    target = owner.module.functions.get(callee_name)
+    if callee is None or target is None:
+        raise EmitError(f"callback of @{callee_name}, which was not emitted")
+    word = ir.IntType(64)
+    function = ir.Function(
+        owner.llvm, ir.FunctionType(word, [word] * len(target.params)), name=name
+    )
+    function.linkage = "private"
+    b = ir.IRBuilder(function.append_basic_block("entry"))
+    arguments = []
+    for argument, (_name, t) in zip(function.args, target.params, strict=True):
+        atom = owner.llvm_type(t)
+        if isinstance(atom, ir.PointerType):
+            arguments.append(b.inttoptr(argument, atom))
+        elif isinstance(atom, ir.IntType) and atom.width < 64:
+            arguments.append(b.trunc(argument, atom))
+        else:
+            arguments.append(argument)
+    slot_type = owner.boundary_atoms(target.results[0])[0] if target.results else word
+    slot = b.alloca(slot_type)
+    status = b.call(callee, [*arguments, slot])
+    failed = function.append_basic_block("failed")
+    answered = function.append_basic_block("answered")
+    b.cbranch(b.icmp_signed("==", status, ir.Constant(ir.IntType(32), STATUS_OK)), answered, failed)
+    b.position_at_end(failed)
+    tell = owner.llvm.globals.get("ppy_coll_callback_failed") or ir.Function(
+        owner.llvm, ir.FunctionType(ir.VoidType(), []), name="ppy_coll_callback_failed"
+    )
+    b.call(tell, [])
+    b.ret(ir.Constant(word, 0))
+    b.position_at_end(answered)
+    value = b.load(slot)
+    if isinstance(slot_type, ir.IntType) and slot_type.width < 64:
+        signed = not (target.results and isinstance(target.results[0], BoolType))
+        value = b.sext(value, word) if signed else b.zext(value, word)
+    b.ret(value)
+    return function

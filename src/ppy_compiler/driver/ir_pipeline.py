@@ -155,6 +155,10 @@ def _writes_self(info) -> bool:  # type: ignore[no-untyped-def]
     return False
 
 
+#: The methods a collection calls back: a class with one is held by handle.
+_COMPARES = frozenset({"__lt__", "__hash__", "__eq__"})
+
+
 def value_class_layouts(bundle) -> dict[str, tuple[tuple[str, str], ...]]:  # type: ignore[no-untyped-def]
     """Classes whose instances can be flattened into scalar arguments.
 
@@ -190,6 +194,10 @@ def value_class_layouts(bundle) -> dict[str, tuple[tuple[str, str], ...]]:  # ty
         # A method that makes and returns an instance (`__add__`) hands back
         # something native code can only return by handle.
         if _returns_own_class(info):
+            continue
+        # A class that orders, hashes, or compares its instances itself is
+        # asked to by the collections runtime, which hands it handles.
+        if _COMPARES & set(info.methods):
             continue
         fields: list[tuple[str, str]] = []
         for name, declared in info.fields.items():
