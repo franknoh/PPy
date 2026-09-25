@@ -17,13 +17,14 @@ from .lowering import NativeParam, NativeSignature
 __all__ = ["SCHEMA_VERSION", "CachedLowering", "decode", "encode"]
 
 #: Bumped when the shape below changes, so an old entry is simply a miss.
-SCHEMA_VERSION = 8
+SCHEMA_VERSION = 9
 
 
 class CachedLowering:
     """What `_collect` produced for one module, minus what is recomputable."""
 
     __slots__ = (
+        "boundaries",
         "exports",
         "fused",
         "ir",
@@ -50,8 +51,11 @@ class CachedLowering:
         ppyir: str = "",
         proved: dict[str, tuple[str, ...]] | None = None,
         remarks: tuple[str, ...] = (),
+        boundaries: dict[str, NativeSignature] | None = None,
     ) -> None:
         self.ir = ir
+        #: Per function, the thunk Python calls where there is one.
+        self.boundaries = dict(boundaries or {})
         self.ppyir = ppyir
         self.proved = dict(proved or {})
         self.remarks = tuple(remarks)
@@ -148,6 +152,11 @@ def encode(module) -> str:  # type: ignore[no-untyped-def]
             "ir": module.ir,
             "ppyir": module.ppyir,
             "signatures": {q: _signature(f.signature) for q, f in module.functions.items()},
+            "boundaries": {
+                q: _signature(f.boundary)
+                for q, f in module.functions.items()
+                if f.boundary is not None
+            },
             "rejected": dict(module.rejected),
             "fused": {symbol: _loop(loop) for symbol, loop in module.fused.items()},
             "plan": [
@@ -184,6 +193,7 @@ def decode(text: str) -> CachedLowering | None:
             ppyir=str(raw.get("ppyir", "")),
             proved={q: tuple(names) for q, names in raw.get("proved", {}).items()},
             remarks=tuple(raw.get("remarks", ())),
+            boundaries={q: _read_signature(s) for q, s in raw.get("boundaries", {}).items()},
         )
     except (KeyError, TypeError, ValueError):
         return None

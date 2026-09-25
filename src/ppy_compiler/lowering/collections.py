@@ -38,7 +38,7 @@ from ..ir import (
 )
 from ..ir.dialects import core
 
-__all__ = ["HANDLE", "CollectionLowering", "Kind", "Shape", "kind_of", "shape_of"]
+__all__ = ["HANDLE", "STR", "CollectionLowering", "Kind", "Shape", "kind_of", "shape_of"]
 
 #: A collection's runtime handle: the address of its header.
 HANDLE = PtrType(I8)
@@ -56,6 +56,8 @@ FAMILY = {
     "HashSet": "map",
     "TreeMap": "tree",
     "TreeSet": "tree",
+    # `list[str]`, the list the string methods hand out.
+    "List": "seq",
 }
 
 #: `floor`, `ceiling`, `lower`, `higher`, as `ppy_tree_bound` numbers them.
@@ -66,7 +68,7 @@ _BOUNDS = {"floor": 0, "ceiling": 1, "lower": 2, "higher": 3}
 class Shape:
     """What one element or value is, word by word."""
 
-    #: "int", "float", "bool", "tuple", "record", "collection", or "object".
+    #: "int", "float", "bool", "str", "tuple", "record", "collection", or "object".
     kind: str
     #: A tuple's items, or a record's fields: scalar kinds.
     parts: tuple[str, ...] = ()
@@ -91,19 +93,25 @@ class Shape:
 
     @property
     def handles(self) -> int:
-        return 1 if self.kind in {"collection", "object"} else 0
+        return 1 if self.kind in {"collection", "object", "str"} else 0
 
     @property
     def reference(self) -> bool:
-        """Held by handle: a collection, or an instance of an object class."""
-        return self.kind in {"collection", "object"}
+        """Held by handle: a collection, a string, or an instance of an object class."""
+        return self.kind in {"collection", "object", "str"}
 
     @property
     def comparable(self) -> bool:
-        """Whether `<` orders it the way the runtime compares words."""
-        return self.kind in {"int", "float", "bool", "tuple"} or (
+        """Whether `<` orders it the way the runtime compares words: a handle
+        word it orders is a string's."""
+        return self.kind in {"int", "float", "bool", "tuple", "str"} or (
             self.kind == "record" and self.ordered
         )
+
+    @property
+    def text(self) -> int:
+        """The words that are strings, as a key's mask."""
+        return 1 if self.kind == "str" else 0
 
     @property
     def integral(self) -> bool:
@@ -124,7 +132,13 @@ class Shape:
     @property
     def spelled(self) -> str:
         """An object's type written out, as a parameter's element spells it."""
+        if self.kind == "str":
+            return "str"
         return str(T.Instance(self.record, self.class_args, (self.record, "object")))
+
+
+#: A string: one handle word.
+STR = Shape("str")
 
 
 @dataclass(frozen=True, slots=True)
@@ -162,6 +176,8 @@ def spelled(kind: Kind) -> str:
         return item.kind
 
     parts = [shape(part) for part in (kind.key, kind.value) if part is not None]
+    if kind.name == "List":
+        return f"list[{', '.join(parts)}]"
     return f"ppy.{kind.name}[{', '.join(parts)}]"
 
 
@@ -183,6 +199,8 @@ def shape_of(t: T.Type, records: Records) -> Shape | None:
         return found if found is not None and found.kind == "object" else None
     if base in (T.INT, T.FLOAT, T.BOOL):
         return Shape(str(base))
+    if base == T.STR:
+        return STR
     if isinstance(base, T.Tuple_) and not base.homogeneous and base.items:
         parts = [T.strip_literal(item) for item in base.items]
         if all(part in (T.INT, T.FLOAT, T.BOOL) for part in parts):
@@ -211,6 +229,9 @@ def shape_of(t: T.Type, records: Records) -> Shape | None:
 def kind_of(t: T.Type, records: Records) -> Kind | None:
     """The collection type `t` is, or None."""
     base = T.strip_literal(t)
+    if isinstance(base, T.Instance) and base.name == "list" and len(base.args) == 1:
+        # A list of strings is the one Python list native code holds.
+        return Kind("List", STR) if T.strip_literal(base.args[0]) == T.STR else None
     if not isinstance(base, T.Instance) or not base.name.startswith("ppy."):
         return None
     name = base.name.removeprefix("ppy.")
@@ -288,13 +309,13 @@ class CollectionLowering:
         """The object class an expression's value is an instance of, if any."""
         if isinstance(node, ast.Name) and node.id in self.collections:
             held = self.collections[node.id].kind
-            return held if isinstance(held, Shape) else None
+            return held if isinstance(held, Shape) and held.kind == "object" else None
         found = shape_of(self._type_of(node), self._records())
         return found if found is not None and found.kind == "object" else None
 
     def _reference_of(self, node: ast.expr) -> Kind | Shape | None:
-        """A collection or an object: what native code holds `node` by handle as."""
-        return self._kind_of(node) or self._object_of(node)
+        """A collection, a string, or an object: what native code holds `node` by handle as."""
+        return self._kind_of(node) or self._object_of(node) or self._string_of(node)  # type: ignore[attr-defined]
 
     def _reference_of_type(self, t: T.Type) -> Kind | Shape | None:
         found = shape_of(t, self._records())
@@ -632,17 +653,21 @@ class CollectionLowering:
         keys = self._word(kind.key.words if kind.key is not None else 0)
         if kind.family == "seq":
             made = self._rt("ppy_seq_new", (count or self._word(0), words, floats, handles), HANDLE)
-            if count is not None and value is not None and value.kind == "collection":
+            if count is not None and value is not None and value.kind in {"collection", "str"}:
                 self._fill_new(made, count, value)
             return made
         if kind.family == "list":
             return self._rt("ppy_list_new", (words, floats, handles), HANDLE)
         symbol = "ppy_map_new" if kind.family == "map" else "ppy_tree_new"
-        return self._rt(symbol, (keys, words, floats, handles), HANDLE)
+        made = self._rt(symbol, (keys, words, floats, handles), HANDLE)
+        assert kind.key is not None
+        if kind.key.text:
+            self._rt("ppy_coll_text_keys", (made, self._word(kind.key.text)), None)
+        return made
 
     def _fill_new(self, made: Value, count: Value, value: Shape) -> None:
-        """`Vec[Vec[int]](n)`: each of the `n` slots its own new, empty collection."""
-        assert value.collection is not None
+        """`Vec[Vec[int]](n)`: each of the `n` slots its own new, empty collection
+        (or, for `Vec[str](n)`, its own empty string)."""
         index = self._alloca(I64, "fill.i")  # type: ignore[attr-defined]
         core.store(self.b, self._word(0), index)
         header = self._block("fill.head")  # type: ignore[attr-defined]
@@ -653,7 +678,10 @@ class CollectionLowering:
         at = core.load(self.b, index)
         core.cond_br(self.b, core.cmp(self.b, "lt", at, count), Successor(body), Successor(done))
         self.b.at_end(body)  # type: ignore[attr-defined]
-        inner = self._new(value.collection)
+        if value.collection is not None:
+            inner = self._new(value.collection)
+        else:
+            inner = self._rt("ppy_str_empty", (), HANDLE)
         address = self._rt("ppy_seq_at", (made, core.load(self.b, index)), HANDLE)
         core.store(self.b, inner, core.cast(self.b, address, PtrType(HANDLE)))
         step = core.add(self.b, core.load(self.b, index), self._word(1), overflow="wrap")
@@ -749,6 +777,12 @@ class CollectionLowering:
             made = self._object_of(node)
             if made is not None:
                 return self._instance(made, node), True
+        made_string = self._string_handle(node)  # type: ignore[attr-defined]
+        if made_string is not None:
+            return made_string
+        listed = self._string_list_handle(node)  # type: ignore[attr-defined]
+        if listed is not None:
+            return listed
         kind = self._constructed(node)
         if kind is not None:
             assert isinstance(node, ast.Call)
@@ -875,9 +909,18 @@ class CollectionLowering:
         assert key is not None
         buffer = self._alloca(key.ir_type(), "key")  # type: ignore[attr-defined]
         address = core.cast(self.b, buffer, _pointer(buffer, I8))
-        value, _ = self._value(node, key)
+        value, owned = self._value(node, key)
         self._write(address, key, value)
+        if owned:
+            # A key made for the lookup: the collection takes its own
+            # reference when it keeps one, so this one goes after the call.
+            self.__dict__.setdefault("_keys_made", []).append(value)
         return address
+
+    def _keys_done(self) -> None:
+        """Let go of the keys made for the runtime calls just emitted."""
+        for value in self.__dict__.pop("_keys_made", []):
+            self._release(value)
 
     # -- operations ------------------------------------------------------------
 
@@ -898,6 +941,7 @@ class CollectionLowering:
         if kind.family not in {"map", "tree"}:
             raise Unsupported(f"`in` asks a map or a set, not a {kind.name}")
         found = self._rt(f"ppy_{kind.family}_find", (handle, self._key(kind, key)))
+        self._keys_done()
         self._done_with(handle, owned)
         return self._found(found)
 
@@ -907,8 +951,10 @@ class CollectionLowering:
         shape = kind.value
         if isinstance(index, ast.Slice) or shape is None:
             raise Unsupported(f"a {kind.name} has no index")
-        if kind.name in {"Vec", "Deque"}:
+        if kind.name in {"Vec", "Deque", "List"}:
             position = self._coerce(self._expr(index), "int")  # type: ignore[attr-defined]
+            if kind.name == "List":
+                position = self._list_position(handle, position)  # type: ignore[attr-defined]
             length = self._rt("ppy_coll_len", (handle,))
             inside = core.bitwise(
                 self.b,
@@ -924,6 +970,8 @@ class CollectionLowering:
                 entry = self._rt(f"ppy_{kind.family}_put", (handle, key))
             else:
                 entry = self._rt(f"ppy_{kind.family}_find", (handle, key))
+            self._keys_done()
+            if value is None:
                 self._require(self._found(entry), "key not found")
             address = self._rt(f"ppy_{kind.family}_value_at", (handle, entry), HANDLE)
         else:
@@ -950,7 +998,10 @@ class CollectionLowering:
             "map": self._keyed_method,
             "tree": self._keyed_method,
         }[kind.family]
+        if kind.name == "List":
+            method = self._string_list_method  # type: ignore[attr-defined]
         found = method(kind, handle, attr, node.args)
+        self._keys_done()
         if found is None:
             raise Unsupported(f"`{kind.name}.{attr}` has no native lowering")
         self._done_with(handle, owned)

@@ -281,6 +281,10 @@ def _input(args: Sequence[Arg]) -> BuiltinResult:
 
 
 def _repr(args: Sequence[Arg]) -> BuiltinResult:
+    # A number's or a string's repr is the builtin's own; anything else may
+    # run a `__repr__` of its class.
+    if args and T.strip_literal(args[0].type) in (T.INT, T.FLOAT, T.BOOL, T.STR):
+        return BuiltinResult(T.STR, Facts(), _ALLOC)
     return BuiltinResult(T.STR, Facts(), _ALLOC | EffectSet.of(Effect.PYTHON_CALLBACK))
 
 

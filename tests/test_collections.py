@@ -190,7 +190,7 @@ def test_the_reference_holds_its_element_type_and_its_index_rules():
         h.push(x)
     assert [h.pop() for _ in range(5)] == [5, 4, 3, 1, 1]
     with pytest.raises(TypeError):
-        ppy.Vec[str]()
+        ppy.Vec[bytes]()
     with pytest.raises(ValueError):
         ppy.Vec[int](-1)
 
@@ -311,7 +311,7 @@ def test_the_checker_names_each_misuse(tmp_path: Path):
 
 
         def a() -> int:
-            v = Vec[str]()
+            v = Vec[bytes]()
             return len(v)
 
 
@@ -350,8 +350,8 @@ def test_the_checker_names_each_misuse(tmp_path: Path):
     errors = [line for line in shown if line.startswith("error[")]
     assert errors[:7] == [
         (
-            "error[E1305]: a `ppy.Vec` holds numbers, tuples of numbers, dataclasses, "
-            "or collections, not `str`"
+            "error[E1305]: a `ppy.Vec` holds numbers, strings, tuples of numbers, "
+            "dataclasses, or collections, not `bytes`"
         ),
         "error[E1301]: a `ppy.Heap` is read by `peek` and `pop`",
         "error[E1302]: a `ppy.Heap` is read by `peek` and `pop`, not iterated",
@@ -631,7 +631,7 @@ def test_the_checker_names_misuse_of_keyed_collections(tmp_path: Path):
     shown = (checked.stdout + checked.stderr).splitlines()
     errors = [line for line in shown if line.startswith("error[")]
     assert errors == [
-        "error[E1305]: a `ppy.HashMap` has `int` or int-tuple keys, not `float`",
+        "error[E1305]: a `ppy.HashMap` has `int`, `str`, or int-tuple keys, not `float`",
         "error[E1301]: a `ppy.HashSet` is read by its methods",
         "error[E1305]: a `ppy.TreeMap` takes a key and a value type",
         "error[E1301]: a `float` does not fit an `int` element",

@@ -115,6 +115,14 @@ class LoweredFunction:
     #: function. Native callers use the direct symbol either way.
     exposed: bool = True
     exposure_reason: str = ""
+    #: The entry Python calls, when it is a thunk around `signature`'s symbol
+    #: (strings cross as UTF-8 bytes there, as handles here).
+    boundary: NativeSignature | None = None
+
+    @property
+    def python(self) -> NativeSignature:
+        """The signature the Python boundary binds."""
+        return self.boundary or self.signature
 
 
 @dataclass(slots=True)
@@ -227,6 +235,15 @@ def _collection_param(
     which is what an argument is matched against.
     """
     base = T.strip_literal(t)
+    if base == T.STR:
+        return NativeParam(name, "handle", "str", class_name="str")
+    if (
+        isinstance(base, T.Instance)
+        and base.name == "list"
+        and len(base.args) == 1
+        and T.strip_literal(base.args[0]) == T.STR
+    ):
+        return NativeParam(name, "handle", "list[str]", class_name="list")
     if isinstance(base, T.Union_):
         members = [m for m in base.members if m != T.NONE]
         if len(members) != 1 or len(members) == len(base.members):
@@ -391,7 +408,8 @@ def should_lower_native(
         # The boundary hands back a value; a function with none to hand
         # back is native code's to call -- a thread's body, a helper.
         return False, "returns nothing, which has no Python boundary"
-    if _collection_param("", info.ret, layouts) is not None:
+    returned = _collection_param("", info.ret, layouts)
+    if returned is not None and returned.element != "str":
         return False, "returns a collection or an object, which native callers receive by handle"
     for param in info.params:
         native = _native_param(param.name, param.type, layouts)
@@ -399,7 +417,7 @@ def should_lower_native(
             # A machine address has no Python object to come from, whatever
             # the directives ask: the function is native code's to call.
             return False, "takes a native pointer, which has no Python boundary"
-        if native is not None and native.is_handle:
+        if native is not None and native.is_handle and native.element != "str":
             return False, "takes a collection or an object, which native callers pass by handle"
     for name in _EXPOSURE_DIRECTIVES:
         if info.directive(name) is not None:

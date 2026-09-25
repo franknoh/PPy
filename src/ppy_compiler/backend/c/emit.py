@@ -452,6 +452,8 @@ class _ModuleEmitter:
         self.entry = entry
         self.target = target
         self.unit = _Unit()
+        #: The shims whose needs are being carried in, against a cycle.
+        self._carrying: set[str] = set()
         self.readable = readable and entry is not None
         self.int32 = self.readable and module.attributes.get("ppy.source_int_width") == 32
         if self.int32:
@@ -656,8 +658,14 @@ class _ModuleEmitter:
             raise HeaderOnlyError(
                 f"`{name}` keeps state the process owns; a header-only unit cannot carry it"
             )
+        if name in self.unit.shims or name in self._carrying:
+            # Carried, or being carried: the runtime's functions may call each
+            # other in a cycle (a collection lets go of the strings it keys by).
+            return
+        self._carrying.add(name)
         for needed in described.needs:
             self.shim(needed)
+        self._carrying.discard(name)
         self.unit.headers.update(described.headers)
         self.unit.shims.setdefault(name)
 
@@ -856,10 +864,19 @@ class _ModuleEmitter:
             for helper in self.unit.helpers.values()
         )
         if self.unit.shims:
-            lines.extend(
-                definition(name, "static inline " if self.header_only else "static ")
+            storage = "static inline " if self.header_only else "static "
+            # A shim in a cycle calls one defined after it: that one is declared first.
+            order = {name: position for position, name in enumerate(self.unit.shims)}
+            later = {
+                needed
                 for name in self.unit.shims
+                for needed in SHIMS[name].needs
+                if order.get(needed, -1) > order[name]
+            }
+            lines.extend(
+                SHIMS[name].prototype(name, storage) + ";" for name in self.unit.shims if name in later
             )
+            lines.extend(definition(name, storage) for name in self.unit.shims)
         if self.unit.externs:
             if cpp:
                 lines.append('extern "C" {')

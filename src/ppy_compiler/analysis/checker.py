@@ -4821,14 +4821,14 @@ class _Checker:
         keyed = canonical in C.KEYED
         if keyed and not self._collection_key(resolved[0]):
             self._error(
-                "E1305", f"a `{canonical}` has `int` or int-tuple keys, not `{resolved[0]}`", node
+                "E1305", f"a `{canonical}` has `int`, `str`, or int-tuple keys, not `{resolved[0]}`", node
             )
         element = resolved[-1]
         if not (keyed and len(resolved) == 1) and not self._collection_element(element):
             self._error(
                 "E1305",
-                f"a `{canonical}` holds numbers, tuples of numbers, dataclasses, or "
-                f"collections, not `{element}`",
+                f"a `{canonical}` holds numbers, strings, tuples of numbers, dataclasses, "
+                f"or collections, not `{element}`",
                 node,
             )
         counted = canonical == "ppy.Vec"
@@ -4851,9 +4851,10 @@ class _Checker:
         return Binding(C.instance(canonical, *resolved))
 
     def _collection_element(self, t: T.Type) -> bool:
-        """What a collection may hold: a number, a tuple of them, a dataclass, a collection."""
+        """What a collection may hold: a number, a string, a tuple of numbers, a
+        dataclass, a collection."""
         base = T.strip_literal(t)
-        if base in (T.INT, T.FLOAT, T.BOOL, T.UNKNOWN) or C.is_collection(base):
+        if base in (T.INT, T.FLOAT, T.BOOL, T.STR, T.UNKNOWN) or C.is_collection(base):
             return True
         if isinstance(base, T.TypeVar_):
             # A generic's parameter: each instantiation is checked as it is made.
@@ -4866,9 +4867,9 @@ class _Checker:
         return False
 
     def _collection_key(self, t: T.Type) -> bool:
-        """What a map or a set is keyed by: an `int`, or a tuple of them."""
+        """What a map or a set is keyed by: an `int` or a `str`, or a tuple of `int`."""
         base = T.strip_literal(t)
-        if base in (T.INT, T.UNKNOWN) or isinstance(base, T.TypeVar_):
+        if base in (T.INT, T.STR, T.UNKNOWN) or isinstance(base, T.TypeVar_):
             return True
         return (
             isinstance(base, T.Tuple_)

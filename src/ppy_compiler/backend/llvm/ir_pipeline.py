@@ -98,6 +98,7 @@ def lower_module_via_ir(
                 entry.signature.native,
                 exposed=entry.exposed,
                 exposure_reason=entry.exposure_reason,
+                boundary=entry.boundary,
             )
             for name, entry in lowered.functions.items()
             if entry.signature.native is not None
