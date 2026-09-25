@@ -23,7 +23,8 @@ def slowest_paths(lines):
         total[fields[2]] += float(fields[3].removeprefix("took=").removesuffix("ms"))
         count[fields[2]] += 1
     return "\n".join(
-        f"{path:<16}{total[path] / count[path]:>9.2f} ms  x{count[path]:,}" for path in sorted(total)
+        f"{path:<16}{total[path] / count[path]:>9.2f} ms  x{count[path]:,}"
+        for path in sorted(total)
     )
 
 

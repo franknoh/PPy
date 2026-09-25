@@ -7,11 +7,11 @@ LINES = 200000
 
 
 def make_log(count: int) -> Vec[str]:
-    levels = ["INFO", "WARN", "ERROR", "DEBUG"]
+    names = ["INFO", "WARN", "ERROR", "DEBUG"]
     paths = ["/api/users", "/api/orders", "/static/app.js", "/health", "/api/search"]
     lines = Vec[str]()
     for i in range(count):
-        level = levels[(i * 7) % 4]
+        level = names[(i * 7) % 4]
         path = paths[(i * 13) % 5]
         took = (i * 37) % 900 + 0.25
         lines.push(f"2026-09-{i % 28 + 1:02d} {level:<5} {path} took={took:.2f}ms user=u{i % 997}")
@@ -30,10 +30,10 @@ def slowest_paths(lines: Vec[str]) -> str:
     order = TreeMap[str, float]()
     for path in total:
         order[path] = total[path] / count[path]
-    report = ""
+    shown = ""
     for path in order:
-        report += f"{path:<16}{order[path]:>9.2f} ms  x{count[path]:,}\n"
-    return report.rstrip()
+        shown += f"{path:<16}{order[path]:>9.2f} ms  x{count[path]:,}\n"
+    return shown.rstrip()
 
 
 def levels(lines: Vec[str]) -> str:
