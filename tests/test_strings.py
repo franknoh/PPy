@@ -229,7 +229,8 @@ PROGRAMS = {
             "extremes",
         ],
     ),
-    "reading": (READING, "3\nThe cat saw\nthe DOG\n\nalpha\n  beta gamma\n", ["tally"]),
+    # Reading input is native in a standalone build; under `ppy run` it is IO.
+    "reading": (READING, "3\nThe cat saw\nthe DOG\n\nalpha\n  beta gamma\n", []),
     "lists": (LISTS, "", ["build", "run"]),
 }
 
@@ -520,6 +521,8 @@ def test_the_runtime_answers_as_cpython_does(tmp_path: Path):
         out = word(0)
         status = lib.ppy_str_to_int(make(text), base, ctypes.byref(out))
         try:
-            assert status == 0 and out.value == int(text, base)
+            wanted = int(text, base)
         except ValueError:
-            assert status == 1
+            assert status == 1, text
+        else:
+            assert (status, out.value) == (0, wanted), text
