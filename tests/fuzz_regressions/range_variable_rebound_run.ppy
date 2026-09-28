@@ -1,0 +1,23 @@
+# fuzz: path=run seed=106 (a loop body assigning its range variable looped forever natively)
+def rebinds(n: int) -> int:
+    total = 0
+    for i in range(n):
+        total += i
+        i -= i
+        total += i * 10
+    return total
+
+
+def stepped(n: int) -> int:
+    total = 0
+    for i in range(n, 0, -2):
+        i = i * 3
+        total = total * 7 + i
+    return total + i
+
+
+def main() -> None:
+    print(rebinds(4), stepped(9))
+
+
+main()

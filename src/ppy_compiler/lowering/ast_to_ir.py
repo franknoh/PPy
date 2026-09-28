@@ -1809,7 +1809,13 @@ class _FunctionLowering(CollectionApiLowering, StringLowering):
             slot = self._alloca(I64, name)
             self.slots[name] = slot
             self.tuples.pop(name, None)
-        core.store(self.b, start, slot)
+        # A body that assigns the loop variable does not steer the loop in
+        # Python: `range` hands out the next value whatever the name holds.
+        # The count then lives in a slot of its own, and each iteration
+        # binds the name from it.
+        rebound = _rebinds(node.body, name)
+        counter = self._alloca(I64, f"{name}.count") if rebound else slot
+        core.store(self.b, start, counter)
 
         header = self._block("for.head")
         body = self._block("for.body")
@@ -1819,22 +1825,24 @@ class _FunctionLowering(CollectionApiLowering, StringLowering):
         assert loop_setup is not None
         core.br(self.b, Successor(header))
         self.b.at_end(header)
-        current = core.load(self.b, slot)
+        current = core.load(self.b, counter)
         condition = core.cmp(self.b, "gt" if step_value < 0 else "lt", current, stop)
         core.cond_br(self.b, condition, Successor(body), Successor(done))
         self.b.at_end(body)
+        if rebound:
+            core.store(self.b, current, slot)
         self._loops.append((latch, done))
         self._body(node.body)
         self._loops.pop()
         if self._open():
             core.br(self.b, Successor(latch))
         self.b.at_end(latch)
-        value = core.load(self.b, slot)
+        value = core.load(self.b, counter)
         if site is not None:
             self._ranges[value] = self._induction[name]
         if self.prover is not None:
             self._term_for_load(value, node.target)
-        core.store(self.b, self._checked_binary(value, step, "add"), slot)
+        core.store(self.b, self._checked_binary(value, step, "add"), counter)
         core.br(self.b, Successor(header))
         self.b.at_end(done)
         if site is not None:
@@ -2008,6 +2016,12 @@ class _FunctionLowering(CollectionApiLowering, StringLowering):
         match node:
             case ast.Constant(value=bool() as value):
                 return core.const(self.b, value, BOOL)
+            case ast.UnaryOp(op=ast.USub(), operand=ast.Constant(value=int() as value)) if (
+                not isinstance(value, bool) and value == 1 << 63
+            ):
+                # `-9223372036854775808` is `-(9223372036854775808)` to the
+                # parser; the literal alone is past a word, the value is not.
+                return core.const(self.b, -(1 << 63), I64)
             case ast.Constant(value=int() as value):
                 if not -(1 << 63) <= value < (1 << 63):
                     raise Unsupported("an integer literal exceeds the native machine range")

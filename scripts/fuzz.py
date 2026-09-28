@@ -42,7 +42,8 @@ def _paths(text: str) -> tuple[str, ...]:
 
 def _still_fails(path: str, reason: str):  # type: ignore[no-untyped-def]
     def check(source: str) -> bool:
-        results = run_program(source, ("python", path))
+        # A hang is found again well inside the fuzzing timeout.
+        results = run_program(source, ("python", path), timeout=30.0)
         reference = results["python"]
         if "NameError" in reference.last_error or "SyntaxError" in reference.last_error:
             return False
@@ -63,7 +64,7 @@ def fuzz(seed: int, count: int, paths: tuple[str, ...], shrink: bool) -> int:
     started = time.monotonic()
     for current in range(seed, seed + count):
         source = generate_program(current)
-        results = run_program(source, paths)
+        results = run_program(source, paths, timeout=60.0)
         mismatches = compare(results)
         if not mismatches:
             print(f"ok    seed {current}", flush=True)
@@ -79,7 +80,7 @@ def fuzz(seed: int, count: int, paths: tuple[str, ...], shrink: bool) -> int:
         first = mismatches[0]
         reduced = source
         if shrink and first.reason != "did not build":
-            reduced = minimize(source, _still_fails(first.path, first.reason))
+            reduced = minimize(source, _still_fails(first.path, first.reason), attempts=60)
         saved = _save(current, first.path, first.reason, reduced)
         print(f"      saved {saved.relative_to(REGRESSIONS.parent.parent)}", flush=True)
     elapsed = time.monotonic() - started

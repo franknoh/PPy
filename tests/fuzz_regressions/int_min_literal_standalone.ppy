@@ -1,0 +1,10 @@
+# fuzz: path=standalone seed=100 (did not build: -9223372036854775808 read as a literal past a word)
+def lowest(x: int) -> int:
+    return min(x, -9223372036854775808)
+
+
+def main() -> None:
+    print(lowest(5), lowest(-9223372036854775807))
+
+
+main()
