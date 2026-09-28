@@ -90,6 +90,7 @@ from .abi import signature_from_ir
 from .collection_api import CollectionApiLowering
 from .collections import HANDLE, Held
 from .exceptions import ExceptionLowering, uses_exceptions
+from .generators import GeneratorLowering
 from .strings import StringLowering
 
 __all__ = ["Frontend", "Lowered", "lower_function", "lower_module_to_ir"]
@@ -1041,7 +1042,9 @@ class _GuardSite:
         core.br(self.b, Successor(setup))
 
 
-class _FunctionLowering(ExceptionLowering, CollectionApiLowering, StringLowering):
+class _FunctionLowering(
+    ExceptionLowering, GeneratorLowering, CollectionApiLowering, StringLowering
+):
     """Lowers one function body."""
 
     def __init__(
@@ -1336,6 +1339,8 @@ class _FunctionLowering(ExceptionLowering, CollectionApiLowering, StringLowering
                     raise Unsupported("`continue` outside a loop")
                 self._leave_for_loop()
                 core.br(self.b, Successor(self._loops[-1][0]))
+            case ast.Expr(value=ast.Yield() | ast.YieldFrom()):
+                self._yield_statement(node.value)
             case ast.Try():
                 self._try(node)
             case ast.Raise():
@@ -1361,6 +1366,8 @@ class _FunctionLowering(ExceptionLowering, CollectionApiLowering, StringLowering
                 raise Unsupported(f"`{type(node).__name__}` has no native lowering")
 
     def _return(self, node: ast.Return) -> None:
+        if self._generator_return(node):
+            return
         if (
             node.value is None
             or (isinstance(node.value, ast.Constant) and node.value.value is None)
@@ -1756,6 +1763,8 @@ class _FunctionLowering(ExceptionLowering, CollectionApiLowering, StringLowering
             self.b.at_end(dead)
 
     def _for(self, node: ast.For) -> None:
+        if self._for_generator(node):
+            return
         if self._is_walk(node.iter):
             self._for_collection(node)
             return
@@ -2460,6 +2469,10 @@ class _FunctionLowering(ExceptionLowering, CollectionApiLowering, StringLowering
             reduced = self._reduction(target, node)
             if reduced is not None:
                 return reduced
+        if target in {"any", "all", "next"}:
+            consumed = self._generator_consumer(target, node)
+            if consumed is not None:
+                return consumed
         if target in {"len", "sum", "min", "max"} and len(node.args) == 1:
             argument = node.args[0]
             if isinstance(argument, ast.Name) and argument.id in self.buffers:

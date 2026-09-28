@@ -132,6 +132,24 @@ class ExceptionLowering:
         for slot in getattr(self, "_exception_slots", ()):
             self._release(core.load(self.b, slot))  # type: ignore[attr-defined]
 
+    def _reached_block(self, block: Block) -> bool:
+        """Whether some block branches to `block`. One nothing reaches must not
+        branch on, or what it branches to would seem to escape the entry."""
+        registry = self.frontend.registry  # type: ignore[attr-defined]
+        return any(
+            block in other.successors_for(registry)
+            for other in self.function.body.blocks  # type: ignore[attr-defined]
+            if other is not block
+        )
+
+    def _seal(self, block: Block) -> bool:
+        """Close `block` where nothing reaches it; whether it was."""
+        if self._reached_block(block):
+            return False
+        self.b.at_end(block)  # type: ignore[attr-defined]
+        core.unreachable(self.b)  # type: ignore[attr-defined]
+        return True
+
     def _raise_target(self) -> Block:
         if self._frames:
             return self._frames[-1].target
@@ -360,6 +378,10 @@ class ExceptionLowering:
             self._body(node.orelse)  # type: ignore[attr-defined]
             self._frames.pop()
             self._leave_normally(final, after)
+        if self._seal(dispatch):
+            # Nothing in the body raises: no handler runs.
+            self._finish_try(unwind, final, after)
+            return
         self.b.at_end(dispatch)  # type: ignore[attr-defined]
         tag = self._rt("ppy_exc_pending_tag", ())  # type: ignore[attr-defined]
         caught_all = False
@@ -388,13 +410,18 @@ class ExceptionLowering:
                 break
         if not caught_all:
             core.br(self.b, Successor(unwind))  # type: ignore[attr-defined]
-        # What no handler took, or a handler or `else` raised: `finally`, then on.
-        self.b.at_end(unwind)  # type: ignore[attr-defined]
-        saved = self._rt("ppy_exc_take", (), HANDLE)  # type: ignore[attr-defined]
-        self._body(final)  # type: ignore[attr-defined]
-        if self._open():  # type: ignore[attr-defined]
-            self._rt("ppy_exc_raise", (saved,), None)  # type: ignore[attr-defined]
-            self._go_raise()
+        self._finish_try(unwind, final, after)
+
+    def _finish_try(self, unwind: Block, final: list[ast.stmt], after: Block) -> None:
+        """What no handler took, or a handler or `else` raised: `finally`, then on;
+        and the code after the `try`, where anything reaches it."""
+        if not self._seal(unwind):
+            self.b.at_end(unwind)  # type: ignore[attr-defined]
+            saved = self._rt("ppy_exc_take", (), HANDLE)  # type: ignore[attr-defined]
+            self._body(final)  # type: ignore[attr-defined]
+            if self._open():  # type: ignore[attr-defined]
+                self._rt("ppy_exc_raise", (saved,), None)  # type: ignore[attr-defined]
+                self._go_raise()
         self.b.at_end(after)  # type: ignore[attr-defined]
         if id(after) not in self._reached:
             # Every way through the `try` returns or raises: nothing follows it.

@@ -177,7 +177,7 @@ def standalone_ir(  # type: ignore[no-untyped-def]
         frontend.native_exceptions = catching
         lowered = frontend.build({q: f for q, f in functions.items() if f[0].module == name})
         for qualname, reason in sorted(lowered.rejected.items()):
-            if qualname in frontend.generics or called_back_only(functions[qualname][0]):
+            if qualname in frontend.generics or _generic(bundle, functions[qualname][0]):
                 continue  # A generic is lowered where a caller instantiates it.
             return _fail(reporter, _chain(reached_from, qualname, reason))
         modules.append(lowered.module)
@@ -306,13 +306,19 @@ def _binds_a_constant(statement, constants: dict) -> bool:  # type: ignore[no-un
 def _generic(bundle, info) -> bool:  # type: ignore[no-untyped-def]
     """A generic function, or a method of a generic class: lowered per instantiation,
     or an `__eq__(self, other: object)`, lowered with `other` an instance of its
-    class where a collection calls it back."""
+    class where a collection calls it back, or a generator, lowered into each
+    loop that consumes it."""
     owner = bundle.symbols.classes.get(info.owner) if info.owner else None
     return (
         bool(info.type_params)
         or (owner is not None and bool(owner.type_params))
         or called_back_only(info)
+        or info.is_generator
     )
+
+
+#: The annotations a generator is written with.
+_ITERATOR_NAMES = frozenset({"Iterator", "Iterable", "Generator"})
 
 
 def _exception(name: str) -> bool:
@@ -412,6 +418,9 @@ def _module_shape(
             if names == "ppy" or listed == ["ppy"]:
                 continue
             if names == "dataclasses" and set(listed) <= {"dataclass", "field"}:
+                continue
+            # What a generator's annotation names; nothing runs for it natively.
+            if names in {"collections.abc", "typing"} and set(listed) <= _ITERATOR_NAMES:
                 continue
             # `gc.collect()` is the collections runtime's collector natively.
             if (
