@@ -1,5 +1,7 @@
 # Changelog
 
+## 0.5.0 — unreleased
+
 ## 0.4.2 — 2026-09-28
 
 - Fixed: `int(x)` of a float in native code returned -2**63 on x86 for NaN,
