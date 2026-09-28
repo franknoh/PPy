@@ -2072,6 +2072,16 @@ class _FunctionLowering(ContainerLowering, StringLowering):
                     if isinstance(node.slice, ast.Slice):
                         raise Unsupported("slicing a buffer allocates, so it stays boxed")
                     return self._buffer_element(node.value.id, self._expr(node.slice))
+                if isinstance(node.slice, ast.Constant) and isinstance(node.slice.value, int):
+                    # `pairs[-1][1]`: an item of a tuple an expression gave.
+                    held = self._expr(node.value)
+                    if isinstance(held.type, TupleType):
+                        count = len(held.type.items)
+                        index = (
+                            node.slice.value + count if node.slice.value < 0 else node.slice.value
+                        )
+                        if 0 <= index < count:
+                            return core.tuple_extract(self.b, held, index)
                 raise Unsupported("subscripting this value has no native lowering")
         raise Unsupported(f"`{type(node).__name__}` has no native lowering")
 

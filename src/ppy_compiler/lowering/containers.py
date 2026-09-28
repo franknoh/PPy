@@ -231,19 +231,21 @@ class ContainerLowering(CollectionApiLowering):
                 target=generator.target, iter=generator.iter, body=[statement], orelse=[]
             )
             names |= {n.id for n in ast.walk(generator.target) if isinstance(n, ast.Name)}
-        for spelled in names:
-            if spelled in self.slots or spelled in self.collections:  # type: ignore[attr-defined]
-                # Python keeps a comprehension's names apart from the function's;
-                # one shared slot would change what the function's name holds.
-                raise Unsupported(f"the comprehension's `{spelled}` shadows a local")
+        # Python keeps a comprehension's names apart from the function's: the
+        # function's own are set aside while it runs and back after, untouched.
+        slots = self.slots  # type: ignore[attr-defined]
+        outer_slots = {n: slots.pop(n) for n in names if n in slots}
+        outer_held = {n: self.collections.pop(n) for n in names if n in self.collections}
         for fresh in (statement, *ast.walk(statement)):
             ast.copy_location(fresh, node)
         self._statement(statement)  # type: ignore[attr-defined]
         for spelled in names:
-            self.slots.pop(spelled, None)  # type: ignore[attr-defined]
+            slots.pop(spelled, None)
             held = self.collections.pop(spelled, None)
             if held is not None:
                 self._release(core.load(self.b, held.slot))
+        slots.update(outer_slots)
+        self.collections.update(outer_held)
         held = self.collections.pop(name)
         return core.load(self.b, held.slot)
 
@@ -409,6 +411,24 @@ class ContainerLowering(CollectionApiLowering):
                 raise Unsupported("an element read from a temporary collection outlives it")
             self._release(handle)
         return found
+
+    def _element_address(self, kind: Kind, handle: Value, index: ast.expr, *, write: bool) -> Value:
+        if kind.name == "Dict":
+            return super()._element_address(self._alias(kind), handle, index, write=write)
+        if kind.name != "List":
+            return super()._element_address(kind, handle, index, write=write)
+        position = self._coerce(self._expr(index), "int")  # type: ignore[attr-defined]
+        position = self._list_position(handle, position)  # type: ignore[attr-defined]
+        length = self._rt("ppy_coll_len", (handle,))
+        inside = core.bitwise(
+            self.b,
+            "and",
+            core.cmp(self.b, "ge", position, self._word(0)),
+            core.cmp(self.b, "lt", position, length),
+        )
+        what = "list assignment index" if write else "list index"
+        self._require(inside, f"{what} out of range", f"IndexError: {what} out of range")
+        return self._rt("ppy_seq_at", (handle, position), HANDLE)
 
     def _delete(self, node: ast.Delete) -> None:
         """`del xs[i]` and `del d[k]`."""

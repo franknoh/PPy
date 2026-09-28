@@ -2887,7 +2887,15 @@ class _Checker:
             ("list", "index"): T.Callable_((T.Param("value", element),), T.INT, "list.index"),
             ("list", "count"): T.Callable_((T.Param("value", element),), T.INT, "list.count"),
             ("list", "clear"): T.Callable_((), T.NONE, "list.clear"),
-            ("list", "sort"): T.Callable_((), T.NONE, "list.sort"),
+            ("list", "remove"): T.Callable_((T.Param("value", element),), T.NONE, "list.remove"),
+            ("list", "sort"): T.Callable_(
+                (
+                    T.Param(C.KEY_PARAMETER, C.sort_key(element), True, "keyword_only"),
+                    T.Param("reverse", T.BOOL, True, "keyword_only"),
+                ),
+                T.NONE,
+                "list.sort",
+            ),
             ("list", "reverse"): T.Callable_((), T.NONE, "list.reverse"),
             ("list", "copy"): T.Callable_((), base, "list.copy"),
             ("dict", "get"): T.Callable_(
@@ -2947,6 +2955,15 @@ class _Checker:
             ("set", "discard"): T.Callable_((T.Param("value", element),), T.NONE, "set.discard"),
             ("set", "remove"): T.Callable_((T.Param("value", element),), T.NONE, "set.remove"),
             ("set", "union"): T.Callable_((), base, "set.union"),
+            ("set", "intersection"): T.Callable_((), base, "set.intersection"),
+            ("set", "difference"): T.Callable_((), base, "set.difference"),
+            ("set", "symmetric_difference"): T.Callable_((), base, "set.symmetric_difference"),
+            ("set", "issubset"): T.Callable_((), T.BOOL, "set.issubset"),
+            ("set", "issuperset"): T.Callable_((), T.BOOL, "set.issuperset"),
+            ("set", "isdisjoint"): T.Callable_((), T.BOOL, "set.isdisjoint"),
+            ("set", "update"): T.Callable_((), T.NONE, "set.update"),
+            ("set", "clear"): T.Callable_((), T.NONE, "set.clear"),
+            ("set", "copy"): T.Callable_((), base, "set.copy"),
             ("tuple", "count"): T.Callable_((), T.INT, "tuple.count"),
             ("tuple", "index"): T.Callable_((), T.INT, "tuple.index"),
         }
@@ -3222,11 +3239,14 @@ class _Checker:
         return value
 
     def _sort_key_context(self, callee: Binding, keyword: ast.keyword) -> tuple[T.Type, ...] | None:
-        """A collection's `sort(key=lambda x: ...)`: the lambda's parameter is an element."""
+        """A collection's or a list's `sort(key=lambda x: ...)`: the lambda's parameter
+        is an element."""
         wanted = callee.type
         if keyword.arg != C.KEY_PARAMETER or not isinstance(keyword.value, ast.Lambda):
             return None
-        if not isinstance(wanted, T.Callable_) or not wanted.qualname.startswith("ppy."):
+        if not isinstance(wanted, T.Callable_) or not (
+            wanted.qualname.startswith("ppy.") or wanted.qualname == "list.sort"
+        ):
             return None
         parameter = next((p for p in wanted.params if p.name == C.KEY_PARAMETER), None)
         if parameter is None or not isinstance(parameter.type, T.Callable_):
@@ -5765,9 +5785,9 @@ class _Checker:
             base = T.strip_literal(members[0]) if len(members) == 1 else base
         if not isinstance(base, T.Instance):
             return False
-        if base.name == "list" and len(base.args) == 1 and T.strip_literal(base.args[0]) == T.STR:
-            # A list of strings is a handle natively too, passed between
-            # native functions and never across the boundary.
+        if base.name in {"list", "dict", "set"} and base.args:
+            # Python's own containers are handles natively too: a write
+            # through an element lands in what the root variable holds.
             return True
         info = self.project.classes.get(base.name)
         return C.is_collection(base) or (info is not None and not info.is_pydantic)
