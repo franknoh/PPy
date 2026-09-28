@@ -508,3 +508,34 @@ def test_what_native_code_does_not_take_stays_in_python(tmp_path: Path):
     for function in ("arguments", "chained", "stepped"):
         explained = _run(tmp_path, "-m", "ppy_compiler", "explain", f"prog.{function}")
         assert "llvm backend: native" not in explained.stdout, (function, explained.stdout)
+
+
+def test_a_function_returning_str_binds_without_the_collection_crossing():
+    """A `str` result comes back as text: the binding calls the native code,
+    as a `ppy build` library's does, rather than running the Python body."""
+    import ctypes  # pylint: disable=import-outside-toplevel
+
+    from ppy_runtime.abi import TEXT, NativeParam, NativeSignature
+    from ppy_runtime.binding import bind
+
+    libc = ctypes.CDLL(None)
+    libc.strdup.restype = ctypes.c_void_p
+    libc.strdup.argtypes = (ctypes.c_char_p,)
+
+    @ctypes.CFUNCTYPE(
+        ctypes.c_int32,
+        ctypes.c_int64,
+        ctypes.POINTER(ctypes.c_void_p),
+        ctypes.POINTER(ctypes.c_int64),
+    )
+    def native(n, address, length):  # type: ignore[no-untyped-def]
+        text = f"native {n}".encode()
+        address[0] = libc.strdup(text)
+        length[0] = len(text)
+        return 0
+
+    signature = NativeSignature(
+        "m.f", "ppy_m_f", (NativeParam("n", "int"),), (TEXT,), returned="str"
+    )
+    binding = bind(signature, ctypes.cast(native, ctypes.c_void_p).value, lambda n: f"python {n}")
+    assert binding.wrapper(3) == "native 3"

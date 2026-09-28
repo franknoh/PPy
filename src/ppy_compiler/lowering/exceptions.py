@@ -91,7 +91,7 @@ class _Frame:
     names: list[str] = field(default_factory=list)
 
 
-class ExceptionLowering:
+class ExceptionLowering:  # pylint: disable=attribute-defined-outside-init
     """The exception half of lowering one function; mixed into `_FunctionLowering`."""
 
     # -- setup ------------------------------------------------------------------

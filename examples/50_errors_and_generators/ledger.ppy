@@ -4,8 +4,8 @@ from collections.abc import Iterator
 
 from ppy import HashMap, Vec
 
-ROWS = 1_500_000
-LIMIT = 200_000
+ROWS = 500_000
+LIMIT = 1_000_000
 
 
 class BadRow(ValueError):

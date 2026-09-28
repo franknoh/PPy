@@ -76,7 +76,7 @@ class _Inline:
     owned: list[Value] = field(default_factory=list)
 
 
-class GeneratorLowering:
+class GeneratorLowering:  # pylint: disable=attribute-defined-outside-init
     """The generator half of lowering one function; mixed into `_FunctionLowering`."""
 
     # -- scopes -----------------------------------------------------------------
