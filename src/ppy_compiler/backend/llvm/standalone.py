@@ -141,6 +141,7 @@ def standalone_ir(  # type: ignore[no-untyped-def]
     """
     from ...ir.linker import link
     from ...lowering.ast_to_ir import Frontend
+    from ...lowering.exceptions import uses_exceptions
     from .ir_pipeline import optimize
 
     program = _program(bundle, reporter, entry, project_modules=True)
@@ -168,8 +169,12 @@ def standalone_ir(  # type: ignore[no-untyped-def]
         if not _generic(bundle, info)
     }
     modules = []
+    # A check in one module is caught in another: every module's checks are
+    # exceptions where any module raises or catches.
+    catching = uses_exceptions([node for _info, _function, node in functions.values()])
     for name, frontend in frontends.items():
         frontend.imports = signatures.get
+        frontend.native_exceptions = catching
         lowered = frontend.build({q: f for q, f in functions.items() if f[0].module == name})
         for qualname, reason in sorted(lowered.rejected.items()):
             if qualname in frontend.generics or called_back_only(functions[qualname][0]):
@@ -259,9 +264,9 @@ def build_standalone(  # type: ignore[no-untyped-def]
     collect = "ppy_collections" in tuple(getattr(result, "libraries", ()))
     main_c.write_text(
         f"#include <stdint.h>\n#include <stdio.h>\n\nint32_t {symbol}(int64_t *out);\n"
-        + ("int64_t ppy_coll_collect(void);\n" if collect else "")
+        + ("int64_t ppy_coll_collect(void);\nvoid ppy_exc_report(void);\n" if collect else "")
         + "\n"
-        + program_main(symbol, collect=collect),
+        + program_main(symbol, collect=collect, raised=collect),
         encoding="utf-8",
     )
     destination = build_directory / entry.stem
@@ -310,6 +315,13 @@ def _generic(bundle, info) -> bool:  # type: ignore[no-untyped-def]
     )
 
 
+def _exception(name: str) -> bool:
+    """A builtin exception a class may derive from: native code raises it."""
+    from ...analysis import types as T
+
+    return "Exception" in T.BUILTIN_MRO.get(name, ())
+
+
 def _field_dataclass(statement, classes: frozenset[str] = frozenset()) -> bool:  # type: ignore[no-untyped-def]
     """A class a standalone program can hold: at most one base, a class defined
     before it in the module (generic or not), `@dataclass` or nothing, and a body of methods,
@@ -323,7 +335,8 @@ def _field_dataclass(statement, classes: frozenset[str] = frozenset()) -> bool: 
     # A generic base is named with its arguments: `Stack[int]`, `Stack[T]`.
     named = [base.value if isinstance(base, ast.Subscript) else base for base in statement.bases]
     if len(named) > 1 or any(
-        not isinstance(base, ast.Name) or base.id not in classes for base in named
+        not isinstance(base, ast.Name) or (base.id not in classes and not _exception(base.id))
+        for base in named
     ):
         return False
     decorated = [
@@ -342,7 +355,7 @@ def _field_dataclass(statement, classes: frozenset[str] = frozenset()) -> bool: 
             item.value is None or isinstance(item.value, ast.Constant) or _field_call(item.value)
         )
         method = isinstance(item, ast.FunctionDef)
-        if not (docstring or field or method):
+        if not (docstring or field or method or isinstance(item, ast.Pass)):
             return False
     return True
 
