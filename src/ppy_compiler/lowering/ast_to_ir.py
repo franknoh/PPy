@@ -1217,6 +1217,24 @@ class _FunctionLowering(CollectionApiLowering, StringLowering):
         self._entry_loads[name] = value
         return value
 
+    def _reached(self, block: Block) -> bool:
+        """Whether some branch of the function goes to `block`."""
+        for other in self.function.body.blocks:
+            for op in other.operations:
+                if any(successor.block is block for successor in op.successors):
+                    return True
+        return False
+
+    def _dead_latch(self, latch: Block) -> bool:
+        """A loop's latch no edge reaches, every way through the body having
+        returned: it ends unreachable, not in a branch back to the loop's head,
+        which would make the head appear to have a way in that no path takes."""
+        if self._reached(latch):
+            return False
+        core.unreachable(self.b)
+        self._dead.add(id(latch))
+        return True
+
     def _block(self, label: str) -> Block:
         self._labels += 1
         return self.function.body.add_block(f"{label}{self._labels}")
@@ -1683,6 +1701,12 @@ class _FunctionLowering(CollectionApiLowering, StringLowering):
         core.store(self.b, self._coerce_type(value, slot.type.pointee), slot)
 
     def _if(self, node: ast.If) -> None:
+        facts = self.frontend.analysis.facts_of(node.test)
+        if facts.has_constant and facts.constant in (True, False) and type(facts.constant) is bool:
+            # A test the checker proved constant: it analyzed the side taken
+            # and nothing it made unreachable, so only that side is code.
+            self._body(node.body if facts.constant else node.orelse)
+            return
         condition = self._test(node.test)
         then_block = self._block("then")
         else_block = self._block("else")
@@ -1837,6 +1861,17 @@ class _FunctionLowering(CollectionApiLowering, StringLowering):
         if self._open():
             core.br(self.b, Successor(latch))
         self.b.at_end(latch)
+        if self._dead_latch(latch):
+            self.b.at_end(done)
+            if site is not None:
+                site.finish(loop_setup)
+                self._guard_sites.pop()
+                if saved_induction is None:
+                    self._induction.pop(name, None)
+                    self._induction_terms.pop(name, None)
+                else:
+                    self._induction[name] = saved_induction
+            return
         value = core.load(self.b, counter)
         if site is not None:
             self._ranges[value] = self._induction[name]
@@ -1889,9 +1924,11 @@ class _FunctionLowering(CollectionApiLowering, StringLowering):
         if self._open():
             core.br(self.b, Successor(latch))
         self.b.at_end(latch)
-        one = core.const(self.b, 1, I64)
-        core.store(self.b, core.add(self.b, core.load(self.b, index), one, overflow="wrap"), index)
-        core.br(self.b, Successor(header))
+        if not self._dead_latch(latch):
+            one = core.const(self.b, 1, I64)
+            step = core.add(self.b, core.load(self.b, index), one, overflow="wrap")
+            core.store(self.b, step, index)
+            core.br(self.b, Successor(header))
         self.b.at_end(done)
 
     # -- buffers ----------------------------------------------------------
@@ -2306,13 +2343,12 @@ class _FunctionLowering(CollectionApiLowering, StringLowering):
         if isinstance(then_value.type, VectorType) or isinstance(else_value.type, VectorType):
             raise Unsupported("a conditional expression over vectors has no native lowering")
         kind = self._unify(_kind(then_value.type), _kind(else_value.type))
-        slot = self._alloca(_scalar_type(kind), "ifexp")
+        result = done.add_argument(_scalar_type(kind), "ifexp")
         for end, value in ((then_end, then_value), (else_end, else_value)):
             self.b.at_end(end)
-            core.store(self.b, self._coerce(value, kind), slot)
-            core.br(self.b, Successor(done))
+            core.br(self.b, Successor(done, [self._coerce(value, kind)]))
         self.b.at_end(done)
-        return core.load(self.b, slot)
+        return result
 
     def _plugin_spec(self, node: ast.Call) -> DialectOperationSpec | None:
         note = self.frontend.analysis.lowerings.get(id(node))

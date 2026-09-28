@@ -620,8 +620,16 @@ def _run_path(  # pylint: disable=too-many-arguments,too-many-positional-argumen
         status, out, err = _execute(build, root, timeout, env)
         if status != 0:
             return Result(path, "", -2, _last_line(err), err)
-        run_env = {**env, "ASAN_OPTIONS": "detect_leaks=1"}
-        status, out, err = _execute([str(root / binary)], root, timeout, run_env)
+        # What the program does, first; a program that stops on an error
+        # leaves what it held to the exit, which LeakSanitizer would call a
+        # leak. Only a clean exit is then held to freeing everything.
+        quiet = {**env, "ASAN_OPTIONS": "detect_leaks=0"}
+        status, out, err = _execute([str(root / binary)], root, timeout, quiet)
+        if status == 0:
+            checked = {**env, "ASAN_OPTIONS": "detect_leaks=1"}
+            leaked, _out, report = _execute([str(root / binary)], root, timeout, checked)
+            if leaked != 0:
+                return Result(path, _clean(out), leaked, _last_line(report), report)
     return Result(path, _clean(out), status, _last_line(err), err)
 
 

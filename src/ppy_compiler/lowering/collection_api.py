@@ -400,14 +400,15 @@ class CollectionApiLowering(CollectionLowering):
         if self._open():  # type: ignore[attr-defined]
             core.br(self.b, Successor(latch))
         self.b.at_end(latch)  # type: ignore[attr-defined]
-        for cursor in cursors:
-            self._advance(cursor)
-        if plan.counter is not None:
-            count = core.load(self.b, plan.counter)
-            core.store(
-                self.b, core.add(self.b, count, self._word(1), overflow="wrap"), plan.counter
-            )
-        core.br(self.b, Successor(header))
+        if not self._dead_latch(latch):  # type: ignore[attr-defined]
+            for cursor in cursors:
+                self._advance(cursor)
+            if plan.counter is not None:
+                count = core.load(self.b, plan.counter)
+                core.store(
+                    self.b, core.add(self.b, count, self._word(1), overflow="wrap"), plan.counter
+                )
+            core.br(self.b, Successor(header))
         self.b.at_end(done)  # type: ignore[attr-defined]
         for source in plan.sources:
             self._let_go(source.slot)

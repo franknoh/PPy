@@ -1,0 +1,29 @@
+# fuzz: path=c seed=131 (a loop body that always returns left the loop head with an edge no path takes)
+from ppy import Vec
+
+
+def first(n: int) -> int:
+    for i in range(n):
+        return i * 2
+    return -1
+
+
+def first_of(v: Vec[int]) -> int:
+    for x in v:
+        return x
+    return -1
+
+
+def spin(n: int) -> int:
+    while n > 0:
+        return n
+    return 0
+
+
+def main() -> None:
+    v = Vec[int]()
+    v.push(7)
+    print(first(3), first(0), first_of(v), spin(4), spin(0))
+
+
+main()

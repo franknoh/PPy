@@ -1,4 +1,4 @@
-# fuzz: path=c seed=187 (stdout differs)
+# fuzz: path=standalone seed=131 (a conditional expression in a loop that returns)
 import math
 from dataclasses import dataclass
 
@@ -28,13 +28,6 @@ def biggest[T: int | float](values: Vec[T]) -> T:
     return best
 
 
-def fn1(a2: bool, a3: int) -> bool:
-    p4 = Point((-7 % (a3 if a3 != 0 else 3)), int(-2.5))
-    n5: int = p4.x * 3 - p4.y
-    v6 = Vec[int]()
-    v6.push((8 >> (a3 % 48)))
-    n7: int = v6.pop() + len(v6)
-    return (max(n5, n5) >= (n7 % (n5 if n5 != 0 else -3)))
 
 
 
@@ -43,10 +36,17 @@ def fn1(a2: bool, a3: int) -> bool:
 
 
 
+def fn43(a44: bool, a45: int, a46: int) -> int:
+    a46 -= a45
+    for i47 in range(0):
+        if (1e-300 != (1e308 / (-0.0 if -0.0 != 0.0 else 2.0))):
+            return (((i47 % (a45 if a45 != 0 else 3)) * a46) + ((a45 % (i47 if i47 != 0 else -3)) - (0 % (a45 if a45 != 0 else 3))))
+    n55: int = 0
+    return (((4611686018427387904 // (a45 if a45 != 0 else -7)) * (n55 - -10)) // (-5 if -5 != 0 else -7))
 
 
 def main() -> None:
-    print(fn1(False, -11))
+    print(fn43(False, -7, 9))
 
 
 main()

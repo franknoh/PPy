@@ -479,7 +479,8 @@ class StringLowering:
         if self._open():  # type: ignore[attr-defined]
             core.br(b, Successor(latch))
         b.at_end(latch)
-        core.br(b, Successor(header))
+        if not self._dead_latch(latch):  # type: ignore[attr-defined]
+            core.br(b, Successor(header))
         b.at_end(done)
         self._release(core.load(b, keep))  # type: ignore[attr-defined]
         return True
