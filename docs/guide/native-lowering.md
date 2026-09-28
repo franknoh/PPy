@@ -51,6 +51,11 @@ The subset includes what a loop is normally made of:
 - statement-level calls whose result is discarded
 - buffers handed on to another native function
 - the bitwise operators, including `~`
+- `raise`, `try` with its handlers, `else`, and `finally`, and `assert`
+- a generator consumed where it is made: by `for`, `next`, `sum`, `min`,
+  `max`, a comprehension, or a collection built from it
+
+[Exceptions and generators](exceptions-and-generators.md) has the details.
 
 A module constant written as an expression, such as `MOD = 10**9 + 7` or
 `LIMIT = 1 << 20`, folds into the code rather than staying a global read.

@@ -108,6 +108,7 @@ nav:
       - Strings: guide/strings.md
       - Collections: guide/collections.md
       - Classes: guide/classes.md
+      - Exceptions and generators: guide/exceptions-and-generators.md
       - Native memory and FFI: guide/native.md
       - Lanes and the machine: guide/simd-cpu.md
       - Atomics and threads: guide/concurrency.md
@@ -155,6 +156,7 @@ nav:
           - howto/47_collections.md
           - howto/48_strings.md
           - howto/49_inheritance.md
+          - howto/50_errors_and_generators.md
       - Accelerators:
           - howto/38_cuda.md
           - howto/44_tile.md
