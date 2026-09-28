@@ -654,6 +654,9 @@ class _Checker:
         self._dynamic_seen = False
         self._current: FunctionInfo | None = None
         self._returns: list[Binding] = []
+        #: For each loop being checked, innermost last: the states its
+        #: `continue`s and its `break`s leave with.
+        self._loop_jumps: list[tuple[list[Env], list[Env]]] = []
         self._provisional_returns: list[bool] = []
         #: Locals whose type is unknown only because a recursive call fed
         #: them, so a `return` of one is provisional the same way.
@@ -791,7 +794,6 @@ class _Checker:
         self._calls = set()
         self._current = info
         self._returns = []
-        self._loop_jumps: list[tuple[list[Env], list[Env]]] = []
         self._provisional_returns = []
         self._provisional_locals = set()
         self._blockers = []
@@ -2746,6 +2748,9 @@ class _Checker:
                 inherited_external = self._external_base_attribute(info, node.attr, owner.facts)
                 if inherited_external is not None:
                     return inherited_external
+                raised_args = _exception_args(base, node.attr)
+                if raised_args is not None:
+                    return raised_args
                 for entry in base.resolved_mro:
                     # `class Reached(list)`: `self.append` is the list's.
                     if entry != base.name and entry in T.BUILTIN_MRO:
@@ -2762,6 +2767,9 @@ class _Checker:
             if info is not None and not self._dynamic_depth:
                 self._strictly("E1202", f"`{info.name}` has no attribute `{node.attr}`", node)
                 return Binding(T.UNKNOWN)
+        raised_args = _exception_args(base, node.attr)
+        if raised_args is not None:
+            return raised_args
         known = (
             stdlib.instance_attribute(base.name, node.attr)
             if isinstance(base, T.Instance)
@@ -6541,3 +6549,14 @@ def _stored_names(body: list[ast.stmt]) -> set[str]:
         for node in ast.walk(statement)
         if isinstance(node, ast.Name) and isinstance(node.ctx, ast.Store)
     }
+
+
+def _exception_args(base: T.Type, attribute: str) -> Binding | None:
+    """`e.args` of an exception: the arguments it was raised with."""
+    if (
+        attribute == "args"
+        and isinstance(base, T.Instance)
+        and "BaseException" in base.resolved_mro
+    ):
+        return Binding(T.Tuple_((T.OBJECT,), homogeneous=True))
+    return None
