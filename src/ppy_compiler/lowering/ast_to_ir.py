@@ -2179,7 +2179,21 @@ class _FunctionLowering(CollectionApiLowering, StringLowering):
         raise Unsupported("unary operator has no native lowering")
 
     def _boolop(self, node: ast.BoolOp) -> Value:
-        """`and`/`or` with short-circuit evaluation, joined by a block argument."""
+        """`and`/`or` with short-circuit evaluation, joined by a block argument.
+
+        Python hands back the operand that decided, not its truth: `0 or 5` is
+        5. Over bools the two are one; over numbers the operand is the value.
+        """
+        answer = T.strip_literal(self._type_of(node))
+        if answer in (T.INT, T.FLOAT):
+            return self._boolop_value(node, "int" if answer == T.INT else "float")
+        if answer != T.BOOL:
+            spelled = type(node.op).__name__.lower()
+            raise Unsupported(f"`{spelled}` of `{answer}` as a value has no native lowering")
+        return self._boolop_truth(node)
+
+    def _boolop_truth(self, node: ast.BoolOp) -> Value:
+        """`and`/`or` where only its truth is asked (a condition), or over bools."""
         done = self._block("boolop.end")
         result = done.add_argument(BOOL, "boolop")
         is_and = isinstance(node.op, ast.And)
@@ -2193,6 +2207,27 @@ class _FunctionLowering(CollectionApiLowering, StringLowering):
                 core.cond_br(self.b, truth, Successor(following), Successor(done, [truth]))
             else:
                 core.cond_br(self.b, truth, Successor(done, [truth]), Successor(following))
+            self.b.at_end(following)
+        self.b.at_end(done)
+        return result
+
+    def _boolop_value(self, node: ast.BoolOp, kind: str) -> Value:
+        """`a or b`, `a and b` over numbers: the first operand whose truth
+        decides (true for `or`, false for `and`), else the last."""
+        done = self._block("boolop.end")
+        result = done.add_argument(_scalar_type(kind), "boolop")
+        is_and = isinstance(node.op, ast.And)
+        for index, value_node in enumerate(node.values):
+            value = self._coerce(self._expr(value_node), kind)
+            if index == len(node.values) - 1:
+                core.br(self.b, Successor(done, [value]))
+                break
+            truth = self._truth(value)
+            following = self._block("boolop")
+            if is_and:
+                core.cond_br(self.b, truth, Successor(following), Successor(done, [value]))
+            else:
+                core.cond_br(self.b, truth, Successor(done, [value]), Successor(following))
             self.b.at_end(following)
         self.b.at_end(done)
         return result
@@ -2245,13 +2280,39 @@ class _FunctionLowering(CollectionApiLowering, StringLowering):
         return core.cmp(self.b, predicate, self._coerce(left, kind), self._coerce(right, kind))
 
     def _ifexp(self, node: ast.IfExp) -> Value:
+        """`a if c else b` evaluates only the side `c` picks: the other may divide
+        by zero or convert a NaN, which Python never does. Two names or constants
+        cannot fail, and choose with a `select`."""
         condition = self._test(node.test)
+        simple = (ast.Name, ast.Constant)
+        if isinstance(node.body, simple) and isinstance(node.orelse, simple):
+            then_value = self._expr(node.body)
+            else_value = self._expr(node.orelse)
+            kind = self._unify(_kind(then_value.type), _kind(else_value.type))
+            return core.select(
+                self.b, condition, self._coerce(then_value, kind), self._coerce(else_value, kind)
+            )
+        then_block = self._block("ifexp.then")
+        else_block = self._block("ifexp.else")
+        done = self._block("ifexp.end")
+        core.cond_br(self.b, condition, Successor(then_block), Successor(else_block))
+        self.b.at_end(then_block)
         then_value = self._expr(node.body)
+        then_end = self.b.block
+        self.b.at_end(else_block)
         else_value = self._expr(node.orelse)
+        else_end = self.b.block
+        assert then_end is not None and else_end is not None
+        if isinstance(then_value.type, VectorType) or isinstance(else_value.type, VectorType):
+            raise Unsupported("a conditional expression over vectors has no native lowering")
         kind = self._unify(_kind(then_value.type), _kind(else_value.type))
-        return core.select(
-            self.b, condition, self._coerce(then_value, kind), self._coerce(else_value, kind)
-        )
+        slot = self._alloca(_scalar_type(kind), "ifexp")
+        for end, value in ((then_end, then_value), (else_end, else_value)):
+            self.b.at_end(end)
+            core.store(self.b, self._coerce(value, kind), slot)
+            core.br(self.b, Successor(done))
+        self.b.at_end(done)
+        return core.load(self.b, slot)
 
     def _plugin_spec(self, node: ast.Call) -> DialectOperationSpec | None:
         note = self.frontend.analysis.lowerings.get(id(node))
@@ -4381,6 +4442,9 @@ class _FunctionLowering(CollectionApiLowering, StringLowering):
         present = self._object_truth(node)
         if present is not None:
             return present
+        if isinstance(node, ast.BoolOp):
+            # A condition asks only for truth, whatever the operands are.
+            return self._boolop_truth(node)
         return self._truth(self._expr(node))
 
     def _truth(self, value: Value) -> Value:
