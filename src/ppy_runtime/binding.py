@@ -428,6 +428,8 @@ def _bind_collections(  # type: ignore[no-untyped-def]
             return True, boundary.result(slots[0].value, returned)
         if nothing or not slots:
             return True, None
+        if signature.returns == (TEXT,):
+            return True, _text_result(slots[0].value, slots[1].value)
         if len(slots) > 1:
             return True, tuple(
                 _result_for(atom)(slot.value)

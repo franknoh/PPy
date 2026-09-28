@@ -24,7 +24,7 @@ import ast
 
 from ..analysis import types as T
 from ..backend.llvm.lowering import Unsupported
-from ..ir import BOOL, I64, Successor, Value
+from ..ir import BOOL, F64, I64, BufferType, PtrType, Successor, Value
 from ..ir.dialects import core
 from .collection_api import CollectionApiLowering
 from .collections import BUILTINS, HANDLE, Kind, Shape
@@ -266,6 +266,31 @@ class ContainerLowering(CollectionApiLowering):
         for iterable in iterables:
             self._refuse_set_order(iterable, None)
         super()._for_collection(node)
+
+    # -- lending ------------------------------------------------------------------------
+
+    def _list_view(self, node: ast.expr, element: str) -> Value | None:
+        """A list of numbers lent to a callee that takes a buffer: its words, in
+        place, for the length of the call. A list's elements are one run of
+        words from its start, which is what a buffer is."""
+        kind = self._builtin_of(node)
+        if kind is None or kind.name != "List" or kind.value is None:
+            return None
+        if kind.value.kind != element:
+            raise Unsupported(f"a list of `{kind.value.kind}` is lent where `{element}` is taken")
+        handle, owned = self._handle(node)
+        if owned:
+            self._temporaries.append(handle)  # type: ignore[attr-defined]
+        scalar = F64 if element == "float" else I64
+        start = self._rt("ppy_seq_at", (handle, self._word(0)), HANDLE)
+        data = core.cast(self.b, start, PtrType(scalar))
+        length = self._rt("ppy_coll_len", (handle,))
+        return self.b.create(
+            "core.call_intrinsic",
+            (data, length),
+            (BufferType(scalar),),
+            {"intrinsic": "ppy.buffer_from_parts"},
+        ).results[0]
 
     # -- methods -------------------------------------------------------------------------
 

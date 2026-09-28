@@ -516,8 +516,9 @@ def test_standalone_rejects_a_python_reachable_graph(tmp_path: Path):
 
 
             def main() -> None:
-                counts: dict[str, int] = {ppy.input[str](): 1}
-                print(len(counts))
+                # A set is walked in CPython's hash order, which stays in Python.
+                for word in {ppy.input[str](), "b"}:
+                    print(word)
 
 
             main()

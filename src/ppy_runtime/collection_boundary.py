@@ -13,10 +13,12 @@ parameter returns the caller's object, as it does in Python. When the
 function writes through a parameter, each argument's contents are copied
 back into the caller's objects after the call, so Python sees the writes.
 
-What crosses is what has a plain native form: numbers, tuples of numbers,
-and collections of them. A dataclass element, an object, or a `LinkedList`
-(whose node ids are the history of its insertions) keeps the function on its
-Python body when Python calls it.
+What crosses is what has a plain native form: numbers, strings, tuples of
+numbers, and collections of them, Python's own `list`, `dict`, and `set`
+included (a string crosses as its UTF-8 bytes, made a native string). A
+dataclass element, an object, or a `LinkedList` (whose node ids are the
+history of its insertions) keeps the function on its Python body when Python
+calls it.
 """
 
 from __future__ import annotations
@@ -36,13 +38,19 @@ RETURNS_NOTHING = "None"
 
 _I64_LOW, _I64_HIGH = -(1 << 63), (1 << 63) - 1
 _SCALARS = frozenset({"int", "float", "bool"})
-#: The collections that cross, by the short name `ppy._collections` gives them.
+#: Python's own containers, which cross as themselves.
+_BUILTINS = {"list": list, "dict": dict, "set": set}
+#: The collections that cross, by the short name `ppy._collections` gives them,
+#: and Python's own by theirs.
 _CROSSING = frozenset(
-    {"Vec", "Deque", "Heap", "MaxHeap", "HashMap", "HashSet", "TreeMap", "TreeSet"}
+    {"Vec", "Deque", "Heap", "MaxHeap", "HashMap", "HashSet", "TreeMap", "TreeSet", *_BUILTINS}
 )
-_MAPS = frozenset({"HashMap", "TreeMap"})
-_SETS = frozenset({"HashSet", "TreeSet"})
+_MAPS = frozenset({"HashMap", "TreeMap", "dict"})
+_SETS = frozenset({"HashSet", "TreeSet", "set"})
 _FAMILY = {
+    "list": "seq",
+    "dict": "map",
+    "set": "map",
     "Vec": "seq",
     "Deque": "seq",
     "Heap": "seq",
@@ -79,7 +87,7 @@ class Spec:
     def _kinds(self) -> tuple[str, ...]:
         if self.kind == "tuple":
             return self.parts
-        return ("handle",) if self.collection else (self.kind,)
+        return ("handle",) if self.collection or self.kind == "str" else (self.kind,)
 
     @property
     def floats(self) -> int:
@@ -87,12 +95,21 @@ class Spec:
 
     @property
     def handles(self) -> int:
-        return 1 if self.collection else 0
+        return 1 if self.collection or self.kind == "str" else 0
+
+    @property
+    def leaves(self) -> int:
+        """The handle words that are strings, which hold no handles themselves."""
+        return 1 if self.kind == "str" else 0
 
     def python(self) -> Any:
         """The type as `ppy._collections` spells it: `Vec[tuple[int, float]]`."""
         if self.kind in _SCALARS:
             return {"int": int, "float": float, "bool": bool}[self.kind]
+        if self.kind == "str":
+            return str
+        if self.kind in _BUILTINS:
+            return _BUILTINS[self.kind]
         if self.kind == "tuple":
             return tuple[tuple({"int": int, "float": float, "bool": bool}[p] for p in self.parts)]
         from ppy import _collections  # pylint: disable=import-outside-toplevel
@@ -125,7 +142,7 @@ def parse(spelled: str) -> Spec | None:
             return None
         name = tokens[position]
         position += 1
-        if name in _SCALARS:
+        if name in _SCALARS or name == "str":
             return Spec(name)
         arguments: list[Spec | None] = []
         if position < len(tokens) and tokens[position] == "[":
@@ -148,7 +165,7 @@ def parse(spelled: str) -> Spec | None:
                 return None
             return Spec("tuple", tuple(part.kind for part in found))
         short = name.removeprefix("ppy.")
-        if not name.startswith("ppy.") or short not in _CROSSING:
+        if not (name.startswith("ppy.") or name in _BUILTINS) or short not in _CROSSING:
             return None
         if short in _MAPS:
             return Spec(short, key=found[0], value=found[1]) if len(found) == 2 else None
@@ -167,7 +184,8 @@ def parse(spelled: str) -> Spec | None:
 def _keys_ok(spec: Spec) -> bool:
     if spec.key is not None:
         key = spec.key
-        if not (key.kind == "int" or (key.kind == "tuple" and set(key.parts) == {"int"})):
+        text = key.kind == "str" and spec.kind in {"dict", "set"}
+        if not (text or key.kind == "int" or (key.kind == "tuple" and set(key.parts) == {"int"})):
             return False
     return spec.value is None or not spec.value.collection or _keys_ok(spec.value)
 
@@ -186,6 +204,10 @@ _SIGNATURES: dict[str, tuple[Any, tuple[Any, ...]]] = {
     "ppy_coll_len": (_I, (_P,)),
     "ppy_coll_retain": (None, (_P,)),
     "ppy_coll_release": (None, (_P,)),
+    "ppy_coll_text_keys": (None, (_P, _I)),
+    "ppy_str_new": (_P, (ctypes.c_char_p, _I)),
+    "ppy_str_data": (_P, (_P,)),
+    "ppy_str_bytes": (_I, (_P,)),
 }
 
 _loaded: dict[str, Any] = {}
@@ -260,12 +282,16 @@ class Boundary:
         words = value_spec.words if value_spec is not None else 0
         floats = value_spec.floats if value_spec is not None else 0
         handles = value_spec.handles if value_spec is not None else 0
+        if value_spec is not None and value_spec.leaves:
+            handles |= value_spec.leaves << 32
         if family == "seq":
             handle = self.rt.ppy_seq_new(0, words, floats, handles)
         else:
             assert spec.key is not None
             maker = self.rt.ppy_map_new if family == "map" else self.rt.ppy_tree_new
             handle = maker(spec.key.words, words, floats, handles)
+            if spec.key.kind == "str":
+                self.rt.ppy_coll_text_keys(handle, 1)
         self._handles[id(value)] = (handle, value)
         self._objects[handle] = value
         # The call holds its own reference to every handle it made, so none is
@@ -283,23 +309,51 @@ class Boundary:
     def _fill(self, handle: int, value: Any, spec: Spec) -> None:
         if _FAMILY[spec.kind] == "seq":
             assert spec.value is not None
-            items = list(value._items)
+            items = list(value) if spec.kind == "list" else list(value._items)
             packed = self._pack(spec.value, items)
             self.rt.ppy_seq_push_many(handle, packed, len(items))
             return
         assert spec.key is not None
-        entries = list(value._walk())
-        keys = self._pack(spec.key, [key for key, _ in entries])
+        if spec.kind == "dict":
+            entries = list(value.items())
+        elif spec.kind == "set":
+            entries = [(key, None) for key in value]
+        else:
+            entries = list(value._walk())
+        made: list[int] = []
+        keys = self._pack(spec.key, [key for key, _ in entries], made)
         values = b""
         if spec.value is not None:
             values = self._pack(spec.value, [item for _, item in entries])
         self.rt.ppy_coll_put_many(handle, keys, values, len(entries))
+        # A map holds its own reference to each string key it keeps.
+        for text in made:
+            self.rt.ppy_coll_release(text)
 
-    def _pack(self, spec: Spec, items: list[Any]) -> bytes:
-        """Elements as native words, checked against their declared type."""
+    def _pack(self, spec: Spec, items: list[Any], made: list[int] | None = None) -> bytes:
+        """Elements as native words, checked against their declared type; the
+        strings made for them are added to `made` where it is given."""
         if not items:
             return b""
-        if spec.collection:
+        if spec.kind == "str":
+            words = []
+            try:
+                for item in items:
+                    if type(item) is not str:
+                        raise Refused
+                    try:
+                        data = item.encode("utf-8")
+                    except UnicodeEncodeError as exc:
+                        raise Refused from exc
+                    words.append(self.rt.ppy_str_new(data, len(data)))
+                    if made is not None:
+                        made.append(words[-1])
+            except BaseException:
+                if made is None:
+                    for text in words:
+                        self.rt.ppy_coll_release(text)
+                raise
+        elif spec.collection:
             words: list[Any] = []
             try:
                 for item in items:
@@ -369,6 +423,13 @@ class Boundary:
         words = struct.unpack_from(f"<{_format(spec) * count}", buffer)
         if spec.collection:
             return [self._python(word, spec, rewrite) for word in words]
+        if spec.kind == "str":
+            return [
+                ctypes.string_at(self.rt.ppy_str_data(word), self.rt.ppy_str_bytes(word)).decode(
+                    "utf-8"
+                )
+                for word in words
+            ]
         if spec.kind == "tuple":
             width = len(spec.parts)
             bools = [i for i, kind in enumerate(spec.parts) if kind == "bool"]
@@ -406,6 +467,17 @@ def _check(kind: str, value: Any) -> None:
 def _replace(made: Any, spec: Spec, entries: list[Any]) -> None:
     """A reference-class object's contents set to what native code holds, in place."""
     family = _FAMILY[spec.kind]
+    if spec.kind == "list":
+        made[:] = entries
+        return
+    if spec.kind == "dict":
+        made.clear()
+        made.update(entries)
+        return
+    if spec.kind == "set":
+        made.clear()
+        made.update(key for key, _ in entries)
+        return
     if family == "seq":
         if spec.kind == "Deque":
             made._items = deque(entries)

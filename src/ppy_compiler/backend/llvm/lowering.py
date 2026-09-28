@@ -40,6 +40,7 @@ from ...analysis.symbols import FunctionInfo
 
 __all__ = [
     "STATUS_FALLBACK",
+    "written_params",
     "STATUS_OK",
     "LoweredFunction",
     "NativeParam",
@@ -227,8 +228,20 @@ _COLLECTIONS = frozenset(
 )
 
 
+#: Python's own containers, which native code holds as the runtime's collections.
+_BUILTIN_CONTAINERS = frozenset({"list", "dict", "set"})
+
+
+def written_params(analysis: FunctionAnalysis | None) -> frozenset[str]:
+    """The parameters a function writes through, which decides how a list of
+    numbers crosses: lent as a buffer when only read, by handle when written."""
+    if analysis is None:
+        return frozenset()
+    return frozenset(analysis.mutated_params | analysis.delegated_writes)
+
+
 def _collection_param(
-    name: str, t: T.Type, layouts: ClassLayouts | None = None
+    name: str, t: T.Type, layouts: ClassLayouts | None = None, written: bool = True
 ) -> NativeParam | None:
     """A collection or an object parameter: a handle native callers pass.
 
@@ -240,13 +253,11 @@ def _collection_param(
     base = T.strip_literal(t)
     if base == T.STR:
         return NativeParam(name, "handle", "str", class_name="str")
-    if (
-        isinstance(base, T.Instance)
-        and base.name == "list"
-        and len(base.args) == 1
-        and T.strip_literal(base.args[0]) == T.STR
-    ):
-        return NativeParam(name, "handle", "list[str]", class_name="list")
+    if isinstance(base, T.Instance) and base.name in _BUILTIN_CONTAINERS and base.args:
+        if not written and _buffer_element(base) is not None:
+            # A list of numbers the function only reads is lent as a buffer.
+            return None
+        return NativeParam(name, "handle", str(base), class_name=base.name)
     if isinstance(base, T.Union_):
         members = [m for m in base.members if m != T.NONE]
         if len(members) != 1 or len(members) == len(base.members):
@@ -263,8 +274,10 @@ def _collection_param(
     return None
 
 
-def _native_param(name: str, t: T.Type, layouts: ClassLayouts | None = None) -> NativeParam | None:
-    collection = _collection_param(name, t, layouts)
+def _native_param(
+    name: str, t: T.Type, layouts: ClassLayouts | None = None, written: bool = False
+) -> NativeParam | None:
+    collection = _collection_param(name, t, layouts, written)
     if collection is not None:
         return collection
     scalar = _scalar_name(t)
@@ -361,7 +374,7 @@ def eligible(
     for param in info.params:
         if param.kind in {"var_positional", "var_keyword"}:
             return False, "variadic parameters have no native ABI"
-        if _native_param(param.name, param.type, layouts) is None:
+        if _native_param(param.name, param.type, layouts, param.name in written) is None:
             return False, f"parameter `{param.name}` is `{param.type}`, which has no native ABI"
     if _return_atoms(info.ret, layouts) is None and not _returns_none(info.ret):
         return False, f"returns `{info.ret}`, which has no native ABI"
@@ -410,6 +423,7 @@ def should_lower_native(
     boundary, so a helper this keeps off it is still called directly by any
     native caller.
     """
+    written = written_params(analysis)
     if info.is_async:
         # The future is the boundary value; a coroutine is called to be run.
         return True, "a coroutine's future crosses the boundary"
@@ -420,7 +434,9 @@ def should_lower_native(
             return False, "device code runs where it is launched"
     fills = any(
         _crosses(native) and native is not None and native.name in analysis.mutated_params
-        for native in (_native_param(p.name, p.type, layouts) for p in info.params)
+        for native in (
+            _native_param(p.name, p.type, layouts, p.name in written) for p in info.params
+        )
     )
     if _returns_none(info.ret) and not fills:
         # The boundary hands back a value; a function with none to hand
@@ -431,7 +447,7 @@ def should_lower_native(
     if returned is not None and returned.element != "str" and not _crosses(returned):
         return False, "returns an object, which native callers receive by handle"
     for param in info.params:
-        native = _native_param(param.name, param.type, layouts)
+        native = _native_param(param.name, param.type, layouts, param.name in written)
         if native is not None and native.is_pointer:
             # A machine address has no Python object to come from, whatever
             # the directives ask: the function is native code's to call.
@@ -443,12 +459,12 @@ def should_lower_native(
         if info.directive(name) is not None:
             return True, f"@ppy.{name} asks for the boundary"
     for param in info.params:
-        native = _native_param(param.name, param.type, layouts)
+        native = _native_param(param.name, param.type, layouts, param.name in written)
         if native is not None and native.is_buffer:
             # Buffer work scales with the data; the crossing is flat.
             return True, "takes a buffer"
     for child in ast.walk(info.node):
-        if isinstance(child, (ast.For, ast.While, ast.AsyncFor)):
+        if isinstance(child, (ast.For, ast.While, ast.AsyncFor, ast.comprehension)):
             return True, "contains a loop"
     work = sum(
         isinstance(child, (ast.BinOp, ast.Compare, ast.BoolOp, ast.Call, ast.Subscript))
@@ -487,7 +503,10 @@ def _signature(
 ) -> NativeSignature:
     written = analysis.mutated_params | analysis.delegated_writes if analysis is not None else set()
     parameters = tuple(
-        _written(_native_param(p.name, p.type, layouts) or NativeParam(p.name, "int"), written)
+        _written(
+            _native_param(p.name, p.type, layouts, p.name in written) or NativeParam(p.name, "int"),
+            written,
+        )
         for p in info.params
     )
     returned = _collection_param("", info.ret, layouts)
