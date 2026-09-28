@@ -59,9 +59,16 @@ FAMILY = {
     "HashSet": "map",
     "TreeMap": "tree",
     "TreeSet": "tree",
-    # `list[str]`, the list the string methods hand out.
+    # Python's own `list`, `dict`, and `set`, over the same runtime: a list is
+    # a sequence indexed from either end, a dict a hash map in insertion
+    # order, a set a hash set (whose walking order is CPython's to decide).
     "List": "seq",
+    "Dict": "map",
+    "Set": "map",
 }
+
+#: Python's containers, by the name the checker gives them.
+BUILTINS = {"list": "List", "dict": "Dict", "set": "Set"}
 
 #: `floor`, `ceiling`, `lower`, `higher`, as `ppy_tree_bound` numbers them.
 _BOUNDS = {"floor": 0, "ceiling": 1, "lower": 2, "higher": 3}
@@ -186,8 +193,9 @@ def spelled(kind: Kind) -> str:
         return item.kind
 
     parts = [shape(part) for part in (kind.key, kind.value) if part is not None]
-    if kind.name == "List":
-        return f"list[{', '.join(parts)}]"
+    python = {value: name for name, value in BUILTINS.items()}.get(kind.name)
+    if python is not None:
+        return f"{python}[{', '.join(parts)}]"
     return f"ppy.{kind.name}[{', '.join(parts)}]"
 
 
@@ -218,7 +226,7 @@ def shape_of(t: T.Type, records: Records) -> Shape | None:
         return None
     if not isinstance(base, T.Instance):
         return None
-    if base.name.startswith("ppy."):
+    if base.name.startswith("ppy.") or base.name in BUILTINS:
         kind = kind_of(base, records)
         return Shape("collection", collection=kind) if kind is not None else None
     found = records.get(base.name)
@@ -239,9 +247,8 @@ def shape_of(t: T.Type, records: Records) -> Shape | None:
 def kind_of(t: T.Type, records: Records) -> Kind | None:
     """The collection type `t` is, or None."""
     base = T.strip_literal(t)
-    if isinstance(base, T.Instance) and base.name == "list" and len(base.args) == 1:
-        # A list of strings is the one Python list native code holds.
-        return Kind("List", STR) if T.strip_literal(base.args[0]) == T.STR else None
+    if isinstance(base, T.Instance) and base.name in BUILTINS:
+        return _builtin_kind(base, records)
     if not isinstance(base, T.Instance) or not base.name.startswith("ppy."):
         return None
     name = base.name.removeprefix("ppy.")
@@ -257,6 +264,30 @@ def kind_of(t: T.Type, records: Records) -> Kind | None:
     if name in {"HashSet", "TreeSet"}:
         return Kind(name, None, shapes[0])
     return Kind(name, shapes[0])
+
+
+def _builtin_kind(base: T.Instance, records: Records) -> Kind | None:
+    """`list[T]`, `dict[K, V]`, `set[K]`: Python's containers, where every type
+    argument has a native form and each key is one native code can hash as
+    CPython does (an `int`, a `str`, a tuple of `int`, an object)."""
+    name = BUILTINS[base.name]
+    arity = 2 if name == "Dict" else 1
+    if len(base.args) != arity:
+        return None
+    shapes = [shape_of(argument, records) for argument in base.args]
+    if any(shape is None for shape in shapes):
+        return None
+    if name == "List":
+        return Kind("List", shapes[0])
+    key = shapes[0]
+    assert key is not None
+    # A float key hashes by value across `0.0 == -0.0` and NaN, and a bool key
+    # is the int it equals: neither is a word native code can hash alike.
+    if not (key.integral or key.kind in {"str", "object", "record"}) or key.kind == "bool":
+        return None
+    if name == "Dict":
+        return Kind("Dict", shapes[1], key)
+    return Kind("Set", None, key)
 
 
 @dataclass(slots=True)
@@ -310,6 +341,9 @@ class CollectionLowering:
         if isinstance(node, ast.Name) and node.id in self.collections:
             held = self.collections[node.id].kind
             return held if isinstance(held, Kind) else None
+        if isinstance(node, ast.Name) and node.id in getattr(self, "buffers", {}):
+            # A `list[int]` parameter lent as a buffer is a buffer here.
+            return None
         return kind_of(self._type_of(node), self._records())
 
     def _is_collection(self, node: ast.expr) -> bool:

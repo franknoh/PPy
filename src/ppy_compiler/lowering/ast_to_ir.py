@@ -87,7 +87,7 @@ from ..ir.raising import OVERFLOW, empty_extreme, negative_shift, zero_division
 from ..ir.transforms.autodiff import AutodiffError, differentiate
 from ..plugins.base import DialectOperationSpec, PluginError, PluginRegistry
 from .abi import signature_from_ir
-from .collection_api import CollectionApiLowering
+from .containers import ContainerLowering
 from .collections import HANDLE, Held
 from .strings import StringLowering
 
@@ -1031,7 +1031,7 @@ class _GuardSite:
         core.br(self.b, Successor(setup))
 
 
-class _FunctionLowering(CollectionApiLowering, StringLowering):
+class _FunctionLowering(ContainerLowering, StringLowering):
     """Lowers one function body."""
 
     def __init__(
@@ -1328,6 +1328,8 @@ class _FunctionLowering(CollectionApiLowering, StringLowering):
                 self._for(node)
             case ast.Pass():
                 return
+            case ast.Delete():
+                self._delete(node)
             case ast.Expr(value=ast.Constant()):
                 return
             case ast.Expr(value=ast.Call() | ast.Await()):

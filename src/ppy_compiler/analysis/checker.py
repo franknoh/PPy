@@ -594,8 +594,11 @@ def _is_fresh_allocation(node: ast.expr) -> bool:
     """Does this expression produce an object nothing else can already hold?"""
     if isinstance(node, (ast.List, ast.Dict, ast.Set, ast.ListComp, ast.DictComp, ast.SetComp)):
         return True
+    if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Mult):
+        # `[0] * n` and `n * [0]`: a new list, whatever the display held.
+        return isinstance(node.left, ast.List) or isinstance(node.right, ast.List)
     if isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
-        return node.func.id in {"list", "dict", "set", "bytearray"}
+        return node.func.id in {"list", "dict", "set", "bytearray", "sorted"}
     # `ppy.buffer[int](n)` and `ppy.scan[Buffer[int]](n)` make the memory
     # they hand back, so nothing else can already be holding it.
     if isinstance(node, ast.Call) and isinstance(node.func, ast.Subscript):

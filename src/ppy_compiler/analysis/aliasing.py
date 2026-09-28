@@ -426,11 +426,17 @@ class _Analyzer:
             return self.eval(node.value, state) | {EXTERNAL}
         if isinstance(node, ast.Constant):
             return frozenset()
+        if isinstance(node, ast.BinOp) and isinstance(node.op, (ast.Add, ast.Mult)):
+            # `xs + ys` and `[0] * n` make a new container holding the operands'
+            # elements, not the operands; a number made so is written by nothing.
+            alloc = self.fresh()
+            for side in (node.left, node.right):
+                self.store_into(alloc, self.elements_of(self.eval(side, state)))
+            return alloc
         if isinstance(node, (ast.BinOp, ast.UnaryOp, ast.Compare)):
             for child in ast.iter_child_nodes(node):
                 if isinstance(child, ast.expr):
                     self.eval(child, state)
-            # `xs + ys` allocates; it holds the operands' elements, not them.
             return frozenset()
         for child in ast.iter_child_nodes(node):
             if isinstance(child, ast.expr):
