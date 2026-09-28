@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.4.2 — 2026-09-28
+
+- Fixed: `int(x)` of a float in native code returned -2**63 on x86 for NaN,
+  an infinity, or a value past 2**63, and was undefined in emitted C. It
+  now gives CPython's answer under `ppy run`: `ValueError` for NaN,
+  `OverflowError` for an infinity, and the exact integer past 2**63. A
+  standalone binary and emitted C/C++ print CPython's error and exit with
+  status 1, `--unsafe` included. Nothing saturates to the largest or
+  smallest word.
+
 ## 0.4.1 — 2026-09-25
 
 Objects order, hash, and compare themselves inside collections, and generic
