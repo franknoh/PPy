@@ -539,7 +539,7 @@ def test_explicit_backend_reports_an_undecorated_function_that_cannot_lower(
     _install_backend(tmp_path, monkeypatch, DUMMY)
     path = _project(tmp_path)
     path.write_text(
-        valid_function + "def bad(value: dict[str, int]) -> int:\n    return len(value)\n"
+        valid_function + "def bad(value: dict[float, int]) -> int:\n    return len(value)\n"
     )
     for command in [("emit", "dummy", path.name), ("build", path.name, "--backend", "dummy")]:
         result = _ppy(path.parent, *command)
