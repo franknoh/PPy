@@ -246,7 +246,9 @@ def main() -> int:
             print(f"{rel:44} {'fails':>9}")
             continue
         run = [sys.executable, "-m", "ppy_compiler", "run", name]
-        cold = _median(run, cwd, max(1, RUNS // 2), before=lambda: shutil.rmtree(cache, True))
+        cold = _median(
+            run, cwd, max(1, RUNS // 2), before=lambda gone=cache: shutil.rmtree(gone, True)
+        )
         warm = _median(run, cwd, RUNS)
         if cold is None or warm is None:
             print(f"{rel:44} {python:9.3f} {'fails':>9}")
