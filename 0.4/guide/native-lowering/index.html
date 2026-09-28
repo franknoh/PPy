@@ -212,7 +212,7 @@
   </div>
   <div class="md-source__repository">
     franknoh/PPy
-    <span class="ppy-source-version" title="Documentation version">v0.4.1</span>
+    <span class="ppy-source-version" title="Documentation version">v0.4.2</span>
   </div>
 </a>
       </div>
@@ -419,7 +419,7 @@
   </div>
   <div class="md-source__repository">
     franknoh/PPy
-    <span class="ppy-source-version" title="Documentation version">v0.4.1</span>
+    <span class="ppy-source-version" title="Documentation version">v0.4.2</span>
   </div>
 </a>
     </div>
@@ -4192,6 +4192,41 @@ lowers too: the write lands in the caller's memory either way. The reverse
 also lowers: filling memory you allocated and then passing it on.</p>
 <p>A call to a function that did not lower keeps its caller on the Python side,
 because the call would otherwise name a symbol nothing defines.</p>
+<p><code>int(x)</code> of a float truncates toward zero, as CPython does, when the result
+is a 64-bit word. The machine's conversion has no answer for the rest (x86
+gives -2**63, and C leaves it undefined), so each case is a guard:</p>
+<table>
+<thead>
+<tr>
+<th><code>x</code></th>
+<th>CPython</th>
+<th><code>ppy run</code></th>
+<th>a standalone binary, emitted C or C++</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>NaN</td>
+<td><code>ValueError: cannot convert float NaN to integer</code></td>
+<td>falls back and raises it</td>
+<td>prints it and exits 1</td>
+</tr>
+<tr>
+<td>an infinity</td>
+<td><code>OverflowError: cannot convert float infinity to integer</code></td>
+<td>falls back and raises it</td>
+<td>prints it and exits 1</td>
+</tr>
+<tr>
+<td>past 2**63</td>
+<td>the exact integer</td>
+<td>falls back and returns it</td>
+<td><code>OverflowError: the result does not fit in a 64-bit integer</code>, exit 1</td>
+</tr>
+</tbody>
+</table>
+<p>The guards are range checks, so <code>--unsafe</code> keeps them. Nothing saturates to
+the largest or smallest word: Python's integers have no largest.</p>
 <h2 id="threads">Threads<a class="headerlink" href="#threads" title="Permanent link">&para;</a></h2>
 <p>The generated wrapper releases the GIL around the native call, so
 <code>@ppy.native</code> functions scale across threads.</p>
