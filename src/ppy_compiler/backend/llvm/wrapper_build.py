@@ -105,6 +105,23 @@ def _publish(draft: Path, final: Path) -> None:
             raise
 
 
+def _shared_directory() -> Path | None:
+    """Where every project keeps its compiled wrappers: the user's cache.
+
+    A wrapper is named by the digest of its source, and its file name carries
+    the interpreter's ABI (`EXT_SUFFIX`), so one built for any project serves
+    every other with the same signatures on the same Python. Kept per project,
+    each new program, and each cleared project cache, paid a C compile again.
+    """
+    base = os.environ.get("XDG_CACHE_HOME") or os.path.join(os.path.expanduser("~"), ".cache")
+    directory = Path(base) / "ppy" / "wrappers"
+    try:
+        directory.mkdir(parents=True, exist_ok=True)
+    except OSError:
+        return None
+    return directory if os.access(directory, os.W_OK) else None
+
+
 def build_wrappers(
     module_name: str,
     signatures: dict[str, NativeSignature],
@@ -139,7 +156,7 @@ def build_wrappers(
     name = f"ppy_wrappers_{_fingerprint(draft.source)}"
     built: WrapperModule = generate(name, signatures)
 
-    directory = cache_directory / "wrappers"
+    directory = _shared_directory() or cache_directory / "wrappers"
     directory.mkdir(parents=True, exist_ok=True)
     suffix = sysconfig.get_config_var("EXT_SUFFIX") or ".so"
     library = directory / f"{name}{suffix}"

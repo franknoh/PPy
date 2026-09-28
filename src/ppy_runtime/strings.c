@@ -131,6 +131,67 @@ int8_t *ppy_str_new(const int8_t *data, int64_t bytes) {
     return handle;
 }
 
+/* A string literal of the program: made once per thread and kept, so a
+   literal is not an allocation and a free every time it is used. It is found
+   by the address of its bytes, a constant of the compiled code; it leaves its
+   thread's heap list, so neither the collector nor a failed call's sweep
+   frees it, and its count is too high to reach zero. The table grows, so
+   every literal is kept: a caller may use one handle as long as it likes. */
+int8_t *ppy_str_interned(const int8_t *data, int64_t bytes) {
+    if (bytes == 1 && (uint8_t)data[0] < 0x80) {
+        return ppy_str_char(data[0]);
+    }
+#ifdef __cplusplus
+    static thread_local uintptr_t *keys;
+    static thread_local int8_t **kept;
+    static thread_local size_t room, used;
+#else
+    static _Thread_local uintptr_t *keys;
+    static _Thread_local int8_t **kept;
+    static _Thread_local size_t room, used;
+#endif
+    if (2 * (used + 1) > room) {
+        size_t grown = room ? room * 2 : 64;
+        uintptr_t *new_keys = (uintptr_t *)calloc(grown, sizeof(uintptr_t));
+        int8_t **new_kept = (int8_t **)calloc(grown, sizeof(int8_t *));
+        if (new_keys == NULL || new_kept == NULL) {
+            ppy_coll_fail();
+        }
+        for (size_t i = 0; i < room; i++) {
+            if (keys[i] != 0) {
+                size_t at = (size_t)((keys[i] >> 3) * 0x9E3779B97F4A7C15ULL) & (grown - 1);
+                while (new_keys[at] != 0) {
+                    at = (at + 1) & (grown - 1);
+                }
+                new_keys[at] = keys[i];
+                new_kept[at] = kept[i];
+            }
+        }
+        free(keys);
+        free(kept);
+        keys = new_keys;
+        kept = new_kept;
+        room = grown;
+    }
+    uintptr_t key = (uintptr_t)data;
+    size_t at = (size_t)((key >> 3) * 0x9E3779B97F4A7C15ULL) & (room - 1);
+    while (keys[at] != 0) {
+        if (keys[at] == key) {
+            return kept[at];
+        }
+        at = (at + 1) & (room - 1);
+    }
+    int8_t *handle = ppy_str_new(data, bytes);
+    int64_t *header = (int64_t *)handle;
+    ppy_coll_untrack(header);
+    header[16] = header[17] = header[18] = 0;
+    header[11] = INT64_MAX / 2;
+    keys[at] = key;
+    kept[at] = handle;
+    used++;
+    return handle;
+}
+
 int8_t *ppy_str_empty(void) {
     return ppy_str_new((const int8_t *)"", 0);
 }
@@ -327,6 +388,22 @@ int8_t *ppy_str_span(int8_t *handle, int64_t from, int64_t to) {
     header[3] = bytes;
     header[5] = 1;
     return made;
+}
+
+/* The character at byte `*at`, a new reference (a static one for ASCII), with
+   `*at` moved past it, and the loop's `previous` character let go: one call
+   per turn of `for c in s`. */
+int8_t *ppy_str_next(int8_t *handle, int64_t *at, int8_t *previous) {
+    ppy_coll_release(previous);
+    int64_t from = *at;
+    const uint8_t *data = ppy_str_raw(handle);
+    if (data[from] < 0x80) {
+        *at = from + 1;
+        return ppy_str_char(data[from]);
+    }
+    int64_t to = from + ppy_str_step(handle, from);
+    *at = to;
+    return ppy_str_span(handle, from, to);
 }
 
 /* `s[index]`, for 0 <= index < len(s). */
@@ -587,6 +664,12 @@ int64_t ppy_str_find(int8_t *handle, int8_t *sub, int64_t start, int64_t end, in
 }
 
 int64_t ppy_str_contains(int8_t *handle, int8_t *sub) {
+    if (ppy_str_bytes(sub) == 1) {
+        /* One byte is one ASCII character, and no other character's UTF-8
+           holds an ASCII byte: `c in "aeiou"` is a memchr. */
+        return memchr(ppy_str_raw(handle), ppy_str_raw(sub)[0], (size_t)ppy_str_bytes(handle)) !=
+               NULL;
+    }
     return ppy_str_search(ppy_str_raw(handle), 0, ppy_str_bytes(handle), ppy_str_raw(sub),
                           ppy_str_bytes(sub), 0) >= 0;
 }

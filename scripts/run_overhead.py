@@ -86,15 +86,161 @@ def margin(python: float) -> float:
     return max(python * MARGIN_FRACTION, MARGIN_FLOOR)
 
 
+#: Programs that stress the boundary rather than the body: each calls a native
+#: candidate from Python many times, where the crossing can cost more than
+#: the work it saves.
+MICRO = {
+    "micro_scalar_calls": """
+def add(a: int, b: int) -> int:
+    return a + b
+
+
+def main() -> None:
+    total = 0
+    for i in range(1_000_000):
+        total = add(total, i) % 1_000_003
+    print(total)
+
+
+main()
+""",
+    "micro_collection_peek": """
+from ppy import Vec
+
+
+def ends(v: Vec[int]) -> int:
+    total = 0
+    for i in range(3):
+        total += v[i] + v[len(v) - 1 - i]
+    return total
+
+
+def main() -> None:
+    v = Vec[int](range(20_000))
+    total = 0
+    for _ in range(3_000):
+        total = (total + ends(v)) % 1_000_003
+    print(total)
+
+
+main()
+""",
+    "micro_collection_sum": """
+from ppy import Vec
+
+
+def total(v: Vec[int]) -> int:
+    s = 0
+    for x in v:
+        s += x * x % 7
+    return s
+
+
+def main() -> None:
+    v = Vec[int](range(200_000))
+    print(sum(total(v) for _ in range(20)))
+
+
+main()
+""",
+    "micro_short_strings": """
+def vowels(text: str) -> int:
+    n = 0
+    for c in text:
+        if c in "aeiou":
+            n += 1
+    return n
+
+
+def main() -> None:
+    words = [f"word{i}abe" for i in range(2_000)]
+    total = 0
+    for _ in range(100):
+        for w in words:
+            total += vowels(w)
+    print(total)
+
+
+main()
+""",
+    "micro_long_string": """
+def vowels(text: str) -> int:
+    n = 0
+    for c in text:
+        if c in "aeiou":
+            n += 1
+    return n
+
+
+def main() -> None:
+    text = "the quick brown fox jumps over the lazy dog " * 100_000
+    print(vowels(text))
+
+
+main()
+""",
+    "micro_fill": """
+from ppy import Vec
+
+
+def fill(v: Vec[int], n: int) -> None:
+    for i in range(n):
+        v.push(i * i % 97)
+
+
+def main() -> None:
+    total = 0
+    for _ in range(200):
+        v = Vec[int]()
+        fill(v, 5_000)
+        total += v[len(v) - 1]
+    print(total)
+
+
+main()
+""",
+}
+
+
+def _micro_entries(only: list[str]) -> list[Path]:
+    """The micro programs, written to a scratch project of their own."""
+    import tempfile  # pylint: disable=import-outside-toplevel
+
+    directory = Path(tempfile.mkdtemp(prefix="ppy-overhead-"))
+    (directory / "pyproject.toml").write_text("[tool.ppy]\nstrict = true\n", encoding="utf-8")
+    entries = []
+    for name, source in MICRO.items():
+        if only and not any(token in name for token in only):
+            continue
+        path = directory / name / "prog.ppy"
+        path.parent.mkdir()
+        path.write_text(source.lstrip("\n"), encoding="utf-8")
+        entries.append(path)
+    return entries
+
+
+#: Examples that start a device runtime (a CUDA context, XLA's PJRT client)
+#: when native, where `python` runs the reference on the CPU: their warm
+#: overhead is that start, and they are timed only when asked for.
+DEVICES = ("38_cuda", "39_xla", "44_tile", "46_gpt2")
+
+
 def main() -> int:
     slower = 0
-    print(f"{'example':44} {'python':>9} {'cold':>9} {'warm':>9}  verdict")
-    for entry in _entries(sys.argv[1:]):
-        if _missing_libraries(entry.parent):
+    arguments = [a for a in sys.argv[1:] if not a.startswith("--")]
+    devices = "--devices" in sys.argv
+    print(f"{'program':44} {'python':>9} {'cold':>9} {'warm':>9}  verdict")
+    entries = _entries(arguments) + _micro_entries(arguments)
+    for entry in entries:
+        if not devices and any(device in str(entry) for device in DEVICES):
+            continue
+        if entry.is_relative_to(EXAMPLES) and _missing_libraries(entry.parent):
             continue
         cwd, name = entry.parent, entry.name
         cache = _cache(entry)
-        rel = str(entry.relative_to(EXAMPLES))
+        rel = str(
+            entry.relative_to(EXAMPLES) if entry.is_relative_to(EXAMPLES) else entry.parent.name
+        )
         python = _median([sys.executable, name], cwd, RUNS)
         if python is None:
             print(f"{rel:44} {'fails':>9}")
@@ -108,7 +254,7 @@ def main() -> int:
         verdict = "ok" if warm <= python + margin(python) else "SLOWER"
         slower += verdict != "ok"
         print(f"{rel:44} {python:9.3f} {cold:9.3f} {warm:9.3f}  {verdict}")
-    print(f"\n{slower} example(s) slower warm than python beyond the margin")
+    print(f"\n{slower} program(s) slower warm than python beyond the margin")
     return 1 if slower else 0
 
 

@@ -156,9 +156,22 @@ class StringLowering:
         return pointer, self._word(len(data))  # type: ignore[attr-defined]
 
     def _string_literal(self, text: str) -> Value:
+        """A literal's handle, looked up once, in the entry block: the runtime
+        keeps every literal for good, so one lookup serves every use, and a
+        literal inside a loop costs nothing per turn."""
         self._use_collections()  # type: ignore[attr-defined]
-        data, length = self._text_data(text)
-        return self._rt("ppy_str_new", (data, length), HANDLE)  # type: ignore[attr-defined]
+        found: dict[str, Value] = self.__dict__.setdefault("_literals", {})
+        if text in found:
+            return found[text]
+        here = self.b  # type: ignore[attr-defined]
+        self.b = self._entry_builder()  # type: ignore[attr-defined]
+        try:
+            data, length = self._text_data(text)
+            made = self._rt("ppy_str_interned", (data, length), HANDLE)  # type: ignore[attr-defined]
+        finally:
+            self.b = here
+        found[text] = made
+        return made
 
     # -- handles ------------------------------------------------------------
 
@@ -166,7 +179,8 @@ class StringLowering:
         """The string expressions a handle comes from here, or None for the
         ones the collections already answer (a name, a field, an element)."""
         if isinstance(node, ast.Constant) and isinstance(node.value, str):
-            return self._string_literal(node.value), True
+            # Borrowed: the runtime keeps every literal, so no use lets go of one.
+            return self._string_literal(node.value), False
         if isinstance(node, ast.JoinedStr):
             return self._fstring(node), True
         if isinstance(node, ast.BinOp) and self._string_of(node) is not None:
@@ -457,6 +471,9 @@ class StringLowering:
         core.store(b, handle, keep)
         cursor = self._alloca(I64, "walk.at")  # type: ignore[attr-defined]
         core.store(b, self._word(0), cursor)  # type: ignore[attr-defined]
+        # A string never changes, and the loop holds its own reference to this
+        # one (so `+=` never appends to it in place): its length is read once.
+        length = self._rt("ppy_str_bytes", (handle,))  # type: ignore[attr-defined]
         header = self._block("walk.head")  # type: ignore[attr-defined]
         body = self._block("walk.body")  # type: ignore[attr-defined]
         latch = self._block("walk.latch")  # type: ignore[attr-defined]
@@ -465,14 +482,15 @@ class StringLowering:
         b.at_end(header)
         walked = core.load(b, keep)
         at = core.load(b, cursor)
-        more = core.cmp(b, "lt", at, self._rt("ppy_str_bytes", (walked,)))  # type: ignore[attr-defined]
+        more = core.cmp(b, "lt", at, length)
         core.cond_br(b, more, Successor(body), Successor(done))
         b.at_end(body)
-        width = self._rt("ppy_str_step", (walked, at))  # type: ignore[attr-defined]
-        following = core.add(b, at, width, overflow="wrap")
-        core.store(b, following, cursor)
-        character = self._rt("ppy_str_span", (walked, at, following), HANDLE)  # type: ignore[attr-defined]
-        self._bind(node.target.id, STR, character, True)  # type: ignore[attr-defined]
+        # The loop name's last character goes in the same call that hands out
+        # the next: one call into the runtime per turn, not two.
+        held = self._held(node.target.id, STR)  # type: ignore[attr-defined]
+        previous = core.load(b, held.slot)
+        character = self._rt("ppy_str_next", (walked, cursor, previous), HANDLE)  # type: ignore[attr-defined]
+        core.store(b, character, held.slot)
         self._loops.append((latch, done))  # type: ignore[attr-defined]
         self._body(node.body)  # type: ignore[attr-defined]
         self._loops.pop()  # type: ignore[attr-defined]

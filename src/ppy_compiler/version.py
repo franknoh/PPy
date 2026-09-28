@@ -64,16 +64,19 @@ def _sources(package: Path):  # type: ignore[no-untyped-def]
     `scandir` hands back the stat with the entry on most filesystems, which
     is what makes this cheap; `rglob` followed by `stat` asks twice.
     """
-    pending = [package]
+    prefix = len(str(package)) + 1
+    pending = [str(package)]
     while pending:
         directory = pending.pop()
         with contextlib.suppress(OSError), os.scandir(directory) as entries:
             for entry in entries:
                 if entry.is_dir(follow_symlinks=False):
                     if entry.name != "__pycache__":
-                        pending.append(Path(entry.path))
+                        pending.append(entry.path)
                 elif entry.name.endswith(".py"):
                     with contextlib.suppress(OSError):
                         stat = entry.stat()
-                        relative = str(Path(entry.path).relative_to(package))
+                        # Relative by slicing: `Path.relative_to` per file cost
+                        # more than the walk itself.
+                        relative = entry.path[prefix:].replace(os.sep, "/")
                         yield relative, stat.st_size, stat.st_mtime_ns

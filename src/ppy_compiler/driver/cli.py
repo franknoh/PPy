@@ -477,15 +477,21 @@ def main(argv: list[str] | None = None) -> int:
         return commands.run_python_backend(file, program_args, options, reporter)
 
     options = parser.parse_args(argv)
+    options.plain_run = _plain_run(argv)
     if options.command == "run":
         # Neither fast path may pay for the compiler's import. A `--prebuilt`
         # manifest runs through the runtime alone, and so does the artifact
         # the last run of this same program left in the cache.
         manifest = getattr(options, "prebuilt", None)
         if manifest is None and options.file.is_file() and not options.profile:
+            from .fastrun import remember, signature
             from .warm import locate
 
+            taken = signature(str(options.file.resolve())) if options.plain_run else None
             manifest = locate(options.file, options).manifest
+            if manifest is not None and taken is not None:
+                # The next `ppy run FILE` finds it without this parser.
+                remember(str(options.file.resolve()), taken, str(manifest))
         if manifest is not None:
             from ppy_runtime.launch import main as launch
 
@@ -550,6 +556,16 @@ def main(argv: list[str] | None = None) -> int:
             return commands.language_server(options, reporter)
     parser.print_help()
     return 2
+
+
+def _plain_run(argv: list[str]) -> bool:
+    """`run FILE` or `run FILE -- ARGS`, with no option: what `fastrun` may serve."""
+    return (
+        len(argv) >= 2
+        and argv[0] == "run"
+        and not argv[1].startswith("-")
+        and (len(argv) == 2 or argv[2] == "--")
+    )
 
 
 def _program_args(rest: list[str]) -> list[str]:

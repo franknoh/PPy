@@ -8,7 +8,7 @@ interpreter compatibility, and file presence -- nothing that reads source.
 from __future__ import annotations
 
 import json
-import platform
+import os
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -190,6 +190,17 @@ def load(path: Path) -> Manifest:
     )
 
 
+def _machine() -> str:
+    """What `platform.machine()` says, without importing `platform`, which costs a
+    warm run more than the rest of this module: `os.uname` where there is one."""
+    uname = getattr(os, "uname", None)
+    if uname is not None:
+        return uname().machine
+    import platform  # pylint: disable=import-outside-toplevel
+
+    return platform.machine()
+
+
 def host_runs(target: str) -> bool:
     """Whether this machine is the one `target` names, by architecture and OS.
 
@@ -200,7 +211,7 @@ def host_runs(target: str) -> bool:
         return True
     parts = target.lower().split("-")
     architecture = {"amd64": "x86_64", "arm64": "aarch64"}.get(parts[0], parts[0])
-    machine = platform.machine().lower()
+    machine = _machine().lower()
     machine = {"amd64": "x86_64", "arm64": "aarch64"}.get(machine, machine)
     system = {"linux": "linux", "darwin": "darwin", "win32": "windows"}.get(
         sys.platform, sys.platform
