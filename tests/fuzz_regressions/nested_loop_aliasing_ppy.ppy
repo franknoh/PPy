@@ -1,4 +1,4 @@
-# fuzz: path=ppy seed=228 (stdout differs)
+# fuzz: path=ppy seed=228 (alias analysis grew a root per loop pass: 2.4 GB and 8 s to check nested loops)
 import math
 from dataclasses import dataclass
 
