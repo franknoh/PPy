@@ -2467,6 +2467,10 @@ class _FunctionLowering(ContainerLowering, StringLowering):
             reduced = self._reduction(target, node)
             if reduced is not None:
                 return reduced
+        if target in {"any", "all"}:
+            decided = self._any_all(target, node)
+            if decided is not None:
+                return decided
         if target in {"len", "sum", "min", "max"} and len(node.args) == 1:
             argument = node.args[0]
             if isinstance(argument, ast.Name) and argument.id in self.buffers:

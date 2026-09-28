@@ -267,6 +267,155 @@ class ContainerLowering(CollectionApiLowering):
             self._refuse_set_order(iterable, None)
         super()._for_collection(node)
 
+    # -- repr --------------------------------------------------------------------------
+
+    def _printed_list(self, node: ast.expr) -> tuple[Value, bool] | None:
+        empty = _empty_display(node)
+        if empty is not None:
+            builder = self._rt("ppy_str_builder", (self._word(0),), HANDLE)
+            self._add_text(builder, empty)
+            return self._rt("ppy_str_finish", (builder,), HANDLE), True
+        kind = self._builtin_of(node)
+        if kind is None or kind.name == "Set":
+            return super()._printed_list(node)  # type: ignore[misc]
+        builder = self._rt("ppy_str_builder", (self._word(0),), HANDLE)
+        handle, owned = self._handle(node)
+        self._add_container_repr(builder, kind, handle)
+        self._done_with(handle, owned)
+        return self._rt("ppy_str_finish", (builder,), HANDLE), True
+
+    def _add_formatted(self, builder: Value, node: ast.expr, conversion: int, spec: str) -> None:
+        empty = _empty_display(node)
+        if empty is not None and not spec:
+            self._add_text(builder, empty)
+            return None
+        kind = self._builtin_of(node)
+        if kind is None:
+            return super()._add_formatted(builder, node, conversion, spec)  # type: ignore[misc]
+        if spec:
+            raise Unsupported("a format spec over a container has no native lowering")
+        if kind.name == "Set":
+            raise Unsupported("a set is shown in CPython's hash order, which stays in Python")
+        handle, owned = self._handle(node)
+        self._add_container_repr(builder, kind, handle)
+        self._done_with(handle, owned)
+        return None
+
+    def _add_text(self, builder: Value, text: str) -> None:
+        data, length = self._text_data(text)  # type: ignore[attr-defined]
+        self._rt("ppy_str_add_bytes", (builder, data, length), None)
+
+    def _add_container_repr(self, builder: Value, kind: Kind, handle: Value) -> None:
+        """`[1, 'a']` and `{1: [2.5]}`, as `repr` writes them."""
+        from .collection_api import _Source  # pylint: disable=import-outside-toplevel
+
+        if kind.name == "Set":
+            raise Unsupported("a set is shown in CPython's hash order, which stays in Python")
+        opening, closing = ("[", "]") if kind.name == "List" else ("{", "}")
+        self._add_text(builder, opening)
+        first = self._alloca(BOOL, "repr.first")  # type: ignore[attr-defined]
+        core.store(self.b, core.const(self.b, True, BOOL), first)
+        slot = self._hold(kind, handle, owned=False)
+        source = _Source(kind, slot, "items" if kind.name == "Dict" else "elements")
+
+        def visit(items: list[tuple[Shape, Value]]) -> None:
+            later = self._block("repr.comma")  # type: ignore[attr-defined]
+            joined = self._block("repr.item")  # type: ignore[attr-defined]
+            core.cond_br(self.b, core.load(self.b, first), Successor(joined), Successor(later))
+            self.b.at_end(later)  # type: ignore[attr-defined]
+            self._add_text(builder, ", ")
+            core.br(self.b, Successor(joined))
+            self.b.at_end(joined)  # type: ignore[attr-defined]
+            core.store(self.b, core.const(self.b, False, BOOL), first)
+            if kind.name == "Dict":
+                (key_shape, key), (value_shape, value) = items[0], items[1]
+                self._add_item_repr(builder, key_shape, key)
+                self._add_text(builder, ": ")
+                self._add_item_repr(builder, value_shape, value)
+            else:
+                shape, value = items[0]
+                self._add_item_repr(builder, shape, value)
+
+        self._walk(source, visit)
+        self._add_text(builder, closing)
+
+    def _add_item_repr(self, builder: Value, shape: Shape, value: Value) -> None:
+        """One element's `repr`."""
+        if shape.kind == "int":
+            self._rt("ppy_str_add_int", (builder, value), None)
+        elif shape.kind == "float":
+            self._rt("ppy_str_add_float", (builder, value), None)
+        elif shape.kind == "bool":
+            self._rt("ppy_str_add_bool", (builder, core.cast(self.b, value, I64)), None)
+        elif shape.kind == "str":
+            self._add_repr(builder, value)  # type: ignore[attr-defined]
+        elif shape.kind == "tuple":
+            self._add_text(builder, "(")
+            for index, part in enumerate(shape.parts):
+                if index:
+                    self._add_text(builder, ", ")
+                item = core.tuple_extract(self.b, value, index)
+                self._add_item_repr(builder, Shape(part), item)
+            self._add_text(builder, ",)" if len(shape.parts) == 1 else ")")
+        elif shape.kind == "collection" and shape.collection is not None:
+            if shape.collection.name not in _ALIASES:
+                raise Unsupported("a `ppy` collection inside a list is shown by Python")
+            self._add_container_repr(builder, shape.collection, value)
+        elif shape.kind == "record" and self._plain_dataclass(shape.record):
+            name = shape.record.rpartition(".")[2]
+            self._add_text(builder, f"{name}(")
+            for index, (field, part) in enumerate(zip(shape.names, shape.parts, strict=True)):
+                self._add_text(builder, (", " if index else "") + f"{field}=")
+                item = core.struct_extract(self.b, value, field)
+                self._add_item_repr(builder, Shape(part), item)
+            self._add_text(builder, ")")
+        else:
+            raise Unsupported(f"a `{shape.kind}` element is shown by Python")
+
+    def _plain_dataclass(self, qualname: str) -> bool:
+        """A dataclass whose `repr` is the generated one: `Point(x=1, y=2)`."""
+        from ..analysis.symbols import dataclass_keyword  # pylint: disable=import-outside-toplevel
+
+        info = self._class_named(qualname)
+        return (
+            info.is_dataclass
+            and "__repr__" not in info.methods
+            and dataclass_keyword(info.node, "repr") is not False
+        )
+
+    # -- any and all ----------------------------------------------------------------
+
+    def _any_all(self, name: str, node: ast.Call) -> Value | None:
+        """`any(c)` and `all(c)` of a collection of numbers, bools, or strings:
+        whether one element is true, or every one is. The answer does not depend
+        on the order the walk goes in, so a set is walked for it too."""
+        if len(node.args) != 1 or node.keywords or not self._is_walk(node.args[0]):
+            return None
+        source = self._source(node.args[0])
+        if source is None or source.mode == "items":
+            return None
+        shape = self._part(source, "values" if source.mode == "values" else "keys")
+        if shape.kind not in {"int", "float", "bool", "str"}:
+            return None
+        seeking = name == "any"
+        answer = self._alloca(BOOL, f"{name}.answer")  # type: ignore[attr-defined]
+        core.store(self.b, core.const(self.b, not seeking, BOOL), answer)
+
+        def look(items: list[tuple[Shape, Value]]) -> None:
+            value = items[0][1]
+            if shape.kind == "str":
+                true = core.cmp(self.b, "gt", self._rt("ppy_str_bytes", (value,)), self._word(0))
+            else:
+                true = self._truth(value)  # type: ignore[attr-defined]
+            if seeking:
+                found = core.bitwise(self.b, "or", core.load(self.b, answer), true)
+            else:
+                found = core.bitwise(self.b, "and", core.load(self.b, answer), true)
+            core.store(self.b, found, answer)
+
+        self._walk(source, look)
+        return core.load(self.b, answer)
+
     # -- lending ------------------------------------------------------------------------
 
     def _list_view(self, node: ast.expr, element: str) -> Value | None:
@@ -571,6 +720,15 @@ class ContainerLowering(CollectionApiLowering):
             self._release(made)
         self._done_with(handle, owned)
         return core.cmp(self.b, "ge", found, self._word(0))
+
+
+def _empty_display(node: ast.expr) -> str | None:
+    """`[]` and `{}` shown as they are: an empty display says nothing of a type."""
+    if isinstance(node, ast.List) and not node.elts:
+        return "[]"
+    if isinstance(node, ast.Dict) and not node.keys:
+        return "{}"
+    return None
 
 
 #: How Python spells each container, for messages.
