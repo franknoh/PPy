@@ -9,6 +9,7 @@ pays for compilation once.
 
     uv run python scripts/run_overhead.py            # every example
     uv run python scripts/run_overhead.py 48 strings # the ones whose path matches
+    uv run python scripts/run_overhead.py --write    # and record them for the docs
 
 Run it alone on a quiet machine: it measures wall time, one process at a
 time. Not a CI gate; the decision logic has cheap tests of its own.
@@ -225,10 +226,26 @@ def _micro_entries(only: list[str]) -> list[Path]:
 DEVICES = ("38_cuda", "39_xla", "44_tile", "46_gpt2")
 
 
+RECORD = EXAMPLES / "run_overhead.json"
+
+
+def _environment() -> dict[str, object]:
+    import platform  # pylint: disable=import-outside-toplevel
+
+    return {
+        "processor": platform.processor() or platform.machine(),
+        "cores": os.cpu_count(),
+        "python": platform.python_version(),
+        "platform": platform.platform(terse=True),
+        "runs": RUNS,
+    }
+
+
 def main() -> int:
     slower = 0
     arguments = [a for a in sys.argv[1:] if not a.startswith("--")]
     devices = "--devices" in sys.argv
+    recorded: dict[str, dict[str, float]] = {}
     print(f"{'program':44} {'python':>9} {'cold':>9} {'warm':>9}  verdict")
     entries = _entries(arguments) + _micro_entries(arguments)
     for entry in entries:
@@ -256,7 +273,25 @@ def main() -> int:
         verdict = "ok" if warm <= python + margin(python) else "SLOWER"
         slower += verdict != "ok"
         print(f"{rel:44} {python:9.3f} {cold:9.3f} {warm:9.3f}  {verdict}")
+        recorded[rel] = {"python": python, "cold": cold, "warm": warm}
     print(f"\n{slower} program(s) slower warm than python beyond the margin")
+    if "--write" in sys.argv:
+        import json  # pylint: disable=import-outside-toplevel
+
+        RECORD.write_text(
+            json.dumps(
+                {
+                    "recorded": time.strftime("%Y-%m-%d"),
+                    "environment": _environment(),
+                    "margin": {"fraction": MARGIN_FRACTION, "floor": MARGIN_FLOOR},
+                    "programs": recorded,
+                },
+                indent=1,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        print(f"recorded {RECORD.relative_to(ROOT)}")
     return 1 if slower else 0
 
 

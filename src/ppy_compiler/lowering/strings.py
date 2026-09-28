@@ -27,6 +27,10 @@ from ..ir import BOOL, F64, I64, U8, BufferType, PtrType, Successor, TupleType, 
 from ..ir.dialects import core
 from .collections import HANDLE, STR, Kind, Shape
 
+#: A static one-character string is 26 words: the collections header's 25 and
+#: one for its byte (`ppy_str_char` in strings.c).
+_CHAR_WORDS = 26
+
 __all__ = ["StringLowering"]
 
 #: `str.is...` methods, as `ppy_str_is` numbers them.
@@ -403,6 +407,13 @@ class StringLowering:
         if self._string_of(container) is not None:
             if self._string_of(item) is None:
                 raise Unsupported("`in <str>` requires a string on the left")
+            if (
+                isinstance(container, ast.Constant)
+                and isinstance(container.value, str)
+                and 0 < len(container.value) <= 16
+                and container.value.isascii()
+            ):
+                return self._in_ascii_literal(item, container.value)
             haystack, h_owned = self._handle(container)  # type: ignore[attr-defined]
             needle, n_owned = self._handle(item)  # type: ignore[attr-defined]
             found = self._rt("ppy_str_contains", (haystack, needle))  # type: ignore[attr-defined]
@@ -472,8 +483,11 @@ class StringLowering:
         cursor = self._alloca(I64, "walk.at")  # type: ignore[attr-defined]
         core.store(b, self._word(0), cursor)  # type: ignore[attr-defined]
         # A string never changes, and the loop holds its own reference to this
-        # one (so `+=` never appends to it in place): its length is read once.
+        # one (so `+=` never appends to it in place): its length and its bytes
+        # are read once.
         length = self._rt("ppy_str_bytes", (handle,))  # type: ignore[attr-defined]
+        bytes_at = self._rt("ppy_str_raw", (handle,), PtrType(U8))  # type: ignore[attr-defined]
+        table = self._ascii_table()
         header = self._block("walk.head")  # type: ignore[attr-defined]
         body = self._block("walk.body")  # type: ignore[attr-defined]
         latch = self._block("walk.latch")  # type: ignore[attr-defined]
@@ -485,12 +499,7 @@ class StringLowering:
         more = core.cmp(b, "lt", at, length)
         core.cond_br(b, more, Successor(body), Successor(done))
         b.at_end(body)
-        # The loop name's last character goes in the same call that hands out
-        # the next: one call into the runtime per turn, not two.
-        held = self._held(node.target.id, STR)  # type: ignore[attr-defined]
-        previous = core.load(b, held.slot)
-        character = self._rt("ppy_str_next", (walked, cursor, previous), HANDLE)  # type: ignore[attr-defined]
-        core.store(b, character, held.slot)
+        self._next_character(node.target.id, walked, at, cursor, bytes_at, table)
         self._loops.append((latch, done))  # type: ignore[attr-defined]
         self._body(node.body)  # type: ignore[attr-defined]
         self._loops.pop()  # type: ignore[attr-defined]
@@ -501,6 +510,111 @@ class StringLowering:
         b.at_end(done)
         self._release(core.load(b, keep))  # type: ignore[attr-defined]
         return True
+
+    def _ascii_table(self) -> Value:
+        """Where the static one-character strings start, asked once, at entry."""
+        found = self.__dict__.get("_ascii_table_value")
+        if found is not None:
+            return found
+        here = self.b  # type: ignore[attr-defined]
+        self.b = self._entry_builder()  # type: ignore[attr-defined]
+        try:
+            found = self._rt("ppy_str_ascii_table", (), HANDLE)  # type: ignore[attr-defined]
+        finally:
+            self.b = here
+        self.__dict__["_ascii_table_value"] = found
+        return found
+
+    def _in_ascii_literal(self, item: ast.expr, text: str) -> Value:
+        """`c in "aeiou"`: a character that is one of the static ASCII strings is
+        in the literal when its place in their table is one of the literal's
+        characters' places; any other string asks the runtime."""
+        b = self.b  # type: ignore[attr-defined]
+        needle, owned = self._handle(item)  # type: ignore[attr-defined]
+        table = self._ascii_table()
+        offset = core.sub(b, core.cast(b, needle, I64), core.cast(b, table, I64), overflow="wrap")
+        result = self._alloca(BOOL, "in.ascii")  # type: ignore[attr-defined]
+        static = core.bitwise(
+            b,
+            "and",
+            core.cmp(b, "ge", offset, self._word(0)),  # type: ignore[attr-defined]
+            core.cmp(b, "lt", offset, self._word(128 * _CHAR_WORDS * 8)),  # type: ignore[attr-defined]
+        )
+        quick = self._block("in.quick")  # type: ignore[attr-defined]
+        asked = self._block("in.asked")  # type: ignore[attr-defined]
+        done = self._block("in.done")  # type: ignore[attr-defined]
+        core.cond_br(b, static, Successor(quick), Successor(asked))
+        b.at_end(quick)
+        matched = None
+        for character in dict.fromkeys(text):
+            place = self._word(ord(character) * _CHAR_WORDS * 8)  # type: ignore[attr-defined]
+            here = core.cmp(b, "eq", offset, place)
+            matched = here if matched is None else core.bitwise(b, "or", matched, here)
+        assert matched is not None
+        core.store(b, matched, result)
+        core.br(b, Successor(done))
+        b.at_end(asked)
+        haystack = self._string_literal(text)
+        found = self._rt("ppy_str_contains", (haystack, needle))  # type: ignore[attr-defined]
+        core.store(b, core.cmp(b, "ne", found, self._word(0)), result)  # type: ignore[attr-defined]
+        core.br(b, Successor(done))
+        b.at_end(done)
+        self._done_with(needle, owned)  # type: ignore[attr-defined]
+        return core.load(b, result)
+
+    def _next_character(  # pylint: disable=too-many-arguments,too-many-positional-arguments
+        self, name: str, walked: Value, at: Value, cursor: Value, data: Value, table: Value
+    ) -> None:
+        """Bind `name` to the character at byte `at` and move the cursor past it.
+
+        An ASCII byte's character is one of the runtime's static strings, at a
+        fixed distance into its table, so the common case is a load and an
+        add; the character before it needs letting go only when it was not
+        one of those. Anything else is one call, which lets go of the one
+        before too.
+        """
+        b = self.b  # type: ignore[attr-defined]
+        held = self._held(name, STR)  # type: ignore[attr-defined]
+        byte = core.cast(b, core.load(b, core.ptr_offset(b, data, at)), I64)
+        ascii_block = self._block("char.ascii")  # type: ignore[attr-defined]
+        other = self._block("char.other")  # type: ignore[attr-defined]
+        done = self._block("char.done")  # type: ignore[attr-defined]
+        core.cond_br(
+            b,
+            core.cmp(b, "lt", byte, self._word(128)),
+            Successor(ascii_block),
+            Successor(other),  # type: ignore[attr-defined]
+        )
+        b.at_end(ascii_block)
+        previous = core.load(b, held.slot)
+        words = core.ptr_offset(
+            b,
+            core.cast(b, table, PtrType(I64)),
+            core.mul(b, byte, self._word(_CHAR_WORDS), overflow="wrap"),  # type: ignore[attr-defined]
+        )
+        core.store(b, core.add(b, at, self._word(1), overflow="wrap"), cursor)  # type: ignore[attr-defined]
+        core.store(b, core.cast(b, words, HANDLE), held.slot)
+        start = core.cast(b, table, I64)
+        offset = core.sub(b, core.cast(b, previous, I64), start, overflow="wrap")
+        static = core.bitwise(
+            b,
+            "and",
+            core.cmp(b, "ge", offset, self._word(0)),  # type: ignore[attr-defined]
+            core.cmp(b, "lt", offset, self._word(128 * _CHAR_WORDS * 8)),  # type: ignore[attr-defined]
+        )
+        release = self._block("char.release")  # type: ignore[attr-defined]
+        core.cond_br(b, static, Successor(done), Successor(release))
+        b.at_end(release)
+        self._release(previous)  # type: ignore[attr-defined]
+        core.br(b, Successor(done))
+        b.at_end(other)
+        # The loop name's last character goes in the same call that hands out
+        # the next: one call into the runtime, not two.
+        previous = core.load(b, held.slot)
+        character = self._rt("ppy_str_next", (walked, cursor, previous), HANDLE)  # type: ignore[attr-defined]
+        core.store(b, character, held.slot)
+        core.br(b, Successor(done))
+        b.at_end(done)
 
     # -- calls -------------------------------------------------------------------
 

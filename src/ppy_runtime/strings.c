@@ -99,6 +99,20 @@ int8_t *ppy_str_char(int64_t c) {
     return (int8_t *)header;
 }
 
+/* Where the 128 one-character ASCII strings start, every one of them made:
+   the one for byte `c` is `c * 208` bytes in (26 words each), which is how
+   `for c in s` hands out an ASCII character without a call. */
+int8_t *ppy_str_ascii_table(void) {
+    static int ready;
+    if (!ready) {
+        for (int64_t c = 0; c < 128; c++) {
+            ppy_str_char(c);
+        }
+        ready = 1;
+    }
+    return ppy_str_char(0);
+}
+
 /* Count the code points, mark ASCII, end with a NUL: the string is done. */
 void ppy_str_seal(int8_t *handle) {
     int64_t *header = (int64_t *)handle;

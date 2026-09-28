@@ -380,6 +380,38 @@ def called_back_only(info: FunctionInfo) -> bool:
     )
 
 
+def _works_through(function: ast.AST, names: list[str]) -> bool:
+    """Whether a loop walks one of `names` (it is in the loop's header) or works
+    on it (a method of it is called in the loop's body): work that grows with
+    the collection, which pays for copying it across the boundary."""
+    wanted = set(names)
+
+    def rooted(node: ast.expr) -> bool:
+        while isinstance(node, (ast.Subscript, ast.Attribute)):
+            node = node.value
+        return isinstance(node, ast.Name) and node.id in wanted
+
+    for loop in ast.walk(function):
+        if not isinstance(loop, (ast.For, ast.While, ast.AsyncFor)):
+            continue
+        header = loop.iter if isinstance(loop, (ast.For, ast.AsyncFor)) else loop.test
+        if any(isinstance(n, ast.Name) and n.id in wanted for n in ast.walk(header)):
+            return True
+        for statement in loop.body:
+            for child in ast.walk(statement):
+                if (
+                    isinstance(child, ast.Call)
+                    and isinstance(child.func, ast.Attribute)
+                    and rooted(child.func.value)
+                ):
+                    return True
+                if isinstance(child, (ast.Assign, ast.AugAssign)):
+                    targets = child.targets if isinstance(child, ast.Assign) else [child.target]
+                    if any(isinstance(t, ast.Subscript) and rooted(t) for t in targets):
+                        return True
+    return False
+
+
 def _returns_none(t: T.Type) -> bool:
     return t == T.NONE
 
@@ -442,6 +474,18 @@ def should_lower_native(
     for name in _EXPOSURE_DIRECTIVES:
         if info.directive(name) is not None:
             return True, f"@ppy.{name} asks for the boundary"
+    crossing = [
+        param.name
+        for param in info.params
+        if (native := _native_param(param.name, param.type, layouts)) is not None
+        and native.is_handle
+        and _crosses(native)
+    ]
+    if crossing and not _works_through(info.node, crossing):
+        # The boundary copies each collection in and back, all of it, on every
+        # call: a body that only looks at a few of its elements pays more for
+        # the copy than it saves.
+        return False, "copying the collections in costs more than the body does with them"
     for param in info.params:
         native = _native_param(param.name, param.type, layouts)
         if native is not None and native.is_buffer:

@@ -318,8 +318,11 @@ class Boundary:
                     _check(kind, part)
             words = [part for item in items for part in item]
         else:
-            for item in items:
-                _check(spec.kind, item)
+            # One type test for the whole list, in C: a check per element in
+            # Python cost more than the native work it fed. `struct.pack`
+            # refuses an integer past a word itself.
+            if set(map(type, items)) != {_TYPES[spec.kind]}:
+                raise Refused
             words = items
         try:
             return struct.pack(f"<{_format(spec) * len(items)}", *words)
@@ -389,6 +392,10 @@ class Boundary:
         for handle in self._owned:
             self.rt.ppy_coll_release(handle)
         self._owned.clear()
+
+
+#: The one Python type a word of each scalar kind is stored as.
+_TYPES = {"int": int, "float": float, "bool": bool}
 
 
 def _check(kind: str, value: Any) -> None:

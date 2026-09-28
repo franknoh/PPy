@@ -47,6 +47,56 @@ def _readme_table() -> str:
     return text[start:end]
 
 
+OVERHEAD = ROOT / "examples" / "run_overhead.json"
+
+
+def _overhead_section() -> list[str]:
+    """`ppy run` against `python` for every example, from `scripts/run_overhead.py`."""
+    if not OVERHEAD.is_file():
+        return []
+    data = json.loads(OVERHEAD.read_text(encoding="utf-8"))
+    margin = data["margin"]
+    environment = data["environment"]
+    lines = [
+        "## `ppy run` against `python`",
+        "",
+        "`ppy run` should never be slower than `python`. Each program below was run",
+        f"{environment.get('runs', '?')} times by each command, one process at a time,",
+        "and the table shows the median wall time of the whole process in seconds. The",
+        "cold column starts from an empty project cache, so it includes analysis,",
+        "lowering, and compilation; every later run is the warm one.",
+        "",
+        (
+            "A warm run counts as no slower when it is within "
+            f"{margin['fraction']:.0%} of `python`, or {margin['floor'] * 1000:.0f} ms,"
+        ),
+        "whichever is more: two runs of the same `python` command differ by that much.",
+        "The programs named `micro_` are in the script; they call a native candidate",
+        "from Python many times, where the crossing matters most. Examples that start a",
+        "device runtime (a CUDA context, XLA's client) are left out: their warm time is",
+        "that start, which `python` running the CPU reference never pays.",
+        "",
+        "| program | `python` | `ppy run`, cold | `ppy run`, warm |",
+        "|---|---:|---:|---:|",
+    ]
+    for name, record in data["programs"].items():
+        lines.append(
+            f"| `{name}` | {record['python']:.3f} | {record['cold']:.3f} | {record['warm']:.3f} |"
+        )
+    lines.extend(
+        [
+            "",
+            (
+                f"Recorded on {environment.get('processor', '?')}, "
+                f"{environment.get('cores', '?')} cores, CPython {environment.get('python', '?')}, "
+                f"{environment.get('platform', '?')}, at {data.get('recorded', '?')}."
+            ),
+            "",
+        ]
+    )
+    return lines
+
+
 def _page() -> str:
     data = json.loads(RECORDED.read_text(encoding="utf-8"))
     environment = data["environment"]
@@ -104,6 +154,7 @@ def _page() -> str:
             "",
         ]
     )
+    lines.extend(_overhead_section())
     return "\n".join(lines)
 
 
