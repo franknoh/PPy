@@ -88,8 +88,8 @@ from ..ir.transforms.autodiff import AutodiffError, differentiate
 from ..plugins.base import DialectOperationSpec, PluginError, PluginRegistry
 from .abi import signature_from_ir
 from .collection_api import CollectionApiLowering
-from .exceptions import ExceptionLowering, uses_exceptions
 from .collections import HANDLE, Held
+from .exceptions import ExceptionLowering, uses_exceptions
 from .strings import StringLowering
 
 __all__ = ["Frontend", "Lowered", "lower_function", "lower_module_to_ir"]

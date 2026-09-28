@@ -257,7 +257,10 @@ def program_main(
     # ends, so a leak checker sees only what nothing can free.
     collected = "    ppy_coll_collect();\n" if collect else ""
     reported = (
-        f"    if (status == {STATUS_RAISED}) {{\n        ppy_exc_report();\n        return 1;\n    }}\n"
+        f"    if (status == {STATUS_RAISED}) {{\n"
+        "        ppy_exc_report();\n"
+        "        return 1;\n"
+        "    }\n"
         if raised
         else ""
     )

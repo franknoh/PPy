@@ -159,7 +159,9 @@ class ExceptionLowering:
         self._use_exceptions()
         spelled = self._string_literal(name.rpartition(".")[2])  # type: ignore[attr-defined]
         made = self._rt(  # type: ignore[attr-defined]
-            "ppy_exc_make", (self._word(tag), spelled, message, known), HANDLE  # type: ignore[attr-defined]
+            "ppy_exc_make",
+            (self._word(tag), spelled, message, known),
+            HANDLE,  # type: ignore[attr-defined]
         )
         self._rt("ppy_exc_raise", (made,), None)  # type: ignore[attr-defined]
         self._go_raise()
@@ -230,7 +232,8 @@ class ExceptionLowering:
         answered = self._block("call.ok")  # type: ignore[attr-defined]
         failed = self._block("call.failed")  # type: ignore[attr-defined]
         zero = self._word(0)  # type: ignore[attr-defined]
-        core.cond_br(self.b, core.cmp(self.b, "eq", status, zero), Successor(answered), Successor(failed))  # type: ignore[attr-defined]
+        answers = core.cmp(self.b, "eq", status, zero)  # type: ignore[attr-defined]
+        core.cond_br(self.b, answers, Successor(answered), Successor(failed))  # type: ignore[attr-defined]
         self.b.at_end(failed)  # type: ignore[attr-defined]
         raised = core.cmp(self.b, "eq", status, self._word(-1))  # type: ignore[attr-defined]
         # Anything but an exception is a failed guard: this call falls back too.
@@ -371,7 +374,10 @@ class ExceptionLowering:
                 condition = core.const(self.b, False, BOOL)  # type: ignore[attr-defined]
                 for wanted in tags:
                     condition = core.bitwise(
-                        self.b, "or", condition, core.cmp(self.b, "eq", tag, self._word(wanted))  # type: ignore[attr-defined]
+                        self.b,
+                        "or",
+                        condition,
+                        core.cmp(self.b, "eq", tag, self._word(wanted)),  # type: ignore[attr-defined]
                     )
                 core.cond_br(self.b, condition, Successor(matched), Successor(following))  # type: ignore[attr-defined]
             self.b.at_end(matched)  # type: ignore[attr-defined]
@@ -394,8 +400,13 @@ class ExceptionLowering:
             # Every way through the `try` returns or raises: nothing follows it.
             core.unreachable(self.b)  # type: ignore[attr-defined]
 
-    def _handler(
-        self, handler: ast.ExceptHandler, unwind: Block, final: list[ast.stmt], loops: int, after: Block
+    def _handler(  # pylint: disable=too-many-arguments,too-many-positional-arguments
+        self,
+        handler: ast.ExceptHandler,
+        unwind: Block,
+        final: list[ast.stmt],
+        loops: int,
+        after: Block,
     ) -> None:
         slot = self._exception_slot("handled")
         exception = self._rt("ppy_exc_take", (), HANDLE)  # type: ignore[attr-defined]
@@ -449,9 +460,12 @@ class ExceptionLowering:
                     for other, mro in T.BUILTIN_MRO.items()
                     if name in mro and "Exception" in mro
                 )
-            elif self._project_exception(name) is None:
-                raise Unsupported(f"`except {name}` catches a class native code does not raise")
-            wanted = self._project_exception(name).qualname if not _builtin_exception(name) else name
+                wanted = name
+            else:
+                own = self._project_exception(name)
+                if own is None:
+                    raise Unsupported(f"`except {name}` catches a class native code does not raise")
+                wanted = own.qualname
             classes = self.frontend.analysis.symbols.classes  # type: ignore[attr-defined]
             tags.update(
                 exception_tag(info.qualname)
@@ -476,7 +490,9 @@ class ExceptionLowering:
                 if frame.final:
                     self._body(frame.final)  # type: ignore[attr-defined]
                     if not self._open():  # type: ignore[attr-defined]
-                        raise Unsupported("a `finally` that leaves the function has no native lowering")
+                        raise Unsupported(
+                            "a `finally` that leaves the function has no native lowering"
+                        )
         finally:
             self._frames = frames
 
@@ -502,7 +518,8 @@ class ExceptionLowering:
         """`str(e)`: an owned string; where it is not CPython's, the call falls back."""
         exception = core.load(self.b, slot)  # type: ignore[attr-defined]
         known = self._rt("ppy_exc_known", (exception,))  # type: ignore[attr-defined]
-        core.guard(self.b, core.cmp(self.b, "ne", known, self._word(0)), "contract", "str() of an exception")  # type: ignore[attr-defined]
+        told = core.cmp(self.b, "ne", known, self._word(0))  # type: ignore[attr-defined]
+        core.guard(self.b, told, "contract", "str() of an exception")  # type: ignore[attr-defined]
         return self._rt("ppy_exc_str", (exception,), HANDLE)  # type: ignore[attr-defined]
 
     def _string_call(self, node: ast.Call, discard: bool) -> Value | None:
@@ -536,7 +553,8 @@ class ExceptionLowering:
         tag = self._rt("ppy_exc_tag", (core.load(self.b, slot),))  # type: ignore[attr-defined]
         found = core.const(self.b, False, BOOL)  # type: ignore[attr-defined]
         for wanted in tags:
-            found = core.bitwise(self.b, "or", found, core.cmp(self.b, "eq", tag, self._word(wanted)))  # type: ignore[attr-defined]
+            same = core.cmp(self.b, "eq", tag, self._word(wanted))  # type: ignore[attr-defined]
+            found = core.bitwise(self.b, "or", found, same)  # type: ignore[attr-defined]
         return found
 
 
