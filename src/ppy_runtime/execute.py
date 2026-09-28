@@ -122,7 +122,9 @@ class GeneratedLoader:
         return self.generated.source_path.read_text(encoding="utf-8")
 
 
-def install_loader(modules: dict[str, GeneratedModule], natives=None) -> _GeneratedFinder:
+def install_loader(
+    modules: dict[str, GeneratedModule], natives=None, *, uses_ppy: bool = True
+) -> _GeneratedFinder:
     """Put the generated finder ahead of everything, and keep it there.
 
     A program that does `import ppy` installs the runtime's own `.ppy` finder
@@ -131,14 +133,17 @@ def install_loader(modules: dict[str, GeneratedModule], natives=None) -> _Genera
     the program's own `import ppy` finds it already present and leaves the
     order alone.
     """
-    try:
-        import ppy
-        from ppy import _native
+    if uses_ppy:
+        # A program that never names `ppy` never installs its loader either,
+        # and skips the import: a few milliseconds of a short program's run.
+        try:
+            import ppy
+            from ppy import _native
 
-        ppy.install()
-        _native.managed()
-    except ImportError:  # pragma: no cover - the runtime is a hard dependency
-        pass
+            ppy.install()
+            _native.managed()
+        except ImportError:  # pragma: no cover - the runtime is a hard dependency
+            pass
     finder = _GeneratedFinder(modules, natives)
     sys.meta_path.insert(0, finder)
     return finder
@@ -152,9 +157,12 @@ def execute(
     search_paths: list[Path] | None = None,
     natives: NativeBinder | None = None,
     entry_name: str | None = None,
+    uses_ppy: bool = True,
 ) -> ExecutionResult:
     """Run the generated entry module as `__main__`."""
-    finder = install_loader({name: m for name, m in modules.items() if m is not entry}, natives)
+    finder = install_loader(
+        {name: m for name, m in modules.items() if m is not entry}, natives, uses_ppy=uses_ppy
+    )
     saved_argv = sys.argv[:]
     saved_path = sys.path[:]
     for extra in reversed(search_paths or []):

@@ -5,6 +5,7 @@ from __future__ import annotations
 import contextlib
 import json
 import os
+import re
 import shutil
 import sys
 from dataclasses import dataclass, field
@@ -657,6 +658,14 @@ def compile_project(  # type: ignore[no-untyped-def]
             "generated": listed,
             "search_paths": [str(path) for path in bundle.project.search_paths],
             "safeguards": bundle.project.config.llvm.safeguards or "hoisted",
+            # Whether any module could import `ppy`, whose loader the launcher
+            # then installs first; a program that never names it skips that
+            # import. A mention in a comment counts: the answer only has to be
+            # yes when it matters.
+            "uses_ppy": any(
+                re.search(r"\bppy\b", symbols.module.source.text) is not None
+                for symbols in bundle.symbols.modules.values()
+            ),
         }
     regions_section = _ship_regions(bundle, reporter, build_directory, artifacts)
     staged_section = _ship_staged(bundle, reporter, build_directory, artifacts)

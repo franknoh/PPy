@@ -191,6 +191,7 @@ def main(manifest_path: Path, argv: list[str]) -> int:
         search_paths=manifest.search_paths,
         natives=binder,
         entry_name=manifest.entry_module,
+        uses_ppy=manifest.uses_ppy,
     )
     if result.exception is not None:
         sys.stderr.write(format_traceback(result.exception))

@@ -51,6 +51,9 @@ class Manifest:
     search_paths: list[Path]
     generated: dict[str, Path]
     safeguards: str
+    #: Whether the program may import `ppy`, whose loader the launcher installs
+    #: first (an older artifact says nothing, and so it may).
+    uses_ppy: bool = True
     #: The prebuilt CPython-ABI wrapper extension, when the build shipped one:
     #: its path next to the manifest, and the wrapper index per qualname.
     #: The triple the objects were compiled for ("" in an older artifact).
@@ -183,6 +186,7 @@ def load(path: Path) -> Manifest:
         search_paths=[Path(p) for p in program.get("search_paths", ())],
         generated=generated,
         safeguards=program.get("safeguards", "hoisted"),
+        uses_ppy=bool(program.get("uses_ppy", True)),
         wrapper_library=wrapper_library,
         wrapper_entries=wrapper_entries,
         regions=regions or None,
