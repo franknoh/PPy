@@ -40,7 +40,6 @@ from ...analysis.symbols import FunctionInfo
 
 __all__ = [
     "STATUS_FALLBACK",
-    "written_params",
     "STATUS_OK",
     "LoweredFunction",
     "NativeParam",
@@ -48,6 +47,7 @@ __all__ = [
     "Unsupported",
     "called_back_only",
     "eligible",
+    "written_params",
 ]
 
 #: The native entry point returns a status; a non-zero status means the caller

@@ -26,7 +26,7 @@ from ..analysis import types as T
 from ..backend.llvm.lowering import Unsupported
 from ..ir import BOOL, F64, I64, BufferType, PtrType, Successor, Value
 from ..ir.dialects import core
-from .collection_api import CollectionApiLowering
+from .collection_api import CollectionApiLowering, _called
 from .collections import BUILTINS, HANDLE, Kind, Shape
 
 __all__ = ["ContainerLowering"]
@@ -57,7 +57,10 @@ class ContainerLowering(CollectionApiLowering):
     # -- making ------------------------------------------------------------------------
 
     def _make_collection(self, name: str, value: ast.expr, declared: T.Type | None = None) -> bool:
-        from .ast_to_ir import _ALLOCATIONS, _line_buffer_read  # pylint: disable=import-outside-toplevel
+        from .ast_to_ir import (  # pylint: disable=import-outside-toplevel
+            _ALLOCATIONS,
+            _line_buffer_read,
+        )
 
         if isinstance(value, ast.Call) and (
             _line_buffer_read(value) is not None or ast.unparse(value.func) in _ALLOCATIONS
@@ -91,11 +94,11 @@ class ContainerLowering(CollectionApiLowering):
 
     def _value(self, node: ast.expr, shape: Shape) -> tuple[Value, bool]:
         # `d[k] = []`, `xs.append({})`: the empty display takes the slot's type.
-        if shape.kind == "collection" and shape.collection is not None:
-            if shape.collection.name in _ALIASES:
-                made = self._made(shape.collection, node)
-                if made is not None:
-                    return made, True
+        collection = shape.collection if shape.kind == "collection" else None
+        if collection is not None and collection.name in _ALIASES:
+            made = self._made(collection, node)
+            if made is not None:
+                return made, True
         return super()._value(node, shape)
 
     def _made(self, kind: Kind, node: ast.expr) -> Value | None:
@@ -122,10 +125,9 @@ class ContainerLowering(CollectionApiLowering):
             and _CONSTRUCTORS.get(node.func.id) == kind.name
         ):
             return self._constructed_builtin(kind, node)
-        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and kind.name == "List":
-            if node.func.id == "sorted":
-                source = self._sorted_source(node)
-                return self._take(source)
+        if _called(node, "sorted") and kind.name == "List":
+            assert isinstance(node, ast.Call)
+            return self._take(self._sorted_source(node))
         return None
 
     def _take(self, source) -> Value:  # type: ignore[no-untyped-def]
@@ -260,9 +262,9 @@ class ContainerLowering(CollectionApiLowering):
 
     def _for_collection(self, node: ast.For) -> None:
         iterables = [node.iter]
-        if isinstance(node.iter, ast.Call) and isinstance(node.iter.func, ast.Name):
-            if node.iter.func.id in {"enumerate", "zip", "reversed"}:
-                iterables = list(node.iter.args)
+        if any(_called(node.iter, name) for name in ("enumerate", "zip", "reversed")):
+            assert isinstance(node.iter, ast.Call)
+            iterables = list(node.iter.args)
         for iterable in iterables:
             self._refuse_set_order(iterable, None)
         super()._for_collection(node)
@@ -489,8 +491,12 @@ class ContainerLowering(CollectionApiLowering):
             counted = self._list_position(handle, given)  # type: ignore[attr-defined]
             low = core.select(b, core.cmp(b, "lt", counted, self._word(0)), self._word(0), counted)
             position = core.select(b, core.cmp(b, "gt", low, length), length, low)
-            address = self._rt("ppy_seq_insert", (handle, position), HANDLE)
-            self._store_into(address, shape, arguments[1], fresh=True)
+            self._store_node(
+                lambda: self._rt("ppy_seq_insert", (handle, position), HANDLE),
+                shape,
+                arguments[1],
+                fresh=True,
+            )
             return self._word(0)
         if attr == "pop" and len(arguments) <= 1:
             length = self._rt("ppy_coll_len", (handle,))
@@ -558,6 +564,8 @@ class ContainerLowering(CollectionApiLowering):
         shape = kind.value
         if kind.name == "Set" or shape is None:
             raise Unsupported("a set has no index")
+        # `xs[i] = e`, `d[k] = e`: `e` first, as Python evaluates it.
+        stored = self._value(value, shape) if value is not None else None
         if kind.name == "Dict":
             address = self._element_address(
                 self._alias(kind), handle, index, write=value is not None
@@ -575,8 +583,8 @@ class ContainerLowering(CollectionApiLowering):
             what = "list assignment index" if value is not None else "list index"
             self._require(inside, f"{what} out of range", f"IndexError: {what} out of range")
             address = self._rt("ppy_seq_at", (handle, position), HANDLE)
-        if value is not None:
-            self._store_into(address, shape, value, fresh=False)
+        if stored is not None:
+            self._put_value(address, shape, stored[0], stored[1], fresh=False)
             self._done_with(handle, owned)
             return self._word(0)
         found = self._read(address, shape)
@@ -705,8 +713,7 @@ class ContainerLowering(CollectionApiLowering):
             return super()._contains(container, key)
         if kind.name != "List":
             return super()._contains(container, key)
-        found = self._search_in(kind, container, key)
-        return found
+        return self._search_in(kind, container, key)
 
     def _search_in(self, kind: Kind, container: ast.expr, needle: ast.expr) -> Value:
         """`x in xs` of a list: a search from the front."""

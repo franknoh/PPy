@@ -357,7 +357,7 @@ class Boundary:
             words: list[Any] = []
             try:
                 for item in items:
-                    words.append(self._native(item, spec))  # noqa: PERF401 - kept on failure
+                    words.append(self._native(item, spec))
             except BaseException:
                 # The references meant for the parent it will never hold.
                 for handle in words:
