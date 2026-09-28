@@ -42,8 +42,10 @@ def grow(count: int) -> list[int]:
 - `counts` is declared `dict[int, int]`, and `counts.get(value, 0) + 1`
   checks against it.
 
-None of these functions is native, because a dict or a set has no native
-form. All of them are strict, typed, and pure.
+All four functions are native under `ppy run`: plain lists, dicts, and sets
+lower to native code (see [Lists, dicts, and sets](../../docs/guide/containers.md)).
+`main` stays in Python because it prints. All of them are strict, typed, and
+pure.
 
 ## Local mutation is pure, shared mutation is not
 

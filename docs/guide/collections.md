@@ -7,6 +7,11 @@ numbers, tuples, dataclasses, or other collections, and a function that uses
 them goes native under `ppy run`, in a standalone binary, and in emitted C
 and C++.
 
+Python's own `list`, `dict`, and `set` lower over the same runtime with no
+rewrite; see [Lists, dicts, and sets](containers.md). The types here are for
+what those do not say: a queue, a heap, a linked list, a map kept in key
+order.
+
 ```python
 from ppy import Deque, Vec
 

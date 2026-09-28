@@ -1413,7 +1413,9 @@ class _FunctionLowering(ContainerLowering, StringLowering):
         if len(node.targets) != 1:
             raise Unsupported("chained assignment has no native lowering")
         target = node.targets[0]
-        if isinstance(target, ast.Name) and self._make_collection(target.id, node.value):
+        if isinstance(target, ast.Name) and self._make_collection(
+            target.id, node.value, self._type_of(target)
+        ):
             return
         if self._unpack_strings(target, node.value):
             return

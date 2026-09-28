@@ -72,6 +72,13 @@ class ContainerLowering(CollectionApiLowering):
         expected = (
             self._builtin_of(ast.Name(name, ast.Load())) if name in self.collections else None
         )
+        if declared is None or _holds_never(declared):
+            # `out = []` then `out.append(x)`: the checker widened the name
+            # later, and the function's final locals hold what it became.
+            analysis = self.frontend.analysis.functions.get(self.info.qualname)
+            final = analysis.locals.get(name) if analysis is not None else None
+            if final is not None and not _holds_never(final):
+                declared = final
         if expected is None and declared is not None:
             found = self._reference_of_type(declared)
             expected = found if isinstance(found, Kind) and found.name in _ALIASES else None
@@ -727,6 +734,11 @@ class ContainerLowering(CollectionApiLowering):
             self._release(made)
         self._done_with(handle, owned)
         return core.cmp(self.b, "ge", found, self._word(0))
+
+
+def _holds_never(t: T.Type) -> bool:
+    base = T.strip_literal(t)
+    return isinstance(base, T.Instance) and any(isinstance(a, T.NeverType) for a in base.args)
 
 
 def _empty_display(node: ast.expr) -> str | None:

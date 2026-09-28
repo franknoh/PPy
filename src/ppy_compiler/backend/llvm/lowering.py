@@ -233,11 +233,18 @@ _BUILTIN_CONTAINERS = frozenset({"list", "dict", "set"})
 
 
 def written_params(analysis: FunctionAnalysis | None) -> frozenset[str]:
-    """The parameters a function writes through, which decides how a list of
-    numbers crosses: lent as a buffer when only read, by handle when written."""
+    """The parameters held by handle rather than lent as buffers: every one, when
+    the function writes through any parameter, and none otherwise.
+
+    A list of numbers only read is lent as a buffer, a copy of its words. A
+    function that writes through a parameter may be handed the same list
+    twice (`f(xs, xs)`), and a copy would not see the write: then each list
+    goes by handle, and the boundary keeps one object one handle."""
     if analysis is None:
         return frozenset()
-    return frozenset(analysis.mutated_params | analysis.delegated_writes)
+    if not (analysis.mutated_params | analysis.delegated_writes):
+        return frozenset()
+    return frozenset(p.name for p in analysis.info.params)
 
 
 def _collection_param(
@@ -257,6 +264,8 @@ def _collection_param(
         if not written and _buffer_element(base) is not None:
             # A list of numbers the function only reads is lent as a buffer.
             return None
+        if not _held_natively(base, layouts):
+            return None
         return NativeParam(name, "handle", str(base), class_name=base.name)
     if isinstance(base, T.Union_):
         members = [m for m in base.members if m != T.NONE]
@@ -272,6 +281,15 @@ def _collection_param(
     if layouts is not None and layouts.get(base.name) == ():
         return NativeParam(name, "handle", collection_spelled(base), class_name=base.name)
     return None
+
+
+def _held_natively(base: T.Instance, layouts: ClassLayouts | None) -> bool:
+    """Whether native code holds this `list`, `dict`, or `set`: what it holds has
+    a native form, and a key is one native code hashes as CPython does."""
+    from ...lowering.collections import kind_of  # pylint: disable=import-outside-toplevel
+
+    records = {name: (tuple(fields), False) for name, fields in (layouts or {}).items()}
+    return kind_of(base, records) is not None
 
 
 def _native_param(

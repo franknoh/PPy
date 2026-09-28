@@ -1135,6 +1135,7 @@ class CollectionLowering:
 
     def _rt(self, symbol: str, arguments: tuple[Value, ...], result: IRType | None = I64) -> Value:
         """One call into the collections runtime."""
+        self._use_collections()
         results = (result,) if result is not None else ()
         found = core.call_extern(self.b, symbol, arguments, results)
         if symbol.startswith(_CALLS_BACK) and self._calls_back():
