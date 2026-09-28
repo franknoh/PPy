@@ -62,6 +62,19 @@ also lowers: filling memory you allocated and then passing it on.
 A call to a function that did not lower keeps its caller on the Python side,
 because the call would otherwise name a symbol nothing defines.
 
+`int(x)` of a float truncates toward zero, as CPython does, when the result
+is a 64-bit word. The machine's conversion has no answer for the rest (x86
+gives -2**63, and C leaves it undefined), so each case is a guard:
+
+| `x` | CPython | `ppy run` | a standalone binary, emitted C or C++ |
+|---|---|---|---|
+| NaN | `ValueError: cannot convert float NaN to integer` | falls back and raises it | prints it and exits 1 |
+| an infinity | `OverflowError: cannot convert float infinity to integer` | falls back and raises it | prints it and exits 1 |
+| past 2**63 | the exact integer | falls back and returns it | `OverflowError: the result does not fit in a 64-bit integer`, exit 1 |
+
+The guards are range checks, so `--unsafe` keeps them. Nothing saturates to
+the largest or smallest word: Python's integers have no largest.
+
 ## Threads
 
 The generated wrapper releases the GIL around the native call, so
