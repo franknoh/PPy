@@ -14,6 +14,7 @@ the caller records the function as running on CPython.
 from __future__ import annotations
 
 import ast
+import math
 import re
 from collections.abc import Callable
 from dataclasses import dataclass, field, replace
@@ -3938,6 +3939,50 @@ class _FunctionLowering(CollectionApiLowering, StringLowering):
         self.frontend.module.require("math", 1)
         return math_dialect.call(self.b, "abs" if name == "fabs" else name, *arguments)
 
+    def _float_to_int(self, value: Value) -> Value:
+        """`int(x)` of a float: truncated toward zero, where the result is a word.
+
+        CPython raises for NaN (`ValueError`) and for an infinity
+        (`OverflowError`), and past 2**63 gives an integer no word holds. The
+        machine's conversion answers none of these (x86 says -2**63, C calls
+        it undefined), so each is a guard: under `ppy run` Python answers,
+        and a standalone binary says what CPython would have raised.
+        """
+        if not self.device:
+            core.guard(
+                self.b,
+                core.cmp(self.b, "eq", value, value),
+                "range",
+                "int() of NaN",
+                raises="ValueError: cannot convert float NaN to integer",
+            )
+            infinity = core.const(self.b, math.inf, F64)
+            core.guard(
+                self.b,
+                core.bitwise(
+                    self.b,
+                    "and",
+                    core.cmp(self.b, "lt", value, infinity),
+                    core.cmp(self.b, "gt", value, core.const(self.b, -math.inf, F64)),
+                ),
+                "range",
+                "int() of an infinity",
+                raises="OverflowError: cannot convert float infinity to integer",
+            )
+            core.guard(
+                self.b,
+                core.bitwise(
+                    self.b,
+                    "and",
+                    core.cmp(self.b, "ge", value, core.const(self.b, -(2.0**63), F64)),
+                    core.cmp(self.b, "lt", value, core.const(self.b, 2.0**63, F64)),
+                ),
+                "range",
+                "int() past 64 bits",
+                raises="OverflowError: the result does not fit in a 64-bit integer",
+            )
+        return core.cast(self.b, value, I64)  # truncates toward zero, like `int()`
+
     def _builtin_call(self, name: str, node: ast.Call) -> Value:
         if len(node.args) != 1:
             raise Unsupported(f"`{name}` with this arity has no native lowering")
@@ -3948,7 +3993,7 @@ class _FunctionLowering(CollectionApiLowering, StringLowering):
             return self._truth(value)
         if name == "int":
             if value.type == F64:
-                return core.cast(self.b, value, I64)  # truncates toward zero, like `int()`
+                return self._float_to_int(value)
             return self._coerce(value, "int")
         if name == "abs":
             if value.type == F64:
