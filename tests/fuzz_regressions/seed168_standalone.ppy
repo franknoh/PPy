@@ -1,0 +1,49 @@
+# fuzz: path=standalone seed=168 (stdout differs)
+import math
+from dataclasses import dataclass
+
+from ppy import Deque, HashMap, Heap, TreeMap, Vec
+
+
+@dataclass
+class Point:
+    x: int
+    y: int
+
+
+class Counter:
+    def __init__(self, start: int) -> None:
+        self.count: int = start
+
+    def bump(self, by: int) -> int:
+        self.count += by
+        return self.count
+
+
+def biggest[T: int | float](values: Vec[T]) -> T:
+    best = values[0]
+    for value in values:
+        if value > best:
+            best = value
+    return best
+
+
+def fn1(a2: float, a3: str, a4: int) -> int:
+    f5: float = (((a2 * a4) / (max(a2, a2) if max(a2, a2) != 0.0 else 2.0)) / (3.0 if 3.0 != 0.0 else 2.0))
+    v13 = Vec[int]()
+    v13.push((a4 // (0 if 0 != 0 else -7)))
+    v13.push(-10)
+    n14: int = v13[(a4 - -9) % len(v13)]
+    f15: float = math.sqrt(abs((math.sqrt(abs(a2)) / f5)))
+    return n14
+
+
+
+
+
+
+def main() -> None:
+    print(fn1(float("nan"), ' spaced out ', 12))
+
+
+main()

@@ -1,0 +1,102 @@
+# fuzz: path=c seed=109 (stdout differs)
+import math
+from dataclasses import dataclass
+
+from ppy import Deque, HashMap, Heap, TreeMap, Vec
+
+
+@dataclass
+class Point:
+    x: int
+    y: int
+
+
+class Counter:
+    def __init__(self, start: int) -> None:
+        self.count: int = start
+
+    def bump(self, by: int) -> int:
+        self.count += by
+        return self.count
+
+
+def biggest[T: int | float](values: Vec[T]) -> T:
+    best = values[0]
+    for value in values:
+        if value > best:
+            best = value
+    return best
+
+
+def fn1(a2: str) -> str:
+    n3: int = -3
+    f8: float = -2.5
+    t9 = ((-6 - n3), (f8 + -2.5))
+    n10, f11 = t9
+    b12: bool = (('two  gaps'.replace('MiXeD', ' spaced out ') in ('a' * 2)) or not (n10 == max(-8, 4)))
+    if (((a2 + a2) >= str(float("-inf"))) or not b12):
+        f13: float = (((f11 + -11) + (1e-300 * f8)) - 1e-300)
+        n14: int = (9 << (n3 % 49))
+    else:
+        m15 = HashMap[int, int]()
+        m15[-4] = m15.get(-4, 0) + int(-2.5)
+        m15[abs(n3)] = m15.get(abs(n3), 0) + int(0.5)
+        n16: int = len(m15) * 100
+    return a2
+
+
+def fn18(a19: float) -> bool:
+    h20 = Heap[int]()
+    h20.push((4611686018427387903 % (10 if 10 != 0 else 5)))
+    n21: int = 0
+    n22: int = (((n21 ^ -9223372036854775808) if ('ab' >= ' spaced out '[2:5]) else 8) * ((n21 - n21) - min(6, -10)))
+    c23 = Counter((4611686018427387904 + -4))
+    n24: int = c23.bump((n22 % (-3 if -3 != 0 else 3)))
+    n24 += c23.bump(abs(0))
+    s25: str = f"{'Hello':>6}|{n22}"
+    n26: int = (n24 if (n24 != int(a19)) else n21)
+    tm27 = TreeMap[int, int]()
+    tm27[(n22 // (n24 if n24 != 0 else 3))] = n26
+    tm27[(n24 * n22)] = int(3.0)
+    tm27[(n22 + n22)] = n21
+    tm27[n24] = (n21 + n26)
+    n28: int = tm27.min() * 10 + tm27.max() + len(tm27)
+    return ((n28 * n24) <= (n26 - n21))
+
+
+def fn29(a30: str, a31: float) -> bool:
+    p32 = Point((-8 >> (0 % 6)), len(a30))
+    n33: int = p32.x * 3 - p32.y
+    k34: int = 0
+    k36: int = 0
+    return ((-0.0 + a31) <= -0.0)
+
+
+def fn39(a40: str) -> float:
+    v41 = Vec[int]()
+    v41.push((-12 % 2))
+    v41.push(8)
+    v41.push((-3 // (-12 if -12 != 0 else 5)))
+    v41.push(10)
+    v41.sort(reverse=True)
+    n42: int = biggest(v41)
+    n43: int = -(n42)
+    f44: float = -0.0
+    return (f44 * 7.25)
+
+
+
+
+def main() -> None:
+    print(fn1('Hello'))
+    print(fn18(3.0))
+    print(fn18(1e308))
+    print(fn29('two  gaps', 7.25))
+    print(fn29('x-y-z', 1e-300))
+    print(fn29('a', 7.25))
+    print(fn39('x-y-z'))
+    print(fn39('ab'))
+    print(fn39(' spaced out '))
+
+
+main()

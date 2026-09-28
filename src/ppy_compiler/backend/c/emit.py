@@ -2492,10 +2492,18 @@ class _FunctionEmitter:
         t = op.result.type
         (a, b), reads = self.operands(op)
         if name == "shr":
+            # A shift's type is its left operand's, promoted: a bare literal is
+            # an `int`, and shifting it by 32 or more is undefined.
+            if re.fullmatch(r"-?\d+", a[0]):
+                a = self.cast_text(a, t)
             self.infix(op.result, ">>", a, b, reads)
             return
         unsigned = self.owner.c_type(IntType(t.width if isinstance(t, IntType) else 64, False))
-        wide = _infix("<<", self._unsigned(op.operands[0], unsigned), self.cast_text(b, unsigned))
+        left = self._unsigned(op.operands[0], unsigned)
+        if re.fullmatch(r"\d+u", left[0]):
+            # `9u << 46` shifts an `unsigned int`: the literal takes the width.
+            left = self.cast_text((left[0][:-1], _ATOM), unsigned)
+        wide = _infix("<<", left, self.cast_text(b, unsigned))
         if op.attributes.get("overflow", "wrap") in {"wrap", "native"}:
             text, level = self.cast_text(wide, t)
             if self.fold(op.result, (text, level), reads=reads) == text:
@@ -2514,10 +2522,6 @@ class _FunctionEmitter:
         (a, b), reads = self.operands(op)
         predicate = str(op.attributes["predicate"])
         floating = isinstance(op.operands[0].type, FloatType)
-        if predicate == "ne" and floating:
-            # Ordered, like the LLVM road: NaN compares neither less nor greater.
-            self.fold(op.result, _infix("||", _infix("<", a, b), _infix(">", a, b)), reads=reads)
-            return
         symbol = _CMP[predicate]
         if a[0] == b[0] and (not floating or symbol in {"<", ">"}):
             # A value against itself: settled here, or a C compiler warns about it.

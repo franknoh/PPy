@@ -1,0 +1,58 @@
+# fuzz: path=c seed=230 (stdout differs)
+import math
+from dataclasses import dataclass
+
+from ppy import Deque, HashMap, Heap, TreeMap, Vec
+
+
+@dataclass
+class Point:
+    x: int
+    y: int
+
+
+class Counter:
+    def __init__(self, start: int) -> None:
+        self.count: int = start
+
+    def bump(self, by: int) -> int:
+        self.count += by
+        return self.count
+
+
+def biggest[T: int | float](values: Vec[T]) -> T:
+    best = values[0]
+    for value in values:
+        if value > best:
+            best = value
+    return best
+
+
+
+
+
+
+
+
+def fn44(a45: float, a46: int) -> int:
+    c47 = Counter((-4 - a46))
+    n48: int = c47.bump((a46 - a46))
+    n48 += c47.bump((8 if ((a46 // (6 if 6 != 0 else 3)) <= (a46 - -5)) else a46))
+    h54 = Heap[int]()
+    h54.push(a46)
+    h54.push((a46 * a46))
+    h54.push(a46)
+    h54.push(int(1e308))
+    h54.push((a46 - n48))
+    n55: int = 0
+    n56: int = a46
+    k57: int = 0
+    s61: str = ('two  gaps' + f"[{len('Hello'):,}]")
+    return len(s61)
+
+
+def main() -> None:
+    print(fn44(0.5, 6))
+
+
+main()

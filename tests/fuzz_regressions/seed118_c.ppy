@@ -1,0 +1,58 @@
+# fuzz: path=c seed=118 (stdout differs)
+import math
+from dataclasses import dataclass
+
+from ppy import Deque, HashMap, Heap, TreeMap, Vec
+
+
+@dataclass
+class Point:
+    x: int
+    y: int
+
+
+class Counter:
+    def __init__(self, start: int) -> None:
+        self.count: int = start
+
+    def bump(self, by: int) -> int:
+        self.count += by
+        return self.count
+
+
+def biggest[T: int | float](values: Vec[T]) -> T:
+    best = values[0]
+    for value in values:
+        if value > best:
+            best = value
+    return best
+
+
+def fn1(a2: int, a3: float) -> float:
+    b4: bool = ((math.sqrt(abs(a3)) == (7.25 / (a3 if a3 != 0.0 else 2.0))) or not (((-12 >= (a2 // (-6 if -6 != 0 else 3))) or not ((a2 * 7) < (a2 // a2))) or not (min(-8, a2) >= -(4611686018427387903))))
+    f5: float = ((math.sqrt(abs(a3)) + a3) + a3)
+    return max(((1e308 * a2) * (a3 * a2)), 3.0)
+
+
+
+
+def fn16(a17: str, a18: str, a19: str) -> float:
+    s20: str = ' spaced out '
+    for i21 in range(5):
+        c22 = Counter(max(i21, 8))
+        n23: int = c22.bump(len(a19))
+        n23 += c22.bump(int(1e308))
+        f24: float = ((math.sqrt(abs(3.0)) - min(0.5, -0.0)) * n23)
+    n25: int = (abs(int(3.0)) * int(3.0))
+    b26: bool = (('a' + '') > str(n25))
+    return (math.sqrt(abs(0.5)) + 1e308)
+
+
+
+
+def main() -> None:
+    print(fn1(6, 7.25))
+    print(fn16('x-y-z', '123', 'two  gaps'))
+
+
+main()

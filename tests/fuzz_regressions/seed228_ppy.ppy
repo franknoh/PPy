@@ -1,0 +1,89 @@
+# fuzz: path=ppy seed=228 (stdout differs)
+import math
+from dataclasses import dataclass
+
+from ppy import Deque, HashMap, Heap, TreeMap, Vec
+
+
+@dataclass
+class Point:
+    x: int
+    y: int
+
+
+class Counter:
+    def __init__(self, start: int) -> None:
+        self.count: int = start
+
+    def bump(self, by: int) -> int:
+        self.count += by
+        return self.count
+
+
+def biggest[T: int | float](values: Vec[T]) -> T:
+    best = values[0]
+    for value in values:
+        if value > best:
+            best = value
+    return best
+
+
+def fn1(a2: int, a3: int, a4: str) -> bool:
+    m5 = HashMap[str, int]()
+    m5[(a4 + 'MiXeD')] = m5.get((a4 + 'MiXeD'), 0) + min(a3, -10)
+    m5[a4[5:5:2]] = m5.get(a4[5:5:2], 0) + (2 % (a2 if a2 != 0 else 3))
+    n6: int = len(m5) * 100
+    n8: int = min(a2, n6)
+    a3 -= 4611686018427387904
+    b13: bool = ((((a3 // (n8 if n8 != 0 else -3)) >= (n6 + a2)) or not ('x-y-z' < a4)) or not (-(n6) == n8))
+    return ((7.25 + -5) == min(-0.0, 1e308))
+
+
+def fn26(a27: int) -> int:
+    b28: bool = ((-2.5 == float(a27)) or not (abs(a27) > a27))
+    h29 = Heap[int]()
+    h29.push((6 >> (-1 % 62)))
+    h29.push((4611686018427387903 - a27))
+    h29.push((a27 // (a27 if a27 != 0 else 5)))
+    h29.push(len('ab'))
+    n30: int = 0
+    k31: int = 0
+    b34: bool = (('MiXeD' * 3) < str(3))
+    return a27
+
+
+def fn35(a36: str) -> int:
+    p37 = Point(3, (8 - 3))
+    n38: int = p37.x * 3 - p37.y
+    n39: int = (((n38 * n38) + n38) - ((9 * n38) * (n38 % (n38 if n38 != 0 else 5))))
+    p46 = Point((n38 if (7 >= (-5 + n38)) else -7), 9223372036854775807)
+    n47: int = p46.x * 3 - p46.y
+    return (int(0.5) * ((n39 - n39) if (n47 <= (n39 << (n39 % 7))) else n39))
+
+
+def fn48(a49: float, a50: int) -> str:
+    for i51 in range(2):
+        s52: str = f"<{(a49 + 1e-300):08.3f}>".swapcase()
+        k53: int = 0
+        while k53 < 4:
+            k53 += 1
+            for i54 in range(1):
+                for i55 in range(1):
+                    t56 = ((i55 - a50), (a49 + a49))
+                    n57, f58 = t56
+    b59: bool = (a50 < a50)
+    a50 += (a50 + 8)
+    t60 = ((a50 - a50), (-0.0 / (7.25 if 7.25 != 0.0 else 2.0)))
+    n61, f62 = t60
+    s63: str = ('Hello' + 'a')
+    n64: int = (a50 - -((-1 - 1)))
+    return ((s63 + s63).replace('a', 'MiXeD') * 2)
+
+
+def main() -> None:
+    print(fn1(-6, 5, '123'))
+    print(fn26(2))
+    print(fn26(-7))
+
+
+main()
