@@ -13,11 +13,20 @@ ppy build --standalone ledger.ppy -o dist && ./dist/ledger
 ```
 
 <!-- outputs:start -->
+## What it prints
+
+**`python  ledger.ppy`**, **`ppy run ledger.ppy`**, **`ppy build --standalone ledger.ppy -o dist && ./dist/ledger`**
+
+```text
+50 accounts, 10055 bad rows (longest message 23), richest 185856, overdrawn 30
+78498 primes, widest gap 114, 8169 twin pairs, past the end -1
+```
+
 <!-- outputs:end -->
 
 ## The program
 
-- `ledger(count)` is a generator. It yields 1.5 million rows as text,
+- `ledger(count)` is a generator. It yields 500,000 rows as text,
   `acct7,-120` and the like; now and then a row has no comma, or no amount.
 - `amount_of(row)` splits a row with `partition` and raises `BadRow`, a
   subclass of `ValueError`, with a message saying what is missing.
@@ -26,7 +35,7 @@ ppy build --standalone ledger.ppy -o dist && ./dist/ledger
   `continue`s. The good rows add up per account in a `HashMap`. The richest
   balance and the number overdrawn come from `max` and `sum` over generator
   expressions.
-- `primes(limit)` yields the primes below 200,000 by trial division, and
+- `primes(limit)` yields the primes below 1,000,000 by trial division, and
   `gaps` builds a `Vec` from it, finds the widest gap and the twin pairs
   with generator expressions, and reads one past the end in a `try` that
   catches the `IndexError`.
@@ -56,9 +65,9 @@ One machine, wall time for the whole program:
 
 | | seconds |
 |---|---:|
-| `python ledger.ppy` | TIME_PYTHON |
-| `ppy run ledger.ppy`, after the first run built the cache | TIME_RUN |
-| `./dist/ledger`, the standalone binary | TIME_STANDALONE |
+| `python ledger.ppy` | 2.1 |
+| `ppy run ledger.ppy`, after the first run built the cache | 0.43 |
+| `./dist/ledger`, the standalone binary | 0.29 |
 
 `ppy run` includes the compiler's own start-up and checking the file, which
 the standalone binary does not pay.
