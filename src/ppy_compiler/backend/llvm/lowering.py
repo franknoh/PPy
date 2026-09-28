@@ -242,7 +242,7 @@ def written_params(analysis: FunctionAnalysis | None) -> frozenset[str]:
     goes by handle, and the boundary keeps one object one handle."""
     if analysis is None:
         return frozenset()
-    if not (analysis.mutated_params | analysis.delegated_writes):
+    if not analysis.mutated_params and not analysis.delegated_writes:
         return frozenset()
     return frozenset(p.name for p in analysis.info.params)
 
