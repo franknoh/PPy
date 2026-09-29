@@ -1,6 +1,126 @@
 # Changelog
 
-## 0.5.0 — unreleased
+## 0.5.0 — 2026-09-30
+
+Ordinary Python goes native without a rewrite. Plain lists, dicts, and sets
+compile, and so do exceptions and generators. A warm `ppy run` is within
+noise of `python` (5%, or 30 ms if that is more) or faster on every example;
+a program that does almost no work still pays about 15 ms to start. A
+differential fuzzer now checks every path against CPython, and the bugs it
+found are fixed.
+
+### Lists, dicts, and sets
+
+- Plain `list`, `dict`, and `set` lower to native code under `ppy run`, in
+  standalone builds, and in emitted C and C++. This covers their methods,
+  slicing, comprehensions, and the common builtins over them, with CPython's
+  results and error messages. `except IndexError`, `except KeyError`, and
+  `except ValueError` around them run natively.
+- A function that takes or returns a list, dict, or set can be called from
+  Python natively. Arguments are copied in, and a container the function
+  wrote is updated in place. A container of strings is copied only for a
+  function that does more than one pass of work per string.
+- `out = []` or `seen = set()`, typed by a later `append` or `add`, lowers
+  natively.
+- Walking a set, and a dict keyed by `float` or `bool`, stay in Python.
+- Fixed: `xs.append(len(xs))` and `v.push(len(v))` natively appended the
+  length after the append.
+- Fixed: a build could reuse a library linked with the collections runtime
+  from before an edit to it.
+- New guide page: Lists, dicts, and sets.
+
+### Exceptions and generators
+
+- `raise`, `try` with `except`, `else`, and `finally`, and `assert` compile
+  to native code under `ppy run`, in standalone binaries, and in emitted C
+  and C++. Exceptions cross native calls, and the checks native code makes
+  raise CPython's exception with CPython's message where a `try` can catch
+  them.
+- Generator functions and generator expressions compile to native code when
+  consumed by `for`, `next`, `sum`, `min`, `max`, `sorted`, `any`, `all`, a
+  comprehension, or a collection constructor.
+- Fixed: a value assigned before a `continue`, a `break`, or a raise inside
+  `try` could be folded to its earlier constant.
+- Fixed: a native function returning `str` ran as Python under a warm
+  `ppy run`.
+- New example `50_errors_and_generators` and guide page "Exceptions and
+  generators".
+
+### `ppy run` is never slower
+
+- `ppy run` of a program it built before starts in about 15 to 20 ms over
+  `python`, down from about 40 ms.
+  - A plain `ppy run FILE` checks the artifact's own sources, the
+    directories their imports resolve through, and the project's
+    configuration, and runs it before the command line is parsed.
+  - A program none of whose native code Python calls runs from a precompiled
+    plan without loading the native library.
+  - Otherwise the launcher reads what it parsed and compiled on its first
+    run.
+- A program that never imports `ppy` no longer loads it under `ppy run`.
+- `ppy run` and `ppy build` share compiled CPython-ABI wrappers across
+  projects in `~/.cache/ppy/wrappers`.
+- A function that takes a container is called natively from Python only when
+  its work grows with the container. The boundary copies a container in and
+  back, which cost far more than a body that reads a few elements.
+- Fixed: a native function that only reads a collection it is given failed
+  to load under `ppy run` (`undefined symbol: ppy_coll_retain`).
+- String work in native code is faster:
+  - literals are made once and reused;
+  - `for c in s` over ASCII and `c in "aeiou"` make no runtime call per
+    character;
+  - `s += a + str(n)` appends in place;
+  - comparing two characters is inline;
+  - `upper()` and the other ASCII case methods do not rescan their result.
+
+  The strings example runs in about 1 s warm, against about 2.4 s for `python`.
+- `scripts/run_overhead.py` times `python` against `ppy run`, cold and warm,
+  for every example, and the performance page shows the result.
+
+### Differential fuzzing
+
+- New: `scripts/fuzz.py` generates programs over the native subset and runs
+  each on every path (CPython, the Python backend, `ppy run`, a standalone
+  binary, and C and C++ under AddressSanitizer), reporting any difference;
+  `tests/test_fuzz.py` runs a few in CI and replays every program it has
+  found.
+- Fixed: in native code a float `!=` against NaN, and `if x:` on a NaN, were
+  false; a NaN divisor raised `ZeroDivisionError`. They now answer as Python
+  does.
+- Fixed: `a if c else b` in native code evaluated both sides, so the side
+  not taken could raise (`0 if c else int(nan)`). It now evaluates only the
+  side taken.
+- Fixed: `a or b` and `a and b` over numbers in native code gave
+  `True`/`False` instead of the operand that decided (`0 or 5` is `5`).
+- Fixed: a `for i in range(...)` whose body assigns `i` looped forever in
+  native code; the range now counts on its own, as in Python.
+- Fixed: a loop whose body always returns, and code after an `if` the
+  checker proves constant, could be refused by a standalone build.
+- Fixed: `-9223372036854775808` written as a literal, a literal shifted by
+  32 or more, and division or remainder by a constant `-1` were refused or
+  undefined in emitted C.
+- Fixed: `int(float("inf"))` in a program made the compiler itself raise
+  `OverflowError` while folding constants.
+- Fixed: the Python backend removed an unused division or remainder along
+  with the `ZeroDivisionError` it raises, and could move one out of a loop
+  that would not have run it.
+- Fixed: checking a function with nested loops could take gigabytes of
+  memory; alias analysis now reaches its fixed point in one pass per loop.
+- `sorted` of numbers, strings, or tuples of them lowers natively from any
+  iterable, a generator included.
+- Standalone programs may `import math`.
+- Fixed: after `del xs[0]`, `xs.pop()`, or `xs.append(...)`, a later
+  `len(xs)` test could still use the list's length from where it was made,
+  and native code took the wrong branch.
+- Fixed: `min` or `max` in emitted C could read memory it had not written
+  before comparing the first element, which an optimizing C compiler may
+  turn into a crash.
+- Fixed: a string literal could be taken for an empty literal placed at the
+  same address, so `float("-inf")` raised `ValueError` in a standalone
+  binary and under `ppy run`.
+- Fixed: a warm `ppy run` could rerun the previous build after a same-size
+  edit made within one timestamp tick of the last build. A source that
+  recent is now checked by its content.
 
 ## 0.4.2 — 2026-09-28
 
