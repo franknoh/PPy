@@ -1,0 +1,81 @@
+# fuzz: path=ppy seed=782 (stdout differs)
+import math
+from dataclasses import dataclass
+
+from ppy import Deque, HashMap, Heap, TreeMap, Vec
+
+
+@dataclass
+class Point:
+    x: int
+    y: int
+
+
+class Counter:
+    def __init__(self, start: int) -> None:
+        self.count: int = start
+
+    def bump(self, by: int) -> int:
+        self.count += by
+        return self.count
+
+
+def biggest[T: int | float](values: Vec[T]) -> T:
+    best = values[0]
+    for value in values:
+        if value > best:
+            best = value
+    return best
+
+
+def fn1(a2: float, a3: bool) -> float:
+    b4: bool = ('123' in 'MiXeD')
+    if (f"{'Hello'}|{-10}" != f"[{1:,}]"):
+        if ((a2 + 4611686018427387904) >= max(a2, 0.5)):
+            if ((a2 / (a2 if a2 != 0.0 else 2.0)) == (a2 * a2)):
+                return (((1e-300 * -4611686018427387904) - a2) * ((12 - -4) << (11 % 11)))
+        else:
+            n5: int = (-11 if b4 else -10)
+        v6 = Vec[int]()
+        v6.push(9)
+        v6.push((-7 * -11))
+        v6.push(-7)
+        v6.push((5 * -1))
+        v6.reverse()
+        n7: int = sum(v6)
+    else:
+        if ('ab' in 'x-y-z'.replace('Hello', '123')):
+            n8: int = ((3037000499 * 2) if (abs(-1) < (3 % (7 if 7 != 0 else 3))) else 6)
+        else:
+            s9: str = (("-".join('two  gaps'.split()) + str(a2)) + str((-6 % (3037000499 if 3037000499 != 0 else -3))))
+    f10: float = (a2 * int(7.25))
+    p11 = Point((-2 >> (-8 % 59)), len('Hello'))
+    n12: int = p11.x * 3 - p11.y
+    n13: int = (((n12 * n12) + 6) + (n12 >> ((5 - 3037000499) % 9)))
+    return (((a2 + a2) / ((7.25 + f10) if (7.25 + f10) != 0.0 else 2.0)) + math.sqrt(abs(a2)))
+
+
+def fn14(a15: float, a16: bool, a17: bool) -> int:
+    p18 = Point((3037000499 * 12), (3 + 1))
+    n19: int = p18.x * 3 - p18.y
+    b20: bool = a17
+    return ((len('ab') * (-2 * 11)) & int((a15 * 9)))
+
+
+def fn21(a22: int, a23: int) -> float:
+    s24: str = ('ab' + f"[{(a23 - a23):,}]")
+    b25: bool = (7.25 <= float(a22))
+    n26: int = ((a23 % (a22 // (4611686018427387903 if 4611686018427387903 != 0 else -7))) - a22)
+    return 0.5
+
+
+def main() -> None:
+    print(fn1(0.5, False))
+    print(fn14(3.0, False, False))
+    print(fn14(0.5, False, True))
+    print(fn21(4, 4))
+    print(fn21(3, -3))
+    print(fn21(3037000499, -3))
+
+
+main()

@@ -1,0 +1,136 @@
+# fuzz: path=ppy seed=1243 (stdout differs)
+import math
+from dataclasses import dataclass
+
+from ppy import Deque, HashMap, Heap, TreeMap, Vec
+
+
+@dataclass
+class Point:
+    x: int
+    y: int
+
+
+class Counter:
+    def __init__(self, start: int) -> None:
+        self.count: int = start
+
+    def bump(self, by: int) -> int:
+        self.count += by
+        return self.count
+
+
+def biggest[T: int | float](values: Vec[T]) -> T:
+    best = values[0]
+    for value in values:
+        if value > best:
+            best = value
+    return best
+
+
+def fn1(a2: int, a3: str, a4: bool) -> bool:
+    tm5 = TreeMap[int, int]()
+    tm5[(9223372036854775807 % (a2 if a2 != 0 else 3))] = a2
+    tm5[a2] = a2
+    n6: int = tm5.min() * 10 + tm5.max() + len(tm5)
+    n7: int = (((n6 * a2) * len(a3)) if (((n6 + a2) >= (a2 + 5)) and not (-2.5 < (1e-300 - 7.25))) else n6)
+    for i8 in range(1):
+        for i9 in range(5):
+            for i10 in range(2):
+                if (((i10 >> (i8 % 49)) != (i8 // (n6 if n6 != 0 else 3))) or not (3.0 <= 7.25)):
+                    b11: bool = (str(7.25) in ('two  gaps' + '123'))
+                else:
+                    n7 += (11 + a2)
+        v12 = Vec[int]()
+        v12.push((a2 + 9223372036854775807))
+        v12.push(-8)
+        v12.push((-10 & 3))
+        v12.sort()
+        n13: int = v12.pop() + len(v12)
+    s14: str = '123'.capitalize()
+    tm15 = TreeMap[int, int]()
+    tm15[-(n7)] = -7
+    tm15[min(n6, 10)] = (a2 - n6)
+    tm15[(n7 + n6)] = (n7 | a2)
+    tm15[a2] = (n6 - n7)
+    n16: int = tm15.min() * 10 + tm15.max() + len(tm15)
+    q17 = Deque[int]()
+    q17.push_front(n16)
+    q17.push_back((-2 ^ n6))
+    n16 = q17.pop_back() - q17.pop_front()
+    return ('ab'.lower() in str(10))
+
+
+def fn18(a19: int, a20: int) -> str:
+    tm21 = TreeMap[int, int]()
+    tm21[(a19 // (3 if 3 != 0 else -7))] = max(a19, 0)
+    tm21[(-7 - a19)] = int(-2.5)
+    tm21[int(3.0)] = (a19 + -3)
+    n22: int = tm21.min() * 10 + tm21.max() + len(tm21)
+    q23 = Deque[int]()
+    q23.push_front(n22)
+    q23.push_back(a19)
+    n22 = q23.pop_back() - q23.pop_front()
+    f24: float = 1e308
+    a19 += (11 if ((a19 % (a19 if a19 != 0 else 5)) <= (n22 // (-7 if -7 != 0 else 3))) else a20)
+    return f"{' spaced out '[2:3:-1]:>6}|{a20}"
+
+
+def fn25(a26: bool, a27: str) -> int:
+    v28 = Vec[int]()
+    v28.push(-12)
+    v28.push(0)
+    v28.push((-5 << (-1 % 60)))
+    v28.push(len('two  gaps'))
+    n29: int = biggest(v28)
+    c30 = Counter(n29)
+    n31: int = c30.bump(4)
+    n31 += c30.bump((n29 // (11 if 11 != 0 else -3)))
+    n32: int = (11 % (len(a27.replace('', 'a')) if len(a27.replace('', 'a')) != 0 else 5))
+    return n31
+
+
+def fn33(a34: str, a35: str) -> str:
+    n36: int = ((min(10, -5) * (-7 // (-4 if -4 != 0 else 5))) // (((-3 >> (9 % 61)) if (abs(-9) <= (2 | -4)) else -10) if ((-3 >> (9 % 61)) if (abs(-9) <= (2 | -4)) else -10) != 0 else -7))
+    f37: float = (1e-300 + n36)
+    s38: str = f"{"-".join(('MiXeD' + a34).split()):>6}|{((7 * 5) - (n36 - -4))}"
+    n36 *= 5
+    s39: str = f"[{(n36 * (n36 // n36)):,}]"
+    t40 = ((-11 * n36), (f37 / (f37 if f37 != 0.0 else 2.0)))
+    n41, f42 = t40
+    return a35
+
+
+def fn43(a44: int) -> bool:
+    k45: int = 0
+    while k45 < 4:
+        k45 += 1
+        p46 = Point((12 if ((a44 - 9223372036854775807) < (5 if ((a44 + a44) < a44) else a44)) else -4), (a44 << (a44 % 12)))
+        n47: int = p46.x * 3 - p46.y
+    h48 = Heap[int]()
+    h48.push(a44)
+    h48.push((7 - a44))
+    n49: int = 0
+    while h48:
+        n49 = n49 * 5 + h48.pop()
+    t50 = (a44, (0.5 - -2.5))
+    n51, f52 = t50
+    n53: int = (n49 + n51)
+    if ((2 * -2) > (n53 - 4611686018427387903)):
+        return (str(f52) <= 'x-y-z'.lower())
+    return (0.5 == (-0.0 - f52))
+
+
+def main() -> None:
+    print(fn1(2, 'a', True))
+    print(fn18(-1, -1))
+    print(fn18(8, 4611686018427387904))
+    print(fn25(True, 'x-y-z'))
+    print(fn33('two  gaps', ''))
+    print(fn33('MiXeD', 'a'))
+    print(fn43(-9))
+    print(fn43(-10))
+    print(fn43(-9223372036854775808))
+
+
+main()

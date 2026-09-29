@@ -1,0 +1,136 @@
+# fuzz: path=ppy seed=524 (stdout differs)
+import math
+from dataclasses import dataclass
+
+from ppy import Deque, HashMap, Heap, TreeMap, Vec
+
+
+@dataclass
+class Point:
+    x: int
+    y: int
+
+
+class Counter:
+    def __init__(self, start: int) -> None:
+        self.count: int = start
+
+    def bump(self, by: int) -> int:
+        self.count += by
+        return self.count
+
+
+def biggest[T: int | float](values: Vec[T]) -> T:
+    best = values[0]
+    for value in values:
+        if value > best:
+            best = value
+    return best
+
+
+def fn1(a2: bool) -> float:
+    b3: bool = ((-8 // (10 if 10 != 0 else -7)) <= (10 - 10))
+    for i4 in range(1):
+        i4 //= ((i4 % (-12 if -12 != 0 else 5)) if (i4 % (-12 if -12 != 0 else 5)) != 0 else 3)
+        f5: float = 0.5
+    if ((-1 * -12) != -6):
+        if (0.5 < (1e308 - 7.25)):
+            return -2.5
+        if a2:
+            n6: int = ((-11 + (1 | 9223372036854775807)) + (2 << ((8 // (6 if 6 != 0 else -3)) % 16)))
+        else:
+            p7 = Point(12, (-12 >> (-3 % 7)))
+            n8: int = p7.x * 3 - p7.y
+    else:
+        h9 = Heap[int]()
+        h9.push(3037000499)
+        h9.push((5 * 1))
+        h9.push((0 * 12))
+        h9.push(0)
+        n10: int = 0
+        while h9:
+            n10 = n10 * 5 + h9.pop()
+    m11 = HashMap[int, int]()
+    m11[3037000499] = m11.get(3037000499, 0) + -11
+    n12: int = len(m11) * 100
+    for key13 in m11:
+        n12 = n12 * 3 + m11[key13]
+    b14: bool = ((-0.0 * 3.0) < float(8))
+    return (-2.5 + min(max(n12, -4611686018427387904), (3 * n12)))
+
+
+def fn15(a16: str) -> str:
+    for i17 in range(0):
+        n18: int = (((i17 * i17) // (i17 if i17 != 0 else -3)) * i17)
+        f19: float = 7.25
+    if ((0.5 > (1e-300 - 1e308)) and not ((-9 // (-2 if -2 != 0 else -7)) >= 9)):
+        n20: int = -5
+        n20 += len(a16)
+    else:
+        n21: int = (min((-12 ^ -9223372036854775808), (7 + -11)) if ((-2.5 >= (0.5 + -2.5)) and not (-10 < len(a16))) else 12)
+    for i22 in range(5):
+        i22 *= (i22 * 3037000499)
+        n23: int = int(((-2.5 / (-0.0 if -0.0 != 0.0 else 2.0)) - 1e308))
+    b24: bool = (max(-2.5, -0.0) != (0.5 + 1e-300))
+    return a16
+
+
+def fn25(a26: bool) -> bool:
+    b27: bool = ((11 - 4611686018427387904) < -3)
+    if (math.sqrt(abs(1e308)) > (0.5 / (7.25 if 7.25 != 0.0 else 2.0))):
+        n28: int = 9223372036854775807
+        s29: str = 'a'
+    else:
+        tm30 = TreeMap[int, int]()
+        tm30[(-1 // (-6 if -6 != 0 else 5))] = (7 + -4)
+        n31: int = tm30.min() * 10 + tm30.max() + len(tm30)
+        q32 = Deque[int]()
+        q32.push_front(n31)
+        q32.push_back((1 % (1 if 1 != 0 else -7)))
+        n31 = q32.pop_back() - q32.pop_front()
+    return ((-10 & 3) >= max(-11, 4))
+
+
+def fn33(a34: str, a35: bool, a36: str) -> int:
+    k37: int = 0
+    while k37 < 1:
+        k37 += 1
+        s38: str = a36
+    m39 = HashMap[int, int]()
+    m39[len('Hello')] = m39.get(len('Hello'), 0) + k37
+    n40: int = len(m39) * 100
+    for key41 in m39:
+        n40 = n40 * 3 + m39[key41]
+    f42: float = (3.0 / ((-2.5 * (0.5 / (1e308 if 1e308 != 0.0 else 2.0))) if (-2.5 * (0.5 / (1e308 if 1e308 != 0.0 else 2.0))) != 0.0 else 2.0))
+    n43: int = ((len(a36) ^ (n40 - k37)) % (int((f42 * -2.5)) if int((f42 * -2.5)) != 0 else -3))
+    if (a34 in "-".join(a36.split())):
+        s44: str = a36
+        b45: bool = ((-7 + n43) <= 6)
+    else:
+        s46: str = a36
+    m47 = HashMap[int, int]()
+    m47[k37] = m47.get(k37, 0) + (n40 & 8)
+    m47[(n43 if (n40 < (n40 - n43)) else n40)] = m47.get((n43 if (n40 < (n40 - n43)) else n40), 0) + (-8 * 4611686018427387904)
+    m47[(-8 * -3)] = m47.get((-8 * -3), 0) + (n40 if (max(n43, -2) <= (n43 & n40)) else -4611686018427387904)
+    m47[(k37 + -9223372036854775808)] = m47.get((k37 + -9223372036854775808), 0) + n40
+    n48: int = len(m47) * 100
+    for key49 in m47:
+        n48 = n48 * 3 + m47[key49]
+    return ((9 // (n40 + n43)) - max(n48, 9))
+
+
+def main() -> None:
+    print(fn1(True))
+    print(fn1(False))
+    print(fn1(False))
+    print(fn15(''))
+    print(fn15('Hello'))
+    print(fn15('123'))
+    print(fn25(True))
+    print(fn25(False))
+    print(fn33('ab', False, 'MiXeD'))
+    print(fn33('a', True, 'a'))
+    print(fn33('MiXeD', True, ' spaced out '))
+
+
+main()

@@ -1,0 +1,196 @@
+# fuzz: path=standalone seed=301 (did not build)
+import math
+from dataclasses import dataclass
+
+from ppy import Deque, HashMap, Heap, TreeMap, Vec
+
+
+@dataclass
+class Point:
+    x: int
+    y: int
+
+
+class Counter:
+    def __init__(self, start: int) -> None:
+        self.count: int = start
+
+    def bump(self, by: int) -> int:
+        self.count += by
+        return self.count
+
+
+def biggest[T: int | float](values: Vec[T]) -> T:
+    best = values[0]
+    for value in values:
+        if value > best:
+            best = value
+    return best
+
+
+def fn1(a2: str, a3: bool, a4: str) -> int:
+    s5: str = ((' spaced out '[-4:6:-1] + ('x-y-z' + 'Hello')) * 3)
+    if a3:
+        return ((abs(7) * (-10 + -3)) - (min(1, 6) & -3))
+    m6 = HashMap[int, int]()
+    m6[(2 + 4611686018427387903)] = m6.get((2 + 4611686018427387903), 0) + -4
+    m6[(7 >> (0 % 19))] = m6.get((7 >> (0 % 19)), 0) + (-2 - -8)
+    m6[(8 if (-12 == (-4 % (12 if 12 != 0 else -3))) else 8)] = m6.get((8 if (-12 == (-4 % (12 if 12 != 0 else -3))) else 8), 0) + 4
+    m6[(4 - -10)] = m6.get((4 - -10), 0) + (4 * -4611686018427387904)
+    n7: int = len(m6) * 100
+    for key8 in m6:
+        n7 = n7 * 3 + m6[key8]
+    p9 = Point(0, abs(n7))
+    n10: int = p9.x * 3 - p9.y
+    tm11 = TreeMap[int, int]()
+    tm11[n7] = (-2 - 11)
+    tm11[(n10 // (n7 if n7 != 0 else -3))] = n7
+    tm11[int(7.25)] = (n7 >> (n10 % 4))
+    n12: int = tm11.min() * 10 + tm11.max() + len(tm11)
+    q13 = Deque[int]()
+    q13.push_front(n12)
+    q13.push_back((n7 // (-7 if -7 != 0 else 3)))
+    n12 = q13.pop_back() - q13.pop_front()
+    p14 = Point((n7 % n7), 1)
+    n15: int = p14.x * 3 - p14.y
+    return (int((7.25 * 1e308)) * -4)
+
+
+def fn16(a17: int, a18: str) -> str:
+    n19: int = ((a17 * a17) * (8 - (3 & a17)))
+    if ((float("-inf") + 1e-300) <= float(-2)):
+        n20: int = (((a17 ^ a17) * 2) << ((a17 + n19) % 4))
+        n21: int = -(((a17 * 9) << ((n19 << (n20 % 22)) % 64)))
+    else:
+        a17 %= (-8 if -8 != 0 else 3)
+    return f"{'123':<4}|{-12}"
+
+
+def fn22(a23: int, a24: bool) -> bool:
+    tm25 = TreeMap[int, int]()
+    tm25[a23] = (a23 % (7 if 7 != 0 else 3))
+    tm25[max(-3, 9)] = (a23 // (a23 if a23 != 0 else -7))
+    tm25[a23] = (-12 * 5)
+    n26: int = tm25.min() * 10 + tm25.max() + len(tm25)
+    if (((n26 - -6) == 9) or not (n26 >= a23)):
+        if a24:
+            return ((float(n26) < -0.0) and not ((-0.0 - -2.5) < min(float("nan"), 7.25)))
+        n27: int = (-5 * a23)
+    else:
+        if (a24 and not ((a23 << (a23 % 2)) != abs(7))):
+            f28: float = 7.25
+        else:
+            f29: float = (7.25 / (7.25 + 3.0))
+    k30: int = 0
+    while k30 < 2:
+        k30 += 1
+        for i31 in range(3):
+            m32 = HashMap[int, int]()
+            m32[5] = m32.get(5, 0) + (i31 - 5)
+            m32[(i31 * n26)] = m32.get((i31 * n26), 0) + (-2 - -10)
+            m32[abs(i31)] = m32.get(abs(i31), 0) + (n26 - 12)
+            m32[(n26 * a23)] = m32.get((n26 * a23), 0) + 9
+            n33: int = len(m32) * 100
+            for key34 in m32:
+                n33 = n33 * 3 + m32[key34]
+    v35 = Vec[int]()
+    v35.push((n26 + -11))
+    v35.push(abs(6))
+    v35.push(11)
+    v35.push((k30 + 4611686018427387904))
+    v35.sort()
+    n36: int = v35[a23 % len(v35)]
+    v37 = Vec[int]()
+    v37.push(k30)
+    v37.push(-7)
+    v37.push((a23 | k30))
+    v37.push((n26 - 12))
+    v37.sort()
+    n38: int = sum(v37)
+    f39: float = max(((1e-300 / (1e308 if 1e308 != 0.0 else 2.0)) + 3.0), -0.0)
+    return ((a23 <= min(6, n26)) or not ((2 % (4 if 4 != 0 else -7)) >= 4))
+
+
+def fn40(a41: bool) -> int:
+    h42 = Heap[int]()
+    h42.push(12)
+    h42.push(9)
+    h42.push((-5 // (3 if 3 != 0 else -3)))
+    h42.push((10 + -12))
+    h42.push((-4 // (9 if 9 != 0 else -3)))
+    n43: int = 0
+    while h42:
+        n43 = n43 * 5 + h42.pop()
+    p44 = Point((8 ^ n43), max(n43, n43))
+    n45: int = p44.x * 3 - p44.y
+    return ((len('Hello') << ((n43 << (n43 % 28)) % 34)) * (n45 // (n43 if n43 != 0 else -3)))
+
+
+def fn46(a47: float, a48: int) -> str:
+    k49: int = 0
+    while k49 < 0:
+        k49 += 1
+        for i50 in range(3):
+            m51 = HashMap[str, int]()
+            m51[''[0:6:-1]] = m51.get(''[0:6:-1], 0) + (i50 >> (a48 % 4))
+            m51['ab'[-4:-2]] = m51.get('ab'[-4:-2], 0) + (i50 - 5)
+            n52: int = len(m51) * 100
+            for key53 in m51:
+                n52 = n52 * 3 + m51[key53]
+    n54: int = 9223372036854775807
+    f55: float = (((-2.5 + 3.0) * (a47 * a47)) * 1e-300)
+    return (('x-y-z' if ((f55 + k49) > (-2.5 * 1e-300)) else ' spaced out ') if ((k49 | 2) < n54) else 'a')
+
+
+def fn56(a57: float) -> int:
+    m58 = HashMap[str, int]()
+    m58[('a' + 'a')] = m58.get(('a' + 'a'), 0) + 11
+    m58[(' spaced out ' * 3)] = m58.get((' spaced out ' * 3), 0) + -9
+    m58["-".join('123'.split())] = m58.get("-".join('123'.split()), 0) + (-2 + -11)
+    n59: int = len(m58) * 100
+    for key60 in m58:
+        n59 = n59 * 3 + m58[key60]
+    for i61 in range(0):
+        if ((n59 // (i61 if i61 != 0 else 5)) > min(1, -7)):
+            s62: str = 'two  gaps'.replace('MiXeD', ' spaced out ')
+        else:
+            k63: int = 0
+            while k63 < 1:
+                k63 += 1
+                n64: int = ((n59 | 10) - n59)
+        s65: str = ('a'.swapcase() + 'Hello')
+    m66 = HashMap[int, int]()
+    m66[n59] = m66.get(n59, 0) + (n59 + n59)
+    m66[(n59 // -8)] = m66.get((n59 // -8), 0) + (n59 * -5)
+    n67: int = len(m66) * 100
+    for key68 in m66:
+        n67 = n67 * 3 + m66[key68]
+    if (a57 <= a57):
+        for i69 in range(4):
+            m70 = HashMap[str, int]()
+            m70['a'.upper()] = m70.get('a'.upper(), 0) + -9
+            n71: int = len(m70) * 100
+            for key72 in m70:
+                n71 = n71 * 3 + m70[key72]
+        tm73 = TreeMap[int, int]()
+        tm73[n59] = (n67 % (n59 if n59 != 0 else 5))
+        tm73[(n59 * -6)] = abs(12)
+        n74: int = tm73.min() * 10 + tm73.max() + len(tm73)
+    else:
+        if ((9223372036854775807 % (n67 if n67 != 0 else -3)) != (n67 // (-5 if -5 != 0 else 5))):
+            return ((n67 * 9) + (n59 + (-4611686018427387904 * n67)))
+    return abs(((-1 + n59) % (n59 if n59 != 0 else -3)))
+
+
+def main() -> None:
+    print(fn1('', False, ' spaced out '))
+    print(fn16(9223372036854775807, ''))
+    print(fn16(3037000499, 'MiXeD'))
+    print(fn22(-9223372036854775808, False))
+    print(fn40(False))
+    print(fn46(-2.5, 8))
+    print(fn56(1e-300))
+    print(fn56(3.0))
+
+
+main()

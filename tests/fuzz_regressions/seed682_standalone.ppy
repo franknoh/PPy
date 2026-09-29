@@ -1,0 +1,123 @@
+# fuzz: path=standalone seed=682 (did not build)
+import math
+from dataclasses import dataclass
+
+from ppy import Deque, HashMap, Heap, TreeMap, Vec
+
+
+@dataclass
+class Point:
+    x: int
+    y: int
+
+
+class Counter:
+    def __init__(self, start: int) -> None:
+        self.count: int = start
+
+    def bump(self, by: int) -> int:
+        self.count += by
+        return self.count
+
+
+def biggest[T: int | float](values: Vec[T]) -> T:
+    best = values[0]
+    for value in values:
+        if value > best:
+            best = value
+    return best
+
+
+def fn1(a2: bool) -> int:
+    m3 = HashMap[str, int]()
+    m3['Hello'] = m3.get('Hello', 0) + -7
+    m3["-".join(''.split())] = m3.get("-".join(''.split()), 0) + 8
+    m3[(' spaced out ' + '')] = m3.get((' spaced out ' + ''), 0) + (2 >> (-4 % 32))
+    m3['123'.swapcase()] = m3.get('123'.swapcase(), 0) + 10
+    n4: int = len(m3) * 100
+    for key5 in m3:
+        n4 = n4 * 3 + m3[key5]
+    s6: str = ('123' * 0)
+    s7: str = s6
+    if a2:
+        c8 = Counter(n4)
+        n9: int = c8.bump((n4 % (n4 if n4 != 0 else 5)))
+        n9 += c8.bump(6)
+        n10: int = -(n9)
+    else:
+        t11 = (5, (3.0 / (1e-300 if 1e-300 != 0.0 else 2.0)))
+        n12, f13 = t11
+    for i14 in range(0):
+        n15: int = -6
+        for i16 in range(1):
+            if ((0.5 / (-2.5 if -2.5 != 0.0 else 2.0)) <= math.sqrt(abs(7.25))):
+                if (i14 != (11 >> (n15 % 36))):
+                    s17: str = (s7 if ('two  gaps' in "-".join(s7.split())) else s6)
+                else:
+                    n18: int = ((i16 - min(n4, i16)) if a2 else n4)
+            else:
+                p19 = Point((i16 | 4), int(1e-300))
+                n20: int = p19.x * 3 - p19.y
+    return int((3.0 + (7.25 * 1e308)))
+
+
+def fn21(a22: bool, a23: float, a24: int) -> int:
+    a24 //= (a24 if a24 != 0 else 3)
+    m25 = HashMap[str, int]()
+    m25[f"<{-0.0:08.3f}>"] = m25.get(f"<{-0.0:08.3f}>", 0) + (-1 // (a24 if a24 != 0 else -7))
+    n26: int = len(m25) * 100
+    for key27 in m25:
+        n26 = n26 * 3 + m25[key27]
+    b28: bool = (max(0, n26) > (n26 * 3))
+    return min(max((0 >> (5 % 49)), (a24 | n26)), ((n26 + a24) * 0))
+
+
+def fn29(a30: str) -> int:
+    t31 = ((-12 << (-8 % 44)), 0.5)
+    n32, f33 = t31
+    v34 = Vec[int]()
+    v34.push(-(n32))
+    v34.push((n32 - -12))
+    v34.push((n32 - -6))
+    v34.reverse()
+    n35: int = v34[(-10 - -9) % len(v34)]
+    n36: int = n35
+    return (n32 - n32)
+
+
+def fn37(a38: int) -> int:
+    if ((6 - a38) > a38):
+        tm39 = TreeMap[int, int]()
+        tm39[-4611686018427387904] = (a38 if ((a38 << (a38 % 13)) >= (a38 // (-12 if -12 != 0 else 3))) else a38)
+        tm39[(-1 * a38)] = (1 // (12 if 12 != 0 else -7))
+        tm39[(a38 + a38)] = a38
+        tm39[a38] = (-6 + a38)
+        n40: int = tm39.min() * 10 + tm39.max() + len(tm39)
+        n41: int = min(int((1e-300 / (7.25 if 7.25 != 0.0 else 2.0))), n40)
+    else:
+        a38 += min(a38, -1)
+    k42: int = 0
+    while k42 < 3:
+        k42 += 1
+        m43 = HashMap[int, int]()
+        m43[(a38 + 3037000499)] = m43.get((a38 + 3037000499), 0) + a38
+        n44: int = len(m43) * 100
+        for key45 in m43:
+            n44 = n44 * 3 + m43[key45]
+    s46: str = str(k42)
+    t47 = ((a38 + k42), min(-2.5, 1e308))
+    n48, f49 = t47
+    return max(abs(a38), (9223372036854775807 << (int(f49) % 52)))
+
+
+def main() -> None:
+    print(fn1(True))
+    print(fn1(True))
+    print(fn1(False))
+    print(fn21(True, 7.25, -12))
+    print(fn29(''))
+    print(fn29(' spaced out '))
+    print(fn37(3037000499))
+
+
+main()

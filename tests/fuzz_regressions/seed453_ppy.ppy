@@ -1,0 +1,137 @@
+# fuzz: path=ppy seed=453 (stdout differs)
+import math
+from dataclasses import dataclass
+
+from ppy import Deque, HashMap, Heap, TreeMap, Vec
+
+
+@dataclass
+class Point:
+    x: int
+    y: int
+
+
+class Counter:
+    def __init__(self, start: int) -> None:
+        self.count: int = start
+
+    def bump(self, by: int) -> int:
+        self.count += by
+        return self.count
+
+
+def biggest[T: int | float](values: Vec[T]) -> T:
+    best = values[0]
+    for value in values:
+        if value > best:
+            best = value
+    return best
+
+
+def fn1(a2: bool, a3: str) -> str:
+    if (max(-10, -5) < 4611686018427387903):
+        for i4 in range(3):
+            n5: int = ((max(4611686018427387903, i4) * (-1 * i4)) * abs((-5 * i4)))
+        n6: int = 4611686018427387903
+    else:
+        if a2:
+            v7 = Vec[int]()
+            v7.push(7)
+            v7.push((1 + 9))
+            v7.push((4611686018427387904 * -1))
+            v7.push((10 | 6))
+            n8: int = v7[(-6 - -4611686018427387904) % len(v7)]
+        else:
+            k9: int = 0
+            while k9 < 0:
+                k9 += 1
+                k10: int = 0
+                while k10 < 1:
+                    k10 += 1
+                    p11 = Point(-9223372036854775808, (-3 + 4))
+                    n12: int = p11.x * 3 - p11.y
+    c13 = Counter(int(7.25))
+    n14: int = c13.bump(abs(9))
+    n14 += c13.bump((-4 if (max(-12, -11) != (-7 // (-8 if -8 != 0 else -3))) else 4611686018427387903))
+    n15: int = (((6 * n14) + (-8 - n14)) % (((-10 >> (n14 % 36)) - 3) if ((-10 >> (n14 % 36)) - 3) != 0 else 5))
+    k16: int = 0
+    while k16 < 3:
+        k16 += 1
+        tm17 = TreeMap[int, int]()
+        tm17[(n14 >> (-12 % 58))] = n14
+        n18: int = tm17.min() * 10 + tm17.max() + len(tm17)
+    n15 *= n14
+    v19 = Vec[int]()
+    v19.push(-6)
+    n20: int = v19[-4 % len(v19)]
+    return "-".join(((a3 if (-7 > (k16 * -6)) else a3) if a2 else 'a').split())
+
+
+def fn21(a22: int, a23: int) -> int:
+    tm24 = TreeMap[int, int]()
+    tm24[len('ab')] = 10
+    n25: int = tm24.min() * 10 + tm24.max() + len(tm24)
+    q26 = Deque[int]()
+    q26.push_front(n25)
+    q26.push_back(a23)
+    n25 = q26.pop_back() - q26.pop_front()
+    a23 += (n25 // (5 if 5 != 0 else -7))
+    f27: float = 0.5
+    p28 = Point(n25, (a22 * a22))
+    n29: int = p28.x * 3 - p28.y
+    k30: int = 0
+    while k30 < 3:
+        k30 += 1
+        m31 = HashMap[int, int]()
+        m31[6] = m31.get(6, 0) + int(f27)
+        m31[(a22 * -11)] = m31.get((a22 * -11), 0) + n29
+        m31[abs(11)] = m31.get(abs(11), 0) + min(a22, a22)
+        m31[(n25 * a22)] = m31.get((n25 * a22), 0) + (n29 * -8)
+        n32: int = len(m31) * 100
+        for key33 in m31:
+            n32 = n32 * 3 + m31[key33]
+    n25 %= (a23 if a23 != 0 else 3)
+    return (4611686018427387904 if (n25 < max(a22, n25)) else n25)
+
+
+def fn34(a35: str, a36: float, a37: bool) -> float:
+    s38: str = 'Hello'
+    if ((8 + -9) < (-1 + 4611686018427387904)):
+        p39 = Point((-12 * 12), -1)
+        n40: int = p39.x * 3 - p39.y
+        for i41 in range(5):
+            t42 = (abs(i41), -0.0)
+            n43, f44 = t42
+    else:
+        c45 = Counter((2 + 4))
+        n46: int = c45.bump((-4611686018427387904 // (1 if 1 != 0 else -7)))
+        n46 += c45.bump((-5 - -9))
+    if (s38 in 'x-y-z'):
+        return math.sqrt(abs(1e308))
+    c47 = Counter((-4611686018427387904 << (5 % 57)))
+    n48: int = c47.bump((10 // (5 if 5 != 0 else 5)))
+    n48 += c47.bump((6 + 8))
+    return math.sqrt(abs(((a36 + a36) * a36)))
+
+
+def fn49(a50: str, a51: float) -> float:
+    p52 = Point((-12 + 11), 0)
+    n53: int = p52.x * 3 - p52.y
+    s54: str = (str(n53) * 1)
+    f55: float = (((-2.5 - a51) / ((a51 / a51) if (a51 / a51) != 0.0 else 2.0)) * ((n53 + -8) + n53))
+    return ((a51 * a51) * float(7))
+
+
+def main() -> None:
+    print(fn1(False, ''))
+    print(fn1(False, '123'))
+    print(fn21(3037000499, -7))
+    print(fn21(6, 12))
+    print(fn34('', float("inf"), True))
+    print(fn34('two  gaps', 7.25, True))
+    print(fn49(' spaced out ', 0.5))
+    print(fn49('a', -0.0))
+    print(fn49('a', 1e-300))
+
+
+main()
