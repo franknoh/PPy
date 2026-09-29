@@ -443,11 +443,8 @@ class ContainerLowering(CollectionApiLowering):
         start = self._rt("ppy_seq_at", (handle, self._word(0)), HANDLE)
         data = core.cast(self.b, start, PtrType(scalar))
         length = self._rt("ppy_coll_len", (handle,))
-        return self.b.create(
-            "core.call_intrinsic",
-            (data, length),
-            (BufferType(scalar),),
-            {"intrinsic": "ppy.buffer_from_parts"},
+        return core.call_intrinsic(
+            self.b, "ppy.buffer_from_parts", (data, length), (BufferType(scalar),)
         ).results[0]
 
     # -- methods -------------------------------------------------------------------------
