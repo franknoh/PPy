@@ -432,12 +432,6 @@ class CollectionApiLowering(CollectionLowering):
 
     # -- storing ------------------------------------------------------------------------
 
-    def _store_value(self, address: Value, shape: Shape, value: Value, owned: bool) -> None:
-        """A value already in hand written into a fresh slot: a collection takes a reference."""
-        if shape.reference and not owned:
-            self._retain(value)
-        self._write(address, shape, value)
-
     def _room(self, kind: Kind, handle: Value, front: bool = False) -> Value:
         """A new element's slot at the back (or the front) of a sequence or a list."""
         if kind.family == "seq":
@@ -467,7 +461,7 @@ class CollectionApiLowering(CollectionLowering):
             self._keys_done()
             return
         assert kind.value is not None
-        self._store_into(self._room(kind, handle, front), kind.value, node, fresh=True)
+        self._store_node(lambda: self._room(kind, handle, front), kind.value, node, fresh=True)
 
     def _fill(self, kind: Kind, handle: Value, node: ast.expr, front: bool = False) -> None:
         """Every element of an iterable added to a collection: a display, a
@@ -790,8 +784,12 @@ class CollectionApiLowering(CollectionLowering):
                         f"replace in an empty {kind.name}",
                         f"IndexError: replace in an empty {kind.name}",
                     )
-                scratch = self._rt("ppy_coll_scratch", (handle,), HANDLE)
-                self._store_into(scratch, shape, arguments[0], fresh=True)
+                self._store_node(
+                    lambda: self._rt("ppy_coll_scratch", (handle,), HANDLE),
+                    shape,
+                    arguments[0],
+                    fresh=True,
+                )
                 replace = self._word(int(attr == "replace"))
                 out = self._rt("ppy_heap_exchange", (handle, self._word(heap), replace), HANDLE)
                 return self._read(out, shape)
@@ -824,8 +822,12 @@ class CollectionApiLowering(CollectionLowering):
                 "IndexError: insert at {0} is out of range for length {1}",
                 (position, length),
             )
-            address = self._rt("ppy_seq_insert", (handle, position), HANDLE)
-            self._store_into(address, shape, arguments[1], fresh=True)
+            self._store_node(
+                lambda: self._rt("ppy_seq_insert", (handle, position), HANDLE),
+                shape,
+                arguments[1],
+                fresh=True,
+            )
             return self._word(0)
         if attr == "pop" and arguments and kind.name == "Vec":
             self._nonempty(kind, handle, "pop")

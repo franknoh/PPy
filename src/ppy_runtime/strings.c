@@ -131,6 +131,34 @@ int8_t *ppy_str_new(const int8_t *data, int64_t bytes) {
     return handle;
 }
 
+/* `count` strings made at once, for the Python boundary: string `i` is the
+   next `lengths[i]` bytes of `data`, and its handle goes in `out[i]`. */
+void ppy_str_new_many(const int8_t *data, const int64_t *lengths, int64_t count, int64_t *out) {
+    for (int64_t i = 0; i < count; i++) {
+        out[i] = (int64_t)(intptr_t)ppy_str_new(data, lengths[i]);
+        data += lengths[i];
+    }
+}
+
+/* The bytes of `count` strings, for the Python boundary: with `out` NULL,
+   how many there are in all, a NUL after each string counted; otherwise
+   copied into `out` one string after another, each followed by a NUL, with
+   each string's byte count in `lengths`. */
+int64_t ppy_str_gather(const int64_t *words, int64_t count, int64_t *lengths, int8_t *out) {
+    int64_t total = 0;
+    for (int64_t i = 0; i < count; i++) {
+        int8_t *text = (int8_t *)(intptr_t)words[i];
+        int64_t bytes = ppy_str_bytes(text);
+        if (out != NULL) {
+            memcpy(out + total, ppy_str_data(text), (size_t)bytes);
+            out[total + bytes] = 0;
+            lengths[i] = bytes;
+        }
+        total += bytes + 1;
+    }
+    return total;
+}
+
 int8_t *ppy_str_empty(void) {
     return ppy_str_new((const int8_t *)"", 0);
 }

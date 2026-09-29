@@ -445,6 +445,23 @@ def _library_key(objects: list[Path]) -> str:
     return digest("ppy-library", *(o.read_bytes().hex() for o in sorted(objects))) + ".so"
 
 
+def _runtime_stamp(library: str) -> str:
+    """A library the link names, with the digest of its source where the link
+    compiles that source in: a runtime edit must not reuse a library linked
+    with the runtime before it."""
+    if library == "ppy_collections":
+        from ppy_runtime.collections import source_path as collections_source
+
+        return collections_source().stem
+    if library == "ppy_aio":
+        from ppy_runtime.aio import source_path
+
+        from ...cache import digest
+
+        return f"{library}-{digest('ppy-aio', source_path().read_bytes().hex())[:16]}"
+    return library
+
+
 def _link_and_cache(
     artifacts, store, key: str, destination: Path, libraries=(), target=None
 ) -> None:  # type: ignore[no-untyped-def]
@@ -609,7 +626,9 @@ def compile_project(  # type: ignore[no-untyped-def]
     artifacts.exports = dict(exports)
     artifacts.libraries = needed
     if artifacts.objects:
-        library_key = _library_key(artifacts.objects) + ("+" + ",".join(needed) if needed else "")
+        library_key = _library_key(artifacts.objects) + (
+            "+" + ",".join(_runtime_stamp(lib) for lib in needed) if needed else ""
+        )
         if not target.is_host:
             library_key = f"{target.triple}+{library_key}"
         destination = build_directory / (

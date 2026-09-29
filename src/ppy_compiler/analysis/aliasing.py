@@ -38,6 +38,37 @@ _FRESH_PPY = frozenset(
     }
 )
 
+#: The methods of `list`, `dict`, and `set` whose aliasing is modeled: what they
+#: store into the receiver and what they hand back. A method not here keeps
+#: the conservative answer (anything from outside).
+_CONTAINER_METHODS = frozenset(
+    {
+        "append",
+        "add",
+        "insert",
+        "extend",
+        "update",
+        "setdefault",
+        "pop",
+        "get",
+        "copy",
+        "union",
+        "intersection",
+        "difference",
+        "symmetric_difference",
+        "remove",
+        "discard",
+        "clear",
+        "sort",
+        "reverse",
+        "index",
+        "count",
+        "keys",
+        "values",
+        "items",
+    }
+)
+
 #: Builtins whose result is a fresh container holding the argument's elements.
 _FRESH_FROM_ELEMENTS = frozenset(
     {"list", "sorted", "reversed", "set", "tuple", "frozenset", "dict", "bytearray"}
@@ -140,11 +171,10 @@ class _Analyzer:
         self.at: dict[int, _State | list[_State]] = {}
         self.holds: dict[str, set[str]] = {}
 
-    def fresh(self, node: ast.AST) -> frozenset[str]:
-        """What `node` makes, named for where it is made: a loop that makes one
-        per pass then reaches its fixed point instead of growing a root per
-        pass, and a nest of loops stays linear rather than ten passes a level."""
-        return frozenset({f"@{getattr(node, 'lineno', 0)}:{getattr(node, 'col_offset', 0)}"})
+    def site(self, node: ast.AST) -> frozenset[str]:
+        """An allocation named for where it is made, so a loop that makes one per
+        pass reaches a fixed point instead of a new name every pass."""
+        return frozenset({f"@{getattr(node, 'lineno', 0)}:{getattr(node, 'col_offset', id(node))}"})
 
     def run(self, node: ast.FunctionDef | ast.AsyncFunctionDef) -> AliasInfo:
         state: _State = {name: frozenset({name}) for name in self.params}
@@ -210,7 +240,7 @@ class _Analyzer:
                 roots = state.get(node.target.id, frozenset())
                 if roots and roots <= self.immutable:
                     state = dict(state)
-                    state[node.target.id] = self.fresh(node)
+                    state[node.target.id] = self.site(node)
             elif isinstance(node.target, (ast.Subscript, ast.Attribute)):
                 self.store_into(self.eval(node.target.value, state), self.eval(node.value, state))
             return state
@@ -322,6 +352,38 @@ class _Analyzer:
             return state
         return state
 
+    def method(self, node: ast.Call, state: _State) -> frozenset[str]:
+        """A container's method: what it stores into the receiver, and what it
+        hands back (an element, a copy, or nothing that aliases)."""
+        assert isinstance(node.func, ast.Attribute)
+        receiver = self.eval(node.func.value, state)
+        attr = node.func.attr
+        arguments = [self.eval(argument, state) for argument in node.args]
+        foreign = frozenset(root for root in receiver if root == EXTERNAL or root in self.params)
+        if attr in {"append", "add", "insert", "setdefault", "appendleft"} and arguments:
+            # The stored value is the last positional argument.
+            self.store_into(receiver, arguments[-1])
+        if attr in {"extend", "update"} and arguments:
+            for argument in arguments:
+                self.store_into(receiver, self.elements_of(argument))
+        if attr in {"pop", "get", "setdefault", "popleft", "popitem"}:
+            found = self.elements_of(receiver) | foreign
+            if attr in {"get", "setdefault", "pop"} and len(arguments) == 2:
+                found = found | arguments[1]
+            return found
+        # A receiver this function did not make may be a project class whose
+        # method of the same name hands back anything, itself included.
+        if attr in {"copy", "union", "intersection", "difference", "symmetric_difference"}:
+            alloc = self.site(node)
+            self.store_into(alloc, self.elements_of(receiver))
+            for argument in arguments:
+                self.store_into(alloc, self.elements_of(argument))
+            return alloc | foreign
+        if attr in {"keys", "values", "items"}:
+            # A view walks the receiver's own elements.
+            return receiver
+        return foreign
+
     def store_into(self, container: frozenset[str], stored: frozenset[str]) -> None:
         for root in container:
             self.holds.setdefault(root, set()).update(stored)
@@ -357,7 +419,7 @@ class _Analyzer:
                 state[node.target.id] = roots
             return roots
         if isinstance(node, (ast.List, ast.Tuple, ast.Set)):
-            alloc = self.fresh(node)
+            alloc = self.site(node)
             for element in node.elts:
                 inner = element.value if isinstance(element, ast.Starred) else element
                 piece = self.eval(inner, state)
@@ -366,7 +428,7 @@ class _Analyzer:
                 self.store_into(alloc, piece)
             return alloc
         if isinstance(node, ast.Dict):
-            alloc = self.fresh(node)
+            alloc = self.site(node)
             for key, value in zip(node.keys, node.values, strict=False):
                 if key is not None:
                     self.store_into(alloc, self.eval(key, state))
@@ -375,17 +437,29 @@ class _Analyzer:
                     self.store_into(alloc, self.elements_of(self.eval(value, state)))
             return alloc
         if isinstance(node, (ast.ListComp, ast.SetComp, ast.DictComp, ast.GeneratorExp)):
+            # The comprehension's own names hold what its iterables hold; what it
+            # makes holds what its element expressions give.
+            inner = dict(state)
             for generator in node.generators:
-                self.eval(generator.iter, state)
-            return self.fresh(node)
+                walked = self.elements_of(self.eval(generator.iter, inner))
+                inner = self.bind(generator.target, walked, None, inner)
+                for condition in generator.ifs:
+                    self.eval(condition, inner)
+            alloc = self.site(node)
+            pieces = [node.key, node.value] if isinstance(node, ast.DictComp) else [node.elt]
+            for piece in pieces:
+                self.store_into(alloc, self.eval(piece, inner))
+            return alloc
         if isinstance(node, ast.Call):
             for argument in node.args:
                 self.eval(argument.value if isinstance(argument, ast.Starred) else argument, state)
             for keyword in node.keywords:
                 self.eval(keyword.value, state)
+            if isinstance(node.func, ast.Attribute) and node.func.attr in _CONTAINER_METHODS:
+                return self.method(node, state)
             if isinstance(node.func, ast.Name) and node.func.id not in state:
                 if node.func.id in _FRESH_FROM_ELEMENTS:
-                    alloc = self.fresh(node)
+                    alloc = self.site(node)
                     if node.args:
                         self.store_into(alloc, self.elements_of(self.eval(node.args[0], state)))
                     return alloc
@@ -395,7 +469,7 @@ class _Analyzer:
             # memory they return, so nothing else can already alias it.
             if isinstance(node.func, ast.Subscript) and ast.unparse(node.func.value) in _FRESH_PPY:
                 if ast.unparse(node.func.value).rpartition(".")[2] not in SHORT_NAMES:
-                    return self.fresh(node)
+                    return self.site(node)
                 # A collection is named for where it is made, so a loop that makes
                 # one per pass reaches a fixed point. Its elements are made with it
                 # (`Vec[Vec[int]](n)`): reading one out yields memory made here.
@@ -409,7 +483,7 @@ class _Analyzer:
             self.eval(node.slice, state)
             if isinstance(node.slice, ast.Slice):
                 # A slice of a list is a fresh list over the same elements.
-                alloc = self.fresh(node)
+                alloc = self.site(node)
                 self.store_into(alloc, self.elements_of(base))
                 return alloc
             return self.elements_of(base)
@@ -427,11 +501,17 @@ class _Analyzer:
             return self.eval(node.value, state) | {EXTERNAL}
         if isinstance(node, ast.Constant):
             return frozenset()
+        if isinstance(node, ast.BinOp) and isinstance(node.op, (ast.Add, ast.Mult)):
+            # `xs + ys` and `[0] * n` make a new container holding the operands'
+            # elements, not the operands; a number made so is written by nothing.
+            alloc = self.site(node)
+            for side in (node.left, node.right):
+                self.store_into(alloc, self.elements_of(self.eval(side, state)))
+            return alloc
         if isinstance(node, (ast.BinOp, ast.UnaryOp, ast.Compare)):
             for child in ast.iter_child_nodes(node):
                 if isinstance(child, ast.expr):
                     self.eval(child, state)
-            # `xs + ys` allocates; it holds the operands' elements, not them.
             return frozenset()
         for child in ast.iter_child_nodes(node):
             if isinstance(child, ast.expr):
