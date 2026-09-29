@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import contextlib
+import hashlib
 import json
 import os
+import re
 import shutil
 import sys
 from dataclasses import dataclass, field
@@ -676,6 +678,22 @@ def compile_project(  # type: ignore[no-untyped-def]
             "generated": listed,
             "search_paths": [str(path) for path in bundle.project.search_paths],
             "safeguards": bundle.project.config.llvm.safeguards or "hoisted",
+            # Whether any module could import `ppy`, whose loader the launcher
+            # then installs first; a program that never names it skips that
+            # import. A mention in a comment counts: the answer only has to be
+            # yes when it matters.
+            "uses_ppy": any(
+                re.search(r"\bppy\b", symbols.module.source.text) is not None
+                for symbols in bundle.symbols.modules.values()
+            ),
+            # What the artifact was built from, by content: a warm `ppy run`
+            # trusts file stats taken after the build only where these match.
+            "sources": {
+                str(symbols.module.path): hashlib.blake2b(
+                    symbols.module.source.text.encode("utf-8"), digest_size=16
+                ).hexdigest()
+                for symbols in bundle.symbols.modules.values()
+            },
         }
     regions_section = _ship_regions(bundle, reporter, build_directory, artifacts)
     staged_section = _ship_staged(bundle, reporter, build_directory, artifacts)
@@ -691,6 +709,7 @@ def compile_project(  # type: ignore[no-untyped-def]
             signatures,
             bundle.project.config.cache_path,
             notify=reporter.note,
+            shared=True,
         )
         if built.ok and built.path is not None:
             shipped = build_directory / built.path.name
@@ -860,7 +879,13 @@ def compile_for_run(  # type: ignore[no-untyped-def]
         return None
     _publish_directory(draft, directory)
     manifest = directory / MANIFEST
-    return manifest if manifest.is_file() else None
+    if not manifest.is_file():
+        return None
+    from ppy_runtime.launch import write_light  # pylint: disable=import-outside-toplevel
+
+    # A program whose native code Python never calls runs without the launcher.
+    write_light(manifest)
+    return manifest
 
 
 def _publish_directory(draft: Path, final: Path) -> None:
@@ -958,6 +983,7 @@ def compile_and_run(  # type: ignore[no-untyped-def]
             {q: lowered.python for q, lowered in native.functions.items()},
             bundle.project.config.cache_path,
             notify=reporter.note,
+            shared=True,
         )
         if not wrappers.ok and wrappers.reason and native.functions:
             reporter.emit(

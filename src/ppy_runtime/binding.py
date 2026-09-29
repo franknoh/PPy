@@ -10,9 +10,10 @@ from __future__ import annotations
 import array
 import ctypes
 from collections.abc import Callable
-from dataclasses import dataclass, field
 
 from . import _cpu
+from ._record import field
+from ._record import record as dataclass
 from .abi import (
     SANITIZERS,
     STATUS_OK,

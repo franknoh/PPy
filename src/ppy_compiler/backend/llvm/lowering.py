@@ -26,8 +26,9 @@ may not mutate it (spec 13.2, 13.3, 13.5).
 from __future__ import annotations
 
 import ast
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, field
 
+from ppy_runtime._record import replace
 from ppy_runtime.abi import STATUS_FALLBACK, STATUS_OK, NativeParam, NativeSignature
 from ppy_runtime.collection_boundary import RETURNS_NOTHING
 from ppy_runtime.collection_boundary import parse as crossing_spec
@@ -444,6 +445,109 @@ def called_back_only(info: FunctionInfo) -> bool:
     )
 
 
+def _crossing_costs_more(
+    info: FunctionInfo, layouts: ClassLayouts | None, written: frozenset[str]
+) -> str | None:
+    """Why copying the function's containers across the boundary would cost more
+    than running it natively saves, or None when it pays.
+
+    The boundary copies a container that crosses whole, in and back, on every
+    call. That is work proportional to its size, so the body has to do work
+    proportional to it too: a loop that walks it, or works on it element by
+    element. A container of strings costs more still, a native string made
+    for every element, about what one pass of a Python loop spends on it, so
+    it pays only when the body makes more than one pass (a loop in a loop).
+    """
+    crossing = [
+        param.name
+        for param in info.params
+        if (native := _native_param(param.name, param.type, layouts, param.name in written))
+        is not None
+        and native.is_handle
+        and native.element != "str"
+        and _crosses(native)
+    ]
+    if crossing and not _works_through(info.node, crossing):
+        return "copying the collections in costs more than the body does with them"
+    if _holds_strings(info) and not _nested_loop(info.node):
+        return "copying its strings across costs what one pass over them saves"
+    return None
+
+
+#: Builtins that go over a whole container given to them.
+_WHOLE_BUILTINS = frozenset(
+    {"sum", "sorted", "min", "max", "any", "all", "list", "set", "dict", "tuple", "reversed",
+     "enumerate", "zip", "map", "filter"}
+)  # fmt: skip
+
+#: Methods that go over a whole container, its own or the one they are given.
+_WHOLE_METHODS = frozenset(
+    {"sort", "copy", "count", "index", "remove", "reverse", "extend", "update", "union",
+     "intersection", "difference", "symmetric_difference", "issubset", "issuperset",
+     "isdisjoint", "join", "values", "items", "keys", "to_sorted", "between"}
+)  # fmt: skip
+
+
+def _works_through(function: ast.AST, names: list[str]) -> bool:
+    """Whether the function does work that grows with one of `names`, which pays
+    for copying it across the boundary: a loop or a comprehension walks it, a
+    loop's body calls a method on it or writes an element of it, an operator
+    takes it whole (`s & t`), or a builtin or a method goes over all of it
+    (`sum(v)`, `v.sort()`, `", ".join(v)`)."""
+    wanted = set(names)
+
+    def whole(node: ast.expr) -> bool:
+        """The container itself (or a field of it), not one of its elements."""
+        while isinstance(node, ast.Attribute):
+            node = node.value
+        return isinstance(node, ast.Name) and node.id in wanted
+
+    def rooted(node: ast.expr) -> bool:
+        while isinstance(node, (ast.Subscript, ast.Attribute)):
+            node = node.value
+        return isinstance(node, ast.Name) and node.id in wanted
+
+    for node in ast.walk(function):
+        # Work over the whole container without a loop of the function's own.
+        if isinstance(node, ast.comprehension) and rooted(node.iter):
+            return True
+        if isinstance(node, ast.BinOp) and (whole(node.left) or whole(node.right)):
+            return True  # `s & t`, `v + w`
+        if isinstance(node, ast.Call):
+            called = node.func
+            if (
+                isinstance(called, ast.Name)
+                and called.id in _WHOLE_BUILTINS
+                and any(whole(argument) for argument in node.args)
+            ):
+                return True
+            if (
+                isinstance(called, ast.Attribute)
+                and called.attr in _WHOLE_METHODS
+                and (whole(called.value) or any(whole(a) for a in node.args))
+            ):
+                return True
+    for loop in ast.walk(function):
+        if not isinstance(loop, (ast.For, ast.While, ast.AsyncFor)):
+            continue
+        header = loop.iter if isinstance(loop, (ast.For, ast.AsyncFor)) else loop.test
+        if any(isinstance(n, ast.Name) and n.id in wanted for n in ast.walk(header)):
+            return True
+        for statement in loop.body:
+            for child in ast.walk(statement):
+                if (
+                    isinstance(child, ast.Call)
+                    and isinstance(child.func, ast.Attribute)
+                    and rooted(child.func.value)
+                ):
+                    return True
+                if isinstance(child, (ast.Assign, ast.AugAssign)):
+                    targets = child.targets if isinstance(child, ast.Assign) else [child.target]
+                    if any(isinstance(t, ast.Subscript) and rooted(t) for t in targets):
+                        return True
+    return False
+
+
 def _returns_none(t: T.Type) -> bool:
     return t == T.NONE
 
@@ -509,10 +613,9 @@ def should_lower_native(
     for name in _EXPOSURE_DIRECTIVES:
         if info.directive(name) is not None:
             return True, f"@ppy.{name} asks for the boundary"
-    if _holds_strings(info) and not _nested_loop(info.node):
-        # Each string copied in or out is a native string made for it, which
-        # costs about what one pass of a Python loop spends on it.
-        return False, "copying its strings across costs what one pass over them saves"
+    refused = _crossing_costs_more(info, layouts, written)
+    if refused is not None:
+        return False, refused
     for param in info.params:
         native = _native_param(param.name, param.type, layouts, param.name in written)
         if native is not None and native.is_buffer:
