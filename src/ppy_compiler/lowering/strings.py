@@ -29,6 +29,24 @@ from ..ir import BOOL, F64, I64, U8, BufferType, PtrType, Successor, TupleType, 
 from ..ir.dialects import core
 from .collections import HANDLE, STR, Kind, Shape
 
+
+def _conversion_call(node: ast.expr) -> tuple[str, ast.expr] | None:
+    """`str(x)`, `repr(x)`, or `ascii(x)` of one argument: the name and argument."""
+    if (
+        isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Name)
+        and node.func.id in _CONVERSIONS
+        and len(node.args) == 1
+        and not node.keywords
+    ):
+        return node.func.id, node.args[0]
+    return None
+
+
+def _reads(node: ast.expr, name: str) -> bool:
+    return any(isinstance(n, ast.Name) and n.id == name for n in ast.walk(node))
+
+
 #: A static one-character string is 26 words: the collections header's 25 and
 #: one for its byte (`ppy_str_char` in strings.c).
 _CHAR_WORDS = 26
@@ -260,6 +278,13 @@ class StringLowering:
         """Strings joined end to end, written once into one builder."""
         self._use_collections()  # type: ignore[attr-defined]
         builder = self._rt("ppy_str_builder", (self._word(0),), HANDLE)  # type: ignore[attr-defined]
+        self._add_parts(builder, parts)
+        return self._rt("ppy_str_finish", (builder,), HANDLE)  # type: ignore[attr-defined]
+
+    def _add_parts(self, builder: Value, parts: list[ast.expr]) -> None:
+        """Each part written onto `builder`: a literal's bytes, a `str(x)` or
+        `repr(x)` formatted in place (no string of its own), any other string
+        copied."""
         for part in parts:
             if isinstance(part, ast.Constant) and isinstance(part.value, str):
                 data, length = self._text_data(part.value)
@@ -267,10 +292,14 @@ class StringLowering:
                 continue
             if self._string_of(part) is None:
                 raise Unsupported("`+` of a string and something else")
+            converted = _conversion_call(part)
+            if converted is not None:
+                name, argument = converted
+                self._add_formatted(builder, argument, _CONVERSIONS[name], "")
+                continue
             handle, owned = self._handle(part)  # type: ignore[attr-defined]
             self._rt("ppy_str_add", (builder, handle), None)  # type: ignore[attr-defined]
             self._done_with(handle, owned)  # type: ignore[attr-defined]
-        return self._rt("ppy_str_finish", (builder,), HANDLE)  # type: ignore[attr-defined]
 
     def _augment_string(self, name: str, node: ast.AugAssign) -> bool:
         """`s += t` and `s *= n` on a string local: the new string bound in its place."""
@@ -282,14 +311,37 @@ class StringLowering:
         if isinstance(node.op, ast.Add):
             if self._string_of(node.value) is None:
                 raise Unsupported("`+=` of a string and something else")
-            # The local's own reference goes to `ppy_str_extend`, which appends
-            # in place when nothing else holds the string, and the result
-            # takes the slot.
-            part, owned = self._handle(node.value)  # type: ignore[attr-defined]
+            # The local's own reference goes to `ppy_str_open`, which hands it
+            # back to write into when nothing else holds it (a copy otherwise);
+            # each part of `s += a + str(n)` is appended there, with no string
+            # made for the right-hand side, and the result takes the slot.
+            parts: list[ast.expr] = []
+
+            def flatten(item: ast.expr) -> None:
+                if (
+                    isinstance(item, ast.BinOp)
+                    and isinstance(item.op, ast.Add)
+                    and self._string_of(item) is not None
+                ):
+                    flatten(item.left)
+                    flatten(item.right)
+                    return
+                parts.append(item)
+
+            flatten(node.value)
+            if any(_reads(part, name) for part in parts):
+                # `s += s`: the parts read the string being written.
+                part, owned = self._handle(node.value)  # type: ignore[attr-defined]
+                current = core.load(self.b, held.slot)  # type: ignore[attr-defined]
+                made = self._rt("ppy_str_extend", (current, part), HANDLE)  # type: ignore[attr-defined]
+                core.store(self.b, made, held.slot)  # type: ignore[attr-defined]
+                self._done_with(part, owned)  # type: ignore[attr-defined]
+                return True
             current = core.load(self.b, held.slot)  # type: ignore[attr-defined]
-            made = self._rt("ppy_str_extend", (current, part), HANDLE)  # type: ignore[attr-defined]
-            core.store(self.b, made, held.slot)  # type: ignore[attr-defined]
-            self._done_with(part, owned)  # type: ignore[attr-defined]
+            opened = self._rt("ppy_str_open", (current,), HANDLE)  # type: ignore[attr-defined]
+            core.store(self.b, opened, held.slot)  # type: ignore[attr-defined]
+            self._add_parts(opened, parts)
+            self._rt("ppy_str_close", (opened,), None)  # type: ignore[attr-defined]
             return True
         if isinstance(node.op, ast.Mult):
             combined = ast.BinOp(left=read, op=node.op, right=node.value)
@@ -398,7 +450,7 @@ class StringLowering:
                     return core.cmp(b, predicate, same, self._word(1))  # type: ignore[attr-defined]
             first, first_owned = self._handle(left)  # type: ignore[attr-defined]
             second, second_owned = self._handle(right)  # type: ignore[attr-defined]
-            same = self._rt("ppy_str_equal", (first, second))  # type: ignore[attr-defined]
+            same = self._string_equal(first, second)
             self._done_with(first, first_owned)  # type: ignore[attr-defined]
             self._done_with(second, second_owned)  # type: ignore[attr-defined]
             return core.cmp(b, predicate, same, self._word(1))  # type: ignore[attr-defined]
@@ -518,6 +570,41 @@ class StringLowering:
         b.at_end(done)
         self._release(core.load(b, keep))  # type: ignore[attr-defined]
         return True
+
+    def _string_equal(self, first: Value, second: Value) -> Value:
+        """1 when two strings are equal, else 0. One handle is its own string; two
+        static ASCII characters are equal only as one handle; the rest asks the
+        runtime. `for c in s: if c == last` compares characters, all inline."""
+        b = self.b  # type: ignore[attr-defined]
+        table = core.cast(b, self._ascii_table(), I64)
+        size = self._word(128 * _CHAR_WORDS * 8)  # type: ignore[attr-defined]
+
+        def static(handle: Value) -> Value:
+            offset = core.sub(b, core.cast(b, handle, I64), table, overflow="wrap")
+            return core.bitwise(
+                b,
+                "and",
+                core.cmp(b, "ge", offset, self._word(0)),  # type: ignore[attr-defined]
+                core.cmp(b, "lt", offset, size),
+            )
+
+        identical = core.cmp(b, "eq", core.cast(b, first, I64), core.cast(b, second, I64))
+        decided = core.bitwise(
+            b, "or", identical, core.bitwise(b, "and", static(first), static(second))
+        )
+        result = self._alloca(I64, "str.equal")  # type: ignore[attr-defined]
+        quick = self._block("equal.quick")  # type: ignore[attr-defined]
+        asked = self._block("equal.asked")  # type: ignore[attr-defined]
+        done = self._block("equal.done")  # type: ignore[attr-defined]
+        core.cond_br(b, decided, Successor(quick), Successor(asked))
+        b.at_end(quick)
+        core.store(b, core.cast(b, identical, I64), result)
+        core.br(b, Successor(done))
+        b.at_end(asked)
+        core.store(b, self._rt("ppy_str_equal", (first, second)), result)  # type: ignore[attr-defined]
+        core.br(b, Successor(done))
+        b.at_end(done)
+        return core.load(b, result)
 
     def _ascii_table(self) -> Value:
         """Where the static one-character strings start, asked once, at entry."""

@@ -284,6 +284,27 @@ int8_t *ppy_str_extend(int8_t *handle, int8_t *part) {
     return handle;
 }
 
+/* `s += ...` written in place: `handle` itself when nothing else holds it (a
+   static or kept string is held by the runtime), a builder holding a copy
+   otherwise, with the caller's reference passed on either way. The caller
+   appends to what comes back and closes it. */
+int8_t *ppy_str_open(int8_t *handle) {
+    int64_t *header = (int64_t *)handle;
+    if (header[11] == 1) {
+        return handle;
+    }
+    int8_t *made = ppy_str_builder(header[0] + 16);
+    ppy_str_add(made, handle);
+    ppy_coll_release(handle);
+    return made;
+}
+
+void ppy_str_close(int8_t *handle) {
+    int64_t *header = (int64_t *)handle;
+    ppy_str_raw(handle)[header[0]] = 0;
+    header[4] = 0;
+}
+
 /* -- UTF-8 -------------------------------------------------------------- */
 
 /* The bytes one code point takes, from its first byte. */
@@ -884,7 +905,12 @@ int8_t *ppy_str_case(int8_t *handle, int64_t mode) {
         out[i] = c;
         word = lower || upper;
     }
-    ppy_str_seal(made);
+    /* ASCII in, ASCII out, one code point a byte: what sealing would count. */
+    int64_t *header = (int64_t *)made;
+    out[bytes] = 0;
+    header[0] = bytes;
+    header[3] = bytes;
+    header[5] = 1;
     return made;
 }
 

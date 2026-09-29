@@ -220,7 +220,12 @@ def bind(
     )
     native = prototype(address)
 
-    if signature.crosses_collections:
+    # A `str` result comes back as text, like any string: only a collection
+    # needs the crossing. (The same fix as #87's; whichever lands first.)
+    text_only = text_result and signature.returned == "str"
+    if signature.crosses_collections and not (
+        text_only and not any(p.is_handle for p in signature.parameters)
+    ):
         return _bind_collections(signature, native, result_types, fallback, owner)
 
     namespace = getattr(fallback, "__globals__", None)
