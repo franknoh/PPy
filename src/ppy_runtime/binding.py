@@ -16,6 +16,7 @@ from . import _cpu
 from .abi import (
     SANITIZERS,
     STATUS_OK,
+    STATUS_RAISED,
     STATUS_SANITIZER_BASE,
     TEXT,
     NativeParam,
@@ -220,7 +221,12 @@ def bind(
     )
     native = prototype(address)
 
-    if signature.crosses_collections:
+    # A `str` result comes back as text, like any string: only a collection
+    # needs the crossing.
+    text_only = text_result and signature.returned == "str"
+    if signature.crosses_collections and not (
+        text_only and not any(p.is_handle for p in signature.parameters)
+    ):
         return _bind_collections(signature, native, result_types, fallback, owner)
 
     namespace = getattr(fallback, "__globals__", None)
@@ -307,6 +313,8 @@ def bind(
         target = entry or native
         status = target(*atoms, *[ctypes.byref(slot) for slot in slots])
         if status != STATUS_OK:
+            if status == STATUS_RAISED:
+                _let_go_of_raised(owner, target)
             if status >= STATUS_SANITIZER_BASE:
                 kind = SANITIZERS[min(status - STATUS_SANITIZER_BASE, len(SANITIZERS) - 1)]
                 raise SanitizerFailure(
@@ -411,6 +419,8 @@ def _bind_collections(  # type: ignore[no-untyped-def]
         slots = [result_type() for result_type in result_types]
         status = native(*atoms, *[ctypes.byref(slot) for slot in slots])
         if status != STATUS_OK:
+            if status == STATUS_RAISED:
+                _let_go_of_raised(owner, native)
             if status >= STATUS_SANITIZER_BASE:
                 kind = SANITIZERS[min(status - STATUS_SANITIZER_BASE, len(SANITIZERS) - 1)]
                 raise SanitizerFailure(
@@ -725,3 +735,37 @@ def _watch(
     binding.registered += 1
     if binding.specialization_count >= policy.maximum:
         binding.observing = False
+
+
+def _let_go_of_raised(owner: object, native: object) -> None:
+    """A native call ended on an exception nothing native caught: Python runs the
+    call again and raises it. What the native call made, the exception with
+    it, is garbage now; the collections runtime in the native code's own
+    library frees all of it at once."""
+    sweep = getattr(owner, "ppy_coll_sweep", None) if isinstance(owner, ctypes.CDLL) else None
+    if sweep is None:
+        sweep = _sweep_beside(native)
+    if sweep is not None:
+        sweep()
+
+
+def _sweep_beside(native: object):  # type: ignore[no-untyped-def]
+    """`ppy_coll_sweep` of the library `native` was loaded from, if any."""
+
+    class _Found(ctypes.Structure):
+        _fields_ = [
+            ("dli_fname", ctypes.c_char_p),
+            ("dli_fbase", ctypes.c_void_p),
+            ("dli_sname", ctypes.c_char_p),
+            ("dli_saddr", ctypes.c_void_p),
+        ]
+
+    try:
+        libc = ctypes.CDLL(None)
+        found = _Found()
+        address = ctypes.cast(native, ctypes.c_void_p)  # type: ignore[arg-type]
+        if not libc.dladdr(address, ctypes.byref(found)) or not found.dli_fname:
+            return None
+        return getattr(ctypes.CDLL(found.dli_fname.decode()), "ppy_coll_sweep", None)
+    except (OSError, AttributeError, TypeError):
+        return None

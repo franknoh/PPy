@@ -318,10 +318,6 @@ class ContainerLowering(CollectionApiLowering):
         self._done_with(handle, owned)
         return None
 
-    def _add_text(self, builder: Value, text: str) -> None:
-        data, length = self._text_data(text)  # type: ignore[attr-defined]
-        self._rt("ppy_str_add_bytes", (builder, data, length), None)
-
     def _add_container_repr(self, builder: Value, kind: Kind, handle: Value) -> None:
         """`[1, 'a']` and `{1: [2.5]}`, as `repr` writes them."""
         from .collection_api import _Source  # pylint: disable=import-outside-toplevel
@@ -401,24 +397,6 @@ class ContainerLowering(CollectionApiLowering):
         )
 
     # -- any and all ----------------------------------------------------------------
-
-    def _materialized(self, node: ast.Call) -> ast.Call:
-        """`sum(e for x in xs)`: `sum`, `min`, and `max` take every element of
-        a generator in order, so the list comprehension of the same element
-        gives the same answer. `any` and `all` stop early and are left out."""
-        if len(node.args) != 1 or not isinstance(node.args[0], ast.GeneratorExp):
-            return node
-        generator = node.args[0]
-        listed = getattr(generator, "_ppy_listed", None)
-        if listed is None:
-            listed = ast.copy_location(ast.ListComp(generator.elt, generator.generators), generator)
-            # The checker's types are keyed by node, so the list gets one, and
-            # the generator keeps the list alive for as long as that key holds.
-            element = self._type_of(generator.elt)
-            self.frontend.analysis.node_types[id(listed)] = T.instance("list", element)
-            generator._ppy_listed = listed  # type: ignore[attr-defined]
-        called = ast.Call(node.func, [listed], node.keywords)
-        return ast.copy_location(called, node)
 
     def _any_all(self, name: str, node: ast.Call) -> Value | None:
         """`any(c)` and `all(c)` of a collection of numbers, bools, or strings:

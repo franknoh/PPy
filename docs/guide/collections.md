@@ -410,6 +410,10 @@ length 2`), and exits with status 1, as CPython does for an uncaught
 exception. Where only native code can fail, an integer past 64 bits, it
 says `OverflowError: the result does not fit in a 64-bit integer`.
 
+In a module that raises or catches exceptions, these guards are native
+exceptions instead, and a `try` around them catches them; see
+[exceptions and generators](exceptions-and-generators.md).
+
 ### Functions that take or return collections
 
 A native function can take a collection as a parameter, as `farthest` above

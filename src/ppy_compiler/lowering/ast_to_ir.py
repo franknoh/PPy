@@ -90,6 +90,8 @@ from ..plugins.base import DialectOperationSpec, PluginError, PluginRegistry
 from .abi import signature_from_ir
 from .collections import HANDLE, Held
 from .containers import ContainerLowering
+from .exceptions import ExceptionLowering, uses_exceptions
+from .generators import GeneratorLowering
 from .strings import StringLowering
 
 __all__ = ["Frontend", "Lowered", "lower_function", "lower_module_to_ir"]
@@ -354,6 +356,10 @@ class Frontend:
         # LLVM build/run retain their existing explicit two's-complement wrap.
         self.native_arithmetic = native_arithmetic and safeguards == "off"
         self.standalone = standalone
+        #: Whether this module raises or catches: its checks are then
+        #: exceptions native code can catch (`lowering/exceptions.py`). A
+        #: standalone build sets it for every module where any has one.
+        self.native_exceptions = False
         self.prover = prover
         #: Source locations are spelled relative to this, so the IR text is
         #: the same wherever the project sits.
@@ -408,6 +414,11 @@ class Frontend:
         candidates: dict[str, tuple[FunctionInfo, FunctionAnalysis, ast.FunctionDef]] = {}
         self.generics: dict[str, tuple[FunctionInfo, FunctionAnalysis, ast.FunctionDef]] = {}
         self.sources = functions
+        if uses_exceptions([node for _info, _analysis, node in functions.values()]):
+            self.native_exceptions = True
+        if self.native_exceptions:
+            # The backends ask each call's status for the raised one.
+            self.module.attributes["ppy.exceptions"] = True
         for qualname, (info, analysis, node) in functions.items():
             extern = info.directive("native.extern")
             if extern is not None:
@@ -1050,7 +1061,7 @@ class _GuardSite:
         core.br(self.b, Successor(setup))
 
 
-class _FunctionLowering(ContainerLowering, StringLowering):
+class _FunctionLowering(ExceptionLowering, GeneratorLowering, ContainerLowering, StringLowering):
     """Lowers one function body."""
 
     def __init__(
@@ -1150,6 +1161,7 @@ class _FunctionLowering(ContainerLowering, StringLowering):
         #: Integer parameters the body never rebinds, and their entry loads.
         self._stable: set[str] = set()
         self._entry_loads: dict[str, Value] = {}
+        self._exception_setup()
 
     # -- setup ------------------------------------------------------------
 
@@ -1174,6 +1186,7 @@ class _FunctionLowering(ContainerLowering, StringLowering):
         self._body(node.body)
         if self._open():
             self._return_default()
+        self._finish_exceptions()
 
     def _bind_parameters(self) -> None:
         """Each parameter into the representation the body reads it by."""
@@ -1336,11 +1349,21 @@ class _FunctionLowering(ContainerLowering, StringLowering):
             case ast.Break():
                 if not self._loops:
                     raise Unsupported("`break` outside a loop")
+                self._leave_for_loop()
                 core.br(self.b, Successor(self._loops[-1][1]))
             case ast.Continue():
                 if not self._loops:
                     raise Unsupported("`continue` outside a loop")
+                self._leave_for_loop()
                 core.br(self.b, Successor(self._loops[-1][0]))
+            case ast.Expr(value=ast.Yield() | ast.YieldFrom()):
+                self._yield_statement(node.value)
+            case ast.Try():
+                self._try(node)
+            case ast.Raise():
+                self._raise(node)
+            case ast.Assert():
+                self._assert(node)
             case ast.While():
                 self._while(node)
             case ast.For():
@@ -1362,11 +1385,14 @@ class _FunctionLowering(ContainerLowering, StringLowering):
                 raise Unsupported(f"`{type(node).__name__}` has no native lowering")
 
     def _return(self, node: ast.Return) -> None:
+        if self._generator_return(node):
+            return
         if (
             node.value is None
             or (isinstance(node.value, ast.Constant) and node.value.value is None)
         ) and not self.function.results:
             self._check_thread_failures()
+            self._leave_for_return()
             self._release_collections()
             core.ret(self.b)
             return
@@ -1384,6 +1410,7 @@ class _FunctionLowering(ContainerLowering, StringLowering):
             items = [
                 self._coerce_type(item, t) for item, t in zip(values, expected.items, strict=True)
             ]
+            self._leave_for_return()
             self._release_collections()
             core.ret(self.b, core.tuple_make(self.b, *items))
             return
@@ -1391,10 +1418,12 @@ class _FunctionLowering(ContainerLowering, StringLowering):
             handle, owned = self._handle(node.value)
             if not owned:
                 self._retain(handle)
+            self._leave_for_return()
             self._release_collections()
             core.ret(self.b, handle)
             return
         returned = self._coerce_type(self._expr(node.value), expected)
+        self._leave_for_return()
         self._release_collections()
         core.ret(self.b, returned)
 
@@ -1404,6 +1433,7 @@ class _FunctionLowering(ContainerLowering, StringLowering):
             return
         if self.info.ret == T.NONE and not self.function.results:
             self._check_thread_failures()
+            self._leave_for_return()
             self._release_collections()
             core.ret(self.b)
             return
@@ -1754,6 +1784,8 @@ class _FunctionLowering(ContainerLowering, StringLowering):
             self.b.at_end(dead)
 
     def _for(self, node: ast.For) -> None:
+        if self._for_generator(node):
+            return
         if self._is_walk(node.iter):
             self._for_collection(node)
             return
@@ -1965,7 +1997,7 @@ class _FunctionLowering(ContainerLowering, StringLowering):
             core.cmp(self.b, "ge", position, zero),
             core.cmp(self.b, "lt", position, length),
         )
-        core.guard(self.b, in_range, "bounds", "index out of range", raises=raises)
+        self._guard(in_range, "bounds", "index out of range", raises=raises)
         return position
 
     def _buffer_element(self, name: str, index: Value) -> Value:
@@ -1984,8 +2016,7 @@ class _FunctionLowering(ContainerLowering, StringLowering):
         carried_as = _read_as(_kind(buffer.type.element))
         carried_type = _scalar_type(carried_as)
         if operation in {"min", "max"}:
-            core.guard(
-                self.b,
+            self._guard(
                 core.cmp(self.b, "ne", length, zero),
                 "contract",
                 f"{operation}() of empty",
@@ -2466,10 +2497,13 @@ class _FunctionLowering(ContainerLowering, StringLowering):
                 width = len(self.tuples[argument.id].type.pointee.items)  # type: ignore[attr-defined]
                 return self._int_constant(width)
         if target in {"sum", "min", "max"}:
-            node = self._materialized(node)
             reduced = self._reduction(target, node)
             if reduced is not None:
                 return reduced
+        if target in {"any", "all", "next"}:
+            consumed = self._generator_consumer(target, node)
+            if consumed is not None:
+                return consumed
         if target in {"any", "all"}:
             decided = self._any_all(target, node)
             if decided is not None:
@@ -2512,7 +2546,7 @@ class _FunctionLowering(ContainerLowering, StringLowering):
             raise Unsupported("keyword arguments have no native ABI")
         function, signature = self.frontend.derivative(qualname, argnums, value)
         arguments = self._call_arguments(signature, node.args, qualname)
-        call = core.call(self.b, function.name, tuple(arguments), function.results)
+        call = self._call_native(function.name, tuple(arguments), function.results)
         return list(call.results)
 
     def _generic_call(
@@ -2551,7 +2585,7 @@ class _FunctionLowering(ContainerLowering, StringLowering):
             value if parameter.is_handle else self._coerce(value, parameter.kind)
             for value, parameter in zip(values, signature.parameters, strict=True)
         ]
-        found = core.call(self.b, function.name, tuple(converted), function.results)
+        found = self._call_native(function.name, tuple(converted), function.results)
         for handle in temporaries:
             self._release(handle)
         if not function.results:
@@ -3812,14 +3846,14 @@ class _FunctionLowering(ContainerLowering, StringLowering):
         if signature.returns_tuple:
             raise Unsupported("a tuple result cannot be forwarded between native calls yet")
         if not function.results and discard_result:
-            core.call(self.b, function.name, tuple(arguments), ())
+            self._call_native(function.name, tuple(arguments), ())
             for handle in temporaries:
                 self._release(handle)
             # Statement calls discard this internal placeholder; it is not a None value.
             return core.const(self.b, 0, I64)
         if not function.results:
             raise Unsupported(f"`{qualname}` returns nothing a caller can use")
-        result = core.call(self.b, function.name, tuple(arguments), function.results).results[0]
+        result = self._call_native(function.name, tuple(arguments), function.results).results[0]
         for handle in temporaries:
             self._release(handle)
         if discard_result and result.type == HANDLE:
@@ -3991,16 +4025,14 @@ class _FunctionLowering(ContainerLowering, StringLowering):
         and a standalone binary says what CPython would have raised.
         """
         if not self.device:
-            core.guard(
-                self.b,
+            self._guard(
                 core.cmp(self.b, "eq", value, value),
                 "range",
                 "int() of NaN",
                 raises="ValueError: cannot convert float NaN to integer",
             )
             infinity = core.const(self.b, math.inf, F64)
-            core.guard(
-                self.b,
+            self._guard(
                 core.bitwise(
                     self.b,
                     "and",
@@ -4011,8 +4043,7 @@ class _FunctionLowering(ContainerLowering, StringLowering):
                 "int() of an infinity",
                 raises="OverflowError: cannot convert float infinity to integer",
             )
-            core.guard(
-                self.b,
+            self._guard(
                 core.bitwise(
                     self.b,
                     "and",
@@ -4291,7 +4322,7 @@ class _FunctionLowering(ContainerLowering, StringLowering):
                     if not isinstance(right.type, StructType)
                     else right
                 )
-                return core.call(self.b, function.name, (left, other), function.results).results[0]
+                return self._call_native(function.name, (left, other), function.results).results[0]
         raise Unsupported(
             f"`{left.type.name}` has no native `{dunder}`; native code never dispatches dynamically"
         )
@@ -4309,15 +4340,13 @@ class _FunctionLowering(ContainerLowering, StringLowering):
             pass
         elif self.frontend.standalone:
             # Python shifts by any count but a negative one; the word does not.
-            core.guard(
-                self.b,
+            self._guard(
                 core.cmp(self.b, "ge", right, zero),
                 "range",
                 "negative shift count",
                 raises=negative_shift(),
             )
-            core.guard(
-                self.b,
+            self._guard(
                 core.cmp(self.b, "le", right, limit),
                 "range",
                 "shift count outside the machine word",
@@ -4336,8 +4365,7 @@ class _FunctionLowering(ContainerLowering, StringLowering):
         if self.device:
             return
         zero = self._literal(0, _kind(value.type))
-        core.guard(
-            self.b,
+        self._guard(
             core.cmp(self.b, "ne", value, zero),
             "zero_division",
             "division by zero",

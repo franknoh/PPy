@@ -123,8 +123,10 @@ Some code should stay as it is:
   different types** is a class and does not act as a struct. It can be
   `.ppy`, but it will not lower. That is fine: the loops that read its numbers
   can.
-- **`try`/`except` around the hot loop.** The loop inside lowers; the handler
-  is Python. Move the `try` outside the loop if the loop is the point.
+- **`try`/`except` that uses more than the class and message.** A handler
+  reading `e.args`, or `raise ... from ...`, keeps its function in Python.
+  One that matches by class and reads `str(e)` lowers; see
+  [exceptions and generators](../guide/exceptions-and-generators.md).
 
 ## What to expect from the numbers
 

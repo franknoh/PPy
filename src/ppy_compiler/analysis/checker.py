@@ -657,6 +657,9 @@ class _Checker:
         self._dynamic_seen = False
         self._current: FunctionInfo | None = None
         self._returns: list[Binding] = []
+        #: For each loop being checked, innermost last: the states its
+        #: `continue`s and its `break`s leave with.
+        self._loop_jumps: list[tuple[list[Env], list[Env]]] = []
         self._provisional_returns: list[bool] = []
         #: Locals whose type is unknown only because a recursive call fed
         #: them, so a `return` of one is provisional the same way.
@@ -1262,6 +1265,7 @@ class _Checker:
 
         body = getattr(node, "body", [])
         orelse = getattr(node, "orelse", [])
+        breaks: list[Env] = []
         for _ in range(_MAX_LOOP_ITERATIONS):
             before = env.snapshot()
             body_env = env.fork()
@@ -1272,9 +1276,17 @@ class _Checker:
                 iterable = self._expr(for_node.iter, body_env)
                 element = self._iteration_element(iterable, for_node.iter)
                 self._bind_target(for_node.target, element, body_env)
-            for stmt in body:
-                self._stmt(stmt, body_env)
+            continues: list[Env] = []
+            breaks = []
+            self._loop_jumps.append((continues, breaks))
+            try:
+                for stmt in body:
+                    self._stmt(stmt, body_env)
+            finally:
+                self._loop_jumps.pop()
             merged = env.merge(body_env) if body_env.reachable else env
+            for jumped in continues:
+                merged = merged.merge(jumped)
             env.restore(merged.snapshot())
             if env.equals(before):
                 break
@@ -1284,6 +1296,11 @@ class _Checker:
             env.restore(self._narrow(test, env.fork(), False).snapshot())
         for stmt in orelse:
             self._stmt(stmt, env)
+        # A `break` leaves past the `else`, with what it saw.
+        after = env
+        for jumped in breaks:
+            after = after.merge(jumped)
+        env.restore(after.snapshot())
         env.reachable = True
 
     def _widen(self, env: Env) -> None:
@@ -1300,9 +1317,14 @@ class _Checker:
                 )
 
     def _stmt_Break(self, node: ast.Break, env: Env) -> None:
+        if self._loop_jumps and env.reachable:
+            self._loop_jumps[-1][1].append(env.fork())
         env.terminate()
 
     def _stmt_Continue(self, node: ast.Continue, env: Env) -> None:
+        # The loop's next pass starts from here as well as from its body's end.
+        if self._loop_jumps and env.reachable:
+            self._loop_jumps[-1][0].append(env.fork())
         env.terminate()
 
     def _stmt_Raise(self, node: ast.Raise, env: Env) -> None:
@@ -1344,13 +1366,28 @@ class _Checker:
         for stmt in node.body:
             self._stmt(stmt, body_env)
         # A handler starts from the state before the try, because the body may
-        # have raised anywhere inside it.
-        merged = body_env if body_env.reachable else env.fork()
+        # have raised anywhere inside it: a name the body assigns may hold any
+        # value it was given there, so only its type is known.
+        raised = env.fork()
+        for name in sorted(_stored_names(node.body)):
+            before = env.get(name)
+            after = body_env.get(name)
+            if before is None:
+                continue
+            binding = before.merge(after) if after is not None else before
+            raised.set(
+                name,
+                Binding(
+                    binding.type,
+                    binding.facts.with_(int_range=None, has_constant=False, constant=None),
+                ),
+            )
+        merged = body_env if body_env.reachable else raised.fork()
         # What follows is reachable only if the body or some handler can fall
         # out of the statement: `try: return a / except E: return b` cannot.
         reachable = body_env.reachable
         for handler in node.handlers:
-            handler_env = env.fork()
+            handler_env = raised.fork()
             if handler.type is not None:
                 bound = self._expr(handler.type, env)
                 if handler.name:
@@ -2714,6 +2751,9 @@ class _Checker:
                 inherited_external = self._external_base_attribute(info, node.attr, owner.facts)
                 if inherited_external is not None:
                     return inherited_external
+                raised_args = _exception_args(base, node.attr)
+                if raised_args is not None:
+                    return raised_args
                 for entry in base.resolved_mro:
                     # `class Reached(list)`: `self.append` is the list's.
                     if entry != base.name and entry in T.BUILTIN_MRO:
@@ -2730,6 +2770,9 @@ class _Checker:
             if info is not None and not self._dynamic_depth:
                 self._strictly("E1202", f"`{info.name}` has no attribute `{node.attr}`", node)
                 return Binding(T.UNKNOWN)
+        raised_args = _exception_args(base, node.attr)
+        if raised_args is not None:
+            return raised_args
         known = (
             stdlib.instance_attribute(base.name, node.attr)
             if isinstance(base, T.Instance)
@@ -6519,3 +6562,24 @@ def _nesting(t: T.Type) -> int:
     if isinstance(t, T.Union_):
         return max((_nesting(m) for m in t.members), default=0)
     return 0
+
+
+def _stored_names(body: list[ast.stmt]) -> set[str]:
+    """The names statements store to, in any block inside them."""
+    return {
+        node.id
+        for statement in body
+        for node in ast.walk(statement)
+        if isinstance(node, ast.Name) and isinstance(node.ctx, ast.Store)
+    }
+
+
+def _exception_args(base: T.Type, attribute: str) -> Binding | None:
+    """`e.args` of an exception: the arguments it was raised with."""
+    if (
+        attribute == "args"
+        and isinstance(base, T.Instance)
+        and "BaseException" in base.resolved_mro
+    ):
+        return Binding(T.Tuple_((T.OBJECT,), homogeneous=True))
+    return None

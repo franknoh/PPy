@@ -13,6 +13,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from ppy_runtime import collections as _collections
+from ppy_runtime.abi import STATUS_RAISED
 from ppy_runtime.scanner import FUNCTIONS, INTERNAL, STATEFUL
 
 __all__ = ["SHIMS", "Shim", "definition", "program_main", "support_source"]
@@ -240,21 +241,33 @@ def support_source() -> str:
     return "\n".join(lines).rstrip("\n") + "\n"
 
 
-def program_main(symbol: str, fputs: str = "fputs", *, collect: bool = False) -> str:
+def program_main(
+    symbol: str, fputs: str = "fputs", *, collect: bool = False, raised: bool = False
+) -> str:
     """A `main` that runs the program's entry and fails where a guard fails.
 
     A guard that knows what CPython would raise says so and exits where it
     fails (`ppy_rt_raise`). One that does not reaches here with a status,
     which is said once on standard error and ends the process with
-    CPython's status for an uncaught exception.
+    CPython's status for an uncaught exception. With `raised`, an exception
+    nothing caught reaches here with the raised status, and its line is
+    CPython's (`ppy_exc_report`).
     """
     # The cycles still waiting for a collection are freed before the process
     # ends, so a leak checker sees only what nothing can free.
     collected = "    ppy_coll_collect();\n" if collect else ""
+    reported = (
+        f"    if (status == {STATUS_RAISED}) {{\n"
+        "        ppy_exc_report();\n"
+        "        return 1;\n"
+        "    }\n"
+        if raised
+        else ""
+    )
     return f"""int main(void) {{
     int64_t out = 0;
     int32_t status = {symbol}(&out);
-{collected}    if (status != 0) {{
+{reported}{collected}    if (status != 0) {{
         {fputs}("RuntimeError: a native guard failed with no Python to fall back to\\n", stderr);
         return 1;
     }}

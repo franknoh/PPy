@@ -291,11 +291,49 @@ def main() -> None:
 main()
 """
 
+CAUGHT = """
+def lookups(n: int) -> int:
+    d = {i: i * i for i in range(n)}
+    xs = [1, 2, 3]
+    total = 0
+    for k in range(n + 3):
+        try:
+            total += d[k]
+        except KeyError:
+            total += 1000
+    try:
+        total += xs[7]
+    except IndexError:
+        total += 7
+    try:
+        xs.remove(99)
+    except ValueError:
+        total += 99
+    try:
+        xs.index(42)
+    except ValueError:
+        total += 42
+    empty: list[int] = []
+    try:
+        total += empty.pop()
+    except IndexError:
+        total += 5
+    return total
+
+
+def main() -> None:
+    print(lookups(10))
+
+
+main()
+"""
+
 PROGRAMS = {
     "big": (BIG, ["lists", "nested", "dicts", "sets"]),
     "params": (PARAMS, ["histogram", "top", "evens", "grow", "pipeline", "shout"]),
     "iters": (ITERS, ["walks", "words", "flags", "generated"]),
     "alias": (ALIAS, ["aliases"]),
+    "caught": (CAUGHT, ["lookups"]),
 }
 
 #: Programs a standalone build prints from natively, where `ppy run` keeps
