@@ -16,7 +16,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from ppy_runtime.abi import SANITIZERS, STATUS_FALLBACK, STATUS_OK, STATUS_SANITIZER_BASE
+from ppy_runtime.abi import (
+    SANITIZERS,
+    STATUS_FALLBACK,
+    STATUS_OK,
+    STATUS_RAISED,
+    STATUS_SANITIZER_BASE,
+)
 
 from ...ir import (
     Block,
@@ -289,6 +295,8 @@ class _FunctionEmitter:
         self._slots = 0
         #: The blocks a failed sanitizer check returns through, by kind.
         self.sanitized: dict[str, object] = {}
+        #: Where an exception leaves the function, once made.
+        self.raised_block = None
         #: A coroutine's resume function returns nothing to no caller.
         self.resume = function.attributes.get("ppy.abi") == "resume"
 
@@ -359,6 +367,17 @@ class _FunctionEmitter:
             )
             self.builder.unreachable()
         return block
+
+    def _raised_exit(self):  # type: ignore[no-untyped-def]
+        """The block that returns the raised status, made once per function.
+
+        Nothing is freed here: what the function held it let go of before
+        raising, and the runtime keeps the exception."""
+        if self.raised_block is None:
+            self.raised_block = self.llvm.append_basic_block("raised")
+            with self.builder.goto_block(self.raised_block):
+                self.builder.ret(self.ir.Constant(self.ir.IntType(32), STATUS_RAISED))
+        return self.raised_block
 
     def _sanitizer_check(self, condition, label: str) -> None:  # type: ignore[no-untyped-def]
         """A sanitizer's check: failing it returns the sanitizer status, never falls back."""
@@ -597,6 +616,11 @@ class _FunctionEmitter:
                 label = str(op.attributes.get("label") or f"{op.attributes['kind']}.ok")
                 if label.startswith("sanitize:"):
                     self._sanitizer_check(self.value(op.operands[0]), label)
+                elif label == "raised":
+                    # An exception leaves the function: the raised status.
+                    keep = self.llvm.append_basic_block("not.raised")
+                    self.builder.cbranch(self.value(op.operands[0]), keep, self._raised_exit())
+                    self.builder.position_at_end(keep)
                 else:
                     self.continue_if(
                         self.value(op.operands[0]),
@@ -876,8 +900,15 @@ class _FunctionEmitter:
         status = b.call(callee, arguments)
         results = list(op.results)
         if op.attributes.get("capture_status"):
-            self.set(results.pop(), b.zext(status, ir.IntType(64)))
+            self.set(results.pop(), b.sext(status, ir.IntType(64)))
         else:
+            if self.owner.module.attributes.get("ppy.exceptions") and not self.resume:
+                # A callee's exception goes on up: this caller has no `try`
+                # around the call, or it would have asked for the status.
+                raised = b.icmp_signed("==", status, ir.Constant(ir.IntType(32), STATUS_RAISED))
+                keep = self.llvm.append_basic_block("call.not.raised")
+                b.cbranch(raised, self._raised_exit(), keep)
+                b.position_at_end(keep)
             ok = b.icmp_signed("==", status, ir.Constant(ir.IntType(32), STATUS_OK))
             self.continue_if(ok, "call.ok")
         for result, (t, atoms) in zip(results, slots, strict=True):
