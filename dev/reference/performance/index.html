@@ -3458,6 +3458,17 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#ppy-run-against-python" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ppy run against python
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -4149,6 +4160,17 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#ppy-run-against-python" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ppy run against python
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -4335,6 +4357,325 @@ reads its input from standard input.</p>
 <p>The <code>ppy run</code> column includes the first run's build into the cache. That is
 why its deviation is wide. From the second run on, it is the launcher alone.</p>
 <p><code>--standalone</code> is a native executable with no interpreter inside.</p>
+<h2 id="ppy-run-against-python"><code>ppy run</code> against <code>python</code><a class="headerlink" href="#ppy-run-against-python" title="Permanent link">&para;</a></h2>
+<p><code>ppy run</code> should never be slower than <code>python</code>. Each program below was run
+5 times by each command, one process at a time,
+and the table shows the median wall time of the whole process in seconds. The
+cold column starts from an empty project cache, so it includes analysis,
+lowering, and compilation; every later run is the warm one.</p>
+<p>A warm run counts as no slower when it is within 5% of <code>python</code>, or 30 ms,
+whichever is more: two runs of the same <code>python</code> command differ by that much.
+The programs named <code>micro_</code> are in the script; they call a native candidate
+from Python many times, where the crossing matters most. Examples that start a
+device runtime (a CUDA context, XLA's client) are left out: their warm time is
+that start, which <code>python</code> running the CPU reference never pays.</p>
+<table>
+<thead>
+<tr>
+<th>program</th>
+<th style="text-align: right;"><code>python</code></th>
+<th style="text-align: right;"><code>ppy run</code>, cold</th>
+<th style="text-align: right;"><code>ppy run</code>, warm</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>01_basics/basics.ppy</code></td>
+<td style="text-align: right;">0.040</td>
+<td style="text-align: right;">0.751</td>
+<td style="text-align: right;">0.048</td>
+</tr>
+<tr>
+<td><code>02_arbitrary_precision/arbitrary_precision.ppy</code></td>
+<td style="text-align: right;">0.040</td>
+<td style="text-align: right;">0.876</td>
+<td style="text-align: right;">0.047</td>
+</tr>
+<tr>
+<td><code>03_effects_and_contracts/effects.ppy</code></td>
+<td style="text-align: right;">0.043</td>
+<td style="text-align: right;">0.876</td>
+<td style="text-align: right;">0.055</td>
+</tr>
+<tr>
+<td><code>04_classes/classes.ppy</code></td>
+<td style="text-align: right;">0.047</td>
+<td style="text-align: right;">0.899</td>
+<td style="text-align: right;">0.045</td>
+</tr>
+<tr>
+<td><code>06_pydantic/pydantic_models.ppy</code></td>
+<td style="text-align: right;">0.125</td>
+<td style="text-align: right;">0.587</td>
+<td style="text-align: right;">0.121</td>
+</tr>
+<tr>
+<td><code>08_native_data/native_data.ppy</code></td>
+<td style="text-align: right;">0.043</td>
+<td style="text-align: right;">0.681</td>
+<td style="text-align: right;">0.052</td>
+</tr>
+<tr>
+<td><code>10_narrowing/narrowing.ppy</code></td>
+<td style="text-align: right;">0.042</td>
+<td style="text-align: right;">0.527</td>
+<td style="text-align: right;">0.046</td>
+</tr>
+<tr>
+<td><code>11_numerics/numerics.ppy</code></td>
+<td style="text-align: right;">0.045</td>
+<td style="text-align: right;">0.685</td>
+<td style="text-align: right;">0.047</td>
+</tr>
+<tr>
+<td><code>12_buffers_and_jit/buffers_and_jit.ppy</code></td>
+<td style="text-align: right;">3.926</td>
+<td style="text-align: right;">0.799</td>
+<td style="text-align: right;">0.722</td>
+</tr>
+<tr>
+<td><code>13_value_classes/value_classes.ppy</code></td>
+<td style="text-align: right;">0.187</td>
+<td style="text-align: right;">0.974</td>
+<td style="text-align: right;">0.075</td>
+</tr>
+<tr>
+<td><code>14_tuples/tuples.ppy</code></td>
+<td style="text-align: right;">0.041</td>
+<td style="text-align: right;">0.641</td>
+<td style="text-align: right;">0.044</td>
+</tr>
+<tr>
+<td><code>15_algorithms/algorithms.ppy</code></td>
+<td style="text-align: right;">4.428</td>
+<td style="text-align: right;">1.326</td>
+<td style="text-align: right;">0.330</td>
+</tr>
+<tr>
+<td><code>16_dynamic/dynamic.ppy</code></td>
+<td style="text-align: right;">0.040</td>
+<td style="text-align: right;">0.606</td>
+<td style="text-align: right;">0.048</td>
+</tr>
+<tr>
+<td><code>17_containers/containers.ppy</code></td>
+<td style="text-align: right;">0.039</td>
+<td style="text-align: right;">0.845</td>
+<td style="text-align: right;">0.049</td>
+</tr>
+<tr>
+<td><code>18_errors/errors.ppy</code></td>
+<td style="text-align: right;">0.040</td>
+<td style="text-align: right;">0.814</td>
+<td style="text-align: right;">0.048</td>
+</tr>
+<tr>
+<td><code>19_strings/strings.ppy</code></td>
+<td style="text-align: right;">0.038</td>
+<td style="text-align: right;">0.864</td>
+<td style="text-align: right;">0.046</td>
+</tr>
+<tr>
+<td><code>20_inventory/inventory.ppy</code></td>
+<td style="text-align: right;">0.040</td>
+<td style="text-align: right;">0.760</td>
+<td style="text-align: right;">0.046</td>
+</tr>
+<tr>
+<td><code>23_inference/pipeline.ppy</code></td>
+<td style="text-align: right;">0.041</td>
+<td style="text-align: right;">0.856</td>
+<td style="text-align: right;">0.042</td>
+</tr>
+<tr>
+<td><code>23_inference/shapes.ppy</code></td>
+<td style="text-align: right;">0.040</td>
+<td style="text-align: right;">0.806</td>
+<td style="text-align: right;">0.045</td>
+</tr>
+<tr>
+<td><code>23_inference/stats.ppy</code></td>
+<td style="text-align: right;">0.037</td>
+<td style="text-align: right;">0.828</td>
+<td style="text-align: right;">0.049</td>
+</tr>
+<tr>
+<td><code>24_interop/geometry.ppy</code></td>
+<td style="text-align: right;">0.037</td>
+<td style="text-align: right;">0.556</td>
+<td style="text-align: right;">0.043</td>
+</tr>
+<tr>
+<td><code>28_threads/threads.ppy</code></td>
+<td style="text-align: right;">11.938</td>
+<td style="text-align: right;">0.883</td>
+<td style="text-align: right;">0.362</td>
+</tr>
+<tr>
+<td><code>30_migrate/legacy.ppy</code></td>
+<td style="text-align: right;">0.039</td>
+<td style="text-align: right;">0.442</td>
+<td style="text-align: right;">0.045</td>
+</tr>
+<tr>
+<td><code>32_native_memory/native_memory.ppy</code></td>
+<td style="text-align: right;">0.054</td>
+<td style="text-align: right;">0.671</td>
+<td style="text-align: right;">0.059</td>
+</tr>
+<tr>
+<td><code>33_simd_and_cpu/lanes.ppy</code></td>
+<td style="text-align: right;">0.043</td>
+<td style="text-align: right;">0.658</td>
+<td style="text-align: right;">0.044</td>
+</tr>
+<tr>
+<td><code>34_atomics_and_threads/counters.ppy</code></td>
+<td style="text-align: right;">0.052</td>
+<td style="text-align: right;">0.665</td>
+<td style="text-align: right;">0.050</td>
+</tr>
+<tr>
+<td><code>35_parallel_range/ranges.ppy</code></td>
+<td style="text-align: right;">0.093</td>
+<td style="text-align: right;">1.000</td>
+<td style="text-align: right;">0.090</td>
+</tr>
+<tr>
+<td><code>37_aio/echo.ppy</code></td>
+<td style="text-align: right;">0.081</td>
+<td style="text-align: right;">0.745</td>
+<td style="text-align: right;">0.065</td>
+</tr>
+<tr>
+<td><code>40_generics/generic.ppy</code></td>
+<td style="text-align: right;">0.017</td>
+<td style="text-align: right;">0.668</td>
+<td style="text-align: right;">0.032</td>
+</tr>
+<tr>
+<td><code>42_toolbox/toolbox.ppy</code></td>
+<td style="text-align: right;">0.011</td>
+<td style="text-align: right;">0.629</td>
+<td style="text-align: right;">0.028</td>
+</tr>
+<tr>
+<td><code>43_regex/patterns.ppy</code></td>
+<td style="text-align: right;">0.158</td>
+<td style="text-align: right;">1.005</td>
+<td style="text-align: right;">0.085</td>
+</tr>
+<tr>
+<td><code>47_collections/graphs.ppy</code></td>
+<td style="text-align: right;">6.142</td>
+<td style="text-align: right;">1.846</td>
+<td style="text-align: right;">0.810</td>
+</tr>
+<tr>
+<td><code>48_strings/text.ppy</code></td>
+<td style="text-align: right;">2.381</td>
+<td style="text-align: right;">2.060</td>
+<td style="text-align: right;">0.994</td>
+</tr>
+<tr>
+<td><code>49_inheritance/shapes.ppy</code></td>
+<td style="text-align: right;">5.522</td>
+<td style="text-align: right;">5.217</td>
+<td style="text-align: right;">4.133</td>
+</tr>
+<tr>
+<td><code>50_errors_and_generators/ledger.ppy</code></td>
+<td style="text-align: right;">2.482</td>
+<td style="text-align: right;">1.583</td>
+<td style="text-align: right;">0.454</td>
+</tr>
+<tr>
+<td><code>15_algorithms/15a_nqueens/nqueens.ppy</code></td>
+<td style="text-align: right;">0.177</td>
+<td style="text-align: right;">0.600</td>
+<td style="text-align: right;">0.056</td>
+</tr>
+<tr>
+<td><code>15_algorithms/15b_dijkstra/dijkstra.ppy</code></td>
+<td style="text-align: right;">2.233</td>
+<td style="text-align: right;">1.823</td>
+<td style="text-align: right;">0.661</td>
+</tr>
+<tr>
+<td><code>15_algorithms/15c_kmp/kmp.ppy</code></td>
+<td style="text-align: right;">0.569</td>
+<td style="text-align: right;">0.887</td>
+<td style="text-align: right;">0.275</td>
+</tr>
+<tr>
+<td><code>15_algorithms/15d_segment_tree/segment_tree.ppy</code></td>
+<td style="text-align: right;">0.735</td>
+<td style="text-align: right;">1.207</td>
+<td style="text-align: right;">0.264</td>
+</tr>
+<tr>
+<td><code>15_algorithms/15e_lis/lis.ppy</code></td>
+<td style="text-align: right;">0.698</td>
+<td style="text-align: right;">0.981</td>
+<td style="text-align: right;">0.199</td>
+</tr>
+<tr>
+<td><code>15_algorithms/15f_input/inversions.ppy</code></td>
+<td style="text-align: right;">0.887</td>
+<td style="text-align: right;">0.977</td>
+<td style="text-align: right;">0.139</td>
+</tr>
+<tr>
+<td><code>26_project/src/app.ppy</code></td>
+<td style="text-align: right;">0.356</td>
+<td style="text-align: right;">0.810</td>
+<td style="text-align: right;">0.052</td>
+</tr>
+<tr>
+<td><code>micro_scalar_calls</code></td>
+<td style="text-align: right;">0.043</td>
+<td style="text-align: right;">0.560</td>
+<td style="text-align: right;">0.037</td>
+</tr>
+<tr>
+<td><code>micro_collection_peek</code></td>
+<td style="text-align: right;">0.041</td>
+<td style="text-align: right;">0.716</td>
+<td style="text-align: right;">0.044</td>
+</tr>
+<tr>
+<td><code>micro_collection_sum</code></td>
+<td style="text-align: right;">0.283</td>
+<td style="text-align: right;">0.960</td>
+<td style="text-align: right;">0.266</td>
+</tr>
+<tr>
+<td><code>micro_short_strings</code></td>
+<td style="text-align: right;">0.047</td>
+<td style="text-align: right;">0.880</td>
+<td style="text-align: right;">0.055</td>
+</tr>
+<tr>
+<td><code>micro_long_string</code></td>
+<td style="text-align: right;">0.070</td>
+<td style="text-align: right;">0.856</td>
+<td style="text-align: right;">0.049</td>
+</tr>
+<tr>
+<td><code>micro_fill</code></td>
+<td style="text-align: right;">0.127</td>
+<td style="text-align: right;">0.900</td>
+<td style="text-align: right;">0.084</td>
+</tr>
+<tr>
+<td><code>micro_words</code></td>
+<td style="text-align: right;">0.182</td>
+<td style="text-align: right;">1.043</td>
+<td style="text-align: right;">0.175</td>
+</tr>
+</tbody>
+</table>
+<p>Recorded on x86_64, 16 cores, CPython 3.14.5, Linux-6.6.114.1-microsoft-standard-WSL2-x86_64-with-glibc2.39, at 2026-09-29.</p>
 
 
 

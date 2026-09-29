@@ -3664,6 +3664,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#ppy_runtime.launch.write_light" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;write_light
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -3697,6 +3708,17 @@
     <span class="md-ellipsis">
       
         <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;RegionLibrary
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ppy_runtime.manifest.launch_cache" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;launch_cache
       
     </span>
   </a>
@@ -4919,6 +4941,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#ppy_runtime.launch.write_light" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;write_light
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -4952,6 +4985,17 @@
     <span class="md-ellipsis">
       
         <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;RegionLibrary
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ppy_runtime.manifest.launch_cache" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;launch_cache
       
     </span>
   </a>
@@ -5749,7 +5793,34 @@ No parsing, no analysis, no LLVM: those all happened at build time.</p>
 
     <div class="doc doc-contents ">
 
-        <p>The generated Python modules a manifest names, read off disk.</p>
+        <p>The generated Python modules a manifest names, read off disk, or off the
+launcher's cache with their compiled code.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="ppy_runtime.launch.write_light" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-function"></code>            <code class="highlight language-python"><span class="n">write_light</span><span class="p">(</span><span class="n">manifest_path</span><span class="p">)</span></code>
+
+<a href="#ppy_runtime.launch.write_light" class="headerlink" title="Permanent link">&para;</a></h3>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Write the light plan of a manifest whose program runs as Python alone.</p>
+<p>A manifest with no native entry Python calls, and no wrappers, regions,
+staged exports, or fused kernels, needs none of the native library: its
+generated modules run as they are. Their compiled code, the entry, the
+search paths, and whether the program names <code>ppy</code> are marshaled beside
+the manifest, so a warm run imports neither this module nor <code>json</code>,
+<code>ctypes</code>, or <code>dataclasses</code>, and compiles nothing. Marshal is tied to this
+interpreter, which the plan records and the reader checks. Returns the
+plan, or None when the program needs the launcher.</p>
 
 
     </div>
@@ -5836,11 +5907,8 @@ interpreter compatibility, and file presence -- nothing that reads source.</p>
 
 
 <h3 id="ppy_runtime.manifest.RegionLibrary" class="doc doc-heading">
-<code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>              <code class="highlight language-python"><span class="n">RegionLibrary</span><span class="p">(</span><span class="n">library</span><span class="p">,</span> <span class="n">entries</span><span class="p">)</span></code>
+<code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>            <code>RegionLibrary</code>
 
-  <span class="doc doc-labels">
-      <small class="doc doc-label doc-label-dataclass"><code>dataclass</code></small>
-  </span>
 
 <a href="#ppy_runtime.manifest.RegionLibrary" class="headerlink" title="Permanent link">&para;</a></h3>
 
@@ -5881,6 +5949,25 @@ them, and the C++ symbol that serves each function.</p>
 
 </div>
 
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="ppy_runtime.manifest.launch_cache" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-function"></code>            <code class="highlight language-python"><span class="n">launch_cache</span><span class="p">(</span><span class="n">path</span><span class="p">)</span></code>
+
+<a href="#ppy_runtime.manifest.launch_cache" class="headerlink" title="Permanent link">&para;</a></h3>
+
+
+    <div class="doc doc-contents ">
+
+        <p>The launcher's cache for the manifest at <code>path</code>, when it was written for
+exactly this manifest file and this interpreter.</p>
+
+
+    </div>
+
+</div>
 
 <div class="doc doc-object doc-function">
 
@@ -6014,11 +6101,8 @@ and its machinery is imported only when it is actually used.</p>
 
 
 <h3 id="ppy_runtime.binding.NativeBinding" class="doc doc-heading">
-<code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>              <code class="highlight language-python"><span class="n">NativeBinding</span><span class="p">(</span><span class="n">signature</span><span class="p">,</span> <span class="n">wrapper</span><span class="p">,</span> <span class="n">fallback</span><span class="p">,</span> <span class="n">calls</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">fallbacks</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">specialized_calls</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">fast_entry</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">owner</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">selectors</span><span class="o">=</span><span class="nb">list</span><span class="p">(),</span> <span class="n">registered</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">key_counts</span><span class="o">=</span><span class="nb">dict</span><span class="p">(),</span> <span class="n">observations</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">observing</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span></code>
+<code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>            <code>NativeBinding</code>
 
-  <span class="doc doc-labels">
-      <small class="doc doc-label doc-label-dataclass"><code>dataclass</code></small>
-  </span>
 
 <a href="#ppy_runtime.binding.NativeBinding" class="headerlink" title="Permanent link">&para;</a></h3>
 
@@ -6226,11 +6310,8 @@ years later.</p>
 
 
 <h3 id="ppy_runtime.abi.NativeParam" class="doc doc-heading">
-<code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>              <code class="highlight language-python"><span class="n">NativeParam</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">kind</span><span class="p">,</span> <span class="n">element</span><span class="o">=</span><span class="s1">''</span><span class="p">,</span> <span class="n">elements</span><span class="o">=</span><span class="p">(),</span> <span class="n">fields</span><span class="o">=</span><span class="p">(),</span> <span class="n">class_name</span><span class="o">=</span><span class="s1">''</span><span class="p">,</span> <span class="n">written</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span></code>
+<code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>            <code>NativeParam</code>
 
-  <span class="doc doc-labels">
-      <small class="doc doc-label doc-label-dataclass"><code>dataclass</code></small>
-  </span>
 
 <a href="#ppy_runtime.abi.NativeParam" class="headerlink" title="Permanent link">&para;</a></h3>
 
@@ -6365,11 +6446,8 @@ point at. A buffer-protocol object already has one (spec 6.4, 13.8).</p>
 
 
 <h3 id="ppy_runtime.abi.NativeSignature" class="doc doc-heading">
-<code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>              <code class="highlight language-python"><span class="n">NativeSignature</span><span class="p">(</span><span class="n">qualname</span><span class="p">,</span> <span class="n">symbol</span><span class="p">,</span> <span class="n">parameters</span><span class="p">,</span> <span class="n">returns</span><span class="p">,</span> <span class="n">releases_gil</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">cpu_features</span><span class="o">=</span><span class="p">(),</span> <span class="n">future</span><span class="o">=</span><span class="s1">''</span><span class="p">,</span> <span class="n">returned</span><span class="o">=</span><span class="s1">''</span><span class="p">)</span></code>
+<code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>            <code>NativeSignature</code>
 
-  <span class="doc doc-labels">
-      <small class="doc doc-label doc-label-dataclass"><code>dataclass</code></small>
-  </span>
 
 <a href="#ppy_runtime.abi.NativeSignature" class="headerlink" title="Permanent link">&para;</a></h3>
 
