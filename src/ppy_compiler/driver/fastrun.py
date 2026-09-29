@@ -23,6 +23,12 @@ The signature is proportional to the program, not to the project:
 content against the digest the build recorded; a file edited while the build
 ran is left unremembered, and the next run takes the full path.
 
+A modification time is only as fine as the file system keeps it, so a
+same-size edit made within one tick of `remember` would leave the stats as
+they were. As git does with its index, a source whose modification time is
+that close to the moment `remember` ran is marked racy, and a warm run checks
+its content against the recorded digest as well as its stats.
+
 A program whose native code Python never calls has a light plan beside its
 manifest (`ppy_runtime.launch.write_light`): its generated modules compiled,
 run here with nothing of the launcher imported. Anything else goes through
@@ -36,15 +42,20 @@ import marshal
 import os
 import sys
 
-__all__ = ["MARKERS", "remember", "signature", "try_warm"]
+__all__ = ["MARKERS", "current", "remember", "signature", "try_warm"]
 
 #: What marks a project root; `config.find_project_root` looks for the same,
 #: and a test holds the two together.
 MARKERS = ("pyproject.toml", "ppy.toml", ".git")
 
 _SUFFIXES = (".ppy", ".py")
-_INDEX_VERSION = 2
+_INDEX_VERSION = 3
 _LIGHT = "light.marshal"
+
+#: How close to `remember` a source's modification time makes it racy. Two
+#: seconds covers the coarsest timestamps a project may live on (FAT, and
+#: some network and Windows-mounted file systems).
+_RACY_NS = 2_000_000_000
 
 
 def _root(file: str) -> str:
@@ -106,6 +117,15 @@ def signature(file: str, sources: tuple[str, ...], directories: tuple[str, ...])
     )
 
 
+def current(file: str, sources, directories, taken, racy: dict[str, str]) -> bool:  # type: ignore[no-untyped-def]
+    """Whether what `remember` recorded still describes the artifact: the same
+    signature, and each racy source (see the module doc) still with the content
+    it was built from, since its stats alone cannot say."""
+    if taken != signature(file, sources, directories):
+        return False
+    return all(_digest(path) == digest for path, digest in racy.items())
+
+
 def _digest(path: str) -> str | None:
     import hashlib  # pylint: disable=import-outside-toplevel
 
@@ -136,6 +156,16 @@ def remember(file: str, manifest: str) -> None:
         if _digest(path) != digest:
             return
     sources = tuple(sorted(recorded))
+    import time  # pylint: disable=import-outside-toplevel
+
+    now = time.time_ns()
+    racy = {}
+    for path in sources:
+        try:
+            if os.stat(path).st_mtime_ns >= now - _RACY_NS:
+                racy[path] = recorded[path]
+        except OSError:
+            return
     directories = tuple(
         sorted({os.path.dirname(p) for p in sources} | set(program.get("search_paths", ())))
     )
@@ -147,6 +177,7 @@ def remember(file: str, manifest: str) -> None:
         signature(file, sources, directories),
         manifest,
         light if os.path.isfile(light) else None,
+        racy,
     )
     path = _index_path(file)
     try:
@@ -172,12 +203,12 @@ def try_warm(argv: list[str]) -> int | None:
         return None
     try:
         with open(_index_path(file), "rb") as held:
-            version, sources, directories, taken, manifest, light = marshal.load(held)
+            version, sources, directories, taken, manifest, light, racy = marshal.load(held)
     except (OSError, EOFError, ValueError, TypeError):
         return None
     if version != _INDEX_VERSION or not os.path.isfile(manifest):
         return None
-    if taken != signature(file, sources, directories):
+    if not current(file, sources, directories, taken, racy):
         return None
     program_args = rest[1:]
     if light is not None:
