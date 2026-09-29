@@ -26,9 +26,11 @@ persists; `scripts/fuzz.py` drives all of it and saves what it finds under
 from __future__ import annotations
 
 import ast
+import contextlib
 import os
 import random
 import shutil
+import signal
 import subprocess
 import sys
 import tempfile
@@ -39,6 +41,7 @@ from pathlib import Path
 __all__ = [
     "ALL_PATHS",
     "OVERFLOW_64",
+    "TIMED_OUT",
     "Mismatch",
     "Result",
     "compare",
@@ -52,6 +55,10 @@ ALL_PATHS = ("python", "ppy", "run", "standalone", "c", "cpp")
 
 #: What native code says where CPython would compute an integer no word holds.
 OVERFLOW_64 = "OverflowError: the result does not fit in a 64-bit integer"
+
+#: The status a path is given when it ran past its timeout: a finding like
+#: any other, since CPython answered in that time.
+TIMED_OUT = 124
 
 #: The paths that are native code with no Python to fall back to.
 _NATIVE_ONLY = frozenset({"standalone", "c", "cpp"})
@@ -738,19 +745,37 @@ def _capped(command: list[str], memory: str) -> list[str]:
 def _execute(
     command: list[str], cwd: Path, timeout: float, env: dict[str, str] | None = None
 ) -> tuple[int, str, str]:
+    """Run `command` in a process group of its own; at `timeout`, kill the group.
+
+    `subprocess.run(timeout=...)` kills only the process it started and then
+    waits for its pipes to close, which a child `ppy run` spawned keeps open:
+    a program that loops natively held a run for a day. Killing the whole
+    group ends every process the command made, and the pipes with them.
+    """
+    process = subprocess.Popen(
+        _capped(command, "2G"),
+        cwd=cwd,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        env=env,
+        start_new_session=True,
+    )
     try:
-        done = subprocess.run(
-            _capped(command, "2G"),
-            cwd=cwd,
-            capture_output=True,
-            text=True,
-            timeout=timeout,
-            check=False,
-            env=env,
-        )
+        out, err = process.communicate(timeout=timeout)
     except subprocess.TimeoutExpired:
-        return 124, "", "timed out"
-    return done.returncode, done.stdout, done.stderr
+        _kill_group(process)
+        with contextlib.suppress(subprocess.TimeoutExpired):
+            process.communicate(timeout=10)
+        return TIMED_OUT, "", "timed out"
+    return process.returncode, out, err
+
+
+def _kill_group(process: subprocess.Popen[str]) -> None:
+    try:
+        os.killpg(process.pid, signal.SIGKILL)
+    except (ProcessLookupError, PermissionError):
+        process.kill()
 
 
 def _last_line(text: str) -> str:
@@ -862,8 +887,14 @@ def compare(results: dict[str, Result]) -> list[Mismatch]:
     """Every way a path differs from CPython, less the one allowed difference."""
     expected = results["python"]
     found: list[Mismatch] = []
+    if expected.status == TIMED_OUT:
+        # The reference itself ran out of time: nothing to hold the paths to.
+        return found
     for path, result in results.items():
         if path == "python":
+            continue
+        if result.status == TIMED_OUT or (result.refused and result.last_error == "timed out"):
+            found.append(Mismatch(path, "timed out", expected, result))
             continue
         if result.refused:
             found.append(Mismatch(path, "did not build", expected, result))
