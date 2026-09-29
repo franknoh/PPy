@@ -480,7 +480,8 @@ BOUNDARY = """
 def histogram(words: list[str]) -> dict[str, int]:
     counts: dict[str, int] = {}
     for w in words:
-        counts[w] = counts.get(w, 0) + 1
+        for ch in w:
+            counts[ch] = counts.get(ch, 0) + 1
     return counts
 
 
@@ -488,9 +489,20 @@ def top(counts: dict[str, int]) -> str:
     best = ""
     most = -1
     for w, c in counts.items():
-        if c > most:
-            best, most = w, c
+        score = c
+        for ch in w:
+            if ch == "q":
+                score += 1
+        if score > most:
+            best, most = w, score
     return best
+
+
+def once(words: list[str]) -> int:
+    total = 0
+    for w in words:
+        total += len(w)
+    return total
 
 
 def grow(xs: list[int], n: int) -> None:
@@ -513,8 +525,9 @@ def kept(s: set[int], n: int) -> int:
 @requires_llvm
 @requires_cc
 def test_python_calls_container_functions_natively(tmp_path: Path):
-    """Python's containers cross by copy: strings included, a write through an
-    argument reaches the caller's object, a returned argument is the caller's
+    """Python's containers cross by copy: strings included where the body does
+    more than one pass over them, a write through an argument reaches the
+    caller's object, a returned argument is the caller's
     own, and an argument of another type runs the Python body."""
     from ppy_compiler.backend.llvm import _collect
     from ppy_compiler.backend.llvm.jit import JitEngine
@@ -545,9 +558,13 @@ def test_python_calls_container_functions_natively(tmp_path: Path):
         return bind(signature, engine.address(signature.symbol), fallback)
 
     histogram = native("histogram")
-    counted = histogram.wrapper(["x", "é", "x"])
-    assert counted == {"x": 2, "é": 1} and type(counted) is dict and histogram.calls == 1
-    assert native("top").wrapper({"q": 3, "r": 5}) == "r"
+    counted = histogram.wrapper(["xy", "é", "x"])
+    assert counted == {"x": 2, "y": 1, "é": 1} and type(counted) is dict
+    assert histogram.calls == 1
+    assert native("top").wrapper({"q": 3, "r": 5, "": 4}) == "r"
+    # One pass over a list of strings is cheaper in Python than copying them in.
+    once = module.functions["prog.once"]
+    assert not once.exposed and "strings" in once.exposure_reason
     xs = [1, 2]
     grow = native("grow")
     assert grow.wrapper(xs, 2) is None and xs == [1, 2, 0, 1] and grow.calls == 1

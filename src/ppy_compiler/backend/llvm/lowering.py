@@ -247,6 +247,39 @@ def written_params(analysis: FunctionAnalysis | None) -> frozenset[str]:
     return frozenset(p.name for p in analysis.info.params)
 
 
+def _holds_strings(info: FunctionInfo) -> bool:
+    """Whether a parameter or the result is a container with strings in it."""
+
+    def inside(t: T.Type) -> bool:
+        base = T.strip_literal(t)
+        if isinstance(base, T.Union_):
+            return any(inside(member) for member in base.members)
+        if not isinstance(base, T.Instance):
+            return False
+        return base.name == "str" or any(inside(a) for a in base.args)
+
+    def container(t: T.Type) -> bool:
+        base = T.strip_literal(t)
+        return isinstance(base, T.Instance) and any(inside(a) for a in base.args)
+
+    return container(info.ret) or any(container(p.type) for p in info.params)
+
+
+def _nested_loop(function: ast.AST) -> bool:
+    """Whether a loop runs inside another loop: work per element of more than
+    one step, which pays for copying the element across."""
+    loops = (ast.For, ast.While, ast.AsyncFor)
+    comprehensions = (ast.ListComp, ast.SetComp, ast.DictComp, ast.GeneratorExp)
+    for child in ast.walk(function):
+        if isinstance(child, loops):
+            inner = (n for statement in child.body for n in ast.walk(statement))
+            if any(isinstance(n, (*loops, ast.comprehension)) for n in inner):
+                return True
+        elif isinstance(child, comprehensions) and len(child.generators) > 1:
+            return True
+    return False
+
+
 def _collection_param(
     name: str, t: T.Type, layouts: ClassLayouts | None = None, written: bool = True
 ) -> NativeParam | None:
@@ -476,6 +509,10 @@ def should_lower_native(
     for name in _EXPOSURE_DIRECTIVES:
         if info.directive(name) is not None:
             return True, f"@ppy.{name} asks for the boundary"
+    if _holds_strings(info) and not _nested_loop(info.node):
+        # Each string copied in or out is a native string made for it, which
+        # costs about what one pass of a Python loop spends on it.
+        return False, "copying its strings across costs what one pass over them saves"
     for param in info.params:
         native = _native_param(param.name, param.type, layouts, param.name in written)
         if native is not None and native.is_buffer:

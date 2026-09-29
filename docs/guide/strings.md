@@ -114,8 +114,9 @@ A string with a lone surrogate has no UTF-8, and a call with one runs as
 Python.
 
 A `list[str]`, `dict[str, V]`, or `set[str]` parameter or result is
-passed by handle between native functions, and crosses from Python by copy
-as every container does; see [Lists, dicts, and sets](containers.md).
+passed by handle between native functions. From Python it crosses by copy
+when the function does more than one pass of work over its strings; see
+[Lists, dicts, and sets](containers.md#between-functions).
 
 ## Reading and printing
 

@@ -23,6 +23,7 @@ calls it.
 
 from __future__ import annotations
 
+import array
 import ctypes
 import re
 import struct
@@ -205,9 +206,8 @@ _SIGNATURES: dict[str, tuple[Any, tuple[Any, ...]]] = {
     "ppy_coll_retain": (None, (_P,)),
     "ppy_coll_release": (None, (_P,)),
     "ppy_coll_text_keys": (None, (_P, _I)),
-    "ppy_str_new": (_P, (ctypes.c_char_p, _I)),
-    "ppy_str_data": (_P, (_P,)),
-    "ppy_str_bytes": (_I, (_P,)),
+    "ppy_str_new_many": (None, (ctypes.c_char_p, ctypes.c_char_p, _I, _P)),
+    "ppy_str_gather": (_I, (_P, _I, _P, _P)),
 }
 
 _loaded: dict[str, Any] = {}
@@ -336,28 +336,15 @@ class Boundary:
         if not items:
             return b""
         if spec.kind == "str":
-            words = []
-            try:
-                for item in items:
-                    if type(item) is not str:
-                        raise Refused
-                    try:
-                        data = item.encode("utf-8")
-                    except UnicodeEncodeError as exc:
-                        raise Refused from exc
-                    words.append(self.rt.ppy_str_new(data, len(data)))
-                    if made is not None:
-                        made.append(words[-1])
-            except BaseException:
-                if made is None:
-                    for text in words:
-                        self.rt.ppy_coll_release(text)
-                raise
-        elif spec.collection:
+            strings = self._strings(items)
+            if made is not None:
+                made.extend(strings)
+            return bytes(strings)
+        if spec.collection:
             words: list[Any] = []
             try:
                 for item in items:
-                    words.append(self._native(item, spec))
+                    words.append(self._native(item, spec))  # noqa: PERF401 - kept on failure
             except BaseException:
                 # The references meant for the parent it will never hold.
                 for handle in words:
@@ -379,6 +366,43 @@ class Boundary:
             return struct.pack(f"<{_format(spec) * len(items)}", *words)
         except (struct.error, OverflowError) as exc:
             raise Refused from exc
+
+    def _texts(self, words: tuple[int, ...]) -> list[str]:
+        """The Python strings of native ones, their bytes copied out in one call."""
+        count = len(words)
+        if count == 0:
+            return []
+        handles = (ctypes.c_int64 * count)(*words)
+        total = self.rt.ppy_str_gather(handles, count, None, None)
+        lengths = (ctypes.c_int64 * count)()
+        data = ctypes.create_string_buffer(total)
+        self.rt.ppy_str_gather(handles, count, lengths, data)
+        raw = data.raw
+        if raw.count(0) == count:
+            # No string holds a NUL, so the one after each string splits them.
+            return raw[:-1].decode("utf-8").split("\0")
+        return _split(raw, lengths)
+
+    def _strings(self, items: list[Any]) -> Any:
+        """Native strings for `items`, made in one call once every item is
+        known to be a string: an array of their handles, each owned. The
+        checks and the encoding run in C builtins, not a loop per item."""
+        if not set(map(type, items)) <= {str}:
+            raise Refused
+        joined = "".join(items)
+        try:
+            data = joined.encode("utf-8")
+        except UnicodeEncodeError as exc:
+            raise Refused from exc
+        count = len(items)
+        if len(data) == len(joined):
+            # All ASCII: each string's bytes are its characters.
+            lengths = array.array("q", map(len, items))
+        else:
+            lengths = array.array("q", (len(item.encode("utf-8")) for item in items))
+        strings = (ctypes.c_int64 * count)()
+        self.rt.ppy_str_new_many(data, lengths.tobytes(), count, strings)
+        return strings
 
     # -- out ----------------------------------------------------------------------
 
@@ -424,12 +448,7 @@ class Boundary:
         if spec.collection:
             return [self._python(word, spec, rewrite) for word in words]
         if spec.kind == "str":
-            return [
-                ctypes.string_at(self.rt.ppy_str_data(word), self.rt.ppy_str_bytes(word)).decode(
-                    "utf-8"
-                )
-                for word in words
-            ]
+            return self._texts(words)
         if spec.kind == "tuple":
             width = len(spec.parts)
             bools = [i for i, kind in enumerate(spec.parts) if kind == "bool"]
@@ -450,6 +469,16 @@ class Boundary:
         for handle in self._owned:
             self.rt.ppy_coll_release(handle)
         self._owned.clear()
+
+
+def _split(data: bytes, lengths: Any) -> list[str]:
+    """Strings laid one after another, each followed by a NUL."""
+    texts = []
+    start = 0
+    for length in lengths:
+        texts.append(data[start : start + length].decode("utf-8"))
+        start += length + 1
+    return texts
 
 
 def _check(kind: str, value: Any) -> None:

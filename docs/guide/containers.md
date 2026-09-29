@@ -86,6 +86,13 @@ copied back into the caller's object, which stays the same object. An
 argument whose contents do not match the declared type runs the Python
 body instead.
 
+Copying a string in or out makes a native string for it, which costs about
+what one pass of a Python loop spends on it. So a function that takes or
+returns a container of strings is called natively from Python only when it
+does more than one pass of work per element, a loop inside its loop, as
+`for w in words: for ch in w:` does. Otherwise Python calls its Python body,
+and native callers still call it natively. `ppy explain` gives the reason.
+
 ```python
 def grow(xs: list[int], n: int) -> None:
     for i in range(n):
