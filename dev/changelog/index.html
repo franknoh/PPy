@@ -210,7 +210,7 @@
   </div>
   <div class="md-source__repository">
     franknoh/PPy
-    <span class="ppy-source-version" title="Documentation version">v0.5.0a1</span>
+    <span class="ppy-source-version" title="Documentation version">v0.5.0</span>
   </div>
 </a>
       </div>
@@ -417,7 +417,7 @@
   </div>
   <div class="md-source__repository">
     franknoh/PPy
-    <span class="ppy-source-version" title="Documentation version">v0.5.0a1</span>
+    <span class="ppy-source-version" title="Documentation version">v0.5.0</span>
   </div>
 </a>
     </div>
@@ -4062,13 +4062,63 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#050-unreleased" class="md-nav__link">
+  <a href="#050-2026-09-30" class="md-nav__link">
     <span class="md-ellipsis">
       
-        0.5.0 — unreleased
+        0.5.0 — 2026-09-30
       
     </span>
   </a>
+  
+    <nav class="md-nav" aria-label="0.5.0 — 2026-09-30">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#lists-dicts-and-sets" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Lists, dicts, and sets
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#exceptions-and-generators" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Exceptions and generators
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ppy-run-is-never-slower" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ppy run is never slower
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#differential-fuzzing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Differential fuzzing
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -4372,13 +4422,63 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#050-unreleased" class="md-nav__link">
+  <a href="#050-2026-09-30" class="md-nav__link">
     <span class="md-ellipsis">
       
-        0.5.0 — unreleased
+        0.5.0 — 2026-09-30
       
     </span>
   </a>
+  
+    <nav class="md-nav" aria-label="0.5.0 — 2026-09-30">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#lists-dicts-and-sets" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Lists, dicts, and sets
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#exceptions-and-generators" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Exceptions and generators
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ppy-run-is-never-slower" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ppy run is never slower
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#differential-fuzzing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Differential fuzzing
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -4668,7 +4768,125 @@
 
 
 <h1 id="changelog">Changelog<a class="headerlink" href="#changelog" title="Permanent link">&para;</a></h1>
-<h2 id="050-unreleased">0.5.0 — unreleased<a class="headerlink" href="#050-unreleased" title="Permanent link">&para;</a></h2>
+<h2 id="050-2026-09-30">0.5.0 — 2026-09-30<a class="headerlink" href="#050-2026-09-30" title="Permanent link">&para;</a></h2>
+<p>Ordinary Python goes native without a rewrite. Plain lists, dicts, and sets
+compile, and so do exceptions and generators. A warm <code>ppy run</code> is within
+noise of <code>python</code> (5%, or 30 ms if that is more) or faster on every example;
+a program that does almost no work still pays about 15 ms to start. A
+differential fuzzer now checks every path against CPython, and the bugs it
+found are fixed.</p>
+<h3 id="lists-dicts-and-sets">Lists, dicts, and sets<a class="headerlink" href="#lists-dicts-and-sets" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Plain <code>list</code>, <code>dict</code>, and <code>set</code> lower to native code under <code>ppy run</code>, in
+  standalone builds, and in emitted C and C++. This covers their methods,
+  slicing, comprehensions, and the common builtins over them, with CPython's
+  results and error messages. <code>except IndexError</code>, <code>except KeyError</code>, and
+  <code>except ValueError</code> around them run natively.</li>
+<li>A function that takes or returns a list, dict, or set can be called from
+  Python natively. Arguments are copied in, and a container the function
+  wrote is updated in place. A container of strings is copied only for a
+  function that does more than one pass of work per string.</li>
+<li><code>out = []</code> or <code>seen = set()</code>, typed by a later <code>append</code> or <code>add</code>, lowers
+  natively.</li>
+<li>Walking a set, and a dict keyed by <code>float</code> or <code>bool</code>, stay in Python.</li>
+<li>Fixed: <code>xs.append(len(xs))</code> and <code>v.push(len(v))</code> natively appended the
+  length after the append.</li>
+<li>Fixed: a build could reuse a library linked with the collections runtime
+  from before an edit to it.</li>
+<li>New guide page: Lists, dicts, and sets.</li>
+</ul>
+<h3 id="exceptions-and-generators">Exceptions and generators<a class="headerlink" href="#exceptions-and-generators" title="Permanent link">&para;</a></h3>
+<ul>
+<li><code>raise</code>, <code>try</code> with <code>except</code>, <code>else</code>, and <code>finally</code>, and <code>assert</code> compile
+  to native code under <code>ppy run</code>, in standalone binaries, and in emitted C
+  and C++. Exceptions cross native calls, and the checks native code makes
+  raise CPython's exception with CPython's message where a <code>try</code> can catch
+  them.</li>
+<li>Generator functions and generator expressions compile to native code when
+  consumed by <code>for</code>, <code>next</code>, <code>sum</code>, <code>min</code>, <code>max</code>, <code>sorted</code>, <code>any</code>, <code>all</code>, a
+  comprehension, or a collection constructor.</li>
+<li>Fixed: a value assigned before a <code>continue</code>, a <code>break</code>, or a raise inside
+  <code>try</code> could be folded to its earlier constant.</li>
+<li>Fixed: a native function returning <code>str</code> ran as Python under a warm
+  <code>ppy run</code>.</li>
+<li>New example <code>50_errors_and_generators</code> and guide page "Exceptions and
+  generators".</li>
+</ul>
+<h3 id="ppy-run-is-never-slower"><code>ppy run</code> is never slower<a class="headerlink" href="#ppy-run-is-never-slower" title="Permanent link">&para;</a></h3>
+<ul>
+<li><code>ppy run</code> of a program it built before starts in about 15 to 20 ms over
+  <code>python</code>, down from about 40 ms.</li>
+<li>A plain <code>ppy run FILE</code> checks the artifact's own sources, the
+    directories their imports resolve through, and the project's
+    configuration, and runs it before the command line is parsed.</li>
+<li>A program none of whose native code Python calls runs from a precompiled
+    plan without loading the native library.</li>
+<li>Otherwise the launcher reads what it parsed and compiled on its first
+    run.</li>
+<li>A program that never imports <code>ppy</code> no longer loads it under <code>ppy run</code>.</li>
+<li><code>ppy run</code> and <code>ppy build</code> share compiled CPython-ABI wrappers across
+  projects in <code>~/.cache/ppy/wrappers</code>.</li>
+<li>A function that takes a container is called natively from Python only when
+  its work grows with the container. The boundary copies a container in and
+  back, which cost far more than a body that reads a few elements.</li>
+<li>Fixed: a native function that only reads a collection it is given failed
+  to load under <code>ppy run</code> (<code>undefined symbol: ppy_coll_retain</code>).</li>
+<li>String work in native code is faster:</li>
+<li>literals are made once and reused;</li>
+<li><code>for c in s</code> over ASCII and <code>c in "aeiou"</code> make no runtime call per
+    character;</li>
+<li><code>s += a + str(n)</code> appends in place;</li>
+<li>comparing two characters is inline;</li>
+<li><code>upper()</code> and the other ASCII case methods do not rescan their result.</li>
+</ul>
+<p>The strings example runs in about 1 s warm, against about 2.4 s for <code>python</code>.
+- <code>scripts/run_overhead.py</code> times <code>python</code> against <code>ppy run</code>, cold and warm,
+  for every example, and the performance page shows the result.</p>
+<h3 id="differential-fuzzing">Differential fuzzing<a class="headerlink" href="#differential-fuzzing" title="Permanent link">&para;</a></h3>
+<ul>
+<li>New: <code>scripts/fuzz.py</code> generates programs over the native subset and runs
+  each on every path (CPython, the Python backend, <code>ppy run</code>, a standalone
+  binary, and C and C++ under AddressSanitizer), reporting any difference;
+  <code>tests/test_fuzz.py</code> runs a few in CI and replays every program it has
+  found.</li>
+<li>Fixed: in native code a float <code>!=</code> against NaN, and <code>if x:</code> on a NaN, were
+  false; a NaN divisor raised <code>ZeroDivisionError</code>. They now answer as Python
+  does.</li>
+<li>Fixed: <code>a if c else b</code> in native code evaluated both sides, so the side
+  not taken could raise (<code>0 if c else int(nan)</code>). It now evaluates only the
+  side taken.</li>
+<li>Fixed: <code>a or b</code> and <code>a and b</code> over numbers in native code gave
+  <code>True</code>/<code>False</code> instead of the operand that decided (<code>0 or 5</code> is <code>5</code>).</li>
+<li>Fixed: a <code>for i in range(...)</code> whose body assigns <code>i</code> looped forever in
+  native code; the range now counts on its own, as in Python.</li>
+<li>Fixed: a loop whose body always returns, and code after an <code>if</code> the
+  checker proves constant, could be refused by a standalone build.</li>
+<li>Fixed: <code>-9223372036854775808</code> written as a literal, a literal shifted by
+  32 or more, and division or remainder by a constant <code>-1</code> were refused or
+  undefined in emitted C.</li>
+<li>Fixed: <code>int(float("inf"))</code> in a program made the compiler itself raise
+  <code>OverflowError</code> while folding constants.</li>
+<li>Fixed: the Python backend removed an unused division or remainder along
+  with the <code>ZeroDivisionError</code> it raises, and could move one out of a loop
+  that would not have run it.</li>
+<li>Fixed: checking a function with nested loops could take gigabytes of
+  memory; alias analysis now reaches its fixed point in one pass per loop.</li>
+<li><code>sorted</code> of numbers, strings, or tuples of them lowers natively from any
+  iterable, a generator included.</li>
+<li>Standalone programs may <code>import math</code>.</li>
+<li>Fixed: after <code>del xs[0]</code>, <code>xs.pop()</code>, or <code>xs.append(...)</code>, a later
+  <code>len(xs)</code> test could still use the list's length from where it was made,
+  and native code took the wrong branch.</li>
+<li>Fixed: <code>min</code> or <code>max</code> in emitted C could read memory it had not written
+  before comparing the first element, which an optimizing C compiler may
+  turn into a crash.</li>
+<li>Fixed: a string literal could be taken for an empty literal placed at the
+  same address, so <code>float("-inf")</code> raised <code>ValueError</code> in a standalone
+  binary and under <code>ppy run</code>.</li>
+<li>Fixed: a warm <code>ppy run</code> could rerun the previous build after a same-size
+  edit made within one timestamp tick of the last build. A source that
+  recent is now checked by its content.</li>
+</ul>
 <h2 id="042-2026-09-28">0.4.2 — 2026-09-28<a class="headerlink" href="#042-2026-09-28" title="Permanent link">&para;</a></h2>
 <ul>
 <li>Fixed: <code>int(x)</code> of a float in native code returned -2<strong>63 on x86 for NaN,
