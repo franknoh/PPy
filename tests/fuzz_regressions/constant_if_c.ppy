@@ -1,0 +1,23 @@
+# fuzz: path=c seed=128 (code after an if the checker proved constant was lowered untyped and refused)
+from ppy import Vec
+
+
+def early(a: int) -> int:
+    if (6 * 9) >= (-5 + -10):
+        return a + 1
+    v = Vec[int]()
+    v.push(a)
+    return v[0]
+
+
+def late(a: int) -> int:
+    if 1e-300 >= 1e308:
+        return -1
+    return a * 2
+
+
+def main() -> None:
+    print(early(4), late(5))
+
+
+main()

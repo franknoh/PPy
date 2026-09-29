@@ -1250,6 +1250,24 @@ class _FunctionLowering(ExceptionLowering, GeneratorLowering, ContainerLowering,
         self._entry_loads[name] = value
         return value
 
+    def _has_edge_to(self, block: Block) -> bool:
+        """Whether some branch of the function goes to `block`."""
+        for other in self.function.body.blocks:
+            for op in other.operations:
+                if any(successor.block is block for successor in op.successors):
+                    return True
+        return False
+
+    def _dead_latch(self, latch: Block) -> bool:
+        """A loop's latch no edge reaches, every way through the body having
+        returned: it ends unreachable, not in a branch back to the loop's head,
+        which would make the head appear to have a way in that no path takes."""
+        if self._has_edge_to(latch):
+            return False
+        core.unreachable(self.b)
+        self._dead.add(id(latch))
+        return True
+
     def _block(self, label: str) -> Block:
         self._labels += 1
         return self.function.body.add_block(f"{label}{self._labels}")
@@ -1737,6 +1755,12 @@ class _FunctionLowering(ExceptionLowering, GeneratorLowering, ContainerLowering,
         core.store(self.b, self._coerce_type(value, slot.type.pointee), slot)
 
     def _if(self, node: ast.If) -> None:
+        facts = self.frontend.analysis.facts_of(node.test)
+        if facts.has_constant and facts.constant in (True, False) and type(facts.constant) is bool:
+            # A test the checker proved constant: it analyzed the side taken
+            # and nothing it made unreachable, so only that side is code.
+            self._body(node.body if facts.constant else node.orelse)
+            return
         condition = self._test(node.test)
         then_block = self._block("then")
         else_block = self._block("else")
@@ -1865,7 +1889,13 @@ class _FunctionLowering(ExceptionLowering, GeneratorLowering, ContainerLowering,
             slot = self._alloca(I64, name)
             self.slots[name] = slot
             self.tuples.pop(name, None)
-        core.store(self.b, start, slot)
+        # A body that assigns the loop variable does not steer the loop in
+        # Python: `range` hands out the next value whatever the name holds.
+        # The count then lives in a slot of its own, and each iteration
+        # binds the name from it.
+        rebound = _rebinds(node.body, name)
+        counter = self._alloca(I64, f"{name}.count") if rebound else slot
+        core.store(self.b, start, counter)
 
         header = self._block("for.head")
         body = self._block("for.body")
@@ -1875,22 +1905,35 @@ class _FunctionLowering(ExceptionLowering, GeneratorLowering, ContainerLowering,
         assert loop_setup is not None
         core.br(self.b, Successor(header))
         self.b.at_end(header)
-        current = core.load(self.b, slot)
+        current = core.load(self.b, counter)
         condition = core.cmp(self.b, "gt" if step_value < 0 else "lt", current, stop)
         core.cond_br(self.b, condition, Successor(body), Successor(done))
         self.b.at_end(body)
+        if rebound:
+            core.store(self.b, current, slot)
         self._loops.append((latch, done))
         self._body(node.body)
         self._loops.pop()
         if self._open():
             core.br(self.b, Successor(latch))
         self.b.at_end(latch)
-        value = core.load(self.b, slot)
+        if self._dead_latch(latch):
+            self.b.at_end(done)
+            if site is not None:
+                site.finish(loop_setup)
+                self._guard_sites.pop()
+                if saved_induction is None:
+                    self._induction.pop(name, None)
+                    self._induction_terms.pop(name, None)
+                else:
+                    self._induction[name] = saved_induction
+            return
+        value = core.load(self.b, counter)
         if site is not None:
             self._ranges[value] = self._induction[name]
         if self.prover is not None:
             self._term_for_load(value, node.target)
-        core.store(self.b, self._checked_binary(value, step, "add"), slot)
+        core.store(self.b, self._checked_binary(value, step, "add"), counter)
         core.br(self.b, Successor(header))
         self.b.at_end(done)
         if site is not None:
@@ -1937,9 +1980,11 @@ class _FunctionLowering(ExceptionLowering, GeneratorLowering, ContainerLowering,
         if self._open():
             core.br(self.b, Successor(latch))
         self.b.at_end(latch)
-        one = core.const(self.b, 1, I64)
-        core.store(self.b, core.add(self.b, core.load(self.b, index), one, overflow="wrap"), index)
-        core.br(self.b, Successor(header))
+        if not self._dead_latch(latch):
+            one = core.const(self.b, 1, I64)
+            step = core.add(self.b, core.load(self.b, index), one, overflow="wrap")
+            core.store(self.b, step, index)
+            core.br(self.b, Successor(header))
         self.b.at_end(done)
 
     # -- buffers ----------------------------------------------------------
@@ -2063,6 +2108,12 @@ class _FunctionLowering(ExceptionLowering, GeneratorLowering, ContainerLowering,
         match node:
             case ast.Constant(value=bool() as value):
                 return core.const(self.b, value, BOOL)
+            case ast.UnaryOp(op=ast.USub(), operand=ast.Constant(value=int() as value)) if (
+                not isinstance(value, bool) and value == 1 << 63
+            ):
+                # `-9223372036854775808` is `-(9223372036854775808)` to the
+                # parser; the literal alone is past a word, the value is not.
+                return core.const(self.b, -(1 << 63), I64)
             case ast.Constant(value=int() as value):
                 if not -(1 << 63) <= value < (1 << 63):
                     raise Unsupported("an integer literal exceeds the native machine range")
@@ -2230,7 +2281,21 @@ class _FunctionLowering(ExceptionLowering, GeneratorLowering, ContainerLowering,
         raise Unsupported("unary operator has no native lowering")
 
     def _boolop(self, node: ast.BoolOp) -> Value:
-        """`and`/`or` with short-circuit evaluation, joined by a block argument."""
+        """`and`/`or` with short-circuit evaluation, joined by a block argument.
+
+        Python hands back the operand that decided, not its truth: `0 or 5` is
+        5. Over bools the two are one; over numbers the operand is the value.
+        """
+        answer = T.strip_literal(self._type_of(node))
+        if answer in (T.INT, T.FLOAT):
+            return self._boolop_value(node, "int" if answer == T.INT else "float")
+        if answer != T.BOOL:
+            spelled = type(node.op).__name__.lower()
+            raise Unsupported(f"`{spelled}` of `{answer}` as a value has no native lowering")
+        return self._boolop_truth(node)
+
+    def _boolop_truth(self, node: ast.BoolOp) -> Value:
+        """`and`/`or` where only its truth is asked (a condition), or over bools."""
         done = self._block("boolop.end")
         result = done.add_argument(BOOL, "boolop")
         is_and = isinstance(node.op, ast.And)
@@ -2244,6 +2309,47 @@ class _FunctionLowering(ExceptionLowering, GeneratorLowering, ContainerLowering,
                 core.cond_br(self.b, truth, Successor(following), Successor(done, [truth]))
             else:
                 core.cond_br(self.b, truth, Successor(done, [truth]), Successor(following))
+            self.b.at_end(following)
+        self.b.at_end(done)
+        return result
+
+    def _cannot_fail(self, node: ast.expr) -> bool:
+        """Whether evaluating `node` can neither raise nor fail a guard, so it
+        may run when Python would not have: names, constants, signs,
+        comparisons, and float `+`, `-`, `*` (an int's may overflow a word)."""
+        if isinstance(node, (ast.Name, ast.Constant)):
+            return True
+        if isinstance(node, ast.UnaryOp) and isinstance(node.op, (ast.USub, ast.UAdd, ast.Not)):
+            if isinstance(node.op, ast.USub) and T.strip_literal(self._type_of(node)) != T.FLOAT:
+                return False
+            return self._cannot_fail(node.operand)
+        if isinstance(node, ast.Compare):
+            return all(self._cannot_fail(part) for part in (node.left, *node.comparators))
+        if isinstance(node, ast.BinOp) and isinstance(node.op, (ast.Add, ast.Sub, ast.Mult)):
+            return (
+                T.strip_literal(self._type_of(node)) == T.FLOAT
+                and self._cannot_fail(node.left)
+                and self._cannot_fail(node.right)
+            )
+        return False
+
+    def _boolop_value(self, node: ast.BoolOp, kind: str) -> Value:
+        """`a or b`, `a and b` over numbers: the first operand whose truth
+        decides (true for `or`, false for `and`), else the last."""
+        done = self._block("boolop.end")
+        result = done.add_argument(_scalar_type(kind), "boolop")
+        is_and = isinstance(node.op, ast.And)
+        for index, value_node in enumerate(node.values):
+            value = self._coerce(self._expr(value_node), kind)
+            if index == len(node.values) - 1:
+                core.br(self.b, Successor(done, [value]))
+                break
+            truth = self._truth(value)
+            following = self._block("boolop")
+            if is_and:
+                core.cond_br(self.b, truth, Successor(following), Successor(done, [value]))
+            else:
+                core.cond_br(self.b, truth, Successor(done, [value]), Successor(following))
             self.b.at_end(following)
         self.b.at_end(done)
         return result
@@ -2296,13 +2402,37 @@ class _FunctionLowering(ExceptionLowering, GeneratorLowering, ContainerLowering,
         return core.cmp(self.b, predicate, self._coerce(left, kind), self._coerce(right, kind))
 
     def _ifexp(self, node: ast.IfExp) -> Value:
+        """`a if c else b` evaluates only the side `c` picks: the other may divide
+        by zero or convert a NaN, which Python never does. Two sides that cannot
+        fail choose with a `select`, which XLA and vector code can take."""
         condition = self._test(node.test)
+        if self._cannot_fail(node.body) and self._cannot_fail(node.orelse):
+            then_value = self._expr(node.body)
+            else_value = self._expr(node.orelse)
+            kind = self._unify(_kind(then_value.type), _kind(else_value.type))
+            return core.select(
+                self.b, condition, self._coerce(then_value, kind), self._coerce(else_value, kind)
+            )
+        then_block = self._block("ifexp.then")
+        else_block = self._block("ifexp.else")
+        done = self._block("ifexp.end")
+        core.cond_br(self.b, condition, Successor(then_block), Successor(else_block))
+        self.b.at_end(then_block)
         then_value = self._expr(node.body)
+        then_end = self.b.block
+        self.b.at_end(else_block)
         else_value = self._expr(node.orelse)
+        else_end = self.b.block
+        assert then_end is not None and else_end is not None
+        if isinstance(then_value.type, VectorType) or isinstance(else_value.type, VectorType):
+            raise Unsupported("a conditional expression over vectors has no native lowering")
         kind = self._unify(_kind(then_value.type), _kind(else_value.type))
-        return core.select(
-            self.b, condition, self._coerce(then_value, kind), self._coerce(else_value, kind)
-        )
+        result = done.add_argument(_scalar_type(kind), "ifexp")
+        for end, value in ((then_end, then_value), (else_end, else_value)):
+            self.b.at_end(end)
+            core.br(self.b, Successor(done, [self._coerce(value, kind)]))
+        self.b.at_end(done)
+        return result
 
     def _plugin_spec(self, node: ast.Call) -> DialectOperationSpec | None:
         note = self.frontend.analysis.lowerings.get(id(node))
@@ -4438,6 +4568,9 @@ class _FunctionLowering(ExceptionLowering, GeneratorLowering, ContainerLowering,
         present = self._object_truth(node)
         if present is not None:
             return present
+        if isinstance(node, ast.BoolOp):
+            # A condition asks only for truth, whatever the operands are.
+            return self._boolop_truth(node)
         return self._truth(self._expr(node))
 
     def _truth(self, value: Value) -> Value:

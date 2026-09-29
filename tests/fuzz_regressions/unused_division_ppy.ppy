@@ -1,0 +1,12 @@
+# fuzz: path=ppy seed=782 (a division whose result nobody read was deleted with the ZeroDivisionError it raises)
+def unused(a: int, b: int) -> float:
+    n: int = a % (b // 7)
+    return 0.5
+
+
+def main() -> None:
+    print(unused(4, 20))
+    print(unused(4, 3))
+
+
+main()

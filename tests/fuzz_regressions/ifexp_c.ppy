@@ -1,0 +1,14 @@
+# fuzz: path=c seed=187 (conditional expressions evaluated both sides; and/or over numbers gave a bool)
+def pick(c: bool, x: float) -> int:
+    return 0 if c else int(x)
+
+
+def share(c: bool, n: int, d: int) -> int:
+    return (n // d) if c else -1
+
+
+def main() -> None:
+    print(pick(True, float("nan")), share(False, 5, 0), pick(False, 2.5), share(True, 7, 2))
+
+
+main()

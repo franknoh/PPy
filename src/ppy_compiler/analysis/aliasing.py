@@ -170,11 +170,6 @@ class _Analyzer:
         self.immutable = immutable
         self.at: dict[int, _State | list[_State]] = {}
         self.holds: dict[str, set[str]] = {}
-        self._alloc = 0
-
-    def fresh(self) -> frozenset[str]:
-        self._alloc += 1
-        return frozenset({f"@{self._alloc}"})
 
     def site(self, node: ast.AST) -> frozenset[str]:
         """An allocation named for where it is made, so a loop that makes one per
@@ -245,7 +240,7 @@ class _Analyzer:
                 roots = state.get(node.target.id, frozenset())
                 if roots and roots <= self.immutable:
                     state = dict(state)
-                    state[node.target.id] = self.fresh()
+                    state[node.target.id] = self.site(node)
             elif isinstance(node.target, (ast.Subscript, ast.Attribute)):
                 self.store_into(self.eval(node.target.value, state), self.eval(node.value, state))
             return state
@@ -474,7 +469,7 @@ class _Analyzer:
             # memory they return, so nothing else can already alias it.
             if isinstance(node.func, ast.Subscript) and ast.unparse(node.func.value) in _FRESH_PPY:
                 if ast.unparse(node.func.value).rpartition(".")[2] not in SHORT_NAMES:
-                    return self.fresh()
+                    return self.site(node)
                 # A collection is named for where it is made, so a loop that makes
                 # one per pass reaches a fixed point. Its elements are made with it
                 # (`Vec[Vec[int]](n)`): reading one out yields memory made here.
@@ -488,7 +483,7 @@ class _Analyzer:
             self.eval(node.slice, state)
             if isinstance(node.slice, ast.Slice):
                 # A slice of a list is a fresh list over the same elements.
-                alloc = self.fresh()
+                alloc = self.site(node)
                 self.store_into(alloc, self.elements_of(base))
                 return alloc
             return self.elements_of(base)

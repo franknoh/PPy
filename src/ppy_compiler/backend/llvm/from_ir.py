@@ -788,7 +788,9 @@ class _FunctionEmitter:
         predicate = str(op.attributes["predicate"])
         symbol = {"eq": "==", "ne": "!=", "lt": "<", "le": "<=", "gt": ">", "ge": ">="}[predicate]
         if isinstance(t, FloatType):
-            self.set(op.result, b.fcmp_ordered(symbol, left, right))
+            # IEEE and Python: every comparison with a NaN is false but `!=`.
+            compare = b.fcmp_unordered if symbol == "!=" else b.fcmp_ordered
+            self.set(op.result, compare(symbol, left, right))
         elif isinstance(t, IntType) and not t.signed:
             self.set(op.result, b.icmp_unsigned(symbol, left, right))
         else:
@@ -819,7 +821,8 @@ class _FunctionEmitter:
         if isinstance(target, BoolType):
             zero = None if isinstance(value.type, ir.VectorType) else 0
             if isinstance(source, FloatType):
-                self.set(op.result, b.fcmp_ordered("!=", value, ir.Constant(value.type, zero)))
+                # `bool(nan)` is true: a NaN is not zero.
+                self.set(op.result, b.fcmp_unordered("!=", value, ir.Constant(value.type, zero)))
             else:
                 self.set(op.result, b.icmp_signed("!=", value, ir.Constant(value.type, zero)))
             return

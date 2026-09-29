@@ -119,7 +119,8 @@ def _int(args: Sequence[Arg]) -> BuiltinResult:
     if args and args[0].facts.has_constant:
         try:
             value = int(args[0].facts.constant)  # type: ignore[arg-type]
-        except (TypeError, ValueError):
+        except (TypeError, ValueError, OverflowError):
+            # `int(inf)` raises at run time; it is not a constant to fold.
             value = None
         if value is not None:
             return BuiltinResult(
@@ -243,7 +244,20 @@ def _sorted(args: Sequence[Arg]) -> BuiltinResult:
         # numbers, tuples, and ordered dataclasses, with no hook to call; and
         # numbers, strings, and tuples of them compare so anywhere.
         return BuiltinResult(T.list_of(element), Facts(), _ALLOC)
+    if _compares_without_hooks(element):
+        # Numbers, strings, and tuples of them order themselves, from any
+        # iterable: no `__lt__` of the program's runs.
+        return BuiltinResult(T.list_of(element), Facts(), _ALLOC)
     return BuiltinResult(T.list_of(element), Facts(), _ALLOC | EffectSet.of(Effect.PYTHON_CALLBACK))
+
+
+def _compares_without_hooks(t: T.Type) -> bool:
+    base = T.strip_literal(t)
+    if base in (T.INT, T.FLOAT, T.BOOL, T.STR):
+        return True
+    if isinstance(base, T.Tuple_) and not base.homogeneous and base.items:
+        return all(_compares_without_hooks(item) for item in base.items)
+    return False
 
 
 def _reversed(args: Sequence[Arg]) -> BuiltinResult:
