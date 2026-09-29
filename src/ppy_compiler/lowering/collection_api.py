@@ -1183,13 +1183,16 @@ class CollectionApiLowering(CollectionLowering):
                 self._word(shape.floats),
                 self._word(shape.handles),
             )
-            beats = self._rt("ppy_coll_before", (*ordered, *widths))
-            first = core.bitwise(
-                self.b, "xor", core.load(self.b, seen), core.const(self.b, True, BOOL)
-            )
-            take = core.bitwise(self.b, "or", first, core.cmp(self.b, "ne", beats, self._word(0)))
             chosen = self._block(f"{operation}.take")  # type: ignore[attr-defined]
+            compare = self._block(f"{operation}.compare")  # type: ignore[attr-defined]
             after = self._block(f"{operation}.next")  # type: ignore[attr-defined]
+            # The first element is taken as it is: `best` holds nothing yet,
+            # and comparing with it would read memory never written (a string's
+            # would be a pointer to nowhere).
+            core.cond_br(self.b, core.load(self.b, seen), Successor(compare), Successor(chosen))
+            self.b.at_end(compare)  # type: ignore[attr-defined]
+            beats = self._rt("ppy_coll_before", (*ordered, *widths))
+            take = core.cmp(self.b, "ne", beats, self._word(0))
             core.cond_br(self.b, take, Successor(chosen), Successor(after))
             self.b.at_end(chosen)  # type: ignore[attr-defined]
             self._write(best_address, shape, items[0][1])

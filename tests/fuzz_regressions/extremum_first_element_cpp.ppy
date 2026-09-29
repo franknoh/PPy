@@ -1,0 +1,27 @@
+# fuzz: path=cpp seed=3238 (min/max compared the first element with a result never written, which clang turned into a crash)
+from collections.abc import Iterator
+
+from ppy import HashMap
+
+
+def countdown(n: int) -> Iterator[int]:
+    while n > 0:
+        yield n
+        n -= 2
+
+
+def fn(a: int, b: int) -> int:
+    m = HashMap[int, int]()
+    m[a * b] = m.get(a * b, 0) + (b + b)
+    n: int = len(m) * 100
+    for key in m:
+        n = n * 3 + m[key]
+    top: int = max(countdown(2))
+    return n + top
+
+
+def main() -> None:
+    print(fn(3, 4), fn(0, 5))
+
+
+main()
