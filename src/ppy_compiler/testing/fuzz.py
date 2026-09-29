@@ -313,9 +313,11 @@ class _Generator:
             for _ in range(max(1, min(budget, 2))):
                 self.statement(w, inner, 0, ret)
             w.depth -= 1
-        elif roll < 0.64:
+        elif roll < 0.6:
             self.vec_statements(w, scope)
-        elif roll < 0.7:
+        elif roll < 0.68:
+            self.container_statements(w, scope)
+        elif roll < 0.71:
             self.map_statements(w, scope)
         elif roll < 0.74:
             self.heap_statements(w, scope)
@@ -350,8 +352,10 @@ class _Generator:
             self.try_statement(w, scope, ret)
         elif roll < 0.975:
             self.generator_statement(w, scope)
-        elif roll < 0.985:
-            w.put(f"assert {self.bool_expr(scope, 2)}, {self.str_expr(scope, 2)}")
+        elif roll < 0.98:
+            # An assert that holds more often than not, so programs run on.
+            holds = self.chance(0.7)
+            w.put(f"assert {self.bool_expr(scope, 2)} or {holds}, {self.str_expr(scope, 2)}")
         else:
             count = self.name("k")
             w.put(f"{count}: int = 0")
@@ -460,6 +464,91 @@ class _Generator:
             w.put(f"for {item} in sorted({source}):")
             w.put(f"    {name} = {name} * 7 + {item}")
         scope.ints.append(name)
+
+    def container_statements(self, w: _Writer, scope: _Scope) -> None:
+        """Python's own `list`, `dict`, and `set`: displays, comprehensions,
+        methods, negative indices, `in`, `del`, and reductions over them."""
+        rng = self.rng
+        roll = rng.random()
+        total = self.name("n")
+        if roll < 0.45:
+            xs = self.name("xs")
+            items = ", ".join(self.int_expr(scope, 2) for _ in range(rng.randint(1, 4)))
+            if self.chance(0.3):
+                w.put(
+                    f"{xs}: list[int] = [x * 2 - 1 for x in range({rng.randint(1, 6)}) if x != 2]"
+                )
+                w.put(f"{xs}.append({self.int_expr(scope, 2)})")
+            else:
+                w.put(f"{xs}: list[int] = [{items}]")
+            for _ in range(rng.randint(1, 3)):
+                op = rng.random()
+                if op < 0.25:
+                    w.put(f"{xs}.append({self.int_expr(scope, 2)})")
+                elif op < 0.4:
+                    w.put(f"{xs}.insert({rng.randint(-2, 2)}, {self.int_expr(scope, 2)})")
+                elif op < 0.55:
+                    w.put(f"{xs}[-1] = {xs}[0] + len({xs})")
+                elif op < 0.7:
+                    w.put(f"{xs}.sort(reverse={rng.choice(('True', 'False'))})")
+                elif op < 0.8:
+                    w.put(f"if len({xs}) > 1:")
+                    w.put(f"    del {xs}[{rng.choice(('0', '-1'))}]")
+                elif op < 0.9:
+                    w.put(f"{xs}.extend([{self.int_expr(scope, 2)}, {rng.randint(-5, 5)}])")
+                else:
+                    w.put(f"{xs} = {xs}[::-1] + {xs}[1:]")
+            pick = rng.random()
+            if pick < 0.2:
+                w.put(f"{total}: int = {xs}[{self.int_expr(scope, 2)} % len({xs})] + {xs}[-1]")
+            elif pick < 0.4:
+                w.put(f"{total}: int = sum({xs}) + {rng.choice(('min', 'max'))}({xs})")
+            elif pick < 0.55:
+                w.put(f"{total}: int = sorted({xs})[0] * 3 + len({xs})")
+            elif pick < 0.7:
+                w.put(f"{total}: int = 1 if {self.int_expr(scope, 2)} in {xs} else 0")
+            elif pick < 0.85:
+                w.put(f"{total}: int = {xs}.count({xs}[0]) + {xs}.index({xs}[-1])")
+            else:
+                w.put(f"{total}: int = {xs}.pop() + len({xs})")
+        elif roll < 0.8:
+            d = self.name("d")
+            keyed = rng.choice(("int", "str"))
+            w.put(f"{d}: dict[{keyed}, int] = {{}}")
+            for _ in range(rng.randint(1, 4)):
+                key = self.int_expr(scope, 2) if keyed == "int" else self.str_expr(scope, 2)
+                w.put(f"{d}[{key}] = {d}.get({key}, 0) + {self.int_expr(scope, 2)}")
+            if self.chance(0.3):
+                key = self.int_expr(scope, 2) if keyed == "int" else self.str_expr(scope, 2)
+                w.put(f"{d}.pop({key}, 0)")
+            if self.chance(0.2) and keyed == "int":
+                w.put(f"{d} = {{k: v * 2 for k, v in {d}.items() if v != 0}}")
+            w.put(f"{total}: int = len({d}) * 100")
+            key = self.name("k")
+            if self.chance(0.5):
+                w.put(f"for {key}, value in {d}.items():")
+                w.put(f"    {total} = {total} * 3 + value")
+            else:
+                w.put(f"{total} += sum({d}.values())")
+            if self.chance(0.3) and keyed == "int":
+                probe = rng.randint(-3, 3)
+                w.put(f"if {probe} in {d}:")
+                w.put(f"    del {d}[{probe}]")
+                w.put(f"    {total} += 1")
+        else:
+            a, b = self.name("sa"), self.name("sb")
+            members = ", ".join(self.int_expr(scope, 2) for _ in range(rng.randint(1, 4)))
+            w.put(f"{a}: set[int] = {{{members}}}")
+            w.put(f"{b}: set[int] = {{x % 5 for x in range({rng.randint(1, 8)})}}")
+            w.put(f"{a}.add({self.int_expr(scope, 2)})")
+            w.put(f"{a}.discard({rng.randint(-2, 4)})")
+            op = rng.choice(("|", "&", "-", "^"))
+            w.put(
+                f"{total}: int = len({a} {op} {b}) * 10 + (1 if {rng.randint(0, 4)} in {b} else 0)"
+            )
+            if self.chance(0.5):
+                w.put(f"{total} += sum({a}) + (max({b}) if {b} else 0)")
+        scope.ints.append(total)
 
     def vec_statements(self, w: _Writer, scope: _Scope) -> None:
         rng = self.rng
