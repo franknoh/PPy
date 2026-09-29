@@ -627,6 +627,8 @@
       
         
       
+        
+      
     
     
     
@@ -752,6 +754,34 @@
     
   
     Strings
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guide/containers/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Lists, dicts, and sets
   
 
     
@@ -4274,8 +4304,11 @@ container the function made and one it was given.</p>
 <li><code>counts</code> is declared <code>dict[int, int]</code>, and <code>counts.get(value, 0) + 1</code>
   checks against it.</li>
 </ul>
-<p>None of these functions is native, because a dict or a set has no native
-form. All of them are strict, typed, and pure.</p>
+<p>All four functions lower to native code: plain lists, dicts, and sets are
+native (see <a href="../../guide/containers/">Lists, dicts, and sets</a>). <code>main</code>
+stays in Python because it prints, and Python calls <code>distinct</code> on its Python
+body, because copying its strings in would cost what its one pass over them
+saves. All of them are strict, typed, and pure.</p>
 <h2 id="local-mutation-is-pure-shared-mutation-is-not">Local mutation is pure, shared mutation is not<a class="headerlink" href="#local-mutation-is-pure-shared-mutation-is-not" title="Permanent link">&para;</a></h2>
 <p><code>flatten</code> extends a list it created, so it is pure. Had it extended <code>rows</code>,
 the write would be an effect on an argument and <code>@ppy.pure</code> would fail with

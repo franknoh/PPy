@@ -13,7 +13,7 @@
         <link rel="canonical" href="https://ppy.franknoh.dev/dev/guide/collections/">
       
       
-        <link rel="prev" href="../strings/">
+        <link rel="prev" href="../containers/">
       
       
         <link rel="next" href="../classes/">
@@ -629,6 +629,8 @@
       
         
       
+        
+      
     
     
     
@@ -757,6 +759,34 @@
     
   
     Strings
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../containers/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Lists, dicts, and sets
   
 
     
@@ -4553,6 +4583,10 @@ and sets. You use them like Python containers, with no pointers. They hold
 numbers, tuples, dataclasses, or other collections, and a function that uses
 them goes native under <code>ppy run</code>, in a standalone binary, and in emitted C
 and C++.</p>
+<p>Python's own <code>list</code>, <code>dict</code>, and <code>set</code> lower over the same runtime with no
+rewrite; see <a href="../containers/">Lists, dicts, and sets</a>. The types here are for
+what those do not say: a queue, a heap, a linked list, a map kept in key
+order.</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ppy</span><span class="w"> </span><span class="kn">import</span> <span class="n">Deque</span><span class="p">,</span> <span class="n">Vec</span>
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>
 <a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>
@@ -5249,7 +5283,7 @@ what the checker refuses; one whose element type differs at run time
       <nav class="md-footer__inner md-grid" aria-label="Footer" >
         
           
-          <a href="../strings/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Strings">
+          <a href="../containers/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Lists, dicts, and sets">
             <div class="md-footer__button md-icon">
               
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
@@ -5259,7 +5293,7 @@ what the checker refuses; one whose element type differs at run time
                 Previous
               </span>
               <div class="md-ellipsis">
-                Strings
+                Lists, dicts, and sets
               </div>
             </div>
           </a>
