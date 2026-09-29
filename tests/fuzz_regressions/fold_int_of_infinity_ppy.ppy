@@ -1,0 +1,13 @@
+# fuzz: path=ppy seed=505 (the checker folded int(inf) and the compiler itself raised OverflowError)
+def whole(x: float) -> int:
+    if x > 0.0:
+        return int(x)
+    return int(float("inf")) if x < -1.0 else 7
+
+
+def main() -> None:
+    print(whole(2.5), whole(0.0))
+    print(whole(-3.0))
+
+
+main()

@@ -558,9 +558,12 @@ def _clean(stdout: str) -> str:
 
 
 def _compilers() -> dict[str, str | None]:
+    """Clang first: GCC 13's `-O1` use-after-scope poisoning reports a variable
+    of a loop nest read where the source never reads it (seed 810), which the
+    same C under clang, and under GCC at `-O0` and `-O2`, does not."""
     return {
-        "c": shutil.which("cc") or shutil.which("gcc") or shutil.which("clang"),
-        "cpp": shutil.which("c++") or shutil.which("g++") or shutil.which("clang++"),
+        "c": shutil.which("clang") or shutil.which("cc") or shutil.which("gcc"),
+        "cpp": shutil.which("clang++") or shutil.which("c++") or shutil.which("g++"),
     }
 
 

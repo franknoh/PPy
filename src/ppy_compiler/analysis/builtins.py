@@ -119,7 +119,8 @@ def _int(args: Sequence[Arg]) -> BuiltinResult:
     if args and args[0].facts.has_constant:
         try:
             value = int(args[0].facts.constant)  # type: ignore[arg-type]
-        except (TypeError, ValueError):
+        except (TypeError, ValueError, OverflowError):
+            # `int(inf)` raises at run time; it is not a constant to fold.
             value = None
         if value is not None:
             return BuiltinResult(

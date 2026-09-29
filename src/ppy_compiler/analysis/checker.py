@@ -3573,8 +3573,19 @@ class _Checker:
         operation = operations.get(op)
         if operation is None:
             return None
+        a, b = left.facts.constant, right.facts.constant
+        # `2 ** 10**9` or `1 << 10**9` is a gigabyte of integer: not folded,
+        # computed at run time if the program really asks for it.
+        huge = (
+            op in (ast.Pow, ast.LShift)
+            and isinstance(a, int)
+            and isinstance(b, int)
+            and (b > 4096 or (op is ast.Pow and abs(a) > 1 and b * abs(a).bit_length() > 4096))
+        )
+        if huge:
+            return None
         try:
-            value = operation(left.facts.constant, right.facts.constant)
+            value = operation(a, b)
         except (TypeError, ValueError, ZeroDivisionError, OverflowError):
             return None
         if isinstance(value, (int, float, complex, str, bytes, bool)) and not isinstance(

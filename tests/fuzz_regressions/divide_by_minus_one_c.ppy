@@ -1,0 +1,16 @@
+# fuzz: path=c seed=376 (division and remainder by a constant -1 were undefined in C for the minimum)
+def by_minus_one(a: int) -> int:
+    return (a // -1) + (a % -1)
+
+
+def by(a: int, b: int) -> int:
+    return (a // b) + (a % b)
+
+
+def main() -> None:
+    print(by_minus_one(7), by_minus_one(-9223372036854775807))
+    print(by(-9223372036854775807 - 1, 3), by(17, -1))
+    print(by_minus_one(-9223372036854775807 - 1))
+
+
+main()

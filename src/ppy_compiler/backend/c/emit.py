@@ -2451,11 +2451,35 @@ class _FunctionEmitter:
         width = t.width if isinstance(t, IntType) else 64
         divisor = self.constant(op.operands[1])
         zero, minus_one = ("0", _ATOM), ("-1", _UNARY)
-        if op.attributes.get("overflow", "python") not in {"wrap", "native"} and divisor is None:
+        if divisor == -1:
+            # C leaves `MIN / -1` and `MIN % -1` undefined. Python's remainder
+            # by -1 is always 0, and its quotient is the negation, which only
+            # the minimum overflows.
+            if name == "mod":
+                self.fold(op.result, zero, reads=reads)
+                return
+            unsigned = self.owner.c_type(IntType(width, False))
+            negated = self.cast_text(_infix("-", ("0", _ATOM), self.cast_text(a, unsigned)), t)
+            if op.attributes.get("overflow", "python") not in {"wrap", "native"}:
+                minimum = (f"INT{width}_MIN", _ATOM)
+                self.fail_unless(
+                    _infix("!=", a, minimum)[0],
+                    "div.ok",
+                    failed=_infix("==", a, minimum)[0],
+                    raises=overflow_text(width),
+                )
+            self.fold(op.result, negated, reads=reads)
+            return
+        if divisor is None:
             minimum = (f"INT{width}_MIN", _ATOM)
             held = _infix("&&", _infix("==", a, minimum), _infix("==", b, minus_one))
             failed = _infix("||", _infix("!=", a, minimum), _infix("!=", b, minus_one))
-            self.fail_unless(failed[0], "div.ok", failed=held[0], raises=overflow_text(width))
+            if op.attributes.get("overflow", "python") not in {"wrap", "native"}:
+                self.fail_unless(failed[0], "div.ok", failed=held[0], raises=overflow_text(width))
+            else:
+                # Wrapping still may not divide `MIN` by -1 in C: divide by 1
+                # there instead, which wraps to `MIN` (and a remainder of 0).
+                b = _ternary(held, ("1", _ATOM), b)
         if op.attributes.get("rounding", "floor") == "trunc" or id(op) in self.truncating:
             self.fold(op.result, _infix(symbol, a, b), reads=reads)
             return
