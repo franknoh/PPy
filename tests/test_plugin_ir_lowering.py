@@ -216,7 +216,7 @@ def test_explicit_backend_reports_plain_function_failure_and_normal_path_falls_b
         """
         def good(n: int) -> int:
             return n + 1
-        def bad(counts: dict[str, int]) -> int:
+        def bad(counts: dict[float, int]) -> int:
             return len(counts)
     """,
     )

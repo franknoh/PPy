@@ -77,6 +77,41 @@ def test_constant_branches_are_folded(write, analyze):
     assert "100" not in code
 
 
+def test_a_jump_out_of_a_loop_or_a_raise_keeps_what_it_assigned(write, analyze):
+    path = write(
+        "jumps.ppy",
+        """
+        def skipped(n: int) -> str:
+            bad = 0
+            for i in range(n):
+                if i % 3 == 0:
+                    bad += 1
+                    continue
+            return f"{bad}"
+
+        def found(n: int) -> str:
+            at = 0
+            for i in range(n):
+                if i == 3:
+                    at = 7
+                    break
+            return f"{at}"
+
+        def caught(n: int) -> str:
+            got = 0
+            try:
+                got = 5
+                got = 10 // n
+            except ZeroDivisionError:
+                return f"{got}"
+            return f"{got}"
+        """,
+    )
+    code = _generated(analyze(path), "jumps")
+    assert "{0}" not in code
+    assert "{bad}" in code and "{at}" in code and code.count("{got}") == 2
+
+
 def test_unreachable_code_is_removed(write, analyze):
     path = write(
         "dead.ppy",

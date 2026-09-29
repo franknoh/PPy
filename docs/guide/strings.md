@@ -113,9 +113,10 @@ without a copy, and a returned string back out as a new Python string.
 A string with a lone surrogate has no UTF-8, and a call with one runs as
 Python.
 
-A `list[str]` parameter or result is passed by handle between native
-functions and does not cross the boundary. A function Python calls with
-one runs its Python body.
+A `list[str]`, `dict[str, V]`, or `set[str]` parameter or result is
+passed by handle between native functions. From Python it crosses by copy
+when the function does more than one pass of work over its strings; see
+[Lists, dicts, and sets](containers.md#between-functions).
 
 ## Reading and printing
 
@@ -141,8 +142,6 @@ separator, `ord` of two characters) is a guard of the same kind.
 
 - `str.format`, `%` formatting, `encode`, `translate`, `expandtabs`, and
   `casefold` stay in Python. An f-string does what `str.format` does.
-- A `dict` or `set` of strings stays in Python; `HashMap[str, V]` and
-  `HashSet[str]` are the native ones.
 - The case of text outside ASCII falls back, as above.
 
 Examples: [Strings](../howto/48_strings.md).

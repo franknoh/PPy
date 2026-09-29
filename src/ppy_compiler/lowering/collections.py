@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import ast
 import hashlib
+from collections.abc import Callable
 from dataclasses import dataclass
 
 from ..analysis import types as T
@@ -59,9 +60,16 @@ FAMILY = {
     "HashSet": "map",
     "TreeMap": "tree",
     "TreeSet": "tree",
-    # `list[str]`, the list the string methods hand out.
+    # Python's own `list`, `dict`, and `set`, over the same runtime: a list is
+    # a sequence indexed from either end, a dict a hash map in insertion
+    # order, a set a hash set (whose walking order is CPython's to decide).
     "List": "seq",
+    "Dict": "map",
+    "Set": "map",
 }
+
+#: Python's containers, by the name the checker gives them.
+BUILTINS = {"list": "List", "dict": "Dict", "set": "Set"}
 
 #: `floor`, `ceiling`, `lower`, `higher`, as `ppy_tree_bound` numbers them.
 _BOUNDS = {"floor": 0, "ceiling": 1, "lower": 2, "higher": 3}
@@ -186,8 +194,9 @@ def spelled(kind: Kind) -> str:
         return item.kind
 
     parts = [shape(part) for part in (kind.key, kind.value) if part is not None]
-    if kind.name == "List":
-        return f"list[{', '.join(parts)}]"
+    python = {value: name for name, value in BUILTINS.items()}.get(kind.name)
+    if python is not None:
+        return f"{python}[{', '.join(parts)}]"
     return f"ppy.{kind.name}[{', '.join(parts)}]"
 
 
@@ -218,7 +227,7 @@ def shape_of(t: T.Type, records: Records) -> Shape | None:
         return None
     if not isinstance(base, T.Instance):
         return None
-    if base.name.startswith("ppy."):
+    if base.name.startswith("ppy.") or base.name in BUILTINS:
         kind = kind_of(base, records)
         return Shape("collection", collection=kind) if kind is not None else None
     found = records.get(base.name)
@@ -239,9 +248,8 @@ def shape_of(t: T.Type, records: Records) -> Shape | None:
 def kind_of(t: T.Type, records: Records) -> Kind | None:
     """The collection type `t` is, or None."""
     base = T.strip_literal(t)
-    if isinstance(base, T.Instance) and base.name == "list" and len(base.args) == 1:
-        # A list of strings is the one Python list native code holds.
-        return Kind("List", STR) if T.strip_literal(base.args[0]) == T.STR else None
+    if isinstance(base, T.Instance) and base.name in BUILTINS:
+        return _builtin_kind(base, records)
     if not isinstance(base, T.Instance) or not base.name.startswith("ppy."):
         return None
     name = base.name.removeprefix("ppy.")
@@ -257,6 +265,30 @@ def kind_of(t: T.Type, records: Records) -> Kind | None:
     if name in {"HashSet", "TreeSet"}:
         return Kind(name, None, shapes[0])
     return Kind(name, shapes[0])
+
+
+def _builtin_kind(base: T.Instance, records: Records) -> Kind | None:
+    """`list[T]`, `dict[K, V]`, `set[K]`: Python's containers, where every type
+    argument has a native form and each key is one native code can hash as
+    CPython does (an `int`, a `str`, a tuple of `int`, an object)."""
+    name = BUILTINS[base.name]
+    arity = 2 if name == "Dict" else 1
+    if len(base.args) != arity:
+        return None
+    shapes = [shape_of(argument, records) for argument in base.args]
+    if any(shape is None for shape in shapes):
+        return None
+    if name == "List":
+        return Kind("List", shapes[0])
+    key = shapes[0]
+    assert key is not None
+    # A float key hashes by value across `0.0 == -0.0` and NaN, and a bool key
+    # is the int it equals: neither is a word native code can hash alike.
+    if not (key.integral or key.kind in {"str", "object", "record"}) or key.kind == "bool":
+        return None
+    if name == "Dict":
+        return Kind("Dict", shapes[1], key)
+    return Kind("Set", None, key)
 
 
 @dataclass(slots=True)
@@ -310,6 +342,9 @@ class CollectionLowering:
         if isinstance(node, ast.Name) and node.id in self.collections:
             held = self.collections[node.id].kind
             return held if isinstance(held, Kind) else None
+        if isinstance(node, ast.Name) and node.id in getattr(self, "buffers", {}):
+            # A `list[int]` parameter lent as a buffer is a buffer here.
+            return None
         return kind_of(self._type_of(node), self._records())
 
     def _is_collection(self, node: ast.expr) -> bool:
@@ -611,7 +646,7 @@ class CollectionLowering:
         if overrides:
             called = self._dispatch(shape, attr, receiver, values, overrides, function)
         else:
-            called = core.call(self.b, function.name, (receiver, *values), results)  # type: ignore[attr-defined]
+            called = self._call_native(function.name, (receiver, *values), results)  # type: ignore[attr-defined]
         for handle in temporaries:
             self._release(handle)
         if not results:
@@ -676,12 +711,12 @@ class CollectionLowering:
             after = self._block(f"{attr}.next")  # type: ignore[attr-defined]
             core.cond_br(self.b, matched, Successor(here), Successor(after))
             self.b.at_end(here)  # type: ignore[attr-defined]
-            made = core.call(self.b, implementation.name, (receiver, *values), results)  # type: ignore[attr-defined]
+            made = self._call_native(implementation.name, (receiver, *values), results)  # type: ignore[attr-defined]
             if slot is not None:
                 core.store(self.b, made.results[0], slot)
             core.br(self.b, Successor(done))
             self.b.at_end(after)  # type: ignore[attr-defined]
-        made = core.call(self.b, function.name, (receiver, *values), results)  # type: ignore[attr-defined]
+        made = self._call_native(function.name, (receiver, *values), results)  # type: ignore[attr-defined]
         if slot is not None:
             core.store(self.b, made.results[0], slot)
         core.br(self.b, Successor(done))
@@ -1152,9 +1187,7 @@ class CollectionLowering:
         `raises` is what CPython's traceback ends with there, `{0}` and on
         standing for `values`; a standalone binary prints it.
         """
-        if not self.frontend.standalone:  # type: ignore[attr-defined]
-            values = ()
-        core.guard(self.b, condition, "bounds", message, raises=raises, values=values)
+        self._guard(condition, "bounds", message, raises=raises, values=values)  # type: ignore[attr-defined]
 
     def _key_report(self, kind: Kind, address: Value) -> tuple[str, tuple[Value, ...]]:
         """A key as `str()` spells it, `5` or `(1, 2)`, and the words it reads."""
@@ -1554,6 +1587,36 @@ class CollectionLowering:
             return found, False
         return self._coerce(self._expr(node), shape.kind), False  # type: ignore[attr-defined]
 
+    def _store_node(
+        self, make_address: Callable[[], Value], shape: Shape, node: ast.expr, fresh: bool
+    ) -> None:
+        """`xs.append(e)`, `d[k] = e`: `e` first, as Python evaluates it, and then
+        the slot, whose making may change the collection `e` reads
+        (`xs.append(len(xs))`)."""
+        value, owned = self._value(node, shape)
+        self._put_value(make_address(), shape, value, owned, fresh)
+
+    def _put_value(
+        self, address: Value, shape: Shape, value: Value, owned: bool, fresh: bool
+    ) -> None:
+        """A value already in hand written where one may already be: a collection
+        stored takes a reference, and the one it replaces is let go."""
+        if not shape.reference:
+            self._write(address, shape, value)
+            return
+        if not owned:
+            self._retain(value)
+        old = None if fresh else self._read(address, shape)
+        self._write(address, shape, value)
+        if old is not None:
+            self._release(old)
+
+    def _store_value(self, address: Value, shape: Shape, value: Value, owned: bool) -> None:
+        """A value already in hand written into a fresh slot: a collection takes a reference."""
+        if shape.reference and not owned:
+            self._retain(value)
+        self._write(address, shape, value)
+
     def _store_into(self, address: Value, shape: Shape, node: ast.expr, fresh: bool) -> None:
         """An element written where one may already be: a collection stored takes a
         reference, and the one it replaces (unless the slot is `fresh`) is let go."""
@@ -1733,6 +1796,8 @@ class CollectionLowering:
         shape = kind.value
         if isinstance(index, ast.Slice) or shape is None:
             raise Unsupported(f"a {kind.name} has no index")
+        # `m[k] = e`: `e` before the key's entry is made, as Python evaluates it.
+        stored = self._value(value, shape) if value is not None else None
         if kind.name in {"Vec", "Deque", "List"}:
             position = self._coerce(self._expr(index), "int")  # type: ignore[attr-defined]
             if kind.name == "List":
@@ -1768,8 +1833,8 @@ class CollectionLowering:
             address = self._rt(f"ppy_{kind.family}_value_at", (handle, entry), HANDLE)
         else:
             raise Unsupported(f"a {kind.name} has no index")
-        if value is not None:
-            self._store_into(address, shape, value, fresh=False)
+        if stored is not None:
+            self._put_value(address, shape, stored[0], stored[1], fresh=False)
             self._done_with(handle, owned)
             return self._word(0)
         found = self._read(address, shape)
@@ -1821,14 +1886,19 @@ class CollectionLowering:
             ("Deque", "push_front"): "ppy_seq_push_front",
         }
         if (kind.name, attr) in pushes:
-            address = self._rt(pushes[(kind.name, attr)], (handle,), HANDLE)
-            self._store_into(address, shape, arguments[0], fresh=True)
+            symbol = pushes[(kind.name, attr)]
+            self._store_node(
+                lambda: self._rt(symbol, (handle,), HANDLE), shape, arguments[0], fresh=True
+            )
             return self._word(0)
         if heap is not None and attr == "push":
             if not self._orders(shape):
                 raise Unsupported(f"a {kind.name} orders its elements, and these have no order")
-            self._store_into(
-                self._rt("ppy_coll_scratch", (handle,), HANDLE), shape, arguments[0], fresh=True
+            self._store_node(
+                lambda: self._rt("ppy_coll_scratch", (handle,), HANDLE),
+                shape,
+                arguments[0],
+                fresh=True,
             )
             return self._rt("ppy_heap_push", (handle, self._word(heap)), None)
         if attr == "clear":
@@ -1871,10 +1941,9 @@ class CollectionLowering:
         if attr in {"push_back", "push_front"}:
             end = self._rt("ppy_coll_field", (handle, self._word(4 if attr == "push_back" else 3)))
             links = (end, self._word(-1)) if attr == "push_back" else (self._word(-1), end)
+            value, owned = self._value(arguments[0], shape)
             node = self._rt("ppy_list_node", (handle, *links))
-            self._store_into(
-                self._rt("ppy_list_at", (handle, node), HANDLE), shape, arguments[0], fresh=True
-            )
+            self._store_value(self._rt("ppy_list_at", (handle, node), HANDLE), shape, value, owned)
             return node
         if attr in {"head", "tail"}:
             return self._rt("ppy_coll_field", (handle, self._word(3 if attr == "head" else 4)))
@@ -1902,10 +1971,9 @@ class CollectionLowering:
                 "ppy_list_step", (handle, node, self._word(1 if attr == "insert_after" else 0))
             )
             links = (node, other) if attr == "insert_after" else (other, node)
+            value, owned = self._value(arguments[1], shape)
             made = self._rt("ppy_list_node", (handle, *links))
-            self._store_into(
-                self._rt("ppy_list_at", (handle, made), HANDLE), shape, arguments[1], fresh=True
-            )
+            self._store_value(self._rt("ppy_list_at", (handle, made), HANDLE), shape, value, owned)
             return made
         if attr in {"next", "prev"}:
             return self._rt("ppy_list_step", (handle, node, self._word(1 if attr == "next" else 0)))

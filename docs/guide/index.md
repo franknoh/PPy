@@ -19,7 +19,9 @@ path.
 | [The subset](subset.md) | What the compiler accepts, the compatibility policy, and the three absences of a type: unknown, `Any`, and `Dynamic`. |
 | [Directives and markers](directives.md) | `@ppy.pure`, `@ppy.native`, `@ppy.jit`, `@ppy.dynamic` and the rest; fixed-width integers, `Buffer[T]`, `Range`, ownership. |
 | [Classes](classes.md) | Value classes and object classes in native code: trees, linked nodes, `class Stack[T]`. |
+| [Exceptions and generators](exceptions-and-generators.md) | `raise`, `try`, `assert`, and generators in native code, and what stays in Python. |
 | [Strings](strings.md) | `str` in native code: methods, f-strings and format specs, parsing numbers, strings as keys. |
+| [Lists, dicts, and sets](containers.md) | Python's own containers in native code, with no rewrite: displays, comprehensions, methods, and the Python boundary. |
 | [Collections](collections.md) | `Vec`, `Deque`, `Heap`, `LinkedList`, `HashMap`, `HashSet`, `TreeMap`, `TreeSet`: containers that compile, with no pointers. |
 | [Native memory and FFI](native.md) | `ppy.native` pointers, stack allocation, `extern` and `export`, and `ppy.ffi` over them. |
 | [Lanes and the machine](simd-cpu.md) | `ppy.simd` vectors and `ppy.cpu` features, hints, and targets. |

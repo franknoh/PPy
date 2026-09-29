@@ -47,6 +47,7 @@ __all__ = [
     "Unsupported",
     "called_back_only",
     "eligible",
+    "written_params",
 ]
 
 #: The native entry point returns a status; a non-zero status means the caller
@@ -227,8 +228,60 @@ _COLLECTIONS = frozenset(
 )
 
 
+#: Python's own containers, which native code holds as the runtime's collections.
+_BUILTIN_CONTAINERS = frozenset({"list", "dict", "set"})
+
+
+def written_params(analysis: FunctionAnalysis | None) -> frozenset[str]:
+    """The parameters held by handle rather than lent as buffers: every one, when
+    the function writes through any parameter, and none otherwise.
+
+    A list of numbers only read is lent as a buffer, a copy of its words. A
+    function that writes through a parameter may be handed the same list
+    twice (`f(xs, xs)`), and a copy would not see the write: then each list
+    goes by handle, and the boundary keeps one object one handle."""
+    if analysis is None:
+        return frozenset()
+    if not analysis.mutated_params and not analysis.delegated_writes:
+        return frozenset()
+    return frozenset(p.name for p in analysis.info.params)
+
+
+def _holds_strings(info: FunctionInfo) -> bool:
+    """Whether a parameter or the result is a container with strings in it."""
+
+    def inside(t: T.Type) -> bool:
+        base = T.strip_literal(t)
+        if isinstance(base, T.Union_):
+            return any(inside(member) for member in base.members)
+        if not isinstance(base, T.Instance):
+            return False
+        return base.name == "str" or any(inside(a) for a in base.args)
+
+    def container(t: T.Type) -> bool:
+        base = T.strip_literal(t)
+        return isinstance(base, T.Instance) and any(inside(a) for a in base.args)
+
+    return container(info.ret) or any(container(p.type) for p in info.params)
+
+
+def _nested_loop(function: ast.AST) -> bool:
+    """Whether a loop runs inside another loop: work per element of more than
+    one step, which pays for copying the element across."""
+    loops = (ast.For, ast.While, ast.AsyncFor)
+    comprehensions = (ast.ListComp, ast.SetComp, ast.DictComp, ast.GeneratorExp)
+    for child in ast.walk(function):
+        if isinstance(child, loops):
+            inner = (n for statement in child.body for n in ast.walk(statement))
+            if any(isinstance(n, (*loops, ast.comprehension)) for n in inner):
+                return True
+        elif isinstance(child, comprehensions) and len(child.generators) > 1:
+            return True
+    return False
+
+
 def _collection_param(
-    name: str, t: T.Type, layouts: ClassLayouts | None = None
+    name: str, t: T.Type, layouts: ClassLayouts | None = None, written: bool = True
 ) -> NativeParam | None:
     """A collection or an object parameter: a handle native callers pass.
 
@@ -240,13 +293,13 @@ def _collection_param(
     base = T.strip_literal(t)
     if base == T.STR:
         return NativeParam(name, "handle", "str", class_name="str")
-    if (
-        isinstance(base, T.Instance)
-        and base.name == "list"
-        and len(base.args) == 1
-        and T.strip_literal(base.args[0]) == T.STR
-    ):
-        return NativeParam(name, "handle", "list[str]", class_name="list")
+    if isinstance(base, T.Instance) and base.name in _BUILTIN_CONTAINERS and base.args:
+        if not written and _buffer_element(base) is not None:
+            # A list of numbers the function only reads is lent as a buffer.
+            return None
+        if not _held_natively(base, layouts):
+            return None
+        return NativeParam(name, "handle", str(base), class_name=base.name)
     if isinstance(base, T.Union_):
         members = [m for m in base.members if m != T.NONE]
         if len(members) != 1 or len(members) == len(base.members):
@@ -263,8 +316,19 @@ def _collection_param(
     return None
 
 
-def _native_param(name: str, t: T.Type, layouts: ClassLayouts | None = None) -> NativeParam | None:
-    collection = _collection_param(name, t, layouts)
+def _held_natively(base: T.Instance, layouts: ClassLayouts | None) -> bool:
+    """Whether native code holds this `list`, `dict`, or `set`: what it holds has
+    a native form, and a key is one native code hashes as CPython does."""
+    from ...lowering.collections import kind_of  # pylint: disable=import-outside-toplevel
+
+    records = {name: (tuple(fields), False) for name, fields in (layouts or {}).items()}
+    return kind_of(base, records) is not None
+
+
+def _native_param(
+    name: str, t: T.Type, layouts: ClassLayouts | None = None, written: bool = False
+) -> NativeParam | None:
+    collection = _collection_param(name, t, layouts, written)
     if collection is not None:
         return collection
     scalar = _scalar_name(t)
@@ -361,7 +425,7 @@ def eligible(
     for param in info.params:
         if param.kind in {"var_positional", "var_keyword"}:
             return False, "variadic parameters have no native ABI"
-        if _native_param(param.name, param.type, layouts) is None:
+        if _native_param(param.name, param.type, layouts, param.name in written) is None:
             return False, f"parameter `{param.name}` is `{param.type}`, which has no native ABI"
     if _return_atoms(info.ret, layouts) is None and not _returns_none(info.ret):
         return False, f"returns `{info.ret}`, which has no native ABI"
@@ -380,17 +444,88 @@ def called_back_only(info: FunctionInfo) -> bool:
     )
 
 
+def _crossing_costs_more(
+    info: FunctionInfo, layouts: ClassLayouts | None, written: set[str]
+) -> str | None:
+    """Why copying the function's containers across the boundary would cost more
+    than running it natively saves, or None when it pays.
+
+    The boundary copies a container that crosses whole, in and back, on every
+    call. That is work proportional to its size, so the body has to do work
+    proportional to it too: a loop that walks it, or works on it element by
+    element. A container of strings costs more still, a native string made
+    for every element, about what one pass of a Python loop spends on it, so
+    it pays only when the body makes more than one pass (a loop in a loop).
+    """
+    crossing = [
+        param.name
+        for param in info.params
+        if (native := _native_param(param.name, param.type, layouts, param.name in written))
+        is not None
+        and native.is_handle
+        and native.element != "str"
+        and _crosses(native)
+    ]
+    if crossing and not _works_through(info.node, crossing):
+        return "copying the collections in costs more than the body does with them"
+    if _holds_strings(info) and not _nested_loop(info.node):
+        return "copying its strings across costs what one pass over them saves"
+    return None
+
+
+#: Builtins that go over a whole container given to them.
+_WHOLE_BUILTINS = frozenset(
+    {"sum", "sorted", "min", "max", "any", "all", "list", "set", "dict", "tuple", "reversed",
+     "enumerate", "zip", "map", "filter"}
+)  # fmt: skip
+
+#: Methods that go over a whole container, its own or the one they are given.
+_WHOLE_METHODS = frozenset(
+    {"sort", "copy", "count", "index", "remove", "reverse", "extend", "update", "union",
+     "intersection", "difference", "symmetric_difference", "issubset", "issuperset",
+     "isdisjoint", "join", "values", "items", "keys", "to_sorted", "between"}
+)  # fmt: skip
+
+
 def _works_through(function: ast.AST, names: list[str]) -> bool:
-    """Whether a loop walks one of `names` (it is in the loop's header) or works
-    on it (a method of it is called in the loop's body): work that grows with
-    the collection, which pays for copying it across the boundary."""
+    """Whether the function does work that grows with one of `names`, which pays
+    for copying it across the boundary: a loop or a comprehension walks it, a
+    loop's body calls a method on it or writes an element of it, an operator
+    takes it whole (`s & t`), or a builtin or a method goes over all of it
+    (`sum(v)`, `v.sort()`, `", ".join(v)`)."""
     wanted = set(names)
+
+    def whole(node: ast.expr) -> bool:
+        """The container itself (or a field of it), not one of its elements."""
+        while isinstance(node, ast.Attribute):
+            node = node.value
+        return isinstance(node, ast.Name) and node.id in wanted
 
     def rooted(node: ast.expr) -> bool:
         while isinstance(node, (ast.Subscript, ast.Attribute)):
             node = node.value
         return isinstance(node, ast.Name) and node.id in wanted
 
+    for node in ast.walk(function):
+        # Work over the whole container without a loop of the function's own.
+        if isinstance(node, ast.comprehension) and rooted(node.iter):
+            return True
+        if isinstance(node, ast.BinOp) and (whole(node.left) or whole(node.right)):
+            return True  # `s & t`, `v + w`
+        if isinstance(node, ast.Call):
+            called = node.func
+            if (
+                isinstance(called, ast.Name)
+                and called.id in _WHOLE_BUILTINS
+                and any(whole(argument) for argument in node.args)
+            ):
+                return True
+            if (
+                isinstance(called, ast.Attribute)
+                and called.attr in _WHOLE_METHODS
+                and (whole(called.value) or any(whole(a) for a in node.args))
+            ):
+                return True
     for loop in ast.walk(function):
         if not isinstance(loop, (ast.For, ast.While, ast.AsyncFor)):
             continue
@@ -442,6 +577,7 @@ def should_lower_native(
     boundary, so a helper this keeps off it is still called directly by any
     native caller.
     """
+    written = written_params(analysis)
     if info.is_async:
         # The future is the boundary value; a coroutine is called to be run.
         return True, "a coroutine's future crosses the boundary"
@@ -452,7 +588,9 @@ def should_lower_native(
             return False, "device code runs where it is launched"
     fills = any(
         _crosses(native) and native is not None and native.name in analysis.mutated_params
-        for native in (_native_param(p.name, p.type, layouts) for p in info.params)
+        for native in (
+            _native_param(p.name, p.type, layouts, p.name in written) for p in info.params
+        )
     )
     if _returns_none(info.ret) and not fills:
         # The boundary hands back a value; a function with none to hand
@@ -463,7 +601,7 @@ def should_lower_native(
     if returned is not None and returned.element != "str" and not _crosses(returned):
         return False, "returns an object, which native callers receive by handle"
     for param in info.params:
-        native = _native_param(param.name, param.type, layouts)
+        native = _native_param(param.name, param.type, layouts, param.name in written)
         if native is not None and native.is_pointer:
             # A machine address has no Python object to come from, whatever
             # the directives ask: the function is native code's to call.
@@ -474,25 +612,16 @@ def should_lower_native(
     for name in _EXPOSURE_DIRECTIVES:
         if info.directive(name) is not None:
             return True, f"@ppy.{name} asks for the boundary"
-    crossing = [
-        param.name
-        for param in info.params
-        if (native := _native_param(param.name, param.type, layouts)) is not None
-        and native.is_handle
-        and _crosses(native)
-    ]
-    if crossing and not _works_through(info.node, crossing):
-        # The boundary copies each collection in and back, all of it, on every
-        # call: a body that only looks at a few of its elements pays more for
-        # the copy than it saves.
-        return False, "copying the collections in costs more than the body does with them"
+    refused = _crossing_costs_more(info, layouts, written)
+    if refused is not None:
+        return False, refused
     for param in info.params:
-        native = _native_param(param.name, param.type, layouts)
+        native = _native_param(param.name, param.type, layouts, param.name in written)
         if native is not None and native.is_buffer:
             # Buffer work scales with the data; the crossing is flat.
             return True, "takes a buffer"
     for child in ast.walk(info.node):
-        if isinstance(child, (ast.For, ast.While, ast.AsyncFor)):
+        if isinstance(child, (ast.For, ast.While, ast.AsyncFor, ast.comprehension)):
             return True, "contains a loop"
     work = sum(
         isinstance(child, (ast.BinOp, ast.Compare, ast.BoolOp, ast.Call, ast.Subscript))
@@ -531,7 +660,10 @@ def _signature(
 ) -> NativeSignature:
     written = analysis.mutated_params | analysis.delegated_writes if analysis is not None else set()
     parameters = tuple(
-        _written(_native_param(p.name, p.type, layouts) or NativeParam(p.name, "int"), written)
+        _written(
+            _native_param(p.name, p.type, layouts, p.name in written) or NativeParam(p.name, "int"),
+            written,
+        )
         for p in info.params
     )
     returned = _collection_param("", info.ret, layouts)

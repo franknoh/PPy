@@ -39,7 +39,13 @@ from collections.abc import Sequence
 from dataclasses import dataclass, field
 from itertools import groupby
 
-from ppy_runtime.abi import SANITIZERS, STATUS_FALLBACK, STATUS_OK, STATUS_SANITIZER_BASE
+from ppy_runtime.abi import (
+    SANITIZERS,
+    STATUS_FALLBACK,
+    STATUS_OK,
+    STATUS_RAISED,
+    STATUS_SANITIZER_BASE,
+)
 
 from ...ir import (
     Block,
@@ -765,8 +771,16 @@ class _ModuleEmitter:
                 self.unit.headers.add("stdio.h")
                 if self.collections:
                     self.shim("ppy_coll_collect")
+                raised = bool(self.module.attributes.get("ppy.exceptions"))
+                if raised:
+                    self.shim("ppy_exc_report")
                 self.unit.exports.append(
-                    program_main(_ident(self.entry), self.std("fputs"), collect=self.collections)
+                    program_main(
+                        _ident(self.entry),
+                        self.std("fputs"),
+                        collect=self.collections,
+                        raised=raised,
+                    )
                 )
         return self.assemble()
 
@@ -2231,7 +2245,17 @@ class _FunctionEmitter:
                 self.call_intrinsic(op)
             case "guard":
                 label = str(op.attributes.get("label") or f"{op.attributes['kind']}.ok")
-                if label.startswith("sanitize:") and not self.direct:
+                if label == "raised" and not self.direct:
+                    # An exception leaves the function: the raised status.
+                    if self.structured:
+                        failed = self.negated(op.operands[0])
+                        self.line(f"if ({failed}) return {STATUS_RAISED}; /* raised */")
+                    else:
+                        condition = self.bare(op.operands[0])
+                        self.body.append(
+                            f"    if (!({condition})) return {STATUS_RAISED}; /* raised */"
+                        )
+                elif label.startswith("sanitize:") and not self.direct:
                     # A sanitizer's check returns its status; nothing falls back.
                     status = STATUS_SANITIZER_BASE + SANITIZERS.index(label.partition(":")[2])
                     if self.structured:
@@ -2592,6 +2616,20 @@ class _FunctionEmitter:
         call = f"{symbol}({', '.join(arguments)})"
         if status_result is not None:
             self.define(status_result, self.cast_text((call, _ATOM), "int64_t")[0])
+        elif self.owner.module.attributes.get("ppy.exceptions") and not self.resume:
+            # A callee's exception goes on up: this caller has no `try`
+            # around the call, or it would have asked for the status.
+            status = self.fresh("status")
+            self._declare_slot("int32_t", status)
+            if self.structured:
+                self.line(f"{status} = {call};")
+                self.line(f"if ({status} == {STATUS_RAISED}) return {STATUS_RAISED};")
+            else:
+                self.body.append(f"    {status} = {call};")
+                self.body.append(f"    if ({status} == {STATUS_RAISED}) return {STATUS_RAISED};")
+            self.fail_unless(
+                f"{status} == {STATUS_OK}", "call.ok", failed=f"{status} != {STATUS_OK}"
+            )
         else:
             self.fail_unless(f"{call} == {STATUS_OK}", "call.ok", failed=f"{call} != {STATUS_OK}")
         for result, t, names in zip(results, target.results, slots, strict=True):

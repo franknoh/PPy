@@ -78,6 +78,7 @@ reports the mean and spread. The site collects those sections on one page.
 | `47_collections` | `Vec`, `Deque`, `Heap`, `LinkedList`, `HashMap`, `TreeSet` in native code, no pointers |
 | `48_strings` | a 200,000-line log parsed, counted, and reported with native `str` |
 | `49_inheritance` | an expression tree of subclasses and a vector class with operators, dispatched natively |
+| `50_errors_and_generators` | a ledger read from a generator, bad rows raised and caught, all in native code |
 
 
 A folder of related problems keeps them in numbered subfolders, and every

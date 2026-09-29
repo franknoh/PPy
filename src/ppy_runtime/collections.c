@@ -172,6 +172,7 @@ void ppy_coll_failed(void) {
 void ppy_coll_sweep(void) {
     int64_t *heap = ppy_coll_heap();
     heap[5] = 0;
+    ppy_exc_forget(); /* the pending exception, if any, is freed with the rest */
     for (int64_t list = 0; list < 2; list++) {
         int64_t *header = ppy_coll_seen(heap[list]);
         while (header != NULL) {
