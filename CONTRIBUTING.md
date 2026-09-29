@@ -231,10 +231,14 @@ every local run is too much. CI runs it as its own job on every push.
 `python scripts/fuzz.py --seed 0 --count 25` writes 25 generated programs
 (`ppy_compiler.testing.fuzz`) and runs each under CPython, the Python
 backend, `ppy run`, a standalone binary, and emitted C and C++ built with
-AddressSanitizer and UBSan. The programs are small and strict, and each
+AddressSanitizer and UBSan (by clang where it is installed: GCC 13 at
+`-O1` reports a stack-use-after-scope in a loop nest that clang, and GCC
+at other levels, do not). The programs are small and strict, and each
 function lowers natively: ints past 64 bits, NaN and the infinities,
 strings and f-strings, the `ppy` collections, a value class, an object
-class, and a generic function, all printed from `main()`. A seed is the
+class, a generic function, `try` with `except`, `else`, and `finally`,
+`raise` and `assert`, and generators consumed by a loop, a reduction,
+`next`, or a collection, all printed from `main()`. A seed is the
 same program on every machine (`--show SEED` prints it).
 
 Every path is held to CPython's output, exit status, and last line of
