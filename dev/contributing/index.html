@@ -4133,6 +4133,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#differential-fuzzing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Differential fuzzing
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#measurements" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4438,6 +4449,17 @@
     <span class="md-ellipsis">
       
         The compiler as its own test corpus
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#differential-fuzzing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Differential fuzzing
       
     </span>
   </a>
@@ -4821,6 +4843,37 @@ as of the converter. Ceilings are recorded on Python 3.13, the version the
 job runs, because counts can differ between versions.</p>
 <p>The dogfood run is not part of <code>check.sh</code>, because a minute of migration on
 every local run is too much. CI runs it as its own job on every push.</p>
+<h2 id="differential-fuzzing">Differential fuzzing<a class="headerlink" href="#differential-fuzzing" title="Permanent link">&para;</a></h2>
+<p><code>python scripts/fuzz.py --seed 0 --count 25</code> writes 25 generated programs
+(<code>ppy_compiler.testing.fuzz</code>) and runs each under CPython, the Python
+backend, <code>ppy run</code>, a standalone binary, and emitted C and C++ built with
+AddressSanitizer and UBSan (by clang where it is installed: GCC 13 at
+<code>-O1</code> reports a stack-use-after-scope in a loop nest that clang, and GCC
+at other levels, do not). The programs are small and strict, and each
+function lowers natively: ints past 64 bits, NaN and the infinities,
+strings and f-strings, the <code>ppy</code> collections, a value class, an object
+class, a generic function, <code>try</code> with <code>except</code>, <code>else</code>, and <code>finally</code>,
+<code>raise</code> and <code>assert</code>, and generators consumed by a loop, a reduction,
+<code>next</code>, or a collection, all printed from <code>main()</code>. A seed is the
+same program on every machine (<code>--show SEED</code> prints it).</p>
+<p>Every path is held to CPython's output, exit status, and last line of
+stderr. One difference is allowed, because it is documented: where CPython
+computes an integer past 64 bits, a standalone binary and emitted C stop
+with <code>OverflowError: the result does not fit in a 64-bit integer</code>, having
+printed what CPython printed before it. A C binary that exits cleanly is
+also run again with leak detection. One that stops on an error is not,
+since the exit frees what it held.</p>
+<p>A program that disagrees is reduced (<code>minimize</code> deletes statements while
+the difference holds) and saved under <code>tests/fuzz_regressions/</code>, named for
+the path it failed on. Replace the saved seed with a short, named program
+once the cause is known. <code>tests/test_fuzz.py</code> runs a few seeds on every
+path in CI and replays every saved file; <code>--replay</code> does the same from the
+command line.</p>
+<p>Run it in batches of a few dozen seeds. Every path of every program runs
+one after another in a process group of its own, under a timeout and, where
+<code>systemd-run</code> can make one, a 2 GB memory limit. At the timeout the whole
+group is killed, children <code>ppy run</code> started included, and a path that ran
+out of time where CPython finished is a finding like any other.</p>
 <h2 id="measurements">Measurements<a class="headerlink" href="#measurements" title="Permanent link">&para;</a></h2>
 <h3 id="the-benchmark-tables">The benchmark tables<a class="headerlink" href="#the-benchmark-tables" title="Permanent link">&para;</a></h3>
 <p>Numbers in the documentation come from <code>examples/15_algorithms/bench.py</code>.
