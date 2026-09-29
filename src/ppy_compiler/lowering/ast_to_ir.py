@@ -1232,7 +1232,7 @@ class _FunctionLowering(
         self._entry_loads[name] = value
         return value
 
-    def _reached(self, block: Block) -> bool:
+    def _has_edge_to(self, block: Block) -> bool:
         """Whether some branch of the function goes to `block`."""
         for other in self.function.body.blocks:
             for op in other.operations:
@@ -1244,7 +1244,7 @@ class _FunctionLowering(
         """A loop's latch no edge reaches, every way through the body having
         returned: it ends unreachable, not in a branch back to the loop's head,
         which would make the head appear to have a way in that no path takes."""
-        if self._reached(latch):
+        if self._has_edge_to(latch):
             return False
         core.unreachable(self.b)
         self._dead.add(id(latch))

@@ -58,6 +58,7 @@ _NATIVE_ONLY = frozenset({"standalone", "c", "cpp"})
 
 _PRELUDE = """\
 import math
+from collections.abc import Iterator
 from dataclasses import dataclass
 
 from ppy import Deque, HashMap, Heap, TreeMap, Vec
@@ -84,6 +85,24 @@ def biggest[T: int | float](values: Vec[T]) -> T:
         if value > best:
             best = value
     return best
+
+
+class Broken(ValueError):
+    pass
+
+
+def countdown(n: int) -> Iterator[int]:
+    while n > 0:
+        yield n
+        n -= 2
+
+
+def pairs(n: int) -> Iterator[int]:
+    for i in range(n):
+        if i % 3 == 0:
+            continue
+        yield i * i
+    yield from countdown(n)
 
 
 """
@@ -322,11 +341,17 @@ class _Generator:
             w.put(f"{first}, {second} = {name}")
             scope.ints.append(first)
             scope.floats.append(second)
-        elif roll < 0.94:
+        elif roll < 0.92:
             w.put(f"if {self.bool_expr(scope)}:")
             w.depth += 1
             w.put(f"return {self.value(ret, scope)}")
             w.depth -= 1
+        elif roll < 0.955:
+            self.try_statement(w, scope, ret)
+        elif roll < 0.975:
+            self.generator_statement(w, scope)
+        elif roll < 0.985:
+            w.put(f"assert {self.bool_expr(scope, 2)}, {self.str_expr(scope, 2)}")
         else:
             count = self.name("k")
             w.put(f"{count}: int = 0")
@@ -343,6 +368,92 @@ class _Generator:
         for _ in range(max(1, budget)):
             self.statement(w, inner, 0, ret)
         w.depth -= 1
+
+    def try_statement(self, w: _Writer, scope: _Scope, ret: str) -> None:
+        """`try` over something that may raise, caught by class, with `else`
+        and `finally` now and then; a caught exception's text is kept."""
+        rng = self.rng
+        name = self.name("n")
+        w.put(f"{name}: int = 0")
+        w.put("try:")
+        w.depth += 1
+        roll = rng.random()
+        if roll < 0.3:
+            w.put(f"{name} = {self.int_expr(scope, 1)} // {self.int_expr(scope, 2)}")
+        elif roll < 0.5 and scope.vecs:
+            w.put(f"{name} = {rng.choice(scope.vecs)}[{self.int_expr(scope, 2)}]")
+        elif roll < 0.65:
+            w.put(f"{name} = int({self.float_expr(scope, 1)})")
+        elif roll < 0.8:
+            w.put(f"if {self.bool_expr(scope, 2)}:")
+            w.put(f"    raise Broken({self.str_expr(scope, 2)})")
+            w.put(f"{name} = {self.int_expr(scope, 2)}")
+        else:
+            w.put(f"assert {self.bool_expr(scope, 2)}, {self.str_expr(scope, 2)}")
+            w.put(f"{name} = {self.int_expr(scope, 2)}")
+        if self.chance(0.2):
+            w.put(f"if {self.bool_expr(scope, 2)}:")
+            w.put(f"    return {self.value(ret, scope)}")
+        w.depth -= 1
+        caught = rng.choice(
+            (
+                "ZeroDivisionError",
+                "IndexError",
+                "(ValueError, OverflowError)",
+                "Broken",
+                "ValueError",
+                "AssertionError",
+                "ArithmeticError",
+                "Exception",
+            )
+        )
+        text = self.name("s")
+        w.put(f"except {caught} as e:")
+        w.depth += 1
+        w.put(f"{text}: str = str(e)")
+        w.put(f"{name} = len({text}) + {rng.randint(1, 9)}")
+        if self.chance(0.1):
+            w.put("raise")
+        w.depth -= 1
+        if self.chance(0.3):
+            w.put("else:")
+            w.put(f"    {name} += 1")
+        if self.chance(0.3):
+            w.put("finally:")
+            w.put(f"    {name} = {name} * 2")
+        scope.ints.append(name)
+
+    def generator_statement(self, w: _Writer, scope: _Scope) -> None:
+        """A generator consumed where it lowers: a loop, a reduction, `next`,
+        a collection built from it."""
+        rng = self.rng
+        name = self.name("n")
+        count = f"({self.int_expr(scope, 2)} % 9)"
+        source = rng.choice(
+            (f"countdown({count})", f"pairs({count})", f"(x * 3 for x in range({count}))")
+        )
+        roll = rng.random()
+        if roll < 0.3:
+            w.put(f"{name}: int = 0")
+            item = self.name("x")
+            w.put(f"for {item} in {source}:")
+            w.put(f"    if {item} > {rng.randint(10, 40)}:")
+            w.put("        break")
+            w.put(f"    {name} = {name} * 3 + {item}")
+        elif roll < 0.5:
+            w.put(f"{name}: int = sum(Vec[int]({source}))")
+        elif roll < 0.62:
+            w.put(f"{name}: int = sum({source})")
+        elif roll < 0.74:
+            w.put(f"{name}: int = {rng.choice(('min', 'max'))}({source}, default=-1)")
+        elif roll < 0.84:
+            w.put(f"{name}: int = next({source}, {self.int_expr(scope, 2)})")
+        elif roll < 0.92:
+            test = rng.choice(("any", "all"))
+            w.put(f"{name}: int = 1 if {test}(x > 4 for x in {source}) else 0")
+        else:
+            w.put(f"{name}: int = len(sorted({source}))")
+        scope.ints.append(name)
 
     def vec_statements(self, w: _Writer, scope: _Scope) -> None:
         rng = self.rng
