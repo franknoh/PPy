@@ -625,6 +625,8 @@
       
         
       
+        
+      
     
     
     
@@ -806,6 +808,34 @@
     
   
     Classes
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../guide/exceptions-and-generators/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Exceptions and generators
   
 
     
@@ -1816,6 +1846,8 @@
       
         
       
+        
+      
     
     
     
@@ -2268,6 +2300,34 @@
     
   
     Inheritance
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../howto/50_errors_and_generators/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Errors and generators
   
 
     
@@ -4378,8 +4438,10 @@ request.</p>
   different types</strong> is a class and does not act as a struct. It can be
   <code>.ppy</code>, but it will not lower. That is fine: the loops that read its numbers
   can.</li>
-<li><strong><code>try</code>/<code>except</code> around the hot loop.</strong> The loop inside lowers; the handler
-  is Python. Move the <code>try</code> outside the loop if the loop is the point.</li>
+<li><strong><code>try</code>/<code>except</code> that uses more than the class and message.</strong> A handler
+  reading <code>e.args</code>, or <code>raise ... from ...</code>, keeps its function in Python.
+  One that matches by class and reads <code>str(e)</code> lowers; see
+  <a href="../../guide/exceptions-and-generators/">exceptions and generators</a>.</li>
 </ul>
 <h2 id="what-to-expect-from-the-numbers">What to expect from the numbers<a class="headerlink" href="#what-to-expect-from-the-numbers" title="Permanent link">&para;</a></h2>
 <p>On a kernel file that types cleanly, <code>ppy run</code> gives the JIT and <code>ppy build</code>

@@ -10,25 +10,31 @@
       
       
       
+        <link rel="canonical" href="https://ppy.franknoh.dev/dev/guide/exceptions-and-generators/">
       
+      
+        <link rel="prev" href="../classes/">
+      
+      
+        <link rel="next" href="../native/">
       
       
         
       
       
-      <link rel="icon" href="/dev/assets/logo.svg">
+      <link rel="icon" href="../../assets/logo.svg">
       <meta name="generator" content="mkdocs-ProperDocs 1.6.7, mkdocs-material-9.7.7">
     
     
       
-        <title>PPy</title>
+        <title>Exceptions and generators - PPy</title>
       
     
     
-      <link rel="stylesheet" href="/dev/assets/stylesheets/main.ec1eaa64.min.css">
+      <link rel="stylesheet" href="../../assets/stylesheets/main.ec1eaa64.min.css">
       
         
-        <link rel="stylesheet" href="/dev/assets/stylesheets/palette.ab4e12ef.min.css">
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
       
       
 
@@ -47,13 +53,13 @@
       
     
     
-      <link rel="stylesheet" href="/dev/assets/_mkdocstrings.css">
+      <link rel="stylesheet" href="../../assets/_mkdocstrings.css">
     
-      <link rel="stylesheet" href="/dev/stylesheets/extra.css">
+      <link rel="stylesheet" href="../../stylesheets/extra.css">
     
-      <link rel="stylesheet" href="/dev/stylesheets/version.css">
+      <link rel="stylesheet" href="../../stylesheets/version.css">
     
-    <script>__md_scope=new URL("/dev",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
     
       
 
@@ -77,6 +83,11 @@
     <label class="md-overlay" for="__drawer"></label>
     <div data-md-component="skip">
       
+        
+        <a href="#exceptions-and-generators" class="md-skip">
+          Skip to content
+        </a>
+      
     </div>
     <div data-md-component="announce">
       
@@ -93,9 +104,9 @@
 
 <header class="md-header md-header--shadow md-header--lifted" data-md-component="header">
   <nav class="md-header__inner md-grid" aria-label="Header">
-    <a href="/dev/." title="PPy" class="md-header__button md-logo" aria-label="PPy" data-md-component="logo">
+    <a href="../.." title="PPy" class="md-header__button md-logo" aria-label="PPy" data-md-component="logo">
       
-  <img src="/dev/assets/logo.svg" alt="logo">
+  <img src="../../assets/logo.svg" alt="logo">
 
     </a>
     <label class="md-header__button md-icon" for="__drawer">
@@ -112,7 +123,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              
+              Exceptions and generators
             
           </span>
         </div>
@@ -220,7 +231,7 @@
   
   
     <li class="md-tabs__item">
-      <a href="/dev/." class="md-tabs__link">
+      <a href="../.." class="md-tabs__link">
         
   
   
@@ -241,7 +252,7 @@
     
     
       <li class="md-tabs__item">
-        <a href="/dev/getting-started/" class="md-tabs__link">
+        <a href="../../getting-started/" class="md-tabs__link">
           
   
   
@@ -259,11 +270,13 @@
   
   
   
+    
+  
   
     
     
-      <li class="md-tabs__item">
-        <a href="/dev/guide/" class="md-tabs__link">
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="../" class="md-tabs__link">
           
   
   
@@ -285,7 +298,7 @@
     
     
       <li class="md-tabs__item">
-        <a href="/dev/howto/" class="md-tabs__link">
+        <a href="../../howto/" class="md-tabs__link">
           
   
   
@@ -307,7 +320,7 @@
     
     
       <li class="md-tabs__item">
-        <a href="/dev/reference/" class="md-tabs__link">
+        <a href="../../reference/" class="md-tabs__link">
           
   
   
@@ -329,7 +342,7 @@
     
     
       <li class="md-tabs__item">
-        <a href="/dev/internals/" class="md-tabs__link">
+        <a href="../../internals/" class="md-tabs__link">
           
   
   
@@ -349,7 +362,7 @@
   
   
     <li class="md-tabs__item">
-      <a href="/dev/changelog/" class="md-tabs__link">
+      <a href="../../changelog/" class="md-tabs__link">
         
   
   
@@ -390,9 +403,9 @@
 
 <nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
   <label class="md-nav__title" for="__drawer">
-    <a href="/dev/." title="PPy" class="md-nav__button md-logo" aria-label="PPy" data-md-component="logo">
+    <a href="../.." title="PPy" class="md-nav__button md-logo" aria-label="PPy" data-md-component="logo">
       
-  <img src="/dev/assets/logo.svg" alt="logo">
+  <img src="../../assets/logo.svg" alt="logo">
 
     </a>
     PPy
@@ -420,7 +433,7 @@
   
   
     <li class="md-nav__item">
-      <a href="/dev/." class="md-nav__link">
+      <a href="../.." class="md-nav__link">
         
   
   
@@ -505,7 +518,7 @@
   
   
     <li class="md-nav__item">
-      <a href="/dev/getting-started/" class="md-nav__link">
+      <a href="../../getting-started/" class="md-nav__link">
         
   
   
@@ -533,7 +546,7 @@
   
   
     <li class="md-nav__item">
-      <a href="/dev/installing/" class="md-nav__link">
+      <a href="../../installing/" class="md-nav__link">
         
   
   
@@ -565,6 +578,8 @@
       
   
   
+    
+  
   
   
     
@@ -618,20 +633,23 @@
     
     
       
+        
+        
+      
       
         
       
     
     
-    <li class="md-nav__item md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" checked>
         
           
           <div class="md-nav__link md-nav__container">
-            <a href="/dev/guide/" class="md-nav__link ">
+            <a href="../" class="md-nav__link ">
               
   
   
@@ -649,13 +667,13 @@
             </a>
             
               
-              <label class="md-nav__link " for="__nav_3" id="__nav_3_label" tabindex="0">
+              <label class="md-nav__link " for="__nav_3" id="__nav_3_label" tabindex="">
                 <span class="md-nav__icon md-icon"></span>
               </label>
             
           </div>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="true">
           <label class="md-nav__title" for="__nav_3">
             <span class="md-nav__icon md-icon"></span>
             
@@ -675,7 +693,7 @@
   
   
     <li class="md-nav__item">
-      <a href="/dev/guide/subset/" class="md-nav__link">
+      <a href="../subset/" class="md-nav__link">
         
   
   
@@ -703,7 +721,7 @@
   
   
     <li class="md-nav__item">
-      <a href="/dev/guide/directives/" class="md-nav__link">
+      <a href="../directives/" class="md-nav__link">
         
   
   
@@ -731,7 +749,7 @@
   
   
     <li class="md-nav__item">
-      <a href="/dev/guide/strings/" class="md-nav__link">
+      <a href="../strings/" class="md-nav__link">
         
   
   
@@ -759,7 +777,7 @@
   
   
     <li class="md-nav__item">
-      <a href="/dev/guide/collections/" class="md-nav__link">
+      <a href="../collections/" class="md-nav__link">
         
   
   
@@ -787,7 +805,7 @@
   
   
     <li class="md-nav__item">
-      <a href="/dev/guide/classes/" class="md-nav__link">
+      <a href="../classes/" class="md-nav__link">
         
   
   
@@ -812,10 +830,37 @@
                 
   
   
+    
   
   
-    <li class="md-nav__item">
-      <a href="/dev/guide/exceptions-and-generators/" class="md-nav__link">
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Exceptions and generators
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
         
   
   
@@ -831,6 +876,126 @@
   
 
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#exceptions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Exceptions
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Exceptions">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#what-lowers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What lowers
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#checks-are-exceptions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Checks are exceptions
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#across-calls" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Across calls
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#what-stays-in-python" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What stays in Python
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#generators" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Generators
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Generators">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#what-consumes-one" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What consumes one
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#what-stays-in-python_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What stays in Python
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
     </li>
   
 
@@ -843,7 +1008,7 @@
   
   
     <li class="md-nav__item">
-      <a href="/dev/guide/native/" class="md-nav__link">
+      <a href="../native/" class="md-nav__link">
         
   
   
@@ -871,7 +1036,7 @@
   
   
     <li class="md-nav__item">
-      <a href="/dev/guide/simd-cpu/" class="md-nav__link">
+      <a href="../simd-cpu/" class="md-nav__link">
         
   
   
@@ -899,7 +1064,7 @@
   
   
     <li class="md-nav__item">
-      <a href="/dev/guide/concurrency/" class="md-nav__link">
+      <a href="../concurrency/" class="md-nav__link">
         
   
   
@@ -927,7 +1092,7 @@
   
   
     <li class="md-nav__item">
-      <a href="/dev/guide/parallel/" class="md-nav__link">
+      <a href="../parallel/" class="md-nav__link">
         
   
   
@@ -955,7 +1120,7 @@
   
   
     <li class="md-nav__item">
-      <a href="/dev/guide/autodiff/" class="md-nav__link">
+      <a href="../autodiff/" class="md-nav__link">
         
   
   
@@ -983,7 +1148,7 @@
   
   
     <li class="md-nav__item">
-      <a href="/dev/guide/aio/" class="md-nav__link">
+      <a href="../aio/" class="md-nav__link">
         
   
   
@@ -1011,7 +1176,7 @@
   
   
     <li class="md-nav__item">
-      <a href="/dev/guide/gpu/" class="md-nav__link">
+      <a href="../gpu/" class="md-nav__link">
         
   
   
@@ -1039,7 +1204,7 @@
   
   
     <li class="md-nav__item">
-      <a href="/dev/guide/tensors/" class="md-nav__link">
+      <a href="../tensors/" class="md-nav__link">
         
   
   
@@ -1067,7 +1232,7 @@
   
   
     <li class="md-nav__item">
-      <a href="/dev/guide/xla/" class="md-nav__link">
+      <a href="../xla/" class="md-nav__link">
         
   
   
@@ -1095,7 +1260,7 @@
   
   
     <li class="md-nav__item">
-      <a href="/dev/guide/generics/" class="md-nav__link">
+      <a href="../generics/" class="md-nav__link">
         
   
   
@@ -1123,7 +1288,7 @@
   
   
     <li class="md-nav__item">
-      <a href="/dev/guide/effects/" class="md-nav__link">
+      <a href="../effects/" class="md-nav__link">
         
   
   
@@ -1151,7 +1316,7 @@
   
   
     <li class="md-nav__item">
-      <a href="/dev/guide/input/" class="md-nav__link">
+      <a href="../input/" class="md-nav__link">
         
   
   
@@ -1179,7 +1344,7 @@
   
   
     <li class="md-nav__item">
-      <a href="/dev/guide/native-lowering/" class="md-nav__link">
+      <a href="../native-lowering/" class="md-nav__link">
         
   
   
@@ -1207,7 +1372,7 @@
   
   
     <li class="md-nav__item">
-      <a href="/dev/guide/regex/" class="md-nav__link">
+      <a href="../regex/" class="md-nav__link">
         
   
   
@@ -1277,7 +1442,7 @@
         
           
           <div class="md-nav__link md-nav__container">
-            <a href="/dev/howto/" class="md-nav__link ">
+            <a href="../../howto/" class="md-nav__link ">
               
   
   
@@ -1321,7 +1486,7 @@
   
   
     <li class="md-nav__item">
-      <a href="/dev/howto/comparisons/" class="md-nav__link">
+      <a href="../../howto/comparisons/" class="md-nav__link">
         
   
   
@@ -1429,7 +1594,7 @@
   
   
     <li class="md-nav__item">
-      <a href="/dev/howto/01_basics/" class="md-nav__link">
+      <a href="../../howto/01_basics/" class="md-nav__link">
         
   
   
@@ -1457,7 +1622,7 @@
   
   
     <li class="md-nav__item">
-      <a href="/dev/howto/02_arbitrary_precision/" class="md-nav__link">
+      <a href="../../howto/02_arbitrary_precision/" class="md-nav__link">
         
   
   
@@ -1485,7 +1650,7 @@
   
   
     <li class="md-nav__item">
-      <a href="/dev/howto/03_effects_and_contracts/" class="md-nav__link">
+      <a href="../../howto/03_effects_and_contracts/" class="md-nav__link">
         
   
   
@@ -1513,7 +1678,7 @@
   
   
     <li class="md-nav__item">
-      <a href="/dev/howto/04_classes/" class="md-nav__link">
+      <a href="../../howto/04_classes/" class="md-nav__link">
         
   
   
@@ -1541,7 +1706,7 @@
   
   
     <li class="md-nav__item">
-      <a href="/dev/howto/08_native_data/" class="md-nav__link">
+      <a href="../../howto/08_native_data/" class="md-nav__link">
         
   
   
@@ -1569,7 +1734,7 @@
   
   
     <li class="md-nav__item">
-      <a href="/dev/howto/10_narrowing/" class="md-nav__link">
+      <a href="../../howto/10_narrowing/" class="md-nav__link">
         
   
   
@@ -1597,7 +1762,7 @@
   
   
     <li class="md-nav__item">
-      <a href="/dev/howto/11_numerics/" class="md-nav__link">
+      <a href="../../howto/11_numerics/" class="md-nav__link">
         
   
   
@@ -1625,7 +1790,7 @@
   
   
     <li class="md-nav__item">
-      <a href="/dev/howto/13_value_classes/" class="md-nav__link">
+      <a href="../../howto/13_value_classes/" class="md-nav__link">
         
   
   
@@ -1653,7 +1818,7 @@
   
   
     <li class="md-nav__item">
-      <a href="/dev/howto/14_tuples/" class="md-nav__link">
+      <a href="../../howto/14_tuples/" class="md-nav__link">
         
   
   
@@ -1681,7 +1846,7 @@
   
   
     <li class="md-nav__item">
-      <a href="/dev/howto/16_dynamic/" class="md-nav__link">
+      <a href="../../howto/16_dynamic/" class="md-nav__link">
         
   
   
@@ -1709,7 +1874,7 @@
   
   
     <li class="md-nav__item">
-      <a href="/dev/howto/17_containers/" class="md-nav__link">
+      <a href="../../howto/17_containers/" class="md-nav__link">
         
   
   
@@ -1737,7 +1902,7 @@
   
   
     <li class="md-nav__item">
-      <a href="/dev/howto/18_errors/" class="md-nav__link">
+      <a href="../../howto/18_errors/" class="md-nav__link">
         
   
   
@@ -1765,7 +1930,7 @@
   
   
     <li class="md-nav__item">
-      <a href="/dev/howto/19_strings/" class="md-nav__link">
+      <a href="../../howto/19_strings/" class="md-nav__link">
         
   
   
@@ -1887,7 +2052,7 @@
   
   
     <li class="md-nav__item">
-      <a href="/dev/howto/12_buffers_and_jit/" class="md-nav__link">
+      <a href="../../howto/12_buffers_and_jit/" class="md-nav__link">
         
   
   
@@ -1915,7 +2080,7 @@
   
   
     <li class="md-nav__item">
-      <a href="/dev/howto/15_algorithms/" class="md-nav__link">
+      <a href="../../howto/15_algorithms/" class="md-nav__link">
         
   
   
@@ -1943,7 +2108,7 @@
   
   
     <li class="md-nav__item">
-      <a href="/dev/howto/28_threads/" class="md-nav__link">
+      <a href="../../howto/28_threads/" class="md-nav__link">
         
   
   
@@ -1971,7 +2136,7 @@
   
   
     <li class="md-nav__item">
-      <a href="/dev/howto/32_native_memory/" class="md-nav__link">
+      <a href="../../howto/32_native_memory/" class="md-nav__link">
         
   
   
@@ -1999,7 +2164,7 @@
   
   
     <li class="md-nav__item">
-      <a href="/dev/howto/33_simd_and_cpu/" class="md-nav__link">
+      <a href="../../howto/33_simd_and_cpu/" class="md-nav__link">
         
   
   
@@ -2027,7 +2192,7 @@
   
   
     <li class="md-nav__item">
-      <a href="/dev/howto/34_atomics_and_threads/" class="md-nav__link">
+      <a href="../../howto/34_atomics_and_threads/" class="md-nav__link">
         
   
   
@@ -2055,7 +2220,7 @@
   
   
     <li class="md-nav__item">
-      <a href="/dev/howto/35_parallel_range/" class="md-nav__link">
+      <a href="../../howto/35_parallel_range/" class="md-nav__link">
         
   
   
@@ -2083,7 +2248,7 @@
   
   
     <li class="md-nav__item">
-      <a href="/dev/howto/36_autodiff/" class="md-nav__link">
+      <a href="../../howto/36_autodiff/" class="md-nav__link">
         
   
   
@@ -2111,7 +2276,7 @@
   
   
     <li class="md-nav__item">
-      <a href="/dev/howto/37_aio/" class="md-nav__link">
+      <a href="../../howto/37_aio/" class="md-nav__link">
         
   
   
@@ -2139,7 +2304,7 @@
   
   
     <li class="md-nav__item">
-      <a href="/dev/howto/40_generics/" class="md-nav__link">
+      <a href="../../howto/40_generics/" class="md-nav__link">
         
   
   
@@ -2167,7 +2332,7 @@
   
   
     <li class="md-nav__item">
-      <a href="/dev/howto/42_toolbox/" class="md-nav__link">
+      <a href="../../howto/42_toolbox/" class="md-nav__link">
         
   
   
@@ -2195,7 +2360,7 @@
   
   
     <li class="md-nav__item">
-      <a href="/dev/howto/43_regex/" class="md-nav__link">
+      <a href="../../howto/43_regex/" class="md-nav__link">
         
   
   
@@ -2223,7 +2388,7 @@
   
   
     <li class="md-nav__item">
-      <a href="/dev/howto/47_collections/" class="md-nav__link">
+      <a href="../../howto/47_collections/" class="md-nav__link">
         
   
   
@@ -2251,7 +2416,7 @@
   
   
     <li class="md-nav__item">
-      <a href="/dev/howto/48_strings/" class="md-nav__link">
+      <a href="../../howto/48_strings/" class="md-nav__link">
         
   
   
@@ -2279,7 +2444,7 @@
   
   
     <li class="md-nav__item">
-      <a href="/dev/howto/49_inheritance/" class="md-nav__link">
+      <a href="../../howto/49_inheritance/" class="md-nav__link">
         
   
   
@@ -2307,7 +2472,7 @@
   
   
     <li class="md-nav__item">
-      <a href="/dev/howto/50_errors_and_generators/" class="md-nav__link">
+      <a href="../../howto/50_errors_and_generators/" class="md-nav__link">
         
   
   
@@ -2405,7 +2570,7 @@
   
   
     <li class="md-nav__item">
-      <a href="/dev/howto/38_cuda/" class="md-nav__link">
+      <a href="../../howto/38_cuda/" class="md-nav__link">
         
   
   
@@ -2433,7 +2598,7 @@
   
   
     <li class="md-nav__item">
-      <a href="/dev/howto/44_tile/" class="md-nav__link">
+      <a href="../../howto/44_tile/" class="md-nav__link">
         
   
   
@@ -2461,7 +2626,7 @@
   
   
     <li class="md-nav__item">
-      <a href="/dev/howto/39_xla/" class="md-nav__link">
+      <a href="../../howto/39_xla/" class="md-nav__link">
         
   
   
@@ -2489,7 +2654,7 @@
   
   
     <li class="md-nav__item">
-      <a href="/dev/howto/45_multi_gpu_jax/" class="md-nav__link">
+      <a href="../../howto/45_multi_gpu_jax/" class="md-nav__link">
         
   
   
@@ -2603,7 +2768,7 @@
   
   
     <li class="md-nav__item">
-      <a href="/dev/howto/05_numpy/" class="md-nav__link">
+      <a href="../../howto/05_numpy/" class="md-nav__link">
         
   
   
@@ -2631,7 +2796,7 @@
   
   
     <li class="md-nav__item">
-      <a href="/dev/howto/06_pydantic/" class="md-nav__link">
+      <a href="../../howto/06_pydantic/" class="md-nav__link">
         
   
   
@@ -2659,7 +2824,7 @@
   
   
     <li class="md-nav__item">
-      <a href="/dev/howto/07_parallel/" class="md-nav__link">
+      <a href="../../howto/07_parallel/" class="md-nav__link">
         
   
   
@@ -2687,7 +2852,7 @@
   
   
     <li class="md-nav__item">
-      <a href="/dev/howto/09_torch/" class="md-nav__link">
+      <a href="../../howto/09_torch/" class="md-nav__link">
         
   
   
@@ -2715,7 +2880,7 @@
   
   
     <li class="md-nav__item">
-      <a href="/dev/howto/46_gpt2/" class="md-nav__link">
+      <a href="../../howto/46_gpt2/" class="md-nav__link">
         
   
   
@@ -2743,7 +2908,7 @@
   
   
     <li class="md-nav__item">
-      <a href="/dev/howto/21_training_torch/" class="md-nav__link">
+      <a href="../../howto/21_training_torch/" class="md-nav__link">
         
   
   
@@ -2771,7 +2936,7 @@
   
   
     <li class="md-nav__item">
-      <a href="/dev/howto/22_training_jax/" class="md-nav__link">
+      <a href="../../howto/22_training_jax/" class="md-nav__link">
         
   
   
@@ -2799,7 +2964,7 @@
   
   
     <li class="md-nav__item">
-      <a href="/dev/howto/25_jax_export/" class="md-nav__link">
+      <a href="../../howto/25_jax_export/" class="md-nav__link">
         
   
   
@@ -2827,7 +2992,7 @@
   
   
     <li class="md-nav__item">
-      <a href="/dev/howto/27_uvicorn/" class="md-nav__link">
+      <a href="../../howto/27_uvicorn/" class="md-nav__link">
         
   
   
@@ -2855,7 +3020,7 @@
   
   
     <li class="md-nav__item">
-      <a href="/dev/howto/29_flax/" class="md-nav__link">
+      <a href="../../howto/29_flax/" class="md-nav__link">
         
   
   
@@ -2883,7 +3048,7 @@
   
   
     <li class="md-nav__item">
-      <a href="/dev/howto/31_torchrun/" class="md-nav__link">
+      <a href="../../howto/31_torchrun/" class="md-nav__link">
         
   
   
@@ -2911,7 +3076,7 @@
   
   
     <li class="md-nav__item">
-      <a href="/dev/howto/41_columnar/" class="md-nav__link">
+      <a href="../../howto/41_columnar/" class="md-nav__link">
         
   
   
@@ -3011,7 +3176,7 @@
   
   
     <li class="md-nav__item">
-      <a href="/dev/howto/20_inventory/" class="md-nav__link">
+      <a href="../../howto/20_inventory/" class="md-nav__link">
         
   
   
@@ -3039,7 +3204,7 @@
   
   
     <li class="md-nav__item">
-      <a href="/dev/howto/23_inference/" class="md-nav__link">
+      <a href="../../howto/23_inference/" class="md-nav__link">
         
   
   
@@ -3067,7 +3232,7 @@
   
   
     <li class="md-nav__item">
-      <a href="/dev/howto/24_interop/" class="md-nav__link">
+      <a href="../../howto/24_interop/" class="md-nav__link">
         
   
   
@@ -3095,7 +3260,7 @@
   
   
     <li class="md-nav__item">
-      <a href="/dev/howto/26_project/" class="md-nav__link">
+      <a href="../../howto/26_project/" class="md-nav__link">
         
   
   
@@ -3123,7 +3288,7 @@
   
   
     <li class="md-nav__item">
-      <a href="/dev/howto/30_migrate/" class="md-nav__link">
+      <a href="../../howto/30_migrate/" class="md-nav__link">
         
   
   
@@ -3201,7 +3366,7 @@
         
           
           <div class="md-nav__link md-nav__container">
-            <a href="/dev/reference/" class="md-nav__link ">
+            <a href="../../reference/" class="md-nav__link ">
               
   
   
@@ -3245,7 +3410,7 @@
   
   
     <li class="md-nav__item">
-      <a href="/dev/cli/" class="md-nav__link">
+      <a href="../../cli/" class="md-nav__link">
         
   
   
@@ -3273,7 +3438,7 @@
   
   
     <li class="md-nav__item">
-      <a href="/dev/reference/diagnostics/" class="md-nav__link">
+      <a href="../../reference/diagnostics/" class="md-nav__link">
         
   
   
@@ -3301,7 +3466,7 @@
   
   
     <li class="md-nav__item">
-      <a href="/dev/reference/config/" class="md-nav__link">
+      <a href="../../reference/config/" class="md-nav__link">
         
   
   
@@ -3329,7 +3494,7 @@
   
   
     <li class="md-nav__item">
-      <a href="/dev/reference/performance/" class="md-nav__link">
+      <a href="../../reference/performance/" class="md-nav__link">
         
   
   
@@ -3357,7 +3522,7 @@
   
   
     <li class="md-nav__item">
-      <a href="/dev/reference/compatibility/" class="md-nav__link">
+      <a href="../../reference/compatibility/" class="md-nav__link">
         
   
   
@@ -3418,7 +3583,7 @@
         
           
           <div class="md-nav__link md-nav__container">
-            <a href="/dev/api/" class="md-nav__link ">
+            <a href="../../api/" class="md-nav__link ">
               
   
   
@@ -3462,7 +3627,7 @@
   
   
     <li class="md-nav__item">
-      <a href="/dev/api/ppy/" class="md-nav__link">
+      <a href="../../api/ppy/" class="md-nav__link">
         
   
   
@@ -3490,7 +3655,7 @@
   
   
     <li class="md-nav__item">
-      <a href="/dev/api/runtime/" class="md-nav__link">
+      <a href="../../api/runtime/" class="md-nav__link">
         
   
   
@@ -3518,7 +3683,7 @@
   
   
     <li class="md-nav__item">
-      <a href="/dev/api/plugins/" class="md-nav__link">
+      <a href="../../api/plugins/" class="md-nav__link">
         
   
   
@@ -3546,7 +3711,7 @@
   
   
     <li class="md-nav__item">
-      <a href="/dev/api/backends/" class="md-nav__link">
+      <a href="../../api/backends/" class="md-nav__link">
         
   
   
@@ -3574,7 +3739,7 @@
   
   
     <li class="md-nav__item">
-      <a href="/dev/api/ir/" class="md-nav__link">
+      <a href="../../api/ir/" class="md-nav__link">
         
   
   
@@ -3658,7 +3823,7 @@
         
           
           <div class="md-nav__link md-nav__container">
-            <a href="/dev/internals/" class="md-nav__link ">
+            <a href="../../internals/" class="md-nav__link ">
               
   
   
@@ -3702,7 +3867,7 @@
   
   
     <li class="md-nav__item">
-      <a href="/dev/internals/architecture/" class="md-nav__link">
+      <a href="../../internals/architecture/" class="md-nav__link">
         
   
   
@@ -3730,7 +3895,7 @@
   
   
     <li class="md-nav__item">
-      <a href="/dev/internals/ir/" class="md-nav__link">
+      <a href="../../internals/ir/" class="md-nav__link">
         
   
   
@@ -3758,7 +3923,7 @@
   
   
     <li class="md-nav__item">
-      <a href="/dev/internals/conversion/" class="md-nav__link">
+      <a href="../../internals/conversion/" class="md-nav__link">
         
   
   
@@ -3786,7 +3951,7 @@
   
   
     <li class="md-nav__item">
-      <a href="/dev/internals/migrating/" class="md-nav__link">
+      <a href="../../internals/migrating/" class="md-nav__link">
         
   
   
@@ -3814,7 +3979,7 @@
   
   
     <li class="md-nav__item">
-      <a href="/dev/internals/plugins/" class="md-nav__link">
+      <a href="../../internals/plugins/" class="md-nav__link">
         
   
   
@@ -3842,7 +4007,7 @@
   
   
     <li class="md-nav__item">
-      <a href="/dev/internals/backends/" class="md-nav__link">
+      <a href="../../internals/backends/" class="md-nav__link">
         
   
   
@@ -3870,7 +4035,7 @@
   
   
     <li class="md-nav__item">
-      <a href="/dev/internals/solver/" class="md-nav__link">
+      <a href="../../internals/solver/" class="md-nav__link">
         
   
   
@@ -3898,7 +4063,7 @@
   
   
     <li class="md-nav__item">
-      <a href="/dev/internals/hardware-validation/" class="md-nav__link">
+      <a href="../../internals/hardware-validation/" class="md-nav__link">
         
   
   
@@ -3926,7 +4091,7 @@
   
   
     <li class="md-nav__item">
-      <a href="/dev/contributing/" class="md-nav__link">
+      <a href="../../contributing/" class="md-nav__link">
         
   
   
@@ -3961,7 +4126,7 @@
   
   
     <li class="md-nav__item">
-      <a href="/dev/changelog/" class="md-nav__link">
+      <a href="../../changelog/" class="md-nav__link">
         
   
   
@@ -3998,6 +4163,116 @@
   
   
   
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#exceptions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Exceptions
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Exceptions">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#what-lowers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What lowers
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#checks-are-exceptions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Checks are exceptions
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#across-calls" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Across calls
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#what-stays-in-python" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What stays in Python
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#generators" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Generators
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Generators">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#what-consumes-one" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What consumes one
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#what-stays-in-python_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What stays in Python
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
   
 </nav>
                   </div>
@@ -4010,8 +4285,180 @@
               
               <article class="md-content__inner md-typeset">
                 
-  <h1>404 - Not found</h1>
+                  
 
+
+  
+  
+
+
+<h1 id="exceptions-and-generators">Exceptions and generators<a class="headerlink" href="#exceptions-and-generators" title="Permanent link">&para;</a></h1>
+<p><code>raise</code>, <code>try</code>, <code>assert</code>, and generators lower to native code. A function
+that catches an exception, or consumes a generator, goes native under
+<code>ppy run</code>, in a standalone binary, and in emitted C and C++, and gives
+CPython's answer on every path.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">collections.abc</span><span class="w"> </span><span class="kn">import</span> <span class="n">Iterator</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="kn">from</span><span class="w"> </span><span class="nn">ppy</span><span class="w"> </span><span class="kn">import</span> <span class="n">Vec</span>
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="k">class</span><span class="w"> </span><span class="nc">BadRow</span><span class="p">(</span><span class="ne">ValueError</span><span class="p">):</span>
+<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>    <span class="k">pass</span>
+<a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>
+<a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>
+<a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a><span class="k">def</span><span class="w"> </span><span class="nf">rows</span><span class="p">(</span><span class="n">text</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Iterator</span><span class="p">[</span><span class="nb">int</span><span class="p">]:</span>
+<a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>    <span class="k">for</span> <span class="n">part</span> <span class="ow">in</span> <span class="n">text</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">","</span><span class="p">):</span>
+<a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>        <span class="k">if</span> <span class="ow">not</span> <span class="n">part</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span><span class="o">.</span><span class="n">isdigit</span><span class="p">():</span>
+<a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a>            <span class="k">raise</span> <span class="n">BadRow</span><span class="p">(</span><span class="sa">f</span><span class="s2">"not a number: </span><span class="si">{</span><span class="n">part</span><span class="si">!r}</span><span class="s2">"</span><span class="p">)</span>
+<a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a>        <span class="k">yield</span> <span class="nb">int</span><span class="p">(</span><span class="n">part</span><span class="p">)</span>
+<a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a>
+<a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a>
+<a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a><span class="k">def</span><span class="w"> </span><span class="nf">total</span><span class="p">(</span><span class="n">text</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">weights</span><span class="p">:</span> <span class="n">Vec</span><span class="p">[</span><span class="nb">int</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+<a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a>    <span class="n">got</span> <span class="o">=</span> <span class="mi">0</span>
+<a id="__codelineno-0-19" name="__codelineno-0-19" href="#__codelineno-0-19"></a>    <span class="k">try</span><span class="p">:</span>
+<a id="__codelineno-0-20" name="__codelineno-0-20" href="#__codelineno-0-20"></a>        <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">row</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">Vec</span><span class="p">[</span><span class="nb">int</span><span class="p">](</span><span class="n">rows</span><span class="p">(</span><span class="n">text</span><span class="p">))):</span>
+<a id="__codelineno-0-21" name="__codelineno-0-21" href="#__codelineno-0-21"></a>            <span class="n">got</span> <span class="o">+=</span> <span class="n">row</span> <span class="o">*</span> <span class="n">weights</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
+<a id="__codelineno-0-22" name="__codelineno-0-22" href="#__codelineno-0-22"></a>    <span class="k">except</span> <span class="n">BadRow</span> <span class="k">as</span> <span class="n">error</span><span class="p">:</span>
+<a id="__codelineno-0-23" name="__codelineno-0-23" href="#__codelineno-0-23"></a>        <span class="k">return</span> <span class="o">-</span><span class="nb">len</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">error</span><span class="p">))</span>
+<a id="__codelineno-0-24" name="__codelineno-0-24" href="#__codelineno-0-24"></a>    <span class="k">except</span> <span class="ne">IndexError</span><span class="p">:</span>
+<a id="__codelineno-0-25" name="__codelineno-0-25" href="#__codelineno-0-25"></a>        <span class="k">return</span> <span class="o">-</span><span class="mi">1</span>
+<a id="__codelineno-0-26" name="__codelineno-0-26" href="#__codelineno-0-26"></a>    <span class="k">return</span> <span class="n">got</span>
+</code></pre></div>
+<p><code>weights[i]</code> past the end is an <code>IndexError</code> the handler takes natively.
+Nothing falls back to Python.</p>
+<h2 id="exceptions">Exceptions<a class="headerlink" href="#exceptions" title="Permanent link">&para;</a></h2>
+<h3 id="what-lowers">What lowers<a class="headerlink" href="#what-lowers" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>raise T</code>, <code>raise T(message)</code></td>
+<td>a builtin exception, or a class deriving from one whose body is only <code>pass</code> or a docstring; the message is a string, an <code>int</code>, or a <code>bool</code></td>
+</tr>
+<tr>
+<td><code>raise</code>, <code>raise e</code></td>
+<td>re-raising the exception a handler holds</td>
+</tr>
+<tr>
+<td><code>try</code> with <code>except T</code>, <code>except (A, B)</code>, <code>except T as e</code>, <code>except</code>, <code>else</code>, <code>finally</code></td>
+<td>a handler matches by class, a base catches its subclasses</td>
+</tr>
+<tr>
+<td><code>assert test</code>, <code>assert test, message</code></td>
+<td><code>AssertionError</code></td>
+</tr>
+<tr>
+<td><code>str(e)</code>, <code>f"{e}"</code>, <code>isinstance(e, T)</code></td>
+<td>in a handler</td>
+</tr>
+</tbody>
+</table>
+<p><code>str()</code> of a <code>KeyError</code> is <code>repr()</code> of its key, as CPython has it.
+<code>finally</code> runs when the body, a handler, or <code>else</code> finishes, raises,
+<code>return</code>s, <code>break</code>s, or <code>continue</code>s.</p>
+<h3 id="checks-are-exceptions">Checks are exceptions<a class="headerlink" href="#checks-are-exceptions" title="Permanent link">&para;</a></h3>
+<p>In a module that raises or catches, the checks native code makes where
+CPython would raise are exceptions too:</p>
+<ul>
+<li>an index out of range</li>
+<li>a missing key</li>
+<li>a division by zero</li>
+<li><code>int()</code> of text that is not a number</li>
+<li><code>None</code> where an object is wanted</li>
+</ul>
+<p>So <code>except IndexError:</code> takes the exception native code raised. Each
+exception is CPython's class with CPython's message. A check whose text
+leaves out what CPython adds, such as <code>int("x")</code>'s literal, gives the class
+natively, and <code>str(e)</code> of it falls back to Python.</p>
+<p>A check that stands for what only native code cannot do is not an
+exception: an integer past 64 bits, or a NaN compared in a collection.
+Under <code>ppy run</code> it falls back and Python answers, since CPython would not
+have raised there. A check the optimizer would hoist out of a loop is not
+hoisted in such a module: caught, a check that failed before the loop ran
+would give a different answer.</p>
+<h3 id="across-calls">Across calls<a class="headerlink" href="#across-calls" title="Permanent link">&para;</a></h3>
+<p>An exception crosses native calls. The function it leaves lets go of what
+it held and returns a raised status, and the caller catches it (a <code>try</code>
+around the call) or returns the same status on up. An exception nothing
+native catches ends the call:</p>
+<ul>
+<li>Under <code>ppy run</code> Python runs the call again and raises it itself; the
+  runtime frees what the native call made.</li>
+<li>A standalone binary, and emitted C and C++, print the line CPython's
+  traceback ends with (<code>Broken: at the bottom of 3</code>) and exit with status 1.</li>
+</ul>
+<h3 id="what-stays-in-python">What stays in Python<a class="headerlink" href="#what-stays-in-python" title="Permanent link">&para;</a></h3>
+<p>A function using any of these runs as Python:</p>
+<ul>
+<li><code>e.args</code>, and any other use of <code>e</code> than the ones above</li>
+<li><code>raise ... from ...</code></li>
+<li>a project exception class with fields or methods of its own</li>
+<li>a <code>finally</code> that returns, breaks, or continues out of itself</li>
+</ul>
+<h2 id="generators">Generators<a class="headerlink" href="#generators" title="Permanent link">&para;</a></h2>
+<p>A generator function, and a generator expression, is lowered into the
+code that consumes it. Its body runs in its own scope, and at each <code>yield</code>
+the consumer's step runs with the value, then the body carries on after
+the <code>yield</code>. Nothing is allocated for the generator itself, so a loop over
+one costs what the loop inside it costs.</p>
+<h3 id="what-consumes-one">What consumes one<a class="headerlink" href="#what-consumes-one" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>for x in gen(...)</code>, with <code>break</code>, <code>continue</code>, and <code>else</code></td>
+<td><code>break</code> closes the generator</td>
+</tr>
+<tr>
+<td><code>sum</code>, <code>min</code>, <code>max</code>, <code>sorted</code>, <code>any</code>, <code>all</code></td>
+<td>over a generator or a generator expression</td>
+</tr>
+<tr>
+<td><code>next(gen(...))</code>, <code>next(gen(...), default)</code></td>
+<td>the first value, or <code>StopIteration</code></td>
+</tr>
+<tr>
+<td><code>Vec[T](gen(...))</code> and the other collections</td>
+<td>built from what it yields</td>
+</tr>
+</tbody>
+</table>
+<p>In the generator, <code>yield value</code> and <code>yield from</code> another generator or a
+collection lower, and <code>return</code> ends it. It yields numbers, tuples of
+numbers, strings, collections, or objects.</p>
+<h3 id="what-stays-in-python_1">What stays in Python<a class="headerlink" href="#what-stays-in-python_1" title="Permanent link">&para;</a></h3>
+<p>A generator that is stored, returned, passed on, or stepped more than once
+keeps the function that does so in Python, and so does:</p>
+<ul>
+<li>a generator method, a generic generator, or an async one</li>
+<li>a generator with a <code>try</code>, a nested function, or a <code>with</code></li>
+<li><code>x = yield</code>, whose value <code>send</code> gives</li>
+<li>a generator that yields from itself</li>
+</ul>
+<p>Examples: <a href="../../howto/50_errors_and_generators/">Errors and generators</a>.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
               </article>
             </div>
           
@@ -4031,6 +4478,44 @@
       
         <footer class="md-footer">
   
+    
+      
+      <nav class="md-footer__inner md-grid" aria-label="Footer" >
+        
+          
+          <a href="../classes/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Classes">
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+            </div>
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Previous
+              </span>
+              <div class="md-ellipsis">
+                Classes
+              </div>
+            </div>
+          </a>
+        
+        
+          
+          <a href="../native/" class="md-footer__link md-footer__link--next" aria-label="Next: Native memory and FFI">
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Next
+              </span>
+              <div class="md-ellipsis">
+                Native memory and FFI
+              </div>
+            </div>
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4 11v2h12l-5.5 5.5 1.42 1.42L19.84 12l-7.92-7.92L10.5 5.5 16 11z"/></svg>
+            </div>
+          </a>
+        
+      </nav>
     
   
   <div class="md-footer-meta md-typeset">
@@ -4062,10 +4547,10 @@
     
       
       
-      <script id="__config" type="application/json">{"annotate": null, "base": "/dev", "features": ["navigation.tabs", "navigation.tabs.sticky", "navigation.sections", "navigation.indexes", "navigation.top", "navigation.footer", "search.suggest", "search.highlight", "content.code.copy", "content.code.annotate", "content.tabs.link", "toc.follow"], "search": "/dev/assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"default": "latest", "provider": "mike"}}</script>
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.tabs", "navigation.tabs.sticky", "navigation.sections", "navigation.indexes", "navigation.top", "navigation.footer", "search.suggest", "search.highlight", "content.code.copy", "content.code.annotate", "content.tabs.link", "toc.follow"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"default": "latest", "provider": "mike"}}</script>
     
     
-      <script src="/dev/assets/javascripts/bundle.d7400e89.min.js"></script>
+      <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
       
     
   </body>

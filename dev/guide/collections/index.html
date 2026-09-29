@@ -627,6 +627,8 @@
       
         
       
+        
+      
     
     
     
@@ -1085,6 +1087,34 @@
     
   
     Classes
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../exceptions-and-generators/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Exceptions and generators
   
 
     
@@ -2095,6 +2125,8 @@
       
         
       
+        
+      
     
     
     
@@ -2547,6 +2579,34 @@
     
   
     Inheritance
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../howto/50_errors_and_generators/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Errors and generators
   
 
     
@@ -5109,6 +5169,9 @@ values (<code>KeyError: (3, -3)</code>, <code>IndexError: index 7 is out of rang
 length 2</code>), and exits with status 1, as CPython does for an uncaught
 exception. Where only native code can fail, an integer past 64 bits, it
 says <code>OverflowError: the result does not fit in a 64-bit integer</code>.</p>
+<p>In a module that raises or catches exceptions, these guards are native
+exceptions instead, and a <code>try</code> around them catches them; see
+<a href="../exceptions-and-generators/">exceptions and generators</a>.</p>
 <h3 id="functions-that-take-or-return-collections">Functions that take or return collections<a class="headerlink" href="#functions-that-take-or-return-collections" title="Permanent link">&para;</a></h3>
 <p>A native function can take a collection as a parameter, as <code>farthest</code> above
 takes <code>adjacent</code>, and can return one. Native callers pass and receive the
