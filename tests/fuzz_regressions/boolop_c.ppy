@@ -1,0 +1,14 @@
+# fuzz: path=c seed=187 (conditional expressions evaluated both sides; and/or over numbers gave a bool)
+def either(a: int, b: int) -> int:
+    return a or b
+
+
+def both(a: int, b: int) -> int:
+    return a and b
+
+
+def main() -> None:
+    print(either(0, 5), either(3, 5), both(0, 5), both(3, 5))
+
+
+main()

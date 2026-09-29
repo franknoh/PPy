@@ -3639,8 +3639,19 @@ class _Checker:
         operation = operations.get(op)
         if operation is None:
             return None
+        a, b = left.facts.constant, right.facts.constant
+        # `2 ** 10**9` or `1 << 10**9` is a gigabyte of integer: not folded,
+        # computed at run time if the program really asks for it.
+        huge = (
+            op in (ast.Pow, ast.LShift)
+            and isinstance(a, int)
+            and isinstance(b, int)
+            and (b > 4096 or (op is ast.Pow and abs(a) > 1 and b * abs(a).bit_length() > 4096))
+        )
+        if huge:
+            return None
         try:
-            value = operation(left.facts.constant, right.facts.constant)
+            value = operation(a, b)
         except (TypeError, ValueError, ZeroDivisionError, OverflowError):
             return None
         if isinstance(value, (int, float, complex, str, bytes, bool)) and not isinstance(
@@ -5835,7 +5846,21 @@ class _Checker:
         info = self.project.classes.get(base.name)
         return C.is_collection(base) or (info is not None and not info.is_pydantic)
 
+    def _forget_lengths(self, env: Env) -> None:
+        """A container was written: every mutable container's known length may
+        have changed, through this name or an alias of it. A string's and a
+        tuple's cannot, and keep theirs."""
+        for name in list(env):
+            binding = env.get(name)
+            if binding is None or binding.facts.length is None:
+                continue
+            base = T.strip_literal(binding.type)
+            if base == T.STR or isinstance(base, T.Tuple_):
+                continue
+            env.set(name, Binding(binding.type, binding.facts.with_(length=None)))
+
     def _note_mutation(self, node: ast.expr, env: Env) -> None:
+        self._forget_lengths(env)
         if self._is_reference(node):
             # A write through an object or a collection lands in what its root
             # variable holds: a parameter's, or this function's own.

@@ -105,6 +105,22 @@ def _is_pure_expr(node: ast.expr) -> bool:
     return True
 
 
+#: Operators that raise for some operands of the right type: a zero divisor,
+#: a negative shift, an overflowing float power.
+_RAISING_OPERATORS = (ast.Div, ast.FloorDiv, ast.Mod, ast.Pow, ast.LShift, ast.RShift)
+
+
+def _cannot_raise(node: ast.expr) -> bool:
+    """Pure, and no operator in it can raise: what may be deleted outright, or
+    moved to where it runs when the program would not have run it."""
+    if not _is_pure_expr(node):
+        return False
+    return not any(
+        isinstance(child, ast.BinOp) and isinstance(child.op, _RAISING_OPERATORS)
+        for child in ast.walk(node)
+    )
+
+
 def _assigned_names(nodes: list[ast.stmt]) -> set[str]:
     found: set[str] = set()
     for statement in nodes:
@@ -252,7 +268,7 @@ class BranchFold(Pass):
     def _test_value(self, test: ast.expr) -> bool | None:
         if isinstance(test, ast.Constant):
             return bool(test.value)
-        if has_const(test) and _is_pure_expr(test):
+        if has_const(test) and _cannot_raise(test):
             return bool(const_of(test))
         return None
 
@@ -364,7 +380,7 @@ class Peephole(Pass):
             len(node.body) == 1
             and isinstance(node.body[0], ast.Pass)
             and not node.orelse
-            and _is_pure_expr(node.test)
+            and _cannot_raise(node.test)
         ):
             self.context.count("peepholes")
             return ast.copy_location(ast.Pass(), node)
@@ -452,7 +468,7 @@ class UnusedLocals(Pass):
                 and _single_name_target(statement) is not None
                 and _single_name_target(statement) not in loaded
                 and statement.value is not None
-                and _is_pure_expr(statement.value)
+                and _cannot_raise(statement.value)
             ):
                 self.context.count("unused_locals_removed")
                 continue
@@ -592,7 +608,9 @@ class LoopInvariantMotion(Pass):
         # already handles them.
         if isinstance(value, (ast.Constant, ast.Name)):
             return None
-        if not _is_pure_expr(value) or _loaded_names(value) & varying:
+        # Hoisted, it runs before the first pass, and even for a loop that
+        # runs none: only what cannot raise may go.
+        if not _cannot_raise(value) or _loaded_names(value) & varying:
             return None
         if target.id in _loaded_names(node.iter):
             return None

@@ -1,0 +1,26 @@
+# fuzz: path=standalone seed=2009 (sorted of a generator of numbers was taken to call Python code)
+from collections.abc import Iterator
+
+
+def countdown(n: int) -> Iterator[int]:
+    while n > 0:
+        yield n
+        n -= 2
+
+
+def a(n: int) -> int:
+    total = 0
+    for x in sorted(countdown(n)):
+        total = total * 10 + x
+    return total
+
+
+def b(n: int) -> int:
+    return min(countdown(n % 9 + 1)) + max(x * 3 for x in range(n % 9 + 1))
+
+
+def main() -> None:
+    print(a(7), b(7))
+
+
+main()

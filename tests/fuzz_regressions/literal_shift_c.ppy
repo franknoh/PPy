@@ -1,0 +1,10 @@
+# fuzz: path=c seed=109 (a literal shifted by 32 or more was a 32-bit shift in C)
+def shifted(n: int) -> int:
+    return (9 << (n % 49)) + (-8 >> (n % 40)) + (7 >> (n % 60))
+
+
+def main() -> None:
+    print(shifted(46), shifted(37), shifted(3))
+
+
+main()

@@ -226,6 +226,42 @@ job runs, because counts can differ between versions.
 The dogfood run is not part of `check.sh`, because a minute of migration on
 every local run is too much. CI runs it as its own job on every push.
 
+## Differential fuzzing
+
+`python scripts/fuzz.py --seed 0 --count 25` writes 25 generated programs
+(`ppy_compiler.testing.fuzz`) and runs each under CPython, the Python
+backend, `ppy run`, a standalone binary, and emitted C and C++ built with
+AddressSanitizer and UBSan (by clang where it is installed: GCC 13 at
+`-O1` reports a stack-use-after-scope in a loop nest that clang, and GCC
+at other levels, do not). The programs are small and strict, and each
+function lowers natively: ints past 64 bits, NaN and the infinities,
+strings and f-strings, the `ppy` collections, a value class, an object
+class, a generic function, `try` with `except`, `else`, and `finally`,
+`raise` and `assert`, and generators consumed by a loop, a reduction,
+`next`, or a collection, all printed from `main()`. A seed is the
+same program on every machine (`--show SEED` prints it).
+
+Every path is held to CPython's output, exit status, and last line of
+stderr. One difference is allowed, because it is documented: where CPython
+computes an integer past 64 bits, a standalone binary and emitted C stop
+with `OverflowError: the result does not fit in a 64-bit integer`, having
+printed what CPython printed before it. A C binary that exits cleanly is
+also run again with leak detection. One that stops on an error is not,
+since the exit frees what it held.
+
+A program that disagrees is reduced (`minimize` deletes statements while
+the difference holds) and saved under `tests/fuzz_regressions/`, named for
+the path it failed on. Replace the saved seed with a short, named program
+once the cause is known. `tests/test_fuzz.py` runs a few seeds on every
+path in CI and replays every saved file; `--replay` does the same from the
+command line.
+
+Run it in batches of a few dozen seeds. Every path of every program runs
+one after another in a process group of its own, under a timeout and, where
+`systemd-run` can make one, a 2 GB memory limit. At the timeout the whole
+group is killed, children `ppy run` started included, and a path that ran
+out of time where CPython finished is a finding like any other.
+
 ## Measurements
 
 ### The benchmark tables

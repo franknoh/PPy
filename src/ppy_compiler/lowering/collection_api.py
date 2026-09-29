@@ -400,14 +400,15 @@ class CollectionApiLowering(CollectionLowering):
         if self._open():  # type: ignore[attr-defined]
             core.br(self.b, Successor(latch))
         self.b.at_end(latch)  # type: ignore[attr-defined]
-        for cursor in cursors:
-            self._advance(cursor)
-        if plan.counter is not None:
-            count = core.load(self.b, plan.counter)
-            core.store(
-                self.b, core.add(self.b, count, self._word(1), overflow="wrap"), plan.counter
-            )
-        core.br(self.b, Successor(header))
+        if not self._dead_latch(latch):  # type: ignore[attr-defined]
+            for cursor in cursors:
+                self._advance(cursor)
+            if plan.counter is not None:
+                count = core.load(self.b, plan.counter)
+                core.store(
+                    self.b, core.add(self.b, count, self._word(1), overflow="wrap"), plan.counter
+                )
+            core.br(self.b, Successor(header))
         self.b.at_end(done)  # type: ignore[attr-defined]
         for source in plan.sources:
             self._let_go(source.slot)
@@ -1182,13 +1183,16 @@ class CollectionApiLowering(CollectionLowering):
                 self._word(shape.floats),
                 self._word(shape.handles),
             )
-            beats = self._rt("ppy_coll_before", (*ordered, *widths))
-            first = core.bitwise(
-                self.b, "xor", core.load(self.b, seen), core.const(self.b, True, BOOL)
-            )
-            take = core.bitwise(self.b, "or", first, core.cmp(self.b, "ne", beats, self._word(0)))
             chosen = self._block(f"{operation}.take")  # type: ignore[attr-defined]
+            compare = self._block(f"{operation}.compare")  # type: ignore[attr-defined]
             after = self._block(f"{operation}.next")  # type: ignore[attr-defined]
+            # The first element is taken as it is: `best` holds nothing yet,
+            # and comparing with it would read memory never written (a string's
+            # would be a pointer to nowhere).
+            core.cond_br(self.b, core.load(self.b, seen), Successor(compare), Successor(chosen))
+            self.b.at_end(compare)  # type: ignore[attr-defined]
+            beats = self._rt("ppy_coll_before", (*ordered, *widths))
+            take = core.cmp(self.b, "ne", beats, self._word(0))
             core.cond_br(self.b, take, Successor(chosen), Successor(after))
             self.b.at_end(chosen)  # type: ignore[attr-defined]
             self._write(best_address, shape, items[0][1])

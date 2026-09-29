@@ -422,10 +422,12 @@ def _module_shape(
             # What a generator's annotation names; nothing runs for it natively.
             if names in {"collections.abc", "typing"} and set(listed) <= _ITERATOR_NAMES:
                 continue
-            # `gc.collect()` is the collections runtime's collector natively.
+            # `gc.collect()` is the collections runtime's collector natively,
+            # and `math.sqrt` and its kin are machine instructions or libm; a
+            # use that does not lower is refused with its function.
             if (
                 isinstance(statement, ast.Import)
-                and listed == ["gc"]
+                and listed in (["gc"], ["math"])
                 and not statement.names[0].asname
             ):
                 continue
