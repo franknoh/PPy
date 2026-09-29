@@ -230,7 +230,20 @@ def _sorted(args: Sequence[Arg]) -> BuiltinResult:
         # A `ppy` collection's elements compare as the runtime compares them:
         # numbers, tuples, and ordered dataclasses, with no hook to call.
         return BuiltinResult(T.list_of(element), Facts(), _ALLOC)
+    if _compares_without_hooks(element):
+        # Numbers, strings, and tuples of them order themselves, from any
+        # iterable: no `__lt__` of the program's runs.
+        return BuiltinResult(T.list_of(element), Facts(), _ALLOC)
     return BuiltinResult(T.list_of(element), Facts(), _ALLOC | EffectSet.of(Effect.PYTHON_CALLBACK))
+
+
+def _compares_without_hooks(t: T.Type) -> bool:
+    base = T.strip_literal(t)
+    if base in (T.INT, T.FLOAT, T.BOOL, T.STR):
+        return True
+    if isinstance(base, T.Tuple_) and not base.homogeneous and base.items:
+        return all(_compares_without_hooks(item) for item in base.items)
+    return False
 
 
 def _reversed(args: Sequence[Arg]) -> BuiltinResult:

@@ -445,14 +445,20 @@ class _Generator:
         elif roll < 0.62:
             w.put(f"{name}: int = sum({source})")
         elif roll < 0.74:
-            w.put(f"{name}: int = {rng.choice(('min', 'max'))}({source}, default=-1)")
+            # Never empty: `min` of nothing is CPython's ValueError, which the
+            # `try` forms already reach.
+            nonempty = source.replace("% 9)", "% 9 + 1)")
+            w.put(f"{name}: int = {rng.choice(('min', 'max'))}({nonempty})")
         elif roll < 0.84:
             w.put(f"{name}: int = next({source}, {self.int_expr(scope, 2)})")
         elif roll < 0.92:
             test = rng.choice(("any", "all"))
             w.put(f"{name}: int = 1 if {test}(x > 4 for x in {source}) else 0")
         else:
-            w.put(f"{name}: int = len(sorted({source}))")
+            w.put(f"{name}: int = 0")
+            item = self.name("x")
+            w.put(f"for {item} in sorted({source}):")
+            w.put(f"    {name} = {name} * 7 + {item}")
         scope.ints.append(name)
 
     def vec_statements(self, w: _Writer, scope: _Scope) -> None:
