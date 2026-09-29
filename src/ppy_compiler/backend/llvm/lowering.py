@@ -446,7 +446,7 @@ def called_back_only(info: FunctionInfo) -> bool:
 
 
 def _crossing_costs_more(
-    info: FunctionInfo, layouts: ClassLayouts | None, written: set[str]
+    info: FunctionInfo, layouts: ClassLayouts | None, written: frozenset[str]
 ) -> str | None:
     """Why copying the function's containers across the boundary would cost more
     than running it natively saves, or None when it pays.

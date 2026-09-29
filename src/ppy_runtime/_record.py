@@ -22,6 +22,8 @@ _MISSING = object()
 class _Field:
     __slots__ = ("default_factory",)
 
+    default_factory: Any
+
     def __init__(self, default_factory: Any) -> None:
         self.default_factory = default_factory
 
