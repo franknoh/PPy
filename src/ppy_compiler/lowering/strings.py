@@ -19,7 +19,9 @@ sequence of string handles, indexed from either end as a list is.
 from __future__ import annotations
 
 import ast
+import contextlib
 import re
+from collections.abc import Iterator
 
 from ..analysis import types as T
 from ..backend.llvm.lowering import Unsupported
@@ -159,6 +161,16 @@ class StringLowering:
         ).result
         return pointer, self._word(len(data))  # type: ignore[attr-defined]
 
+    @contextlib.contextmanager
+    def _at_entry(self) -> Iterator[None]:
+        """Emit into the entry block for the duration: what is made once per call."""
+        here = self.b  # type: ignore[attr-defined]
+        self.__dict__["b"] = self._entry_builder()  # type: ignore[attr-defined]
+        try:
+            yield
+        finally:
+            self.__dict__["b"] = here
+
     def _string_literal(self, text: str) -> Value:
         """A literal's handle, looked up once, in the entry block: the runtime
         keeps every literal for good, so one lookup serves every use, and a
@@ -167,13 +179,9 @@ class StringLowering:
         found: dict[str, Value] = self.__dict__.setdefault("_literals", {})
         if text in found:
             return found[text]
-        here = self.b  # type: ignore[attr-defined]
-        self.b = self._entry_builder()  # type: ignore[attr-defined]
-        try:
+        with self._at_entry():
             data, length = self._text_data(text)
             made = self._rt("ppy_str_interned", (data, length), HANDLE)  # type: ignore[attr-defined]
-        finally:
-            self.b = here
         found[text] = made
         return made
 
@@ -516,12 +524,8 @@ class StringLowering:
         found = self.__dict__.get("_ascii_table_value")
         if found is not None:
             return found
-        here = self.b  # type: ignore[attr-defined]
-        self.b = self._entry_builder()  # type: ignore[attr-defined]
-        try:
+        with self._at_entry():
             found = self._rt("ppy_str_ascii_table", (), HANDLE)  # type: ignore[attr-defined]
-        finally:
-            self.b = here
         self.__dict__["_ascii_table_value"] = found
         return found
 
