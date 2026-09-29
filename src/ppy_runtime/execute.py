@@ -9,10 +9,9 @@ from __future__ import annotations
 import builtins
 import sys
 import types
-from dataclasses import dataclass
 from pathlib import Path
-from typing import Protocol
 
+from ._record import record as dataclass
 from .generated import (
     BINDER_NAME,
     EXPORTED_BINDER,
@@ -20,6 +19,12 @@ from .generated import (
     REGION_BINDER,
     GeneratedModule,
 )
+
+TYPE_CHECKING = False
+if TYPE_CHECKING:
+    from typing import Protocol
+else:
+    Protocol = object
 
 __all__ = ["ExecutionResult", "NativeBinder", "execute", "install_loader"]
 
@@ -89,11 +94,13 @@ class _GeneratedFinder:
         self.natives = natives
 
     def find_spec(self, fullname: str, path=None, target=None):  # type: ignore[no-untyped-def]
-        from importlib.machinery import ModuleSpec
-
         generated = self.modules.get(fullname)
         if generated is None:
             return None
+        # Imported only for a module of ours: the import itself asks the
+        # finders, this one included, for what it loads.
+        from importlib.machinery import ModuleSpec  # pylint: disable=import-outside-toplevel
+
         spec = ModuleSpec(
             fullname, GeneratedLoader(generated, self.natives), origin=str(generated.source_path)
         )

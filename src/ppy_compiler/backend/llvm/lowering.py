@@ -26,8 +26,9 @@ may not mutate it (spec 13.2, 13.3, 13.5).
 from __future__ import annotations
 
 import ast
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, field
 
+from ppy_runtime._record import replace
 from ppy_runtime.abi import STATUS_FALLBACK, STATUS_OK, NativeParam, NativeSignature
 from ppy_runtime.collection_boundary import RETURNS_NOTHING
 from ppy_runtime.collection_boundary import parse as crossing_spec

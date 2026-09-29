@@ -7,12 +7,11 @@ interpreter compatibility, and file presence -- nothing that reads source.
 
 from __future__ import annotations
 
-import json
 import os
 import sys
-from dataclasses import dataclass
 from pathlib import Path
 
+from ._record import record as dataclass
 from .abi import NativeParam, NativeSignature
 
 __all__ = ["Manifest", "ManifestError", "NativeEntry", "RegionLibrary", "load"]
@@ -94,9 +93,49 @@ def _signature(payload: dict) -> NativeSignature:
     )
 
 
-def load(path: Path) -> Manifest:
+#: Beside a manifest, written by the launcher's first run from it: the manifest
+#: and its generated modules as parsed, and their compiled code.
+LAUNCH_CACHE = "launch.marshal"
+
+
+#: `launch_cache` by manifest path, once per process: the cache holds every
+#: module's code, and decoding it once is the point of it.
+_LAUNCH_CACHES: dict[str, dict | None] = {}  # type: ignore[type-arg]
+
+
+def launch_cache(path: Path) -> dict | None:  # type: ignore[type-arg]
+    """The launcher's cache for the manifest at `path`, when it was written for
+    exactly this manifest file and this interpreter."""
+    key = str(path)
+    if key not in _LAUNCH_CACHES:
+        _LAUNCH_CACHES[key] = _read_launch_cache(path)
+    return _LAUNCH_CACHES[key]
+
+
+def _read_launch_cache(path: Path) -> dict | None:  # type: ignore[type-arg]
+    import marshal  # pylint: disable=import-outside-toplevel
+
     try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
+        stat = os.stat(path)
+        with open(path.with_name(LAUNCH_CACHE), "rb") as held:
+            cached = marshal.load(held)
+    except (OSError, EOFError, ValueError, TypeError):
+        return None
+    stamp = (stat.st_size, stat.st_mtime_ns, sys.version)
+    if not isinstance(cached, dict) or cached.get("stamp") != stamp:
+        return None
+    return cached
+
+
+def load(path: Path) -> Manifest:
+    cached = launch_cache(path)
+    try:
+        if cached is not None:
+            payload = cached["payload"]
+        else:
+            import json  # pylint: disable=import-outside-toplevel
+
+            payload = json.loads(path.read_text(encoding="utf-8"))
     except OSError as exc:
         raise ManifestError(f"cannot read the binding manifest {path}: {exc}") from exc
     except ValueError as exc:

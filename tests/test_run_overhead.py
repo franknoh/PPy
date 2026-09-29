@@ -106,32 +106,149 @@ def test_the_warm_path_takes_only_a_plain_run(argv: list[str]):
 
 
 def test_the_warm_path_runs_only_what_nothing_since_has_changed(tmp_path: Path, monkeypatch):
+    """The signature covers the artifact's own sources, the directories its
+    imports resolve through, and the project's configuration; not the rest of
+    the project, and not a source edited while the artifact was built."""
+    import hashlib
+    import json
+
     monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path / "cache"))
     project = tmp_path / "project"
     project.mkdir()
     (project / "pyproject.toml").write_text("[tool.ppy]\n", encoding="utf-8")
     program = project / "prog.ppy"
     program.write_text("print(1)\n", encoding="utf-8")
-    other = project / "helper.ppy"
-    other.write_text("X = 1\n", encoding="utf-8")
-    manifest = tmp_path / "ppy-bindings.json"
-    manifest.write_text("{}", encoding="utf-8")
+    unrelated = project / "notes" / "other.ppy"
+    unrelated.parent.mkdir()
+    unrelated.write_text("X = 1\n", encoding="utf-8")
+    manifest = tmp_path / "run" / "ppy-bindings.json"
+    manifest.parent.mkdir()
 
-    taken = fastrun.signature(str(program))
-    fastrun.remember(str(program), taken, str(manifest))
-    assert fastrun.signature(str(program)) == taken
-    # Any source under the root, a configuration file, or a new file changes it.
-    other.write_text("X = 22\n", encoding="utf-8")
-    assert fastrun.signature(str(program)) != taken
-    other.write_text("X = 1\n", encoding="utf-8")
-    os.utime(other, ns=(0, 0))
-    assert fastrun.signature(str(program)) != taken
-    (project / "new.ppy").write_text("", encoding="utf-8")
-    assert fastrun.signature(str(program)) != taken
+    def built_from(text: str) -> None:
+        digest = hashlib.blake2b(text.encode(), digest_size=16).hexdigest()
+        program_section = {"sources": {str(program): digest}, "search_paths": [str(project)]}
+        manifest.write_text(json.dumps({"program": program_section}), encoding="utf-8")
+
+    def index():  # type: ignore[no-untyped-def]
+        import marshal
+
+        with open(fastrun._index_path(str(program)), "rb") as held:
+            return marshal.load(held)
+
+    built_from("print(1)\n")
+    fastrun.remember(str(program), str(manifest))
+    _version, sources, directories, taken, _manifest, _light = index()
+    assert sources == (str(program),)
+    assert fastrun.signature(str(program), sources, directories) == taken
+    # A file the program does not import changes nothing.
+    unrelated.write_text("X = 22\n", encoding="utf-8")
+    assert fastrun.signature(str(program), sources, directories) == taken
+    # Its own source, a new file where imports resolve, or the configuration do.
+    program.write_text("print(2)\n", encoding="utf-8")
+    assert fastrun.signature(str(program), sources, directories) != taken
+    program.write_text("print(1)\n", encoding="utf-8")
+    os.utime(program, ns=(0, 0))
+    assert fastrun.signature(str(program), sources, directories) != taken
+    fastrun.remember(str(program), str(manifest))
+    _version, sources, directories, taken, _manifest, _light = index()
+    (project / "shadow.ppy").write_text("", encoding="utf-8")
+    assert fastrun.signature(str(program), sources, directories) != taken
+    fastrun.remember(str(program), str(manifest))
+    _version, sources, directories, taken, _manifest, _light = index()
+    (project / "pyproject.toml").write_text("[tool.ppy]\nstrict = false\n", encoding="utf-8")
+    assert fastrun.signature(str(program), sources, directories) != taken
+
+    # A source that no longer matches what the build read is not remembered.
+    os.unlink(fastrun._index_path(str(program)))
+    built_from("print(0)\n")
+    fastrun.remember(str(program), str(manifest))
+    assert not os.path.exists(fastrun._index_path(str(program)))
     # A remembered manifest that is gone is a miss, not an error.
+    built_from("print(1)\n")
+    fastrun.remember(str(program), str(manifest))
     manifest.unlink()
     monkeypatch.chdir(project)
     assert fastrun.try_warm(["run", "prog.ppy"]) is None
+
+
+LIGHT_PROGRAM = """
+def shout(text: str) -> str:
+    return text.upper() + "!"
+
+
+def main() -> None:
+    import sys
+
+    print(shout("light"), sys.argv[1:])
+    raise SystemExit(3)
+
+
+main()
+"""
+
+
+def test_a_program_python_never_calls_natively_runs_without_the_launcher(tmp_path: Path):
+    """No native entry crosses to Python here, so the build writes a light plan,
+    and a warm run imports none of the launcher, `json`, or `ctypes`."""
+    import subprocess
+    import sys
+
+    (tmp_path / "pyproject.toml").write_text("[tool.ppy]\nstrict = true\n", encoding="utf-8")
+    (tmp_path / "prog.ppy").write_text(textwrap.dedent(LIGHT_PROGRAM).lstrip(), encoding="utf-8")
+    env = {**os.environ, "XDG_CACHE_HOME": str(tmp_path / "cache")}
+    env.pop("PPY_LOWERING", None)
+    run = [sys.executable, "-m", "ppy_compiler", "run", "prog.ppy", "--", "a", "b"]
+    first = subprocess.run(run, cwd=tmp_path, capture_output=True, text=True, env=env, check=False)
+    assert first.returncode == 3, first.stderr
+    assert list((tmp_path / ".ppy-cache" / "run").glob("*/light.marshal"))
+    traced = subprocess.run(
+        [sys.executable, "-X", "importtime", *run[1:]],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        env=env,
+        check=False,
+    )
+    assert traced.returncode == 3
+    assert traced.stdout.strip().splitlines()[-1] == "LIGHT! ['a', 'b']"
+    imported = {line.rsplit("|", 1)[-1].strip() for line in traced.stderr.splitlines()}
+    assert not imported & {"ppy_runtime.launch", "json", "ctypes", "dataclasses"}
+
+
+def test_the_launcher_caches_what_it_parsed_and_compiled(tmp_path: Path):
+    """A warm run of a program with native entries reads the manifest and its
+    compiled modules from the launcher's cache: no `json`, no `ast`."""
+    import subprocess
+    import sys
+
+    (tmp_path / "pyproject.toml").write_text("[tool.ppy]\nstrict = true\n", encoding="utf-8")
+    # No `import ppy` here: `ppy` imports `dataclasses` itself, under `python` too.
+    source = (
+        "def total_squares(n: int) -> int:\n    s = 0\n    for i in range(n):\n"
+        "        s += i * i\n    return s\n\n\nprint(total_squares(300))\n"
+    )
+    (tmp_path / "prog.ppy").write_text(source, encoding="utf-8")
+    env = {**os.environ, "XDG_CACHE_HOME": str(tmp_path / "cache")}
+    env.pop("PPY_LOWERING", None)
+    run = [sys.executable, "-m", "ppy_compiler", "run", "prog.ppy"]
+    for _ in range(2):
+        done = subprocess.run(
+            run, cwd=tmp_path, capture_output=True, text=True, env=env, check=False
+        )
+        assert done.returncode == 0, done.stderr
+    assert list((tmp_path / ".ppy-cache" / "run").glob("*/launch.marshal"))
+    traced = subprocess.run(
+        [sys.executable, "-X", "importtime", *run[1:]],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        env=env,
+        check=False,
+    )
+    assert traced.stdout.strip().splitlines()[-1] == str(sum(i * i for i in range(300)))
+    imported = {line.rsplit("|", 1)[-1].strip() for line in traced.stderr.splitlines()}
+    assert "ppy_runtime.launch" in imported
+    assert not imported & {"json", "ast", "dataclasses", "inspect"}
 
 
 def test_the_static_characters_are_where_the_inlined_code_looks():

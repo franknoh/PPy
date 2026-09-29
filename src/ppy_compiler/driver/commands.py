@@ -267,11 +267,8 @@ def run_llvm_backend(
     if not file.is_file():
         reporter.emit(Diagnostic("E1002", Severity.ERROR, f"{file} is not a file"))
         return 2
-    from .fastrun import remember, signature
+    from .fastrun import remember
 
-    # Taken before the key is: a file edited while this builds makes the next
-    # run miss the index rather than hit a stale artifact.
-    taken = signature(str(file.resolve())) if getattr(options, "plain_run", False) else None
     warm = locate(file, options)
     project = open_project(file, config_overrides=_overrides(options))
     _answer_removed_road(project, reporter)
@@ -309,8 +306,10 @@ def run_llvm_backend(
                 opt_level=level,  # type: ignore[arg-type]
             )
             if manifest is not None:
-                if taken is not None:
-                    remember(str(file.resolve()), taken, str(manifest))
+                if getattr(options, "plain_run", False):
+                    # Checked against what the build read, so an edit made
+                    # while it ran is not remembered as built.
+                    remember(str(file.resolve()), str(manifest))
                 return launch(manifest, program_args)
         return compile_and_run(
             bundle,

@@ -484,14 +484,14 @@ def main(argv: list[str] | None = None) -> int:
         # the last run of this same program left in the cache.
         manifest = getattr(options, "prebuilt", None)
         if manifest is None and options.file.is_file() and not options.profile:
-            from .fastrun import remember, signature
             from .warm import locate
 
-            taken = signature(str(options.file.resolve())) if options.plain_run else None
             manifest = locate(options.file, options).manifest
-            if manifest is not None and taken is not None:
+            if manifest is not None and options.plain_run:
+                from .fastrun import remember
+
                 # The next `ppy run FILE` finds it without this parser.
-                remember(str(options.file.resolve()), taken, str(manifest))
+                remember(str(options.file.resolve()), str(manifest))
         if manifest is not None:
             from ppy_runtime.launch import main as launch
 
