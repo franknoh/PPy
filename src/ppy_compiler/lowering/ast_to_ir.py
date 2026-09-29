@@ -42,6 +42,7 @@ from ..backend.llvm.lowering import (
     _signature,
     eligible,
     should_lower_native,
+    written_params,
 )
 from ..backend.llvm.obligations import BinOp, Const, Obligation, Relation, Term, Var, variables
 from ..backend.llvm.prover import Prover
@@ -87,8 +88,8 @@ from ..ir.raising import OVERFLOW, empty_extreme, negative_shift, zero_division
 from ..ir.transforms.autodiff import AutodiffError, differentiate
 from ..plugins.base import DialectOperationSpec, PluginError, PluginRegistry
 from .abi import signature_from_ir
-from .collection_api import CollectionApiLowering
 from .collections import HANDLE, Held
+from .containers import ContainerLowering
 from .exceptions import ExceptionLowering, uses_exceptions
 from .generators import GeneratorLowering
 from .strings import StringLowering
@@ -538,9 +539,15 @@ class Frontend:
         self, info: FunctionInfo, analysis: FunctionAnalysis | None = None
     ) -> IRSignature:
         parameters = []
+        written = written_params(analysis)
         for parameter in info.params:
             ir_type = self.lower_type(parameter.type, parameter.facts)
-            native_param = _native_param(parameter.name, parameter.type, self.layouts)
+            native_param = _native_param(
+                parameter.name, parameter.type, self.layouts, parameter.name in written
+            )
+            if native_param is not None and native_param.is_handle:
+                # A list of numbers the function writes is held by handle, not lent.
+                ir_type = _param_type(native_param)
             if native_param is not None and _param_type(native_param) != ir_type:
                 native_param = None
             parameters.append(IRParameter(parameter.name, ir_type, native_param))
@@ -554,6 +561,9 @@ class Frontend:
                 else facts.shape,
             )
         result = self.lower_type(info.ret, facts)
+        if _return_atoms(info.ret, self.layouts) == ("handle",):
+            # A list of numbers handed back is a new list, by handle.
+            result = HANDLE
         results = () if result == VOID else (result,)
         native = None
         if (
@@ -621,7 +631,14 @@ class Frontend:
         if native is None or self.standalone or not self.cpu_compatible:
             return None
         texts = [p.is_handle and p.element == "str" for p in native.parameters]
-        if any(p.is_handle and not text for p, text in zip(native.parameters, texts, strict=True)):
+        # A collection parameter that crosses on its own (a `dict[str, int]`)
+        # passes through the thunk as its handle.
+        from ppy_runtime.collection_boundary import parse  # pylint: disable=import-outside-toplevel
+
+        if any(
+            p.is_handle and not text and parse(p.element) is None
+            for p, text in zip(native.parameters, texts, strict=True)
+        ):
             return None
         returns_text = T.strip_literal(info.ret) == T.STR
         if not any(texts) and not returns_text:
@@ -688,6 +705,8 @@ class Frontend:
             symbol=f"{native.symbol}_py",
             parameters=parameters,
             returns=(TEXT,) if returns_text else native.returns,
+            # A string handed back is the thunk's copy of its bytes, not a handle.
+            returned="" if returns_text else native.returned,
         )
 
     def declare(self, info: FunctionInfo, signature: NativeSignature | IRSignature) -> IRFunction:
@@ -1042,9 +1061,7 @@ class _GuardSite:
         core.br(self.b, Successor(setup))
 
 
-class _FunctionLowering(
-    ExceptionLowering, GeneratorLowering, CollectionApiLowering, StringLowering
-):
+class _FunctionLowering(ExceptionLowering, GeneratorLowering, ContainerLowering, StringLowering):
     """Lowers one function body."""
 
     def __init__(
@@ -1353,6 +1370,8 @@ class _FunctionLowering(
                 self._for(node)
             case ast.Pass():
                 return
+            case ast.Delete():
+                self._delete(node)
             case ast.Expr(value=ast.Constant()):
                 return
             case ast.Expr(value=ast.Call() | ast.Await()):
@@ -1424,7 +1443,9 @@ class _FunctionLowering(
         if len(node.targets) != 1:
             raise Unsupported("chained assignment has no native lowering")
         target = node.targets[0]
-        if isinstance(target, ast.Name) and self._make_collection(target.id, node.value):
+        if isinstance(target, ast.Name) and self._make_collection(
+            target.id, node.value, self._type_of(target)
+        ):
             return
         if self._unpack_strings(target, node.value):
             return
@@ -2103,6 +2124,16 @@ class _FunctionLowering(
                     if isinstance(node.slice, ast.Slice):
                         raise Unsupported("slicing a buffer allocates, so it stays boxed")
                     return self._buffer_element(node.value.id, self._expr(node.slice))
+                if isinstance(node.slice, ast.Constant) and isinstance(node.slice.value, int):
+                    # `pairs[-1][1]`: an item of a tuple an expression gave.
+                    held = self._expr(node.value)
+                    if isinstance(held.type, TupleType):
+                        count = len(held.type.items)
+                        index = (
+                            node.slice.value + count if node.slice.value < 0 else node.slice.value
+                        )
+                        if 0 <= index < count:
+                            return core.tuple_extract(self.b, held, index)
                 raise Unsupported("subscripting this value has no native lowering")
         raise Unsupported(f"`{type(node).__name__}` has no native lowering")
 
@@ -2473,6 +2504,10 @@ class _FunctionLowering(
             consumed = self._generator_consumer(target, node)
             if consumed is not None:
                 return consumed
+        if target in {"any", "all"}:
+            decided = self._any_all(target, node)
+            if decided is not None:
+                return decided
         if target in {"len", "sum", "min", "max"} and len(node.args) == 1:
             argument = node.args[0]
             if isinstance(argument, ast.Name) and argument.id in self.buffers:
@@ -3567,6 +3602,10 @@ class _FunctionLowering(
                 arguments.append(self._coerce_type(self._expr(argument), parameter.type))
                 continue
             if parameter.is_buffer:
+                view = self._list_view(argument, parameter.element)
+                if view is not None:
+                    arguments.append(view)
+                    continue
                 if not isinstance(argument, ast.Name) or argument.id not in self.buffers:
                     raise Unsupported("a buffer argument must be a buffer this function holds")
                 buffer = self.buffers[argument.id]
