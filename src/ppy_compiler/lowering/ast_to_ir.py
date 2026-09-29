@@ -2466,6 +2466,7 @@ class _FunctionLowering(ContainerLowering, StringLowering):
                 width = len(self.tuples[argument.id].type.pointee.items)  # type: ignore[attr-defined]
                 return self._int_constant(width)
         if target in {"sum", "min", "max"}:
+            node = self._materialized(node)
             reduced = self._reduction(target, node)
             if reduced is not None:
                 return reduced

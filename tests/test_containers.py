@@ -220,8 +220,16 @@ def flags(n: int) -> int:
     return count + (1 if any(seen) else 0) + (1 if all(seen) else 0)
 
 
+def generated(n: int) -> float:
+    rows = [[j for j in range(i % 4)] for i in range(n)]
+    total = sum(1 for r in rows if r) + max(len(r) * 2 for r in rows)
+    again = [[len(r) + k for r in rows] for k in range(3)]
+    total += sum(again[2]) + len(again)
+    return total + min(x - 3 for x in range(n)) + sum(x * 0.1 for x in range(n))
+
+
 def main() -> None:
-    print(walks(20), words(12), flags(10))
+    print(walks(20), words(12), flags(10), generated(9))
 
 
 main()
@@ -286,7 +294,7 @@ main()
 PROGRAMS = {
     "big": (BIG, ["lists", "nested", "dicts", "sets"]),
     "params": (PARAMS, ["histogram", "top", "evens", "grow", "pipeline", "shout"]),
-    "iters": (ITERS, ["walks", "words", "flags"]),
+    "iters": (ITERS, ["walks", "words", "flags", "generated"]),
     "alias": (ALIAS, ["aliases"]),
 }
 

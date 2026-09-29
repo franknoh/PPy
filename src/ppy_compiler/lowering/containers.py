@@ -253,10 +253,18 @@ class ContainerLowering(CollectionApiLowering):
             held = self.collections.pop(spelled, None)
             if held is not None:
                 self._release(core.load(self.b, held.slot))
+                self._clear(held.slot)
         slots.update(outer_slots)
         self.collections.update(outer_held)
         held = self.collections.pop(name)
-        return core.load(self.b, held.slot)
+        made = core.load(self.b, held.slot)
+        # The container is the caller's now. A comprehension inside a loop runs
+        # again over the same slot, which must not let go of it a second time.
+        self._clear(held.slot)
+        return made
+
+    def _clear(self, slot: Value) -> None:
+        core.store(self.b, self._rt("ppy_coll_none", (), HANDLE), slot)
 
     # -- order ---------------------------------------------------------------------------
 
@@ -393,6 +401,24 @@ class ContainerLowering(CollectionApiLowering):
         )
 
     # -- any and all ----------------------------------------------------------------
+
+    def _materialized(self, node: ast.Call) -> ast.Call:
+        """`sum(e for x in xs)`: `sum`, `min`, and `max` take every element of
+        a generator in order, so the list comprehension of the same element
+        gives the same answer. `any` and `all` stop early and are left out."""
+        if len(node.args) != 1 or not isinstance(node.args[0], ast.GeneratorExp):
+            return node
+        generator = node.args[0]
+        listed = getattr(generator, "_ppy_listed", None)
+        if listed is None:
+            listed = ast.copy_location(ast.ListComp(generator.elt, generator.generators), generator)
+            # The checker's types are keyed by node, so the list gets one, and
+            # the generator keeps the list alive for as long as that key holds.
+            element = self._type_of(generator.elt)
+            self.frontend.analysis.node_types[id(listed)] = T.instance("list", element)
+            generator._ppy_listed = listed  # type: ignore[attr-defined]
+        called = ast.Call(node.func, [listed], node.keywords)
+        return ast.copy_location(called, node)
 
     def _any_all(self, name: str, node: ast.Call) -> Value | None:
         """`any(c)` and `all(c)` of a collection of numbers, bools, or strings:

@@ -37,7 +37,7 @@ a class Python can hash (see [Collections](collections.md#what-a-collection-hold
 |---|---|
 | displays | `[a, b]`, `{k: v}`, `{a, b}`, and `[]`, `{}`, `set()` given a type by the name they go to |
 | repetition | `[0] * n`, `[[0] * n for _ in range(m)]` |
-| comprehensions | `[e for x in xs if c]`, `{k: v for ...}`, `{e for ...}`, nested, with the comprehension's names its own |
+| comprehensions | `[e for x in xs if c]`, `{k: v for ...}`, `{e for ...}`, nested, with the comprehension's names its own, and a generator given to `sum`, `min`, or `max` |
 | constructors | `list(xs)`, `set(xs)`, `dict(d)` |
 | a list | `xs[i]` and `xs[i] = v` from either end, slices with steps, `append`, `extend`, `insert`, `pop()`, `pop(i)`, `remove`, `index`, `count`, `sort()` with `key=` and `reverse=`, `reverse`, `clear`, `copy`, `del xs[i]`, `+` |
 | a dict | `d[k]`, `d[k] = v`, `del d[k]`, `get(k, default)`, `setdefault`, `pop(k)`, `pop(k, default)`, `keys()`, `values()`, `items()`, `update`, `copy`, `clear` |
@@ -112,6 +112,8 @@ their quotes, tuples, nested containers, and dataclasses shown as
 - `d.get(k)` with no default, which may give `None`, stays in Python; with a
   default it is native.
 - `sort(key=...)` natively takes a key giving numbers or tuples of them.
+- `any` and `all` of a generator stay in Python, because they stop at the
+  first answer and a list built first would not; of a list they are native.
 - A standalone binary's `KeyError` for a string key says `KeyError` without
   the key.
 - A container holding objects or dataclasses keeps a Python caller on the
