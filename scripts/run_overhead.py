@@ -200,6 +200,42 @@ def main() -> None:
 
 main()
 """,
+    "micro_words": """
+def frequencies(words: list[str]) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for word in words:
+        counts[word] = counts.get(word, 0) + 1
+    return counts
+
+
+def busiest(counts: dict[str, int]) -> str:
+    best, most = "", 0
+    for word, count in counts.items():
+        if count > most:
+            best, most = word, count
+    return best
+
+
+def by_length(words: list[str]) -> int:
+    groups: dict[int, list[int]] = {}
+    for i in range(len(words)):
+        groups.setdefault(len(words[i]), []).append(i)
+    return max(len(g) for g in groups.values())
+
+
+def main() -> None:
+    syllables = ["ka", "ri", "to", "ne", "su", "mo", "la", "pe"]
+    words = []
+    for i in range(400000):
+        words.append(syllables[i % 8] + syllables[(i * 7) % 8] + syllables[(i * 13 // 5) % 8])
+    for _ in range(5):
+        counts = frequencies(words)
+    print(len(counts), busiest(counts))
+    print(by_length(words))
+
+
+main()
+""",
 }
 
 
