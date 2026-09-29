@@ -611,7 +611,7 @@ class CollectionLowering:
         if overrides:
             called = self._dispatch(shape, attr, receiver, values, overrides, function)
         else:
-            called = core.call(self.b, function.name, (receiver, *values), results)  # type: ignore[attr-defined]
+            called = self._call_native(function.name, (receiver, *values), results)  # type: ignore[attr-defined]
         for handle in temporaries:
             self._release(handle)
         if not results:
@@ -676,12 +676,12 @@ class CollectionLowering:
             after = self._block(f"{attr}.next")  # type: ignore[attr-defined]
             core.cond_br(self.b, matched, Successor(here), Successor(after))
             self.b.at_end(here)  # type: ignore[attr-defined]
-            made = core.call(self.b, implementation.name, (receiver, *values), results)  # type: ignore[attr-defined]
+            made = self._call_native(implementation.name, (receiver, *values), results)  # type: ignore[attr-defined]
             if slot is not None:
                 core.store(self.b, made.results[0], slot)
             core.br(self.b, Successor(done))
             self.b.at_end(after)  # type: ignore[attr-defined]
-        made = core.call(self.b, function.name, (receiver, *values), results)  # type: ignore[attr-defined]
+        made = self._call_native(function.name, (receiver, *values), results)  # type: ignore[attr-defined]
         if slot is not None:
             core.store(self.b, made.results[0], slot)
         core.br(self.b, Successor(done))
@@ -1146,9 +1146,7 @@ class CollectionLowering:
         `raises` is what CPython's traceback ends with there, `{0}` and on
         standing for `values`; a standalone binary prints it.
         """
-        if not self.frontend.standalone:  # type: ignore[attr-defined]
-            values = ()
-        core.guard(self.b, condition, "bounds", message, raises=raises, values=values)
+        self._guard(condition, "bounds", message, raises=raises, values=values)  # type: ignore[attr-defined]
 
     def _key_report(self, kind: Kind, address: Value) -> tuple[str, tuple[Value, ...]]:
         """A key as `str()` spells it, `5` or `(1, 2)`, and the words it reads."""

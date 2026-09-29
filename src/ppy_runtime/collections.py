@@ -1,4 +1,4 @@
-"""The collections runtime: `collections.c` and `strings.c`, and the ways a
+"""The collections runtime: `collections.c`, `strings.c`, and `exceptions.c`, and the ways a
 program reaches them.
 
 The C text is written once, as ordinary C files, and read here into one
@@ -24,7 +24,11 @@ from pathlib import Path
 __all__ = ["FUNCTIONS", "HEADERS", "library_path", "library_source", "source_path"]
 
 #: The files, beside this module, in the order they are compiled.
-SOURCES = (Path(__file__).with_name("collections.c"), Path(__file__).with_name("strings.c"))
+SOURCES = (
+    Path(__file__).with_name("collections.c"),
+    Path(__file__).with_name("strings.c"),
+    Path(__file__).with_name("exceptions.c"),
+)
 
 #: What every function needs from the C library.
 HEADERS = ("float.h", "math.h", "stdint.h", "stdio.h", "stdlib.h", "string.h")

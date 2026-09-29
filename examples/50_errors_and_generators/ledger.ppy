@@ -1,0 +1,84 @@
+"""A ledger parsed from a generator, with the bad rows caught as exceptions."""
+
+from collections.abc import Iterator
+
+from ppy import HashMap, Vec
+
+ROWS = 500_000
+LIMIT = 1_000_000
+
+
+class BadRow(ValueError):
+    """A row that is not `account,amount`."""
+
+
+def ledger(count: int) -> Iterator[str]:
+    """The rows as text: now and then one without a comma or an amount."""
+    for i in range(count):
+        if i % 97 == 13:
+            yield f"acct{i % 50};oops"
+        elif i % 101 == 7:
+            yield f"acct{i % 50},"
+        else:
+            yield f"acct{i % 50},{(i * 37) % 1000 - 505}"
+
+
+def amount_of(row: str) -> int:
+    account, comma, amount = row.partition(",")
+    if not comma:
+        raise BadRow(f"no comma in {row}")
+    if not amount:
+        raise BadRow(f"no amount for {account}")
+    return int(amount)
+
+
+def settle(count: int) -> str:
+    balances = HashMap[str, int]()
+    bad = 0
+    longest = 0
+    for row in ledger(count):
+        try:
+            amount = amount_of(row)
+        except BadRow as error:
+            bad += 1
+            longest = max(longest, len(str(error)))
+            continue
+        account, _, _ = row.partition(",")
+        balances[account] = balances.get(account, 0) + amount
+    richest = max(balances[name] for name in balances)
+    overdrawn = sum(1 for name in balances if balances[name] < 0)
+    accounts = f"{len(balances)} accounts, {bad} bad rows (longest message {longest})"
+    return f"{accounts}, richest {richest}, overdrawn {overdrawn}"
+
+
+def primes(limit: int) -> Iterator[int]:
+    """The primes below `limit`, by trial division."""
+    for n in range(2, limit):
+        d = 2
+        prime = True
+        while d * d <= n:
+            if n % d == 0:
+                prime = False
+                break
+            d += 1
+        if prime:
+            yield n
+
+
+def gaps(limit: int) -> str:
+    found = Vec[int](primes(limit))
+    widest = max(found[i + 1] - found[i] for i in range(len(found) - 1))
+    twins = sum(1 for i in range(len(found) - 1) if found[i + 1] - found[i] == 2)
+    try:
+        beyond = found[len(found)]
+    except IndexError:
+        beyond = -1
+    return f"{len(found)} primes, widest gap {widest}, {twins} twin pairs, past the end {beyond}"
+
+
+def main() -> None:
+    print(settle(ROWS))
+    print(gaps(LIMIT))
+
+
+main()

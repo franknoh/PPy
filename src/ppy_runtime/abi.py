@@ -10,10 +10,22 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-__all__ = ["STATUS_FALLBACK", "STATUS_OK", "TEXT", "NativeParam", "NativeSignature"]
+__all__ = [
+    "STATUS_FALLBACK",
+    "STATUS_OK",
+    "STATUS_RAISED",
+    "TEXT",
+    "NativeParam",
+    "NativeSignature",
+]
 
 STATUS_OK = 0
 STATUS_FALLBACK = 1
+#: An exception is pending (`ppy_runtime/exceptions.c`): a caller in a `try`
+#: catches it, any other returns this too. The boundary sees a status other
+#: than `STATUS_OK` and runs the call as Python, which raises it; negative, so
+#: it is never read as a sanitizer's.
+STATUS_RAISED = -1
 #: A sanitizer's check failed: `STATUS_SANITIZER_BASE + SANITIZERS.index(kind)`.
 #: Unlike a fallback, the boundary raises; nothing Python could do would be right.
 STATUS_SANITIZER_BASE = 2
