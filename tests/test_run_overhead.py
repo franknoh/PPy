@@ -137,26 +137,42 @@ def test_the_warm_path_runs_only_what_nothing_since_has_changed(tmp_path: Path, 
 
     built_from("print(1)\n")
     fastrun.remember(str(program), str(manifest))
-    _version, sources, directories, taken, _manifest, _light = index()
+    _version, sources, directories, taken, _manifest, _light, racy = index()
     assert sources == (str(program),)
     assert fastrun.signature(str(program), sources, directories) == taken
     # A file the program does not import changes nothing.
     unrelated.write_text("X = 22\n", encoding="utf-8")
     assert fastrun.signature(str(program), sources, directories) == taken
     # Its own source, a new file where imports resolve, or the configuration do.
+    # A same-size edit this soon after `remember` may keep the stats; the file
+    # is racy, and its content decides.
+    assert racy == {str(program): hashlib.blake2b(b"print(1)\n", digest_size=16).hexdigest()}
+    assert fastrun.current(str(program), sources, directories, taken, racy)
     program.write_text("print(2)\n", encoding="utf-8")
-    assert fastrun.signature(str(program), sources, directories) != taken
+    assert not fastrun.current(str(program), sources, directories, taken, racy)
     program.write_text("print(1)\n", encoding="utf-8")
     os.utime(program, ns=(0, 0))
-    assert fastrun.signature(str(program), sources, directories) != taken
+    assert not fastrun.current(str(program), sources, directories, taken, racy)
     fastrun.remember(str(program), str(manifest))
-    _version, sources, directories, taken, _manifest, _light = index()
+    _version, sources, directories, taken, _manifest, _light, racy = index()
     (project / "shadow.ppy").write_text("", encoding="utf-8")
     assert fastrun.signature(str(program), sources, directories) != taken
     fastrun.remember(str(program), str(manifest))
-    _version, sources, directories, taken, _manifest, _light = index()
+    _version, sources, directories, taken, _manifest, _light, racy = index()
     (project / "pyproject.toml").write_text("[tool.ppy]\nstrict = false\n", encoding="utf-8")
     assert fastrun.signature(str(program), sources, directories) != taken
+
+    # A same-size edit that keeps the very stats `remember` took (a coarse clock)
+    # is still seen: the racy source's content is checked.
+    program.write_text("print(1)\n", encoding="utf-8")
+    fastrun.remember(str(program), str(manifest))
+    _version, sources, directories, taken, _manifest, _light, racy = index()
+    kept = os.stat(program)
+    program.write_text("print(7)\n", encoding="utf-8")
+    os.utime(program, ns=(kept.st_atime_ns, kept.st_mtime_ns))
+    assert fastrun.signature(str(program), sources, directories) == taken
+    assert not fastrun.current(str(program), sources, directories, taken, racy)
+    program.write_text("print(1)\n", encoding="utf-8")
 
     # A source that no longer matches what the build read is not remembered.
     os.unlink(fastrun._index_path(str(program)))
