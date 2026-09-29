@@ -752,7 +752,7 @@ def _execute(
     a program that loops natively held a run for a day. Killing the whole
     group ends every process the command made, and the pipes with them.
     """
-    process = subprocess.Popen(
+    with subprocess.Popen(
         _capped(command, "2G"),
         cwd=cwd,
         stdout=subprocess.PIPE,
@@ -760,15 +760,15 @@ def _execute(
         text=True,
         env=env,
         start_new_session=True,
-    )
-    try:
-        out, err = process.communicate(timeout=timeout)
-    except subprocess.TimeoutExpired:
-        _kill_group(process)
-        with contextlib.suppress(subprocess.TimeoutExpired):
-            process.communicate(timeout=10)
-        return TIMED_OUT, "", "timed out"
-    return process.returncode, out, err
+    ) as process:
+        try:
+            out, err = process.communicate(timeout=timeout)
+        except subprocess.TimeoutExpired:
+            _kill_group(process)
+            with contextlib.suppress(subprocess.TimeoutExpired):
+                process.communicate(timeout=10)
+            return TIMED_OUT, "", "timed out"
+        return process.returncode, out, err
 
 
 def _kill_group(process: subprocess.Popen[str]) -> None:
