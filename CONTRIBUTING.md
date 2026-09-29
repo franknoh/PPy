@@ -257,9 +257,10 @@ path in CI and replays every saved file; `--replay` does the same from the
 command line.
 
 Run it in batches of a few dozen seeds. Every path of every program runs
-one after another, each under its own timeout and, where `systemd-run` can
-make one, a 2 GB memory limit, so a runaway program stops without taking
-the machine with it.
+one after another in a process group of its own, under a timeout and, where
+`systemd-run` can make one, a 2 GB memory limit. At the timeout the whole
+group is killed, children `ppy run` started included, and a path that ran
+out of time where CPython finished is a finding like any other.
 
 ## Measurements
 

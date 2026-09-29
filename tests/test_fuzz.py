@@ -10,6 +10,7 @@ Paths whose toolchain this machine lacks are left out, and say so.
 
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 
 import pytest
@@ -19,6 +20,7 @@ from ppy_compiler.backend.llvm.link import c_compiler, standalone_toolchain_stat
 from ppy_compiler.testing.fuzz import (
     ALL_PATHS,
     OVERFLOW_64,
+    TIMED_OUT,
     Result,
     compare,
     generate_program,
@@ -87,3 +89,27 @@ def test_the_one_allowed_difference_is_the_64_bit_overflow():
     wrong = Result("c", "1\n3\n", 1, OVERFLOW_64)
     assert compare({"python": reference, "c": wrong})
     assert set(ALL_PATHS) >= set(_available())
+
+
+def test_a_timeout_ends_every_process_the_path_started(tmp_path: Path):
+    """A child that keeps the output pipe open does not hold the runner past
+    its timeout: the whole process group is killed, and the timeout is a
+    finding, not a pass."""
+    import time  # pylint: disable=import-outside-toplevel
+
+    from ppy_compiler.testing.fuzz import _execute  # pylint: disable=import-outside-toplevel
+
+    script = tmp_path / "spawner.py"
+    script.write_text(
+        "import subprocess, sys, time\n"
+        "subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(600)'])\n"
+        "time.sleep(600)\n",
+        encoding="utf-8",
+    )
+    started = time.monotonic()
+    status, _out, err = _execute([sys.executable, str(script)], tmp_path, timeout=2.0)
+    assert status == TIMED_OUT and err == "timed out"
+    assert time.monotonic() - started < 30
+    reference = Result("python", "1\n", 0, "")
+    hung = Result("run", "", TIMED_OUT, "timed out")
+    assert [m.reason for m in compare({"python": reference, "run": hung})] == ["timed out"]
