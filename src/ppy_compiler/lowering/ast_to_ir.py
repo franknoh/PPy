@@ -2281,6 +2281,26 @@ class _FunctionLowering(
         self.b.at_end(done)
         return result
 
+    def _cannot_fail(self, node: ast.expr) -> bool:
+        """Whether evaluating `node` can neither raise nor fail a guard, so it
+        may run when Python would not have: names, constants, signs,
+        comparisons, and float `+`, `-`, `*` (an int's may overflow a word)."""
+        if isinstance(node, (ast.Name, ast.Constant)):
+            return True
+        if isinstance(node, ast.UnaryOp) and isinstance(node.op, (ast.USub, ast.UAdd, ast.Not)):
+            if isinstance(node.op, ast.USub) and T.strip_literal(self._type_of(node)) != T.FLOAT:
+                return False
+            return self._cannot_fail(node.operand)
+        if isinstance(node, ast.Compare):
+            return all(self._cannot_fail(part) for part in (node.left, *node.comparators))
+        if isinstance(node, ast.BinOp) and isinstance(node.op, (ast.Add, ast.Sub, ast.Mult)):
+            return (
+                T.strip_literal(self._type_of(node)) == T.FLOAT
+                and self._cannot_fail(node.left)
+                and self._cannot_fail(node.right)
+            )
+        return False
+
     def _boolop_value(self, node: ast.BoolOp, kind: str) -> Value:
         """`a or b`, `a and b` over numbers: the first operand whose truth
         decides (true for `or`, false for `and`), else the last."""
@@ -2351,11 +2371,10 @@ class _FunctionLowering(
 
     def _ifexp(self, node: ast.IfExp) -> Value:
         """`a if c else b` evaluates only the side `c` picks: the other may divide
-        by zero or convert a NaN, which Python never does. Two names or constants
-        cannot fail, and choose with a `select`."""
+        by zero or convert a NaN, which Python never does. Two sides that cannot
+        fail choose with a `select`, which XLA and vector code can take."""
         condition = self._test(node.test)
-        simple = (ast.Name, ast.Constant)
-        if isinstance(node.body, simple) and isinstance(node.orelse, simple):
+        if self._cannot_fail(node.body) and self._cannot_fail(node.orelse):
             then_value = self._expr(node.body)
             else_value = self._expr(node.orelse)
             kind = self._unify(_kind(then_value.type), _kind(else_value.type))
