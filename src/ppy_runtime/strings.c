@@ -190,7 +190,9 @@ int8_t *ppy_str_interned(const int8_t *data, int64_t bytes) {
     uintptr_t key = (uintptr_t)data;
     size_t at = (size_t)((key >> 3) * 0x9E3779B97F4A7C15ULL) & (room - 1);
     while (keys[at] != 0) {
-        if (keys[at] == key) {
+        /* An address alone does not name a literal: an empty one takes no
+           room, and the next literal may start where it does. */
+        if (keys[at] == key && ((int64_t *)kept[at])[0] == bytes) {
             return kept[at];
         }
         at = (at + 1) & (room - 1);

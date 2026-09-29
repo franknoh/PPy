@@ -1,0 +1,65 @@
+# fuzz: path=run seed=3567 (an empty literal and the next one share an address in LLVM, and interning by address gave float("-inf") the empty string)
+import math
+from collections.abc import Iterator
+from dataclasses import dataclass
+
+from ppy import Deque, HashMap, Heap, TreeMap, Vec
+
+
+@dataclass
+class Point:
+    x: int
+    y: int
+
+
+class Counter:
+    def __init__(self, start: int) -> None:
+        self.count: int = start
+
+    def bump(self, by: int) -> int:
+        self.count += by
+        return self.count
+
+
+def biggest[T: int | float](values: Vec[T]) -> T:
+    best = values[0]
+    for value in values:
+        if value > best:
+            best = value
+    return best
+
+
+class Broken(ValueError):
+    pass
+
+
+def countdown(n: int) -> Iterator[int]:
+    pass
+
+
+def pairs(n: int) -> Iterator[int]:
+    yield from countdown(n)
+
+
+
+
+
+
+def fn29(a30: str, a31: int, a32: bool) -> bool:
+    n33: int = ((a31 + 3) + ((a31 + a31) * max(a31, a31)))
+    n34: int = 0
+    return (float("-inf") != (-2.5 + 7.25))
+
+
+def fn39(a40: float) -> str:
+    s41: str = ''
+    n45: int = (((-6 % (-7 if -7 != 0 else -7)) & (2 - 3)) - abs(-1))
+    return (s41[0:6:-1] if ((6 + n45) >= (n45 + n45)) else s41)
+
+
+def main() -> None:
+    print(fn29('', -4, False))
+    print(fn39(float("-inf")))
+
+
+main()
