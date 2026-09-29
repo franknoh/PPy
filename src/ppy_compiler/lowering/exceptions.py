@@ -31,7 +31,7 @@ from dataclasses import dataclass, field
 
 from ..analysis import types as T
 from ..backend.llvm.lowering import Unsupported
-from ..ir import BOOL, I64, Block, Successor, Value
+from ..ir import BOOL, I64, Block, IRType, Successor, Value
 from ..ir.dialects import core
 from .collections import HANDLE, class_tag
 
@@ -239,13 +239,13 @@ class ExceptionLowering:  # pylint: disable=attribute-defined-outside-init
     # -- calls ------------------------------------------------------------------
 
     def _call_native(
-        self, callee: str, arguments: tuple[Value, ...], results: tuple[object, ...]
+        self, callee: str, arguments: tuple[Value, ...], results: tuple[IRType, ...]
     ) -> object:
         """A call to a native function; in a module that catches, one whose
         exception goes where the code catches it."""
         if not self._exceptions_on():
-            return core.call(self.b, callee, arguments, results)  # type: ignore[attr-defined, arg-type]
-        made = core.call(self.b, callee, arguments, results, capture_status=True)  # type: ignore[attr-defined, arg-type]
+            return core.call(self.b, callee, arguments, results)  # type: ignore[attr-defined]
+        made = core.call(self.b, callee, arguments, results, capture_status=True)  # type: ignore[attr-defined]
         *values, status = made.results
         answered = self._block("call.ok")  # type: ignore[attr-defined]
         failed = self._block("call.failed")  # type: ignore[attr-defined]

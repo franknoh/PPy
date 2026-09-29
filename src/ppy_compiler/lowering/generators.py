@@ -472,7 +472,9 @@ def _check_generator(info) -> None:  # type: ignore[no-untyped-def]
 
 def _expression_loops(node: ast.GeneratorExp) -> ast.stmt:
     """A generator expression as the loops it stands for: `for ...: if ...: yield elt`."""
-    inner: list[ast.stmt] = [ast.copy_location(ast.Expr(ast.Yield(node.elt)), node.elt)]
+    yielded = ast.Expr(ast.Yield(node.elt))
+    ast.copy_location(yielded, node.elt)
+    inner: list[ast.stmt] = [yielded]
     for generator in reversed(node.generators):
         for condition in reversed(generator.ifs):
             inner = [ast.copy_location(ast.If(test=condition, body=inner, orelse=[]), condition)]
