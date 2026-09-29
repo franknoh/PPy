@@ -128,8 +128,12 @@ def build_wrappers(
     cache_directory: Path,
     *,
     notify=None,
+    shared: bool = False,
 ) -> BuiltWrappers:
-    """Generate, compile, and import the Python-ABI wrappers for a module."""
+    """Generate, compile, and import the Python-ABI wrappers for a module.
+
+    With `shared`, the compiled wrapper goes to the user's cache, where every
+    project finds it, rather than to `cache_directory`."""
     # A coroutine hands back a future the Python side wraps; no C wrapper for it.
     signatures = {name: s for name, s in signatures.items() if not s.future}
     # A collection crosses through the Python-level binding, which copies it.
@@ -156,7 +160,7 @@ def build_wrappers(
     name = f"ppy_wrappers_{_fingerprint(draft.source)}"
     built: WrapperModule = generate(name, signatures)
 
-    directory = _shared_directory() or cache_directory / "wrappers"
+    directory = (_shared_directory() if shared else None) or cache_directory / "wrappers"
     directory.mkdir(parents=True, exist_ok=True)
     suffix = sysconfig.get_config_var("EXT_SUFFIX") or ".so"
     library = directory / f"{name}{suffix}"

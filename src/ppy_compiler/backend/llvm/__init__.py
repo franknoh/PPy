@@ -681,6 +681,7 @@ def compile_project(  # type: ignore[no-untyped-def]
             signatures,
             bundle.project.config.cache_path,
             notify=reporter.note,
+            shared=True,
         )
         if built.ok and built.path is not None:
             shipped = build_directory / built.path.name
@@ -948,6 +949,7 @@ def compile_and_run(  # type: ignore[no-untyped-def]
             {q: lowered.python for q, lowered in native.functions.items()},
             bundle.project.config.cache_path,
             notify=reporter.note,
+            shared=True,
         )
         if not wrappers.ok and wrappers.reason and native.functions:
             reporter.emit(
