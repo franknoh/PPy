@@ -8,7 +8,7 @@ years later.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from ._record import record as dataclass
 
 __all__ = [
     "STATUS_FALLBACK",

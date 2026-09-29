@@ -17,9 +17,10 @@ import ast
 import math
 import re
 from collections.abc import Callable
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, field
 from pathlib import Path
 
+from ppy_runtime._record import replace
 from ppy_runtime.abi import TEXT, NativeParam, NativeSignature
 from ppy_runtime.aio import available as aio_available
 

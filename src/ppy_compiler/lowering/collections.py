@@ -1135,6 +1135,8 @@ class CollectionLowering:
 
     def _rt(self, symbol: str, arguments: tuple[Value, ...], result: IRType | None = I64) -> Value:
         """One call into the collections runtime."""
+        # Any call names the runtime, not only one that makes a collection: a
+        # function that only reads a collection it was handed links it too.
         self._use_collections()
         results = (result,) if result is not None else ()
         found = core.call_extern(self.b, symbol, arguments, results)
@@ -1159,10 +1161,13 @@ class CollectionLowering:
         Building it takes a C compiler; without one the function stays in
         Python rather than calling functions nothing defines.
         """
+        if self.__dict__.get("_runtime_named"):
+            return
         from ppy_runtime.aio import compiler  # pylint: disable=import-outside-toplevel
 
         if not self.frontend.standalone and compiler() is None:  # type: ignore[attr-defined]
             raise Unsupported("native collections need a C compiler to build their runtime")
+        self.__dict__["_runtime_named"] = True
         module = self.frontend.module  # type: ignore[attr-defined]
         known = module.attributes.get("ppy.libraries", ())
         if "ppy_collections" not in known:
@@ -1395,8 +1400,8 @@ class CollectionLowering:
         self._bind(name, kind, handle, owned)
         return True
 
-    def _bind(self, name: str, kind: Kind | Shape, handle: Value, owned: bool) -> None:
-        """`name` now holds `handle`: one reference taken, the old one let go."""
+    def _held(self, name: str, kind: Kind | Shape) -> Held:
+        """The slot a handle local lives in, made (holding `None`) on first use."""
         held = self.collections.get(name)
         if held is not None and held.kind != kind and not _related(held.kind, kind):
             raise Unsupported(f"`{name}` keeps one collection type")
@@ -1408,6 +1413,11 @@ class CollectionLowering:
             held = Held(kind, slot)
             self.collections[name] = held
             self.slots.pop(name, None)  # type: ignore[attr-defined]
+        return held
+
+    def _bind(self, name: str, kind: Kind | Shape, handle: Value, owned: bool) -> None:
+        """`name` now holds `handle`: one reference taken, the old one let go."""
+        held = self._held(name, kind)
         if not owned:
             self._retain(handle)
         old = core.load(self.b, held.slot)

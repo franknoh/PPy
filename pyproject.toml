@@ -57,7 +57,7 @@ solver = [
 bind = ["libclang>=16"]
 
 [project.scripts]
-ppy = "ppy_compiler.driver.cli:main"
+ppy = "ppy_compiler.__main__:main"
 
 [dependency-groups]
 # The base group: everything the compiler core and its test suite need.
