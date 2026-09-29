@@ -47,7 +47,8 @@ def settle(count: int) -> str:
         balances[account] = balances.get(account, 0) + amount
     richest = max(balances[name] for name in balances)
     overdrawn = sum(1 for name in balances if balances[name] < 0)
-    return f"{len(balances)} accounts, {bad} bad rows (longest message {longest}), richest {richest}, overdrawn {overdrawn}"
+    accounts = f"{len(balances)} accounts, {bad} bad rows (longest message {longest})"
+    return f"{accounts}, richest {richest}, overdrawn {overdrawn}"
 
 
 def primes(limit: int) -> Iterator[int]:
