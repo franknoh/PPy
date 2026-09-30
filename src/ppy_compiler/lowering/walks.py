@@ -24,6 +24,8 @@ from .collections import HANDLE, STR, Kind, Shape, shape_of
 class _Counted(_Source):
     """A walk by position: over a range, a string, a buffer, or a tuple."""
 
+    #: None where the walk holds no handle (a range, a buffer, a tuple).
+    slot: Value | None = None  # type: ignore[assignment]
     #: "range", "text", "buffer", "array", or "frame" (a generator's).
     what: str = ""
     #: A range's first value, step, and length; a tuple's elements' slots.

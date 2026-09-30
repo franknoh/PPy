@@ -1710,7 +1710,7 @@ class _Checker:
 
     _stmt_TryStar = _stmt_Try
 
-    def _stmt_With(self, node: ast.With, env: Env) -> None:
+    def _stmt_With(self, node: ast.With | ast.AsyncWith, env: Env) -> None:
         dynamic = False
         for item in node.items:
             if self._is_dynamic_marker(item.context_expr):
@@ -1730,7 +1730,7 @@ class _Checker:
 
     def _stmt_AsyncWith(self, node: ast.AsyncWith, env: Env) -> None:
         self._effects = self._effects.add(Effect.SYNC)
-        self._stmt_With(node, env)  # type: ignore[arg-type]
+        self._stmt_With(node, env)
 
     def _stmt_FunctionDef(self, node: ast.FunctionDef, env: Env) -> None:
         self._check_decorators(node, env)

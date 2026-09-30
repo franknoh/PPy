@@ -28,7 +28,7 @@ from __future__ import annotations
 from ..analysis import region_dominators
 from ..dialect import DialectRegistry
 from ..dialects import core
-from ..model import Block, Builder, IRFunction, IRModule, Operation, Successor, Value
+from ..model import Attribute, Block, Builder, IRFunction, IRModule, Operation, Successor, Value
 from ..passes import Pass, PassContext
 from ..types import I64, IntType, IRType, PtrType
 from .lower_async import _generic, _index, _regeneralize, _set, _user_op, _words
@@ -87,18 +87,19 @@ class _Plan:
         self.function = function
         self.registry = registry
         symbol = str(function.attributes.get("ppy.symbol", function.name))
+        attributes: dict[str, Attribute] = {
+            "ppy.symbol": f"{symbol}_resume",
+            "ppy.qualname": str(function.attributes.get("ppy.qualname", function.name)),
+            "ppy.generator.resume": function.name,
+            "ppy.abi": "canonical",
+            "ppy.releases_gil": False,
+            "effects": function.attributes.get("effects", ()),
+        }
         self.resume = module.add_function(
             f"{function.name}.resume",
             [("generator", _HANDLE)],
             [I64],
-            attributes={
-                "ppy.symbol": f"{symbol}_resume",
-                "ppy.qualname": function.attributes.get("ppy.qualname", function.name),
-                "ppy.generator.resume": function.name,
-                "ppy.abi": "canonical",
-                "ppy.releases_gil": False,
-                "effects": function.attributes.get("effects", ()),
-            },
+            attributes=attributes,
             location=function.location,
         )
         yielded = function.attributes.get("ppy.generator.value_words", 1)

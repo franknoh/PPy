@@ -165,7 +165,7 @@ def _buffer_element(t: T.Type) -> tuple[str, str] | None:
     if base.name not in {"list", "Sequence", "Buffer", "memoryview", "array"}:
         return None
     element = _scalar_name(base.args[0])
-    if element not in _BUFFER_ELEMENTS:
+    if element is None or element not in _BUFFER_ELEMENTS:
         return None
     # A `Sequence` promises only reading, which is what a copied-in buffer
     # does; anything the caller passes is unpacked the same way.
