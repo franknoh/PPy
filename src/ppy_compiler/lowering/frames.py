@@ -22,10 +22,10 @@ import ast
 
 from ..analysis import types as T
 from ..backend.llvm.lowering import Unsupported
-from ..ir import I64, PtrType, Value
+from ..ir import I64, PtrType, Successor, Value
 from ..ir.dialects import core
 from ..ir.transforms.lower_generators import GENERATOR_YIELD, HANDLE_WORDS, SLOT_VALUE
-from .collection_api import _called, _Cursor
+from .collection_api import _called
 from .collections import HANDLE, Kind, Shape, generator_spelled, shape_of
 from .walks import _Counted
 
@@ -381,17 +381,17 @@ class FrameLowering:  # pylint: disable=attribute-defined-outside-init
         gave = self._block("next.gave")  # type: ignore[attr-defined]
         empty = self._block("next.empty")  # type: ignore[attr-defined]
         done = self._block("next.end")  # type: ignore[attr-defined]
-        core.cond_br(b, self._frame_step(handle), _succ(gave), _succ(empty))
+        core.cond_br(b, self._frame_step(handle), Successor(gave), Successor(empty))
         b.at_end(gave)
         core.store(b, self._frame_value_read(handle, element), got)
-        core.br(b, _succ(done))
+        core.br(b, Successor(done))
         b.at_end(empty)
         if len(node.args) == 2:
             default, default_owned = self._value(node.args[1], element)  # type: ignore[attr-defined]
             if element.reference and not default_owned:
                 self._retain(default)  # type: ignore[attr-defined]
             core.store(b, default, got)
-            core.br(b, _succ(done))
+            core.br(b, Successor(done))
         else:
             from .generators import _stop_tag  # pylint: disable=import-outside-toplevel
 
@@ -407,17 +407,3 @@ class FrameLowering:  # pylint: disable=attribute-defined-outside-init
         if not self.__dict__.get("_next_owned"):
             self._take_yielded(node, element, value)
         return value
-
-
-def _succ(block):  # type: ignore[no-untyped-def]
-    from ..ir import Successor  # pylint: disable=import-outside-toplevel
-
-    return Successor(block)
-
-
-def _frame_cursor(source: _Counted, at: Value) -> _Cursor:
-    return _Cursor(source, at, None, None)
-
-
-#: Every handle word a frame can name, past its fixed words.
-FRAME_HANDLES = HANDLE_WORDS - SLOT_VALUE
