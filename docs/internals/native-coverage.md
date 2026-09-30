@@ -193,3 +193,28 @@ import a sibling (`from .stack import Stack`, `from data_structures...`) fail
 on both sides, and programs that read `input()` end in `EOFError` on both
 sides. They count as different only because `ppy run` stops earlier, at the
 check, with its own error.
+
+## After the standard library went native
+
+With `random`, `math`, `heapq`, `bisect`, `itertools`, and `string` lowered
+(see [the guide](../guide/stdlib.md)), the same summary over the same tree:
+
+| tier | functions | statements |
+|---|---:|---:|
+| native, called from Python | 254 (5%) | 2,497 (7%) |
+| native, called from native code | 463 (10%) | 1,870 (5%) |
+| Python | 3,969 (85%) | 32,602 (88%) |
+
+"Draws random numbers" is gone from the reasons: 138 functions and 1,388
+statements. Calls with unknown effects went from 840 functions (8,213
+statements) to 753 (7,416). Some of the freed functions now stop at the
+next reason in their body, which is why a few rows grew: a `for` over a
+tuple (55 to 62 functions), integer `**` (37 to 42), a `list[Any]`
+parameter (56 to 59).
+
+The 400-script comparison ran again with `random` seeded before each
+program on both sides (a `sitecustomize` that calls `random.seed`), so
+programs that draw are compared too. 357 match, 33 differ, and 10 were
+skipped as nondeterministic or slow under CPython. Of the 18 programs that
+import `random`, 14 match. All 33 differences also differ on the tree
+before this change, with the same seed: none is new.
