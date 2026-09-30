@@ -219,12 +219,12 @@ included. The C reference reads the same input with `scanf`.
 
 | | problem | plain | `ppy build --unsafe` | `--standalone --unsafe` | C (`gcc`) | C (`clang`) |
 |---|---|---:|---:|---:|---:|---:|
-| [15a](15a_nqueens/) | N-Queens | 157.6 ms | 50.8 ms | 5.8 ms | 4.9 ms | 5.7 ms |
-| [15b](15b_dijkstra/) | shortest path | 5680.7 ms | 5174.5 ms | 163.1 ms | 172.0 ms | 161.7 ms |
-| [15c](15c_kmp/) | substring search | 357.7 ms | 62.0 ms | — | 10.1 ms | 9.4 ms |
-| [15d](15d_segment_tree/) | range sums | 1966.7 ms | 1788.2 ms | **34.2 ms** | 56.6 ms | 57.8 ms |
-| [15e](15e_lis/) | longest increasing subsequence | 615.7 ms | 132.0 ms | **47.5 ms** | 64.2 ms | 58.6 ms |
-| [15f](15f_input/) | counting inversions | 789.7 ms | 114.0 ms | **41.5 ms** | 47.1 ms | 47.3 ms |
+| [15a](15a_nqueens/) | N-Queens | 163.2 ms | 49.7 ms | 5.9 ms | 4.9 ms | 5.6 ms |
+| [15b](15b_dijkstra/) | shortest path | 5208.3 ms | 5908.1 ms | 193.2 ms | 188.5 ms | 175.0 ms |
+| [15c](15c_kmp/) | substring search | 368.4 ms | 72.5 ms | — | 10.7 ms | 9.8 ms |
+| [15d](15d_segment_tree/) | range sums | 2092.2 ms | 1940.2 ms | **37.6 ms** | 60.9 ms | 62.4 ms |
+| [15e](15e_lis/) | longest increasing subsequence | 636.5 ms | 131.1 ms | **48.5 ms** | 70.8 ms | 65.7 ms |
+| [15f](15f_input/) | counting inversions | 835.1 ms | 119.5 ms | **41.6 ms** | 46.9 ms | 47.4 ms |
 
 Every cell is the mean of five runs, recorded in
 [`measurements.json`](measurements.json) with the machine it was measured
