@@ -13,4 +13,5 @@ to follow a decision about how something compiled all the way down.
 | [Migrating a real project](migrating.md) | What to hand `ppy migrate` on a real codebase: profile, carve the kernels, leave the rest. |
 | [Plugins](plugins.md) | How each library integration works, and how to write one against the interface. |
 | [Where a solver fits](solver.md) | The two places an SMT solver earns its keep: proving overflow guards away and validating the optimizer. |
+| [Native coverage of a real corpus](native-coverage.md) | What `ppy explain --summary` and a CPython comparison found on TheAlgorithms/Python, and what that suggests lowering next. |
 | [Hardware validation](hardware-validation.md) | How the accelerator stack is checked on rented GPUs, and what the last run found. |
