@@ -95,6 +95,49 @@ static PyObject *ppy_handoff(PyObject *fallback, PyObject *const *args, Py_ssize
     return PyObject_Vectorcall(fallback, args, nargs, NULL);
 }
 
+/* The entry that stands in for a Python function answers to its name, its
+ * module, and its docstring, so `help`, `doctest`, and `__name__` see the
+ * function the program wrote rather than the wrapper module's table entry. */
+static PyObject *ppy_named(PyCFunction call, PyObject *fallback) {
+    PyObject *name = PyObject_GetAttrString(fallback, "__name__");
+    PyObject *doc = PyObject_GetAttrString(fallback, "__doc__");
+    PyObject *module = PyObject_GetAttrString(fallback, "__module__");
+    PyObject *entry = NULL;
+    PyMethodDef *def = NULL;
+    const char *text;
+    if (name == NULL || doc == NULL || module == NULL || !PyUnicode_Check(name)) {
+        goto done;
+    }
+    def = (PyMethodDef *)PyMem_RawCalloc(1, sizeof(PyMethodDef));
+    if (def == NULL) {
+        PyErr_NoMemory();
+        goto done;
+    }
+    text = PyUnicode_AsUTF8(name);
+    def->ml_name = text != NULL ? strdup(text) : NULL;
+    if (def->ml_name == NULL) {
+        goto done;
+    }
+    if (PyUnicode_Check(doc)) {
+        text = PyUnicode_AsUTF8(doc);
+        def->ml_doc = text != NULL ? strdup(text) : NULL;
+    }
+    def->ml_meth = call;
+    def->ml_flags = METH_FASTCALL | METH_KEYWORDS;
+    entry = PyCFunction_NewEx(def, NULL, module);
+done:
+    Py_XDECREF(name);
+    Py_XDECREF(doc);
+    Py_XDECREF(module);
+    if (entry == NULL) {
+        /* An entry that could not be named is still correct: the caller falls
+         * back to the table's own, which it finds by name. */
+        PyErr_Clear();
+        Py_RETURN_NONE;
+    }
+    return entry;
+}
+
 #define PPY_MAX_SPECS 8
 #define PPY_MAX_PINS 8
 
@@ -247,7 +290,8 @@ def generate(name: str, signatures: dict[str, NativeSignature]) -> WrapperModule
         # place, so it bears the function's qualified name (`mod.f`,
         # `mod.Class.method`) rather than an index.
         methods.append(
-            f'    {{"{qualname}", (PyCFunction)(void *)ppy_call_{index}, METH_FASTCALL, NULL}},'
+            f'    {{"{qualname}", (PyCFunction)(void *)ppy_call_{index}, '
+            "METH_FASTCALL | METH_KEYWORDS, NULL},"
         )
 
     parts.append(_FOOTER.format(methods="\n".join(methods), name=name))
@@ -310,6 +354,8 @@ static PyObject *ppy_fallback_{index} = NULL;
 {name_slots}
 {builder}
 
+static PyObject *ppy_call_{index}(PyObject *, PyObject *const *, Py_ssize_t, PyObject *);
+
 static PyObject *ppy_bind_{index}(PyObject *self, PyObject *args) {{
     unsigned long long address;
     PyObject *types;
@@ -328,6 +374,9 @@ static PyObject *ppy_bind_{index}(PyObject *self, PyObject *args) {{
     ppy_fallback_{index} = fallback;
     ppy_target_{index} = ({pointer})(uintptr_t)address;
 {_type_assignments(index, object_params)}    ppy_spec_count_{index} = 0;
+    if (fallback != NULL) {{
+        return ppy_named((PyCFunction)(void *)ppy_call_{index}, fallback);
+    }}
     Py_RETURN_NONE;
 }}
 
@@ -339,7 +388,16 @@ static PyObject *ppy_specialize_{index}(PyObject *self, PyObject *args) {{
     return PyBool_FromLong(added);
 }}
 
-static PyObject *ppy_call_{index}(PyObject *self, PyObject *const *args, Py_ssize_t nargs) {{
+static PyObject *ppy_call_{index}(
+    PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames
+) {{
+    if (kwnames != NULL && PyTuple_GET_SIZE(kwnames) > 0) {{
+        /* Python binds keywords; the native code takes its arguments in order. */
+        if (ppy_fallback_{index} == NULL) {{
+            Py_RETURN_NOTIMPLEMENTED;
+        }}
+        return PyObject_Vectorcall(ppy_fallback_{index}, args, nargs, kwnames);
+    }}
     if (ppy_target_{index} == NULL || nargs != {len(signature.parameters)}) {{
         return ppy_handoff(ppy_fallback_{index}, args, nargs);
     }}

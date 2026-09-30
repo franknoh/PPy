@@ -46,9 +46,11 @@ class BuiltWrappers:
         if self.module is None or index is None:
             return None
         try:
-            getattr(self.module, f"bind_{index}")(address, types, fallback)
+            named = getattr(self.module, f"bind_{index}")(address, types, fallback)
         except Exception:  # noqa: BLE001 - a refusal keeps the slower path
             return None
+        if named is not None:
+            return named
         # A wrapper module built before the entry points carried their names
         # still answers to the index.
         return getattr(self.module, qualname, None) or getattr(self.module, f"call_{index}", None)

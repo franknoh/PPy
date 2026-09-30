@@ -119,6 +119,11 @@ static PyObject *ppy_adopt_{index}(PyObject *function) {{
     ppy_types_{index} = types;
     ppy_target_{index} = (ppy_fn_{index})&{symbol};
 {assignments}    ppy_spec_count_{index} = 0;
+    PyObject *named = ppy_named((PyCFunction)(void *)ppy_call_{index}, function);
+    if (named != Py_None) {{
+        return named;
+    }}
+    Py_DECREF(named);
     return PyCFunction_NewEx(&ppy_calls[{position}], NULL, NULL);
 }}
 """
@@ -187,7 +192,8 @@ def extension_source(
         entries.append(f'    {{"{keys[qualname]}", {index}}},')
         method_name = keys[qualname].rpartition(".")[2]
         calls.append(
-            f'    {{"{method_name}", (PyCFunction)(void *)ppy_call_{index}, METH_FASTCALL, NULL}},'
+            f'    {{"{method_name}", (PyCFunction)(void *)ppy_call_{index}, '
+            "METH_FASTCALL | METH_KEYWORDS, NULL},"
         )
         object_params = [p for p in signature.parameters if p.is_object]
         adopters.append(

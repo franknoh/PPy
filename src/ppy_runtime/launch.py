@@ -105,9 +105,12 @@ class PrebuiltBinder(LibraryBinder):
         if types is None:
             return None
         try:
-            getattr(self._wrappers, f"bind_{index}")(address, types, fallback)
+            named = getattr(self._wrappers, f"bind_{index}")(address, types, fallback)
         except Exception:  # noqa: BLE001 - a refusal keeps the slower path
             return None
+        if named is not None:
+            # A copy that answers to the function's own name and docstring.
+            return named
         # The entry point bears the function's qualified name in the library
         # `ppy build` writes beside the manifest.
         return getattr(self._wrappers, signature.qualname, None)
