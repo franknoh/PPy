@@ -29,6 +29,7 @@ import ast
 import contextlib
 import os
 import random
+import re
 import shutil
 import signal
 import subprocess
@@ -47,6 +48,7 @@ __all__ = [
     "compare",
     "generate_program",
     "minimize",
+    "printed_twice",
     "run_program",
 ]
 
@@ -159,9 +161,11 @@ class _Scope:
 
 
 class _Generator:
-    def __init__(self, seed: int) -> None:
+    def __init__(self, seed: int, prints: bool = False) -> None:
         self.rng = random.Random(seed)
         self.fresh = 0
+        #: Whether functions print too, between checks that may fall back.
+        self.prints = prints
 
     def name(self, prefix: str) -> str:
         self.fresh += 1
@@ -296,6 +300,9 @@ class _Generator:
 
     def statement(self, w: _Writer, scope: _Scope, budget: int, ret: str) -> None:
         rng = self.rng
+        if self.prints and self.chance(0.15):
+            self.print_statement(w, scope)
+            return
         roll = rng.random()
         if roll < 0.14:
             name = self.name("n")
@@ -389,6 +396,29 @@ class _Generator:
             self.statement(w, scope.copy(), 0, ret)
             w.depth -= 1
             scope.ints.append(count)
+
+    def print_statement(self, w: _Writer, scope: _Scope) -> None:
+        """A print between two checks: one before it that may fall back, and one
+        after it that may too, often past 64 bits. The line is tagged, so a line
+        printed twice is plain to see."""
+        rng = self.rng
+        before = self.name("n")
+        w.put(f"{before}: int = {self.int_expr(scope, 1)}")
+        scope.ints.append(before)
+        tag = self.name("p")
+        kind = rng.choice(("int", "float", "str", "bool"))
+        options = ""
+        if self.chance(0.3):
+            options += f", sep={rng.choice(('', '|', ', '))!r}"
+        if self.chance(0.2):
+            options += f", end={rng.choice(('', ';', '!\n'))!r}"
+        if self.chance(0.15):
+            options += ", flush=True"
+        w.put(f"print({self.value(kind, scope)}, {tag!r}{options})")
+        after = self.name("n")
+        big = rng.choice(_BIG)
+        w.put(f"{after}: int = {before} * {big} + {self.int_expr(scope, 2)}")
+        scope.ints.append(after)
 
     def block(self, w: _Writer, scope: _Scope, budget: int, ret: str) -> None:
         w.depth += 1
@@ -862,9 +892,33 @@ class _Generator:
         return "\n".join(w.lines) + "\n"
 
 
-def generate_program(seed: int) -> str:
-    """The program for `seed`: identical on every machine and every run."""
-    return _Generator(seed).program()
+def generate_program(seed: int, prints: bool = False) -> str:
+    """The program for `seed`: identical on every machine and every run. With
+    `prints`, functions print between checks that may fall back."""
+    return _Generator(seed, prints).program()
+
+
+def printed_twice(results: dict[str, Result]) -> list[Mismatch]:
+    """Every path on which a tagged line (`print_statement`) shows up more often
+    than under CPython: output a fallback printed a second time."""
+    expected = results["python"]
+    tags = re.compile(r"\bp\d+\b")
+
+    def counts(text: str) -> dict[str, int]:
+        found: dict[str, int] = {}
+        for tag in tags.findall(text):
+            found[tag] = found.get(tag, 0) + 1
+        return found
+
+    wanted = counts(expected.stdout)
+    found: list[Mismatch] = []
+    for path, result in results.items():
+        if path == "python":
+            continue
+        extra = {t: n for t, n in counts(result.stdout).items() if n > wanted.get(t, 0)}
+        if extra:
+            found.append(Mismatch(path, f"printed twice: {sorted(extra)}", expected, result))
+    return found
 
 
 # -- running ----------------------------------------------------------------
