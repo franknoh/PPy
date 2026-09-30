@@ -334,7 +334,10 @@ def bind(
         if effects is not None:
             outer = effects.enter()
             status = target(*atoms, *[ctypes.byref(slot) for slot in slots])
-            if not _settled(effects, status, outer, signature, owner, target):
+            settled = _settled(effects, status, outer, signature, owner, target)
+            if isinstance(settled, BaseException):
+                raise settled
+            if not settled:
                 binding.fallbacks += 1
                 return fallback(*args)
             binding.calls += 1
@@ -373,18 +376,16 @@ def bind(
     return binding
 
 
-def _settled(effects, status, outer, signature, owner, target) -> bool:  # type: ignore[no-untyped-def]
+def _settled(effects, status, outer, signature, owner, target) -> bool | BaseException:  # type: ignore[no-untyped-def]
     """Whether a call with effects answered: what it printed is written out once
     its result is read (`Effects.commit`); where it fell back, dropped. What it
-    raised after an effect it cannot take back is raised here."""
+    raised after an effect it cannot take back comes back, for the caller to raise."""
     if status >= STATUS_SANITIZER_BASE:
         effects.abandon(outer)
         kind = SANITIZERS[min(status - STATUS_SANITIZER_BASE, len(SANITIZERS) - 1)]
-        raise SanitizerFailure(f"sanitizer: a {kind} check failed in `{signature.qualname}`")
-    return bool(
-        effects.leave(
-            status, outer, signature.qualname, lambda: _let_go_of_raised(owner, target)
-        )
+        return SanitizerFailure(f"sanitizer: a {kind} check failed in `{signature.qualname}`")
+    return effects.leave(  # type: ignore[no-any-return]
+        status, outer, signature.qualname, lambda: _let_go_of_raised(owner, target)
     )
 
 
@@ -505,7 +506,10 @@ def _bind_collections(  # type: ignore[no-untyped-def]
         slots = [result_type() for result_type in result_types]
         outer = effects.enter()
         status = native(*atoms, *[ctypes.byref(slot) for slot in slots])
-        if not _settled(effects, status, outer, signature, owner, native):
+        settled = _settled(effects, status, outer, signature, owner, native)
+        if isinstance(settled, BaseException):
+            raise settled
+        if not settled:
             return False, None
         try:
             return True, _read(boundary, args, slots)

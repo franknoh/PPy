@@ -33,7 +33,7 @@ from dataclasses import dataclass, field
 from ..analysis import types as T
 from ..analysis.lexical import LexicalBindings
 from ..backend.llvm.lowering import Unsupported
-from ..ir import F64, I64, IRFunction, IRModule, Operation, Successor, SymbolRef, Value
+from ..ir import F64, I64, IntType, IRFunction, IRModule, Operation, Successor, SymbolRef, Value
 from ..ir.dialects import core
 from .collections import HANDLE, class_tag
 
@@ -388,6 +388,24 @@ def _constant(value: Value) -> object:
     return None
 
 
+def _checked_arithmetic(op: Operation) -> bool:
+    """An integer operation the backend checks for overflow, falling back
+    (`from_ir._arith`, `_neg`, `_divmod`, `_shift`)."""
+    name = op.name
+    if name not in {"core.add", "core.sub", "core.mul", "core.neg", "core.div", "core.mod", "core.shl"}:
+        return False
+    if not op.results or not isinstance(op.results[0].type, IntType):
+        return False
+    default = "wrap" if name == "core.shl" else "python"
+    overflow = op.attributes.get("overflow", default)
+    unchecked = {"wrap", "native"} if name in {"core.neg", "core.div", "core.mod", "core.shl"} else {
+        "wrap",
+        "native",
+        "proven",
+    }
+    return overflow not in unchecked
+
+
 def _callee(op: Operation) -> str | None:
     found = op.attributes.get("callee")
     return found.name if isinstance(found, SymbolRef) else None
@@ -447,7 +465,7 @@ class _Checker:
 
     def bad_raise(self, op: Operation) -> bool:
         """`ppy_exc_raise` of anything but a builtin exception with CPython's text."""
-        if _extern(op) != "ppy_exc_raise" or not op.operands:
+        if _extern(op) != "ppy_exc_raise" or not op.operands or op.attributes.get("ppy.rethrow"):
             return False
         made = _owner(op.operands[0])
         if not isinstance(made, Operation) or _extern(made) != "ppy_exc_make":
@@ -473,30 +491,46 @@ class _Checker:
         elif name == "core.call":
             callee = _callee(op) or ""
             summary = self.summary(callee)
+            shown = self.spelled(callee)
             if summary.falls_back:
-                falls = f"a call to `{callee}`, which may fall back"
+                falls = f"a call to `{shown}`, which may fall back,"
             if summary.raises_inexactly:
-                inexact = f"a call to `{callee}`, which may raise what Python would say otherwise"
+                inexact = f"a call to `{shown}`, which may raise what Python would say otherwise,"
             if not self.exceptions and not op.attributes.get("capture_status"):
                 if summary.raises_inexactly or summary.falls_back:
-                    falls = falls or f"a call to `{callee}`, whose exception falls back"
+                    falls = falls or f"a call to `{shown}`, whose exception falls back,"
             if summary.barrier:
-                barrier = f"`{callee}`"
+                barrier = f"`{shown}()`"
         elif name == "core.call_indirect":
             falls = "a call through a function value"
             inexact = falls
         elif name == "core.call_extern":
             extern = _extern(op)
-            if extern in BARRIERS:
-                barrier = {
-                    "ppy_io_call": "a call into Python",
-                    "ppy_io_flush_or_raise": "`print(flush=True)`",
-                }[extern]
+            if extern == "ppy_io_call":
+                barrier = self.python_callee(op)
+            elif extern in BARRIERS:
+                barrier = "`print(flush=True)`"
             elif self.bad_raise(op):
-                inexact = "an exception PPy cannot raise as Python would after it"
+                inexact = "an exception PPy cannot raise with Python's own text"
         elif op.dialect in _FALLING_DIALECTS:
             falls = f"`{name}`"
+        elif _checked_arithmetic(op):
+            falls = "integer arithmetic that may not fit 64 bits"
         return falls, inexact, barrier
+
+    def python_callee(self, op: Operation) -> str:
+        """`input()` or the like: what a call into Python calls."""
+        made = _owner(op.operands[0]) if op.operands else None
+        symbol = made.attributes.get("symbol") if isinstance(made, Operation) else None
+        found = self.module.globals.get(str(symbol)) if symbol is not None else None
+        spelled = str(found.value) if found is not None and found.value is not None else ""
+        name = spelled.partition(":")[2]
+        return f"`{name}()`" if name else "a call into Python"
+
+    def spelled(self, name: str) -> str:
+        """A function's qualname, for a report."""
+        target = self.module.functions.get(name)
+        return str(target.attributes.get("ppy.qualname", name)) if target is not None else name
 
     def summarize(self, function: IRFunction) -> EffectSummary:
         made = EffectSummary()
@@ -566,6 +600,15 @@ class _Checker:
                     return f"{falls} can follow {first}"
                 if inexact:
                     return f"{inexact} can follow {first}"
+                if (
+                    _extern(op) == "ppy_exc_raise"
+                    and op.attributes.get("ppy.rethrow")
+                    and self.summaries[function.name].raises_inexactly
+                ):
+                    # Raised again, caught from anywhere in the function, before
+                    # the barrier as well: judged by what the function raises at all.
+                    why = self.summaries[function.name].why["raises_inexactly"]
+                    return f"{why}, raised again, can follow {first}"
         return ""
 
     def referenced(self) -> dict[str, set[str]]:
@@ -616,7 +659,9 @@ def check_effects(module: IRModule, exceptions: bool) -> tuple[dict[str, str], d
                 hit = named & broken.keys()
                 if hit:
                     callee = sorted(hit)[0]
-                    broken[function.name] = f"calls `{callee}`, which stays in Python"
+                    broken[function.name] = (
+                        f"calls `{checker.spelled(callee)}`, which stays in Python"
+                    )
                     changed = True
                     break
     return broken, checker.summaries

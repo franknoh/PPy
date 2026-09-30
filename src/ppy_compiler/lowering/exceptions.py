@@ -315,8 +315,15 @@ class ExceptionLowering:  # pylint: disable=attribute-defined-outside-init
 
     def _reraise(self, exception: Value) -> None:
         self._retain(exception)  # type: ignore[attr-defined]
-        self._rt("ppy_exc_raise", (exception,), None)  # type: ignore[attr-defined]
+        self._raise_again(exception)
         self._go_raise()
+
+    def _raise_again(self, exception: Value) -> None:
+        """Raise an exception that was raised before and caught: marked so, for
+        the barrier rule (`lowering/effects.py`), which judges it where it was made."""
+        self._use_collections()  # type: ignore[attr-defined]
+        made = core.call_extern(self.b, "ppy_exc_raise", (exception,), ())  # type: ignore[attr-defined]
+        made.attributes["ppy.rethrow"] = True
 
     def _exception_class(self, node: ast.expr) -> str:
         """The class a `raise` names: a builtin exception, or a project class
@@ -503,7 +510,7 @@ class ExceptionLowering:  # pylint: disable=attribute-defined-outside-init
             saved = self._rt("ppy_exc_take", (), HANDLE)  # type: ignore[attr-defined]
             self._body(final)  # type: ignore[attr-defined]
             if self._open():  # type: ignore[attr-defined]
-                self._rt("ppy_exc_raise", (saved,), None)  # type: ignore[attr-defined]
+                self._raise_again(saved)
                 self._go_raise()
         self.b.at_end(after)  # type: ignore[attr-defined]
         if id(after) not in self._reached:

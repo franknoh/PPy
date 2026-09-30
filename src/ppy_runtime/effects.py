@@ -117,10 +117,11 @@ class Effects:
         local.depth = getattr(local, "depth", 0) + 1
         return int(self.lib.ppy_io_enter())
 
-    def leave(self, status: int, outer: int, qualname: str, let_go: Any) -> bool:
+    def leave(self, status: int, outer: int, qualname: str, let_go: Any) -> bool | BaseException:
         """After the native call: True where it answered, and the caller then
         converts its result and calls `commit`; False where it fell back, with
-        what it printed dropped. Raises what a call that crossed a barrier raised."""
+        what it printed dropped; or what a call that crossed a barrier raised,
+        for the caller to raise."""
         crossed = self.lib.ppy_io_leave(outer)
         if status == STATUS_OK:
             return True
@@ -132,14 +133,16 @@ class Effects:
                 return False
             if status != STATUS_RAISED:
                 self.lib.ppy_io_discard()
-                raise EffectError(
+                return EffectError(
                     f"PPy: native `{qualname}` fell back after an effect; "
                     "please report this as a bug"
                 )
             error = self._native_exception()
             let_go()
-            self._commit()
-            raise error
+            if self.lib.ppy_io_commit() != 0:
+                # A write failed first, as it did first in the program.
+                return self._raised().pop()
+            return error
         finally:
             self._done()
 
@@ -287,6 +290,10 @@ class Effects:
             lib.ppy_io_answer(_OBJECT, number)
 
     def _pend(self, error: BaseException) -> None:
+        traceback = error.__traceback__
+        if traceback is not None and traceback.tb_frame.f_code is Effects._dispatch.__code__:
+            # From where Python was called on: the hook's own frame is no part of it.
+            error.__traceback__ = traceback.tb_next
         raised = self._raised()
         number = len(raised)
         raised.append(error)

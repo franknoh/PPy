@@ -2196,7 +2196,14 @@ class _FunctionLowering(
             self._ranges[value] = self._induction[name]
         if self.prover is not None:
             self._term_for_load(value, node.target)
-        core.store(self.b, self._checked_binary(value, step, "add"), counter)
+        if abs(step_value) == 1 and self.overflow == "python":
+            # The header let the count through only while it is short of
+            # `stop`, a word itself: one step on cannot pass the word's end,
+            # so no check falls back here (and none follows an effect).
+            stepped = core.add(self.b, value, step, overflow="proven")
+        else:
+            stepped = self._checked_binary(value, step, "add")
+        core.store(self.b, stepped, counter)
         core.br(self.b, Successor(header))
         self.b.at_end(done)
         if site is not None:
