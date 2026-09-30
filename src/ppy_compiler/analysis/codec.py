@@ -63,7 +63,13 @@ def encode_type(t: T.Type) -> Any:
         case T.ClassObject():
             return ["class", t.name, encode_type(t.instance_type) if t.instance_type else None]
         case T.TypeVar_():
-            return ["typevar", t.name, encode_type(t.bound) if t.bound else None]
+            return [
+                "typevar",
+                t.name,
+                encode_type(t.bound) if t.bound else None,
+                t.owner,
+                t.constrained,
+            ]
     raise CodecError(f"no encoding for {type(t).__name__}")
 
 
@@ -100,7 +106,10 @@ def decode_type(raw: Any) -> T.Type:
             instance = decode_type(raw[2]) if raw[2] is not None else None
             return T.ClassObject(raw[1], instance)  # type: ignore[arg-type]
         case "typevar":
-            return T.TypeVar_(raw[1], decode_type(raw[2]) if raw[2] is not None else None)
+            bound = decode_type(raw[2]) if raw[2] is not None else None
+            if len(raw) > 3:
+                return T.TypeVar_(raw[1], bound, owner=raw[3], constrained=raw[4])
+            return T.TypeVar_(raw[1], bound)
     raise CodecError(f"no decoding for {raw[0]!r}")
 
 

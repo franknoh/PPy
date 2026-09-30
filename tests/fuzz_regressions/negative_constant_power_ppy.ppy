@@ -1,0 +1,17 @@
+# corpus: path=ppy (TheAlgorithms conversions/negative_binary_base_to_int.py; constant folding turned `(-2)` into the literal -2, which the Python backend unparsed as `-2 ** c`, that is `-(2 ** c)`)
+def negabinary(n: int) -> int:
+    digits = str(n)[::-1]
+    return sum([int(digits[c]) * (-2) ** c for c in range(len(digits))])
+
+
+def powers(n: int) -> list[int]:
+    base = -3
+    return [base**k for k in range(n)]
+
+
+def signed_zero() -> float:
+    zero = -0.0
+    return zero ** 3
+
+
+print(negabinary(110), negabinary(101110), powers(4), signed_zero(), (-2.5) ** 2)
