@@ -525,3 +525,222 @@ double ppy_math_binary(int64_t which, double x, double y) {
         return fmod(x, y);
     }
 }
+
+/* -- `itertools`, made into a list where a loop or a call consumes it ----------
+
+   `made` is the result, made empty by the caller with the element layout the
+   checker gave the iterator's items; each item's words are the inputs'
+   element words side by side, and the collections they hold are shared, one
+   reference more each. The orders are CPython's: lexicographic by position
+   in the inputs. */
+
+/* One item from the elements at `positions` of `sources` (one source per
+   position where `sources` has several, else the one). */
+void ppy_iter_emit(int8_t *made, int8_t **sources, int64_t each, const int64_t *positions,
+                   int64_t count) {
+    int8_t *slot = ppy_seq_push_back(made);
+    int64_t offset = 0;
+    for (int64_t i = 0; i < count; i++) {
+        int8_t *source = sources[each ? i : 0];
+        int64_t words = ((int64_t *)source)[8];
+        memcpy(slot + offset * 8, ppy_seq_at(source, positions[i]), (size_t)(words * 8));
+        offset += words;
+    }
+    ppy_coll_retain_words(made, slot);
+}
+
+/* `product(a, b, ...)` of up to four lists. */
+void ppy_iter_product(int8_t *made, int64_t count, int8_t *a, int8_t *b, int8_t *c, int8_t *d) {
+    int8_t *sources[4] = {a, b, c, d};
+    int64_t positions[4] = {0, 0, 0, 0};
+    for (int64_t i = 0; i < count; i++) {
+        if (((int64_t *)sources[i])[0] == 0) {
+            return;
+        }
+    }
+    for (;;) {
+        ppy_iter_emit(made, sources, 1, positions, count);
+        int64_t i = count - 1;
+        while (i >= 0) {
+            positions[i]++;
+            if (positions[i] < ((int64_t *)sources[i])[0]) {
+                break;
+            }
+            positions[i] = 0;
+            i--;
+        }
+        if (i < 0) {
+            return;
+        }
+    }
+}
+
+/* `permutations(xs, r)`, `combinations(xs, r)` (`kind` 1), and
+   `combinations_with_replacement(xs, r)` (`kind` 2), r at least 0. Past 16
+   positions (or 64 elements to arrange) it fails into `ppy_math_cell`. */
+void ppy_iter_choose(int8_t *made, int8_t *source, int64_t r, int64_t kind) {
+    int64_t n = ((int64_t *)source)[0];
+    int64_t positions[16];
+    if ((kind != 2 && r > n) || (kind == 2 && n == 0 && r > 0)) {
+        return;
+    }
+    if (r > 16 || (kind == 0 && n > 64)) {
+        ppy_math_cell()[0] = 1;
+        return;
+    }
+    int8_t *sources[1] = {source};
+    if (kind == 0) {
+        /* Every arrangement of r distinct positions, smallest first. */
+        int64_t used[64] = {0};
+        int64_t depth = 0;
+        int64_t next[17];
+        next[0] = 0;
+        if (r == 0) {
+            ppy_iter_emit(made, sources, 0, positions, 0);
+            return;
+        }
+        while (depth >= 0) {
+            if (depth == r) {
+                ppy_iter_emit(made, sources, 0, positions, r);
+                depth--;
+                used[positions[depth]] = 0;
+                continue;
+            }
+            int64_t p = next[depth];
+            while (p < n && used[p]) {
+                p++;
+            }
+            if (p >= n) {
+                depth--;
+                if (depth >= 0) {
+                    used[positions[depth]] = 0;
+                }
+                continue;
+            }
+            positions[depth] = p;
+            used[p] = 1;
+            next[depth] = p + 1;
+            depth++;
+            next[depth] = 0;
+        }
+        return;
+    }
+    for (int64_t i = 0; i < r; i++) {
+        positions[i] = kind == 1 ? i : 0;
+    }
+    for (;;) {
+        ppy_iter_emit(made, sources, 0, positions, r);
+        int64_t i = r - 1;
+        if (kind == 1) {
+            while (i >= 0 && positions[i] == i + n - r) {
+                i--;
+            }
+            if (i < 0) {
+                return;
+            }
+            positions[i]++;
+            for (int64_t j = i + 1; j < r; j++) {
+                positions[j] = positions[j - 1] + 1;
+            }
+        } else {
+            while (i >= 0 && positions[i] == n - 1) {
+                i--;
+            }
+            if (i < 0) {
+                return;
+            }
+            int64_t v = positions[i] + 1;
+            for (int64_t j = i; j < r; j++) {
+                positions[j] = v;
+            }
+        }
+    }
+}
+
+/* `pairwise(xs)`. */
+void ppy_iter_pairwise(int8_t *made, int8_t *source) {
+    int64_t n = ((int64_t *)source)[0];
+    int8_t *sources[1] = {source};
+    for (int64_t i = 0; i + 1 < n; i++) {
+        int64_t positions[2] = {i, i + 1};
+        ppy_iter_emit(made, sources, 0, positions, 2);
+    }
+}
+
+/* `chain(a, b, ...)` of up to four lists of one element type. */
+void ppy_iter_chain(int8_t *made, int64_t count, int8_t *a, int8_t *b, int8_t *c, int8_t *d) {
+    int8_t *sources[4] = {a, b, c, d};
+    for (int64_t i = 0; i < count; i++) {
+        int64_t n = ((int64_t *)sources[i])[0];
+        for (int64_t j = 0; j < n; j++) {
+            ppy_iter_emit(made, &sources[i], 0, &j, 1);
+        }
+    }
+}
+
+/* `islice(xs, start, stop, step)` of a list, the arguments checked. */
+void ppy_iter_islice(int8_t *made, int8_t *source, int64_t start, int64_t stop, int64_t step) {
+    int64_t n = ((int64_t *)source)[0];
+    int8_t *sources[1] = {source};
+    if (stop > n) {
+        stop = n;
+    }
+    for (int64_t i = start; i < stop; i += step) {
+        ppy_iter_emit(made, sources, 0, &i, 1);
+    }
+}
+
+/* `accumulate(xs)` of ints (`floats` 0) or floats with `+`, or with `max`
+   (`how` 1) or `min` (2), from `initial` where `has_initial`. The ints fail
+   past a word, into `ppy_math_cell`. */
+void ppy_iter_accumulate(int8_t *made, int8_t *source, int64_t floats, int64_t how,
+                         int64_t has_initial, int64_t initial_int, double initial_float) {
+    int64_t n = ((int64_t *)source)[0];
+    int64_t total = initial_int;
+    if (floats) {
+        memcpy(&total, &initial_float, 8);
+    }
+    int64_t started = has_initial;
+    if (has_initial) {
+        *(int64_t *)ppy_seq_push_back(made) = total;
+    }
+    for (int64_t i = 0; i < n; i++) {
+        int64_t word = *(int64_t *)ppy_seq_at(source, i);
+        if (!started) {
+            total = word;
+            started = 1;
+        } else if (floats) {
+            double x, y;
+            memcpy(&x, &total, 8);
+            memcpy(&y, &word, 8);
+            double z = how == 0 ? x + y : how == 1 ? (y > x ? y : x) : (y < x ? y : x);
+            memcpy(&total, &z, 8);
+        } else if (how == 0) {
+            if (__builtin_add_overflow(total, word, &total)) {
+                ppy_math_cell()[0] = 1;
+                return;
+            }
+        } else {
+            total = how == 1 ? (word > total ? word : total) : (word < total ? word : total);
+        }
+        *(int64_t *)ppy_seq_push_back(made) = total;
+    }
+}
+
+/* `repeat(x, n)`: the one element at `value`, n times. */
+void ppy_iter_repeat(int8_t *made, const int8_t *value, int64_t n) {
+    int64_t words = ((int64_t *)made)[8];
+    for (int64_t i = 0; i < n; i++) {
+        int8_t *slot = ppy_seq_push_back(made);
+        memcpy(slot, value, (size_t)(words * 8));
+        ppy_coll_retain_words(made, slot);
+    }
+}
+
+/* `range(start, stop, step)` into the empty `list[int]` `made`, step nonzero. */
+void ppy_iter_range(int8_t *made, int64_t start, int64_t stop, int64_t step) {
+    int64_t n = ppy_random_range_len(start, stop, step);
+    for (int64_t i = 0; i < n; i++) {
+        *(int64_t *)ppy_seq_push_back(made) = (int64_t)((__int128)start + (__int128)step * i);
+    }
+}

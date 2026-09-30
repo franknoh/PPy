@@ -17,6 +17,7 @@ import math
 from collections.abc import Callable
 from functools import cache
 
+from ..analysis import types as T
 from ..analysis.lexical import LexicalBindings
 from ..analysis.native_stdlib import MATH_NATIVE, MODELS
 from ..backend.llvm.lowering import _MATH_INTRINSICS, Unsupported
@@ -24,7 +25,7 @@ from ..ir import BOOL, F64, I64, Value
 from ..ir.dialects import core
 from ..ir.dialects import math as math_dialect
 from ..ir.raising import OVERFLOW, said
-from .collections import HANDLE, Kind, _pointer
+from .collections import HANDLE, Kind, _pointer, kind_of
 
 __all__ = ["StdlibLowering"]
 
@@ -83,6 +84,17 @@ class StdlibLowering:
         value = _CONSTANTS.get(next(iter(found)))
         return self._float(value) if value is not None else None
 
+    def _kind_of(self, node: ast.expr) -> Kind | None:
+        """An `itertools` iterator is the list it makes where it is consumed."""
+        if isinstance(node, ast.Call):
+            qualname = self._stdlib_target(node)
+            if qualname is not None and qualname.startswith("itertools."):
+                made = self._type_of(node)  # type: ignore[attr-defined]
+                if isinstance(made, T.Instance) and made.name == "Iterator" and made.args:
+                    found = kind_of(T.list_of(made.args[0]), self._records())  # type: ignore[attr-defined]
+                    return found if isinstance(found, Kind) else None
+        return super()._kind_of(node)  # type: ignore[misc,no-any-return]
+
     def _stdlib_target(self, node: ast.Call) -> str | None:
         lexical = self.frontend.analysis.symbols.lexical  # type: ignore[attr-defined]
         if not isinstance(lexical, LexicalBindings):
@@ -106,6 +118,8 @@ class StdlibLowering:
             made = self._math_native(name, node) if name in MATH_NATIVE else None
             # `from math import sqrt` reaches the instructions `math.sqrt` does.
             return made if made is not None else self._math_call(name, node)  # type: ignore[attr-defined]
+        if module == "itertools":
+            return self._itertools_call(name, node)
         if node.keywords and qualname != "random.choices":
             raise Unsupported(f"`{qualname}` with keywords has no native lowering")
         if any(isinstance(a, ast.Starred) for a in node.args):
@@ -627,6 +641,106 @@ class StdlibLowering:
             for i in range(width)
         ]
 
+    # -- itertools -----------------------------------------------------------------
+
+    def _walked_list(self, node: ast.expr) -> tuple[Value, bool]:
+        """A list argument's handle, or a `range(...)` made into a list."""
+        bounds = _range_bounds(node)
+        if bounds is None:
+            _, handle, owned = self._plain_list(node)
+            return handle, owned
+        word = self._word  # type: ignore[attr-defined]
+        start, stop, step = (self._int_argument(a) if a is not None else None for a in bounds)
+        start = start if start is not None else word(0)
+        step = step if step is not None else word(1)
+        self._require(  # type: ignore[attr-defined]
+            core.cmp(self.b, "ne", step, word(0)),  # type: ignore[attr-defined]
+            "range() arg 3 must not be zero",
+            _text("range_step"),
+        )
+        made = self._new(kind_of(T.list_of(T.INT), {}))  # type: ignore[attr-defined]
+        self._rt("ppy_iter_range", (made, start, stop, step), None)  # type: ignore[attr-defined]
+        return made, True
+
+    def _itertools_call(self, name: str, node: ast.Call) -> Value:
+        """The iterator as the list of what it hands out, in CPython's order."""
+        b = self.b  # type: ignore[attr-defined]
+        rt = self._rt  # type: ignore[attr-defined]
+        word = self._word  # type: ignore[attr-defined]
+        kind = self._kind_of(node)
+        if kind is None or kind.value is None:
+            raise Unsupported(f"`itertools.{name}` of these arguments has no native lowering")
+        args = node.args
+        if name == "repeat":
+            value, owned = self._value(args[0], kind.value)  # type: ignore[attr-defined]
+            count = self._int_argument(args[1])
+            buffer = self._alloca(kind.value.ir_type(), "value")  # type: ignore[attr-defined]
+            address = core.cast(b, buffer, _pointer(buffer, HANDLE.pointee))
+            self._write(address, kind.value, value)  # type: ignore[attr-defined]
+            made = self._new(kind)  # type: ignore[attr-defined]
+            rt("ppy_iter_repeat", (made, address, count), None)
+            if owned:
+                self._release(value)  # type: ignore[attr-defined]
+            return made  # type: ignore[no-any-return]
+        if name in {"product", "chain"}:
+            sources = [self._walked_list(a) for a in args]
+            made = self._new(kind)  # type: ignore[attr-defined]
+            handles = [handle for handle, _ in sources]
+            handles += [rt("ppy_coll_none", (), HANDLE)] * (4 - len(handles))
+            rt(f"ppy_iter_{name}", (made, word(len(sources)), *handles), None)
+            for handle, owned in sources:
+                self._done_with(handle, owned)  # type: ignore[attr-defined]
+            return made  # type: ignore[no-any-return]
+        source, source_owned = self._walked_list(args[0])
+        rest = [self._int_argument(a) for a in args[1:]]
+        initial = None
+        for keyword in node.keywords:
+            initial = self._expr(keyword.value)  # type: ignore[attr-defined]
+        made = self._new(kind)  # type: ignore[attr-defined]
+        if name in {"permutations", "combinations", "combinations_with_replacement"}:
+            choose = {"permutations": 0, "combinations": 1}.get(name, 2)
+            rt("ppy_iter_choose", (made, source, rest[0], word(choose)), None)
+            self._past_word(core.cmp(b, "eq", rt("ppy_math_fault", ()), word(0)), name)
+        elif name == "pairwise":
+            rt("ppy_iter_pairwise", (made, source), None)
+        elif name == "islice":
+            start, stop, step = self._islice_bounds(rest)
+            rt("ppy_iter_islice", (made, source, start, stop, step), None)
+        else:
+            floats = kind.value.kind == "float"
+            whole, part = word(0), self._float(0.0)
+            if initial is not None and floats:
+                part = self._coerce(initial, "float")  # type: ignore[attr-defined]
+            elif initial is not None:
+                whole = self._coerce(initial, "int")  # type: ignore[attr-defined]
+            flags = (word(int(floats)), word(0), word(int(initial is not None)))
+            rt("ppy_iter_accumulate", (made, source, *flags, whole, part), None)
+            self._past_word(core.cmp(b, "eq", rt("ppy_math_fault", ()), word(0)), name)
+        self._done_with(source, source_owned)  # type: ignore[attr-defined]
+        return made  # type: ignore[no-any-return]
+
+    def _islice_bounds(self, given: list[Value]) -> tuple[Value, Value, Value]:
+        """`islice(xs, stop)` and `islice(xs, start, stop[, step])`, with CPython's checks."""
+        b = self.b  # type: ignore[attr-defined]
+        word = self._word  # type: ignore[attr-defined]
+        if len(given) == 1:
+            start, stop, step = word(0), given[0], word(1)
+        else:
+            start, stop = given[0], given[1]
+            step = given[2] if len(given) == 3 else word(1)
+        negative = core.bitwise(
+            b, "and", core.cmp(b, "ge", start, word(0)), core.cmp(b, "ge", stop, word(0))
+        )
+        self._require(  # type: ignore[attr-defined]
+            negative,
+            "islice indices must be non-negative",
+            _text("islice_stop" if len(given) == 1 else "islice_indices"),
+        )
+        self._require(  # type: ignore[attr-defined]
+            core.cmp(b, "gt", step, word(0)), "islice step must be positive", _text("islice_step")
+        )
+        return start, stop, step
+
     # -- heapq ---------------------------------------------------------------------
 
     def _heapq_call(self, name: str, node: ast.Call) -> Value:
@@ -747,6 +861,7 @@ _A, _B, _S = 1234567, 7654, 99991
 def _raising() -> dict[str, Callable[[], object]]:
     import bisect  # pylint: disable=import-outside-toplevel
     import heapq  # pylint: disable=import-outside-toplevel
+    import itertools  # pylint: disable=import-outside-toplevel
     import random  # pylint: disable=import-outside-toplevel
 
     r = random.Random(0)
@@ -763,6 +878,9 @@ def _raising() -> dict[str, Callable[[], object]]:
         "isclose": lambda: math.isclose(1.0, 1.0, rel_tol=-1.0),
         "dist": lambda: math.dist([1.0], [1.0, 2.0]),
         "range": lambda: math.exp(1000.0),
+        "islice_stop": lambda: itertools.islice([], -1),
+        "islice_indices": lambda: itertools.islice([], -1, 2),
+        "islice_step": lambda: itertools.islice([], 0, 2, 0),
         "randrange1": lambda: r.randrange(0),
         "randrange2": lambda: r.randrange(_A, _B),
         "randrange3": lambda: r.randrange(_A, _B, _S),

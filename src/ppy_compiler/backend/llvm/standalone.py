@@ -26,7 +26,7 @@ from .lowering import LoweringResult, called_back_only, eligible
 __all__ = ["build_standalone", "standalone_ir"]
 
 #: Standard-library modules whose calls the runtime has natively.
-_NATIVE_MODULES = frozenset({"random", "heapq", "bisect"})
+_NATIVE_MODULES = frozenset({"random", "heapq", "bisect", "itertools"})
 
 #: What `from math import ...` may name in a standalone module.
 _MATH_NAMES = (
@@ -447,7 +447,7 @@ def _module_shape(
                 and not statement.names[0].asname
             ):
                 continue
-            # `random`, `heapq`, and `bisect` are the runtime's natively; a
+            # `random`, `heapq`, `bisect`, and `itertools` are the runtime's natively; a
             # call that does not lower is refused with its function too.
             if isinstance(statement, ast.Import) and all(
                 alias.name in _NATIVE_MODULES for alias in statement.names

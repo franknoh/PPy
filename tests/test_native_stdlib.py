@@ -274,6 +274,42 @@ def main() -> None:
 main()
 """
 
+ITERTOOLS = """
+import itertools
+from itertools import combinations, pairwise, permutations
+
+
+def walks(n: int) -> str:
+    t = 0
+    out: list[str] = []
+    for a, b in itertools.product(range(n), range(3)):
+        t += a * b
+    for p in permutations([1, 2, 3], 2):
+        out.append(f"{p[0]}{p[1]}")
+    for c in combinations(range(5), 3):
+        t += c[0] * 100 + c[1] * 10 + c[2]
+    for x, y in pairwise([4, 9, 1, 7]):
+        t += x * y
+    for w in itertools.combinations_with_replacement([1.5, 2.0, 3.0], 2):
+        out.append(str(w[0] + w[1]))
+    for z in itertools.chain([1, 2], [3], range(4, 6)):
+        t += z
+    for s in itertools.islice([10, 20, 30, 40, 50], 1, 4, 2):
+        t += s
+    acc = list(itertools.accumulate([1, 5, 2, 8]))
+    fac = list(itertools.accumulate([0.5, 1.5], initial=2.0))
+    rep = list(itertools.repeat("ab", 3))
+    pairs = len(list(combinations(range(n), 2)))
+    return f"{t} {out} {acc} {fac} {rep} {pairs}"
+
+
+def main() -> None:
+    print(walks(20))
+
+
+main()
+"""
+
 #: name -> (source, the functions `ppy explain` must call native).
 PROGRAMS = {
     "random": (RANDOM, ("draws",)),
@@ -283,6 +319,7 @@ PROGRAMS = {
     # standalone binary, Python's under `ppy run`.
     "gauss": (GAUSS, ()),
     "math": (MATH, ("integers", "floats", "sums")),
+    "itertools": (ITERTOOLS, ("walks",)),
 }
 
 

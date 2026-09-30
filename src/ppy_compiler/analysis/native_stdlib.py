@@ -75,6 +75,20 @@ MODELS: dict[str, tuple[T.Type, EffectSet]] = {
     "random.randbytes": _fn("random.randbytes", T.BYTES, _RANDOM),
     "random.getstate": _fn("random.getstate", T.ANY, _RANDOM),
     "random.setstate": _fn("random.setstate", T.NONE, _RANDOM_RAISES),
+    **{
+        f"itertools.{name}": _fn(f"itertools.{name}", T.instance("Iterator", T.ANY), _ALLOC)
+        for name in (
+            "product",
+            "permutations",
+            "combinations",
+            "combinations_with_replacement",
+            "pairwise",
+            "chain",
+            "islice",
+            "accumulate",
+            "repeat",
+        )
+    },
     "heapq.heappush": _fn("heapq.heappush", T.NONE, _HEAP_WRITE),
     "heapq.heappop": _fn("heapq.heappop", T.ANY, _HEAP_WRITE),
     "heapq.heapify": _fn("heapq.heapify", T.NONE, _HEAP_WRITE),
@@ -163,6 +177,8 @@ def call(
     module, _, name = qualname.partition(".")
     if module == "random":
         found = _random(name, args, keywords)
+    elif module == "itertools":
+        found = _itertools(name, args, keywords)
     elif module == "heapq":
         found = None if keywords else _heapq(name, args)
     else:
@@ -323,3 +339,60 @@ def _math_result(name: str, args: list[_Argument]) -> T.Type | None:
         name, {1} if name in _FLOAT_UNARY else set()
     )
     return T.FLOAT if count in arity and all(map(_number, args)) else None
+
+
+#: Items `itertools` lays side by side in a tuple natively.
+_SCALARS = frozenset({"int", "float", "bool"})
+
+
+def _walked(argument: _Argument) -> T.Type | None:
+    """The element a list or a `range` hands out."""
+    if _range(argument):
+        return T.INT
+    return _list_element(argument.type)
+
+
+def _constant(argument: _Argument) -> int | None:
+    facts = argument.facts
+    if facts.has_constant and isinstance(facts.constant, int):
+        return int(facts.constant)
+    return None
+
+
+def _itertools(name: str, args: list[_Argument], keywords: dict[str, _Argument]) -> T.Type | None:
+    """`itertools`' finite iterators over lists and ranges, typed by what they
+    hand out; the lowering makes each into a list where it is consumed."""
+    if keywords and not (name == "accumulate" and set(keywords) == {"initial"}):
+        return None
+    if name == "repeat":
+        if len(args) == 2 and _integer(args[1]):
+            return T.instance("Iterator", _plain(args[0].type))
+        return None
+    elements = [_walked(a) for a in args[:1]] if args else []
+    if not elements or elements[0] is None:
+        return None
+    element = elements[0]
+    scalar = _is(element, *_SCALARS)
+    if name == "product" and 1 <= len(args) <= 4:
+        items = [_walked(a) for a in args]
+        if all(item is not None and _is(item, *_SCALARS) for item in items):
+            return T.instance("Iterator", T.Tuple_(tuple(items)))  # type: ignore[arg-type]
+        return None
+    if name in {"permutations", "combinations", "combinations_with_replacement"}:
+        r = _constant(args[1]) if len(args) == 2 else None
+        if r is None or not 0 <= r <= 16 or not scalar:
+            return None
+        return T.instance("Iterator", T.Tuple_((element,) * r))
+    if name == "pairwise" and len(args) == 1 and scalar:
+        return T.instance("Iterator", T.Tuple_((element, element)))
+    if name == "chain" and 1 <= len(args) <= 4:
+        if all(_walked(a) == element for a in args):
+            return T.instance("Iterator", element)
+        return None
+    if name == "islice" and 2 <= len(args) <= 4 and all(map(_integer, args[1:])):
+        return T.instance("Iterator", element)
+    if name == "accumulate" and len(args) == 1 and element in (T.INT, T.FLOAT):
+        initial = keywords.get("initial")
+        if initial is None or _plain(initial.type) == element:
+            return T.instance("Iterator", element)
+    return None
