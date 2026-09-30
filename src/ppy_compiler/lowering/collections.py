@@ -1261,6 +1261,10 @@ class CollectionLowering:
         if kind.key.text:
             self._rt("ppy_coll_text_keys", (made, self._word(kind.key.text)), None)
         self._install_methods(made, kind)
+        tuples = pyset_kind(kind)
+        if tuples is not None:
+            # A set walks in CPython's order: the runtime keeps a copy of its table.
+            self._rt("ppy_pyset_track", (made, self._word(tuples)), None)
         return made
 
     # -- the program's own order and hash ---------------------------------------
@@ -2207,6 +2211,19 @@ def _related(held: Kind | Shape, kind: Kind | Shape) -> bool:
     return (
         isinstance(held, Shape) and isinstance(kind, Shape) and held.kind == kind.kind == "object"
     )
+
+
+def pyset_kind(kind: Kind) -> int | None:
+    """A `set` whose order the runtime keeps as CPython's: 0 for ints (and bools),
+    1 for tuples of them; None for any other element, whose hash is not an int's."""
+    key = kind.key
+    if kind.name != "Set" or key is None:
+        return None
+    if key.kind in {"int", "bool"}:
+        return 0
+    if key.kind == "tuple" and all(part in {"int", "bool"} for part in key.parts):
+        return 1
+    return None
 
 
 def _kinds(shape: Shape) -> tuple[str, ...]:

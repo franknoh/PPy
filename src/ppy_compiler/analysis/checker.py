@@ -2997,6 +2997,7 @@ class _Checker:
             ("set", "add"): T.Callable_((T.Param("value", element),), T.NONE, "set.add"),
             ("set", "discard"): T.Callable_((T.Param("value", element),), T.NONE, "set.discard"),
             ("set", "remove"): T.Callable_((T.Param("value", element),), T.NONE, "set.remove"),
+            ("set", "pop"): T.Callable_((), element, "set.pop"),
             ("set", "union"): T.Callable_((), base, "set.union"),
             ("set", "intersection"): T.Callable_((), base, "set.intersection"),
             ("set", "difference"): T.Callable_((), base, "set.difference"),

@@ -365,7 +365,7 @@ class GeneratorLowering:  # pylint: disable=attribute-defined-outside-init
                 matched = core.cmp(self.b, "eq", current, self._word(k))  # type: ignore[attr-defined]
                 core.cond_br(self.b, matched, Successor(here), Successor(other))  # type: ignore[attr-defined]
                 self.b.at_end(here)  # type: ignore[attr-defined]
-                self._take(site, k, steps, segments, shape, value, owned, waiting, resume, closed)
+                self._site_value(site, k, steps, segments, shape, value, owned, waiting, resume, closed)
                 if self._open():  # type: ignore[attr-defined]
                     core.br(self.b, Successor(joined))  # type: ignore[attr-defined]
                 self.b.at_end(other)  # type: ignore[attr-defined]
@@ -395,7 +395,7 @@ class GeneratorLowering:  # pylint: disable=attribute-defined-outside-init
         self._body(segments[-1])  # type: ignore[attr-defined]
         return True
 
-    def _take(  # pylint: disable=too-many-arguments,too-many-positional-arguments
+    def _site_value(  # pylint: disable=too-many-arguments,too-many-positional-arguments
         self,
         site: _Site,
         k: int,

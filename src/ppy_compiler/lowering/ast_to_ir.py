@@ -1719,6 +1719,8 @@ class _FunctionLowering(ExceptionLowering, GeneratorLowering, ContainerLowering,
             raise Unsupported("augmented assignment to a non-local has no native lowering")
         if self._augment_string(node.target.id, node):
             return
+        if self._augment_set(node):
+            return
         current = self._load(node.target.id)
         if self.prover is not None and current.type == I64:
             self._term_for_load(current, node.target)

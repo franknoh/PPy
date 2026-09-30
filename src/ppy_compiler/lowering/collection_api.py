@@ -27,7 +27,15 @@ from ..analysis import types as T
 from ..backend.llvm.lowering import Unsupported
 from ..ir import BOOL, F64, I64, PtrType, Successor, TupleType, Value
 from ..ir.dialects import core
-from .collections import HANDLE, CollectionLowering, Kind, Shape, _pointer, shape_of
+from .collections import (
+    HANDLE,
+    CollectionLowering,
+    Kind,
+    Shape,
+    _pointer,
+    pyset_kind,
+    shape_of,
+)
 
 __all__ = ["CollectionApiLowering"]
 
@@ -151,7 +159,19 @@ class CollectionApiLowering(CollectionLowering):
         kind, handle, owned = self._receiver(node)
         if kind.name in {"Heap", "MaxHeap"}:
             raise Unsupported(f"a {kind.name} is read by `peek` and `pop`, not iterated")
+        if id(node) in getattr(self, "_shown_orders", ()):
+            self._order_known(kind, handle)
         return _Source(kind, self._hold(kind, handle, owned))
+
+    def _order_known(self, kind: Kind, handle: Value) -> None:
+        """A set walked where its order shows: one made natively walks in CPython's
+        order, and one copied in from Python, whose order is not known, falls back."""
+        if pyset_kind(kind) is None:
+            return
+        known = self._rt("ppy_pyset_ordered", (handle,))
+        core.guard(
+            self.b, core.cmp(self.b, "ne", known, self._word(0)), "contract", "a set's order"
+        )
 
     def _sorted_source(self, node: ast.Call) -> _Source:
         """`sorted(c)`: the elements (or keys) copied into a new `Vec` and sorted there."""
@@ -890,7 +910,12 @@ class CollectionApiLowering(CollectionLowering):
         key_shape = kind.key
         assert key_shape is not None
         if attr in _COMBINE or attr in _RELATIONS or attr == "update":
-            if self._kind_of(arguments[0]) != kind:
+            given = self._kind_of(arguments[0])
+            # A plain `set` reaches here as the `HashSet` it lowers as.
+            if given != kind and not (
+                given is not None
+                and (given.family, given.key, given.value) == (kind.family, kind.key, kind.value)
+            ):
                 raise Unsupported(f"`{attr}` takes a collection of the same type")
             other, other_owned = self._handle(arguments[0])
             if attr == "update":
