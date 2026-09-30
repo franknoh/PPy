@@ -503,7 +503,10 @@ def main(argv: list[str] | None = None) -> int:
         if manifest is None and options.file.is_file() and not options.profile:
             from .warm import locate
 
-            manifest = locate(options.file, options).manifest
+            located = locate(options.file, options)
+            # A miss builds; the build asks the same question and reuses this answer.
+            options.located = located
+            manifest = located.manifest
             if manifest is not None and options.plain_run:
                 from .fastrun import remember
 

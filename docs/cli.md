@@ -294,7 +294,7 @@ a project, parse, analyze, or touch LLVM, and it keeps working with
 
 What the launcher does pay for is starting the embedded interpreter and
 importing the runtime: about 35 ms before the program begins. A cold
-`ppy run` that compiles first takes about 0.7 s. A warm `ppy run` takes
+`ppy run` that compiles first takes about 0.35 s. A warm `ppy run` takes
 this same launcher path, from the cache. `examples/bench_startup.py`
 measures the categories separately, and `--standalone` (below) removes the
 35 ms too.

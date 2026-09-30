@@ -50,10 +50,12 @@ class PassContext:
         registry: DialectRegistry | None = None,
         *,
         verify_after_each: bool = False,
+        verify_added: bool = True,
         options: dict[str, object] | None = None,
     ) -> None:
         self.registry = registry or default_registry()
         self.verify_after_each = verify_after_each
+        self.verify_added = verify_added
         self.options: dict[str, object] = dict(options or {})
         self.remarks: list[str] = []
         self._analyses: dict[tuple[str, int], object] = {}
@@ -188,17 +190,21 @@ class PassManager:
 
     def passes(self) -> list[Pass]:
         """The passes in the order they will run, stage passes expanded."""
-        expanded: list[Pass] = []
+        return [pass_ for pass_, _added in self._expanded()]
+
+    def _expanded(self) -> list[tuple[Pass, bool]]:
+        """Each pass, and whether a plugin or a backend added it at a stage."""
+        expanded: list[tuple[Pass, bool]] = []
         for item in self._items:
             if isinstance(item, _Stage):
-                expanded.extend(factory() for factory in self._stage_passes[item.name])
+                expanded.extend((factory(), True) for factory in self._stage_passes[item.name])
             else:
-                expanded.append(item)
+                expanded.append((item, False))
         return expanded
 
     def run(self, module: IRModule) -> PassReport:
         report = PassReport()
-        for pass_ in self.passes():
+        for pass_, added in self._expanded():
             for function in module.functions.values():
                 if function.is_declaration:
                     continue
@@ -210,7 +216,10 @@ class PassManager:
             if changed and not isinstance(pass_, FunctionPass):
                 keep = ANALYSES if pass_.preserves == "all" else pass_.preserves
                 self.ctx.invalidate(keep=keep)
-            if self.ctx.verify_after_each:
+            # A pass a plugin or a backend added is verified as it runs, so the
+            # one that breaks the IR is named; the pipeline's own are verified
+            # together at its end, unless every pass is asked for.
+            if self.ctx.verify_after_each or (added and self.ctx.verify_added):
                 errors = verify(module, self.ctx.registry)
                 if errors:
                     raise PassVerificationError(repr(pass_), errors)
