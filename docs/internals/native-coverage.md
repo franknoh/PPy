@@ -143,15 +143,14 @@ under "not fixed". The differences, sorted:
   dominated by nothing, and refused a later read of a local, so a whole
   module failed to lower (backtracking/match_word_pattern).
 
-**A PPy difference, not fixed:** a native function with a `float` parameter
-accepts an `int` and converts it, so its result is a float where CPython's
-would be an int. `cross_product((0, 0), (1, 1), (2, 2))`, declared over
-`tuple[float, float]`, returns `0.0` natively and `0` in CPython
-(maths/ear_clipping_polygon_triangulation's doctest shows it now that doctest
-sees native functions). Refusing the int at the boundary is a one-line change
-but sends every such call to Python; converting only where the result cannot
-tell is the better fix and needs the lowering to know it. It is left for
-0.6.0.
+**A PPy difference, fixed in 0.6.0:** a native function with a `float`
+parameter accepted an `int` and converted it, so its result was a float where
+CPython's would be an int. `cross_product((0, 0), (1, 1), (2, 2))`, declared
+over `tuple[float, float]`, returned `0.0` natively and `0` in CPython
+(maths/ear_clipping_polygon_triangulation's doctest showed it). The compiler
+now follows each float parameter through the body, and the boundary refuses
+an `int` only for the parameters whose int-ness would show; see
+[A `float` given an `int`](../guide/native-lowering.md#a-float-given-an-int).
 
 **Checker refusals of valid code, fixed on this branch:**
 
