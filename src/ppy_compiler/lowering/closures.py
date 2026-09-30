@@ -325,9 +325,11 @@ class ClosureLowering:  # pylint: disable=attribute-defined-outside-init
         typed = T.strip_literal(self._type_of(node))  # type: ignore[attr-defined]
         if not isinstance(typed, T.Callable_):
             return None
-        if isinstance(node, ast.Attribute) and self._object_of(node.value) is None:  # type: ignore[attr-defined]
-            # A method, bound: not a value native code holds.
-            return None
+        if isinstance(node, ast.Attribute):
+            # A field holding a function, not a method bound to its object.
+            owner = self._object_of(node.value)  # type: ignore[attr-defined]
+            if owner is None or node.attr not in self._layout(owner).fields:  # type: ignore[attr-defined]
+                return None
         found = shape_of(typed, self._records())  # type: ignore[attr-defined]
         return found if found is not None and found.kind == "function" else None
 

@@ -3366,18 +3366,35 @@ class _Checker:
             return [first, *rest]
         wanted = T.strip_literal(callee.type)
         params = (
-            [p for p in wanted.params if p.kind not in {"keyword_only", "var_keyword"}]
+            [p.type for p in wanted.params if p.kind not in {"keyword_only", "var_keyword"}]
             if isinstance(wanted, T.Callable_)
-            else []
+            else self._constructor_params(wanted)
         )
         found: list[Binding] = []
         for index, value in enumerate(values):
-            expected = T.strip_literal(params[index].type) if index < len(params) else None
+            expected = T.strip_literal(params[index]) if index < len(params) else None
             if isinstance(value, ast.Lambda) and isinstance(expected, T.Callable_):
                 self._lambda_parameters = tuple(p.type for p in expected.params)
             found.append(self._expr(value, env))
             self._lambda_parameters = None
         return found
+
+    def _constructor_params(self, wanted: T.Type) -> list[T.Type]:
+        """What a project class's constructor takes, positionally: its
+        `__init__`'s parameters after `self`, or a dataclass's fields."""
+        if not isinstance(wanted, T.ClassObject):
+            return []
+        info = self.project.classes.get(wanted.name)
+        if info is None:
+            return []
+        for entry in info.mro:
+            base = self.project.classes.get(entry)
+            init = base.methods.get("__init__") if base is not None else None
+            if init is not None:
+                return [p.type for p in init.params[1:] if p.kind == "positional_or_keyword"]
+        if info.is_dataclass:
+            return list(self._constructor(info)[0].values())
+        return []
 
     def _calls_native_function(self, node: ast.Call, args: list[Binding]) -> bool:
         """`map`/`filter` whose function is the program's own: a lambda, a

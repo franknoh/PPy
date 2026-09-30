@@ -2153,6 +2153,11 @@ class _FunctionEmitter:
                     if self.owner.is_main(self.function):
                         for value in op.operands:
                             self.line(f"(void)({self.bare(value)});")
+                        if self.owner.collections:
+                            # What only a cycle keeps (a closure that calls
+                            # itself) goes with one last collection.
+                            self.owner.shim("ppy_coll_collect")
+                            self.line("ppy_coll_collect();")
                         self.line("return 0;")
                     else:
                         self.line(
