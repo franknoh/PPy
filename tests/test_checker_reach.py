@@ -341,7 +341,32 @@ def main() -> None:
 main()
 """
 
+GENERATORS = """
+from collections.abc import Generator, Iterator, Iterable
+
+
+def squares(n: int) -> Generator[int, None, None]:
+    return (i * i for i in range(n))
+
+
+def evens(xs: list[int]) -> Generator[int]:
+    return (x for x in xs if x % 2 == 0)
+
+
+def take(g: Generator[int, None, None]) -> int:
+    return sum(g)
+
+
+def main() -> None:
+    g: Generator[int, None, None] = (i for i in range(3))
+    print(list(squares(4)), list(evens([1, 2, 4])), take(i for i in range(5)), next(g))
+
+
+main()
+"""
+
 PROGRAMS = {
+    "generators": GENERATORS,
     "generic_static": GENERIC_STATIC,
     "setattr": SETATTR,
     "narrowing": NARROWING,

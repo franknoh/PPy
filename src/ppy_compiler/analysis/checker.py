@@ -172,6 +172,8 @@ def _display_fits(node: ast.expr, actual: T.Type, declared: T.Type) -> bool:
         ast.Dict: "dict",
         ast.DictComp: "dict",
     }
+    if isinstance(node, ast.GeneratorExp):
+        return _generator_fits(actual, declared)
     kind = kinds.get(type(node))
     if kind is None:
         return False
@@ -200,6 +202,23 @@ def _display_fits(node: ast.expr, actual: T.Type, declared: T.Type) -> bool:
             and all(_fresh_fits(e, held, wanted) for e in elements[index])
         )
         for index, (held, wanted) in enumerate(zip(actual.args, declared.args, strict=True))
+    )
+
+
+def _generator_fits(actual: T.Type, declared: T.Type) -> bool:
+    """A generator expression is a `Generator[T, None, None]`: it is typed
+    `Iterator[T]`, and fits a `Generator` that sends and returns nothing."""
+    actual = T.strip_literal(actual)
+    declared = T.strip_literal(declared)
+    return (
+        isinstance(actual, T.Instance)
+        and actual.name == "Iterator"
+        and len(actual.args) == 1
+        and isinstance(declared, T.Instance)
+        and declared.name == "Generator"
+        and 1 <= len(declared.args) <= 3
+        and T.is_assignable(actual.args[0], declared.args[0])
+        and all(isinstance(a, T.AnyType) or a == T.NONE for a in declared.args[1:])
     )
 
 
@@ -3057,6 +3076,12 @@ class _Checker:
                     f"passes `{argument.type}` where `{info.name}` declares `{param.type}`"
                 )
                 info.widened_callers = True
+                continue
+            if (
+                isinstance(where, ast.GeneratorExp)
+                and not fact_mismatch
+                and _generator_fits(argument.type, param.type)
+            ):
                 continue
             if (
                 not self.strict
