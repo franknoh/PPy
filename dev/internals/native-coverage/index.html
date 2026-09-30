@@ -4581,29 +4581,29 @@ tell is the better fix and needs the lowering to know it. It is left for
 <li>A <code>return None</code> after a <code>while 1:</code> that leaves only by <code>return</code> was checked
   as reachable.</li>
 </ul>
-<p><strong>Checker refusals of valid code, not fixed:</strong></p>
-<ul>
-<li><code>typing.Self</code>, <code>queue.Queue</code>, and old-style <code>TypeVar</code> (27 corpus files use
-  it) are not supported annotations.</li>
-<li>A <code>Generator</code> annotation given a generator expression, which the checker
-  types as <code>Iterator</code>.</li>
-<li><code>Counter &amp; Counter</code>, <code>datetime + timedelta</code>, and <code>Decimal / int</code> have no
-  model in the standard-library stubs.</li>
-<li><code>list[int]</code> passed where <code>list[int | float]</code> or <code>Sequence[float]</code> is
-  expected. The first is correct under invariance, and the second is kept
-  refused on purpose: accepted, the native code would compute in floats and
-  print <code>9.0</code> where CPython prints <code>9</code>, the difference above. CPython runs
-  both, and the corpus does it often.</li>
-<li>Old-style type variables (<code>T = TypeVar("T")</code>) used in annotations, and
-  <code>setattr</code> on a class.</li>
-<li>A recursive generic <code>RandomizedHeapNode[T] | None</code> compared unequal to
-  itself.</li>
-</ul>
-<p><strong>Checker refusals of code that is wrong:</strong> several programs pass
-<code>Node | None</code> where <code>Node</code> is declared, or read <code>.value</code> from something that
-may be <code>None</code>. CPython runs them because the <code>None</code> never arrives on that
-input. PPy refuses them in either mode. Whether non-strict mode should warn
-instead is a policy question for 0.6.0.</p>
+<p><strong>Checker refusals of valid code, fixed in 0.6.0:</strong> <code>typing.Self</code>,
+<code>queue.Queue</code> and the other generic collections of the standard library,
+old-style <code>TypeVar</code> with bounds and constraints and <code>Generic[T]</code>, a
+<code>Generator</code> annotation given a generator expression, <code>Counter &amp; Counter</code>,
+<code>datetime + timedelta</code>, <code>Decimal / int</code>, <code>setattr</code> on a class and on an
+object, a class attribute assigned through its class, a method called
+through its class, <code>__import__("doctest")</code>, <code>namedtuple("P", "x y")</code>,
+<code>list[int]</code> passed where the callee only reads a <code>list[int | float]</code> or a
+<code>Sequence[float]</code> (the call runs on CPython), and the recursive generic
+<code>RandomizedHeapNode[T] | None</code>, which is now inferred through the union.</p>
+<p><strong>Code that may pass <code>None</code>:</strong> several programs pass <code>Node | None</code> where
+<code>Node</code> is declared, or read <code>.value</code> from something that may be <code>None</code>.
+CPython runs them because the <code>None</code> never arrives on that input. Strict
+mode still refuses them. <code>--no-strict</code> reports them as <code>W2011</code> and runs
+them, and native code raises CPython's <code>AttributeError</code> where the <code>None</code>
+would arrive.</p>
+<p>With these, the same 400 scripts give 377 matching, 10 differing, and 13
+skipped. Of the 10, seven are harness artifacts (below), one is a program
+that ends in a <code>NameError</code> CPython reaches and PPy refuses first
+(matrix/validate_sudoku_board), one is the <code>float</code> parameter difference
+above, and one was a PPy bug the newly accepted programs exposed: constant
+folding turned <code>(-2) ** c</code> into <code>-2 ** c</code> in the Python backend
+(conversions/negative_binary_base_to_int), now fixed, with a regression.</p>
 <p><strong>Harness artifacts:</strong> copied to a directory of their own, programs that
 import a sibling (<code>from .stack import Stack</code>, <code>from data_structures...</code>) fail
 on both sides, and programs that read <code>input()</code> end in <code>EOFError</code> on both

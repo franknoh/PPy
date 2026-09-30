@@ -982,6 +982,28 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#class-attributes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Class attributes
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#named-tuples" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Named tuples
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#limitations" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4370,6 +4392,28 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#class-attributes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Class attributes
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#named-tuples" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Named tuples
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#limitations" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4652,6 +4696,27 @@ leak check passes.</p>
 that takes or returns one is called by native code only. When Python code
 calls it, its Python body runs. The functions Python calls natively take and
 return numbers, and make their objects inside.</p>
+<h2 id="class-attributes">Class attributes<a class="headerlink" href="#class-attributes" title="Permanent link">&para;</a></h2>
+<p>An attribute the class body sets (<code>capacity: int = 10</code>, <code>LIMIT = 3</code>) may be
+assigned through the class, as <code>Cache.capacity = n</code> or
+<code>setattr(Cache, "capacity", n)</code>. The checker holds the value to the
+attribute's type, widened from a literal. Such an attribute is state the
+whole program shares: functions that read or write it run on CPython, so
+every reader sees the latest value. An attribute the class body does not set
+is still refused when assigned through the class (<code>E1506</code>).</p>
+<p>A method can be called through its class with the receiver written out:
+<code>Cache.add(b, 5)</code> is <code>b.add(5)</code>.</p>
+<p><code>typing.Self</code> names the class in its own signatures, fields, and method
+bodies: <code>def link(self, other: Self) -&gt; Self</code>. The checker reads it as the
+class that writes it, so a subclass inherits a method that returns the base
+class.</p>
+<h2 id="named-tuples">Named tuples<a class="headerlink" href="#named-tuples" title="Permanent link">&para;</a></h2>
+<p><code>class P(NamedTuple)</code>, <code>P = NamedTuple("P", [("x", int), ("y", int)])</code>, and
+<code>P = namedtuple("P", "x y")</code> declare a class whose instance is also a tuple:
+<code>p.x</code>, <code>p[0]</code>, <code>x, y = p</code>, and <code>for v in p</code> read its fields, and
+<code>_replace</code>, <code>_asdict</code>, and <code>_fields</code> are typed. A <code>namedtuple</code> field has no
+type, so what is read from it is <code>Any</code>. Functions that take named tuples run
+on CPython.</p>
 <h2 id="limitations">Limitations<a class="headerlink" href="#limitations" title="Permanent link">&para;</a></h2>
 <ul>
 <li>A class with more than one base, a base from another module or a

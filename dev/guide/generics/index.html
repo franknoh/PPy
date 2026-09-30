@@ -1246,6 +1246,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#old-style-type-variables" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Old-style type variables
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#protocol-bounds" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4248,6 +4259,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#old-style-type-variables" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Old-style type variables
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#protocol-bounds" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4311,18 +4333,52 @@ its bound (<code>E1721</code>). The call has the declared return type with the t
 arguments substituted: <code>largest(1, 2)</code> is an <code>int</code>, <code>largest(1.5, 2.5)</code> a
 <code>float</code>.</p>
 <p>An unbounded parameter has no operators, because nothing says it does.</p>
+<h2 id="old-style-type-variables">Old-style type variables<a class="headerlink" href="#old-style-type-variables" title="Permanent link">&para;</a></h2>
+<p>Code written before Python 3.12 declares its type variables at module level.
+The checker reads those as well:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Generic</span><span class="p">,</span> <span class="n">TypeVar</span>
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="n">T</span> <span class="o">=</span> <span class="n">TypeVar</span><span class="p">(</span><span class="s2">"T"</span><span class="p">)</span>
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="n">N</span> <span class="o">=</span> <span class="n">TypeVar</span><span class="p">(</span><span class="s2">"N"</span><span class="p">,</span> <span class="n">bound</span><span class="o">=</span><span class="nb">float</span><span class="p">)</span>
+<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="n">S</span> <span class="o">=</span> <span class="n">TypeVar</span><span class="p">(</span><span class="s2">"S"</span><span class="p">,</span> <span class="nb">int</span><span class="p">,</span> <span class="nb">str</span><span class="p">)</span>
+<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>
+<a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a>
+<a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a><span class="k">class</span><span class="w"> </span><span class="nc">Stack</span><span class="p">(</span><span class="n">Generic</span><span class="p">[</span><span class="n">T</span><span class="p">]):</span>
+<a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a>    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">items</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">T</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+<a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a>
+<a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">push</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">value</span><span class="p">:</span> <span class="n">T</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">items</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">value</span><span class="p">)</span>
+<a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a>
+<a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a>
+<a id="__codelineno-1-16" name="__codelineno-1-16" href="#__codelineno-1-16"></a><span class="k">def</span><span class="w"> </span><span class="nf">biggest</span><span class="p">(</span><span class="n">a</span><span class="p">:</span> <span class="n">N</span><span class="p">,</span> <span class="n">b</span><span class="p">:</span> <span class="n">N</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">N</span><span class="p">:</span>
+<a id="__codelineno-1-17" name="__codelineno-1-17" href="#__codelineno-1-17"></a>    <span class="k">return</span> <span class="n">a</span> <span class="k">if</span> <span class="n">a</span> <span class="o">&gt;</span> <span class="n">b</span> <span class="k">else</span> <span class="n">b</span>
+<a id="__codelineno-1-18" name="__codelineno-1-18" href="#__codelineno-1-18"></a>
+<a id="__codelineno-1-19" name="__codelineno-1-19" href="#__codelineno-1-19"></a>
+<a id="__codelineno-1-20" name="__codelineno-1-20" href="#__codelineno-1-20"></a><span class="k">def</span><span class="w"> </span><span class="nf">twice</span><span class="p">(</span><span class="n">x</span><span class="p">:</span> <span class="n">S</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">S</span><span class="p">:</span>
+<a id="__codelineno-1-21" name="__codelineno-1-21" href="#__codelineno-1-21"></a>    <span class="k">return</span> <span class="n">x</span> <span class="o">+</span> <span class="n">x</span>
+</code></pre></div>
+<p>A class takes the variables its <code>Generic[...]</code> base names, or those its
+generic bases are given. A function takes the variables its annotations name
+that its class does not already bind, and a nested function sees those of the
+functions and class it is in. <code>bound=</code> is the bound. Constraints
+(<code>TypeVar("S", int, str)</code>, or <code>[S: (int, str)]</code>) make the value one of them:
+<code>x + x</code> is checked for each, and the result is <code>S</code>.</p>
+<p>A static method or a class method of a generic class that names the class's
+parameters is generic in them, since it has no receiver to fix them: each
+call to <code>Node.merge(a, b)</code> infers <code>T</code> from <code>a</code> and <code>b</code>.</p>
 <h2 id="protocol-bounds">Protocol bounds<a class="headerlink" href="#protocol-bounds" title="Permanent link">&para;</a></h2>
 <p>A bound that is a Protocol lends its methods, to operators and to attribute
 calls alike:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Protocol</span>
-<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>
-<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>
-<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="k">class</span><span class="w"> </span><span class="nc">Named</span><span class="p">(</span><span class="n">Protocol</span><span class="p">):</span>
-<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">name</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span> <span class="o">...</span>
-<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>
-<a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a>
-<a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a><span class="k">def</span><span class="w"> </span><span class="nf">label</span><span class="p">[</span><span class="n">T</span><span class="p">:</span> <span class="n">Named</span><span class="p">](</span><span class="n">thing</span><span class="p">:</span> <span class="n">T</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
-<a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a>    <span class="k">return</span> <span class="s2">"at "</span> <span class="o">+</span> <span class="n">thing</span><span class="o">.</span><span class="n">name</span><span class="p">()</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Protocol</span>
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>
+<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="k">class</span><span class="w"> </span><span class="nc">Named</span><span class="p">(</span><span class="n">Protocol</span><span class="p">):</span>
+<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">name</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span> <span class="o">...</span>
+<a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>
+<a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a>
+<a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="k">def</span><span class="w"> </span><span class="nf">label</span><span class="p">[</span><span class="n">T</span><span class="p">:</span> <span class="n">Named</span><span class="p">](</span><span class="n">thing</span><span class="p">:</span> <span class="n">T</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a>    <span class="k">return</span> <span class="s2">"at "</span> <span class="o">+</span> <span class="n">thing</span><span class="o">.</span><span class="n">name</span><span class="p">()</span>
 </code></pre></div>
 <p>A project class is an instance of a Protocol when its members cover the
 Protocol's.</p>

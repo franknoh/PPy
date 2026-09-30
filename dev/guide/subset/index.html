@@ -770,6 +770,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#accepted-forms-of-ordinary-python" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Accepted forms of ordinary Python
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#compatibility-policy" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4287,6 +4298,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#accepted-forms-of-ordinary-python" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Accepted forms of ordinary Python
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#compatibility-policy" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4419,7 +4441,55 @@ a sound fallback: an unannotated parameter (<code>E1201</code>), an unknown attr
 iterable (<code>E1302</code>), and a call with no known signature (<code>E1306</code>). Each is
 still reported, as a <code>W2010</code> warning that names the code it replaces, and the
 code involved runs on CPython. Type mismatches (<code>E1301</code>) and the rest stay
-errors.</p>
+errors, with one exception: a value that may be <code>None</code> where one that is not
+is needed.</p>
+<p>A program often passes a <code>Node | None</code> where a <code>Node</code> is declared, or reads
+<code>.value</code> from something that may be <code>None</code>, because it knows the <code>None</code>
+never arrives on that path. Strict mode refuses this (<code>E1301</code>, <code>E1206</code>).
+<code>--no-strict</code> reports it as <code>W2011</code> and runs the program. If the value is
+<code>None</code> after all, the program raises where CPython raises: native code checks
+every field read and method call through such a value and raises CPython's
+<code>AttributeError</code>.</p>
+<p>Without strict mode, a module-private function (one whose name starts with
+<code>_</code>) that has unannotated parameters takes their types from its call sites,
+when every use of it is a direct call in its own module. <code>_scale(xs, k)</code>
+called only as <code>_scale([1, 2, 3], 2)</code> has <code>xs: list[int]</code> and <code>k: int</code>, and
+compiles like an annotated function. A call from elsewhere with other types,
+through reflection or <code>doctest</code>, runs the function's Python body.</p>
+<h2 id="accepted-forms-of-ordinary-python">Accepted forms of ordinary Python<a class="headerlink" href="#accepted-forms-of-ordinary-python" title="Permanent link">&para;</a></h2>
+<p>These are valid Python that the checker accepts and types:</p>
+<ul>
+<li><code>typing.Self</code> in a class's signatures, fields, and method bodies.</li>
+<li>Old-style type variables: <code>T = TypeVar("T")</code>, with <code>bound=</code> or
+  constraints, and <code>class Stack(Generic[T])</code>. See <a href="../generics/">Generics</a>.</li>
+<li><code>namedtuple("P", "x y")</code>, <code>NamedTuple("P", [("x", int)])</code>, and
+  <code>class P(NamedTuple)</code>. An instance reads as the tuple it is (<code>p[0]</code>,
+  <code>x, y = p</code>, <code>for v in p</code>), and has <code>_replace</code>, <code>_asdict</code>, and <code>_fields</code>.
+  The fields of <code>namedtuple</code> have no type.</li>
+<li><code>Cls.attr = value</code> and <code>setattr(Cls, "attr", value)</code> for an attribute the
+  class body sets. It is a class variable that changes: functions that read
+  or write it run on CPython. <code>setattr(obj, "name", value)</code> with a constant
+  name is checked as <code>obj.name = value</code>.</li>
+<li><code>Cls.method(obj, arg)</code>, a method called through its class with the
+  receiver written out.</li>
+<li><code>__import__("doctest")</code> with a constant name, as <code>import doctest</code>.</li>
+<li><code>isinstance(x, (list, tuple))</code> narrows <code>x</code> to what its declared type
+  shares with the classes: a <code>list[int]</code> stays a <code>list[int]</code>.</li>
+<li>A container passed where a wider element type is declared. <code>list[int]</code>
+  goes where <code>Sequence[float]</code> is declared, and where <code>list[int | float]</code> is
+  declared if the callee only reads the list. A function that appends a
+  float to it is still refused (<code>E1301</code>). Calls like these run on CPython,
+  since native code would convert the ints.</li>
+<li>A list written in place with narrower elements than declared:
+  <code>m: list[list[float]] = [[0] * n for _ in range(n)]</code>.</li>
+<li>A generator expression where a <code>Generator[T, None, None]</code> is declared.</li>
+</ul>
+<p>The standard library's <code>Queue</code>, <code>LifoQueue</code>, <code>PriorityQueue</code>, <code>deque</code>,
+<code>Counter</code>, <code>OrderedDict</code>, and <code>defaultdict</code> have their methods typed by
+their type arguments (<code>Queue[int].get()</code> is an <code>int</code>). <code>datetime</code> and <code>date</code>
+with <code>timedelta</code>, <code>Decimal</code> and <code>Fraction</code> with themselves and with numbers,
+and <code>Counter</code> with <code>Counter</code> under <code>+ - &amp; |</code> have their operators typed, and
+their fields and common methods too. Code that uses them runs on CPython.</p>
 <h2 id="compatibility-policy">Compatibility policy<a class="headerlink" href="#compatibility-policy" title="Permanent link">&para;</a></h2>
 <p>PPy makes three separate compatibility claims and holds each to a different
 standard:</p>
