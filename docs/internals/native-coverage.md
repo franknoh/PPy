@@ -14,8 +14,8 @@ lists, dicts, and doctests, with some NumPy, Matplotlib, and network code at
 the edges.
 
 The summary runs over the whole tree as one project, with `[tool.ppy]
-strict = false`. It takes 30 to 50 seconds whether the project's cache is
-cold or warm, and peaks under 500 MB. A module whose lowering raises is
+strict = false`. It takes 32 seconds with the project's cache cold and 19
+warm, and peaks under 500 MB. A module whose lowering raises is
 reported under "could not be analyzed" and the rest of the report still
 comes out. On the current tree no module fails.
 
@@ -23,9 +23,9 @@ comes out. On the current tree no module fails.
 
 | tier | functions | statements |
 |---|---:|---:|
-| native, called from Python | 230 (5%) | 2,269 (6%) |
-| native, called from native code | 420 (9%) | 1,698 (5%) |
-| Python | 4,036 (86%) | 33,002 (89%) |
+| native, called from Python | 231 (5%) | 2,290 (6%) |
+| native, called from native code | 421 (9%) | 1,699 (5%) |
+| Python | 4,034 (86%) | 32,980 (89%) |
 
 247 of the Python functions are generic. They have no entry point of their
 own, and each native caller compiles its own instance, so the report does not
@@ -43,7 +43,7 @@ runs its Python body. The reasons, by count:
 |---:|---|
 | 155 | the boundary crossing costs more than the body saves |
 | 115 | returns nothing, which has no Python boundary |
-| 94 | takes an object, which native callers pass by handle |
+| 95 | takes an object, which native callers pass by handle |
 | 22 | returns an object, which native callers receive by handle |
 | 20 | copying the collections in costs more than the body does with them |
 | 9 | copying its strings across costs what one pass over them saves |
@@ -65,15 +65,15 @@ the rows add up to more than the Python total.
 | 1,388 | 138 | draws random numbers |
 | 1,156 | 241 | a parameter or result with no annotation the checker could infer |
 | 1,002 | 74 | writes through a name the compiler cannot follow |
-| 747 | 92 | calls back into Python |
+| 744 | 91 | calls back into Python |
 | 641 | 96 | a nested function whose enclosing function stays in Python |
-| 539 | 72 | a generator that is stored, returned, or stepped by hand |
+| 539 | 72 | a generator that is returned, passed on, or stepped inside a loop or a branch |
 | 535 | 55 | a `for` over something native code does not walk |
 | 530 | 102 | a `numpy.ndarray` parameter |
-| 443 | 48 | a chained comparison |
+| 449 | 49 | a chained comparison |
 | 407 | 56 | a `list[Any]` parameter |
 | 348 | 27 | `in` or `is` against a tuple, a range, or a string |
-| 294 | 36 | `**` between two integers |
+| 309 | 37 | `**` between two integers |
 | 213 | 16 | an empty `[]` or `{}` whose element type is never told |
 
 Closures lower now, and they are not a blocker of their own. Of the 101
