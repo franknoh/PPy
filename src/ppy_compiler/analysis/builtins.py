@@ -419,6 +419,12 @@ def _getattr(args: Sequence[Arg]) -> BuiltinResult:
     )
 
 
+def _setattr(args: Sequence[Arg]) -> BuiltinResult:
+    return BuiltinResult(
+        T.NONE, Facts(), EffectSet.of(Effect.WRITE_OBJECT, raises=("AttributeError",))
+    )
+
+
 def _hasattr(args: Sequence[Arg]) -> BuiltinResult:
     return BuiltinResult(T.BOOL, Facts(int_range=IntRange(0, 1)), EffectSet.of(Effect.READ_OBJECT))
 
@@ -484,6 +490,8 @@ BUILTINS: dict[str, Handler] = {
     "memoryview": _memoryview,
     "getattr": _getattr,
     "hasattr": _hasattr,
+    "setattr": _setattr,
+    "delattr": _setattr,
 }
 
 #: Effects attributed to calls into well-known standard-library modules.

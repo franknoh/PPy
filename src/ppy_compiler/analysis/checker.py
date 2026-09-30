@@ -33,6 +33,7 @@ from .binding import bind_ast_call, bind_call, positional_values
 from .closures import captured_names, free_names, rebound_by_closures
 from .effects import Effect, EffectSet
 from .env import Binding, Env
+from .readonly import reads_only
 from .refinements import Facts, IntRange, width_range
 from .results import FunctionAnalysis, LoweringNote, ModuleAnalysis, ProjectAnalysis
 from .symbols import (
@@ -180,10 +181,40 @@ def _display_fits(node: ast.expr, actual: T.Type, declared: T.Type) -> bool:
         return False
     if actual.name != kind or declared.name != kind or len(actual.args) != len(declared.args):
         return False
+    if isinstance(node, (ast.List, ast.Set)):
+        elements: list[list[ast.expr]] = [list(node.elts)]
+    elif isinstance(node, (ast.ListComp, ast.SetComp)):
+        elements = [[node.elt]]
+    elif isinstance(node, ast.Dict):
+        elements = [[k for k in node.keys if k is not None], list(node.values)]
+    else:
+        assert isinstance(node, ast.DictComp)
+        elements = [[node.key], [node.value]]
     return all(
-        isinstance(held, T.NeverType) or T.is_assignable(held, wanted)
-        for held, wanted in zip(actual.args, declared.args, strict=True)
+        isinstance(held, T.NeverType)
+        or T.is_assignable(held, wanted)
+        # `[[0] * n for _ in range(n)]` beside `list[list[float]]`: the rows
+        # are made here too, so they are lists of floats that hold ints.
+        or (
+            index == len(elements) - 1
+            and all(_fresh_fits(e, held, wanted) for e in elements[index])
+        )
+        for index, (held, wanted) in enumerate(zip(actual.args, declared.args, strict=True))
     )
+
+
+def _fresh_fits(node: ast.expr, held: T.Type, wanted: T.Type) -> bool:
+    """Is `node` a container made where it is written whose elements fit
+    `wanted`, if not as `held` says them?"""
+    if T.is_assignable(held, wanted):
+        return True
+    if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Mult):
+        # `[0] * n`: a new list of what the display holds.
+        for side in (node.left, node.right):
+            if isinstance(side, ast.List):
+                return _fresh_fits(side, held, wanted)
+        return False
+    return _display_fits(node, held, wanted)
 
 
 def _shapes_conflict(
@@ -265,6 +296,90 @@ def _forget_attributes(env: Env, root: str) -> None:
 
 def _is_place(node: ast.expr) -> bool:
     return isinstance(node, (ast.Attribute, ast.Subscript))
+
+
+#: Containers a callee cannot write through: a `list[int]` is a `Sequence[float]`.
+_READ_ONLY_CONTAINERS = frozenset(
+    {"Sequence", "Iterable", "Collection", "Container", "Reversible", "AbstractSet", "Mapping"}
+)
+_COVARIANT_SOURCES = frozenset(
+    {"list", "tuple", "set", "frozenset", "dict", *_READ_ONLY_CONTAINERS}
+)
+
+
+def _read_only_container(t: T.Type) -> bool:
+    return all(
+        isinstance(m, T.Instance) and m.name in _READ_ONLY_CONTAINERS
+        for m in T.members_of(T.strip_literal(t))
+        if m != T.NONE
+    )
+
+
+def _nested_container(t: T.Type) -> bool:
+    """Are the elements of `t` mutable containers themselves?"""
+    for member in T.members_of(T.strip_literal(t)):
+        if isinstance(member, T.Instance):
+            for arg in member.args:
+                for inner in T.members_of(T.strip_literal(arg)):
+                    if isinstance(inner, T.Instance) and inner.name in {"list", "dict", "set"}:
+                        return True
+    return False
+
+
+def _covariant(actual: T.Type, expected: T.Type) -> bool:
+    """Is `actual` a container of values of `expected`'s element types, if not
+    one of that exact type? `list[int]` for `list[int | float]`,
+    `list[list[int]]` for `list[list[float]]`, `list[int]` for `Sequence[float]`."""
+    a, e = T.strip_literal(actual), T.strip_literal(expected)
+    if T.is_assignable(a, e):
+        return True
+    if isinstance(e, T.Union_):
+        return any(_covariant(a, m) for m in e.members)
+    if isinstance(a, T.Union_):
+        return all(_covariant(m, e) for m in a.members)
+    if not isinstance(e, T.Instance) or not e.args:
+        return False
+    if isinstance(a, T.Tuple_):
+        return (
+            e.name in {"tuple", *_READ_ONLY_CONTAINERS}
+            and len(e.args) == 1
+            and all(_covariant(item, e.args[0]) for item in a.items)
+        )
+    if not isinstance(a, T.Instance) or len(a.args) != len(e.args):
+        return False
+    if not (a.name == e.name or (e.name in _READ_ONLY_CONTAINERS and a.name in _COVARIANT_SOURCES)):
+        return False
+    if len(e.args) == 2:
+        # A mapping's keys are looked up by equality: they stay what they are.
+        return a.args[0] == e.args[0] and _covariant(a.args[1], e.args[1])
+    return _covariant(a.args[0], e.args[0])
+
+
+def _intersect_classes(declared: T.Type, candidates: list[T.Type]) -> T.Type:
+    """What `isinstance(x, (list, tuple))` leaves of `x`: the members of its
+    type that are one of the classes, as they were (`list[int]` stays
+    `list[int]`), and the classes that are narrower than a member. A value
+    whose type says nothing becomes one of the classes."""
+    kept: list[T.Type] = []
+    for member in T.members_of(declared):
+        base = T.strip_literal(member)
+        if isinstance(base, (T.AnyType, T.UnknownType)):
+            return T.union(*candidates)
+        if any(_subclass_of(base, c) for c in candidates):
+            kept.append(member)
+            continue
+        kept.extend(c for c in candidates if _subclass_of(c, base) and c not in kept)
+    return T.union(*kept) if kept else T.union(*candidates)
+
+
+def _subclass_of(t: T.Type, cls: T.Type) -> bool:
+    """Is every `t` an instance of `cls`, by class and not by promotion (an
+    `int` is not a `float` to `isinstance`)?"""
+    if not isinstance(cls, T.Instance):
+        return False
+    if isinstance(t, T.Tuple_):
+        return cls.name in {"tuple", "object"}
+    return isinstance(t, T.Instance) and cls.name in t.resolved_mro
 
 
 def _named_tuple_attribute(base: T.Instance, attr: str) -> T.Type | None:
@@ -853,6 +968,12 @@ class _Checker:
         self._provisional_locals = set()
         self._blockers = []
         self._native_blockers = []
+        if info.widened_callers:
+            # A caller hands it a `list[int]` for a `Sequence[float]`; the
+            # native boundary would convert those ints, CPython does not.
+            self._native_blockers.append(
+                "a caller passes a container with narrower elements than it declares"
+            )
         self._escaping = set()
         self._mutated = set()
         self._delegated = set()
@@ -902,10 +1023,22 @@ class _Checker:
         outer_params = self.annotations.type_params
         outer_self = self.annotations.self_type
         owner = self.project.classes.get(info.owner) if info.owner else None
+        enclosing_params: dict[str, T.TypeVar_] = {}
+        enclosing = self.project.functions.get(info.enclosing) if info.enclosing else None
+        while enclosing is not None:
+            # A closure's body names the type parameters of what it is in.
+            cls = self.project.classes.get(enclosing.owner) if enclosing.owner else None
+            for variable in (*enclosing.type_params, *(cls.type_params if cls else ())):
+                enclosing_params.setdefault(variable.name, variable)
+            owner = owner or cls
+            enclosing = (
+                self.project.functions.get(enclosing.enclosing) if enclosing.enclosing else None
+            )
         if owner is not None:
             self.annotations.self_type = owner.instance(owner.type_params)
         self.annotations.type_params = {
             **outer_params,
+            **enclosing_params,
             **{variable.name: variable for variable in (owner.type_params if owner else ())},
             **{variable.name: variable for variable in info.type_params},
         }
@@ -2695,6 +2828,8 @@ class _Checker:
                 return Binding(_awaitable_of(result))
             return Binding(result, info.ret_facts)
         for index, (param, argument) in enumerate(zip(signature.params, args, strict=False)):
+            if index < len(node.args) and isinstance(node.args[index], ast.Starred):
+                break  # `func(*args)`: which parameters the tuple fills is not known here
             fits = T.is_assignable(argument.type, param.type)
             if not fits and signature.qualname in _LOOKUPS and index == 0:
                 fits = T.is_assignable(param.type, argument.type)
@@ -2906,6 +3041,39 @@ class _Checker:
             if not reached.keyword and reached.index - offset < len(node.args):
                 where = node.args[reached.index - offset]
             fact_mismatch = self._fact_mismatch(param.facts, argument.facts)
+            if (
+                not fact_mismatch
+                and not T.is_assignable(argument.type, param.type)
+                and _covariant(argument.type, param.type)
+                and (
+                    _read_only_container(param.type)
+                    or reads_only(info, param.name, nested=_nested_container(param.type))
+                )
+            ):
+                # `bucket_sort([3, 1])` for `my_list: list[int | float]`: the
+                # callee only reads the list, so its narrower elements are
+                # values of the declared type. CPython runs the call as written.
+                self._native_blockers.append(
+                    f"passes `{argument.type}` where `{info.name}` declares `{param.type}`"
+                )
+                info.widened_callers = True
+                continue
+            if (
+                not self.strict
+                and not fact_mismatch
+                and T.is_optional(T.strip_literal(argument.type))
+                and not T.is_assignable(argument.type, param.type)
+                and T.is_assignable(T.remove_none(T.strip_literal(argument.type)), param.type)
+            ):
+                # `find_set(node.parent)` for `x: Node` where `parent` may be
+                # `None`: the call is made; `None` fails where the callee uses it.
+                self._may_be_none(
+                    "E1301",
+                    f"`{info.name}` parameter `{param.name}` expects `{param.type}`, "
+                    f"got `{argument.type}`, which may be `None`",
+                    where,
+                )
+                continue
             if not T.is_assignable(argument.type, param.type) or fact_mismatch:
                 self._mismatch(
                     "E1301",
@@ -2961,7 +3129,7 @@ class _Checker:
             # `if self.x is not None:` was checked above; this read is what
             # the check was for.
             return narrowed
-        optional = self._optional_receiver(owner, node)
+        optional = self._optional_receiver(owner, node, env)
         if optional is not None:
             return optional
         if isinstance(owner.type, (T.AnyType, T.UnknownType)):
@@ -3122,7 +3290,7 @@ class _Checker:
                 return found
         return None
 
-    def _optional_receiver(self, owner: Binding, node: ast.Attribute) -> Binding | None:
+    def _optional_receiver(self, owner: Binding, node: ast.Attribute, env: Env) -> Binding | None:
         """Reading through a value that may be None, which fails at runtime.
 
         Without this the union falls through to the generic path and the
@@ -3136,6 +3304,17 @@ class _Checker:
         present = T.remove_none(owner.type)
         if isinstance(present, T.NeverType):
             return None
+        if not self.strict:
+            # CPython raises `AttributeError` if it is `None`; so does native
+            # code, which checks every field read and method call for it.
+            self._may_be_none(
+                "E1206",
+                f"`{ast.unparse(node.value)}` may be `None`, so `.{node.attr}` "
+                "raises `AttributeError` if it is",
+                node,
+            )
+            self._effects = self._effects.add(raises=("AttributeError",))
+            return self._attribute(Binding(present, owner.facts), node, env)
         self._error(
             "E1206",
             f"`{ast.unparse(node.value)}` may be `None`, so `.{node.attr}` is not available",
@@ -4300,7 +4479,7 @@ class _Checker:
         if not candidates:
             return env
         if positive:
-            narrowed = T.union(*candidates)
+            narrowed = _intersect_classes(binding.type, candidates)
             facts = binding.facts
             if len(candidates) == 1 and isinstance(candidates[0], T.Instance):
                 facts = facts.with_(exact_class=candidates[0].name)
@@ -5922,6 +6101,14 @@ class _Checker:
                 )
                 return True
             self._effects = self._effects.add(Effect.WRITE_OBJECT)
+            if name == "setattr" and len(node.args) == 3:
+                # `setattr(obj, "size", 3)` is `obj.size = 3`, checked as one.
+                target = ast.copy_location(
+                    ast.Attribute(node.args[0], node.args[1].value, ast.Store()), node
+                )
+                self._check_attribute_assignment(
+                    self._expr(node.args[0], env), target, self._expr(node.args[2], env)
+                )
         return False
 
     def _constant_import(self, node: ast.Call) -> Binding | None:
@@ -6849,6 +7036,19 @@ class _Checker:
             )
         )
 
+    def _may_be_none(self, code: str, message: str, node: ast.AST) -> None:
+        """`W2011`: under `--no-strict`, a value that may be `None` where one
+        that is not is needed. The program runs; `None` raises there."""
+        self.diagnostics.add(
+            Diagnostic(
+                "W2011",
+                Severity.WARNING,
+                f"{message} ({code} under strict mode)",
+                span_of(self.path, node),
+                help="narrow it first, for example with `if x is not None:`",
+            )
+        )
+
     def _warn(self, code: str, message: str, node: ast.AST) -> None:
         self.diagnostics.add(Diagnostic(code, Severity.WARNING, message, span_of(self.path, node)))
 
@@ -7061,6 +7261,7 @@ def _function_summary(info: FunctionInfo) -> str:
     return (
         f"{info.qualname}({params})->{info.ret}|{info.ret_facts}|{info.ret_annotated}"
         f"|{info.effects}|{info.verified_pure}|{info.dynamic}|{info.directives}"
+        f"|{info.widened_callers}"
     )
 
 

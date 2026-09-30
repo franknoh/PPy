@@ -151,6 +151,10 @@ class FunctionInfo:
     dynamic: bool = False
     #: `def f[T: Bound](...)`: the type parameters, resolved with the signature.
     type_params: tuple[T.TypeVar_, ...] = ()
+    #: A caller passes a container with narrower elements than a parameter
+    #: declares (`list[int]` for `Sequence[float]`), which the native
+    #: boundary would convert: the function runs as Python.
+    widened_callers: bool = False
     #: Whether the body yields. The answer needs a walk of the whole function,
     #: and `signature()` asks for it once per function per checked function, so
     #: it is computed once and kept.
@@ -1146,7 +1150,22 @@ class ProjectSymbols:
         if info.params:
             return
         outer = {v.name: v for v in owner.type_params} if owner is not None else {}
-        annotations.self_type = owner.instance(owner.type_params) if owner is not None else None
+        self_class = owner
+        enclosing = self.functions.get(info.enclosing) if info.enclosing else None
+        while enclosing is not None:
+            # A closure sees the type parameters of the functions it is in,
+            # and of their classes: `T` in a nested `def inner(x: T)` is theirs.
+            for variable in enclosing.type_params:
+                outer.setdefault(variable.name, variable)
+            cls = self.classes.get(enclosing.owner) if enclosing.owner else None
+            if cls is not None:
+                for variable in cls.type_params:
+                    outer.setdefault(variable.name, variable)
+                self_class = self_class or cls
+            enclosing = self.functions.get(enclosing.enclosing) if enclosing.enclosing else None
+        annotations.self_type = (
+            self_class.instance(self_class.type_params) if self_class is not None else None
+        )
         own = self._type_params(info, annotations, frozenset(outer))
         info.type_params = tuple(own.values())
         # A method sees its class's type parameters as well as its own; only
@@ -1199,6 +1218,19 @@ class ProjectSymbols:
             info.ret = resolved.type
             info.ret_facts = resolved.facts
             info.ret_annotated = True
+        if owner is not None and (info.is_static or info.is_classmethod) and owner.type_params:
+            # `RandomizedHeapNode.merge(a, b)` has no receiver to say what the
+            # class's `T` is: a static method that names it is generic in it,
+            # and each call infers it from the arguments.
+            mentioned = {
+                variable
+                for t in (*(p.type for p in info.params), info.ret)
+                for variable in T.type_variables(t)
+            }
+            info.type_params = (
+                *info.type_params,
+                *(v for v in owner.type_params if v in mentioned and v not in info.type_params),
+            )
         annotations.type_params = {}
         annotations.self_type = None
 
@@ -1368,6 +1400,16 @@ def _collect_rebound_class_attributes(symbols: ModuleSymbols) -> None:
     for node in ast.walk(symbols.module.tree):
         if isinstance(node, ast.Assign):
             targets = node.targets
+        elif (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Name)
+            and node.func.id == "setattr"
+            and len(node.args) == 3
+            and isinstance(node.args[1], ast.Constant)
+            and isinstance(node.args[1].value, str)
+        ):
+            # `setattr(Cls, "size", 3)` is `Cls.size = 3`.
+            targets = [ast.Attribute(node.args[0], node.args[1].value, ast.Store())]
         elif isinstance(node, (ast.AugAssign, ast.AnnAssign)):
             targets = [node.target]
         else:

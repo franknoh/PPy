@@ -231,7 +231,120 @@ def main() -> None:
 main()
 """
 
+SETATTR = """
+from typing import Callable, TypeVar
+
+T = TypeVar("T")
+U = TypeVar("U")
+
+
+class Config:
+    level: int = 1
+
+    def __init__(self) -> None:
+        self.name = "a"
+
+
+def memo(func: Callable[[T], U]) -> Callable[[T], U]:
+    seen: dict[T, U] = {}
+
+    def wrapper(*args: T) -> U:
+        if args[0] not in seen:
+            seen[args[0]] = func(*args)
+        return seen[args[0]]
+
+    def size() -> int:
+        return len(seen)
+
+    setattr(wrapper, "size", size)
+    return wrapper
+
+
+def square(x: int) -> int:
+    return x * x
+
+
+def main() -> None:
+    c = Config()
+    fast = memo(square)
+    setattr(c, "name", "b")
+    setattr(Config, "level", 5)
+    print(c.name, Config.level, c.level, fast(3), fast(3))
+
+
+main()
+"""
+
+NARROWING = """
+def f(x: int | float, y: list[int] | str, z: object, w: list[int]) -> str:
+    out = []
+    if isinstance(x, float):
+        out.append(str(x / 2))
+    if isinstance(y, (list, tuple)):
+        out.append(str(sum(y)))
+    if isinstance(z, int):
+        out.append(str(z + 1))
+    if not isinstance(w, (list, tuple)):
+        raise ValueError
+    out.append(str(len(w)))
+    return ",".join(out)
+
+
+print(f(3.0, [1, 2], 4, [1]), f(3, "a", "b", [1, 2]))
+"""
+
+GENERIC_STATIC = """
+from __future__ import annotations
+
+
+class HeapNode[T: float]:
+    def __init__(self, value: T) -> None:
+        self.value = value
+        self.left: HeapNode[T] | None = None
+        self.right: HeapNode[T] | None = None
+
+    @staticmethod
+    def merge(a: HeapNode[T] | None, b: HeapNode[T] | None) -> HeapNode[T] | None:
+        if a is None:
+            return b
+        if b is None:
+            return a
+        if a.value > b.value:
+            a, b = b, a
+        a.left, a.right = a.right, a.left
+        a.left = HeapNode.merge(a.left, b)
+        return a
+
+
+class Heap[T: float]:
+    def __init__(self) -> None:
+        self.root: HeapNode[T] | None = None
+
+    def push(self, value: T) -> None:
+        self.root = HeapNode.merge(self.root, HeapNode(value))
+
+    def pop(self) -> T:
+        root = self.root
+        if root is None:
+            raise IndexError("empty")
+        self.root = HeapNode.merge(root.left, root.right)
+        return root.value
+
+
+def main() -> None:
+    h: Heap[int] = Heap()
+    for x in [5, 3, 8, 1, 9, 2]:
+        h.push(x)
+    print([h.pop() for _ in range(6)])
+
+
+main()
+"""
+
 PROGRAMS = {
+    "generic_static": GENERIC_STATIC,
+    "setattr": SETATTR,
+    "narrowing": NARROWING,
     "named_tuples": NAMED_TUPLES,
     "named_tuple_class": NAMED_TUPLE_CLASS,
     "class_state": CLASS_STATE,
@@ -340,6 +453,16 @@ def test_ppy_run_prints_what_python_prints(project_dir: Path, write, name: str):
         def patch() -> None:
             Box.size = "big"
         """,
+        # `setattr` with a constant name is the assignment it spells.
+        """
+        class C:
+            def __init__(self) -> None:
+                self.n = 1
+
+
+        def f(c: C) -> None:
+            setattr(c, "n", "x")
+        """,
         # `Self` outside a class says what it is.
         """
         from typing import Self
@@ -353,3 +476,71 @@ def test_ppy_run_prints_what_python_prints(project_dir: Path, write, name: str):
 def test_the_matching_mistake_is_still_refused(write, codes, source: str):
     path = write("wrong.py", textwrap.dedent(source))
     assert any(c.startswith("E") for c in codes(path))
+
+
+MAYBE_NONE = """
+class Node:
+    def __init__(self, value: int) -> None:
+        self.value = value
+        self.next: Node | None = None
+
+
+def value_of(node: Node) -> int:
+    return node.value
+
+
+def second(node: Node) -> int:
+    return node.next.value
+
+
+def total(head: Node, n: int) -> int:
+    s = 0
+    for _ in range(n):
+        s += value_of(head.next) + second(head)
+    return s
+
+
+def main() -> None:
+    a = Node(1)
+    a.next = Node(2)
+    print(total(a, 1000))
+    for f in (lambda: value_of(a.next.next), lambda: second(a.next), lambda: total(a.next, 3)):
+        try:
+            print(f())
+        except AttributeError as e:
+            print("AttributeError", e)
+
+
+main()
+"""
+
+
+def test_a_value_that_may_be_none_is_a_warning_without_strict(write, codes):
+    """`W2011` under `--no-strict`: `node.next.value` and `value_of(head.next)`
+    run, and raise `AttributeError` where CPython does. Strict mode keeps
+    `E1206` and `E1301`."""
+    path = write("prog.py", MAYBE_NONE)
+    loose = codes(path, strict=False)
+    assert "W2011" in loose
+    assert [c for c in loose if c.startswith("E")] == []
+    strict = codes(path)
+    assert "E1206" in strict and "E1301" in strict
+
+
+def test_native_code_raises_where_cpython_does_on_none(project_dir: Path, write):
+    (project_dir / "pyproject.toml").write_text("[tool.ppy]\nstrict = false\n", encoding="utf-8")
+    path = write("prog.py", MAYBE_NONE)
+    expected = subprocess.run(
+        [sys.executable, str(path)], capture_output=True, text=True, check=True
+    ).stdout
+    done = subprocess.run(
+        [sys.executable, "-m", "ppy_compiler", "run", "prog.py"],
+        cwd=project_dir,
+        capture_output=True,
+        text=True,
+        env=_env(),
+        timeout=600,
+        check=False,
+    )
+    assert done.returncode == 0, done.stdout + done.stderr
+    assert done.stdout == expected
