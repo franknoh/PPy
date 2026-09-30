@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import array
 import ctypes
+import sys
 from collections.abc import Callable
 from typing import Any
 
@@ -89,6 +90,9 @@ def value_class_types(signature: NativeSignature, fallback: Callable[..., object
     Resolved from the defining module, so a class the wrapper cannot see means
     no fast entry rather than a wrong one.
     """
+    if signature.reads_globals:
+        # The Python-level binding reads the globals; a C wrapper would not.
+        return None
     namespace = getattr(fallback, "__globals__", None)
     found = []
     for parameter in signature.parameters:
@@ -184,6 +188,7 @@ def bind(
     fast_entry: Callable[..., object] | None = None,
     owner: object | None = None,
     register: Callable[[int, tuple], bool] | None = None,
+    globals_read: bool = False,
 ) -> NativeBinding:
     """Build the Python-callable wrapper for one native function.
 
@@ -200,6 +205,8 @@ def bind(
         return NativeBinding(
             signature=signature, wrapper=fallback, fallback=fallback, fast_entry=None, owner=owner
         )
+    if signature.reads_globals and not globals_read:
+        return _bind_globals(signature, address, fallback, owner)
     argument_types: list[type] = []
     for parameter in signature.parameters:
         if parameter.is_buffer:
@@ -340,6 +347,70 @@ def bind(
     wrapper.__ppy_fallback__ = fallback  # type: ignore[attr-defined]
     binding.wrapper = wrapper
     return binding
+
+
+class _Spelled:
+    """The Python function called with the arguments Python spelled: the
+    globals the native entry takes after them are left off."""
+
+    __slots__ = ("count", "function")
+
+    def __init__(self, function: Callable[..., object], count: int) -> None:
+        self.function = function
+        self.count = count
+
+    def __call__(self, *args: object, **keywords: object) -> object:
+        return self.function(*args[: self.count], **keywords)
+
+    @property
+    def __globals__(self) -> dict | None:  # noqa: PLW3201 - read as a function's is
+        return getattr(self.function, "__globals__", None)
+
+
+def _bind_globals(  # type: ignore[no-untyped-def]
+    signature: NativeSignature, address: int, fallback: Callable[..., object], owner
+) -> NativeBinding:
+    """A function passed the settled module globals it reads (`NativeParam.
+    source`). Python's caller spells the other arguments; the wrapper reads
+    each global from its module at the call and passes it after them, where
+    the native entry takes it. A global the module no longer holds, or holds
+    as something the function does not take, runs the Python body.
+    """
+    count = sum(1 for p in signature.parameters if not p.source)
+    own = signature.qualname.rpartition(".")[0]
+    namespace = getattr(fallback, "__globals__", None)
+    places: list[tuple[str, str]] = []
+    for parameter in signature.parameters[count:]:
+        module, _, name = parameter.source.rpartition(":")
+        places.append((module, name))
+    inner = bind(signature, address, _Spelled(fallback, count), owner=owner, globals_read=True)
+    if inner.wrapper is inner.fallback:
+        # No native entry here after all: the Python function is the function.
+        inner.wrapper = inner.fallback = fallback
+        return inner
+    native = inner.wrapper
+
+    def read(module: str, name: str) -> object:
+        if module == own and namespace is not None:
+            return namespace[name]
+        return sys.modules[module].__dict__[name]
+
+    def wrapper(*args: object, **keywords: object) -> object:
+        if keywords or len(args) != count:
+            return fallback(*args, **keywords)
+        try:
+            values = [read(module, name) for module, name in places]
+        except KeyError:
+            inner.fallbacks += 1
+            return fallback(*args)
+        return native(*args, *values)
+
+    _dress(wrapper, signature, fallback)
+    wrapper.__ppy_native__ = signature  # type: ignore[attr-defined]
+    wrapper.__ppy_fallback__ = fallback  # type: ignore[attr-defined]
+    inner.wrapper = wrapper
+    inner.fallback = fallback
+    return inner
 
 
 def _dress(wrapper, signature, fallback) -> None:  # type: ignore[no-untyped-def]

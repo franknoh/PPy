@@ -26,6 +26,7 @@ may not mutate it (spec 13.2, 13.3, 13.5).
 from __future__ import annotations
 
 import ast
+import dataclasses
 from dataclasses import dataclass, field
 
 from ppy_runtime._record import replace
@@ -38,7 +39,8 @@ from ...analysis.checker import FunctionAnalysis
 from ...analysis.closures import callable_spelled, is_plain_callable
 from ...analysis.collections import spelled as collection_spelled
 from ...analysis.effects import Effect
-from ...analysis.symbols import FunctionInfo
+from ...analysis.settled import implicit_parameter_name
+from ...analysis.symbols import FunctionInfo, ParamInfo
 
 __all__ = [
     "STATUS_FALLBACK",
@@ -242,11 +244,26 @@ def written_params(analysis: FunctionAnalysis | None) -> frozenset[str]:
     function that writes through a parameter may be handed the same list
     twice (`f(xs, xs)`), and a copy would not see the write: then each list
     goes by handle, and the boundary keeps one object one handle."""
-    if analysis is None:
+    if analysis is None or not writes(analysis):
         return frozenset()
-    if not analysis.mutated_params and not analysis.delegated_writes:
-        return frozenset()
-    return frozenset(p.name for p in analysis.info.params)
+    return frozenset(p.name for p in analysis.info.params) | {
+        implicit_parameter_name(analysis, held) for held in analysis.implicit_globals
+    }
+
+
+def writes(analysis: FunctionAnalysis) -> set[str]:
+    """The parameters the function writes through, itself or by handing them to
+    a callee that does, and the settled globals passed to it that it or a
+    callee writes, by the names it takes them as."""
+    return (
+        analysis.mutated_params
+        | analysis.delegated_writes
+        | {
+            implicit_parameter_name(analysis, held)
+            for held in analysis.implicit_globals
+            if held.written
+        }
+    )
 
 
 def _holds_strings(info: FunctionInfo) -> bool:
@@ -375,6 +392,7 @@ def eligible(
     allow_io: bool = False,
     allow_launch: bool = False,
     allow_async: bool = False,
+    allow_globals: bool = False,
 ) -> tuple[bool, str]:
     """Can this function be lowered to a native scalar entry point?
 
@@ -382,14 +400,21 @@ def eligible(
     native shims there, so the IO effect alone is not disqualifying.
     `allow_launch` is the GPU source backends': a kernel launch is written
     as one, where the CPU backends have no launch runtime yet.
+    `allow_globals` is `ppy run`'s: the settled globals the function reads
+    are parameters of `info` (see `with_implicit_globals`), which Python's
+    boundary reads from the module at the call.
     """
     if info.is_generator:
         return False, "generators use the boxed runtime"
     if info.is_async and not allow_async:
         return False, "a coroutine runs natively only where the async runtime does"
-    written = analysis.mutated_params | analysis.delegated_writes
+    written = writes(analysis)
+    passes_globals = allow_globals and analysis.globals_native
     for name in sorted(written):
         declared = next((p.type for p in info.params if p.name == name), None)
+        if declared is None and not passes_globals:
+            # A global written where it is not passed: reading it is the blocker.
+            continue
         described = _buffer_element(declared) if declared is not None else None
         handle = _collection_param(name, declared, layouts) if declared is not None else None
         # Writing through a borrowed buffer is visible to the caller, which is
@@ -410,6 +435,9 @@ def eligible(
     violations.discard(Effect.ATOMIC)
     violations.discard(Effect.SYNC)
     violations.discard(Effect.THREAD)
+    if passes_globals:
+        # Every global it reads is one no one rebinds, passed in as a parameter.
+        violations.discard(Effect.READ_GLOBAL)
     if allow_io:
         violations.discard(Effect.IO)
     if allow_launch:
@@ -437,6 +465,23 @@ def eligible(
     if _return_atoms(info.ret, layouts) is None and not _returns_none(info.ret):
         return False, f"returns `{info.ret}`, which has no native ABI"
     return True, ""
+
+
+def with_implicit_globals(info: FunctionInfo, analysis: FunctionAnalysis) -> FunctionInfo:
+    """`info` with the settled globals native code passes it (see
+    `analysis/settled.py`) as parameters after its own."""
+    if not analysis.implicit_globals:
+        return info
+    added = [
+        ParamInfo(
+            implicit_parameter_name(analysis, held),
+            held.type,
+            annotated=True,
+            global_of=held.key,
+        )
+        for held in analysis.implicit_globals
+    ]
+    return dataclasses.replace(info, params=[*info.params, *added])
 
 
 def called_back_only(info: FunctionInfo) -> bool:
@@ -665,11 +710,18 @@ def _signature(
     layouts: ClassLayouts | None = None,
     analysis: FunctionAnalysis | None = None,
 ) -> NativeSignature:
-    written = analysis.mutated_params | analysis.delegated_writes if analysis is not None else set()
+    written = writes(analysis) if analysis is not None else set()
+    # Held by handle as the function's IR takes them: each one, when it writes
+    # through any (see `written_params`).
+    held = written_params(analysis)
     parameters = tuple(
-        _written(
-            _native_param(p.name, p.type, layouts, p.name in written) or NativeParam(p.name, "int"),
-            written,
+        _sourced(
+            _written(
+                _native_param(p.name, p.type, layouts, p.name in held)
+                or NativeParam(p.name, "int"),
+                written,
+            ),
+            p.global_of,
         )
         for p in info.params
     )
@@ -711,6 +763,11 @@ def _written(parameter: NativeParam, written: set[str]) -> NativeParam:
     if parameter.is_handle and parameter.name in written:
         return replace(parameter, written=True)
     return parameter
+
+
+def _sourced(parameter: NativeParam, source: str) -> NativeParam:
+    """A settled global passed as a parameter, marked for the boundary to read."""
+    return replace(parameter, source=source) if source else parameter
 
 
 def _crosses(parameter: NativeParam | None) -> bool:

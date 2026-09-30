@@ -65,6 +65,10 @@ class NativeParam:
     #: A collection the function writes through: the boundary copies its
     #: contents back into the caller's object after the call.
     written: bool = False
+    #: A module global the function reads, passed as this parameter:
+    #: `module:name`. Python does not pass it; the boundary reads the global
+    #: when the function is called.
+    source: str = ""
 
     @property
     def is_buffer(self) -> bool:
@@ -167,6 +171,12 @@ class NativeSignature:
     def crosses_collections(self) -> bool:
         """Whether a collection crosses the boundary, in or out."""
         return bool(self.returned) or any(p.is_handle for p in self.parameters)
+
+    @property
+    def reads_globals(self) -> bool:
+        """Whether module globals are passed to it, which the Python-level
+        binding reads at each call."""
+        return any(p.source for p in self.parameters)
 
     @property
     def ret(self) -> str:

@@ -118,6 +118,9 @@ class ParamInfo:
     #: Whether a pass filled this type in. Usable, but still open to new
     #: evidence -- which is why it is not the same flag as `annotated`.
     inferred: bool = False
+    #: A settled module global native code takes as this parameter
+    #: (`module:name`); Python callers never pass it.
+    global_of: str = ""
 
     @property
     def known(self) -> bool:
@@ -271,6 +274,11 @@ class ModuleSymbols:
     globals: dict[str, T.Type] = field(default_factory=dict)
     global_facts: dict[str, Facts] = field(default_factory=dict)
     constant_globals: dict[str, object] = field(default_factory=dict)
+    #: Module globals bound once, by a statement of the module's own body, and
+    #: never rebound: no `global` statement names them, no other module assigns
+    #: them through the module, and nothing deletes them. What they hold may
+    #: change; which object they hold does not, once the module has run.
+    settled_globals: set[str] = field(default_factory=set)
     #: Module-level names bound once to `re.compile(<bytes literal>)`: name -> (pattern, flags).
     pattern_globals: dict[str, tuple[bytes, int]] = field(default_factory=dict)
     #: Module-level names bound to `ppy.grad(f)` / `ppy.value_and_grad(f)`:
@@ -707,6 +715,7 @@ class ProjectSymbols:
             counts: dict[str, int] = {}
             literals: dict[str, object] = {}
             patterns: dict[str, tuple[bytes, int]] = {}
+            assigned: set[str] = set()
             for node in symbols.module.nodes:
                 if isinstance(node, ast.Name) and isinstance(node.ctx, (ast.Store, ast.Del)):
                     counts[node.id] = counts.get(node.id, 0) + 1
@@ -722,6 +731,7 @@ class ProjectSymbols:
                     target, value = node.targets[0].id, node.value
                 if target is None or value is None:
                     continue
+                assigned.add(target)
                 compiled = pattern_call(symbols, value)
                 if compiled is not None:
                     patterns[target] = compiled
@@ -749,6 +759,18 @@ class ProjectSymbols:
                 symbols.globals.setdefault(
                     name, T.Instance("re.Pattern", (), ("re.Pattern", "object"))
                 )
+
+            bound_otherwise = set(symbols.functions) | set(symbols.classes) | set(symbols.imports)
+            module_stores = _module_scope_stores(symbols.module.tree)
+            symbols.settled_globals = {
+                name
+                for name in assigned
+                if module_stores.get(name, 0) == 1
+                and (symbols.name, name) not in rebound
+                and name not in symbols.constant_globals
+                and name not in symbols.pattern_globals
+                and name not in bound_otherwise
+            }
 
     def resolver(self, symbols: ModuleSymbols) -> NameResolver:
         return NameResolver(symbols, self)
@@ -1268,6 +1290,39 @@ def dataclass_keyword(node: ast.ClassDef, option: str) -> object:
             if keyword.arg == option and isinstance(keyword.value, ast.Constant):
                 return keyword.value.value
     return None
+
+
+def _module_scope_stores(tree: ast.Module) -> dict[str, int]:
+    """How often each name is bound, deleted, or imported in the module's own
+    scope: a function's, a class's, a lambda's, or a comprehension's bindings
+    are its own and do not count."""
+    counts: dict[str, int] = {}
+    scopes = (
+        ast.FunctionDef,
+        ast.AsyncFunctionDef,
+        ast.Lambda,
+        ast.ClassDef,
+        ast.ListComp,
+        ast.SetComp,
+        ast.DictComp,
+        ast.GeneratorExp,
+    )
+    pending: list[ast.AST] = [tree]
+    while pending:
+        node = pending.pop()
+        for child in ast.iter_child_nodes(node):
+            if isinstance(child, scopes):
+                if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+                    counts[child.name] = counts.get(child.name, 0) + 1
+                continue
+            if isinstance(child, ast.Name) and isinstance(child.ctx, (ast.Store, ast.Del)):
+                counts[child.id] = counts.get(child.id, 0) + 1
+            elif isinstance(child, (ast.Import, ast.ImportFrom)):
+                for alias in child.names:
+                    bound = alias.asname or alias.name.partition(".")[0]
+                    counts[bound] = counts.get(bound, 0) + 1
+            pending.append(child)
+    return counts
 
 
 def _dataclass_option(node: ast.ClassDef, option: str) -> bool:
