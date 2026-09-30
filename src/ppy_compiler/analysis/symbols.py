@@ -1218,6 +1218,13 @@ class ProjectSymbols:
                     )
                 )
                 continue
+            if isinstance(entry.bound, ast.Tuple):
+                # `[S: (int, str)]`: constrained, as `TypeVar("S", int, str)` is.
+                constraints = [annotations.resolve(e).type for e in entry.bound.elts]
+                found[entry.name] = T.TypeVar_(
+                    entry.name, T.union(*constraints), owner=info.qualname, constrained=True
+                )
+                continue
             bound = annotations.resolve(entry.bound).type if entry.bound is not None else None
             found[entry.name] = T.TypeVar_(entry.name, bound, owner=info.qualname)
         return found
@@ -1547,9 +1554,7 @@ def _generic_marker(resolver: object, base: ast.expr) -> bool:
     return canonical in {"typing.Generic", "typing_extensions.Generic"}
 
 
-def _old_style_params(
-    node: ast.AST, decls: dict[str, ast.Call], resolver: object
-) -> list[str]:
+def _old_style_params(node: ast.AST, decls: dict[str, ast.Call], resolver: object) -> list[str]:
     """The module `TypeVar`s a class's bases or a function's annotations name, in order."""
     exprs: list[ast.expr] = []
     if isinstance(node, ast.ClassDef):
@@ -1590,5 +1595,5 @@ def _type_var(name: str, call: ast.Call, annotations: object, owner: str) -> T.T
             bound = annotations.resolve(keyword.value).type  # type: ignore[attr-defined]
     constraints = [annotations.resolve(a).type for a in call.args[1:]]  # type: ignore[attr-defined]
     if constraints and bound is None:
-        bound = T.union(*constraints)
+        return T.TypeVar_(name, T.union(*constraints), owner=owner, constrained=True)
     return T.TypeVar_(name, bound, owner=owner)

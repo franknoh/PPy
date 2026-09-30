@@ -2991,7 +2991,7 @@ class _Checker:
         if raised_args is not None:
             return raised_args
         known = (
-            stdlib.instance_attribute(base.name, node.attr)
+            stdlib.instance_attribute(base.name, node.attr, base.args)
             if isinstance(base, T.Instance)
             else None
         )
@@ -3829,6 +3829,12 @@ class _Checker:
         overloaded = self._operator_method(left_base, right_base, op, node)
         if overloaded is not None:
             return overloaded
+        library = stdlib.operator(left_base, _ARITH_OPS.get(op, ""), right_base)
+        if library is not None:
+            # `when + timedelta(days=1)`, `Decimal(x) / 3`, `Counter & Counter`.
+            self._effects = self._effects.add(Effect.ALLOC, raises=("ArithmeticError",))
+            self._native_blockers.append(f"`{_ARITH_OPS.get(op, '?')}` on `{left_base}`")
+            return Binding(library)
         generic = self._type_variable_operator(left_base, right_base, op, node)
         if generic is not None:
             return generic
@@ -3862,6 +3868,22 @@ class _Checker:
 
         return self._numeric_result(left, right, left_base, right_base, op, node)
 
+    def _for_each_constraint(
+        self, members: tuple[T.Type, ...], op: type[ast.operator], node: ast.AST
+    ) -> list[T.Type] | None:
+        """What `m <op> m` is for each constraint `m`, or None if any has no
+        such operator. The trials report nothing."""
+        reported, cascaded = self.diagnostics, self.cascaded
+        self.diagnostics = DiagnosticBag()
+        try:
+            found = [self._binary(Binding(m), Binding(m), op, node).type for m in members]
+            failed = any(d.severity is Severity.ERROR for d in self.diagnostics)
+        finally:
+            self.diagnostics, self.cascaded = reported, cascaded
+        if failed or any(isinstance(t, (T.UnknownType, T.AnyType)) for t in found):
+            return None
+        return [T.strip_literal(t) for t in found]
+
     def _type_variable_operator(
         self, left_base: T.Type, right_base: T.Type, op: type[ast.operator], node: ast.AST
     ) -> Binding | None:
@@ -3887,6 +3909,12 @@ class _Checker:
             )
             return Binding(T.UNKNOWN)
         members = bound.members if isinstance(bound, T.Union_) else (bound,)
+        if variable.constrained and left_base == right_base:
+            # `x + x` for `S = TypeVar("S", int, str)`: both sides are the same
+            # one of the constraints, so it holds if it holds for each.
+            found = self._for_each_constraint(members, op, node)
+            if found is not None:
+                return Binding(variable if found == list(members) else T.union(*found))
         if all(T.is_numeric(T.strip_literal(m)) for m in members):
             other = right_base if variable is left_base else left_base
             other = T.strip_literal(other)

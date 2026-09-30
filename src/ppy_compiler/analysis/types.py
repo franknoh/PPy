@@ -307,11 +307,14 @@ class TypeVar_(Type):
 
     `bound` is the constraint a type argument must satisfy; `owner` names
     the function that declares it, so two functions' `T`s are two types.
+    `constrained` means `bound` is a union of constraints (`TypeVar("S",
+    int, str)`, `[S: (int, str)]`): the value is one of them, not any mix.
     """
 
     name: str
     bound: Type | None = None
     owner: str = ""
+    constrained: bool = False
 
     def __str__(self) -> str:
         return self.name
