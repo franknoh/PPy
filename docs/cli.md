@@ -752,6 +752,40 @@ code. For a function it reports:
 - the representation chosen for each parameter
 - each library call's lowering, with its guards
 
+### `--summary`
+
+```bash
+ppy explain --summary [PATH ...] [--limit N] [--modules] [--json]
+```
+
+Over files or directories (the current directory by default), how much of
+the code goes native and what keeps the rest in Python:
+
+- each function counted once, as native and called from Python, native and
+  called only from native code, or Python; in functions and in statements,
+  which weigh a long function above a short one
+- the reasons functions stay in Python, grouped and ordered by the
+  statements they keep out, each with what to do about it, the guide page,
+  and the first places it occurs; an effect list counts under each effect,
+  and calls whose effects are unknown list the calls seen most often
+- for native functions Python does not call natively, why the boundary is
+  not used (it costs more than the body saves, it passes objects, and so on)
+- a nested function runs where the function around it runs, so it is
+  native when that function is, and otherwise names the function around it;
+  its statements count under itself, not twice
+- files that could not be analyzed or lowered, which are reported and do
+  not stop the summary
+
+| option | effect |
+|---|---|
+| `--limit N` | how many reasons to list (10 by default) |
+| `--modules` | add one line per file: native, native from native, and Python functions |
+| `--json` | everything as JSON: the totals, every reason, and every function with its tier and reason |
+
+A module the analysis follows an import into is not counted; name it to
+include it. [Finding what stays in Python](guide/native-lowering.md#finding-what-stays-in-python)
+walks through reading one.
+
 ## `ppy inspect`
 
 Print generated artifacts.

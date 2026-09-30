@@ -1,0 +1,16 @@
+# corpus: path=run (TheAlgorithms project_euler/problem_049/sol1.py; loop-invariant motion hoisted
+# `tmp = []` out of the loop in a function that stayed in Python, so every pass appended to one list; `[0]` keeps
+# strict mode from asking for an annotation, which would make it a statement LICM leaves alone)
+def solution(xs: list[int]) -> list[list[int]]:
+    out: list[list[int]] = []
+    for n in xs:
+        tmp = [0]
+        for c in str(n * 11):
+            tmp.append(int(c))
+        print(n, len(tmp))
+        out.append(tmp)
+    return out
+
+
+if __name__ == "__main__":
+    print(solution([1, 2]))

@@ -493,7 +493,12 @@ class Frontend:
         self._reject_callers_of_rejected(lowered)
         for qualname in lowered.rejected:
             declaration = self.declared.get(qualname)
-            if declaration is not None and declaration[0].is_declaration:
+            if declaration is None:
+                continue
+            # A function rejected after it lowered (a callee stayed in Python)
+            # takes its string boundary thunk with it: the thunk calls it.
+            self.module.functions.pop(f"{declaration[0].name}.py", None)
+            if declaration[0].is_declaration:
                 self.module.functions.pop(declaration[0].name, None)
         lowered.remarks = tuple(self.remarks)
         return lowered
@@ -2251,6 +2256,8 @@ class _FunctionLowering(
         zero = core.const(self.b, 0, I64)
         carried_as = _read_as(_kind(buffer.type.element))
         carried_type = _scalar_type(carried_as)
+        if operation == "sum" and carried_as == "float":
+            return self._buffer_float_sum(buffer, length)
         if operation in {"min", "max"}:
             self._guard(
                 core.cmp(self.b, "ne", length, zero),
@@ -2291,6 +2298,54 @@ class _FunctionLowering(
         core.br(self.b, Successor(header))
         self.b.at_end(done)
         return core.load(self.b, accumulator)
+
+    def _buffer_float_sum(self, buffer: Value, length: Value) -> Value:
+        """`sum(xs)` of floats as CPython adds them, with Neumaier's compensation
+        carried and added at the end: `sum([0.1, 0.2, 0.3])` is `0.6`."""
+        zero = core.const(self.b, 0.0, F64)
+        # An empty sum is the int 0, which a float result cannot be.
+        self._guard(
+            core.cmp(self.b, "ne", length, core.const(self.b, 0, I64)),
+            "bounds",
+            "sum of no floats is the int 0",
+            raises="TypeError: sum() of no floats is the int 0, which a native float cannot hold",
+        )
+        running = self._alloca(F64, "sum.f")
+        carried = self._alloca(F64, "sum.c")
+        index = self._alloca(I64, "sum.i")
+        core.store(self.b, zero, running)
+        core.store(self.b, zero, carried)
+        core.store(self.b, core.const(self.b, 0, I64), index)
+        header = self._block("sum.head")
+        body = self._block("sum.body")
+        done = self._block("sum.end")
+        core.br(self.b, Successor(header))
+        self.b.at_end(header)
+        current = core.load(self.b, index)
+        core.cond_br(
+            self.b, core.cmp(self.b, "lt", current, length), Successor(body), Successor(done)
+        )
+        self.b.at_end(body)
+        position = core.load(self.b, index)
+        x = self._coerce(core.buffer_load(self.b, buffer, position), "float")
+        f = core.load(self.b, running)
+        t = core.add(self.b, f, x)
+        bigger = core.cmp(self.b, "ge", _magnitude(self, f), _magnitude(self, x))
+        first = core.add(self.b, core.sub(self.b, f, t), x)
+        second = core.add(self.b, core.sub(self.b, x, t), f)
+        step = core.select(self.b, bigger, first, second)
+        core.store(self.b, core.add(self.b, core.load(self.b, carried), step), carried)
+        core.store(self.b, t, running)
+        one = core.const(self.b, 1, I64)
+        core.store(self.b, core.add(self.b, position, one, overflow="wrap"), index)
+        core.br(self.b, Successor(header))
+        self.b.at_end(done)
+        f = core.load(self.b, running)
+        c = core.load(self.b, carried)
+        finite = core.cmp(self.b, "eq", core.sub(self.b, c, c), zero)
+        nonzero = core.cmp(self.b, "ne", c, zero)
+        compensated = core.bitwise(self.b, "and", finite, nonzero)
+        return core.select(self.b, compensated, core.add(self.b, f, c), f)
 
     # -- expressions ------------------------------------------------------
 
@@ -5056,3 +5111,9 @@ _COLLECTION_SUFFIX = {"int": "i64", "float": "f64"}
 def _simple(node: ast.expr) -> bool:
     """A key evaluated twice gives the same value and does nothing else."""
     return isinstance(node, (ast.Name, ast.Constant))
+
+
+def _magnitude(lowering: _FunctionLowering, value: Value) -> Value:
+    zero = core.const(lowering.b, 0.0, F64)
+    negative = core.cmp(lowering.b, "lt", value, zero)
+    return core.select(lowering.b, negative, core.sub(lowering.b, zero, value), value)

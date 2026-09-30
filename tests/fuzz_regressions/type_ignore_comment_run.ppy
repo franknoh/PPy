@@ -1,0 +1,14 @@
+# corpus: path=run (TheAlgorithms maths/entropy.py; a `# type: ignore` comment reached the source map
+# as a node with a line and no column, and `ppy run` crashed building the map)
+from collections import Counter
+
+
+def counts(text: str) -> int:
+    seen: Counter[str] = Counter()  # type: ignore[var-annotated]
+    for ch in text:
+        seen[ch] += 1
+    return len(seen)
+
+
+if __name__ == "__main__":
+    print(counts("hello"))

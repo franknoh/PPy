@@ -41,7 +41,8 @@ PROGRAM = """
 @requires_llvm
 def test_the_probe_answers_for_the_object_in_the_namespace(tmp_path: Path):
     """Under `ppy run` the namespace may hold the C entry point itself, which no
-    attribute can be hung on; the probe knows it anyway, and it bears the qualified name."""
+    attribute can be hung on; the probe knows it anyway, and it bears the function's
+    own name, as the Python function does."""
     entry = tmp_path / "probe.ppy"
     entry.write_text(textwrap.dedent(PROGRAM).lstrip("\n"), encoding="utf-8")
     plain = subprocess.run(
@@ -57,7 +58,7 @@ def test_the_probe_answers_for_the_object_in_the_namespace(tmp_path: Path):
     assert plain.returncode == 0, plain.stderr
     assert native.returncode == 0, native.stderr
     assert plain.stdout == "6.0\nFalse total\n"
-    assert native.stdout == "6.0\nTrue probe.total\n", native.stderr
+    assert native.stdout == "6.0\nTrue total\n", native.stderr
 
 
 def test_the_probe_is_false_for_a_plain_function_and_for_no_runtime():

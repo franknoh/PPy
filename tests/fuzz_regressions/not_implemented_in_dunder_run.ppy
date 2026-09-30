@@ -1,0 +1,21 @@
+# corpus: path=run (TheAlgorithms geometry/jarvis_march.py; `return NotImplemented` in an `__eq__`
+# declared `-> bool` was E1303, so `ppy run` refused a valid program)
+class Point:
+    def __init__(self, x: int, y: int) -> None:
+        self.x = x
+        self.y = y
+
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, Point):
+            return NotImplemented
+        return self.x == other.x and self.y == other.y
+
+    def __hash__(self) -> int:
+        return hash((self.x, self.y))
+
+
+def main() -> None:
+    print(Point(1, 2) == Point(1, 2), Point(1, 2) == Point(2, 1), Point(1, 2) == 3)
+
+
+main()

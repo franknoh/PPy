@@ -56,7 +56,11 @@ def region_dominators(
         changed = False
         for block in blocks[1:]:
             incoming = [sets[p] for p in predecessors[block]]
-            new = set.intersection(*incoming) if incoming else set()
+            # A block nothing branches to is dominated by every block, as LLVM
+            # has it. Taken as dominated by itself alone, it would empty the
+            # intersection at a join it falls into: the merge after an `if`
+            # whose branches both return would lose the entry block.
+            new = set.intersection(*incoming) if incoming else set(everything)
             new.add(block)
             if new != sets[block]:
                 sets[block] = new

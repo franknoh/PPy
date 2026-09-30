@@ -975,6 +975,10 @@ class CollectionApiLowering(CollectionLowering):
         """`get`, `setdefault`, and `pop` with a default: the value where the key is,
         the default where it is not. A collection handed out is the caller's."""
         family = kind.family
+        if len(arguments) != 2:
+            # `d.get(k)` and `d.setdefault(k)` answer `None` for a missing key,
+            # which a value of this shape has no word for.
+            raise Unsupported(f"`{attr}` without a default has no native lowering")
         default, default_owned = self._value(arguments[1], shape)
         key = self._key(kind, arguments[0])
         entry = self._rt(f"ppy_{family}_find", (handle, key))

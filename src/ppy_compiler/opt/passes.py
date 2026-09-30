@@ -105,6 +105,24 @@ def _is_pure_expr(node: ast.expr) -> bool:
     return True
 
 
+_FRESH = (
+    ast.List,
+    ast.Dict,
+    ast.Set,
+    ast.ListComp,
+    ast.DictComp,
+    ast.SetComp,
+    ast.GeneratorExp,
+    ast.Lambda,
+)
+
+
+def _makes_new_object(node: ast.expr) -> bool:
+    """A display, or an operator over one, makes a new object each time it
+    runs: two evaluations are two objects, and one evaluation shared is one."""
+    return any(isinstance(child, _FRESH) for child in ast.walk(node))
+
+
 #: Operators that raise for some operands of the right type: a zero divisor,
 #: a negative shift, an overflowing float power.
 _RAISING_OPERATORS = (ast.Div, ast.FloorDiv, ast.Mod, ast.Pow, ast.LShift, ast.RShift)
@@ -528,7 +546,7 @@ class CommonSubexpression(Pass):
         for node in _same_scope(root):
             if not isinstance(node, (ast.BinOp, ast.Compare)):
                 continue
-            if not _is_pure_expr(node):
+            if not _is_pure_expr(node) or _makes_new_object(node):
                 continue
             key = ast.dump(node)
             count, first = seen.get(key, (0, node))
@@ -632,6 +650,11 @@ class LoopInvariantMotion(Pass):
         # runs none: only what cannot raise may go.
         if not _cannot_raise(value) or _loaded_names(value) & varying:
             return None
+        # A display makes a new object on every pass; hoisted, every pass
+        # would share the one, and `row = []` would keep what the last pass
+        # appended.
+        if _makes_new_object(value):
+            return None
         if target.id in _loaded_names(node.iter):
             return None
         self._temporaries += 1
@@ -680,7 +703,7 @@ class InlineSmallFunctions(Pass):
         params = [p.name for p in info.params]
         if len(params) != len(node.args):
             return node
-        if any(not _is_pure_expr(a) for a in node.args):
+        if any(not _is_pure_expr(a) or _makes_new_object(a) for a in node.args):
             return node
         mapping = dict(zip(params, node.args, strict=False))
         inlined = _Substitute(mapping).visit(copy.deepcopy(body))

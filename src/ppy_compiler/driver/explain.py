@@ -21,7 +21,19 @@ _CODE = re.compile(r"^[EWR]\d{4}$", re.IGNORECASE)
 
 
 def run_explain(options: argparse.Namespace, reporter: Reporter) -> int:
-    location: str = options.location
+    if getattr(options, "summary", False):
+        return _summary(options, reporter)
+    locations: list[str] = options.location
+    if len(locations) != 1:
+        reporter.emit(
+            Diagnostic(
+                "E1002",
+                Severity.ERROR,
+                "`ppy explain` takes one location, qualname, or code (or --summary PATH...)",
+            )
+        )
+        return 2
+    location = locations[0]
 
     if _CODE.match(location):
         return _explain_code(location, reporter)
@@ -38,6 +50,34 @@ def run_explain(options: argparse.Namespace, reporter: Reporter) -> int:
     target = Path.cwd()
     bundle = _analyze(target, options)
     return _explain_qualname(bundle, location, reporter)
+
+
+def _summary(options: argparse.Namespace, reporter: Reporter) -> int:
+    """`ppy explain --summary [PATH...]`: see `driver.summary`."""
+    from .summary import render_summary, summarize, summary_json
+
+    targets = [Path(p) for p in options.location] or [Path.cwd()]
+    missing = [t for t in targets if not t.exists()]
+    if missing:
+        for target in missing:
+            reporter.emit(Diagnostic("E1002", Severity.ERROR, f"{target} does not exist"))
+        return 2
+    project = open_project(targets[0])
+    entries = sorted({entry for target in targets for entry in collect_sources(target)})
+    bundle = analyze_paths(project, entries, backend="llvm")
+    failures: dict[str, str] = {}
+    try:
+        from ..backend.llvm import _collect
+
+        lowered = _collect(bundle, failures=failures)
+    except ImportError:  # pragma: no cover - the backend is optional
+        lowered = {}
+    summary = summarize(bundle, lowered, entries, failures)
+    if options.json:
+        print(summary_json(summary), end="")
+    else:
+        print(render_summary(summary, limit=options.limit, modules=options.modules), end="")
+    return 0
 
 
 def _analyze(target: Path, options: argparse.Namespace) -> AnalysisBundle:

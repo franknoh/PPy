@@ -1,0 +1,22 @@
+# corpus: path=run (TheAlgorithms boolean_algebra/karnaugh_map_simplification.py; the Python-level
+# binding of a native function taking a list accepted positional arguments only, so a keyword call
+# raised TypeError, and doctest skipped it for being defined in the runtime's module; the replay
+# prints what doctest reads)
+def simplify_kmap(kmap: list[list[int]]) -> str:
+    """
+    >>> simplify_kmap(kmap=[[0, 1], [1, 1]])
+    "A'B + AB' + AB"
+    """
+    terms = []
+    for a, row in enumerate(kmap):
+        for b, item in enumerate(row):
+            if item != 0:
+                term = ("A" if a else "A'") + ("B" if b else "B'")
+                terms.append(term)
+    return " + ".join(terms)
+
+
+if __name__ == "__main__":
+    shown = simplify_kmap
+    print(shown.__name__, shown.__qualname__, shown.__module__, shown.__doc__)
+    print(simplify_kmap(kmap=[[0, 1], [1, 1]]))

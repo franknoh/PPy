@@ -1409,7 +1409,13 @@ class _Checker:
         for jumped in breaks:
             after = after.merge(jumped)
         env.restore(after.snapshot())
-        env.reachable = True
+        # `while True:` with no `break` leaves only by `return` or `raise`:
+        # what follows it never runs, and is not checked, as a trailing
+        # `return None` after such a loop is not.
+        endless = (
+            test is not None and isinstance(test, ast.Constant) and bool(test.value) and not breaks
+        )
+        env.reachable = not endless
 
     def _widen(self, env: Env) -> None:
         """Drop non-converging integer ranges rather than iterate forever."""
@@ -1857,7 +1863,8 @@ class _Checker:
                 env.set(path, Binding(declared_type or value.type, value.facts))
         elif isinstance(target, ast.Subscript):
             container = T.strip_literal(self._expr(target.value, env).type)
-            self._expr(target.slice, env)
+            key = self._expr(target.slice, env)
+            container = self._widen_empty_dict(target.value, container, key, value, env)
             written = target.value
             if isinstance(container, T.Instance) and container.name in C.COLLECTIONS:
                 self._store_element(container, value, target)
@@ -2401,6 +2408,27 @@ class _Checker:
         if base.name in {"list", "set"} and isinstance(base.args[0], T.NeverType):
             env.set(func.value.id, Binding(T.instance(base.name, element), binding.facts))
 
+    def _widen_empty_dict(
+        self, owner: ast.expr, container: T.Type, key: Binding, value: Binding, env: Env
+    ) -> T.Type:
+        """`seen = {}` followed by `seen[k] = v` gives `seen` its key and value
+        types, as `append` does for a list."""
+        if not (
+            isinstance(owner, ast.Name)
+            and isinstance(container, T.Instance)
+            and container.name == "dict"
+            and len(container.args) == 2
+            and all(isinstance(arg, T.NeverType) for arg in container.args)
+        ):
+            return container
+        written = [T.strip_literal(key.type), T.strip_literal(value.type)]
+        if any(isinstance(t, (T.UnknownType, T.AnyType, T.NeverType)) for t in written):
+            return container
+        binding = env.get(owner.id)
+        widened = T.instance("dict", *written)
+        env.set(owner.id, Binding(widened, binding.facts if binding else Facts()))
+        return widened
+
     def _construct(
         self,
         cls: T.ClassObject,
@@ -2712,7 +2740,11 @@ class _Checker:
             if chosen is None:
                 bindings[variable] = variable.bound or T.ANY
                 continue
-            if variable.bound is not None and not T.is_assignable(chosen, variable.bound):
+            if (
+                variable.bound is not None
+                and not T.is_assignable(chosen, variable.bound)
+                and not self._has_protocol_members(chosen, variable.bound)
+            ):
                 self._error(
                     "E1721",
                     f"`{info.name}[{variable.name}]` requires `{variable.bound}`, "
@@ -3082,6 +3114,40 @@ class _Checker:
             self._effects = self._effects | effects
             self._blockers.append(f"uses `{module}` which has effects: {effects}")
         return Binding(T.UNKNOWN)
+
+    def _has_protocol_members(self, chosen: T.Type, bound: T.Type) -> bool:
+        """Whether `chosen` has every member a project Protocol `bound` names.
+
+        A project class gains the Protocols it matches in its MRO when symbols
+        are resolved; a builtin (`int` for a `Comparable` with `__lt__`) never
+        does, so a bound is also met by the members themselves, by name, as
+        that matching is.
+        """
+        target = T.strip_literal(bound)
+        if not isinstance(target, T.Instance):
+            return False
+        protocol = self.project.classes.get(target.name)
+        if protocol is None or not protocol.is_protocol:
+            return False
+        wanted = set(protocol.methods) | set(protocol.fields)
+        wanted -= {"__init__", "__slots__"}
+        if not wanted:
+            return True
+        import builtins  # pylint: disable=import-outside-toplevel
+
+        base = T.strip_literal(chosen)
+        info = self.project.classes.get(base.name) if isinstance(base, T.Instance) else None
+        # A builtin's own type answers for its dunders, which the method table
+        # does not model (`int.__lt__`).
+        runtime = getattr(builtins, base.name, None) if isinstance(base, T.Instance) else None
+        for name in wanted:
+            if info is not None and info.lookup(name, self.project) is not None:
+                continue
+            if isinstance(runtime, type) and hasattr(runtime, name):
+                continue
+            if self._builtin_method(base, name) is None:
+                return False
+        return True
 
     def _builtin_method(self, base: T.Type, attr: str) -> T.Type | None:
         if not isinstance(base, (T.Instance, T.Tuple_)):
@@ -3688,6 +3754,22 @@ class _Checker:
             if isinstance(left_base, T.DynamicType) or isinstance(right_base, T.DynamicType):
                 return Binding(T.DYNAMIC)
             return Binding(T.DYNAMIC if self._dynamic_depth else T.UNKNOWN)
+
+        if isinstance(left_base, T.NeverType) or isinstance(right_base, T.NeverType):
+            # An element of a container still empty here, as `seen[k] += 1` is
+            # on the first pass of a loop whose other branch fills `seen`:
+            # there is no such value yet, and the next pass checks the real one.
+            return Binding(T.NEVER)
+        if (
+            op is ast.Add
+            and isinstance(left_base, T.Instance)
+            and isinstance(right_base, T.Instance)
+            and left_base.name == right_base.name
+            and T.is_empty_container(left_base)
+        ):
+            # `[] + names`: the empty list takes the other's element type.
+            self._effects = self._effects.add(Effect.ALLOC)
+            return Binding(right_base)
 
         if op is ast.BitOr and _is_class_value(left_base) and _is_class_value(right_base):
             # `list | dict` in an `isinstance` is a type made of types.

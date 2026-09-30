@@ -1,0 +1,32 @@
+# corpus: path=run (TheAlgorithms sorts/tim_sort.py; Sequence[T] given a list[int] bound no T, and a
+# list of a subclass given for Sequence of its base was refused, since variance was read off the list)
+from collections.abc import Sequence
+
+
+class Animal:
+    def __init__(self, legs: int) -> None:
+        self.legs = legs
+
+
+class Dog(Animal):
+    def bark(self) -> str:
+        return "woof"
+
+
+def legs(animals: Sequence[Animal]) -> int:
+    total = 0
+    for animal in animals:
+        total += animal.legs
+    return total
+
+
+def first[T](values: Sequence[T]) -> T:
+    return values[0]
+
+
+def main() -> None:
+    dogs: list[Dog] = [Dog(4), Dog(3)]
+    print(legs(dogs), first([4, 5]), first(["x", "y"]), first(dogs).bark())
+
+
+main()

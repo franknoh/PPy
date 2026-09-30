@@ -272,7 +272,10 @@ def bind(
         # choice, the call, and the boxing in C; `NotImplemented` is its signal
         # that a guard failed. While the function is still learning which
         # argument shapes repeat, Python watches alongside.
-        def fast_wrapper(*args: object) -> object:
+        def fast_wrapper(*args: object, **keywords: object) -> object:
+            if keywords:
+                # Python binds keywords; the native code takes its arguments in order.
+                return fallback(*args, **keywords)
             if binding.observing:
                 _watch(binding, signature, args, policy, specializer, info, register)
             result = fast_entry(*args)
@@ -282,17 +285,15 @@ def bind(
             binding.calls += 1
             return result
 
-        fast_wrapper.__name__ = signature.qualname.rpartition(".")[2]
-        fast_wrapper.__qualname__ = signature.qualname
-        fast_wrapper.__doc__ = getattr(fallback, "__doc__", None)
+        _dress(fast_wrapper, signature, fallback)
         fast_wrapper.__ppy_native__ = signature  # type: ignore[attr-defined]
         fast_wrapper.__ppy_fallback__ = fallback  # type: ignore[attr-defined]
         binding.wrapper = fast_wrapper
         return binding
 
-    def wrapper(*args: object) -> object:
-        if len(args) != len(expanders):
-            return fallback(*args)
+    def wrapper(*args: object, **keywords: object) -> object:
+        if keywords or len(args) != len(expanders):
+            return fallback(*args, **keywords)
         atoms: list[object] = []
         # `borrowed` keeps each unboxed buffer alive for the duration of the call.
         borrowed: list[object] = []
@@ -334,13 +335,21 @@ def bind(
             )
         return finalizers[0](slots[0].value)
 
-    wrapper.__name__ = signature.qualname.rpartition(".")[2]
-    wrapper.__qualname__ = signature.qualname
-    wrapper.__doc__ = getattr(fallback, "__doc__", None)
+    _dress(wrapper, signature, fallback)
     wrapper.__ppy_native__ = signature  # type: ignore[attr-defined]
     wrapper.__ppy_fallback__ = fallback  # type: ignore[attr-defined]
     binding.wrapper = wrapper
     return binding
+
+
+def _dress(wrapper, signature, fallback) -> None:  # type: ignore[no-untyped-def]
+    """Give a wrapper the function's own name, docstring, and module, so
+    `help`, `doctest`, and `__name__` see what the program wrote."""
+    name = signature.qualname.rpartition(".")[2]
+    wrapper.__name__ = getattr(fallback, "__name__", name)
+    wrapper.__qualname__ = getattr(fallback, "__qualname__", signature.qualname)
+    wrapper.__doc__ = getattr(fallback, "__doc__", None)
+    wrapper.__module__ = getattr(fallback, "__module__", wrapper.__module__)
 
 
 def _text_result(address: int | None, length: int) -> str:
@@ -388,9 +397,9 @@ def _bind_collections(  # type: ignore[no-untyped-def]
         signature=signature, wrapper=lambda *a: None, fallback=fallback, owner=owner
     )
 
-    def wrapper(*args: object) -> object:
-        if len(args) != len(expanders):
-            return fallback(*args)
+    def wrapper(*args: object, **keywords: object) -> object:
+        if keywords or len(args) != len(expanders):
+            return fallback(*args, **keywords)
         boundary = crossing.Boundary(rt)
         try:
             answered, answer = _cross(boundary, args)
@@ -449,9 +458,7 @@ def _bind_collections(  # type: ignore[no-untyped-def]
             )
         return True, _result_for(signature.returns[0])(slots[0].value)
 
-    wrapper.__name__ = signature.qualname.rpartition(".")[2]
-    wrapper.__qualname__ = signature.qualname
-    wrapper.__doc__ = getattr(fallback, "__doc__", None)
+    _dress(wrapper, signature, fallback)
     wrapper.__ppy_native__ = signature  # type: ignore[attr-defined]
     wrapper.__ppy_fallback__ = fallback  # type: ignore[attr-defined]
     binding.wrapper = wrapper

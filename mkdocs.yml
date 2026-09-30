@@ -206,6 +206,7 @@ nav:
       - Plugins: internals/plugins.md
       - Backends: internals/backends.md
       - Where a solver fits: internals/solver.md
+      - Native coverage of a real corpus: internals/native-coverage.md
       - Hardware validation: internals/hardware-validation.md
       - Contributing: contributing.md
   - Changelog: changelog.md

@@ -1,0 +1,15 @@
+# corpus: path=run (TheAlgorithms backtracking/match_word_pattern.py; the join after an `if` whose
+# branches both return was taken as dominated by that unreachable join alone, so the IR verifier
+# refused a later read of a local as "used before it is defined" and `ppy run` crashed)
+def pick(n: int) -> int:
+    x = n + 1
+    if x > 3:
+        if x > 5:
+            return 1
+        else:
+            return 2
+    return x
+
+
+if __name__ == "__main__":
+    print(pick(1), pick(4), pick(9))

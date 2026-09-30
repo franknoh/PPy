@@ -120,8 +120,13 @@ def prover_for(config):  # type: ignore[no-untyped-def]
     return Prover()
 
 
-def _collect(bundle, opt_level: int | None = None) -> dict[str, NativeModule]:  # type: ignore[no-untyped-def]
-    """Lower every module in the project to LLVM IR, reusing a cached result."""
+def _collect(bundle, opt_level: int | None = None, failures=None) -> dict[str, NativeModule]:  # type: ignore[no-untyped-def]
+    """Lower every module in the project to LLVM IR, reusing a cached result.
+
+    With `failures` (a dict), a module whose lowering raises is recorded
+    there, by name, and left out, so a report over many modules survives one
+    it cannot lower; without it, the error propagates as it always has.
+    """
     modules: dict[str, NativeModule] = {}
     layouts = _value_class_layouts(bundle)
     available: dict[str, tuple] = {}  # type: ignore[type-arg]
@@ -155,9 +160,15 @@ def _collect(bundle, opt_level: int | None = None) -> dict[str, NativeModule]:  
         fused, plan, notes = _fuse(symbols, analysis)
         if not candidates and not fused:
             continue
-        result: LoweringResult = _lower(
-            bundle, analysis, candidates, layouts, opt_level, available.get
-        )
+        try:
+            result: LoweringResult = _lower(
+                bundle, analysis, candidates, layouts, opt_level, available.get
+            )
+        except Exception as error:  # reported through `failures`, see the docstring
+            if failures is None:
+                raise
+            failures[module.name] = f"{type(error).__name__}: {str(error).splitlines()[0]}"
+            continue
         native = NativeModule(
             name=module.name,
             ppyir=result.ppyir,
