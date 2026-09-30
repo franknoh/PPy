@@ -3,11 +3,12 @@
 ## 0.5.0 — 2026-09-30
 
 Ordinary Python goes native without a rewrite. Plain lists, dicts, and sets
-compile, and so do exceptions and generators. A warm `ppy run` is within
-noise of `python` (5%, or 30 ms if that is more) or faster on every example;
-a program that does almost no work still pays about 15 ms to start. A
-differential fuzzer now checks every path against CPython, and the bugs it
-found are fixed.
+compile, and so do exceptions, generators, closures, lambdas, and functions
+passed as values. A warm `ppy run` is within noise of `python` (5%, or 30 ms
+if that is more) or faster on every example, and a first run takes about
+half as long as in 0.4. `ppy explain --summary` shows what stays in Python
+and why. A differential fuzzer now checks every path against CPython, and
+the bugs it and a corpus of public programs found are fixed.
 
 ### Lists, dicts, and sets
 
@@ -76,6 +77,14 @@ found are fixed.
   The strings example runs in about 1 s warm, against about 2.4 s for `python`.
 - `scripts/run_overhead.py` times `python` against `ppy run`, cold and warm,
   for every example, and the performance page shows the result.
+- The first `ppy run` of a program is faster: the median across the examples
+  fell from 0.67 s to 0.38 s. The collections and async runtimes are
+  compiled once per machine with optimization and reused. Each module's LLVM
+  IR is emitted only when something reads it. The pipeline's own passes are
+  verified once at the end. External class hierarchies are read on first
+  use.
+- Programs that use lists, dicts, sets, or strings run faster warm, because
+  their runtime is now optimized.
 
 ### Differential fuzzing
 
@@ -121,6 +130,83 @@ found are fixed.
 - Fixed: a warm `ppy run` could rerun the previous build after a same-size
   edit made within one timestamp tick of the last build. A source that
   recent is now checked by its content.
+
+### Functions as values
+
+- Nested functions and `lambda` compile to native code under `ppy run`, in
+  standalone binaries, and in emitted C and C++. A closure reads the
+  enclosing function's variables as they are when it runs, and writes them
+  with `nonlocal`, as CPython does.
+- Functions are values natively: `Callable[[A, B], R]` parameters, results,
+  locals, list and dict elements, and object fields, and calls through any
+  of them.
+- `sorted(xs, key=...)`, `min(xs, key=...)`, and `max(xs, key=...)` are
+  native, and `sort`'s key may be any function value.
+- `map(f, xs)`, `filter(f, xs)`, and `filter(None, xs)` compile where a
+  loop, `sum`, `min`, `max`, `sorted`, or a comprehension consumes them.
+- A lambda takes its parameter types from where it is written: a `Callable`
+  parameter, a declared local, a field, a dict or list element, or a
+  constructor argument.
+- A function that takes or returns a function value runs as Python when
+  Python calls it. A function value never crosses the boundary.
+- Fixed: the Python backend could fold a variable a nested function rebinds
+  with `nonlocal`, and could move an expression out of a lambda body.
+- Fixed: `--unsafe` C and C++ programs freed a reference cycle only if the
+  collector happened to run.
+- The checker now checks nested function bodies. A display returned from a
+  function takes its declared type, and `&`, `|`, and `^` of two bools give
+  a `bool`.
+- New guide page: [Functions as
+  values](https://ppy.franknoh.dev/dev/guide/closures/).
+
+### More of Python native
+
+- Project exception classes with fields and `__init__`, `raise ... from`,
+  and generators stepped by `next` and `for` compile to native code.
+- Sets of ints and tuples of ints walk and print in CPython's order
+  natively, and the in-place set operators change the set itself.
+- `dict` and `set` keyed by `float` or `bool` are native.
+- Dataclass `==`, `order=True`, and `repr`, and `str()` and `repr()` of
+  objects are native.
+- `str.format` and `%` formatting of a literal are native.
+
+### Finding what stays in Python
+
+- `ppy explain --summary [PATH ...]` reports, for a file, a directory, or a
+  project, how many functions and statements go native, and what keeps the
+  rest in Python. The reasons are grouped and ranked, each with a hint and a
+  guide link. `--json` gives every function.
+- Fixed: `ppy run` crashed when a function returning a string called one
+  that stayed in Python.
+- Fixed: `d.get(k)` without a default crashed lowering.
+- Fixed: a native function refused keyword arguments. It also reported the
+  wrapper's name and module with no docstring, so `doctest` skipped its
+  tests.
+- Fixed: loop-invariant motion hoisted `row = []` out of a loop, so every
+  pass shared one list.
+- Fixed: common-subexpression elimination made `a, b = [0] * n, [0] * n` one
+  list.
+- Fixed: a native `sum` of a float list added without CPython's compensation
+  (`0.6000000000000001` for `[0.1, 0.2, 0.3]`).
+- Fixed: a `# type: ignore` comment crashed the Python backend.
+- Fixed: the IR verifier refused a local read after an `if` whose branches
+  both return.
+- A builtin such as `int` meets a Protocol bound.
+- A list goes where a `Sequence` of its element type, or of a base class, is
+  expected.
+- `return NotImplemented` in an operator method is allowed.
+- A bare `Callable` annotation is accepted.
+- An empty `{}` or `[]` takes the type of what fills it.
+- A `return` after `while True:` with no `break` is no longer checked.
+
+### Known limitations
+
+- A native function with a `float` parameter given an `int` works with it as
+  a float, so a result CPython keeps an `int` comes back a float: `f(0)`
+  returns `0.0` where CPython returns `0`. A fix that keeps such calls native
+  is planned for 0.6.0.
+- A generator returned from a function or passed to another, `e.args`, and
+  sorting objects of an `order=True` dataclass stay in Python.
 
 ## 0.4.2 — 2026-09-28
 
