@@ -515,6 +515,22 @@ def _verify_struct_extract(op: Operation, checker: Checker) -> None:
     _result_matches(op, checker, source.field_type(name))  # type: ignore[arg-type]
 
 
+def _passes(given: IRType, expected: IRType) -> bool:
+    """Whether an argument of type `given` goes to a parameter of type `expected`:
+    the same type, or a pointer to the caller's own stack lent to a callee that
+    takes any host address, for the call and no longer."""
+    if given == expected:
+        return True
+    return (
+        isinstance(given, PtrType)
+        and isinstance(expected, PtrType)
+        and given.address_space == "stack"
+        and expected.address_space == "generic"
+        and given.pointee == expected.pointee
+        and given.mutable == expected.mutable
+    )
+
+
 def _verify_call(op: Operation, checker: Checker) -> None:
     callee = op.attributes.get("callee")
     if not isinstance(callee, SymbolRef):
@@ -529,7 +545,9 @@ def _verify_call(op: Operation, checker: Checker) -> None:
         return
     given = tuple(v.type for v in op.operands)
     expected = tuple(t for _name, t in target.params)
-    if given != expected:
+    if len(given) != len(expected) or not all(
+        _passes(g, e) for g, e in zip(given, expected, strict=True)
+    ):
         checker.error(
             op,
             f"@{callee.name} takes ({', '.join(map(str, expected))}), "
