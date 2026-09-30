@@ -1306,10 +1306,13 @@ class _FunctionLowering(ExceptionLowering, GeneratorLowering, ContainerLowering,
     # -- statements -------------------------------------------------------
 
     def _body(self, body: list[ast.stmt]) -> None:
-        for statement in body:
+        for index, statement in enumerate(body):
             if not self._open():
                 return
             self._location(statement)
+            if self._stepped_generator(statement, body[index + 1 :]):
+                # `it = gen()` stepped by the statements after it, which it lowered.
+                return
             self._statement(statement)
 
     def _resolves_to(self, node: ast.expr, qualname: str) -> bool:
