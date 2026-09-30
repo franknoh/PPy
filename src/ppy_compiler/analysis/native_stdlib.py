@@ -11,13 +11,14 @@ answers None for, and the call stays a Python call.
 
 from __future__ import annotations
 
+import string as _string
 from typing import Protocol
 
 from . import types as T
 from .effects import Effect, EffectSet
 from .refinements import Facts
 
-__all__ = ["MODELS", "MUTATES_FIRST", "call"]
+__all__ = ["MODELS", "MUTATES_FIRST", "STRING_CONSTANTS", "call"]
 
 
 class _Argument(Protocol):
@@ -102,6 +103,22 @@ MODELS: dict[str, tuple[T.Type, EffectSet]] = {
     "bisect.insort_left": _fn("bisect.insort_left", T.NONE, _INSORT),
     "bisect.insort_right": _fn("bisect.insort_right", T.NONE, _INSORT),
     "bisect.insort": _fn("bisect.insort", T.NONE, _INSORT),
+}
+
+#: `string`'s constants, which native code holds as literals.
+STRING_CONSTANTS = {
+    f"string.{name}": getattr(_string, name)
+    for name in (
+        "ascii_letters",
+        "ascii_lowercase",
+        "ascii_uppercase",
+        "digits",
+        "hexdigits",
+        "octdigits",
+        "punctuation",
+        "whitespace",
+        "printable",
+    )
 }
 
 #: The calls that write to the list they are given first.

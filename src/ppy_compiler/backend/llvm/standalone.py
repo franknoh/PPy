@@ -13,7 +13,7 @@ import os
 import subprocess
 from pathlib import Path
 
-from ...analysis.native_stdlib import MATH_NATIVE
+from ...analysis.native_stdlib import MATH_NATIVE, STRING_CONSTANTS
 from ...analysis.native_stdlib import MODELS as NATIVE_MODELS
 from ...diagnostics import Diagnostic, Severity
 from ...driver.ir_pipeline import value_class_layouts
@@ -26,7 +26,7 @@ from .lowering import LoweringResult, called_back_only, eligible
 __all__ = ["build_standalone", "standalone_ir"]
 
 #: Standard-library modules whose calls the runtime has natively.
-_NATIVE_MODULES = frozenset({"random", "heapq", "bisect", "itertools"})
+_NATIVE_MODULES = frozenset({"random", "heapq", "bisect", "itertools", "string"})
 
 #: What `from math import ...` may name in a standalone module.
 _MATH_NAMES = (
@@ -447,14 +447,15 @@ def _module_shape(
                 and not statement.names[0].asname
             ):
                 continue
-            # `random`, `heapq`, `bisect`, and `itertools` are the runtime's natively; a
+            # `random`, `heapq`, `bisect`, `itertools`, and `string` are native; a
             # call that does not lower is refused with its function too.
             if isinstance(statement, ast.Import) and all(
                 alias.name in _NATIVE_MODULES for alias in statement.names
             ):
                 continue
             if names in _NATIVE_MODULES and all(
-                f"{names}.{name}" in NATIVE_MODELS for name in listed
+                f"{names}.{name}" in NATIVE_MODELS or f"{names}.{name}" in STRING_CONSTANTS
+                for name in listed
             ):
                 continue
             if names == "math" and all(name in _MATH_NAMES for name in listed):

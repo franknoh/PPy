@@ -19,7 +19,7 @@ from functools import cache
 
 from ..analysis import types as T
 from ..analysis.lexical import LexicalBindings
-from ..analysis.native_stdlib import MATH_NATIVE, MODELS
+from ..analysis.native_stdlib import MATH_NATIVE, MODELS, STRING_CONSTANTS
 from ..backend.llvm.lowering import _MATH_INTRINSICS, Unsupported
 from ..ir import BOOL, F64, I64, Value
 from ..ir.dialects import core
@@ -68,6 +68,26 @@ _FLOAT_ARGUMENTS = {
 
 class StdlibLowering:
     """The standard library's calls; mixed into `_FunctionLowering`."""
+
+    def _handle(self, node: ast.expr) -> tuple[Value, bool]:
+        if isinstance(node, ast.Name):
+            constant = self._string_handle(node)
+            if constant is not None:
+                return constant
+        return super()._handle(node)  # type: ignore[misc,no-any-return]
+
+    def _string_handle(self, node: ast.expr) -> tuple[Value, bool] | None:
+        """`string.ascii_lowercase` and its kin: a literal, borrowed."""
+        if isinstance(node, (ast.Attribute, ast.Name)):
+            name = node.attr if isinstance(node, ast.Attribute) else node.id
+            if f"string.{name}" in STRING_CONSTANTS:
+                lexical = self.frontend.analysis.symbols.lexical  # type: ignore[attr-defined]
+                if isinstance(lexical, LexicalBindings):
+                    found = lexical.targets_at(node)
+                    if len(found) == 1 and next(iter(found)) in STRING_CONSTANTS:
+                        text = STRING_CONSTANTS[next(iter(found))]
+                        return self._string_literal(text), False  # type: ignore[attr-defined]
+        return super()._string_handle(node)  # type: ignore[misc,no-any-return]
 
     def _stdlib_constant(self, node: ast.Attribute | ast.Name) -> Value | None:
         """`math.pi`, `from math import inf`, and the rest of `math`'s constants."""

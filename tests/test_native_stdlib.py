@@ -276,7 +276,9 @@ main()
 
 ITERTOOLS = """
 import itertools
+import string
 from itertools import combinations, pairwise, permutations
+from string import digits
 
 
 def walks(n: int) -> str:
@@ -303,8 +305,16 @@ def walks(n: int) -> str:
     return f"{t} {out} {acc} {fac} {rep} {pairs}"
 
 
+def letters(n: int) -> str:
+    s = ""
+    for i in range(n):
+        s += string.ascii_lowercase[i % 26] + digits[i % 10]
+    return s + str(len(string.punctuation)) + str("q" in string.ascii_letters)
+
+
 def main() -> None:
     print(walks(20))
+    print(letters(30))
 
 
 main()
@@ -319,7 +329,7 @@ PROGRAMS = {
     # standalone binary, Python's under `ppy run`.
     "gauss": (GAUSS, ()),
     "math": (MATH, ("integers", "floats", "sums")),
-    "itertools": (ITERTOOLS, ("walks",)),
+    "itertools": (ITERTOOLS, ("walks", "letters")),
 }
 
 
