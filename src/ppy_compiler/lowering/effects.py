@@ -33,7 +33,18 @@ from dataclasses import dataclass, field
 from ..analysis import types as T
 from ..analysis.lexical import LexicalBindings
 from ..backend.llvm.lowering import Unsupported
-from ..ir import BOOL, F64, I64, IntType, IRFunction, IRModule, Operation, Successor, SymbolRef, Value
+from ..ir import (
+    BOOL,
+    F64,
+    I64,
+    IntType,
+    IRFunction,
+    IRModule,
+    Operation,
+    Successor,
+    SymbolRef,
+    Value,
+)
 from ..ir.dialects import core
 from .collections import HANDLE, STR, class_tag
 
@@ -323,9 +334,7 @@ class EffectLowering:  # pylint: disable=too-few-public-methods
         core.store(self.b, opened, slot)  # type: ignore[attr-defined]
         self._effect_files()[name] = slot
         closing = ast.Expr(
-            ast.Call(
-                ast.Attribute(ast.Name(name, ast.Load()), "close", ast.Load()), [], []
-            )
+            ast.Call(ast.Attribute(ast.Name(name, ast.Load()), "close", ast.Load()), [], [])
         )
         guarded = ast.Try(body=node.body, handlers=[], orelse=[], finalbody=[closing])
         ast.copy_location(guarded, node)
@@ -665,17 +674,29 @@ def _checked_arithmetic(op: Operation) -> bool:
     """An integer operation the backend checks for overflow, falling back
     (`from_ir._arith`, `_neg`, `_divmod`, `_shift`)."""
     name = op.name
-    if name not in {"core.add", "core.sub", "core.mul", "core.neg", "core.div", "core.mod", "core.shl"}:
+    if name not in {
+        "core.add",
+        "core.sub",
+        "core.mul",
+        "core.neg",
+        "core.div",
+        "core.mod",
+        "core.shl",
+    }:
         return False
     if not op.results or not isinstance(op.results[0].type, IntType):
         return False
     default = "wrap" if name == "core.shl" else "python"
     overflow = op.attributes.get("overflow", default)
-    unchecked = {"wrap", "native"} if name in {"core.neg", "core.div", "core.mod", "core.shl"} else {
-        "wrap",
-        "native",
-        "proven",
-    }
+    unchecked = (
+        {"wrap", "native"}
+        if name in {"core.neg", "core.div", "core.mod", "core.shl"}
+        else {
+            "wrap",
+            "native",
+            "proven",
+        }
+    )
     return overflow not in unchecked
 
 
@@ -726,9 +747,7 @@ class _Checker:
         a barrier where its signature says it has effects."""
         target = self.module.functions.get(name)
         effects = bool(target is not None and target.attributes.get("ppy.effects"))
-        return EffectSummary(
-            holds=effects, barrier=effects, falls_back=True, raises_inexactly=True
-        )
+        return EffectSummary(holds=effects, barrier=effects, falls_back=True, raises_inexactly=True)
 
     def summary(self, name: str) -> EffectSummary:
         found = self.summaries.get(name)
@@ -762,10 +781,9 @@ class _Checker:
         name = op.name
         if name == "core.guard":
             label = str(op.attributes.get("label") or "")
-            if label != "raised" and not label.startswith("sanitize:"):
-                if _linked_call(op) is None:
-                    message = str(op.attributes.get("message") or op.attributes.get("kind"))
-                    falls = f"a check that falls back ({message})"
+            if label != "raised" and not label.startswith("sanitize:") and _linked_call(op) is None:
+                message = str(op.attributes.get("message") or op.attributes.get("kind"))
+                falls = f"a check that falls back ({message})"
         elif name == "core.call":
             callee = _callee(op) or ""
             summary = self.summary(callee)
@@ -774,9 +792,12 @@ class _Checker:
                 falls = f"a call to `{shown}`, which may fall back,"
             if summary.raises_inexactly:
                 inexact = f"a call to `{shown}`, which may raise what Python would say otherwise,"
-            if not self.exceptions and not op.attributes.get("capture_status"):
-                if summary.raises_inexactly or summary.falls_back:
-                    falls = falls or f"a call to `{shown}`, whose exception falls back,"
+            if (
+                not self.exceptions
+                and not op.attributes.get("capture_status")
+                and (summary.raises_inexactly or summary.falls_back)
+            ):
+                falls = falls or f"a call to `{shown}`, whose exception falls back,"
             if summary.barrier:
                 barrier = f"`{shown}()`"
         elif name == "core.call_indirect":
@@ -939,7 +960,7 @@ def check_effects(
                 named = {v.name for v in op.attributes.values() if isinstance(v, SymbolRef)}
                 hit = named & broken.keys()
                 if hit:
-                    callee = sorted(hit)[0]
+                    callee = min(hit)
                     broken[function.name] = (
                         f"calls `{checker.spelled(callee)}`, which stays in Python"
                     )
@@ -958,4 +979,3 @@ def rule_of(summary: EffectSummary) -> str:
     if summary.holds:
         return "effects: output is held until the call returns, and dropped if it falls back"
     return ""
-

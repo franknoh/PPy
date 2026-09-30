@@ -746,7 +746,10 @@ class Frontend:
         # An exception goes on up as one: after an effect, the boundary raises it.
         raised = core.cmp(b, "eq", status, core.const(b, STATUS_RAISED, I64))
         core.guard(
-            b, core.bitwise(b, "xor", raised, core.const(b, True, BOOL)), "contract", "raised",
+            b,
+            core.bitwise(b, "xor", raised, core.const(b, True, BOOL)),
+            "contract",
+            "raised",
             label="raised",
         )
         core.guard(b, core.cmp(b, "eq", status, core.const(b, 0, I64)), "contract", "fell back")
@@ -1250,9 +1253,7 @@ class Frontend:
         """The barrier rule (`lowering/effects.py`): a function that could fall
         back after an effect it cannot take back stays in Python, and one with
         effects says so in its signature, for the boundary."""
-        left = frozenset(
-            self.declared[q][0].name for q in lowered.rejected if q in self.declared
-        )
+        left = frozenset(self.declared[q][0].name for q in lowered.rejected if q in self.declared)
         broken, summaries = check_effects(self.module, self.native_exceptions, left)
         names = {self.declared[q][0].name: q for q in lowered.functions}
         for name, why in broken.items():
@@ -1361,7 +1362,7 @@ class _GuardSite:
         core.br(self.b, Successor(setup))
 
 
-class _FunctionLowering(
+class _FunctionLowering(  # pylint: disable=too-many-ancestors
     EffectLowering,
     ClosureLowering,
     ExceptionLowering,

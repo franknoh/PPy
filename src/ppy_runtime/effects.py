@@ -28,7 +28,7 @@ from typing import Any
 
 from .abi import STATUS_OK, STATUS_RAISED
 
-__all__ = ["Effects", "EffectError", "effects_for", "register_namespace"]
+__all__ = ["EffectError", "Effects", "effects_for", "register_namespace"]
 
 _HOOK = ctypes.CFUNCTYPE(
     ctypes.c_int64, ctypes.c_int64, ctypes.c_int64, ctypes.c_int64, ctypes.c_int64
@@ -297,9 +297,7 @@ class Effects:
         raised = self._raised()
         number = len(raised)
         raised.append(error)
-        base = next(
-            (k for k in type(error).__mro__ if k.__module__ == "builtins"), BaseException
-        )
+        base = next((k for k in type(error).__mro__ if k.__module__ == "builtins"), BaseException)
         try:
             text = str(error)
         except Exception:  # noqa: BLE001 - str() of it is only for native code to read
