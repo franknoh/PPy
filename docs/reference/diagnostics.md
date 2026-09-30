@@ -6,8 +6,9 @@ emit. Each diagnostic has a stable code (spec 29.1).
 - `E` codes are errors, `W` codes are warnings, and `R` codes are remarks.
 - `ppy explain E1301` prints the description of a code.
 - `--no-strict` downgrades the strict-mode errors that have a sound
-  fallback to `W2010` warnings, which name the code they replace. It never
-  downgrades the rest.
+  fallback to `W2010` warnings, and a value that may be `None` used where
+  one that is not is needed to `W2011`. Both name the code they replace. It
+  never downgrades the rest.
 
 ## Source and module structure
 
@@ -160,6 +161,7 @@ emit. Each diagnostic has a stable code (spec 29.1).
 | `W2008` | A kernel will not run on the device; the reason is named, and the reference runs. |
 | `W2009` | A function changed since the profile given to `--pgo` was recorded; its counts were ignored and it was built as without a profile. |
 | `W2010` | Under `--no-strict`, a strict-mode error with a sound fallback (`E1201`, `E1202`, `E1204`, `E1302`, `E1306`). The message names the code it is under strict mode. |
+| `W2011` | Under `--no-strict`, a value that may be `None` is used where one that is not is needed: an attribute read through it (`E1206`), or an argument for a parameter that does not take `None` (`E1301`). The program runs. If the value is `None`, CPython raises `AttributeError` or `TypeError` there, and so does native code. |
 | `W2101` | The build cache index was damaged; it was quarantined and rebuilt, and compilation continued with cache misses. |
 
 ## Internal

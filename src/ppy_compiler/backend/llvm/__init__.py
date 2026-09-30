@@ -86,6 +86,8 @@ class NativeModule:
     exports: dict[str, str] = field(default_factory=dict)
     #: What the lowering and the passes said, as remarks; cached with the module.
     remarks: tuple[str, ...] = ()
+    #: Per function with effects, the rule they run under; cached with the module.
+    effects: dict[str, str] = field(default_factory=dict)
     #: Makes `llvm` from `ppyir` when it is first read; None once it has.
     emitter: object = None
 
@@ -190,6 +192,7 @@ def _collect(bundle, opt_level: int | None = None, failures=None) -> dict[str, N
             fusion_notes=notes,
             proved=result.proved,
             remarks=result.remarks,
+            effects=result.effects,
             libraries=result.libraries,
             exports=result.exports,
         )
@@ -331,6 +334,7 @@ def _module_from_cache(name: str, reused, candidates, layouts=None) -> NativeMod
         exports=dict(reused.exports),
         proved=dict(reused.proved),
         remarks=tuple(reused.remarks),
+        effects=dict(reused.effects),
     )
 
 
@@ -1229,7 +1233,7 @@ class _Binder(LibraryBinder):
         policy = SpecializationPolicy.of(info) if info is not None else None
         fast_entry = None
         register = None
-        if wrappers is not None and wrappers.ok:
+        if wrappers is not None and wrappers.ok and not signature.effects:
             types = value_class_types(signature, fallback)
             if types is not None:
                 register = wrappers.registrar(qualname)

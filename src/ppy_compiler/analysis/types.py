@@ -307,11 +307,14 @@ class TypeVar_(Type):
 
     `bound` is the constraint a type argument must satisfy; `owner` names
     the function that declares it, so two functions' `T`s are two types.
+    `constrained` means `bound` is a union of constraints (`TypeVar("S",
+    int, str)`, `[S: (int, str)]`): the value is one of them, not any mix.
     """
 
     name: str
     bound: Type | None = None
     owner: str = ""
+    constrained: bool = False
 
     def __str__(self) -> str:
         return self.name
@@ -391,6 +394,23 @@ def infer(pattern: Type, actual: Type, bindings: dict[TypeVar_, Type]) -> bool:
             if isinstance(joined, Union_):
                 return False
             bindings[pattern] = joined
+        return True
+    if isinstance(pattern, Union_):
+        # `Node[T] | None` given a `Node[int] | None`, or a `Node[int]`: each
+        # member of what is given binds the member of the pattern it is.
+        fixed = [m for m in pattern.members if not type_variables(m)]
+        open_members = [m for m in pattern.members if type_variables(m)]
+        for member in actual.members if isinstance(actual, Union_) else (actual,):
+            if any(is_assignable(member, f) for f in fixed):
+                continue
+            matching = [
+                m
+                for m in open_members
+                if not (isinstance(m, Instance) and isinstance(member, Instance))
+                or m.name == member.name
+            ]
+            if len(matching) == 1 and not infer(matching[0], member, bindings):
+                return False
         return True
     if isinstance(pattern, Instance) and isinstance(actual, Instance):
         if (
@@ -855,6 +875,16 @@ def _tuple_assignable(source: Tuple_, target: Type) -> bool:
 def _callable_assignable(source: Callable_, target: Callable_) -> bool:
     if not is_assignable(source.ret, target.ret):
         return False
+    star = next((p for p in source.params if p.kind == "var_positional"), None)
+    if star is not None:
+        # `def wrapper(*args: T)` takes any number of `T`s, so it is a
+        # `Callable[[T], U]` and a `Callable[[T, T], U]` alike.
+        fixed = [p for p in source.params if p.kind in {"positional_only", "positional_or_keyword"}]
+        element = star.type.items[0] if isinstance(star.type, Tuple_) and star.type.items else ANY
+        return all(
+            is_assignable(tp.type, fixed[index].type if index < len(fixed) else element)
+            for index, tp in enumerate(target.params)
+        )
     required = [p for p in target.params if not p.has_default]
     if len(source.params) < len(required):
         return False

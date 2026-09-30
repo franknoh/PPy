@@ -284,3 +284,54 @@ def test_ppy_run_passes_globals_across_modules(tmp_path: Path):
     lines = [line for line in ran.stdout.splitlines() if not line.startswith("compiling")]
     assert lines[:2] == python.stdout.splitlines()[:2]
     assert lines[2] == "True True"
+
+
+REBOUND_AT_A_BARRIER = """
+import sys
+
+SCALE = int("3")
+TABLE: list[int] = [k * 2 for k in range(5)]
+
+
+def poke() -> None:
+    setattr(sys.modules[__name__], "SCALE", 100)
+    TABLE.append(7)
+
+
+def work(n: int) -> int:
+    total = 0
+    for v in TABLE:
+        total += SCALE * v * n
+    print("before", total, flush=True)
+    poke()
+    if SCALE > 50 and len(TABLE) > 5:
+        return 1
+    return 0
+
+
+def main() -> None:
+    print(work(5))
+    print(work(5), SCALE, len(TABLE))
+
+
+main()
+"""
+
+
+@requires_llvm
+@requires_cc
+def test_a_global_python_rebinds_at_a_barrier(tmp_path: Path):
+    """Python that runs at a barrier (`print(flush=True)`, a call into Python)
+    may rebind a settled global the analysis cannot see rebound (`setattr` on
+    the module) or change a container one holds. Native code was handed the
+    global before the call, so a function that reads one and has a barrier
+    stays in Python, and the answer is CPython's."""
+    _write(tmp_path, REBOUND_AT_A_BARRIER)
+    python = _run(tmp_path, "prog.ppy")
+    assert python.returncode == 0, python.stderr
+    ran = _run(tmp_path, "-m", "ppy_compiler", "run", "prog.ppy")
+    assert ran.returncode == 0, ran.stderr
+    lines = [line for line in ran.stdout.splitlines() if not line.startswith("compiling")]
+    assert lines == python.stdout.splitlines()
+    explained = _run(tmp_path, "-m", "ppy_compiler", "explain", "prog.work")
+    assert "reads module global `SCALE`" in explained.stdout + explained.stderr

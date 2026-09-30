@@ -238,6 +238,10 @@ class NativeSignature:
     #: The project classes whose instances cross with its arguments or its
     #: result, and every subclass of those.
     classes: tuple[CrossingClass, ...] = ()
+    #: The body prints, reads, or calls into Python (`ppy_runtime/effects.py`):
+    #: the boundary holds its output until it answers, and raises what it
+    #: raised after an effect it cannot take back.
+    effects: bool = False
 
     @property
     def crosses_collections(self) -> bool:

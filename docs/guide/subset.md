@@ -39,7 +39,59 @@ a sound fallback: an unannotated parameter (`E1201`), an unknown attribute
 iterable (`E1302`), and a call with no known signature (`E1306`). Each is
 still reported, as a `W2010` warning that names the code it replaces, and the
 code involved runs on CPython. Type mismatches (`E1301`) and the rest stay
-errors.
+errors, with one exception: a value that may be `None` where one that is not
+is needed.
+
+A program often passes a `Node | None` where a `Node` is declared, or reads
+`.value` from something that may be `None`, because it knows the `None`
+never arrives on that path. Strict mode refuses this (`E1301`, `E1206`).
+`--no-strict` reports it as `W2011` and runs the program. If the value is
+`None` after all, the program raises where CPython raises: native code checks
+every field read and method call through such a value and raises CPython's
+`AttributeError`.
+
+Without strict mode, a module-private function (one whose name starts with
+`_`) that has unannotated parameters takes their types from its call sites,
+when every use of it is a direct call in its own module. `_scale(xs, k)`
+called only as `_scale([1, 2, 3], 2)` has `xs: list[int]` and `k: int`, and
+compiles like an annotated function. A call from elsewhere with other types,
+through reflection or `doctest`, runs the function's Python body.
+
+## Accepted forms of ordinary Python
+
+These are valid Python that the checker accepts and types:
+
+- `typing.Self` in a class's signatures, fields, and method bodies.
+- Old-style type variables: `T = TypeVar("T")`, with `bound=` or
+  constraints, and `class Stack(Generic[T])`. See [Generics](generics.md).
+- `namedtuple("P", "x y")`, `NamedTuple("P", [("x", int)])`, and
+  `class P(NamedTuple)`. An instance reads as the tuple it is (`p[0]`,
+  `x, y = p`, `for v in p`), and has `_replace`, `_asdict`, and `_fields`.
+  The fields of `namedtuple` have no type.
+- `Cls.attr = value` and `setattr(Cls, "attr", value)` for an attribute the
+  class body sets. It is a class variable that changes: functions that read
+  or write it run on CPython. `setattr(obj, "name", value)` with a constant
+  name is checked as `obj.name = value`.
+- `Cls.method(obj, arg)`, a method called through its class with the
+  receiver written out.
+- `__import__("doctest")` with a constant name, as `import doctest`.
+- `isinstance(x, (list, tuple))` narrows `x` to what its declared type
+  shares with the classes: a `list[int]` stays a `list[int]`.
+- A container passed where a wider element type is declared. `list[int]`
+  goes where `Sequence[float]` is declared, and where `list[int | float]` is
+  declared if the callee only reads the list. A function that appends a
+  float to it is still refused (`E1301`). Calls like these run on CPython,
+  since native code would convert the ints.
+- A list written in place with narrower elements than declared:
+  `m: list[list[float]] = [[0] * n for _ in range(n)]`.
+- A generator expression where a `Generator[T, None, None]` is declared.
+
+The standard library's `Queue`, `LifoQueue`, `PriorityQueue`, `deque`,
+`Counter`, `OrderedDict`, and `defaultdict` have their methods typed by
+their type arguments (`Queue[int].get()` is an `int`). `datetime` and `date`
+with `timedelta`, `Decimal` and `Fraction` with themselves and with numbers,
+and `Counter` with `Counter` under `+ - & |` have their operators typed, and
+their fields and common methods too. Code that uses them runs on CPython.
 
 ## Compatibility policy
 

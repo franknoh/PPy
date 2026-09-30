@@ -428,8 +428,10 @@ def test_scalar_functions_are_lowered_natively(write, analyze):
     natives = _collect(analyze(path, backend="llvm"))
     module = natives["native"]
     assert "native.poly" in module.functions
-    assert "native.shout" in module.rejected
-    assert "IO" in module.rejected["native.shout"]
+    # A print lowers under `ppy run`: its output is held until the call returns.
+    assert "native.shout" in module.functions
+    assert module.functions["native.shout"].signature.effects
+    assert "output is held" in module.effects["native.shout"]
 
 
 @requires_llvm

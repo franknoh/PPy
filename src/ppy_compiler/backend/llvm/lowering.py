@@ -154,6 +154,8 @@ class LoweringResult:
     exports: dict[str, str] = field(default_factory=dict)
     #: What the lowering and the passes said about the code, as remarks.
     remarks: tuple[str, ...] = ()
+    #: Per function with effects, the rule they run under (`lowering/effects.py`).
+    effects: dict[str, str] = field(default_factory=dict)
 
 
 def _scalar_name(t: T.Type) -> str | None:
@@ -402,6 +404,7 @@ def eligible(
     allow_io: bool = False,
     allow_launch: bool = False,
     allow_async: bool = False,
+    allow_python: bool = False,
     allow_globals: bool = False,
 ) -> tuple[bool, str]:
     """Can this function be lowered to a native scalar entry point?
@@ -409,10 +412,13 @@ def eligible(
     `allow_io` is the standalone build's dispensation: printing goes through
     native shims there, so the IO effect alone is not disqualifying.
     `allow_launch` is the GPU source backends': a kernel launch is written
-    as one, where the CPU backends have no launch runtime yet.
-    `allow_globals` is `ppy run`'s: the settled globals the function reads
-    are parameters of `info` (see `with_implicit_globals`), which Python's
-    boundary reads from the module at the call.
+    as one, where the CPU backends have no launch runtime yet. `allow_python`
+    is `ppy run`'s: a call native code cannot make it makes through Python
+    (`lowering/effects.py`), so a call of unknown effect is the lowering's to
+    refuse, one call at a time. `allow_globals` is `ppy run`'s too: the
+    settled globals the function reads are parameters of `info` (see
+    `with_implicit_globals`), which Python's boundary reads from the module
+    at the call.
     """
     if info.is_generator:
         return False, "generators use the boxed runtime"
@@ -450,6 +456,9 @@ def eligible(
         violations.discard(Effect.READ_GLOBAL)
     if allow_io:
         violations.discard(Effect.IO)
+    if allow_python:
+        violations.discard(Effect.EXTERNAL_UNKNOWN)
+        violations.discard(Effect.PYTHON_CALLBACK)
     if allow_launch:
         violations.discard(Effect.GPU_LAUNCH)
     if allow_async:

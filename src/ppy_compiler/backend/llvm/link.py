@@ -422,6 +422,7 @@ def write_manifest(
                     "future": signature.future,
                     "returned": signature.returned,
                     "classes": classes_to_json(signature.classes),
+                    "effects": signature.effects,
                 },
             }
             for signature in sorted(entries.values(), key=lambda s: s.qualname)

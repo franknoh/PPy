@@ -35,6 +35,7 @@ path.
 | [XLA](xla.md) | `@xla.jit`: StableHLO from the compiler, run through PJRT. |
 | [Generics](generics.md) | Type parameters, bounds, monomorphization, static dispatch. |
 | [Effects and the three paths](effects.md) | The effect vocabulary, purity, and why three ways of running agree. |
+| [Effects in native code](native-effects.md) | `print`, `input`, text files, and calls into Python from native code, and why nothing prints twice. |
 | [Reading input](input.md) | `ppy.input` reads lines, `ppy.scan` reads tokens, `ppy.read_*` fill a buffer. |
 | [Native lowering](native-lowering.md) | When a function gets a boundary, and what its parameters may be. |
 | [Regular expressions](regex.md) | A pattern compiled from a bytes literal, matched natively over a byte buffer. |

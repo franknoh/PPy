@@ -93,6 +93,7 @@ def _signature(payload: dict) -> NativeSignature:
         future=str(abi.get("future", "")),
         returned=str(abi.get("returned", "")),
         classes=classes_from_json(abi.get("classes", [])),
+        effects=bool(abi.get("effects", False)),
     )
 
 

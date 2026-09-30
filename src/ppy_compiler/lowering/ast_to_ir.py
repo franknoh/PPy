@@ -22,7 +22,7 @@ from dataclasses import replace as dataclass_replace
 from pathlib import Path
 
 from ppy_runtime._record import replace
-from ppy_runtime.abi import TEXT, NativeParam, NativeSignature
+from ppy_runtime.abi import STATUS_RAISED, TEXT, NativeParam, NativeSignature
 from ppy_runtime.aio import available as aio_available
 
 from ..analysis import types as T
@@ -95,6 +95,7 @@ from .abi import signature_from_ir
 from .closures import ClosureLowering
 from .collections import HANDLE, Held, crossing_classes, records_of
 from .containers import ContainerLowering
+from .effects import EffectLowering, check_effects, rule_of, wants_exceptions
 from .exceptions import ExceptionLowering, uses_exceptions
 from .generators import GeneratorLowering
 from .strings import StringLowering
@@ -237,6 +238,8 @@ class Lowered:
     proved: dict[str, tuple[str, ...]] = field(default_factory=dict)
     #: What the frontend decided about parallel loops, as remarks.
     remarks: tuple[str, ...] = ()
+    #: Per function with effects, the rule they run under (`lowering/effects.py`).
+    effects: dict[str, str] = field(default_factory=dict)
 
 
 def lower_module_to_ir(
@@ -256,21 +259,47 @@ def lower_module_to_ir(
     backend_name: str | None = None,
 ) -> Lowered:
     """The IR of every eligible function in one module."""
-    frontend = Frontend(
-        module,
-        layouts,
-        safeguards=safeguards,
-        standalone=standalone,
-        prover=prover,
-        root=root,
-        launches=launches,
-        asynchronous=asynchronous,
-        imports=imports,
-        plugins=plugins,
-        cpu_compatible=cpu_compatible,
-        backend_name=backend_name,
-    )
-    return frontend.build(functions)
+
+    def build(exceptions: bool, python: dict[str, str]) -> tuple[Frontend, Lowered]:
+        frontend = Frontend(
+            module,
+            layouts,
+            safeguards=safeguards,
+            standalone=standalone,
+            prover=prover,
+            root=root,
+            launches=launches,
+            asynchronous=asynchronous,
+            imports=imports,
+            plugins=plugins,
+            cpu_compatible=cpu_compatible,
+            backend_name=backend_name,
+        )
+        # Print, input, and calls into Python under `ppy run` (`lowering/effects.py`).
+        frontend.effects = cpu_compatible and backend_name == "llvm" and not standalone
+        frontend.native_exceptions = exceptions
+        frontend.python = python
+        return frontend, frontend.build(functions)
+
+    exceptions, python = False, dict[str, str]()
+    for _attempt in range(3):
+        frontend, lowered = build(exceptions, python)
+        again = False
+        if frontend.wants_exceptions and not frontend.native_exceptions:
+            # A barrier turned up only as the module lowered (a call into
+            # Python): after it, what may fail has to raise natively, so it
+            # is lowered again so.
+            exceptions = again = True
+        if frontend.effects:
+            # A caller of a function that stayed in Python may call it through
+            # Python instead (`lowering/effects.py`): lowered again, with those
+            # functions left to Python from the start.
+            more = python | frontend.called_through_python(lowered, functions)
+            if more.keys() != python.keys():
+                python, again = more, True
+        if not again:
+            break
+    return lowered
 
 
 def lower_function(
@@ -365,6 +394,13 @@ class Frontend:
         #: exceptions native code can catch (`lowering/exceptions.py`). A
         #: standalone build sets it for every module where any has one.
         self.native_exceptions = False
+        #: Whether `print`, `input`, and calls into Python lower natively under
+        #: `ppy run`, and whether one found it needs exception mode for them.
+        self.effects = False
+        self.wants_exceptions = False
+        #: Functions left to Python whose native callers call them through it:
+        #: qualname -> why each stayed in Python.
+        self.python: dict[str, str] = {}
         self.prover = prover
         #: Source locations are spelled relative to this, so the IR text is
         #: the same wherever the project sits.
@@ -426,7 +462,8 @@ class Frontend:
         candidates: dict[str, tuple[FunctionInfo, FunctionAnalysis, ast.FunctionDef]] = {}
         self.generics: dict[str, tuple[FunctionInfo, FunctionAnalysis, ast.FunctionDef]] = {}
         self.sources = functions
-        if uses_exceptions([node for _info, _analysis, node in functions.values()]):
+        bodies = [node for _info, _analysis, node in functions.values()]
+        if uses_exceptions(bodies) or (self.effects and wants_exceptions(bodies)):
             self.native_exceptions = True
         if self.native_exceptions:
             # The backends ask each call's status for the raised one.
@@ -437,6 +474,9 @@ class Frontend:
                 lowered.rejected[qualname] = (
                     "a function defined inside another is lowered as a closure where it is defined"
                 )
+                continue
+            if qualname in self.python:
+                lowered.rejected[qualname] = self.python[qualname]
                 continue
             extern = info.directive("native.extern")
             if extern is not None:
@@ -461,7 +501,8 @@ class Frontend:
                         info,
                         analysis,
                         self.layouts,
-                        allow_io=self.standalone,
+                        allow_io=self.standalone or self.effects,
+                        allow_python=self.effects,
                         allow_launch=self.launches,
                         allow_async=self.asynchronous,
                         allow_globals=passes_globals,
@@ -501,6 +542,8 @@ class Frontend:
             lowered.functions[qualname] = CanonicalFunction(
                 info, signature, exposed=exposed, exposure_reason=why, boundary=boundary
             )
+        if self.effects:
+            self._check_effects(lowered)
         self._reject_callers_of_rejected(lowered)
         for qualname in lowered.rejected:
             declaration = self.declared.get(qualname)
@@ -725,6 +768,15 @@ class Frontend:
         *results, status = called.results
         for handle in made:
             core.call_extern(b, "ppy_coll_release", (handle,), ())
+        # An exception goes on up as one: after an effect, the boundary raises it.
+        raised = core.cmp(b, "eq", status, core.const(b, STATUS_RAISED, I64))
+        core.guard(
+            b,
+            core.bitwise(b, "xor", raised, core.const(b, True, BOOL)),
+            "contract",
+            "raised",
+            label="raised",
+        )
         core.guard(b, core.cmp(b, "eq", status, core.const(b, 0, I64)), "contract", "fell back")
         if returns_text:
             handle = results[0]
@@ -846,6 +898,7 @@ class Frontend:
                 "ppy.abi": "ppy",
                 "ppy.external": True,
                 **({"ppy.async": True} if signature.future else {}),
+                **({"ppy.effects": True} if getattr(signature, "effects", False) else {}),
             },
         )
         function.param_attributes = self.parameter_attributes(info, signature)
@@ -979,7 +1032,8 @@ class Frontend:
                 specialized,
                 analysis,
                 self.layouts,
-                allow_io=self.standalone,
+                allow_io=self.standalone or self.effects,
+                allow_python=self.effects,
                 allow_launch=self.launches,
                 allow_async=self.asynchronous,
             )
@@ -1023,7 +1077,13 @@ class Frontend:
             return found[1], found[2]
         analysis = self.analysis.functions.get(info.qualname)
         if self.cpu_compatible and analysis is not None:
-            ok, reason = eligible(info, analysis, self.layouts, allow_io=self.standalone)
+            ok, reason = eligible(
+                info,
+                analysis,
+                self.layouts,
+                allow_io=self.standalone or self.effects,
+                allow_python=self.effects,
+            )
             if not ok:
                 raise Unsupported(f"`{info.name}` has no native lowering: {reason}")
         base = self.signature(info, analysis)
@@ -1179,7 +1239,13 @@ class Frontend:
         params = [replace(p, type=taken_as) if p.name == parameter else p for p in info.params]
         specialized = replace(info, qualname=f"{info.qualname}__{spelled}", params=params)
         if self.cpu_compatible:
-            ok, reason = eligible(specialized, analysis, self.layouts, allow_io=self.standalone)
+            ok, reason = eligible(
+                specialized,
+                analysis,
+                self.layouts,
+                allow_io=self.standalone or self.effects,
+                allow_python=self.effects,
+            )
             if not ok:
                 raise Unsupported(f"`{qualname}` has no native lowering: {reason}")
         signature = self.signature(specialized, analysis)
@@ -1193,6 +1259,99 @@ class Frontend:
             del self.module.functions[function.name]
             raise
         return self.instances[key]
+
+    def called_through_python(
+        self,
+        lowered: Lowered,
+        functions: dict[str, tuple[FunctionInfo, FunctionAnalysis, ast.FunctionDef]],
+    ) -> dict[str, str]:
+        """Functions that stayed in Python and kept a caller out of native code
+        with them: plain module-level functions, which a native caller may call
+        through Python instead."""
+        blocking = {
+            match.group(1)
+            for why in lowered.rejected.values()
+            if (match := re.match(r"`([^`]+)` has no native lowering, so this call", why))
+        }
+        found: dict[str, str] = {}
+        for qualname, why in lowered.rejected.items():
+            entry = functions.get(qualname)
+            if entry is None or qualname not in blocking or "so this call cannot be made" in why:
+                # One kept out only by a callee gets its own chance next time.
+                continue
+            info = entry[0]
+            if info.enclosing is not None or info.owner or info.type_params or info.is_async:
+                continue
+            if info.directive("native.extern") is not None or self._generic_owner(info):
+                continue
+            found[qualname] = why
+        return found
+
+    def _check_effects(self, lowered: Lowered) -> None:
+        """The barrier rule (`lowering/effects.py`): a function that could fall
+        back after an effect it cannot take back stays in Python, and one with
+        effects says so in its signature, for the boundary."""
+        left = frozenset(self.declared[q][0].name for q in lowered.rejected if q in self.declared)
+        broken, summaries = check_effects(self.module, self.native_exceptions, left)
+        names = {self.declared[q][0].name: q for q in lowered.functions}
+        for qualname, entry in lowered.functions.items():
+            function = self.declared[qualname][0]
+            summary = summaries.get(function.name)
+            native = entry.signature.native
+            if summary is None or not summary.barrier or native is None or not entry.exposed:
+                continue
+            read = next((p.source for p in native.parameters if p.source), "")
+            if read and function.name not in broken:
+                # The boundary read the global before the call; Python that
+                # runs at the barrier could rebind it, or change what it holds,
+                # and the native code would go on with what it was given.
+                broken[function.name] = (
+                    f"reads module global `{read.rpartition(':')[2]}`, which Python could "
+                    f"rebind or change at {summary.why.get('barrier', 'a barrier')}"
+                )
+                continue
+            copied = next(
+                (
+                    p.name
+                    for p in native.parameters
+                    if p.kind in {"list", "sequence", "object", "handle"}
+                ),
+                None,
+            )
+            if copied is not None and function.name not in broken:
+                # The boundary copies it in and back out; Python that runs at
+                # the barrier would see, or change, the object and not the copy.
+                broken[function.name] = (
+                    f"takes `{copied}` by copy, which Python could read or change at "
+                    f"{summary.why.get('barrier', 'a barrier')}"
+                )
+        for name, why in broken.items():
+            qualname = names.get(name)
+            if qualname is not None:
+                lowered.rejected[qualname] = why
+                del lowered.functions[qualname]
+                self._drop(qualname)
+            elif name in self.module.functions:
+                self.module.functions[name].body.blocks.clear()
+        for qualname, entry in list(lowered.functions.items()):
+            function = self.declared[qualname][0]
+            summary = summaries.get(function.name)
+            if summary is None or not summary.holds:
+                continue
+            function.attributes["ppy.effects"] = True
+            lowered.effects[qualname] = rule_of(summary)
+            signature = entry.signature
+            native = signature.native
+            lowered.functions[qualname] = replace(
+                entry,
+                signature=replace(
+                    signature,
+                    native=replace(native, effects=True) if native is not None else None,
+                ),
+                boundary=replace(entry.boundary, effects=True)
+                if entry.boundary is not None
+                else None,
+            )
 
     def _reject_callers_of_rejected(self, lowered: Lowered) -> None:
         """A caller of a function that did not lower runs on CPython too."""
@@ -1272,8 +1431,13 @@ class _GuardSite:
         core.br(self.b, Successor(setup))
 
 
-class _FunctionLowering(
-    ClosureLowering, ExceptionLowering, GeneratorLowering, ContainerLowering, StringLowering
+class _FunctionLowering(  # pylint: disable=too-many-ancestors
+    EffectLowering,
+    ClosureLowering,
+    ExceptionLowering,
+    GeneratorLowering,
+    ContainerLowering,
+    StringLowering,
 ):
     """Lowers one function body."""
 
@@ -1598,6 +1762,8 @@ class _FunctionLowering(
                 core.br(self.b, Successor(self._loops[-1][0]))
             case ast.Expr(value=ast.Yield() | ast.YieldFrom()):
                 self._yield_statement(node.value)
+            case ast.With():
+                self._effect_with(node)
             case ast.Try():
                 self._try(node)
             case ast.Raise():
@@ -2038,6 +2204,8 @@ class _FunctionLowering(
     def _for(self, node: ast.For) -> None:
         if self._for_generator(node):
             return
+        if self._effect_for(node):
+            return
         if self._is_walk(node.iter):
             self._for_collection(node)
             return
@@ -2164,7 +2332,14 @@ class _FunctionLowering(
             self._ranges[value] = self._induction[name]
         if self.prover is not None:
             self._term_for_load(value, node.target)
-        core.store(self.b, self._checked_binary(value, step, "add"), counter)
+        if abs(step_value) == 1 and self.overflow == "python":
+            # The header let the count through only while it is short of
+            # `stop`, a word itself: one step on cannot pass the word's end,
+            # so no check falls back here (and none follows an effect).
+            stepped = core.add(self.b, value, step, overflow="proven")
+        else:
+            stepped = self._checked_binary(value, step, "add")
+        core.store(self.b, stepped, counter)
         core.br(self.b, Successor(header))
         self.b.at_end(done)
         if site is not None:
@@ -2838,6 +3013,9 @@ class _FunctionLowering(
         text = self._string_call(node, discard_result)
         if text is not None:
             return text
+        effect = self._effect_call(node, discard_result)
+        if effect is not None:
+            return effect
         if self.frontend.standalone:
             read = self._read_string(node)
             if read is not None:
@@ -2899,7 +3077,9 @@ class _FunctionLowering(
                 return self._native_call(
                     function, signature, imported, node, discard_result=discard_result
                 )
-        if target.startswith("math."):
+        if target.startswith("math.") and (
+            target.removeprefix("math.") in _MATH_INTRINSICS or not self._effects_on()
+        ):
             return self._math_call(target.removeprefix("math."), node)
         if target.startswith(("ppy.native.", "native.")):
             return self._native_op(target.rpartition("native.")[2], node)
@@ -2951,6 +3131,9 @@ class _FunctionLowering(
         for qualname, (info, _analysis, _node) in self.frontend.generics.items():
             if qualname.rpartition(".")[2] == target:
                 return self._generic_call(qualname, info, node, discard_result=discard_result)
+        through = self._effect_python_call(node, discard_result)
+        if through is not None:
+            return through
         raise Unsupported(f"`{target}` has no native lowering")
 
     def _derivative_spec(self, func: ast.expr) -> tuple[str, tuple[int, ...], bool] | None:

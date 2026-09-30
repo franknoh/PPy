@@ -4,14 +4,18 @@
     uv run python scripts/fuzz.py --seed 400 --count 10 --paths run,standalone
     uv run python scripts/fuzz.py --state --count 25 # module globals and objects
     uv run python scripts/fuzz.py --replay           # every saved regression
+    uv run python scripts/fuzz.py --prints --seed 0 --count 25 --paths python,run
 
 Each seed is a program from `ppy_compiler.testing.fuzz.generate_program`. It
 runs under CPython (the reference) and each path asked for, one at a time,
 and any path that differs is minimized and saved under
 `tests/fuzz_regressions/` with the path it failed on in its first line.
-`tests/test_fuzz.py` replays every file there. With `--state`, each program
-also reads and writes module globals and walks objects Python made, and runs
-on the paths with a Python boundary (CPython, `ppy`, and `ppy run`).
+`tests/test_fuzz.py` replays every file there. With `--prints`, functions
+also print between checks that may fall back, and a path that prints a
+line more often than CPython does is a failure of its own. With `--state`,
+each program also reads and writes module globals and walks objects Python
+made, and runs on the paths with a Python boundary (CPython, `ppy`, and
+`ppy run`).
 
 Run it through the shared memory cap in a batch at a time; each program's
 paths run one after another, each under its own timeout and memory cap.
@@ -30,6 +34,7 @@ from ppy_compiler.testing.fuzz import (
     compare,
     generate_program,
     minimize,
+    printed_twice,
     run_program,
 )
 
@@ -51,7 +56,8 @@ def _still_fails(path: str, reason: str):  # type: ignore[no-untyped-def]
         reference = results["python"]
         if "NameError" in reference.last_error or "SyntaxError" in reference.last_error:
             return False
-        return any(m.path == path and m.reason == reason for m in compare(results))
+        found = printed_twice(results) + compare(results)
+        return any(m.path == path and m.reason == reason for m in found)
 
     return check
 
@@ -63,15 +69,20 @@ def _save(seed: int, path: str, reason: str, source: str, state: bool = False) -
     return target
 
 
-def fuzz(
-    seed: int, count: int, paths: tuple[str, ...], shrink: bool, state: bool = False
+def fuzz(  # pylint: disable=too-many-arguments,too-many-positional-arguments
+    seed: int,
+    count: int,
+    paths: tuple[str, ...],
+    shrink: bool,
+    prints: bool = False,
+    state: bool = False,
 ) -> int:
     failures = 0
     started = time.monotonic()
     for current in range(seed, seed + count):
-        source = generate_program(current, state)
+        source = generate_program(current, prints, state)
         results = run_program(source, paths, timeout=60.0)
-        mismatches = compare(results)
+        mismatches = printed_twice(results) + compare(results)
         if not mismatches:
             print(f"ok    seed {current}", flush=True)
             continue
@@ -116,15 +127,23 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--no-minimize", action="store_true")
     parser.add_argument("--replay", action="store_true")
+    parser.add_argument("--prints", action="store_true", help="functions print between checks")
     parser.add_argument("--show", type=int, help="print the program for this seed and exit")
     options = parser.parse_args(argv)
     if options.show is not None:
-        print(generate_program(options.show, options.state), end="")
+        print(generate_program(options.show, options.prints, options.state), end="")
         return 0
     if options.replay:
         return replay()
     paths = options.paths or ",".join(STATE_PATHS if options.state else ALL_PATHS)
-    return fuzz(options.seed, options.count, _paths(paths), not options.no_minimize, options.state)
+    return fuzz(
+        options.seed,
+        options.count,
+        _paths(paths),
+        not options.no_minimize,
+        options.prints,
+        options.state,
+    )
 
 
 if __name__ == "__main__":
