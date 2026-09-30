@@ -1,4 +1,4 @@
-"""The collections runtime: `collections.c`, `strings.c`, and `exceptions.c`, and the ways a
+"""The collections runtime: `collections.c`, `strings.c`, `exceptions.c`, and `random.c`, and the ways a
 program reaches them.
 
 The C text is written once, as ordinary C files, and read here into one
@@ -28,10 +28,11 @@ SOURCES = (
     Path(__file__).with_name("collections.c"),
     Path(__file__).with_name("strings.c"),
     Path(__file__).with_name("exceptions.c"),
+    Path(__file__).with_name("random.c"),
 )
 
 #: What every function needs from the C library.
-HEADERS = ("float.h", "math.h", "stdint.h", "stdio.h", "stdlib.h", "string.h")
+HEADERS = ("float.h", "math.h", "stdint.h", "stdio.h", "stdlib.h", "string.h", "time.h")
 
 #: name -> (result, parameters, body, needs).
 Definitions = dict[str, tuple[str, tuple[str, ...], str, tuple[str, ...]]]
