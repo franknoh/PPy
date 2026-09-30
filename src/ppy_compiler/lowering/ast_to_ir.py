@@ -1235,7 +1235,7 @@ class _GuardSite:
         core.br(self.b, Successor(setup))
 
 
-class _FunctionLowering(
+class _FunctionLowering(  # pylint: disable=too-many-ancestors
     StdlibLowering,
     ClosureLowering,
     ExceptionLowering,
