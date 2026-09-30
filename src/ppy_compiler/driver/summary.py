@@ -116,6 +116,36 @@ _SHAPES: tuple[_Shape, ...] = (
         "guide/native-lowering/",
     ),
     _shape(
+        r"a lambda whose type native code does not know",
+        "a lambda whose parameter types the checker could not tell",
+        "pass it where a typed parameter or `sorted(key=...)` gives it a type, or use a `def`",
+        "guide/closures/",
+    ),
+    _shape(
+        r"a lambda with defaults or special parameters|is not a function a closure can hold",
+        "a nested function or lambda with defaults, `*args`, or a decorator",
+        "take the value as an ordinary parameter, or define it at module level",
+        "guide/closures/",
+    ),
+    _shape(
+        r"a function value takes positional arguments natively",
+        "a keyword argument through a function value",
+        "pass the arguments to a function value by position",
+        "guide/closures/",
+    ),
+    _shape(
+        r"is not a function (value|native code holds|native code can call)",
+        "a callable that is not a plain function (a bound method, a class, a builtin)",
+        "wrap it in a `def` or a lambda of the module",
+        "guide/closures/",
+    ),
+    _shape(
+        r"a closure shares a `[^`]+` variable|names no variable a closure shares natively",
+        "a closure that shares a variable of a type native code has no cell for",
+        "share a number, a string, or a collection, or pass the value in",
+        "guide/closures/",
+    ),
+    _shape(
         r"chained comparison",
         "a chained comparison (`a < b < c`)",
         "write it as `a < b and b < c` for now",

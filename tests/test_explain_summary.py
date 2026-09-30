@@ -61,6 +61,17 @@ def test_opaque_operator_reasons_name_the_code_they_come_from():
     )
 
 
+def test_what_keeps_a_closure_in_python_has_a_hint_and_the_closures_page():
+    for reason in (
+        "a lambda whose type native code does not know",
+        "a lambda with defaults or special parameters",
+        "a function value takes positional arguments natively",
+        "`self.step` is not a function native code can call",
+    ):
+        ((category, hint, page),) = categorize(reason)
+        assert hint and page.endswith("/guide/closures/"), (reason, category)
+
+
 def test_generics_are_not_blockers_and_unknown_calls_are_named():
     def outcome(reason: str, unknown: tuple[str, ...] = ()) -> FunctionOutcome:
         return FunctionOutcome("m.f", "m", "m.py", 1, 5, "python", reason, unknown)
