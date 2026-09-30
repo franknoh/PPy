@@ -2,6 +2,7 @@
 
     uv run python scripts/fuzz.py --seed 0 --count 25
     uv run python scripts/fuzz.py --seed 400 --count 10 --paths run,standalone
+    uv run python scripts/fuzz.py --seed 0 --count 25 --stdlib   # random, math, heapq, bisect
     uv run python scripts/fuzz.py --replay           # every saved regression
 
 Each seed is a program from `ppy_compiler.testing.fuzz.generate_program`. It
@@ -59,11 +60,11 @@ def _save(seed: int, path: str, reason: str, source: str) -> Path:
     return target
 
 
-def fuzz(seed: int, count: int, paths: tuple[str, ...], shrink: bool) -> int:
+def fuzz(seed: int, count: int, paths: tuple[str, ...], shrink: bool, stdlib: bool = False) -> int:
     failures = 0
     started = time.monotonic()
     for current in range(seed, seed + count):
-        source = generate_program(current)
+        source = generate_program(current, stdlib)
         results = run_program(source, paths, timeout=60.0)
         mismatches = compare(results)
         if not mismatches:
@@ -108,13 +109,20 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--no-minimize", action="store_true")
     parser.add_argument("--replay", action="store_true")
     parser.add_argument("--show", type=int, help="print the program for this seed and exit")
+    parser.add_argument(
+        "--stdlib",
+        action="store_true",
+        help="draw seeded random numbers and call math, heapq, bisect, and itertools",
+    )
     options = parser.parse_args(argv)
     if options.show is not None:
-        print(generate_program(options.show), end="")
+        print(generate_program(options.show, options.stdlib), end="")
         return 0
     if options.replay:
         return replay()
-    return fuzz(options.seed, options.count, _paths(options.paths), not options.no_minimize)
+    return fuzz(
+        options.seed, options.count, _paths(options.paths), not options.no_minimize, options.stdlib
+    )
 
 
 if __name__ == "__main__":

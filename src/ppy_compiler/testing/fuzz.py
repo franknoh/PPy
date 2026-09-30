@@ -159,9 +159,12 @@ class _Scope:
 
 
 class _Generator:
-    def __init__(self, seed: int) -> None:
+    def __init__(self, seed: int, stdlib: bool = False) -> None:
         self.rng = random.Random(seed)
         self.fresh = 0
+        self.seed = seed
+        #: Also draw seeded random numbers and call `math`, `heapq`, and `bisect`.
+        self.stdlib = stdlib
 
     def name(self, prefix: str) -> str:
         self.fresh += 1
@@ -179,6 +182,8 @@ class _Generator:
 
     def int_expr(self, scope: _Scope, depth: int = 0) -> str:
         rng = self.rng
+        if self.stdlib and depth < 2 and self.chance(0.15):
+            return self.stdlib_int(scope, depth + 1)
         if depth > 2 or self.chance(0.3):
             if scope.ints and self.chance(0.65):
                 return rng.choice(scope.ints)
@@ -214,6 +219,8 @@ class _Generator:
 
     def float_expr(self, scope: _Scope, depth: int = 0) -> str:
         rng = self.rng
+        if self.stdlib and depth < 2 and self.chance(0.15):
+            return self.stdlib_float(scope, depth + 1)
         if depth > 2 or self.chance(0.3):
             if scope.floats and self.chance(0.6):
                 return rng.choice(scope.floats)
@@ -237,6 +244,87 @@ class _Generator:
         if roll < 0.9:
             return f"float({self.int_expr(scope, depth + 1)})"
         return f"{rng.choice(('min', 'max'))}({left}, {self.float_expr(scope, depth + 1)})"
+
+    def small(self, scope: _Scope, depth: int, top: int) -> str:
+        """A nonnegative int below `top`, from an expression."""
+        return f"(abs({self.int_expr(scope, depth + 1)}) % {top})"
+
+    def int_list(self, scope: _Scope, depth: int) -> str:
+        items = ", ".join(self.int_expr(scope, 3) for _ in range(self.rng.randint(0, 5)))
+        return f"[{items}]"
+
+    def float_list(self, scope: _Scope, depth: int) -> str:
+        items = ", ".join(self.float_expr(scope, 3) for _ in range(self.rng.randint(0, 5)))
+        return f"[{items}]"
+
+    def stdlib_int(self, scope: _Scope, depth: int) -> str:
+        rng = self.rng
+        roll = rng.random()
+        if roll < 0.15:
+            low = self.int_expr(scope, depth + 1)
+            return f"random.randint({low}, {low} + {self.small(scope, depth, 50)})"
+        if roll < 0.25:
+            return f"random.randrange({self.int_expr(scope, depth + 1)}, {rng.randint(-5, 60)})"
+        if roll < 0.32:
+            return f"random.getrandbits({self.small(scope, depth, 64)})"
+        if roll < 0.4:
+            return f"random.choice({self.int_list(scope, depth)})"
+        if roll < 0.48:
+            return f"sum(random.sample({self.int_list(scope, depth)}, {rng.randint(0, 3)}))"
+        if roll < 0.56:
+            return f"math.gcd({self.int_expr(scope, depth + 1)}, {self.int_expr(scope, depth + 1)})"
+        if roll < 0.62:
+            return f"math.lcm({self.small(scope, depth, 1000)}, {self.small(scope, depth, 1000)})"
+        if roll < 0.7:
+            return f"math.comb({self.small(scope, depth, 40)}, {self.small(scope, depth, 40)})"
+        if roll < 0.76:
+            return f"math.factorial({self.small(scope, depth, 22)})"
+        if roll < 0.82:
+            return f"math.isqrt({self.int_expr(scope, depth + 1)})"
+        if roll < 0.9:
+            return (
+                f"bisect.bisect_left(sorted({self.int_list(scope, depth)}), {self.int_literal()})"
+            )
+        return f"len(list(itertools.combinations(range({self.small(scope, depth, 8)}), 2)))"
+
+    def stdlib_float(self, scope: _Scope, depth: int) -> str:
+        rng = self.rng
+        roll = rng.random()
+        if roll < 0.2:
+            return "random.random()"
+        if roll < 0.35:
+            left = self.float_expr(scope, depth + 1)
+            return f"random.uniform({left}, {self.float_expr(scope, depth + 1)})"
+        if roll < 0.45:
+            return f"random.gauss({self.float_expr(scope, depth + 1)}, 1.0)"
+        if roll < 0.55:
+            return f"random.expovariate({rng.choice(('0.5', '2.0', '1.0'))})"
+        if roll < 0.65:
+            return f"math.fsum({self.float_list(scope, depth)})"
+        if roll < 0.75:
+            left = self.float_expr(scope, depth + 1)
+            return f"math.hypot({left}, {self.float_expr(scope, depth + 1)})"
+        if roll < 0.85:
+            name = rng.choice(("atan", "tanh", "erf", "cbrt", "asinh", "log1p", "exp2"))
+            return f"math.{name}({self.float_expr(scope, depth + 1)})"
+        left = self.float_expr(scope, depth + 1)
+        return f"math.copysign({left}, {self.float_expr(scope, depth + 1)})"
+
+    def stdlib_statements(self, w: _Writer, scope: _Scope) -> None:
+        rng = self.rng
+        heap = self.name("h")
+        w.put(f"{heap}: list[int] = {self.int_list(scope, 2)}")
+        w.put(f"heapq.heapify({heap})")
+        for _ in range(rng.randint(1, 4)):
+            w.put(f"heapq.heappush({heap}, {self.int_expr(scope, 2)})")
+        if self.chance(0.5):
+            w.put(f"random.shuffle({heap})")
+            w.put(f"heapq.heapify({heap})")
+        total = self.name("n")
+        w.put(f"{total}: int = heapq.heappop({heap}) + len({heap})")
+        w.put(f"bisect.insort({heap}, {self.int_expr(scope, 2)})")
+        w.put(f"{total} += sum({heap}) + {heap}[0]")
+        scope.ints.append(total)
 
     def bool_expr(self, scope: _Scope, depth: int = 0) -> str:
         rng = self.rng
@@ -296,6 +384,9 @@ class _Generator:
 
     def statement(self, w: _Writer, scope: _Scope, budget: int, ret: str) -> None:
         rng = self.rng
+        if self.stdlib and self.chance(0.08):
+            self.stdlib_statements(w, scope)
+            return
         roll = rng.random()
         if roll < 0.14:
             name = self.name("n")
@@ -844,6 +935,8 @@ class _Generator:
 
     def program(self) -> str:
         w = _Writer()
+        if self.stdlib:
+            w.lines.extend(["import bisect", "import heapq", "import itertools", "import random"])
         w.lines.extend(_PRELUDE.splitlines())
         calls: list[str] = []
         for _ in range(self.rng.randint(3, 6)):
@@ -854,6 +947,8 @@ class _Generator:
                 for _ in range(self.rng.randint(1, 3))
             )
         w.put("def main() -> None:")
+        if self.stdlib:
+            w.put(f"    random.seed({self.seed})")
         for call in calls:
             w.put(f"    print({call})")
         w.put("")
@@ -862,9 +957,11 @@ class _Generator:
         return "\n".join(w.lines) + "\n"
 
 
-def generate_program(seed: int) -> str:
-    """The program for `seed`: identical on every machine and every run."""
-    return _Generator(seed).program()
+def generate_program(seed: int, stdlib: bool = False) -> str:
+    """The program for `seed`: identical on every machine and every run. With
+    `stdlib`, it also draws seeded random numbers and calls `math`, `heapq`,
+    `bisect`, and `itertools`."""
+    return _Generator(seed, stdlib).program()
 
 
 # -- running ----------------------------------------------------------------
