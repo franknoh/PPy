@@ -21,7 +21,6 @@ __all__ = ["ContractReport", "native_report", "parallel_report", "verify"]
 #: Effects that force an opaque CPython call inside the function body.
 BOXED_EFFECTS = (
     Effect.IO,
-    Effect.RANDOM,
     Effect.TIME,
     Effect.PROCESS,
     Effect.PYTHON_CALLBACK,

@@ -410,6 +410,9 @@ def eligible(
     violations.discard(Effect.ATOMIC)
     violations.discard(Effect.SYNC)
     violations.discard(Effect.THREAD)
+    # A draw is a write to the generator's state, which native code shares
+    # with Python's `random` (the boundary saves and restores it).
+    violations.discard(Effect.RANDOM)
     if allow_io:
         violations.discard(Effect.IO)
     if allow_launch:
@@ -691,6 +694,7 @@ def _signature(
         cpu_features=_cpu_features(info),
         future=future,
         returned=_returned(info, returned, parameters),
+        draws=analysis is not None and Effect.RANDOM in analysis.effects,
     )
 
 
@@ -728,7 +732,8 @@ def _cpu_features(info: FunctionInfo) -> tuple[str, ...]:
 
 #: Effects that mean the body can reach the interpreter while it runs, so the
 #: GIL has to be held for the whole call.
-_NEEDS_GIL = (Effect.PYTHON_CALLBACK, Effect.EXTERNAL_UNKNOWN, Effect.IO)
+# A draw moves `random._inst`'s state, which Python code may be reading.
+_NEEDS_GIL = (Effect.PYTHON_CALLBACK, Effect.EXTERNAL_UNKNOWN, Effect.IO, Effect.RANDOM)
 
 
 def _releases_gil(analysis: FunctionAnalysis) -> bool:

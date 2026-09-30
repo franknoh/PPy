@@ -102,6 +102,7 @@ def _signature(s: NativeSignature) -> dict:
         "cpu_features": list(s.cpu_features),
         "future": s.future,
         "returned": s.returned,
+        "draws": s.draws,
     }
 
 
@@ -115,6 +116,7 @@ def _read_signature(raw: dict) -> NativeSignature:
         cpu_features=tuple(raw.get("cpu_features", ())),
         future=str(raw.get("future", "")),
         returned=str(raw.get("returned", "")),
+        draws=bool(raw.get("draws", False)),
     )
 
 

@@ -95,6 +95,7 @@ from .collections import HANDLE, Held
 from .containers import ContainerLowering
 from .exceptions import ExceptionLowering, uses_exceptions
 from .generators import GeneratorLowering
+from .stdlib import StdlibLowering
 from .strings import StringLowering
 
 __all__ = ["Frontend", "Lowered", "lower_function", "lower_module_to_ir"]
@@ -1235,7 +1236,12 @@ class _GuardSite:
 
 
 class _FunctionLowering(
-    ClosureLowering, ExceptionLowering, GeneratorLowering, ContainerLowering, StringLowering
+    StdlibLowering,
+    ClosureLowering,
+    ExceptionLowering,
+    GeneratorLowering,
+    ContainerLowering,
+    StringLowering,
 ):
     """Lowers one function body."""
 
@@ -2797,6 +2803,9 @@ class _FunctionLowering(
             return self._object_method(node, discard_result)
         if target == "gc.collect" and self._resolves_to(node.func, "gc.collect"):
             return self._collect(node, discard_result)
+        library = self._stdlib_call(node, discard_result)
+        if library is not None:
+            return library
         text = self._string_call(node, discard_result)
         if text is not None:
             return text

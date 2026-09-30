@@ -608,7 +608,9 @@ MODULE_ATTRIBUTES.update(
 
 
 def lookup(qualname: str) -> tuple[T.Type, EffectSet] | None:
-    return _FUNCTIONS.get(qualname)
+    from .native_stdlib import MODELS  # pylint: disable=import-outside-toplevel
+
+    return _FUNCTIONS.get(qualname) or MODELS.get(qualname)
 
 
 def call(qualname: str, args: list[tuple[T.Type, Facts]]) -> tuple[T.Type, EffectSet] | None:

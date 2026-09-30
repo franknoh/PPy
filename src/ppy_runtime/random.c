@@ -16,9 +16,11 @@
 
 /* Where the state lives: [0] the bound state's address, or 0; [1] whether
    the process-wide fallback below was seeded; [2] whether a seed call ran
-   since the last ask (Python's `seed` also forgets `gauss_next`). */
+   since the last ask (Python's `seed` also forgets `gauss_next`); [3]
+   whether `gauss` holds a value back, and [4] its bits, in a standalone
+   binary (under `ppy run` that value is Python's, and `gauss` stays there). */
 int64_t *ppy_random_cell(void) {
-    static int64_t cell[3];
+    static int64_t cell[5];
     return cell;
 }
 
@@ -69,7 +71,6 @@ void ppy_random_seed_int(int8_t *state, int64_t a) {
     key[0] = (uint32_t)n;
     key[1] = (uint32_t)(n >> 32);
     ppy_random_init_by_array(state, key, key[1] ? 2 : 1);
-    ppy_random_cell()[2] = 1;
 }
 
 /* An unseeded generator, as CPython seeds one: 624 words from the operating
@@ -106,6 +107,19 @@ int8_t *ppy_random_state(void) {
         cell[1] = 1;
     }
     return (int8_t *)own;
+}
+
+/* `random.seed(a)` of an integer (`given`), or `random.seed()`: the state,
+   and the value `gauss` held back, forgotten. */
+void ppy_random_reseed(int8_t *state, int64_t given, int64_t a) {
+    if (given) {
+        ppy_random_seed_int(state, a);
+    } else {
+        ppy_random_seed_system(state);
+    }
+    int64_t *cell = ppy_random_cell();
+    cell[2] = 1;
+    cell[3] = 0;
 }
 
 /* Draw from the state at `address`: `random._inst`'s, handed over by the
@@ -277,19 +291,208 @@ double ppy_random_normal(int8_t *state, double mu, double sigma) {
     return mu + z * sigma;
 }
 
-/* `choices(population, cum_weights=..., k)` for one pick: `bisect_right` of
-   `random() * total` over the cumulative weights, below `hi`. */
-int64_t ppy_random_pick_weighted(int8_t *state, const double *cumulative, int64_t n,
-                                 double total) {
-    double x = ppy_random_double(state) * total;
-    int64_t lo = 0, hi = n - 1;
-    while (lo < hi) {
-        int64_t mid = (lo + hi) / 2;
-        if (x < cumulative[mid]) {
-            hi = mid;
+/* How many values `range(0, width, step)` holds, for `randrange`: step
+   nonzero; 0 or less where it is empty. */
+int64_t ppy_random_range_count(int64_t width, int64_t step) {
+    __int128 w = width, t = step, n;
+    __int128 top = step > 0 ? w + t - 1 : w + t + 1;
+    n = top / t;
+    if ((top % t != 0) && ((top < 0) != (t < 0))) {
+        n -= 1;
+    }
+    if (n > INT64_MAX) {
+        return INT64_MAX;
+    }
+    return n < 0 ? 0 : (int64_t)n;
+}
+
+/* `randrange`'s pick: `start + step * _randbelow(n)`, which lies in the range. */
+int64_t ppy_random_range_pick(int8_t *state, int64_t start, int64_t n, int64_t step) {
+    __int128 r = ppy_random_below(state, n);
+    return (int64_t)((__int128)start + (__int128)step * r);
+}
+
+/* `len(range(start, stop, step))`, step nonzero. */
+int64_t ppy_random_range_len(int64_t start, int64_t stop, int64_t step) {
+    __int128 a = start, b = stop, t = step;
+    if (t > 0 ? a >= b : a <= b) {
+        return 0;
+    }
+    __int128 n = t > 0 ? (b - a - 1) / t + 1 : (a - b - 1) / (-t) + 1;
+    return n > INT64_MAX ? INT64_MAX : (int64_t)n;
+}
+
+/* Positions into a range: each `p` becomes `start + step * p`. */
+void ppy_random_affine(int8_t *positions, int64_t start, int64_t step) {
+    int64_t n = ((int64_t *)positions)[0];
+    for (int64_t i = 0; i < n; i++) {
+        int64_t *word = (int64_t *)ppy_seq_at(positions, i);
+        *word = (int64_t)((__int128)start + (__int128)step * *word);
+    }
+}
+
+/* A new list of `population`'s elements at `positions`, in their order: the
+   collections they hold shared, each with one more reference. */
+int8_t *ppy_random_gather(int8_t *population, int8_t *positions) {
+    int64_t *header = (int64_t *)population;
+    int64_t k = ((int64_t *)positions)[0];
+    /* Word 13 carries the leaves above bit 48; `ppy_coll_make` takes them
+       above bit 32 of the handle mask. */
+    int64_t leaves = (int64_t)(((uint64_t)header[13] >> 48) << 32);
+    int8_t *made = ppy_coll_make(0, header[13] & 0xFFFFFFFF, header[8], header[9],
+                                 header[10] | leaves, header[15], k > 0 ? k : 1);
+    ppy_coll_inherit(made, population);
+    for (int64_t i = 0; i < k; i++) {
+        int64_t at = *(int64_t *)ppy_seq_at(positions, i);
+        int8_t *slot = ppy_seq_push_back(made);
+        memcpy(slot, ppy_seq_at(population, at), (size_t)(header[8] * 8));
+        ppy_coll_retain_words(made, slot);
+    }
+    return made;
+}
+
+/* `choices(population, k=k)`: `floor(random() * n)`, k times, as positions. */
+int8_t *ppy_random_choice_positions(int8_t *state, int64_t n, int64_t k) {
+    int8_t *made = ppy_seq_new(0, 1, 0, 0);
+    double size = (double)n;
+    for (int64_t i = 0; i < k; i++) {
+        *(int64_t *)ppy_seq_push_back(made) = (int64_t)floor(ppy_random_double(state) * size);
+    }
+    return made;
+}
+
+/* The weights' running total as `choices` builds it (`accumulate`, or the
+   cumulative weights as given), each as a double, into `into`. */
+void ppy_random_cumulative(int8_t *weights, int64_t cumulative, int64_t integers,
+                           double *into) {
+    int64_t n = ((int64_t *)weights)[0];
+    int64_t whole = 0;
+    double part = 0.0;
+    for (int64_t i = 0; i < n; i++) {
+        int8_t *at = ppy_seq_at(weights, i);
+        if (integers) {
+            int64_t w = *(int64_t *)at;
+            whole = cumulative ? w : whole + w;
+            into[i] = (double)whole;
         } else {
-            lo = mid + 1;
+            double w = *(double *)at;
+            part = cumulative ? w : part + w;
+            into[i] = part;
         }
     }
-    return lo;
+}
+
+/* `cum_weights[-1] + 0.0`: the total `choices` draws below. */
+double ppy_random_weights_total(int8_t *weights, int64_t cumulative, int64_t integers) {
+    int64_t n = ((int64_t *)weights)[0];
+    if (n == 0) {
+        return 0.0;
+    }
+    if (cumulative) {
+        int8_t *last = ppy_seq_at(weights, n - 1);
+        return integers ? (double)*(int64_t *)last : *(double *)last;
+    }
+    int64_t whole = 0;
+    double part = 0.0;
+    for (int64_t i = 0; i < n; i++) {
+        int8_t *at = ppy_seq_at(weights, i);
+        if (integers) {
+            whole += *(int64_t *)at;
+        } else {
+            part += *(double *)at;
+        }
+    }
+    return integers ? (double)whole : part;
+}
+
+/* What `choices` says of a total: 0 fine, 1 not above zero, 2 not finite. */
+int64_t ppy_random_total_fault(double total) {
+    if (total <= 0.0) {
+        return 1;
+    }
+    return total - total == 0.0 ? 0 : 2; /* an infinity or a NaN is not */
+}
+
+/* `choices(population, weights, k=k)`: `bisect(cum, random() * total, 0,
+   n - 1)`, k times, as positions. */
+int8_t *ppy_random_weighted_positions(int8_t *state, int8_t *weights, int64_t cumulative,
+                                      int64_t integers, int64_t k, double total) {
+    int64_t n = ((int64_t *)weights)[0];
+    double *cum = (double *)malloc((size_t)(n > 0 ? n : 1) * sizeof(double));
+    if (cum == NULL) {
+        ppy_coll_fail();
+    }
+    ppy_random_cumulative(weights, cumulative, integers, cum);
+    int8_t *made = ppy_seq_new(0, 1, 0, 0);
+    for (int64_t i = 0; i < k; i++) {
+        double x = ppy_random_double(state) * total;
+        int64_t lo = 0, hi = n - 1;
+        while (lo < hi) {
+            int64_t mid = (lo + hi) / 2;
+            if (x < cum[mid]) {
+                hi = mid;
+            } else {
+                lo = mid + 1;
+            }
+        }
+        *(int64_t *)ppy_seq_push_back(made) = lo;
+    }
+    free(cum);
+    return made;
+}
+
+/* `triangular(low, high, mode)`; `has_mode` 0 is `mode=None`. */
+double ppy_random_triangular(int8_t *state, double low, double high, double mode,
+                             int64_t has_mode) {
+    double u = ppy_random_double(state);
+    double c = 0.5;
+    if (has_mode) {
+        if (high - low == 0.0) {
+            return low;
+        }
+        c = (mode - low) / (high - low);
+    }
+    if (u > c) {
+        u = 1.0 - u;
+        c = 1.0 - c;
+        double swap = low;
+        low = high;
+        high = swap;
+    }
+    return low + (high - low) * sqrt(u * c);
+}
+
+/* `expovariate(lambd)`, lambd nonzero. */
+double ppy_random_expo(int8_t *state, double lambd) {
+    return -log(1.0 - ppy_random_double(state)) / lambd;
+}
+
+/* `gauss(mu, sigma)`, with the value it holds back, in a standalone binary. */
+double ppy_random_gauss(int8_t *state, double mu, double sigma) {
+    int64_t *cell = ppy_random_cell();
+    double z;
+    if (cell[3]) {
+        memcpy(&z, &cell[4], sizeof z);
+        cell[3] = 0;
+    } else {
+        double x2pi = ppy_random_double(state) * 6.283185307179586;
+        double g2rad = sqrt(-2.0 * log(1.0 - ppy_random_double(state)));
+        z = cos(x2pi) * g2rad;
+        double next = sin(x2pi) * g2rad;
+        memcpy(&cell[4], &next, sizeof next);
+        cell[3] = 1;
+    }
+    return mu + z * sigma;
+}
+
+/* `paretovariate(alpha)`, alpha nonzero: `(1 - random()) ** (-1 / alpha)`. */
+double ppy_random_pareto(int8_t *state, double alpha) {
+    double u = 1.0 - ppy_random_double(state);
+    return pow(u, -1.0 / alpha);
+}
+
+/* `weibullvariate(alpha, beta)`, beta nonzero. */
+double ppy_random_weibull(int8_t *state, double alpha, double beta) {
+    double u = 1.0 - ppy_random_double(state);
+    return alpha * pow(-log(u), 1.0 / beta);
 }
