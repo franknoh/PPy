@@ -173,7 +173,7 @@ def _buffer_element(t: T.Type) -> tuple[str, str] | None:
     if base.name not in {"list", "Sequence", "Buffer", "memoryview", "array"}:
         return None
     element = _scalar_name(base.args[0])
-    if element not in _BUFFER_ELEMENTS:
+    if element is None or element not in _BUFFER_ELEMENTS:
         return None
     # A `Sequence` promises only reading, which is what a copied-in buffer
     # does; anything the caller passes is unpacked the same way.
@@ -325,6 +325,10 @@ def _collection_param(
         if not is_plain_callable(base):
             return None
         return NativeParam(name, "handle", callable_spelled(base), class_name="callable")
+    if isinstance(base, T.Instance) and base.name in {"Iterator", "Generator"} and base.args:
+        # A generator's frame: native code's own, never crossing to Python.
+        element = T.strip_literal(base.args[0])
+        return NativeParam(name, "handle", f"generator[{element}]", class_name="generator")
     if isinstance(base, T.Instance) and base.name in _BUILTIN_CONTAINERS and base.args:
         if not written and _buffer_element(base) is not None:
             # A list of numbers the function only reads is lent as a buffer.
@@ -420,8 +424,8 @@ def eligible(
     `with_implicit_globals`), which Python's boundary reads from the module
     at the call.
     """
-    if info.is_generator:
-        return False, "generators use the boxed runtime"
+    if info.is_generator and info.is_async:
+        return False, "an async generator runs on CPython"
     if info.is_async and not allow_async:
         return False, "a coroutine runs natively only where the async runtime does"
     written = writes(analysis)

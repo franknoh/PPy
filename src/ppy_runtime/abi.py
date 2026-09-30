@@ -72,6 +72,10 @@ class NativeParam:
     source: str = ""
     #: An object parameter that may be `None`, the null handle.
     nullable: bool = False
+    #: A `float` (or a tuple, list, or value class holding floats) whose
+    #: int-ness the body would show: an `int` given for it keeps the call in
+    #: Python, where it stays an `int`.
+    exact: bool = False
 
     @property
     def is_buffer(self) -> bool:

@@ -79,10 +79,11 @@ _SHAPES: tuple[_Shape, ...] = (
         "reference/compatibility/",
     ),
     _shape(
-        r"generators use the boxed runtime",
-        "a generator that is returned, passed on, or stepped inside a loop or a branch",
-        "consume it where it is made, in a `for`, a builtin like `sum`, a comprehension, or "
-        "`next` steps at the top level of the function",
+        r"generators use the boxed runtime|a generator (holds|of|function is|that yields|'s "
+        r"return)|uses a `yield`'s value|an async generator",
+        "a generator native code cannot hold a frame for",
+        "annotate it `Iterator[T]`, yield values of one native type, and do not use a "
+        "`yield`'s value or a return value",
         "guide/exceptions-and-generators/",
     ),
     _shape(
@@ -153,28 +154,36 @@ _SHAPES: tuple[_Shape, ...] = (
         "guide/closures/",
     ),
     _shape(
+        r"`isinstance` of a `[^`]+` depends on the value",
+        "`isinstance` whose answer the types do not decide (an `int` that may be a `bool`, a "
+        "`float` that may be an `int`)",
+        "annotate the value with the type it is, or test it another way",
+        "guide/native-lowering/",
+    ),
+    _shape(
         r"chained comparison",
-        "a chained comparison (`a < b < c`)",
-        "write it as `a < b and b < c` for now",
+        "a chained comparison or a membership test over values that are not numbers or names",
+        "give the operand a name first",
         "guide/native-lowering/",
     ),
     _shape(
         r"comparison operator has no native lowering",
-        "`in` or `is` against a value that is not a collection (a tuple, a range, a string)",
-        "test membership in a list, dict, set, or string, or compare with `==`",
+        "`in` or `is` against a value native code cannot test (mixed types, an object "
+        "without `__contains__`)",
+        "test membership of one type in a tuple, a range, a list, dict, set, or string",
         "guide/native-lowering/",
     ),
     _shape(
         r"integer operator has no native lowering",
-        "`**` between two integers",
-        "use `pow(a, b)` with a float, or a loop, until integer powers lower",
+        "an integer operator with no native form (`@`)",
+        "use the operator on floats or a ppy tensor",
         "guide/native-lowering/",
     ),
     _shape(
         r"only `for NAME in range",
-        "a `for` loop over something native code does not walk (a tuple, a string of names, an "
-        "object)",
-        "loop over a range, a list, a dict, a set, a string, or a ppy collection",
+        "a `for` loop native code does not walk (an object without a generator `__iter__`)",
+        "loop over a range, a list, a dict, a set, a string, a tuple, a generator, or a ppy "
+        "collection",
         "guide/native-lowering/",
     ),
     _shape(

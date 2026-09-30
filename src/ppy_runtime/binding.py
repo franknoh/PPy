@@ -693,8 +693,12 @@ def _expander_for(
         code = _ELEMENT_CODES[parameter.element]
         pointer_type = ctypes.POINTER(_ELEMENT_CTYPES[parameter.element])
 
+        exact_floats = parameter.exact and parameter.element in {"float", "f64", "f32"}
+
         def expand_buffer(value: object, atoms: list, borrowed: list) -> None:
             if type(value) is not list:
+                raise GuardFailed
+            if exact_floats and not all(type(item) is float for item in value):
                 raise GuardFailed
             try:
                 buffer = array.array(code, value)  # type: ignore[arg-type]
@@ -708,7 +712,10 @@ def _expander_for(
         return expand_buffer
 
     if parameter.is_object:
-        field_guards = [(attr, _scalar_guard(_abi_of(scalar))) for attr, scalar in parameter.fields]
+        field_guards = [
+            (attr, _scalar_guard(_abi_of(scalar), parameter.exact))
+            for attr, scalar in parameter.fields
+        ]
         short_name = parameter.class_name.rpartition(".")[2]
         resolved: list[type | None] = [None]
 
@@ -737,7 +744,7 @@ def _expander_for(
         return expand_object
 
     if parameter.is_tuple:
-        element_guards = [_scalar_guard(atom) for atom in parameter.abi]
+        element_guards = [_scalar_guard(atom, parameter.exact) for atom in parameter.abi]
 
         def expand_tuple(value: object, atoms: list, borrowed: list) -> None:
             if type(value) is not tuple or len(value) != len(element_guards):
@@ -751,9 +758,8 @@ def _expander_for(
     if abi == "i64":
 
         def expand_int(value: object, atoms: list, borrowed: list) -> None:
-            if type(value) is bool:
-                atoms.append(int(value))
-                return
+            # A `bool` stays a `bool` in Python where native code would make it
+            # 1 or 0; the compiled wrapper refuses it too.
             if type(value) is not int or not _I64_LOW <= value <= _I64_HIGH:
                 raise GuardFailed
             atoms.append(value)
@@ -761,12 +767,13 @@ def _expander_for(
         return expand_int
 
     if abi == "double":
+        exact = parameter.exact
 
         def expand_float(value: object, atoms: list, borrowed: list) -> None:
             if type(value) is float:
                 atoms.append(value)
                 return
-            if type(value) is int and _I64_LOW <= value <= _I64_HIGH:
+            if not exact and type(value) is int and -_EXACT_INT <= value <= _EXACT_INT:
                 atoms.append(float(value))
                 return
             raise GuardFailed
@@ -789,13 +796,16 @@ def _result_for(abi: str) -> Callable[[object], object]:
     return int  # type: ignore[arg-type]
 
 
-def _scalar_guard(abi: str) -> Callable[[object], object]:
-    """Guard and convert one scalar, raising `GuardFailed` when it does not fit."""
+#: The largest int a double holds exactly, and every int below it.
+_EXACT_INT = 1 << 53
+
+
+def _scalar_guard(abi: str, exact: bool = False) -> Callable[[object], object]:
+    """Guard and convert one scalar, raising `GuardFailed` when it does not fit;
+    an `exact` float takes only a `float`."""
     if abi == "i64":
 
         def as_int(value: object) -> object:
-            if type(value) is bool:
-                return int(value)
             if type(value) is not int or not _I64_LOW <= value <= _I64_HIGH:
                 raise GuardFailed
             return value
@@ -806,7 +816,7 @@ def _scalar_guard(abi: str) -> Callable[[object], object]:
         def as_float(value: object) -> object:
             if type(value) is float:
                 return value
-            if type(value) is int and _I64_LOW <= value <= _I64_HIGH:
+            if not exact and type(value) is int and -_EXACT_INT <= value <= _EXACT_INT:
                 return float(value)
             raise GuardFailed
 

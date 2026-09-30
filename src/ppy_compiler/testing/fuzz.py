@@ -129,6 +129,32 @@ def pairs(n: int) -> Iterator[int]:
     yield from countdown(n)
 
 
+def drain(it: Iterator[int], most: int) -> int:
+    total = 0
+    for value in it:
+        if most <= 0:
+            break
+        total = total * 5 + value
+        most -= 1
+    return total
+
+
+class Ring:
+    def __init__(self, size: int) -> None:
+        self.size: int = size
+        self.names: list[str] = []
+
+    def add(self, name: str) -> None:
+        self.names.append(name)
+
+    def __iter__(self) -> Iterator[str]:
+        seen: list[str] = []
+        for name in self.names:
+            if name not in seen:
+                seen.append(name)
+                yield name + str(len(seen))
+
+
 """
 
 #: What a program with module state adds: objects Python makes and native
@@ -248,8 +274,15 @@ class _Generator:
             return f"{rng.choice(('min', 'max'))}({left}, {self.int_expr(scope, depth + 1)})"
         if roll < 0.91:
             return f"len({self.str_expr(scope, depth + 1)})"
-        if roll < 0.95:
+        if roll < 0.93:
             return f"int({self.float_expr(scope, depth + 1)})"
+        if roll < 0.95:
+            # A small exponent, and one past a word now and then.
+            exponent = rng.choice(("0", "1", "2", "3", "7", "40", "63", "64"))
+            if self.chance(0.5):
+                modulus = rng.choice(("7", "1000000007", "-5", "1"))
+                return f"pow({left}, {exponent}, {modulus})"
+            return f"({left} ** {exponent})"
         return f"({left} if {self.bool_expr(scope, depth + 1)} else {self.int_expr(scope, 3)})"
 
     def float_expr(self, scope: _Scope, depth: int = 0) -> str:
@@ -290,8 +323,22 @@ class _Generator:
             return f"({self.float_expr(scope, 2)} {compare} {self.float_expr(scope, 2)})"
         if roll < 0.75:
             return f"({self.str_expr(scope, 2)} {compare} {self.str_expr(scope, 2)})"
-        if roll < 0.85:
+        if roll < 0.8:
             return f"({self.str_expr(scope, 2)} in {self.str_expr(scope, 2)})"
+        if roll < 0.84:
+            items = ", ".join(self.int_expr(scope, 2) for _ in range(rng.randint(1, 4)))
+            test = rng.choice(("in", "not in"))
+            container = rng.choice((f"({items},)", f"{{{items}}}"))
+            if self.chance(0.4):
+                step = rng.choice(("1", "3", "-2", self.int_expr(scope, 2) + " % 5 + 1"))
+                container = f"range({self.int_expr(scope, 2)}, {self.int_expr(scope, 2)}, {step})"
+            return f"({self.int_expr(scope, 2)} {test} {container})"
+        if roll < 0.87:
+            ops = [rng.choice(("<", "<=", ">", ">=", "==", "!=")) for _ in range(rng.randint(2, 3))]
+            spelled = self.int_expr(scope, 2)
+            for op in ops:
+                spelled += f" {op} {self.int_expr(scope, 2)}"
+            return f"({spelled})"
         joiner = rng.choice(("and", "or"))
         left = self.bool_expr(scope, depth + 1)
         return f"({left} {joiner} not {self.bool_expr(scope, depth + 1)})"
@@ -418,7 +465,10 @@ class _Generator:
         elif roll < 0.96:
             self.generator_statement(w, scope)
         elif roll < 0.975:
-            self.lifted_statement(w, scope)
+            if self.chance(0.5):
+                self.lifted_statement(w, scope)
+            else:
+                self.expression_statement(w, scope)
         elif roll < 0.985:
             # An assert that holds more often than not, so programs run on.
             holds = self.chance(0.7)
@@ -553,6 +603,74 @@ class _Generator:
             item = self.name("x")
             w.put(f"for {item} in sorted({source}):")
             w.put(f"    {name} = {name} * 7 + {item}")
+        scope.ints.append(name)
+
+    def expression_statement(self, w: _Writer, scope: _Scope) -> None:
+        """What 0.6.0 took native: `isinstance`, loops over ranges with a
+        step, strings, and tuples under `enumerate`, `zip`, and `reversed`,
+        chained assignment, `e.args`, and generators held, passed on, and
+        made by `__iter__`."""
+        rng = self.rng
+        roll = rng.random()
+        name = self.name("n")
+        if roll < 0.12:
+            subject = rng.choice([*scope.ints, *scope.floats, *scope.strs, *scope.bools, "None"])
+            classes = rng.choice(("int", "float", "(int, float)", "str", "bool", "(str, list)"))
+            w.put(f"{name}: int = 1 if isinstance({subject}, {classes}) else 0")
+        elif roll < 0.3:
+            step = rng.choice(("1", "2", "-1", "-3", f"({self.int_expr(scope, 2)} % 4 or 1)"))
+            source = rng.choice(
+                (
+                    f"range({self.int_expr(scope, 2)} % 9, {self.int_expr(scope, 2)} % 9, {step})",
+                    f"reversed(range({self.int_expr(scope, 2)} % 7))",
+                    f"({self.int_expr(scope, 2)}, {self.int_expr(scope, 2)}, 5)",
+                )
+            )
+            wrapped = rng.choice(("plain", "enumerate", "zip"))
+            w.put(f"{name}: int = 0")
+            if wrapped == "plain":
+                w.put(f"for x in {source}:")
+                w.put(f"    {name} = {name} * 3 + x")
+            elif wrapped == "enumerate":
+                w.put(f"for i, x in enumerate({source}, {rng.randint(0, 2)}):")
+                w.put(f"    {name} = {name} * 3 + i * x")
+            else:
+                w.put(f"for x, c in zip({source}, {self.str_expr(scope, 2)}):")
+                w.put(f"    {name} = {name} * 3 + x + ord(c)")
+        elif roll < 0.42:
+            other = self.name("n")
+            w.put(f"{name} = {other} = {self.int_expr(scope, 2)}")
+            w.put(f"{other} += 1")
+            scope.ints.append(other)
+        elif roll < 0.55:
+            w.put(f"{name}: int = 0")
+            w.put("try:")
+            w.put(f"    if {self.bool_expr(scope, 2)}:")
+            w.put(f"        raise ValueError({self.str_expr(scope, 2)})")
+            w.put("    raise KeyError()")
+            w.put("except ValueError as e:")
+            w.put(f"    {name} = len(str(e.args)) * 10 + len(e.args)")
+            w.put("except KeyError as e:")
+            w.put(f"    {name} = len(e.args) - 1")
+        elif roll < 0.8:
+            count = f"({self.int_expr(scope, 2)} % 9)"
+            it = self.name("it")
+            w.put(f"{it} = countdown({count})")
+            w.put(f"{name}: int = 0")
+            w.put(f"for k in range({rng.randint(0, 3)}):")
+            w.put(f"    {name} += next({it}, -1) * (k + 2)")
+            w.put(f"{name} += drain({it}, {rng.randint(0, 4)})")
+            w.put(f"{name} += drain(pairs({count}), {rng.randint(0, 4)})")
+        else:
+            ring = self.name("r")
+            w.put(f"{ring} = Ring({rng.randint(0, 3)})")
+            for _ in range(rng.randint(0, 4)):
+                w.put(f"{ring}.add({self.str_expr(scope, 2)})")
+            w.put(f"{name}: int = 0")
+            w.put(f"for word in {ring}:")
+            w.put(f"    {name} = {name} * 7 + len(word)")
+            w.put(f"    if {name} > {rng.randint(5, 60)}:")
+            w.put("        break")
         scope.ints.append(name)
 
     def lifted_statement(self, w: _Writer, scope: _Scope) -> None:

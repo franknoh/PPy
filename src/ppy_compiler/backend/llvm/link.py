@@ -413,6 +413,7 @@ def write_manifest(
                             "written": parameter.written,
                             "source": parameter.source,
                             "nullable": parameter.nullable,
+                            "exact": parameter.exact,
                         }
                         for parameter in signature.parameters
                     ],

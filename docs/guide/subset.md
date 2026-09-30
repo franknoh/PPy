@@ -80,8 +80,10 @@ These are valid Python that the checker accepts and types:
 - A container passed where a wider element type is declared. `list[int]`
   goes where `Sequence[float]` is declared, and where `list[int | float]` is
   declared if the callee only reads the list. A function that appends a
-  float to it is still refused (`E1301`). Calls like these run on CPython,
-  since native code would convert the ints.
+  float to it is still refused (`E1301`). Native code converts the ints
+  only where the callee cannot show the difference, and otherwise runs the
+  call on CPython (see
+  [A `float` given an `int`](native-lowering.md#a-float-given-an-int)).
 - A list written in place with narrower elements than declared:
   `m: list[list[float]] = [[0] * n for _ in range(n)]`.
 - A generator expression where a `Generator[T, None, None]` is declared.

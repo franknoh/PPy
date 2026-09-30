@@ -1009,12 +1009,6 @@ class _Checker:
         self._provisional_locals = set()
         self._blockers = []
         self._native_blockers = []
-        if info.widened_callers:
-            # A caller hands it a `list[int]` for a `Sequence[float]`; the
-            # native boundary would convert those ints, CPython does not.
-            self._native_blockers.append(
-                "a caller passes a container with narrower elements than it declares"
-            )
         self._escaping = set()
         self._mutated = set()
         self._delegated = set()
@@ -1748,7 +1742,7 @@ class _Checker:
 
     _stmt_TryStar = _stmt_Try
 
-    def _stmt_With(self, node: ast.With, env: Env) -> None:
+    def _stmt_With(self, node: ast.With | ast.AsyncWith, env: Env) -> None:
         dynamic = False
         for item in node.items:
             if self._is_dynamic_marker(item.context_expr):
@@ -1768,7 +1762,7 @@ class _Checker:
 
     def _stmt_AsyncWith(self, node: ast.AsyncWith, env: Env) -> None:
         self._effects = self._effects.add(Effect.SYNC)
-        self._stmt_With(node, env)  # type: ignore[arg-type]
+        self._stmt_With(node, env)
 
     def _stmt_FunctionDef(self, node: ast.FunctionDef, env: Env) -> None:
         self._check_decorators(node, env)
@@ -2530,6 +2524,10 @@ class _Checker:
                 return Binding(T.STR)
         if isinstance(node.func, ast.Name) and node.func.id not in env:
             result = B.call_builtin(node.func.id, [(a.type, a.facts) for a in args])
+            if result is not None and node.func.id == "iter" and len(args) == 1:
+                own = self._own_iterator(args[0].type)
+                if own is not None:
+                    result = B.BuiltinResult(own, result.facts, result.effects)
             if result is not None and node.func.id == "open" and B.opens_text(node):
                 result = B.BuiltinResult(B.TEXT_STREAM, result.facts, result.effects)
             if result is not None and self._calls_native_function(node, args):
@@ -3138,10 +3136,10 @@ class _Checker:
             ):
                 # `bucket_sort([3, 1])` for `my_list: list[int | float]`: the
                 # callee only reads the list, so its narrower elements are
-                # values of the declared type. CPython runs the call as written.
-                self._native_blockers.append(
-                    f"passes `{argument.type}` where `{info.name}` declares `{param.type}`"
-                )
+                # values of the declared type. CPython runs the call as written;
+                # native code keeps the ints where they would show (the float
+                # parameters `lowering.intness` marks exact), and a native
+                # caller does not hand an int buffer to a float one.
                 info.widened_callers = True
                 continue
             if (
@@ -6443,6 +6441,9 @@ class _Checker:
             return Binding(C.element_of(base))
         element = B.element_type(base)
         if isinstance(element, T.UnknownType):
+            own = self._own_iterator(base)
+            if own is not None:
+                return Binding(B.element_type(own))
             if isinstance(base, T.Instance) and base.name == "range":
                 return Binding(T.INT, self._range_facts(node))
             if T.is_exact_builtin(base):
@@ -6477,6 +6478,26 @@ class _Checker:
             case [start, stop, step] if step < 0:
                 return Facts(int_range=IntRange(min(start, stop + 1), start))
         return Facts(int_range=IntRange())
+
+    def _own_iterator(self, t: T.Type) -> T.Type | None:
+        """What `iter()` of an instance of a project class gives: its `__iter__`'s
+        annotated result, an `Iterator[T]` or a `Generator[T]`."""
+        base = T.strip_literal(t)
+        if not isinstance(base, T.Instance):
+            return None
+        info = self.project.classes.get(base.name)
+        method = None
+        for entry in info.mro if info is not None else ():
+            owner = self.project.classes.get(entry)
+            method = owner.methods.get("__iter__") if owner is not None else None
+            if method is not None:
+                break
+        if method is None:
+            return None
+        returned = T.strip_literal(method.ret)
+        if isinstance(returned, T.Instance) and returned.name in {"Iterator", "Generator"}:
+            return returned
+        return None
 
     def _enter_type(self, t: T.Type) -> T.Type:
         base = T.strip_literal(t)

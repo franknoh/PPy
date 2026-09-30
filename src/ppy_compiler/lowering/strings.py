@@ -559,6 +559,7 @@ class StringLowering:
             # The name the loop walks may be rebound inside it.
             self._retain(handle)  # type: ignore[attr-defined]
         keep = self._alloca(HANDLE, "walked")  # type: ignore[attr-defined]
+        keep.owner.attributes["ppy.owns"] = True  # type: ignore[union-attr]
         core.store(b, handle, keep)
         cursor = self._alloca(I64, "walk.at")  # type: ignore[attr-defined]
         core.store(b, self._word(0), cursor)  # type: ignore[attr-defined]
@@ -590,6 +591,7 @@ class StringLowering:
             core.br(b, Successor(header))
         b.at_end(done)
         self._release(core.load(b, keep))  # type: ignore[attr-defined]
+        core.store(b, self._rt("ppy_coll_none", (), HANDLE), keep)  # type: ignore[attr-defined]
         return True
 
     def _string_equal(self, first: Value, second: Value) -> Value:
