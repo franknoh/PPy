@@ -17,7 +17,7 @@ from .lowering import NativeParam, NativeSignature
 __all__ = ["SCHEMA_VERSION", "CachedLowering", "decode", "encode"]
 
 #: Bumped when the shape below changes, so an old entry is simply a miss.
-SCHEMA_VERSION = 9
+SCHEMA_VERSION = 10
 
 
 class CachedLowering:
@@ -25,6 +25,7 @@ class CachedLowering:
 
     __slots__ = (
         "boundaries",
+        "effects",
         "exports",
         "fused",
         "ir",
@@ -52,8 +53,11 @@ class CachedLowering:
         proved: dict[str, tuple[str, ...]] | None = None,
         remarks: tuple[str, ...] = (),
         boundaries: dict[str, NativeSignature] | None = None,
+        effects: dict[str, str] | None = None,
     ) -> None:
         self.ir = ir
+        #: Per function with effects, the rule they run under.
+        self.effects = dict(effects or {})
         #: Per function, the thunk Python calls where there is one.
         self.boundaries = dict(boundaries or {})
         self.ppyir = ppyir
@@ -102,6 +106,7 @@ def _signature(s: NativeSignature) -> dict:
         "cpu_features": list(s.cpu_features),
         "future": s.future,
         "returned": s.returned,
+        "effects": s.effects,
     }
 
 
@@ -115,6 +120,7 @@ def _read_signature(raw: dict) -> NativeSignature:
         cpu_features=tuple(raw.get("cpu_features", ())),
         future=str(raw.get("future", "")),
         returned=str(raw.get("returned", "")),
+        effects=bool(raw.get("effects", False)),
     )
 
 
@@ -173,6 +179,7 @@ def encode(module) -> str:  # type: ignore[no-untyped-def]
             "exports": dict(module.exports),
             "proved": {q: list(names) for q, names in module.proved.items()},
             "remarks": list(module.remarks),
+            "effects": dict(getattr(module, "effects", {})),
         },
         separators=(",", ":"),
     )
@@ -200,6 +207,7 @@ def decode(text: str) -> CachedLowering | None:
             proved={q: tuple(names) for q, names in raw.get("proved", {}).items()},
             remarks=tuple(raw.get("remarks", ())),
             boundaries={q: _read_signature(s) for q, s in raw.get("boundaries", {}).items()},
+            effects=dict(raw.get("effects", {})),
         )
     except (KeyError, TypeError, ValueError):
         return None

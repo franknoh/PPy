@@ -66,5 +66,12 @@ cannot keep a promise runs the Python body.
 One exception stands above that rule. A check `--sanitize` inserted does not
 fall back but raises `SanitizerFailure` ([CLI](../cli.md)).
 
+A fallback runs the whole call again, so it must not repeat what the call
+already did. Under `ppy run`, what a native function prints is held until the
+call returns and dropped when it falls back. An effect that cannot be taken
+back (`input()`, `print(flush=True)`, a file, a call into Python) is a
+barrier: the compiler proves nothing falls back after one, or the function
+stays in Python. [Effects in native code](native-effects.md) has the rules.
+
 Examples: [Effects and contracts](../howto/03_effects_and_contracts.md),
 [Errors](../howto/18_errors.md).

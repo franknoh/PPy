@@ -1,5 +1,5 @@
-"""The collections runtime: `collections.c`, `strings.c`, and `exceptions.c`, and the ways a
-program reaches them.
+"""The collections runtime: `collections.c`, `strings.c`, `exceptions.c`, and `pyio.c`,
+and the ways a program reaches them.
 
 The C text is written once, as ordinary C files, and read here into one
 entry per function: its result, its parameters, its body, and the other
@@ -28,6 +28,7 @@ SOURCES = (
     Path(__file__).with_name("collections.c"),
     Path(__file__).with_name("strings.c"),
     Path(__file__).with_name("exceptions.c"),
+    Path(__file__).with_name("pyio.c"),
 )
 
 #: What every function needs from the C library.
