@@ -10,13 +10,13 @@
       
       
       
-        <link rel="canonical" href="https://ppy.franknoh.dev/dev/howto/19_strings/">
+        <link rel="canonical" href="https://ppy.franknoh.dev/dev/internals/native-coverage/">
       
       
-        <link rel="prev" href="../18_errors/">
+        <link rel="prev" href="../solver/">
       
       
-        <link rel="next" href="../12_buffers_and_jit/">
+        <link rel="next" href="../hardware-validation/">
       
       
         
@@ -27,7 +27,7 @@
     
     
       
-        <title>Strings - PPy</title>
+        <title>Native coverage of a real corpus - PPy</title>
       
     
     
@@ -84,7 +84,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#strings" class="md-skip">
+        <a href="#native-coverage-of-a-real-corpus" class="md-skip">
           Skip to content
         </a>
       
@@ -123,7 +123,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Strings
+              Native coverage of a real corpus
             
           </span>
         </div>
@@ -292,13 +292,11 @@
   
   
   
-    
-  
   
     
     
-      <li class="md-tabs__item md-tabs__item--active">
-        <a href="../" class="md-tabs__link">
+      <li class="md-tabs__item">
+        <a href="../../howto/" class="md-tabs__link">
           
   
   
@@ -338,11 +336,13 @@
   
   
   
+    
+  
   
     
     
-      <li class="md-tabs__item">
-        <a href="../../internals/" class="md-tabs__link">
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="../" class="md-tabs__link">
           
   
   
@@ -1312,8 +1312,6 @@
       
   
   
-    
-  
   
   
     
@@ -1339,23 +1337,20 @@
     
     
       
-        
-        
-      
       
         
       
     
     
-    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" checked>
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
         
           
           <div class="md-nav__link md-nav__container">
-            <a href="../" class="md-nav__link ">
+            <a href="../../howto/" class="md-nav__link ">
               
   
   
@@ -1373,13 +1368,13 @@
             </a>
             
               
-              <label class="md-nav__link " for="__nav_4" id="__nav_4_label" tabindex="">
+              <label class="md-nav__link " for="__nav_4" id="__nav_4_label" tabindex="0">
                 <span class="md-nav__icon md-icon"></span>
               </label>
             
           </div>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="true">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_4">
             <span class="md-nav__icon md-icon"></span>
             
@@ -1399,7 +1394,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../comparisons/" class="md-nav__link">
+      <a href="../../howto/comparisons/" class="md-nav__link">
         
   
   
@@ -1424,10 +1419,8 @@
                 
   
   
-    
   
   
-  
     
     
       
@@ -1462,21 +1455,18 @@
     
       
       
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_3" >
         
           
-          
-        
-      
-    
-    
-    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
-      
-        
-        
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_3" checked>
-        
-          
-          <label class="md-nav__link" for="__nav_4_3" id="__nav_4_3_label" tabindex="">
+          <label class="md-nav__link" for="__nav_4_3" id="__nav_4_3_label" tabindex="0">
             
   
   
@@ -1494,7 +1484,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_3_label" aria-expanded="true">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_3_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_4_3">
             <span class="md-nav__icon md-icon"></span>
             
@@ -1512,7 +1502,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../01_basics/" class="md-nav__link">
+      <a href="../../howto/01_basics/" class="md-nav__link">
         
   
   
@@ -1540,7 +1530,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../02_arbitrary_precision/" class="md-nav__link">
+      <a href="../../howto/02_arbitrary_precision/" class="md-nav__link">
         
   
   
@@ -1568,7 +1558,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../03_effects_and_contracts/" class="md-nav__link">
+      <a href="../../howto/03_effects_and_contracts/" class="md-nav__link">
         
   
   
@@ -1596,7 +1586,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../04_classes/" class="md-nav__link">
+      <a href="../../howto/04_classes/" class="md-nav__link">
         
   
   
@@ -1624,7 +1614,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../08_native_data/" class="md-nav__link">
+      <a href="../../howto/08_native_data/" class="md-nav__link">
         
   
   
@@ -1652,7 +1642,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../10_narrowing/" class="md-nav__link">
+      <a href="../../howto/10_narrowing/" class="md-nav__link">
         
   
   
@@ -1680,7 +1670,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../11_numerics/" class="md-nav__link">
+      <a href="../../howto/11_numerics/" class="md-nav__link">
         
   
   
@@ -1708,7 +1698,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../13_value_classes/" class="md-nav__link">
+      <a href="../../howto/13_value_classes/" class="md-nav__link">
         
   
   
@@ -1736,7 +1726,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../14_tuples/" class="md-nav__link">
+      <a href="../../howto/14_tuples/" class="md-nav__link">
         
   
   
@@ -1764,7 +1754,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../16_dynamic/" class="md-nav__link">
+      <a href="../../howto/16_dynamic/" class="md-nav__link">
         
   
   
@@ -1792,7 +1782,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../17_containers/" class="md-nav__link">
+      <a href="../../howto/17_containers/" class="md-nav__link">
         
   
   
@@ -1820,7 +1810,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../18_errors/" class="md-nav__link">
+      <a href="../../howto/18_errors/" class="md-nav__link">
         
   
   
@@ -1845,37 +1835,10 @@
                 
   
   
-    
   
   
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
-      
-      
-        
-      
-      
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Strings
-  
-
-    
-  </span>
-  
-  
-
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
-      <a href="./" class="md-nav__link md-nav__link--active">
+    <li class="md-nav__item">
+      <a href="../../howto/19_strings/" class="md-nav__link">
         
   
   
@@ -1891,92 +1854,6 @@
   
 
       </a>
-      
-        
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-    
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#run-it" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Run it
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#what-it-prints" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        What it prints
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#which-functions-lower" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Which functions lower
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#very-large-text" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Very large text
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#where-the-code-comes-from" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Where the code comes from
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#19_stringsstringsppy" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        19_strings/strings.ppy
-      
-    </span>
-  </a>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-      
     </li>
   
 
@@ -2037,20 +1914,17 @@
       
       
         
-          
-          
-        
       
     
     
-    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--nested">
       
         
         
         <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_4" >
         
           
-          <label class="md-nav__link" for="__nav_4_4" id="__nav_4_4_label" tabindex="">
+          <label class="md-nav__link" for="__nav_4_4" id="__nav_4_4_label" tabindex="0">
             
   
   
@@ -2086,7 +1960,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../12_buffers_and_jit/" class="md-nav__link">
+      <a href="../../howto/12_buffers_and_jit/" class="md-nav__link">
         
   
   
@@ -2114,7 +1988,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../15_algorithms/" class="md-nav__link">
+      <a href="../../howto/15_algorithms/" class="md-nav__link">
         
   
   
@@ -2142,7 +2016,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../28_threads/" class="md-nav__link">
+      <a href="../../howto/28_threads/" class="md-nav__link">
         
   
   
@@ -2170,7 +2044,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../32_native_memory/" class="md-nav__link">
+      <a href="../../howto/32_native_memory/" class="md-nav__link">
         
   
   
@@ -2198,7 +2072,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../33_simd_and_cpu/" class="md-nav__link">
+      <a href="../../howto/33_simd_and_cpu/" class="md-nav__link">
         
   
   
@@ -2226,7 +2100,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../34_atomics_and_threads/" class="md-nav__link">
+      <a href="../../howto/34_atomics_and_threads/" class="md-nav__link">
         
   
   
@@ -2254,7 +2128,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../35_parallel_range/" class="md-nav__link">
+      <a href="../../howto/35_parallel_range/" class="md-nav__link">
         
   
   
@@ -2282,7 +2156,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../36_autodiff/" class="md-nav__link">
+      <a href="../../howto/36_autodiff/" class="md-nav__link">
         
   
   
@@ -2310,7 +2184,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../37_aio/" class="md-nav__link">
+      <a href="../../howto/37_aio/" class="md-nav__link">
         
   
   
@@ -2338,7 +2212,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../40_generics/" class="md-nav__link">
+      <a href="../../howto/40_generics/" class="md-nav__link">
         
   
   
@@ -2366,7 +2240,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../42_toolbox/" class="md-nav__link">
+      <a href="../../howto/42_toolbox/" class="md-nav__link">
         
   
   
@@ -2394,7 +2268,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../43_regex/" class="md-nav__link">
+      <a href="../../howto/43_regex/" class="md-nav__link">
         
   
   
@@ -2422,7 +2296,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../47_collections/" class="md-nav__link">
+      <a href="../../howto/47_collections/" class="md-nav__link">
         
   
   
@@ -2450,7 +2324,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../48_strings/" class="md-nav__link">
+      <a href="../../howto/48_strings/" class="md-nav__link">
         
   
   
@@ -2478,7 +2352,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../49_inheritance/" class="md-nav__link">
+      <a href="../../howto/49_inheritance/" class="md-nav__link">
         
   
   
@@ -2506,7 +2380,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../50_errors_and_generators/" class="md-nav__link">
+      <a href="../../howto/50_errors_and_generators/" class="md-nav__link">
         
   
   
@@ -2558,20 +2432,17 @@
       
       
         
-          
-          
-        
       
     
     
-    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--nested">
       
         
         
         <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_5" >
         
           
-          <label class="md-nav__link" for="__nav_4_5" id="__nav_4_5_label" tabindex="">
+          <label class="md-nav__link" for="__nav_4_5" id="__nav_4_5_label" tabindex="0">
             
   
   
@@ -2607,7 +2478,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../38_cuda/" class="md-nav__link">
+      <a href="../../howto/38_cuda/" class="md-nav__link">
         
   
   
@@ -2635,7 +2506,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../44_tile/" class="md-nav__link">
+      <a href="../../howto/44_tile/" class="md-nav__link">
         
   
   
@@ -2663,7 +2534,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../39_xla/" class="md-nav__link">
+      <a href="../../howto/39_xla/" class="md-nav__link">
         
   
   
@@ -2691,7 +2562,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../45_multi_gpu_jax/" class="md-nav__link">
+      <a href="../../howto/45_multi_gpu_jax/" class="md-nav__link">
         
   
   
@@ -2759,20 +2630,17 @@
       
       
         
-          
-          
-        
       
     
     
-    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--nested">
       
         
         
         <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_6" >
         
           
-          <label class="md-nav__link" for="__nav_4_6" id="__nav_4_6_label" tabindex="">
+          <label class="md-nav__link" for="__nav_4_6" id="__nav_4_6_label" tabindex="0">
             
   
   
@@ -2808,7 +2676,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../05_numpy/" class="md-nav__link">
+      <a href="../../howto/05_numpy/" class="md-nav__link">
         
   
   
@@ -2836,7 +2704,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../06_pydantic/" class="md-nav__link">
+      <a href="../../howto/06_pydantic/" class="md-nav__link">
         
   
   
@@ -2864,7 +2732,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../07_parallel/" class="md-nav__link">
+      <a href="../../howto/07_parallel/" class="md-nav__link">
         
   
   
@@ -2892,7 +2760,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../09_torch/" class="md-nav__link">
+      <a href="../../howto/09_torch/" class="md-nav__link">
         
   
   
@@ -2920,7 +2788,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../46_gpt2/" class="md-nav__link">
+      <a href="../../howto/46_gpt2/" class="md-nav__link">
         
   
   
@@ -2948,7 +2816,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../21_training_torch/" class="md-nav__link">
+      <a href="../../howto/21_training_torch/" class="md-nav__link">
         
   
   
@@ -2976,7 +2844,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../22_training_jax/" class="md-nav__link">
+      <a href="../../howto/22_training_jax/" class="md-nav__link">
         
   
   
@@ -3004,7 +2872,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../25_jax_export/" class="md-nav__link">
+      <a href="../../howto/25_jax_export/" class="md-nav__link">
         
   
   
@@ -3032,7 +2900,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../27_uvicorn/" class="md-nav__link">
+      <a href="../../howto/27_uvicorn/" class="md-nav__link">
         
   
   
@@ -3060,7 +2928,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../29_flax/" class="md-nav__link">
+      <a href="../../howto/29_flax/" class="md-nav__link">
         
   
   
@@ -3088,7 +2956,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../31_torchrun/" class="md-nav__link">
+      <a href="../../howto/31_torchrun/" class="md-nav__link">
         
   
   
@@ -3116,7 +2984,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../41_columnar/" class="md-nav__link">
+      <a href="../../howto/41_columnar/" class="md-nav__link">
         
   
   
@@ -3170,20 +3038,17 @@
       
       
         
-          
-          
-        
       
     
     
-    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--nested">
       
         
         
         <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_7" >
         
           
-          <label class="md-nav__link" for="__nav_4_7" id="__nav_4_7_label" tabindex="">
+          <label class="md-nav__link" for="__nav_4_7" id="__nav_4_7_label" tabindex="0">
             
   
   
@@ -3219,7 +3084,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../20_inventory/" class="md-nav__link">
+      <a href="../../howto/20_inventory/" class="md-nav__link">
         
   
   
@@ -3247,7 +3112,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../23_inference/" class="md-nav__link">
+      <a href="../../howto/23_inference/" class="md-nav__link">
         
   
   
@@ -3275,7 +3140,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../24_interop/" class="md-nav__link">
+      <a href="../../howto/24_interop/" class="md-nav__link">
         
   
   
@@ -3303,7 +3168,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../26_project/" class="md-nav__link">
+      <a href="../../howto/26_project/" class="md-nav__link">
         
   
   
@@ -3331,7 +3196,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../30_migrate/" class="md-nav__link">
+      <a href="../../howto/30_migrate/" class="md-nav__link">
         
   
   
@@ -3822,6 +3687,8 @@
       
   
   
+    
+  
   
   
     
@@ -3855,20 +3722,23 @@
     
     
       
+        
+        
+      
       
         
       
     
     
-    <li class="md-nav__item md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" checked>
         
           
           <div class="md-nav__link md-nav__container">
-            <a href="../../internals/" class="md-nav__link ">
+            <a href="../" class="md-nav__link ">
               
   
   
@@ -3886,13 +3756,13 @@
             </a>
             
               
-              <label class="md-nav__link " for="__nav_6" id="__nav_6_label" tabindex="0">
+              <label class="md-nav__link " for="__nav_6" id="__nav_6_label" tabindex="">
                 <span class="md-nav__icon md-icon"></span>
               </label>
             
           </div>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="true">
           <label class="md-nav__title" for="__nav_6">
             <span class="md-nav__icon md-icon"></span>
             
@@ -3912,7 +3782,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../internals/architecture/" class="md-nav__link">
+      <a href="../architecture/" class="md-nav__link">
         
   
   
@@ -3940,7 +3810,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../internals/ir/" class="md-nav__link">
+      <a href="../ir/" class="md-nav__link">
         
   
   
@@ -3968,7 +3838,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../internals/conversion/" class="md-nav__link">
+      <a href="../conversion/" class="md-nav__link">
         
   
   
@@ -3996,7 +3866,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../internals/migrating/" class="md-nav__link">
+      <a href="../migrating/" class="md-nav__link">
         
   
   
@@ -4024,7 +3894,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../internals/plugins/" class="md-nav__link">
+      <a href="../plugins/" class="md-nav__link">
         
   
   
@@ -4052,7 +3922,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../internals/backends/" class="md-nav__link">
+      <a href="../backends/" class="md-nav__link">
         
   
   
@@ -4080,7 +3950,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../internals/solver/" class="md-nav__link">
+      <a href="../solver/" class="md-nav__link">
         
   
   
@@ -4105,10 +3975,37 @@
                 
   
   
+    
   
   
-    <li class="md-nav__item">
-      <a href="../../internals/native-coverage/" class="md-nav__link">
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Native coverage of a real corpus
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
         
   
   
@@ -4124,6 +4021,70 @@
   
 
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#the-corpus" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The corpus
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#how-much-goes-native" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How much goes native
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-keeps-the-rest-in-python" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What keeps the rest in Python
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#running-the-corpus-under-ppy-run" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Running the corpus under ppy run
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
     </li>
   
 
@@ -4136,7 +4097,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../internals/hardware-validation/" class="md-nav__link">
+      <a href="../hardware-validation/" class="md-nav__link">
         
   
   
@@ -4246,10 +4207,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#run-it" class="md-nav__link">
+  <a href="#the-corpus" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Run it
+        The corpus
       
     </span>
   </a>
@@ -4257,10 +4218,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#what-it-prints" class="md-nav__link">
+  <a href="#how-much-goes-native" class="md-nav__link">
     <span class="md-ellipsis">
       
-        What it prints
+        How much goes native
       
     </span>
   </a>
@@ -4268,10 +4229,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#which-functions-lower" class="md-nav__link">
+  <a href="#what-keeps-the-rest-in-python" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Which functions lower
+        What keeps the rest in Python
       
     </span>
   </a>
@@ -4279,32 +4240,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#very-large-text" class="md-nav__link">
+  <a href="#running-the-corpus-under-ppy-run" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Very large text
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#where-the-code-comes-from" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Where the code comes from
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#19_stringsstringsppy" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        19_strings/strings.ppy
+        Running the corpus under ppy run
       
     </span>
   </a>
@@ -4331,91 +4270,315 @@
   
 
 
-<h1 id="strings">Strings<a class="headerlink" href="#strings" title="Permanent link">&para;</a></h1>
-<p>Three small string functions, checked in strict mode and proven pure. Two
-of them go native: <code>initials</code> splits and uppercases, and <code>is_palindrome</code>
-indexes a string from both ends. The third returns a <code>dict</code>, which has no
-native form, so it runs as Python, and <code>ppy explain</code> says why.</p>
-<h2 id="run-it">Run it<a class="headerlink" href="#run-it" title="Permanent link">&para;</a></h2>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>python<span class="w">  </span>strings.ppy
-<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>ppy<span class="w">     </span>strings.ppy
-<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>ppy<span class="w"> </span>run<span class="w"> </span>strings.ppy
-</code></pre></div>
-<!-- outputs:start -->
-<h2 id="what-it-prints">What it prints<a class="headerlink" href="#what-it-prints" title="Permanent link">&para;</a></h2>
-<p><strong><code>python  strings.ppy</code></strong>, <strong><code>ppy     strings.ppy</code></strong>, <strong><code>ppy run strings.ppy</code></strong></p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>ALK
-<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>True False
-<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>[('a', 3), ('b', 2), ('c', 1)]
-</code></pre></div>
-<!-- outputs:end -->
-
-<h2 id="which-functions-lower">Which functions lower<a class="headerlink" href="#which-functions-lower" title="Permanent link">&para;</a></h2>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>ppy<span class="w"> </span>explain<span class="w"> </span>strings.initials<span class="w">        </span><span class="c1"># llvm backend: native</span>
-<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>ppy<span class="w"> </span>explain<span class="w"> </span>strings.is_palindrome<span class="w">   </span><span class="c1"># llvm backend: native</span>
-<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>ppy<span class="w"> </span>explain<span class="w"> </span>strings.word_count<span class="w">      </span><span class="c1"># llvm backend: boxed: returns `dict[str, int]`, which has no native ABI</span>
-</code></pre></div>
-<p><code>is_palindrome</code> indexes <code>cleaned[left]</code> and <code>cleaned[right]</code>. Natively a
-string knows its length in code points and whether it is all ASCII, so an
-index into ASCII text is one step, and the one-character strings the
-comparison reads are static and never allocated.</p>
-<p><code>word_count</code> would lower with a <code>HashMap[str, int]</code> in place of the <code>dict</code>;
-the <a href="../48_strings/">Strings example</a> counts that way.</p>
-<h2 id="very-large-text">Very large text<a class="headerlink" href="#very-large-text" title="Permanent link">&para;</a></h2>
-<p>Text of millions of characters can still come in as bytes:
-<code>Buffer[ppy.u8]</code> is one byte per character and is read without building a
-Python string, which is how
-<a href="https://github.com/franknoh/PPy/blob/main/examples/15_algorithms/15c_kmp/README.md">substring search</a> scans four million
-characters.</p>
-<h2 id="where-the-code-comes-from">Where the code comes from<a class="headerlink" href="#where-the-code-comes-from" title="Permanent link">&para;</a></h2>
-<p><code>strings.ppy</code> is hand-written; there is no <code>.py</code> source and no conversion step.</p>
-<p>Read on: <a href="../../guide/strings/">Strings</a> ·
-<a href="../../guide/input/">Reading input</a> ·
-<a href="../../guide/native-lowering/">Native lowering</a> ·
-<a href="https://github.com/franknoh/PPy/blob/main/examples/15_algorithms/15c_kmp/README.md">Algorithms: substring search</a></p>
-<h2 id="19_stringsstringsppy"><code>19_strings/strings.ppy</code><a class="headerlink" href="#19_stringsstringsppy" title="Permanent link">&para;</a></h2>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">ppy</span>
-<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>
-<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>
-<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="nd">@ppy</span><span class="o">.</span><span class="n">pure</span>
-<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="k">def</span><span class="w"> </span><span class="nf">initials</span><span class="p">(</span><span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
-<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>    <span class="n">out</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">""</span>
-<a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a>    <span class="k">for</span> <span class="n">part</span> <span class="ow">in</span> <span class="n">name</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">" "</span><span class="p">):</span>
-<a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a>        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">part</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
-<a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a>            <span class="n">out</span> <span class="o">+=</span> <span class="n">part</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">upper</span><span class="p">()</span>
-<a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a>    <span class="k">return</span> <span class="n">out</span>
-<a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a>
-<a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a>
-<a id="__codelineno-3-13" name="__codelineno-3-13" href="#__codelineno-3-13"></a><span class="nd">@ppy</span><span class="o">.</span><span class="n">pure</span>
-<a id="__codelineno-3-14" name="__codelineno-3-14" href="#__codelineno-3-14"></a><span class="k">def</span><span class="w"> </span><span class="nf">is_palindrome</span><span class="p">(</span><span class="n">text</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
-<a id="__codelineno-3-15" name="__codelineno-3-15" href="#__codelineno-3-15"></a>    <span class="n">cleaned</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="n">text</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s2">" "</span><span class="p">,</span> <span class="s2">""</span><span class="p">)</span>
-<a id="__codelineno-3-16" name="__codelineno-3-16" href="#__codelineno-3-16"></a>    <span class="n">left</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">0</span>
-<a id="__codelineno-3-17" name="__codelineno-3-17" href="#__codelineno-3-17"></a>    <span class="n">right</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">cleaned</span><span class="p">)</span> <span class="o">-</span> <span class="mi">1</span>
-<a id="__codelineno-3-18" name="__codelineno-3-18" href="#__codelineno-3-18"></a>    <span class="k">while</span> <span class="n">left</span> <span class="o">&lt;</span> <span class="n">right</span><span class="p">:</span>
-<a id="__codelineno-3-19" name="__codelineno-3-19" href="#__codelineno-3-19"></a>        <span class="k">if</span> <span class="n">cleaned</span><span class="p">[</span><span class="n">left</span><span class="p">]</span> <span class="o">!=</span> <span class="n">cleaned</span><span class="p">[</span><span class="n">right</span><span class="p">]:</span>
-<a id="__codelineno-3-20" name="__codelineno-3-20" href="#__codelineno-3-20"></a>            <span class="k">return</span> <span class="kc">False</span>
-<a id="__codelineno-3-21" name="__codelineno-3-21" href="#__codelineno-3-21"></a>        <span class="n">left</span> <span class="o">+=</span> <span class="mi">1</span>
-<a id="__codelineno-3-22" name="__codelineno-3-22" href="#__codelineno-3-22"></a>        <span class="n">right</span> <span class="o">-=</span> <span class="mi">1</span>
-<a id="__codelineno-3-23" name="__codelineno-3-23" href="#__codelineno-3-23"></a>    <span class="k">return</span> <span class="kc">True</span>
-<a id="__codelineno-3-24" name="__codelineno-3-24" href="#__codelineno-3-24"></a>
-<a id="__codelineno-3-25" name="__codelineno-3-25" href="#__codelineno-3-25"></a>
-<a id="__codelineno-3-26" name="__codelineno-3-26" href="#__codelineno-3-26"></a><span class="nd">@ppy</span><span class="o">.</span><span class="n">pure</span>
-<a id="__codelineno-3-27" name="__codelineno-3-27" href="#__codelineno-3-27"></a><span class="k">def</span><span class="w"> </span><span class="nf">word_count</span><span class="p">(</span><span class="n">text</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">int</span><span class="p">]:</span>
-<a id="__codelineno-3-28" name="__codelineno-3-28" href="#__codelineno-3-28"></a>    <span class="n">counts</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
-<a id="__codelineno-3-29" name="__codelineno-3-29" href="#__codelineno-3-29"></a>    <span class="k">for</span> <span class="n">word</span> <span class="ow">in</span> <span class="n">text</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">" "</span><span class="p">):</span>
-<a id="__codelineno-3-30" name="__codelineno-3-30" href="#__codelineno-3-30"></a>        <span class="n">counts</span><span class="p">[</span><span class="n">word</span><span class="p">]</span> <span class="o">=</span> <span class="n">counts</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">word</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span> <span class="o">+</span> <span class="mi">1</span>
-<a id="__codelineno-3-31" name="__codelineno-3-31" href="#__codelineno-3-31"></a>    <span class="k">return</span> <span class="n">counts</span>
-<a id="__codelineno-3-32" name="__codelineno-3-32" href="#__codelineno-3-32"></a>
-<a id="__codelineno-3-33" name="__codelineno-3-33" href="#__codelineno-3-33"></a>
-<a id="__codelineno-3-34" name="__codelineno-3-34" href="#__codelineno-3-34"></a><span class="k">def</span><span class="w"> </span><span class="nf">main</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<a id="__codelineno-3-35" name="__codelineno-3-35" href="#__codelineno-3-35"></a>    <span class="nb">print</span><span class="p">(</span><span class="n">initials</span><span class="p">(</span><span class="s2">"ada lovelace king"</span><span class="p">))</span>
-<a id="__codelineno-3-36" name="__codelineno-3-36" href="#__codelineno-3-36"></a>    <span class="nb">print</span><span class="p">(</span><span class="n">is_palindrome</span><span class="p">(</span><span class="s2">"A man a plan a canal Panama"</span><span class="p">),</span> <span class="n">is_palindrome</span><span class="p">(</span><span class="s2">"nope"</span><span class="p">))</span>
-<a id="__codelineno-3-37" name="__codelineno-3-37" href="#__codelineno-3-37"></a>    <span class="nb">print</span><span class="p">(</span><span class="nb">sorted</span><span class="p">(</span><span class="n">word_count</span><span class="p">(</span><span class="s2">"a b a c b a"</span><span class="p">)</span><span class="o">.</span><span class="n">items</span><span class="p">()))</span>
-<a id="__codelineno-3-38" name="__codelineno-3-38" href="#__codelineno-3-38"></a>
-<a id="__codelineno-3-39" name="__codelineno-3-39" href="#__codelineno-3-39"></a>
-<a id="__codelineno-3-40" name="__codelineno-3-40" href="#__codelineno-3-40"></a><span class="n">main</span><span class="p">()</span>
-</code></pre></div>
-<p>Source: <a href="https://github.com/franknoh/PPy/blob/main/examples/19_strings"><code>examples/19_strings</code></a>.</p>
+<h1 id="native-coverage-of-a-real-corpus">Native coverage of a real corpus<a class="headerlink" href="#native-coverage-of-a-real-corpus" title="Permanent link">&para;</a></h1>
+<p>This page records what <code>ppy explain --summary</code> found on a large body of
+ordinary Python, and what running that code under <code>ppy run</code> against CPython
+found. It is input for choosing what 0.6.0 lowers next.</p>
+<h2 id="the-corpus">The corpus<a class="headerlink" href="#the-corpus" title="Permanent link">&para;</a></h2>
+<p><a href="https://github.com/TheAlgorithms/Python">TheAlgorithms/Python</a> (MIT), commit
+<code>0a72d14</code> of 2026-09-28, shallow-cloned outside the repository: 1,603 <code>.py</code>
+files in 46 top-level directories, 4,686 functions (101 of them nested), 36,969 statements.
+It is a good test of code nobody wrote for PPy: mostly annotated, heavy on
+lists, dicts, and doctests, with some NumPy, Matplotlib, and network code at
+the edges.</p>
+<p>The summary runs over the whole tree as one project, with <code>[tool.ppy]
+strict = false</code>. It takes 32 seconds with the project's cache cold and 19
+warm, and peaks under 500 MB. A module whose lowering raises is
+reported under "could not be analyzed" and the rest of the report still
+comes out. On the current tree no module fails.</p>
+<h2 id="how-much-goes-native">How much goes native<a class="headerlink" href="#how-much-goes-native" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>tier</th>
+<th style="text-align: right;">functions</th>
+<th style="text-align: right;">statements</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>native, called from Python</td>
+<td style="text-align: right;">231 (5%)</td>
+<td style="text-align: right;">2,290 (6%)</td>
+</tr>
+<tr>
+<td>native, called from native code</td>
+<td style="text-align: right;">421 (9%)</td>
+<td style="text-align: right;">1,699 (5%)</td>
+</tr>
+<tr>
+<td>Python</td>
+<td style="text-align: right;">4,034 (86%)</td>
+<td style="text-align: right;">32,980 (89%)</td>
+</tr>
+</tbody>
+</table>
+<p>247 of the Python functions are generic. They have no entry point of their
+own, and each native caller compiles its own instance, so the report does not
+count them as blocked.</p>
+<p>A nested function counts its own body. The function around it counts its
+<code>def</code> as one statement, so no statement is counted twice. A nested function
+has no entry point of its own either: it runs where the function around it
+runs.</p>
+<p>"Called from native code" means the function compiled, but a call from Python
+runs its Python body. The reasons, by count:</p>
+<table>
+<thead>
+<tr>
+<th style="text-align: right;">functions</th>
+<th>why its boundary is not used</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: right;">155</td>
+<td>the boundary crossing costs more than the body saves</td>
+</tr>
+<tr>
+<td style="text-align: right;">115</td>
+<td>returns nothing, which has no Python boundary</td>
+</tr>
+<tr>
+<td style="text-align: right;">95</td>
+<td>takes an object, which native callers pass by handle</td>
+</tr>
+<tr>
+<td style="text-align: right;">22</td>
+<td>returns an object, which native callers receive by handle</td>
+</tr>
+<tr>
+<td style="text-align: right;">20</td>
+<td>copying the collections in costs more than the body does with them</td>
+</tr>
+<tr>
+<td style="text-align: right;">9</td>
+<td>copying its strings across costs what one pass over them saves</td>
+</tr>
+<tr>
+<td style="text-align: right;">5</td>
+<td>a closure, lowered inside the function around it</td>
+</tr>
+</tbody>
+</table>
+<h2 id="what-keeps-the-rest-in-python">What keeps the rest in Python<a class="headerlink" href="#what-keeps-the-rest-in-python" title="Permanent link">&para;</a></h2>
+<p>By statements kept out. A function can count under more than one reason, so
+the rows add up to more than the Python total.</p>
+<table>
+<thead>
+<tr>
+<th style="text-align: right;">statements</th>
+<th style="text-align: right;">functions</th>
+<th>reason</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: right;">8,213</td>
+<td style="text-align: right;">840</td>
+<td>calls code whose effects are unknown</td>
+</tr>
+<tr>
+<td style="text-align: right;">3,755</td>
+<td style="text-align: right;">355</td>
+<td>does I/O</td>
+</tr>
+<tr>
+<td style="text-align: right;">2,466</td>
+<td style="text-align: right;">249</td>
+<td>writes to a parameter native code copies</td>
+</tr>
+<tr>
+<td style="text-align: right;">2,027</td>
+<td style="text-align: right;">217</td>
+<td>reads a module global that can change</td>
+</tr>
+<tr>
+<td style="text-align: right;">1,800</td>
+<td style="text-align: right;">140</td>
+<td>writes to an object native code does not own</td>
+</tr>
+<tr>
+<td style="text-align: right;">1,554</td>
+<td style="text-align: right;">154</td>
+<td>calls <code>isinstance</code></td>
+</tr>
+<tr>
+<td style="text-align: right;">1,388</td>
+<td style="text-align: right;">138</td>
+<td>draws random numbers</td>
+</tr>
+<tr>
+<td style="text-align: right;">1,156</td>
+<td style="text-align: right;">241</td>
+<td>a parameter or result with no annotation the checker could infer</td>
+</tr>
+<tr>
+<td style="text-align: right;">1,002</td>
+<td style="text-align: right;">74</td>
+<td>writes through a name the compiler cannot follow</td>
+</tr>
+<tr>
+<td style="text-align: right;">744</td>
+<td style="text-align: right;">91</td>
+<td>calls back into Python</td>
+</tr>
+<tr>
+<td style="text-align: right;">641</td>
+<td style="text-align: right;">96</td>
+<td>a nested function whose enclosing function stays in Python</td>
+</tr>
+<tr>
+<td style="text-align: right;">539</td>
+<td style="text-align: right;">72</td>
+<td>a generator that is returned, passed on, or stepped inside a loop or a branch</td>
+</tr>
+<tr>
+<td style="text-align: right;">535</td>
+<td style="text-align: right;">55</td>
+<td>a <code>for</code> over something native code does not walk</td>
+</tr>
+<tr>
+<td style="text-align: right;">530</td>
+<td style="text-align: right;">102</td>
+<td>a <code>numpy.ndarray</code> parameter</td>
+</tr>
+<tr>
+<td style="text-align: right;">449</td>
+<td style="text-align: right;">49</td>
+<td>a chained comparison</td>
+</tr>
+<tr>
+<td style="text-align: right;">407</td>
+<td style="text-align: right;">56</td>
+<td>a <code>list[Any]</code> parameter</td>
+</tr>
+<tr>
+<td style="text-align: right;">348</td>
+<td style="text-align: right;">27</td>
+<td><code>in</code> or <code>is</code> against a tuple, a range, or a string</td>
+</tr>
+<tr>
+<td style="text-align: right;">309</td>
+<td style="text-align: right;">37</td>
+<td><code>**</code> between two integers</td>
+</tr>
+<tr>
+<td style="text-align: right;">213</td>
+<td style="text-align: right;">16</td>
+<td>an empty <code>[]</code> or <code>{}</code> whose element type is never told</td>
+</tr>
+</tbody>
+</table>
+<p>Closures lower now, and they are not a blocker of their own. Of the 101
+nested functions, 96 stay in Python only because the function around them
+does, for one of the other reasons in this table. Among the reasons that are
+about closures themselves: four closures share a variable of a type native
+code has no cell for (a <code>set[Any]</code>, a <code>defaultdict</code>, a list of lists of
+<code>float | int</code>), three functions define a nested function with defaults or a
+decorator, and one function value returns a tuple of four values. No function
+in the corpus stays in Python for an untyped lambda or for a keyword argument
+through a function value.</p>
+<p>The unknown-effect calls spread thinly. The most frequent callees are
+<code>pytest.raises</code> (40), <code>httpx2.get</code> (39), <code>np.random.default_rng</code> (23),
+<code>plt.show</code> (23), <code>os.path.dirname</code> (18), and <code>random.sample</code> (17). No one
+stub removes much of that row.</p>
+<p>What this suggests for 0.6.0, in order of statements freed per unit of work:</p>
+<ol>
+<li><strong><code>isinstance</code></strong> (1,554 statements). Most calls test a parameter against a
+   builtin type, as input validation, where the checker already knows the
+   answer or the check is one type tag.</li>
+<li><strong>Chained comparisons, <code>in</code> on a tuple or range, integer <code>**</code>, and <code>for</code>
+   over a tuple</strong> (about 1,600 statements together). Each is small in the
+   lowering.</li>
+<li><strong>Module globals that can change</strong> (2,027). Most are never written after
+   import. Reading them as constants once the module has finished loading
+   would free most of the row.</li>
+<li><strong>Parameter writes</strong> (2,466) and <strong>writes to unowned objects</strong> (1,800).
+   These need the copy-back that lists already have, extended to the other
+   shapes.</li>
+<li>I/O, random numbers, and callbacks are working as intended: those
+   functions belong in Python.</li>
+</ol>
+<h2 id="running-the-corpus-under-ppy-run">Running the corpus under <code>ppy run</code><a class="headerlink" href="#running-the-corpus-under-ppy-run" title="Permanent link">&para;</a></h2>
+<p>Separately, 400 of the corpus's scripts ran under CPython and under <code>ppy
+run</code>, one at a time, each in its own directory, with empty stdin, a timeout,
+and <code>PYTHONHASHSEED=0</code>. Both sides used the same interpreter, CPython 3.14. A
+program counts as the same when the exit code, stdout, and the exception that
+ended it all match. 13 of the 400 were skipped as nondeterministic under
+CPython (two runs disagreed).</p>
+<p>On the first pass 323 matched and 64 differed. After the fixes below, on the
+current tree, 353 match and 34 differ. None of the 34 is <code>ppy run</code> printing a
+different answer from a program both sides accept, except the one listed
+under "not fixed". The differences, sorted:</p>
+<p><strong>PPy bugs, fixed on this branch</strong>, each with a regression under
+<code>tests/fuzz_regressions/</code>:</p>
+<ul>
+<li><code>ppy run</code> crashed with an LLVM verification error when a function returning
+  a string called one that stayed in Python.</li>
+<li><code>d.get(k)</code> without a default crashed lowering.</li>
+<li>The C entry point that stands in for a native function refused keyword
+  arguments, and answered to the wrapper module's name with no docstring, so
+  <code>doctest</code> silently skipped its tests. The Python-level binding had the same
+  keyword problem and reported the runtime's module.</li>
+<li>Loop-invariant motion hoisted <code>row = []</code> out of a loop, so every pass
+  appended to one list (project_euler/problem_049 printed a wrong answer).</li>
+<li>Common-subexpression elimination bound <code>a, b = [0] * n, [0] * n</code> to one
+  list (sorts/pigeon_sort).</li>
+<li>A <code># type: ignore</code> comment crashed the Python backend's source map.</li>
+<li>A native <code>sum</code> over a <code>list[float]</code> argument added without CPython's
+  compensation, so <code>sum([0.1, 0.2, 0.3])</code> printed <code>0.6000000000000001</code>.</li>
+<li>The IR verifier took the join after an <code>if</code> whose branches both return as
+  dominated by nothing, and refused a later read of a local, so a whole
+  module failed to lower (backtracking/match_word_pattern).</li>
+</ul>
+<p><strong>A PPy difference, not fixed:</strong> a native function with a <code>float</code> parameter
+accepts an <code>int</code> and converts it, so its result is a float where CPython's
+would be an int. <code>cross_product((0, 0), (1, 1), (2, 2))</code>, declared over
+<code>tuple[float, float]</code>, returns <code>0.0</code> natively and <code>0</code> in CPython
+(maths/ear_clipping_polygon_triangulation's doctest shows it now that doctest
+sees native functions). Refusing the int at the boundary is a one-line change
+but sends every such call to Python; converting only where the result cannot
+tell is the better fix and needs the lowering to know it. It is left for
+0.6.0.</p>
+<p><strong>Checker refusals of valid code, fixed on this branch:</strong></p>
+<ul>
+<li>A builtin such as <code>int</code> did not meet a Protocol bound (<code>T: Comparable</code>).</li>
+<li>A <code>list[Dog]</code> was refused where a <code>Sequence[Animal]</code> was expected.</li>
+<li><code>return NotImplemented</code> in <code>__eq__</code> was a return type error.</li>
+<li>A bare <code>Callable</code> annotation was "not a type the project can analyze".</li>
+<li><code>seen = {}</code> filled by <code>seen[k] = 1</code> in one branch refused <code>seen[k] += 1</code> in
+  the other, and <code>[] + names</code> was refused.</li>
+<li>A <code>return None</code> after a <code>while 1:</code> that leaves only by <code>return</code> was checked
+  as reachable.</li>
+</ul>
+<p><strong>Checker refusals of valid code, not fixed:</strong></p>
+<ul>
+<li><code>typing.Self</code>, <code>queue.Queue</code>, and old-style <code>TypeVar</code> (27 corpus files use
+  it) are not supported annotations.</li>
+<li>A <code>Generator</code> annotation given a generator expression, which the checker
+  types as <code>Iterator</code>.</li>
+<li><code>Counter &amp; Counter</code>, <code>datetime + timedelta</code>, and <code>Decimal / int</code> have no
+  model in the standard-library stubs.</li>
+<li><code>list[int]</code> passed where <code>list[int | float]</code> or <code>Sequence[float]</code> is
+  expected. The first is correct under invariance, and the second is kept
+  refused on purpose: accepted, the native code would compute in floats and
+  print <code>9.0</code> where CPython prints <code>9</code>, the difference above. CPython runs
+  both, and the corpus does it often.</li>
+<li>Old-style type variables (<code>T = TypeVar("T")</code>) used in annotations, and
+  <code>setattr</code> on a class.</li>
+<li>A recursive generic <code>RandomizedHeapNode[T] | None</code> compared unequal to
+  itself.</li>
+</ul>
+<p><strong>Checker refusals of code that is wrong:</strong> several programs pass
+<code>Node | None</code> where <code>Node</code> is declared, or read <code>.value</code> from something that
+may be <code>None</code>. CPython runs them because the <code>None</code> never arrives on that
+input. PPy refuses them in either mode. Whether non-strict mode should warn
+instead is a policy question for 0.6.0.</p>
+<p><strong>Harness artifacts:</strong> copied to a directory of their own, programs that
+import a sibling (<code>from .stack import Stack</code>, <code>from data_structures...</code>) fail
+on both sides, and programs that read <code>input()</code> end in <code>EOFError</code> on both
+sides. They count as different only because <code>ppy run</code> stops earlier, at the
+check, with its own error.</p>
 
 
 
@@ -4453,7 +4616,7 @@ characters.</p>
       <nav class="md-footer__inner md-grid" aria-label="Footer" >
         
           
-          <a href="../18_errors/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Exceptions">
+          <a href="../solver/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Where a solver fits">
             <div class="md-footer__button md-icon">
               
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
@@ -4463,20 +4626,20 @@ characters.</p>
                 Previous
               </span>
               <div class="md-ellipsis">
-                Exceptions
+                Where a solver fits
               </div>
             </div>
           </a>
         
         
           
-          <a href="../12_buffers_and_jit/" class="md-footer__link md-footer__link--next" aria-label="Next: Buffers and JIT">
+          <a href="../hardware-validation/" class="md-footer__link md-footer__link--next" aria-label="Next: Hardware validation">
             <div class="md-footer__title">
               <span class="md-footer__direction">
                 Next
               </span>
               <div class="md-ellipsis">
-                Buffers and JIT
+                Hardware validation
               </div>
             </div>
             <div class="md-footer__button md-icon">

@@ -1361,6 +1361,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#finding-what-stays-in-python" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Finding what stays in Python
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#threads" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3821,6 +3832,8 @@
       
         
       
+        
+      
     
     
     
@@ -4078,6 +4091,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../../internals/native-coverage/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Native coverage of a real corpus
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../internals/hardware-validation/" class="md-nav__link">
         
   
@@ -4232,6 +4273,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#finding-what-stays-in-python" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Finding what stays in Python
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#threads" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4351,6 +4403,47 @@ gives -2**63, and C leaves it undefined), so each case is a guard:</p>
 </table>
 <p>The guards are range checks, so <code>--unsafe</code> keeps them. Nothing saturates to
 the largest or smallest word: Python's integers have no largest.</p>
+<h2 id="finding-what-stays-in-python">Finding what stays in Python<a class="headerlink" href="#finding-what-stays-in-python" title="Permanent link">&para;</a></h2>
+<p><code>ppy explain --summary</code> answers, for a file, a directory, or a project, how
+much of the code goes native and what keeps the rest in Python. Here it is
+over the <code>sorts</code> folder of TheAlgorithms/Python, trimmed:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>167 functions, 1389 statements
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>  native, called from Python              1 functions (  1%)        8 statements (  1%)
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>  native, called from native code         0 functions (  0%)        0 statements (  0%)
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>  Python                                166 functions ( 99%)     1381 statements ( 99%)
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>  (76 of the Python functions are generic: each native caller compiles its own instance)
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>
+<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>what keeps functions in Python, by statements kept out (a function can count under more than one):
+<a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>      161 statements     13 functions  calls code whose effects are unknown (a library, or a call the checker cannot type)
+<a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>      annotate it, add a stub or plugin, or call it outside the hot function
+<a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>      most often: `dict.fromkeys` (1), `file.readlines` (1), `file.write` (1), `heapq.heapify` (1)
+<a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>      see https://ppy.franknoh.dev/latest/guide/effects/
+<a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>      sorts/benchmark_sorts.py:56 sorts.benchmark_sorts.is_sorted
+<a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a>      155 statements      9 functions  writes to a parameter native code copies
+<a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a>      return the new value, or take a `Buffer`, a list, or a ppy collection
+<a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a>      see https://ppy.franknoh.dev/latest/guide/native/
+<a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a>      sorts/bead_sort.py:7 sorts.bead_sort.bead_sort
+</code></pre></div>
+<p>Read it from the top down:</p>
+<ul>
+<li>The first block counts every function once. "Called from native code"
+  means the function compiled but Python calls its Python body, because the
+  crossing costs more than the body saves or it passes objects by handle;
+  the summary lists those reasons last.</li>
+<li>The reasons are ordered by statements kept out, so the first one is where
+  a change moves the most code. A function with several effects counts
+  under each.</li>
+<li>A generic function is not a blocker: it has no entry point of its own and
+  is compiled for each native caller that names its types. Most of <code>sorts</code>
+  is generic sorts that nothing calls natively.</li>
+<li>A nested function lowers with the function around it. When that one
+  stays in Python, the nested one says so, and the reason to fix is the
+  outer function's.</li>
+<li>Each reason says what to do and links the page that explains it. The
+  first places it occurs are listed with their line.</li>
+</ul>
+<p><code>--json</code> gives every function with its tier and reason, for a script or a
+dashboard. See <a href="../../cli/#ppy-explain">the command</a>.</p>
 <h2 id="threads">Threads<a class="headerlink" href="#threads" title="Permanent link">&para;</a></h2>
 <p>The generated wrapper releases the GIL around the native call, so
 <code>@ppy.native</code> functions scale across threads.</p>
