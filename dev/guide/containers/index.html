@@ -4498,8 +4498,10 @@ order, and an empty one as <code>set()</code>.</p>
   first answer and a list built first would not; of a list they are native.</li>
 <li>A standalone binary's <code>KeyError</code> for a string key says <code>KeyError</code> without
   the key.</li>
-<li>A container holding objects or dataclasses keeps a Python caller on the
-  Python body; native callers are not affected.</li>
+<li>A container of objects or dataclasses crosses from Python as
+  <a href="../classes/#the-python-boundary">objects do</a>. A container of objects
+  whose class is an exception or generic keeps a Python caller on the Python
+  body; native callers are not affected.</li>
 </ul>
 <p>Examples: <a href="../../howto/47_collections/">Collections</a>, <a href="../../howto/48_strings/">Strings</a>.</p>
 

@@ -4002,6 +4002,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#ppy_runtime.abi.CrossingClass" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;CrossingClass
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#ppy_runtime.abi.NativeSignature" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4024,8 +4035,30 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#ppy_runtime.abi.NativeSignature.reads_globals" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-attribute"></code>&nbsp;reads_globals
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ppy_runtime.abi.classes_to_json" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;classes_to_json
+      
+    </span>
+  </a>
   
 </li>
         
@@ -5309,6 +5342,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#ppy_runtime.abi.CrossingClass" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;CrossingClass
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#ppy_runtime.abi.NativeSignature" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -5331,8 +5375,30 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#ppy_runtime.abi.NativeSignature.reads_globals" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-attribute"></code>&nbsp;reads_globals
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ppy_runtime.abi.classes_to_json" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        <code class="doc-symbol doc-symbol-toc doc-symbol-function"></code>&nbsp;classes_to_json
+      
+    </span>
+  </a>
   
 </li>
         
@@ -6332,7 +6398,7 @@ statistics are not collected on this path.</p>
 
 
 <h3 id="ppy_runtime.binding.bind" class="doc doc-heading">
-<code class="doc-symbol doc-symbol-heading doc-symbol-function"></code>            <code class="highlight language-python"><span class="n">bind</span><span class="p">(</span><span class="n">signature</span><span class="p">,</span> <span class="n">address</span><span class="p">,</span> <span class="n">fallback</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">specializer</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">policy</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">info</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">fast_entry</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">owner</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">register</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></code>
+<code class="doc-symbol doc-symbol-heading doc-symbol-function"></code>            <code class="highlight language-python"><span class="n">bind</span><span class="p">(</span><span class="n">signature</span><span class="p">,</span> <span class="n">address</span><span class="p">,</span> <span class="n">fallback</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">specializer</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">policy</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">info</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">fast_entry</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">owner</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">register</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">globals_read</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span></code>
 
 <a href="#ppy_runtime.binding.bind" class="headerlink" title="Permanent link">&para;</a></h3>
 
@@ -6535,6 +6601,57 @@ point at. A buffer-protocol object already has one (spec 6.4, 13.8).</p>
 
 
 
+<h3 id="ppy_runtime.abi.CrossingClass" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>            <code>CrossingClass</code>
+
+
+<a href="#ppy_runtime.abi.CrossingClass" class="headerlink" title="Permanent link">&para;</a></h3>
+
+
+    <div class="doc doc-contents ">
+
+
+
+        <p>A project class whose instances cross the Python boundary, as native
+code lays them out.</p>
+<p>An object (<code>kind</code> "object") is a handle: a sequence of one record, its
+fields at their word offsets, its class's tag in the header. A value
+class (<code>kind</code> "record") is its fields' words in place, inside a
+collection's element.</p>
+
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-class">
+
+
+
 <h3 id="ppy_runtime.abi.NativeSignature" class="doc doc-heading">
 <code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>            <code>NativeSignature</code>
 
@@ -6588,6 +6705,29 @@ point at. A buffer-protocol object already has one (spec 6.4, 13.8).</p>
 
 </div>
 
+<div class="doc doc-object doc-attribute">
+
+
+
+<h4 id="ppy_runtime.abi.NativeSignature.reads_globals" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-attribute"></code>            <code class="highlight language-python"><span class="n">reads_globals</span></code>
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-property"><code>property</code></small>
+  </span>
+
+<a href="#ppy_runtime.abi.NativeSignature.reads_globals" class="headerlink" title="Permanent link">&para;</a></h4>
+
+
+    <div class="doc doc-contents ">
+
+        <p>Whether module globals are passed to it, which the Python-level
+binding reads at each call.</p>
+
+    </div>
+
+</div>
+
 
 
 
@@ -6599,6 +6739,24 @@ point at. A buffer-protocol object already has one (spec 6.4, 13.8).</p>
 
 </div>
 
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="ppy_runtime.abi.classes_to_json" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-function"></code>            <code class="highlight language-python"><span class="n">classes_to_json</span><span class="p">(</span><span class="n">classes</span><span class="p">)</span></code>
+
+<a href="#ppy_runtime.abi.classes_to_json" class="headerlink" title="Permanent link">&para;</a></h3>
+
+
+    <div class="doc doc-contents ">
+
+        <p>The classes a signature crosses, as a manifest or a cache writes them.</p>
+
+
+    </div>
+
+</div>
 
 
 

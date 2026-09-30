@@ -4692,10 +4692,43 @@ a statement, and <code>n = gc.collect()</code> keeps the function in Python. A
 standalone binary also collects once before it exits, which is why its
 leak check passes.</p>
 <h2 id="the-python-boundary">The Python boundary<a class="headerlink" href="#the-python-boundary" title="Permanent link">&para;</a></h2>
-<p>An object never crosses between Python and native code. A native function
-that takes or returns one is called by native code only. When Python code
-calls it, its Python body runs. The functions Python calls natively take and
-return numbers, and make their objects inside.</p>
+<p>Under <code>ppy run</code>, Python can call a native function that takes or returns
+objects of the project's classes. The object is copied into native memory
+whole, together with the objects and containers its fields hold. An object
+reached twice becomes one native object, so a shared object and a cycle
+stay what they were.</p>
+<p>After the call:</p>
+<ul>
+<li>if the function writes a field, the new values are set on the caller's
+  objects, which stay the same objects;</li>
+<li>an object the function returns is the caller's own object when it came
+  from one;</li>
+<li>an object native code made becomes a new instance of its class, with its
+  fields set. <code>__init__</code> does not run again, because native code already
+  ran it.</li>
+</ul>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="k">class</span><span class="w"> </span><span class="nc">Node</span><span class="p">:</span>
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">value</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">value</span> <span class="o">=</span> <span class="n">value</span>
+<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">next</span><span class="p">:</span> <span class="n">Node</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
+<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>
+<a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a>
+<a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="k">def</span><span class="w"> </span><span class="nf">bump</span><span class="p">(</span><span class="n">head</span><span class="p">:</span> <span class="n">Node</span> <span class="o">|</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a>    <span class="k">while</span> <span class="n">head</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a>        <span class="n">head</span><span class="o">.</span><span class="n">value</span> <span class="o">+=</span> <span class="mi">1</span>
+<a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a>        <span class="n">head</span> <span class="o">=</span> <span class="n">head</span><span class="o">.</span><span class="n">next</span>
+</code></pre></div>
+<p>Called from Python, <code>bump(a)</code> runs natively and leaves each node's <code>value</code>
+one higher. <code>bump(None)</code> is native too, since the parameter allows <code>None</code>.</p>
+<p>The copy costs time in proportion to what crosses. So Python calls the
+native body only when the function does work in proportion to it: a loop
+that follows a field (<code>head = head.next</code>), a loop over a container of
+objects, or a call to itself on a field (<code>height(node.left)</code>). Native
+callers pass objects by handle and copy nothing. <code>ppy explain</code> gives the
+reason for each function.</p>
+<p>Python runs the function's own body instead when an argument's class is not
+one the signature describes. That covers a class made at run time, a
+subclass from another module, and an object missing a field.</p>
 <h2 id="class-attributes">Class attributes<a class="headerlink" href="#class-attributes" title="Permanent link">&para;</a></h2>
 <p>An attribute the class body sets (<code>capacity: int = 10</code>, <code>LIMIT = 3</code>) may be
 assigned through the class, as <code>Cache.capacity = n</code> or
@@ -4736,6 +4769,9 @@ on CPython.</p>
   address, which only Python has. A value class with its own <code>__repr__</code> or
   <code>__str__</code> is shown by Python.</li>
 <li>A generic class whose type arguments nothing tells stays in Python.</li>
+<li>An exception object, an instance of a generic class, and an object with a
+  field holding a function do not cross the Python boundary. A function that
+  takes one is called natively by native code only.</li>
 </ul>
 <p>Examples: <a href="../../howto/49_inheritance/">Inheritance</a>,
 <a href="../../howto/47_collections/">Collections</a>.</p>

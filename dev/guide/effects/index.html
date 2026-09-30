@@ -1296,6 +1296,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#module-globals" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Module globals
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#the-three-execution-paths" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4281,6 +4292,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#module-globals" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Module globals
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#the-three-execution-paths" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4353,6 +4375,52 @@ whether anything could observe it. Lowering asks whether CPython has to
 perform it.</p>
 <p>A function that fills memory it allocated and passes it on lowers, but is not
 <code>@ppy.pure</code>, because the callee saw the object before the function returned.</p>
+<h2 id="module-globals">Module globals<a class="headerlink" href="#module-globals" title="Permanent link">&para;</a></h2>
+<p>A function that reads a module global can still run natively under
+<code>ppy run</code>, if the global is settled. A settled global is bound once by the
+module's own top-level code and never bound again: no second assignment at
+the top level, no <code>global</code> statement that assigns it, and no <code>del</code>.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="n">PRIMES</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="p">[</span><span class="n">p</span> <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">100</span><span class="p">)</span> <span class="k">if</span> <span class="nb">all</span><span class="p">(</span><span class="n">p</span> <span class="o">%</span> <span class="n">d</span> <span class="k">for</span> <span class="n">d</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="n">p</span><span class="p">))]</span>
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="n">SEEN</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>
+<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="k">def</span><span class="w"> </span><span class="nf">count</span><span class="p">(</span><span class="n">n</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>    <span class="n">total</span> <span class="o">=</span> <span class="mi">0</span>
+<a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a>    <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="n">PRIMES</span><span class="p">:</span>
+<a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>        <span class="k">if</span> <span class="n">n</span> <span class="o">%</span> <span class="n">p</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+<a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a>            <span class="n">SEEN</span><span class="p">[</span><span class="n">p</span><span class="p">]</span> <span class="o">=</span> <span class="n">SEEN</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">p</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span> <span class="o">+</span> <span class="mi">1</span>
+<a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a>            <span class="n">total</span> <span class="o">+=</span> <span class="mi">1</span>
+<a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a>    <span class="k">return</span> <span class="n">total</span>
+</code></pre></div>
+<p>Here is how a settled global reaches native code:</p>
+<ul>
+<li>Native code takes each settled global the function reads as one more
+  parameter, after its own.</li>
+<li>When Python calls the function, the boundary reads each global from the
+  module, as it is at that moment. A container crosses as any container
+  argument does, and a write to it (<code>SEEN[p] = ...</code>) is copied back into the
+  module's object.</li>
+<li>A native caller passes on the globals it was given, so a function that
+  calls <code>count</code> takes <code>PRIMES</code> and <code>SEEN</code> as well, even from another module.</li>
+</ul>
+<p>The analysis cannot see every rebinding: <code>setattr(module, ...)</code> from
+elsewhere, or a test that patches the name. For that reason the boundary
+reads the global at every call instead of once:</p>
+<ul>
+<li>if a global was rebound to another object of the same type, the call uses
+  the new object;</li>
+<li>if the name is gone, or now holds a different type, the Python body runs.</li>
+</ul>
+<p>A function that has a barrier (<a href="../native-effects/">Effects in native code</a>)
+and reads a global stays in Python. Python code that runs at the barrier
+could rebind the global or change what it holds, while native code would go
+on with the value it was handed at the call.</p>
+<p>A literal constant (<code>LIMIT = 10</code>) is folded where it is read and needs none
+of this.</p>
+<p>A global that is not settled keeps its readers in Python. Neither kind
+reaches a standalone build or a C export, and a method, a nested function,
+a thread's body, and a function used as a value are not passed globals, so
+they too stay in Python when they read one.</p>
 <h2 id="the-three-execution-paths">The three execution paths<a class="headerlink" href="#the-three-execution-paths" title="Permanent link">&para;</a></h2>
 <table>
 <thead>
