@@ -391,8 +391,6 @@ class CollectionApiLowering(CollectionLowering):
         loop began, as `dict` does, and CPython's `RuntimeError` is what the
         check falls back to.
         """
-        if node.orelse:
-            raise Unsupported("a `for` loop's `else` has no native lowering")
         plan = self._plan(node.iter)
         if plan is None:
             raise Unsupported(f"`{ast.unparse(node.iter)}` is not walked natively")
@@ -401,6 +399,8 @@ class CollectionApiLowering(CollectionLowering):
         body = self._block("each.body")  # type: ignore[attr-defined]
         latch = self._block("each.latch")  # type: ignore[attr-defined]
         done = self._block("each.end")  # type: ignore[attr-defined]
+        # `for ... else`: the walk's end runs the `else`, a `break` goes past it.
+        after = self._block("each.after") if node.orelse else done  # type: ignore[attr-defined]
         core.br(self.b, Successor(header))
         self.b.at_end(header)  # type: ignore[attr-defined]
         # `zip` asks each walk in turn and stops at the first that has ended,
@@ -424,7 +424,7 @@ class CollectionApiLowering(CollectionLowering):
                 self._bind_item(inner, parts)
         else:
             self._bind_item(target, items[0])
-        self._loops.append((latch, done))  # type: ignore[attr-defined]
+        self._loops.append((latch, after))  # type: ignore[attr-defined]
         self._body(node.body)  # type: ignore[attr-defined]
         self._loops.pop()  # type: ignore[attr-defined]
         if self._open():  # type: ignore[attr-defined]
@@ -440,6 +440,13 @@ class CollectionApiLowering(CollectionLowering):
                 )
             core.br(self.b, Successor(header))
         self.b.at_end(done)  # type: ignore[attr-defined]
+        if node.orelse:
+            self._body(node.orelse)  # type: ignore[attr-defined]
+            if self._open():  # type: ignore[attr-defined]
+                core.br(self.b, Successor(after))
+            if self._seal(after):  # type: ignore[attr-defined]
+                return
+            self.b.at_end(after)  # type: ignore[attr-defined]
         for source in plan.sources:
             self._let_go(source.slot)
         # `between`'s bounds, made before the loop, are read until it ends.

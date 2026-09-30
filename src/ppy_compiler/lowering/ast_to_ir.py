@@ -91,12 +91,16 @@ from ..ir.transforms.autodiff import AutodiffError, differentiate
 from ..plugins.base import DialectOperationSpec, PluginError, PluginRegistry
 from .abi import signature_from_ir
 from .closures import ClosureLowering
-from .collections import HANDLE, Held
+from .collections import HANDLE, Held, records_of
 from .containers import ContainerLowering
 from .effects import EffectLowering, check_effects, rule_of, wants_exceptions
 from .exceptions import ExceptionLowering, uses_exceptions
+from .expressions import ExpressionLowering
+from .frames import FrameLowering, check_frame, frame_shape, frame_words
 from .generators import GeneratorLowering
+from .intness import ModuleIntness, gives_int
 from .strings import StringLowering
+from .walks import WalkLowering
 
 __all__ = ["Frontend", "Lowered", "lower_function", "lower_module_to_ir"]
 
@@ -504,7 +508,7 @@ class Frontend:
                     if not ok:
                         raise Unsupported(reason)
                 if info.is_generator:
-                    raise Unsupported("generators use the boxed runtime")
+                    frame_shape(info, records_of(self))
                 if info.is_async and not self.asynchronous:
                     raise Unsupported("a coroutine runs natively only where the async runtime does")
                 if any(p.kind in {"var_positional", "var_keyword"} for p in info.params):
@@ -606,8 +610,13 @@ class Frontend:
         written = written_params(analysis)
         for parameter in info.params:
             ir_type = self.lower_type(parameter.type, parameter.facts)
+            # A generator's frame outlives the call: a list it takes is held by
+            # handle, never lent as a buffer.
             native_param = _native_param(
-                parameter.name, parameter.type, self.layouts, parameter.name in written
+                parameter.name,
+                parameter.type,
+                self.layouts,
+                parameter.name in written or info.is_generator,
             )
             if native_param is not None and native_param.is_handle:
                 # A list of numbers the function writes is held by handle, not lent.
@@ -635,7 +644,7 @@ class Frontend:
             and (_return_atoms(info.ret, self.layouts) is not None or info.ret == T.NONE)
             and results == _result_types(info, self.layouts)
         ):
-            native = _signature(info, self.layouts, analysis)
+            native = self._exact_signature(info, _signature(info, self.layouts, analysis))
         if self.cpu_compatible and native is None:
             raise Unsupported("canonical signature has no CPU native ABI")
         return IRSignature(
@@ -682,6 +691,25 @@ class Frontend:
                 described["noalias"] = True
             kinds.append(described)
         return kinds
+
+    def exact_params(self, qualname: str) -> frozenset[str]:
+        """The float parameters of a function of this module whose int-ness shows."""
+        found = self.__dict__.get("_intness")
+        if found is None:
+            found = ModuleIntness(self.analysis.functions, self.analysis.node_types)
+            self.__dict__["_intness"] = found
+        return found.exact(qualname)
+
+    def _exact_signature(self, info: FunctionInfo, native: NativeSignature) -> NativeSignature:
+        exact = self.exact_params(info.qualname)
+        if not exact:
+            return native
+        return replace(
+            native,
+            parameters=tuple(
+                replace(p, exact=True) if p.name in exact else p for p in native.parameters
+            ),
+        )
 
     def _text_boundary(self, info: FunctionInfo, signature: IRSignature) -> NativeSignature | None:
         """A thunk for Python to call a function that takes or gives strings.
@@ -895,7 +923,15 @@ class Frontend:
         """Lower the body; returns the chains a proof freed of their guard."""
         function, signature = self.declared[info.qualname]
         lowering = _FunctionLowering(self, function, signature, info, constants)
+        if info.is_generator:
+            shape = frame_shape(info, records_of(self))
+            lowering.__dict__["_frame_shape"] = shape
+            lowering.hoist = False
+            function.attributes["ppy.generator"] = True
+            function.attributes["ppy.generator.value_words"] = frame_words(shape)
         lowering.run(node)
+        if info.is_generator:
+            check_frame(function, frame_words(lowering.__dict__["_frame_shape"]))
         return lowering.proved
 
     def define_once(self, qualname: str) -> list[str]:
@@ -1384,6 +1420,9 @@ class _GuardSite:
 
 
 class _FunctionLowering(  # pylint: disable=too-many-ancestors
+    ExpressionLowering,
+    FrameLowering,
+    WalkLowering,
     EffectLowering,
     ClosureLowering,
     ExceptionLowering,
@@ -1793,6 +1832,9 @@ class _FunctionLowering(  # pylint: disable=too-many-ancestors
         if self.b.block is not None and id(self.b.block) in self._dead:
             core.unreachable(self.b)
             return
+        if self._frame() is not None:
+            self._frame_end()
+            return
         if self.info.ret == T.NONE and not self.function.results:
             self._check_thread_failures()
             self._leave_for_return()
@@ -1803,8 +1845,11 @@ class _FunctionLowering(  # pylint: disable=too-many-ancestors
 
     def _assign(self, node: ast.Assign) -> None:
         if len(node.targets) != 1:
-            raise Unsupported("chained assignment has no native lowering")
+            self._chained_assign(node)
+            return
         target = node.targets[0]
+        if self._assign_choice(target, node):
+            return
         if isinstance(target, ast.Name) and self._make_collection(
             target.id, node.value, self._type_of(target)
         ):
@@ -2158,7 +2203,7 @@ class _FunctionLowering(  # pylint: disable=too-many-ancestors
             return
         if self._effect_for(node):
             return
-        if self._is_walk(node.iter):
+        if self._is_walk(node.iter) or (node.orelse and self._counted_kind(node.iter)):
             self._for_collection(node)
             return
         if node.orelse or not isinstance(node.target, ast.Name):
@@ -2544,6 +2589,8 @@ class _FunctionLowering(  # pylint: disable=too-many-ancestors
                 return loaded
             case ast.BinOp():
                 operated = self._object_binary(node)
+                if operated is None:
+                    operated = self._power(node)
                 if operated is not None:
                     return operated
                 return self._binary(self._expr(node.left), self._expr(node.right), type(node.op))
@@ -2766,7 +2813,7 @@ class _FunctionLowering(  # pylint: disable=too-many-ancestors
 
     def _compare(self, node: ast.Compare) -> Value:
         if len(node.ops) != 1:
-            raise Unsupported("chained comparison has no native lowering")
+            return self._chained(node)
         identity = self._match_identity(node)
         if identity is not None:
             return identity
@@ -2801,6 +2848,9 @@ class _FunctionLowering(  # pylint: disable=too-many-ancestors
         compared = self._record_compare(node)
         if compared is not None:
             return compared
+        member = self._member_of(node)
+        if member is not None:
+            return member
         predicate = _COMPARISONS.get(type(node.ops[0]))
         if predicate is None:
             raise Unsupported("comparison operator has no native lowering")
@@ -3075,6 +3125,10 @@ class _FunctionLowering(  # pylint: disable=too-many-ancestors
             return self._extremum(target, node)
         if target in {"abs", "float", "int", "bool"}:
             return self._builtin_call(target, node)
+        if target == "pow":
+            powered = self._pow_call(node)
+            if powered is not None:
+                return powered
         for qualname, (function, signature) in self.frontend.declared.items():
             if qualname.rpartition(".")[2] == target and "ppy.generic" not in function.attributes:
                 return self._native_call(
@@ -4156,7 +4210,12 @@ class _FunctionLowering(  # pylint: disable=too-many-ancestors
         if len(spelled) != len(signature.parameters):
             raise Unsupported(f"`{qualname}` called with the wrong number of arguments")
         arguments: list[Value] = []
+        exact = self.frontend.exact_params(qualname)
         for argument, parameter in zip(spelled, signature.parameters, strict=True):
+            if parameter.name in exact and gives_int(self._type_of(argument)):
+                raise Unsupported(
+                    f"`{qualname}` shows whether `{parameter.name}` is an int, and is given one"
+                )
             if isinstance(parameter, IRParameter) and parameter.native is None:
                 arguments.append(self._coerce_type(self._expr(argument), parameter.type))
                 continue

@@ -78,6 +78,7 @@ def _signature(payload: dict) -> NativeSignature:
             fields=tuple((f, s) for f, s in parameter.get("fields", ())),
             class_name=parameter.get("class_name", ""),
             written=bool(parameter.get("written", False)),
+            exact=bool(parameter.get("exact", False)),
         )
         for parameter in abi["parameters"]
     )

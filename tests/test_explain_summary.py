@@ -53,12 +53,18 @@ def test_an_unknown_reason_keeps_its_words_without_the_names():
 
 
 def test_opaque_operator_reasons_name_the_code_they_come_from():
-    assert categorize("chained comparison has no native lowering")[0][0].startswith(
+    assert categorize("a chained comparison's operand is a name or a number here")[0][0].startswith(
         "a chained comparison"
     )
-    assert (
-        categorize("integer operator has no native lowering")[0][0] == "`**` between two integers"
+    assert categorize("integer operator has no native lowering")[0][0].startswith(
+        "an integer operator"
     )
+    assert categorize("`isinstance` of a `int` depends on the value")[0][0].startswith(
+        "`isinstance`"
+    )
+    assert categorize("a generator holds a buffer or a vector, which its frame cannot")[0][
+        2
+    ].endswith("/guide/exceptions-and-generators/")
 
 
 def test_what_keeps_a_closure_in_python_has_a_hint_and_the_closures_page():

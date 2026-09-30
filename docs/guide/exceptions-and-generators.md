@@ -116,9 +116,14 @@ native catches ends the call:
 
 ### What stays in Python
 
+`e.args` lowers where the exception was raised with one string or with
+nothing, which covers CPython's own checks and `raise ValueError("...")`:
+`e.args[0]`, `len(e.args)`, and `str(e.args)` or `e.args` in an f-string or
+`print`. An exception raised with anything else falls back there.
+
 A function using any of these runs as Python:
 
-- `e.args`, and any other use of `e` than the ones above
+- any other use of `e` than the ones above
 - a cause that is neither a name nor a new exception (`raise X from f()`)
 - a `finally` that returns, breaks, or continues out of itself
 
@@ -164,15 +169,50 @@ The steps are `x = next(it)` and `for` statements of the function itself,
 not inside a loop or a branch, and the code between two of them does not
 `return`, `break`, or `continue`.
 
+### Generators with a frame
+
+A generator that outlives the code that made it has a frame of its own: one
+that is returned, passed to another function, held and stepped from inside a
+loop or a branch, or made by an `__iter__` method. The function is lowered
+twice over. Calling it makes the frame, a runtime object holding the
+generator's locals, and returns its handle. Stepping it runs the body from
+where it stopped to its next `yield`. The frame counts its references like a
+collection does, and freeing it lets go of what its locals hold, however far
+the generator got.
+
+```python
+class Tree:
+    def __init__(self, value: int) -> None:
+        self.value = value
+        self.left: Tree | None = None
+        self.right: Tree | None = None
+
+    def __iter__(self) -> Iterator[int]:
+        if self.left:
+            yield from self.left
+        yield self.value
+        if self.right:
+            yield from self.right
+
+
+def total(it: Iterator[int]) -> int:
+    t = 0
+    for v in it:
+        t += v
+    return t
+```
+
+`for v in tree`, `iter(tree)`, `next(it)`, `next(it, default)`, and the
+walks above (`enumerate`, `zip`, `sorted`, a comprehension) take such a
+generator. The function is annotated `Iterator[T]` or `Generator[T]`, and
+yields values of one native type.
+
 ### What stays in Python
 
-A generator that is returned, passed to another function, or stepped from
-inside a loop or a branch keeps the function that does so in Python, and so
-does:
-
-- a generator method, a generic generator, or an async one
-- a generator with a `try`, a nested function, or a `with`
-- `x = yield`, whose value `send` gives
-- a generator that yields from itself
+- a generic generator, or an async one
+- a generator with a nested function or a class in it
+- `x = yield`, whose value `send` gives, and a `return` with a value
+- a generator that keeps a list it was lent as a buffer, or more than 29
+  references, across a `yield`
 
 Examples: [Errors and generators](../howto/50_errors_and_generators.md).

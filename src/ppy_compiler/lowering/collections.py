@@ -42,6 +42,7 @@ from ..ir import (
     Value,
 )
 from ..ir.dialects import core
+from .intness import gives_int
 
 __all__ = ["HANDLE", "STR", "CollectionLowering", "Kind", "Shape", "kind_of", "shape_of"]
 
@@ -84,7 +85,8 @@ class Shape:
     """What one element or value is, word by word."""
 
     #: "int", "float", "bool", "str", "tuple", "record", "collection", "object",
-    #: or "function" (a closure: its type is `class_args[0]`, spelled in `record`).
+    #: "function" (a closure: its type is `class_args[0]`, spelled in `record`),
+    #: or "generator" (a generator's frame: what it yields is `class_args[0]`).
     kind: str
     #: A tuple's items, or a record's fields: scalar kinds.
     parts: tuple[str, ...] = ()
@@ -109,13 +111,13 @@ class Shape:
 
     @property
     def handles(self) -> int:
-        return 1 if self.kind in {"collection", "object", "str", "function"} else 0
+        return 1 if self.kind in {"collection", "object", "str", "function", "generator"} else 0
 
     @property
     def reference(self) -> bool:
         """Held by handle: a collection, a string, an instance of an object class,
         or a function value."""
-        return self.kind in {"collection", "object", "str", "function"}
+        return self.kind in {"collection", "object", "str", "function", "generator"}
 
     @property
     def comparable(self) -> bool:
@@ -155,7 +157,7 @@ class Shape:
         """An object's type written out, as a parameter's element spells it."""
         if self.kind == "str":
             return "str"
-        if self.kind == "function":
+        if self.kind in {"function", "generator"}:
             return self.record
         return str(T.Instance(self.record, self.class_args, (self.record, "object")))
 
@@ -209,6 +211,33 @@ def spelled(kind: Kind) -> str:
 Records = dict[str, tuple[tuple[tuple[str, str], ...], bool]]
 
 
+#: The types a generator's frame is held as.
+GENERATOR_TYPES = frozenset({"Iterator", "Generator"})
+
+
+def generator_spelled(t: T.Type) -> str | None:
+    """`generator[int]` for an `Iterator[int]` or a `Generator[int]`, which native
+    code holds as a generator's frame; None for anything else."""
+    t = T.strip_literal(t)
+    if isinstance(t, T.Instance) and t.name in GENERATOR_TYPES and t.args:
+        return f"generator[{T.strip_literal(t.args[0])}]"
+    return None
+
+
+def records_of(frontend: object) -> Records:
+    """The value classes of a frontend's module, by qualified name, made once."""
+    cached = getattr(frontend, "_collection_records", None)
+    if cached is not None:
+        return cached
+    records: Records = {}
+    classes = frontend.analysis.symbols.classes  # type: ignore[attr-defined]
+    for qualname, fields in frontend.layouts.items():  # type: ignore[attr-defined]
+        info = classes.get(qualname) or classes.get(qualname.rpartition(".")[2])
+        records[qualname] = (tuple(fields), _ordered(info.node) if info is not None else False)
+    frontend._collection_records = records  # type: ignore[attr-defined]
+    return records
+
+
 def shape_of(t: T.Type, records: Records) -> Shape | None:
     """The shape of a value of type `t`, or None where it has none.
 
@@ -233,6 +262,10 @@ def shape_of(t: T.Type, records: Records) -> Shape | None:
             tuple(T.Param(f"arg{i}", p.type) for i, p in enumerate(base.params)), base.ret
         )
         return Shape("function", record=callable_spelled(plain), class_args=(plain,))
+    generator = generator_spelled(base)
+    if generator is not None:
+        assert isinstance(base, T.Instance)
+        return Shape("generator", record=generator, class_args=(T.strip_literal(base.args[0]),))
     if isinstance(base, T.Tuple_) and not base.homogeneous and base.items:
         parts = [T.strip_literal(item) for item in base.items]
         if all(part in (T.INT, T.FLOAT, T.BOOL) for part in parts):
@@ -337,16 +370,7 @@ class CollectionLowering:
     # -- types ------------------------------------------------------------
 
     def _records(self) -> Records:
-        cached = getattr(self.frontend, "_collection_records", None)
-        if cached is not None:
-            return cached
-        records: Records = {}
-        classes = self.frontend.analysis.symbols.classes  # type: ignore[attr-defined]
-        for qualname, fields in self.frontend.layouts.items():  # type: ignore[attr-defined]
-            info = classes.get(qualname) or classes.get(qualname.rpartition(".")[2])
-            records[qualname] = (tuple(fields), _ordered(info.node) if info is not None else False)
-        self.frontend._collection_records = records  # type: ignore[attr-defined]
-        return records
+        return records_of(self.frontend)  # type: ignore[attr-defined]
 
     def _type_of(self, node: ast.expr) -> T.Type:
         """What the checker said of `node`, with a generic instance's arguments in."""
@@ -606,6 +630,7 @@ class CollectionLowering:
                 continue
             if value is None:
                 raise Unsupported(f"`{info.name}` needs `{name}`, whose default is not a constant")
+            self._refuse_int_for_float(info.name, name, field_shape, value)
             self._store_into(address, field_shape, value, fresh=True)
         return made
 
@@ -1377,6 +1402,8 @@ class CollectionLowering:
         missing = [name for name, _ in fields if name not in given]
         if missing:
             raise Unsupported(f"`{made.name}` is built natively from every field: {missing[0]}")
+        for name, kind in fields:
+            self._refuse_int_for_float(made.name, name, Shape(kind), given[name])
         values = [
             self._coerce(self._expr(given[name]), kind)  # type: ignore[attr-defined]
             for name, kind in fields
@@ -1386,6 +1413,12 @@ class CollectionLowering:
         ir_type = shape.ir_type()
         assert isinstance(ir_type, StructType)
         return core.struct_make(self.b, ir_type, *values)
+
+    def _refuse_int_for_float(self, owner: str, name: str, shape: Shape, value: ast.expr) -> None:
+        """A float field given an int keeps the int in Python, and its repr shows it."""
+        kinds = shape.parts if shape.kind == "tuple" else (shape.kind,)
+        if "float" in kinds and gives_int(self._type_of(value)):
+            raise Unsupported(f"`{owner}.{name}` is a float field given an int, which Python keeps")
 
     def _record_value(self, node: ast.expr) -> Value | None:
         """A value-class expression's struct, where it has one natively."""
@@ -1677,6 +1710,8 @@ class CollectionLowering:
             raise Unsupported(f"`{name}` keeps one collection type")
         if held is None:
             slot = self._alloca(HANDLE, name)  # type: ignore[attr-defined]
+            # The slot owns what it holds (a generator's frame lets go of it).
+            slot.owner.attributes["ppy.owns"] = True  # type: ignore[union-attr]
             entry = self._entry_builder()  # type: ignore[attr-defined]
             empty = core.call_extern(entry, "ppy_coll_none", (), (HANDLE,)).results[0]
             core.store(entry, empty, slot)
@@ -1697,6 +1732,7 @@ class CollectionLowering:
     def _bind_parameter(self, name: str, kind: Kind | Shape, argument: Value) -> None:
         """A collection parameter: the caller's, held for the call like any local."""
         slot = self._alloca(HANDLE, name)  # type: ignore[attr-defined]
+        slot.owner.attributes["ppy.owns"] = True  # type: ignore[union-attr]
         core.store(self.b, argument, slot)
         self._retain(argument)
         self.collections[name] = Held(kind, slot)

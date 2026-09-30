@@ -502,15 +502,20 @@ main()
 @requires_llvm
 @requires_cc
 def test_what_native_code_does_not_take_stays_in_python(tmp_path: Path):
-    """`e.args`, a cause made from an expression, and a generator stepped in a loop keep
-    the function on its Python body, which answers."""
+    """A cause made from an expression keeps the function on its Python body,
+    which answers. `e.args` of an exception raised with an int, and a generator
+    stepped in a loop, are native: the first falls back where it is read, and
+    the second has a frame of its own."""
     expected = _expected(tmp_path, PYTHON_ONLY)
     done = _run(tmp_path, "-m", "ppy_compiler", "run", "prog.ppy")
     assert done.returncode == 0, done.stderr
     assert _output(done).strip() == expected
-    for function in ("arguments", "chained", "stepped"):
+    for function, native in (("arguments", True), ("chained", False), ("stepped", True)):
         explained = _run(tmp_path, "-m", "ppy_compiler", "explain", f"prog.{function}")
-        assert "llvm backend: native" not in explained.stdout, (function, explained.stdout)
+        assert ("llvm backend: native" in explained.stdout) == native, (
+            function,
+            explained.stdout,
+        )
 
 
 def test_a_function_returning_str_binds_without_the_collection_crossing():
