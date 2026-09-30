@@ -94,8 +94,10 @@ from .closures import ClosureLowering
 from .collections import HANDLE, Held
 from .containers import ContainerLowering
 from .exceptions import ExceptionLowering, uses_exceptions
+from .expressions import ExpressionLowering
 from .generators import GeneratorLowering
 from .strings import StringLowering
+from .walks import WalkLowering
 
 __all__ = ["Frontend", "Lowered", "lower_function", "lower_module_to_ir"]
 
@@ -1234,8 +1236,14 @@ class _GuardSite:
         core.br(self.b, Successor(setup))
 
 
-class _FunctionLowering(
-    ClosureLowering, ExceptionLowering, GeneratorLowering, ContainerLowering, StringLowering
+class _FunctionLowering(  # pylint: disable=too-many-ancestors
+    ExpressionLowering,
+    WalkLowering,
+    ClosureLowering,
+    ExceptionLowering,
+    GeneratorLowering,
+    ContainerLowering,
+    StringLowering,
 ):
     """Lowers one function body."""
 
@@ -1647,8 +1655,11 @@ class _FunctionLowering(
 
     def _assign(self, node: ast.Assign) -> None:
         if len(node.targets) != 1:
-            raise Unsupported("chained assignment has no native lowering")
+            self._chained_assign(node)
+            return
         target = node.targets[0]
+        if self._assign_choice(target, node):
+            return
         if isinstance(target, ast.Name) and self._make_collection(
             target.id, node.value, self._type_of(target)
         ):
@@ -2379,6 +2390,8 @@ class _FunctionLowering(
                 return loaded
             case ast.BinOp():
                 operated = self._object_binary(node)
+                if operated is None:
+                    operated = self._power(node)
                 if operated is not None:
                     return operated
                 return self._binary(self._expr(node.left), self._expr(node.right), type(node.op))
@@ -2601,7 +2614,7 @@ class _FunctionLowering(
 
     def _compare(self, node: ast.Compare) -> Value:
         if len(node.ops) != 1:
-            raise Unsupported("chained comparison has no native lowering")
+            return self._chained(node)
         identity = self._match_identity(node)
         if identity is not None:
             return identity
@@ -2636,6 +2649,9 @@ class _FunctionLowering(
         compared = self._record_compare(node)
         if compared is not None:
             return compared
+        member = self._member_of(node)
+        if member is not None:
+            return member
         predicate = _COMPARISONS.get(type(node.ops[0]))
         if predicate is None:
             raise Unsupported("comparison operator has no native lowering")
@@ -2905,6 +2921,10 @@ class _FunctionLowering(
             return self._extremum(target, node)
         if target in {"abs", "float", "int", "bool"}:
             return self._builtin_call(target, node)
+        if target == "pow":
+            powered = self._pow_call(node)
+            if powered is not None:
+                return powered
         for qualname, (function, signature) in self.frontend.declared.items():
             if qualname.rpartition(".")[2] == target and "ppy.generic" not in function.attributes:
                 return self._native_call(
