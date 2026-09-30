@@ -1383,7 +1383,13 @@ class _Checker:
         for jumped in breaks:
             after = after.merge(jumped)
         env.restore(after.snapshot())
-        env.reachable = True
+        # `while True:` with no `break` leaves only by `return` or `raise`:
+        # what follows it never runs, and is not checked, as a trailing
+        # `return None` after such a loop is not.
+        endless = (
+            test is not None and isinstance(test, ast.Constant) and bool(test.value) and not breaks
+        )
+        env.reachable = not endless
 
     def _widen(self, env: Env) -> None:
         """Drop non-converging integer ranges rather than iterate forever."""
