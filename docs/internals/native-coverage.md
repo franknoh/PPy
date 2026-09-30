@@ -164,29 +164,31 @@ tell is the better fix and needs the lowering to know it. It is left for
 - A `return None` after a `while 1:` that leaves only by `return` was checked
   as reachable.
 
-**Checker refusals of valid code, not fixed:**
+**Checker refusals of valid code, fixed in 0.6.0:** `typing.Self`,
+`queue.Queue` and the other generic collections of the standard library,
+old-style `TypeVar` with bounds and constraints and `Generic[T]`, a
+`Generator` annotation given a generator expression, `Counter & Counter`,
+`datetime + timedelta`, `Decimal / int`, `setattr` on a class and on an
+object, a class attribute assigned through its class, a method called
+through its class, `__import__("doctest")`, `namedtuple("P", "x y")`,
+`list[int]` passed where the callee only reads a `list[int | float]` or a
+`Sequence[float]` (the call runs on CPython), and the recursive generic
+`RandomizedHeapNode[T] | None`, which is now inferred through the union.
 
-- `typing.Self`, `queue.Queue`, and old-style `TypeVar` (27 corpus files use
-  it) are not supported annotations.
-- A `Generator` annotation given a generator expression, which the checker
-  types as `Iterator`.
-- `Counter & Counter`, `datetime + timedelta`, and `Decimal / int` have no
-  model in the standard-library stubs.
-- `list[int]` passed where `list[int | float]` or `Sequence[float]` is
-  expected. The first is correct under invariance, and the second is kept
-  refused on purpose: accepted, the native code would compute in floats and
-  print `9.0` where CPython prints `9`, the difference above. CPython runs
-  both, and the corpus does it often.
-- Old-style type variables (`T = TypeVar("T")`) used in annotations, and
-  `setattr` on a class.
-- A recursive generic `RandomizedHeapNode[T] | None` compared unequal to
-  itself.
+**Code that may pass `None`:** several programs pass `Node | None` where
+`Node` is declared, or read `.value` from something that may be `None`.
+CPython runs them because the `None` never arrives on that input. Strict
+mode still refuses them. `--no-strict` reports them as `W2011` and runs
+them, and native code raises CPython's `AttributeError` where the `None`
+would arrive.
 
-**Checker refusals of code that is wrong:** several programs pass
-`Node | None` where `Node` is declared, or read `.value` from something that
-may be `None`. CPython runs them because the `None` never arrives on that
-input. PPy refuses them in either mode. Whether non-strict mode should warn
-instead is a policy question for 0.6.0.
+With these, the same 400 scripts give 377 matching, 10 differing, and 13
+skipped. Of the 10, seven are harness artifacts (below), one is a program
+that ends in a `NameError` CPython reaches and PPy refuses first
+(matrix/validate_sudoku_board), one is the `float` parameter difference
+above, and one was a PPy bug the newly accepted programs exposed: constant
+folding turned `(-2) ** c` into `-2 ** c` in the Python backend
+(conversions/negative_binary_base_to_int), now fixed, with a regression.
 
 **Harness artifacts:** copied to a directory of their own, programs that
 import a sibling (`from .stack import Stack`, `from data_structures...`) fail

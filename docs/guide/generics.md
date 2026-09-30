@@ -16,6 +16,46 @@ arguments substituted: `largest(1, 2)` is an `int`, `largest(1.5, 2.5)` a
 
 An unbounded parameter has no operators, because nothing says it does.
 
+## Old-style type variables
+
+Code written before Python 3.12 declares its type variables at module level.
+The checker reads those as well:
+
+```python
+from typing import Generic, TypeVar
+
+T = TypeVar("T")
+N = TypeVar("N", bound=float)
+S = TypeVar("S", int, str)
+
+
+class Stack(Generic[T]):
+    def __init__(self) -> None:
+        self.items: list[T] = []
+
+    def push(self, value: T) -> None:
+        self.items.append(value)
+
+
+def biggest(a: N, b: N) -> N:
+    return a if a > b else b
+
+
+def twice(x: S) -> S:
+    return x + x
+```
+
+A class takes the variables its `Generic[...]` base names, or those its
+generic bases are given. A function takes the variables its annotations name
+that its class does not already bind, and a nested function sees those of the
+functions and class it is in. `bound=` is the bound. Constraints
+(`TypeVar("S", int, str)`, or `[S: (int, str)]`) make the value one of them:
+`x + x` is checked for each, and the result is `S`.
+
+A static method or a class method of a generic class that names the class's
+parameters is generic in them, since it has no receiver to fix them: each
+call to `Node.merge(a, b)` infers `T` from `a` and `b`.
+
 ## Protocol bounds
 
 A bound that is a Protocol lends its methods, to operators and to attribute
