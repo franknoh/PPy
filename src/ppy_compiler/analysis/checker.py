@@ -701,6 +701,9 @@ class _Checker:
         #: Source annotations remain contracts after flow-sensitive rebinding.
         self._declarations: dict[str, Binding] = {}
         self._unsettled: set[str] = set()
+        #: Names a nested function or lambda shares, with their types where it
+        #: is made: a name bound in one branch only is still a local there.
+        self._closure_seen: dict[str, T.Type] = {}
 
     def check_module(self) -> ModuleAnalysis:
         env = Env()
@@ -798,6 +801,7 @@ class _Checker:
             self._aliases,
             self._declarations,
             self._unsettled,
+            self._closure_seen,
         )
         self._effects = EffectSet()
         self._unknown = []
@@ -817,6 +821,7 @@ class _Checker:
         self._returned_names = set()
         self._external_writes = False
         self._declarations = {}
+        self._closure_seen = {}
         # Names are not objects: everything below that asks "what does this
         # mutate or share?" resolves the name through the alias map first.
         # The map depends on the body and on which parameters are immutable,
@@ -888,6 +893,7 @@ class _Checker:
             self._aliases,
             self._declarations,
             self._unsettled,
+            self._closure_seen,
         ) = previous
         return result
 
@@ -974,9 +980,12 @@ class _Checker:
             inferred_ret=inferred,
             ret_facts=ret_facts,
             locals={
-                name: (env.get(name).type if env.get(name) else T.UNKNOWN)
-                for name in env.names()
-                if "." not in name and "[" not in name  # a narrowed path is not a local
+                **self._closure_seen,
+                **{
+                    name: (env.get(name).type if env.get(name) else T.UNKNOWN)
+                    for name in env.names()
+                    if "." not in name and "[" not in name  # a narrowed path is not a local
+                },
             },
             dynamic=info.dynamic or self._dynamic_seen,
             unknown_callees=tuple(dict.fromkeys(self._unknown)),
@@ -1493,10 +1502,22 @@ class _Checker:
         if self._current is not None:
             # A function defined inside this one: a closure over its names.
             qualname = f"{self._current.qualname}.<locals>.{node.name}"
+            self._see_shared(node, env)
         info = self.project.functions.get(qualname)
         env.set(node.name, Binding(info.signature() if info else T.UNKNOWN))
 
     _stmt_AsyncFunctionDef = _stmt_FunctionDef
+
+    def _see_shared(
+        self, node: ast.FunctionDef | ast.AsyncFunctionDef | ast.Lambda, env: Env
+    ) -> None:
+        for name in free_names(node):
+            bound = env.get(name)
+            if bound is None or name not in self._function_locals:
+                continue
+            seen = T.strip_literal(bound.type)
+            known = self._closure_seen.get(name)
+            self._closure_seen[name] = seen if known is None else T.join(known, seen)
 
     def _stmt_ClassDef(self, node: ast.ClassDef, env: Env) -> None:
         self._check_class_construction(node)
@@ -3468,6 +3489,8 @@ class _Checker:
         simple = not (node.args.posonlyargs or node.args.kwonlyargs or node.args.vararg)
         typed = known is not None and simple and len(known) == len(node.args.args)
         inner = env.fork()
+        if self._current is not None:
+            self._see_shared(node, env)
         # The lambda reads the names it shares as they are when it runs, which
         # is later: what is known of their values here does not hold there.
         for name in free_names(node):

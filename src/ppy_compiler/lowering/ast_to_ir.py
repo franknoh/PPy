@@ -2045,7 +2045,10 @@ class _FunctionLowering(
 
         site: _GuardSite | None = None
         saved_induction = self._induction.get(name)
-        if self.hoist and not _rebinds(node.body, name):
+        # A variable a closure shares lives in its cell, where a call in the
+        # body may change it: the loop counts in a slot of its own.
+        shared = self._is_cell(name)
+        if self.hoist and not _rebinds(node.body, name) and not shared:
             guards = self._block("for.guards")
             setup = self._block("for.setup")
             core.br(self.b, Successor(guards))
@@ -2064,15 +2067,16 @@ class _FunctionLowering(
                 self._induction_terms[name] = self._induction_bounds(start, stop, step_value > 0)
 
         slot = self.slots.get(name)
-        if slot is None or slot.type != PtrType(I64, "stack"):
+        if not shared and (slot is None or slot.type != PtrType(I64, "stack")):
             slot = self._alloca(I64, name)
             self.slots[name] = slot
             self.tuples.pop(name, None)
+        assert slot is not None
         # A body that assigns the loop variable does not steer the loop in
         # Python: `range` hands out the next value whatever the name holds.
         # The count then lives in a slot of its own, and each iteration
         # binds the name from it.
-        rebound = _rebinds(node.body, name)
+        rebound = _rebinds(node.body, name) or shared
         counter = self._alloca(I64, f"{name}.count") if rebound else slot
         core.store(self.b, start, counter)
 
@@ -2134,9 +2138,11 @@ class _FunctionLowering(
         assert isinstance(target, ast.Name)
         carried = _scalar_type(_read_as(_kind(element)))
         slot = self.slots.get(target.id)
-        if slot is None or slot.type != PtrType(carried, "stack"):
+        shared = self._is_cell(target.id)
+        if not shared and (slot is None or slot.type != PtrType(carried, "stack")):
             slot = self._alloca(carried, target.id)
             self.slots[target.id] = slot
+        assert slot is not None
         length = core.cast(self.b, core.buffer_len(self.b, buffer), I64)
 
         header = self._block("each.head")
