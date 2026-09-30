@@ -90,7 +90,10 @@ over the whole function before it lets the function go native:
   cannot give CPython's exact text for, keeps the caller in Python when it
   can follow a barrier;
 - a loop counts: a check in a loop body after a barrier, or before it, in
-  the next iteration, follows it.
+  the next iteration, follows it;
+- a function called from Python that takes a list, a dict, a set, or an
+  object by copy stays in Python if it has a barrier. Python code that runs
+  at the barrier would read or change the caller's object, not the copy.
 
 The same holds across calls. A caller that calls a function with a barrier
 has crossed one when the call returns, and the rule applies to what follows
