@@ -402,7 +402,10 @@ class ContainerLowering(CollectionApiLowering):
             shown = self._block("repr.shown")  # type: ignore[attr-defined]
             length = self._rt("ppy_coll_len", (handle,))
             core.cond_br(
-                self.b, core.cmp(self.b, "eq", length, self._word(0)), Successor(empty), Successor(full)
+                self.b,
+                core.cmp(self.b, "eq", length, self._word(0)),
+                Successor(empty),
+                Successor(full),
             )
             self.b.at_end(empty)  # type: ignore[attr-defined]
             self._add_text(builder, "set()")

@@ -234,7 +234,7 @@ class StringLowering:
         return None
 
     def _kind_name(self, node: ast.expr) -> str:
-        """"int", "float", "bool", or "str" where the checker says so, else ""."""
+        """ "int", "float", "bool", or "str" where the checker says so, else ""."""
         base = T.strip_literal(self._type_of(node))  # type: ignore[attr-defined]
         for name, scalar in (("bool", T.BOOL), ("int", T.INT), ("float", T.FLOAT), ("str", T.STR)):
             if base == scalar:

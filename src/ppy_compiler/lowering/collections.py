@@ -1095,7 +1095,9 @@ class CollectionLowering:
                     less.append(core.cmp(b, "lt", order, self._word(0)))
                     continue
                 if kind == "float":
-                    numbers = core.bitwise(b, "and", core.cmp(b, "eq", x, x), core.cmp(b, "eq", y, y))
+                    numbers = core.bitwise(
+                        b, "and", core.cmp(b, "eq", x, x), core.cmp(b, "eq", y, y)
+                    )
                     core.guard(b, numbers, "contract", "a NaN field")
                 if kind == "bool":
                     x, y = core.cast(b, x, I64), core.cast(b, y, I64)
@@ -1890,7 +1892,9 @@ class CollectionLowering:
             if given in {"int", "bool"}:
                 # `d[1]` in a dict of floats, `d[True]` in one of ints: CPython
                 # keeps the key object as it came, and shows it so.
-                raise Unsupported(f"a `{given}` key in a dict or set of `{key.kind}` keeps its type")
+                raise Unsupported(
+                    f"a `{given}` key in a dict or set of `{key.kind}` keeps its type"
+                )
         # A bool key is a word in the collection, as an element is.
         stored = I64 if key.kind == "bool" else key.ir_type()
         if key.kind == "tuple" and "bool" in key.parts:
@@ -1913,9 +1917,7 @@ class CollectionLowering:
         for index, part in enumerate(_kinds(key)):
             if part == "float":
                 word = self._read_word(address, index, "float")
-                core.guard(
-                    self.b, core.cmp(self.b, "eq", word, word), "contract", "a NaN key"
-                )
+                core.guard(self.b, core.cmp(self.b, "eq", word, word), "contract", "a NaN key")
 
     def _keys_done(self) -> None:
         """Let go of the keys made for the runtime calls just emitted."""
