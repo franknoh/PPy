@@ -10,6 +10,7 @@ from __future__ import annotations
 import array
 import ctypes
 from collections.abc import Callable
+from typing import Any
 
 from . import _cpu
 from ._record import field
@@ -645,11 +646,11 @@ def _observe(
     binding: NativeBinding,
     signature: NativeSignature,
     args: tuple[object, ...],
-    policy,  # type: ignore[no-untyped-def]
-    specializer,
+    policy: Any,
+    specializer: Any,
     info: object,
-    prototype,  # type: ignore[no-untyped-def]
-):
+    prototype: Any,
+) -> Any:
     """Watch the arguments, and compile a specialization once one repeats.
 
     This runs only while learning. Once a specialization exists its matcher
@@ -696,8 +697,8 @@ def _watch(
     binding: NativeBinding,
     signature: NativeSignature,
     args: tuple[object, ...],
-    policy,  # type: ignore[no-untyped-def]
-    specializer,
+    policy: Any,
+    specializer: Any,
     info: object,
     register: Callable[[int, tuple], bool] | None,
 ) -> None:

@@ -444,6 +444,14 @@ def _is_negative(facts: Facts) -> bool:
 _WIDTHS = {"int": 8, "float": 8, "bool": 1, "i8": 1, "u8": 1}
 
 
+def _is_byte_pointer(t: T.Type) -> bool:
+    """A `native.ptr[ppy.u8]`, or its `const_ptr` twin."""
+    base = T.strip_literal(t)
+    return (
+        _is_pointer(base) and isinstance(base, T.Instance) and _scalar_name_of(base.args[0]) == "u8"
+    )
+
+
 def _is_pointer(t: T.Type) -> bool:
     base = T.strip_literal(t)
     return (
@@ -980,12 +988,12 @@ class _Checker:
             inferred_ret=inferred,
             ret_facts=ret_facts,
             locals={
-                **self._closure_seen,
                 **{
                     name: (env.get(name).type if env.get(name) else T.UNKNOWN)
                     for name in env.names()
                     if "." not in name and "[" not in name  # a narrowed path is not a local
                 },
+                **self._shared_locals(info, env),
             },
             dynamic=info.dynamic or self._dynamic_seen,
             unknown_callees=tuple(dict.fromkeys(self._unknown)),
@@ -1263,13 +1271,24 @@ class _Checker:
             current = self._current
             returned = current.ret if current is not None and current.ret_annotated else None
             value = self._expr_expecting(node.value, env, returned)
+            if returned is not None and _display_fits(node.value, value.type, returned):
+                # A display returned in place is of the declared type, as one
+                # assigned beside its annotation is.
+                value = Binding(returned, value.facts)
             self._returns.append(value)
             self._provisional_returns.append(self._is_provisional(node.value, value, env))
             if isinstance(node.value, ast.Name):
                 self._returned_names.update(self._roots(node.value, node.value.id))
             self._mark_escape(node.value, env)
             info = self._current
-            if info is not None and info.ret_annotated:
+            declines = (
+                isinstance(node.value, ast.Name)
+                and node.value.id == "NotImplemented"
+                and info is not None
+                and info.name.startswith("__")
+                and info.name.endswith("__")
+            )
+            if info is not None and info.ret_annotated and not declines:
                 fact_mismatch = self._fact_mismatch(info.ret_facts, value.facts)
                 if not T.is_assignable(value.type, info.ret) or fact_mismatch:
                     self._mismatch(
@@ -1502,11 +1521,35 @@ class _Checker:
         if self._current is not None:
             # A function defined inside this one: a closure over its names.
             qualname = f"{self._current.qualname}.<locals>.{node.name}"
-            self._see_shared(node, env)
         info = self.project.functions.get(qualname)
         env.set(node.name, Binding(info.signature() if info else T.UNKNOWN))
+        if self._current is not None:
+            # After the name is bound: a nested function may call itself.
+            self._see_shared(node, env)
 
     _stmt_AsyncFunctionDef = _stmt_FunctionDef
+
+    def _shared_locals(self, info: FunctionInfo, env: Env) -> dict[str, T.Type]:
+        """The types closures see the names they share as. A name bound once
+        is what it was where each closure was made (narrowed there, say, past
+        a `None` check); one bound again is anything it is ever bound to."""
+        stores: dict[str, int] = {p.name: 1 for p in info.params}
+        for child in ast.walk(info.node):
+            if isinstance(child, ast.Name) and isinstance(child.ctx, (ast.Store, ast.Del)):
+                stores[child.id] = stores.get(child.id, 0) + 1
+            elif (
+                isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef))
+                and child is not info.node
+            ):
+                stores[child.name] = stores.get(child.name, 0) + 1
+        shared: dict[str, T.Type] = {}
+        for name, seen in self._closure_seen.items():
+            final = env.get(name)
+            if stores.get(name, 0) <= 1 or final is None:
+                shared[name] = seen
+            else:
+                shared[name] = T.join(seen, T.strip_literal(final.type))
+        return shared
 
     def _see_shared(
         self, node: ast.FunctionDef | ast.AsyncFunctionDef | ast.Lambda, env: Env
@@ -3782,6 +3825,9 @@ class _Checker:
         rank = max(T.numeric_rank(left_base) or 0, T.numeric_rank(right_base) or 0)
         result_type: T.Type = [T.INT, T.INT, T.FLOAT, T.COMPLEX][rank]
 
+        if op in {ast.BitOr, ast.BitAnd, ast.BitXor} and left_base == right_base == T.BOOL:
+            # `bool.__or__` and its kin keep a bool a bool.
+            return Binding(T.BOOL)
         if op in {ast.LShift, ast.RShift, ast.BitOr, ast.BitAnd, ast.BitXor}:
             if rank > 1:
                 self._error("E1302", f"`{_ARITH_OPS[op]}` requires integer operands", node)
@@ -5007,10 +5053,7 @@ class _Checker:
                 elif shape == "str" and base != T.STR:
                     self._mismatch("E1301", "a `str` is expected, not", arg_node, argument.type)
                     ok = False
-                elif shape == "bytes" and not (
-                    _is_pointer(argument.type)
-                    and _scalar_name_of(T.strip_literal(argument.type).args[0]) == "u8"  # type: ignore[attr-defined]
-                ):
+                elif shape == "bytes" and not _is_byte_pointer(argument.type):
                     self._error(
                         "E1645", f"`{spelled}` moves bytes through a `native.ptr[ppy.u8]`", arg_node
                     )

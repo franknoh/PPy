@@ -292,7 +292,8 @@ def bind_fused(
         try:
             if loop.returns_scalar:
                 if parallelized:
-                    partials = workers.map_chunks(  # type: ignore[union-attr]
+                    assert workers is not None
+                    partials = workers.map_chunks(
                         lambda start, stop: reduce_chunk(pointers, widened, start, stop), length
                     )
                     result = _combine(loop.reduction, [float(p) for p in partials])
@@ -318,7 +319,8 @@ def bind_fused(
                     map_chunk(out_pointer, pointers, widened, start, stop)
                     return not check or storage.finite_slice(out, arrays, start, stop)
 
-                finite = all(workers.map_chunks(map_and_check, length))  # type: ignore[union-attr]
+                assert workers is not None
+                finite = all(workers.map_chunks(map_and_check, length))
             else:
                 map_chunk(out_pointer, pointers, widened, 0, length)
                 finite = not check or storage.finite(out, arrays)

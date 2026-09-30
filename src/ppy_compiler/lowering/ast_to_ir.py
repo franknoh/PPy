@@ -966,7 +966,7 @@ class Frontend:
     # -- closures ---------------------------------------------------------------
 
     def closure_code(
-        self, info: FunctionInfo, node: ast.FunctionDef, captured: tuple[str, ...]
+        self, info: FunctionInfo, node: ast.FunctionDef, captured: dict[str, T.Type]
     ) -> tuple[IRFunction, IRSignature]:
         """The native entry of a nested function, a lambda, or a function used as
         a value: its parameters after one more, the closure it runs as, whose
@@ -1023,7 +1023,7 @@ class Frontend:
         info = entry[0]
         known = self._adapters.get(qualname)
         if known is not None:
-            return self.closure_code(known[0], known[1], ())
+            return self.closure_code(known[0], known[1], {})
         names = [ast.Name(p.name, ast.Load()) for p in info.params]
         call = ast.Call(ast.Name(info.name, ast.Load()), list(names), [])
         body: ast.stmt = ast.Expr(call) if info.ret == T.NONE else ast.Return(call)
@@ -1044,7 +1044,7 @@ class Frontend:
             info, qualname=f"{info.qualname}.<value>", node=node, enclosing=None
         )
         self._adapters[qualname] = (value_info, node)
-        return self.closure_code(value_info, node, ())
+        return self.closure_code(value_info, node, {})
 
     def lambda_code(
         self, node: ast.Lambda, typed: T.Callable_, outer: FunctionInfo

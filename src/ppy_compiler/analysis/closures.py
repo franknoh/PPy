@@ -14,10 +14,16 @@ from __future__ import annotations
 
 import ast
 from collections.abc import Iterator, Mapping
+from typing import TYPE_CHECKING
 
 from . import types as T
 
+if TYPE_CHECKING:
+    from .results import FunctionAnalysis
+    from .symbols import FunctionInfo
+
 __all__ = [
+    "Scope",
     "callable_spelled",
     "captured_names",
     "free_names",
@@ -122,13 +128,15 @@ def rebound_by_closures(node: Scope) -> set[str]:
     return found & own_names(node)
 
 
-def captured_names(info, analyses: Mapping[str, object]) -> dict[str, T.Type]:  # type: ignore[no-untyped-def]
+def captured_names(
+    info: FunctionInfo, analyses: Mapping[str, FunctionAnalysis]
+) -> dict[str, T.Type]:
     """The names a nested function shares with the function it is in, and the
     types that function gave them."""
     outer = analyses.get(info.enclosing) if info.enclosing else None
     if outer is None:
         return {}
-    known: dict[str, T.Type] = getattr(outer, "locals", {})
+    known = outer.locals
     return {name: known[name] for name in sorted(free_names(info.node)) if name in known}
 
 

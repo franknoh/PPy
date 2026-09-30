@@ -2145,7 +2145,9 @@ def _copies_before_writes(function: ast.AST, record: str, type_of) -> bool:  # t
         )
 
     def visit(node: ast.AST, loops: list[ast.AST]) -> None:
-        inner = [*loops, node] if isinstance(node, (ast.For, ast.While)) else loops
+        inner: list[ast.AST] = list(loops)
+        if isinstance(node, (ast.For, ast.While)):
+            inner.append(node)
         if isinstance(node, (ast.Assign, ast.AnnAssign)):
             targets = node.targets if isinstance(node, ast.Assign) else [node.target]
             value = node.value

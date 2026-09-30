@@ -1067,12 +1067,13 @@ class CollectionApiLowering(CollectionLowering):
             self._walks += 1
             name = f".key{self._walks}"
             function = key
-            if not isinstance(key, ast.Name) and self._reference_of(key) is not None:
+            made = self._reference_of(key) if not isinstance(key, ast.Name) else None
+            if made is not None:
                 # A function value made by an expression is made once, and
                 # held under a hidden name for the sort's calls.
                 held = f".keyfn{self._walks}"
                 handle, owned = self._handle(key)  # type: ignore[attr-defined]
-                self._bind(held, self._reference_of(key), handle, owned)
+                self._bind(held, made, handle, owned)
                 function = ast.Name(id=held, ctx=ast.Load())
             elif not isinstance(key, ast.Name):
                 raise Unsupported("a sort key is a lambda or a function")

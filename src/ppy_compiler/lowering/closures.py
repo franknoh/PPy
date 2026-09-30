@@ -27,7 +27,7 @@ from collections.abc import Mapping
 from types import MappingProxyType
 
 from ..analysis import types as T
-from ..analysis.closures import free_names, is_plain_callable, own_names
+from ..analysis.closures import Scope, free_names, is_plain_callable, own_names
 from ..backend.llvm.lowering import Unsupported, _scalar_name
 from ..ir import I64, PtrType, Successor, Value
 from ..ir.dialects import core
@@ -48,11 +48,11 @@ def _inline_key(call: ast.Call, lambda_: ast.Lambda) -> bool:
     return isinstance(func, ast.Attribute) and func.attr == "sort"
 
 
-def _closure_nodes(node: ast.FunctionDef) -> list[ast.AST]:
+def _closure_nodes(node: ast.FunctionDef) -> list[Scope]:
     """The nested functions and lambdas directly in `node`'s scope that become
     closures: every one but a sort key's lambda, whose body runs in place."""
     inline: set[int] = set()
-    found: list[ast.AST] = []
+    found: list[Scope] = []
     pending: list[ast.AST] = list(node.body)
     while pending:
         current = pending.pop()
@@ -116,7 +116,7 @@ class ClosureLowering:  # pylint: disable=attribute-defined-outside-init
                 self._place(name, cell, typed)
         shared: set[str] = set()
         for child in _closure_nodes(node):
-            shared |= free_names(child)  # type: ignore[arg-type]
+            shared |= free_names(child)
         shared &= own_names(node)
         shared -= set(self.captures)
         for name in sorted(shared):
@@ -227,11 +227,9 @@ class ClosureLowering:  # pylint: disable=attribute-defined-outside-init
 
     # -- making closures -------------------------------------------------------------
 
-    def _captured(self, node: ast.AST) -> dict[str, T.Type]:
+    def _captured(self, node: Scope) -> dict[str, T.Type]:
         return {
-            name: self._cell_types[name]
-            for name in sorted(free_names(node))  # type: ignore[arg-type]
-            if name in self._cells
+            name: self._cell_types[name] for name in sorted(free_names(node)) if name in self._cells
         }
 
     def _closure(self, entry: str, captured: dict[str, T.Type]) -> Value:
