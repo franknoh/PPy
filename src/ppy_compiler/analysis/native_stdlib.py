@@ -154,6 +154,8 @@ def call(
     qualname: str, args: list[_Argument], keywords: dict[str, _Argument]
 ) -> tuple[T.Type, EffectSet] | None:
     """What a call gives where native code makes it, or None where it does not."""
+    if qualname.startswith("math."):
+        return _math(qualname, args, keywords)
     model = MODELS.get(qualname)
     if model is None:
         return None
@@ -247,3 +249,77 @@ def _bisect(name: str, args: list[_Argument]) -> T.Type | None:
         return None
     return T.NONE if name.startswith("insort") else T.INT
 
+
+#: `math`'s functions native code has beyond the machine's instructions,
+#: and the constants.
+MATH_NATIVE = frozenset(
+    {
+        "gcd", "lcm", "isqrt", "comb", "perm", "factorial", "prod", "fsum", "isclose",
+        "hypot", "dist", "copysign", "atan2", "fmod", "degrees", "radians", "log",
+        "asin", "acos", "atan", "sinh", "cosh", "tanh", "asinh", "acosh", "atanh",
+        "log1p", "expm1", "erf", "erfc", "cbrt", "exp2", "fabs",
+    }
+)  # fmt: skip
+
+_FLOAT_UNARY = frozenset(
+    {
+        "asin", "acos", "atan", "sinh", "cosh", "tanh", "asinh", "acosh", "atanh",
+        "log1p", "expm1", "erf", "erfc", "cbrt", "exp2", "fabs", "degrees", "radians",
+    }
+)  # fmt: skip
+
+
+def _tuple_of_numbers(t: T.Type) -> int | None:
+    t = _plain(t)
+    if isinstance(t, T.Tuple_) and not t.homogeneous and all(
+        _is(item, "int", "bool", "float") for item in t.items
+    ):
+        return len(t.items)
+    return None
+
+
+def _math(
+    qualname: str, args: list[_Argument], keywords: dict[str, _Argument]
+) -> tuple[T.Type, EffectSet] | None:
+    from . import stdlib  # pylint: disable=import-outside-toplevel
+
+    name = qualname.removeprefix("math.")
+    described = stdlib.lookup(qualname)
+    if name not in MATH_NATIVE or described is None:
+        return None
+    effects = described[1]
+    count = len(args)
+    found: T.Type | None = None
+    if name == "isclose":
+        if count == 2 and all(map(_number, args)) and not set(keywords) - {"rel_tol", "abs_tol"}:
+            if all(map(_number, keywords.values())):
+                found = T.BOOL
+    elif keywords:
+        return None
+    elif name in {"gcd", "lcm"} and all(map(_integer, args)):
+        found = T.INT
+    elif name in {"isqrt", "factorial"} and count == 1 and _integer(args[0]):
+        found = T.INT
+    elif name == "comb" and count == 2 and all(map(_integer, args)):
+        found = T.INT
+    elif name == "perm" and count in (1, 2) and all(map(_integer, args)):
+        found = T.INT
+    elif name in {"prod", "fsum"} and count == 1:
+        element = _list_element(args[0].type)
+        if element in (T.INT, T.FLOAT):
+            found = element if name == "prod" else T.FLOAT
+    elif name == "hypot" and count in (2, 3) and all(map(_number, args)):
+        found = T.FLOAT
+    elif name == "dist" and count == 2:
+        sizes = {_tuple_of_numbers(a.type) for a in args}
+        if len(sizes) == 1 and sizes & {2, 3}:
+            found = T.FLOAT
+        elif all(_list_element(a.type) == T.FLOAT for a in args):
+            found = T.FLOAT
+    elif name in {"copysign", "atan2", "fmod"} and count == 2 and all(map(_number, args)):
+        found = T.FLOAT
+    elif name == "log" and count == 2 and all(map(_number, args)):
+        found = T.FLOAT
+    elif name in _FLOAT_UNARY and count == 1 and _number(args[0]):
+        found = T.FLOAT
+    return (found, effects) if found is not None else None

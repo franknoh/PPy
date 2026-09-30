@@ -11,19 +11,43 @@ in CPython; what CPython raises for is a guard, with its message.
 from __future__ import annotations
 
 import ast
+import math
 from collections.abc import Callable
 from functools import cache
 
-from ..analysis.native_stdlib import MODELS
+from ..analysis.native_stdlib import MATH_NATIVE, MODELS
 from ..backend.llvm.lowering import Unsupported
 from ..analysis.lexical import LexicalBindings
-from ..ir import F64, I64, Value
+from ..ir import BOOL, F64, I64, Value
 from ..ir.dialects import core
 from ..ir.dialects import math as math_dialect
-from ..ir.raising import said
+from ..ir.raising import OVERFLOW, said
 from .collections import HANDLE, Kind, _pointer
 
 __all__ = ["StdlibLowering"]
+
+#: `math`'s constants.
+_CONSTANTS = {
+    "math.pi": math.pi,
+    "math.e": math.e,
+    "math.tau": math.tau,
+    "math.inf": math.inf,
+    "math.nan": math.nan,
+}
+_CONSTANT_NAMES = frozenset(q.rpartition(".")[2] for q in _CONSTANTS)
+
+#: `ppy_math_unary`'s functions, by their number there.
+_UNARY = (
+    "asin", "acos", "atan", "sinh", "cosh", "tanh", "asinh", "acosh", "atanh",
+    "log1p", "expm1", "erf", "erfc", "cbrt", "exp2", "fabs",
+)  # fmt: skip
+
+#: `ppy_math_binary`'s, likewise.
+_BINARY = {"atan2": 0, "copysign": 1, "fmod": 2}
+
+#: The ones whose infinity from a finite number is an `OverflowError`, not a
+#: `ValueError` (CPython's `can_overflow`).
+_OVERFLOWS = frozenset({"sinh", "cosh", "exp2", "expm1"})
 
 _FLOAT_ARGUMENTS = {
     "uniform": 2,
@@ -42,6 +66,21 @@ _FLOAT_ARGUMENTS = {
 class StdlibLowering:
     """The standard library's calls; mixed into `_FunctionLowering`."""
 
+    def _stdlib_constant(self, node: ast.Attribute | ast.Name) -> Value | None:
+        """`math.pi`, `from math import inf`, and the rest of `math`'s constants."""
+        if isinstance(node, ast.Attribute) and node.attr not in _CONSTANT_NAMES:
+            return None
+        if isinstance(node, ast.Name) and node.id not in _CONSTANT_NAMES:
+            return None
+        lexical = self.frontend.analysis.symbols.lexical  # type: ignore[attr-defined]
+        if not isinstance(lexical, LexicalBindings):
+            return None
+        found = lexical.targets_at(node)
+        if len(found) != 1:
+            return None
+        value = _CONSTANTS.get(next(iter(found)))
+        return self._float(value) if value is not None else None
+
     def _stdlib_target(self, node: ast.Call) -> str | None:
         lexical = self.frontend.analysis.symbols.lexical  # type: ignore[attr-defined]
         if not isinstance(lexical, LexicalBindings):
@@ -50,6 +89,8 @@ class StdlibLowering:
         if len(found) != 1:
             return None
         qualname = next(iter(found))
+        if qualname.startswith("math."):
+            return qualname if qualname.removeprefix("math.") in MATH_NATIVE else None
         return qualname if qualname in MODELS else None
 
     def _stdlib_call(self, node: ast.Call, discard_result: bool) -> Value | None:
@@ -58,6 +99,8 @@ class StdlibLowering:
         if qualname is None:
             return None
         module, _, name = qualname.partition(".")
+        if module == "math":
+            return self._math_native(name, node)
         if node.keywords and qualname != "random.choices":
             raise Unsupported(f"`{qualname}` with keywords has no native lowering")
         if any(isinstance(a, ast.Starred) for a in node.args):
@@ -375,6 +418,200 @@ class StdlibLowering:
         )
         return drawn  # type: ignore[no-any-return]
 
+    # -- math ----------------------------------------------------------------------
+
+    def _math_native(self, name: str, node: ast.Call) -> Value | None:
+        """`math`'s integer functions, its sums and norms, and libm's functions
+        with the checks CPython's `math_1` makes of what they give."""
+        args = node.args
+        b = self.b  # type: ignore[attr-defined]
+        rt = self._rt  # type: ignore[attr-defined]
+        word = self._word  # type: ignore[attr-defined]
+        require = self._require  # type: ignore[attr-defined]
+        if name == "fabs" or (name == "log" and len(args) != 2):
+            return None
+        if any(isinstance(a, ast.Starred) for a in args):
+            raise Unsupported(f"`math.{name}` with `*` arguments has no native lowering")
+        if node.keywords and name != "isclose":
+            raise Unsupported(f"`math.{name}` with keywords has no native lowering")
+        if name in {"gcd", "lcm"}:
+            values = [self._int_argument(a) for a in args]
+            if not values:
+                return word(0 if name == "gcd" else 1)
+            # One argument is its magnitude for both: `gcd(a, 0)`.
+            made = rt("ppy_math_gcd", (values[0], word(0)))
+            for value in values[1:]:
+                made = rt(f"ppy_math_{name}", (made, value))
+            self._past_word(core.cmp(b, "ge", made, word(0)), name)
+            return made  # type: ignore[no-any-return]
+        if name in {"isqrt", "factorial", "comb", "perm"}:
+            return self._math_integer(name, [self._int_argument(a) for a in args])
+        if name in {"prod", "fsum"}:
+            kind, handle, owned = self._plain_list(args[0])
+            integers = kind.value is not None and kind.value.kind == "int"
+            if name == "prod" and integers:
+                made = rt("ppy_math_prod_ints", (handle,))
+                self._past_word(core.cmp(b, "eq", rt("ppy_math_fault", ()), word(0)), name)
+            elif name == "prod":
+                made = rt("ppy_math_prod_floats", (handle,), F64)
+            else:
+                made = rt("ppy_math_fsum", (handle, word(int(integers))), F64)
+                fault = rt("ppy_math_fault", ())
+                require(core.cmp(b, "ne", fault, word(1)), "fsum overflow", _text("fsum_overflow"))
+                require(core.cmp(b, "ne", fault, word(2)), "fsum -inf + inf", _text("fsum_nan"))
+            self._done_with(handle, owned)  # type: ignore[attr-defined]
+            return made  # type: ignore[no-any-return]
+        if name == "isclose":
+            return self._isclose(node)
+        if name == "hypot":
+            floats = [self._float_argument(a) for a in args]
+            return rt(f"ppy_math_hypot{len(floats)}", tuple(floats), F64)  # type: ignore[no-any-return]
+        if name == "dist":
+            return self._dist(args[0], args[1])
+        if name in {"degrees", "radians"}:
+            factor = 180.0 / math.pi if name == "degrees" else math.pi / 180.0
+            return core.mul(b, self._float(factor), self._float_argument(args[0]))
+        floats = [self._float_argument(a) for a in args]
+        if name == "log":
+            x, base = floats
+            zero = self._float(0.0)
+            # `x <= 0` is false for a NaN, which `log` gives back.
+            positive = core.bitwise(b, "xor", core.cmp(b, "le", x, zero), core.const(b, True, BOOL))
+            require(positive, "log of a number not above zero", _text("log_domain"))
+            positive = core.bitwise(b, "xor", core.cmp(b, "le", base, zero), core.const(b, True, BOOL))
+            require(positive, "log of a number not above zero", _text("log_domain"))
+            top = self._math("log", x)
+            bottom = self._math("log", base)
+            require(core.cmp(b, "ne", bottom, zero), "log base 1", _text("log_base"))
+            return core.div(b, top, bottom)  # type: ignore[no-any-return]
+        if name in _BINARY:
+            made = rt("ppy_math_binary", (word(_BINARY[name]), *floats), F64)
+        else:
+            made = rt("ppy_math_unary", (word(_UNARY.index(name)), *floats), F64)
+        self._math_checked(made, floats, overflows=name in _OVERFLOWS)
+        return made  # type: ignore[no-any-return]
+
+    def _math_checked(
+        self,
+        made: Value,
+        inputs: list[Value],
+        *,
+        overflows: bool,
+        zero_base: Value | None = None,
+    ) -> None:
+        """What CPython's `math_1` and `math_2` raise for: a NaN from numbers,
+        and an infinity from finite numbers (a `ValueError` for `pow` of a
+        zero `zero_base`, which is a division by zero there)."""
+        b = self.b  # type: ignore[attr-defined]
+        yes = core.const(b, True, BOOL)
+        inf = self._float(math.inf)
+        some_nan = core.const(b, False, BOOL)
+        all_finite = yes
+        for value in inputs:
+            some_nan = core.bitwise(b, "or", some_nan, core.cmp(b, "ne", value, value))
+            finite = core.cmp(b, "lt", self._math("abs", value), inf)
+            all_finite = core.bitwise(b, "and", all_finite, finite)
+        is_nan = core.cmp(b, "ne", made, made)
+        fine = core.bitwise(b, "or", core.bitwise(b, "xor", is_nan, yes), some_nan)
+        self._require(fine, "math domain error", _text("domain"))  # type: ignore[attr-defined]
+        infinite = core.cmp(b, "eq", self._math("abs", made), inf)
+        blown = core.bitwise(b, "and", infinite, all_finite)
+        if zero_base is not None:
+            zero = core.cmp(b, "eq", zero_base, self._float(0.0))
+            self._require(  # type: ignore[attr-defined]
+                core.bitwise(b, "xor", core.bitwise(b, "and", blown, zero), yes),
+                "math domain error",
+                _text("domain"),
+            )
+        self._require(  # type: ignore[attr-defined]
+            core.bitwise(b, "xor", blown, yes),
+            "math range error",
+            _text("range") if overflows else _text("domain"),
+        )
+
+    def _past_word(self, condition: Value, name: str) -> None:
+        self._guard(  # type: ignore[attr-defined]
+            condition, "range", f"`math.{name}` past a word", raises=OVERFLOW
+        )
+
+    def _math_integer(self, name: str, values: list[Value]) -> Value:
+        b = self.b  # type: ignore[attr-defined]
+        rt = self._rt  # type: ignore[attr-defined]
+        word = self._word  # type: ignore[attr-defined]
+        require = self._require  # type: ignore[attr-defined]
+        n = values[0]
+        if name == "isqrt":
+            require(core.cmp(b, "ge", n, word(0)), "isqrt of a negative", _text("isqrt"))
+            return rt("ppy_math_isqrt", (n,))  # type: ignore[no-any-return]
+        if name == "factorial" or (name == "perm" and len(values) == 1):
+            require(core.cmp(b, "ge", n, word(0)), "factorial of a negative", _text("factorial"))
+            made = rt("ppy_math_perm", (n, n))
+        else:
+            k = values[1]
+            require(core.cmp(b, "ge", n, word(0)), "n negative", _text(f"{name}_n"))
+            require(core.cmp(b, "ge", k, word(0)), "k negative", _text(f"{name}_k"))
+            made = rt(f"ppy_math_{name}", (n, k))
+        self._past_word(core.cmp(b, "ge", made, word(0)), name)
+        return made  # type: ignore[no-any-return]
+
+    def _isclose(self, node: ast.Call) -> Value:
+        b = self.b  # type: ignore[attr-defined]
+        a, other = (self._float_argument(x) for x in node.args)
+        keywords = {k.arg: k.value for k in node.keywords}
+        relative = (
+            self._float_argument(keywords["rel_tol"]) if "rel_tol" in keywords else self._float(1e-09)
+        )
+        absolute = (
+            self._float_argument(keywords["abs_tol"]) if "abs_tol" in keywords else self._float(0.0)
+        )
+        zero = self._float(0.0)
+        # A NaN tolerance is not below zero, as in CPython.
+        below = core.bitwise(
+            b, "or", core.cmp(b, "lt", relative, zero), core.cmp(b, "lt", absolute, zero)
+        )
+        self._require(  # type: ignore[attr-defined]
+            core.bitwise(b, "xor", below, core.const(b, True, BOOL)),
+            "tolerances must be non-negative",
+            _text("isclose"),
+        )
+        found = self._rt("ppy_math_isclose", (a, other, relative, absolute))  # type: ignore[attr-defined]
+        return core.cmp(b, "ne", found, self._word(0))  # type: ignore[attr-defined]
+
+    def _dist(self, p: ast.expr, q: ast.expr) -> Value:
+        b = self.b  # type: ignore[attr-defined]
+        if self._builtin_of(p) is not None:  # type: ignore[attr-defined]
+            _, left, left_owned = self._plain_list(p)
+            _, right, right_owned = self._plain_list(q)
+            self._require(  # type: ignore[attr-defined]
+                core.cmp(
+                    b,
+                    "eq",
+                    self._rt("ppy_coll_len", (left,)),  # type: ignore[attr-defined]
+                    self._rt("ppy_coll_len", (right,)),  # type: ignore[attr-defined]
+                ),
+                "both points must have the same number of dimensions",
+                _text("dist"),
+            )
+            made = self._rt("ppy_math_hypot_list", (left, right), F64)  # type: ignore[attr-defined]
+            self._done_with(left, left_owned)  # type: ignore[attr-defined]
+            self._done_with(right, right_owned)  # type: ignore[attr-defined]
+            return made  # type: ignore[no-any-return]
+        left, right = self._coordinates(p), self._coordinates(q)
+        differences = tuple(core.sub(b, x, y) for x, y in zip(left, right, strict=True))
+        return self._rt(f"ppy_math_hypot{len(differences)}", differences, F64)  # type: ignore[attr-defined,no-any-return]
+
+    def _coordinates(self, node: ast.expr) -> list[Value]:
+        """A point's coordinates as floats: a tuple display's elements, or a
+        tuple value's items."""
+        if isinstance(node, ast.Tuple):
+            return [self._float_argument(e) for e in node.elts]
+        value = self._expr(node)  # type: ignore[attr-defined]
+        width = len(value.type.items)  # type: ignore[attr-defined]
+        return [
+            self._coerce(core.tuple_extract(self.b, value, i), "float")  # type: ignore[attr-defined]
+            for i in range(width)
+        ]
+
     # -- heapq ---------------------------------------------------------------------
 
     def _heapq_call(self, name: str, node: ast.Call) -> Value:
@@ -499,6 +736,18 @@ def _raising() -> dict[str, Callable[[], object]]:
 
     r = random.Random(0)
     return {
+        "fsum_overflow": lambda: math.fsum([1e308, 1e308]),
+        "fsum_nan": lambda: math.fsum([math.inf, -math.inf]),
+        "log_base": lambda: math.log(2.0, 1.0),
+        "isqrt": lambda: math.isqrt(-1),
+        "factorial": lambda: math.factorial(-1),
+        "comb_n": lambda: math.comb(-1, 1),
+        "comb_k": lambda: math.comb(1, -1),
+        "perm_n": lambda: math.perm(-1, 1),
+        "perm_k": lambda: math.perm(1, -1),
+        "isclose": lambda: math.isclose(1.0, 1.0, rel_tol=-1.0),
+        "dist": lambda: math.dist([1.0], [1.0, 2.0]),
+        "range": lambda: math.exp(1000.0),
         "randrange1": lambda: r.randrange(0),
         "randrange2": lambda: r.randrange(_A, _B),
         "randrange3": lambda: r.randrange(_A, _B, _S),
@@ -521,8 +770,20 @@ def _raising() -> dict[str, Callable[[], object]]:
     }
 
 
+#: A domain error's text where CPython's names no value (3.14 says "expected
+#: a positive input, got 0.0", which a standalone binary cannot spell yet).
+_DOMAIN = "ValueError: math domain error"
+
+
 @cache
 def _text(key: str) -> str:
+    if key in {"domain", "log_domain"}:
+        said_text = said(lambda: math.log(0.0)) if key == "log_domain" else said(lambda: math.acos(2.0))
+        return said_text if "0.0" not in said_text and "2.0" not in said_text else _DOMAIN
+    return _said_text(key)
+
+
+def _said_text(key: str) -> str:
     """The traceback's last line for check `key`, `{0}` and on where it
     carries the values the check reports (the start, the stop, the step:
     for `randint`, `a` and whichever of `b` and `b + 1` the message shows)."""

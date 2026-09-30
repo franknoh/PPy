@@ -152,3 +152,376 @@ int64_t ppy_bisect(int8_t *handle, const int64_t *x, int64_t lo, int64_t hi, int
     }
     return lo;
 }
+
+/* -- `math` beyond the machine's instructions ----------------------------------
+
+   The integer functions answer -1 where the exact result is past a word
+   (every result they have is 0 or more), and the caller falls back. */
+
+/* `gcd(a, b)`. */
+int64_t ppy_math_gcd(int64_t a, int64_t b) {
+    uint64_t x = a < 0 ? (uint64_t)0 - (uint64_t)a : (uint64_t)a;
+    uint64_t y = b < 0 ? (uint64_t)0 - (uint64_t)b : (uint64_t)b;
+    while (y != 0) {
+        uint64_t t = x % y;
+        x = y;
+        y = t;
+    }
+    return x > (uint64_t)INT64_MAX ? -1 : (int64_t)x;
+}
+
+/* `lcm(a, b)`: `abs(a // gcd(a, b) * b)`. */
+int64_t ppy_math_lcm(int64_t a, int64_t b) {
+    if (a == 0 || b == 0) {
+        return 0;
+    }
+    int64_t g = ppy_math_gcd(a, b);
+    if (g < 0) {
+        return -1;
+    }
+    __int128 made = ((__int128)a / g) * (__int128)b;
+    if (made < 0) {
+        made = -made;
+    }
+    return made > INT64_MAX ? -1 : (int64_t)made;
+}
+
+/* `isqrt(n)` for n >= 0: the largest r with r * r <= n. */
+int64_t ppy_math_isqrt(int64_t n) {
+    uint64_t r = (uint64_t)sqrt((double)n);
+    while ((unsigned __int128)r * r > (unsigned __int128)n) {
+        r--;
+    }
+    while ((unsigned __int128)(r + 1) * (r + 1) <= (unsigned __int128)n) {
+        r++;
+    }
+    return (int64_t)r;
+}
+
+/* `comb(n, k)` for n, k >= 0. */
+int64_t ppy_math_comb(int64_t n, int64_t k) {
+    if (k > n) {
+        return 0;
+    }
+    if (k > n - k) {
+        k = n - k;
+    }
+    unsigned __int128 made = 1;
+    for (int64_t i = 0; i < k; i++) {
+        /* C(n, i + 1) = C(n, i) * (n - i) / (i + 1), exact at each step. */
+        made = made * (unsigned __int128)(n - i) / (unsigned __int128)(i + 1);
+        if (made > (unsigned __int128)INT64_MAX) {
+            return -1;
+        }
+    }
+    return (int64_t)made;
+}
+
+/* `perm(n, k)` for n, k >= 0. */
+int64_t ppy_math_perm(int64_t n, int64_t k) {
+    if (k > n) {
+        return 0;
+    }
+    unsigned __int128 made = 1;
+    for (int64_t i = 0; i < k; i++) {
+        made *= (unsigned __int128)(n - i);
+        if (made > (unsigned __int128)INT64_MAX) {
+            return -1;
+        }
+    }
+    return (int64_t)made;
+}
+
+/* What the last of these functions to fail said: 1 an integer past a word
+   or an intermediate overflow, 2 `-inf + inf` in `fsum`. */
+int64_t *ppy_math_cell(void) {
+    static int64_t cell[1];
+    return cell;
+}
+
+/* The failure since the last ask, or 0; asking clears it. */
+int64_t ppy_math_fault(void) {
+    int64_t *cell = ppy_math_cell();
+    int64_t fault = cell[0];
+    cell[0] = 0;
+    return fault;
+}
+
+/* The product of a list's ints from 1. */
+int64_t ppy_math_prod_ints(int8_t *handle) {
+    int64_t n = ((int64_t *)handle)[0];
+    int64_t made = 1;
+    for (int64_t i = 0; i < n; i++) {
+        if (__builtin_mul_overflow(made, *(int64_t *)ppy_seq_at(handle, i), &made)) {
+            ppy_math_cell()[0] = 1;
+            return 0;
+        }
+    }
+    return made;
+}
+
+/* The product of a list's floats, left to right from 1.0. */
+double ppy_math_prod_floats(int8_t *handle) {
+    int64_t n = ((int64_t *)handle)[0];
+    double made = 1.0;
+    for (int64_t i = 0; i < n; i++) {
+        made *= *(double *)ppy_seq_at(handle, i);
+    }
+    return made;
+}
+
+/* `fsum` of a list's floats (or ints, `integers`), by CPython's algorithm:
+   Shewchuk's exact partials, a correction for half-even rounding across
+   them, and the special values summed apart; a failure is left in
+   `ppy_math_cell`. */
+double ppy_math_fsum(int8_t *handle, int64_t integers) {
+    int64_t count = ((int64_t *)handle)[0];
+    int64_t room = 32, n = 0;
+    double stack[32];
+    double *p = stack;
+    double special_sum = 0.0, inf_sum = 0.0, hi = 0.0, lo = 0.0;
+    for (int64_t index = 0; index < count; index++) {
+        int8_t *at = ppy_seq_at(handle, index);
+        double x = integers ? (double)*(int64_t *)at : *(double *)at;
+        double xsave = x;
+        int64_t i = 0;
+        for (int64_t j = 0; j < n; j++) {
+            double y = p[j];
+            if (fabs(x) < fabs(y)) {
+                double t = x;
+                x = y;
+                y = t;
+            }
+            hi = x + y;
+            double yr = hi - x;
+            lo = y - yr;
+            if (lo != 0.0) {
+                p[i++] = lo;
+            }
+            x = hi;
+        }
+        n = i;
+        if (x != 0.0) {
+            if (!(x - x == 0.0)) {
+                if (xsave - xsave == 0.0) {
+                    ppy_math_cell()[0] = 1;
+                    if (p != stack) {
+                        free(p);
+                    }
+                    return 0.0;
+                }
+                if (xsave == INFINITY || xsave == -INFINITY) {
+                    inf_sum += xsave;
+                }
+                special_sum += xsave;
+                n = 0;
+            } else {
+                if (n >= room) {
+                    double *grown = (double *)malloc((size_t)(2 * room) * sizeof(double));
+                    if (grown == NULL) {
+                        ppy_coll_fail();
+                    }
+                    memcpy(grown, p, (size_t)n * sizeof(double));
+                    if (p != stack) {
+                        free(p);
+                    }
+                    p = grown;
+                    room *= 2;
+                }
+                p[n++] = x;
+            }
+        }
+    }
+    if (special_sum != 0.0) {
+        if (p != stack) {
+            free(p);
+        }
+        if (inf_sum != inf_sum) {
+            ppy_math_cell()[0] = 2;
+            return 0.0;
+        }
+        return special_sum;
+    }
+    hi = 0.0;
+    if (n > 0) {
+        hi = p[--n];
+        while (n > 0) {
+            double x = hi;
+            double y = p[--n];
+            hi = x + y;
+            double yr = hi - x;
+            lo = y - yr;
+            if (lo != 0.0) {
+                break;
+            }
+        }
+        if (n > 0 && ((lo < 0.0 && p[n - 1] < 0.0) || (lo > 0.0 && p[n - 1] > 0.0))) {
+            double y = lo * 2.0;
+            double x = hi + y;
+            double yr = x - hi;
+            if (y == yr) {
+                hi = x;
+            }
+        }
+    }
+    if (p != stack) {
+        free(p);
+    }
+    return hi;
+}
+
+/* `isclose(a, b, rel_tol=..., abs_tol=...)`, the tolerances checked by the caller. */
+int64_t ppy_math_isclose(double a, double b, double rel_tol, double abs_tol) {
+    if (a == b) {
+        return 1;
+    }
+    if (a == INFINITY || a == -INFINITY || b == INFINITY || b == -INFINITY) {
+        return 0;
+    }
+    double diff = fabs(b - a);
+    return ((diff <= fabs(rel_tol * b)) || (diff <= fabs(rel_tol * a))) || (diff <= abs_tol);
+}
+
+/* A double and the error of it, for `hypot`'s exact arithmetic. */
+void ppy_math_dl_mul(double x, double y, double *hi, double *lo) {
+    double z = x * y;
+    *hi = z;
+    *lo = fma(x, y, -z);
+}
+
+/* `hypot` of the magnitudes in `values` (`count` of them, the largest `max`,
+   `nan` whether any is a NaN): CPython's `vector_norm`, scaled, squared,
+   and summed without loss, then corrected once. */
+double ppy_math_norm(double *values, int64_t count, double max, int64_t nan) {
+    if (max == INFINITY) {
+        return max;
+    }
+    if (nan) {
+        return NAN;
+    }
+    if (max == 0.0 || count <= 1) {
+        return max;
+    }
+    int max_e;
+    frexp(max, &max_e);
+    if (max_e < -1023) {
+        for (int64_t i = 0; i < count; i++) {
+            values[i] /= DBL_MIN;
+        }
+        return DBL_MIN * ppy_math_norm(values, count, max / DBL_MIN, nan);
+    }
+    double scale = ldexp(1.0, -max_e);
+    double csum = 1.0, frac1 = 0.0, frac2 = 0.0, hi, lo;
+    for (int64_t i = 0; i < count; i++) {
+        double x = values[i] * scale;
+        ppy_math_dl_mul(x, x, &hi, &lo);
+        double sum = csum + hi;
+        double error = (csum - sum) + hi;
+        csum = sum;
+        frac1 += lo;
+        frac2 += error;
+    }
+    double h = sqrt(csum - 1.0 + (frac1 + frac2));
+    ppy_math_dl_mul(-h, h, &hi, &lo);
+    double sum = csum + hi;
+    double error = (csum - sum) + hi;
+    csum = sum;
+    frac1 += lo;
+    frac2 += error;
+    double x = csum - 1.0 + (frac1 + frac2);
+    h += x / (2.0 * h);
+    return h / scale;
+}
+
+/* `hypot(x, y)`. */
+double ppy_math_hypot2(double x, double y) {
+    double values[2] = {fabs(x), fabs(y)};
+    double max = 0.0;
+    int64_t nan = 0;
+    for (int64_t i = 0; i < 2; i++) {
+        nan |= values[i] != values[i];
+        if (values[i] > max) {
+            max = values[i];
+        }
+    }
+    return ppy_math_norm(values, 2, max, nan);
+}
+
+/* `hypot(x, y, z)`. */
+double ppy_math_hypot3(double x, double y, double z) {
+    double values[3] = {fabs(x), fabs(y), fabs(z)};
+    double max = 0.0;
+    int64_t nan = 0;
+    for (int64_t i = 0; i < 3; i++) {
+        nan |= values[i] != values[i];
+        if (values[i] > max) {
+            max = values[i];
+        }
+    }
+    return ppy_math_norm(values, 3, max, nan);
+}
+
+/* `hypot` of a list of floats, or `dist` of two (`other` not NULL; the
+   lengths checked by the caller). */
+double ppy_math_hypot_list(int8_t *handle, int8_t *other) {
+    int64_t n = ((int64_t *)handle)[0];
+    double stack[16];
+    double *values = n <= 16 ? stack : (double *)malloc((size_t)n * sizeof(double));
+    if (values == NULL) {
+        ppy_coll_fail();
+    }
+    double max = 0.0;
+    int64_t nan = 0;
+    for (int64_t i = 0; i < n; i++) {
+        double x = *(double *)ppy_seq_at(handle, i);
+        if (other != NULL) {
+            x -= *(double *)ppy_seq_at(other, i);
+        }
+        x = fabs(x);
+        values[i] = x;
+        nan |= x != x;
+        if (x > max) {
+            max = x;
+        }
+    }
+    double made = ppy_math_norm(values, n, max, nan);
+    if (values != stack) {
+        free(values);
+    }
+    return made;
+}
+
+/* One of libm's functions by number, as `math` calls it: 0 asin, 1 acos,
+   2 atan, 3 sinh, 4 cosh, 5 tanh, 6 asinh, 7 acosh, 8 atanh, 9 log1p,
+   10 expm1, 11 erf, 12 erfc, 13 cbrt, 14 exp2, 15 fabs. */
+double ppy_math_unary(int64_t which, double x) {
+    switch (which) {
+    case 0: return asin(x);
+    case 1: return acos(x);
+    case 2: return atan(x);
+    case 3: return sinh(x);
+    case 4: return cosh(x);
+    case 5: return tanh(x);
+    case 6: return asinh(x);
+    case 7: return acosh(x);
+    case 8: return atanh(x);
+    case 9: return log1p(x);
+    case 10: return expm1(x);
+    case 11: return erf(x);
+    case 12: return erfc(x);
+    case 13: return cbrt(x);
+    case 14: return exp2(x);
+    default: return fabs(x);
+    }
+}
+
+/* Two-argument ones: 0 atan2(y, x), 1 copysign, 2 fmod. */
+double ppy_math_binary(int64_t which, double x, double y) {
+    switch (which) {
+    case 0: return atan2(x, y);
+    case 1: return copysign(x, y);
+    default:
+        /* `fmod(x, inf)` is x for a finite x, as C says too. */
+        return fmod(x, y);
+    }
+}

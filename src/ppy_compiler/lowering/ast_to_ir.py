@@ -2372,6 +2372,9 @@ class _FunctionLowering(
             case ast.Constant(value=float() as value):
                 return core.const(self.b, value, F64)
             case ast.Name():
+                constant = self._stdlib_constant(node)
+                if constant is not None:
+                    return constant
                 loaded = self._load(node.id)
                 if loaded.type == I64:
                     interval = self._induction.get(node.id)
@@ -2404,6 +2407,9 @@ class _FunctionLowering(
             case ast.Await():
                 return self._await(node)
             case ast.Attribute():
+                constant = self._stdlib_constant(node)
+                if constant is not None:
+                    return constant
                 if isinstance(node.value, ast.Name) and node.value.id in self.objects:
                     return self._struct_field(node.value.id, node.attr)
                 if self._object_of(node.value) is not None:
@@ -4412,7 +4418,17 @@ class _FunctionLowering(
             raise Unsupported(f"`math.{name}` takes {arity} argument(s)")
         arguments = tuple(self._coerce(self._expr(a), "float") for a in node.args)
         self.frontend.module.require("math", 1)
-        return math_dialect.call(self.b, "abs" if name == "fabs" else name, *arguments)
+        made = math_dialect.call(self.b, "abs" if name == "fabs" else name, *arguments)
+        if name in {"sqrt", "sin", "cos", "tan", "log", "log2", "log10", "exp", "pow"}:
+            # What CPython raises for, which the machine answers with a NaN or
+            # an infinity: `sqrt(-1)`, `log(0)`, `exp(1000)`, `pow(0, -1)`.
+            self._math_checked(
+                made,
+                list(arguments),
+                overflows=name in {"exp", "pow"},
+                zero_base=arguments[0] if name == "pow" else None,
+            )
+        return made
 
     def _float_to_int(self, value: Value) -> Value:
         """`int(x)` of a float: truncated toward zero, where the result is a word.

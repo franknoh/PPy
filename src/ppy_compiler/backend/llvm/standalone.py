@@ -13,6 +13,7 @@ import os
 import subprocess
 from pathlib import Path
 
+from ...analysis.native_stdlib import MATH_NATIVE
 from ...analysis.native_stdlib import MODELS as NATIVE_MODELS
 from ...diagnostics import Diagnostic, Severity
 from ...driver.ir_pipeline import value_class_layouts
@@ -26,6 +27,14 @@ __all__ = ["build_standalone", "standalone_ir"]
 
 #: Standard-library modules whose calls the runtime has natively.
 _NATIVE_MODULES = frozenset({"random", "heapq", "bisect"})
+
+#: What `from math import ...` may name in a standalone module.
+_MATH_NAMES = (
+    MATH_NATIVE
+    | {"pi", "e", "tau", "inf", "nan"}
+    | {"sqrt", "sin", "cos", "tan", "exp", "log", "log2", "log10", "pow"}
+    | {"floor", "ceil", "trunc", "isnan", "isinf", "isfinite"}
+)
 
 
 def _fail(reporter, message: str, help_text: str | None = None) -> int:  # type: ignore[no-untyped-def]
@@ -447,6 +456,8 @@ def _module_shape(
             if names in _NATIVE_MODULES and all(
                 f"{names}.{name}" in NATIVE_MODELS for name in listed
             ):
+                continue
+            if names == "math" and all(name in _MATH_NAMES for name in listed):
                 continue
             if project_modules and all(
                 (binding := symbols.imports.get(alias.asname or alias.name.split(".")[0]))
