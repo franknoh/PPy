@@ -96,11 +96,6 @@ class NativeModule:
             self.llvm = emit()  # type: ignore[operator]
         return self.llvm
 
-    @ir.setter
-    def ir(self, text: str) -> None:
-        self.llvm = text
-        self.emitter = None
-
 
 #: Members that make attribute reads observable, so the class stays boxed.
 

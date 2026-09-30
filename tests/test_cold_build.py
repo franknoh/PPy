@@ -156,9 +156,8 @@ def test_a_module_emits_its_llvm_ir_once_when_first_read():
     assert emitted == ["m"]
 
 
-def test_setting_a_modules_llvm_ir_replaces_its_emitter():
-    module = NativeModule("m", emitter=lambda: pytest.fail("emitted"))
-    module.ir = "; given"
+def test_a_module_given_its_llvm_ir_emits_nothing():
+    module = NativeModule("m", llvm="; given")
     assert module.ir == "; given"
 
 
