@@ -4475,11 +4475,15 @@ all numbers, since a copy of its fields would cut a subclass's short.</p>
 </tr>
 <tr>
 <td><code>a == b</code>, <code>a != b</code></td>
-<td><code>__eq__</code>, <code>__ne__</code> (or <code>not __eq__</code>); a class with neither compares identity</td>
+<td><code>__eq__</code>, <code>__ne__</code> (or <code>not __eq__</code>); a dataclass compares its fields; any other class compares identity</td>
 </tr>
 <tr>
 <td><code>a &lt; b</code>, <code>a &lt;= b</code>, <code>a &gt; b</code>, <code>a &gt;= b</code></td>
-<td><code>__lt__</code>, ..., or the reflected method of the right operand</td>
+<td><code>__lt__</code>, ..., or the reflected method of the right operand; <code>@dataclass(order=True)</code> compares its fields as tuples</td>
+</tr>
+<tr>
+<td><code>str(a)</code>, <code>repr(a)</code>, <code>print(a)</code>, <code>f"{a}"</code>, <code>f"{a!r}"</code></td>
+<td><code>__str__</code>, <code>__repr__</code>, or a dataclass's generated <code>__repr__</code>, <code>Point(x=1, y=2.5)</code></td>
 </tr>
 <tr>
 <td><code>obj[key]</code>, <code>obj[key] = value</code></td>
@@ -4595,8 +4599,17 @@ return numbers, and make their objects inside.</p>
   the functions that use it in Python.</li>
 <li>A call through a generic base whose subclass has type parameters the
   base's arguments do not decide stays in Python, as above.</li>
-<li>A dataclass object compared with <code>==</code> keeps the function in Python unless
-  the class defines <code>__eq__</code>, since the generated one compares fields.</li>
+<li>A dataclass's generated <code>==</code> and order compare fields that are numbers,
+  bools, and strings; a field holding anything else keeps the comparison in
+  Python. A float field that is NaN falls back, since whether it equals itself
+  depends on CPython's version.</li>
+<li>A dataclass with subclasses keeps its generated methods in Python, since
+  they read the instance's own class.</li>
+<li><code>sorted</code>, <code>min</code>, and <code>max</code> of <code>order=True</code> dataclass objects stay in
+  Python; comparing two of them is native.</li>
+<li>A class with neither <code>__str__</code>, <code>__repr__</code>, nor a generated one prints its
+  address, which only Python has. A value class with its own <code>__repr__</code> or
+  <code>__str__</code> is shown by Python.</li>
 <li>A generic class whose type arguments nothing tells stays in Python.</li>
 </ul>
 <p>Examples: <a href="../../howto/49_inheritance/">Inheritance</a>,

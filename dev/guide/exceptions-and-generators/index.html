@@ -4398,7 +4398,11 @@ Nothing falls back to Python.</p>
 <tbody>
 <tr>
 <td><code>raise T</code>, <code>raise T(message)</code></td>
-<td>a builtin exception, or a class deriving from one whose body is only <code>pass</code> or a docstring; the message is a string, an <code>int</code>, or a <code>bool</code></td>
+<td>a builtin exception, or a class deriving from one; the message is a string, an <code>int</code>, or a <code>bool</code></td>
+</tr>
+<tr>
+<td><code>raise T(...) from cause</code>, <code>raise ... from None</code></td>
+<td>the cause is a name or a new exception, as CPython chains it</td>
 </tr>
 <tr>
 <td><code>raise</code>, <code>raise e</code></td>
@@ -4413,11 +4417,33 @@ Nothing falls back to Python.</p>
 <td><code>AssertionError</code></td>
 </tr>
 <tr>
-<td><code>str(e)</code>, <code>f"{e}"</code>, <code>isinstance(e, T)</code></td>
+<td><code>str(e)</code>, <code>f"{e}"</code>, <code>print(e)</code>, <code>isinstance(e, T)</code>, <code>e.field</code></td>
 <td>in a handler</td>
 </tr>
 </tbody>
 </table>
+<p>A project exception class may have fields, methods, and an <code>__init__</code> of its
+own. Its <code>str()</code> is what <code>super().__init__(...)</code> was given, or, where
+<code>__init__</code> does not call it, the arguments the class was called with, as
+CPython keeps them:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="k">class</span><span class="w"> </span><span class="nc">ParseError</span><span class="p">(</span><span class="ne">ValueError</span><span class="p">):</span>
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">line</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">text</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="sa">f</span><span class="s2">"line </span><span class="si">{</span><span class="n">line</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">text</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">line</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="n">line</span>
+<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">text</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="n">text</span>
+<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>
+<a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a>
+<a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a><span class="k">def</span><span class="w"> </span><span class="nf">parse</span><span class="p">(</span><span class="n">n</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+<a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a>    <span class="n">total</span> <span class="o">=</span> <span class="mi">0</span>
+<a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a>    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">n</span><span class="p">):</span>
+<a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a>        <span class="k">try</span><span class="p">:</span>
+<a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a>            <span class="k">if</span> <span class="n">i</span> <span class="o">%</span> <span class="mi">7</span> <span class="o">==</span> <span class="mi">3</span><span class="p">:</span>
+<a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a>                <span class="k">raise</span> <span class="n">ParseError</span><span class="p">(</span><span class="n">i</span><span class="p">,</span> <span class="s2">"bad token"</span><span class="p">)</span>
+<a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a>            <span class="n">total</span> <span class="o">+=</span> <span class="n">i</span>
+<a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a>        <span class="k">except</span> <span class="n">ParseError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+<a id="__codelineno-1-16" name="__codelineno-1-16" href="#__codelineno-1-16"></a>            <span class="n">total</span> <span class="o">+=</span> <span class="n">e</span><span class="o">.</span><span class="n">line</span> <span class="o">*</span> <span class="mi">1000</span> <span class="o">+</span> <span class="nb">len</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">e</span><span class="p">))</span>
+<a id="__codelineno-1-17" name="__codelineno-1-17" href="#__codelineno-1-17"></a>    <span class="k">return</span> <span class="n">total</span>
+</code></pre></div>
 <p><code>str()</code> of a <code>KeyError</code> is <code>repr()</code> of its key, as CPython has it.
 <code>finally</code> runs when the body, a handler, or <code>else</code> finishes, raises,
 <code>return</code>s, <code>break</code>s, or <code>continue</code>s.</p>
@@ -4456,8 +4482,7 @@ native catches ends the call:</p>
 <p>A function using any of these runs as Python:</p>
 <ul>
 <li><code>e.args</code>, and any other use of <code>e</code> than the ones above</li>
-<li><code>raise ... from ...</code></li>
-<li>a project exception class with fields or methods of its own</li>
+<li>a cause that is neither a name nor a new exception (<code>raise X from f()</code>)</li>
 <li>a <code>finally</code> that returns, breaks, or continues out of itself</li>
 </ul>
 <h2 id="generators">Generators<a class="headerlink" href="#generators" title="Permanent link">&para;</a></h2>
@@ -4488,6 +4513,10 @@ one costs what the loop inside it costs.</p>
 <td>the first value, or <code>StopIteration</code></td>
 </tr>
 <tr>
+<td><code>it = gen(...)</code>, then <code>next(it)</code>, <code>next(it, default)</code>, and <code>for x in it</code></td>
+<td>stepped from one place to the next, as below</td>
+</tr>
+<tr>
 <td><code>Vec[T](gen(...))</code> and the other collections</td>
 <td>built from what it yields</td>
 </tr>
@@ -4496,9 +4525,26 @@ one costs what the loop inside it costs.</p>
 <p>In the generator, <code>yield value</code> and <code>yield from</code> another generator or a
 collection lower, and <code>return</code> ends it. It yields numbers, tuples of
 numbers, strings, collections, or objects.</p>
+<p>A generator held in a name and stepped more than once runs in step with the
+function holding it. The code between two steps runs as the generator hands
+over its next value, and a <code>for</code> over it may <code>break</code> and leave the rest for
+the next step:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="k">def</span><span class="w"> </span><span class="nf">header_then_rows</span><span class="p">(</span><span class="n">n</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>    <span class="n">it</span> <span class="o">=</span> <span class="n">squares</span><span class="p">(</span><span class="n">n</span><span class="p">)</span>
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>    <span class="n">first</span> <span class="o">=</span> <span class="nb">next</span><span class="p">(</span><span class="n">it</span><span class="p">)</span>
+<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>    <span class="n">second</span> <span class="o">=</span> <span class="nb">next</span><span class="p">(</span><span class="n">it</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">)</span>
+<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>    <span class="n">total</span> <span class="o">=</span> <span class="n">first</span> <span class="o">*</span> <span class="mi">100</span> <span class="o">+</span> <span class="n">second</span>
+<a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>    <span class="k">for</span> <span class="n">row</span> <span class="ow">in</span> <span class="n">it</span><span class="p">:</span>
+<a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a>        <span class="n">total</span> <span class="o">+=</span> <span class="n">row</span>
+<a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a>    <span class="k">return</span> <span class="n">total</span> <span class="o">*</span> <span class="mi">1000</span> <span class="o">+</span> <span class="nb">next</span><span class="p">(</span><span class="n">it</span><span class="p">,</span> <span class="mi">77</span><span class="p">)</span>
+</code></pre></div>
+<p>The steps are <code>x = next(it)</code> and <code>for</code> statements of the function itself,
+not inside a loop or a branch, and the code between two of them does not
+<code>return</code>, <code>break</code>, or <code>continue</code>.</p>
 <h3 id="what-stays-in-python_1">What stays in Python<a class="headerlink" href="#what-stays-in-python_1" title="Permanent link">&para;</a></h3>
-<p>A generator that is stored, returned, passed on, or stepped more than once
-keeps the function that does so in Python, and so does:</p>
+<p>A generator that is returned, passed to another function, or stepped from
+inside a loop or a branch keeps the function that does so in Python, and so
+does:</p>
 <ul>
 <li>a generator method, a generic generator, or an async one</li>
 <li>a generator with a <code>try</code>, a nested function, or a <code>with</code></li>
