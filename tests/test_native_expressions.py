@@ -541,7 +541,46 @@ def main() -> None:
 main()
 """
 
+RECURSIVE = """
+from collections.abc import Iterator
+
+
+class Node:
+    def __init__(self, data: int) -> None:
+        self.data = data
+        self.left: Node | None = None
+        self.right: Node | None = None
+
+
+def preorder(root: Node | None) -> Iterator[int]:
+    if root:
+        yield root.data
+        yield from preorder(root.left)
+        yield from preorder(root.right)
+
+
+def build() -> Node:
+    tree = Node(1)
+    tree.left = Node(2)
+    tree.right = Node(3)
+    tree.left.left = Node(4)
+    tree.left.right = Node(5)
+    return tree
+
+
+def walk() -> list[int]:
+    return list(preorder(build()))
+
+
+def main() -> None:
+    print(walk(), sum(preorder(build())))
+
+
+main()
+"""
+
 PROGRAMS = {
+    "recursive": (RECURSIVE, ["preorder", "build", "walk"]),
     "expressions": (EXPRESSIONS, ["kinds", "nodes", "chains", "members", "powers", "float_powers"]),
     "loops": (LOOPS, ["counted", "tupled", "stepped", "chained", "picked"]),
     "exception_args": (EXCEPTION_ARGS, ["check", "read"]),

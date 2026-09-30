@@ -192,6 +192,13 @@ class FrameLowering:  # pylint: disable=attribute-defined-outside-init
         found = self._generator_function(node)  # type: ignore[attr-defined]
         if found is None:
             return True
+        qualname = found.info.qualname
+        if qualname == self.info.qualname or any(  # type: ignore[attr-defined]
+            inline.qualname == qualname
+            for inline in self._inlines_stack()  # type: ignore[attr-defined]
+        ):
+            # One that yields from itself: each call has a frame of its own.
+            return self._frame_value(node) is None
         try:
             _check_generator(found.info)
         except Unsupported:
