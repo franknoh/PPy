@@ -33,7 +33,7 @@ from dataclasses import dataclass, field
 from ..analysis import types as T
 from ..analysis.lexical import LexicalBindings
 from ..backend.llvm.lowering import Unsupported
-from ..ir import F64, I64, IntType, IRFunction, IRModule, Operation, Successor, SymbolRef, Value
+from ..ir import BOOL, F64, I64, IntType, IRFunction, IRModule, Operation, Successor, SymbolRef, Value
 from ..ir.dialects import core
 from .collections import HANDLE, class_tag
 
@@ -234,16 +234,16 @@ class EffectLowering:  # pylint: disable=too-few-public-methods
                 self._add_text(builder, str(argument.value))  # type: ignore[attr-defined]
                 continue
             if not _plain(self._type_of(argument)):  # type: ignore[attr-defined]
-                self._hold(stream, builder)
+                self._hold_text(stream, builder)
                 builder = rt("ppy_str_builder", (self._word(0),), HANDLE)  # type: ignore[attr-defined]
             self._add_formatted(builder, argument, -1, "")  # type: ignore[attr-defined]
         self._add_text(builder, end)  # type: ignore[attr-defined]
-        self._hold(stream, builder)
+        self._hold_text(stream, builder)
         if flush:
             status = rt("ppy_io_flush_or_raise", (self._word(stream),))  # type: ignore[attr-defined]
             self._after_barrier(status)
 
-    def _hold(self, stream: int, builder: Value) -> None:
+    def _hold_text(self, stream: int, builder: Value) -> None:
         rt = self._rt  # type: ignore[attr-defined]
         text = rt("ppy_str_finish", (builder,), HANDLE)
         rt("ppy_io_print", (self._word(stream), text), None)  # type: ignore[attr-defined]
@@ -292,6 +292,86 @@ class EffectLowering:  # pylint: disable=too-few-public-methods
             arguments.append((_STR, handle, owned))
         return self._python_call("builtins:input", arguments, _STR)  # type: ignore[return-value]
 
+    def _effect_python_call(self, node: ast.Call, discard: bool) -> Value | None:
+        """A call to a function native code has no lowering for, made through
+        Python: a function of this module that stayed in Python, one of a
+        module imported, or a builtin. Its arguments are numbers, bools, and
+        strings, boxed; its result one of those, or nothing. None where the
+        call is not one of these."""
+        if not self._effects_on() or node.keywords:
+            return None
+        func = node.func
+        probe = func
+        while isinstance(probe, ast.Attribute):
+            probe = probe.value
+        if not isinstance(probe, ast.Name) or probe.id in self._effect_locals():
+            return None
+        symbols = self.frontend.analysis.symbols  # type: ignore[attr-defined]
+        head = probe.id
+        if isinstance(func, ast.Name):
+            known = head in symbols.functions or head in symbols.imports
+            if not known:
+                lexical = symbols.lexical
+                known = isinstance(lexical, LexicalBindings) and lexical.targets_at(func) == {
+                    f"builtins.{head}"
+                }
+        else:
+            known = head in symbols.imports
+        if not known:
+            return None
+        if any(isinstance(a, ast.Starred) for a in node.args):
+            raise Unsupported("a call into Python with `*arguments` has no native lowering")
+        returned = T.strip_literal(self._type_of(node))  # type: ignore[attr-defined]
+        kind = _NONE
+        if not discard and returned != T.NONE:
+            kind = {T.FLOAT: _FLOAT, T.BOOL: _BOOL, T.STR: _STR}.get(returned, -1)  # type: ignore[call-overload]
+            if kind < 0:
+                raise Unsupported(
+                    f"`{ast.unparse(func)}` stays in Python and gives `{returned}`, which a "
+                    "native caller cannot take back through Python (an int may not fit 64 bits)"
+                )
+        arguments: list[tuple[int, Value, bool]] = []
+        for argument in node.args:
+            if isinstance(argument, ast.Constant) and argument.value is None:
+                arguments.append((_NONE, self._word(0), False))  # type: ignore[attr-defined]
+                continue
+            if self._string_of(argument) is not None:  # type: ignore[attr-defined]
+                handle, owned = self._handle(argument)  # type: ignore[attr-defined]
+                arguments.append((_STR, handle, owned))
+                continue
+            value = self._expr(argument)  # type: ignore[attr-defined]
+            argument_kind = {I64: _INT, F64: _FLOAT}.get(value.type)
+            if argument_kind is None and value.type == BOOL:
+                argument_kind = _BOOL
+            if argument_kind is None:
+                raise Unsupported(
+                    f"`{ast.unparse(argument)}` crosses into Python only as a number, a bool, "
+                    "or a string"
+                )
+            arguments.append((argument_kind, value, False))
+        module = self.info.module  # type: ignore[attr-defined]
+        made = self._python_call(f"{module}:{ast.unparse(func)}", arguments, kind)
+        return made if made is not None else self._word(0)  # type: ignore[attr-defined,no-any-return]
+
+    def _effect_locals(self) -> frozenset[str]:
+        """Names the function binds itself: a call to one is not to a module's."""
+        found = self.__dict__.get("_effect_bound")
+        if found is None:
+            node = self.info.node  # type: ignore[attr-defined]
+            names = {a.arg for a in ast.walk(node.args) if isinstance(a, ast.arg)}
+            for inner in ast.walk(node):
+                if isinstance(inner, ast.Name) and isinstance(inner.ctx, (ast.Store, ast.Del)):
+                    names.add(inner.id)
+                elif isinstance(inner, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+                    if inner is not node:
+                        names.add(inner.name)
+                elif isinstance(inner, (ast.Global, ast.Nonlocal)):
+                    names.update(inner.names)
+                elif isinstance(inner, ast.alias):
+                    names.add((inner.asname or inner.name).partition(".")[0])
+            found = self.__dict__["_effect_bound"] = frozenset(names)
+        return found  # type: ignore[no-any-return]
+
     def _python_call(
         self, spelled: str, arguments: list[tuple[int, Value, bool]], kind: int
     ) -> Value | None:
@@ -299,7 +379,9 @@ class EffectLowering:  # pylint: disable=too-few-public-methods
         unbox its result as `kind`; what it raises is raised natively."""
         rt = self._rt  # type: ignore[attr-defined]
         for argument_kind, value, _owned in arguments:
-            if argument_kind == _STR:
+            if argument_kind == _NONE:
+                rt("ppy_io_push", (self._word(_NONE), self._word(0)), None)  # type: ignore[attr-defined]
+            elif argument_kind == _STR:
                 rt("ppy_io_push_text", (value,), None)
             elif argument_kind == _FLOAT:
                 rt("ppy_io_push_float", (value,), None)
@@ -439,9 +521,12 @@ def _linked_call(op: Operation) -> Operation | None:
 class _Checker:
     """The barrier rule over one module (see the module's docstring)."""
 
-    def __init__(self, module: IRModule, exceptions: bool) -> None:
+    def __init__(self, module: IRModule, exceptions: bool, left: frozenset[str]) -> None:
         self.module = module
         self.exceptions = exceptions
+        #: This module's functions that stayed in Python: a caller of one stays
+        #: too, for that reason, whatever it would have done here.
+        self.left = left
         self.summaries: dict[str, EffectSummary] = {}
         self.builtin_tags = _builtin_tags()
 
@@ -458,6 +543,8 @@ class _Checker:
         found = self.summaries.get(name)
         if found is not None:
             return found
+        if name in self.left:
+            return EffectSummary()
         target = self.module.functions.get(name)
         if target is None or target.is_declaration:
             return self.external(name)
@@ -627,10 +714,13 @@ class _Checker:
         return found
 
 
-def check_effects(module: IRModule, exceptions: bool) -> tuple[dict[str, str], dict[str, EffectSummary]]:
+def check_effects(
+    module: IRModule, exceptions: bool, left: frozenset[str] = frozenset()
+) -> tuple[dict[str, str], dict[str, EffectSummary]]:
     """The barrier rule over a module: the functions that break it, each with why
-    (callers of one included), and every function's summary."""
-    checker = _Checker(module, exceptions)
+    (callers of one included), and every function's summary. `left` are the
+    module's functions that stayed in Python, whose callers go for that."""
+    checker = _Checker(module, exceptions, left)
     checker.settle()
     broken: dict[str, str] = {}
     referenced = checker.referenced()

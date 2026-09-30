@@ -258,7 +258,7 @@ def lower_module_to_ir(
 ) -> Lowered:
     """The IR of every eligible function in one module."""
 
-    def build(exceptions: bool) -> tuple[Frontend, Lowered]:
+    def build(exceptions: bool, python: dict[str, str]) -> tuple[Frontend, Lowered]:
         frontend = Frontend(
             module,
             layouts,
@@ -276,13 +276,27 @@ def lower_module_to_ir(
         # Print, input, and calls into Python under `ppy run` (`lowering/effects.py`).
         frontend.effects = cpu_compatible and backend_name == "llvm" and not standalone
         frontend.native_exceptions = exceptions
+        frontend.python = python
         return frontend, frontend.build(functions)
 
-    frontend, lowered = build(False)
-    if frontend.wants_exceptions and not frontend.native_exceptions:
-        # A barrier turned up only as the module lowered (a call into Python):
-        # after it, what may fail has to raise natively, so lower it again so.
-        _frontend, lowered = build(True)
+    exceptions, python = False, dict[str, str]()
+    for _attempt in range(3):
+        frontend, lowered = build(exceptions, python)
+        again = False
+        if frontend.wants_exceptions and not frontend.native_exceptions:
+            # A barrier turned up only as the module lowered (a call into
+            # Python): after it, what may fail has to raise natively, so it
+            # is lowered again so.
+            exceptions = again = True
+        if frontend.effects:
+            # A caller of a function that stayed in Python may call it through
+            # Python instead (`lowering/effects.py`): lowered again, with those
+            # functions left to Python from the start.
+            more = python | frontend.called_through_python(lowered, functions)
+            if more.keys() != python.keys():
+                python, again = more, True
+        if not again:
+            break
     return lowered
 
 
@@ -382,6 +396,9 @@ class Frontend:
         #: `ppy run`, and whether one found it needs exception mode for them.
         self.effects = False
         self.wants_exceptions = False
+        #: Functions left to Python whose native callers call them through it:
+        #: qualname -> why each stayed in Python.
+        self.python: dict[str, str] = {}
         self.prover = prover
         #: Source locations are spelled relative to this, so the IR text is
         #: the same wherever the project sits.
@@ -455,6 +472,9 @@ class Frontend:
                 lowered.rejected[qualname] = (
                     "a function defined inside another is lowered as a closure where it is defined"
                 )
+                continue
+            if qualname in self.python:
+                lowered.rejected[qualname] = self.python[qualname]
                 continue
             extern = info.directive("native.extern")
             if extern is not None:
@@ -1187,11 +1207,41 @@ class Frontend:
             raise
         return self.instances[key]
 
+    def called_through_python(
+        self,
+        lowered: Lowered,
+        functions: dict[str, tuple[FunctionInfo, FunctionAnalysis, ast.FunctionDef]],
+    ) -> dict[str, str]:
+        """Functions that stayed in Python and kept a caller out of native code
+        with them: plain module-level functions, which a native caller may call
+        through Python instead."""
+        blocking = {
+            match.group(1)
+            for why in lowered.rejected.values()
+            if (match := re.match(r"`([^`]+)` has no native lowering, so this call", why))
+        }
+        found: dict[str, str] = {}
+        for qualname, why in lowered.rejected.items():
+            entry = functions.get(qualname)
+            if entry is None or qualname not in blocking or "so this call cannot be made" in why:
+                # One kept out only by a callee gets its own chance next time.
+                continue
+            info = entry[0]
+            if info.enclosing is not None or info.owner or info.type_params or info.is_async:
+                continue
+            if info.directive("native.extern") is not None or self._generic_owner(info):
+                continue
+            found[qualname] = why
+        return found
+
     def _check_effects(self, lowered: Lowered) -> None:
         """The barrier rule (`lowering/effects.py`): a function that could fall
         back after an effect it cannot take back stays in Python, and one with
         effects says so in its signature, for the boundary."""
-        broken, summaries = check_effects(self.module, self.native_exceptions)
+        left = frozenset(
+            self.declared[q][0].name for q in lowered.rejected if q in self.declared
+        )
+        broken, summaries = check_effects(self.module, self.native_exceptions, left)
         names = {self.declared[q][0].name: q for q in lowered.functions}
         for name, why in broken.items():
             qualname = names.get(name)
@@ -2993,6 +3043,9 @@ class _FunctionLowering(
         for qualname, (info, _analysis, _node) in self.frontend.generics.items():
             if qualname.rpartition(".")[2] == target:
                 return self._generic_call(qualname, info, node, discard_result=discard_result)
+        through = self._effect_python_call(node, discard_result)
+        if through is not None:
+            return through
         raise Unsupported(f"`{target}` has no native lowering")
 
     def _derivative_spec(self, func: ast.expr) -> tuple[str, tuple[int, ...], bool] | None:
