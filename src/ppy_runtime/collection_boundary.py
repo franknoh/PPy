@@ -251,19 +251,17 @@ class Classes:
                 parsed.append((name, offset, spec))
             self.fields[c.qualname] = parsed
 
-    def python(self, qualname: str) -> type | None:
+    def python(self, qualname: str) -> Any:
         """The Python class of `qualname`, or None where the module has none."""
-        known = self._python.get(qualname)
-        if known is not None:
-            return known
-        described = self.by_name.get(qualname)
-        if described is None or self._resolve is None:
-            return None
-        resolved = self._resolve(described)
-        if not isinstance(resolved, type):
-            return None
-        self._python[qualname] = resolved
-        return resolved
+        if qualname not in self._python:
+            described = self.by_name.get(qualname)
+            if described is None or self._resolve is None:
+                return None
+            resolved = self._resolve(described)
+            if not isinstance(resolved, type):
+                return None
+            self._python[qualname] = resolved
+        return self._python[qualname]
 
     def of(self, value: Any) -> CrossingClass | None:
         """The class `value` is an instance of, exactly, among those described."""
