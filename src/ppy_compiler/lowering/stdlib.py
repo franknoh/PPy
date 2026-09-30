@@ -338,6 +338,7 @@ class StdlibLowering:
         _, handle, owned = self._plain_list(node.args[0])
         given = weights if weights is not None else cumulative
         weighed = None
+        weighed_owned = integers = False
         if given is not None:
             weight_kind, weighed, weighed_owned = self._plain_list(given)
             integers = weight_kind.value is not None and weight_kind.value.kind == "int"
