@@ -183,7 +183,7 @@ def test_python_calls_read_the_globals_at_the_call(tmp_path: Path):
     engine.add(module.ir)
     engine.finalize()
     namespace: dict[str, object] = {}
-    exec(compile(BOUNDARY, "prog.ppy", "exec"), namespace)  # noqa: S102 - the program itself
+    exec(compile(BOUNDARY, "prog.ppy", "exec"), namespace)
     fell: list[str] = []
 
     # A plain function's globals are its module's; one made by exec here is.
@@ -195,13 +195,13 @@ def test_python_calls_read_the_globals_at_the_call(tmp_path: Path):
         signature = lowered.boundary or lowered.signature
         assert signature.reads_globals
         own = dict(namespace)
-        exec(source, own)  # noqa: S102
+        exec(source, own)
         own.update(FELL=fell, NAME=name, PYTHON=namespace[name])
         return bind(signature, engine.address(signature.symbol), own["fallback"]), own
 
     lookup, lookup_globals = bound("lookup")
     expected = namespace["lookup"](25)  # type: ignore[operator]
-    assert lookup.wrapper(25) == expected and lookup.calls == 1 and fell == []
+    assert lookup.wrapper(25) == expected and lookup.calls == 1 and not fell
     lookup_globals["TABLE"] = [1] * 10
     assert lookup.wrapper(25) == 25 * 3 + 10 and lookup.calls == 2
     lookup_globals["SCALE"] = 2

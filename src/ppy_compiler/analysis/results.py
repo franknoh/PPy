@@ -21,7 +21,13 @@ from .symbols import FunctionInfo, ModuleSymbols, ProjectSymbols
 if TYPE_CHECKING:
     from ..plugins.base import LoweringSpec
 
-__all__ = ["FunctionAnalysis", "ImplicitGlobal", "LoweringNote", "ModuleAnalysis", "ProjectAnalysis"]
+__all__ = [
+    "FunctionAnalysis",
+    "ImplicitGlobal",
+    "LoweringNote",
+    "ModuleAnalysis",
+    "ProjectAnalysis",
+]
 
 
 @dataclass(frozen=True, slots=True)

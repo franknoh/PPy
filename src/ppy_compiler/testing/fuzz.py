@@ -939,7 +939,7 @@ class _Generator:
         w.put("total += node.value + len(node.label)")
         if rng.random() < 0.3:
             w.put("if node.next is None and k > 0:")
-            w.put(f'    node.next = Link(k, "new")')
+            w.put('    node.next = Link(k, "new")')
             w.put("    k = 0")
         w.put("node = node.next")
         w.depth -= 1
@@ -987,8 +987,10 @@ class _Generator:
         walker = self.name("walk")
         self.object_function(w, walker)
         after.append(f"h = chain({self.state.randint(1, 6)})")
-        for _ in range(self.state.randint(1, 2)):
-            after.append(f"print({walker}(h, {self.state.randint(-3, 9)}), values(h), h.label)")
+        after.extend(
+            f"print({walker}(h, {self.state.randint(-3, 9)}), values(h), h.label)"
+            for _ in range(self.state.randint(1, 2))
+        )
         return after
 
 

@@ -230,9 +230,7 @@ class Classes:
     Python class found when first wanted: the module is still running its
     body when a function of it is bound."""
 
-    def __init__(
-        self, described: tuple[CrossingClass, ...], resolve: Any = None
-    ) -> None:
+    def __init__(self, described: tuple[CrossingClass, ...], resolve: Any = None) -> None:
         self.by_name = {c.qualname: c for c in described}
         self.by_tag = {c.tag: c for c in described if c.kind == "object"}
         self._resolve = resolve
@@ -498,7 +496,7 @@ class Boundary:
         if described is None or described.qualname != spec.record:
             raise Refused
         found = []
-        for (name, _offset, kind) in described.fields:
+        for name, _offset, kind in described.fields:
             try:
                 part = getattr(item, name)
             except AttributeError as exc:
@@ -670,9 +668,10 @@ class Boundary:
         if spec.kind == "str":
             return self._texts((words[offset],))[0]
         if spec.kind == "tuple":
+            parts = words[offset : offset + len(spec.parts)]
             return tuple(
                 part != 0 if kind == "bool" else part
-                for kind, part in zip(spec.parts, words[offset : offset + len(spec.parts)], strict=True)
+                for kind, part in zip(spec.parts, parts, strict=True)
             )
         if spec.kind == "record":
             return self._record(spec, words[offset : offset + len(spec.parts)])

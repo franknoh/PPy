@@ -553,14 +553,17 @@ def analyze_aliases(
     `settled_globals` names module globals the body reads that no one rebinds:
     each is rooted as a parameter is, since native code is handed it as one.
     """
-    params = frozenset(
-        arg.arg
-        for arg in [
-            *node.args.posonlyargs,
-            *node.args.args,
-            *node.args.kwonlyargs,
-            *([node.args.vararg] if node.args.vararg else []),
-            *([node.args.kwarg] if node.args.kwarg else []),
-        ]
-    ) | settled_globals
+    params = (
+        frozenset(
+            arg.arg
+            for arg in [
+                *node.args.posonlyargs,
+                *node.args.args,
+                *node.args.kwonlyargs,
+                *([node.args.vararg] if node.args.vararg else []),
+                *([node.args.kwarg] if node.args.kwarg else []),
+            ]
+        )
+        | settled_globals
+    )
     return _Analyzer(params, immutable_params & params).run(node)

@@ -452,10 +452,10 @@ class Frontend:
                     "it has no single native entry point"
                 )
                 continue
+            passes_globals = self._passes_globals(info, analysis)
+            # The settled globals it reads are parameters of its native entry.
+            info = with_implicit_globals(info, analysis) if passes_globals else info  # noqa: PLW2901
             try:
-                passes_globals = self._passes_globals(info, analysis)
-                if passes_globals:
-                    info = with_implicit_globals(info, analysis)
                 if self.cpu_compatible:
                     ok, reason = eligible(
                         info,
@@ -4031,7 +4031,9 @@ class _FunctionLowering(
         sources = [_source_of(parameter) for parameter in signature.parameters]
         if any(sources):
             if not called:
-                raise Unsupported(f"`{qualname}` reads module globals, which it cannot be passed here")
+                raise Unsupported(
+                    f"`{qualname}` reads module globals, which it cannot be passed here"
+                )
             held = {p.global_of: p.name for p in self.info.params if p.global_of}
             passed = []
             for source in sources:
