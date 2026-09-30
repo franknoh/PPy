@@ -221,3 +221,40 @@ def test_an_empty_display_takes_the_type_of_what_fills_it(write, codes):
         """,
     )
     assert "E1302" not in codes(path, strict=False)
+
+
+@requires_llvm
+def test_a_nested_function_runs_where_the_function_around_it_runs(tmp_path: Path):
+    """A closure lowers with the function it is defined in, so it has no entry
+    of its own; its statements count once, under itself."""
+    (tmp_path / "pyproject.toml").write_text("[tool.ppy]\nstrict = false\n", encoding="utf-8")
+    (tmp_path / "nest.ppy").write_text(
+        textwrap.dedent(
+            """
+            def scaled(n: int, k: int) -> int:
+                def times(x: int) -> int:
+                    return x * k
+
+                total = 0
+                for i in range(n):
+                    total += times(i)
+                return total
+
+
+            def shown(n: int) -> None:
+                def show(x: int) -> None:
+                    print(x)
+
+                show(n)
+            """
+        ).lstrip("\n"),
+        encoding="utf-8",
+    )
+    done = _explain(tmp_path, "--json", ".")
+    assert done.returncode == 0, done.stderr
+    functions = {f["qualname"].rpartition(".")[2]: f for f in json.loads(done.stdout)["functions"]}
+    assert functions["times"]["tier"] in {"native", "internal"}
+    assert functions["show"]["tier"] == "python"
+    assert functions["show"]["reason"] == "the function around it stays in Python"
+    assert functions["scaled"]["statements"] == 5
+    assert functions["times"]["statements"] == 1

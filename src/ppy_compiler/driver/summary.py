@@ -146,6 +146,12 @@ _SHAPES: tuple[_Shape, ...] = (
         "guide/closures/",
     ),
     _shape(
+        r"the function around it stays in Python",
+        "a nested function whose enclosing function stays in Python",
+        "it goes native with the function around it; see that function's reason",
+        "guide/closures/",
+    ),
+    _shape(
         r"chained comparison",
         "a chained comparison (`a < b < c`)",
         "write it as `a < b and b < c` for now",
@@ -357,7 +363,42 @@ class Summary:
 
 
 def _statements(node: ast.AST) -> int:
-    return sum(isinstance(child, ast.stmt) for child in ast.walk(node)) - 1
+    """The statements of a function's own body. A nested function counts as
+    its one `def` here, and its body counts under its own entry."""
+    count = 0
+    pending = list(ast.iter_child_nodes(node))
+    while pending:
+        child = pending.pop()
+        if isinstance(child, ast.stmt):
+            count += 1
+        if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)):
+            continue
+        pending.extend(ast.iter_child_nodes(child))
+    return count
+
+
+#: A nested function that lowered with the function around it.
+_CLOSURE = "lowered inside the function around it, as a closure"
+#: A nested function whose enclosing function stays in Python.
+_ENCLOSED = "the function around it stays in Python"
+
+
+def _place_nested(outcomes: list[FunctionOutcome]) -> None:
+    """A nested function is lowered as part of the one it is defined in, so
+    it has no entry of its own in the backend's result: it runs where the
+    function around it runs."""
+    by_name = {o.qualname: o for o in outcomes}
+    for outcome in outcomes:
+        if outcome.reason != "not lowered" or ".<locals>." not in outcome.qualname:
+            continue
+        outer = by_name.get(outcome.qualname.rpartition(".<locals>.")[0])
+        if outer is None:
+            continue
+        if outer.tier in {"native", "internal"}:
+            outcome.tier = "internal"
+            outcome.reason = _CLOSURE
+        else:
+            outcome.reason = _ENCLOSED
 
 
 def summarize(bundle, lowered, sources=None, failures=None) -> Summary:  # type: ignore[no-untyped-def]
@@ -404,8 +445,15 @@ def summarize(bundle, lowered, sources=None, failures=None) -> Summary:  # type:
             elif result is not None and qualname in result.rejected:
                 outcome.reason = result.rejected[qualname]
             else:
-                outcome.reason = "not lowered"
+                # Not a candidate at all: the contract refused it before lowering.
+                # A nested function is placed with the one around it, below.
+                report = None if ".<locals>." in qualname else bundle.reports.get(qualname)
+                refused = getattr(report, "native_reason", "") if report is not None else ""
+                outcome.reason = refused or "not lowered"
             outcomes.append(outcome)
+    # Outer functions sort first, so a chain of nesting resolves outward in.
+    outcomes.sort(key=lambda o: o.qualname.count(".<locals>."))
+    _place_nested(outcomes)
     failed = {
         _shown(Path(d.span.path), root) if d.span is not None else "?": d.message
         for d in bundle.diagnostics.sorted()
