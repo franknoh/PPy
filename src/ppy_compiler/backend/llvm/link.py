@@ -186,20 +186,35 @@ _RUNTIME_OBJECT_TAG = "o1"
 
 def runtime_object(source: Path, compiler: str) -> Path:
     """A runtime's C source (the collections, the async loop) compiled once, with
-    optimization, to an object beside it in the user cache, and linked into
-    every library that needs it from then on.
+    optimization, to an object in the user cache, and linked into every
+    library that needs it from then on.
 
     Each link used to compile the whole source again, without optimization:
     about 0.2 s of every first `ppy run` of a program with a collection or a
     string, and a runtime slower than it had to be. The object is named for
-    the source's digest (in the source's name), the compiler, and the flags,
-    and written through a draft, so concurrent builds agree and a partial one
+    the digest of the source and the headers it includes, the compiler, and
+    the flags, so an upgraded runtime or another compiler builds its own. It
+    is written through a draft, so concurrent builds agree and a partial one
     is never used. Where it cannot be compiled, the source is linked as before.
     """
     import hashlib  # pylint: disable=import-outside-toplevel
+    import re  # pylint: disable=import-outside-toplevel
 
-    which = hashlib.sha256(str(Path(compiler).resolve()).encode()).hexdigest()[:8]
-    target = source.with_name(f"{source.stem}-{_RUNTIME_OBJECT_TAG}-{which}.o")
+    directory = _runtime_objects()
+    try:
+        text = source.read_bytes()
+    except OSError:
+        return source
+    if directory is None:
+        return source
+    digest = hashlib.sha256(text)
+    for header in re.findall(rb'#include "([^"]+)"', text):
+        try:
+            digest.update((source.parent / header.decode()).read_bytes())
+        except (OSError, UnicodeDecodeError):
+            continue
+    digest.update(f"\0{Path(compiler).resolve()}\0{_RUNTIME_OBJECT_TAG}".encode())
+    target = directory / f"{source.stem}-{digest.hexdigest()[:16]}.o"
     if target.is_file():
         return target
     draft = target.with_name(f"{target.name}.{os.getpid()}.part")
@@ -216,11 +231,22 @@ def runtime_object(source: Path, compiler: str) -> Path:
         str(draft),
     ]
     done = subprocess.run(command, capture_output=True, text=True, check=False)
-    if done.returncode != 0:
+    if done.returncode != 0 or not draft.is_file():
         draft.unlink(missing_ok=True)
         return source
     draft.replace(target)
     return target
+
+
+def _runtime_objects() -> Path | None:
+    """Where compiled runtimes are kept, or None when it cannot be written."""
+    base = os.environ.get("XDG_CACHE_HOME") or os.path.join(os.path.expanduser("~"), ".cache")
+    directory = Path(base) / "ppy" / "runtime-objects"
+    try:
+        directory.mkdir(parents=True, exist_ok=True)
+    except OSError:
+        return None
+    return directory if os.access(directory, os.W_OK) else None
 
 
 def _linker(target) -> list[str]:  # type: ignore[no-untyped-def]

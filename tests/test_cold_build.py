@@ -44,31 +44,61 @@ def _counting(tmp_path: Path, real: str) -> tuple[str, Path]:
     return str(script), calls
 
 
-def test_a_runtime_is_compiled_once_and_reused(tmp_path):
-    source = tmp_path / "runtime-abc.c"
-    source.write_text("int ppy_answer(void) { return 42; }\n")
+@pytest.fixture
+def user_cache(tmp_path, monkeypatch):
+    monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path / "cache"))
+    return tmp_path / "cache" / "ppy" / "runtime-objects"
+
+
+def _runtime(tmp_path: Path, text: str = "int ppy_answer(void) { return 42; }\n") -> Path:
+    source = tmp_path / "runtime.c"
+    source.write_text(text)
+    return source
+
+
+def test_a_runtime_is_compiled_once_and_reused(tmp_path, user_cache):
+    source = _runtime(tmp_path)
     compiler, calls = _counting(tmp_path, _compiler())
     first = runtime_object(source, compiler)
-    assert first != source and first.suffix == ".o" and first.is_file()
+    assert first.parent == user_cache and first.suffix == ".o" and first.is_file()
     assert runtime_object(source, compiler) == first
     assert calls.read_text().count("x") == 1
     # No draft is left behind.
-    assert not [p for p in tmp_path.iterdir() if p.name.endswith(".part")]
+    assert [p.name for p in user_cache.iterdir()] == [first.name]
 
 
-def test_a_runtime_object_is_named_for_its_compiler(tmp_path):
-    source = tmp_path / "runtime-abc.c"
-    source.write_text("int ppy_answer(void) { return 42; }\n")
+def test_a_runtime_object_is_named_for_its_compiler(tmp_path, user_cache):
+    source = _runtime(tmp_path)
     real = _compiler()
     wrapped, _calls = _counting(tmp_path, real)
     assert runtime_object(source, real) != runtime_object(source, wrapped)
 
 
-def test_a_runtime_that_cannot_be_compiled_is_linked_as_source(tmp_path):
-    source = tmp_path / "runtime-abc.c"
-    source.write_text("this is not C\n")
+def test_a_changed_runtime_or_header_builds_a_new_object(tmp_path, user_cache):
+    header = tmp_path / "runtime.h"
+    header.write_text("#define ANSWER 42\n")
+    source = _runtime(tmp_path, '#include "runtime.h"\nint ppy_answer(void) { return ANSWER; }\n')
+    compiler = _compiler()
+    first = runtime_object(source, compiler)
+    header.write_text("#define ANSWER 43\n")
+    second = runtime_object(source, compiler)
+    source.write_text('#include "runtime.h"\nint ppy_answer(void) { return -ANSWER; }\n')
+    third = runtime_object(source, compiler)
+    assert len({first, second, third}) == 3
+
+
+def test_a_runtime_that_cannot_be_compiled_is_linked_as_source(tmp_path, user_cache):
+    source = _runtime(tmp_path, "this is not C\n")
     assert runtime_object(source, _compiler()) == source
-    assert sorted(p.name for p in tmp_path.iterdir()) == ["runtime-abc.c"]
+    assert list(user_cache.iterdir()) == []
+
+
+def test_a_runtime_is_linked_as_source_when_the_cache_cannot_be_written(tmp_path, monkeypatch):
+    blocked = tmp_path / "blocked"
+    blocked.write_text("")  # a file where the cache directory would go
+    monkeypatch.setenv("XDG_CACHE_HOME", str(blocked))
+    source = _runtime(tmp_path)
+    assert runtime_object(source, _compiler()) == source
 
 
 # -- verification between passes ------------------------------------------------
