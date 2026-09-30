@@ -483,10 +483,7 @@ def emit_ir(bundle) -> dict[str, str]:  # type: ignore[no-untyped-def]
     if not available():
         raise LlvmUnavailable("llvmlite is not installed, so no LLVM IR can be produced")
     engine = JitEngine(opt_level=bundle.project.config.opt_level)
-    return {
-        name: engine.optimized_ir(module.ir)
-        for name, module in _collect(bundle).items()
-    }
+    return {name: engine.optimized_ir(module.ir) for name, module in _collect(bundle).items()}
 
 
 def _library_key(objects: list[Path]) -> str:
